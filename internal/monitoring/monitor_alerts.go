@@ -335,7 +335,11 @@ func (m *Monitor) handleAlertLifecycleEvent(event alerts.LifecycleEvent) {
 	switch event.Type {
 	case eventlog.TypeFired, eventlog.TypeRefired:
 		if m.incidentStore != nil {
-			m.incidentStore.RecordAlertFired(timelineAlert)
+			if event.Type == eventlog.TypeRefired {
+				m.incidentStore.RecordAlertRefired(timelineAlert, event.OccurredAt)
+			} else {
+				m.incidentStore.RecordAlertFired(timelineAlert)
+			}
 		}
 		occurredAt := event.OccurredAt
 		if event.Type == eventlog.TypeFired && !alert.StartTime.IsZero() {
@@ -566,6 +570,7 @@ func (m *Monitor) recordAlertTimelineChange(alert *alerts.Alert, kind unifiedres
 
 	change := unifiedresources.BuildAlertTimelineChange(alert.ResourceID, kind, occurredAt, actor, unifiedresources.AlertTimelineChange{
 		AlertIdentifier: alert.ID,
+		AlertStartedAt:  alert.StartTime,
 		AlertType:       alert.Type,
 		AlertLevel:      string(alert.Level),
 		AlertMessage:    alert.Message,

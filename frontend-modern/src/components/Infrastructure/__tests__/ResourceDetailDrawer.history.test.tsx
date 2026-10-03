@@ -161,7 +161,7 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 describe('ResourceDetailDrawer change history section', () => {
   it('keeps current readings separate from stored history samples', () => {
     expect(guestDrawerHistorySource).toContain('currentMetrics');
-    expect(guestDrawerHistorySource).toContain('Collecting history');
+    expect(guestDrawerHistorySource).toContain('No stored history in this range');
     expect(guestDrawerHistorySource).not.toContain('buildFallbackHistoryPoints');
   });
 
@@ -610,7 +610,7 @@ describe('ResourceDetailDrawer change history section', () => {
     await within(contextSection).findByText('Analysis');
     expect(contextSection.querySelector('table')).toBeTruthy();
     expect(contextSection.querySelector('tbody')).toBeTruthy();
-    expect(contextSection.querySelectorAll('tbody[class*="shadow-sm"]')).toHaveLength(1);
+    expect(contextSection.querySelectorAll('tbody[class*="shadow-xs"]')).toHaveLength(1);
     expect(screen.getByText('Health')).toBeInTheDocument();
     expect(screen.getByText('A · 92/100')).toBeInTheDocument();
     expect(screen.getByText('Trend')).toBeInTheDocument();

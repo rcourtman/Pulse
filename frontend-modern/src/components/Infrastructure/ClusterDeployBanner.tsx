@@ -62,7 +62,7 @@ export const ClusterDeployBanner: Component<ClusterDeployBannerProps> = (props) 
               e.stopPropagation();
               props.onDeploy(info().cluster, info().cluster);
             }}
-            class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 dark:text-blue-300 dark:bg-blue-900 dark:hover:bg-blue-800 transition-colors"
+            class="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[10px] font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 dark:text-blue-300 dark:bg-blue-900/25 dark:hover:bg-blue-800 transition-colors"
           >
             <RocketIcon class="w-2.5 h-2.5" />
             Review & Deploy

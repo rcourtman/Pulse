@@ -46,10 +46,10 @@ const INLINE_NOTICE_ACTION_BASE_CLASS =
   'inline-flex items-center gap-1 text-xs font-semibold underline-offset-2 hover:underline';
 
 export const INLINE_NOTICE_ACTION_TONE_CLASSES: Record<InlineNoticeTone, string> = {
-  danger: 'text-red-900 dark:text-red-100',
-  info: 'text-blue-900 dark:text-blue-100',
-  success: 'text-emerald-900 dark:text-emerald-100',
-  warning: 'text-amber-900 dark:text-amber-100',
+  danger: 'text-red-800 dark:text-red-100',
+  info: 'text-blue-800 dark:text-blue-100',
+  success: 'text-emerald-800 dark:text-emerald-100',
+  warning: 'text-amber-800 dark:text-amber-100',
 };
 
 const INLINE_NOTICE_ACTION_ICON_CLASS =

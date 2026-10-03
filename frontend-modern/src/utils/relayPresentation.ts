@@ -23,32 +23,32 @@ export const RELAY_INLINE_ACTION_CLASS =
 export const RELAY_INFO_TITLE_CLASS = 'text-sm font-medium text-base-content';
 export const RELAY_INFO_MESSAGE_CLASS = 'text-xs text-muted mt-1';
 export const RELAY_LAST_ERROR_CLASS =
-  'mt-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900 rounded px-2 py-1';
+  'mt-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/25 rounded-sm px-2 py-1';
 export const RELAY_CODE_BLOCK_CLASS =
-  'block text-xs font-mono text-base-content bg-surface-alt rounded px-3 py-2 select-all break-all';
+  'block text-xs font-mono text-base-content bg-surface-alt rounded-sm px-3 py-2 select-all break-all';
 export const RELAY_QR_IMAGE_CLASS = 'rounded-md border border-border p-2';
 export const RELAY_DIAGNOSTICS_WRAP_CLASS = 'space-y-2';
 export const RELAY_DIAGNOSTICS_TITLE_CLASS = 'text-xs font-semibold text-base-content';
 export const RELAY_SETTINGS_DESCRIPTION =
-  'Check on your systems and get alert push notifications anywhere with the Pulse Mobile app — no port forwarding or VPN required.';
+  'Connect paired Pulse Mobile devices to this instance. Pulse Mobile is being retired on 31 March 2027, and paired phones keep working until then.';
 export const RELAY_LICENSE_REQUIRED_MESSAGE =
-  'See your infrastructure and get alert push notifications anywhere with the Pulse Mobile app — no port forwarding or VPN required. Available with Relay and Pro plans.';
-export const RELAY_PAIRING_AVAILABILITY_TITLE = 'Pair Pulse Mobile through Relay';
+  'Pulse Mobile is being retired on 31 March 2027 and is no longer part of new plans. For alerts on your phone, add an ntfy, Gotify, or Pushover destination under Alerts.';
+export const RELAY_PAIRING_AVAILABILITY_TITLE = 'Pair Pulse Mobile';
 export const RELAY_PAIRING_AVAILABILITY_MESSAGE =
-  'Install the Pulse Mobile app on your phone, then scan a QR code or open a deep link here to securely link it to this Pulse instance. Paired devices receive alert push notifications over an end-to-end encrypted connection.';
+  'Install the Pulse Mobile app on your phone, then scan a QR code or open a deep link here to securely link it to this Pulse instance. Paired devices receive alert push notifications over an end-to-end encrypted connection until Pulse Mobile is retired on 31 March 2027.';
 export const RELAY_ENABLE_HELP_TEXT =
   'Open a secure outbound connection so paired Pulse Mobile devices can reach this instance from anywhere. No inbound ports needed.';
 export const RELAY_ACTIVATION_REQUIRED_LABEL = 'Activation required';
 export const RELAY_ACTIVATION_REQUIRED_MESSAGE =
-  'Remote Access is enabled, but this instance does not have an active Relay token. Activate a Relay-capable plan or turn Remote Access off before pairing mobile clients.';
+  'Pulse Mobile connections are on, but this instance does not have an active Relay token. Refresh your plan, or turn Pulse Mobile connections off before pairing phones.';
 export const RELAY_PAIRING_APP_AVAILABILITY_TEXT =
-  'Pulse Mobile is in early access for iOS and Android. To get the install links, enter your activation key on';
+  'Pulse Mobile stays available for iOS and Android until 31 March 2027. To get the install links, enter your activation key on';
 export const RELAY_PAIRING_APP_DOWNLOAD_LINK_LABEL = 'your download page';
 
 export function getRelayDiagnosticClass(severity: 'warning' | 'error'): string {
   return severity === 'error'
-    ? 'rounded px-2 py-1 text-xs bg-red-50 dark:bg-red-900 text-red-700 dark:text-red-300'
-    : 'rounded px-2 py-1 text-xs bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-300';
+    ? 'rounded-sm px-2 py-1 text-xs bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300'
+    : 'rounded-sm px-2 py-1 text-xs bg-amber-50 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300';
 }
 
 export function getRelayConnectionPresentation(

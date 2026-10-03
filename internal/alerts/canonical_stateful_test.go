@@ -54,6 +54,61 @@ func TestCanonicalLifecycleCopiesValidatedAlertCorrelation(t *testing.T) {
 	}
 }
 
+func TestRAIDSpareCanonicalActivationAndRecovery(t *testing.T) {
+	m := newEventLogManager(t)
+	cfg := m.GetConfig()
+	cfg.TimeThresholds = map[string]int{}
+	m.UpdateConfig(cfg)
+	host := models.Host{ID: "raid-host", Hostname: "linux-raid", Status: "online", RAID: []models.HostRAIDArray{{
+		Device: "/dev/md1", Level: "raid5", State: "clean", TotalDevices: 5, ActiveDevices: 4, WorkingDevices: 5, SpareDevices: 1,
+	}}}
+	id := buildCanonicalStateID("agent:raid-host/raid:md1", "agent:raid-host/raid:md1-health")
+	m.CheckHost(host)
+	if testHasActiveAlert(t, m, id) || len(queryAlertEvents(t, m, eventlog.Filter{})) != 0 {
+		t.Fatal("legacy healthy spare report activated an incident")
+	}
+
+	// An unreplaced required member is critical, even when the attached spare
+	// makes the old total/active arithmetic look like a healthy spare tuple.
+	host.RAID[0].RequiredDevices = 4
+	host.RAID[0].TotalDevices = 4
+	host.RAID[0].ActiveDevices = 3
+	host.RAID[0].WorkingDevices = 4
+	m.CheckHost(host)
+	active := testRequireActiveAlert(t, m, id)
+	if active.Level != AlertLevelCritical || active.Metadata["raidRequiredDevices"] != 4 {
+		t.Fatalf("deficit alert lost required count or severity: %+v", active)
+	}
+	for _, operation := range []string{"check", "resync", "recovery"} {
+		host.RAID[0].Operation = operation
+		host.RAID[0].RebuildPercent = 25
+		m.CheckHost(host)
+		if got := testRequireActiveAlert(t, m, id); got.Level != AlertLevelCritical || !got.StartTime.Equal(active.StartTime) {
+			t.Fatalf("maintenance/recovery masked or reopened required-member deficit: %+v", got)
+		}
+	}
+	m.HandleHostTelemetryExpired(host)
+	if got := testRequireActiveAlert(t, m, id); got.Level != AlertLevelCritical {
+		t.Fatal("transient operation expiry removed a static member deficit")
+	}
+
+	host.RAID[0].TotalDevices = 5
+	host.RAID[0].ActiveDevices = 4
+	host.RAID[0].WorkingDevices = 5
+	host.RAID[0].Operation = ""
+	host.RAID[0].RebuildPercent = 0
+	m.CheckHost(host)
+	m.CheckHost(host)
+	if testHasActiveAlert(t, m, id) {
+		t.Fatal("full member recovery plus spare did not resolve the incident")
+	}
+	for kind, want := range map[string]int{eventlog.TypeFired: 1, eventlog.TypeResolved: 1} {
+		if got := len(queryAlertEvents(t, m, eventlog.Filter{Types: []string{kind}})); got != want {
+			t.Fatalf("canonical %s events=%d, want %d", kind, got, want)
+		}
+	}
+}
+
 func TestStatefulAlertReFireCooldown(t *testing.T) {
 	t.Run("re-fire within cooldown does not create duplicate history entry", func(t *testing.T) {
 		m := newTestManager(t)

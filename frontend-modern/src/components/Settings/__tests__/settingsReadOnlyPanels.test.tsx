@@ -141,7 +141,7 @@ describe('settings read-only panel states', () => {
     render(() => <RelaySettingsPanel canManage={false} />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Remote access settings are read-only/i)).toBeInTheDocument();
+      expect(screen.getByText(/Pulse Mobile settings are read-only/i)).toBeInTheDocument();
     });
 
     const serverUrlInput = screen.getByDisplayValue('wss://relay.example.test/ws/instance');

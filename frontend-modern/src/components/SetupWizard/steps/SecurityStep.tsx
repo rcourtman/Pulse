@@ -157,7 +157,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
             type="text"
             value={username()}
             onInput={(e) => setUsername(e.currentTarget.value)}
-            class="w-full px-5 py-3.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
+            class="w-full px-5 py-3.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-hidden focus:ring-0 focus:border-blue-500 transition-colors font-mono"
             placeholder={t('setup.security.placeholder.username')}
           />
         </div>
@@ -199,7 +199,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                   type={showPassword() ? 'text' : 'password'}
                   value={password()}
                   onInput={(e) => setPassword(e.currentTarget.value)}
-                  class="w-full px-5 py-3.5 pr-20 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
+                  class="w-full px-5 py-3.5 pr-20 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-hidden focus:ring-0 focus:border-blue-500 transition-colors font-mono"
                   placeholder={t('setup.security.placeholder.password')}
                 />
                 <button
@@ -217,7 +217,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                 type={showPassword() ? 'text' : 'password'}
                 value={confirmPassword()}
                 onInput={(e) => setConfirmPassword(e.currentTarget.value)}
-                class="w-full px-5 py-3.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
+                class="w-full px-5 py-3.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-hidden focus:ring-0 focus:border-blue-500 transition-colors font-mono"
                 placeholder={t('setup.security.label.confirmPassword')}
               />
               <p class="text-xs text-muted">{t('setup.security.minimumPasswordHelp')}</p>

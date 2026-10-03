@@ -23,53 +23,105 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
-### No-op identity lists do not create change history — issue #2319 companion
+### Canonical RAID configured-member evidence — issue #2369
 
-Resource change emission compares hostname/IP/MAC lists order-independently,
-including equivalent nil/empty lists, while scalar machine/DMI/cluster/guest
-identifiers and actual list-member changes remain exact change evidence.
-This carries reviewed main `a5aa881ac530` through this line's existing
-`recordRegistryChanges` List boundary; it does not import main's newer locked-
-generation/clone optimization or change canonical matching, wire fields,
-source authority, collection timing or existing persisted rows.
-`TestResourceChangeIdentityIgnoresSetOrderAndEmptySlices` and
-`TestRegistryListComparisonTreatsIdentityListsAsSets` pin no-op order/nil cases
-and one real new-address row. The serial-bearing SMART guard-removal fixture
-then reports one tags-only row; final guarded full/skip cycles add no rows.
-These are synthetic in-memory journal controls, not installed writes or CPU.
+Host RAID metadata and read views retain optional `requiredDevices` (configured
+members excluding spares) without rewriting source-native `totalDevices`.
+Clones preserve both values and isolate caller mutation. The shared storage
+health assessment owns per-array risk and aggregate protection posture: a full
+member set with a hot spare must not become critical, while a configured member
+deficit remains critical even if active plus spares equals the attached count.
+Adapter, clone and monitoring readback tests pin these boundaries. Count
+evidence does not establish backup coverage, native array recovery or any
+storage mutation authority; the field adds no resource or action identity.
 
+### Bounded confidence/priority work in broadcast grouping — issue #2199
 
-### Release-line PBS retention revocation — 30 September 2026
+The general identity matcher retains every confidence, reason, ordering and
+review flag. Top-level grouping requests only its existing high-confidence
+floor (0.90), so hostname-only and IP-only peer sets are not built when no
+eligible composite signal exists. High-confidence results are identical to
+filtering the full general matcher; machine ID, UUID and hostname+MAC still
+keep their existing precedence. Host/IP fallback still requires exactly one
+strictly better-priority owner. Equal/worse-priority peers are discarded before
+allocating/sorting fallback candidates, and a best-priority group has no possible
+attachment target. No identity, ambiguity, count, group ID or explanation rule
+changes, and no cached output hides live transitions.
 
-PBS drawer host-target retention is bound to the unchanged identity evidence
-used by this line's existing selector, including the reported PBS node name.
-Changed or withdrawn evidence and a present ambiguous host snapshot revoke the
-remembered host; a subsequent omission cannot resurrect it. An unchanged, fresh
-identity still survives a transient omitted host row. Each keyed datastore row
-receives its own unwrapped resource snapshot, so Solid reconciliation cannot
-mutate the service target or a sibling row.
+Independent pre-repair matching/grouping oracles, candidate-floor differential
+cases/fuzzing, a discarded-peer allocation bound, mixed grouping records and the
+complete existing identity/topology suites protect these constraints. The
+residual synthetic broadcast profile identified discarded matching/grouping as
+the dominant cost; it is not a profile of the reporter's installed agent fleet.
 
-This bounded adaptation of main `3df86570396a` repairs retention added after
-stable v6.4.1. It does not introduce main's backend `pbs.linkedAgentId` producer,
-change the line's direct correlation selector or establish installed #1723
-relief. Builder and open-drawer regressions in `ProxmoxBackupServersTable.test.ts`
-and `ProxmoxBackupServersTable.drawer.test.tsx`, plus desktop/phone production
-drawer verification in `browser-tests/pbs-retention-guard.cjs`, pin the boundary.
+### Allocation-bounded snapshot and clone metadata — issue #2199
 
+WebSocket snapshot extraction decodes every entry's ID from the encoded array
+in one batched pass, preserving standard JSON identity semantics rather than
+trusting source-ID hints after checking only the first entry. Missing/duplicate
+IDs still reject resource keying; infrastructure and alert arrays retain the
+existing whole-field fallback. The decoder-owned raw entry buffers are retained
+without a redundant copy, and must remain isolated from the original encoding
+and from each other. Per-entry reference decoding, malformed/escaped/duplicate
+identity fuzz cases and encoded tail-change deltas pin these boundaries.
 
-### PVE physical-disk alert reference alias — issue #2112
+Resource clones still refresh canonical metadata on every read, including after
+source, facet or tag edits. Platform membership uses a deduplicated small slice
+with the existing canonical order; sensitivity scans normalized tags once,
+preserving explicit public, restricted, sensitive and resource-type precedence.
+The exhaustive source-combination test and clone scope/policy refresh test
+protect page admission, policy routing and clone isolation. Component benchmarks
+measure allocation/time changes, not installed fleet CPU or write-rate acceptance.
 
-A Proxmox physical-disk resource with a non-empty instance, node name and
-`PhysicalDisk.DevPath` indexes the legacy PVE disk-alert reference as a
-canonical alias. The alias uses the same path sanitisation as alert creation;
-it is not the source ID, canonical primary ID or metrics identity. Non-disk
-resources and incomplete PVE disk identities must not claim that reference.
-Normal registry ambiguity rules still govern resolution when more than one
-resource claims an alias. An absent device path retains the historical
-empty-key alert reference, distinct from the root-device key, but cannot be
-claimed as a disk alias without a device path. `TestProxmoxPhysicalDiskAlertAliasIsScopedToDisk`
-pins the admission boundary; monitoring's targeted-mute test covers the
-registry-to-alert bridge on distinct device paths.
+### Bounded generation change comparison — issue #2199
+
+Accepted snapshot rebuilds compare the previous and replacement registry
+generations by resource ID without deep-cloning and sorting both complete
+resource lists solely for change emission. Classification reads both generations
+under registry read locks, materialises change records, and releases those locks
+before the backing store persists them. Discovery, removal, state, relationship
+and configuration classifications retain the existing journal semantics;
+unchanged telemetry and volatile relationship timestamps produce no new
+journal row. `TestRecordRegistryChangesBetweenGenerationsMatchesListComparison`
+compares the old and new paths, while
+`TestRegistryGenerationComparisonIgnoresUnchangedTelemetry` pins the no-op
+boundary. The 1,000-resource benchmark is component evidence, not installed
+fleet CPU attribution or a release acceptance claim.
+
+### Node-indexed guest parent resolution during ingest — issue #2199
+
+Guest ingest resolves each Proxmox guest's parent node, and that lookup can
+fall back to scanning for agent candidates by node name. Walking every resource
+for every guest made each snapshot rebuild quadratic in the estate. Every
+agent-producing source is ingested before the VM and container loops, so the
+registry buckets agents by lowercased node name for those loops, reusing
+`agentNodeScanIndex` from `buildChildCounts`. `ingestRecord` rebuilds a live
+index whenever an ingest yields an agent, and the indexed walk skips entries
+that are no longer the registry's current object for their ID, so resolution
+matches the full scan exactly. `TestGuestIngestParentsMatchFullAgentScan`
+compares every guest's ingest-time parent with the full scan, including a
+cluster whose guests are reachable only through the scan, and
+`TestAgentNodeScanIndexTracksAgentsIngestedWhileLive` pins the rebuild. On a
+synthetic estate of 8-node clusters the rebuild moved from 74 to 42 ms at 2,080
+resources and now grows linearly; that is component evidence, not installed
+fleet CPU attribution.
+
+### Host continuity overlays reuse one build per registry generation
+
+`ReadStateWithHostContinuity` overlays standalone agents that are offline
+across a restart onto the live read state by building a registry clone. The
+monitor requests that overlay on every canonical read-state lookup, which
+alert evaluation makes once per resource per poll, so a single offline agent
+made every poll rebuild the registry once per resource for up to 72 hours. The
+adapter now keeps the last overlay keyed by registry pointer, `LastRebuiltAt`,
+and a fingerprint of the requested records (excluding the build-time
+`UpdatedAt` stamp), and reuses it for at most `overlayReadStateMaxAge` (2
+seconds), since the overlay evaluates source staleness when built. The live
+adapter is never mutated.
+`TestHostContinuityOverlayReusedWithinRegistryGeneration` pins reuse, rebuilds
+on a new generation or different records, and the age bound.
+
+### Bounded incident-history selection
 
 Canonical frontend memory withdrawal is explicit: when a resource snapshot omits the canonical memory metric and its Proxmox memory facet marks usageUnavailable, the display merge must clear any previous metric. Plain partial omission remains compatible with richer REST state, and an incoming canonical metric (including measured zero) takes precedence over unavailable raw evidence. The adapter transition tests pin withdrawal and recovery; the hybrid-memory Chromium fixture exercises the rendered table and drawer at 1280px and 390px. Workload details remain canonical-only: withdrawal shows N/A in the table and removes the Memory section rather than manufacturing a raw-facet total; measured-zero recovery restores Total and Free, with screenshot positioning above fixed navigation. This does not change agent-only or arbitrary field-deletion semantics.
 
@@ -504,7 +556,13 @@ about the same disk cannot diverge.
 
 PBS presentation correlation accepts standalone agents and VM/system-container resources with an agent facet. Preserve unique identity matching and canonical metricsTarget type and ID. Guests without telemetry and mixed ambiguous agent/guest matches must not replace the PBS target.
 
-A single agent surfaced as both a VM/system-container guest and a standalone agent row is one identity, not an ambiguous pair. Collapse candidates that share an agent identity before deciding, and prefer the guest's canonical metricsTarget because it names the persisted host series; the PBS service target names the service key and has no host history. Only distinct agent identities, or candidates whose identity cannot be proven equal, decline to choose. Never use input order or a fallback that discards the PBS row id.
+When the registry uniquely corroborates a PBS connection to a host agent by PBS-reported node name, configured endpoint hostname or reported interface IP, the PBS service may expose that source-native agent ID as `pbs.linkedAgentId`. The user-editable connection name alone is not host identity: it must not attach an unrelated Agent or preempt a corroborated VM-IP/Agent link. This is a presentation link, not a replacement for the PBS service's canonical ID or metrics target. Token-auth connections may lack `nodeName`; consumers must use the explicit link in preference to display-name matching and must not infer one from an IP or name themselves. PVE-only nodes without an actual Agent facet are not host-history candidates, even if their name matches the PBS connection. A changed link invalidates any remembered correlation to an old host.
+
+Direct corroboration also requires a source-native Agent ID and non-zero PBS/Agent observations within five minutes. A current PBS endpoint must not keep a stale Agent's link or disk membership when the address is reused. Interface evidence uses the shared provider-link address filter: loopback, link-local, non-unicast and recognisable Docker-local interfaces cannot prove machine identity; ordinary private management interfaces, custom management bridges and explicit global-unicast report-IP hints remain eligible. URL hostname extraction preserves bracketed IPv6 literals instead of truncating at their first colon. `TestPBSDirectHostLinkRejectsUnsafeObservations`, `TestPBSDirectHostLinkPreservesManagementEvidence` and `TestPBSDirectHostLinkWithdrawsAndReplacesStaleAgent` pin these boundaries. `TestPBSHostHistoryThreeServerTopology` proves source-native host targets and Agent disk/network/I/O telemetry remain distinct for two PVE guests and one independently IP-corroborated non-PVE PBS among nine Agents; it is synthetic, not the reporter's installed VirtualBox evidence.
+
+For a PBS inside a PVE VM whose in-guest Agent omits interface IPs, the registry may also corroborate a unique Agent-to-VM state link with a unique running VM reporting the PBS endpoint's exact IP. All three observations must be within five minutes, and reused/non-unique IPs, stopped guests or competing Agent links decline to associate. This is an alternate backend evidence chain, not frontend hostname inference; it cannot identify a VirtualBox guest without equivalent observed topology.
+
+A single agent surfaced as both a VM/system-container guest and a standalone agent row is one identity, not an ambiguous pair. Collapse candidates that share an agent identity before deciding, and prefer the guest's canonical metricsTarget because it names the persisted host series; the PBS service target names the service key and now records only PBS API node-status CPU/memory history, not host-agent disk, network, or I/O. Only distinct agent identities, or candidates whose identity cannot be proven equal, decline to choose. Never use input order or a fallback that discards the PBS row id.
 
 A realtime refresh can briefly omit the correlated host row while the PBS server row remains. Retain the last resolved correlation per PBS server across that omission rather than substituting the PBS service target, so the drawer's identity rows and history target stay stable. Reuse the remembered host only while it is still fresh relative to the server and drop it once stale, so a removed or replaced host is not advertised indefinitely; a present but ambiguous host still declines.
 
@@ -732,6 +790,13 @@ dense platform table rendering must use `PlatformTableRelativeTimeValue` /
 `formatPlatformTableRelativeTimeValue` for relative labels, compact defaults,
 invalid/empty markers, and tabular styling instead of importing
 `formatRelativeTime` or declaring local timestamp-age helpers in table files.
+Kubernetes controller Detail timestamps (Job completion and start, CronJob
+last success and last schedule) are relative-age values under that rule:
+`KubernetesControllersTable` renders them as a labelled age through
+`formatPlatformTableRelativeTimeValue` with the absolute
+`formatPlatformTableDateTimeValue` time as hover title, never as the raw RFC
+3339 string the agent reports, and the Detail column carries enough weight
+for those labelled ages to fit whole on a full-width desktop table.
 Duration and interval cells keep the same split: unified-resource or
 source-specific consumers own which elapsed duration, human fallback, or poll
 interval field is meaningful, while dense platform table rendering must use
@@ -762,6 +827,21 @@ guest identity on one line and makes every row keyboard- and touch-operable so
 the complete guest identity and job context are available through an explicit
 detail disclosure rather than hover-only title text. Compact status, route,
 last-sync, and next-sync values must remain fully visible in the scanning row.
+The same disclosure stays available at every container width and leads with
+the job's complete error text: the scanning row keeps the error on one
+truncated line, and the narrower layouts drop the error, schedule, duration,
+and failure columns, so the reason a job failed must never depend on the
+column being present or wide enough. Replication search matches that error
+text.
+`ProxmoxCephTable` and `ProxmoxMailGatewayTable` size every visible column
+through `getPlatformTableWeightedColumnWidthStyle` above their phone
+projections. A fixed-layout table that sizes only its always-on columns leaves
+the optional ones to split the remainder, which clips their headers and values
+on a full-width desktop table. The Ceph row keeps the health message ahead of
+the daemon tally as width shrinks, keeps one five-value phone projection
+(cluster, health, OSDs, pools, capacity) whose values each fit whole, and
+leaves quorum membership and the FSID to the cluster disclosure, where the
+FSID stays searchable and is shown in full.
 Optional numeric table cells follow the same split: unified-resource consumers
 own which count or replica field is meaningful, whether the domain should
 zero-default an absent scheduler/service/inventory count, whether a
@@ -1068,7 +1148,10 @@ container inventory table.
     provider-owned resource to the standalone Machines list. Presentation-only
     correlation retains the canonical PBS row id and service facet, uses the
     canonical host/guest metrics target and telemetry facets, and fails closed when no host
-    matches or more than one candidate matches. It must not alter registry
+    matches or more than one candidate matches. A registry-corroborated
+    `pbs.linkedAgentId` selects the matching Agent facet even when token-auth
+    PBS has no node name or a same-host PVE API node has a different label;
+    a PVE-only row cannot supply host History. It must not alter registry
     identity or treat input order as correlation evidence.
 13. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx` shared with `storage-recovery`: Proxmox workload coverage rows are both a storage/recovery protection-posture surface and a unified-resource identity consumer boundary.
 14. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx` shared with `storage-recovery`: Proxmox recoverable workload table rows are both a storage/recovery coverage surface and a unified-resource platform-table consumer boundary.
@@ -2542,6 +2625,17 @@ persists recurrence JSON and scope in additive columns while legacy one-shot
 rows retain their existing meaning. Scheduling, updating, changing scope, or
 clearing either form remains an atomic operator-state plus resource-timeline
 lifecycle write.
+
+The operator-state banner projects these authoritative occurrence boundaries
+as local absolute start and end timestamps, including scheduled future dates.
+An active maintenance window describes paused attention rather than claiming
+that rejected observations have been acknowledged. Persisted policy remains
+keyed by canonical resource identity. Monitoring reconciles restored native
+alert aliases after registry publication, before evaluation or shared-state
+publication. Mounted operator-state regressions cover active and scheduled
+copy, while the monitoring restore regression covers SQLite policy and native
+aliases before the first observation.
+
 `NormalizeResourceOperatorState` trims whitespace, de-duplicates capability
 names, guarantees a non-nil empty capability list, and lower-cases the
 criticality value before persistence. SQLite reads must apply that
@@ -2933,6 +3027,13 @@ missing provenance remains an immediate fail-closed warning rather than hidden
 detail. Actions is the canonical browser hub for action review, execution
 progress, and recorded outcomes; contextual sources such as Patrol link into an
 exact action review instead of duplicating those mutations locally.
+When a user selects a different action before a prior detail read completes,
+only the detail matching the current `action` URL may open the review. Closing
+the review invalidates pending detail and receipt reads, so a late response
+cannot reopen it or substitute another resource's action. The page also keeps
+Open and History list responses scoped to their latest request; an older tab
+result or error cannot replace the current tab. This is a browser ownership
+rule over server-authored action identity, not a new action or receipt state.
 
 APT review presents server-recorded policy provenance and distinguishes the
 elevated update posture from low-risk-eligible cache cleanup. Both typed actions
@@ -2943,6 +3044,19 @@ explains that refresh or reconnect rehydrates the existing action rather than
 creating a duplicate. Package cleanup is explicitly irreversible; an
 inconclusive or failed cleanup requires a fresh scan and never presents fake
 rollback or automatic retry.
+
+An executing action whose durable dispatch attempt remains `receipt_pending`
+for more than the server's one-hour reconciliation window is still an unknown
+operational outcome. At any age, the Actions review labels that wait as receipt
+pending, warns against a new plan, and can re-read the same action by GET without
+dispatching or closing it; this is available even to read-only viewers. The
+Actions review may offer the already-authorized local
+audit force-fail recourse only after direct resource-state checking, a reason,
+acknowledgement and a fresh detail read. This terminalizes the audit row
+inconclusively; it does not stop or retry the agent operation. The shared
+decision packet and Actions history therefore label an operator-force-failed
+record as outcome unknown, not as a proved failed mutation. Terminal records
+and read-only sessions retain their review evidence but no recovery control.
 
 Task 09 owns shared APT telemetry freshness in
 `internal/unifiedresources/host_apt_telemetry.go`. Capability construction,
@@ -4409,6 +4523,15 @@ projection for notes, analyses, command breadcrumbs, runbooks, and other
 operator-facing incident memory. Agents must not model the same durable backend
 fact in both places as competing primary histories.
 
+Alert lifecycle resource changes record a nonzero occurrence start in
+`MetadataAlertStartedAt` (`alert_started_at`), separately from the transition
+timestamp. A refire retains this start, so the canonical incident query can
+reconstruct the original occurrence without an incident-memory checkpoint.
+Legacy changes without the metadata retain timestamp-based projection.
+`TestMonitorLifecycleRefireReopensRetainedOccurrence` in
+`internal/monitoring/monitor_alert_handling_test.go` proves the metadata bridge,
+ordered lifecycle history and canonical-only reconstruction together.
+
 The unified resource core is strong and canonical, but monitoring and some
 frontend/API consumers are still being tightened around it.
 
@@ -4461,6 +4584,17 @@ Canonical physical-disk views now expose the full disk identity and SMART
 metadata needed by monitoring refresh paths, so physical-disk temperature and
 SMART merges can run from unified `ReadState` instead of from snapshot-owned
 disk arrays.
+For a Proxmox physical disk with a complete instance, node and device path,
+canonical aliases include the persisted PVE disk-alert reference
+`instance:node:disk:sanitized-device-path`. The alert checker and registry use
+one constructor for that legacy reference. It is a lookup alias, never the
+disk's primary canonical ID or source ID, and must not leak across nodes,
+instances or non-disk resources. Ambiguous alias claims still fail closed under
+normal reference resolution. An absent device path retains the historical
+empty-key alert reference, distinct from the root-device key, but cannot be
+claimed as a disk alias without a device path. `TestProxmoxDiskAlertAliasIsScopedAndNotPrimaryIdentity`
+pins the identity boundary, and the registry-backed monitoring mute test pins
+its operator-state consumer.
 When host-agent SMART and Proxmox physical-disk rows merge, the unified
 resource must preserve both the enriched `PhysicalDiskMeta` and the Proxmox
 source payload (`ProxmoxData.NodeName`, `Instance`, and source id). A
@@ -5007,6 +5141,13 @@ for provider-read breadcrumbs such as VMware tasks and events, plus the
 change model instead of introducing a second event shape, and `RecordChange`
 must stay idempotent by canonical change ID so poller refreshes and replayed
 supplemental snapshots do not duplicate resource history.
+Resource identity change emission compares scalar identifiers exactly and
+hostname, IP-address and MAC-address lists as sets. Reordering a source merge
+or changing a list between nil and empty is not an identity change; a changed
+serial/machine ID, guest key or actual set member still is. This prevents
+no-op `identity` configuration rows without weakening canonical matching or
+changing the public resource shape. `TestResourceChangeIdentityIgnoresSetOrderAndEmptySlices`
+pins both the quiet and real-change cases.
 Change emission over registry rebuilds must diff relationships by edge
 identity only: canonical source, canonical target, type, and active state,
 order-insensitive (`relationshipsEquivalent` in `change_emission.go`).
@@ -5089,17 +5230,28 @@ wire-level contract.
 
 `internal/unifiedresources/pbs_host_disks.go` may add `pbs` source membership
 to an agent host and its agent-reported SMART disk resources only when one
-host is uniquely corroborated by the PBS instance name, endpoint hostname, or
-endpoint IP against the host report and interface addresses. Multiple matches
-are ambiguous and must fail closed without assigning PBS ownership.
+host is uniquely corroborated by the PBS-reported node name, endpoint hostname,
+endpoint IP against the host report and interface addresses, or a fresh PVE
+guest-IP/Agent link. The user-editable connection label is not identity evidence.
+All candidate Agent reports must be fresh relative to the PBS observation;
+direct IP corroboration excludes host-local networks under the shared provider
+link filter. Multiple eligible matches are ambiguous and must fail closed
+without assigning PBS ownership.
+
+The same unique match may set `PBSData.LinkedAgentID` on the PBS service only
+after the source-native host ID resolves to a canonical resource carrying that
+Agent facet. This link is for Backups host-history presentation; it does not
+merge the PBS service and host, change either metrics target, or turn PBS API
+polls into a host-agent time series. A missing or ambiguous host leaves the
+link absent.
 
 PBS does not supply the SMART inventory. Disk identity, health, temperature,
 and other typed physical-disk facts therefore remain agent-owned, while the
 PBS source mapping and PBS-parent relationship make the existing disk
 discoverable in Proxmox Backup Server storage context. Canonical parent and
 fact precedence continue to follow the existing source-priority rules.
-`internal/unifiedresources/pbs_pmg_registry_test.go` pins the unique-match and
-ambiguous-match boundaries.
+`internal/unifiedresources/pbs_pmg_registry_test.go` pins the unique-match,
+guest-IP fallback, stale-observation and ambiguous-match boundaries.
 That same shared-consumer boundary now also owns VMware phase-1 detail
 presentation. `frontend-modern/src/components/Infrastructure/`
 `resourceDetailDrawerVmwareModel.ts`,
@@ -5334,3 +5486,40 @@ selection can be retained and recovered without manufacturing a target. The
 boundary, and `scripts/check-drawer-tab-retention.cjs` exercises the rendered
 drawer at desktop and narrow widths: selecting History, dropping the merged
 metrics target, and restoring it must keep the selection and recover the chart.
+
+### Canonical reference resolution uses a derived alias index
+
+After ingest and canonical identity refresh, the registry defers building its
+derived simple-folded index for primary IDs, platform IDs and aliases until a
+public reference lookup actually needs an alias. Rebuilding it on every ingest
+made the registry's batch-ingest benchmarks regress. Distinct resources
+claiming the same alias remain ambiguous. During an ingest batch, internal
+reference reads use the live scan until the index is built. Exact canonical
+IDs, superseded IDs, source IDs and Proxmox guest references retain their
+existing precedence without paying the index build. `ResolveReferenceID` gives
+identity-only monitor callers the same resolution without cloning a resource.
+Registry tests cover Unicode fold classes, ambiguity, precedence and refresh.
+On the 1,500-agent synthetic benchmark, canonical-alias hits moved from about
+225µs and 1,518 allocations to about 5µs and 19 allocations. A server CPU
+profile attributed about 0.77s of a 30s baseline window to the old alias
+scan. These measurements identify this component cost, not the total
+installed-fleet CPU effect.
+
+The first #2260 benchmark job found the eager index build on ingest: its
+50-host merge benchmark rose 27.91% and the mixed ingest benchmark rose 24.88%,
+with additional allocations. After deferring index construction, five
+alternating exact-base/candidate worker runs at load 0.53-0.91 measured the
+50-host merge at 462.4µs versus 464.8µs (+0.5%) and mixed ingest at 4.918ms
+versus 4.953ms (+0.7%), with unchanged allocations. The 200-host merge was
+3.210ms versus 3.192ms (-0.6%). The warmed alias-hit benchmark remained about
+4.7µs and 19 allocations. These paired runs remove the observed local ingest
+regression. The revised #2260 CI Benchmarks job passed on commit
+`bbce69ea65` with no benchmark regression gate failure.
+
+### Actions empty-state copy does not touch the action ledger
+
+The Actions page now hides its Patrol Watch only guidance while the
+`assistantEnabled` session capability is false. This is empty-state
+presentation only: the action audit list, approval counts, review dialog,
+routing and every recorded action outcome are read and rendered exactly as
+before, and no resource or action identity changes.

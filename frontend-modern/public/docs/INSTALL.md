@@ -67,7 +67,12 @@ If you run Proxmox VE, the easiest and most “Pulse-native” deployment is the
 Replace `vX.Y.Z` with the exact release tag you want, then run this on your Proxmox host:
 
 ```bash
+(
+set -e
 export PULSE_VERSION=vX.Y.Z
+pulse_installer_dir="$(mktemp -d)"
+trap 'rm -rf "$pulse_installer_dir"' EXIT
+cd "$pulse_installer_dir"
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh"
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig"
 ssh-keygen -Y verify \
@@ -76,8 +81,16 @@ ssh-keygen -Y verify \
   -n pulse-install \
   -s install.sh.sshsig < install.sh
 bash install.sh --version "${PULSE_VERSION}"
-rm -f install.sh install.sh.sshsig
+)
 ```
+
+The signed server installer uses the `vX.Y.Z` Pulse release, which contains the
+Linux server archive; it does not ask for a GitHub personal access token. A
+`helm-chart-*` release contains a Kubernetes chart, not that archive. If a
+different helper selects a Helm-chart release or asks for a GitHub token, stop
+instead of supplying one or blindly retrying. On the Proxmox host, check
+`pct list` for a partly created Pulse container first; do not run a fresh
+installer over an existing container without checking its state.
 
 > **Note**: The GitHub `install.sh` is the **server** installer. The agent installer is served from your Pulse server at `/install.sh` (see **Settings → Infrastructure → Install on a host**). Do not use the GitHub server installer to install or update `pulse-agent`.
 
@@ -144,7 +157,12 @@ See [KUBERNETES.md](KUBERNETES.md) for ingress and persistence configuration.
 For Linux servers (VM or bare metal), use the official installer:
 
 ```bash
+(
+set -e
 export PULSE_VERSION=vX.Y.Z
+pulse_installer_dir="$(mktemp -d)"
+trap 'rm -rf "$pulse_installer_dir"' EXIT
+cd "$pulse_installer_dir"
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh"
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig"
 ssh-keygen -Y verify \
@@ -153,7 +171,7 @@ ssh-keygen -Y verify \
   -n pulse-install \
   -s install.sh.sshsig < install.sh
 sudo bash install.sh --version "${PULSE_VERSION}"
-rm -f install.sh install.sh.sshsig
+)
 ```
 
 > **Note**: This installs the Pulse server. Use the `/install.sh` endpoint from **Settings → Infrastructure → Install on a host** for installing or upgrading `pulse-agent` on monitored hosts.
@@ -206,6 +224,7 @@ Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Tok
 | Platform | Command |
 |----------|---------|
 | **Docker** | `docker exec pulse /app/pulse bootstrap-token` |
+| **Docker app UIs** (Unraid, Portainer, TrueNAS apps) | Open the Pulse container's console and run `/app/pulse bootstrap-token` |
 | **Kubernetes** | `kubectl exec -it <pod> -- /app/pulse bootstrap-token` |
 | **Systemd** | `sudo pulse bootstrap-token` |
 | **Proxmox LXC** | `pct exec <ctid> -- /usr/local/bin/pulse bootstrap-token` (run on the Proxmox host; the installer prints this command with your container ID at the end of the install) |
@@ -250,7 +269,15 @@ Pulse can update the server runtime to the latest stable version.
 |----------|---------|
 | **Docker** | `docker compose pull && docker compose up -d` |
 | **Kubernetes** | `helm repo update && helm upgrade pulse pulse/pulse -n pulse` |
-| **Systemd / Proxmox LXC** | `sudo /bin/update` |
+| **Systemd / Proxmox LXC with the Pulse-owned helper** | `sudo /bin/update` |
+
+Use `/bin/update --version vX.Y.Z` for an exact target only when the helper was
+installed by the Pulse server installer. On Proxmox community-scripts
+containers, `/bin/update` can belong to a different updater that ignores
+`--version`. If the helper is absent or its owner is unknown, use the
+[signed server-installer flow](#2-bare-metal--systemd) with `PULSE_VERSION` set
+to the exact target tag. The same ownership check applies to rollback. After
+the service restarts, verify the installed version with `GET /api/version`.
 
 Docker without Compose: `docker restart` keeps the old image running. Run `docker pull rcourtman/pulse:vX.Y.Z`, then `docker stop pulse && docker rm pulse` and re-run your original `docker run` command.
 

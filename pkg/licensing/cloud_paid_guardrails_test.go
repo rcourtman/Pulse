@@ -1,6 +1,14 @@
 package licensing
 
-import "testing"
+import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"testing"
+	"time"
+)
 
 func TestNormalizeBillingStatePreservesMissingPlanVersionAndScrubsRetiredMonitoringLimit(t *testing.T) {
 	state := &BillingState{
@@ -91,5 +99,45 @@ func TestCloudClaimsMissingPlanVersionDoesNotReintroduceMonitoringLimit(t *testi
 	}
 	if _, ok := claims.EffectiveLimits()["max_monitored_systems"]; ok {
 		t.Fatalf("EffectiveLimits retained retired max_monitored_systems: %v", claims.EffectiveLimits())
+	}
+}
+
+// A provider control plane must keep starting on a lapsed licence so its
+// portal can sell the renewal, but the licence must still be authentic, and
+// client runtimes must still refuse to take MSP capabilities from it.
+func TestValidateLicenseAllowingLapseReturnsLapsedButStillAuthenticLicence(t *testing.T) {
+	setupTestPublicKey(t)
+	providerPub, providerPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate provider key pair: %v", err)
+	}
+	lapsed := mintTestProviderMSPLicense(t, TierMSP, providerPub, -30*24*time.Hour)
+
+	if _, err := ValidateLicense(lapsed); !errors.Is(err, ErrExpiredLicense) {
+		t.Fatalf("ValidateLicense(lapsed) error = %v, want ErrExpiredLicense", err)
+	}
+	license, err := ValidateLicenseAllowingLapse(lapsed)
+	if err != nil || license == nil {
+		t.Fatalf("ValidateLicenseAllowingLapse(lapsed) = %v, %v; want the licence", license, err)
+	}
+	if !license.IsExpired() || license.GracePeriodEnd == nil || !license.GracePeriodEnd.Before(time.Now()) {
+		t.Fatalf("lapsed licence expired=%v graceEnd=%v; want expired with a grace end in the past", license.IsExpired(), license.GracePeriodEnd)
+	}
+
+	// Authenticity is not relaxed: a licence not signed by the Pulse root is
+	// still refused.
+	claims := Claims{LicenseID: "lic_forged", Email: "attacker@example.com", Tier: TierMSP, IssuedAt: time.Now().Unix(),
+		ExpiresAt: time.Now().Add(-30 * 24 * time.Hour).Unix(), PlanVersion: "msp_starter",
+		EntitlementSigningPublicKey: base64.StdEncoding.EncodeToString(providerPub)}
+	payload, _ := json.Marshal(claims)
+	if _, err := ValidateLicenseAllowingLapse(signTestJWT(t, payload, providerPriv)); err == nil {
+		t.Fatal("ValidateLicenseAllowingLapse accepted a licence not signed by the Pulse root")
+	}
+
+	// Enforcement stays with the runtime: a lease chained to the lapsed
+	// licence does not verify.
+	token := signTestProviderLease(t, providerPriv, lapsed, []string{FeatureWhiteLabel, FeatureMultiTenant})
+	if _, err := VerifyEntitlementLeaseToken(token, testPublicKey, "t-acme.pulse.example-msp.com", time.Now()); err == nil {
+		t.Fatal("a lease chained to a lapsed provider licence must not verify")
 	}
 }

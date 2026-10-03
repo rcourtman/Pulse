@@ -2,9 +2,101 @@ package unifiedresources
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 )
+
+// BenchmarkRegistry_CachedVMReads measures concurrent reads from a clean
+// 1,000-VM view cache. It isolates the reader lock path used by typed accessors
+// from ingestion, sorting, and serialization work.
+func BenchmarkRegistry_CachedVMReads(b *testing.B) {
+	const count = 1000
+	records := make([]IngestRecord, count)
+	for i := range records {
+		records[i] = IngestRecord{
+			SourceID: fmt.Sprintf("vm-%d", i),
+			Resource: Resource{
+				Type:   ResourceTypeVM,
+				Name:   fmt.Sprintf("vm-%d", i),
+				Status: StatusOnline,
+			},
+		}
+	}
+
+	registry := NewRegistry(nil)
+	registry.IngestRecords(SourceProxmox, records)
+	if got := len(registry.VMs()); got != count {
+		b.Fatalf("VM cache length = %d, want %d", got, count)
+	}
+
+	var total atomic.Uint64
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		var local uint64
+		for pb.Next() {
+			local += uint64(len(registry.VMs()))
+		}
+		total.Add(local)
+	})
+	b.StopTimer()
+	if got, want := total.Load(), uint64(b.N*count); got != want {
+		b.Fatalf("read cache totals = %d, want %d", got, want)
+	}
+}
+
+// BenchmarkRegistry_DirtyVMCacheRead measures the invalidation path after a
+// one-resource update: the next typed accessor must rebuild the 1,000-VM view
+// before it can return. This is intentionally separate from the clean-cache
+// read benchmark so rebuild cost is not mistaken for accessor lock cost.
+func BenchmarkRegistry_DirtyVMCacheRead(b *testing.B) {
+	const count = 1000
+	records := make([]IngestRecord, count)
+	for i := range records {
+		records[i] = IngestRecord{
+			SourceID: fmt.Sprintf("vm-%d", i),
+			Resource: Resource{
+				Type:   ResourceTypeVM,
+				Name:   fmt.Sprintf("vm-%d", i),
+				Status: StatusOnline,
+			},
+		}
+	}
+
+	registry := NewRegistry(nil)
+	registry.IngestRecords(SourceProxmox, records)
+	if got := len(registry.VMs()); got != count {
+		b.Fatalf("VM cache length = %d, want %d", got, count)
+	}
+
+	update := IngestRecord{
+		SourceID: "vm-0",
+		Resource: Resource{
+			Type:   ResourceTypeVM,
+			Name:   "vm-0",
+			Status: StatusOnline,
+		},
+	}
+	registry.IngestRecords(SourceProxmox, []IngestRecord{update})
+	if got := len(registry.VMs()); got != count {
+		b.Fatalf("VM count after update = %d, want %d", got, count)
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if i%2 == 0 {
+			update.Resource.Status = StatusOnline
+		} else {
+			update.Resource.Status = StatusOffline
+		}
+		registry.IngestRecords(SourceProxmox, []IngestRecord{update})
+		if got := len(registry.VMs()); got != count {
+			b.Fatalf("VM count after update = %d, want %d", got, count)
+		}
+	}
+}
 
 // BenchmarkIngestRecords_NewResources measures the ingest path when every
 // record creates a new resource (no dedup). This is the baseline cost of

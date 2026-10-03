@@ -238,3 +238,32 @@ describe('extractDocTitle', () => {
     expect(extractDocTitle('Intro\n\n# Later heading', 'FAQ')).toBe('FAQ');
   });
 });
+
+describe('documentation table column semantics', () => {
+  it('assigns column scope to every sanitized Markdown header without promoting data cells', () => {
+    const container = document.createElement('div');
+    container.innerHTML = renderDocMarkdown(
+      '| Feature | Community | Pro |\n| --- | --- | --- |\n| Metrics | Yes | Yes |',
+      'PULSE_PRO',
+    );
+    const headers = Array.from(container.querySelectorAll('thead th'));
+    expect(headers).toHaveLength(3);
+    expect(headers.map((header) => header.getAttribute('scope'))).toEqual(['col', 'col', 'col']);
+    expect(container.querySelectorAll('tbody [scope]')).toHaveLength(0);
+    expect(
+      container.querySelector('table')?.parentElement?.hasAttribute('data-doc-table-scroll'),
+    ).toBe(true);
+  });
+
+  it('does not trust document-supplied roles or scope while assigning trusted column scope', () => {
+    const container = document.createElement('div');
+    container.innerHTML = renderDocMarkdown(
+      '<table><thead><tr><th role="presentation" scope="row" onclick="evil()">Heading</th></tr></thead><tbody><tr><th scope="col" class="fixed">Body label</th><td>Value</td></tr></tbody></table>',
+      'PULSE_PRO',
+    );
+    const header = container.querySelector('thead th');
+    expect(header?.getAttribute('scope')).toBe('col');
+    expect(container.querySelector('[role], [onclick], th[class]')).toBeNull();
+    expect(container.querySelector('tbody th')?.hasAttribute('scope')).toBe(false);
+  });
+});

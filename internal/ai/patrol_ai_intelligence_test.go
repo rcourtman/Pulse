@@ -143,9 +143,10 @@ func TestSeedPrecomputeIntelligence_PopulatesSignals(t *testing.T) {
 	pd.RecordEvent(HistoricalEvent{ResourceID: "vm-1", EventType: EventHighCPU, Timestamp: now.Add(-12 * time.Hour)})
 	ps.SetPatternDetector(pd)
 
-	cd := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 10})
-	cd.DetectChanges([]ResourceSnapshot{{ID: "vm-1", Name: "vm-1", Type: "vm", Status: "running", SnapshotTime: now.Add(-2 * time.Hour)}})
-	cd.DetectChanges([]ResourceSnapshot{{ID: "vm-1", Name: "vm-1", Type: "vm", Status: "stopped", SnapshotTime: now.Add(-1 * time.Hour)}})
+	cd := newLegacyChangeDetector(t,
+		legacyCreatedChange("vm-1", "vm-1", "vm"),
+		legacyStatusChange("vm-1", "vm-1", "vm", "running", "stopped"),
+	)
 	ps.SetChangeDetector(cd)
 
 	corrCfg := DefaultCorrelationConfig()

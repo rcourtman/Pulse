@@ -2275,14 +2275,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
   onCleanup(stopPanelResize);
   const rootClassName = createMemo(() => {
     if (isOverlayLayout()) {
-      return `fixed top-0 right-0 bottom-[var(--pulse-mobile-nav-height)] z-50 flex h-auto w-full flex-col bg-surface transition-transform duration-300 sm:w-[560px] sm:max-w-[calc(100vw-1rem)] ${
+      return `fixed top-0 right-0 bottom-(--pulse-mobile-nav-height) z-50 flex h-auto w-full flex-col bg-surface transition-transform duration-300 sm:w-[560px] sm:max-w-[calc(100vw-1rem)] ${
         isOpen()
           ? 'translate-x-0 overflow-visible border-l border-border shadow-2xl'
           : 'translate-x-full overflow-hidden border-l-0'
       }`;
     }
 
-    return `relative flex h-full flex-shrink-0 flex-col bg-surface transition-all duration-300 ${
+    return `relative flex h-full shrink-0 flex-col bg-surface transition-all duration-300 ${
       isOpen()
         ? 'w-full overflow-visible border-l border-border sm:w-[560px]'
         : 'w-0 overflow-hidden border-l-0'
@@ -2758,7 +2758,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const currentStatusKind = createMemo(() => currentStatus()?.type);
   const currentStatusRowClass = createMemo(() => {
     if (currentStatusKind() === 'retrying') {
-      return 'bg-amber-50/80 text-amber-900 dark:bg-amber-950/25 dark:text-amber-100';
+      return 'bg-amber-50/80 text-amber-900/25 dark:bg-amber-950/25 dark:text-amber-100';
     }
     return '';
   });
@@ -4274,7 +4274,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       <Show when={isOpen() && isOverlayLayout()}>
         <button
           type="button"
-          class="fixed inset-x-0 top-0 bottom-[var(--pulse-mobile-nav-height)] z-40 bg-slate-950/45 backdrop-blur-[1px]"
+          class="fixed inset-x-0 top-0 bottom-(--pulse-mobile-nav-height) z-40 bg-slate-950/45 backdrop-blur-[1px]"
           onClick={props.onClose}
           aria-label="Close Pulse Assistant backdrop"
         />
@@ -4287,7 +4287,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         <Show when={isOpen()}>
           {/* Drag handle to resize the panel (desktop widths only) */}
           <div
-            class="absolute inset-y-0 left-0 z-50 hidden w-1.5 cursor-col-resize touch-none hover:bg-blue-400/40 focus:bg-blue-400/60 focus:outline-none sm:block"
+            class="absolute inset-y-0 left-0 z-50 hidden w-1.5 cursor-col-resize touch-none hover:bg-blue-400/40 focus:bg-blue-400/60 focus:outline-hidden sm:block"
             role="separator"
             aria-orientation="vertical"
             aria-label="Resize Assistant panel"
@@ -4308,7 +4308,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               aria-label={AI_CHAT_COLLAPSE_TITLE}
             >
               <svg
-                class="h-5 w-5 flex-shrink-0"
+                class="h-5 w-5 shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -4336,14 +4336,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
             </h2>
 
             <div
-              class="order-3 flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:order-none sm:w-auto sm:flex-none"
+              class="order-3 flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:order-0 sm:w-auto sm:flex-none"
               data-testid="assistant-header-actions"
             >
               {/* New chat */}
               <button
                 type="button"
                 onClick={handleNewConversation}
-                class="flex flex-shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-muted hover:text-base-content rounded-md border border-border hover:border-border bg-surface transition-colors"
+                class="flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-muted hover:text-base-content rounded-md border border-border hover:border-border bg-surface transition-colors"
                 title={AI_CHAT_NEW_SESSION_BUTTON_TITLE}
                 aria-label={AI_CHAT_NEW_SESSION_BUTTON_TITLE}
               >
@@ -4507,7 +4507,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
                 <Show when={showSessions()}>
                   <div
-                    class="fixed w-[min(20rem,calc(100vw-1rem))] bg-surface rounded-md shadow-sm border border-border z-[9999] overflow-hidden"
+                    class="fixed w-[min(20rem,calc(100vw-1rem))] bg-surface rounded-md shadow-xs border border-border z-9999 overflow-hidden"
                     role="dialog"
                     aria-label={AI_CHAT_SESSION_MENU_TITLE}
                     style={{
@@ -4519,7 +4519,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     <button
                       type="button"
                       onClick={handleNewConversation}
-                      class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 border-b border-border"
+                      class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/25 border-b border-border"
                       aria-label={AI_CHAT_NEW_SESSION_MENU_ARIA_LABEL}
                     >
                       <PlusIcon class="h-4 w-4" aria-hidden="true" />
@@ -4575,7 +4575,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                   <div
                                     class={`group relative flex items-start gap-2 px-3 py-2.5 hover:bg-surface-hover focus-within:bg-surface-hover ${
                                       isSessionCurrent(session.id)
-                                        ? 'bg-blue-50 dark:bg-blue-900'
+                                        ? 'bg-blue-50 dark:bg-blue-900/25'
                                         : ''
                                     }`}
                                   >
@@ -4590,7 +4590,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                           role="option"
                                           aria-selected={isSessionCurrent(session.id)}
                                           aria-label={getSessionPickerOptionLabel(session)}
-                                          class="min-w-0 flex-1 text-left focus:outline-none"
+                                          class="min-w-0 flex-1 text-left focus:outline-hidden"
                                           onClick={() => handleLoadSession(session.id)}
                                           onKeyDown={(event) =>
                                             handleSessionOptionKeyDown(event, session.id)
@@ -4601,7 +4601,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                               {session.title || 'Untitled'}
                                             </div>
                                             <Show when={isSessionWorking(session.id)}>
-                                              <span class="inline-flex shrink-0 items-center gap-1 rounded border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200">
+                                              <span class="inline-flex shrink-0 items-center gap-1 rounded-sm border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200">
                                                 <LoaderCircleIcon class="h-3 w-3 animate-spin" />
                                                 Working
                                               </span>
@@ -4612,7 +4612,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                                 !isSessionWorking(session.id)
                                               }
                                             >
-                                              <span class="shrink-0 rounded border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-700 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200">
+                                              <span class="shrink-0 rounded-sm border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-700 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200">
                                                 Current
                                               </span>
                                             </Show>
@@ -4635,15 +4635,15 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                           <Show when={session.handoff_summary}>
                                             {(summary) => (
                                               <div class="mt-1 flex max-w-full flex-wrap gap-1.5">
-                                                <span class="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+                                                <span class="rounded-sm border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:border-blue-800 dark:bg-blue-950/25 dark:text-blue-200">
                                                   {getSessionHandoffSourceLabel(summary())}
                                                 </span>
-                                                <span class="rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
+                                                <span class="rounded-sm border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
                                                   {getSessionHandoffBadgeLabel(summary())}
                                                 </span>
                                                 <Show when={formatSessionHandoffStatus(summary())}>
                                                   {(status) => (
-                                                    <span class="max-w-full truncate rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
+                                                    <span class="max-w-full truncate rounded-sm border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
                                                       {status()}
                                                     </span>
                                                   )}
@@ -4672,7 +4672,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                             maxLength={AI_CHAT_SESSION_TITLE_MAX_LENGTH}
                                             disabled={sessionRenameSaving()}
                                             aria-label={`New title for ${session.title || 'Untitled'}`}
-                                            class="min-w-0 flex-1 rounded border border-blue-300 bg-surface px-2 py-1 text-sm font-medium text-base-content outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-70 dark:border-blue-800"
+                                            class="min-w-0 flex-1 rounded-sm border border-blue-300 bg-surface px-2 py-1 text-sm font-medium text-base-content outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-70 dark:border-blue-800"
                                           />
                                           <ActionIconButton
                                             type="submit"
@@ -4775,7 +4775,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               }}
               tone="neutral"
               size="lg"
-              class="order-2 sm:order-none"
+              class="order-2 sm:order-0"
               title={AI_CHAT_CLOSE_LABEL}
               label={AI_CHAT_CLOSE_LABEL}
               data-testid="assistant-close-button"
@@ -4787,7 +4787,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           <Show when={transcriptCopyFallback()}>
             {(fallback) => (
               <section
-                class="border-b border-amber-200 bg-amber-50 px-4 py-3 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
+                class="border-b border-amber-200 bg-amber-50 px-4 py-3 text-amber-950/25 dark:border-amber-900/25 dark:bg-amber-950/30 dark:text-amber-100"
                 aria-label={AI_CHAT_TRANSCRIPT_FALLBACK_TITLE}
               >
                 <div class="mb-2 flex items-center justify-between gap-2">
@@ -4815,7 +4815,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </div>
                 <textarea
                   ref={transcriptFallbackTextareaRef}
-                  class="h-36 w-full resize-y rounded-md border border-amber-200 bg-surface px-2 py-2 font-mono text-[11px] leading-relaxed text-base-content outline-none focus:border-amber-400 dark:border-amber-800 dark:bg-surface"
+                  class="h-36 w-full resize-y rounded-md border border-amber-200 bg-surface px-2 py-2 font-mono text-[11px] leading-relaxed text-base-content outline-hidden focus:border-amber-400 dark:border-amber-800 dark:bg-surface"
                   readonly
                   value={fallback().transcript}
                   aria-label={AI_CHAT_TRANSCRIPT_FALLBACK_TEXTAREA_LABEL}
@@ -4829,17 +4829,17 @@ export const AIChat: Component<AIChatProps> = (props) => {
               <section
                 class={`border-b px-4 py-2.5 text-[11px] ${
                   presentation().tone === 'checking'
-                    ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200'
+                    ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/25 dark:text-blue-200'
                     : presentation().tone === 'ready'
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100'
-                      : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/25 dark:text-emerald-100'
+                      : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/25 dark:text-amber-100'
                 }`}
                 aria-label="Assistant selected model route status"
               >
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div class="flex min-w-0 items-start gap-2.5">
                     <span
-                      class={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${
+                      class={`mt-1 h-2 w-2 shrink-0 rounded-full ${
                         presentation().tone === 'checking'
                           ? 'bg-blue-500 dark:bg-blue-300'
                           : presentation().tone === 'ready'
@@ -4879,7 +4879,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                           <button
                             type="button"
                             onClick={switchToProviderReadinessAlternative}
-                            class="inline-flex max-w-[11rem] items-center gap-1.5 rounded-md border border-current/20 bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover"
+                            class="inline-flex max-w-44 items-center gap-1.5 rounded-md border border-current/20 bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover"
                             aria-label={providerReadinessAlternativeButtonLabel()}
                             title={alternative().label}
                           >
@@ -4926,10 +4926,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
           {/* Discovery hint - show when discovery is disabled */}
           <Show when={discoveryEnabled() === false && !discoveryHintDismissed()}>
-            <div class="px-4 py-2 border-b border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900 flex items-center justify-between gap-3 text-[11px] text-cyan-700 dark:text-cyan-200">
+            <div class="px-4 py-2 border-b border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/25 flex items-center justify-between gap-3 text-[11px] text-cyan-700 dark:text-cyan-200">
               <div class="flex items-center gap-2">
                 <svg
-                  class="w-4 h-4 text-cyan-500 dark:text-cyan-400 flex-shrink-0"
+                  class="w-4 h-4 text-cyan-500 dark:text-cyan-400 shrink-0"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -4984,7 +4984,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               <Show when={contextBriefing()!.actionHref && contextBriefing()!.actionLabel}>
                 <a
                   href={contextBriefing()!.actionHref}
-                  class="mt-2 inline-flex rounded border border-border bg-surface px-2 py-1 text-[11px] font-medium text-base-content hover:bg-surface-alt"
+                  class="mt-2 inline-flex rounded-sm border border-border bg-surface px-2 py-1 text-[11px] font-medium text-base-content hover:bg-surface-alt"
                 >
                   {contextBriefing()!.actionLabel}
                 </a>
@@ -5038,7 +5038,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               }
             >
               <div
-                class="mb-2 overflow-hidden rounded-md border border-border bg-surface-alt text-base-content shadow-sm"
+                class="mb-2 overflow-hidden rounded-md border border-border bg-surface-alt text-base-content shadow-xs"
                 data-testid="assistant-activity-dock"
               >
                 <Show when={currentStatus()}>
@@ -5130,7 +5130,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     <button
                       type="button"
                       onClick={() => updateControlLevel('controlled')}
-                      class="inline-flex shrink-0 items-center rounded-md border border-red-200 bg-surface px-2 py-1 text-[10px] font-medium text-red-700 transition-colors hover:bg-red-50 hover:text-red-900 dark:border-red-800 dark:bg-surface dark:text-red-200 dark:hover:bg-red-950/40"
+                      class="inline-flex shrink-0 items-center rounded-md border border-red-200 bg-surface px-2 py-1 text-[10px] font-medium text-red-700 transition-colors hover:bg-red-50 hover:text-red-900/25 dark:border-red-800 dark:bg-surface dark:text-red-200 dark:hover:bg-red-950/40"
                       aria-label={AI_CHAT_SWITCH_TO_APPROVAL_LABEL}
                     >
                       Switch to Ask first
@@ -5194,7 +5194,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                           };
                           return (
                             <div
-                              class="flex min-h-7 items-center gap-2 rounded-md bg-white/70 px-2 py-1 text-xs text-blue-900 outline-none transition-colors focus:bg-white focus:ring-2 focus:ring-blue-500/40 dark:bg-blue-900/30 dark:text-blue-100 dark:focus:bg-blue-900/50"
+                              class="flex min-h-7 items-center gap-2 rounded-md bg-white/70 px-2 py-1 text-xs text-blue-900/25 outline-hidden transition-colors focus:bg-white focus:ring-2 focus:ring-blue-500/40 dark:bg-blue-900/30 dark:text-blue-100 dark:focus:bg-blue-900/50"
                               classList={{
                                 'bg-blue-50 ring-2 ring-blue-500/60 dark:bg-blue-800/50':
                                   queuedFollowUpCommandTargetId() === queued.id,
@@ -5372,7 +5372,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               class="relative"
             >
               <div
-                class={`relative flex min-h-[56px] items-end rounded-lg border bg-surface-alt shadow-sm transition-colors ${
+                class={`relative flex min-h-[56px] items-end rounded-lg border bg-surface-alt shadow-xs transition-colors ${
                   mentionActive() || slashCommandActive()
                     ? 'border-blue-400 ring-2 ring-blue-500/20'
                     : 'border-border focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20'
@@ -5402,7 +5402,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         : undefined
                   }
                   rows={1}
-                  class="max-h-40 min-h-[54px] flex-1 resize-none bg-transparent px-3.5 py-3.5 pr-14 text-sm leading-5 text-base-content placeholder-slate-400 focus:outline-none"
+                  class="max-h-40 min-h-[54px] flex-1 resize-none bg-transparent px-3.5 py-3.5 pr-14 text-sm leading-5 text-base-content placeholder-slate-400 focus:outline-hidden"
                 />
                 <div data-mention-autocomplete>
                   <MentionAutocomplete
@@ -5469,7 +5469,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       aria-label="Assistant selected model route health"
                       aria-live="polite"
                       title={health().title}
-                      class={`inline-flex h-7 max-w-[11rem] shrink-0 items-center gap-1.5 rounded-md border px-2 text-[10px] font-medium ${health().className}`}
+                      class={`inline-flex h-7 max-w-44 shrink-0 items-center gap-1.5 rounded-md border px-2 text-[10px] font-medium ${health().className}`}
                       data-testid="assistant-provider-route-health"
                     >
                       <span
@@ -5487,7 +5487,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       aria-label="Assistant capability availability"
                       aria-live="polite"
                       title={health().title}
-                      class={`inline-flex h-7 max-w-[9rem] shrink-0 items-center gap-1.5 rounded-md border px-2 text-[10px] font-medium ${health().className}`}
+                      class={`inline-flex h-7 max-w-36 shrink-0 items-center gap-1.5 rounded-md border px-2 text-[10px] font-medium ${health().className}`}
                       data-testid="assistant-surface-tools-health"
                     >
                       <WrenchIcon
@@ -5537,7 +5537,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     ref={controlModeButtonRef}
                     onClick={toggleControlMenu}
                     onKeyDown={handleControlModeTriggerKeyDown}
-                    class={`flex flex-shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-md border transition-colors ${controlPresentation().pillClassName} ${controlSaving() ? 'opacity-70 cursor-wait' : 'hover:opacity-90'}`}
+                    class={`flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-md border transition-colors ${controlPresentation().pillClassName} ${controlSaving() ? 'opacity-70 cursor-wait' : 'hover:opacity-90'}`}
                     title={AI_CHAT_CONTROL_MODE_LABEL}
                     aria-label={`${AI_CHAT_CONTROL_MODE_LABEL}: ${controlPresentation().label}`}
                     aria-haspopup="menu"
@@ -5560,7 +5560,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
                   <Show when={showControlMenu()}>
                     <div
-                      class="absolute bottom-full left-0 z-50 mb-2 w-60 overflow-hidden rounded-md border border-border bg-surface shadow-sm"
+                      class="absolute bottom-full left-0 z-50 mb-2 w-60 overflow-hidden rounded-md border border-border bg-surface shadow-xs"
                       role="menu"
                       aria-label={AI_CHAT_CONTROL_MODE_MENU_LABEL}
                     >
@@ -5629,7 +5629,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               <Show when={lastAssistantTurnSummary()}>
                 {(summary) => (
                   <div
-                    class="flex h-5 min-w-0 items-center justify-end self-end text-[10px] font-medium text-muted sm:h-7 sm:max-w-[14rem] sm:shrink-0 sm:self-auto"
+                    class="flex h-5 min-w-0 items-center justify-end self-end text-[10px] font-medium text-muted sm:h-7 sm:max-w-56 sm:shrink-0 sm:self-auto"
                     aria-label={summary().title}
                     title={summary().title}
                   >

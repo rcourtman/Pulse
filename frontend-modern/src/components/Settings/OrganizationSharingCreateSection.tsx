@@ -28,7 +28,7 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
                 labelClass="text-xs font-medium uppercase tracking-wide text-muted"
                 value={props.state.targetOrgId()}
                 onChange={(event) => props.state.updateTargetOrg(event.currentTarget.value)}
-                selectBaseClass={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${props.state.targetOrgError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
+                selectBaseClass={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 ${props.state.targetOrgError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
               >
                 <option value="">Select organization</option>
                 <For each={props.state.targetOrgOptions()}>
@@ -48,7 +48,7 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
               onChange={(event) =>
                 props.state.setAccessRole(event.currentTarget.value as ShareAccessRole)
               }
-              selectBaseClass="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              selectBaseClass="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             >
               <For each={ORGANIZATION_SHARE_ROLE_OPTIONS}>
                 {(option) => <option value={option.value}>{option.label}</option>}
@@ -57,14 +57,14 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
           </div>
 
           <Show when={props.state.unifiedResourceOptions().length > 0}>
-            <div class="rounded-md border border-blue-200 bg-blue-50 p-3 space-y-2 dark:border-blue-900 dark:bg-blue-900">
+            <div class="rounded-md border border-blue-200 bg-blue-50 p-3 space-y-2 dark:border-blue-900/25 dark:bg-blue-900/25">
               <FormSelect
                 label="Quick Pick Resource"
                 labelClass="text-xs font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300"
                 fieldBaseClass="space-y-1 block"
                 value={props.state.selectedQuickPick()}
                 onChange={(event) => props.state.applyResourceQuickPick(event.currentTarget.value)}
-                selectBaseClass="w-full rounded-md border border-blue-300 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-700"
+                selectBaseClass="w-full rounded-md border border-blue-300 bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:border-blue-700"
               >
                 <option value="">Select resource</option>
                 <For each={props.state.unifiedResourceOptions()}>
@@ -109,7 +109,7 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
                   value={props.state.resourceType()}
                   onInput={(event) => props.state.updateResourceType(event.currentTarget.value)}
                   placeholder={CANONICAL_RESOURCE_TYPES.join(' | ')}
-                  class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${props.state.resourceTypeError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
+                  class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 ${props.state.resourceTypeError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
                 />
                 <Show when={props.state.resourceTypeError() !== ''}>
                   <p class="text-xs text-red-600 dark:text-red-400">
@@ -127,7 +127,7 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
                   value={props.state.resourceId()}
                   onInput={(event) => props.state.updateResourceId(event.currentTarget.value)}
                   placeholder="resource identifier"
-                  class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${props.state.resourceIdError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
+                  class={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 ${props.state.resourceIdError() ? 'border-red-400 dark:border-red-500' : 'border-border'}`}
                 />
                 <Show when={props.state.resourceIdError() !== ''}>
                   <p class="text-xs text-red-600 dark:text-red-400">
@@ -145,7 +145,7 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
                   value={props.state.resourceName()}
                   onInput={(event) => props.state.updateResourceName(event.currentTarget.value)}
                   placeholder="optional display name"
-                  class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 />
               </label>
             </div>
@@ -168,7 +168,7 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
 
     <Show when={!props.state.canManageCurrentOrg()}>
       <div class="p-4 sm:p-6">
-        <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300">
+        <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-300">
           Admin or owner role required to create or remove organization shares.
         </div>
       </div>

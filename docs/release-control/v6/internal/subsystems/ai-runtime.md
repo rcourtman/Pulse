@@ -25,6 +25,16 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### RAID configured-member read evidence — issue #2369
+
+The existing host RAID status tool preserves optional `required_devices` from
+the canonical host view alongside source-native total, active, working, failed
+and spare counts. Omission means the configured requirement is unknown, not
+zero members. A total that includes spares is not evidence of a member deficit;
+the shared health owner remains authoritative for risk. Tool serialization tests
+check the separate counts. This read-only projection creates no feature, route,
+array-repair grant, backup verdict or recovery confirmation.
+
 ### Ollama Basic Auth continuity
 Patrol's runtime provider factory must carry the persisted Ollama username and
 password into streaming requests without trimming password bytes.
@@ -44,6 +54,17 @@ callers retain best-effort matching. `TestIncidentStore_LifecycleReplayIdentity`
 covers unchanged active evaluations, repeated fired/resolved transitions,
 JSON checkpoint reload, canonical-backed shells and delayed historical events.
 `TestIncidentStore_LifecycleRapidRecurrence` covers distinct subsecond starts.
+
+An explicit newer refire reopens the same retained occurrence. The checkpoint
+persists its refire timestamp so an older resolution, historical read repair,
+or repeated refire cannot override the latest transition. Canonical resource
+history carries `alert_started_at` separately from transition time, allowing
+`QueryIncidents` to reconstruct one occurrence after fire, resolution and refire
+even without a saved incident shell. Legacy history without this metadata keeps
+its timestamp-based fallback. `internal/ai/memory/incidents_refire_test.go` pins
+checkpoint and stale-replay behaviour, while
+`TestMonitorLifecycleRefireReopensRetainedOccurrence` exercises both local and
+canonical projections, including reconstruction from canonical history.
 
 This does not migrate existing duplicate records, change bounded retention,
 make acknowledgement event replay idempotent, or prove aggregate write-byte
@@ -75,6 +96,17 @@ This does not change occurrence identity, retention or notification timing, nor
 does it eliminate snapshot serialization. Proof:
 `internal/ai/memory/incidents_unchanged_test.go` covers unchanged evaluations,
 metadata, restart, resolution/recurrence, file loss and failed-write retry.
+
+Coalesced asynchronous checkpoints are tracked until they finish. A queued save
+still creates the data directory and writes its temp file after the mutation
+returns, so a caller that removes or inspects that directory joins in-flight
+saves through the store's unexported `flush` first. Tests backed by `t.TempDir`
+register it as a cleanup; unjoined saves recreated the removed directory or
+failed its cleanup with "directory not empty" on loaded CI runners. This is an
+internal durability boundary. It does not change checkpoint timing,
+coalescing or the stored format, and it is not a shutdown flush.
+`TestIncidentStoreFlushJoinsQueuedSave` proves the join covers a queued save
+that has not started.
 
 Assistant owns composer registration and focus on every open, rather than only
 on component mount. Closing clears the registered input so later keyboard
@@ -6622,6 +6654,17 @@ The patrol-local `memory.ChangeDetector.GetChangesSummary` path now also
 delegates to the shared memory recent-change presentation helper, so any
 future fallback summary entry point inherits the same heading, resource
 prefixing, and change-type labels without re-implementing the markdown shape.
+That detector is a reader of legacy history, not a detector. Its on-disk
+history (`ai_changes.json`) was written by releases that still ran change
+detection, which patrol dropped when it moved to agentic execution. The
+detector loads that file once at construction and never modifies it, so it
+holds no lock and has no background save to join before a data directory is
+removed. `DetectChanges`, its snapshot diffing and `ResourceSnapshot` were
+reachable only from tests and are retired; new change history belongs in the
+unified-resource timeline, not in this fallback. Tests seed the fallback
+through a legacy `ai_changes.json`, the same path production reads, and
+`TestChangeDetector_LegacyHistoryIsReadOnly` proves reads leave the file and
+directory untouched.
 Those unified-resource action and export audit records are now also exposed
 through the enterprise audit read surface so operators can inspect the
 execution trail without reaching into storage internals.
@@ -8436,3 +8479,18 @@ complete new snapshot, never a partially written file. This is an internal
 durability boundary, not a public API or stored-format change. The
 `TestKnowledgeStore_SaveLoad` cleanup join and the concurrent-save reload
 regression in `internal/ai/adapters/adapters_additional_test.go` enforce it.
+
+### AI entry points follow the assistant session capability
+
+Every AI entry point in the app shell follows the `assistantEnabled` session
+capability (AI enabled and a provider configured, or mock mode). That covers
+the Assistant launcher and Assistant command-palette commands, and the Patrol
+top-level tab, mobile bottom-bar slot, `g r` shortcut, shortcuts-help row and
+`Go to Patrol` palette command. Patrol cannot run without a configured
+provider, so an AI-off install no longer carries navigation that only reaches
+an "off" setup page, which restores the issue #905 behaviour for Patrol. The
+Settings Patrol and Assistant items and the `/patrol` route stay reachable, so
+turning AI back on needs no new path. This is presentation gating only: Patrol
+runtime, findings, schedules and the capability's server derivation are
+unchanged. `AppLayout.test.tsx`, `CommandPaletteModal.test.tsx`,
+`KeyboardShortcutsModal.test.tsx` and `App.architecture.test.ts` pin it.

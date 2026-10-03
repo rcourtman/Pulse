@@ -348,6 +348,16 @@ func TestApplyRemoteSettings(t *testing.T) {
 	}
 }
 
+func TestLoadConfigDisableClusterPeerSensorsFlag(t *testing.T) {
+	cfg, err := loadConfig([]string{"--disable-cluster-peer-sensors"}, func(string) string { return "" })
+	if err != nil {
+		t.Fatalf("loadConfig returned unexpected error: %v", err)
+	}
+	if !cfg.DisableClusterPeerSensors {
+		t.Fatal("expected --disable-cluster-peer-sensors to disable peer sensor collection")
+	}
+}
+
 func TestApplyRemoteSettingsHonorsLocalDockerOptOut(t *testing.T) {
 	logger := zerolog.New(io.Discard)
 	cfg := &Config{

@@ -34,7 +34,7 @@ export const SOURCE_PLATFORM_PRESENTATION: Record<KnownSourcePlatform, SourcePla
     ...GENERATED_SOURCE_PLATFORM_PRESENTATION,
     availability: {
       label: 'Availability',
-      tone: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
+      tone: 'bg-sky-100 text-sky-700 dark:bg-sky-900/25 dark:text-sky-300',
     },
   } as Record<KnownSourcePlatform, SourcePlatformPresentation>;
 

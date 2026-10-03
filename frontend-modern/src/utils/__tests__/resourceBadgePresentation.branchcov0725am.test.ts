@@ -73,7 +73,7 @@ describe('resourceBadgePresentation — dead-arm reachability characterization (
     expect(badge).not.toBeNull();
     expect(badge?.label).toBe('invented-resource-kind');
     expect(badge?.classes).toBe(
-      'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-base-content',
+      'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-base-content',
     );
   });
 

@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import tailwindcss from '@tailwindcss/vite';
 import solid from 'vite-plugin-solid';
 import sri from 'vite-plugin-sri-gen';
 import path from 'path';
@@ -50,7 +51,11 @@ export default defineConfig(({ mode }) => ({
   // the whole app incl. all Settings panels and every locale) at cold start,
   // defeating route-level code splitting on slow devices. Dynamic-import SRI
   // is still enforced through the generated import map integrity block.
-  plugins: [solid(), sri({ algorithm: 'sha384', preloadDynamicChunks: false })],
+  plugins: [
+    tailwindcss(),
+    solid(),
+    sri({ algorithm: 'sha384', preloadDynamicChunks: false }),
+  ],
   resolve: {
     alias: {
       '@': srcAlias,

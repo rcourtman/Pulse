@@ -42,7 +42,7 @@ describe('quickstart copy contract', () => {
     }
   });
 
-  it('keeps Relay public docs aligned with the Relay tier instead of Pro-only copy', () => {
+  it('keeps retired Relay guidance about existing pairings, not a current offer', () => {
     const security = readRepoFile('SECURITY.md');
     const publicSecurity = readRepoFile('frontend-modern/public/docs/SECURITY.md');
     const screenshots = readRepoFile('docs/SCREENSHOTS.md');
@@ -53,10 +53,47 @@ describe('quickstart copy contract', () => {
       expect(copy).not.toContain('relay protocol (Pro feature)');
     }
 
-    expect(security).toContain('Relay Security (Relay and Above)');
-    expect(publicSecurity).toContain('Relay Security (Relay and Above)');
-    expect(security).toContain('Relay, Pro, legacy Pro+, or Cloud license');
-    expect(publicSecurity).toContain('Relay, Pro, legacy Pro+, or Cloud license');
+    for (const copy of [security, publicSecurity]) {
+      expect(copy).toContain('### Existing Mobile Pairings (Retirement)');
+      expect(copy).toContain('Pulse Mobile and Relay retire on **31 March 2027**');
+      expect(copy).toContain('Existing paired phones keep\nworking until then');
+      expect(copy).toContain('Relay is no longer sold');
+      expect(copy).toContain('receive Pro features at their current price');
+      expect(copy).toContain('Paired-app access remains license-gated until retirement');
+      expect(copy).toMatch(/Relay connects the app, not the\s+web UI/);
+      expect(copy).not.toContain('Relay Security (Relay and Above)');
+      expect(copy).not.toContain('Relay, Pro, legacy Pro+, or Cloud license');
+    }
+    expect(publicSecurity).toBe(security);
+  });
+
+  it('keeps FAQ and plan guidance current without offering retired Relay', () => {
+    for (const file of ['FAQ.md', 'PULSE_PRO.md']) {
+      const copy = readRepoFile(`docs/${file}`);
+      const shippedCopy = readRepoFile(`frontend-modern/public/docs/${file}`);
+      expect(shippedCopy).toBe(copy);
+
+      const text = copy.replace(/\s+/g, ' ');
+      expect(text).toContain('31 March 2027');
+      expect(text).toContain('Existing paired phones keep working until then');
+      expect(text).toContain('Relay is no longer sold');
+      expect(text).toContain('Pro features at their current price');
+      expect(text).toContain('for as long as their subscription continues');
+      expect(text).toContain("Those Pro features do not end with the app's retirement");
+      expect(text).toContain('Relay connects the app, not the web UI');
+      expect(text).toContain('own VPN or tunnel');
+      expect(text).toContain('ntfy, Gotify or Pushover');
+      expect(text).not.toMatch(/Relay (?:adds|includes) secure remote (?:web )?access/i);
+      expect(text).not.toContain('Remote access via Relay');
+      expect(text).not.toContain('Community / Relay / Pro self-hosted plans');
+      expect(copy).not.toMatch(/^\| Relay \|/m);
+    }
+
+    const plans = readRepoFile('docs/PULSE_PRO.md');
+    expect(plans).toContain('Relay (legacy)');
+    expect(plans).toContain('Legacy Relay payloads can still show 14-day history');
+    expect(plans).toContain('Continuing Relay subscribers receive the **Pro** column');
+    expect(plans).toContain('Existing Relay subscriber');
   });
 
   it('keeps public AI docs aligned with model-owned Patrol and Assistant reasoning', () => {

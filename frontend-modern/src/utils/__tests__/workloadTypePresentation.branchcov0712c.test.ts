@@ -51,7 +51,7 @@ describe('workloadTypePresentation (branch coverage 0712c)', () => {
         label: 'VM',
         pluralLabel: 'VMs',
         title: 'Virtual Machine',
-        className: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+        className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300',
       });
     });
 
@@ -60,7 +60,7 @@ describe('workloadTypePresentation (branch coverage 0712c)', () => {
         label: 'LXC',
         pluralLabel: 'LXC',
         title: 'System Container',
-        className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+        className: 'bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300',
       });
     });
 
@@ -69,7 +69,7 @@ describe('workloadTypePresentation (branch coverage 0712c)', () => {
         label: 'Container',
         pluralLabel: 'Containers',
         title: 'Application Container',
-        className: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
+        className: 'bg-sky-100 text-sky-700 dark:bg-sky-900/25 dark:text-sky-300',
       });
     });
 
@@ -78,7 +78,7 @@ describe('workloadTypePresentation (branch coverage 0712c)', () => {
         label: 'Pod',
         pluralLabel: 'Pods',
         title: 'Kubernetes Pod',
-        className: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+        className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
       });
     });
 
@@ -96,7 +96,7 @@ describe('workloadTypePresentation (branch coverage 0712c)', () => {
         label: 'LXC',
         pluralLabel: 'LXC',
         title: 'System Container',
-        className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+        className: 'bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300',
       });
     });
 
@@ -111,7 +111,7 @@ describe('workloadTypePresentation (branch coverage 0712c)', () => {
         label: 'My VM',
         pluralLabel: 'My VMs',
         title: 'My Machine',
-        className: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+        className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300',
       });
     });
 
@@ -122,7 +122,7 @@ describe('workloadTypePresentation (branch coverage 0712c)', () => {
         label: 'VM',
         pluralLabel: 'VMs',
         title: 'Virtual Machine',
-        className: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+        className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300',
       });
     });
 
@@ -131,7 +131,7 @@ describe('workloadTypePresentation (branch coverage 0712c)', () => {
         label: 'Pod',
         pluralLabel: 'Pods',
         title: 'My Pod Title',
-        className: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+        className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
       });
     });
 

@@ -3431,40 +3431,150 @@ Pulse-service-backed capabilities. `providerChained` retains its narrower
 meaning: a Pulse-signed licence is available to embed so release builds can
 verify the lease.
 
-### Provider MSP tenant networks remain installation scoped
+### Provider MSP health monitor keeps clients running across upgrades
 
-An existing isolated network is accepted for provisioning only when its tenant
-and provider-MSP runtime labels match the requested tenant; an empty tenant ID
-is refused. Support containers selected for connection or forced disconnect
-must also be on this installation's configured provider ingress network. Client
-removal selects only its derived, correctly labelled network and disconnects
-only local support containers still attached to it. Shared role labels or a
-network name alone must not cross an MSP installation boundary. Regression
-coverage is in `internal/cloudcp/docker/manager_test.go`; installed multi-provider
-acceptance remains separate.
-
-### Provider MSP health monitor keeps clients running across upgrades (v6.5)
-
-Backported to the v6.5 line from main (#2216, reconciled in `82f07453f8`).
-The control plane's health monitor restarts an unhealthy client workspace with
-a single Docker restart, never a stop: Docker's `unless-stopped` policy does
-not bring back a container stopped through the API. Once at startup and before
-each health check, it reattaches the provider support containers (Traefik and
-the control plane) to every active client's isolated tenant network, which a
-recreate of either container drops. Without it, upgrading a provider install
-to this line left the recreated control plane off every client network, so
-clients could not renew their entitlement leases and the portal could not read
-their health, and a recreated Traefik had no route to any client. Reattachment
-keeps the installation-scoped ownership checks already on this line: only a
-network carrying this tenant's runtime labels, and only this installation's
-support containers, are touched; a client without an isolated network is
-skipped. Regression coverage:
-`TestHealthMonitorReattachesSupportContainersAndRestartsInsteadOfStopping` and
-`TestHealthMonitorKeepsProviderInstallationsIsolatedOnRecovery` in
-`internal/cloudcp/health_monitor_test.go`, and
+The control plane's health monitor restarts an unhealthy client workspace
+with a single Docker restart, never a stop: Docker's `unless-stopped` policy
+does not bring back a container stopped through the API, so a stopped client
+stayed down until someone started it by hand. Before each health check, and
+once as soon as the control plane starts, the monitor also reattaches the
+provider support containers (Traefik and the control plane) to every active
+client's isolated tenant network. Recreating either one, which every
+`upgrade.sh` run does to the control plane, drops those attachments, cutting
+the client's Traefik route and, with the old stop behaviour, taking every
+client offline three minutes later. A client without an isolated network is
+skipped quietly during recovery. Provisioning may create a missing isolated
+network, but it must not adopt a same-named pre-existing network unless the
+network has the exact tenant ID and provider-MSP tenant-runtime labels; an
+empty tenant ID is invalid. This prevents a foreign or unlabelled network from
+becoming a client's runtime route before support containers are attached.
+Regression coverage:
+`TestHealthMonitorReattachesSupportContainersAndRestartsInsteadOfStopping` in
+`internal/cloudcp/health_monitor_test.go` and
 `TestEnsureSupportContainersOnTenantNetworkSkipsMissingNetwork` and
-`TestEnsureSupportContainersOnTenantNetworkRejectsWrongOwner` in
+`TestEnsureTenantNetworkRejectsUnownedExistingNetwork` in
 `internal/cloudcp/docker/manager_test.go`.
+
+### A provider control plane keeps its portal up on a lapsed licence
+
+A provider-hosted control plane used to refuse to start once its licence was
+past expiry and the 7-day grace: `ValidateLicense` rejected it, so `LoadConfig`
+failed and the portal went down at the next restart. That is exactly when the
+provider needs the portal, because Plan is the only place to buy or renew;
+the same happened to a paying provider whose subscription lapsed. Startup now
+resolves an authentic, key-bound licence with
+`pkglicensing.ValidateLicenseAllowingLapse`, preferring a current licence
+(renewed first) and otherwise the lapsed one that expired later, and logs the
+lapse. Nothing is unlocked by this: client runtimes still verify the provider
+licence carried in each lease with `ValidateLicense` and drop MSP capabilities
+once it lapses, workspace creation refuses with `provider_msp_license_lapsed`,
+and the refresher still refuses to adopt a lapsed licence from the licence
+server. The Plan panel reads `lapsed` from the plan state, says the evaluation
+or plan ended and what that means for clients, and offers the plans, including
+the same plan again after a paid plan ends; `provider-msp status` prints
+`license_lapsed` without failing, so a lapsed install can still upgrade. The
+portal also shows a control plane error's `message` in preference to its
+machine `error` code, which had been surfacing codes such as
+`provider_msp_license_lapsed` and `already_subscribed` as the whole message.
+Verified on 2026-09-24 against the walkthrough lab: the control plane started
+on an evaluation that lapsed 20 days earlier, the Plan panel offered Solo and
+Starter, adding a client showed the lapse sentence, and with a live
+subscription the refresher restored the paid licence on its own. Regression
+coverage: `TestValidateLicenseAllowingLapseReturnsLapsedButStillAuthenticLicence`
+in `pkg/licensing/service_lapsed_test.go`,
+`TestLoadConfig_ProviderHostedMSPStartsOnALapsedLicence` in
+`internal/cloudcp/config_test.go`,
+`TestCreateWorkspace_ProviderHostedMSPRefusesNewClientsOnALapsedLicence` in
+`internal/cloudcp/account/tenant_handlers_lapsed_test.go`, and
+`TestProviderMSPLicenseRefreshRefusesALapsedLicence` in
+`internal/cloudcp/provider_msp_license_refresh_test.go`.
+
+### Provider-hosted MSP platforms buy and renew their own licence
+
+A provider-hosted control plane now buys and renews its licence through the
+licence server's self-serve provider MSP path (pulse-pro
+`license-server/provider_msp_purchase.go`), with no key copy and nobody at
+Pulse in the loop. Portal routes under `/api/accounts/{account_id}/provider-msp/`
+serve plan state to any member. Checkout, the Stripe billing portal and an
+immediate licence refresh are restricted to owners and admins. The purchasable
+plan list comes from the licence server's `GET /v1/provider-msp/plans`, so the
+portal offers only what the catalogue sells, at Stripe's price, and drops any
+plan without a known workspace limit. `ProviderMSPLicenseRefresher` signs
+every request that must come from this platform with its lease signing key,
+validates the returned licence the way startup does, requires it to bind this
+platform's key, and installs it at `ProviderMSPRenewedLicensePath`.
+`LoadConfig` prefers that renewed licence while it validates (plan source
+`renewed_license`), so a paying provider keeps starting after the self-issued
+evaluation on the host expires. A changed licence restarts the control plane
+through the graceful shutdown path, because the plan version is read once at
+load. The comparison includes the signed expiry in both directions: a shorter
+paid period for the same licence ID and plan must replace the old licence and
+restart rather than retain a longer entitlement. An unchanged ID, plan and
+expiry must not trigger a restart. `msp_solo` (3 client workspaces) is the
+first paid step above the 2-workspace evaluation.
+
+In the portal, provider-hosted mode shows the `billing` section as **Plan**
+(`internal/cloudcp/portal/frontend/src/provider_plan.ts`), never Pulse-hosted
+or self-hosted billing. The section shows the evaluation or paid plan, how
+many client workspaces are in use, the evaluation's expiry, and, on an
+evaluation, the plans above the current cap with their monthly or annual
+price. A paid plan shows no licence date while it renews; once the licence is
+inside its 14-day grace the panel says the subscription has not renewed and
+when clients lose the plan. Owners and admins get Buy, Manage billing and an
+immediate refresh ("Apply my purchase now", or "Apply it now" on a paid plan);
+read-only members are told who can buy. After Stripe returns to
+`?provider_msp_checkout=complete`, the redirect is a navigation hint, not
+proof of payment. The panel keeps checking without saying payment was received
+until the licence refresh reports `active` and the running plan is paid and
+matches the returned plan version, licence ID and expiry. A changed licence
+that schedules a restart is confirmed only after the restarted control plane
+serves the matching plan; an unchanged paid licence already applied by a
+background refresh can be confirmed without another restart. If no matching
+paid plan appears, the panel gives conditional follow-up instead of claiming
+payment or activation. Manual Apply uses the same running-plan confirmation
+before updating the view. The panel never reloads the page. Manage billing returns to
+`?provider_msp_checkout=billing`, and the panel checks the licence twice so a
+plan changed in the Stripe billing portal applies without a click. It also
+accepts a matching paid plan already applied by the background refresher
+without requiring a second restart; an unchanged visit stays silent. A stale
+panel is replaced only after the refreshed running plan is confirmed, never
+because the billing return URL says a change was made. When the return check
+finishes before the initial plan load, the panel may show that confirmed paid
+plan silently but must keep its second check for a later webhook. A cancelled
+or unknown checkout return value must not assert whether a charge occurred.
+Regression
+coverage:
+`TestLoadConfig_ProviderHostedMSPPrefersRenewedLicense` in
+`internal/cloudcp/config_test.go`,
+`TestProviderMSPLicenseRefreshInstallsThePaidLicenceAndRestarts`,
+`TestProviderMSPLicenseRefreshAppliesShorterPaidPeriod` and
+`TestProviderMSPPortalRoutesRelayToTheLicenceServer` in
+`internal/cloudcp/provider_msp_license_refresh_test.go`,
+`TestRegisterRoutes_ProviderMSPPurchaseRoutesRequireOwnerOrAdmin` in
+`internal/cloudcp/routes_auth_test.go`, and
+`TestProviderMSPWorkspaceLadderRisesFromTheEvaluation` in
+`pkg/licensing/features_test.go`.
+
+### Provider MSP health monitor recovers clients across upgrades
+
+The health monitor rejoins Traefik and the control plane to each active
+client's labelled isolated network on startup and before every health check.
+Recreating either support container drops its tenant-network attachments;
+without reconnection, routes fail and a healthy client can appear unreachable.
+The monitor now restarts an unhealthy client with Docker's restart operation,
+rather than stopping it: `unless-stopped` does not revive a container stopped
+through the API. Missing isolated networks are skipped; a network whose labels
+do not identify that tenant is refused rather than connected. Support containers
+must also have the role label and belong to the configured provider ingress
+network, avoiding a same-host provider stack with the same role label. Regression
+coverage is in `internal/cloudcp/health_monitor_test.go` and
+`internal/cloudcp/docker/manager_test.go`.
+
+The same boundary applies when removing a client: cleanup only selects that
+managed client's derived, correctly labelled tenant network, and only
+disconnects support containers on this provider ingress that are still
+attached to it. A role label by itself must not select another provider's
+support container for a forced disconnect.
 
 ### Provider MSP status reads client health that any caller can observe
 
@@ -3520,3 +3630,25 @@ activation semantics. The offline mobile audit explicitly activates the default
 context before it creates and activates isolated organizations, using the normal
 authenticated API. Its route/overflow checks and AppLayout regression cover this
 boundary without granting Community private RBAC or changing CI tier membership.
+
+### AI navigation gating stays outside commercial scope
+
+The app shell hides Patrol navigation and Assistant palette commands while the
+`assistantEnabled` session capability is false. The gate reads only that AI
+capability: it does not consult entitlements, organization scope, hosted
+bootstrap or upgrade state, and it adds no commercial prompt. Paid Patrol
+modes stay governed on the Patrol and Actions surfaces, which remain
+reachable by route. `App.architecture.test.ts` pins that the gate reads the
+same capability as the Assistant launcher.
+
+### Relay retired inside the app
+
+Relay left public checkout on 2026-09-29, and existing Relay subscribers carry
+Pro entitlements through the pulse-pro license server. In-app commercial
+presentation therefore never offers Relay: Community sees only the Pro
+comparison card, a Relay-tier license sees none, `FEATURE_MIN_TIER_LABELS`
+maps `relay`, `mobile_app` and `push_notifications` to Pro, and the Pulse
+Mobile settings gate and Alerts push panel carry no upgrade prompt. The
+`relay` feature is labelled "Pulse Relay (Mobile Connection)" because it never
+provided remote access to the web UI. Pulse Mobile retires on 31 March 2027;
+until then licensed instances keep pairing and push unchanged.

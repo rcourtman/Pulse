@@ -140,6 +140,46 @@ and verifies the live service health and exact version. The privileged systemd
 smoke environment is digest-pinned because a floating container image would
 otherwise be an unreviewed code path inside the release gate.
 
+`release-lifecycle-rehearsal.yml` is a daily shadow rehearsal of the systemd
+lifecycle between two published releases, in the same digest-pinned systemd
+container. It installs the older release with its signature-verified
+`install.sh --version`, seeds real settings through the API, upgrades with the
+installed `/bin/update --version <to>` helper and rolls back with the documented
+`/bin/update --version <from>`, checking version, health, unit state, settings
+and data-dir survival after each step. It is read-only, uploads nothing and gates
+nothing; results are in the job log and step summary. Run
+`scripts/release_lifecycle_rehearsal.sh --from <tag> --to <tag>` to reproduce
+it locally (`PULSE_REHEARSAL_ENGINE=podman` on hosts without Docker).
+
+`release-signing-preflight.yml` checks that the macOS release signing path
+would work, without building or publishing anything. The maintainer's nightly
+release rehearsal dispatches it from `main`. On a `macos-15` runner it imports
+the Developer ID certificate into a throwaway keychain, requires the configured
+identity to be valid for code signing and at least 30 days from expiry, signs
+and verifies a probe binary with a secure timestamp, and reads the Apple notary
+submission history with the release notary key. The notary service refuses
+every request while a required Apple developer agreement is unsigned or
+expired, so that read catches the failure that stopped v6.4.6-rc.1 without a
+submission. It shows the credentials are accepted, not that a submission would
+be Accepted. The certificate and notary checks run independently, and each of
+its four checks (Developer ID signing, identity, certificate and Apple notary
+access) reports one outcome under its own title, an error annotation or a
+`passed` notice, so a check that was never reached is distinguishable from
+one that passed. It uploads nothing and gates nothing.
+
+`dependency-advisory-watch.yml` runs the required build-and-test frontend audit
+daily against `main` and every active `release/v<major>.<minor>` line (the
+latest stable's line and newer), because a new npm advisory against an
+unchanged lockfile otherwise surfaces only when it fails every pull request on
+that branch. Each line is a separate matrix job that reads only that line's
+`frontend-modern/package.json` and `package-lock.json` (it never checks out,
+installs or runs another branch's code in the default branch's scope) and audits
+them with the same Node.js pin and `scripts/npm-audit-retry.sh all`. A failing job names
+the branch and advisories in its step summary and annotation; the fix is
+`npm audit fix --package-lock-only` on that line plus raised floors in
+`frontend-modern/src/security/__tests__/dependencySecurity.test.ts`. It is
+read-only, hosted-only, uses no secrets and uploads nothing.
+
 The shared `install-sh-smoke-body.yml` inherits its caller's token permissions;
 keep it free of workflow- or job-level permission overrides. Continuity calls
 that body directly with `contents: read`. The existing `install-sh-smoke.yml`
@@ -194,7 +234,7 @@ Use this decision sequence within the existing release authority:
    This is supersession, not evidence that the old publication was successful
    or that customers pinned to its container version have migrated.
 3. Keep patch scope to named regression/security fixes. A changed patch RC
-   restarts 72 hours of clean soak; an older immutable RC or green main cannot
+   restarts 24 hours of clean soak; an older immutable RC or green main cannot
    lend its qualification to changed bytes. Retain the exact candidate packet
    for release-steward judgment and exact-source admission before stable
    publication. Under standing authority granted on 8 September 2026, the

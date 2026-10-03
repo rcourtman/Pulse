@@ -23,7 +23,7 @@ const GuestPhysicalDiskRow: Component<{ disk: Resource }> = (props) => {
 
   return (
     <details
-      class="rounded border border-border p-2"
+      class="rounded-sm border border-border p-2"
       onToggle={(event) => setExpanded(event.currentTarget.open)}
       data-testid="guest-physical-disk"
     >

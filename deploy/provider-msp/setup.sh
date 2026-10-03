@@ -22,7 +22,6 @@ PULSE_PROVIDER_MSP_LICENSE_URL="${PULSE_PROVIDER_MSP_LICENSE_URL:-https://licens
 PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE="${PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE:-0}"
 PULSE_PROVIDER_MSP_EVAL_EMAIL="${PULSE_PROVIDER_MSP_EVAL_EMAIL:-}"
 PULSE_PROVIDER_MSP_SIGNUP_SOURCE="${PULSE_PROVIDER_MSP_SIGNUP_SOURCE:-provider_msp_setup}"
-PULSE_PROVIDER_MSP_UPGRADE_URL="${PULSE_PROVIDER_MSP_UPGRADE_URL:-https://pulserelay.pro/msp.html}"
 
 log() {
   echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] $*"
@@ -436,16 +435,11 @@ ensure_eval_license() {
   chmod 0600 "${eval_path}"
   set_env_value CP_PROVIDER_MSP_LICENSE_FILE "./provider-msp-eval-license.jwt" "${env_path}"
 
-  local expires license_id
+  local expires
   expires="$(printf '%s' "${response}" | jq -r '.expires_at // empty' 2>/dev/null || true)"
-  license_id="$(printf '%s' "${response}" | jq -r '.license_id // empty' 2>/dev/null || true)"
   log "evaluation license installed: 2 client workspaces${expires:+, expires ${expires}}"
-  if [[ "${license_id}" =~ ^lic_msp_[a-f0-9]+$ ]]; then
-    log "  when you need a third client, request an upgrade at:"
-    log "  ${PULSE_PROVIDER_MSP_UPGRADE_URL%/}?eval_license_id=${license_id}#request"
-  else
-    log "  when you need a third client, request an upgrade at ${PULSE_PROVIDER_MSP_UPGRADE_URL%/}#request"
-  fi
+  log "  Plan in your provider portal shows whether a paid upgrade is available"
+  log "  keep within two clients until Plan confirms a higher active limit"
 }
 
 ensure_generated_secrets() {
@@ -529,26 +523,16 @@ ensure_env_file() {
 
 Created ${env_path} from .env.example.
 
-Edit it now and set required values:
-  - DOMAIN
+Edit it now and set the three values only you can supply:
+  - DOMAIN (client workspaces are served at https://<client-id>.DOMAIN)
   - ACME_EMAIL
   - CF_DNS_API_TOKEN (with the default ACME_DNS_PROVIDER=cloudflare; for any
     other Traefik dnsChallenge provider, set ACME_DNS_PROVIDER and put that
     provider's credential variables in dns-credentials.env)
-  - TRAEFIK_IMAGE (digest pinned)
-  - DOCKER_SOCKET_PROXY_IMAGE (digest pinned)
-  - CONTROL_PLANE_IMAGE (digest pinned)
-  - CP_PULSE_IMAGE (digest pinned)
-  - PULSE_PROVIDER_MSP_DATA_DIR
-  - PULSE_PROVIDER_MSP_DOCKER_NETWORK
-  - PULSE_PROVIDER_MSP_DOCKER_SUBNET
-  - PULSE_PROVIDER_MSP_DOCKER_SOCKET
-  - PULSE_PROVIDER_MSP_ROOT_SPACECHECK_DIR
-  - PULSE_PROVIDER_MSP_DOCKER_SPACECHECK_DIR
-  - CP_TRUSTED_PROXY_CIDRS
 
-setup.sh will generate CP_ADMIN_KEY and CP_ENTITLEMENT_SIGNING_PRIVATE_KEY if they
-are still blank.
+Everything else has a working default. setup.sh resolves the image pins to
+digests and generates CP_ADMIN_KEY and CP_ENTITLEMENT_SIGNING_PRIVATE_KEY while
+they are blank.
 
 EOF
 
@@ -698,14 +682,12 @@ validate_env_file() {
   # of the first screen, and an isolation guarantee is the one claim a provider
   # cannot evaluate from a screenshot.
   #
-  # Unlicensed runs on msp_eval (2 client workspaces). Set the licence file
-  # when you buy; the paid caps come from the licence, never from here.
+  # Unlicensed runs on msp_eval (2 client workspaces). Paid caps come from a
+  # valid licence, never from local configuration.
   local license_file
   license_file="$(env_value CP_PROVIDER_MSP_LICENSE_FILE "${env_path}")"
   if [[ -z "${license_file}" ]]; then
     log "no CP_PROVIDER_MSP_LICENSE_FILE set: evaluation mode, 2 client workspaces"
-    log "to buy, request a licence bound to this lease signing public key:"
-    log "  $(derive_lease_signing_public_key)"
     return 0
   fi
   if [[ "${license_file}" != /* ]]; then
@@ -713,11 +695,10 @@ validate_env_file() {
   fi
   if [[ ! -f "${license_file}" ]]; then
     die "CP_PROVIDER_MSP_LICENSE_FILE is set but does not exist: ${license_file}
-Leave it blank to run in evaluation mode (2 client workspaces), or request your
-provider MSP license with this lease signing public key
-(./setup.sh --print-lease-signing-public-key):
-  $(derive_lease_signing_public_key)
-The license must bind this key or the control plane will refuse to start."
+Leave it blank to run in evaluation mode (2 client workspaces), or place an
+already issued license at that path. For a custom license, print the platform's
+lease signing public key with ./setup.sh --print-lease-signing-public-key;
+the license must bind that key or the control plane will refuse to start."
   fi
 }
 
@@ -748,6 +729,24 @@ pull_provider_images() {
     [[ "${image_ref}" == *@sha256:* ]] || die "${key} is not digest-pinned before image pull"
     docker pull "${image_ref}"
   done
+}
+
+start_provider_services() {
+  # Leave the platform running. The next steps setup prints (bootstrap, then
+  # the portal sign-in link) only work against a running control plane; a
+  # setup that stopped at "prepared" handed a first-time provider a sign-in
+  # link that answered 404 until something else happened to start it.
+  log "starting provider MSP services"
+  (cd "${PULSE_PROVIDER_MSP_INSTALL_DIR}" && docker compose up -d traefik docker-socket-proxy control-plane)
+
+  local attempt
+  for attempt in $(seq 1 30); do
+    if (cd "${PULSE_PROVIDER_MSP_INSTALL_DIR}" && docker compose ps --services --status running 2>/dev/null) | grep -qx control-plane; then
+      return 0
+    fi
+    sleep 2
+  done
+  die "control plane did not reach running state; inspect: cd ${PULSE_PROVIDER_MSP_INSTALL_DIR} && docker compose logs control-plane"
 }
 
 run_install_proof_if_requested() {
@@ -786,7 +785,7 @@ print_summary() {
 
   cat <<EOF
 
-Pulse Provider MSP setup prepared.
+Pulse Provider MSP is running.
 
 Paths:
   - Deploy dir: ${PULSE_PROVIDER_MSP_INSTALL_DIR}
@@ -804,15 +803,16 @@ Prove the platform before the first real client:
 Portal (after bootstrap):
   https://${domain}/portal
 
+Plan: the evaluation covers two clients. Open Plan in the portal to see whether
+a paid upgrade is available. Keep within two clients until Plan confirms a
+higher active limit. A paid plan exposes Manage billing for changes or
+cancellation.
+
 Day 2: portal sessions last 7 days. Re-run the bootstrap command above any
 time to print a fresh owner sign-in link, or use
   docker compose run --rm control-plane provider-msp portal-link --email you@example.com
 for any invited teammate. Set RESEND_API_KEY in .env to enable emailed
 sign-in links instead.
-
-Lease signing public key (your provider MSP license must bind this key;
-re-print any time with ./setup.sh --print-lease-signing-public-key):
-  $(derive_lease_signing_public_key)
 
 EOF
 }
@@ -850,6 +850,7 @@ main() {
   # signal rather than a record created before setup can succeed.
   ensure_eval_license
   validate_compose_config
+  start_provider_services
   run_install_proof_if_requested
   print_summary
 }

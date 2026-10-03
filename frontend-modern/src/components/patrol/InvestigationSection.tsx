@@ -42,7 +42,7 @@ const INVESTIGATION_BADGE_PROPS = {
 } as const;
 
 const summaryClass =
-  'text-sm prose prose-slate prose-sm dark:prose-invert max-w-none break-words prose-headings:my-2 prose-p:my-2 prose-pre:overflow-x-auto prose-code:break-all prose-code:before:content-none prose-code:after:content-none';
+  'text-sm prose prose-slate prose-sm dark:prose-invert max-w-none wrap-break-word prose-headings:my-2 prose-p:my-2 prose-pre:overflow-x-auto prose-code:break-all prose-code:before:content-none prose-code:after:content-none';
 
 interface InvestigationSectionProps {
   findingId: string;
@@ -159,7 +159,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
             type="button"
             onClick={handleReinvestigate}
             disabled={reinvestigating()}
-            class="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 rounded transition-colors disabled:opacity-50"
+            class="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/25 rounded-sm transition-colors disabled:opacity-50"
           >
             <RefreshCwIcon class={`w-3 h-3 ${reinvestigating() ? 'animate-spin' : ''}`} />
             Re-investigate
@@ -184,7 +184,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
       </Show>
 
       <Show when={investigationRecord().hasRecord}>
-        <div class="mb-2 rounded border border-border bg-surface-alt p-2">
+        <div class="mb-2 rounded-sm border border-border bg-surface-alt p-2">
           <div class="flex items-center gap-2 flex-wrap">
             <span class="text-xs font-medium text-base-content">Patrol record</span>
             <MetadataBadge
@@ -229,7 +229,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
 
           <Show when={investigationRecord().proposedFix}>
             {(fix) => (
-              <div class="mt-2 rounded border border-border-subtle bg-surface p-2 text-xs">
+              <div class="mt-2 rounded-sm border border-border-subtle bg-surface p-2 text-xs">
                 <div class="font-medium text-base-content">{fix().description}</div>
                 <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-muted">
                   <Show when={fix().riskLabel}>
@@ -259,7 +259,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
                 class="mt-1 text-xs"
                 classList={{
                   'text-muted': Boolean(investigationRecord().impact),
-                  'italic text-muted/70': !investigationRecord().impact,
+                  'italic ': !investigationRecord().impact,
                 }}
               >
                 {investigationRecord().impact || 'Impact not assessed'}
@@ -294,7 +294,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
               <div class="text-[10px] font-medium uppercase text-muted">Rollback</div>
               <Show
                 when={investigationRecord().rollbackSummaries.length > 0}
-                fallback={<p class="mt-1 text-xs italic text-muted/70">Rollback not specified</p>}
+                fallback={<p class="mt-1 text-xs italic">Rollback not specified</p>}
               >
                 <ul class="mt-1 space-y-1 text-xs text-muted">
                   <For each={investigationRecord().rollbackSummaries}>
@@ -318,7 +318,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
           </Show>
 
           <Show when={investigationRecord().error}>
-            <div class="mt-2 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300">
+            <div class="mt-2 rounded-sm border border-red-200 bg-red-50 p-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/25 dark:text-red-300">
               {investigationRecord().error}
             </div>
           </Show>
@@ -344,7 +344,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
                   inv().outcome === 'cannot_fix')
               }
             >
-              <div class="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded p-2">
+              <div class="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800 rounded-sm p-2">
                 {inv().error}
               </div>
             </Show>
@@ -356,7 +356,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
               }
             >
               <div
-                class={`bg-surface-alt rounded p-2 ${summaryClass}`}
+                class={`bg-surface-alt rounded-sm p-2 ${summaryClass}`}
                 // eslint-disable-next-line solid/no-innerhtml
                 innerHTML={renderMarkdown(inv().summary!)}
               />

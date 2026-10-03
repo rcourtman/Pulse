@@ -402,7 +402,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                     min={PVE_POLLING_MIN_SECONDS}
                     max={PVE_POLLING_MAX_SECONDS}
                     value={props.pvePollingCustomSeconds()}
-                    class="w-full sm:w-32 min-h-10 rounded-md border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:focus:ring-blue-400 shadow-sm"
+                    class="w-full sm:w-32 min-h-10 rounded-md border border-border px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:focus:ring-blue-400 shadow-xs"
                     disabled={props.pvePollingEnvLocked()}
                     onInput={(e) => {
                       if (props.pvePollingEnvLocked()) return;
@@ -424,7 +424,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
 
               {/* Env override warning */}
               <Show when={props.pvePollingEnvLocked()}>
-                <div class="flex items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                <div class="flex items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-200">
                   <svg
                     class="h-4 w-4 shrink-0 mt-0.5 self-start"
                     viewBox="0 0 24 24"

@@ -82,6 +82,14 @@ export const getActionInboxStatePresentation = (
   state: ActionAuditState,
 ): ActionInboxStatePresentation => ACTION_INBOX_STATE_PRESENTATION[state];
 
+export const getActionAuditStatePresentation = (
+  audit: ActionAuditRecord,
+): ActionInboxStatePresentation =>
+  audit.state === 'failed' &&
+  audit.result?.actionResultV2?.execution.reasonCode === 'operator_force_failed'
+    ? { accentClass: 'border-l-amber-500', label: 'Outcome unknown', tone: 'warning' }
+    : getActionInboxStatePresentation(audit.state);
+
 const OPEN_ACTION_PRIORITY: Record<ActionAuditState, number> = {
   pending_approval: 0,
   planned: 1,
@@ -119,6 +127,9 @@ export const getActionApprovalBadgePresentation = (
 };
 
 export interface ActionsWatchOnlyEmptyStateInput {
+  // False while AI is off or unconfigured: Patrol is not running at all, so
+  // naming its Watch only mode (or pitching Pro modes) would be untrue.
+  aiEnabled: boolean;
   patrolWatchOnly: boolean;
   patrolModesUnlocked: boolean;
   commercialSurfacesHidden: boolean;
@@ -136,7 +147,7 @@ export type ActionsWatchOnlyEmptyStatePresentation =
 export const getActionsWatchOnlyEmptyState = (
   input: ActionsWatchOnlyEmptyStateInput,
 ): ActionsWatchOnlyEmptyStatePresentation | undefined => {
-  if (!input.patrolWatchOnly) return undefined;
+  if (!input.aiEnabled || !input.patrolWatchOnly) return undefined;
   if (input.patrolModesUnlocked) {
     return {
       kind: 'switch',

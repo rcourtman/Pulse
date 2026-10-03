@@ -122,6 +122,8 @@ type BuildUnixAgentInstallCommandOptions = {
   insecure?: boolean;
   caCertPath?: string | null;
   extraArgs?: string[];
+  // Existing private file for non-terminal hosts; never contains credential bytes.
+  tokenFilePath?: string | null;
 };
 
 type BuildWindowsAgentInstallCommandOptions = {
@@ -138,20 +140,25 @@ export const buildUnixAgentInstallCommand = ({
   insecure = false,
   caCertPath,
   extraArgs = [],
+  tokenFilePath,
 }: BuildUnixAgentInstallCommandOptions) => {
   const normalizedBaseUrl = normalizeInstallerBaseUrl(baseUrl);
   if (!normalizedBaseUrl.trim()) {
     throw new Error('Pulse install endpoint URL is required.');
   }
   const normalizedCaCertPath = (caCertPath || '').trim();
-  const normalizedToken = (token || '').trim();
+  const needsToken = Boolean((token || '').trim() || tokenFilePath?.trim());
+  const normalizedTokenFilePath = (tokenFilePath || '').trim();
+  if (normalizedTokenFilePath && !normalizedTokenFilePath.startsWith('/')) {
+    throw new Error('Pulse token file path must be absolute.');
+  }
   const normalizedExtraArgs = extraArgs.map((arg) => arg.trim()).filter((arg) => arg.length > 0);
   const installRequiresInsecure = insecure || normalizedBaseUrl.startsWith('http://');
   const curlFlags = insecure ? '-kfsSL' : '-fsSL';
   // Build shell grammar explicitly: command fields such as pfSense's remove
   // pasted newlines. Never flatten a multiline script (or quoted user data).
   if (
-    [normalizedBaseUrl, normalizedToken, normalizedCaCertPath, ...normalizedExtraArgs].some(
+    [normalizedBaseUrl, normalizedTokenFilePath, normalizedCaCertPath, ...normalizedExtraArgs].some(
       (value) => /[\r\n]/.test(value),
     )
   ) {
@@ -167,57 +174,57 @@ export const buildUnixAgentInstallCommand = ({
   ].join(' ');
   const installArgs = [
     `--url ${shellQuoteArg(normalizedBaseUrl)}`,
-    ...(normalizedToken ? ['--token-file "$token_file"'] : []),
+    ...(needsToken ? ['--token-file "$token_file"'] : []),
     ...normalizedExtraArgs,
     '--non-interactive',
   ].join(' ');
-  const rootTokenSetup = normalizedToken
-    ? [
-        'token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX);',
-        'token_file="$token_dir/token";',
-        'umask 077;',
-        `printf %s ${shellQuoteArg(normalizedToken)} > "$token_file";`,
-      ]
-    : [];
-  const sudoTokenSetup = normalizedToken
-    ? [
-        'token_dir=$(sudo mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX);',
-        'token_file="$token_dir/token";',
-        `printf %s ${shellQuoteArg(normalizedToken)} | sudo tee "$token_file" >/dev/null;`,
-        'sudo chmod 0600 "$token_file";',
-      ]
-    : [];
+
+  // Keep this reader aligned with configapi/privateBootstrapCommand. Bash owns
+  // the silent bounded read in the privileged child, not the caller's shell or
+  // sudo argv. A canonical line read silently truncates long pasted tokens.
+  const privileged = ['set +xv;', 'set -eu;', 'umask 077;'];
+  if (normalizedTokenFilePath) {
+    privileged.push(
+      `token_file=${shellQuoteArg(normalizedTokenFilePath)};`,
+      'token_parent=${token_file%/*};',
+      'if [ ! -f "$token_file" ] || [ -L "$token_file" ] || [ ! -O "$token_file" ] || [ ! -d "$token_parent" ] || [ -L "$token_parent" ] || [ ! -O "$token_parent" ] || [ "$(stat -c %a "$token_file" 2>/dev/null || stat -f %Lp "$token_file")" != 600 ] || [ "$(stat -c %a "$token_parent" 2>/dev/null || stat -f %Lp "$token_parent")" != 700 ]; then echo "Use a root-owned 0600 regular token file in a root-owned 0700 directory. No installation was attempted." >&2; exit 1; fi;',
+    );
+  } else if (needsToken) {
+    privileged.push(
+      'token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX);',
+      'token_file="$token_dir/token";',
+      'unset pulse_token pulse_discard tty_state;',
+      'cleanup() { unset pulse_token pulse_discard; if [ -n "${tty_state:-}" ]; then stty "$tty_state" </dev/tty 2>/dev/null || :; fi; rm -f -- "$token_file"; rmdir -- "$token_dir"; };',
+      "trap cleanup EXIT; trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM;",
+      'if ! tty_state=$(stty -g </dev/tty); then echo "A terminal is required to enter the token. No installation was attempted." >&2; exit 1; fi;',
+      'stty -echo </dev/tty;',
+      `if ! IFS= read -r -s -p ${shellQuoteArg('Pulse agent token (paste at this prompt, not in the command): ')} -n 4097 pulse_token </dev/tty; then echo "Token input was interrupted. No installation was attempted." >&2; exit 1; fi;`,
+      'if [ "${#pulse_token}" -gt 4096 ]; then while IFS= read -r -s -n 4097 pulse_discard </dev/tty && [ "${#pulse_discard}" -eq 4097 ]; do :; done; unset pulse_discard; fi;',
+      'stty "$tty_state" </dev/tty; unset tty_state;',
+      "printf '\\n' >/dev/tty;",
+      'if [ -z "$pulse_token" ] || [ "${#pulse_token}" -gt 4096 ]; then echo "A non-empty token of at most 4096 characters is required." >&2; exit 1; fi;',
+      'printf %s "$pulse_token" > "$token_file"; unset pulse_token;',
+    );
+  }
+  privileged.push(`bash "$1" ${installArgs}${caCertArg}${insecureArg};`);
+  const child = `bash -c ${shellQuoteArg(privileged.join(' '))} pulse-bootstrap "$install_script";`;
 
   return [
     '(',
-    'set -e;',
-    'tmp_dir=$(mktemp -d);',
-    'token_dir="";',
-    'install_script="$tmp_dir/install.sh";',
-    'cleanup() {',
-    'rm -rf -- "$tmp_dir";',
-    'if [ -n "${token_dir:-}" ]; then',
-    'if [ "$(id -u)" -eq 0 ]; then',
-    'rm -rf -- "$token_dir";',
-    'elif command -v sudo >/dev/null 2>&1; then',
-    'sudo rm -rf -- "$token_dir" >/dev/null 2>&1 || true;',
-    'fi;',
-    'fi;',
-    '};',
-    'trap cleanup EXIT HUP INT TERM;',
+    'set +xv;',
+    'set -eu;',
+    'umask 077;',
+    'if [ "$(id -u)" -eq 0 ]; then :; elif command -v sudo >/dev/null 2>&1; then sudo -v; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi;',
+    'bootstrap_dir=$(mktemp -d /tmp/pulse-bootstrap.XXXXXX);',
+    'install_script="$bootstrap_dir/install.sh";',
+    'cleanup() { rm -f -- "$install_script"; rmdir -- "$bootstrap_dir"; };',
+    "trap cleanup EXIT; trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM;",
     `curl ${curlFlags}${caCertArg} ${shellQuoteArg(`${normalizedBaseUrl}/install.sh`)} -o "$install_script";`,
-    'chmod +x "$install_script";',
-    `bash "$install_script" ${preflightArgs}${caCertArg}${insecureArg};`,
-    'if [ "$(id -u)" -eq 0 ]; then',
-    ...rootTokenSetup,
-    `bash "$install_script" ${installArgs}${caCertArg}${insecureArg};`,
-    'elif command -v sudo >/dev/null 2>&1; then',
-    ...sudoTokenSetup,
-    `sudo bash "$install_script" ${installArgs}${caCertArg}${insecureArg};`,
-    'else',
-    'echo "Root privileges required. Run as root (su -) and retry." >&2;',
-    'exit 1;',
-    'fi;',
+    // Detachment must not require a downloadable new agent binary.
+    ...(!normalizedExtraArgs.includes('--uninstall')
+      ? [`bash "$install_script" ${preflightArgs}${caCertArg}${insecureArg};`]
+      : []),
+    `if [ "$(id -u)" -eq 0 ]; then ${child} else sudo ${child} fi;`,
     ')',
   ].join(' ');
 };

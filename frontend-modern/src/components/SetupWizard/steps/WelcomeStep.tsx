@@ -38,6 +38,13 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
       command: 'docker exec <pulse-container> /app/pulse bootstrap-token',
     },
     {
+      // Unraid, Portainer and TrueNAS open a shell inside the container
+      // itself, so the docker exec prefix above does not apply there.
+      id: 'container-console',
+      label: t('setup.welcome.deploymentLabel.containerConsole'),
+      command: '/app/pulse bootstrap-token',
+    },
+    {
       id: 'lxc',
       label: t('setup.welcome.deploymentLabel.lxc'),
       // pct exec runs with PATH=/sbin:/bin:/usr/sbin:/usr/bin, which excludes
@@ -173,12 +180,12 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                   <div class="mb-1.5 text-[11px] font-semibold text-muted">{item.label}</div>
                   <div class="flex items-center justify-between gap-3 font-mono text-sm text-emerald-400">
                     <div class="flex min-w-0 items-center space-x-3 overflow-x-auto scrollbar-hide">
-                      <Terminal class="h-4 w-4 flex-shrink-0" />
+                      <Terminal class="h-4 w-4 shrink-0" />
                       <code class="whitespace-nowrap select-all">{item.command}</code>
                     </div>
                     <button
                       onClick={() => void copyCommand(item.id, item.command)}
-                      class="flex-shrink-0 rounded-md bg-surface p-2 text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:outline-none focus:ring-0"
+                      class="shrink-0 rounded-md bg-surface p-2 text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:outline-hidden focus:ring-0"
                       title={`${t('setup.welcome.copyCommandTitle')}: ${item.label}`}
                     >
                       <Show when={copiedCommand() === item.id} fallback={<Copy class="h-4 w-4" />}>
@@ -206,14 +213,14 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                 props.setBootstrapToken(e.currentTarget.value);
               }}
               onKeyDown={(e) => e.key === 'Enter' && void handleUnlock()}
-              class="w-full px-5 py-3.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
+              class="w-full px-5 py-3.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-hidden focus:ring-0 focus:border-blue-500 transition-colors font-mono"
               placeholder={t('setup.welcome.placeholder.bootstrapToken')}
               autofocus
             />
 
             <p class="text-xs text-muted">{t('setup.welcome.tokenHelp.afterVerify')}</p>
             <Show when={looksLikeBootstrapTokenSnapshot(props.bootstrapToken)}>
-              <p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+              <p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
                 {snapshotPasteHelp()}
               </p>
             </Show>

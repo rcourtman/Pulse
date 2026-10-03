@@ -702,19 +702,21 @@ type SMARTAttributes struct {
 
 // HostRAIDArray represents an mdadm RAID array on a host.
 type HostRAIDArray struct {
-	Device         string           `json:"device"`
-	Name           string           `json:"name,omitempty"`
-	Level          string           `json:"level"`
-	State          string           `json:"state"`
-	TotalDevices   int              `json:"totalDevices"`
-	ActiveDevices  int              `json:"activeDevices"`
-	WorkingDevices int              `json:"workingDevices"`
-	FailedDevices  int              `json:"failedDevices"`
-	SpareDevices   int              `json:"spareDevices"`
-	UUID           string           `json:"uuid,omitempty"`
-	Devices        []HostRAIDDevice `json:"devices"`
-	RebuildPercent float64          `json:"rebuildPercent"`
-	RebuildSpeed   string           `json:"rebuildSpeed,omitempty"`
+	Device string `json:"device"`
+	Name   string `json:"name,omitempty"`
+	Level  string `json:"level"`
+	State  string `json:"state"`
+	// RequiredDevices excludes spares; zero denotes an older or unknown count.
+	RequiredDevices int              `json:"requiredDevices,omitempty"`
+	TotalDevices    int              `json:"totalDevices"`
+	ActiveDevices   int              `json:"activeDevices"`
+	WorkingDevices  int              `json:"workingDevices"`
+	FailedDevices   int              `json:"failedDevices"`
+	SpareDevices    int              `json:"spareDevices"`
+	UUID            string           `json:"uuid,omitempty"`
+	Devices         []HostRAIDDevice `json:"devices"`
+	RebuildPercent  float64          `json:"rebuildPercent"`
+	RebuildSpeed    string           `json:"rebuildSpeed,omitempty"`
 	// Operation is the in-progress sync action from /proc/mdstat
 	// ("recovery", "resync", "check", or "reshape"); empty when idle.
 	Operation string `json:"operation,omitempty"`
@@ -4717,8 +4719,9 @@ func (s *State) SyncGuestBackupTimes() {
 		}
 	}
 
-	// findBestPBSBackup finds the best PBS backup for a given typed VMID and guest location.
-	// Placement and guest-name matches are preferred over VMID-only fallback.
+	// findBestPBSBackup finds the newest attributable PBS backup for a given
+	// typed VMID and guest location. Match strength decides which guest owns
+	// each snapshot, not whether an older owned snapshot outranks a newer one.
 	// Returns zero time if no suitable backup found. The subject map is a
 	// parameter so the same attribution rules apply to completed snapshots
 	// (feeding LastBackup) and to in-flight ones (feeding BackupInProgress).
@@ -4730,8 +4733,6 @@ func (s *State) SyncGuestBackupTimes() {
 		}
 
 		var bestTime time.Time
-		bestScore := -1
-
 		for _, backup := range backups {
 			score := proxmoxidentity.BackupGuestMatchScore(
 				backup.Namespace,
@@ -4742,6 +4743,30 @@ func (s *State) SyncGuestBackupTimes() {
 				node,
 			)
 			snapshotKey := pbsSnapshotKey{backupType: backupType, vmid: vmid, unixTime: backup.BackupTime.Unix()}
+			if score > 0 && subjectIsAmbiguous[subjectKey] {
+				// A namespace such as "pve" can match two clusters with the
+				// same node label. A positive score is not attribution when a
+				// different connection matches the same snapshot at least as
+				// strongly. Do not use batch-learned source inference to break a
+				// positive tie: it can see the other connection on another PBS
+				// instance without proving which one wrote this snapshot (#2292).
+				strongestOther := 0
+				for _, other := range subjectGuests[subjectKey] {
+					if other.instance == instance {
+						continue
+					}
+					otherScore := proxmoxidentity.BackupGuestMatchScore(
+						backup.Namespace, backup.Comment, backup.VMID,
+						other.name, other.instance, other.node,
+					)
+					if otherScore > strongestOther {
+						strongestOther = otherScore
+					}
+				}
+				if strongestOther >= score {
+					continue
+				}
+			}
 			if score == 0 {
 				if !subjectIsAmbiguous[subjectKey] {
 					score = 1
@@ -4774,8 +4799,7 @@ func (s *State) SyncGuestBackupTimes() {
 			if score <= 0 {
 				continue
 			}
-			if score > bestScore || (score == bestScore && backup.BackupTime.After(bestTime)) {
-				bestScore = score
+			if backup.BackupTime.After(bestTime) {
 				bestTime = backup.BackupTime
 			}
 		}

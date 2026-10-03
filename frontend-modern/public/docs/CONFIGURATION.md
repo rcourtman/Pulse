@@ -6,7 +6,7 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | ------ | --------- | ---------------- |
 | `.env` | Authentication & Secrets | 🔒 **Critical** (Read-only by owner) |
 | `.encryption.key` | Encryption key for `.enc` files | 🔒 **Critical** |
-| `.audit-signing.key` | Audit log signing key (Pro/legacy Pro+/Cloud, encrypted) | 🔒 **Sensitive** |
+| `audit/.audit-signing.key` | Encrypted signing key for the default audit store; preserve with its history and matching encryption key | 🔒 **Sensitive** |
 | `system.json` | General Settings | 📝 Standard |
 | `nodes.enc` | Node Credentials | 🔒 **Encrypted** (AES-256-GCM) |
 | `alerts.json` | Alert Rules | 📝 Standard |
@@ -35,7 +35,7 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `sessions.json` | Persistent sessions (includes OIDC refresh tokens) | 🔒 **Sensitive** |
 | `update-history.jsonl` | Update history log (in-app updates) | 📝 Standard |
 | `metrics.db` | Persistent metrics history (SQLite) | 📝 Standard |
-| `audit.db` | Audit log database (Pro/legacy Pro+/Cloud, SQLite) | 🔒 **Sensitive** |
+| `audit/audit.db` | Default audit database; capture on all plans, licensed query/export | 🔒 **Sensitive** |
 | `baselines.json` | AI baseline data for anomaly detection | 📝 Standard |
 | `ai_correlations.json` | AI correlation analysis cache | 📝 Standard |
 | `ai_patterns.json` | AI pattern detection data | 📝 Standard |
@@ -45,7 +45,11 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 
 Guest metadata entries are keyed by the canonical guest ID format `instance:node:vmid` (for example, `pve1:node1:100`). Legacy dash-separated keys are migrated automatically.
 
-All files are located in `/etc/pulse/` (Systemd) or `/data/` (Docker/Kubernetes) by default.
+Paths are relative to `/etc/pulse/` (Systemd) or `/data/` (Docker/Kubernetes) by
+default. The audit database and default signing key are in the `audit/`
+subdirectory. Runtime-specific audit storage and non-default organisation
+paths can differ; see [Audit storage and safe recovery](AUDIT_LOGGING.md#storage).
+Do not reset signing or encryption keys as a troubleshooting step.
 
 Path overrides:
 - `PULSE_DATA_DIR` sets the base directory for `system.json`, encrypted files, and the bootstrap token.

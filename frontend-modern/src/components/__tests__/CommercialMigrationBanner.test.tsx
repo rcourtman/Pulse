@@ -73,13 +73,13 @@ describe('CommercialMigrationBanner', () => {
     expect(commercialMigrationBannerSource).not.toContain('toneClasses');
     expect(commercialMigrationBannerSource).not.toContain('buttonClasses');
     expect(commercialMigrationBannerSource).not.toContain(
-      'bg-amber-50 dark:bg-amber-900 border-b border-amber-200',
+      'bg-amber-50 dark:bg-amber-900/25 border-b border-amber-200',
     );
     expect(commercialMigrationBannerSource).not.toContain(
-      'bg-red-50 dark:bg-red-900 border-b border-red-200',
+      'bg-red-50 dark:bg-red-900/25 border-b border-red-200',
     );
     expect(commercialMigrationBannerSource).not.toContain(
-      'p-1 rounded transition-colors opacity-70 hover:opacity-100',
+      'p-1 rounded-sm transition-colors opacity-70 hover:opacity-100',
     );
   });
 

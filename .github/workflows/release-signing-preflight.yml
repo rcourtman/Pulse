@@ -1,0 +1,163 @@
+name: Release Signing Preflight
+# The caller's request id makes each dispatch's run findable by title if
+# the dispatch answer is lost.
+run-name: ${{ format('Release signing preflight (no release build or publication){0}', inputs.request_id && format(' [{0}]', inputs.request_id) || '') }}
+
+# The maintainer's nightly release rehearsal (pulse-dev-infra
+# pulse-maintainer-release-rehearsal) dispatches this from main, so a lapsed
+# Apple developer agreement, a revoked notary key or an expiring Developer ID
+# certificate shows up the morning after it happens instead of as a failed RC.
+# On 2 Oct 2026 v6.4.6-rc.1 failed notarization because the agreement was
+# unsigned. This signs only a throwaway probe binary on the runner; it builds,
+# notarizes, uploads and publishes nothing. The certificate and notary checks
+# are independent, so one night names every broken credential.
+on:
+  workflow_dispatch:
+    inputs:
+      request_id:
+        description: 'Optional caller id shown in the run title'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-signing-preflight
+  cancel-in-progress: false
+
+jobs:
+  apple-signing-preflight:
+    name: Apple Developer ID and Notary Access
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Verify Developer ID identity and notary access
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION_IDENTITY }}
+          APPLE_NOTARY_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          # Fail this many days before the Developer ID certificate expires.
+          MIN_CERTIFICATE_DAYS: "30"
+        run: |
+          # GitHub runs bash with -e; every check below reports its own
+          # failure instead, so one broken credential cannot hide another.
+          set +e
+          set -uo pipefail
+          failures=0
+          # Each of the four checks reports exactly one outcome under its
+          # own title (an error, or a "passed" notice), so the rehearsal can
+          # tell a check that passed from one that was never reached.
+          fail() {
+            echo "::error title=$1::$2"
+            failures=$((failures + 1))
+          }
+          pass() {
+            echo "::notice title=$1::passed"
+          }
+          missing() {
+            local name unset_names=()
+            for name in "$@"; do
+              [[ -n "${!name:-}" ]] || unset_names+=("$name")
+            done
+            (( ${#unset_names[@]} == 0 )) && return 1
+            printf '%s ' "${unset_names[@]}"
+          }
+
+          work="$RUNNER_TEMP/signing-preflight"
+          keychain="$work/preflight.keychain-db"
+          mkdir -p "$work" || exit 1
+          cleanup() {
+            security delete-keychain "$keychain" >/dev/null 2>&1 || true
+            rm -rf "$work"
+          }
+          trap cleanup EXIT
+          decode() {
+            python3 -c 'import base64, os, sys; open(sys.argv[2], "wb").write(base64.b64decode(os.environ[sys.argv[1]], validate=True))' "$1" "$2" 2>/dev/null
+          }
+
+          # Developer ID certificate, identity and signing.
+          if absent="$(missing APPLE_CERTIFICATE_P12_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY)"; then
+            fail "Developer ID signing" "Missing signing secret(s) behind: ${absent}"
+          elif ! decode APPLE_CERTIFICATE_P12_BASE64 "$work/developer-id.p12"; then
+            fail "Developer ID signing" "The Developer ID .p12 secret is not valid base64."
+          else
+            keychain_password="$(openssl rand -hex 24)"
+            if ! { security create-keychain -p "$keychain_password" "$keychain" \
+                && security set-keychain-settings -lut 900 "$keychain" \
+                && security unlock-keychain -p "$keychain_password" "$keychain"; } >/dev/null 2>&1; then
+              fail "Developer ID signing" "A temporary keychain could not be created on the runner."
+            elif ! security import "$work/developer-id.p12" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" \
+                -T /usr/bin/codesign >/dev/null 2>&1; then
+              fail "Developer ID signing" "The Developer ID .p12 could not be imported with its password."
+            elif ! { security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" \
+                && security list-keychains -d user -s "$keychain"; } >/dev/null 2>&1; then
+              fail "Developer ID signing" "The imported Developer ID key could not be made available to codesign."
+            else
+              # The release signs with this identity; it must be valid for
+              # code signing (trusted chain, not expired or revoked).
+              identity_line="$(security find-identity -v -p codesigning "$keychain" | grep -F -- "$APPLE_SIGNING_IDENTITY" | head -n 1)"
+              if [[ -z "$identity_line" ]]; then
+                fail "Developer ID identity" "The configured signing identity is not a valid code-signing identity in the imported certificate (expired, revoked or a different certificate)."
+              else
+                pass "Developer ID identity"
+                identity_hash="$(awk '{print $2}' <<<"$identity_line")"
+                security find-certificate -a -Z -p "$keychain" \
+                  | awk -v want="$identity_hash" '
+                      /^SHA-1 hash:/ { keep = ($3 == want); next }
+                      keep { print }
+                      /-----END CERTIFICATE-----/ { keep = 0 }' >"$work/identity.pem"
+                if ! expires="$(openssl x509 -in "$work/identity.pem" -noout -enddate 2>/dev/null)"; then
+                  fail "Developer ID certificate" "The signing identity's certificate could not be read."
+                elif ! openssl x509 -in "$work/identity.pem" -noout -checkend "$((MIN_CERTIFICATE_DAYS * 86400))" >/dev/null; then
+                  fail "Developer ID certificate" "The Developer ID certificate expires within ${MIN_CERTIFICATE_DAYS} days (${expires#notAfter=}). Renew it and update the signing secrets before the next release."
+                else
+                  echo "Developer ID certificate valid until ${expires#notAfter=}."
+                  pass "Developer ID certificate"
+                fi
+                # Sign a throwaway binary as the release signs the agent,
+                # including Apple's timestamp service.
+                printf 'int main(void) { return 0; }\n' >"$work/probe.c"
+                if ! clang -o "$work/signing-probe" "$work/probe.c" >"$work/codesign.log" 2>&1; then
+                  fail "Developer ID signing" "The runner could not build the signing probe: $(tr '\n' ' ' <"$work/codesign.log" | cut -c1-300)"
+                elif codesign --force --timestamp --options runtime --keychain "$keychain" \
+                    --sign "$APPLE_SIGNING_IDENTITY" "$work/signing-probe" >"$work/codesign.log" 2>&1 \
+                  && codesign --verify --strict "$work/signing-probe" >>"$work/codesign.log" 2>&1; then
+                  echo "Signed and verified a probe binary with the release identity and a secure timestamp."
+                  pass "Developer ID signing"
+                else
+                  fail "Developer ID signing" "Signing a probe binary with the release identity failed: $(tr '\n' ' ' <"$work/codesign.log" | cut -c1-500)"
+                fi
+              fi
+            fi
+          fi
+
+          # Notary access. Every Notary API request is refused while a
+          # required Apple developer agreement is unsigned or expired, or the
+          # key is revoked, so reading the submission history shows the
+          # release's notary credentials are accepted without submitting
+          # anything. It does not show that a submission would be Accepted.
+          if absent="$(missing APPLE_NOTARY_KEY_P8_BASE64 APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER_ID)"; then
+            fail "Apple notary access" "Missing notary secret(s) behind: ${absent}"
+          elif ! decode APPLE_NOTARY_KEY_P8_BASE64 "$work/AuthKey.p8"; then
+            fail "Apple notary access" "The notary key secret is not valid base64."
+          elif xcrun notarytool history \
+              --key "$work/AuthKey.p8" \
+              --key-id "$APPLE_NOTARY_KEY_ID" \
+              --issuer "$APPLE_NOTARY_ISSUER_ID" \
+              --output-format json >"$work/notary.log" 2>&1; then
+            echo "Apple notary service accepted the release notary key."
+            pass "Apple notary access"
+          else
+            fail "Apple notary access" "The Apple notary service refused the release notary key, so notarization would fail (an unsigned or expired developer agreement in App Store Connect, or a revoked key): $(tr '\n' ' ' <"$work/notary.log" | cut -c1-600)"
+          fi
+
+          if (( failures > 0 )); then
+            exit 1
+          fi
+          echo "Release signing credentials are ready."

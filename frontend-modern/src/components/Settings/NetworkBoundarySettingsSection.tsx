@@ -9,7 +9,7 @@ interface EnvironmentOverrideAlertProps {
 
 function EnvironmentOverrideAlert(props: EnvironmentOverrideAlertProps) {
   return (
-    <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
+    <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900/25 border border-amber-300 dark:border-amber-700 rounded-sm text-xs text-amber-800 dark:text-amber-200">
       <div class="flex items-center gap-1">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
@@ -70,7 +70,7 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
               placeholder="https://pulse.example.com"
               class={`w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md ${
                 props.envOverrides().publicURL
-                  ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900 cursor-not-allowed opacity-75'
+                  ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/25 cursor-not-allowed opacity-75'
                   : 'border-border bg-surface'
               }`}
             />
@@ -126,7 +126,7 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
               placeholder="* or https://example.com"
               class={`w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md ${
                 props.envOverrides().allowedOrigins
-                  ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900 cursor-not-allowed opacity-75'
+                  ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/25 cursor-not-allowed opacity-75'
                   : 'border-border bg-surface'
               }`}
             />
@@ -166,7 +166,7 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
                 props.setAllowEmbedding(e.currentTarget.checked);
                 props.setHasUnsavedChanges(true);
               }}
-              class="h-5 w-5 sm:h-4 sm:w-4 rounded border-border text-blue-600 focus:ring-blue-500"
+              class="h-5 w-5 sm:h-4 sm:w-4 rounded-sm border-border text-blue-600 focus:ring-blue-500"
             />
             <label for="allowEmbedding" class="text-sm text-base-content">
               Allow iframe embedding
@@ -258,7 +258,7 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
         >
           <p class="text-xs text-amber-800 dark:text-amber-200 mb-2">
             <strong>Port Configuration:</strong> Use{' '}
-            <code class="font-mono bg-amber-100 dark:bg-amber-800 px-1 rounded">
+            <code class="font-mono bg-amber-100 dark:bg-amber-800 px-1 rounded-sm">
               systemctl edit pulse
             </code>
           </p>

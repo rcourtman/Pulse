@@ -123,7 +123,7 @@ export function WhatsNewCard() {
     <>
       <Show when={noticeVisible()}>
         <aside
-          class="fixed bottom-[var(--pulse-mobile-nav-height)] left-4 right-4 z-30 max-w-sm md:right-auto md:bottom-4"
+          class="fixed bottom-(--pulse-mobile-nav-height) left-4 right-4 z-30 max-w-sm md:right-auto md:bottom-4"
           aria-live="polite"
           data-testid="whats-new-notice"
         >
@@ -156,7 +156,7 @@ export function WhatsNewCard() {
                 <div class="flex items-center gap-3 min-w-0">
                   {/* Sparkle icon */}
                   <svg
-                    class="w-5 h-5 flex-shrink-0 text-emerald-600 dark:text-emerald-400"
+                    class="w-5 h-5 shrink-0 text-emerald-600 dark:text-emerald-400"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"

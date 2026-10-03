@@ -15,23 +15,34 @@
 
 ## Purpose
 
-### Release-line routine polling write repairs — issues #2319/#2320
+### MD RAID required members and spares — issue #2369
 
-A linked Agent-only SMART disk's inherited PVE instance is presentation scope,
-not a PVE inventory observation. Skipped PVE polls require an actual Proxmox
-source before copying a disk into PVE-owned state. Agent source admission,
-identity, collected readings and command authority remain unchanged.
-`TestPhysicalDiskSkippedPollDoesNotPromoteAgentOnlySMARTToPVEInventory` pins
-repeated full/skip cycles; genuine PVE readback retains its existing continuity.
+Host RAID reports carry optional `requiredDevices`: the configured member count
+from mdadm's `Raid Devices` or mdstat's required/active bitmap, excluding spares.
+Zero/omission means unknown. `totalDevices` retains its existing source-native
+meaning: attached devices including spares for mdadm, bitmap width for mdstat.
+The existing QNAP sparse-role normalization applies to both bitmap counts.
+Invalid or negative detail counts fall back to the kernel report, and missing
+detail requirements may be enriched from that report. This is read-only
+collection, not permission to change array membership or perform recovery.
+Collector-to-wire/health/alert tests cover healthy spares, missing and failed
+members, mdstat-only and malformed-detail fallback, and maintenance/recovery.
+Report serialization and `buildReport` must preserve both counts independently.
+An explicit zero active count under a known requirement is retained; neither
+device-token inference nor a different kernel fallback probe may fill it in.
+The collector/report controls exercise both zero-active boundaries.
 
-Routine successful agent config fetches are audited on the first delivery
-since startup, a token or desired-config hash change, or after 24 hours since
-the previous audit. Every failed fetch remains audited. Signing, payloads,
-scopes, response delivery and existing security rows are unchanged.
-`TestAgentConfigFetchAuditsNewDeliveriesAndEveryFailure` and the tracker
-regressions in `internal/api/unified_agent_handlers_test.go` cover the rule.
-These are synthetic source controls, not installed field acceptance.
+### Continuity-aware broadcast read ownership
 
+Broadcast state takes its single resource list from the current continuity-aware
+read view, not a preliminary registry clone discarded before that view is
+resolved. The resulting presentation slice is caller-owned; URL/health
+decoration cannot mutate nested registry data. Ignored/re-enrollment surfaces,
+parent identities and agent action targets remain unchanged, and a prior client
+baseline must survive later mutable updates. No freshness cache substitutes for
+live reads. `TestBroadcastProjectionListsRegistryOnceAndKeepsLiveChanges` checks
+same-freshness changes and ignored-host inventory; the previous-pipeline JSON
+oracle checks split-host identity/action/infrastructure composition.
 
 ### Import preview lifetime and setup authority
 
@@ -70,6 +81,28 @@ infer present agent liveness from an old alert closure. A failed canonical read
 is exposed as unavailable, rather than replaced with a synthetic healthy state.
 
 Delivery-log diagnostic text is a notification-attempt projection, not an agent admission or liveness verdict. Masking embedded destination credentials preserves failure context without changing agent identities, credentials, session replacement or removal policy. Consumers must use the retained failureClass and outcome as delivery evidence only; a transport error does not establish that the monitored agent is offline.
+
+### Accepted reports refresh the canonical store at most once per window — issue #2199
+
+Every canonical store refresh is estate-wide, so refreshing on each accepted
+report made total cost grow with agent count times estate size. Accepted host,
+Docker and Kubernetes reports, including rejected-report liveness, therefore
+refresh through `refreshUnifiedResourceStoreAfterAgentReport`, throttled to one
+refresh per `agentReportRefreshInterval` (2 seconds, the same staleness the
+read paths accept through `readPathRegistryFreshness`). The first report after
+a quiet window is published before the handler returns. Reports inside the
+window fold into one trailing refresh at the window's end, which reads the
+latest state and broadcasts it, so a report reaches ReadState consumers within
+the window rather than immediately. Agent removal and host-agent evaluation
+still refresh immediately, so removed inventory retires at once. `Monitor.Stop`
+cancels a pending trailing refresh and waits for a running one before closing
+stores. Monitors built without `New` keep a zero window and refresh on every
+report. `TestAgentReportRefreshFoldsReportsWithinWindow` and
+`TestStopCancelsPendingAgentReportRefresh` pin the leading, trailing and
+shutdown behaviour. The founder approved trading immediate visibility for this
+bound on 24 September 2026.
+
+### Canonical Patrol and Assistant continuation, 2026-09-07
 
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
@@ -132,6 +165,13 @@ monitoring metadata and does not change Agent registration, execution authority,
 or the Agent report wire contract. `internal/models/metrics_types_test.go` covers
 snapshot retention and isolation, and the monitoring collection-trust roundtrip
 covers merged Agent/Proxmox disks without losing the Proxmox source schedule.
+An Agent-only SMART disk linked to a PVE node may carry that node's instance
+for presentation, but the instance is not an Agent report of PVE disk
+inventory. Skipped PVE polls must not round-trip that disk into PVE-owned
+state; the monitoring readback requires an actual Proxmox source observation.
+This leaves Agent source identity, report admission and command authority
+unchanged. The repeated-cycle regression is
+`TestPhysicalDiskSkippedPollDoesNotPromoteAgentOnlySMARTToPVEInventory`.
 
 Assistant historical metric wiring uses the current monitor's retained store
 and registry metrics coordinates. Historical reads do not alter enrollment,
@@ -182,6 +222,15 @@ management, and fleet control surfaces. Pulse v6 has one host-installed
 infrastructure agent binary, `pulse-agent`; host, Docker / Podman,
 Kubernetes, Proxmox-local, and other node-local telemetry are modules inside
 that binary, not separate customer-facing agent products.
+
+In a Proxmox VE cluster, an enabled agent may collect peer temperature data
+through its existing SSH sensor path. `--disable-cluster-peer-sensors` and
+`PULSE_DISABLE_CLUSTER_PEER_SENSORS=true` are local, default-off operator
+controls that stop only that peer discovery and SSH collection path. They do
+not disable the local host, SMART, Ceph, or Proxmox reporting modules, alter
+agent enrollment or identity, or add remote command authority. The disabled
+path is pinned by `TestCollectClusterSensors_Disabled`; configuration parsing
+is pinned by `TestLoadConfigDisableClusterPeerSensorsFlag`.
 On supported Linux systemd hosts, the opt-in safe runtime is a root-owned,
 unprivileged monitoring collector plus the no-network typed helper, with
 remediation installed only as the separate root-owned `pulse-agent-runner`.
@@ -591,6 +640,10 @@ acknowledgement stays a success rather than a rejection so a real agent does not
 read a demo server as an outage and retry-storm it. Tests that assert report
 admission or tenant isolation must therefore not enable mock mode, or the
 assertion passes without exercising the boundary.
+Report admission, config fetch, and continuity lookups read the live host list
+through `GetLiveHostsSnapshot`, which copies only hosts (see the monitoring
+contract); it must not route through a full state snapshot, which copied every
+guest on each agent report.
 
 Physical-disk evidence collected by a host agent must survive projection back
 into monitoring's models. Absent evidence has to carry its declared sentinel
@@ -1031,6 +1084,12 @@ usage ledger, and the findings store; it does not read, register, authorize,
 configure, or report a Pulse agent, and no agent token, inventory,
 registration state, host command, or command-channel readiness may feed it or
 be inferred from it.
+Schema v18 update-discovery telemetry assembled through `internal/api/` (the
+effective Pulse server update channel, the closed outcome of the last server
+update check, and whether it offered a newer release) is the same kind of
+adjacent analytics. It reads only the server update manager's last check; it
+does not describe agent binaries, agent auto-update, or agent version skew,
+and agent lifecycle surfaces must not consume it as agent update state.
 Scheduled-report route and background-worker wiring in `internal/api/router.go`
 and the reporting handlers is API/reporting ownership, not agent lifecycle.
 The scheduler may enumerate tenant organization IDs so each workspace can run
@@ -3278,8 +3337,11 @@ Agent` secondary handoff against the live setup wizard instead of relying
     first source is still pending,
     that same completion narrative must describe Add infrastructure as the
     place where the operator chooses platform API inventory, Pulse Agent
-    telemetry, or both. If the operator selects the direct agent path from that
-    completion surface, the agent install body may prepare the first-host
+    telemetry, or both. The operator-facing copy names those choices in plain
+    words (connect by API, install the Pulse Agent, or both) and names what
+    each one shows, rather than the internal terms inventory, node-local
+    telemetry, estate, or source strategy used in this contract. If the
+    operator selects the direct agent path from that completion surface, the agent install body may prepare the first-host
     scoped install token from setup handoff, and when it names the shared
     settings workspace for follow-up lifecycle control it must use the
     canonical `Infrastructure` label instead of reviving the retired
@@ -3427,17 +3489,37 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
-### Org managers reach the agent install path in their own organization
+### Credential-safe container diagnostics bootstrap (1 October 2026)
 
-An owner or admin of the selected organization now receives
-`settingsCapabilities.infrastructureRead` from `/api/security/status`, matching
-the `ensureAdminSession` rule that already let them through the Infrastructure
-routes. A provider opening a client workspace from the Pulse Account portal
-therefore lands on Settings → Infrastructure with the host install flow open,
-instead of a navigation that hid the page and fell through to General. The
-install tokens it generates stay bound to that organization; nothing about token
-scope, agent registration or reporting identity changes. See the api-contracts
-contract, rule 35, for the capability rule.
+The existing container-runtime migration command now shares the Proxmox
+complete-download/preflight/private-input implementation in
+`internal/api/configapi/install_command.go`. The authenticated response keeps
+its separate `token` field; `installCommand` never interpolates it. A terminal
+prompt inside the root/sudo child creates a bounded 0700/0600 handoff, passes
+only its path, and removes it on success, failure or handled signals. Optional
+auth needs neither a credential nor a terminal. Default host-plus-Docker and
+explicit workload-only modes, their persisted scopes, 30-second interval and
+plain-HTTP continuity remain unchanged; neither mode adds command execution.
+The diagnostic systemd reference uses the default installer's protected
+`/var/lib/pulse-agent/token`, not a token literal or secret environment value.
+It is not a replacement for the complete installer-generated unit, especially
+on custom-state or privilege-profile installations. Executable root/sudo,
+history, argv, cleanup and real TLS-download fixtures are in
+`configapi/container_install_command_test.go`; they are not native installation
+or Docker/Podman estate acceptance.
+
+### Credential-safe Proxmox bootstrap (1 October 2026)
+
+Proxmox initial bootstrap keeps credentials out of copied shell source. The current PVE/PBS agent command fetches a complete installer, runs its credential-free preflight, then privately prompts inside the root/sudo Bash child. Its 0700 directory and 0600 token file are owned by that child, passed only by path and removed on exit or handled signals. The UI reveals credentials separately, clears cached setup material on close and discards late issuance after close/reset. No exec scope is added. Existing fleet reporting is unchanged; newly enrolling an older agent with a newer server requires the current installer. New agents and the root installer still validate coherent old-server artifacts during rolling upgrades, but never execute their command strings.
+
+
+### Update progress stream delivery
+
+Server update progress delivery is owned by internal/updates and its API
+adapter. Immediate status on connect, ordered flushed events, and the modal's
+polling fallback change how progress is observed only. They grant no agent
+update, installation or command-execution authority, and a completed server
+update is not evidence that any agent was upgraded.
 
 ### Hosted runtimes always mint agent install tokens
 
@@ -3455,6 +3537,18 @@ runtimes with no authentication configured keep the token-less command.
 Regression coverage: `TestHostedRuntimeMintsAgentInstallTokensWithoutLocalAuth`
 and `TestSelfHostedRuntimeWithoutAuthStillOmitsInstallToken` in
 `internal/api/configapi/hosted_agent_install_token_test.go`.
+
+### Org managers reach the agent install path in their own organization
+
+An owner or admin of the selected organization now receives
+`settingsCapabilities.infrastructureRead` from `/api/security/status`, matching
+the `ensureAdminSession` rule that already let them through the Infrastructure
+routes. A provider opening a client workspace from the Pulse Account portal
+therefore lands on Settings → Infrastructure with the host install flow open,
+instead of a navigation that hid the page and fell through to General. The
+install tokens it generates stay bound to that organization; nothing about token
+scope, agent registration or reporting identity changes. See the api-contracts
+contract, rule 35, for the capability rule.
 
 ### Auto-register preserves the operator's stored TLS choice
 
@@ -3616,6 +3710,16 @@ removed the never-consumed `autoUpdateCheckInterval` / `autoUpdateTime`
 fields. No agent-lifecycle behavior keyed off them — agent update targeting
 and command admission are unaffected — and the extension-point expectations
 on the system-settings boundary are otherwise unchanged.
+
+### Shared telemetry settings preserve sender lifecycle ownership
+
+Telemetry preference saves invoke the sender callback only after a persisted
+explicit boolean changes the effective runtime value. Repeated saves and
+null/omitted preferences do not restart it. This lifecycle belongs to telemetry
+reporting, not agent registration or command admission. A telemetry `startup`
+event also follows a genuine sender re-enable or ID reset and therefore cannot
+serve as a count of agent or server restarts. Settings transition/persistence
+tests pin this shared boundary without changing agent lifecycle authority.
 
 ### Shared system-settings boundary gained an SSH backoff reset side effect
 
@@ -5229,6 +5333,14 @@ agent truth, effective enforcement, and bounded reason separately so lifecycle
 surfaces can show desired-disabled/applied-enabled and
 desired-enabled/applied-disabled as drift or attention, and no-report cases as
 pending or unknown rather than in-sync.
+
+Routine config polling is not a per-poll audit event:
+`/api/agents/agent/{id}/config` audits every failed fetch, and a successful one
+normally on the agent's first delivery after start, a token or desired-config
+change, or once a day (see the API contract). Suppression is bounded to 4,096
+organisation/agent pairs. New keys replace only expired suppression entries;
+overflow deliveries are audited with `reason=capacity`, without evicting
+recent agents or restricting enrolment, config access, or command authority.
 That same canonical /api/auto-register path must also complete the live
 post-registration contract after persistence: it must trigger discovery refresh
 and emit the canonical `node_auto_registered` WebSocket payload instead of
@@ -8270,17 +8382,54 @@ Focused proof lives in `internal/hostagent/agent_new_test.go`
 `TestGetReliableMachineIDNormalizesWindowsBraces`); the Windows recovery file is
 cross-compiled with `GOOS=windows go build ./internal/hostagent/`.
 
-### Unix bootstrap survives single-line command fields
+### Private Unix lifecycle bootstrap
 
-The shared frontend Unix installer command uses explicit shell statement
-separators rather than literal newlines or backslash-newline continuations.
-This preserves its grammar when copied into a single-line command field (#2123).
-The builder rejects embedded CR/LF in its normalized inputs rather than silently
-altering a quoted URL, credential, CA path or option. Shell quoting is unchanged.
-Download and unprivileged preflight still precede token-file creation and sudo
-installation. Root and sudo paths retain private token directories, file modes,
-TLS options, non-interactive operation and cleanup on success or failure.
-`agentInstallCommand.test.ts` covers normalized-input syntax and
-synthetic root/sudo execution under sh and Bash, including download, preflight
-and install failures. A clipboard fixture proves input compatibility, not native
-FreeBSD installation, offline dependency availability or service persistence.
+The shared frontend Unix installer preserves single-line paste grammar,
+quoted destinations, explicit custom CA/insecure continuity and profile flags.
+Issued credentials are separate from copied commands. A privileged Bash child
+owns the Core-aligned silent bounded reader and temporary 0700/0600 handoff;
+maximum-size input must survive unchanged, overflow must not reach the caller's
+history, and every exit must restore terminal modes and remove temporary files.
+Download/preflight failures never reach credential entry or installation.
+Sudo validation occurs before download; download and unprivileged preflight
+still precede privileged installation. Token-optional and saved-state update
+paths need no terminal or replacement credential.
+
+For non-terminal FreeBSD command fields, the existing page offers an absolute
+local private-token-file variant, with ownership/regular-file/symlink/mode
+checks and the installer's bounded trusted reader. The operator provisions and
+removes that file through a trusted file path; the command neither contains its
+contents nor deletes it. A GUI without private file provisioning requires a
+console/SSH session; native pfSense/FreeBSD installation is not inferred.
+
+Unix upgrades, explicit credential repairs and uninstall now share this
+complete-download transport rather than executing a partial fetch pipe or
+putting tokens in argv. Repairs/removal retain canonical ID and hostname;
+ordinary updates preserve their saved-state credential/identity route. Removal
+skips new-binary preflight, which is not a detachment prerequisite. Issuance,
+scopes, tenant/host binding, TLS and command-execution opt-in are unchanged.
+Windows credential handling is deliberately unchanged pending its own complete
+validated step. `agentInstallCommand.test.ts` is the executable helper proof;
+`infrastructureAgentDoctorModel.test.ts` verifies the real operations closures
+and existing credential/identity choices. Browser receipts cover real settings
+components with synthetic APIs, not installed outcome or reporter acceptance.
+
+### Agent Doctor handoff stays readable on a phone
+
+The outdated-agent notice routes operators to Agent Doctor with the affected
+agent IDs. On a 390px viewport, the target list now allocates its visible
+columns to Agent, Status and Seen so the full "Needs attention" badge fits
+without horizontal scrolling or clipping. The Status column also receives
+enough width in the intermediate layout, while the wide desktop layout retains
+its original proportions and System, Reported and Target columns. Agent
+Doctor's light-tone guidance uses opaque text colors because the current
+900-level palette tokens
+are translucent. The 49-agent synthetic browser pass follows the deep link,
+inspects the guidance and status rows at phone and desktop widths, and keeps
+update commands and credential authority unchanged.
+
+### Pulse Mobile pairing copy only
+
+`internal/api/onboarding_handlers.go` changed only the human-readable pairing
+readiness messages so they name Settings > Pulse Mobile. No agent
+registration, lifecycle or install path changed.

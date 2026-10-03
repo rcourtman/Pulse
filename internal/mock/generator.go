@@ -793,6 +793,53 @@ func computeGuestCountsForNode(config MockConfig, nodeRole string, node models.N
 	return vmCount, lxcCount
 }
 
+// mockReplicationInterval matches the "*/15" schedule every mock job carries.
+const mockReplicationInterval = 15 * time.Minute
+
+// mockReplicationTargetNode picks a replication target for a guest. Replication
+// copies a guest to a different node, so the source is never a candidate; an
+// estate with no second node has nothing to replicate to.
+func mockReplicationTargetNode(nodes []models.Node, sourceNode string, start int) (string, bool) {
+	for offset := 0; offset < len(nodes); offset++ {
+		candidate := nodes[(start+offset)%len(nodes)].Name
+		if candidate != "" && candidate != sourceNode {
+			return candidate, true
+		}
+	}
+	return "", false
+}
+
+// rebaseMockReplicationJobs keeps replication timing on the fixture clock.
+// The generator stamps last and next sync once, so without a rebase every job
+// on a long-running demo reads as hours overdue while still reporting ok. Each
+// job keeps a stable phase inside its schedule window: a healthy job last
+// synced less than one interval ago and is next due in the future, and a
+// failing job's last good sync falls further behind with each failure. A job
+// is rewritten only when its phase passes, so a refresh does not manufacture a
+// change for jobs that did not run.
+func rebaseMockReplicationJobs(jobs []models.ReplicationJob, now time.Time) {
+	windowSeconds := uint64(mockReplicationInterval / time.Second)
+	for i := range jobs {
+		job := &jobs[i]
+		phase := time.Duration(mockStableHash64("replication-phase", job.ID)%windowSeconds) * time.Second
+		lastRun := now.Truncate(mockReplicationInterval).Add(phase)
+		if lastRun.After(now) {
+			lastRun = lastRun.Add(-mockReplicationInterval)
+		}
+		nextSync := lastRun.Add(mockReplicationInterval)
+		lastSync := lastRun.Add(-time.Duration(job.FailCount) * mockReplicationInterval)
+		if job.LastSyncTime != nil && job.LastSyncUnix == lastSync.Unix() && job.NextSyncUnix == nextSync.Unix() {
+			continue
+		}
+
+		job.LastSyncTime = ptrTime(lastSync)
+		job.LastSyncUnix = lastSync.Unix()
+		job.NextSyncTime = ptrTime(nextSync)
+		job.NextSyncUnix = nextSync.Unix()
+		job.LastPolled = now
+	}
+}
+
 func generateReplicationJobs(nodes []models.Node, vms []models.VM) []models.ReplicationJob {
 	if len(nodes) == 0 || len(vms) == 0 {
 		return []models.ReplicationJob{}
@@ -814,10 +861,13 @@ func generateReplicationJobs(nodes []models.Node, vms []models.VM) []models.Repl
 			instance = vm.Node
 		}
 
+		targetNode, ok := mockReplicationTargetNode(nodes, vm.Node, (i+1)%nodeCount)
+		if !ok {
+			continue
+		}
+
 		jobNumber := i % 3
 		jobID := fmt.Sprintf("%d-%d", vm.VMID, jobNumber)
-		lastSync := now.Add(-time.Duration(300+rand.Intn(3600)) * time.Second)
-		nextSync := lastSync.Add(15 * time.Minute)
 		durationSeconds := 90 + rand.Intn(240)
 		durationHuman := formatSecondsAsClock(durationSeconds)
 		status := "idle"
@@ -835,7 +885,6 @@ func generateReplicationJobs(nodes []models.Node, vms []models.VM) []models.Repl
 			status = "syncing"
 		}
 
-		targetNode := nodes[(i+1)%nodeCount].Name
 		rate := 80.0 + rand.Float64()*140.0
 
 		job := models.ReplicationJob{
@@ -858,12 +907,8 @@ func generateReplicationJobs(nodes []models.Node, vms []models.VM) []models.Repl
 			State:                   status,
 			Status:                  status,
 			LastSyncStatus:          lastStatus,
-			LastSyncTime:            ptrTime(lastSync),
-			LastSyncUnix:            lastSync.Unix(),
 			LastSyncDurationSeconds: durationSeconds,
 			LastSyncDurationHuman:   durationHuman,
-			NextSyncTime:            ptrTime(nextSync),
-			NextSyncUnix:            nextSync.Unix(),
 			DurationSeconds:         durationSeconds,
 			DurationHuman:           durationHuman,
 			FailCount:               failCount,
@@ -875,6 +920,7 @@ func generateReplicationJobs(nodes []models.Node, vms []models.VM) []models.Repl
 		jobs = append(jobs, job)
 	}
 
+	rebaseMockReplicationJobs(jobs, now)
 	return jobs
 }
 
@@ -2647,10 +2693,10 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 
 		host := models.DockerHost{
 			ID:                hostID,
-			AgentID:           fmt.Sprintf("agent-%s", randomHexString(6)),
+			AgentID:           fmt.Sprintf("agent-%s", mockStableHexString(16, "docker-agent", hostID)),
 			Hostname:          hostname,
 			DisplayName:       humanizeHostDisplayName(hostname),
-			MachineID:         randomHexString(32),
+			MachineID:         mockStableHexString(32, "docker-host-machine", hostID),
 			OS:                dockerOperatingSystems[rand.Intn(len(dockerOperatingSystems))],
 			KernelVersion:     dockerKernelVersions[rand.Intn(len(dockerKernelVersions))],
 			Architecture:      dockerArchitectures[rand.Intn(len(dockerArchitectures))],
@@ -3913,7 +3959,7 @@ func buildMockLinkedHostFromKubernetesNode(
 		IntervalSeconds: 30,
 		LastSeen:        lastSeen,
 		AgentVersion:    hostAgentVersions[rand.Intn(len(hostAgentVersions))],
-		MachineID:       randomHexString(32),
+		MachineID:       mockStableHexString(32, "linked-host-machine", hostID),
 		Tags:            tags,
 	}
 	host.NetInRate = SampleMetric("agent", host.ID, "netin", now)
@@ -4191,7 +4237,7 @@ func buildMockLinkedHostFromNode(node models.Node, hostID string, hostIndex int,
 		IntervalSeconds: 30,
 		LastSeen:        lastSeen,
 		AgentVersion:    hostAgentVersions[rand.Intn(len(hostAgentVersions))],
-		MachineID:       randomHexString(32),
+		MachineID:       mockStableHexString(32, "linked-host-machine", hostID),
 		Tags:            []string{"mock", "proxmox-node"},
 		LinkedNodeID:    node.ID,
 	}

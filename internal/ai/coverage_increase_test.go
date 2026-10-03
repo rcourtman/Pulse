@@ -338,18 +338,7 @@ func TestService_BuildEnrichedResourceContext(t *testing.T) {
 	s.mu.Unlock()
 
 	// Case 8: With Change Logic
-	cd := NewChangeDetector(memory.ChangeDetectorConfig{})
-	// Simulate a "created" change
-	cd.DetectChanges([]memory.ResourceSnapshot{
-		{
-			ID:           "res1",
-			Name:         "res1",
-			Type:         "vm",
-			Status:       "running",
-			SnapshotTime: now,
-		},
-	})
-	// Force persistence flush/processing if needed (DetectChanges does it async but returns changes immediately)
+	cd := newLegacyChangeDetector(t, legacyCreatedChange("res1", "res1", "vm"))
 
 	ps.SetChangeDetector(cd)
 
@@ -607,16 +596,13 @@ func TestService_BuildRelationshipContext_UsesCanonicalReadState(t *testing.T) {
 func TestService_BuildRecentResourceChangesContext_FallsBackToMemoryFormatter(t *testing.T) {
 	s := &Service{}
 	ps := NewPatrolService(nil, nil)
-	cd := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 10})
-	cd.DetectChanges([]ResourceSnapshot{
-		{ID: "res-fallback", Name: "fallback-resource", Type: "vm", Status: "running", SnapshotTime: time.Now()},
-	})
+	cd := newLegacyChangeDetector(t, legacyCreatedChange("res-fallback", "fallback-resource", "vm"))
 	ps.SetChangeDetector(cd)
 	s.patrolService = ps
 
 	got := s.buildRecentResourceChangesContext("res-fallback")
 	want := memory.FormatRecentChangesContext(cd.GetChangesForResource("res-fallback", 5), false, "###")
-	if got != want {
+	if got == "" || got != want {
 		t.Fatalf("expected fallback recent-resource-changes context to use shared memory formatter:\nwant %q\n got %q", want, got)
 	}
 }

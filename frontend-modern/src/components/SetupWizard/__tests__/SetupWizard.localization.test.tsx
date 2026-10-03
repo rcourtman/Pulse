@@ -111,9 +111,9 @@ describe('localized setup wizard journey', () => {
       />
     ));
 
-    expect(screen.getByText('Elige tu primera fuente de infraestructura')).toBeInTheDocument();
+    expect(screen.getByText('Conecta tu primer sistema')).toBeInTheDocument();
     expect(screen.getByText('Credenciales que debes guardar ahora')).toBeInTheDocument();
-    expect(screen.getByText('Opciones de fuente')).toBeInTheDocument();
+    expect(screen.getByText('Formas de conectar')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Agregar infraestructura' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Instalar Pulse Agent' })).toBeInTheDocument();
   });

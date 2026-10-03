@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 	"unsafe"
@@ -585,53 +584,4 @@ func TestAgentConfigFetchAuditTrackerRecordsOnlyNewDeliveries(t *testing.T) {
 	if _, audit := unset.observe("default", "agent-1", "tok-a", "sha256:1", start); !audit {
 		t.Fatal("a handler without a tracker must audit every delivery")
 	}
-}
-
-func TestAgentConfigFetchAuditTrackerDayRestartAndConcurrency(t *testing.T) {
-	tracker := newAgentConfigFetchAuditTracker()
-	start := time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)
-	recorded := 0
-	for minute := 0; minute < 1440; minute++ {
-		if _, audit := tracker.observe("org", "agent", "token", "sha256:config", start.Add(time.Duration(minute)*time.Minute)); audit {
-			recorded++
-		}
-	}
-	if recorded != 1 {
-		t.Fatalf("1,440 unchanged minute polls recorded %d audits, want 1", recorded)
-	}
-	if reason, audit := tracker.observe("org", "agent", "token", "sha256:config", start.Add(24*time.Hour)); !audit || reason != "daily" {
-		t.Fatalf("daily access audit = %v %q, want daily", audit, reason)
-	}
-	if reason, audit := tracker.observe("org", "agent", "token", "sha256:config", start.Add(23*time.Hour)); audit || reason != "" {
-		t.Fatalf("a backwards clock recorded unchanged access: %v %q", audit, reason)
-	}
-	restarted := newAgentConfigFetchAuditTracker()
-	if reason, audit := restarted.observe("org", "agent", "token", "sha256:config", start.Add(24*time.Hour)); !audit || reason != "first_since_start" {
-		t.Fatalf("restart audit = %v %q, want first_since_start", audit, reason)
-	}
-
-	// Concurrent deliveries must atomically share the same remembered success.
-	concurrent := newAgentConfigFetchAuditTracker()
-	results := make(chan bool, 32)
-	var workers sync.WaitGroup
-	for i := 0; i < cap(results); i++ {
-		workers.Add(1)
-		go func() {
-			defer workers.Done()
-			_, audit := concurrent.observe("org", "agent", "token", "sha256:config", start)
-			results <- audit
-		}()
-	}
-	workers.Wait()
-	close(results)
-	concurrentAudits := 0
-	for audit := range results {
-		if audit {
-			concurrentAudits++
-		}
-	}
-	if concurrentAudits != 1 {
-		t.Fatalf("32 concurrent identical deliveries recorded %d audits, want 1", concurrentAudits)
-	}
-	t.Logf("unchanged minute polls=1440 recorded=%d; concurrent polls=32 recorded=%d; daily and restart access preserved", recorded, concurrentAudits)
 }

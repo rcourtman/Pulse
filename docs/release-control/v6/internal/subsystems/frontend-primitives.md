@@ -28,23 +28,17 @@ and responsive labels are unchanged; the production drawer browser fixture
 `frontend-modern/browser-tests/pool-capacity.cjs` verifies desktop and phone
 transitions and overflow alongside storage capacity regression tests.
 
-### Release-line PBS retention revocation — 30 September 2026
+### Shipped documentation table headers
 
-PBS drawer host-target retention is bound to the unchanged identity evidence
-used by this line's existing selector, including the reported PBS node name.
-Changed or withdrawn evidence and a present ambiguous host snapshot revoke the
-remembered host; a subsequent omission cannot resurrect it. An unchanged, fresh
-identity still survives a transient omitted host row. Each keyed datastore row
-receives its own unwrapped resource snapshot, so Solid reconciliation cannot
-mutate the service target or a sibling row.
-
-This bounded adaptation of main `3df86570396a` repairs retention added after
-stable v6.4.1. It does not introduce main's backend `pbs.linkedAgentId` producer,
-change the line's direct correlation selector or establish installed #1723
-relief. Builder and open-drawer regressions in `ProxmoxBackupServersTable.test.ts`
-and `ProxmoxBackupServersTable.drawer.test.tsx`, plus desktop/phone production
-drawer verification in `browser-tests/pbs-retention-guard.cjs`, pin the boundary.
-
+After sanitization, the documentation renderer assigns trusted `scope=col` to
+native `thead th` cells without expanding the attribute allowlist. Document
+roles, scope and classes remain untrusted, and body cells are not promoted.
+Table-local horizontal scrolling is preserved. Renderer regression tests cover
+trusted column scope and rejected author-supplied attributes. The production
+Docs/router/styles fixture checks all eight current plan-table columnheader
+roles in desktop Chromium and phone WebKit, including local scrolling and
+page-width containment. This establishes browser roles, not screen-reader
+speech or release availability.
 
 ### Shipped documentation fragment navigation
 
@@ -334,11 +328,51 @@ keeps the tallest, so uniform tables still measure their real row height while
 mixed group/content lists keep a content-scale estimate.
 
 Shared workload, node, Docker-host, and resource-drawer history presentation
+must scope retained observations to the exact resource type, resource ID and
+range. An uncached target or range change clears the former points while its
+read is pending, including when a PBS host link is withdrawn. A failed
+replacement must never cache former-host points under the new target. Matching
+cached reads and same-source background polls retain their chart without a
+loading flash. Superseded, locked, unavailable and unmounted requests propagate
+the query's abort signal to the Charts API; late results cannot replace current
+observations. `GuestDrawerHistory.source-isolation.test.tsx` exercises the real
+renderer, cache readback and cancellation, not a mocked chart. The mock-backed
+PBS browser runner verifies delayed range and withdrawn-target reads at desktop
+and phone widths; neither proof establishes installed collection or #1723 relief.
+
+Failed same-source history refreshes keep valid previously loaded observations
+visible with an explicit warning, rather than hiding the entire chart. Initial
+or uncached replacement failures show unavailable history, never borrowed points
+or a collecting claim. The existing target/range owns every manual refresh;
+locked or absent targets expose no refresh control. The control remains mounted
+and focusable through retry and recovery, rejects activation while busy, and
+updates a pre-mounted polite status region without exposing transport diagnostics.
+The latest query read settles loading even when background polling supersedes
+a foreground refresh; late superseded results remain inert. Verification:
+`GuestDrawerHistory.refresh.test.tsx`, `createNonSuspendingQuery.test.tsx`, and
+`browser-tests/pbs-history-refresh.cjs` (direct production History renderer, scripted failures,
+keyboard retry, overlap, target withdrawal, phone/desktop and light/dark themes).
+These proofs establish presentation/recovery, not installed collection or delivery.
+
+Shared workload, node, Docker-host, and resource-drawer history presentation
 keeps current readings separate from stored samples. A current metric may
-populate the legend while history is still being collected, but it must never
-be expanded into synthetic timestamps or chart geometry. An empty stored
-series renders the shared collecting-history state; zero remains a valid
+populate the legend only with the explicit `current` label, never as a stored
+reading, timestamp or chart geometry. A successful empty read says `No stored
+history in this range`; it does not imply that collection is running or that
+changing provider configuration will produce a sample. Zero remains a valid
 reported reading, while an absent metric remains unavailable.
+A lone stored series renders one point at its actual timestamp and value,
+including measured zero, never an invented line. A group with one observation
+time exposes that date visibly with `Single observation. No trend yet.` and
+retains the existing accessible observation description. Multiple series with
+separate single observations remain separate points, inspectable at their
+actual times through the existing native control. Failed same-source refreshes
+retain these points; source/range replacement clears them along with paths and
+captions. `GuestDrawerHistory.sparse.test.tsx` checks geometry, units, provenance,
+invalid data, refresh and replacement. `browser-tests/history-window.cjs` also
+checks sparse/empty/current states through the production PBS drawer and direct
+shared renderer. This is presentation proof, not provider collection or #1723
+installed acceptance.
 Shared history-chart gridlines must carry numeric labels derived from the
 plotted scale rather than semantic `Avg` / `Max` placeholders. Byte and
 byte-rate axes include their human-readable unit at each gridline, and the
@@ -400,9 +434,20 @@ priority.
 
 Expandable platform summary rows use
 `getPlatformResourceDetailRowInteractionProps` (or
-`createPlatformResourceDetailState`, which owns the same state contract) for
-whole-row pointer activation, Enter/Space keyboard activation, focus treatment,
-`aria-expanded` / `aria-controls`, and exclusion of embedded links and controls.
+`createPlatformResourceDetailState` for their expansion state) for whole-row
+pointer activation and exclusion of embedded links and controls. The nested
+native disclosure button owns keyboard activation, focus and
+`aria-expanded` / `aria-controls`; static table rows are not duplicate controls.
+The shared `TableRow` installs a non-activating native click target only while
+an `onClick` action exists. WebKit touch must be able to synthesize that row's
+click, but actions remain document-delegated so embedded controls can stop
+propagation before the row action runs. Do not move the action into the native
+compatibility listener or add touch-end activation that opens rows during
+scrolling. Explicit caller-owned native listeners remain caller-owned.
+`Table.test.tsx` covers native binding, removal, single activation, child
+isolation and bound handlers; `PulseDataGrid.test.tsx` checks inheritance.
+The production PBS table/drawer browser fixture exercises first-tap disclosure
+and History in WebKit phone emulation, not installed collection or devices.
 `PlatformResourceDetailToggleButton` is the desktop disclosure affordance and
 is visually removed on phone layouts where the complete row is the touch target;
 provider tables must not add a second mobile chevron. When row activation
@@ -429,6 +474,22 @@ and thermal facts remain discoverable from the PBS surface.
 `ProxmoxBackupServersTable` belongs to the Proxmox Backups tab. Proxmox
 Overview must not duplicate that domain table between its node and guest
 regions; the tab boundary owns PBS server, datastore, and artifact detail.
+The shared Proxmox section rail renders only tabs backed by current capability
+evidence. It reads the source-filtered `facets.byType` from one compact
+`type=pmg&source=proxmox,pbs,pmg,agent` request, not estate-wide
+`aggregations.byType`: unrelated VMware VMs and TrueNAS storage must not
+advertise Proxmox workflows. Agent is included for Proxmox-owned physical
+disks, whose fact source may remain `agent`; because that source is shared, a
+generic agent disk can still expose Storage until the route filters its rows.
+A fresh all-resources cache does not carry source-filtered facets, so the
+compact query must revalidate even when that cache can paint rows. While the
+facets are unknown the rail must not show every optional
+tab as a loading fallback; an independently fetched positive replication-job
+count may still expose Replication. A bookmarked section remains the active
+hydration target until counts can distinguish unavailable from unsupported,
+then unsupported sections fall back to Overview. This rule applies at desktop
+and phone widths and must not rewrite the URL or discard a valid PBS-only
+Backups tab when its count arrives.
 When that surface receives the provider-owned PBS resource and its host Agent
 as separate canonical resources, `ProxmoxBackupServersTable` may assemble a
 presentation-only drawer resource only after one unique normalized host
@@ -437,6 +498,12 @@ telemetry, host details, and stored History use the Agent facet and Agent
 metrics target. Zero or multiple matches must leave the PBS resource unchanged
 rather than guessing; this presentation correlation must not mutate either
 canonical input or create a second mobile disclosure interaction.
+When the PBS service has a registry-corroborated `pbs.linkedAgentId`, the
+Backups drawer selects only an Agent-bearing resource with that source-native
+ID, even if same-host PVE API labels or a token-auth PBS connection have no
+matching hostname. PVE-only rows cannot masquerade as a host series. A new
+link cannot reuse a retained old host target, and the displayed PBS row keeps
+its own canonical resource ID while History uses the selected host target.
 
 Presentation helpers that mirror a server-side classification must name the
 predicate they mirror and expose it as a single exported function rather than
@@ -649,11 +716,32 @@ that manual-channel consequence must stay visible at desktop and narrow widths.
 
 ## Shared Boundaries
 
+### Maintenance schedule copy
+
+Operator maintenance banners show local absolute start and end timestamps,
+including future dates. Past-time relative formatting must not turn a future
+expiry into "just now". The banner describes paused attention rather than
+promising that rejected alert observations are acknowledged. Active and
+future-window mounted regressions pin these user-visible claims.
+
+### Retained state in bounded platform windows
+
+`PlatformWindowedRows` and `PlatformWindowedList` keep one keyed renderer owner
+while the visible window moves. Items present in both windows retain component
+identity, active detail tabs and unsaved edits. Passing a new window must update
+the existing renderer rather than instantiate another renderer around it.
+Removed items still unmount, and row budgets and spacer behavior are unchanged.
+The mounted scroll regression in `PlatformWindowedRows.test.tsx` exercises both
+renderers with an edited input retained across overlapping windows. The browser
+journey is a narrow Proxmox node Manage form, scrolling to lifecycle Save while
+the synthetic estate continues updating, plus the alert timeline and note form.
+
+
 ### PBS host history correlation
 
 The Backups surface passes its complete deduplicated route inventory to the PBS table. Only PBS servers render as rows; other resources supply correlation inputs. Preserve PBS drawer identity and use the correlated canonical history target. Missing disk utilisation does not gate CPU/memory history.
 
-One agent can be surfaced twice for a single PBS host: folded into its PVE guest and as a standalone `source=pbs` host row. Those two rows are one machine, not an ambiguous pair. Correlation must collapse candidates that share an agent identity and prefer the guest representation, whose canonical metrics target carries the persisted host history; the PBS service target has no host series and renders the collecting-history state. Two candidates with distinct agent identities remain ambiguous, and a candidate with no agent identity must not be treated as proof of sameness.
+One agent can be surfaced twice for a single PBS host: folded into its PVE guest and as a standalone `source=pbs` host row. Those two rows are one machine, not an ambiguous pair. Correlation must collapse candidates that share an agent identity and prefer the guest representation, whose canonical metrics target carries the persisted host history; the PBS service target has no stored host series and renders the no-history state. Two candidates with distinct agent identities remain ambiguous, and a candidate with no agent identity must not be treated as proof of sameness.
 
 A live snapshot can briefly omit the correlated host row while the PBS server row remains, for example while a realtime refresh replaces the merged estate. The correlation must retain the last resolved host per PBS server across that omission instead of falling back to the PBS service target, so the drawer's Discovery and Metrics Target rows and its History series do not flicker. Reuse the remembered host only while it is still fresh relative to the server, and drop it once stale so a removed or replaced host is not advertised indefinitely; a host row that is present but ambiguous still declines.
 
@@ -3340,6 +3428,11 @@ confirmation note or rule reason is a `FormTextarea`, and the alert-only
 guidance link is a `ButtonLink`. `PatrolIntelligenceSurface.tsx` passes the
 Patrol findings accessor into the workbench; the workbench does not fetch or
 poll findings itself.
+The feature shell keeps the independent attention workbench mounted when
+Patrol is off or its model needs setup, while retaining the existing setup task
+above it. Desktop and narrow browser checks must show the task and attention
+list together, then allow a selected decision to open and return without
+changing the disabled Patrol controls or overflowing the viewport.
 The objective brief and optional-context fields in `PatrolObjectivesPanel`
 share the same `FormTextarea` ownership contract.
 
@@ -4511,6 +4604,14 @@ and button lifecycle, and
 and button tooltip formatting, class selection, and label/state presentation.
 Future container-update work should extend those owners instead of pushing
 store wiring, settings reads, or mutation flow back into the shared shell.
+For governed container updates, the row's current-session pending state is
+bound to the action ID. A changed registry update badge, a legacy command for
+the same container, or elapsed time cannot turn an unconfirmed action green or
+offer a fresh plan. The row reopens that action with a read-only action GET;
+only its recorded completed outcome earns the transient completed state.
+Operator-closed unknown outcomes remain reviewable and must not be presented
+as failed. A browser reload loses this row-local shortcut, not the durable
+Actions audit; the audit remains the authority before any later retry.
 The shared web interface URL field now follows that same owner split.
 `frontend-modern/src/components/shared/WebInterfaceUrlField.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useWebInterfaceUrlFieldState.ts`
@@ -5425,6 +5526,17 @@ styling. `TableHeader` and `TableBody` may provide canonical default borders
 and dividers, but when a caller supplies explicit border or divide classes the
 shared primitive must defer to that local contract instead of silently forcing
 the default separator treatment back into the rendered DOM.
+Cell padding follows the same ownership rule. `TableCell` and `TableHead`
+provide the canonical `px-2 sm:px-3` and `py-*` defaults, but Tailwind emits
+every padding utility at equal specificity in spacing-scale order, so a base
+utility silently beats any smaller caller utility. When a caller's class names
+a side's padding (`p-*`, `px-*`, `pl-*`, `pr-*`, `py-*`, `pt-*`, `pb-*`, with
+or without `!`), the primitive omits its default for that side and keeps it for
+the sides the caller left alone; prefixed-only variants such as `lg:px-0` keep
+layering on the default. Tables therefore state the padding they want in their
+own classes or presentation constants instead of carrying `!px-*` overrides to
+beat the primitive. `Table.test.tsx` pins the base, single-side, important,
+`p-*`, prefixed-only and reactive cases.
 That same shared table boundary now owns CSP-safe sizing for infrastructure
 tables and metric bars. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
 and `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
@@ -6323,6 +6435,14 @@ or `advanced_sso` feature probe before opening the SAML provider modal.
 `useSSOProvidersState.ts` must treat provider type as form state only; SSO
 entitlement truth belongs to the backend/runtime capability contract, where
 OIDC, SAML, and multi-provider SSO are Community-tier capabilities.
+The group-to-role mapping form must retain IdP group names with embedded
+spaces through provider detail, edit, payload, and reload. Its entries are
+comma- or newline-delimited `group=roleId` pairs; whitespace within a group
+name is not an entry separator. Keep the existing whitespace parsing for
+OIDC scopes and the other allowed lists separate from mapping parsing.
+`ssoProvidersModel.test.ts` and `SSOProvidersPanel.test.tsx` pin this round
+trip, and browser verification must inspect the saved mapping in the desktop
+and narrow edit dialog.
 `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` must keep
 page-shell titles, descriptions, and lead panel framing aligned instead of
 letting navigation/header labels drift away from the actual settings surface.
@@ -6762,6 +6882,19 @@ action path or verification card when `ActionResultV2` is present. Read-only
 sessions keep the review packet inspectable but must not render approve, reject,
 or run controls, while settled historical records must not be mislabeled as
 expired actionable reviews.
+For an aged, receipt-pending execution, the same responsive review dialog may
+expose an audit-recovery disclosure to an eligible local administrator. It must
+show the receipt-pending state to every viewer as an unknown outcome, with a
+non-mutating in-dialog re-read of the same action and a warning not to create a
+second plan while the first outcome is unknown. The re-read remains available
+before the recovery window and in read-only sessions; a failed read retains the
+unknown state and never implies that the action was sent again. Recovery must
+first instruct the operator to check the resource's actual state outside the
+action record, then require a written reason and an explicit acknowledgement
+before a fresh action read and guarded force-fail call. Desktop and phone
+layouts keep this confirmation visible without implying a retry, cancellation
+or failed mutation. Read-only and settled records show no recovery control;
+permission hints in the client never replace the server's authority check.
 Its action controls are also plan-identity-bound: a missing reviewed `planHash`
 renders explicit replan guidance and hides approve, reject, and run controls,
 while an actionable record sends the exact displayed hash on every mutation.
@@ -6772,6 +6905,13 @@ the matching Open or History subtab from server-authored lifecycle state, and
 removes the query when the dialog closes. Feature pages may summarize action
 context, but they must not recreate approve, reject, run, progress, or outcome
 controls outside the shared Actions review.
+The Actions route owns overlapping reads by request generation. A slower detail
+response or late dialog refresh must not replace a newer URL-selected action or
+reopen a closed review; a mismatched server action id is rejected. An older Open
+or History list response must not overwrite the newer tab's results or error.
+`Actions.requestOwnership.test.tsx` covers both response orders and close while
+a receipt re-read is pending; the browser navigation proof checks the rendered
+dialog and URL at desktop and phone widths without sending an action mutation.
 The Actions ledger is a peer top-level navigation destination. Patrol remains
 the primary detection and investigation home and may expose a route-backed
 Actions handoff, but Actions owns its pending-approval count and selected state.
@@ -6866,7 +7006,8 @@ and
 
 ### Agent Doctor settings framing
 
-Settings labels the application update panel **Pulse server updates** and keeps
+Settings labels the application update panel **Updates** under the System
+group, whose description sends agent updates to Infrastructure, and keeps
 agent lifecycle triage in the separate **Agent Doctor** dialog. Platform update
 notices, Diagnostics, and Infrastructure rows use the canonical Agent Doctor
 route handoff instead of recreating installer or repair controls. The dialog
@@ -7435,6 +7576,109 @@ read, confirm clear, then release the obsolete response at desktop and phone
 widths. Scripted API responses establish component behaviour, not installed
 backend deletion or destination delivery.
 
+### Large platform notices keep the inventory in view
+
+`PlatformOutdatedAgentNotice` previews at most three affected names and exposes
+the full list through a keyboard-operable button when more hosts are outdated.
+The count, update guidance and action link remain visible. This keeps a
+large-estate stale-agent warning from pushing the platform inventory and
+Storage search below the phone viewport while preserving every affected name
+on demand. The component test pins collapsed, expanded and collapsed-again
+states; 1440px, 768px and 390px browser checks verify placement and overflow.
+The shared `InlineNotice` action text uses opaque 800-level colors for its four
+tones. The current Tailwind configuration overrides several 900-level palette
+tokens with 25%-alpha colors for translucent backgrounds, so using those
+tokens for notice links made a working action look disabled. The browser proof
+also follows the outdated-agent action to Agent Doctor with all 49 host IDs.
+The broader palette override should be corrected in its own shared-design
+slice, with background users migrated to explicit alpha utilities so other
+900-level text consumers can use normal opaque color semantics.
+
+### Actions empty state follows the AI capability
+
+`getActionsWatchOnlyEmptyState` takes an explicit `aiEnabled` input, which
+`pages/Actions.tsx` fills from the `assistantEnabled` session capability. While
+AI is off it returns no guidance, so the empty Open inbox keeps its plain copy
+instead of saying Patrol runs in Watch only mode or pitching Pro Patrol modes
+for a feature that is not running (issue #905). With AI on, the Watch only,
+switch and upgrade branches are unchanged. `actionsWatchOnlyEmptyState.test.ts`
+pins both states and the page wiring.
+
+### Pulse Mobile settings section label
+
+The `system-relay` settings section is labelled Pulse Mobile in the nav
+catalog, the header metadata and every locale catalog; the product name is not
+translated. Its route id, feature gate and read capability are unchanged.
+Relay never provided remote access to the web UI, so no settings chrome may
+label it Remote Access.
+
+### Drawer History is inspectable without pointer hover
+
+`GuestDrawerHistory` exposes a labelled native range input for groups with
+multiple stored observation times. Native arrow keys, Home/End and touch input
+select real stored timestamps; the control's value text includes the full local
+date/time and separately formatted series values. A series without a sample at
+the selected time remains missing rather than borrowing a neighbouring or live
+reading. The SVG has a linked textual description, including lone observations
+and the absence of stored data; a lone observation does not fabricate a trend.
+
+Selection follows its timestamp across same-source refreshes, not an ordinal
+index that shifts when samples arrive. An expired selection snaps to an actual
+remaining observation. Changing resource type, id or range clears pointer and
+keyboard selection even when matching cached data arrives immediately. Empty,
+failed initial, absent-target and licence-locked views expose no inspection
+control. Existing matching-point retention and scoped retry remain unchanged.
+Mounted inspection regressions cover these boundaries. The direct-renderer
+browser fixture verifies native keys, focus, pointer coexistence and touch at
+desktop/phone widths across Chromium, Firefox and WebKit; it is not installed
+PBS collection or a screen-reader announcement-quality claim.
+
+### Drawer History pointer values share one observed time
+
+Pointer inspection snaps to the nearest actual stored timestamp across the
+group's series, with equidistant observations resolved to the earlier time.
+Every displayed value and marker must belong to that timestamp. Missing series
+remain unavailable at the inspected time, not a nearest neighbour, latest
+observation or current reading. A lone stored sample, including zero, can be
+inspected without fabricating a trend. The SVG's dated description follows the
+same active time as the visible legend. Leaving the plot restores the normal
+latest/current legend; focused native inspection still takes precedence.
+
+Matching refreshes reconcile the pointer with the current set of actual
+observations; resource/range replacement still clears pointer state. Mounted
+`GuestDrawerHistory.pointer.test.tsx` regressions cover sparse and disjoint
+series, zero rates, single observations, ties, focus precedence and replacement.
+`browser-tests/history-pointer.cjs` verifies the production renderer and query
+in Chromium/Firefox desktop and Chromium/WebKit phone emulation in both themes,
+including failed refreshes and source replacement. Scripted APIs establish
+presentation accuracy, not real PBS collection or installed #1723 acceptance.
+
+### Drawer History panels share a dated time window
+
+`GuestDrawerHistory` uses one common time interval for every configured metric
+group, including utilization, network, disk I/O and thermals. The fulfilled
+API response's valid `start`/`end` interval remains in view even if it contains
+only a few minutes of observations. A sample at a given timestamp occupies the
+same horizontal position in every panel; a group's sparse coverage must not
+stretch independently to fill the selected range. Visible date/time endpoints
+and full local timestamps in their accessible labels distinguish overnight and
+multi-day windows. Native inspection still selects actual observations.
+
+Returned edge observations widen the common envelope instead of being clipped
+or discarded, including aggregated bucket timestamps. An invalid API interval
+falls back to the valid observed envelope across configured groups, not a
+fabricated range. Non-date timestamps and unconfigured metrics cannot poison
+that geometry. A valid empty window has labelled endpoints but no trend or
+inspection control. Failed matching refreshes retain the window with its data;
+target/range replacement clears both until matching data arrives.
+
+`GuestDrawerHistory.window.test.tsx` pins geometry, labels, refresh/replacement,
+empty/invalid windows and edge observations. `browser-tests/history-window.cjs`
+uses the production PBS table, resource drawers, History query and CSS with
+synthetic APIs, checking three separately mapped drawers and range/refresh
+behaviour in desktop and phone-emulated engines. This is presentation proof,
+not installed PBS/VirtualBox collection or a complete #1723 acceptance result.
+
 ### Shared canvas History responses belong to their selection
 
 `useHistoryChartState` cancels and invalidates old requests when the resource,
@@ -7480,3 +7724,76 @@ remain separate errors. No polling frequency, request or access policy changes.
 and selection changes; `browser-tests/history-status.cjs` checks actual chart
 states in desktop Chromium and phone WebKit with synthetic transport failures.
 These checks do not establish native collection or released availability.
+
+### Shared History single observations
+
+A single stored observation renders as a visible centred marker with one real
+timestamp label, including measured zero. It must not imply a trend or invent
+a duration. Pointer and keyboard inspection resolve to that actual observation;
+ordinary multi-observation interpolation and empty-result states are unchanged.
+The geometry's inverse timestamp mapping is shared by pointer inspection.
+
+`HistoryChart.sparse.test.tsx` and `historyChartModel.branchcov2.test.ts` cover
+marker geometry, one timestamp label, pointer bounds, keyboard inspection and
+single/zero/multiple/empty refreshes. `browser-tests/history-sparse.cjs` checks
+actual series pixels and tooltips in desktop Chromium and phone WebKit, using
+the production chart and API transport with synthetic stored samples. This
+does not establish native collection, whole-report resolution or availability
+in a release. Existing request, source, units and access boundaries are unchanged.
+
+### Shared History touch inspection preserves native scrolling
+
+A primary touch tap inside a Storage History plot selects the nearest actual
+observation at that horizontal position. Compatibility mouse focus must not
+replace that reading with the latest sample or announce it as keyboard input.
+The existing hover group and timestamp reconciliation remain shared with mouse
+and keyboard inspection. Single measured-zero observations remain inspectable;
+empty data and a changed selection cannot inherit an old touch.
+
+Movement beyond ten CSS pixels, cancellation, multiple contacts and release
+outside the plot are not taps. Inspection neither prevents native touch defaults
+nor captures the pointer or changes touch-action: page scrolling and pinch zoom
+remain browser-owned. Blur and Escape clear inspection, and supported keyboard
+keys resume the existing dated, politely announced sample navigation.
+
+Mounted `HistoryChart.test.tsx` regressions cover focus ordering, gesture
+rejection, selection ownership, refresh, empty/zero and input coexistence.
+`browser-tests/history-touch.cjs` exercises actual touchscreen taps through the
+production disk/pool details and API transport in phone Chromium/WebKit, native
+vertical panning in Chromium, and desktop mouse/keyboard controls. Synthetic
+sample presentation is not native collector, physical device, assistive-device
+or installed whole-report acceptance.
+
+### Shared Storage presenters preserve disk ownership
+
+Pool-detail presenters under `features/storageBackups/` must not use repeated
+device paths, UnRAID group labels or host display names as fleet-wide identity.
+Direct pool children are retained; inferred membership requires the same
+canonical host parent, or a complete native Proxmox instance/node pair when
+parents are missing. Known parent conflicts win over native names. Full ZFS
+device identifiers may normalize an optional `/dev/` prefix but must not match
+arbitrary suffixes. Missing ownership produces no invented linked-disk facts.
+The storage adapter preserves the instance needed for that presentation scope;
+this does not rewrite canonical resources or History targets. Existing keyed
+pool details must update linked disks and local health through target/snapshot
+replacement without retaining peer-host rows. The mounted
+`StoragePoolDetail.ownership.test.tsx` and production-component browser fixture
+`browser-tests/pool-ownership.cjs` verify desktop/phone presentation and History
+coexistence; they are not field collection or native recovery evidence.
+
+### Scheduled report kinds
+
+The Settings > Reporting schedule form composes the shared `FormSelect` for a
+"Report type" choice between the performance report and the Patrol weekly
+summary (`patrol_digest`). The choice renders only while the session's AI
+capability reports Patrol can run, or while an existing summary schedule is
+being edited, so an AI-off install sees the unchanged performance-report form.
+The summary variant hides the cadence, format, resource picker, tag filter,
+delivery, retention, attach, and save-copy controls and keeps name, weekday,
+time, timezone, recipients, and enabled; `reportingSchedulesModel.ts` owns the
+kind normalisation, the kind switch, the email-only payload, and the plain
+"Patrol activity, last 7 days" scope label. `ReportingPanel.test.tsx`,
+`useReportingPanelState.test.ts`, and `reportingSchedulesModel.branchcov2.test.ts`
+cover the gating, the reduced form, the pinned fields, and the saved payload.
+This is a presentation and form-state boundary; the schedule API contract,
+report rendering, and email delivery are unchanged.

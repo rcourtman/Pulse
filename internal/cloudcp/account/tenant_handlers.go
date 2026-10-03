@@ -36,6 +36,10 @@ type ownerAwareWorkspaceProvisioner interface {
 type WorkspaceLimitPolicy struct {
 	ProviderHostedMSP      bool
 	ProviderMSPPlanVersion string
+	// ProviderMSPLicenseLapsed reports whether the provider's licence is past
+	// its expiry and grace period. The portal keeps running then, so the
+	// provider can buy or renew, but no new client workspace may be created.
+	ProviderMSPLicenseLapsed func() bool
 }
 
 // HandleListTenants lists all tenants for an account.
@@ -271,6 +275,13 @@ func enforceWorkspaceLimit(reg *registry.TenantRegistry, account *registry.Accou
 	usingProviderHostedPlan := false
 	if sa == nil {
 		if policy.ProviderHostedMSP && account != nil && account.Kind == registry.AccountKindMSP {
+			if policy.ProviderMSPLicenseLapsed != nil && policy.ProviderMSPLicenseLapsed() {
+				return &workspaceLimitError{
+					reason:     "provider_msp_license_lapsed",
+					message:    "Your Pulse MSP plan has ended, so no new clients can be added. Buy a plan from Plan in the portal to add clients again.",
+					statusCode: http.StatusForbidden,
+				}
+			}
 			planVersion = pkglicensing.CanonicalizePlanVersion(policy.ProviderMSPPlanVersion)
 			usingProviderHostedPlan = true
 			if strings.TrimSpace(planVersion) == "" {

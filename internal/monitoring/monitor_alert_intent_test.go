@@ -54,14 +54,13 @@ func TestProxmoxPhysicalDiskMuteResolvesAndSuppressesWearoutAlert(t *testing.T) 
 	registry.IngestSnapshot(models.StateSnapshot{
 		PhysicalDisks: []models.PhysicalDisk{makeDisk("/dev/sda"), makeDisk("/dev/sdb")},
 	})
-	resolver := unifiedresources.NewMonitorAdapter(registry)
 	diskID := unifiedresources.ProxmoxPhysicalDiskAlertResourceID(instance, node, "/dev/sda")
-	canonicalID, found := resolver.ResolveCanonicalResourceID(diskID)
+	canonicalID, found := registry.ResolveReferenceID(diskID)
 	if !found {
 		t.Fatalf("PVE wearout alert resource %q did not resolve to a physical disk", diskID)
 	}
 	otherID := unifiedresources.ProxmoxPhysicalDiskAlertResourceID(instance, node, "/dev/sdb")
-	if other, ok := resolver.ResolveCanonicalResourceID(otherID); !ok || other == canonicalID {
+	if other, ok := registry.ResolveReferenceID(otherID); !ok || other == canonicalID {
 		t.Fatalf("other PVE disk identity = %q, %v; want a different disk", other, ok)
 	}
 
@@ -78,7 +77,7 @@ func TestProxmoxPhysicalDiskMuteResolvesAndSuppressesWearoutAlert(t *testing.T) 
 		t.Fatal(err)
 	}
 	monitor := &Monitor{alertManager: manager}
-	monitor.installOperatorIntentResolver(resolver)
+	monitor.installOperatorIntentResolver(unifiedresources.NewMonitorAdapter(registry))
 	if got := len(manager.GetActiveAlerts()); got != 0 {
 		t.Fatalf("mute left %d existing PVE wearout alerts active", got)
 	}

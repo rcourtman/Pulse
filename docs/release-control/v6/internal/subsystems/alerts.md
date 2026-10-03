@@ -15,19 +15,36 @@
 
 ## Purpose
 
-### PVE physical-disk alert identity and mute — issue #2112
+### RAID spare-count lifecycle — issue #2369
 
-PVE disk-health and wearout alerts retain their persisted path-shaped resource
-reference, `instance:node:disk:<sanitised device path>`, and their existing alert
-ID strings. The reference is resolved through the unified-resource physical-disk
-alias before exact operator intent is evaluated. A mute on one identified disk
-must clear its active wearout occurrence and suppress new evaluations for that
-disk without silencing a different device path. Absent wearout readings do not
-prove recovery; the separate confirmed-recovery rule still applies.
-`TestProxmoxDiskCanonicalResourceIDTrimsIdentity` pins representative persisted
-path keys, and monitoring's `TestProxmoxPhysicalDiskMuteResolvesAndSuppressesWearoutAlert`
-pins targeted active/new-alert suppression. These are source checks, not proof of
-installed notification relief for the reporter.
+Canonical host RAID alerts use the shared required-member health assessment,
+not attached-device arithmetic. Known configured counts appear as
+`raidRequiredDevices` metadata alongside unchanged total/active/failed/spare
+observations. A healthy spare creates no incident; an actual missing member or
+failed device still activates critical health. Scrub/resync/recovery and transient
+operation expiry cannot mask a static deficit. Restoring all required members
+with a spare resolves the existing incident through the same canonical state
+identity, once, without a duplicate fire or resolve.
+`TestRAIDSpareCanonicalActivationAndRecovery` checks event-ledger activation,
+continuity and resolution; collector and ingestion tests check both health and
+canonical alert severity. Routine scrub/resync remains silent, and genuine
+recovery/reshape keeps its warning when no critical deficit exists.
+
+### Retained occurrence re-fires preserve incident truth
+
+A reducer re-fire inside the retention window keeps its original occurrence
+identity and reopens that incident. It is distinct from replaying the initial
+firing. Canonical resource changes carry `alert_started_at` separately from the
+transition timestamp, so history reconstruction also retains one occurrence.
+Legacy records without that key retain their historical timestamp projection.
+Checkpointed re-fire timestamps reject earlier resolution replay and historical
+read repair. A later resolution still closes the occurrence, and replaying the
+older re-fire cannot reopen it. This does not change alert retention or delivery.
+
+`TestMonitorLifecycleRefireReopensRetainedOccurrence` covers both history paths,
+canonical reconstruction without an incident checkpoint, repeated replay and
+historical read repair. `TestIncidentRefireCheckpointPreservesTransitionOrder`
+covers checkpoint reload on either side of the final resolution.
 
 ### Automatic acknowledgement lifecycle
 
@@ -40,6 +57,21 @@ callbacks remain outside the manager lock. No retention duration is extended.
 `internal/alerts/reducer_parity_ack_test.go` verifies cleanup, the next metric
 sample and a short recovery/refire. This is synthetic lifecycle proof, not
 installed notification-destination acceptance.
+
+Hourly tracking-map cleanup retains canonical acknowledgement records while
+their incident is active, including legacy-keyed active snapshots and active
+recurrences with an older inactive timestamp. A decision does not expire from
+its acknowledgement age while the condition continues. Recovery starts the
+existing inactive-retention window; the ordinary cleanup's one-hour expiry,
+hourly stale-record fallback and explicit unacknowledgement remain unchanged.
+`TestTrackingCleanupPreservesAcknowledgedProviderRecurrence` in
+`internal/alerts/reducer_parity_ack_test.go` verifies manual and automatic
+acknowledgement through provider-native pool incident reconciliation, affirmative
+recovery, short recurrence, dispatch callbacks and JSON/durable checkpoint restart.
+`TestTrackingCleanupCanonicalAckRetentionBounds` verifies active/legacy identity,
+recent inactivity, both existing expiry paths and missing-timestamp fallback.
+Modeled elapsed time and local callbacks do not prove installed recovery or
+delivery to an external notification destination.
 
 Mobile incident drawers transfer their exact context to Assistant and close
 through the shared explicit handoff callback. Keeping the source drawer above
@@ -775,6 +807,8 @@ transition references recovery evidence separate from its trigger evidence.
 5. Update the event-log schema upgrade and history-projection parity proofs
    when lifecycle snapshots, occurrence folding, or alert-history authority
    changes
+6. When notification admission changes, verify firing, recovery, escalation,
+   queued-escalation revalidation, and quiet-hours replay precedence together.
 
 ### Attention projection source contract
 
@@ -790,6 +824,50 @@ must not reinterpret acknowledgement as resolution, omit suppressed state from
 inspectability, or convert missing/stale evidence into health.
 
 ## Current State
+
+### Active Docker update pending age survives restart
+
+A positive Docker image-update report reuses the matching active occurrence's
+`StartTime` as its pending-age authority. Resource and stable-identity timer maps
+are process-local; restoring the active alert must not impose another 24/48-hour
+delay during which positive reports fail to refresh `LastSeen`. Both cleanup
+paths must retain the observed occurrence, acknowledgement and notification
+identity without manufacturing recovery, refiring or duplicate delivery.
+Only the same resource's active `docker-container-update` occurrence supplies
+age. Another host/container and a resolved occurrence cannot lend their timers;
+affirmative recovery still retires tracking and a new update waits its normal
+delay. Absent/failed checks remain unknown, not recovery. An unactivated pending
+timer remains process-local; this does not infer an update's first detection
+from its cached registry-check timestamp.
+
+`TestDockerUpdateRestartRestoresActivePendingAge` in `update_alerts_test.go`
+exercises the public host checker, real JSON/durable checkpoint and restart,
+24/48-hour delays, acknowledged/unacknowledged incidents, stale saved observation,
+cached positive/absent/error reports, hourly and retention cleanup, lifecycle and
+delivery callbacks, isolated hosts and affirmative recovery/new-delay controls.
+The saved observation is aged deliberately; this is deterministic source-level
+restart/housekeeping proof, not a naturally elapsed day, live registry or
+destination result, or reporter confirmation of #2353's full daily cycle.
+
+### Continuing unacknowledged alerts survive age-based cleanup
+
+`MaxAlertAgeDays` removes an unacknowledged alert only when both its occurrence
+start and last observation predate the configured limit. A still-observed
+condition keeps its occurrence identity, age and dispatch timestamp; cleanup
+must not hide it or manufacture another firing on the next poll. Legacy alerts
+without `LastSeen` use `StartTime` for inactivity. Zero disables this retention
+rule. Acknowledged-alert cleanup, automatic acknowledgement, explicit clears,
+confirmed recovery and notification eligibility remain unchanged.
+
+`TestCleanupRetentionRequiresObservationInactivity` in `alerts_test.go` covers
+continuing/inactive, legacy, disabled, acknowledged and inconsistent-timestamp
+controls. `TestCleanupContinuingDockerUpdateKeepsOccurrence` in
+`cleanup_observation_retention_test.go` exercises the real Docker update
+detector with cached, absent and failed registry observations through four
+cleanup/next-poll cycles, JSON and durable active-state restart, callback counts,
+history and affirmative recovery. This is source-fixture lifecycle proof, not
+an installed registry/destination result or a diagnosis of a reporter's daily
+resolve/reopen cycle.
 
 ### Confirmed empty storage is recovery evidence
 
@@ -1406,6 +1484,43 @@ suppression, monitor-only notification suppression, cooldown decisions, and
 per-alert rate limiting; future notification-gating changes should extend that
 policy owner rather than burying new checks inside metric or resource-specific
 evaluators.
+
+### Configured flapping thresholds remain reachable
+
+Every accepted positive `FlappingThreshold`, including values above ten, must
+be reachable by current observations inside `FlappingWindowSeconds`. Per-key
+history retains at most `max(10, FlappingThreshold)` timestamps after window
+pruning; it must not grow with repeated attempts during an active cooldown.
+Only the threshold-crossing attempt opens that cooldown. Later attempts keep
+its original deadline even after the observation window drains, and a served
+cooldown resets the episode so a later storm can arm it again. Lowering the
+threshold applies the new history bound and threshold on the next check. The
+read-only delivery diagnosis must explain the same threshold and suppression
+actually enforced at dispatch. `internal/alerts/flapping_threshold_test.go`
+pins these boundaries through normal configuration updates and notification
+callbacks, alongside the existing flapping cooldown and one-shot callback tests.
+
+Ordinary retention cleanup and hourly tracking cleanup retire a served
+suppression deadline, its flapping latch and its observations atomically under
+the manager lock, using the same expiry rule as dispatch. Neither sweep may
+leave an active occurrence in unbounded flapping suppression after deleting its
+deadline. The next burst starts a fresh observation window and can arm a new
+bounded cooldown and one-shot callback. Unexpired cooldowns, other keys' policy
+and pending bursts without a deadline remain unchanged; expiry does not clear,
+acknowledge or change the identity of an active alert. The cleanup regression
+controls in `internal/alerts/flapping_threshold_test.go` exercise both sweeps,
+drained and retained windows, dispatch callbacks and delivery diagnosis. These
+modeled-time controls are not installed notification-destination acceptance.
+
+### Monitor-only delivery is terminal
+
+Monitor-only alerts remain visible, but neither a firing nor a recovery
+notification may enter the delivery queue. They must not acquire quiet-hours
+replay metadata or schedule escalation levels and critical repeats. An already
+queued escalation must be revalidated against the current monitor-only state
+before delivery; the read-only delivery diagnosis reports monitor-only
+suppression rather than a replayable quiet-hours deferral.
+
 The same policy owner also exposes the read-only alert delivery diagnosis
 projection used by `/api/alerts/delivery-diagnosis`; that projection may explain
 current gating state, quiet-hours replay timing, cooldown timing, rate-limit
@@ -1662,6 +1777,18 @@ Proxmox disk health alert evaluation now lives in
 identity, disk health assessment alerts, known-firmware health suppression, and
 SSD wearout alerts; future Proxmox disk-health behavior should extend that
 checker owner rather than expanding the central Manager file.
+PVE disk-health and wearout occurrences retain the existing
+`instance:node:disk:sanitized-device-path` resource reference. The shared
+constructor in unified resources must produce the same identity as the alert
+checker; changing occurrence IDs to match registry source IDs would reopen
+historical incidents and can re-notify a worn disk. The registry resolves this
+reference as an alias of the exact physical disk for operator-state lookups.
+Muting one physical disk therefore resolves its active wearout alert and blocks
+later writes and notifications without muting another disk or changing the
+wearout recovery rules. `TestProxmoxDiskCanonicalResourceIDTrimsIdentity` pins
+the persisted identity shape; monitoring's registry-backed
+`TestProxmoxPhysicalDiskMuteResolvesAndSuppressesWearoutAlert` pins the policy
+path. These are source invariants, not evidence of installed field relief.
 Shared metric threshold runtime now lives in
 `internal/alerts/metric_runtime.go`. That file owns metric threshold lookup,
 per-metric delay and intent resolution, reducer input composition, active-alert
@@ -2593,17 +2720,23 @@ hidden by expected-offline.
 
 Every active-alert writer passes through the same operator-state gate, and
 notification delivery consults the same decision before quiet-hours policy.
-The active-store writer reports admission explicitly. A detector must not
-record history, recent state, fired events, rate-limit consumption, or delivery
+The active-store writer reports admission explicitly. Detectors must not add
+history, recent-alert state, fired events, rate-limit consumption, or delivery
 intent after a rejected write. Lifecycle evaluators report suppression without
 an activation transition. Restore and guest-identity migration must not revive
-acknowledgement or tracking state for rejected alerts. Repeated observations,
-policy removal or expiry, and post-mutation reconciliation are covered in
-`internal/alerts/intent_policy_test.go` across provider incidents, metrics and
-canonical lifecycle writers. This is source-level regression coverage, not an
-installed notification-delivery result.
+acknowledgement or tracking state for a rejected alert. Repeated observations,
+policy removal or expiry, and post-mutation reconciliation are exercised across
+provider incidents, metric and canonical lifecycle writers in
+`internal/alerts/alert_admission_test.go`.
 Operator suppression is never converted into a quiet-hours replay, including
-for recovery notifications carrying stale replay metadata.
+for recovery notifications carrying stale replay metadata. The internal alert
+dispatch path applies this terminal decision even for an already-active alert
+between a policy save and its reconciliation: it neither invokes a delivery
+callback nor marks the alert notified, and it removes stale replay metadata.
+The read-only delivery diagnosis reports the operator reason as suppressed,
+not as a quiet-hours deferral. `TestOperatorPolicySuppressesDirectAlertDispatchWithoutQueueReplay`
+pins muted, expected-offline, maintenance and unaffected performance cases,
+including the immutable suppression-versus-deferral event distinction.
 After a persisted policy mutation, `ReconcileResourceOperatorState` resolves
 already-active records for that resource immediately; later detector writes
 cannot recreate them while suppression remains active. Existing prefix, tag,
@@ -2833,8 +2966,8 @@ grouping; an already-notified symptom does not duplicate on group dissolution.
 Acknowledgement, rate limits and other ordinary delivery gates still apply.
 `observation-set` members continue to notify independently because Pulse has
 not established causality. `incident_synthesis_test.go` pins classification,
-contradiction downgrade, bounded evidence, duplicate-delivery suppression, and
-partial-recovery delivery, no duplicate after prior dispatch, escalation
+contradiction downgrade, bounded evidence, duplicate-delivery suppression,
+partial-recovery delivery and no duplicate after prior dispatch, escalation
 suppression, and queued-callback revalidation without muting observation sets.
 
 ### Alert hydration is not resource admission
@@ -3022,6 +3155,34 @@ starting database workers, including restart loading and Unix hardening. The
 active mirror's unchanged fast path alone does not cover this companion file.
 This is a narrow write contributor, not aggregate installed-write acceptance.
 
+### Coalesced asynchronous active-alert checkpoints
+
+`active_persistence.go` admits one asynchronous checkpoint worker per Manager,
+not one goroutine and full serialization per mutation. Admission is protected
+by the shutdown lock. A worker starts immediately, takes fresh state through
+`SaveActiveAlerts`, and retains one follow-up request for mutations arriving
+during its current pass. Returning to idle and accepting another request share
+the same lock, so requests cannot be stranded at the idle boundary. The worker
+never holds the shutdown lock while acquiring persistence or manager-state
+locks; callers may request a checkpoint while holding the manager-state lock.
+
+This coalesces derived snapshots, not lifecycle events or notification work.
+Synchronous lifecycle durability, checkpoint revision/failure-epoch checks,
+recovery-mirror replacement, intent timing and periodic saves are unchanged.
+An error or recovered panic releases admission after any requested follow-up;
+there is no automatic busy-loop retry. Once shutdown closes admission, the
+worker finishes only its in-flight pass; `Stop` joins it and writes the final
+current snapshot synchronously instead of draining redundant queued snapshots.
+
+`TestAsyncActiveCheckpointBurstIsBounded` in `internal/alerts/alerts_test.go`
+blocks the real checkpoint writer, bounds a 512-request burst to one worker,
+then verifies current acknowledgement, incident age, metadata and pending intent
+through actual JSON persistence and a fresh Manager. The scheduler regressions
+in `internal/alerts/async_checkpoint_test.go` pin one follow-up for 10,000
+in-flight requests, idle restart, error/panic recovery, retry after a real file
+failure, and shutdown admission/draining. These checks establish bounded
+checkpoint work, not the installed CPU/write rate or any reporter's recovery.
+
 ### Warning-level destination preference persistence
 
 Email API decoding and encoding, plus webhook edit/create and list presentation,
@@ -3033,3 +3194,12 @@ or sending provider notifications. Component proof is not installed delivery.
 Formatting-only follow-up retains this warning-level contract. The production-component
 browser matrix was rerun after formatting at desktop and narrow widths, including
 all/critical/warning save/reload, cancel, and warning webhook creation.
+
+### Pulse Mobile push destination without an upsell
+
+The Alerts destinations page renders the mobile push panel only when the
+instance has the `relay` feature. Community installs see no panel and no
+upgrade prompt, and never load or save relay push settings. Licensed instances
+keep the minimum-severity control and the link to Pulse Mobile settings, with
+the 31 March 2027 retirement date in the copy. Webhook, email, Apprise and
+dead-man destinations are unaffected.

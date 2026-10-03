@@ -58,9 +58,35 @@ screen for this instance and do not paste it into support requests or issue
 reports.
 
 ### Port change didn't take effect
-1. Check which service is running: `systemctl status pulse` (legacy installs may use `pulse-backend`).
-2. Verify environment override: `systemctl show pulse --property=Environment`.
-3. Docker: Ensure you updated the `-p` flag (e.g., `-p 8080:7655`).
+
+The web UI and API listen on `FRONTEND_PORT` (default `7655`). The deprecated
+`PORT` alias applies only when `FRONTEND_PORT` is unset; changing
+`frontendPort` in `system.json` has no effect. `PULSE_AGENT_INGEST_PORT` is a
+separate agent listener, not the web UI port. See
+[Port configuration](CONFIGURATION.md#common-overrides-environment-variables).
+
+- **Systemd / Proxmox LXC**: identify the active service with
+  `systemctl is-active pulse` (legacy installs may use `pulse-backend`). Inspect
+  only the port setting in its managed configuration locally. If you change a
+  unit or drop-in, run `sudo systemctl daemon-reload`, then restart the affected
+  service during a suitable maintenance window. For LXC, run these checks inside
+  the Pulse container, not on the Proxmox host.
+- **Docker / Compose**: distinguish the published host port from the listener
+  inside the container. With the default listener, `8080:7655` exposes the UI on
+  host port `8080`; changing the host port does not require `FRONTEND_PORT`.
+  In the repository's Compose file, `PULSE_PORT` controls this host-side mapping.
+  Save the mapping in your existing Compose project and apply it with
+  `docker compose up -d pulse`, keeping the same image and mounted data volume.
+  Restarting an existing container does not apply a new port mapping. For other
+  container managers, use their recreate/redeploy action while preserving the
+  data mount; do not delete the volume.
+- **Reverse proxy**: check its upstream port and the firewall separately. A
+  working agent connection on a split-port deployment does not prove that the
+  web UI is reachable.
+
+Do not post full service environments, `docker inspect` output or resolved
+`docker compose config` output: they can include passwords and tokens. Share
+only the relevant port numbers and a redacted error if help is needed.
 
 ### "Connection Refused"
 - Check if Pulse is running.
@@ -83,19 +109,40 @@ reports.
 - If another admin can log in, use `POST /api/security/reset-lockout` to clear the lockout for your username or IP.
 
 #### Audit Log verification shows unsigned events
-- **Symptom**: Audit Log entries show “Unsigned” or verification fails in the UI.
-- **Root cause**: Audit signing is disabled (crypto manager unavailable), so events are stored without signatures.
-- **Fix**: Ensure `.encryption.key` is present and Pro/legacy Pro+/Cloud audit logging is enabled, then restart Pulse to regenerate `.audit-signing.key`. Newly created events will be signed; existing unsigned events remain unsigned.
+
+**Unsigned** means no signature was stored for that event; it is not the same
+as **Failed** verification or a request **Error**. Signing can be unavailable
+when Pulse cannot initialise its encryption manager. Check a bounded startup
+log excerpt and the persistent data mount and access for the service account,
+without printing key contents. Do not delete or regenerate `.encryption.key`
+or an audit signing key to make the warning disappear. Restoring signing for
+new events cannot authenticate an old unsigned event.
+
+See [Audit verification and safe recovery](AUDIT_LOGGING.md#verification-failures-and-safe-recovery)
+for the different results and evidence to retain.
 
 #### Audit Log is empty
-- **Symptom**: Audit Log shows zero events or "Console Logging Only."
-- **Root cause**: Community plan uses console logging only, or Pro/legacy Pro+/Cloud audit logging is not enabled.
-- **Fix**: Use Pro, legacy Pro+, or Cloud with audit logging enabled, then generate new audit events (logins, token creation, password changes).
+
+Clear the event, user, date and success filters, and check the selected
+organisation first. A query error is not an empty history. **Pulse Pro runtime
+required** means an active licence is running on the public community runtime;
+follow the panel's **Download Pulse Pro** link rather than buying another
+licence or resetting storage. Without the audit capability, reads and exports
+are gated, but Pulse still attempts to capture events persistently on all
+plans. **Console Logging Only** can also reflect unavailable persistent
+storage: inspect the bounded startup logs for audit initialisation errors.
+Do not change passwords or create tokens merely to populate the panel.
 
 #### Audit Log verification fails for older events
-- **Symptom**: Older events fail verification while newer events pass.
-- **Root cause**: The audit signing key changed (for example, `.audit-signing.key` was regenerated), so signatures no longer match.
-- **Fix**: Restore the previous `.audit-signing.key` from backup to verify older events. If rotated intentionally, expect older events to fail verification.
+
+A failed signature check does not by itself prove tampering. An event signed
+with a different key can fail even when its contents are unchanged; missing
+signatures and an unsupported or damaged signature format also cannot verify.
+Keep the failure as evidence. Do not swap an old key into the live instance,
+edit audit rows or re-sign old events. Preserve the current data and keys
+privately before any recovery; compare a matching backup only in an isolated
+restore, not by overwriting today's history. Follow
+[safe audit recovery](AUDIT_LOGGING.md#verification-failures-and-safe-recovery).
 
 ### Monitoring Data
 
@@ -155,11 +202,19 @@ repair an older generated unit rather than adding a JSON-parsing wrapper.
 - See [Temperature Monitoring](TEMPERATURE_MONITORING.md).
 
 #### Docker hosts appearing/disappearing
-- **Duplicate IDs**: Cloned VMs often share `/etc/machine-id`.
-- **Fix**: Run `rm /etc/machine-id && systemd-machine-id-setup` on the clone.
-- **Identity note**: The displayed IP is not the durable identity. Pulse uses
-  the machine ID or an explicit agent ID, so two clones with the same value can
-  collapse into one record even when their hostnames or IP addresses differ.
+
+Cloned hosts can share a **saved Pulse agent ID**, not just an OS machine ID.
+The agent uses an explicit ID first, then its saved `agent-id` file, and derives
+one from the machine only when neither is available. Changing a hostname, IP or
+`/etc/machine-id` therefore does not necessarily change its Pulse identity.
+
+Compare the affected hosts in **Agent Doctor** and inspect only their configured
+`agent-id` files locally. Do not delete the OS machine ID, agent state or Pulse
+history as a troubleshooting step. If a duplicate is confirmed, give only the
+clone a stable, unique ID in its managed service or container configuration;
+leave the original host unchanged. Follow
+[Clone identity recovery](UNIFIED_AGENT.md#duplicate-agents) for the configuration
+precedence, systemd example and checks after restart.
 
 ### Notifications
 
@@ -195,32 +250,72 @@ A healthy heartbeat indicates Pulse monitoring-loop progress, not successful
 delivery of every resource alert or external reachability of your services.
 Continue checking delivery activity for destination failures.
 
+#### Test succeeds but real alerts are missing
+
+A test sends directly to its destination: it skips the persistent delivery queue
+and is not listed in **Recent delivery activity**. It does not prove that a real
+alert was generated, routed or delivered to the intended recipient.
+
+- Open **Alerts → Notifications**. If **Notifications are paused** is shown,
+  configured destinations and a successful test do not enable real delivery.
+  Turn delivery on there only when you intend to send alerts.
+- Check the affected alert, the destination's **Enabled** state, minimum alert
+  severity and tag filters. Review quiet hours and any mute, acknowledgement or
+  maintenance policy before treating an absent attempt as a transport failure.
+- Use **Recent delivery activity** to correlate the original alert, destination
+  and absolute timestamp, including held-notification reasons. An empty window
+  is not proof of healthy delivery; an **unavailable** read is not an empty log.
+  Do not create an outage or repeat a notification storm to populate it.
+
+#### Recover retained delivery failures
+
+Pulse shows a delivery warning for failed or dead-lettered notifications in its
+persistent queue, not for every recoverable retry. **Recent delivery activity**
+includes safely redacted provider errors; completed attempts remain for 7 days
+and dead-letter attempts for 30 days. Start with the failure class and timestamp:
+
+| Failure | Check before retrying |
+| --- | --- |
+| Authentication | Destination credentials and account permissions, locally; never post them. |
+| Rate limited | Provider limits and delivery volume; repeated tests or retries can make this worse. |
+| Connectivity | DNS, firewall, proxy and reachability from the Pulse server, not just your browser. |
+| TLS | Certificate trust, expiry and hostname matching; do not disable verification to diagnose it. |
+| Configuration / rejected | Enabled destination, required fields and the provider's endpoint or payload requirements. |
+| Server error / unknown | Destination service status and a relevant, bounded local error excerpt. |
+
+Save the corrected destination settings and send one test; check receipt at the
+intended destination. **Retry retained deliveries** gives terminal failures a
+fresh retry budget, but a destination that accepted an earlier attempt may
+receive a duplicate. Review the confirmation's delivery count and provider
+limits before retrying. A successful test does not itself retry retained items.
+
+Use **Dismiss retained failures** only when those deliveries should not be sent.
+Dismissal clears the warning without retrying them; delivery history remains.
+Neither action deletes the audit trail. Do not delete `notification_queue.db`
+or audit data to clear the warning.
+
 #### Emails not sending
-- Open **Alerts → Notifications** first. Pulse shows a delivery warning when
-  failed or dead-lettered notifications remain in the persistent queue; a
-  missing queue-health read is shown as unavailable rather than healthy.
-- **Recent delivery activity** appears directly below that warning. It names
-  the destination and affected alert, shows an absolute timestamp for timeline
-  correlation, and includes safely redacted provider errors. Completed attempts
-  remain for 7 days and dead-letter attempts remain for 30 days.
-- After correcting the destination, use **Retry retained deliveries**. Use
-  **Dismiss retained failures** only when those deliveries should not be sent.
-  Both actions preserve delivery history; do not delete `notification_queue.db`
-  to clear the warning.
-- Check SMTP settings in **Alerts → Notifications**.
-- Check logs: `docker logs pulse | grep email`.
-- Ensure your SMTP provider allows the connection (e.g., Gmail App Passwords).
+
+Follow [retained-failure recovery](#recover-retained-delivery-failures) first.
+Check SMTP host, port, sender, recipients, authentication and TLS settings in
+**Alerts → Notifications** against your provider's requirements (some providers
+require an app password). Keep passwords in the settings form, not a diagnostic
+command or report. If the delivery error is insufficient, inspect
+[bounded notification logs](#inspect-notification-logs) locally.
 
 #### Webhooks failing
-- Check the delivery warning in **Alerts → Notifications** and use **Send test**
-  after correcting the destination. Recoverable retries do not trigger the
-  warning; retained terminal failures do.
-- If the test succeeds, use **Retry retained deliveries** to give the retained
-  items a fresh retry budget. Dismiss them only when delivery is no longer
-  wanted; neither action deletes the audit trail.
-- Verify the URL is reachable from the Pulse server.
-- If targeting private IPs, allow them in **Settings → System → Network → Webhook Security**.
-- Check Pulse logs for HTTP status codes and response bodies.
+
+Follow [retained-failure recovery](#recover-retained-delivery-failures) first.
+Use the failure class and HTTP status to check the provider's endpoint and
+payload requirements. Verify reachability from the Pulse server. For an intended
+private destination, review **Settings → System → Network → Webhook Security**;
+do not broadly weaken network or TLS controls just to make a test pass.
+
+Prefer the redacted delivery error over raw provider response bodies. A provider
+can echo credentials or private content in its response; do not post it wholesale
+or enable debug logging just to collect it. If needed, inspect
+[bounded notification logs](#inspect-notification-logs) and share only the
+consequential, manually redacted error.
 
 ### TrueNAS
 
@@ -234,8 +329,12 @@ Continue checking delivery activity for destination failures.
   transport; TrueNAS 26 removed the former `/api/v2.0` REST endpoints.
 
 #### TrueNAS pools/datasets not appearing
-- TrueNAS data appears in the unified resource model and may take one polling cycle (30s) to appear.
+- TrueNAS data appears in the unified resource model and may take one configured
+  polling cycle (60 seconds by default) to appear.
 - Check **Infrastructure** (TrueNAS host), **Storage** (pools/datasets), and **Recovery** (snapshots/replication).
+- For data that stops refreshing, use the [TrueNAS polling checks](TRUENAS.md#stale-truenas-data)
+  before testing or restarting. A stale badge is not proof of an invalid key,
+  and a successful connection test is not proof that collection has recovered.
 
 ### Navigation (v6)
 
@@ -254,15 +353,85 @@ Continue checking delivery activity for destination failures.
 
 ## 🛠️ Advanced Diagnostics
 
-### Correlate Logs with Requests
-Every API response has an `X-Request-ID` header. Use it to find the exact log entry:
+### Inspect Notification Logs
+
+Prefer **Recent delivery activity** in **Alerts → Notifications**. If a local log
+is needed, run only the command for your deployment, on the Pulse host with an
+account authorised to read its logs. For Proxmox LXC, run the systemd command
+inside the Pulse container, not on the Proxmox host. Adjust the time window to
+the original incident and substitute your actual service or container name
+(`pulse-backend` on some older systemd installs). These examples read at most
+200 records from the last 15 minutes; they do not follow the log or send a test.
+
 ```bash
 # systemd / Proxmox LXC
-journalctl -u pulse --no-pager | grep "request_id=abc123"
-
-# Docker
-docker logs pulse 2>&1 | grep "request_id=abc123"
+journalctl -u pulse --since '15 minutes ago' --lines 200 --no-pager
 ```
+
+```bash
+# Docker
+docker logs --since 15m --tail 200 pulse
+```
+
+Docker can write application logs to either stdout or stderr; inspect both.
+Do not pipe the reader into `grep email`: it can miss SMTP or webhook errors
+and hide a failed read behind a matching partial line. A nonzero reader exit,
+access error or missing service/container is a failed read, not “no delivery
+errors”. Even a successful empty read is inconclusive: the window, retained
+logs or selected instance may differ.
+
+These local excerpts are **not sanitised**. Do not post them wholesale. Share
+only the relevant timestamp, method, HTTP status or SMTP error code and a
+manually redacted error. Remove credentials, cookies, secret URLs, addresses
+and private host or personal information, including anything echoed by the
+provider. Never upload full environments, configuration, a queue database or
+audit data. See [Getting Help](#-getting-help).
+
+### Correlate Logs with Requests
+
+For a failed HTTP API request, inspect its response in your authenticated
+browser's **Developer tools → Network** panel. Copy only the `X-Request-ID`
+response header, if present, and keep the HTTP status and time. Do not copy a
+session cookie, **Copy as cURL** command or full network export into a report.
+WebSocket upgrades do not pass through this request-ID middleware.
+
+Service logs normally use JSON (`"request_id":"abc123"`); console logs may use
+`request_id=abc123`. Search for the literal ID value so both formats work.
+Replace `abc123` below with the response's ID. Run only the command for your
+deployment, on the Pulse host using an account authorised to read its logs.
+These examples limit collection to the last 15 minutes and 1,000 lines; adjust
+the time window to the original incident rather than repeating the failed action.
+
+```bash
+# systemd / Proxmox LXC
+set -o pipefail
+REQUEST_ID='abc123'
+journalctl -u pulse --since '15 minutes ago' --lines 1000 --no-pager |
+  grep -F -- "$REQUEST_ID"
+```
+
+```bash
+# Docker
+REQUEST_ID='abc123'
+if pulse_logs=$(docker logs --since 15m --tail 1000 pulse 2>&1); then
+  printf '%s\n' "$pulse_logs" | grep -F -- "$REQUEST_ID"
+else
+  printf '%s\n' "$pulse_logs" >&2
+  false
+fi
+```
+
+A log-reader failure is not an empty search result: resolve any access or
+container/service error locally first. Even a successful read with no match
+does not prove the request succeeded. At the default log level, this middleware
+logs HTTP 5xx failures but not successful requests; HTTP 4xx failures are logged
+at debug level. The selected window, retained logs or deployment may also differ.
+Keep the original response status, time and ID even when there is no matching log;
+do not enable debug logging or retry a state-changing request just to fill that gap.
+
+These local excerpts are **not sanitised**. Before sharing a relevant line,
+remove credentials, cookies, secret URLs and private host, network or personal
+information. See [Getting Help](#-getting-help) for safe evidence collection.
 
 ### Check Permissions (Proxmox)
 If Pulse can't see VMs or storage, check the user permissions on Proxmox:
@@ -309,25 +478,50 @@ check, report the Pulse version and displayed check time/status separately; API
 success alone does not confirm the Pulse display has recovered.
 
 ### Recovery Mode
-If you are completely locked out, you can trigger a recovery token from localhost:
-```bash
-curl -X POST http://localhost:7655/api/security/recovery \
-  -d '{"action":"generate_token","duration":30}'
-```
-Use the returned token in `X-Recovery-Token` when calling `/api/security/recovery` to enable or disable local-only auth bypass (`disable_auth` / `enable_auth`). Token generation is localhost-only.
 
-Example (enable recovery mode):
-```bash
-curl -X POST http://localhost:7655/api/security/recovery \
-  -H "X-Recovery-Token: <token>" \
-  -d '{"action":"disable_auth"}'
-```
+For a forgotten local password, follow [I forgot my password](#i-forgot-my-password)
+above, using the steps for your deployment. Enter the host-only bootstrap token
+in that instance's setup screen; do not paste it into a command or a report.
+For OIDC, SAML or proxy login, use the identity-provider or administrator path
+described there instead.
+
+The advanced `/api/security/recovery` API creates a **browser-bound recovery
+session**, not a server-wide authentication bypass. Despite its legacy name,
+`disable_auth` does not disable authentication for other clients. Recovery
+sessions work only over direct loopback requests; remote and reverse-proxy
+requests cannot use them. A successful curl response does not unlock a separate
+browser: the session cookie belongs to the client that made the request.
+`enable_auth` clears that recovery session; it does not reset a password.
+
+Do not transfer recovery cookies between clients or paste recovery tokens into
+command arguments, URLs, screenshots or GitHub threads. The password-reset steps
+above avoid that credential-handling detour.
 
 ---
 
 ## 🆘 Getting Help
 
 If you're still stuck:
-1. **Check Logs**: `journalctl -u pulse -n 100` or `docker logs --tail 100 pulse`.
-2. **Check Version**: `curl http://localhost:7655/api/version`.
-3. **Open Issue**: Report on [GitHub Issues](https://github.com/rcourtman/Pulse/issues) with your logs and version info.
+
+1. **Keep the original evidence**: note what you did, when it happened and the
+   exact error. Do not repeat an update, outage or notification storm merely to
+   reproduce it. A failed update banner does not prove the action left the
+   target unchanged; check its current state before another attempt.
+2. **Identify the affected version**: give the running Pulse and relevant agent
+   versions, not just the version before an upgrade. For Docker, include the
+   running image tag or digest. If installation never started Pulse, give the
+   attempted release and public installer/helper source, or say "unknown".
+3. **Choose relevant, safe evidence**: if Pulse is running and collection is
+   safe, use **Settings → Diagnostics → Export for GitHub (sanitized)** for
+   connection or data failures. For a visual problem, a screenshot or the exact
+   error may be enough. If logs are needed, inspect a bounded local excerpt
+   (`journalctl -u pulse -n 100 --no-pager` or `docker logs --tail 100 pulse`),
+   not a full configuration or data-directory upload.
+4. **Review before posting**: even a sanitized export or screenshot can contain
+   identifying details. Remove credentials, session cookies, webhook URLs and
+   private host, network or personal information. Never post bootstrap/recovery
+   tokens, `.env` files, private keys or an unsanitized export.
+5. **Use the appropriate thread**: [GitHub Issues](https://github.com/rcourtman/Pulse/issues)
+   for a bug, or [Discussions](https://github.com/rcourtman/Pulse/discussions) for
+   a setup question. Add new evidence to an existing matching report rather
+   than opening a duplicate. Do not refile information you have already supplied.

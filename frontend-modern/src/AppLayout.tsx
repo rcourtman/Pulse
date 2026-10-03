@@ -136,9 +136,9 @@ export function sessionHasSettingsAccess(scopes: string[] | undefined): boolean 
 }
 const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
 const AI_CHAT_MOBILE_LAUNCHER_BUTTON_CLASS =
-  'group relative flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-surface-hover text-blue-600 transition-colors hover:bg-border hover:text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 dark:hover:text-blue-300';
+  'group relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-hover text-blue-600 transition-colors hover:bg-border hover:text-blue-700 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 dark:hover:text-blue-300';
 const AI_CHAT_DESKTOP_LAUNCHER_BUTTON_CLASS =
-  'fixed right-0 top-1/2 z-40 flex min-h-9 min-w-10 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 border-border bg-surface px-2.5 py-2.5 text-blue-600 transition-colors duration-200 hover:bg-surface-hover hover:text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 dark:hover:text-blue-300';
+  'fixed right-0 top-1/2 z-40 flex min-h-9 min-w-10 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 border-border bg-surface px-2.5 py-2.5 text-blue-600 transition-colors duration-200 hover:bg-surface-hover hover:text-blue-700 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 dark:hover:text-blue-300';
 
 function getDesktopUtilityTabAriaLabel(tab: UtilityTab): string {
   const count = tab.count ?? 0;
@@ -208,7 +208,7 @@ export function ConnectionStatusBadge(props: {
       aria-label={status().detail}
     >
       <Show when={showSpinner()}>
-        <svg class="animate-spin h-3 w-3 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+        <svg class="animate-spin h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24">
           <circle
             class="opacity-25"
             cx="12"
@@ -225,7 +225,7 @@ export function ConnectionStatusBadge(props: {
         </svg>
       </Show>
       <Show when={!showSpinner()}>
-        <span class={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${indicatorClass()}`} />
+        <span class={`h-2.5 w-2.5 rounded-full shrink-0 ${indicatorClass()}`} />
       </Show>
       <span
         class={`whitespace-nowrap overflow-hidden transition-all duration-500 ${
@@ -470,7 +470,7 @@ export function AppLayout(props: AppLayoutProps) {
       title={assistantPageContext().title}
       aria-label={assistantPageContext().ariaLabel}
     >
-      <SparklesIcon class="h-5 w-5 flex-shrink-0" />
+      <SparklesIcon class="h-5 w-5 shrink-0" />
     </button>
   );
   createEffect(() => {
@@ -603,17 +603,25 @@ export function AppLayout(props: AppLayoutProps) {
         breakdown,
         icon: BellIcon,
       },
-      {
-        id: 'ai',
-        label: 'Patrol',
-        route: '/patrol',
-        tooltip: 'Review active operational attention and recent Patrol checks',
-        badge: null,
-        count: patrolAttentionCount() || undefined,
-        countLabel: patrolAttentionCountLabel(),
-        breakdown: undefined,
-        icon: PulsePatrolLogo,
-      },
+      // Patrol cannot run without an enabled, configured AI provider, so its
+      // tab follows the same session capability as the Assistant launcher.
+      // Turning AI off in Settings hides every AI entry point (#905); the
+      // route itself stays reachable for links and the settings handoff.
+      ...(aiChatStore.enabled === true
+        ? [
+            {
+              id: 'ai' as const,
+              label: 'Patrol',
+              route: '/patrol',
+              tooltip: 'Review active operational attention and recent Patrol checks',
+              badge: null,
+              count: patrolAttentionCount() || undefined,
+              countLabel: patrolAttentionCountLabel(),
+              breakdown: undefined,
+              icon: PulsePatrolLogo,
+            },
+          ]
+        : []),
       {
         id: 'actions',
         label: 'Actions',
@@ -683,7 +691,7 @@ export function AppLayout(props: AppLayoutProps) {
 
     const className = () => {
       if (isActive()) {
-        return `${baseClasses} bg-surface text-blue-600 dark:text-blue-400 border-border border-b border-b-surface shadow-sm font-semibold`;
+        return `${baseClasses} bg-surface text-blue-600 dark:text-blue-400 border-border border-b border-b-surface shadow-xs font-semibold`;
       }
       if (needsSetup()) {
         return `${baseClasses} text-muted opacity-70 bg-base hover:bg-surface-hover`;
@@ -710,7 +718,7 @@ export function AppLayout(props: AppLayoutProps) {
         <span class="hidden xs:inline-flex items-center gap-1">
           <span>{tab.label}</span>
           <Show when={tab.badge}>
-            <span class="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted bg-surface-hover rounded">
+            <span class="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted bg-surface-hover rounded-sm">
               {tab.badge}
             </span>
           </Show>
@@ -743,7 +751,7 @@ export function AppLayout(props: AppLayoutProps) {
       <div
         class={`header mb-1 flex flex-wrap items-center gap-1 sm:flex-nowrap sm:mb-3 sm:gap-2 ${
           kioskMode()
-            ? 'fixed top-0 left-0 right-0 z-50 justify-end bg-surface shadow-sm'
+            ? 'fixed top-0 left-0 right-0 z-50 justify-end bg-surface shadow-xs'
             : 'justify-between sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0'
         }`}
         style={
@@ -789,7 +797,7 @@ export function AppLayout(props: AppLayoutProps) {
                   <img
                     src={logoDataUrl()}
                     alt={customBrandName() ? `${customBrandName()} logo` : 'Custom logo'}
-                    class="max-h-8 max-w-[12rem] object-contain"
+                    class="max-h-8 max-w-48 object-contain"
                     data-testid="custom-brand-logo"
                   />
                 )}
@@ -800,7 +808,7 @@ export function AppLayout(props: AppLayoutProps) {
                 </span>
               </Show>
               <Show when={props.versionInfo()?.channel === 'rc'}>
-                <span class="text-xs px-1.5 py-0.5 bg-orange-700 text-white rounded font-bold">
+                <span class="text-xs px-1.5 py-0.5 bg-orange-700 text-white rounded-sm font-bold">
                   Preview
                 </span>
               </Show>
@@ -826,9 +834,9 @@ export function AppLayout(props: AppLayoutProps) {
               <button
                 type="button"
                 onClick={toggleKioskMode}
-                class={`group relative flex h-9 w-9 items-center justify-center rounded-full text-xs transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10 ${
+                class={`group relative flex h-9 w-9 items-center justify-center rounded-full text-xs transition focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10 ${
                   kioskMode()
-                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800'
+                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/25 dark:text-blue-300 dark:hover:bg-blue-800'
                     : 'bg-surface-hover text-base-content hover:bg-border'
                 }`}
                 title={
@@ -839,8 +847,8 @@ export function AppLayout(props: AppLayoutProps) {
                 aria-label={kioskMode() ? 'Exit kiosk mode' : 'Enter kiosk mode'}
                 aria-pressed={kioskMode()}
               >
-                <Show when={kioskMode()} fallback={<Maximize2Icon class="h-4 w-4 flex-shrink-0" />}>
-                  <Minimize2Icon class="h-4 w-4 flex-shrink-0" />
+                <Show when={kioskMode()} fallback={<Maximize2Icon class="h-4 w-4 shrink-0" />}>
+                  <Minimize2Icon class="h-4 w-4 shrink-0" />
                 </Show>
               </button>
               <Show when={props.proxyAuthInfo()?.username}>
@@ -849,12 +857,12 @@ export function AppLayout(props: AppLayoutProps) {
               <button
                 type="button"
                 onClick={props.handleLogout}
-                class="group relative flex h-9 w-9 items-center justify-center rounded-full bg-surface-hover text-xs text-base-content transition hover:bg-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10"
+                class="group relative flex h-9 w-9 items-center justify-center rounded-full bg-surface-hover text-xs text-base-content transition hover:bg-border focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10"
                 title="Logout"
                 aria-label="Logout"
               >
                 <svg
-                  class="h-4 w-4 flex-shrink-0"
+                  class="h-4 w-4 shrink-0"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -870,7 +878,7 @@ export function AppLayout(props: AppLayoutProps) {
               </button>
             </div>
           </Show>
-          <ConnectionStatusBadge connectionStatus={props.connectionStatus} class="flex-shrink-0" />
+          <ConnectionStatusBadge connectionStatus={props.connectionStatus} class="shrink-0" />
         </div>
       </div>
 
@@ -893,7 +901,7 @@ export function AppLayout(props: AppLayoutProps) {
 
                   const className = () => {
                     if (isActive()) {
-                      return `${baseClasses} bg-surface text-blue-600 dark:text-blue-400 border-border border-b border-b-surface shadow-sm font-semibold`;
+                      return `${baseClasses} bg-surface text-blue-600 dark:text-blue-400 border-border border-b border-b-surface shadow-xs font-semibold`;
                     }
                     return `${baseClasses} text-muted hover:text-base-content hover:bg-surface-hover`;
                   };
@@ -952,7 +960,7 @@ export function AppLayout(props: AppLayoutProps) {
                         </span>
                       </Show>
                       <Show when={tab.badge === 'pro' && !presentationPolicyHidesUpgradePrompts()}>
-                        <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900 rounded">
+                        <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/25 rounded-sm">
                           Pro
                         </span>
                       </Show>
@@ -968,7 +976,7 @@ export function AppLayout(props: AppLayoutProps) {
       <main
         id="main"
         tabindex="-1"
-        class="tab-content mb-1 block rounded-b rounded-tl rounded-tr bg-surface shadow sm:mb-2"
+        class="tab-content mb-1 block rounded-b rounded-tl rounded-tr bg-surface shadow-sm sm:mb-2"
       >
         <div class="pulse-panel">
           <Suspense fallback={<div class="p-6 text-sm text-muted">Loading view...</div>}>
@@ -996,7 +1004,7 @@ export function AppLayout(props: AppLayoutProps) {
               href="https://github.com/rcourtman/Pulse/releases"
               target="_blank"
               rel="noopener noreferrer"
-              class="inline-flex min-h-8 items-center break-all rounded px-1 py-1 text-blue-600 hover:underline dark:text-blue-400 sm:min-h-9"
+              class="inline-flex min-h-8 items-center break-all rounded-sm px-1 py-1 text-blue-600 hover:underline dark:text-blue-400 sm:min-h-9"
             >
               {props.versionInfo()?.version || 'loading...'}
             </a>
@@ -1015,7 +1023,7 @@ export function AppLayout(props: AppLayoutProps) {
             <Show when={isPro()}>
               <a
                 href={`mailto:support@pulserelay.pro?subject=${encodeURIComponent(`Support Request - Pulse ${props.versionInfo()?.version || ''}`)}`}
-                class="inline-flex min-h-8 items-center rounded px-1 py-1 text-blue-600 hover:underline dark:text-blue-400 sm:min-h-9"
+                class="inline-flex min-h-8 items-center rounded-sm px-1 py-1 text-blue-600 hover:underline dark:text-blue-400 sm:min-h-9"
               >
                 Get Support
               </a>

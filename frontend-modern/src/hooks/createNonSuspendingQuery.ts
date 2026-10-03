@@ -243,9 +243,9 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
             value: value(),
           });
         }
-        if (!runOptions.background) {
-          setLoading(false);
-        }
+        // A background poll can replace a pending foreground refresh. The
+        // latest read owns settlement, regardless of how that read started.
+        setLoading(false);
       }
     }
   };

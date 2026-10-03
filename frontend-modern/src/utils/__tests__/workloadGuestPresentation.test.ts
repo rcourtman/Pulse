@@ -11,17 +11,17 @@ describe('workloadGuestPresentation', () => {
   it('returns canonical guest backup status presentation', () => {
     expect(getWorkloadsGuestBackupStatusPresentation('fresh')).toEqual({
       color: 'text-green-600 dark:text-green-400',
-      bgColor: 'bg-green-100 dark:bg-green-900',
+      bgColor: 'bg-green-100 dark:bg-green-900/25',
       icon: 'check',
     });
     expect(getWorkloadsGuestBackupStatusPresentation('never')).toEqual({
       color: 'text-red-600 dark:text-red-400',
-      bgColor: 'bg-red-100 dark:bg-red-900',
+      bgColor: 'bg-red-100 dark:bg-red-900/25',
       icon: 'x',
     });
     expect(getWorkloadsGuestBackupStatusPresentation('overdue')).toEqual({
       color: 'text-yellow-600 dark:text-yellow-400',
-      bgColor: 'bg-yellow-100 dark:bg-yellow-900',
+      bgColor: 'bg-yellow-100 dark:bg-yellow-900/25',
       icon: 'warning',
     });
   });
@@ -51,7 +51,7 @@ describe('workloadGuestPresentation', () => {
   it('presents a running backup as its own state, keeping the completed age', () => {
     expect(getWorkloadsGuestBackupStatusPresentation('running')).toEqual({
       color: 'text-blue-600 dark:text-blue-400',
-      bgColor: 'bg-blue-100 dark:bg-blue-900',
+      bgColor: 'bg-blue-100 dark:bg-blue-900/25',
       icon: 'running',
     });
     // While a backup runs, the tooltip still reports the last COMPLETED

@@ -473,6 +473,7 @@ export interface ResourcePBSMeta {
   instanceId?: string;
   hostname?: string;
   nodeName?: string;
+  linkedAgentId?: string;
   version?: string;
   uptimeSeconds?: number;
   datastoreCount?: number;

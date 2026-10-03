@@ -44,16 +44,16 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
             </p>
           </div>
 
-          <label class="flex cursor-pointer items-start gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-700 dark:bg-amber-900">
+          <label class="flex cursor-pointer items-start gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-700 dark:bg-amber-900/25">
             <input
               type="checkbox"
               checked={props.editScopes().includes('*')}
               onChange={() => props.onToggleEditScope('*')}
               disabled={props.updatingTokenId() !== null}
-              class="mt-0.5 h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500"
+              class="mt-0.5 h-4 w-4 rounded-sm border-border text-amber-600 focus:ring-amber-500"
             />
             <span>
-              <span class="block font-semibold text-amber-900 dark:text-amber-100">
+              <span class="block font-semibold text-amber-900/25 dark:text-amber-100">
                 Full access
               </span>
               <span class="text-amber-800 dark:text-amber-200">
@@ -78,7 +78,7 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
                             checked={props.editScopes().includes(option.value)}
                             onChange={() => props.onToggleEditScope(option.value)}
                             disabled={props.updatingTokenId() !== null}
-                            class="mt-0.5 h-4 w-4 rounded border-border text-blue-600 focus:ring-blue-500"
+                            class="mt-0.5 h-4 w-4 rounded-sm border-border text-blue-600 focus:ring-blue-500"
                           />
                           <span>
                             <span class="block font-medium text-base-content">{option.label}</span>
@@ -151,7 +151,7 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
               value={props.renameInput()}
               onInput={(event) => props.onRenameInput(event.currentTarget.value)}
               disabled={props.isRenaming()}
-              class="w-full min-h-10 rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              class="w-full min-h-10 rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-200"
               autofocus
             />
           </label>

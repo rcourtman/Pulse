@@ -44,7 +44,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
 
   return (
     <div
-      class={`flex flex-col h-full ${props.compact ? '' : 'bg-surface rounded-md shadow-sm border border-border p-4'}`}
+      class={`flex flex-col h-full ${props.compact ? '' : 'bg-surface rounded-md shadow-xs border border-border p-4'}`}
     >
       <HistoryChartHeader
         chart={chart}
@@ -68,7 +68,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
       >
         <canvas
           ref={canvasRef}
-          class="block w-full h-full cursor-crosshair rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
+          class="block w-full h-full cursor-crosshair rounded-sm focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-blue-500"
           tabIndex={0}
           onFocus={chart.handleFocus}
           onBlur={chart.handleBlur}
@@ -78,10 +78,15 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
           aria-describedby={descriptionId}
           onMouseMove={chart.handleMouseMove}
           onMouseLeave={chart.handleMouseLeave}
+          onPointerDown={chart.handlePointerDown}
+          onPointerMove={chart.handlePointerMove}
+          onPointerUp={chart.handlePointerUp}
+          onPointerCancel={chart.handlePointerCancel}
         />
         <p id={descriptionId} class="sr-only">
-          {refreshStatus()} {accessibleDescription()} Use Left and Right arrow keys to inspect
-          readings, Home and End for the first and last reading, and Escape to clear inspection.
+          {refreshStatus()} {accessibleDescription()} Tap the chart to inspect a reading, or use
+          Left and Right arrow keys, Home and End for the first and last reading, and Escape to
+          clear inspection.
         </p>
         <p class="sr-only" aria-live="polite" aria-atomic="true">
           {chart.keyboardInspecting() && chart.hoveredPoint()

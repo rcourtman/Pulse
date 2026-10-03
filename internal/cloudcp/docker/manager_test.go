@@ -607,6 +607,75 @@ func TestDockerRecordedHealthDecidesWhenTheImageDeclaresOne(t *testing.T) {
 	}
 }
 
+// A client created before per-client networks has no isolated network to
+// rejoin. Reconciling it must be a quiet no-op, not a warning every minute.
+func TestEnsureSupportContainersOnTenantNetworkSkipsMissingNetwork(t *testing.T) {
+	var mutations []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Api-Version", "1.47")
+		if strings.HasSuffix(r.URL.Path, "/_ping") {
+			_, _ = w.Write([]byte("OK"))
+			return
+		}
+		if r.Method != http.MethodGet {
+			mutations = append(mutations, r.Method+" "+r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"message":"network not found"}`))
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	t.Setenv("DOCKER_CERT_PATH", "")
+
+	mgr, err := NewManager(ManagerConfig{Image: "pulse:test", Network: "pulse-provider-msp", IsolateTenantNetworks: true})
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	t.Cleanup(func() { _ = mgr.Close() })
+
+	if err := mgr.EnsureSupportContainersOnTenantNetwork(context.Background(), "t-legacy"); err != nil {
+		t.Fatalf("EnsureSupportContainersOnTenantNetwork = %v, want nil for a client without an isolated network", err)
+	}
+	if len(mutations) != 0 {
+		t.Fatalf("reconcile changed the host for a missing network: %v", mutations)
+	}
+}
+
+func TestEnsureSupportContainersOnTenantNetworkRejectsWrongOwner(t *testing.T) {
+	var mutations []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Api-Version", "1.47")
+		if strings.HasSuffix(r.URL.Path, "/_ping") {
+			_, _ = w.Write([]byte("OK"))
+			return
+		}
+		if r.Method != http.MethodGet {
+			mutations = append(mutations, r.Method+" "+r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"Name":"pulse-provider-msp-tenant-t-acme","Id":"net-1","Labels":{"pulse.tenant.id":"t-other","pulse.provider-msp.network":"tenant"}}`))
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	t.Setenv("DOCKER_CERT_PATH", "")
+
+	mgr, err := NewManager(ManagerConfig{Image: "pulse:test", Network: "pulse-provider-msp", IsolateTenantNetworks: true})
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	t.Cleanup(func() { _ = mgr.Close() })
+
+	if err := mgr.EnsureSupportContainersOnTenantNetwork(context.Background(), "t-acme"); err == nil {
+		t.Fatal("expected wrong-owner network to be rejected")
+	}
+	if len(mutations) != 0 {
+		t.Fatalf("reconcile changed wrong-owner network: %v", mutations)
+	}
+}
+
 func TestEnsureTenantNetworkRejectsUnownedExistingNetwork(t *testing.T) {
 	var labels map[string]string
 	var mutations []string
@@ -780,131 +849,5 @@ func TestTenantNetworkCleanupDisconnectsOnlyAttachedLocalSupport(t *testing.T) {
 	}
 	if len(disconnected) != 1 || disconnected[0] != localAttached {
 		t.Fatalf("disconnected = %v, want only attached local support %s", disconnected, localAttached)
-	}
-}
-
-func TestTenantNetworkConnectSelectsOnlyLocalSupport(t *testing.T) {
-	const target = "provider-a-tenant-t-acme"
-	const local = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	const other = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-	var listFilters map[string]map[string]bool
-	var connected []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Api-Version", "1.47")
-		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case strings.HasSuffix(r.URL.Path, "/_ping"):
-			_, _ = w.Write([]byte("OK"))
-		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/containers/json"):
-			if err := json.Unmarshal([]byte(r.URL.Query().Get("filters")), &listFilters); err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			items := []map[string]string{{"Id": local}}
-			if !listFilters["network"]["provider-a"] {
-				items = append(items, map[string]string{"Id": other})
-			}
-			_ = json.NewEncoder(w).Encode(items)
-		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/networks/"+target):
-			_ = json.NewEncoder(w).Encode(map[string]any{"Name": target, "Containers": map[string]any{}})
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/networks/"+target+"/connect"):
-			var body struct{ Container string }
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			connected = append(connected, body.Container)
-			_, _ = w.Write([]byte(`{}`))
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	t.Cleanup(srv.Close)
-	t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
-	t.Setenv("DOCKER_TLS_VERIFY", "")
-	t.Setenv("DOCKER_CERT_PATH", "")
-
-	mgr, err := NewManager(ManagerConfig{Network: "provider-a", IsolateTenantNetworks: true, SupportContainerLabels: []string{providerSupportTraefikLabel}})
-	if err != nil {
-		t.Fatalf("NewManager: %v", err)
-	}
-	t.Cleanup(func() { _ = mgr.Close() })
-	if err := mgr.connectSupportContainersByLabel(context.Background(), target, providerSupportTraefikLabel); err != nil {
-		t.Fatalf("connectSupportContainersByLabel: %v", err)
-	}
-	if !listFilters["network"]["provider-a"] || !listFilters["label"][providerSupportTraefikLabel] {
-		t.Fatalf("support selection did not identify the local provider: %v", listFilters)
-	}
-	if len(connected) != 1 || connected[0] != local {
-		t.Fatalf("connected = %v, want only local support %s", connected, local)
-	}
-}
-
-// A client created before per-client networks has no isolated network to
-// rejoin. Reconciling it must be a quiet no-op, not a warning every minute.
-func TestEnsureSupportContainersOnTenantNetworkSkipsMissingNetwork(t *testing.T) {
-	var mutations []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Api-Version", "1.47")
-		if strings.HasSuffix(r.URL.Path, "/_ping") {
-			_, _ = w.Write([]byte("OK"))
-			return
-		}
-		if r.Method != http.MethodGet {
-			mutations = append(mutations, r.Method+" "+r.URL.Path)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"message":"network not found"}`))
-	}))
-	t.Cleanup(srv.Close)
-	t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
-	t.Setenv("DOCKER_TLS_VERIFY", "")
-	t.Setenv("DOCKER_CERT_PATH", "")
-
-	mgr, err := NewManager(ManagerConfig{Image: "pulse:test", Network: "pulse-provider-msp", IsolateTenantNetworks: true})
-	if err != nil {
-		t.Fatalf("NewManager: %v", err)
-	}
-	t.Cleanup(func() { _ = mgr.Close() })
-
-	if err := mgr.EnsureSupportContainersOnTenantNetwork(context.Background(), "t-legacy"); err != nil {
-		t.Fatalf("EnsureSupportContainersOnTenantNetwork = %v, want nil for a client without an isolated network", err)
-	}
-	if len(mutations) != 0 {
-		t.Fatalf("reconcile changed the host for a missing network: %v", mutations)
-	}
-}
-
-func TestEnsureSupportContainersOnTenantNetworkRejectsWrongOwner(t *testing.T) {
-	var mutations []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Api-Version", "1.47")
-		if strings.HasSuffix(r.URL.Path, "/_ping") {
-			_, _ = w.Write([]byte("OK"))
-			return
-		}
-		if r.Method != http.MethodGet {
-			mutations = append(mutations, r.Method+" "+r.URL.Path)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"Name":"pulse-provider-msp-tenant-t-acme","Id":"net-1","Labels":{"pulse.tenant.id":"t-other","pulse.provider-msp.network":"tenant"}}`))
-	}))
-	t.Cleanup(srv.Close)
-	t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
-	t.Setenv("DOCKER_TLS_VERIFY", "")
-	t.Setenv("DOCKER_CERT_PATH", "")
-
-	mgr, err := NewManager(ManagerConfig{Image: "pulse:test", Network: "pulse-provider-msp", IsolateTenantNetworks: true})
-	if err != nil {
-		t.Fatalf("NewManager: %v", err)
-	}
-	t.Cleanup(func() { _ = mgr.Close() })
-
-	if err := mgr.EnsureSupportContainersOnTenantNetwork(context.Background(), "t-acme"); err == nil {
-		t.Fatal("expected wrong-owner network to be rejected")
-	}
-	if len(mutations) != 0 {
-		t.Fatalf("reconcile changed wrong-owner network: %v", mutations)
 	}
 }

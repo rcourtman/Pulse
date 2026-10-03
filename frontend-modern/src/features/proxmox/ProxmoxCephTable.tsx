@@ -20,6 +20,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableContainerLayout,
   getPlatformTableHeadClassForKind,
+  getPlatformTableWeightedColumnWidthStyle,
   PlatformResponsiveTableLabel,
   type PlatformTableFilterOption,
   PlatformTableEmptyState,
@@ -50,18 +51,15 @@ import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQue
 
 type CephStatusFilter = 'all' | 'healthy' | 'warning' | 'critical';
 
-export type CephPhoneColumn = 'cluster' | 'health' | 'quorum' | 'osds' | 'pools' | 'capacity';
+export type CephPhoneColumn = 'cluster' | 'health' | 'osds' | 'pools' | 'capacity';
 
+export type CephColumn = CephPhoneColumn | 'quorum' | 'pgs' | 'services' | 'detail';
+
+// One phone projection for every compact width: five values that each fit
+// whole. A sixth column left the cluster name, the health word, and every
+// figure clipped ("Heal", "MO…", "15/1…"); the monitor and manager counts it
+// carried are itemised in the expansion's Services table.
 export const CEPH_PHONE_COLUMNS: readonly CephPhoneColumn[] = [
-  'cluster',
-  'health',
-  'quorum',
-  'osds',
-  'pools',
-  'capacity',
-];
-
-export const CEPH_NARROW_COLUMNS: readonly CephPhoneColumn[] = [
   'cluster',
   'health',
   'osds',
@@ -70,21 +68,27 @@ export const CEPH_NARROW_COLUMNS: readonly CephPhoneColumn[] = [
 ];
 
 export const CEPH_PHONE_COLUMN_WIDTHS: Readonly<Record<CephPhoneColumn, number>> = {
-  cluster: 30,
-  health: 15,
-  quorum: 13,
-  osds: 14,
-  pools: 14,
-  capacity: 14,
+  cluster: 36,
+  health: 21,
+  osds: 13,
+  pools: 12,
+  capacity: 18,
 };
 
-export const CEPH_NARROW_COLUMN_WIDTHS: Readonly<Record<CephPhoneColumn, number>> = {
-  cluster: 40,
-  health: 15,
-  quorum: 0,
-  osds: 15,
-  pools: 15,
-  capacity: 15,
+// Above the phone projection every visible column takes a weighted share of
+// the row. Sizing only the always-on columns left PGs, Services, and Detail to
+// split the remainder, which truncated both their headers and their values on
+// a full-width desktop table.
+export const CEPH_COLUMN_WEIGHTS: Readonly<Record<CephColumn, number>> = {
+  cluster: 20,
+  health: 10,
+  quorum: 13,
+  osds: 12,
+  pgs: 6,
+  pools: 13,
+  capacity: 13,
+  services: 22,
+  detail: 14,
 };
 
 const STATUS_FILTER_OPTIONS: PlatformTableFilterOption<CephStatusFilter>[] = [
@@ -154,7 +158,7 @@ function poolsLabel(resource: Resource): JSX.Element {
   return (
     <span class="tabular-nums">
       {pools.length}
-      <span class="text-muted text-[10px]">
+      <span class="platform-table-phone-hidden-inline text-muted text-[10px]">
         {' · '}
         {formatPlatformTableBytesValue(stored, '0 B')} stored
       </span>
@@ -177,7 +181,10 @@ function osdLabel(resource: Resource): JSX.Element {
       }
     >
       {up}/{total}
-      <span class="text-muted text-[10px]"> up · {inService} in</span>
+      <span class="platform-table-phone-hidden-inline text-muted text-[10px]">
+        {' '}
+        up · {inService} in
+      </span>
     </span>
   );
 }
@@ -201,7 +208,10 @@ function capacityLabel(resource: Resource): JSX.Element {
     return (
       <span class="tabular-nums">
         {formatPlatformTablePercentValue(pct)}
-        <span class="text-muted text-[10px]"> of {formatPlatformTableBytesValue(total)}</span>
+        <span class="platform-table-phone-hidden-inline text-muted text-[10px]">
+          {' '}
+          of {formatPlatformTableBytesValue(total)}
+        </span>
       </span>
     );
   }
@@ -212,7 +222,7 @@ function healthMessageCell(resource: Resource): JSX.Element {
   const msg = asTrimmedString(resource.ceph?.healthMessage);
   if (!msg) return <span class="text-muted">—</span>;
   return (
-    <span class="inline-block max-w-[20rem] truncate" title={msg}>
+    <span class="block truncate" title={msg}>
       {msg}
     </span>
   );
@@ -275,25 +285,38 @@ export const ProxmoxCephTable: Component<{
   const layout = createMemo(() =>
     getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [520, 720, 960, 1200]),
   );
-  const isNarrowPhone = createMemo(() => {
-    const width = observedWidth.width();
-    return typeof width === 'number' && width > 0 && width < 360;
-  });
-  // Quorum and pool count are high-value health context even on phones.
-  const showQuorum = createMemo(() => !isNarrowPhone());
-  const showPools = createMemo(() => true);
-  const showOperational = createMemo(() => ['operational', 'expanded', 'full'].includes(layout()));
+  // Below the operational width the row cannot hold quorum beside the OSD,
+  // pool, and capacity figures without clipping all four.
+  const showQuorum = createMemo(() => ['operational', 'expanded', 'full'].includes(layout()));
+  // The health message says what is wrong, so it outranks the daemon tally,
+  // which needs the widest layout to fit and is itemised in the expansion.
+  // The FSID is forensic detail: searchable, and shown whole in the expansion.
+  const showPgs = createMemo(() => ['expanded', 'full'].includes(layout()));
   const showDetail = createMemo(() => ['expanded', 'full'].includes(layout()));
-  const showFsid = createMemo(() => layout() === 'full');
-  const visibleColumnCount = createMemo(
-    () =>
-      4 +
-      Number(showQuorum()) +
-      Number(showPools()) +
-      Number(showOperational()) * 2 +
-      Number(showDetail()) +
-      Number(showFsid()),
-  );
+  const showServices = createMemo(() => layout() === 'full');
+  const visibleColumns = createMemo<readonly CephColumn[]>(() => {
+    if (layout() === 'compact') return CEPH_PHONE_COLUMNS;
+    const columns: CephColumn[] = ['cluster', 'health'];
+    if (showQuorum()) columns.push('quorum');
+    columns.push('osds');
+    if (showPgs()) columns.push('pgs');
+    columns.push('pools', 'capacity');
+    if (showServices()) columns.push('services');
+    if (showDetail()) columns.push('detail');
+    return columns;
+  });
+  const visibleColumnCount = createMemo(() => visibleColumns().length);
+  const columnWidthStyle = (column: CephColumn) => {
+    if (layout() !== 'compact') {
+      return getPlatformTableWeightedColumnWidthStyle(
+        column,
+        CEPH_COLUMN_WEIGHTS,
+        visibleColumns(),
+      );
+    }
+    const phoneWidths: Partial<Record<CephColumn, number>> = CEPH_PHONE_COLUMN_WIDTHS;
+    return { width: `${phoneWidths[column] ?? 0}%` };
+  };
 
   return (
     <Show
@@ -331,72 +354,54 @@ export const ProxmoxCephTable: Component<{
           }
         >
           <PlatformTableShell
-            tableClass="min-w-[0px] table-fixed text-xs"
+            tableClass="min-w-0 table-fixed text-xs"
             colgroup={
-              <Show when={layout() === 'compact'}>
-                <colgroup>
-                  <For each={isNarrowPhone() ? CEPH_NARROW_COLUMNS : CEPH_PHONE_COLUMNS}>
-                    {(column) => (
-                      <col
-                        style={{
-                          width: `${
-                            (isNarrowPhone()
-                              ? CEPH_NARROW_COLUMN_WIDTHS
-                              : CEPH_PHONE_COLUMN_WIDTHS)[column]
-                          }%`,
-                        }}
-                        data-proxmox-ceph-column={column}
-                      />
-                    )}
-                  </For>
-                </colgroup>
-              </Show>
+              <colgroup>
+                <For each={visibleColumns()}>
+                  {(column) => (
+                    <col style={columnWidthStyle(column)} data-proxmox-ceph-column={column} />
+                  )}
+                </For>
+              </colgroup>
             }
             header={
               <>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[18%]`}
+                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30`}
                 >
                   Cluster
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[12%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15`}
                 >
                   Health
                 </TableHead>
-                <Show when={showFsid()}>
-                  <TableHead class={getPlatformTableHeadClassForKind('text')}>FSID</TableHead>
-                </Show>
                 <Show when={showQuorum()}>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-10 md:w-[13%] platform-table-narrow-hidden`}
-                  >
-                    <PlatformResponsiveTableLabel compact="Qrm" full="Quorum" />
+                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')}`}>
+                    Quorum
                   </TableHead>
                 </Show>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[13%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15`}
                 >
                   OSDs
                 </TableHead>
-                <Show when={showOperational()}>
+                <Show when={showPgs()}>
                   <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
                     PGs
                   </TableHead>
                 </Show>
-                <Show when={showPools()}>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[14%]`}
-                  >
-                    Pools
-                  </TableHead>
-                </Show>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[14%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15`}
                 >
-                  Capacity
+                  Pools
                 </TableHead>
-                <Show when={showOperational()}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15`}
+                >
+                  <PlatformResponsiveTableLabel compact="Used" full="Capacity" />
+                </TableHead>
+                <Show when={showServices()}>
                   <TableHead class={getPlatformTableHeadClassForKind('text')}>Services</TableHead>
                 </Show>
                 <Show when={showDetail()}>
@@ -410,7 +415,6 @@ export const ProxmoxCephTable: Component<{
                   {(cluster) => {
                     const ind = indicatorFor(classify(cluster));
                     const name = asTrimmedString(cluster.name) || cluster.id;
-                    const fsid = asTrimmedString(cluster.ceph?.fsid) || '—';
                     const isOpen = () => selectedId() === cluster.id;
                     const detailRowId = () => `proxmox-ceph-detail-${cluster.id}`;
                     return (
@@ -453,18 +457,9 @@ export const ProxmoxCephTable: Component<{
                               <span class={`text-[11px] font-medium ${ind.tone}`}>{ind.label}</span>
                             </div>
                           </TableCell>
-                          <Show when={showFsid()}>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
-                            >
-                              <span class="inline-block max-w-[10rem] truncate" title={fsid}>
-                                {fsid}
-                              </span>
-                            </TableCell>
-                          </Show>
                           <Show when={showQuorum()}>
                             <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content platform-table-narrow-hidden`}
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                             >
                               {quorumLabel(cluster.ceph)}
                             </TableCell>
@@ -474,7 +469,7 @@ export const ProxmoxCephTable: Component<{
                           >
                             {osdLabel(cluster)}
                           </TableCell>
-                          <Show when={showOperational()}>
+                          <Show when={showPgs()}>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
                             >
@@ -486,19 +481,17 @@ export const ProxmoxCephTable: Component<{
                               </Show>
                             </TableCell>
                           </Show>
-                          <Show when={showPools()}>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                            >
-                              {poolsLabel(cluster)}
-                            </TableCell>
-                          </Show>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            {poolsLabel(cluster)}
+                          </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             {capacityLabel(cluster)}
                           </TableCell>
-                          <Show when={showOperational()}>
+                          <Show when={showServices()}>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
                             >

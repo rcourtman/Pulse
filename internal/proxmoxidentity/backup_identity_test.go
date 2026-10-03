@@ -70,6 +70,30 @@ func TestBackupGuestMatchScoreRanksNodeMatchAboveClusterEntrypoint(t *testing.T)
 	}
 }
 
+func TestBackupGuestMatchScoreNodeVMIDNameComment(t *testing.T) {
+	const comment = "pdm21.21008.pulse"
+	if got := BackupGuestMatchScore("", comment, "21008", "pulse", "cluster-a", "pdm21"); got <= 0 {
+		t.Fatalf("matching node.VMID.name comment score = %d, want positive", got)
+	}
+	for _, tc := range []struct {
+		name, vmid, guestName, node string
+	}{
+		{"other node", "21008", "pulse", "pdm22"},
+		{"other VMID", "21009", "pulse", "pdm21"},
+		{"other name", "21008", "other", "pdm21"},
+		{"empty node", "21008", "pulse", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := BackupGuestMatchScore("", comment, tc.vmid, tc.guestName, "cluster-a", tc.node); got != 0 {
+				t.Fatalf("mismatched node.VMID.name comment score = %d, want zero", got)
+			}
+		})
+	}
+	if got := BackupGuestMatchScore("", "other.pdm21.21008.pulse", "21008", "pulse", "cluster-a", "pdm21"); got != 0 {
+		t.Fatalf("prefixed comment score = %d, want zero", got)
+	}
+}
+
 func TestLocationLabelsEqualRequiresExactNormalizedMatch(t *testing.T) {
 	if !LocationLabelsEqual("pve-nat", "PVE Nat") {
 		t.Fatal("normalized identical labels should match")

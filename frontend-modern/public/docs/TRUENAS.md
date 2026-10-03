@@ -9,7 +9,7 @@ Pulse v6 includes first-class monitoring for **TrueNAS SCALE** and **TrueNAS COR
 3. Enter the TrueNAS URL (e.g., `https://truenas.local`), the API key, and the
    username that owns the key.
 4. Click **Test Connection** → **Save**.
-5. Data appears within one polling cycle (~30 seconds).
+5. Data appears within one configured polling cycle (60 seconds by default).
 
 ## Creating a TrueNAS API Key
 
@@ -89,23 +89,50 @@ All endpoints require admin authentication.
 | `DELETE` | `/api/truenas/connections/{id}` | Remove a TrueNAS connection |
 | `POST` | `/api/truenas/connections/test` | Test a connection before saving |
 
-### Adding a connection (API)
+### Testing and adding a connection (API)
+
+The **Settings → TrueNAS** flow is the simplest option. For an API client,
+prepare the private Pulse header file as described in the
+[API authentication guide](API.md). The Pulse API token authenticates to
+Pulse; the separate TrueNAS API key belongs in the connection's JSON file.
+Do not put either credential in shell arguments, URLs or a public thread.
+
+Create or protect the connection file before opening it in a trusted editor:
 
 ```bash
-curl -X POST http://localhost:7655/api/truenas/connections \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"nas-1","host":"https://truenas.local","username":"key-owner","apiKey":"your-api-key"}'
+umask 077
+mkdir -p "$HOME/.config/pulse"
+touch "$HOME/.config/pulse/truenas-connection.json"
+chmod 600 "$HOME/.config/pulse/truenas-connection.json"
+vi "$HOME/.config/pulse/truenas-connection.json"
 ```
 
-### Testing a connection (API)
+In that file, enter a JSON object with `name`, `host` (the TrueNAS HTTPS URL),
+`username` (the key owner) and `apiKey`. Keep both credential files private;
+do not paste their contents into a terminal command or upload them.
+
+Test the connection before saving it:
 
 ```bash
-curl -X POST http://localhost:7655/api/truenas/connections/test \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"nas-1","host":"https://truenas.local","username":"key-owner","apiKey":"your-api-key"}'
+curl --fail-with-body --silent --show-error \
+  --header "@$HOME/.config/pulse/api-header" \
+  --header 'Content-Type: application/json' \
+  --data-binary "@$HOME/.config/pulse/truenas-connection.json" \
+  http://127.0.0.1:7655/api/truenas/connections/test
 ```
+
+After checking the test response, save the connection with:
+
+```bash
+curl --fail-with-body --silent --show-error \
+  --header "@$HOME/.config/pulse/api-header" \
+  --header 'Content-Type: application/json' \
+  --data-binary "@$HOME/.config/pulse/truenas-connection.json" \
+  http://127.0.0.1:7655/api/truenas/connections
+```
+
+These Pulse URLs are loopback-only examples. For a remote Pulse server, use
+its trusted HTTPS origin without disabling certificate verification.
 
 ## Troubleshooting
 
@@ -121,22 +148,108 @@ curl -X POST http://localhost:7655/api/truenas/connections/test \
   current appliance through the removed `/api/v2.0` REST endpoints.
 
 ### No data appearing after adding connection
-- Wait at least 30 seconds for the first poll cycle.
-- Check Pulse logs for TrueNAS-related errors:
+- Allow one configured polling cycle (60 seconds by default), not a fixed
+  30-second wait. Check that the saved connection is enabled.
+- **Test Connection** checks authentication and the selected transport, not
+  successful collection of every metric. The legacy REST diagnostic is
+  expected for recognized CORE 13 systems; it is not itself a connection error.
+- Inspect a bounded local log excerpt for TrueNAS-related errors:
   ```bash
-  journalctl -u pulse | grep -i truenas
+  journalctl -u pulse -n 100 --no-pager | grep -i truenas
   # or
-  docker logs pulse | grep -i truenas
+  docker logs --tail 100 pulse 2>&1 | grep -i truenas
   ```
+- If collection is safe, **Settings → Diagnostics → Export for GitHub
+  (sanitized)** can provide connection evidence. Review the export or log
+  excerpt before sharing: remove credentials, cookies, private hostnames,
+  addresses and webhook URLs. Do not upload configuration or credential files.
+
+### Inventory works but CPU, memory or History is missing
+
+Services, uptime, hardware capacity and disk temperatures can be collected
+without CPU or memory usage. A Host panel showing core count and total memory
+does not establish a live reading; check the CPU/memory usage columns and
+History series separately. A disk-utilisation line does not establish that
+CPU, memory or network History is available.
+
+Check whether the corresponding graphs work in the TrueNAS web UI. If Pulse
+still shows missing readings, report the affected panels, running Pulse and
+TrueNAS versions, and the relevant sanitized evidence above. Do not replace
+an otherwise working key or clear stored History merely because a graph is
+empty.
+
+If a maintainer requests a **CORE 13 native graph response**, use your existing
+signed-in **TrueNAS** browser session, not the Pulse page:
+
+1. In Firefox on macOS, open Network with **⌘⌥E**, then reload with Network
+   recording. Select **WS**, select the WebSocket connection and open its
+   **Response** pane.
+2. Show **All** messages and clear any message search for `reporting.get_data`.
+   The incoming reply does not need to repeat the method name, so that search
+   can hide the evidence. Open the CPU or Memory graph on TrueNAS's Reporting
+   page while recording.
+3. Find the outgoing `"msg":"method"` request with `"name":"cpu"` or
+   `"name":"memory"`; `cputemp` is temperature, not CPU usage. Each request has
+   a different `id`, which is normal. Find the incoming `"msg":"result"` reply
+   with the **same `id` as that request**, and expand its `result` (or `error`).
+   The `legend`, timing fields and `data` belong to the response, not the
+   outgoing request's `params`.
+4. Share only the requested graph name, `legend`, timing fields and one `data`
+   row, or the matching sanitized error. If no matching incoming reply is
+   visible after the graph loads, report that instead of sending more requests.
+
+Omit authentication messages, keys, cookies, private hostnames and addresses.
+Do not upload a full browser network capture or paste code into the browser
+console to collect this evidence.
 
 ### Stale TrueNAS data
-- If TrueNAS data stops updating, the source status transitions to `stale` after ~120 seconds.
-- Check TrueNAS connectivity and API key validity.
-- Verify with the API:
-  ```bash
-  curl -H "Authorization: Bearer $TOKEN" http://localhost:7655/api/resources \
-    | jq '.resources[] | select(.platformType == "truenas")'
-  ```
+
+A **Pending** or **Stale** badge is not an authentication diagnosis. Keep the
+connection and key unchanged while checking whether ordinary polling still
+collects data; a working connection can have missing telemetry or a stalled
+collection step.
+
+1. **Record the existing state before testing or restarting.** In your
+   signed-in Pulse admin browser session, open `/api/truenas/connections` on
+   the same Pulse origin. Inspect only the affected connection. This is a
+   read-only request using your existing session; do not copy a token or cookie.
+2. Note `enabled`, `poll.intervalSeconds`, `poll.lastAttemptAt`,
+   `poll.lastSuccessAt`, `poll.consecutiveFailures`, `poll.lastError`, and
+   `observed.collectedAt`. When present, also note `transport.mode`,
+   `transport.reconnects` and `transport.lastError`. If your build does not
+   expose a field, record that rather than interpreting its absence as success.
+3. Compare the timestamps after two configured polling cycles, without
+   pressing **Test Connection**, saving changes or restarting between reads.
+   Slow requests can take longer than the interval. `lastAttemptAt` records a
+   completed attempt, not an in-flight request; a frozen value alone cannot
+   distinguish a blocked request from polling that has not run.
+
+| Existing evidence | What it distinguishes and what to check next |
+|---|---|
+| `lastAttemptAt` advances, but `lastSuccessAt` and `observed.collectedAt` do not; failures increase | Polling returns failures. Use the actual error category and method to distinguish TLS, authentication, permissions and collection errors; a stale badge alone does not distinguish them. |
+| `observed.collectedAt` advances, but some usage or History panels stay empty | Inventory is refreshing, not necessarily every metric. Follow the [missing-telemetry checks](#inventory-works-but-cpu-memory-or-history-is-missing); do not replace a working key to populate a chart. |
+| No timestamps advance, or no completed attempt is recorded | Check that the connection and integration are enabled, then preserve the bounded local error above. This is not proof of an invalid key. |
+| Reconnects or TrueNAS sign-ins increase while `observed.collectedAt` advances | Session turnover alone does not establish failed authentication or stopped polling. Record the timing and any existing close/error message separately from the data freshness. |
+
+**Test Connection** checks connectivity and authentication, not a complete
+poll. Testing a saved connection can update `lastAttemptAt` and `lastSuccessAt`
+and reset its failure count without refreshing `observed.collectedAt`. Record
+any manual test and its time separately; a successful test is not evidence
+that missing data or stopped polling has recovered.
+
+An `app.stats` error such as **Apps are not available** concerns Apps
+collection, not necessarily the key. Check the existing Apps status in
+TrueNAS, but do not stop Apps or reproduce a hang to gather evidence. Preserve
+the existing error before changing anything. Do not repeatedly restart Pulse,
+clear History, rotate keys or disable TLS verification as a diagnostic shortcut.
+
+For a report, include the running Pulse and TrueNAS versions, configured poll
+interval, affected panels, before/after timestamps and a reviewed, bounded
+error excerpt from the local logs above. Remove private names and addresses
+from errors. Do not post the full connection response, credential files,
+authentication messages, cookies or a full browser network capture. If safe
+inspection is unavailable, describe what you could observe without repeating
+the failure or collecting a larger dump.
 
 ### Disabling TrueNAS integration
 Set `PULSE_ENABLE_TRUENAS=false` and restart Pulse. Existing connection data is preserved but polling stops.

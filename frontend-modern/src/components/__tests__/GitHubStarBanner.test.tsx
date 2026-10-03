@@ -195,7 +195,7 @@ describe('GitHubStarBanner', () => {
 
 describe('GitHubStarBanner mobile navigation clearance', () => {
   it('reads the published bottom navigation height', () => {
-    expect(gitHubStarBannerSource).toContain('bottom-[var(--pulse-mobile-nav-height)]');
+    expect(gitHubStarBannerSource).toContain('bottom-(--pulse-mobile-nav-height)');
   });
 
   it('does not keep its own copy of the bar height', () => {

@@ -522,6 +522,9 @@ func (m *Manager) CheckHost(host models.Host) {
 			raidMetadata["raidDevice"] = array.Device
 			raidMetadata["raidLevel"] = array.Level
 			raidMetadata["raidState"] = array.State
+			if array.RequiredDevices > 0 {
+				raidMetadata["raidRequiredDevices"] = array.RequiredDevices
+			}
 			raidMetadata["raidTotalDevices"] = array.TotalDevices
 			raidMetadata["raidActiveDevices"] = array.ActiveDevices
 			raidMetadata["raidFailedDevices"] = array.FailedDevices

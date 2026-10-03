@@ -1308,6 +1308,11 @@ type Monitor struct {
 	// data, which is the dominant write amplification in #1966.
 	unifiedMetricSyncMu   sync.Mutex
 	unifiedMetricSyncLast map[unifiedMetricSampleKey]unifiedMetricSample
+
+	// agentReportRefreshWindow folds accepted agent reports into at most one
+	// canonical store refresh per window; zero refreshes on every report.
+	agentReportRefreshWindow time.Duration
+	agentReportRefresh       agentReportRefreshState
 }
 
 func (m *Monitor) setRuntimeContext(ctx context.Context, hub *websocket.Hub) {
@@ -1745,6 +1750,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 	m := &Monitor{
 		config:                     cfg,
 		state:                      models.NewState(),
+		agentReportRefreshWindow:   agentReportRefreshInterval,
 		pveClients:                 make(map[string]PVEClientInterface),
 		pbsClients:                 make(map[string]*pbs.Client),
 		pmgClients:                 make(map[string]*pmg.Client),
@@ -3955,20 +3961,21 @@ func hostRAIDFromReadStateView(raid []unifiedresources.HostRAIDMeta) []models.Ho
 			})
 		}
 		out = append(out, models.HostRAIDArray{
-			Device:         entry.Device,
-			Name:           entry.Name,
-			Level:          entry.Level,
-			State:          entry.State,
-			TotalDevices:   entry.TotalDevices,
-			ActiveDevices:  entry.ActiveDevices,
-			WorkingDevices: entry.WorkingDevices,
-			FailedDevices:  entry.FailedDevices,
-			SpareDevices:   entry.SpareDevices,
-			UUID:           entry.UUID,
-			Devices:        devices,
-			RebuildPercent: entry.RebuildPercent,
-			RebuildSpeed:   entry.RebuildSpeed,
-			Operation:      entry.Operation,
+			Device:          entry.Device,
+			Name:            entry.Name,
+			Level:           entry.Level,
+			State:           entry.State,
+			RequiredDevices: entry.RequiredDevices,
+			TotalDevices:    entry.TotalDevices,
+			ActiveDevices:   entry.ActiveDevices,
+			WorkingDevices:  entry.WorkingDevices,
+			FailedDevices:   entry.FailedDevices,
+			SpareDevices:    entry.SpareDevices,
+			UUID:            entry.UUID,
+			Devices:         devices,
+			RebuildPercent:  entry.RebuildPercent,
+			RebuildSpeed:    entry.RebuildSpeed,
+			Operation:       entry.Operation,
 		})
 	}
 	return out
@@ -4335,13 +4342,18 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateS
 	unifiedView := m.currentUnifiedStateView()
 	metricsTargetResolver := broadcastMetricsTargetResolver(unifiedView.readState)
 	broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)
-	broadcastResources = m.applyPersistedMetadataToUnifiedResources(broadcastResources)
-	broadcastResources = unifiedresources.AttachResourceHealth(
-		broadcastResources,
-		resourceHealthAlerts(frontendState.ActiveAlerts),
-		time.Now().UTC(),
+	// Coalescing owns the outer slice. Decorate that one projection in place,
+	// not three full-resource copies; nested store data is still read-only.
+	healthAlerts := resourceHealthAlerts(frontendState.ActiveAlerts)
+	now := time.Now().UTC()
+	for i := range broadcastResources {
+		m.applyPersistedMetadataToUnifiedResource(&broadcastResources[i])
+		health := unifiedresources.EvaluateResourceHealth(broadcastResources[i], healthAlerts, now)
+		broadcastResources[i].Health = &health
+	}
+	broadcastFrontendResources, broadcastCatalogs := convertPresentationResourcesForBroadcast(
+		attachBroadcastMetricsTargets(broadcastResources, metricsTargetResolver),
 	)
-	broadcastFrontendResources, broadcastCatalogs := convertResourcesForBroadcast(broadcastResources, metricsTargetResolver)
 	frontendState.Resources = broadcastFrontendResources
 	frontendState.CapabilityCatalog = broadcastCatalogs.capabilities
 	frontendState.PolicyCatalog = broadcastCatalogs.policies
@@ -4371,7 +4383,9 @@ func (m *Monitor) GetLiveHostsSnapshot() []models.Host {
 	if m == nil || m.state == nil {
 		return nil
 	}
-	return m.state.GetSnapshot().Hosts
+	// Copy only the hosts. GetSnapshot deep-copies every guest as well, and
+	// this runs on each agent report, config fetch, and continuity lookup.
+	return m.state.GetHosts()
 }
 
 // SetOrgID sets the organization ID for this monitor instance.
@@ -4961,17 +4975,18 @@ func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
 		return m.unifiedStateViewWithStandaloneHostContinuity(monitorUnifiedStateViewFromSnapshot(m.GetState()))
 	}
 
-	resources := store.GetAll()
 	freshness := unifiedResourceFreshness(store, state)
 
 	if readState, ok := store.(unifiedresources.ReadState); ok {
+		// The continuity view lists this same store (or its overlay) below.
+		// Cloning here too discarded a complete registry on every broadcast.
 		return m.unifiedStateViewWithStandaloneHostContinuity(monitorUnifiedStateView{
-			resources: resources,
 			readState: readState,
 			freshness: freshness,
 		})
 	}
 
+	resources := store.GetAll()
 	if len(resources) > 0 || state == nil {
 		return m.unifiedStateViewWithStandaloneHostContinuity(monitorUnifiedStateViewFromResources(resources, freshness))
 	}
@@ -5039,6 +5054,19 @@ func (m *Monitor) GetUnifiedReadState() unifiedresources.ReadState {
 // ephemeral snapshot-backed adapter to preserve read access without exposing
 // direct state reads to consumer packages.
 func (m *Monitor) GetUnifiedReadStateOrSnapshot() unifiedresources.ReadState {
+	if m == nil {
+		return nil
+	}
+	// A store that is itself the read state needs no view. Building one
+	// deep-clones every resource, twice, only for this caller to discard the
+	// copies, and alert evaluation reaches here once per resource per poll
+	// through the default CPU evaluation window, which made every poll cost
+	// grow with the square of the estate (#2199).
+	if !mock.IsMockEnabled() {
+		if readState := m.GetUnifiedReadState(); readState != nil {
+			return m.readStateWithStandaloneHostContinuity(readState)
+		}
+	}
 	return m.currentUnifiedStateView().readState
 }
 
@@ -5109,6 +5137,7 @@ func (m *Monitor) updateResourceStoreForRead(state models.StateSnapshot) {
 		return
 	}
 	recordSupplementalResourceChanges(store, m.collectSupplementalChanges())
+	store = newResourceSnapshotStore(store)
 	m.syncAllUnifiedMetrics(store)
 	m.syncUnifiedResourceAlertsToState(store.GetAll())
 }
@@ -5156,6 +5185,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	if atomicStore, ok := store.(AtomicSnapshotResourceStore); ok {
 		atomicStore.PopulateSnapshotAndSupplemental(snapshotForStore, recordsBySource)
 		recordSupplementalResourceChanges(store, supplementalChanges)
+		store = newResourceSnapshotStore(store)
 		m.syncAllUnifiedMetrics(store)
 		for source, records := range recordsBySource {
 			if len(records) == 0 {
@@ -5187,12 +5217,55 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	}
 
 	recordSupplementalResourceChanges(store, supplementalChanges)
+	store = newResourceSnapshotStore(store)
 	m.syncAllUnifiedMetrics(store)
 	m.syncUnifiedResourceAlertsToState(store.GetAll())
 }
 
-// refreshUnifiedResourceStoreAfterAgentStateChange makes accepted agent
-// ingest and removal immediately visible to canonical ReadState consumers.
+// resourceSnapshotStore serves one GetAll clone to every consumer of a single
+// store-refresh pass. The metric syncs and the alert sync each cloned the
+// whole registry for themselves, up to six clones for every accepted agent
+// report (#2199). Consumers of a pass only read, so they can share one
+// generation.
+type resourceSnapshotStore struct {
+	ResourceStoreInterface
+	targets   MetricsTargetResourceStore
+	resources []unifiedresources.Resource
+	listed    bool
+}
+
+// newResourceSnapshotStore wraps store for one refresh pass. A store that
+// cannot resolve metrics targets is returned as is, so the metric syncs'
+// capability checks see exactly what they would without the wrapper.
+func newResourceSnapshotStore(store ResourceStoreInterface) ResourceStoreInterface {
+	if store == nil {
+		return nil
+	}
+	if _, ok := store.(*resourceSnapshotStore); ok {
+		return store
+	}
+	targets, ok := store.(MetricsTargetResourceStore)
+	if !ok {
+		return store
+	}
+	return &resourceSnapshotStore{ResourceStoreInterface: store, targets: targets}
+}
+
+func (s *resourceSnapshotStore) GetAll() []unifiedresources.Resource {
+	if !s.listed {
+		s.resources = s.ResourceStoreInterface.GetAll()
+		s.listed = true
+	}
+	return s.resources
+}
+
+func (s *resourceSnapshotStore) MetricsTargetForResource(resourceID string) *unifiedresources.MetricsTarget {
+	return s.targets.MetricsTargetForResource(resourceID)
+}
+
+// refreshUnifiedResourceStoreAfterAgentStateChange makes agent removal and
+// host-agent evaluation immediately visible to canonical ReadState consumers;
+// accepted reports go through refreshUnifiedResourceStoreAfterAgentReport.
 // WebSocket broadcasts may also rebuild the store for their own hydrate path,
 // but client presence must never be the trigger that publishes agent-backed
 // runtime truth or retires removed inventory.
@@ -5201,6 +5274,105 @@ func (m *Monitor) refreshUnifiedResourceStoreAfterAgentStateChange() {
 		return
 	}
 	m.updateResourceStore(m.GetState())
+}
+
+// agentReportRefreshInterval bounds how often accepted agent reports refresh
+// the canonical store. It matches readPathRegistryFreshness, the staleness the
+// read paths already accept.
+const agentReportRefreshInterval = readPathRegistryFreshness
+
+// agentReportRefreshState throttles report-driven store refreshes to a leading
+// refresh plus at most one trailing refresh per window.
+type agentReportRefreshState struct {
+	mu       sync.Mutex
+	lastRun  time.Time
+	running  bool
+	pending  *time.Timer
+	stopped  bool
+	inFlight sync.WaitGroup
+}
+
+// refreshUnifiedResourceStoreAfterAgentReport publishes an accepted agent
+// report to the canonical store. Every refresh is estate-wide, so refreshing
+// on each report made total cost grow with agents times resources (#2199).
+// The first report after a quiet window still refreshes before the handler
+// returns. Reports within agentReportRefreshInterval of the previous refresh
+// fold into one trailing refresh at the window's end, which reads the latest
+// state and broadcasts it. Agent removal and host-agent evaluation keep
+// refreshing immediately through refreshUnifiedResourceStoreAfterAgentStateChange.
+func (m *Monitor) refreshUnifiedResourceStoreAfterAgentReport() {
+	if m == nil || m.state == nil {
+		return
+	}
+	window := m.agentReportRefreshWindow
+	if window <= 0 {
+		m.updateResourceStore(m.GetState())
+		return
+	}
+
+	r := &m.agentReportRefresh
+	r.mu.Lock()
+	if r.stopped || r.pending != nil {
+		// A due trailing refresh reads state after this report was applied.
+		r.mu.Unlock()
+		return
+	}
+	now := time.Now()
+	if !r.running && now.Sub(r.lastRun) >= window {
+		r.running = true
+		r.lastRun = now
+		r.mu.Unlock()
+		m.updateResourceStore(m.GetState())
+		r.mu.Lock()
+		r.running = false
+		r.mu.Unlock()
+		return
+	}
+	r.inFlight.Add(1)
+	r.pending = time.AfterFunc(max(window-now.Sub(r.lastRun), 0), m.runTrailingAgentReportRefresh)
+	r.mu.Unlock()
+}
+
+func (m *Monitor) runTrailingAgentReportRefresh() {
+	r := &m.agentReportRefresh
+	defer r.inFlight.Done()
+	r.mu.Lock()
+	r.pending = nil
+	if r.stopped {
+		r.mu.Unlock()
+		return
+	}
+	r.running = true
+	r.lastRun = time.Now()
+	r.mu.Unlock()
+
+	m.updateResourceStore(m.GetState())
+
+	r.mu.Lock()
+	r.running = false
+	r.mu.Unlock()
+
+	// No handler follows a trailing refresh, so publish it to clients here.
+	m.mu.RLock()
+	hub := m.wsHub
+	m.mu.RUnlock()
+	if hub != nil {
+		m.broadcastCurrentState(hub)
+	}
+}
+
+// stopAgentReportRefresh cancels a pending trailing refresh and waits for one
+// already running, so none touches stores Stop is about to close.
+func (m *Monitor) stopAgentReportRefresh() {
+	r := &m.agentReportRefresh
+	r.mu.Lock()
+	r.stopped = true
+	if r.pending != nil && r.pending.Stop() {
+		r.pending = nil
+		r.inFlight.Done()
+	}
+	r.mu.Unlock()
+	r.inFlight.Wait()
 }
 
 func recordSupplementalResourceChanges(store ResourceStoreInterface, changes []unifiedresources.ResourceChange) {
@@ -5980,42 +6152,46 @@ func (m *Monitor) applyPersistedMetadataToUnifiedResources(resources []unifiedre
 	out := make([]unifiedresources.Resource, len(resources))
 	copy(out, resources)
 	for i := range out {
-		resource := &out[i]
-
-		switch unifiedresources.ContractResourceType(*resource) {
-		case unifiedresources.ResourceTypeAppContainer:
-			if resource.Docker == nil {
-				continue
-			}
-			hostID := strings.TrimSpace(resource.Docker.HostSourceID)
-			containerID := strings.TrimSpace(resource.Docker.ContainerID)
-			if hostID == "" {
-				continue
-			}
-			if customURL, ok := m.dockerAppContainerCustomURL(*resource, hostID, containerID); ok {
-				// The metadata record is authoritative even when empty: an
-				// explicit clear must remove a stale URL still carried by an
-				// older unified-resource snapshot.
-				resource.CustomURL = strings.TrimSpace(customURL)
-			}
-		case unifiedresources.ResourceTypePod,
-			unifiedresources.ResourceTypeK8sDeployment,
-			unifiedresources.ResourceTypeK8sService:
-			if customURL, ok := m.kubernetesWorkloadCustomURL(*resource); ok {
-				resource.CustomURL = strings.TrimSpace(customURL)
-			}
-		case unifiedresources.ResourceTypeAgent,
-			unifiedresources.ResourceType("docker-host"),
-			unifiedresources.ResourceTypePBS,
-			unifiedresources.ResourceTypePMG,
-			unifiedresources.ResourceTypeK8sCluster,
-			unifiedresources.ResourceTypeK8sNode:
-			if customURL, ok := m.hostResourceCustomURL(*resource); ok {
-				resource.CustomURL = customURL
-			}
-		}
+		m.applyPersistedMetadataToUnifiedResource(&out[i])
 	}
 	return out
+}
+
+// applyPersistedMetadataToUnifiedResource changes only a caller-owned resource
+// value, never its nested registry state. Empty persisted values clear stale URLs.
+func (m *Monitor) applyPersistedMetadataToUnifiedResource(resource *unifiedresources.Resource) {
+	switch unifiedresources.ContractResourceType(*resource) {
+	case unifiedresources.ResourceTypeAppContainer:
+		if resource.Docker == nil {
+			return
+		}
+		hostID := strings.TrimSpace(resource.Docker.HostSourceID)
+		containerID := strings.TrimSpace(resource.Docker.ContainerID)
+		if hostID == "" {
+			return
+		}
+		if customURL, ok := m.dockerAppContainerCustomURL(*resource, hostID, containerID); ok {
+			// The metadata record is authoritative even when empty: an
+			// explicit clear must remove a stale URL still carried by an
+			// older unified-resource snapshot.
+			resource.CustomURL = strings.TrimSpace(customURL)
+		}
+	case unifiedresources.ResourceTypePod,
+		unifiedresources.ResourceTypeK8sDeployment,
+		unifiedresources.ResourceTypeK8sService:
+		if customURL, ok := m.kubernetesWorkloadCustomURL(*resource); ok {
+			resource.CustomURL = strings.TrimSpace(customURL)
+		}
+	case unifiedresources.ResourceTypeAgent,
+		unifiedresources.ResourceType("docker-host"),
+		unifiedresources.ResourceTypePBS,
+		unifiedresources.ResourceTypePMG,
+		unifiedresources.ResourceTypeK8sCluster,
+		unifiedresources.ResourceTypeK8sNode:
+		if customURL, ok := m.hostResourceCustomURL(*resource); ok {
+			resource.CustomURL = customURL
+		}
+	}
 }
 
 func appendUniqueMetadataCandidate(candidates []string, seen map[string]struct{}, value string) []string {
@@ -6194,19 +6370,25 @@ func convertResourcesForBroadcast(
 		firstBroadcastMetricsTargetResolver(metricsTargetResolvers),
 	)
 	allResources = unifiedresources.CoalescePresentationHostResources(allResources)
-	type broadcastResource struct {
-		input      models.ResourceConvertInput
-		sortKey    string
-		resourceID string
+	return convertPresentationResourcesForBroadcast(allResources)
+}
+
+// convertPresentationResourcesForBroadcast consumes an already-coalesced
+// projection. Sorting the final rows avoids retaining a second estate-sized
+// array of conversion inputs and coalescing the same hosts a second time.
+func convertPresentationResourcesForBroadcast(allResources []unifiedresources.Resource) ([]models.ResourceFrontend, broadcastResourceCatalogs) {
+	if len(allResources) == 0 {
+		return []models.ResourceFrontend{}, broadcastResourceCatalogs{}
 	}
 
-	converted := make([]broadcastResource, 0, len(allResources))
+	result := make([]models.ResourceFrontend, len(allResources))
+	sortKeys := make([]string, len(allResources))
 	catalogs := broadcastResourceCatalogs{
 		capabilities:    make(map[string]json.RawMessage),
 		policies:        make(map[string]json.RawMessage),
 		aiSafeSummaries: make(map[string]string),
 	}
-	for _, r := range allResources {
+	for i, r := range allResources {
 		input := monitorResourceToConvertInput(r)
 		if len(input.Capabilities) > 0 {
 			id := capabilityCatalogID(input.Capabilities)
@@ -6233,24 +6415,11 @@ func convertResourcesForBroadcast(
 		if sortKey == "" {
 			sortKey = strings.ToLower(input.Name)
 		}
-		converted = append(converted, broadcastResource{
-			input:      input,
-			sortKey:    sortKey,
-			resourceID: input.ID,
-		})
+		sortKeys[i] = sortKey
+		result[i] = models.ConvertResourceToFrontend(input)
 	}
 
-	sort.Slice(converted, func(i, j int) bool {
-		if converted[i].sortKey == converted[j].sortKey {
-			return converted[i].resourceID < converted[j].resourceID
-		}
-		return converted[i].sortKey < converted[j].sortKey
-	})
-
-	result := make([]models.ResourceFrontend, len(converted))
-	for i, resource := range converted {
-		result[i] = models.ConvertResourceToFrontend(resource.input)
-	}
+	sort.Sort(broadcastFrontendSort{resources: result, keys: sortKeys})
 	if len(catalogs.capabilities) == 0 {
 		catalogs.capabilities = nil
 	}
@@ -6261,6 +6430,24 @@ func convertResourcesForBroadcast(
 		catalogs.aiSafeSummaries = nil
 	}
 	return result, catalogs
+}
+
+// Keep each precomputed sort key beside its row while sorting in place.
+type broadcastFrontendSort struct {
+	resources []models.ResourceFrontend
+	keys      []string
+}
+
+func (s broadcastFrontendSort) Len() int { return len(s.resources) }
+func (s broadcastFrontendSort) Less(i, j int) bool {
+	if s.keys[i] == s.keys[j] {
+		return s.resources[i].ID < s.resources[j].ID
+	}
+	return s.keys[i] < s.keys[j]
+}
+func (s broadcastFrontendSort) Swap(i, j int) {
+	s.resources[i], s.resources[j] = s.resources[j], s.resources[i]
+	s.keys[i], s.keys[j] = s.keys[j], s.keys[i]
 }
 
 func broadcastMetricsTargetResolver(source interface{}) MetricsTargetResourceStore {
@@ -7411,6 +7598,9 @@ const guestMetadataDrainTimeout = 2 * time.Second
 
 func (m *Monitor) Stop() {
 	log.Info().Msg("stopping monitor")
+
+	// A trailing agent-report refresh must not run against stores closed below.
+	m.stopAgentReportRefresh()
 
 	if m.deadMan != nil {
 		m.deadMan.stop(time.Now().UTC(), m.alertManager)

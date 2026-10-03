@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"testing"
@@ -423,21 +425,17 @@ func TestBuildBackupPVETemplateSubjectKeyTrimsParts(t *testing.T) {
 }
 
 func TestProxmoxDiskCanonicalResourceIDTrimsIdentity(t *testing.T) {
-	cases := []struct {
-		path string
-		want string
+	for _, tt := range []struct {
+		name, instance, node, path, want string
 	}{
-		{path: "/dev/sda", want: "inst:node:disk:dev-sda"},
-		{path: "/dev/nvme0n1", want: "inst:node:disk:dev-nvme0n1"},
-		{path: "/dev/disk/by-id/SSD X", want: "inst:node:disk:dev-disk-by-id-ssd-x"},
-		{path: "/", want: "inst:node:disk:root"},
-		{path: "", want: "inst:node:disk:"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.path, func(t *testing.T) {
-			got := proxmoxDiskCanonicalResourceID(" inst ", " node ", tc.path)
-			if got != tc.want {
-				t.Fatalf("proxmoxDiskCanonicalResourceID() = %q, want %q", got, tc.want)
+		{"trimmed source identity", " inst ", " node ", "/dev/sda", "inst:node:disk:dev-sda"},
+		{"nested device path", "inst", "node", "/dev/disk/by-id/ATA_DISK", "inst:node:disk:dev-disk-by-id-ata-disk"},
+		{"root path", "inst", "node", "/", "inst:node:disk:root"},
+		{"missing path keeps legacy identity", "inst", "node", "", "inst:node:disk:"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := proxmoxDiskCanonicalResourceID(tt.instance, tt.node, tt.path); got != tt.want {
+				t.Fatalf("proxmoxDiskCanonicalResourceID() = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -2430,7 +2428,7 @@ func TestCheckBackupsSkipsOrphanedWhenDisabled(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
 
-	alertOrphaned := false
+	alertOrphaned := true
 	m.mu.Lock()
 	m.config.Enabled = true
 	m.config.BackupDefaults = BackupAlertConfig{
@@ -2462,11 +2460,28 @@ func TestCheckBackupsSkipsOrphanedWhenDisabled(t *testing.T) {
 	m.CheckBackups(rollups, map[string]GuestLookup{}, map[string][]GuestLookup{})
 
 	m.mu.RLock()
+	var activeOrphan bool
+	for _, alert := range m.activeAlerts {
+		if alert != nil && alert.Type == "backup-age" && metadataBoolValue(alert.Metadata, "orphaned") {
+			activeOrphan = true
+		}
+	}
+	m.mu.RUnlock()
+	if !activeOrphan {
+		t.Fatal("expected an orphaned backup-age alert before disabling orphaned alerts")
+	}
+
+	disabled := false
+	m.mu.Lock()
+	m.config.BackupDefaults.AlertOrphaned = &disabled
+	m.mu.Unlock()
+	m.CheckBackups(rollups, map[string]GuestLookup{}, map[string][]GuestLookup{})
+
+	m.mu.RLock()
 	defer m.mu.RUnlock()
 	for storageKey, alert := range m.activeAlerts {
-		id := effectiveAlertID(alert, storageKey)
-		if strings.HasPrefix(id, "backup-age-") {
-			t.Fatalf("expected orphaned backup to be skipped, found alert %s", id)
+		if alert != nil && alert.Type == "backup-age" {
+			t.Fatalf("expected orphaned backup alert to clear after disabling it, found %s", effectiveAlertID(alert, storageKey))
 		}
 	}
 }
@@ -21545,5 +21560,132 @@ func TestIntentCheckpointRetriesFailedWrite(t *testing.T) {
 	}
 	if string(got) != "[]" {
 		t.Fatalf("retry wrote %q", got)
+	}
+}
+
+// A slow checkpoint must not turn an alert burst into one blocked worker per
+// mutation. Exercise the real asynchronous entry point and real JSON writer.
+func TestAsyncActiveCheckpointBurstIsBounded(t *testing.T) {
+	dir := t.TempDir()
+	id, alert := testNewCanonicalAlert("checkpoint-host", "metric-threshold:cpu", "host", "cpu")
+	now := time.Now().UTC()
+	alert.Level, alert.StartTime, alert.LastSeen = AlertLevelWarning, now.Add(-time.Hour), now
+	m := &Manager{
+		alertsDir:     filepath.Join(dir, "alerts"),
+		activeAlerts:  map[string]*Alert{id: alert},
+		intentPending: make(map[string]IntentPendingState),
+	}
+	m.saveMu.Lock()
+	locked := true
+	defer func() {
+		if locked {
+			m.saveMu.Unlock()
+		}
+		m.workerWG.Wait()
+	}()
+	const requests = 512
+	for range requests {
+		m.saveActiveAlertsAsync("burst checkpoint")
+	}
+	var stacks bytes.Buffer
+	if err := pprof.Lookup("goroutine").WriteTo(&stacks, 2); err != nil {
+		t.Fatal(err)
+	}
+	workers := strings.Count(stacks.String(), "created by github.com/rcourtman/pulse-go-rewrite/internal/alerts.(*Manager).saveActiveAlertsAsync")
+	t.Logf("blocked asynchronous checkpoint workers: %d for %d requests", workers, requests)
+	if workers != 1 {
+		t.Errorf("burst started %d checkpoint workers, want one", workers)
+	}
+
+	// State changed while the first checkpoint was blocked must reach both
+	// restart files, not the snapshot that existed at request admission.
+	m.mu.Lock()
+	alert.Acknowledged, alert.AckUser, alert.AckTime = true, "checkpoint-operator", &now
+	alert.LastSeen = now.Add(time.Second)
+	alert.Metadata["checkpoint"] = "latest"
+	m.intentPending["pending-cpu"] = IntentPendingState{
+		TrackingKey: "pending-cpu", ResourceID: "checkpoint-host", Signal: "cpu",
+		FirstMatchedAt: now.Add(-time.Minute), LastObservedAt: now, ElapsedNanos: int64(time.Minute),
+	}
+	m.mu.Unlock()
+	m.saveActiveAlertsAsync("latest state")
+	m.saveMu.Unlock()
+	locked = false
+	m.workerWG.Wait()
+
+	data, err := os.ReadFile(filepath.Join(m.alertsDir, "active-alerts.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var persisted []*Alert
+	if err := json.Unmarshal(data, &persisted); err != nil {
+		t.Fatal(err)
+	}
+	if len(persisted) != 1 || !persisted[0].Acknowledged || persisted[0].AckUser != "checkpoint-operator" ||
+		!persisted[0].StartTime.Equal(alert.StartTime) || !persisted[0].LastSeen.Equal(alert.LastSeen) ||
+		persisted[0].Metadata["checkpoint"] != "latest" {
+		t.Fatalf("checkpoint lost latest incident state: %s", data)
+	}
+	restarted := NewManagerWithDataDir(dir)
+	t.Cleanup(restarted.Stop)
+	restored := testRequireActiveAlert(t, restarted, id)
+	if !restored.Acknowledged || restored.AckUser != "checkpoint-operator" || !restored.StartTime.Equal(alert.StartTime) {
+		t.Fatalf("restart lost acknowledgement or incident age: %+v", restored)
+	}
+	restarted.mu.RLock()
+	pending := restarted.intentPending["pending-cpu"]
+	restarted.mu.RUnlock()
+	if pending.ElapsedNanos != int64(time.Minute) || pending.ResourceID != "checkpoint-host" {
+		t.Fatalf("restart lost latest pending intent: %+v", pending)
+	}
+}
+
+func TestCleanupRetentionRequiresObservationInactivity(t *testing.T) {
+	now := time.Now()
+	old := now.Add(-48 * time.Hour)
+	recent := now.Add(-5 * time.Minute)
+	for _, tc := range []struct {
+		name         string
+		start, seen  time.Time
+		acknowledged bool
+		ttl          int
+		keep         bool
+	}{
+		{name: "continuing unacknowledged condition", start: old, seen: recent, ttl: 1, keep: true},
+		{name: "inactive unacknowledged condition", start: old, seen: old, ttl: 1},
+		{name: "legacy inactive without last seen", start: old, ttl: 1},
+		{name: "legacy recent without last seen", start: recent, ttl: 1, keep: true},
+		{name: "recent occurrence with inconsistent old last seen", start: recent, seen: old, ttl: 1, keep: true},
+		{name: "disabled unacknowledged retention", start: old, seen: old, keep: true},
+		{name: "continuing acknowledged condition", start: old, seen: recent, acknowledged: true, ttl: 1, keep: true},
+		{name: "inactive acknowledged condition", start: old, seen: old, acknowledged: true, ttl: 1},
+		{name: "legacy without either timestamp", ttl: 1},
+		{name: "future observation does not expire", start: old, seen: now.Add(time.Hour), ttl: 1, keep: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newCleanupRetentionManager(t, t.TempDir(), false)
+			alert := &Alert{
+				ID: "retention-resource::metric-threshold:usage", ResourceID: "retention-resource",
+				CanonicalSpecID: "metric-threshold:usage", Type: "usage", Level: AlertLevelWarning,
+				StartTime: tc.start, LastSeen: tc.seen, Acknowledged: tc.acknowledged,
+			}
+			if tc.acknowledged {
+				ackTime := old
+				alert.AckTime = &ackTime
+				alert.AckUser = "operator"
+			}
+			m.mu.Lock()
+			m.config.MaxAlertAgeDays = tc.ttl
+			m.setActiveAlertNoLock(alert.ID, alert)
+			m.mu.Unlock()
+			m.Cleanup(time.Hour)
+			active := m.GetActiveAlerts()
+			if kept := len(active) == 1; kept != tc.keep {
+				t.Fatalf("cleanup kept = %v, want %v (start %s, last seen %s)", kept, tc.keep, tc.start, tc.seen)
+			}
+			if tc.keep && (!active[0].StartTime.Equal(tc.start) || !active[0].LastSeen.Equal(tc.seen) || active[0].Acknowledged != tc.acknowledged) {
+				t.Fatalf("cleanup changed the retained occurrence: %+v", active[0])
+			}
+		})
 	}
 }

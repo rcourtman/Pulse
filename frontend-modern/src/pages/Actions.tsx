@@ -10,6 +10,7 @@ import { Card } from '@/components/shared/Card';
 import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
 import { PATROL_AUTONOMY_FEATURE_KEY } from '@/features/patrol/patrolAutonomyAvailability';
 import { PATROL_PATH } from '@/routing/resourceLinks';
+import { aiChatStore } from '@/stores/aiChat';
 import { hasFeature } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import {
@@ -25,7 +26,7 @@ import { ACTION_REVIEW_QUERY_PARAM, parseActionReviewId } from '@/features/actio
 import {
   formatActionName,
   getActionOriginLabel,
-  getActionInboxStatePresentation,
+  getActionAuditStatePresentation,
   getActionResourcePresentation,
   getActionsWatchOnlyEmptyState,
   sortOpenActionsForReview,
@@ -54,6 +55,8 @@ export function Actions() {
   const [loadError, setLoadError] = createSignal('');
   const [readOnly, setReadOnly] = createSignal(false);
   const [patrolWatchOnly, setPatrolWatchOnly] = createSignal(false);
+  let listRequestGeneration = 0;
+  let detailRequestGeneration = 0;
 
   // The Open tab is where users land wondering why nothing is queued. When
   // Patrol runs Watch only it never proposes fixes, so the calm state must say
@@ -66,6 +69,7 @@ export function Actions() {
 
   const watchOnlyGuidance = createMemo(() =>
     getActionsWatchOnlyEmptyState({
+      aiEnabled: aiChatStore.enabled === true,
       patrolWatchOnly: patrolWatchOnly(),
       patrolModesUnlocked: hasFeature(PATROL_AUTONOMY_FEATURE_KEY),
       commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),
@@ -75,18 +79,22 @@ export function Actions() {
   );
 
   const loadActions = async () => {
+    const generation = ++listRequestGeneration;
+    const requestedView = view();
     setLoading(true);
     setLoadError('');
     try {
-      const response = await ResourceActionsAPI.listActions(view());
+      const response = await ResourceActionsAPI.listActions(requestedView);
+      if (generation !== listRequestGeneration) return;
       setActions(response.actions);
       setReadOnly(response.readOnly === true);
     } catch (cause) {
+      if (generation !== listRequestGeneration) return;
       setActions([]);
       setReadOnly(false);
       setLoadError(cause instanceof Error ? cause.message : 'The action store is unavailable.');
     } finally {
-      setLoading(false);
+      if (generation === listRequestGeneration) setLoading(false);
     }
   };
 
@@ -106,14 +114,26 @@ export function Actions() {
     view() === 'pending' ? sortOpenActionsForReview(actions()) : actions(),
   );
 
-  const openActionById = async (actionId: string) => {
-    setDetailError('');
+  const openActionById = async (actionId: string, generation: number) => {
     try {
       const detail = await ResourceActionsAPI.getAction(actionId);
+      if (
+        generation !== detailRequestGeneration ||
+        parseActionReviewId(location.search) !== actionId
+      )
+        return;
+      if (detail.audit.id !== actionId) {
+        setDetailError('Action details did not match the selected action. Open it again.');
+        return;
+      }
       setSelected(detail);
       setView(getInboxViewForState(detail.audit.state));
     } catch (cause) {
-      setSelected(null);
+      if (
+        generation !== detailRequestGeneration ||
+        parseActionReviewId(location.search) !== actionId
+      )
+        return;
       setDetailError(cause instanceof Error ? cause.message : 'Action details are unavailable.');
     }
   };
@@ -123,6 +143,7 @@ export function Actions() {
   };
 
   const closeAction = () => {
+    ++detailRequestGeneration;
     setSelected(null);
     setDetailError('');
     setSearchParams({ [ACTION_REVIEW_QUERY_PARAM]: null }, { replace: true });
@@ -135,7 +156,10 @@ export function Actions() {
 
   createEffect(() => {
     const actionId = parseActionReviewId(location.search);
-    if (actionId) void openActionById(actionId);
+    const generation = ++detailRequestGeneration;
+    setSelected(null);
+    setDetailError('');
+    if (actionId) void openActionById(actionId, generation);
   });
 
   return (
@@ -172,7 +196,7 @@ export function Actions() {
       />
 
       <Show when={readOnly()}>
-        <div class="flex items-center gap-2 rounded-md border border-border-subtle bg-surface-alt/50 px-3 py-2 text-xs text-muted">
+        <div class="flex items-center gap-2 rounded-md border border-border-subtle px-3 py-2 text-xs text-muted">
           <EyeIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
           <span>
             <strong class="font-medium text-base-content">Read-only demo data.</strong> You can
@@ -184,7 +208,7 @@ export function Actions() {
       <Show when={detailError()}>
         <div
           role="alert"
-          class="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+          class="rounded-sm border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
         >
           {detailError()}
         </div>
@@ -260,7 +284,7 @@ export function Actions() {
               windowSize={48}
             >
               {(action) => {
-                const state = () => getActionInboxStatePresentation(action.state);
+                const state = () => getActionAuditStatePresentation(action);
                 const resource = () =>
                   getActionResourcePresentation(action.request.resourceId, action.resource);
                 const title = () => formatActionName(action.request.capabilityName);
@@ -270,7 +294,7 @@ export function Actions() {
                     <button
                       type="button"
                       aria-label={`Review ${title()} on ${action.request.resourceId}, ${state().label}`}
-                      class={`group w-full border-l-2 px-3 py-3 text-left transition-colors hover:bg-surface-hover/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 sm:px-4 ${state().accentClass}`}
+                      class={`group w-full border-l-2 px-3 py-3 text-left transition-colors hover:bg-surface-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-blue-500 sm:px-4 ${state().accentClass}`}
                       onClick={() => openAction(action)}
                     >
                       <div class="flex items-center gap-3">
@@ -311,7 +335,7 @@ export function Actions() {
                           </div>
                           <p class="mt-1.5 truncate text-sm text-muted">{action.request.reason}</p>
                         </div>
-                        <span class="inline-flex shrink-0 items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-muted transition-colors group-hover:bg-surface group-hover:text-base-content">
+                        <span class="inline-flex shrink-0 items-center gap-1 rounded-sm border border-border px-2 py-1 text-xs font-medium text-muted transition-colors group-hover:bg-surface group-hover:text-base-content">
                           Review
                           <ChevronRightIcon class="h-3.5 w-3.5" aria-hidden="true" />
                         </span>
@@ -328,9 +352,17 @@ export function Actions() {
         detail={selected()}
         onClose={closeAction}
         onChanged={async (detail) => {
+          // A read or mutation started in an earlier review must not replace
+          // the action currently selected by the URL (or reopen a closed one).
+          if (
+            selected()?.audit.id !== detail.audit.id ||
+            parseActionReviewId(location.search) !== detail.audit.id
+          )
+            return;
           setSelected(detail);
-          setView(getInboxViewForState(detail.audit.state));
-          await loadActions();
+          const nextView = getInboxViewForState(detail.audit.state);
+          if (view() === nextView) await loadActions();
+          else setView(nextView); // the view effect loads the new list once
         }}
       />
     </div>

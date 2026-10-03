@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { formatPlatformTableDateTimeValue } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 import { KubernetesControllersTable } from '../KubernetesControllersTable';
 
@@ -24,10 +25,17 @@ const makeResource = ({
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
 });
+
+const absoluteTime = (timestamp: string): string =>
+  formatPlatformTableDateTimeValue(timestamp, { dateTimeFormat: { year: 'numeric' } });
 
 describe('KubernetesControllersTable', () => {
   it('renders native controller fields for ReplicaSet, StatefulSet, DaemonSet, Job, and CronJob rows', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-24T13:31:00Z'));
+
     render(() => (
       <KubernetesControllersTable
         resources={[
@@ -133,11 +141,70 @@ describe('KubernetesControllersTable', () => {
     expect(screen.getByText('Job')).toBeInTheDocument();
     expect(screen.getByText('10 completions')).toBeInTheDocument();
     expect(screen.getByText('Failed: 2')).toBeInTheDocument();
-    expect(screen.getByText('Completed: 2026-05-24T13:00:00Z')).toBeInTheDocument();
+    // Job and CronJob timestamps arrive as RFC 3339 strings; the cell shows
+    // how long ago and keeps the absolute time on hover.
+    const completed = screen.getByText('Completed 31m ago');
+    expect(completed).toHaveAttribute(
+      'title',
+      `Completed: ${absoluteTime('2026-05-24T13:00:00Z')}`,
+    );
 
     expect(screen.getByText('CronJob')).toBeInTheDocument();
     expect(screen.getByText('*/5 * * * *')).toBeInTheDocument();
     expect(screen.getByText('Suspended')).toBeInTheDocument();
-    expect(screen.getByText('Last success: 2026-05-24T12:55:00Z')).toBeInTheDocument();
+    const lastSuccess = screen.getByText('Last success 36m ago');
+    expect(lastSuccess).toHaveAttribute(
+      'title',
+      `Last success: ${absoluteTime('2026-05-24T12:55:00Z')}`,
+    );
+    expect(screen.queryByText(/2026-05-24T1[23]/)).not.toBeInTheDocument();
+  });
+
+  it('falls back to start and last-run times when a Job or CronJob has not completed', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-24T13:31:00Z'));
+
+    render(() => (
+      <KubernetesControllersTable
+        resources={[
+          makeResource({
+            id: 'nightly-import',
+            type: 'k8s-job',
+            kubernetes: {
+              clusterName: 'prod',
+              namespace: 'batch',
+              resourceKind: 'Job',
+              desiredReplicas: 1,
+              active: 1,
+              startTime: '2026-05-24T13:29:30Z',
+            },
+          }),
+          makeResource({
+            id: 'billing-rollup',
+            type: 'k8s-cronjob',
+            kubernetes: {
+              clusterName: 'prod',
+              namespace: 'batch',
+              resourceKind: 'CronJob',
+              schedule: '0 2 * * *',
+              lastScheduleTime: '2026-05-22T02:00:00Z',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No controllers"
+        emptyDescription="No controllers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByText('Started 1m ago')).toHaveAttribute(
+      'title',
+      `Started: ${absoluteTime('2026-05-24T13:29:30Z')}`,
+    );
+    expect(screen.getByText('Last run 2d ago')).toHaveAttribute(
+      'title',
+      `Last run: ${absoluteTime('2026-05-22T02:00:00Z')}`,
+    );
   });
 });

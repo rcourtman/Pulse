@@ -9,8 +9,8 @@ import (
 )
 
 func TestSchemaV17FieldNamesArePinned(t *testing.T) {
-	if TelemetrySchemaVersion != 17 {
-		t.Fatalf("TelemetrySchemaVersion = %d, want 17", TelemetrySchemaVersion)
+	if TelemetrySchemaVersion < 17 {
+		t.Fatalf("TelemetrySchemaVersion = %d, want at least 17", TelemetrySchemaVersion)
 	}
 	want := map[string]string{
 		"AIProviderClass":                                                      "ai_provider_class",

@@ -105,9 +105,15 @@ func TestServiceHealthProbeCoversAPIUIAndFrontendAssets(t *testing.T) {
 }
 
 func TestServiceHealthProbeReportsConnectivityWithoutListener(t *testing.T) {
-	got := newServiceHealthProbe(nil, false)()
-	if !got.Observed || got.Healthy || got.FailureCategory != telemetry.ServiceHealthFailureAPIConnectivity {
-		t.Fatalf("service-health observation = %#v", got)
+	for _, listener := range []net.Listener{
+		nil,
+		serviceHealthAddrListener{addr: &net.UnixAddr{Name: "/tmp/unused", Net: "unix"}},
+		serviceHealthAddrListener{addr: &net.TCPAddr{IP: net.IPv4zero}},
+	} {
+		got := newServiceHealthProbe(listener, false)()
+		if !got.Observed || got.Healthy || got.FailureCategory != telemetry.ServiceHealthFailureAPIConnectivity {
+			t.Fatalf("invalid listener service-health observation = %#v", got)
+		}
 	}
 }
 

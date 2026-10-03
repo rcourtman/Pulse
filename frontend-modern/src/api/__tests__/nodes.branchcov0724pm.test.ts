@@ -93,7 +93,7 @@ describe('NodesAPI — branch coverage (normalizeProxmoxSetupCommandResponse val
     type: 'pve',
     host: 'https://pve.example:8006',
     url: 'https://pulse.example/api/setup-script?type=pve',
-    downloadURL: 'https://pulse.example/api/setup-script?type=pve&setup_token=setup-token-123',
+    downloadURL: 'https://pulse.example/api/setup-script?type=pve',
     scriptFileName: 'pulse-setup-pve.sh',
     command: 'curl pve ...',
     commandWithEnv: 'curl env pve ...',
@@ -149,10 +149,11 @@ describe('NodesAPI — branch coverage (downloadProxmoxSetupScript failure arms)
   });
 
   const pveBootstrap = (): ProxmoxSetupCommandResponse => ({
+    setupToken: 'synthetic-setup-token',
     type: 'pve',
     host: 'https://pve.example:8006',
     url: 'https://pulse.example/base/api/setup-script?type=pve',
-    downloadURL: 'https://pulse.example/base/api/setup-script?type=pve&setup_token=setup-token-123',
+    downloadURL: 'https://pulse.example/base/api/setup-script?type=pve',
     scriptFileName: 'pulse-setup-pve.sh',
     command: 'curl pve ...',
     commandWithEnv: 'curl env pve ...',

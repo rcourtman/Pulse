@@ -730,7 +730,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
           </label>
         </Show>
         <Show when={form().protocol === 'http' || form().protocol === 'https'}>
-          <section class="space-y-4 rounded-lg border border-border bg-surface-alt/40 p-4 sm:col-span-2">
+          <section class="space-y-4 rounded-lg border border-border p-4 sm:col-span-2">
             <div>
               <h3 class="text-sm font-semibold text-base-content">
                 What proves this service is working?

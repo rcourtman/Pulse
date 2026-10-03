@@ -101,17 +101,14 @@ describe('relayPresentation', () => {
   });
 
   it('centralizes relay availability copy', () => {
-    // Value-first copy: every surface states the user job (push notifications
-    // through the Pulse Mobile app, no port forwarding/VPN), not transport
-    // mechanics.
-    expect(RELAY_SETTINGS_DESCRIPTION).toContain('Pulse Mobile app');
-    expect(RELAY_SETTINGS_DESCRIPTION).toContain('push notifications');
-    expect(RELAY_SETTINGS_DESCRIPTION).toContain('no port forwarding or VPN');
-    expect(RELAY_LICENSE_REQUIRED_MESSAGE).toContain('Pulse Mobile app');
-    expect(RELAY_LICENSE_REQUIRED_MESSAGE).toContain('push notifications');
-    expect(RELAY_LICENSE_REQUIRED_MESSAGE).toContain('Available with Relay and Pro plans');
-    expect(RELAY_LICENSE_REQUIRED_MESSAGE).not.toContain('Relay or Pro');
-    expect(RELAY_PAIRING_AVAILABILITY_TITLE).toBe('Pair Pulse Mobile through Relay');
+    // Pulse Mobile retires on 31 March 2027 and Relay is no longer sold, so the
+    // copy states the end date and never offers Relay as a plan.
+    expect(RELAY_SETTINGS_DESCRIPTION).toContain('Pulse Mobile');
+    expect(RELAY_SETTINGS_DESCRIPTION).toContain('retired on 31 March 2027');
+    expect(RELAY_LICENSE_REQUIRED_MESSAGE).toContain('retired on 31 March 2027');
+    expect(RELAY_LICENSE_REQUIRED_MESSAGE).toContain('ntfy, Gotify, or Pushover');
+    expect(RELAY_LICENSE_REQUIRED_MESSAGE).not.toContain('Available with Relay');
+    expect(RELAY_PAIRING_AVAILABILITY_TITLE).toBe('Pair Pulse Mobile');
     expect(RELAY_PAIRING_AVAILABILITY_MESSAGE).toContain('QR code');
     expect(RELAY_PAIRING_AVAILABILITY_MESSAGE).toContain('deep link');
     expect(RELAY_PAIRING_AVAILABILITY_MESSAGE).toContain('push notifications');
@@ -119,7 +116,7 @@ describe('relayPresentation', () => {
     expect(RELAY_ENABLE_HELP_TEXT).toContain('No inbound ports');
     expect(RELAY_ACTIVATION_REQUIRED_LABEL).toBe('Activation required');
     expect(RELAY_ACTIVATION_REQUIRED_MESSAGE).toContain('active Relay token');
-    expect(RELAY_ACTIVATION_REQUIRED_MESSAGE).toContain('Relay-capable plan');
+    expect(RELAY_ACTIVATION_REQUIRED_MESSAGE).not.toContain('Relay-capable plan');
   });
 
   it('does not retain retired Relay price or trial-era onboarding copy', () => {

@@ -1513,6 +1513,11 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const hasCachedResources = cacheEntry.hasSnapshot;
 
   const [resources, setResources] = createStore<Resource[]>(initialResources);
+  const [resourceSnapshotChange, setResourceSnapshotChange] = createSignal<{
+    version: number;
+    changedIds: ReadonlySet<string> | null;
+  }>({ version: 0, changedIds: null });
+  let resourceSnapshotVersion = 0;
   const [policyPosture, setPolicyPosture] = createSignal<ResourcePolicyPostureSummary | null>(
     initialPolicyPosture,
   );
@@ -1541,6 +1546,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       return;
     }
     setResources(reconcile(next, { key: 'id' }));
+    setResourceSnapshotChange({ version: ++resourceSnapshotVersion, changedIds: null });
     setPolicyPosture(targetEntry.policyPosture);
     setAggregations(targetEntry.aggregations);
     setFacets(targetEntry.facets);
@@ -1903,6 +1909,12 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       projectedFacetResources === null
         ? cacheEntry.facets
         : buildUnifiedResourceFacets(projectedFacetResources);
+    // The all-resources route shares this cache object. Keep its prior state
+    // before publishing the new generation so it can use the same bounded
+    // changed-ID path as source-scoped projections.
+    const previousProjectedResources = cacheEntry.resources;
+    const previousCacheRealtimeVersion = cacheEntry.realtimeVersion;
+    const previousCacheHasSnapshot = cacheEntry.hasSnapshot;
     const now = Date.now();
     clearInitialHydrationTimeout();
     setUnifiedResourcesCache(allResourcesEntry, mergedWsResources, now);
@@ -1935,10 +1947,10 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     }
 
     const cacheEntryCatchUp =
-      cacheEntry.hasSnapshot &&
-      cacheEntry.realtimeVersion > 0 &&
+      previousCacheHasSnapshot &&
+      previousCacheRealtimeVersion > 0 &&
       resolvedProjectedResources === projectedResources
-        ? resolveCatchUpMeta(cacheEntry.realtimeVersion)
+        ? resolveCatchUpMeta(previousCacheRealtimeVersion)
         : null;
     const canPatchProjectionIncrementally = cacheEntryCatchUp !== null;
     const changedResourceTouchesAgent =
@@ -1955,9 +1967,6 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
         )
       : null;
 
-    // Captured before the cache write below replaces it: the fast-commit
-    // eligibility check needs the row the instance store currently mirrors.
-    const previousProjectedResources = cacheEntry.resources;
     setUnifiedResourcesCache(
       cacheEntry,
       resolvedProjectedResources,
@@ -2008,6 +2017,10 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
           }
         });
       }
+      setResourceSnapshotChange({
+        version: ++resourceSnapshotVersion,
+        changedIds: incrementalPatchIndices === null ? null : cacheEntryCatchUp!.changedIds,
+      });
       setPolicyPosture(cacheEntry.policyPosture);
       setAggregations(cacheEntry.aggregations);
       setFacets(cacheEntry.facets);
@@ -2090,6 +2103,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     batch(() => {
       setError(undefined);
       setResources(reconcile(scopedResources, { key: 'id' }));
+      setResourceSnapshotChange({ version: ++resourceSnapshotVersion, changedIds: null });
       setPolicyPosture(scopedPolicyPosture);
       setAggregations(scopedAggregations);
       setFacets(scopedFacets);
@@ -2137,6 +2151,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
 
   return {
     resources: () => resources,
+    resourceSnapshotChange,
     policyPosture,
     aggregations,
     facets,

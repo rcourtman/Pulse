@@ -10,7 +10,7 @@ import {
 import { createAuthenticatedStorageState } from "./helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const EXPECTED_TELEMETRY_SCHEMA_VERSION = 17;
+const EXPECTED_TELEMETRY_SCHEMA_VERSION = 18;
 
 type WorkerFixtures = {
   authStorageStatePath: string;
@@ -66,6 +66,9 @@ async function readTelemetryPreview(page: Page) {
     active_alerts_warning: number;
     alerts_resolution_under_15m_30d: number;
     alert_active_state_persistence_degraded_tenants: number;
+    update_channel: string;
+    update_check_outcome: string;
+    update_available: boolean;
   };
 }
 
@@ -137,6 +140,22 @@ test.describe("Telemetry disclosure", () => {
     expect(
       initialPreview.alert_active_state_persistence_degraded_tenants,
     ).toBeGreaterThanOrEqual(0);
+    // Schema v18 update discovery is always present and closed (#2285).
+    expect(["stable", "rc", "unknown"]).toContain(
+      initialPreview.update_channel,
+    );
+    expect([
+      "not_checked",
+      "up_to_date",
+      "available",
+      "no_release",
+      "rate_limited",
+      "network_error",
+      "metadata_error",
+      "skipped",
+      "error",
+    ]).toContain(initialPreview.update_check_outcome);
+    expect(typeof initialPreview.update_available).toBe("boolean");
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(
