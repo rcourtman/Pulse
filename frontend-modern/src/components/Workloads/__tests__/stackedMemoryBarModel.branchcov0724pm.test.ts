@@ -231,7 +231,7 @@ describe('stackedMemoryBarModel (branch coverage 0724pm)', () => {
     });
 
     it('counts the padding the label chip carries in StackedMemoryBar', () => {
-      expect(stackedMemoryBarSource).toContain('bg-surface/80 px-1 text-center');
+      expect(stackedMemoryBarSource).toContain('px-1 text-center');
     });
   });
 });
