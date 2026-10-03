@@ -38,6 +38,28 @@ failed/uncertain terminal evidence privately. An unresolved estate blocks later
 mutation. No source-worker production capability, package upgrade, Relay copy
 activation or credential is added.
 
+Receipt I/O failure must not skip the owned stop/restore or shorten either
+recovery observation window. Physical restoration and complete observations
+remain distinct from retained evidence: any phase/terminal write loss yields
+failed, unverified `observation_failed` evidence and blocks later mutation,
+even when the old runtime/data are restored. The capture remains private and
+retained. No OS error text or private path is returned. A missing terminal may
+remain nonterminal on disk; it cannot be fabricated as verified.
+
+The bootstrap observes the exact child's closed systemd result before accepting
+a terminal, including favourable JSON made visible by replacement before a
+failed directory fsync. The child retains `RemainAfterExit=yes` and failed
+units are not automatically collected. Running, missing, malformed or
+contradictory child/receipt evidence is not acceptance. This is terminal
+observation of the existing transaction, not another dispatch/admission route.
+Receipt loss exits 2 rather than an ordinary failed-operation exit 1; new
+attempts cannot clear a prior child-bound terminal whose exit disagrees. Older
+unbound receipts gain no retrospective result.
+Connected verification is in `test_demo_runtime_transaction.py`: receipt I/O
+faults after stop/replacement and through recovery preserve complete watches,
+capture/runtime/data and cancellation ownership; collector controls cover
+writer closure, contradictory exits, unavailable state and repeated non-replay.
+
 SSH observes, but never owns or cancels, the systemd child. Durable intent
 precedes submission; the exact request identity is not replayed after a lost
 response. Forward cancellation initiates restoration; recovery ignores

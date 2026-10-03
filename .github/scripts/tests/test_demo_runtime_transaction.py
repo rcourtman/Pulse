@@ -61,6 +61,7 @@ class FixtureHost(engine.Host):
         self.co_host_change = False
         self.co_pid = 200
         self.transaction = None
+        self.prior_exit = 0
 
     def now(self):
         return self.clock
@@ -71,6 +72,9 @@ class FixtureHost(engine.Host):
     def identity(self, hostname):
         if hostname != "fixture":
             raise engine.Failure("host-identity")
+
+    def prior_closed(self, attempt, status):
+        return self.prior_exit == engine.TERMINAL_EXIT[status]
 
     def state(self):
         state = {"ActiveState": "active", "SubState": "running", "MainPID": str(self.pid), "NRestarts": "0"}
@@ -251,6 +255,132 @@ class TransactionTest(unittest.TestCase):
         self.assertEqual(receipt["recovery"]["runtime_sha256"], receipt["runtime_snapshot_sha256"])
         self.assertEqual(receipt["recovery"]["elapsed_seconds"], 300)
 
+    def receipt_fault(self, status, *, persistent=False, after_replace=False):
+        """Fault only receipt I/O, leaving the real capture/restore usable."""
+        original = engine.atomic_json
+        fired = []
+
+        def write(path, value):
+            if path == self.attempt / "receipt.json" and (
+                    value["status"] == status or (persistent and fired)):
+                fired.append(value["status"])
+                if after_replace:
+                    original(path, value)
+                raise OSError("private fixture path must not appear in receipt")
+            return original(path, value)
+
+        return patch.object(engine, "atomic_json", side_effect=write), fired
+
+    def assert_observation_failure_restored(self, tx, result, status):
+        receipt = tx.receipt
+        self.assertEqual((result, receipt["status"], receipt["rollback"]),
+                         (2, "observation_failed", "unverified"))
+        self.assertTrue(receipt["recovery_required"])
+        self.assertIn(status, receipt["observation_failures"])
+        self.assertEqual(receipt["recovery"]["elapsed_seconds"], 300)
+        self.assertEqual(receipt["recovery"]["samples"], 61)
+        self.assertEqual(engine.estate_hash(self.paths), self.before)
+        self.assertEqual(engine.estate_hash(self.untouched), self.untouched_before)
+        self.assertEqual(self.paths["version"].read_text(), "6.4.5\n")
+        self.assertEqual(self.host.runtime_version, "6.4.5")
+        self.assertEqual((self.host.stops, self.host.starts),
+                         (2, 1 if status == "applying" else 2))
+        self.assertTrue(receipt["snapshot_retained"])
+        self.assertTrue((self.attempt / "snapshot/data/persisted-history").exists())
+        self.assertNotIn("private fixture", json.dumps(receipt))
+
+    def run_fault(self, status, **fault):
+        req = request("update"); req["version"] = "v6.4.6"
+        tx = engine.Transaction(self.host, req, self.attempt)
+        self.host.transaction = tx
+        self.host.fail_at = 55 if status in {"recovering", "rolled_back"} else None
+        writer, fired = self.receipt_fault(status, **fault)
+        with writer:
+            result = tx.run()
+        self.assertTrue(fired)
+        self.assert_observation_failure_restored(tx, result, status)
+        return tx
+
+    def test_receipt_failure_after_stop_does_not_abandon_original_service(self):
+        tx = self.run_fault("applying")
+        self.assertEqual(self.host.install_count, 0)
+        self.assertEqual(tx.receipt, json.loads((self.attempt / "receipt.json").read_text()))
+
+    def test_terminal_forward_receipt_failure_restores_changed_runtime(self):
+        tx = self.run_fault("committed")
+        self.assertEqual(tx.receipt["forward"]["elapsed_seconds"], 300)
+        self.assertEqual(self.host.install_count, 1)
+        self.assertEqual(tx.receipt, json.loads((self.attempt / "receipt.json").read_text()))
+
+    def test_recovering_receipt_failure_cannot_prevent_restoration(self):
+        tx = self.run_fault("recovering")
+        self.assertEqual(tx.receipt["failure"], "new-service-crash")
+        self.assertEqual(tx.receipt["forward"]["elapsed_seconds"], 50)
+        self.assertEqual(tx.receipt, json.loads((self.attempt / "receipt.json").read_text()))
+
+    def test_recovery_terminal_receipt_failure_retains_full_restoration(self):
+        tx = self.run_fault("rolled_back")
+        self.assertEqual(tx.receipt["observed_outcome"], "rolled_back")
+        self.assertEqual(tx.receipt["failure"], "new-service-crash")
+        self.assertEqual(tx.receipt, json.loads((self.attempt / "receipt.json").read_text()))
+
+    def test_persistent_receipt_failure_keeps_capture_and_full_cancel_safe_recovery(self):
+        self.host.cancel_in_recovery = True
+        previous = signal.getsignal(signal.SIGTERM)
+        tx = self.run_fault("recovering", persistent=True)
+        self.assertEqual(tx.receipt["failure"], "new-service-crash")
+        self.assertEqual(tx.receipt["observation_failures"], ["recovering", "observation_failed"])
+        retained = json.loads((self.attempt / "receipt.json").read_text())
+        self.assertEqual(retained["status"], "applying")
+        self.assertNotIn(retained["status"], engine.TERMINAL)
+        self.assertFalse(self.host.cancel_in_recovery)
+        self.assertEqual(signal.getsignal(signal.SIGTERM), previous)
+        # Lost terminal evidence blocks a different attempt without touching it.
+        self.attempt = self.root / "attempts" / ("b" * 64); self.attempt.mkdir()
+        stops = self.host.stops
+        code, receipt = self.run_transaction()
+        self.assertEqual((code, receipt["failure"]), (1, "prior-recovery-required"))
+        self.assertEqual(self.host.stops, stops)
+
+    def test_visible_forward_receipt_does_not_make_failed_fsync_an_acceptance(self):
+        tx = self.run_fault("committed", persistent=True, after_replace=True)
+        self.assertEqual(tx.receipt["failure"], "receipt-observation")
+        self.assertEqual(json.loads((self.attempt / "receipt.json").read_text())["status"], "observation_failed")
+
+    def test_stale_visible_terminal_cannot_unblock_new_mutation_after_writer_failure(self):
+        for status in ("committed", "rolled_back", "refused"):
+            with self.subTest(status=status):
+                (self.attempt / "receipt.json").write_text(json.dumps({"status": status, "child_result_required": True}))
+                original = self.attempt
+                self.attempt = self.root / "attempts" / ("b" * 64); self.attempt.mkdir()
+                self.host.prior_exit = 2
+                code, receipt = self.run_transaction()
+                self.assertEqual((code, receipt["failure"]), (1, "prior-recovery-required"))
+                self.assertEqual(self.host.stops, 0)
+                self.assertEqual(engine.estate_hash(self.paths), self.before)
+                (self.attempt / "receipt.json").unlink(); self.attempt.rmdir(); self.attempt = original
+
+    def test_noop_terminal_failure_never_restarts_or_reports_healthy_acceptance(self):
+        self.host.profile(request(), False)
+        writer, _ = self.receipt_fault("healthy_noop")
+        with writer:
+            code, receipt = self.run_transaction()
+        self.assertEqual((code, receipt["status"]), (2, "observation_failed"))
+        self.assertEqual(receipt["failure"], "receipt-observation")
+        self.assertEqual(receipt["forward"]["elapsed_seconds"], 300)
+        self.assertEqual((self.host.stops, self.host.starts), (0, 0))
+
+    def test_lock_refusal_receipt_error_stays_failed_without_touching_estate(self):
+        lock = self.root / "host.lock"
+        fd = os.open(lock, os.O_CREAT | os.O_RDWR, 0o600); self.addCleanup(os.close, fd)
+        engine.fcntl.flock(fd, engine.fcntl.LOCK_EX | engine.fcntl.LOCK_NB)
+        (self.attempt / "request.json").write_text(json.dumps(request()))
+        writer, _ = self.receipt_fault("refused", persistent=True)
+        with writer, patch.object(engine, "LOCK", lock), patch.object(engine.sys, "argv", ["transaction", str(self.attempt)]):
+            self.assertEqual(engine.main(), 2)
+        self.assertEqual(self.host.stops, 0)
+        self.assertEqual(engine.estate_hash(self.paths), self.before)
+
     def test_payload_version_mismatch_restores_without_installing(self):
         (self.attempt / "version").write_text("6.4.7\n")
         code, receipt = self.run_transaction("update", "v6.4.6")
@@ -383,6 +513,21 @@ class TransactionTest(unittest.TestCase):
 
 
 class InputAndCommandTest(unittest.TestCase):
+    def test_prior_terminal_result_rejects_missing_and_failed_writer_evidence(self):
+        host = engine.Host(); attempt = Path("/fixed/attempts") / ("a" * 64)
+        for status, expected in engine.TERMINAL_EXIT.items():
+            body = f"ActiveState={'active' if expected == 0 else 'failed'}\nSubState={'exited' if expected == 0 else 'failed'}\nMainPID=0\nExecMainCode=1\nExecMainStatus={expected}\n"
+            with self.subTest(status=status), patch.object(host, "command", return_value=body) as command:
+                self.assertTrue(host.prior_closed(attempt, status))
+                self.assertEqual(command.call_args.args[0][2], "pulse-demo-" + "a" * 32)
+            with patch.object(host, "command", return_value=body.replace(f"ExecMainStatus={expected}", "ExecMainStatus=2")):
+                self.assertFalse(host.prior_closed(attempt, status))
+        for body in ("", "MainPID=bad", "ActiveState=inactive\nSubState=dead"):
+            with patch.object(host, "command", return_value=body):
+                self.assertFalse(host.prior_closed(attempt, "committed"))
+        with patch.object(host, "command", side_effect=engine.Failure("command-unavailable")):
+            self.assertFalse(host.prior_closed(attempt, "committed"))
+
     def test_cohost_check_uses_the_existing_relay_health_route(self):
         self.assertEqual(engine.RELAY_HEALTH, "https://relay.pulserelay.pro/healthz")
 
@@ -460,6 +605,8 @@ class DispatchLifecycleTest(unittest.TestCase):
         self.assertGreater(4000, 45 * 60 + 20 * 60)
         self.assertNotIn("'--wait'", source)
         self.assertNotIn("systemctl', 'stop'", source)
+        self.assertIn("RemainAfterExit=yes", source)
+        self.assertNotIn("'--collect'", source)
 
     def test_bootstrap_retains_intent_and_repeated_or_uncertain_launch_does_not_replay(self):
         # Execute the real bootstrap with only its filesystem/root/systemd/clock
@@ -474,6 +621,8 @@ class DispatchLifecycleTest(unittest.TestCase):
                 payload = {"request": request(), "source": "c291cmNl", "binary": "", "version_file": ""}
 
                 def launch(argv, **kwargs):
+                    if argv[0] == "systemctl":
+                        return subprocess.CompletedProcess(argv, 0, b"ActiveState=active\nSubState=exited\nMainPID=0\nExecMainCode=1\nExecMainStatus=0\n")
                     calls.append(argv)
                     attempt = next((root / "attempts").iterdir())
                     if uncertain:
@@ -498,6 +647,75 @@ class DispatchLifecycleTest(unittest.TestCase):
                 self.assertEqual(attempt.stat().st_mode & 0o777, 0o700)
                 if uncertain:
                     self.assertEqual(json.loads((attempt / "launch.json").read_text())["state"], "uncertain")
+
+    def test_terminal_observer_requires_writer_closure_without_replay_or_stale_success(self):
+        cases = [
+            ("committed", "success", 0, "committed"),
+            ("committed", "failure", 1, "uncertain"),
+            ("healthy_noop", "signal", 1, "uncertain"),
+            ("observation_failed", "evidence_failure", 1, "observation_failed"),
+            ("rolled_back", "failure", 1, "rolled_back"),
+            ("rolled_back", "evidence_failure", 1, "uncertain"),
+            ("committed", "malformed", 1, "uncertain"),
+            ("committed", "unavailable", 1, "uncertain"),
+            ("committed", "missing", 1, "uncertain"),
+            ("committed", "timeout", 1, "uncertain"),
+            ("committed", "running", 1, "uncertain"),
+        ]
+        for receipt_status, child_status, expected_code, expected_status in cases:
+            with self.subTest(receipt=receipt_status, child=child_status), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory) / "state"
+                source = dispatcher.BOOTSTRAP.replace("'/var/lib/pulse-deploy/demo'", repr(str(root)))
+                source = source.replace("root.stat().st_uid == 0", "root.stat().st_uid == os.getuid()")
+                clock, launches, reads = [0], [], []
+                payload = {"request": request(), "source": "c291cmNl", "binary": "", "version_file": ""}
+
+                class Input:
+                    def read(self, _limit):
+                        return json.dumps(payload)
+
+                def command(argv, **kwargs):
+                    if argv[0] == "systemd-run":
+                        launches.append(argv)
+                        attempt = next((root / "attempts").iterdir())
+                        (attempt / "receipt.json").write_text(json.dumps({"status": receipt_status}))
+                        return subprocess.CompletedProcess(argv, 0)
+                    self.assertEqual(argv[:2], ["systemctl", "show"])
+                    reads.append(argv)
+                    # Even a visible terminal must wait for its writing child.
+                    if len(reads) == 1 or child_status == "running":
+                        body = b"ActiveState=active\nSubState=running\nMainPID=123\nExecMainCode=0\nExecMainStatus=0\n"
+                    elif child_status == "timeout":
+                        raise subprocess.TimeoutExpired("systemctl", 20)
+                    else:
+                        body = {
+                            "success": b"ActiveState=active\nSubState=exited\nMainPID=0\nExecMainCode=1\nExecMainStatus=0\n",
+                            "failure": b"ActiveState=failed\nSubState=failed\nMainPID=0\nExecMainCode=1\nExecMainStatus=1\n",
+                            "evidence_failure": b"ActiveState=failed\nSubState=failed\nMainPID=0\nExecMainCode=1\nExecMainStatus=2\n",
+                            "signal": b"ActiveState=failed\nSubState=failed\nMainPID=0\nExecMainCode=2\nExecMainStatus=9\n",
+                            "malformed": b"MainPID=not-a-pid\n",
+                            "unavailable": b"",
+                            "missing": b"ActiveState=inactive\nSubState=dead\nMainPID=0\nExecMainCode=0\nExecMainStatus=0\n",
+                        }[child_status]
+                    return subprocess.CompletedProcess(argv, 1 if child_status == "unavailable" and len(reads) > 1 else 0, body)
+
+                with patch.object(os, "geteuid", return_value=0), patch.object(subprocess, "run", side_effect=command), \
+                     patch.object(dispatcher.sys, "stdin", Input()), patch("time.monotonic", side_effect=lambda: clock[0]), \
+                     patch("time.sleep", side_effect=lambda seconds: clock.__setitem__(0, clock[0] + seconds)), patch("builtins.print") as output:
+                    for _ in range(2):
+                        reads.clear(); clock[0] = 0
+                        with self.assertRaises(SystemExit) as exit_result:
+                            exec(compile(source, "fixed-bootstrap", "exec"), {})
+                        self.assertEqual(exit_result.exception.code, expected_code)
+                        result = json.loads(output.call_args.args[0])
+                        self.assertEqual(result["status"], expected_status)
+                        self.assertGreaterEqual(len(reads), 2)
+                        if expected_status == "uncertain":
+                            self.assertTrue(result["recovery_required"])
+                self.assertEqual(len(launches), 1)
+                # Collection must not edit or fabricate the host receipt.
+                attempt = next((root / "attempts").iterdir())
+                self.assertEqual(json.loads((attempt / "receipt.json").read_text())["status"], receipt_status)
 
 
 class NativeAdmissionTest(unittest.TestCase):

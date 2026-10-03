@@ -46,8 +46,9 @@ if not attempt.exists():
     for directory in (attempt, root / 'attempts', root, root.parent):
         dfd = os.open(directory, os.O_DIRECTORY); os.fsync(dfd); os.close(dfd)
     try:
-        child = subprocess.run(['systemd-run', '--quiet', '--collect',
+        child = subprocess.run(['systemd-run', '--quiet',
                                 '--unit=pulse-demo-' + identity[:32],
+                                '--property=RemainAfterExit=yes',
                                 '--property=RuntimeMaxSec=45min',
                                 '--property=TimeoutStopSec=20min', '--property=KillMode=mixed',
                                 '/usr/bin/python3', str(attempt / 'transaction.py'), str(attempt)],
@@ -63,16 +64,45 @@ if not attempt.exists():
 os.close(fd)
 # Closing or losing this observer never stops the independently owned unit.
 deadline = time.monotonic() + 4000
-terminal = {'committed', 'healthy_noop', 'rolled_back', 'rollback_failed', 'recovery_required', 'refused'}
+terminal = {'committed', 'healthy_noop', 'rolled_back', 'rollback_failed', 'recovery_required', 'refused', 'observation_failed'}
 while time.monotonic() < deadline:
     try:
         receipt = json.loads((attempt / 'receipt.json').read_text())
-    except (FileNotFoundError, ValueError):
+    except (OSError, ValueError):
         receipt = None
     if receipt and receipt.get('status') in terminal:
-        receipt['request_identity'] = identity
-        print(json.dumps(receipt))
-        sys.exit(0 if receipt['status'] in {'committed', 'healthy_noop'} else 1)
+        # A replace can become visible before directory fsync fails. Never
+        # accept that provisional favourable receipt while its writer is still
+        # running, or after the writer exits failed. Retain the unit's result;
+        # reading it neither launches nor stops a child.
+        try:
+            child = subprocess.run(['systemctl', 'show', 'pulse-demo-' + identity[:32],
+                                    '--property=ActiveState,SubState,MainPID,ExecMainCode,ExecMainStatus',
+                                    '--no-pager'], capture_output=True, timeout=20)
+            if child.returncode:
+                break
+            fields = dict(line.split('=', 1) for line in child.stdout.decode().splitlines() if '=' in line)
+            pid = int(fields['MainPID'])
+            code = int(fields['ExecMainCode'])
+            status = int(fields['ExecMainStatus'])
+            pending = (pid > 0 and fields['ActiveState'] in {'activating', 'active', 'deactivating'})
+            complete = (pid == 0 and code in {1, 2, 3}
+                        and (fields['ActiveState'], fields['SubState']) in {('active', 'exited'), ('failed', 'failed')})
+            if complete:
+                succeeded = (fields['ActiveState'], fields['SubState'], code, status) == ('active', 'exited', 1, 0)
+                receipt['request_identity'] = identity
+                receipt['child_result'] = {'exit_code': status if code == 1 else None,
+                                           'signal': status if code in {2, 3} else None}
+                favourable = receipt['status'] in {'committed', 'healthy_noop'}
+                expected = 0 if favourable else (2 if receipt['status'] == 'observation_failed' else 1)
+                if code != 1 or status != expected or favourable != succeeded:
+                    receipt.update(status='uncertain', failure='terminal-child-mismatch', recovery_required=True)
+                print(json.dumps(receipt))
+                sys.exit(0 if favourable and succeeded else 1)
+            if not pending:
+                break
+        except (OSError, ValueError, KeyError, subprocess.TimeoutExpired):
+            break
     launch = attempt / 'launch.json'
     if launch.exists() and json.loads(launch.read_text()).get('state') == 'uncertain':
         break

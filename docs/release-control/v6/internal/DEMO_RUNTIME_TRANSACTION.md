@@ -32,6 +32,22 @@ workflow queue does not exclude another repository's host deployment.
   mutation. A prior failed baseline is not a healthy rollback. No crash dump is
   induced. Receipt fields contain fixed diagnostics and identities, never raw
   journal/HTTP bodies, environment values or snapshot contents.
+- Phase/terminal receipt I/O failure cannot gate owned stop, restoration or the
+  full recovery watch. It retains captures and the original failure. Even an
+  observed full restored window is **unverified** after evidence loss:
+  `observation_failed`/`recovery_required` blocks a new mutation. A persistently
+  unwritable receipt may leave only a nonterminal record; missing evidence is
+  not converted to acceptance or retried as a new request.
+- Terminal collection also observes the original systemd child's exit, without
+  restarting or stopping it. `RemainAfterExit=yes` retains the closed result;
+  failed units are not collected automatically. A favourable JSON replacement
+  can become visible before its directory fsync fails, so it is provisional
+  until the writer exits successfully. Missing, malformed or contradictory
+  child evidence returns uncertainty, never a successful receipt or replay.
+  The engine exits **2** on receipt loss, distinct from **1** for an observed
+  failed operation; a stale `rolled_back` JSON cannot hide that loss. New
+  attempts also reconcile the retained child of a prior source-bound terminal
+  that requires this binding. Older receipts gain no missing exit evidence.
 - Source-bound intent precedes systemd submission. An identical request reads
   its receipt and cannot start another child after a lost response. SSH loss
   does not terminate the child. TERM/INT/HUP cannot abort owned recovery. The
@@ -46,6 +62,11 @@ service, journal and HTTP adapters. Tests retain delayed 55/299-second failure,
 changed executable/VERSION/data rollback, cancellation, failed and unhealthy
 recovery, headroom refusal, shared-lock contention, source mismatch, journal
 failure, cohost restart, source-bound repeated/lost submission and no-op proof.
+Receipt faults after stop, after runtime replacement and during restoration
+exercise the real filesystem engine, including persistent write loss,
+post-replacement fsync loss, cancellation and failed-terminal non-replay. The
+unchanged-parent control retains the adverse skipped restoration. Collection
+controls wait for writer closure and reject favourable stale terminals.
 The production window is not shortened. This is **not native acceptance**.
 
 `demo-runtime-native.yml` now carries the next executable acceptance rather

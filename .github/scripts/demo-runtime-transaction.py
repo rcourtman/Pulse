@@ -42,6 +42,7 @@ DEMO_HISTORY = ("ai_incidents.json", "ai_incidents.json.tmp",
                 "alerts/events.db", "alerts/events.db-shm", "alerts/events.db-wal")
 CRASH = re.compile(r"\bpanic\b|\bfatal error\b|segmentation fault|core dumped|watchdog timeout", re.I)
 TERMINAL = {"committed", "healthy_noop", "rolled_back", "refused"}
+TERMINAL_EXIT = {"committed": 0, "healthy_noop": 0, "rolled_back": 1, "refused": 1}
 MAX_BINARY = 128 * 1024 * 1024
 
 
@@ -201,6 +202,20 @@ class Host:
         if result.returncode or len(result.stdout) > 1024 * 1024:
             raise Failure("command-failed")
         return result.stdout.decode("utf-8", errors="strict")
+
+    def prior_closed(self, attempt, status):
+        """Do not unblock on a stale JSON terminal from a failed writer."""
+        if not re.fullmatch(r"[0-9a-f]{64}", attempt.name):
+            return False
+        try:
+            text = self.command(["systemctl", "show", "pulse-demo-" + attempt.name[:32],
+                                 "--property=ActiveState,SubState,MainPID,ExecMainCode,ExecMainStatus", "--no-pager"])
+            fields = dict(line.split("=", 1) for line in text.splitlines() if "=" in line)
+            expected = TERMINAL_EXIT[status]
+            return (fields["ActiveState"], fields["SubState"], fields["MainPID"], fields["ExecMainCode"], fields["ExecMainStatus"]) == (
+                "active" if expected == 0 else "failed", "exited" if expected == 0 else "failed", "0", "1", str(expected))
+        except (Failure, KeyError, ValueError):
+            return False
 
     def identity(self, hostname):
         if socket.gethostname() != hostname or os.geteuid() != 0:
@@ -387,11 +402,47 @@ class Transaction:
                         "expected_version": request["version"],
                         "footprint": "server-binary-version-and-demo-data",
                         "binary_sha256": request["binary_sha256"], "version_sha256": request["version_sha256"],
-                        "forward": {}, "recovery": {}, "recovery_required": False}
+                        "forward": {}, "recovery": {}, "recovery_required": False,
+                        "observation_failures": [], "child_result_required": True}
 
     def save(self, status):
         self.receipt["status"] = status
-        atomic_json(self.attempt / "receipt.json", self.receipt)
+        try:
+            atomic_json(self.attempt / "receipt.json", self.receipt)
+        except OSError as error:
+            # Retain only the fixed phase, never an OS message/private path.
+            if status not in self.receipt["observation_failures"]:
+                self.receipt["observation_failures"].append(status)
+            raise Failure("receipt-observation") from error
+
+    def recovery_save(self, status):
+        """Receipt storage must not gate the already-owned restoration."""
+        try:
+            self.save(status)
+        except Failure as error:
+            if str(error) != "receipt-observation":
+                raise
+
+    def finish(self, status):
+        """Best-effort failed evidence is not a verified terminal outcome."""
+        self.receipt["observed_outcome"] = status
+
+        def unverified():
+            self.receipt["status"] = "observation_failed"
+            self.receipt["recovery_required"] = True
+            if self.receipt.get("rollback") == "verified":
+                self.receipt["rollback"] = "unverified"
+
+        if self.receipt["observation_failures"]:
+            unverified()
+        try:
+            self.save(self.receipt["status"] if self.receipt["observation_failures"] else status)
+        except Failure as error:
+            if str(error) != "receipt-observation":
+                raise
+            unverified()
+            # One bounded attempt to retain the failure, not to obtain a pass.
+            self.recovery_save("observation_failed")
 
     def urls(self):
         return (self.request["local_url"].rstrip("/") + "/api/health", self.request["public_url"], RELAY_HEALTH)
@@ -485,7 +536,9 @@ class Transaction:
                 if entry == self.attempt:
                     continue
                 receipt = entry / "receipt.json"
-                if not receipt.exists() or json.loads(receipt.read_text()).get("status") not in TERMINAL:
+                prior = json.loads(receipt.read_text()) if receipt.exists() else {}
+                if (prior.get("status") not in TERMINAL
+                        or (prior.get("child_result_required") and not self.host.prior_closed(entry, prior["status"]))):
                     raise Failure("prior-recovery-required")
             states = self.host.state()
             if not all(active(states[name]) for name in ("pulse-relay", "caddy")) or self.host.status(RELAY_HEALTH) != "200":
@@ -537,14 +590,14 @@ class Transaction:
                 signal.signal(sig, signal.SIG_IGN)
             if stopped:
                 try:
-                    self.save("recovering")
+                    self.recovery_save("recovering")
                     self.host.stop()
                     if "snapshot_sha256" in self.receipt:
                         self.restore()
                     if not healthy_baseline:
                         self.receipt["recovery_required"] = True
                         self.receipt["rollback"] = "unavailable-unhealthy-baseline"
-                        self.save("recovery_required")
+                        outcome = "recovery_required"
                     else:
                         cursors = self.host.cursors()
                         self.host.start()
@@ -554,15 +607,20 @@ class Transaction:
                         if any(final[name] != states[name] for name in ("pulse-relay", "caddy")):
                             raise Failure("cohost-identity-changed")
                         self.receipt["rollback"] = "verified"
-                        self.save("rolled_back")
+                        outcome = "rolled_back"
                 except Exception as recovery:
                     self.receipt["rollback"] = "failed"
                     self.receipt["recovery_failure"] = str(recovery) if isinstance(recovery, Failure) else "recovery-observation"
                     self.receipt["recovery_required"] = True
-                    self.save("rollback_failed")
+                    outcome = "rollback_failed"
+                # A terminal write failure cannot undo or interrupt recovery,
+                # nor relabel a restored estate as a failed file restoration.
+                self.finish(outcome)
             else:
-                self.save("refused")
-            return 1
+                self.finish("refused")
+            # Distinguish evidence loss from an ordinary failed-but-observed
+            # operation, even if the last visible JSON still says rolled_back.
+            return 2 if self.receipt["observation_failures"] else 1
         finally:
             for sig, handler in old_handlers.items():
                 signal.signal(sig, handler)
@@ -579,14 +637,15 @@ def main():
     transaction = Transaction(Host(), request, attempt)
     fd = None
     try:
-        LOCK.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        fd = os.open(LOCK, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            LOCK.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            fd = os.open(LOCK, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (OSError, ValueError):
+            transaction.receipt["failure"] = "host-lock-unavailable"
+            transaction.finish("refused")
+            return 2 if transaction.receipt["observation_failures"] else 1
         return transaction.run()
-    except (OSError, ValueError):
-        transaction.receipt["failure"] = "host-lock-unavailable"
-        transaction.save("refused")
-        return 1
     finally:
         if fd is not None:
             os.close(fd)
