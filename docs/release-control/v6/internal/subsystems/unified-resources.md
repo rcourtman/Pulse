@@ -35,6 +35,13 @@ count lifecycle; `browser-tests/backup-inventory.cjs` verifies production rows
 and source notices on desktop/phone. This changes no resource identity, native
 provider assessment or permission policy.
 
+The backup inventory count also remains unavailable when an HTTP200 response
+fails the client backup-envelope/row validation; transport success is not an
+observed zero. A malformed source cannot remove independently readable canonical
+server health or the other source's artifacts. Fixed diagnostics expose no
+response body. The inventory parser, mounted table and
+`browser-tests/backup-inventory-format.cjs` exercise that combined boundary.
+
 ### Guest disk freshness presentation
 
 Existing workload disk evidence retains its source reason through the row,
@@ -910,6 +917,19 @@ last success and last schedule) are relative-age values under that rule:
 `formatPlatformTableDateTimeValue` time as hover title, never as the raw RFC
 3339 string the agent reports, and the Detail column carries enough weight
 for those labelled ages to fit whole on a full-width desktop table.
+The controller row expansion carries those timestamps in full: the
+always-visible summary tables of the resource drawer render a Kubernetes
+workload-controller section (`buildKubernetesControllerSection`, in the same
+slot as the Docker container section) with the Job start and completion time,
+the CronJob schedule and last run and last success time, each as the absolute
+`formatPlatformTableDateTimeValue` time followed by its age in parentheses and
+allowed to wrap in a phone-width detail cell, plus the target,
+count, service, and scope fields the narrower layouts drop, so a phone or a
+half-width pane reaches them in one tap rather than through a collapsed
+platform-details disclosure. The `KubernetesControllersTable` phone projection
+keeps controller, kind, ready, and issues and demotes Target with
+`platform-table-phone-hidden`, so kind labels such as `DaemonSet` and
+`StatefulSet` fit whole instead of clipping in a 15 percent track.
 Duration and interval cells keep the same split: unified-resource or
 source-specific consumers own which elapsed duration, human fallback, or poll
 interval field is meaningful, while dense platform table rendering must use
@@ -2143,6 +2163,14 @@ application resource-provider or WebSocket lifecycle.
     populates only the canonical field on the REST contract, so without
     landing on `v2.uptime` ESXi hosts and VMware-backed VMs lose uptime on
     the unified-resources side even though the API payload carries it.
+    The same mapping must carry every facet the frontend reads at the top
+    level of `Resource`: the provider facets (`pmg` included) and the
+    per-source `sourceStatus`, `actionReadiness`, and `technology` fields the
+    API returns. The REST and websocket transports race on a fresh route
+    load, and a facet present only under `platformData` on the REST row left
+    the Mail Gateway table rendering every PMG column as a dash, and Docker
+    lifecycle refusals and storage freshness reading undefined, whenever the
+    REST snapshot landed last.
     That same shared cache boundary must normalize route/query type filters
     through the canonical frontend-to-`ResourceType` resolver before slicing
     the snapshot, so compatibility values such as `disk` / `physical_disk`
@@ -2666,6 +2694,11 @@ facet. Its value is owned by the backup recovery model, not by canonical
 resource identity: PBS instance and datastore form the repository scope, and
 the same value must survive the date/coverage route handoff so both views
 apply one repository selection without inventing a top-level recovery route.
+A PBS datastore resource takes its status from the storage vocabulary that PVE
+storage already uses (`available`/`unavailable` alongside online, degraded, and
+offline), so a healthy datastore is online and one PBS reports an error for is
+offline; the generic string mapper that left every datastore unknown is not a
+valid datastore status source.
 Unified-resource drawers and Kubernetes drill-down controls may own resource
 timeline filter semantics, namespace choices, and destination routes, but their
 native select chrome must compose the frontend-primitives-owned `FormSelect`.
@@ -5521,6 +5554,16 @@ read-only status and governed UpdateButton content. The boundary must preserve
 full action names, review semantics and native agent/container identity; it must
 not hide update labels to satisfy width constraints. DockerNativeTables.test.ts
 checks that the governed update action remains inside that boundary.
+A phone row (under 440px) keeps container, state, CPU, memory and the update
+control and defers the restart count to the row expansion, so the state word
+and the Update control fit whole instead of clipping to "runni…" beside an
+unreadable Restarts header. At compact width (a 1280-1536px laptop window) the
+Host, Engine and Updates columns take enough share that "docker 26.1.3", a
+host name and the Update control render whole; the percentage-only CPU and
+memory bars yield the difference. Swarm services show the rollout state as
+words ("Rollback started") with the raw token, message and completion time in
+the title, and Swarm tasks show Started as an age with the RFC3339 stamp in
+the title, matching every other platform table's time cells.
 
 ResourceDetailDrawer headings wrap long display names rather than ellipsising
 them. Overview rows may still truncate identity; keyboard expansion exposes the

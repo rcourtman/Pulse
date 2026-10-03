@@ -58,24 +58,26 @@ describe('formatPowerOnHours - boundaries', () => {
 });
 
 describe('estimateTextWidth - edge inputs', () => {
-  it('counts whitespace characters as full-width', () => {
-    expect(estimateTextWidth(' ')).toBe(13.5);
-    expect(estimateTextWidth('  ')).toBe(19);
+  it('gives a space its own narrow advance', () => {
+    // A semibold space is 2.78px in the fallback advances.
+    expect(estimateTextWidth(' ')).toBe(3);
+    expect(estimateTextWidth('  ')).toBe(6);
   });
 
-  it('counts control characters (tab, newline) as length 1', () => {
-    expect(estimateTextWidth('\t')).toBe(13.5);
-    expect(estimateTextWidth('\n')).toBe(13.5);
+  it('counts a glyph outside the measured ASCII range as a full em', () => {
+    expect(estimateTextWidth('\t')).toBe(10);
+    expect(estimateTextWidth('\n')).toBe(10);
+    expect(estimateTextWidth('—')).toBe(10);
   });
 
-  it('counts surrogate pairs as length 2 (UTF-16 code units)', () => {
+  it('counts surrogate pairs as two UTF-16 code units', () => {
     // "😀" is one code point but two UTF-16 code units -> length === 2
     expect('😀'.length).toBe(2);
-    expect(estimateTextWidth('😀')).toBe(19);
+    expect(estimateTextWidth('😀')).toBe(20);
   });
 
   it('scales linearly for very long strings', () => {
-    expect(estimateTextWidth('a'.repeat(100))).toBe(558);
+    expect(estimateTextWidth('a'.repeat(100))).toBe(589); // 100 x 5.89
   });
 
   it('is strictly monotonic with respect to length', () => {

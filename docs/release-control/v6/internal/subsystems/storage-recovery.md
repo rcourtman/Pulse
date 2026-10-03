@@ -41,6 +41,17 @@ disposal. `browser-tests/backup-inventory.cjs` uses production components,
 API adapters, router and CSS in Chromium/WebKit with synthetic HTTP responses;
 these controls are not native backup, permission, thaw or release acceptance.
 
+An HTTP success alone does not establish readable recovery evidence. The client
+validates the data envelope, source collections and consumed row fields before
+publishing that inventory. Malformed or undecodable responses invalidate that
+source atomically, not a silently truncated list or confirmed empty inventory.
+PVE's explicitly nil Go collections remain valid empty observations; absent
+fields are not nil collections. Optional unknown facts and additional fields
+retain their existing meaning, and completion flags are never coerced.
+`proxmoxBackupInventory.test.ts`, the mounted backup-table tests and
+`browser-tests/backup-inventory-format.cjs` cover this response boundary, source
+isolation and recovery without extending native protection or thaw claims.
+
 ### Backup identity, phone storage and History consent composition
 
 The Proxmox Coverage last-backup pointer selects completed PBS snapshots or PVE
@@ -2750,6 +2761,14 @@ capability over storage or recovery data.
 discriminator` and `falls back to the topology discriminator when no
 vdev layout is reported` in
     `frontend-modern/src/features/storageBackups/__tests__/storageAdapters.test.ts`.
+    When neither is reported, a Proxmox storage plugin type resolves to the
+    name the Proxmox UI gives it (`lvmthin` is LVM-Thin, `nfs` is NFS,
+    `cifs` is SMB/CIFS, `iscsi` is iSCSI, `zfs`, `btrfs`, `glusterfs`,
+    `esxi` likewise); title-casing the raw plugin name is not a label.
+    A storage the poller merged across the cluster carries the synthetic
+    `cluster` node (the mock fixture's `shared`), and its host label reads
+    "Shared" with the reporting node count when the storage lists its
+    nodes, never the raw marker.
 
 27. A rejected legacy RBAC import must not destroy the store. The import is
     transactional and leaves the legacy files in place, so a failure leaves the

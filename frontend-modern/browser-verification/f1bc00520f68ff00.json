@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "ebda81d2be79d2ee7e7ff4f665b41e1d330d87a6",
+  "verified_at": "2026-10-03T20:21:04Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "ddad24a010a2a194f37977f3c3aa3fa647b431bd65d1d75e9f5aea6d42f72692",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx": "5d7362905632cf4e69c4a878f972ac40544bda2959db2822a431bcc74ba35089"
+  },
+  "routes": [
+    "/kubernetes"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 900,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Merge of origin/main 1f140a5d38 into #2434: both files carry the PR's controller-expansion changes plus main's Tailwind 4 renames (max-w-48/max-w-52 truncation spans, rounded-sm badges, dark:bg-blue-900/25 identity IP badge), checked on a private mock stack built from the merged tree",
+    "Workload Controllers table with DaemonSet, CronJob, Job and StatefulSet rows across three mock clusters: 1440 shows Scope and Detail, 1280 and 900 hide them, 390 keeps Controller, Kind, Ready and Issues; table width equals its container at every width, 1440 clips only one long StatefulSet Service detail, 1280 and 900 clip nothing, 390 clips only long controller names",
+    "CronJob, Job and StatefulSet rows expanded at every width in light (and dark at 1440 and 390): the CronJob section shows Schedule, Last run and Last success as absolute time with age, Active, Namespace and Cluster; the Job section shows Started, Completed, Duration 5m, Target 1 completion and Succeeded; the StatefulSet shows Service, Target, Current, Ready, Available and Updated; no value in those sections clips, and only the pre-existing Identity IDs clip at 390"
+  ],
+  "interactions": [
+    "Loaded /kubernetes per viewport and colour scheme, clicked the cron-nightly-backfill, nightly-backfill-28918234 and platform-observability rows to open and close their inline drawers",
+    "Ran a scrollWidth-over-clientWidth sweep over every controllers th/td leaf and every leaf inside each open drawer",
+    "Ran vitest for src/features/kubernetes, src/components/Infrastructure and src/features/platformPage on the merged tree: 90 files, 1504 tests passed"
+  ]
+}

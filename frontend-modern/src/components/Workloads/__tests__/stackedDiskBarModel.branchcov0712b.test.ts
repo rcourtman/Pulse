@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { AnomalyReport } from '@/types/aiIntelligence';
 import type { Disk } from '@/types/api';
 
+import stackedDiskBarSource from '../StackedDiskBar.tsx?raw';
 import { buildStackedDiskBarPresentation } from '../stackedDiskBarModel';
 
 // The four small helpers under test (getDiskUsagePercent, getShortDiskLabel,
@@ -117,7 +118,8 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
   });
 
   describe('getInlineDiskText (via miniDisks[].inlineText)', () => {
-    // estimateInlineTextWidth(text) = text.length * 5.4 + 4 (module-internal).
+    // estimateInlineTextWidth(text) is the label's width at text-[9px]
+    // semibold, rounded up, plus the slot's 2px of padding (module-internal).
     it('returns the full text when slotWidth <= 0 (short-circuit)', () => {
       // slotWidth = containerWidth(0) / 1 = 0 -> first operand of the || .
       const p = buildStackedDiskBarPresentation(
@@ -130,7 +132,7 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
     });
 
     it('returns the full text when it fits within the slot', () => {
-      // 'sda1 50%' width = 8 * 5.4 + 4 = 47.2 <= slotWidth(60).
+      // 'sda1 50%' width = 46 + 2 = 48 <= slotWidth(60).
       const p = buildStackedDiskBarPresentation(
         {
           disks: [makeDisk({ mountpoint: '/dev/sda1', total: 100, used: 50, free: 50, usage: 50 })],
@@ -141,8 +143,8 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
     });
 
     it('falls back to the percent label when only it fits', () => {
-      // shortLabel 'a', percentLabel '100%'. full 'a 100%' width 36.4 > 30;
-      // '100%' width 25.6 <= 30 -> returns '100%'.
+      // shortLabel 'a', percentLabel '100%'. full 'a 100%' width 38 > 30;
+      // '100%' width 30 <= 30 -> returns '100%'.
       const p = buildStackedDiskBarPresentation(
         { disks: [makeDisk({ mountpoint: '/dev/a', total: 100, used: 100, free: 0, usage: 100 })] },
         30,
@@ -151,7 +153,7 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
     });
 
     it('falls back to the short label when the percent label does not fit but the short label does', () => {
-      // slotWidth 20: full 36.4 > 20; percent '100%' 25.6 > 20; short 'a' 9.4 <= 20 -> 'a'.
+      // slotWidth 20: full 38 > 20; percent '100%' 30 > 20; short 'a' 8 <= 20 -> 'a'.
       const p = buildStackedDiskBarPresentation(
         { disks: [makeDisk({ mountpoint: '/dev/a', total: 100, used: 100, free: 0, usage: 100 })] },
         20,
@@ -166,6 +168,26 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
         5,
       );
       expect(p.miniDisks[0].inlineText).toBe('');
+    });
+
+    it('sizes each slot after the gap between slots', () => {
+      // Two disks in a 117.58px bar (Proxmox nodes at a 900px viewport) get
+      // 57.79px each once the 2px gap is out. 'backup 80%' needs 58 + 2, so
+      // the slot keeps the percentage; splitting the bar in half had let the
+      // full text in and clipped it.
+      const disks = [
+        makeDisk({ mountpoint: '/backup', total: 100, used: 80, free: 20, usage: 80 }),
+        makeDisk({ mountpoint: '/', total: 100, used: 50, free: 50, usage: 50 }),
+      ];
+      const narrow = buildStackedDiskBarPresentation({ disks }, 117.58);
+      expect(narrow.miniDisks.map((disk) => disk.inlineText)).toEqual(['80%', '/ 50%']);
+      const wide = buildStackedDiskBarPresentation({ disks }, 122);
+      expect(wide.miniDisks[0].inlineText).toBe('backup 80%');
+    });
+
+    it('counts the padding and gap the inline slots carry in StackedDiskBar', () => {
+      expect(stackedDiskBarSource).toContain('flex h-full items-stretch gap-0.5');
+      expect(stackedDiskBarSource).toContain('overflow-hidden px-px text-center text-[9px]');
     });
   });
 
@@ -465,6 +487,47 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
       );
       expect(unknown.anomalyClass).toBe('text-yellow-400');
       expect(unknown.anomalyRatio).toBe('');
+    });
+
+    it('shows the sublabel only where the whole label fits', () => {
+      // '60% (265 GB/440 GB)' is 110.1px of text in the browser and sits in
+      // 4px of padding: a 113px bar keeps the percentage, a 115px bar fits it.
+      const GiB = 1024 ** 3;
+      const disks = [
+        makeDisk({
+          mountpoint: '/',
+          total: 440 * GiB,
+          used: 265 * GiB,
+          free: 175 * GiB,
+          usage: 60,
+        }),
+      ];
+      const narrow = buildStackedDiskBarPresentation({ disks }, 113);
+      expect(narrow.displayLabel).toBe('60%');
+      expect(narrow.displaySublabel).toBe('265 GB/440 GB');
+      expect(narrow.showSublabel).toBe(false);
+      expect(buildStackedDiskBarPresentation({ disks }, 114).showSublabel).toBe(false);
+      expect(buildStackedDiskBarPresentation({ disks }, 115).showSublabel).toBe(true);
+      expect(stackedDiskBarSource).toContain('text-ellipsis px-0.5 text-center');
+    });
+
+    it('leaves room for the anomaly marker that shares the line', () => {
+      // ' 2.5x' adds 25.35px, taking the threshold from 115 to 140.
+      const GiB = 1024 ** 3;
+      const props = {
+        disks: [
+          makeDisk({
+            mountpoint: '/',
+            total: 440 * GiB,
+            used: 265 * GiB,
+            free: 175 * GiB,
+            usage: 60,
+          }),
+        ],
+        anomaly: makeAnomaly({ baseline_mean: 10, current_value: 25 }),
+      };
+      expect(buildStackedDiskBarPresentation(props, 139).showSublabel).toBe(false);
+      expect(buildStackedDiskBarPresentation(props, 140).showSublabel).toBe(true);
     });
 
     it('suppresses the sublabel when containerWidth is too narrow to fit it', () => {

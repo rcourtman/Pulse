@@ -987,3 +987,27 @@ func demoProxmoxNodeIsOffline(graph FixtureGraph, nodeName string) bool {
 	}
 	return false
 }
+
+func TestDemoDockerContainerNamesAreUniquePerHost(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.DockerHostCount = 3
+	cfg.DockerContainersPerHost = 8
+
+	graph := buildFixtureGraph(cfg, time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC))
+
+	// Docker refuses two containers with one name on a host. The demo used to
+	// reuse a curated profile for a second round and show two "customer-portal"
+	// rows per host, which also doubled every image's "used by" list.
+	for _, host := range graph.State.DockerHosts {
+		seen := map[string]struct{}{}
+		for _, container := range host.Containers {
+			if _, dup := seen[container.Name]; dup {
+				t.Fatalf("host %s names two containers %q", host.Hostname, container.Name)
+			}
+			seen[container.Name] = struct{}{}
+		}
+	}
+	if !dockerContainerNameExists(graph, "customer-portal") {
+		t.Fatal("expected the first round of curated names to stay unchanged")
+	}
+}

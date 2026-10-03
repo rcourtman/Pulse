@@ -1291,3 +1291,34 @@ func TestRebaseMockReplicationJobsLeavesUnchangedJobsAlone(t *testing.T) {
 		t.Fatalf("expected at most one job to roll over in one second, %d of %d stayed put", unchanged, len(jobs))
 	}
 }
+
+func TestBuildFixtureStateMergesSharedPBSStorageLikeThePoller(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.NodeCount = 5
+
+	data := buildFixtureState(cfg)
+
+	// Issue 1049: the poller folds a shared storage reported by every node
+	// into one cluster-scoped row. The fixture must not fan it back out into
+	// one row per node, each with its own usage figure.
+	seen := map[string]models.Storage{}
+	for _, storage := range data.Storage {
+		if storage.Type != "pbs" {
+			continue
+		}
+		key := storage.Instance + "/" + storage.Name
+		if _, dup := seen[key]; dup {
+			t.Fatalf("shared PBS storage %s appears more than once", key)
+		}
+		seen[key] = storage
+		if storage.Node != "cluster" || storage.NodeCount < 2 || len(storage.Nodes) != storage.NodeCount {
+			t.Fatalf("shared PBS storage %s is not cluster-scoped: node=%q nodes=%v count=%d", key, storage.Node, storage.Nodes, storage.NodeCount)
+		}
+		if !strings.HasSuffix(storage.ID, "-cluster-"+storage.Name) {
+			t.Fatalf("shared PBS storage %s keeps a node-scoped id %q", key, storage.ID)
+		}
+	}
+	if len(seen) == 0 {
+		t.Fatal("expected shared PBS storage in the fixture")
+	}
+}
