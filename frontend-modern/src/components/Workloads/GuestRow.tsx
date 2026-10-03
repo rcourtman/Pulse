@@ -1,4 +1,4 @@
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createMemo, createSignal, Show, splitProps } from 'solid-js';
 import BoxIcon from 'lucide-solid/icons/box';
 import type { VM } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
@@ -50,6 +50,7 @@ export type { GuestRowProps, WorkloadIOEmphasis } from './guestRowModel';
 import { getGuestColumnStyle } from './guestRowModel';
 
 export function GuestRow(props: GuestRowProps) {
+  const [rowActionProps] = splitProps(props, ['onClick']);
   const {
     agentVersion,
     appContainerRuntimeBadge,
@@ -242,8 +243,8 @@ export function GuestRow(props: GuestRowProps) {
             : undefined
         }
         data-summary-row-active={props.isSummaryHighlighted && !props.isExpanded ? 'true' : 'false'}
-        on:click={props.onClick ? nativeRowClickTarget : undefined}
-        onClick={props.onClick}
+        on:click={rowActionProps.onClick ? nativeRowClickTarget : undefined}
+        {...rowActionProps}
         {...interactiveRowHandlers}
       >
         {/* Name - always visible */}
