@@ -1610,11 +1610,12 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             "# Pulse v6.5.1", "# Pulse v6.5.0-rc.1", "# Pulse v6.5.00",
             "# Pulse v6.5.0-beta.1", "## Pulse v6.5.0", "# Other Pulse v6.5.0",
             "# Pulse v6x5x0", "# Pulse v6.5.0 Release Notes extra",
-            "# Pulse v6.5.0extra", "",
+            "# Pulse v6.5.0extra", "User-facing changes before the title.",
         ):
             with self.subTest(title=title):
                 self.assertFalse(release_notes_have_exact_title(
                     title + "\n\n# Pulse v6.5.0 Release Notes\n\n`v6.5.0`\n", "6.5.0"))
+        self.assertFalse(release_notes_have_exact_title("\n \n", "6.5.0"))
         authored = read("scripts/installtests/testdata/release-notes-v6.4.5-authored.md")
         self.assertTrue(release_notes_have_exact_title(authored, "6.4.5"))
 
@@ -2190,7 +2191,12 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("scripts/install-mcp.ps1 release/install-mcp.ps1", candidate_workflow)
         self.assertIn("$PinnedReleaseSshPublicKey = '${TRUSTED_SSH_PUBLIC_KEY}'", candidate_workflow)
         self.assertIn("TRUSTED_SSH_PUBLIC_KEY", update_demo_workflow)
-        self.assertIn('sed -i "s|^PINNED_RELEASE_SSH_PUBLIC_KEY=.*|PINNED_RELEASE_SSH_PUBLIC_KEY=\\"${TRUSTED_SSH_PUBLIC_KEY}\\"|" /tmp/pulse-install.sh', update_demo_workflow)
+        self.assertIn("Verify signed release and select only demo server runtime", update_demo_workflow)
+        self.assertIn('printf \'pulse-installer %s\\n\' "$TRUSTED_SSH_PUBLIC_KEY" > /tmp/pulse-demo-signers', update_demo_workflow)
+        self.assertIn("ssh-keygen -Y verify -f /tmp/pulse-demo-signers -I pulse-installer", update_demo_workflow)
+        self.assertIn("-n pulse-install -s /tmp/pulse-demo-release.sshsig < /tmp/pulse-demo-release.tgz", update_demo_workflow)
+        self.assertIn("python3 .github/scripts/dispatch-demo-runtime.py prepare", update_demo_workflow)
+        self.assertNotIn("bash /tmp/pulse-install.sh", update_demo_workflow)
         self.assertIn("bash .github/scripts/setup-demo-ssh.sh", update_demo_workflow)
         self.assertIn("bash .github/scripts/check-demo-reachability.sh", update_demo_workflow)
         self.assertIn("ping: ${{ secrets.DEMO_SERVER_HOST }}", update_demo_workflow)
@@ -2803,8 +2809,12 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('WINDOW = 300', transaction)
         self.assertIn('self.watch("recovery", original_version, cursors)', transaction)
         self.assertIn('signal.signal(sig, signal.SIG_IGN)', transaction)
-        self.assertIn('self.save("rolled_back")', transaction)
-        self.assertIn('self.save("rollback_failed")', transaction)
+        self.assertIn('outcome = "rolled_back"', transaction)
+        self.assertIn('outcome = "rollback_failed"', transaction)
+        self.assertIn('self.finish(outcome)', transaction)
+        self.assertIn('self.receipt["observed_outcome"] = status', transaction)
+        self.assertIn('self.receipt["status"] = "observation_failed"', transaction)
+        self.assertIn('self.save(terminal)', transaction)
         for required in ("alerts/events.db", "alerts/alert-history.json.imported",
                          "alerts/alert-history.backup.json.imported", "ai_incidents.json", "snapshot_retained"):
             self.assertIn(required, transaction)
