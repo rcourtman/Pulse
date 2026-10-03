@@ -1005,8 +1005,8 @@ func TestTrueNASHandlers_HandleTestSavedConnection_UsesStoredLegacyAPIKey(t *tes
 		t.Fatalf("unexpected saved client config: %+v", gotConfig)
 	}
 	summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
-	if summary.Poll == nil || summary.Poll.LastSuccessAt == nil {
-		t.Fatalf("expected saved retest to update poll summary success state, got %+v", summary.Poll)
+	if summary.Poll == nil || summary.Poll.LastSuccessAt != nil || summary.Poll.LastAttemptAt != nil || summary.Observed != nil {
+		t.Fatalf("a successful legacy-key probe must not invent runtime polling evidence, got %+v", summary)
 	}
 
 	missingReq := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/missing/test", nil)
