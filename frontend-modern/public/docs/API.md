@@ -1663,7 +1663,12 @@ Target payload fields:
 - `linkedResourceId` - Optional resource id hint for attaching the probe facet to an existing resource.
 - `certificateMonitoringDisabled` - Explicit HTTPS-only opt-out; certificate validity monitoring is enabled by default.
 - `certificateExpiryWarningDays` - HTTPS certificate expiry warning window; defaults to 30 days.
-- `probeAgentId` - Optional registered host-agent ID that runs the check instead of the Pulse server; requires the Pro `external_probe` entitlement. Send an explicit empty string on update to return the check to local execution.
+- `observationLocationIds` - Observation locations for this one logical check: `pulse:local` for this Pulse server and `agent:<host-agent-id>` for a connected agent. Agent locations require the Pro `external_probe` entitlement. Include `pulse:local` only when a local observation is wanted; agent-only sets do not also run locally. Each location retains separate evidence rather than treating one path failure as a universal outage.
+- `probeAgentId` - Compatibility field for single-location clients. A non-empty registered host-agent ID selects that agent; an explicit empty string selects local execution. When updating only this field, omit `observationLocationIds`. For multi-location updates, send the complete desired `observationLocationIds` set and clear `probeAgentId` to `""` so a legacy value cannot override a single-location edit.
+
+External agents collect observations, but alert evaluation and notification
+delivery still depend on the Pulse server. Missing reports are not proof of a
+target outage. See [probe coverage and outage limits](CONFIGURATION.md#external-probes-pro).
 
 An explicit `linkedResourceId` is authoritative and fails closed when it
 cannot resolve. Without it, Pulse correlates only on one exact normalized IP

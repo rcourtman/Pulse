@@ -303,11 +303,15 @@ storage nodes to avoid duplicate or ambiguously correlated readings.
 ## External Probes (Pro)
 
 With the Pro `external_probe` entitlement, availability checks configured in
-Pulse can be assigned to run from a specific agent instead of the Pulse
-server (Settings -> Monitoring -> Availability checks -> "Run from"). This is
-how you observe a service from outside its local network: deploy the agent on
-a machine elsewhere — a cloud VM, a Docker host at another location — and
-assign checks to it. **The agent does not send notifications directly.** The
+Pulse can run from one or more connected agents. In **Settings → Monitoring →
+Availability checks**, select the agents under **Observation locations** in the
+check editor. Keep **This Pulse server** selected for a local observation too,
+or deselect it for agent-only checks. Each location keeps its own evidence; a
+failure on one path is not a universal outage.
+
+To observe a service from outside its local network, deploy the agent on a
+machine elsewhere — a cloud VM, a Docker host at another location — and assign
+checks to it. **The agent does not send notifications directly.** The
 Pulse server must be running and able to reach the notification destination;
 target failures are evaluated there through your normal alert routes.
 
@@ -317,7 +321,7 @@ configured interval, and results are delivered with its regular reports.
 Results waiting for delivery use a bounded **in-memory** queue of up to 200
 observations across the agent's checks. Oldest pending observations are dropped
 when it fills, and an agent restart loses the queue; it is not a complete outage
-record. If reports stop arriving, the check becomes indeterminate ("no recent
+record. If reports stop arriving, the affected location becomes indeterminate ("no recent
 report from probe agent"). This is missing evidence, not proof the target is
 down. The missing-report window is the
 longer of **five minutes or three check intervals**. During normal server

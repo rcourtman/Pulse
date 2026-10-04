@@ -50,6 +50,7 @@ const { chromium, webkit } = require('playwright');
         const body = (await page.locator('article').innerText()).replace(/\s+/g, ' ');
         for (const text of ['The agent does not send notifications directly.',
           'Pulse server must be running and able to reach the notification destination',
+          'Observation locations', 'This Pulse server', 'not a universal outage',
           'not proof the target is down', 'five minutes or three check intervals',
           '31 March 2027', 'Relay is no longer sold', 'not a permanent substitute']) {
           assert.ok(body.includes(text), text);
@@ -96,6 +97,11 @@ const { chromium, webkit } = require('playwright');
       await page.getByRole('heading', { name: 'External Probes (Pro)', exact: true }).waitFor();
       await follow('configuration guide', '/docs/CONFIGURATION#external-probes-pro',
         'External probes (Pro)', 'external-probes-pro');
+      await follow('target fields', '/docs/API#availability-checks',
+        'Availability Checks', 'availability-checks');
+      assert.ok((await page.locator('article').innerText()).includes('clear probeAgentId to ""'));
+      await page.goBack();
+      await page.getByRole('heading', { name: 'External probes (Pro)', exact: true }).waitFor();
       await follow('external watchdog', '/docs/TROUBLESHOOTING#no-alert-when-pulse-power-or-internet-goes-down',
         'No alert when Pulse, power or internet goes down', 'no-alert-when-pulse-power-or-internet-goes-down');
       assert.deepEqual(errors, []);
@@ -104,11 +110,11 @@ const { chromium, webkit } = require('playwright');
         serverDependencyVisible: true, semanticContainedCoverageTable: true,
         noDocumentOverflow: true, queueAndRetirementLimitsVisible: true,
         keyboardAgentGuide: true, keyboardConfigurationGuide: true,
-        keyboardWatchdogLinks: 2, keyboardRetirementLink: true, errors });
+        keyboardWatchdogLinks: 2, keyboardRetirementLink: true, keyboardCanonicalApiFields: true, errors });
       await browser.close();
       browser = undefined;
     }
-    const files = ['public/docs/CONFIGURATION.md', 'public/docs/UNIFIED_AGENT.md',
+    const files = ['public/docs/CONFIGURATION.md', 'public/docs/UNIFIED_AGENT.md', 'public/docs/API.md',
       'browser-tests/probe-guidance.cjs', 'browser-tests/docs-fragment-navigation.tsx',
       'src/features/docs/docMarkdown.ts', 'src/pages/Docs.tsx'].map((file) => ({ file,
         sha256: crypto.createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex') }));

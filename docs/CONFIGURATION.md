@@ -579,20 +579,25 @@ alerts, and resource projections keep one canonical protocol value.
 
 External probes change **where a check runs**, not where alerts are sent.
 By default, checks run on the Pulse server. With the Pro `external_probe`
-entitlement, assign a connected Pulse agent using **Run from** in the UI
-(`probeAgentId` in the API). An agent on a cloud VM or at another site can
-observe a service from outside its local network.
+entitlement, select one or more connected agents under **Observation locations**
+in the check editor. An agent on a cloud VM or at another site can observe a
+service from outside its local network. Keep **This Pulse server** selected if
+you also want a local observation; deselect it for agent-only checks. Pulse keeps
+each location's evidence separate, so a failure on one path is not a universal
+outage. The API uses `observationLocationIds`; see the
+[target fields](API.md#availability-checks).
 
 The assigned agent receives signed configuration, runs the check and reports
-results back to Pulse. Only the currently assigned agent's results are accepted;
-an assigned check is not also run locally. **The agent does not send
+results back to Pulse. Only agents assigned to that target may submit results;
+the server runs a local check only when **This Pulse server** is selected.
+**The agent does not send
 notifications directly.** The Pulse server must be running and able to reach
 the notification destination to evaluate results and send alerts.
 
 | Situation | What the check can tell you |
 | --- | --- |
 | Pulse is running and receives probe results | Target observations are evaluated through the normal alert and notification policies. |
-| Pulse is running but probe results stop arriving | The check becomes indeterminate: "no recent report from probe agent". This is missing evidence, not proof the target is down. |
+| Pulse is running but probe results stop arriving | The affected location becomes indeterminate: "no recent report from probe agent". This is missing evidence, not proof the target is down. Other locations retain their own evidence. |
 | Pulse is stopped or cannot reach its notification destination | An external agent cannot deliver Pulse alerts in its place. Use an independent external watchdog for this failure. |
 
 The missing-report window is the longer of **five minutes or three check

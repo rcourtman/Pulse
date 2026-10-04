@@ -117,6 +117,31 @@ describe('docsLinks', () => {
     }
   });
 
+  it('matches the existing observation-location editor and compatibility fields', () => {
+    for (const guide of probeGuides()) {
+      expect(guide).toContain('Observation locations');
+      expect(guide).toContain('This Pulse server');
+      expect(guide).toContain('not a universal outage');
+      expect(guide).not.toContain('Run from');
+      expect(guide).not.toContain('an assigned check is not also run locally');
+    }
+    const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    expect(api).toContain('`observationLocationIds` - Observation locations');
+    expect(api).toContain('`pulse:local` for this Pulse server');
+    expect(api).toContain('`agent:<host-agent-id>` for a connected agent');
+    expect(api).toContain('omit `observationLocationIds`');
+    expect(api).toContain('clear `probeAgentId` to `""`');
+    const editor = readFileSync(path.join(frontendRoot, 'src', 'components', 'Settings',
+      'ConnectionEditor', 'CredentialSlots', 'AvailabilityTargetSlot.tsx'), 'utf8');
+    expect(editor).toContain('Observation locations</legend>');
+    expect(editor).toContain('observationLocationIds: [...form.observationLocationIds]');
+    const handler = readFileSync(
+      path.join(repoRoot, 'internal', 'api', 'availability_handlers.go'), 'utf8',
+    );
+    expect(handler).toContain('compatibility.ObservationLocationIDs == nil && compatibility.ProbeAgentID != nil');
+    expect(handler).toContain('agentID != "" && len(*compatibility.ObservationLocationIDs) == 1');
+  });
+
   it('separates server removal from persistent-data erasure', () => {
     const installation = readFileSync(path.join(repoRoot, 'docs', 'INSTALL.md'), 'utf8');
     const removal = installation.split('## 🗑️ Uninstall')[1];
