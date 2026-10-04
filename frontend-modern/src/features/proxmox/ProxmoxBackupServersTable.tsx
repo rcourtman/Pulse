@@ -509,10 +509,11 @@ export function ProxmoxBackupServersTable(props: {
                 estimatedRowHeight={32}
               >
                 {(row) => {
-                  const capacity = () => datastoreCapacity(row.datastore, row.online);
-                  const pct = () => capacity().percent;
+                  // Read admission is not a generic storage-adapter capacity snapshot.
+                  const capacityEvidence = () => datastoreCapacity(row.datastore, row.online);
+                  const pct = () => capacityEvidence().percent;
                   const capacityNotice = () =>
-                    capacity().state === 'unavailable'
+                    capacityEvidence().state === 'unavailable'
                       ? 'Datastore capacity is unavailable. This does not mean the datastore is empty.'
                       : 'Datastore capacity is unknown. This does not mean the datastore is empty.';
                   const rowIdentity = { id: row.key };
@@ -630,13 +631,15 @@ export function ProxmoxBackupServersTable(props: {
                           >
                             {(datastore) => (
                               <Show
-                                when={capacity().state === 'available'}
+                                when={capacityEvidence().state === 'available'}
                                 fallback={
                                   <span
                                     class="text-[11px] text-amber-600 dark:text-amber-300"
                                     title={capacityNotice()}
                                   >
-                                    {capacity().state === 'unavailable' ? 'Unavailable' : 'Unknown'}
+                                    {capacityEvidence().state === 'unavailable'
+                                      ? 'Unavailable'
+                                      : 'Unknown'}
                                   </span>
                                 }
                               >
@@ -700,7 +703,7 @@ export function ProxmoxBackupServersTable(props: {
                           >
                             <Show
                               when={
-                                capacity().state === 'available' &&
+                                capacityEvidence().state === 'available' &&
                                 typeof row.datastore?.deduplicationFactor === 'number' &&
                                 Number.isFinite(row.datastore.deduplicationFactor) &&
                                 row.datastore.deduplicationFactor > 0
