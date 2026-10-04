@@ -61,6 +61,62 @@ function getRuntimeSourceFiles(dir: string): string[] {
 }
 
 describe('docsLinks', () => {
+  const probeGuides = () => [
+    readFileSync(path.join(repoRoot, 'docs', 'CONFIGURATION.md'), 'utf8')
+      .split('### External probes (Pro)')[1].split('### ICMP probe privileges')[0],
+    readFileSync(path.join(repoRoot, 'docs', 'UNIFIED_AGENT.md'), 'utf8')
+      .split('## External Probes (Pro)')[1].split('## Custom metrics')[0],
+  ].map((section) => section.replace(/\s+/g, ' '));
+
+  it('keeps external probes dependent on server-side alert delivery', () => {
+    for (const guide of probeGuides()) {
+      expect(guide).toContain('The agent does not send notifications directly.');
+      expect(guide).toContain('Pulse server must be running and able to reach the notification destination');
+      expect(guide).toContain('agent cannot deliver Pulse alerts in its place');
+      expect(guide).toContain('not proof');
+      expect(guide).not.toContain('cannot disappear silently');
+    }
+  });
+
+  it('explains the existing missing-report and bounded-buffer limits', () => {
+    for (const guide of probeGuides()) {
+      expect(guide).toContain('five minutes or three check intervals');
+      expect(guide).toContain('server receipt time');
+      expect(guide).toContain('host-offline alert');
+      expect(guide).toContain('policies');
+      expect(guide).toMatch(/changes (?:its|the) observation location/);
+    }
+    const agentGuide = probeGuides()[1];
+    expect(agentGuide).toContain('up to 200 observations');
+    expect(agentGuide).toContain('Oldest pending observations are dropped');
+    expect(agentGuide).toContain('agent restart loses the queue');
+    expect(agentGuide).toContain('not a complete outage record');
+    // These limits come from the current implementation, not a new policy.
+    const monitor = readFileSync(
+      path.join(repoRoot, 'internal', 'monitoring', 'availability_probe_agent.go'), 'utf8',
+    );
+    expect(monitor).toContain('availabilityProbeStaleFloor = 5 * time.Minute');
+    expect(monitor).toContain('target.EffectivePollIntervalSecs()) * 3 * time.Second');
+    const agent = readFileSync(
+      path.join(repoRoot, 'internal', 'hostagent', 'availability.go'), 'utf8',
+    );
+    expect(agent).toContain('availabilityPendingCapacity = 200');
+  });
+
+  it('links independent outage coverage without a permanent Mobile guarantee', () => {
+    for (const guide of probeGuides()) {
+      expect(guide).toContain('TROUBLESHOOTING.md#no-alert-when-pulse-power-or-internet-goes-down');
+      expect(guide).toContain('independently reachable notification destination');
+      expect(guide).toContain('authorised test environment');
+      expect(guide).toContain('Existing paired Pulse Mobile/Relay users');
+      expect(guide).toContain('31 March 2027');
+      expect(guide).toContain('Relay is no longer sold');
+      expect(guide).toContain('not a permanent substitute');
+      expect(guide).toContain('[Mobile retirement](RELAY.md)');
+      expect(guide).not.toContain('push covers the dark-site case');
+    }
+  });
+
   it('separates server removal from persistent-data erasure', () => {
     const installation = readFileSync(path.join(repoRoot, 'docs', 'INSTALL.md'), 'utf8');
     const removal = installation.split('## 🗑️ Uninstall')[1];

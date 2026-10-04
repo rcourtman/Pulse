@@ -305,40 +305,51 @@ storage nodes to avoid duplicate or ambiguously correlated readings.
 With the Pro `external_probe` entitlement, availability checks configured in
 Pulse can be assigned to run from a specific agent instead of the Pulse
 server (Settings -> Monitoring -> Availability checks -> "Run from"). This is
-how you monitor a site from the outside: deploy the agent on a machine
-elsewhere — a cloud VM, a Docker host at another location — and assign checks
-to it. Target failures are evaluated on the Pulse server through your normal
-alert routes.
+how you observe a service from outside its local network: deploy the agent on
+a machine elsewhere — a cloud VM, a Docker host at another location — and
+assign checks to it. **The agent does not send notifications directly.** The
+Pulse server must be running and able to reach the notification destination;
+target failures are evaluated there through your normal alert routes.
 
 There is nothing to configure on the agent itself. Assignments arrive through
 the agent's signed remote configuration, the agent runs each check on its
 configured interval, and results are delivered with its regular reports.
-Results survive temporary connectivity loss to the Pulse server in a bounded
-in-memory queue; if the agent cannot deliver for several check intervals the
-check shows as indeterminate in Pulse until reports resume. After the
-five-minute minimum grace window, Pulse raises one
+Results waiting for delivery use a bounded **in-memory** queue of up to 200
+observations across the agent's checks. Oldest pending observations are dropped
+when it fills, and an agent restart loses the queue; it is not a complete outage
+record. If reports stop arriving, the check becomes indeterminate ("no recent
+report from probe agent"). This is missing evidence, not proof the target is
+down. The missing-report window is the
+longer of **five minutes or three check intervals**. During normal server
+evaluation, eligible stale probes raise one
 `availability_probe_unavailable` warning per disconnected probe, regardless of
 how many checks it owns. Pulse measures that reporting window from server receipt
 time rather than the agent's clock, so clock skew cannot create or conceal the
 disconnect. That warning uses the normal email, webhook, Apprise, and
-recovery-notification pipeline. When Pulse Mobile is paired through Relay, Pulse
-also sends a privacy-safe `external_probe_offline` push linked to the canonical
-mobile attention item without exposing target names or addresses. The alert
-identity belongs to the probe agent, so adding or removing an assigned check
-does not resolve and reopen it.
+recovery-notification pipeline, subject to alert and connectivity policies.
+The alert identity belongs to the probe agent, so adding or removing an assigned
+check does not resolve and reopen it.
 
 When the host heartbeat itself is offline, Pulse keeps the existing
 host-offline alert as the single canonical incident and suppresses the
-probe-results warning. Assigned probe hosts still receive the external-probe
-mobile push, but operators do not get two normal alerts for the same agent
-failure.
+probe-results warning, rather than producing two normal alerts for the same
+agent failure.
 
-This has a complementary dark-site path: if the entire Pulse instance or its
-site goes offline, Pulse Relay independently sends its existing instance
-offline push after five minutes. Together, probe-loss alerts while Pulse is
-online and Relay's instance-loss alert while Pulse is dark ensure the
-outside-monitoring path cannot disappear silently. Relay does not evaluate
-individual target results while the Pulse server is offline.
+If Pulse itself stops or loses outbound connectivity, the external agent cannot
+deliver Pulse alerts in its place. Configure an
+[external watchdog](TROUBLESHOOTING.md#no-alert-when-pulse-power-or-internet-goes-down)
+outside the shared power/network failure, with an independently reachable
+notification destination. Verify recipient delivery in an authorised test
+environment, not by interrupting a production site.
+
+Existing paired Pulse Mobile/Relay users retain their current push path until
+**31 March 2027**. Relay is no longer sold. Its instance-disconnect push does not
+evaluate individual targets while Pulse is offline, and is not a permanent
+substitute for the watchdog. See [Mobile retirement](RELAY.md).
+
+If the external-probe entitlement lapses, checks resume on the Pulse server,
+not the agent. That changes the observation location and may change the result;
+see the [configuration guide](CONFIGURATION.md#external-probes-pro).
 
 The module appears as `availability` in the agent's module status when at
 least one check is assigned.
