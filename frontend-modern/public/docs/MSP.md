@@ -110,11 +110,37 @@ the tunnels and keep the management port out of them.
 
 ### Validation checklist (run after setup, repeat after network changes)
 
+Use your actual HTTPS addresses and keep certificate verification enabled.
+For a private CA, add `--cacert /path/to/trusted-ca.pem` using a CA you have
+verified independently; do not bypass a certificate error with `--insecure`.
+The examples make bounded **GET** requests, discard response bodies and print
+only the HTTP status. They do not send notifications or change settings.
+
+For the authenticated checks, prepare two separate private header files with
+[the API token file procedure](API.md#api-token-recommended), substituting
+`agent-header` and `org-a-header` for `api-header`. Keep the directory mode
+`700` and files mode `600`, owned by the account running curl. Enter the token
+only in your local editor, never in a shell command, URL or report. Each file
+contains one `X-API-Token` header: the existing `agent:report` token in
+`agent-header`, and an existing org-A token with `monitoring:read` in
+`org-a-header`. Do not broaden scopes or create a privileged token just to run
+these checks. Keep the files outside repositories, backups shared for support
+and diagnostic exports; remove them locally when no longer needed.
+
+Keep `--disable` first so a local curl configuration cannot enable tracing,
+extra credentials or redirects. Do not add verbose/trace output or follow
+redirects with these tokens. For the HTTP-status checks below, a TLS, DNS,
+timeout or connection error is a **failed check**, not proof of isolation:
+require curl exit **0** as well as the expected HTTP status. `000` is not an HTTP result. Do not use `--fail` for these
+checks because the expected rejections are HTTP errors.
+
 1. **Agent port excludes management surfaces.** Both must return `404`:
 
    ```bash
-   curl -sk -o /dev/null -w '%{http_code}\n' https://agents.example.com:7656/          # 404
-   curl -sk -o /dev/null -w '%{http_code}\n' https://agents.example.com:7656/api/login # 404
+   curl --disable --silent --show-error --proto '=https' --connect-timeout 5 --max-time 10 \
+     --output /dev/null --write-out '%{http_code}\n' https://agents.example.com:7656/ # 404
+   curl --disable --silent --show-error --proto '=https' --connect-timeout 5 --max-time 10 \
+     --output /dev/null --write-out '%{http_code}\n' https://agents.example.com:7656/api/login # 404
    ```
 
    When commands are enabled, also verify that `/api/agent/ws` reaches Pulse
@@ -123,33 +149,45 @@ the tunnels and keep the management port out of them.
 
 2. **Management port is not reachable from a client site.** From a client
    network (or through a client tunnel), a connection to `FRONTEND_PORT` must
-   time out or be refused by your firewall — not answer.
+   time out or be refused by your firewall — not answer. That observation alone
+   does not distinguish a firewall from a DNS, TLS or server failure; confirm
+   the same management endpoint works from the authorised staff network.
 
-3. **Agent tokens cannot manage.** A request to a management endpoint with an
-   agent token must be rejected:
-
-   ```bash
-   curl -sk -o /dev/null -w '%{http_code}\n' \
-     -H "X-API-Token: <agent:report token>" https://pulse.internal:7655/api/notifications/webhooks  # 401/403
-   ```
-
-4. **Cross-tenant isolation (shared-process mode only).** A token bound to one
-   organization must get `403` when targeting another organization AND when
-   targeting the default org (a leaked client-site token must not read the
-   provider's own estate):
+3. **Agent tokens cannot manage.** On an authentication-enabled instance, a
+   request to a management endpoint with the agent token must be rejected:
 
    ```bash
-   curl -sk -o /dev/null -w '%{http_code}\n' \
-     -H "X-API-Token: <org-A token>" -H "X-Pulse-Org-ID: org-b" \
-     https://pulse.internal:7655/api/alerts/active  # 403
-   curl -sk -o /dev/null -w '%{http_code}\n' \
-     -H "X-API-Token: <org-A token>" -H "X-Pulse-Org-ID: default" \
-     https://pulse.internal:7655/api/alerts/active  # 403
+   curl --disable --silent --show-error --proto '=https' --connect-timeout 5 --max-time 10 \
+     --output /dev/null --write-out '%{http_code}\n' \
+     --header "@$HOME/.config/pulse/agent-header" \
+     https://pulse.internal:7655/api/notifications/webhooks # 401/403
    ```
+
+4. **Cross-tenant isolation (shared-process mode only).** A valid token bound
+   to org-A with `monitoring:read` must get `403` when targeting another
+   organization AND when targeting the default org (a leaked client-site
+   token must not read the provider's own estate):
+
+   ```bash
+   curl --disable --silent --show-error --proto '=https' --connect-timeout 5 --max-time 10 \
+     --output /dev/null --write-out '%{http_code}\n' \
+     --header "@$HOME/.config/pulse/org-a-header" --header 'X-Pulse-Org-ID: org-b' \
+     https://pulse.internal:7655/api/alerts/active # 403
+   curl --disable --silent --show-error --proto '=https' --connect-timeout 5 --max-time 10 \
+     --output /dev/null --write-out '%{http_code}\n' \
+     --header "@$HOME/.config/pulse/org-a-header" --header 'X-Pulse-Org-ID: default' \
+     https://pulse.internal:7655/api/alerts/active # 403
+   ```
+
+   An expired or otherwise invalid token can give `401` before the tenant
+   boundary is checked. First confirm that this same token can read
+   `/api/alerts/active` in org-A through the private header-file method; do not
+   count an authentication failure as cross-tenant acceptance.
 
    Keep your own monitoring estate in its own organization too, rather than
    in the default org, so every boundary in the instance is an explicit org
-   boundary.
+   boundary. For help, share only the check, redacted endpoint role, status and
+   curl exit; never the header file, token, response body or trace.
 
 ## Connecting a client's Proxmox or PBS over your VPN
 
@@ -169,8 +207,11 @@ Per client, the steps are:
 
 1. Make the client's PVE/PBS API address reachable from the Docker host that
    runs the client workspaces (route or interface into that client's
-   tunnel). From the host, `curl -sk https://<client-pve>:8006` should
-   answer before you involve Pulse.
+   tunnel). From that host, make a bounded unauthenticated HTTPS request to
+   the PVE/PBS API with certificate verification enabled. For a private or
+   self-signed certificate, use `--cacert` with an independently verified
+   certificate/CA. A TLS error is not proof of a blocked tunnel, and an HTTP
+   response is not proof that Pulse's configured account can collect data.
 2. Open the client's workspace (portal → workspace → **Open**) and add the
    node under **Settings → Infrastructure**, using the tunnel-reachable
    address. The guided flow generates a setup command to run once on the
