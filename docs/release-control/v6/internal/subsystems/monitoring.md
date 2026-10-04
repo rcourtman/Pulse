@@ -4411,6 +4411,25 @@ and the live-generation guard.
 
 ### Native pool-health collection and appliance isolation
 
+CORE's legacy REST disk inventory treats `rotationrate` as optional provider
+metadata, just like the RPC reader: integers and numeric strings retain their
+classification, while null, absent, unknown and unrecognised values provide no
+rotation evidence. The existing explicit HDD/SSD/NVMe type fallback remains;
+an unknown QEMU/VTSCSI disk gains no SMART health, temperature, serial or SSD
+type assertion. Required disk-field decoding, complete JSON inventory shape
+and HTTP errors still fail collection. Both inventory and disk-temperature
+identifier discovery use the tolerant shape.
+
+`TestRESTDiskRotationRateSnapshot` and
+`TestRESTDiskRotationRatePreservesErrorsAndTopology` in
+`internal/truenas/client_api_shapes_test.go` bind complete snapshots, mixed
+alert arguments, RPC parity, healthy neighbours and actual topology evidence.
+`TestTrueNASPollerCOREUnknownRotationRate` in
+`internal/monitoring/truenas_poller_test.go` binds saved-config ordinary polling,
+canonical unknowns, failure without renewed evidence, recovery and disable.
+These synthetic controls reproduce and repair #2466's disk failure; they do
+not establish native appliance acceptance or a containing release.
+
 TrueNAS monitoring preserves the complete native `pool.query` observation
 needed by the shared storage-health contract: pool GUID and status detail,
 structured scrub or resilver state, pool and vdev read/write/checksum counters,
