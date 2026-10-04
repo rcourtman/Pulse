@@ -320,7 +320,7 @@ describe('Discovery outcome ownership', () => {
   });
 
   it('does not close another guest’s notes editor when an old save finishes', async () => {
-    const save = deferred<void>();
+    const save = deferred<ResourceDiscovery>();
     vi.mocked(api.updateDiscoveryNotes).mockReturnValueOnce(save.promise);
     const { state, setId } = await mount();
     state.startEditingNotes();
@@ -330,7 +330,7 @@ describe('Discovery outcome ownership', () => {
     await waitFor(() => expect(state.discovery()?.resource_id).toBe('101'));
     state.startEditingNotes();
     state.setNotesText('New guest draft');
-    save.resolve();
+    save.resolve(saved());
     await first;
     expect(state.editingNotes()).toBe(true);
     expect(state.notesText()).toBe('New guest draft');
