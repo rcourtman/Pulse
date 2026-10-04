@@ -15,6 +15,22 @@
 
 ## Purpose
 
+### Guest read-state display does not start another read
+
+The existing workload drawer's guest-read state and backup precaution derive
+only from its current workload props. Cached version metadata and Discovery
+assignment are not connectivity checks. Opening or changing the precaution
+must not start diagnostics, guest-agent requests or additional polling. Existing
+History/metadata reads keep their own ownership and request identities, and
+same-guest lock/uncertainty/recovery does not remount the drawer. No retained
+filesystem reason is promoted to a memory-source claim.
+
+Verification: `GuestDrawer.test.tsx`, the mounted
+`GuestDrawerOverview.agent-state.test.tsx` state replacements and
+`browser-tests/guest-agent-coverage.cjs` cover source-only calculation, tab
+identity and absence of diagnostic/mutation requests. Synthetic read/render
+observations establish neither fleet CPU relief nor native guest recovery.
+
 ### Workload backup projection preserves timestamp uncertainty
 
 Both resource-API and owning-canonical-snapshot paths preserve a present malformed

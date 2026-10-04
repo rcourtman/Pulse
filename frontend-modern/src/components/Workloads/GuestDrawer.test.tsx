@@ -220,6 +220,42 @@ afterEach(() => {
 // ── Tests ──────────────────────────────────────────────────────────────
 
 describe('GuestDrawer', () => {
+  it('keeps the backup precaution visible across drawer tabs without starting a guest check', async () => {
+    const [guest, setGuest] = createSignal(
+      makeGuest({
+        agentVersion: '9.2',
+        guestAgentStatus: 'deferred',
+        diskStatusReason: 'prev-vm-locked',
+        lock: 'backup',
+      }),
+    );
+    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    const precaution = () => screen.getByTestId('guest-read-precaution');
+    expect(precaution()).toBeVisible();
+    expect(precaution()).toHaveTextContent(
+      'Do not run live diagnostics or restart the guest agent during a backup, freeze/thaw or an unresponsive-guest incident.',
+    );
+    expect(precaution()).toHaveTextContent('does not prove thaw');
+    expect(precaution()).toHaveTextContent('filesystems covered by the backup');
+    expect(
+      within(precaution()).getByRole('link', { name: 'Backup safety guidance' }),
+    ).toHaveAttribute('href', '/docs/VM_DISK_MONITORING');
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    expect(precaution()).toBeVisible();
+    setGuest({
+      ...guest(),
+      lock: '',
+      guestAgentStatus: 'expected-unreachable',
+      diskStatusReason: 'agent-timeout',
+    });
+    expect(precaution()).toHaveTextContent('Completion is uncertain');
+    fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
+    expect(precaution()).toBeVisible();
+    setGuest({ ...guest(), guestAgentStatus: 'available', diskStatusReason: '' });
+    expect(screen.queryByTestId('guest-read-precaution')).not.toBeInTheDocument();
+    expect(discoveryApiMocks.getDiscovery).not.toHaveBeenCalled();
+  });
+
   it('keeps malformed and future backup times unknown through same-guest replacement', () => {
     const [guest, setGuest] = createSignal(makeGuest({ lastBackup: NaN }));
     render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
@@ -1017,9 +1053,9 @@ describe('GuestDrawer', () => {
       ));
 
       expect(screen.getByText('Pulse coverage')).toBeInTheDocument();
-      expect(technicalDetails().getByText('Node agent connected')).toHaveAttribute(
+      expect(technicalDetails().getByText('Node agent assigned')).toHaveAttribute(
         'title',
-        'Discovery and governed actions use the Pulse Agent connected to delly.',
+        'Discovery and governed actions are assigned to the Pulse Agent on delly. Assignment is not a current connection check.',
       );
       expect(screen.queryByRole('link', { name: 'Add agent for AI actions' })).toBeNull();
     });
