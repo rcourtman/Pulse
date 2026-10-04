@@ -180,6 +180,23 @@ describe('useUnifiedResources', () => {
     try {
       await waitForResourceCount(() => result.resources().length);
       expect(result.resources()[0].memory).toMatchObject({ current: 50, observation });
+      apiFetchMock.mockResolvedValue(
+        resourceResponse([
+          {
+            ...v2Resource,
+            lastSeen: '2026-10-04T17:00:00Z',
+            metrics: {
+              ...v2Resource.metrics,
+              memory: { ...v2Resource.metrics.memory, observation },
+            },
+          },
+        ]),
+      );
+      await result.refetch();
+      expect(result.resources()[0].memory).toMatchObject({ current: 50, observation });
+      apiFetchMock.mockResolvedValue(resourceResponse([v2Resource]));
+      await result.refetch();
+      expect(result.resources()[0].memory).not.toHaveProperty('observation');
     } finally {
       dispose();
     }

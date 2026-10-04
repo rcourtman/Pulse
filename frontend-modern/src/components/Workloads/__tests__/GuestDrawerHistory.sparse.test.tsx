@@ -49,6 +49,65 @@ const group = (id = 'utilization') =>
 const dots = () => document.querySelectorAll('[data-history-observation]');
 
 describe('GuestDrawerHistory sparse observations and current provenance', () => {
+  it('reads again only for changed coordinates, not a fresh same-target snapshot object', async () => {
+    const fetch = vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    const [source, setSource] = createSignal(target);
+    const [usage, setUsage] = createSignal(25);
+    render(() => (
+      <GuestDrawerHistory target={source()} range="1h" currentMetrics={{ memory: usage() }} />
+    ));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Refresh history' })).toHaveAttribute(
+        'aria-busy',
+        'false',
+      ),
+    );
+    const chart = group();
+    setSource({ ...target });
+    setUsage(35);
+    await waitFor(() =>
+      expect(chart.querySelector('[data-history-current="memory"]')).toHaveTextContent(
+        '35.0%current',
+      ),
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(group()).toBe(chart);
+    setSource({ ...target, resourceId: 'peer-host' });
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(fetch.mock.calls[1][0]).toMatchObject({ resourceId: 'peer-host' });
+  });
+
+  it('keeps unknown freshness distinct from current, last-known and stored readings', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    render(() => (
+      <GuestDrawerHistory
+        target={target}
+        range="1h"
+        currentMetrics={{ memory: 99 }}
+        deferredMetrics={{
+          memory: {
+            lastKnownValue: 25,
+            valueLabel: 'freshness unknown',
+            message: 'Observation time unknown. Not a current measurement.',
+          },
+        }}
+      />
+    ));
+    await waitFor(() =>
+      expect(screen.getAllByText('No stored history in this range')).toHaveLength(3),
+    );
+    expect(group().querySelector('[data-history-unknown="memory"]')).toHaveTextContent(
+      'Memory25.0%freshness unknown',
+    );
+    expect(group().querySelector('[data-history-unknown="memory"]')).toHaveAccessibleDescription(
+      'Memory reading: Observation time unknown. Not a current measurement.',
+    );
+    expect(group().querySelector('[data-history-current]')).toBeNull();
+    expect(group().querySelector('[data-history-last-known]')).toBeNull();
+    expect(group().querySelector('path')).toBeNull();
+    expect(dots()).toHaveLength(0);
+  });
+
   it('gives explicit deferred evidence precedence over a numeric current fallback', async () => {
     vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
     render(() => (
@@ -67,7 +126,7 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
       'Disk50.0%last known',
     );
     expect(group().querySelector('[data-history-last-known="disk"]')).toHaveAccessibleDescription(
-      'Disk live reading: Guest reads paused.',
+      'Disk reading: Guest reads paused.',
     );
     expect(group().querySelector('path')).toBeNull();
     expect(dots()).toHaveLength(0);

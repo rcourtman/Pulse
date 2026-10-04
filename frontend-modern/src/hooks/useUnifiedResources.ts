@@ -1,3 +1,5 @@
+import { readMemoryObservation } from '@/utils/memoryObservation';
+import type { MemoryObservation } from '@/types/api';
 import { batch, createEffect, createSignal, onCleanup, untrack, type Accessor } from 'solid-js';
 import { createStore, reconcile, unwrap } from 'solid-js/store';
 import { canonicalizeMetricsHistoryTargetType } from '@/api/charts';
@@ -69,6 +71,7 @@ const UNIFIED_RESOURCES_WS_INITIAL_HYDRATION_WAIT_MS = 1_200;
 const UNIFIED_RESOURCES_WS_CANONICAL_REVALIDATE_DELAY_MS = UNIFIED_RESOURCES_CACHE_MAX_AGE_MS + 250;
 
 type APIMetricValue = {
+  observation?: MemoryObservation;
   value?: number;
   used?: number;
   total?: number;
@@ -793,9 +796,11 @@ const metricToResourceMetric = (metric?: APIMetricValue) => {
   const used = metric.used ?? undefined;
   const total = metric.total ?? undefined;
   const current = metric.percent ?? metric.value ?? 0;
+  const observation = readMemoryObservation(metric.observation);
   const free = total !== undefined && used !== undefined ? total - used : undefined;
   return {
     current,
+    ...(observation ? { observation } : {}),
     total,
     used,
     free,

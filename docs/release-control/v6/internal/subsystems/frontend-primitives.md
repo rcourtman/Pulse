@@ -20,6 +20,32 @@
 
 ## Purpose
 
+### Guest drawers consume selected memory provenance
+
+Existing guest drawers consume optional server-owned `memory.observation` and
+selected canonical/API metric annotations without renewing their original
+observation time from resource LastSeen, disk-read deferral or another platform
+facet. `useWorkloads`, `useUnifiedResources` and the legacy resource adapter
+preserve the selected annotation. A selected unannotated metric cannot borrow a
+conflicting raw platform annotation. Raw-memory fallback retains its own
+annotation only when its numeric reading is actually selected.
+
+Proxmox VM/LXC Overview states current, last known, unavailable or freshness
+unknown with the original known UTC time and an allowlisted source label.
+Missing, unrecognised or unusable provenance is not current. Unavailable usage
+keeps known capacity but never invents zero used/free/swap measurements. History
+keeps retained/unknown numeric context separate from current legends and stored
+points, dated inspection and denied source access. Same-guest source changes
+update without resetting the drawer or refetching History. Independent valid
+PVE/Pulse Agent readings remain current even while QGA disk reads are deferred;
+unannotated unrelated platforms keep existing presentation.
+
+Connected original-source/normalizer/adapter and mounted History controls plus
+`browser-tests/guest-memory-provenance.cjs` exercise these boundaries. They do
+not establish native thaw, covered-filesystem writes, liveness, reporter relief,
+publication or an installed containing release. No route, collection, numeric
+selection, retention, alert policy or diagnostic permission is added.
+
 Pulse system-alert presentation uses the existing reserved ID/metadata markers,
 not the displayed name or a platform fallback. Overview and both History layouts
 keep service warnings, occurrence timelines and acknowledgement usable without
@@ -49,8 +75,8 @@ requires independent thaw and writes to covered filesystems. Running power
 state, an OK backup or reported agent availability establishes none of those.
 Fresh same-guest evidence withdraws the precaution without a new diagnostic or
 collector request. Existing filesystem provenance, metric values, History,
-Discovery/action permissions and monitoring policy are unchanged. No disk-read
-reason is used to invent memory provenance that the workload API does not expose.
+Discovery/action permissions and monitoring policy are unchanged. Memory qualification uses its own authoritative observation; disk-read state
+cannot qualify a different metric or renew its observation time.
 
 Verification: `GuestDrawerOverview.agent-state.test.tsx` covers each current state
 with/without cached version, unknown private fields, action ownership, platform

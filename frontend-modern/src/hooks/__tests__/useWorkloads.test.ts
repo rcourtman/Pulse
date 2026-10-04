@@ -539,6 +539,21 @@ describe('useWorkloads', () => {
         await flushAsync();
         expect(result.workloads()[0].memory).not.toHaveProperty('observation');
         expect(result.workloads()[0].memory.usage).toBe(50);
+        const live = {
+          ...resource,
+          metrics: {
+            ...resource.metrics,
+            memory: { ...resource.metrics.memory, observation: raw },
+          },
+          memory: { ...resource.memory, observation: raw },
+        };
+        if (transport === 'snapshot') setSnapshot([live]);
+        else {
+          apiFetchJSONMock.mockResolvedValue({ data: [live], meta: { totalPages: 1 } });
+          await result.refetch();
+        }
+        await flushAsync();
+        expect(result.workloads()[0].memory).toMatchObject({ usage: 50, observation: raw });
       } finally {
         dispose();
       }

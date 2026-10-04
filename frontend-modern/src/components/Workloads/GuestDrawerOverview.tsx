@@ -23,6 +23,7 @@ import { buildWorkloadsDiskPresentation } from './diskListModel';
 import {
   getGuestDrawerAlertMessage,
   getGuestDrawerMemoryRows,
+  getGuestDrawerMemoryReading,
   getGuestDrawerGuestReadPresentation,
   isGuestDrawerVM,
 } from './guestDrawerModel';
@@ -92,6 +93,9 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
           makeDetailRow('Guest-agent reads', guestReadPresentation()?.label, {
             title: guestReadPresentation()?.detail,
             tone: guestReadPresentation()?.tone,
+            wrap: true,
+          }),
+          makeDetailRow('Memory reading', getGuestDrawerMemoryReading(props.guest)?.summary, {
             wrap: true,
           }),
           makeDetailRow('Primary IP', props.ipAddresses[0]),

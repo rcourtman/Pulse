@@ -72,6 +72,15 @@ describe('resourceStateAdapters nodeFromResource', () => {
       usage: 75,
       observation: raw,
     });
+    expect(
+      nodeFromResource({
+        ...resource,
+        memory: {
+          ...resource.memory!,
+          observation: { state: 'current', source: 'agent', observedAt: '2026-10-04T16:00:00Z' },
+        },
+      })?.memory.observation?.source,
+    ).toBe('agent');
   });
 
   it('keeps Proxmox metric coordinates without inventing an agent from discovery routing', () => {

@@ -1,3 +1,5 @@
+import { readMemoryObservation } from '@/utils/memoryObservation';
+import type { MemoryObservation } from '@/types/api';
 import { onCleanup, createEffect, createSignal, untrack, type Accessor } from 'solid-js';
 import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
 import { normalizeOrgScope } from '@/utils/orgScope';
@@ -40,6 +42,7 @@ const WORKLOADS_MAX_PAGES = 100;
 const WORKLOADS_CACHE_MAX_AGE_MS = 15_000;
 
 type APIMetricValue = {
+  observation?: MemoryObservation;
   value?: number;
   used?: number;
   total?: number;
@@ -559,8 +562,10 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     memory: (() => {
       const base = buildMetric(resource.metrics?.memory);
       const cache = resource.proxmox?.memoryCache ?? 0;
+      const observation = readMemoryObservation(resource.metrics?.memory?.observation);
       return {
         ...base,
+        ...(observation ? { observation } : {}),
         usageUnavailable: !memoryAvailable,
         // buildMetric derives free as total-used (available); carve the
         // reclaimable cache back out so free means truly-free pages.
@@ -688,6 +693,7 @@ const metricToAPI = (metric?: Resource['cpu']): APIMetricValue | undefined =>
   metric
     ? {
         percent: metric.current,
+        ...(metric.observation ? { observation: metric.observation } : {}),
         used: metric.used,
         total: metric.total,
       }

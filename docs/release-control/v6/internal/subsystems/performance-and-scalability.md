@@ -15,6 +15,18 @@
 
 ## Purpose
 
+### Memory presentation does not collect or renew observations
+
+Guest-memory provenance is projected from the already-owned snapshot in the
+existing drawer. A same-guest provenance change updates the Overview/History
+label without refetching metrics History, resetting the drawer, creating chart
+points or running a diagnostic. Fixed source labels and the original known
+time replace fabricated current freshness; there is no new timer, collector or
+fleet-wide query. Connected hook and mounted sparse/provenance controls pin
+unchanged numeric selection, source isolation and no-extra-History-read
+behaviour. Browser comparisons are source/render acceptance, not native CPU,
+RSS, backup safety or installed relief measurements.
+
 ### Guest read-state display does not start another read
 
 The existing workload drawer's guest-read state and backup precaution derive

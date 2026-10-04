@@ -65,6 +65,7 @@ export interface GuestDrawerHistoryTimeBounds {
 
 export interface GuestDrawerHistoryDeferredMetric {
   lastKnownValue?: number;
+  valueLabel?: 'freshness unknown';
   message: string;
 }
 
@@ -106,18 +107,106 @@ const getGuestDrawerDiskUsage = (guest: Guest): number | undefined => {
   return typeof usage === 'number' && Number.isFinite(usage) && usage >= 0 ? usage : undefined;
 };
 
+export interface GuestDrawerMemoryReading {
+  state: 'current' | 'last-known' | 'unavailable' | 'unknown';
+  summary: string;
+  message: string;
+}
+
+const memorySourceLabels: Record<string, string> = {
+  'guest-agent-meminfo': 'QEMU guest agent',
+  'guest-agent-meminfo-derived': 'QEMU guest agent',
+  agent: 'Pulse Agent',
+  'available-field': 'Proxmox',
+  'derived-free-buffers-cached': 'Proxmox',
+  'derived-total-minus-used': 'Proxmox',
+  'status-mem': 'Proxmox',
+  'status-freemem': 'Proxmox',
+  'cluster-resources': 'Proxmox',
+  'previous-snapshot': 'Previous snapshot',
+};
+
+const getGuestDrawerMemoryUsage = (guest: Guest): number | undefined => {
+  const usage = guest.memory?.usage;
+  return guest.telemetryAvailability?.memory !== false &&
+    !guest.memory?.usageUnavailable &&
+    typeof usage === 'number' &&
+    Number.isFinite(usage) &&
+    usage >= 0 &&
+    usage <= 100
+    ? usage
+    : undefined;
+};
+
+export const getGuestDrawerMemoryReading = (guest: Guest): GuestDrawerMemoryReading | null => {
+  const observation = guest.memory?.observation;
+  const nonProxmoxVMware =
+    guest.platformScopes?.includes('vmware-vsphere') &&
+    !guest.platformScopes.includes('proxmox-pve');
+  const proxmoxGuest =
+    !nonProxmoxVMware &&
+    (guest.type === 'qemu' ||
+      guest.type === 'lxc' ||
+      guest.platformScopes?.includes('proxmox-pve') ||
+      (guest.vmid > 0 && Boolean(guest.node && guest.instance)));
+  // Unannotated unrelated platforms retain their existing behaviour. Legacy
+  // Proxmox readings lack authority to assert current freshness.
+  if (!proxmoxGuest && !observation) return null;
+  const timestamp =
+    typeof observation?.observedAt === 'string' ? Date.parse(observation.observedAt) : NaN;
+  const validTime = Number.isFinite(timestamp) && timestamp > 0 && timestamp <= Date.now();
+  const observed = validTime
+    ? new Date(timestamp).toISOString().replace('T', ' ').replace('.000Z', 'Z').replace('Z', ' UTC')
+    : null;
+  const state =
+    getGuestDrawerMemoryUsage(guest) === undefined || observation?.state === 'unavailable'
+      ? 'unavailable'
+      : observation?.state === 'last-known'
+        ? 'last-known'
+        : observation?.state === 'current' && validTime
+          ? 'current'
+          : 'unknown';
+  const label =
+    state === 'current'
+      ? 'Current'
+      : state === 'last-known'
+        ? 'Last known'
+        : state === 'unavailable'
+          ? 'Unavailable'
+          : 'Freshness unknown';
+  const source =
+    observation && Object.hasOwn(memorySourceLabels, observation.source)
+      ? memorySourceLabels[observation.source]
+      : 'Unknown source';
+  const time = observed ? `Observed: ${observed}.` : 'Observation time unknown.';
+  return {
+    state,
+    summary: `${label} · ${source}${observed ? ` · ${observed}` : ' · time unknown'}`,
+    message: `${label}. Source: ${source}. ${time}${state === 'last-known' || state === 'unknown' ? ' Not a current measurement.' : ''}`,
+  };
+};
+
 export const getGuestDrawerDeferredMetrics = (
   guest: Guest,
 ): Record<string, GuestDrawerHistoryDeferredMetric> => {
-  if (!isGuestDrawerVM(guest) || !guest.diskStatusReason) return {};
-  return {
-    disk: {
+  const metrics: Record<string, GuestDrawerHistoryDeferredMetric> = {};
+  if (isGuestDrawerVM(guest) && guest.diskStatusReason) {
+    metrics.disk = {
       lastKnownValue: guest.diskStatusReason.startsWith('prev-')
         ? getGuestDrawerDiskUsage(guest)
         : undefined,
       message: getWorkloadGuestDiskStatusMessage(guest.diskStatusReason),
-    },
-  };
+    };
+  }
+  const memory = getGuestDrawerMemoryReading(guest);
+  if (memory && memory.state !== 'current') {
+    metrics.memory = {
+      lastKnownValue: memory.state === 'unavailable' ? undefined : getGuestDrawerMemoryUsage(guest),
+      ...(memory.state === 'unknown' ? { valueLabel: 'freshness unknown' as const } : {}),
+      message: memory.message,
+    };
+  }
+  return metrics;
 };
 
 // Current-value metrics displayed beside history legends while the metrics
@@ -128,8 +217,11 @@ export const getGuestDrawerCurrentMetrics = (guest: Guest): Record<string, numbe
   const available = (metric: keyof NonNullable<Guest['telemetryAvailability']>): boolean =>
     availability?.[metric] ?? true;
   const cpuPercent = available('cpu') ? getWorkloadCPUPercent(guest.cpu) : undefined;
+  const memoryReading = getGuestDrawerMemoryReading(guest);
   const memUsage =
-    available('memory') && !guest.memory?.usageUnavailable ? guest.memory?.usage : undefined;
+    available('memory') && (!memoryReading || memoryReading.state === 'current')
+      ? getGuestDrawerMemoryUsage(guest)
+      : undefined;
   // A paused filesystem read is not current, even if the snapshot still
   // carries a numeric summary. Retained evidence has its own labelled path.
   const diskUsage =
@@ -497,11 +589,12 @@ export const getGuestDrawerMemoryRows = (guest: Guest): GuestDrawerMemoryRow[] =
   if (!memory) return [];
 
   const rows: GuestDrawerMemoryRow[] = [];
+  const reading = getGuestDrawerMemoryReading(guest);
   const total = memory.total ?? 0;
   const used = memory.used ?? 0;
   const cache = memory.cache ?? 0;
 
-  if (memory.usageUnavailable) {
+  if (memory.usageUnavailable || reading?.state === 'unavailable') {
     rows.push({ label: 'Usage', value: 'Unavailable' });
     if (total > 0) {
       rows.push({ label: 'Total', value: formatBytes(total) });
@@ -524,7 +617,12 @@ export const getGuestDrawerMemoryRows = (guest: Guest): GuestDrawerMemoryRow[] =
     rows.push({ label: 'Balloon', value: formatBytes(memory.balloon) });
   }
 
-  if (memory.swapTotal && memory.swapTotal > 0) {
+  if (
+    !memory.usageUnavailable &&
+    reading?.state !== 'unavailable' &&
+    memory.swapTotal &&
+    memory.swapTotal > 0
+  ) {
     rows.push({
       label: 'Swap',
       value: `${formatBytes(memory.swapUsed ?? 0)} / ${formatBytes(memory.swapTotal)}`,

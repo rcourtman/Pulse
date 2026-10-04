@@ -9,6 +9,7 @@ import {
   getGuestDrawerCurrentMetrics,
   getGuestDrawerDeferredMetrics,
   getGuestDrawerMemoryRows,
+  getGuestDrawerMemoryReading,
 } from '../guestDrawerModel';
 
 vi.mock('@/stores/license', () => ({
@@ -92,10 +93,7 @@ describe('guest memory original-observation provenance', () => {
         lastKnownValue: 25,
         message: expect.stringContaining('2026-10-04 14:00:00 UTC'),
       });
-      expect(getGuestDrawerMemoryRows(value)).toContainEqual({
-        label: 'Reading',
-        value: expect.stringContaining('Last known'),
-      });
+      expect(getGuestDrawerMemoryReading(value)?.summary).toContain('Last known');
       expect(getGuestDrawerCurrentMetrics(value)).toMatchObject({ cpu: 10, disk: 50, netin: 100 });
     },
   );
@@ -156,7 +154,21 @@ describe('guest memory original-observation provenance', () => {
     ).toBeUndefined();
   });
 
+  it('retains unknown original age without exposing a raw source string', () => {
+    const value = guest({ state: 'last-known', source: 'private provider detail' });
+    expect(getGuestDrawerMemoryReading(value)?.summary).toBe(
+      'Last known · Unknown source · time unknown',
+    );
+    expect(getGuestDrawerDeferredMetrics(value).memory.message).toContain(
+      'Observation time unknown.',
+    );
+    expect(getGuestDrawerDeferredMetrics(value).memory.message).not.toContain(
+      'private provider detail',
+    );
+  });
+
   it('retains measured zero and leaves unannotated non-Proxmox data unchanged', () => {
+    expect(getGuestDrawerDeferredMetrics(guest(annotation('last-known'), 0)).memory).toBeDefined();
     expect(
       getGuestDrawerDeferredMetrics(guest(annotation('last-known'), 0)).memory.lastKnownValue,
     ).toBe(0);
