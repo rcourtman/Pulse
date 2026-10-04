@@ -19,6 +19,50 @@ func TestGuestSnapshotResourceTypeUsesCanonicalSystemContainer(t *testing.T) {
 	}
 }
 
+func TestGuestSnapshotObservationAvailability(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		memory     models.Memory
+		disk       models.Disk
+		reason     string
+		wantMemory bool
+		wantDisk   bool
+	}{
+		{name: "legacy measured zero", memory: models.Memory{}, disk: models.Disk{}},
+		{name: "current independent read", memory: models.Memory{Usage: 96, Observation: models.MemoryObservation{State: "current", Source: "agent"}}, disk: models.Disk{Usage: 98}},
+		{name: "retained memory only", memory: models.Memory{Usage: 96, Observation: models.MemoryObservation{State: "last-known"}}, disk: models.Disk{Usage: 98}, wantMemory: true},
+		{name: "unavailable numeric placeholder", memory: models.Memory{Usage: 0, Observation: models.MemoryObservation{State: "unavailable"}}, wantMemory: true},
+		{name: "unknown observation version", memory: models.Memory{Usage: 96, Observation: models.MemoryObservation{State: "future-version"}}, wantMemory: true},
+		{name: "explicit unavailable overrides current", memory: models.Memory{Usage: 96, UsageUnavailable: true, Observation: models.MemoryObservation{State: "current"}}, wantMemory: true},
+		{name: "retained filesystem only", memory: models.Memory{Usage: 96}, disk: models.Disk{Usage: 98}, reason: "prev-vm-locked", wantDisk: true},
+		{name: "failed empty filesystem inventory", memory: models.Memory{Usage: 96}, disk: models.Disk{Usage: -1}, reason: "agent-error", wantDisk: true},
+		{name: "legacy unavailable aggregate", memory: models.Memory{Usage: 96}, disk: models.Disk{Usage: -1}, wantDisk: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			// A deferred QGA session does not by itself make independent
+			// selected memory or Pulse-agent filesystems unavailable.
+			vm := models.VM{Memory: test.memory, Disk: test.disk, DiskStatusReason: test.reason, GuestAgentStatus: "deferred"}
+			for _, guest := range []any{vm, &vm} {
+				snapshot, ok := extractGuestSnapshot(guest)
+				if !ok || snapshot.MemoryUnavailable != test.wantMemory || snapshot.DiskUnavailable != test.wantDisk {
+					t.Fatalf("observation flags lost: %+v", snapshot)
+				}
+				metrics := snapshot.metrics()
+				if metrics.MemoryUnavailable != test.wantMemory || metrics.DiskUnavailable != test.wantDisk || metrics.MemUsage != test.memory.Usage || metrics.DiskUsage != test.disk.Usage {
+					t.Fatal("filter projection lost availability or rewrote retained values")
+				}
+			}
+			ct := models.Container{Memory: test.memory, Disk: test.disk}
+			for _, guest := range []any{ct, &ct} {
+				snapshot, _ := extractGuestSnapshot(guest)
+				if snapshot.MemoryUnavailable != test.wantMemory || snapshot.DiskUnavailable != (test.disk.Usage < 0) {
+					t.Fatal("LXC observation availability changed with an unrelated VM disk failure")
+				}
+			}
+		})
+	}
+}
+
 func TestGuestSnapshotUsesCanonicalProxmoxCPUPercent(t *testing.T) {
 	for _, tc := range []struct {
 		name string

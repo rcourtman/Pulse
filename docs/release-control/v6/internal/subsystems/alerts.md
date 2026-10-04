@@ -15,6 +15,34 @@
 
 ## Purpose
 
+### Retained guest observations are not alert evidence
+
+Guest memory marked `last-known`, `unavailable` or an unknown observation state
+cannot start, advance, refresh or resolve a memory incident. A VM filesystem
+read with a nonempty `diskStatusReason`, including retained `prev-*` values,
+or unavailable aggregate usage is likewise not current disk evidence. It cannot
+evaluate either aggregate or per-filesystem thresholds, replace an aggregate
+incident with filesystem incidents, or clear filesystem alerts as if a failed
+or expired inventory were authoritative removal. Metric filters do not match
+these unavailable memory/disk values, including a fabricated healthy zero.
+
+Existing incidents retain their last trusted value, occurrence, acknowledgement,
+observation time and lifecycle/delivery evidence until a current observation
+resumes evaluation. Successful current inventory still resolves removed
+filesystems. Explicit disablement, suppression and stopped-guest behavior remain
+effective independently of telemetry. Legacy unannotated memory and independent
+current PVE/Pulse-agent memory/disks keep their existing policy, even while QGA
+is deferred; current CPU and I/O continue to evaluate. Producers own freshness;
+no new age threshold, QGA request, payload, alert family or UI surface is added.
+
+`guest_observation_test.go` pins typed/pointer VM/LXC observation admission,
+delayed breaches, canonical incident/acknowledgement/ledger continuity, filters,
+fresh recovery and removal, independent metrics and deliberate disablement.
+`TestGuestBackupDeferralAlertObservationLifecycle` connects actual HTTP client,
+poll builder, retained snapshot, unified view, History and the production alert
+call. These are synthetic source proofs, not native backup/thaw, containing
+release, installed delivery or external recipient acceptance.
+
 ### Pulse system alerts retain their service scope in the existing UI
 
 The `pulse-system-` identity prefix or explicit `systemAlert: true` metadata

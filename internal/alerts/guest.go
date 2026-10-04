@@ -259,8 +259,11 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 		memoryMetric = &UnifiedResourceMetric{Percent: memUsage}
 	}
 	diskReadMetric, diskWriteMetric, networkInMetric, networkOutMetric := guestIORateMetrics(snapshot)
-	diskMetric := &UnifiedResourceMetric{Percent: diskUsage}
-	if len(disks) > 0 {
+	var diskMetric *UnifiedResourceMetric
+	if !snapshot.DiskUnavailable {
+		diskMetric = &UnifiedResourceMetric{Percent: diskUsage}
+	}
+	if !snapshot.DiskUnavailable && len(disks) > 0 {
 		seenAggregateDiskKeys := make(map[string]struct{})
 		for idx, disk := range disks {
 			if disk.Total <= 0 || disk.Usage < 0 {
@@ -294,6 +297,14 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 		NetworkIn:  networkInMetric,
 		NetworkOut: networkOutMetric,
 	}, thresholds, evalOpts)
+
+	// Retained/failed filesystem evidence is useful to display, but neither
+	// its values nor an empty result can establish a breach, recovery or disk
+	// removal. CPU/I/O and independent current memory were evaluated above;
+	// explicit suppression/disablement and stopped-guest handling stay earlier.
+	if snapshot.DiskUnavailable {
+		return
+	}
 
 	if len(disks) > 0 {
 		seenDiskKeys := make(map[string]struct{})
