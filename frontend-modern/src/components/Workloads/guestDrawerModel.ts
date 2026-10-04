@@ -359,6 +359,128 @@ export const getGuestDrawerAgentTitle = (guest: Guest): string => {
 export const getGuestDrawerAgentHeading = (guest: Guest): string =>
   guest.agentKind === 'pulse' ? 'Pulse Agent' : 'Guest agent';
 
+export interface GuestDrawerGuestReadPresentation {
+  label: string;
+  detail: string;
+  tone: 'muted' | 'warning';
+  precaution: boolean;
+}
+
+export const GUEST_DRAWER_BACKUP_PRECAUTION =
+  'Do not run live diagnostics or restart the guest agent during a backup, freeze/thaw or an unresponsive-guest incident. An OK backup or a running VM does not prove thaw. Confirm thaw and writes to the filesystems covered by the backup independently.';
+
+const guestReadDeferrals = new Set([
+  'vm-locked',
+  'lock-unverified',
+  'agent-busy',
+  'agent-cooldown',
+  'agent-response-incomplete',
+  'agent-capacity',
+  'invalid-guest-key',
+  'agent-timeout',
+]);
+
+// Version/OS metadata can survive a lock or failed read. Neither it nor a
+// parent-agent action target establishes QGA liveness. Use only the current
+// provider state and fixed read reasons; never print an unknown raw value.
+export const getGuestDrawerGuestReadPresentation = (
+  guest: Guest,
+): GuestDrawerGuestReadPresentation | null => {
+  if (!isGuestDrawerVM(guest)) return null;
+  const hasProxmoxEvidence =
+    guest.type === 'qemu' ||
+    guest.agentKind === 'qemu-guest' ||
+    guest.platformType === 'proxmox-pve' ||
+    guest.platformScopes?.includes('proxmox-pve') ||
+    Boolean(guest.guestAgentStatus || guest.diskStatusReason);
+  if (!hasProxmoxEvidence) return null;
+
+  const reason = (guest.diskStatusReason || '').replace(/^prev-/, '');
+  const readDeferred = guestReadDeferrals.has(reason);
+  const state = (guest.guestAgentStatus || '').trim().toLowerCase();
+  if ((guest.lock || '').trim()) {
+    return {
+      label: 'Deferred',
+      tone: 'warning',
+      precaution: true,
+      detail: getWorkloadGuestDiskStatusMessage('vm-locked'),
+    };
+  }
+  if (guest.backupInProgress) {
+    return {
+      label: 'Backup in progress',
+      tone: 'warning',
+      precaution: true,
+      detail:
+        'A backup is reported in progress. Guest-agent availability does not establish safe live checks during the backup.',
+    };
+  }
+  if (state === 'deferred' || (!state && readDeferred)) {
+    return {
+      label: 'Deferred',
+      tone: 'warning',
+      precaution: true,
+      detail: readDeferred
+        ? getWorkloadGuestDiskStatusMessage(reason)
+        : 'Guest reads are deferred. Previously observed details do not prove a current connection.',
+    };
+  }
+  const precaution = readDeferred;
+  switch (state) {
+    case 'available':
+      return {
+        label: 'Reported available',
+        tone: 'muted',
+        precaution,
+        detail:
+          'Proxmox reports guest-agent availability. This does not independently confirm thaw or filesystem writes.',
+      };
+    case 'expected-unreachable':
+      return {
+        label: 'Unreachable',
+        tone: 'warning',
+        precaution,
+        detail:
+          'Proxmox expects the guest agent but cannot reach it. Previously observed details do not prove a current connection.',
+      };
+    case 'not-running':
+      return {
+        label: 'Not running',
+        tone: 'warning',
+        precaution,
+        detail:
+          'Proxmox reports that the guest agent is not running. Previously observed details do not prove a current connection.',
+      };
+    case 'disabled':
+      return {
+        label: 'Disabled',
+        tone: 'muted',
+        precaution,
+        detail:
+          'Proxmox reports that the guest agent is disabled. Previously observed details do not prove a current connection.',
+      };
+    default:
+      return {
+        label: 'Unknown',
+        tone: 'muted',
+        precaution,
+        detail:
+          'Pulse has no recognised current guest-agent state. Previously observed details do not prove a current connection.',
+      };
+  }
+};
+
+// A read-specific precaution is independent of the reported availability flag.
+// For example Proxmox can report QGA enabled while its last request timed out.
+export const getGuestDrawerGuestReadPrecaution = (guest: Guest): string | null => {
+  const presentation = getGuestDrawerGuestReadPresentation(guest);
+  if (!presentation?.precaution) return null;
+  const reason = (guest.diskStatusReason || '').replace(/^prev-/, '');
+  return guestReadDeferrals.has(reason)
+    ? getWorkloadGuestDiskStatusMessage(reason)
+    : presentation.detail;
+};
+
 export interface GuestDrawerMemoryRow {
   label: string;
   value: string;

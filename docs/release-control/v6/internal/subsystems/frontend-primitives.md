@@ -20,6 +20,37 @@
 
 ## Purpose
 
+### Guest-agent coverage is not inferred from metadata
+
+The existing workload drawer distinguishes assigned Pulse Agent action ownership,
+observed agent version metadata and Proxmox-reported guest-read state. Neither a
+version string nor a parent-node Discovery target may be called **connected**.
+Reported available, deferred, expected-unreachable, not-running, disabled and
+unknown states remain visible even before a version or filesystem sample exists.
+A current operation lock/backup takes precedence over a cached available flag.
+QEMU read state remains separate from Pulse Agent metadata/assignment and does
+not appear for an unrelated vSphere VM or a system container from version alone.
+Unknown raw provider states/reasons are not printed in the new state explanation.
+
+During a fixed guest-read deferral or uncertain completion, a visible, wrapping
+precaution remains outside the drawer tabs. It links the existing backup-safety
+guide, cautions against live diagnostics or restarting QGA during backup, and
+requires independent thaw and writes to covered filesystems. Running power
+state, an OK backup or reported agent availability establishes none of those.
+Fresh same-guest evidence withdraws the precaution without a new diagnostic or
+collector request. Existing filesystem provenance, metric values, History,
+Discovery/action permissions and monitoring policy are unchanged. No disk-read
+reason is used to invent memory provenance that the workload API does not expose.
+
+Verification: `GuestDrawerOverview.agent-state.test.tsx` covers each current state
+with/without cached version, unknown private fields, action ownership, platform
+separation, lock/uncertainty/recovery and unchanged measurements. Mounted
+`GuestDrawer.test.tsx` covers the notice across Overview/History/Manage and the
+shipped-doc link without a guest check. `browser-tests/guest-agent-coverage.cjs`
+uses production row/drawer/router/docs and CSS, keyboard/touch, light/dark and
+320px/390px/desktop, with synthetic responses. Source/render proof is not native
+thaw, safe writes, installed acceptance or a containing published release.
+
 ### Backup inventory ownership is source-scoped and unambiguous
 
 The existing Backups Coverage and By date views do not select a workload from

@@ -233,7 +233,7 @@ describe('GuestDrawer', () => {
     const precaution = () => screen.getByTestId('guest-read-precaution');
     expect(precaution()).toBeVisible();
     expect(precaution()).toHaveTextContent(
-      'Do not run live diagnostics or restart the guest agent during a backup.',
+      'Do not run live diagnostics or restart the guest agent during a backup, freeze/thaw or an unresponsive-guest incident.',
     );
     expect(precaution()).toHaveTextContent('does not prove thaw');
     expect(precaution()).toHaveTextContent('filesystems covered by the backup');
@@ -1053,9 +1053,9 @@ describe('GuestDrawer', () => {
       ));
 
       expect(screen.getByText('Pulse coverage')).toBeInTheDocument();
-      expect(technicalDetails().getByText('Node agent connected')).toHaveAttribute(
+      expect(technicalDetails().getByText('Node agent assigned')).toHaveAttribute(
         'title',
-        'Discovery and governed actions use the Pulse Agent connected to delly.',
+        'Discovery and governed actions are assigned to the Pulse Agent on delly. Assignment is not a current connection check.',
       );
       expect(screen.queryByRole('link', { name: 'Add agent for AI actions' })).toBeNull();
     });

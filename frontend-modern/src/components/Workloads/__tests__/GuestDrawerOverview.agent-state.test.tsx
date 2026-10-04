@@ -3,6 +3,11 @@ import { createSignal, type ComponentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GuestDrawerOverview } from '../GuestDrawerOverview';
 import type { WorkloadGuest } from '@/types/workloads';
+import {
+  GUEST_DRAWER_BACKUP_PRECAUTION,
+  getGuestDrawerGuestReadPresentation,
+  getGuestDrawerGuestReadPrecaution,
+} from '../guestDrawerModel';
 
 vi.mock('../GuestPhysicalDisks', () => ({ GuestPhysicalDisks: () => null }));
 
@@ -159,5 +164,97 @@ describe('guest agent coverage requires current state, not cached metadata', () 
       platformScopes: ['proxmox-pve'],
     });
     expect(screen.queryByText('Guest-agent reads')).not.toBeInTheDocument();
+  });
+});
+
+describe('fixed guest read state and precaution evidence', () => {
+  it.each([
+    'vm-locked',
+    'lock-unverified',
+    'agent-busy',
+    'agent-cooldown',
+    'agent-response-incomplete',
+    'agent-capacity',
+    'invalid-guest-key',
+    'agent-timeout',
+  ])('uses %s without a probe or installation diagnosis', (reason) => {
+    for (const prefix of ['', 'prev-']) {
+      const value = guest({ diskStatusReason: prefix + reason });
+      expect(getGuestDrawerGuestReadPresentation(value)).toMatchObject({
+        label: 'Deferred',
+        precaution: true,
+      });
+      const message = getGuestDrawerGuestReadPrecaution(value)!;
+      expect(message).not.toMatch(/Using last known|may not be installed|may need to be restarted/);
+      expect(message).not.toContain('prev-');
+    }
+  });
+
+  it('does not turn a reported available flag into completed read or thaw evidence', () => {
+    const value = guest({ guestAgentStatus: 'available', diskStatusReason: 'agent-timeout' });
+    expect(getGuestDrawerGuestReadPresentation(value)?.label).toBe('Reported available');
+    expect(getGuestDrawerGuestReadPrecaution(value)).toContain('Completion is uncertain');
+    expect(getGuestDrawerGuestReadPresentation(value)?.detail).toContain(
+      'does not independently confirm thaw',
+    );
+    expect(GUEST_DRAWER_BACKUP_PRECAUTION).toContain('running VM does not prove thaw');
+  });
+
+  it('unknown private fields do not become an explanation or an installation recommendation', () => {
+    const value = guest({
+      guestAgentStatus: 'https://private.invalid/token=secret',
+      diskStatusReason: 'raw-private-body',
+    });
+    const presentation = getGuestDrawerGuestReadPresentation(value)!;
+    expect(presentation.label).toBe('Unknown');
+    expect(JSON.stringify(presentation)).not.toMatch(
+      /private|token=|secret|raw-private-body|Install/,
+    );
+    expect(getGuestDrawerGuestReadPrecaution(value)).toBeNull();
+  });
+
+  it('keeps a lock precaution despite absent version, status or disk data', () => {
+    const value = guest({ lock: 'backup', disks: [], agentVersion: '', guestAgentStatus: '' });
+    expect(getGuestDrawerGuestReadPresentation(value)).toMatchObject({
+      label: 'Deferred',
+      precaution: true,
+    });
+    expect(getGuestDrawerGuestReadPrecaution(value)).toContain('VM operation lock');
+  });
+
+  it('keeps state and current measurements independent; it does not relabel memory using a disk reason', () => {
+    const value = guest({ guestAgentStatus: 'deferred', diskStatusReason: 'prev-vm-locked' });
+    const original = structuredClone(value);
+    getGuestDrawerGuestReadPresentation(value);
+    getGuestDrawerGuestReadPrecaution(value);
+    expect(value).toEqual(original);
+  });
+
+  it('does not treat a vSphere operation or container backup as QEMU state', () => {
+    expect(
+      getGuestDrawerGuestReadPresentation(
+        guest({
+          type: 'vm',
+          platformType: 'vmware-vsphere',
+          platformScopes: ['vmware-vsphere'],
+          lock: 'snapshot',
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      getGuestDrawerGuestReadPresentation(
+        guest({ type: 'lxc', lock: 'backup', guestAgentStatus: 'deferred' }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('backup activity is not a confirmed VM lock', () => {
+  it('warns about a reported backup without inventing a lock or changing the reported flag', () => {
+    const value = guest({ backupInProgress: true, guestAgentStatus: 'available', lock: '' });
+    expect(getGuestDrawerGuestReadPresentation(value)?.label).toBe('Backup in progress');
+    expect(getGuestDrawerGuestReadPrecaution(value)).toContain('A backup is reported in progress');
+    expect(getGuestDrawerGuestReadPrecaution(value)).not.toContain('VM operation lock');
+    expect(value.guestAgentStatus).toBe('available');
   });
 });
