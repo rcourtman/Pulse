@@ -432,25 +432,6 @@ func (r *Router) setupRoutes() {
 		func(context.Context) *monitoring.TrueNASPoller { return r.trueNASPoller },
 		func(context.Context) *monitoring.VMwarePoller { return r.vmwarePoller },
 	)
-	if r.monitor != nil {
-		// Drive the connection-degraded alert off the same aggregator the
-		// HTTP handler uses, so the active-notification stream stays in
-		// lockstep with the Settings → Infrastructure badges. Single-tenant
-		// only for now; multi-tenant per-org wiring is a follow-up.
-		getCfg := r.configHandlers.Config
-		getPersist := r.configHandlers.Persistence
-		monitor := r.monitor
-		trueNASPoller := r.trueNASPoller
-		vmwarePoller := r.vmwarePoller
-		r.monitor.SetConnectionsSnapshotLister(func() []alerts.ConnectionSnapshot {
-			ctx := context.Background()
-			return buildAlertConnectionSnapshotsWithRuntimeSources(ctx, getCfg(ctx), getPersist(ctx), monitor, aggregatorRuntimeSources{
-				orgID:         "default",
-				truenasPoller: trueNASPoller,
-				vmwarePoller:  vmwarePoller,
-			})
-		})
-	}
 	r.availabilityHandlers = NewAvailabilityHandlers(
 		r.configHandlers.Persistence,
 		r.configHandlers.Monitor,
@@ -481,6 +462,28 @@ func (r *Router) setupRoutes() {
 	r.trueNASPoller.Start(r.lifecycleCtx)
 	r.vmwarePoller = monitoring.NewVMwarePoller(r.multiTenant, 0)
 	r.vmwarePoller.Start(r.lifecycleCtx)
+	if r.monitor != nil {
+		// Drive the connection-degraded alert off the same aggregator the
+		// HTTP handler uses, so the active-notification stream stays in
+		// lockstep with the Settings → Infrastructure badges. Single-tenant
+		// only for now; multi-tenant per-org wiring is a follow-up.
+		// Capture the constructed runtime owners, not the nil fields that
+		// existed earlier while handlers were being registered. The monitor
+		// may already be running, so publish only this complete snapshot source.
+		getCfg := r.configHandlers.Config
+		getPersist := r.configHandlers.Persistence
+		monitor := r.monitor
+		trueNASPoller := r.trueNASPoller
+		vmwarePoller := r.vmwarePoller
+		r.monitor.SetConnectionsSnapshotLister(func() []alerts.ConnectionSnapshot {
+			ctx := context.Background()
+			return buildAlertConnectionSnapshotsWithRuntimeSources(ctx, getCfg(ctx), getPersist(ctx), monitor, aggregatorRuntimeSources{
+				orgID:         "default",
+				truenasPoller: trueNASPoller,
+				vmwarePoller:  vmwarePoller,
+			})
+		})
+	}
 	updateHandlers := NewUpdateHandlersWithContext(r.updateManager, r.updateHistory, r.lifecycleCtx)
 	updateHandlers.SetUpdateReadinessSources(
 		r.updateReadinessConfigSnapshot,

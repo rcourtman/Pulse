@@ -28,6 +28,10 @@ const (
 	// notification destinations are not delivering.
 	NotificationDeliveryAlertType = "notification-delivery"
 
+	// BackupEvaluationAlertType reports unavailable backup-age evaluation,
+	// independently of whether backup artifacts themselves are stale.
+	BackupEvaluationAlertType = "backup-evaluation"
+
 	// DeadManDeliveryAlertType reports that Pulse is healthy but cannot reach
 	// the configured external watchdog.
 	DeadManDeliveryAlertType = "deadman-delivery"

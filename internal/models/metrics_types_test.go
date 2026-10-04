@@ -7,6 +7,43 @@ import (
 	"time"
 )
 
+func TestGuestMemoryObservationWireContract(t *testing.T) {
+	legacy := Memory{Total: 100, Used: 25, Free: 75, Usage: 25}
+	payload, err := json.Marshal(legacy)
+	if err != nil || strings.Contains(string(payload), "observation") {
+		t.Fatalf("legacy memory unexpectedly asserts freshness: %s / %v", payload, err)
+	}
+	at := time.Date(2026, time.October, 4, 12, 0, 0, 123, time.UTC)
+	for _, state := range []string{"current", "last-known", "unavailable"} {
+		t.Run(state, func(t *testing.T) {
+			memory := legacy
+			memory.Observation = MemoryObservation{State: state, Source: "guest-agent-meminfo", ObservedAt: at}
+			if state == "unavailable" {
+				memory.Observation.ObservedAt = time.Time{}
+			}
+			payload, err := json.Marshal(memory)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var roundtrip Memory
+			if err := json.Unmarshal(payload, &roundtrip); err != nil || roundtrip != memory {
+				t.Fatalf("memory provenance changed in wire roundtrip: %s / %v", payload, err)
+			}
+			if strings.Contains(string(payload), "observedAt") != (state != "unavailable") {
+				t.Fatalf("unknown time was manufactured: %s", payload)
+			}
+			if memory.HasKnownUsage() != legacy.HasKnownUsage() {
+				t.Fatal("annotation changed numeric validity / threshold policy")
+			}
+			metric := ResourceMetricInput{Current: 25, Observation: memory.Observation}
+			front := ConvertResourceToFrontend(ResourceConvertInput{Memory: &metric, CPU: &metric, Disk: &metric})
+			if front.Memory == nil || front.Memory.Observation != memory.Observation || front.CPU.Observation.State != "" || front.Disk.Observation.State != "" {
+				t.Fatal("memory projection lost evidence or attributed it to another metric")
+			}
+		})
+	}
+}
+
 func TestMetricPoint_ZeroValue(t *testing.T) {
 	var point MetricPoint
 

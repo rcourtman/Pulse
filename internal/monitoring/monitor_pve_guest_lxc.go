@@ -99,8 +99,9 @@ func (m *Monitor) buildContainerFromClusterResource(
 		agentHost,
 		hasAgent,
 	)
+	previousMemory := m.previousGuestSnapshot(instanceName, "lxc", res.Node, res.VMID)
 	memUsed, memorySource, _ = stabilizeGuestLowTrustMemory(
-		m.previousGuestSnapshot(instanceName, "lxc", res.Node, res.VMID),
+		previousMemory,
 		res.Status,
 		memorySource,
 		memTotal,
@@ -129,6 +130,10 @@ func (m *Monitor) buildContainerFromClusterResource(
 			Usage: safePercentage(float64(clampedMemUsed), float64(memTotal)),
 		}
 	}
+	memory.Observation = m.guestMemoryObservation(instanceName, "lxc", res.Node, res.VMID, memory, guestMemoryObservationContext{
+		source: memorySource, providerObservedAt: observedAtOr(res.ObservedAt, sampleTime),
+		previous: previousMemory, linkedAgent: agentHost,
+	}, time.Now())
 	diskUsed := res.Disk
 	if diskUsed > res.MaxDisk && res.MaxDisk > 0 {
 		diskUsed = res.MaxDisk

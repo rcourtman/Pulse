@@ -658,13 +658,7 @@ func (m *Monitor) checkMockAlerts() {
 		Msg("Collecting resources for alert cleanup in mock mode")
 	m.alertManager.CleanupAlertsForNodes(existingNodes)
 
-	guestsByKey, guestsByVMID := buildGuestLookupsFromReadState(m.GetUnifiedReadStateOrSnapshot(), m.guestMetadataStore)
-	rollups, err := m.listBackupRollupsForAlerts(context.Background())
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to list recovery rollups for backup alerts")
-	} else {
-		m.alertManager.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, m.backupInventoryScopeForAlerts())
-	}
+	m.checkBackupAlerts(context.Background())
 
 	// Limit how many guests we check per cycle to prevent blocking with large datasets
 	const maxGuestsPerCycle = 50

@@ -142,18 +142,31 @@ func guestAgentPath(path string) (string, int, bool) {
 func (c *Client) verifyGuestAgentUnlocked(ctx context.Context, node string, vmid int) error {
 	// The config endpoint contains the authoritative PVE operation lock even
 	// when a PVE version omits it from status/current or cluster/resources.
-	config, err := c.GetVMConfig(ctx, node, vmid)
-	if err != nil || config == nil {
+	// Unlike an ordinary config read, redirected or ambiguous evidence cannot
+	// establish the lock on the endpoint about to receive this guest command.
+	lockClient := *c.httpClient
+	lockClient.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	resp, err := c.requestWithRetryUsingClient(ctx, http.MethodGet, fmt.Sprintf("/nodes/%s/qemu/%d/config", node, vmid), nil, false, &lockClient)
+	if err != nil {
 		return &guestAgentDeferredError{reason: "lock-unverified", cause: err}
 	}
-	if value, exists := config["lock"]; exists {
-		lock, ok := value.(string)
-		if !ok {
-			return &guestAgentDeferredError{reason: "lock-unverified"}
-		}
-		if strings.TrimSpace(lock) != "" {
-			return &guestAgentDeferredError{reason: "vm-locked"}
-		}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return &guestAgentDeferredError{reason: "lock-unverified"}
+	}
+	body, readErr := readResponseBodyLimited(resp.Body)
+	closeErr := resp.Body.Close()
+	if readErr != nil || closeErr != nil {
+		return &guestAgentDeferredError{reason: "lock-unverified", cause: errors.Join(readErr, closeErr)}
+	}
+	lock, valid := guestAgentConfigLock(body)
+	if !valid {
+		return &guestAgentDeferredError{reason: "lock-unverified"}
+	}
+	if strings.TrimSpace(lock) != "" {
+		return &guestAgentDeferredError{reason: "vm-locked"}
 	}
 	return nil
 }
@@ -186,12 +199,23 @@ func (c *Client) getGuestAgent(ctx context.Context, path, node string, vmid int)
 			uncertain = true
 			return nil, &guestAgentDeferredError{reason: "agent-response-incomplete", cause: err}
 		}
-		// Explicit refusals/unsupported commands remain ordinary errors. An
-		// uncertain completion blocks every command, not just this method.
+		// A complete gateway/server error can follow a consumed command. Use
+		// the actual wire status, never an "API error" quoted in body text.
+		// Specific terminal rejections remain errors, not successful telemetry.
 		lower := strings.ToLower(err.Error())
-		uncertain = !strings.Contains(lower, "api error") || ctx.Err() != nil || strings.Contains(lower, "timeout") || strings.Contains(lower, "timed out") || strings.Contains(lower, "wrong command id")
+		uncertain = ctx.Err() != nil || strings.Contains(lower, "timeout") || strings.Contains(lower, "timed out") || strings.Contains(lower, "wrong command id")
 		if uncertain {
 			return nil, &guestAgentDeferredError{reason: "agent-timeout", cause: err}
+		}
+		var response *apiResponseError
+		if !errors.As(err, &response) {
+			uncertain = true
+			return nil, &guestAgentDeferredError{reason: "agent-timeout", cause: err}
+		}
+		if response.statusCode == http.StatusRequestTimeout ||
+			(response.statusCode >= 500 && !response.guestCommandRejected) {
+			uncertain = true
+			return nil, &guestAgentDeferredError{reason: "agent-completion-unverified", cause: err}
 		}
 		return nil, err
 	}

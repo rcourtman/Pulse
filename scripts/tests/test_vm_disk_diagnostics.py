@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import textwrap
 import time
 import unittest
 
@@ -25,6 +26,32 @@ BASH = shutil.which("bash")
 REAL_TIMEOUT = shutil.which("timeout")
 PRIVATE = "synthetic-private-infrastructure-marker"
 READS = [["status", "100"], ["config", "100", "--current"]]
+
+
+def guide_section(guide, heading):
+    """Select one named H3, never another section's executable examples."""
+    sections, current = [], None
+    fenced = False
+    for line in guide.splitlines(keepends=True):
+        boundary = None if fenced else re.match(r"^(#{1,3}) (.*?)\s*$", line)
+        if boundary:
+            if current is not None:
+                sections.append("".join(current))
+            current = [] if boundary.group(1) == "###" and boundary.group(2) == heading else None
+        elif current is not None:
+            current.append(line)
+        if line.lstrip().startswith("```"):
+            fenced = not fenced
+    if current is not None:
+        sections.append("".join(current))
+    if len(sections) != 1:
+        raise AssertionError(f"Expected one guide section: {heading}")
+    return sections[0]
+
+
+def bash_examples(section):
+    return [textwrap.dedent(block).strip()
+            for block in re.findall(r"```bash\n(.*?)```", section, re.DOTALL)]
 
 # Record every attempted operation, including prohibited ones. The timeout
 # adapter checks the helper's real deadline arguments; one test uses real
@@ -250,7 +277,7 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
         self.assert_passive(calls, operations=READS[:1])
 
     def test_exact_documented_command_uses_the_passive_helper(self):
-        recipes = re.findall(r"```bash\n(.*?)```", DOC.read_text(), re.DOTALL)
+        recipes = bash_examples(guide_section(DOC.read_text(), "Passive host preflight"))
         self.assertEqual(len(recipes), 1)
         result, calls = self.exercise(recipe=recipes[0])
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -272,6 +299,47 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
 
 
 class VMDiskHelpTest(unittest.TestCase):
+    def test_section_selection_preserves_shell_comments_and_rejects_missing_or_duplicate_headings(self):
+        content = "```bash\n# From the reviewed checkout\n### Shell comment, not a heading\ntrue\n```\n"
+        guide = "### Passive host preflight\n" + content + "## Next\nOther text\n"
+        self.assertEqual(guide_section(guide, "Passive host preflight"), content)
+        for invalid in ("## No passive section\n", guide + "### Passive host preflight\n"):
+            with self.subTest(guide=invalid), self.assertRaises(AssertionError):
+                guide_section(invalid, "Passive host preflight")
+
+    def assert_guide_commands(self, guide):
+        # The planned server pause is intentionally active, unlike the passive
+        # hypervisor diagnostic. Admit only the six reviewed server/timer blocks
+        # here; do not permit arbitrary systemctl or guest commands elsewhere.
+        precaution = guide_section(guide, "Pause Pulse for a planned freeze-enabled backup")
+        self.assertEqual(bash_examples(precaution), [
+            "systemctl show pulse.service --property=LoadState,ActiveState,MainPID",
+            "systemctl show pulse-update.timer --property=LoadState,ActiveState",
+            "sudo systemctl stop pulse-update.timer\n"
+            "systemctl show pulse-update.timer pulse-update.service \\\n"
+            "  --property=Id,LoadState,ActiveState,MainPID",
+            "sudo systemctl stop pulse.service\n"
+            "systemctl show pulse.service --property=LoadState,ActiveState,MainPID",
+            "sudo systemctl start pulse.service\nsystemctl is-active pulse.service",
+            "sudo systemctl start pulse-update.timer",
+        ])
+        for block in bash_examples(guide.replace(precaution, "", 1)):
+            self.assertNotRegex(block, r"\b(curl|wget|qm agent|pveum|systemctl)\b")
+
+    def test_command_boundaries_reject_active_diagnostics_and_unreviewed_pause_operations(self):
+        guide = DOC.read_text()
+        mutations = [
+            guide.replace("sudo bash ./scripts/test-vm-disk.sh 100",
+                          "systemctl restart pulse.service"),
+            guide.replace("sudo systemctl stop pulse.service", "sudo systemctl restart pulse.service"),
+            guide.replace("sudo systemctl start pulse-update.timer", "qm agent 100 ping"),
+            guide + "\n```bash\nsystemctl stop pulse.service\n```\n",
+            guide.replace("sudo bash ./scripts/test-vm-disk.sh 100", "curl https://example.invalid"),
+        ]
+        for index, mutated in enumerate(mutations):
+            with self.subTest(mutation=index), self.assertRaises(AssertionError):
+                self.assert_guide_commands(mutated)
+
     def test_guides_are_mirrored_and_preserve_the_safety_and_proof_boundaries(self):
         for name in ("VM_DISK_MONITORING", "TROUBLESHOOTING"):
             source = (ROOT / f"docs/{name}.md").read_bytes()
@@ -281,8 +349,7 @@ class VMDiskHelpTest(unittest.TestCase):
                        "does not prove thaw", "a backup can", "older copies", "non-zero exit",
                        "host-root diagnostic does not test", "not a claim", "bounded timeouts"):
             self.assertIn(phrase, guide)
-        for block in re.findall(r"```bash\n(.*?)```", guide, re.DOTALL):
-            self.assertNotRegex(block, r"\b(curl|wget|qm agent|pveum|systemctl)\b")
+        self.assert_guide_commands(guide)
         self.assertNotIn("GUEST_AGENT_FSINFO_TIMEOUT=", guide)
 
 

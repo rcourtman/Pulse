@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "decision": "No screenshots are proposed because this checkpoint changes lifecycle replay, incident-history occurrence boundaries, and backend ownership of retained-delivery controls without changing visual presentation. Static images cannot prove delayed replay, reload behavior, queue ownership, acknowledgement isolation, or ordinary destination delivery.",
+  "captures": []
+}

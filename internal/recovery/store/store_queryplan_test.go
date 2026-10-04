@@ -296,3 +296,18 @@ func recoveryOutcomeForIndex(i int) recovery.Outcome {
 func twoDigit(v int) string {
 	return fmt.Sprintf("%02d", v)
 }
+
+// #2465: enumerate narrow indexed scope keys and seek each latest row. Ranking
+// every historical evidence payload can monopolise the one recovery connection
+// and make the otherwise quick backup-age rollup read miss its deadline.
+func TestLatestProtectionObservationPlanAvoidsHistoricalPayloadScan(t *testing.T) {
+	s := observationHistoryStore(t, 1000)
+	plan := explainRecoveryQueryPlan(t, s.db, latestProtectionObservationSQL(t))
+	t.Logf("production latest-observation plan:\n%s", plan)
+	if !strings.Contains(plan, "USING COVERING INDEX idx_protection_provider_observations_scope") {
+		t.Error("scope enumeration must read the narrow covering index, not every historical payload")
+	}
+	if !strings.Contains(plan, "SEARCH candidate USING INDEX idx_protection_provider_observations_scope (provider=? AND scope=?)") {
+		t.Error("latest evidence must be selected through a provider/scope index seek")
+	}
+}

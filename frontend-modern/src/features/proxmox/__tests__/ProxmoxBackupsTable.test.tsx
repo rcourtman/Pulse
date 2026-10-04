@@ -4,6 +4,14 @@ import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
+import {
+  BACKUP_IDENTITY_NOW,
+  identityGuest,
+  identityArchive,
+  identityPBS,
+  identitySnapshot,
+  identityTask,
+} from '../__fixtures__/backupIdentity';
 import { buildBackupServerRows } from '../ProxmoxBackupServersTable';
 import proxmoxBackupServersTableSource from '../ProxmoxBackupServersTable.tsx?raw';
 import proxmoxBackupsTableSource from '../ProxmoxBackupsTable.tsx?raw';
@@ -214,6 +222,55 @@ beforeEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
+  it('keeps successful backup inventory independent of unavailable datastore capacity', async () => {
+    mockBackupAPIs();
+    const failed = {
+      ...pbsServerResource,
+      pbs: {
+        ...pbsServerResource.pbs!,
+        datastores: [
+          {
+            name: 'main',
+            total: 0,
+            used: 0,
+            available: 0,
+            usagePercent: 0,
+            status: 'unavailable',
+            error: 'PRIVATE_PROVIDER_ERROR_SENTINEL',
+          },
+        ],
+      },
+    } as Resource;
+    const [servers, setServers] = createSignal([failed]);
+    const { container } = renderInRouter(() => (
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[workloadResource]}
+        servers={servers()}
+      />
+    ));
+    // The router mounts its page asynchronously. Wait for the capacity notice
+    // before binding page-level queries to the server table.
+    await screen.findByText('Unavailable');
+    const table = container.querySelector('[data-proxmox-backups-table="servers"]') as HTMLElement;
+    const backupCount = () => {
+      const index = Array.from(table.querySelectorAll('th')).findIndex(
+        (head) => head.getAttribute('aria-label') === 'Backups',
+      );
+      return table.querySelector('tbody tr')!.querySelectorAll('td')[index].textContent;
+    };
+    await within(table).findByText('Unavailable');
+    await waitFor(() => expect(backupCount()).toBe('1'));
+    await screen.findAllByText('Protected');
+    expect(container.innerHTML).not.toContain('PRIVATE_PROVIDER_ERROR_SENTINEL');
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
+
+    setServers([pbsServerResource]);
+    await waitFor(() => expect(within(table).queryByText('Unavailable')).not.toBeInTheDocument());
+    expect(backupCount()).toBe('1');
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
+  });
+
   it('uses a corroborated PBS host link for Backups History despite a PVE-only name collision', () => {
     const pbs = {
       ...pbsServerResource,
@@ -1091,5 +1148,90 @@ describe('backup-date-evidence connected inventory', () => {
     expect(lastBackupCell()).not.toHaveTextContent('None');
     expect(lastBackupCell()).not.toHaveTextContent('Unknown');
     expect(within(coverageRow()).getByText('Protected')).toBeInTheDocument();
+  });
+});
+
+describe('backup-identity: connected Coverage and By date', () => {
+  const mockIdentityAPIs = () => {
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse({
+          data:
+            url === '/api/backups/pve'
+              ? {
+                  storageBackups: [identityArchive()],
+                  guestSnapshots: [identitySnapshot()],
+                  backupTasks: [identityTask()],
+                }
+              : { backups: [identityPBS()] },
+        }),
+      ),
+    );
+    apiFetchJSONMock.mockResolvedValue({ data: [], policy: {}, meta: {} });
+    vi.spyOn(Date, 'now').mockReturnValue(BACKUP_IDENTITY_NOW);
+  };
+  afterEach(() => vi.restoreAllMocks());
+
+  it('keeps all three artifacts and the successful task with the scoped owner through reorder and display rename', async () => {
+    mockIdentityAPIs();
+    window.history.replaceState({}, '', '/proxmox/backups/coverage');
+    const east = identityGuest('east-100', 'east', 'pve-1');
+    const west = identityGuest('west-100', 'west', 'pve-10');
+    const [workloads, setWorkloads] = createSignal([west, east]);
+    const { container } = renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={workloads()} />
+    ));
+    const rowFor = (name: string) =>
+      Array.from(container.querySelectorAll('[data-proxmox-backup-row="coverage"]')).find((row) =>
+        row.textContent?.includes(name),
+      ) as HTMLElement;
+    await waitFor(() => expect(rowFor('east-100')).toHaveTextContent('OK'));
+    expect(rowFor('west-100')).not.toHaveTextContent('OK');
+    expect(within(rowFor('west-100')).getByTitle('No recent task')).toBeInTheDocument();
+    const toggle = within(rowFor('east-100')).getByRole('button', { name: /expand details/i });
+    await fireEvent.click(toggle);
+    const detailID = toggle.getAttribute('aria-controls')!;
+    await waitFor(() => expect(document.getElementById(detailID)).toHaveTextContent('Snapshot'));
+    expect(document.getElementById(detailID)).toHaveTextContent('PVE file');
+    expect(document.getElementById(detailID)).toHaveTextContent('PBS');
+    setWorkloads([east, { ...west, proxmox: { ...west.proxmox!, nodeDisplayName: 'pve-1' } }]);
+    await waitFor(() => expect(rowFor('east-100')).toHaveTextContent('OK'));
+    expect(within(rowFor('east-100')).getByRole('button', { name: /collapse details/i })).toBe(
+      toggle,
+    );
+    expect(rowFor('west-100')).not.toHaveTextContent('OK');
+    expect(document.getElementById(detailID)).toHaveTextContent('PVE file');
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pve')).toHaveLength(1);
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
+  });
+
+  it('withdraws ambiguous PBS ownership without losing the artifact, PVE owner or server posture', async () => {
+    mockIdentityAPIs();
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    const east = identityGuest('east-100', 'east', 'pve-1');
+    const west = identityGuest('west-100', 'west', 'pve-10');
+    const [workloads, setWorkloads] = createSignal([west, east]);
+    const { container } = renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={workloads()} />
+    ));
+    const artifacts = () =>
+      Array.from(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]'));
+    await waitFor(() => expect(artifacts()).toHaveLength(3));
+    expect(artifacts().every((row) => row.textContent?.includes('east-100'))).toBe(true);
+    setWorkloads([identityGuest('west-100', 'west', 'pve-1'), east]);
+    await waitFor(() =>
+      expect(artifacts().filter((row) => row.textContent?.includes('east-100'))).toHaveLength(2),
+    );
+    const unresolved = artifacts().find((row) => !row.textContent?.includes('east-100'))!;
+    expect(unresolved).toHaveTextContent('VM 100');
+    expect(unresolved).toHaveTextContent('PBS');
+    expect(artifacts()).toHaveLength(3);
+    await fireEvent.click(screen.getByRole('link', { name: 'Coverage' }));
+    await fireEvent.click(screen.getByRole('button', { name: /1 unmatched backup/ }));
+    await waitFor(() =>
+      expect(screen.getByText('Not evaluated', { exact: true })).toBeInTheDocument(),
+    );
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pve')).toHaveLength(1);
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
   });
 });

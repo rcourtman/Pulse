@@ -20,6 +20,27 @@
 
 ## Purpose
 
+### Platform connection alerts share the constructed runtime owners
+
+The default monitor's connection-alert snapshot callback is installed only after
+TrueNAS and VMware pollers have been constructed. It captures those exact
+router-owned instances, as used by the request-time connections ledger, rather
+than startup's nil fields. A runtime inventory or login failure can therefore
+reach the existing connection-degraded detector with the same state, error
+category and observation time shown by `GET /api/connections`.
+
+Existing three-observation firing, healthy recovery confirmation, disabled and
+paused suppression, tenant separation and source-specific policy are unchanged.
+This preserves the existing default-monitor scope; it does not add per-tenant
+alert wiring, a probe, route, permission, wire field or new detector. Saved Tests
+and configured scope still cannot prove a TrueNAS runtime poll.
+`TestRouterPlatformConnectionAlertsFollowRuntime` in `internal/api/contract_test.go`
+uses the actual constructor, loopback appliance clients, saved config, ledger,
+normal monitor ticker and alert manager. It covers both observed failures,
+paused peers, independent authoritative disable and required-inventory recovery.
+Those controls prove source wiring, not #2382's cause, native appliance recovery
+or release availability.
+
 ### Metrics History responses are bound to the issued selection
 
 The shared History client admits HTTP200 JSON only when the response resource

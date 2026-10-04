@@ -1140,10 +1140,11 @@ func (r ResourceFrontend) NormalizeCollections() ResourceFrontend {
 
 // ResourceMetricFrontend represents a metric value for the frontend.
 type ResourceMetricFrontend struct {
-	Current float64 `json:"current"`
-	Total   *int64  `json:"total,omitempty"`
-	Used    *int64  `json:"used,omitempty"`
-	Free    *int64  `json:"free,omitempty"`
+	Current     float64           `json:"current"`
+	Total       *int64            `json:"total,omitempty"`
+	Used        *int64            `json:"used,omitempty"`
+	Free        *int64            `json:"free,omitempty"`
+	Observation MemoryObservation `json:"observation,omitzero"`
 }
 
 // ResourceNetworkFrontend represents network metrics for the frontend.

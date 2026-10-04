@@ -512,13 +512,19 @@ func TestCloneProxmoxData_NetworkInterfaceIsolation(t *testing.T) {
 }
 
 func TestCloneProxmoxDataMemoryIsolation(t *testing.T) {
+	observation := models.MemoryObservation{State: "last-known", Source: "guest-agent-meminfo", ObservedAt: time.Now().Add(-time.Minute)}
 	original := &ProxmoxData{
-		Memory: &models.Memory{Total: 8 << 30, Used: 4 << 30, Usage: 50},
+		Memory: &models.Memory{Total: 8 << 30, Used: 4 << 30, Usage: 50, Observation: observation},
 	}
 	cloned := cloneProxmoxData(original)
+	if cloned.Memory.Observation != observation {
+		t.Fatal("clone lost original memory observation")
+	}
 
 	cloned.Memory.Used = 7 << 30
-	if original.Memory.Used != 4<<30 {
+	cloned.Memory.Observation.State = "current"
+	cloned.Memory.Observation.ObservedAt = time.Now()
+	if original.Memory.Used != 4<<30 || original.Memory.Observation != observation {
 		t.Error("mutating cloned memory should not affect original")
 	}
 }

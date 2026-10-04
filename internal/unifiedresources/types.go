@@ -347,6 +347,9 @@ type MetricValue struct {
 	Percent float64    `json:"percent,omitempty"`
 	Unit    string     `json:"unit,omitempty"`
 	Source  DataSource `json:"-"`
+	// Memory provenance travels with the selected numeric metric, not a
+	// different platform facet retained on a cross-source merged guest.
+	Observation models.MemoryObservation `json:"observation,omitzero"`
 }
 
 // ProxmoxData contains Proxmox-specific data for a resource.

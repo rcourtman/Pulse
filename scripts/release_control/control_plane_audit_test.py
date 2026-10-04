@@ -252,11 +252,12 @@ class ControlPlaneAuditTest(unittest.TestCase):
                         "v6.4.6-rc.1", "6.4.6", "v6.4.6+build.1"):
             with self.subTest(version=version):
                 self.assertEqual(release_branch_for_version(version), "release/v6.4")
+        # Every release from 6.5.0 on is cut from main (founder direction,
+        # 2 October 2026), so later versions need no release-line entry.
         for version in ("6.4.1", "6.4.2", "6.4.7-rc.1", "6.4.60-rc.1", "6.4.50-beta.1", "6.4.40-beta.1",
-                        "6.4.30", "6.3.20", "6.6.0-beta.1"):
+                        "6.4.30", "6.3.20", "6.5.0-rc.1", "6.5.0", "6.5.10-beta.1", "6.6.0-beta.1"):
             with self.subTest(version=version):
                 self.assertEqual(release_branch_for_version(version), "main")
-        self.assertEqual(release_branch_for_version("6.5.10-beta.1"), "release/v6.5")
 
     def test_forward_patch_workflow_branch_contract(self) -> None:
         # Execute the real branch-policy shell only, never dispatch a workflow.

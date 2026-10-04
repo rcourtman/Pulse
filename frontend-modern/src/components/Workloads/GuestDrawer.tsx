@@ -7,12 +7,15 @@ import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import {
+  GUEST_DRAWER_BACKUP_PRECAUTION,
+  getGuestDrawerGuestReadPrecaution,
   getGuestDrawerCurrentMetrics,
   getGuestDrawerDeferredMetrics,
   type GuestDrawerProps,
 } from './guestDrawerModel';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
 import { InlineNotice } from '@/components/shared/InlineNotice';
+import { getShippedDocUrl } from '@/utils/docsLinks';
 import { useGuestDrawerState } from './useGuestDrawerState';
 import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from './GuestDrawerHistory';
 import { GuestDrawerOverview } from './GuestDrawerOverview';
@@ -61,6 +64,8 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
   const historyCurrentMetrics = createMemo(() => getGuestDrawerCurrentMetrics(props.guest));
   const historyDeferredMetrics = createMemo(() => getGuestDrawerDeferredMetrics(props.guest));
 
+  const guestReadPrecaution = createMemo(() => getGuestDrawerGuestReadPrecaution(props.guest));
+
   const headerIndicator = createMemo(() => getSimpleStatusIndicator(props.guest.status));
 
   return (
@@ -97,6 +102,20 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
             actionOnClick={retryDiscoveryRead}
           >
             {message()}
+          </InlineNotice>
+        )}
+      </Show>
+      <Show when={guestReadPrecaution()}>
+        {(message) => (
+          <InlineNotice
+            tone="warning"
+            role="status"
+            data-testid="guest-read-precaution"
+            actionHref={getShippedDocUrl('VM_DISK_MONITORING.md')}
+            actionLabel="Backup safety guidance"
+          >
+            <p>{message()}</p>
+            <p>{GUEST_DRAWER_BACKUP_PRECAUTION}</p>
           </InlineNotice>
         )}
       </Show>
