@@ -175,7 +175,9 @@ export const mappingsToString = (mappings?: Record<string, string>) =>
 
 export const stringToMappings = (input: string) => {
   const result: Record<string, string> = {};
-  splitList(input).forEach((pair) => {
+  // A group name can contain spaces. Unlike scopes and allowed lists, mappings
+  // are separated only by commas or newlines, as shown by mappingsToString.
+  input.split(/[,\r\n]+/).forEach((pair) => {
     const [key, value] = pair.split('=').map((segment) => segment.trim());
     if (key && value) {
       result[key] = value;

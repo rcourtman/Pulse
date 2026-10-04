@@ -1,8 +1,11 @@
 package updates
 
 import (
+	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -238,4 +241,94 @@ func TestSSEBroadcaster_CloseIsIdempotentAndPostCloseSafe(t *testing.T) {
 	if broadcaster.GetClientCount() != 0 {
 		t.Fatal("expected no connected clients after close")
 	}
+}
+
+// A (re)connecting update modal must see the current stage immediately, not
+// after the next stage change, which during a long download can be minutes.
+func TestSSEBroadcaster_AddClientWritesCurrentStatusBeforeReturning(t *testing.T) {
+	broadcaster := NewSSEBroadcaster()
+	defer broadcaster.Close()
+
+	broadcaster.Broadcast(UpdateStatus{Status: "extracting", Progress: 40, Message: "Extracting update..."})
+
+	w := &mockFlushWriter{ResponseRecorder: httptest.NewRecorder()}
+	if client := broadcaster.AddClient(w, "client-now"); client == nil {
+		t.Fatal("AddClient returned nil")
+	}
+
+	body := w.Body.String()
+	if !strings.HasPrefix(body, ": connected\n\n") {
+		t.Fatalf("expected connection preamble first, got %q", body)
+	}
+	if !strings.Contains(body, `data: {"status":"extracting","progress":40`) {
+		t.Fatalf("expected current status on connect, got %q", body)
+	}
+	if w.flushed < 1 {
+		t.Fatal("initial status must be flushed, not left buffered")
+	}
+}
+
+// Broadcasts used to be sent from one goroutine per message, so stages
+// emitted in quick succession could reach a client out of order.
+func TestSSEBroadcaster_DeliversStagesInOrder(t *testing.T) {
+	broadcaster := NewSSEBroadcaster()
+	defer broadcaster.Close()
+
+	w := &syncFlushWriter{}
+	if client := broadcaster.AddClient(w, "client-order"); client == nil {
+		t.Fatal("AddClient returned nil")
+	}
+
+	const stages = 40
+	for i := 1; i <= stages; i++ {
+		broadcaster.Broadcast(UpdateStatus{Status: "verifying", Progress: i})
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && !strings.Contains(w.String(), `"progress":40,`) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	body := w.String()
+	last := -1
+	for i := 1; i <= stages; i++ {
+		idx := strings.Index(body, `"progress":`+strconv.Itoa(i)+`,`)
+		if idx < 0 {
+			t.Fatalf("stage %d never delivered:\n%s", i, body)
+		}
+		if idx < last {
+			t.Fatalf("stage %d delivered out of order:\n%s", i, body)
+		}
+		last = idx
+	}
+}
+
+type syncFlushWriter struct {
+	mu     sync.Mutex
+	header http.Header
+	buf    strings.Builder
+}
+
+func (w *syncFlushWriter) Header() http.Header {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.header == nil {
+		w.header = make(http.Header)
+	}
+	return w.header
+}
+
+func (w *syncFlushWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.buf.Write(p)
+}
+
+func (w *syncFlushWriter) WriteHeader(int) {}
+
+func (w *syncFlushWriter) Flush() {}
+
+func (w *syncFlushWriter) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.buf.String()
 }

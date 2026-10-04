@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render as solidRender, screen, within } from '@solidjs/testing-library';
+import {
+  fireEvent,
+  render as solidRender,
+  screen,
+  within,
+  waitFor,
+} from '@solidjs/testing-library';
 import { Suspense } from 'solid-js';
 
 import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
@@ -161,7 +167,7 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 describe('ResourceDetailDrawer change history section', () => {
   it('keeps current readings separate from stored history samples', () => {
     expect(guestDrawerHistorySource).toContain('currentMetrics');
-    expect(guestDrawerHistorySource).toContain('Collecting history');
+    expect(guestDrawerHistorySource).toContain('No stored history in this range');
     expect(guestDrawerHistorySource).not.toContain('buildFallbackHistoryPoints');
   });
 
@@ -236,7 +242,7 @@ describe('ResourceDetailDrawer change history section', () => {
     );
     expect(resourceDetailDrawerHistoryStateSource).toContain('resourceFacetRelationships');
     expect(resourceDetailDrawerDerivedStateSource).toContain('options.resourceRelationships?.()');
-    expect(resourceDetailDrawerDerivedStateSource).toContain('resource.relationships ?? []');
+    expect(resourceDetailDrawerDerivedStateSource).toContain('resource().relationships ?? []');
     expect(resourceActionHistorySource).toContain('getActionAuditRecordStatePresentation');
     expect(resourceActionHistorySource).toContain('getActionAuditResultPresentation');
     expect(resourceActionHistorySource).toContain('getActionAuditVerificationOutcomePresentation');
@@ -610,7 +616,7 @@ describe('ResourceDetailDrawer change history section', () => {
     await within(contextSection).findByText('Analysis');
     expect(contextSection.querySelector('table')).toBeTruthy();
     expect(contextSection.querySelector('tbody')).toBeTruthy();
-    expect(contextSection.querySelectorAll('tbody[class*="shadow-sm"]')).toHaveLength(1);
+    expect(contextSection.querySelectorAll('tbody[class*="shadow-xs"]')).toHaveLength(1);
     expect(screen.getByText('Health')).toBeInTheDocument();
     expect(screen.getByText('A · 92/100')).toBeInTheDocument();
     expect(screen.getByText('Trend')).toBeInTheDocument();
@@ -1403,5 +1409,62 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(panel.queryByText('Timeline 2')).toBeNull();
     expect(await panel.findByText('CPU spike detected')).toBeInTheDocument();
     expect(panel.queryByText('Routine restart requested')).toBeNull();
+  });
+  it('does not re-display embedded changes after a denied facet read', async () => {
+    facetBundleMock.getFacetBundle.mockRejectedValueOnce(
+      Object.assign(new Error('private response detail'), { status: 403 }),
+    );
+    render(() => (
+      <ResourceDetailDrawer
+        resource={baseResource({
+          recentChanges: [
+            {
+              id: 'embedded',
+              resourceId: 'resource-1',
+              observedAt: '2026-10-03T03:00:00Z',
+              kind: 'restart',
+              sourceType: 'platform_event',
+              confidence: 'high',
+              actor: 'Embedded snapshot actor',
+            },
+          ],
+          facetCounts: { recentChanges: 7 },
+        })}
+      />
+    ));
+    const history = screen.getByTestId('resource-change-history-section');
+    await waitFor(() =>
+      expect(within(history).getByRole('alert')).toHaveTextContent(
+        'Access denied. Check your permissions and license plan.',
+      ),
+    );
+    expect(history).not.toHaveTextContent('Embedded snapshot actor');
+    expect(history).not.toHaveTextContent('No events yet.');
+    expect(history).not.toHaveTextContent('Changes loaded');
+    expect(within(history).getByRole('button', { name: /^Retry$/ })).toBeInTheDocument();
+  });
+
+  it('keeps a failed first action read and retry visible in Manage', async () => {
+    actionAuditMock.listActionAudits.mockRejectedValueOnce(
+      Object.assign(new Error('Actions temporarily unavailable'), { status: 503 }),
+    );
+    render(() => <ResourceDetailDrawer resource={baseResource({})} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('resource-action-history-section')).toHaveTextContent(
+        'Actions temporarily unavailable',
+      ),
+    );
+    const actions = screen.getByTestId('resource-action-history-section');
+    expect(actions).toHaveTextContent('Actions unavailable');
+    expect(actions).not.toHaveTextContent('No actions yet.');
+    actionAuditMock.listActionAudits.mockResolvedValueOnce({
+      audits: [],
+      count: 0,
+      available: true,
+    });
+    fireEvent.click(within(actions).getByRole('button', { name: /^Retry$/ }));
+    await waitFor(() => expect(actions).toHaveTextContent('No actions yet.'));
+    expect(actions).not.toHaveTextContent('Actions temporarily unavailable');
   });
 });

@@ -386,7 +386,7 @@ export const KubernetesStorageTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
-                            <span class="inline-block max-w-[12rem] truncate" title={scope()}>
+                            <span class="inline-block max-w-48 truncate" title={scope()}>
                               {scope()}
                             </span>
                           </TableCell>
@@ -408,10 +408,7 @@ export const KubernetesStorageTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
-                            <span
-                              class="inline-block max-w-[12rem] truncate"
-                              title={policy().title}
-                            >
+                            <span class="inline-block max-w-48 truncate" title={policy().title}>
                               {policy().label}
                             </span>
                           </TableCell>

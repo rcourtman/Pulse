@@ -117,6 +117,10 @@ describe('WelcomeStep', () => {
     expect(
       screen.getByText('docker exec <pulse-container> /app/pulse bootstrap-token'),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText('Container console (Unraid, Portainer, TrueNAS apps)'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('/app/pulse bootstrap-token')).toBeInTheDocument();
     // Absolute path, because pct exec runs with
     // PATH=/sbin:/bin:/usr/sbin:/usr/bin and cannot resolve /usr/local/bin.
     expect(

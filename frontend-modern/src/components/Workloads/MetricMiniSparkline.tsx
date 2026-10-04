@@ -13,11 +13,13 @@ import {
 } from './workloadMetricHistoryModel';
 
 type MetricMiniSparklineValueLabelMode = 'inline' | 'tooltip' | 'hidden';
+export type MetricMiniSparklineValueLabelContext = 'current' | 'last known';
 
 interface MetricMiniSparklineProps {
   series: WorkloadMetricSparklineSeries[];
   valueLabel?: string;
   valueLabelMode?: MetricMiniSparklineValueLabelMode;
+  valueLabelContext?: MetricMiniSparklineValueLabelContext;
   title?: string;
   unit?: string;
   emptyLabel?: string;
@@ -80,11 +82,15 @@ export const MetricMiniSparkline: Component<MetricMiniSparklineProps> = (props) 
   });
   const activeHoverState = createMemo(() => synchronizedState() ?? hoveredState());
   const rootColumns = createMemo(() =>
-    showInlineValue() ? 'grid-cols-[minmax(2.5rem,1fr)_auto]' : 'grid-cols-[minmax(2.5rem,1fr)]',
+    // Narrow workload columns cannot spare a 40px plot plus its value.
+    // Keep the number readable and let the trend line use the remaining width.
+    showInlineValue() ? 'grid-cols-[minmax(0,1fr)_auto]' : 'grid-cols-[minmax(0,1fr)]',
   );
   const ariaLabel = createMemo(() => {
     const title = props.title || 'Metric history';
-    const value = props.valueLabel ? `, current ${props.valueLabel}` : '';
+    const value = props.valueLabel
+      ? `, ${props.valueLabelContext ?? 'current'} ${props.valueLabel}`
+      : '';
     return `${title}${value}`;
   });
   const formatHoverValue = (value: number) =>
@@ -172,7 +178,7 @@ export const MetricMiniSparkline: Component<MetricMiniSparklineProps> = (props) 
         </Show>
       </svg>
       <Show when={showInlineValue()}>
-        <span class="block max-w-[5.5rem] overflow-hidden text-ellipsis whitespace-nowrap text-right text-[10px] font-medium tabular-nums text-base-content">
+        <span class="block max-w-22 overflow-hidden text-ellipsis whitespace-nowrap text-right text-[10px] font-medium tabular-nums text-base-content">
           {displayLabel()}
         </span>
       </Show>

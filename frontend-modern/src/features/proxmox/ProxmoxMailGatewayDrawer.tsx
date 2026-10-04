@@ -126,7 +126,7 @@ function StackedBar(props: { segments: StackedSegment[]; ariaLabel: string }) {
             const share = total() > 0 ? (seg.value / total()) * 100 : 0;
             return (
               <div class="flex items-center gap-1.5">
-                <span class={`inline-block h-2 w-2 rounded-sm ${seg.tone}`} aria-hidden="true" />
+                <span class={`inline-block h-2 w-2 rounded-xs ${seg.tone}`} aria-hidden="true" />
                 <span class="text-muted">{seg.label}</span>
                 <span class="text-base-content font-semibold tabular-nums">
                   {formatPlatformTableIntegerValue(seg.value)}
@@ -168,7 +168,7 @@ function SpamHistogram(props: { buckets: PMGSpamBucket[] }) {
           return (
             <div class="flex flex-1 min-w-[20px] flex-col items-center gap-1">
               <div
-                class={`w-full rounded-sm ${tone}`}
+                class={`w-full rounded-xs ${tone}`}
                 style={{ height: `${Math.max(heightPct, 2)}%` }}
                 title={`Score ${bucket.score}: ${formatPlatformTableIntegerValue(bucket.count)}`}
               />
@@ -199,7 +199,7 @@ function InOutBar(props: {
     <div class="space-y-1">
       <div class="text-[11px] text-muted">{props.label}</div>
       <div
-        class="relative flex h-4 w-full overflow-hidden rounded bg-surface-hover"
+        class="relative flex h-4 w-full overflow-hidden rounded-sm bg-surface-hover"
         title={`In ${format(props.inValue)} · Out ${format(props.outValue)}`}
       >
         <div class="relative bg-blue-500/60" style={{ width: `${inWidth}%` }} />
@@ -620,7 +620,7 @@ export const ProxmoxMailGatewayDrawer: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('name')} font-mono text-[11px] text-base-content`}
                           >
-                            <span class="inline-block max-w-[14rem] truncate" title={domain.domain}>
+                            <span class="inline-block max-w-56 truncate" title={domain.domain}>
                               {domain.domain || '—'}
                             </span>
                           </TableCell>
@@ -667,7 +667,7 @@ export const ProxmoxMailGatewayDrawer: Component<{
                 <For each={relayDomains()}>
                   {(rd) => (
                     <span
-                      class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] font-mono text-base-content"
+                      class="inline-flex items-center rounded-xs bg-surface-alt px-1.5 py-0.5 text-[10px] font-mono text-base-content"
                       title={rd.comment || rd.domain}
                     >
                       {rd.domain}

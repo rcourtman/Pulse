@@ -1,7 +1,7 @@
 import { getSourcePlatformLabel, getSourcePlatformPresentation } from '@/utils/sourcePlatforms';
 
 const BASE_BADGE =
-  'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap';
+  'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap';
 
 export interface SourcePlatformBadge {
   label: string;

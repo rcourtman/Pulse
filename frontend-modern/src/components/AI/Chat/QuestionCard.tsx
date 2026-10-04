@@ -40,10 +40,10 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
   };
 
   return (
-    <div class="rounded-md border border-blue-300 dark:border-blue-700 overflow-hidden shadow-sm">
+    <div class="rounded-md border border-blue-300 dark:border-blue-700 overflow-hidden shadow-xs">
       {/* Header */}
-      <div class="px-3 py-2 text-xs font-medium flex items-center gap-2 bg-blue-50 dark:bg-blue-900 text-blue-800 dark:text-blue-200 border-b border-blue-200 dark:border-blue-800">
-        <div class="p-1 rounded bg-blue-100 dark:bg-blue-800">
+      <div class="px-3 py-2 text-xs font-medium flex items-center gap-2 bg-blue-50 dark:bg-blue-900/25 text-blue-800 dark:text-blue-200 border-b border-blue-200 dark:border-blue-800">
+        <div class="p-1 rounded-sm bg-blue-100 dark:bg-blue-800">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
@@ -57,7 +57,7 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
       </div>
 
       {/* Questions */}
-      <div class="px-3 py-3 bg-blue-50 dark:bg-blue-900 space-y-4">
+      <div class="px-3 py-3 bg-blue-50 dark:bg-blue-900/25 space-y-4">
         <For each={props.question.questions}>
           {(q) => (
             <div class="space-y-2">
@@ -71,7 +71,7 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
                   type="text"
                   value={answers()[q.id] || ''}
                   onInput={(e) => handleInputChange(q.id, e.currentTarget.value)}
-                  class="w-full px-3 py-2 text-sm border border-blue-200 dark:border-blue-700 rounded-md bg-surface text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  class="w-full px-3 py-2 text-sm border border-blue-200 dark:border-blue-700 rounded-md bg-surface text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   placeholder={AI_CHAT_QUESTION_CARD_PLACEHOLDER}
                   disabled={props.question.isAnswering}
                 />
@@ -88,7 +88,7 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
                         class={`w-full px-3 py-2 text-sm text-left rounded-md border transition-colors ${
                           answers()[q.id] === option.value
                             ? 'bg-blue-100 dark:bg-blue-800 border-blue-400 dark:border-blue-600 text-blue-800 dark:text-blue-200'
-                            : 'bg-surface border-blue-200 dark:border-blue-700 text-base-content hover:bg-blue-50 dark:hover:bg-blue-900'
+                            : 'bg-surface border-blue-200 dark:border-blue-700 text-base-content hover:bg-blue-50 dark:hover:bg-blue-900/25'
                         } ${props.question.isAnswering ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         <div class="flex flex-col gap-0.5">
@@ -117,7 +117,7 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
                 ? 'bg-blue-400 text-white cursor-wait'
                 : !isValid()
                   ? 'bg-surface-hover text-muted cursor-not-allowed'
-                  : 'bg-blue-500 hover:bg-blue-600 text-white shadow-sm hover:shadow-sm'
+                  : 'bg-blue-500 hover:bg-blue-600 text-white shadow-xs hover:shadow-xs'
             }`}
           >
             <Show

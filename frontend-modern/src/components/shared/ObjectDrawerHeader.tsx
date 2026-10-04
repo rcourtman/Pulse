@@ -24,14 +24,14 @@ export function ObjectDrawerHeader(props: ObjectDrawerHeaderProps) {
     >
       <button
         type="button"
-        class="absolute inset-0 z-0 cursor-pointer rounded-md transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        class="absolute inset-0 z-0 cursor-pointer rounded-md transition-colors hover:bg-surface-hover focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
         onClick={local.onCollapse}
         aria-label={local.collapseLabel}
         title={local.collapseLabel}
       />
       <div class="pointer-events-none relative z-10 min-w-0 flex-1">{local.children}</div>
       <Show when={local.actions}>
-        <div class="pointer-events-none relative z-10 flex shrink-0 items-center gap-1.5 [&>*]:pointer-events-auto">
+        <div class="pointer-events-none relative z-10 flex shrink-0 items-center gap-1.5 *:pointer-events-auto">
           {local.actions}
         </div>
       </Show>

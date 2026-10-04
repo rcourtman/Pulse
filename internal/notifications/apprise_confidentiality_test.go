@@ -305,9 +305,10 @@ func TestAppriseQueueConfidentiality(t *testing.T) {
 					t.Fatal(err)
 				}
 				q.SetProcessor(n.ProcessQueuedNotification)
-				// SetProcessor wakes the production dispatcher. Do not also invoke
-				// processBatch concurrently: that manufactures a second dispatcher
-				// with a stale pre-retry snapshot. Observe its committed audit.
+				// SetProcessor wakes the autonomous dispatcher. Do not also run
+				// a manual batch against the same pending snapshot: that can
+				// claim a retry before its scheduled wake. Observe the worker's
+				// committed audit, then pause retries before checking the row.
 				deadline := time.Now().Add(3 * time.Second)
 				for {
 					var count int
@@ -336,7 +337,7 @@ func TestAppriseQueueConfidentiality(t *testing.T) {
 					wantStatus = QueueStatusDLQ
 				}
 				if gotStatus != string(wantStatus) || attempts != 1 || rawConfig != string(config) {
-					t.Error("queue lifecycle, attempt budget or admitted credentials changed")
+					t.Errorf("queue lifecycle: status=%s want=%s attempts=%d want=1 configUnchanged=%t", gotStatus, wantStatus, attempts, rawConfig == string(config))
 				}
 				if status == http.StatusUnauthorized && (!lastError.Valid || !strings.Contains(lastError.String, "HTTP 401")) {
 					t.Error("DLQ error observation was lost")

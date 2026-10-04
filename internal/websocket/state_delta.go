@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 const resourceDeltaField = "resourceDelta"
@@ -56,28 +58,91 @@ func extractKeyedEntries(
 	if err := json.Unmarshal(encoded, &entries); err != nil {
 		return nil, nil, fmt.Errorf("decode state %s: %w", field, err)
 	}
-	byID := make(map[string]json.RawMessage)
+	// Decode all identities in one pass rather than allocating a decoder and
+	// throwaway struct for every entry. Keys must come from the encoded entries,
+	// not hints from the source value: checking one hinted ID cannot establish
+	// the identity of the rest, especially if a marshaler changes their order.
+	identities := make([]struct {
+		ID string `json:"id"`
+	}, len(entries))
+	if err := json.Unmarshal(encoded, &identities); err != nil {
+		return nil, nil, fmt.Errorf("decode state %s identity: %w", field, err)
+	}
+
+	byID := make(map[string]json.RawMessage, len(entries))
 	order := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		var identity struct {
-			ID string `json:"id"`
-		}
-		if err := json.Unmarshal(entry, &identity); err != nil {
-			return nil, nil, fmt.Errorf("decode state %s identity: %w", field, err)
-		}
-		if identity.ID == "" {
+	for i, entry := range entries {
+		id := identities[i].ID
+		if id == "" {
 			return nil, nil, fmt.Errorf("state %s entry is missing id", field)
 		}
-		if _, exists := byID[identity.ID]; exists {
-			return nil, nil, fmt.Errorf("state %s id %q is duplicated", field, identity.ID)
+		if _, exists := byID[id]; exists {
+			return nil, nil, fmt.Errorf("state %s id %q is duplicated", field, id)
 		}
-		byID[identity.ID] = append(json.RawMessage(nil), entry...)
-		order = append(order, identity.ID)
+		// RawMessage.UnmarshalJSON already copied each entry into its own buffer.
+		// Retaining that buffer is safe; copying it a second time is redundant.
+		byID[id] = entry
+		order = append(order, id)
 	}
 	return byID, order, nil
 }
 
 func buildClientStateSnapshot(state interface{}) (*clientStateSnapshot, error) {
+	// Unknown shapes and custom marshalers retain the generic wire-authoritative
+	// path. Only the concrete frontend projection can avoid the whole resources
+	// array's encode/decode/copy round trip.
+	if _, custom := state.(json.Marshaler); !custom {
+		switch frontend := state.(type) {
+		case models.StateFrontend:
+			return buildFrontendStateSnapshot(frontend)
+		case *models.StateFrontend:
+			if frontend != nil {
+				return buildFrontendStateSnapshot(*frontend)
+			}
+		}
+	}
+	return buildGenericClientStateSnapshot(state)
+}
+
+func buildFrontendStateSnapshot(state models.StateFrontend) (*clientStateSnapshot, error) {
+	resources := state.Resources
+	// Encode the rest through the existing generic path so future top-level
+	// fields, omitempty, nil/empty arrays and keyed-field fallback stay identical.
+	// This is a local value copy; no source slices/maps are modified or cached.
+	state.Resources = nil
+	snapshot, err := buildGenericClientStateSnapshot(state)
+	if err != nil {
+		return nil, err
+	}
+	snapshot.resources = make(map[string]json.RawMessage, len(resources))
+	snapshot.resourceOrder = make([]string, 0, len(resources))
+	for i := range resources {
+		encoded, err := json.Marshal(&resources[i])
+		if err != nil {
+			return nil, fmt.Errorf("marshal state resource: %w", err)
+		}
+		// Identity still comes from EVERY encoded entry, never a source-ID hint.
+		// json.Marshal owns this buffer; it can be retained directly as immutable
+		// snapshot data without whole-state and RawMessage decoding copies.
+		var identity struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(encoded, &identity); err != nil {
+			return nil, fmt.Errorf("decode state resource identity: %w", err)
+		}
+		if identity.ID == "" {
+			return nil, fmt.Errorf("state resource entry is missing id")
+		}
+		if _, exists := snapshot.resources[identity.ID]; exists {
+			return nil, fmt.Errorf("state resource id %q is duplicated", identity.ID)
+		}
+		snapshot.resources[identity.ID] = encoded
+		snapshot.resourceOrder = append(snapshot.resourceOrder, identity.ID)
+	}
+	return snapshot, nil
+}
+
+func buildGenericClientStateSnapshot(state interface{}) (*clientStateSnapshot, error) {
 	encoded, err := json.Marshal(state)
 	if err != nil {
 		return nil, fmt.Errorf("marshal state snapshot: %w", err)
@@ -117,7 +182,7 @@ func buildClientStateSnapshot(state interface{}) (*clientStateSnapshot, error) {
 		snapshot.keyed[keyedField.field] = &keyedFieldSnapshot{
 			entries: entries,
 			order:   order,
-			raw:     append(json.RawMessage(nil), encodedField...),
+			raw:     encodedField,
 		}
 		delete(fields, keyedField.field)
 	}

@@ -149,7 +149,7 @@ const HostDetailsDisclosure: Component<{
       class={props.class}
       contentClass={
         props.contentClass ??
-        'mt-3 flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(50%-0.375rem)] [&>*]:min-w-[220px] [&>*]:max-w-full [&>*]:overflow-hidden'
+        'mt-3 flex flex-wrap gap-3 *:flex-1 *:basis-[calc(50%-0.375rem)] *:min-w-[220px] *:max-w-full *:overflow-hidden'
       }
       dataTestId="resource-host-details-section"
     >
@@ -270,7 +270,7 @@ export const ResourceAccessDisclosure: Component<{
                 <a
                   href={link.href}
                   aria-label={link.ariaLabel}
-                  class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
+                  class="inline-flex items-center rounded-sm border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-200 dark:hover:bg-blue-900/25"
                 >
                   {link.compactLabel}
                 </a>
@@ -352,8 +352,9 @@ export const ResourceAccessDisclosure: Component<{
 export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOverviewTabProps> = (
   props,
 ) => {
-  const { resource, drawer } = props;
-  const showPlatformId = shouldShowResourcePlatformId(resource);
+  const resource = () => props.resource;
+  const { drawer } = props;
+  const showPlatformId = () => shouldShowResourcePlatformId(resource());
   const pbsJobHealthEvidence = () => buildPbsJobHealthEvidenceModel(drawer.pbsData());
   const compactTableRow = () => props.presentation === 'table-row';
   const shouldRenderChangeHistorySection = () =>
@@ -363,14 +364,14 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
     drawer.resourceTimelineCount() > 0 ||
     Boolean(drawer.facetBundleError());
   const attentionItems = () => {
-    const items = (resource.alerts ?? []).map((alert) => ({
+    const items = (resource().alerts ?? []).map((alert) => ({
       id: alert.id,
       message: alert.message,
       severity: alert.level,
     }));
     const healthIssue = drawer.healthIssue();
     if (healthIssue && !items.some((item) => item.message === healthIssue.primary)) {
-      const severity = /critical|failed|faulted|error/i.test(resource.status)
+      const severity = /critical|failed|faulted|error/i.test(resource().status)
         ? 'critical'
         : 'warning';
       items.unshift(
@@ -389,19 +390,19 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
       <DrawerAttentionSection items={attentionItems()} />
       <TechnicalDetailsSection dataTestId="resource-technical-details">
         <InlineResourceSummaryTables
-          resource={resource}
+          resource={resource()}
           drawer={drawer}
-          showPlatformId={showPlatformId}
+          showPlatformId={showPlatformId()}
           content="all"
           dataTestId="resource-technical-summary-section"
         />
       </TechnicalDetailsSection>
 
-      <Show when={resource.availability || (resource.availabilityChecks?.length ?? 0) > 0}>
-        <div class="flex flex-wrap gap-3 [&>*]:min-w-[240px] [&>*]:flex-1">
+      <Show when={resource().availability || (resource().availabilityChecks?.length ?? 0) > 0}>
+        <div class="flex flex-wrap gap-3 *:min-w-[240px] *:flex-1">
           <AvailabilityProbeStatusCards
-            availability={resource.availability}
-            checks={resource.availabilityChecks}
+            availability={resource().availability}
+            checks={resource().availabilityChecks}
           />
         </div>
       </Show>
@@ -460,7 +461,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   label="Change kind"
                   fieldBaseClass="space-y-1 text-[10px]"
                   labelClass="text-muted"
-                  selectBaseClass="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                  selectBaseClass="w-full rounded-sm border border-border bg-base px-2 py-1 text-[11px] text-base-content"
                   value={drawer.timelineKindFilter()}
                   onChange={(event) =>
                     drawer.setTimelineKindFilter(
@@ -476,7 +477,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   label="Source type"
                   fieldBaseClass="space-y-1 text-[10px]"
                   labelClass="text-muted"
-                  selectBaseClass="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                  selectBaseClass="w-full rounded-sm border border-border bg-base px-2 py-1 text-[11px] text-base-content"
                   value={drawer.timelineSourceTypeFilter()}
                   onChange={(event) =>
                     drawer.setTimelineSourceTypeFilter(
@@ -492,7 +493,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   label="Source adapter"
                   fieldBaseClass="space-y-1 text-[10px]"
                   labelClass="text-muted"
-                  selectBaseClass="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                  selectBaseClass="w-full rounded-sm border border-border bg-base px-2 py-1 text-[11px] text-base-content"
                   value={drawer.timelineSourceAdapterFilter()}
                   onChange={(event) =>
                     drawer.setTimelineSourceAdapterFilter(
@@ -525,7 +526,10 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             </Show>
 
             <Show when={drawer.facetBundleError()}>
-              <div class="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-700 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
+              <div
+                role="alert"
+                class="mt-2 rounded-sm border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-700 dark:border-amber-700 dark:bg-amber-900/25 dark:text-amber-200"
+              >
                 <div class="flex items-start justify-between gap-2">
                   <span>{drawer.facetBundleError()}</span>
                   <button
@@ -542,9 +546,11 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             <Show
               when={drawer.sortedResourceTimeline().length > 0}
               fallback={
-                <div class="mt-3 rounded border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
-                  No events yet.
-                </div>
+                <Show when={!drawer.facetBundleError()}>
+                  <div class="mt-3 rounded-sm border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
+                    No events yet.
+                  </div>
+                </Show>
               }
             >
               <div class="mt-3 space-y-2">
@@ -559,7 +565,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                       : null;
 
                     return (
-                      <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
+                      <div class="rounded-sm border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
                         <div class="flex items-start justify-between gap-3">
                           <div class="min-w-0">
                             <div class="font-medium text-base-content">
@@ -588,28 +594,28 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                             <InfoCardKeyValueRow
                               label="Actor"
                               value={change.actor}
-                              valueClass="break-words"
+                              valueClass="wrap-break-word"
                             />
                           </Show>
                           <Show when={change.from || change.to}>
                             <InfoCardKeyValueRow
                               label="Transition"
                               value={`${change.from || '—'} → ${change.to || '—'}`}
-                              valueClass="break-words"
+                              valueClass="wrap-break-word"
                             />
                           </Show>
                         </div>
                         <Show when={change.reason}>
-                          <div class="mt-1 rounded border border-border bg-base px-2 py-1 text-[10px] text-base-content">
+                          <div class="mt-1 rounded-sm border border-border bg-base px-2 py-1 text-[10px] text-base-content">
                             {change.reason}
                           </div>
                         </Show>
                         <Show when={hasMetadataEntries(change.metadata)}>
-                          <details class="mt-1 rounded border border-border bg-base px-2 py-1">
+                          <details class="mt-1 rounded-sm border border-border bg-base px-2 py-1">
                             <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
                               Metadata
                             </summary>
-                            <pre class="mt-2 overflow-auto whitespace-pre-wrap break-words text-[10px] text-base-content">
+                            <pre class="mt-2 overflow-auto whitespace-pre-wrap wrap-break-word text-[10px] text-base-content">
                               {JSON.stringify(change.metadata ?? {}, null, 2)}
                             </pre>
                           </details>
@@ -621,7 +627,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                               {(relatedResource) => {
                                 const label = drawer.resolveResourceLabel(relatedResource);
                                 return (
-                                  <span class="inline-flex rounded bg-surface px-1.5 py-0.5 text-[10px] text-base-content">
+                                  <span class="inline-flex rounded-sm bg-surface px-1.5 py-0.5 text-[10px] text-base-content">
                                     {label}
                                   </span>
                                 );
@@ -668,7 +674,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
           >
             <div
               data-testid="resource-support-sections"
-              class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(50%-0.375rem)] [&>*]:min-w-[260px] [&>*]:max-w-full [&>*]:overflow-hidden"
+              class="flex flex-wrap gap-3 *:flex-1 *:basis-[calc(50%-0.375rem)] *:min-w-[260px] *:max-w-full *:overflow-hidden"
             >
               <Show when={drawer.hasTrueNASDetails()}>
                 <TrueNASDetailsDisclosure drawer={drawer} class="h-full" />
@@ -690,7 +696,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   contentClass="mt-3 space-y-3"
                   dataTestId="resource-investigation-context"
                 >
-                  <ResourceInvestigationContextTables resource={resource} drawer={drawer} />
+                  <ResourceInvestigationContextTables resource={resource()} drawer={drawer} />
                 </SupportDisclosure>
               </Show>
 
@@ -706,8 +712,8 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   contentClass="mt-3 space-y-3"
                   dataTestId="resource-service-details-section"
                 >
-                  <Show when={resource.type === 'docker-host'}>
-                    <div class="rounded border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900">
+                  <Show when={resource().type === 'docker-host'}>
+                    <div class="rounded-sm border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900/25">
                       <div class="mb-2 flex items-center justify-between gap-2">
                         <div class="text-[11px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">
                           Docker runtime
@@ -751,7 +757,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                 drawer.dockerHostCommand()?.status
                               }
                             >
-                              <div class="rounded border border-sky-200 bg-surface px-2 py-1.5 text-[10px] dark:border-sky-700">
+                              <div class="rounded-sm border border-sky-200 bg-surface px-2 py-1.5 text-[10px] dark:border-sky-700">
                                 <InfoCardKeyValueRow
                                   label="Action"
                                   value={formatIdentifierLabel(drawer.dockerHostCommand()?.type, {
@@ -790,12 +796,12 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                             </Show>
 
                             <Show when={drawer.dockerActionError()}>
-                              <div class="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900 dark:text-red-200">
+                              <div class="rounded-sm border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900/25 dark:text-red-200">
                                 {drawer.dockerActionError()}
                               </div>
                             </Show>
                             <Show when={drawer.dockerActionNote()}>
-                              <div class="rounded border border-sky-200 bg-surface px-2 py-1.5 text-[10px] text-base-content dark:border-sky-700">
+                              <div class="rounded-sm border border-sky-200 bg-surface px-2 py-1.5 text-[10px] text-base-content dark:border-sky-700">
                                 {drawer.dockerActionNote()}
                               </div>
                             </Show>
@@ -860,11 +866,11 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   <Show when={drawer.pbsData()}>
                     {(pbs) => {
                       const connection = getServiceHealthPresentation(
-                        resource.status,
+                        resource().status,
                         pbs().connectionHealth,
                       );
                       return (
-                        <div class="rounded border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-700 dark:bg-indigo-900">
+                        <div class="rounded-sm border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-700 dark:bg-indigo-900/25">
                           <div class="mb-2 flex items-center justify-between gap-2">
                             <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
                               PBS
@@ -887,10 +893,10 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                             <Show when={pbs().version}>
                               <InfoCardKeyValueRow label="Version" value={pbs().version} />
                             </Show>
-                            <Show when={pbs().uptimeSeconds || resource.uptime}>
+                            <Show when={pbs().uptimeSeconds || resource().uptime}>
                               <InfoCardKeyValueRow
                                 label="Uptime"
-                                value={formatUptime(pbs().uptimeSeconds ?? resource.uptime ?? 0)}
+                                value={formatUptime(pbs().uptimeSeconds ?? resource().uptime ?? 0)}
                               />
                             </Show>
                             <Show when={drawer.pbsActiveTaskCount() > 0}>
@@ -903,20 +909,20 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                             <Show when={drawer.showPbsJobDetail()}>
                               <div class="space-y-1.5 border-t border-indigo-200 pt-2 dark:border-indigo-700">
                                 <div class="grid grid-cols-2 gap-2 md:grid-cols-3">
-                                  <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
+                                  <div class="rounded-sm border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
                                     <div class="text-[10px] text-muted">Datastores</div>
                                     <div class="text-sm font-semibold text-base-content">
                                       {formatInteger(pbs().datastoreCount)}
                                     </div>
                                   </div>
-                                  <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
+                                  <div class="rounded-sm border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
                                     <div class="text-[10px] text-muted">Jobs</div>
                                     <div class="text-sm font-semibold text-base-content">
                                       {formatInteger(drawer.pbsJobTotal())}
                                     </div>
                                   </div>
                                   <Show when={drawer.pbsActiveTaskCount() > 0}>
-                                    <div class="rounded border border-emerald-200 bg-emerald-50 px-2 py-1.5 dark:border-emerald-700 dark:bg-emerald-950/40">
+                                    <div class="rounded-sm border border-emerald-200 bg-emerald-50 px-2 py-1.5 dark:border-emerald-700 dark:bg-emerald-950/40">
                                       <div class="text-[10px] text-muted">Active</div>
                                       <div class="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
                                         {formatInteger(drawer.pbsActiveTaskCount())}
@@ -927,7 +933,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                 <Show when={drawer.pbsActiveTaskCount() > 0}>
                                   <div
                                     data-testid="pbs-active-tasks"
-                                    class="rounded border border-emerald-200 bg-surface px-2 py-1.5 dark:border-emerald-700"
+                                    class="rounded-sm border border-emerald-200 bg-surface px-2 py-1.5 dark:border-emerald-700"
                                   >
                                     <div class="flex items-center justify-between gap-2">
                                       <span class="text-[10px] font-medium uppercase tracking-wide text-muted">
@@ -977,7 +983,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                 <Show when={pbsJobHealthEvidence().evidenceCount > 0}>
                                   <div
                                     data-testid="pbs-job-health-evidence"
-                                    class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700"
+                                    class="rounded-sm border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700"
                                   >
                                     <div class="flex flex-wrap items-center justify-between gap-2">
                                       <span class="text-[10px] font-medium uppercase tracking-wide text-muted">
@@ -990,7 +996,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                     <div class="mt-2 space-y-2 border-t border-indigo-200 pt-2 dark:border-indigo-700">
                                       <For each={pbsJobHealthEvidence().entries}>
                                         {(entry) => (
-                                          <div class="min-w-0 rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
+                                          <div class="min-w-0 rounded-sm border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
                                             <div class="flex flex-wrap items-start justify-between gap-2">
                                               <div class="min-w-0">
                                                 <div
@@ -1071,7 +1077,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                     </div>
                                   </div>
                                 </Show>
-                                <details class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
+                                <details class="rounded-sm border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
                                   <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
                                     <span>Types</span>
                                     <span class="text-muted">
@@ -1109,11 +1115,11 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   <Show when={drawer.pmgData()}>
                     {(pmg) => {
                       const connection = getServiceHealthPresentation(
-                        resource.status,
+                        resource().status,
                         pmg().connectionHealth,
                       );
                       return (
-                        <div class="rounded border border-rose-200 bg-rose-50 p-3 dark:border-rose-700 dark:bg-rose-900">
+                        <div class="rounded-sm border border-rose-200 bg-rose-50 p-3 dark:border-rose-700 dark:bg-rose-900/25">
                           <div class="mb-2 flex items-center justify-between gap-2">
                             <div class="text-[11px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300">
                               PMG
@@ -1136,16 +1142,16 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                             <Show when={pmg().version}>
                               <InfoCardKeyValueRow label="Version" value={pmg().version} />
                             </Show>
-                            <Show when={pmg().uptimeSeconds || resource.uptime}>
+                            <Show when={pmg().uptimeSeconds || resource().uptime}>
                               <InfoCardKeyValueRow
                                 label="Uptime"
-                                value={formatUptime(pmg().uptimeSeconds ?? resource.uptime ?? 0)}
+                                value={formatUptime(pmg().uptimeSeconds ?? resource().uptime ?? 0)}
                               />
                             </Show>
                             <Show when={drawer.showPmgMailFlowDetail()}>
                               <div class="space-y-1.5 border-t border-rose-200 pt-2 dark:border-rose-700">
                                 <div class="grid grid-cols-2 gap-2">
-                                  <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                                  <div class="rounded-sm border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
                                     <div class="text-[10px] text-muted">Queue</div>
                                     <div
                                       class={`text-sm font-semibold ${drawer.pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
@@ -1153,7 +1159,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                       {formatInteger(pmg().queueTotal)}
                                     </div>
                                   </div>
-                                  <div class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                                  <div class="rounded-sm border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
                                     <div class="text-[10px] text-muted">Backlog</div>
                                     <div
                                       class={`text-sm font-semibold ${drawer.pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-base-content'}`}
@@ -1165,7 +1171,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                 <Show when={pmg().nodeCount || drawer.pmgUpdatedRelative()}>
                                   <div
                                     data-testid="pmg-support-context"
-                                    class="space-y-1.5 rounded border border-dashed border-rose-200 bg-surface px-2 py-1.5 text-[10px] dark:border-rose-700"
+                                    class="space-y-1.5 rounded-sm border border-dashed border-rose-200 bg-surface px-2 py-1.5 text-[10px] dark:border-rose-700"
                                   >
                                     <Show when={pmg().nodeCount}>
                                       <InfoCardKeyValueRow
@@ -1186,7 +1192,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                     </Show>
                                   </div>
                                 </Show>
-                                <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                                <details class="rounded-sm border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
                                   <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
                                     Queue detail
                                   </summary>
@@ -1204,7 +1210,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                     </For>
                                   </div>
                                 </details>
-                                <details class="rounded border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
+                                <details class="rounded-sm border border-rose-200 bg-surface px-2 py-1.5 dark:border-rose-700">
                                   <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
                                     Mail detail
                                   </summary>
@@ -1241,7 +1247,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
               </Show>
 
               <Show when={drawer.hasHostDetails()}>
-                <HostDetailsDisclosure resource={resource} drawer={drawer} class="h-full" />
+                <HostDetailsDisclosure resource={resource()} drawer={drawer} class="h-full" />
               </Show>
             </div>
           </TechnicalDetailsDisclosure>

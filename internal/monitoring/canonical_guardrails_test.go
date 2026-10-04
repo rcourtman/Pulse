@@ -1,6 +1,8 @@
 package monitoring
 
 import (
+	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -18,6 +20,7 @@ import (
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 var bannedSnapshotResourceAccessPatterns = []struct {
@@ -606,7 +609,8 @@ func TestBroadcastResourceProjectionCoalescesSplitHostIdentities(t *testing.T) {
 	for _, snippet := range []string{
 		"metricsTargetResolver := broadcastMetricsTargetResolver(unifiedView.readState)",
 		"broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)",
-		"broadcastFrontendResources, broadcastCatalogs := convertResourcesForBroadcast(broadcastResources, metricsTargetResolver)",
+		"broadcastFrontendResources, broadcastCatalogs := convertPresentationResourcesForBroadcast(",
+		"attachBroadcastMetricsTargets(broadcastResources, metricsTargetResolver)",
 		"frontendState.CapabilityCatalog = broadcastCatalogs.capabilities",
 		"frontendState.PolicyCatalog = broadcastCatalogs.policies",
 		"frontendState.AISafeSummaryCatalog = broadcastCatalogs.aiSafeSummaries",
@@ -1910,7 +1914,7 @@ func TestProxmoxGuestAgentContinuityUsesCanonicalEvidenceAndRetryPaths(t *testin
 		"monitor_pve_guest_builders.go": {
 			"guestAgentAvailable := shouldQueryGuestAgent(state.detailedStatus, prevVM, now) ||",
 			"m.hasRecentGuestMetadataEvidence(instanceName, res.Node, res.VMID, now)",
-			"if guestAgentAvailable && state.detailedStatus == nil {",
+			`if guestAgentAvailable && res.Lock == "" && state.detailedStatus == nil {`,
 		},
 		"monitor_polling_vm.go": {
 			"prevVMByID := prevGuests.vmsByID",
@@ -2901,4 +2905,154 @@ func TestMockGuestChartHistorySkipsMemoryUsedForNonProxmoxGuests(t *testing.T) {
 			)
 		}
 	}
+}
+
+func TestBroadcastProjectionMatchesPreviousPipeline(t *testing.T) {
+	now := time.Now().UTC()
+	resources := []unifiedresources.Resource{
+		{ID: "agent-api", Type: unifiedresources.ResourceTypeAgent, Name: "tower", Status: unifiedresources.StatusOnline, LastSeen: now,
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"tower.local"}},
+			Sources:  []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+			Proxmox:  &unifiedresources.ProxmoxData{NodeName: "tower.local", ClusterName: "lab", PVEVersion: "9"}},
+		{ID: "agent-runtime", Type: unifiedresources.ResourceTypeAgent, Name: "tower", Status: unifiedresources.StatusOnline, LastSeen: now,
+			Identity: unifiedresources.ResourceIdentity{MachineID: "tower-machine", Hostnames: []string{"tower.local"}},
+			Sources:  []unifiedresources.DataSource{unifiedresources.SourceAgent},
+			Agent:    &unifiedresources.AgentData{AgentID: "tower-machine", Hostname: "tower.local", Platform: "linux", AgentVersion: "6.4.5"},
+			Metrics:  &unifiedresources.ResourceMetrics{CPU: &unifiedresources.MetricValue{Value: 25, Unit: "percent"}}},
+	}
+	for i, name := range []string{"zebra", "Alpha", "alpha", "", "尾"} {
+		parent := "agent-api"
+		resources = append(resources, unifiedresources.Resource{
+			ID: fmt.Sprintf("vm-%d", i), Type: unifiedresources.ResourceTypeVM, Name: name,
+			ParentID: &parent, Status: unifiedresources.StatusOnline, LastSeen: now,
+			Proxmox: &unifiedresources.ProxmoxData{NodeName: "tower.local", VMID: i + 100},
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+			Metrics: &unifiedresources.ResourceMetrics{CPU: &unifiedresources.MetricValue{Value: 10, Unit: "percent"}},
+		})
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestResources(resources)
+	store := &broadcastProjectionCountingStore{MonitorAdapter: unifiedresources.NewMonitorAdapter(registry)}
+	m := &Monitor{resourceStore: store}
+	snapshot := models.EmptyStateSnapshot()
+	snapshot.ActiveAlerts = []models.Alert{{ID: "warning", ResourceID: "agent-runtime", Level: "warning", Type: "cpu"}}
+	snapshot.RemovedHostAgents = []models.RemovedHostAgent{{ID: "ignored-host", Hostname: "ignored.local", RemovedAt: now}}
+	snapshot.RemovedDockerHosts = []models.RemovedDockerHost{{ID: "ignored-docker", Hostname: "docker.local", RemovedAt: now}}
+	sourceBefore, _ := json.Marshal(store.GetAll())
+	view := m.currentUnifiedStateView()
+	previousResources := unifiedresources.CoalescePresentationHostResources(view.resources)
+	previousResources = m.applyPersistedMetadataToUnifiedResources(previousResources)
+	previousResources = unifiedresources.AttachResourceHealth(previousResources, resourceHealthAlerts(snapshot.ActiveAlerts), now)
+	want := snapshot.ToFrontend()
+	projected, catalogs := convertResourcesForBroadcastReference(previousResources, broadcastMetricsTargetResolver(view.readState))
+	want.Resources = projected
+	want.CapabilityCatalog = catalogs.capabilities
+	want.PolicyCatalog = catalogs.policies
+	want.AISafeSummaryCatalog = catalogs.aiSafeSummaries
+	want.ConnectedInfrastructure = buildConnectedInfrastructure(previousResources, snapshot)
+	if !view.freshness.IsZero() {
+		want.LastUpdate = view.freshness.UnixMilli()
+	}
+	got := m.buildBroadcastFrontendStateFromSnapshot(snapshot)
+	wantJSON, err := json.Marshal(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotJSON, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(gotJSON) != string(wantJSON) {
+		t.Fatalf("projection differs from previous pipeline\nwant=%s\ngot=%s", wantJSON, gotJSON)
+	}
+	sourceAfter, _ := json.Marshal(store.GetAll())
+	if string(sourceAfter) != string(sourceBefore) {
+		t.Fatal("broadcast decoration mutated registry")
+	}
+}
+
+// The runtime contract includes both poll builders, protocol admission and truthful History.
+func TestGuestAgentBackupMonitoringContract(t *testing.T) {
+	testGuestAgentBackupMonitoringLifecycle(t)
+}
+
+func TestDeferredVMGuestMemoryRequiresOriginalEvidence(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name   string
+		change func(*agentMemCacheEntry, *GuestMemorySnapshot)
+		key    string
+		want   bool
+	}{
+		{name: "expired read TTL still supports last-known memory", want: true},
+		{name: "derived meminfo", want: true, change: func(e *agentMemCacheEntry, _ *GuestMemorySnapshot) { e.info.Source = "meminfo-derived" }},
+		{name: "last-known age boundary", want: true, change: func(e *agentMemCacheEntry, _ *GuestMemorySnapshot) { e.fetchedAt = now.Add(-vmAgentMemCleanupMaxAge) }},
+		{name: "expired original observation", change: func(e *agentMemCacheEntry, _ *GuestMemorySnapshot) {
+			e.fetchedAt = now.Add(-vmAgentMemCleanupMaxAge - time.Nanosecond)
+		}},
+		{name: "missing observation time", change: func(e *agentMemCacheEntry, _ *GuestMemorySnapshot) { e.fetchedAt = time.Time{} }},
+		{name: "future observation time", change: func(e *agentMemCacheEntry, _ *GuestMemorySnapshot) { e.fetchedAt = now.Add(time.Second) }},
+		{name: "failed guest read", change: func(e *agentMemCacheEntry, _ *GuestMemorySnapshot) { e.negative = true }},
+		{name: "missing source", change: func(e *agentMemCacheEntry, _ *GuestMemorySnapshot) { e.info.Source = "" }},
+		{name: "unsupported source", change: func(e *agentMemCacheEntry, _ *GuestMemorySnapshot) { e.info.Source = "unavailable" }},
+		{name: "different instance cache", key: "other/node/105"},
+		{name: "different node cache", key: "fixture/other/105"},
+		{name: "different VM cache", key: "fixture/node/106"},
+		{name: "different previous identity", change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.VMID++ }},
+		{name: "different guest type", change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.GuestType = "lxc" }},
+		{name: "stopped guest", change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.Status = "stopped" }},
+		{name: "unrelated memory source", change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.MemorySource = "agent" }},
+		{name: "previous-snapshot remains bound to original read", want: true, change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.MemorySource = "previous-snapshot" }},
+		{name: "unknown previous memory", change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.Memory = models.UnavailableMemory(100) }},
+		{name: "changed capacity", change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.Memory.Total++ }},
+		{name: "different observation", change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.Memory.Used++ }},
+		{name: "different free memory observation", change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.Memory.Free++ }},
+		{name: "different reclaimable cache observation", change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.Memory.Cache++ }},
+		{name: "impossible availability", change: func(e *agentMemCacheEntry, _ *GuestMemorySnapshot) { e.info.EffectiveAvailable = 101 }},
+		{name: "observed zero usage", want: true, change: func(e *agentMemCacheEntry, v *GuestMemorySnapshot) {
+			e.info.EffectiveAvailable = 100
+			e.info.Free = 20
+			v.Memory = models.Memory{Total: 100, Free: 20, Cache: 80}
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entry := agentMemCacheEntry{info: proxmox.LinuxMemoryAvailability{Source: "meminfo-available", EffectiveAvailable: 60, Free: 10}, fetchedAt: now.Add(-2 * vmAgentMemCacheTTL)}
+			previous := GuestMemorySnapshot{GuestType: "qemu", Status: "running", MemorySource: "guest-agent-meminfo", Instance: "fixture", Node: "node", VMID: 105, Memory: models.Memory{Total: 100, Used: 40, Free: 10, Cache: 50, Usage: 40}}
+			if tt.change != nil {
+				tt.change(&entry, &previous)
+			}
+			key := tt.key
+			if key == "" {
+				key = guestMemoryCacheKey("fixture", "node", 105)
+			}
+			m := &Monitor{vmAgentMemCache: map[string]agentMemCacheEntry{key: entry}}
+			memory, ok := m.deferredVMGuestMemory("fixture", "node", 105, 100, &previous, now)
+			if ok != tt.want || (ok && memory != previous.Memory) {
+				t.Fatalf("retention = %#v, %t; want previous memory, %t", memory, ok, tt.want)
+			}
+			if m.vmAgentMemCache[key] != entry {
+				t.Fatal("last-known evidence was renewed or changed")
+			}
+		})
+	}
+	if _, ok := (&Monitor{}).deferredVMGuestMemory("fixture", "node", 105, 100, nil, now); ok {
+		t.Fatal("invented memory without a previous observation")
+	}
+}
+
+func TestGuestAgentTransportMonitoringContract(t *testing.T) {
+	for _, reason := range []string{"agent-redirect", "agent-transport-unverified"} {
+		for _, prefix := range []string{"", "prev-"} {
+			if !guestAgentDiskDeferred(prefix + reason) {
+				t.Errorf("transport uncertainty %q is not labelled deferred", prefix+reason)
+			}
+		}
+	}
+	for _, reason := range []string{"", "permission-denied", "agent-not-running", "agent-error"} {
+		if guestAgentDiskDeferred(reason) {
+			t.Errorf("completed/ordinary error %q became transport uncertainty", reason)
+		}
+	}
+	testGuestAgentTransportDeferralKeepsLastKnownHistory(t)
 }

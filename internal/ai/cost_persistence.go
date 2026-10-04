@@ -25,18 +25,20 @@ func (a *CostPersistenceAdapter) SaveUsageHistory(events []cost.UsageEvent) erro
 	records := make([]config.AIUsageEventRecord, len(events))
 	for i, e := range events {
 		records[i] = config.AIUsageEventRecord{
-			Timestamp:     e.Timestamp,
-			Provider:      e.Provider,
-			RequestModel:  e.RequestModel,
-			ResponseModel: e.ResponseModel,
-			UseCase:       e.UseCase,
-			ContextScope:  e.ContextScope,
-			ToolCallCount: e.ToolCallCount,
-			InputTokens:   e.InputTokens,
-			OutputTokens:  e.OutputTokens,
-			TargetType:    e.TargetType,
-			TargetID:      e.TargetID,
-			FindingID:     e.FindingID,
+			Timestamp:                e.Timestamp,
+			Provider:                 e.Provider,
+			RequestModel:             e.RequestModel,
+			ResponseModel:            e.ResponseModel,
+			UseCase:                  e.UseCase,
+			ContextScope:             e.ContextScope,
+			ToolCallCount:            e.ToolCallCount,
+			InputTokens:              e.InputTokens,
+			OutputTokens:             e.OutputTokens,
+			CacheCreationInputTokens: e.CacheCreationInputTokens,
+			CacheReadInputTokens:     e.CacheReadInputTokens,
+			TargetType:               e.TargetType,
+			TargetID:                 e.TargetID,
+			FindingID:                e.FindingID,
 		}
 	}
 	return a.config.SaveAIUsageHistory(records)
@@ -55,18 +57,20 @@ func (a *CostPersistenceAdapter) LoadUsageHistory() ([]cost.UsageEvent, error) {
 	events := make([]cost.UsageEvent, len(data.Events))
 	for i, r := range data.Events {
 		events[i] = cost.UsageEvent{
-			Timestamp:     r.Timestamp,
-			Provider:      r.Provider,
-			RequestModel:  r.RequestModel,
-			ResponseModel: r.ResponseModel,
-			UseCase:       r.UseCase,
-			ContextScope:  r.ContextScope,
-			ToolCallCount: r.ToolCallCount,
-			InputTokens:   r.InputTokens,
-			OutputTokens:  r.OutputTokens,
-			TargetType:    r.TargetType,
-			TargetID:      r.TargetID,
-			FindingID:     r.FindingID,
+			Timestamp:                r.Timestamp,
+			Provider:                 r.Provider,
+			RequestModel:             r.RequestModel,
+			ResponseModel:            r.ResponseModel,
+			UseCase:                  r.UseCase,
+			ContextScope:             r.ContextScope,
+			ToolCallCount:            r.ToolCallCount,
+			InputTokens:              r.InputTokens,
+			OutputTokens:             r.OutputTokens,
+			CacheCreationInputTokens: r.CacheCreationInputTokens,
+			CacheReadInputTokens:     r.CacheReadInputTokens,
+			TargetType:               r.TargetType,
+			TargetID:                 r.TargetID,
+			FindingID:                r.FindingID,
 		}
 	}
 	return events, nil

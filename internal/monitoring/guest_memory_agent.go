@@ -2,10 +2,12 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
@@ -34,6 +36,39 @@ type guestAgentMemoryAvailabilityClient interface {
 
 func guestMemoryCacheKey(instanceName, node string, vmid int) string {
 	return fmt.Sprintf("%s/%s/%d", instanceName, node, vmid)
+}
+
+// deferredVMGuestMemory retains a rendered observation only while the original
+// successful guest read still supports it. The ordinary read TTL schedules a
+// refresh; the cleanup age bounds last-known evidence during coordination.
+// Neither a poll timestamp nor a previous-snapshot trust label renews that age.
+func (m *Monitor) deferredVMGuestMemory(instanceName, node string, vmid int, total uint64, previous *GuestMemorySnapshot, now time.Time) (models.Memory, bool) {
+	if previous == nil || previous.GuestType != "qemu" || previous.Status != "running" || previous.Instance != instanceName || previous.Node != node || previous.VMID != vmid || !previous.Memory.HasKnownUsage() || uint64(previous.Memory.Total) != total {
+		return models.Memory{}, false
+	}
+	switch CanonicalMemorySource(previous.MemorySource) {
+	case "guest-agent-meminfo", "guest-agent-meminfo-derived", "previous-snapshot":
+	default:
+		return models.Memory{}, false
+	}
+	m.rrdCacheMu.RLock()
+	entry, ok := m.vmAgentMemCache[guestMemoryCacheKey(instanceName, node, vmid)]
+	m.rrdCacheMu.RUnlock()
+	if !ok || entry.negative || entry.fetchedAt.IsZero() || entry.fetchedAt.After(now) || now.Sub(entry.fetchedAt) > vmAgentMemCleanupMaxAge {
+		return models.Memory{}, false
+	}
+	if entry.info.Source != "meminfo-available" && entry.info.Source != "meminfo-derived" {
+		return models.Memory{}, false
+	}
+	if entry.info.EffectiveAvailable > total || previous.Memory.Used != int64(total-entry.info.EffectiveAvailable) {
+		return models.Memory{}, false
+	}
+	expected := models.Memory{Free: int64(entry.info.EffectiveAvailable)}
+	splitReclaimableMemory(&expected, entry.info.Free)
+	if previous.Memory.Free != expected.Free || previous.Memory.Cache != expected.Cache {
+		return models.Memory{}, false
+	}
+	return previous.Memory, true
 }
 
 func (m *Monitor) getVMAgentMemAvailable(ctx context.Context, client PVEClientInterface, instanceName, node string, vmid int) (uint64, error) {
@@ -91,6 +126,12 @@ func (m *Monitor) getVMAgentMemoryAvailability(ctx context.Context, client PVECl
 		}
 	} else {
 		return proxmox.LinuxMemoryAvailability{}, fmt.Errorf("guest agent meminfo fallback unsupported")
+	}
+
+	if errors.Is(err, proxmox.ErrGuestAgentDeferred) {
+		// A coordination pause is not a failed guest observation. Preserve the
+		// last successful cache and its original timestamp for normal resumption.
+		return proxmox.LinuxMemoryAvailability{}, err
 	}
 
 	m.rrdCacheMu.Lock()

@@ -48,13 +48,15 @@ export const HistoryChartOverlay: Component<HistoryChartOverlayProps> = (props) 
 
       <Show when={props.chart.error()}>
         <div class="absolute inset-0 flex items-center justify-center">
-          <p class="text-sm text-red-500">{props.chart.error()}</p>
+          <p role="alert" class="px-3 text-center text-sm text-red-500">
+            {props.chart.error()}
+          </p>
         </div>
       </Show>
 
       <Show when={props.chart.isLocked() && !props.hideLock}>
         <div class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-surface rounded-md">
-          <div class="bg-indigo-500 rounded-full p-3 shadow-sm mb-3">
+          <div class="bg-indigo-500 rounded-full p-3 shadow-xs mb-3">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="24"

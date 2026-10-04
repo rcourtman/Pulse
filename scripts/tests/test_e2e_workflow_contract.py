@@ -21,6 +21,8 @@ class E2EWorkflowContractTest(unittest.TestCase):
         probation_step = workflow[probation_start:report_start]
 
         self.assertIn("continue-on-error: true", probation_step)
+        # Non-gating and promotion counts only main runs, so PRs skip it.
+        self.assertIn("github.event_name != 'pull_request'", probation_step)
         self.assertIn("timeout-minutes: 12", probation_step)
         self.assertIn("--max-failures=5", probation_step)
         self.assertIn("--global-timeout=600000", probation_step)

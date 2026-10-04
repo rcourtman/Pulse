@@ -95,7 +95,7 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
   const hideTooltip = () => setTooltip(null);
 
   return (
-    <div class="rounded-lg border border-border-subtle bg-surface-alt/25 px-2 py-2">
+    <div class="rounded-lg border border-border-subtle px-2 py-2">
       <div class="mb-2 flex flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between">
         <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
           <div class="font-semibold uppercase tracking-[0.18em] text-muted">{props.title}</div>
@@ -105,7 +105,7 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                 const presentation = getBackupActivitySegmentPresentation(kind);
                 return (
                   <span class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
-                    <span class={`h-2.5 w-2.5 rounded ${presentation.swatchClassName}`} />
+                    <span class={`h-2.5 w-2.5 rounded-sm ${presentation.swatchClassName}`} />
                     {presentation.label}
                   </span>
                 );
@@ -118,7 +118,7 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
             <div
               role="group"
               aria-label="Activity metric"
-              class="inline-flex shrink-0 rounded border border-border bg-surface p-0.5"
+              class="inline-flex shrink-0 rounded-sm border border-border bg-surface p-0.5"
             >
               <For each={['count', 'volume'] as const}>
                 {(mode) => {
@@ -144,7 +144,7 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
           <div
             role="group"
             aria-label="Activity range"
-            class="inline-flex shrink-0 rounded border border-border bg-surface p-0.5"
+            class="inline-flex shrink-0 rounded-sm border border-border bg-surface p-0.5"
           >
             <For each={BACKUP_ACTIVITY_RANGE_DAYS}>
               {(days) => {
@@ -231,7 +231,7 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                             onFocus={(event) => showTooltip(event.currentTarget, point, dateLabel)}
                             onBlur={hideTooltip}
                           >
-                            <div class="relative h-full w-full overflow-hidden rounded-sm">
+                            <div class="relative h-full w-full overflow-hidden rounded-xs">
                               <Show
                                 when={total() > 0}
                                 fallback={
@@ -328,7 +328,7 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                         )}
                       </div>
                     </div>
-                    <div class="shrink-0 rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[9px] font-medium text-muted">
+                    <div class="shrink-0 rounded-sm border border-border bg-surface-alt px-1.5 py-0.5 text-[9px] font-medium text-muted">
                       {getBackupActivityDayFilterStateLabel(
                         props.selectedDateKey() === t().point.key,
                         hasSelection(),
@@ -346,11 +346,11 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                       {(row) => (
                         <li
                           class={`flex items-center justify-between gap-4 ${
-                            row.muted ? 'text-muted/70' : 'text-base-content'
+                            row.muted ? '' : 'text-base-content'
                           }`}
                         >
                           <span class="flex min-w-0 items-center gap-1.5">
-                            <span class={`h-2 w-2 shrink-0 rounded-sm ${row.segmentClassName}`} />
+                            <span class={`h-2 w-2 shrink-0 rounded-xs ${row.segmentClassName}`} />
                             <span class="truncate">{row.label}</span>
                           </span>
                           <span class="shrink-0 font-mono tabular-nums">{row.value}</span>

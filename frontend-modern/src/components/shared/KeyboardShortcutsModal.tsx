@@ -14,6 +14,7 @@ interface KeyboardShortcutsModalProps {
   isOpen: boolean;
   onClose: () => void;
   platformVisibility: () => PlatformNavigationVisibility;
+  patrolVisible: () => boolean;
 }
 
 const UNIFIED_NAV_SHORTCUTS: ShortcutGroup = {
@@ -30,6 +31,8 @@ const UNIFIED_NAV_SHORTCUTS: ShortcutGroup = {
     { keys: 'g then t', description: 'Go to Settings' },
   ],
 };
+
+const PATROL_NAV_SHORTCUT_KEYS = 'g then r';
 
 const NAV_PRIMARY_SHORTCUTS: Record<string, keyof PlatformNavigationVisibility> = {
   'g then s': 'standalone',
@@ -54,6 +57,7 @@ export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
   const shortcutGroups = createMemo<ShortcutGroup[]>(() => {
     const platformVisibility = props.platformVisibility();
     const visibleNavigationItems = UNIFIED_NAV_SHORTCUTS.items.filter((item) => {
+      if (item.keys === PATROL_NAV_SHORTCUT_KEYS) return props.patrolVisible();
       const navId = NAV_PRIMARY_SHORTCUTS[item.keys];
       if (!navId) return true;
       return primaryPlatformNavigationIsVisible(platformVisibility, navId);
@@ -99,7 +103,7 @@ export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
                   {(item) => (
                     <div class="flex items-center justify-between text-sm text-base-content">
                       <span>{item.description}</span>
-                      <span class="rounded bg-surface-alt px-2 py-1 text-xs font-medium text-base-content">
+                      <span class="rounded-sm bg-surface-alt px-2 py-1 text-xs font-medium text-base-content">
                         {item.keys}
                       </span>
                     </div>

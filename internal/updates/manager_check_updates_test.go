@@ -16,17 +16,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
-// runtimeArchiveFixture advertises the archive the update check requires on
-// the architecture running this test, rather than assuming an amd64 host.
-func runtimeArchiveFixture(t *testing.T, tag string) ReleaseAsset {
-	t.Helper()
-	asset, ok := updateReleaseAssetForRuntime(tag)
-	if !ok {
-		t.Skipf("no Pulse server archive is published for %s", runtime.GOARCH)
-	}
-	return ReleaseAsset{Name: asset.Name, BrowserDownloadURL: "https://example.com/" + asset.Name}
-}
-
 func newReleaseServer(t *testing.T, releases []ReleaseInfo, hitCount *int32) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -299,4 +288,17 @@ func TestForcedUpdateCheckDoesNotReturnCachedResultOnRateLimit(t *testing.T) {
 	if manager.GetStatus().Status != "error" {
 		t.Fatalf("status=%+v", manager.GetStatus())
 	}
+}
+
+// runtimeArchiveFixture returns the server archive the update check requires
+// for the architecture running the test. The check offers an update only when
+// that exact archive exists, so a hard-coded linux-amd64 fixture made these
+// tests fail on arm64 hosts.
+func runtimeArchiveFixture(t *testing.T, tag string) ReleaseAsset {
+	t.Helper()
+	asset, ok := updateReleaseAssetForRuntime(tag)
+	if !ok {
+		t.Skipf("no Pulse server archive is published for %s", runtime.GOARCH)
+	}
+	return ReleaseAsset{Name: asset.Name, BrowserDownloadURL: "https://example.com/" + asset.Name}
 }

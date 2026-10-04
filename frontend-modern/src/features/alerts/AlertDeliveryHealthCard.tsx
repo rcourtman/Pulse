@@ -55,7 +55,7 @@ export function AlertDeliveryHealthCard(props: AlertDeliveryHealthCardProps) {
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="flex min-w-0 flex-1 basis-72 items-start gap-3">
           <AlertTriangleIcon
-            class="mt-0.5 h-4 w-4 flex-shrink-0 text-red-700 dark:text-red-300"
+            class="mt-0.5 h-4 w-4 shrink-0 text-red-700 dark:text-red-300"
             aria-hidden="true"
           />
           <div class="min-w-0">

@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="docs/images/pulse-logo.svg" alt="Pulse logo" width="112" />
-  <p><strong>Infrastructure monitoring that finds what needs attention.</strong></p>
+  <p><strong>Real-time Proxmox, Docker and Kubernetes monitoring that finds what needs attention.</strong></p>
 
   [![GitHub Stars](https://img.shields.io/github/stars/rcourtman/Pulse?style=flat&logo=github)](https://github.com/rcourtman/Pulse)
   [![GitHub Release](https://img.shields.io/github/v/release/rcourtman/Pulse)](https://github.com/rcourtman/Pulse/releases/latest)
@@ -91,16 +91,18 @@ The installer is signed. Verify `install.sh` against the pinned
 
 ```bash
 export PULSE_VERSION=vX.Y.Z
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh"
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig"
+curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh" &&
+curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig" &&
 ssh-keygen -Y verify \
   -f <(printf '%s\n' 'pulse-installer namespaces="pulse-install" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer') \
   -I pulse-installer \
   -n pulse-install \
-  -s install.sh.sshsig < install.sh
+  -s install.sh.sshsig < install.sh &&
 bash install.sh --version "${PULSE_VERSION}"
-rm -f install.sh install.sh.sshsig
 ```
+
+Paste the whole block: installation stops if either download or signature
+verification fails. Do not run the final command separately to bypass a failure.
 
 The GitHub installer installs the Pulse server. Install and upgrade agents
 (including v5-to-v6 agent upgrades) with the per-host command generated under
@@ -133,14 +135,18 @@ agent can and cannot do at each privilege level.
 
 - **Community** — self-hosted monitoring, seven days of metric history, core
   SSO, update alerts, and Patrol with your own provider or local model.
-- **Relay** — Community plus secure remote web access, Pulse Mobile pairing,
-  push notifications, and fourteen days of history.
-- **Pro** — Relay plus Patrol investigation, governed fixes, ninety days of
+- **Pro** — Community plus Patrol investigation, governed fixes, ninety days of
   history, centralized agent profiles, RBAC, audit logging, and reporting.
 - **MSP** — for managed service providers: one Pulse Account running many
   client workspaces, each with an isolated Pulse runtime — separate
   dashboards, alerts, users, audit history, and reports. Free sixty-day
   two-client evaluation at [Pulse for MSPs](https://pulserelay.pro/msp).
+
+Relay is no longer sold. Existing Relay subscribers receive Pro features at their
+current price for as long as their subscription continues. Existing paired phones
+keep working until **31 March 2027**. Relay connects the app, not the web UI. Use
+your own VPN or tunnel for remote web access. For phone alerts, add an
+ntfy, Gotify or Pushover destination and open Pulse in your phone's browser.
 
 Core self-hosted monitoring is not gated by monitored-system or child-resource
 volume. See the [runtime-aligned capability reference](docs/PULSE_PRO.md) and

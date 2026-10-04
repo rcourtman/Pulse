@@ -5,6 +5,7 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { controlClass, formField, formHelpText, labelClass } from '@/components/shared/Form';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { getAPITokenManagementLocationMessage } from '@/utils/apiTokenPresentation';
+import { getShippedDocUrl } from '@/utils/docsLinks';
 
 interface BackupTransferDialogsProps {
   securityStatus: Accessor<SecurityStatusInfo | null>;
@@ -124,10 +125,10 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 </Show>
               </div>
 
-              <div class="bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+              <div class="bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-md p-3">
                 <div class="flex gap-2">
                   <svg
-                    class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
+                    class="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -140,9 +141,19 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                     />
                   </svg>
                   <div class="text-xs text-amber-700 dark:text-amber-300">
-                    <strong>Important:</strong> The backup contains node credentials but NOT
-                    authentication settings. Each Pulse instance should configure its own login
-                    credentials for security. Remember your{' '}
+                    <strong>Configuration only:</strong> Includes Proxmox connections, SSO settings
+                    and API-token records, but not history, TrueNAS/vSphere connections or agent
+                    enrolment state. Local login credentials and sessions are not included. Check
+                    the{' '}
+                    <a
+                      href={getShippedDocUrl('MIGRATION.md')}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="underline"
+                    >
+                      migration guide
+                    </a>{' '}
+                    before relying on this for recovery. Remember your{' '}
                     {props.useCustomPassphrase() || !props.securityStatus()?.hasAuthentication
                       ? 'passphrase'
                       : 'password'}{' '}
@@ -206,7 +217,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 />
               </div>
 
-              <div class="text-xs text-muted rounded p-2">
+              <div class="text-xs text-muted rounded-sm p-2">
                 <p class="font-semibold mb-1">{getAPITokenManagementLocationMessage()}</p>
                 <p>
                   Tokens are managed in the UI and stored in <code>api_tokens.json</code>.
@@ -279,16 +290,27 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 </p>
               </div>
 
-              <div class="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-800 rounded p-3">
+              <div class="bg-yellow-50 dark:bg-yellow-900/25 border border-yellow-200 dark:border-yellow-800 rounded-sm p-3">
                 <div class="space-y-2 text-xs text-yellow-700 dark:text-yellow-300">
                   <p>
-                    <strong>Warning:</strong> Importing will replace all current configuration. This
-                    action cannot be undone.
+                    <strong>Warning:</strong> Import replaces the included settings and API-token
+                    records, not the whole installation. Back up the destination first. History and
+                    excluded settings are not restored. Check the{' '}
+                    <a
+                      href={getShippedDocUrl('MIGRATION.md')}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="underline"
+                    >
+                      migration guide
+                    </a>{' '}
+                    before retiring the old server.
                   </p>
                   <p>
-                    <strong>Agent migration:</strong> The backup restores server-side agent records
-                    and credentials, but it cannot change the Pulse URL stored on remote agents. If
-                    this server has a different address, retarget each agent after the import.
+                    <strong>Agent migration:</strong> API-token records are included, but agent
+                    inventory, enrolment state, profiles and assignments are not. Import cannot
+                    change the Pulse URL stored on remote agents. Preserve each agent's identity and
+                    private credential, retarget if the address changes, and verify fresh admission.
                   </p>
                 </div>
               </div>

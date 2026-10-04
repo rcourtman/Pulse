@@ -21,21 +21,95 @@
 
 ## Purpose
 
-### Polling-write repair preserves recovery evidence — issues #2319/#2320
+### TrueNAS connection probes do not settle recovery inventory
 
-Routine successful agent config polling no longer creates one security-audit
-row per minute: first delivery after startup, token/config changes and daily
-access remain recorded, as does every failure. Recovery actions keep their
-existing action audits, receipts and verification. No audit or change-history
-rows are removed. Skipped PVE disk readback requires an actual Proxmox source;
-Agent-only SMART presentation scope is not source-owned inventory or recovery
-state. Storage targets, samples, health, restore and command authority are
-unchanged. `internal/api/host_agent_removal_lifecycle_integration_test.go`
-verifies config delivery/failure auditing and
-`internal/monitoring/physical_disk_roundtrip_test.go` verifies unchanged disk
-identity and no fabricated journal changes. Native/installed acceptance is
-separate from these synthetic controls.
+A successful settings probe reads system information only, on a separate client.
+It cannot advance the runtime poll watermark, manufacture an initial settled
+inventory or update the last observed recovery/resource contribution. A probe
+failure likewise does not impersonate a completed inventory refresh. Actual
+runtime auth/permission failures and existing cache withdrawal remain effective;
+a later probe success must not erase them. Source controls cover never-polled
+and previously observed-but-failing states through the real API boundary.
+No restore, guest mutation or native appliance acceptance is implied.
 
+### Partial backup inventory is not empty recovery evidence
+
+The existing Proxmox Backups view treats PVE and PBS inventories as independent
+reads. Fulfilled artifacts remain usable when the other source is loading or
+unavailable. The page identifies that source, marks totals as incomplete and
+does not claim no backups exist until both inventories have fulfilled. PBS server
+backup counts show loading/unavailable rather than a fabricated zero; current
+server health and server-owned protection posture remain independent facts.
+Isolated retry preserves filters and the other source, while settled failures
+withdraw the failed source's artifacts. Both failed reads have a shared retry.
+Organisation changes and disposal cancel/replace reads and prevent late responses
+from restoring former inventory. No polling, recovery operation, native identity
+rule, protection-policy or provider contract is changed.
+
+Verification: `ProxmoxBackupsTable.test.tsx` exercises pending/partial/both-source
+failure, retries, measured empty counts, access denial, org-switch races and
+disposal. `browser-tests/backup-inventory.cjs` uses production components,
+API adapters, router and CSS in Chromium/WebKit with synthetic HTTP responses;
+these controls are not native backup, permission, thaw or release acceptance.
+
+An HTTP success alone does not establish readable recovery evidence. The client
+validates the data envelope, source collections and consumed row fields before
+publishing that inventory. Malformed or undecodable responses invalidate that
+source atomically, not a silently truncated list or confirmed empty inventory.
+PVE's explicitly nil Go collections remain valid empty observations; absent
+fields are not nil collections. Optional unknown facts and additional fields
+retain their existing meaning, and completion flags are never coerced.
+`proxmoxBackupInventory.test.ts`, the mounted backup-table tests and
+`browser-tests/backup-inventory-format.cjs` cover this response boundary, source
+isolation and recovery without extending native protection or thaw claims.
+
+### Backup identity, phone storage and History consent composition
+
+The Proxmox Coverage last-backup pointer selects completed PBS snapshots or PVE
+backup files, never guest-local snapshots. Guest snapshots remain listed as
+restore evidence but cannot make an old independent backup look current.
+Archive detail uses its format (or filename fallback), preserving the full
+provider volid for hover and search in both Coverage and By date.
+
+Phone pool/disk rows preserve health and identity while using weighted widths,
+consistent gutters and compact capacity/health labels. Full disk risk reasons
+move into the existing expanded header; the ZFS activity badge uses supplied
+scan data only when rebuild is reported and keeps the full summary as its title.
+Collection-independent, organisation-owned disk History remains intact.
+
+The UpdateHistory confirmation is a version-rollback consent, not a full-state
+recovery promise. Its current API exposes no verified restore-scope metadata;
+copy must retain installation-only and legacy differences and direct full-state
+recovery to the stopped-service procedure. Regressions cover these distinctions,
+archive/snapshot attribution and storage values; the composed browser fixture
+checks real table/drawer rendering, not native or installed recovery.
+
+
+### Disk History is independent of current collection
+
+The existing physical-disk History catalog is selected by disk family, not by
+whether the latest snapshot contains temperature or extended SMART values.
+Temperature and ATA reallocated-sector charts, or temperature and NVMe
+endurance/spare charts, query only the already-resolved canonical disk target.
+A missing current field must not hide stored observations. An empty series is
+shown as no history samples, never a fabricated zero or current-value fallback.
+Overview continues to report current collection availability; explicit
+unavailable/unsupported I/O still suppresses the existing live I/O section.
+
+Catalog entries retain their identity across matching snapshots so ordinary
+current-temperature changes cannot remount charts, drop inspection or restart
+History reads. The shared chart owner still invalidates reads and inspection
+when the explicit target or range changes; a late cancelled response cannot
+populate its replacement. This changes neither disk correlation nor collector,
+retention, permission or entitlement policy, and proves no appliance recovery.
+
+Verification: `DiskDetail.test.tsx` and `useDiskDetailModel.test.ts` pin the
+catalog and matching-snapshot boundary; `DiskDetail.history-collection.test.tsx`
+uses the actual chart owner to cover absent current fields, stored zero versus
+empty, NVMe/ATA catalogs, request counts, preserved inspection and late former
+target responses. `frontend-modern/browser-tests/disk-history-collection.cjs`
+checks the production components/client/CSS with synthetic API data on desktop
+Chromium and touch/dark phone WebKit, not native NAS or installed acceptance.
 
 ### Independent physical disk temperature
 
@@ -71,23 +145,18 @@ and the production-drawer fixture in
 partial snapshots, including live transitions on desktop and phone viewports.
 These synthetic checks are not native collector acceptance.
 
-### Release-line PBS retention revocation — 30 September 2026
+### RAID required-member count evidence — issue #2369
 
-PBS drawer host-target retention is bound to the unchanged identity evidence
-used by this line's existing selector, including the reported PBS node name.
-Changed or withdrawn evidence and a present ambiguous host snapshot revoke the
-remembered host; a subsequent omission cannot resurrect it. An unchanged, fresh
-identity still survives a transient omitted host row. Each keyed datastore row
-receives its own unwrapped resource snapshot, so Solid reconciliation cannot
-mutate the service target or a sibling row.
-
-This bounded adaptation of main `3df86570396a` repairs retention added after
-stable v6.4.1. It does not introduce main's backend `pbs.linkedAgentId` producer,
-change the line's direct correlation selector or establish installed #1723
-relief. Builder and open-drawer regressions in `ProxmoxBackupServersTable.test.ts`
-and `ProxmoxBackupServersTable.drawer.test.tsx`, plus desktop/phone production
-drawer verification in `browser-tests/pbs-retention-guard.cjs`, pin the boundary.
-
+Canonical host RAID metadata carries optional `requiredDevices`, excluding
+spares, separately from source-native attached/bitmap totals. Array protection
+risk follows the shared required-member assessment rather than assuming that
+every attached spare is a missing active member. Missing configured members,
+failed devices and explicit degraded state remain critical; maintenance and
+spare presence cannot erase those risks. A healthy spare is not recovery proof,
+backup coverage or storage mutation authority. Collector, ingestion and
+canonical event-ledger tests distinguish that correction from genuine member
+recovery, which resolves the existing health incident only after the reported
+active set again meets its requirement.
 
 Incident history retains canonical storage-related risk, source identity and
 separate observation/occurrence timestamps. A recorded alert closure or operator
@@ -334,6 +403,44 @@ grant no backup mutation, restore, or recovery-state authority; `agent:exec`
 appears only when the operator explicitly requests the transitional
 command-capable profile.
 
+### Restore-point chronology is not completion or protection
+
+The existing Proxmox Backups Coverage and By date views preserve completed
+artifacts with missing, unusable, zero-time or future dates as unknown age,
+not a current/green backup or an absent point. Unknown chronology cannot elect
+an arbitrary or older dated artifact as the latest completed point. PBS, PVE,
+guest-snapshot and independent-backup selections each retain this uncertainty;
+the same selector owns full-inventory and location-filtered Coverage. Running
+and failed artifacts remain listed but never contaminate completed chronology.
+Guest-local snapshots still cannot fill the independent-backup slot.
+
+Unknown ages have a fixed explanation and accessible name; no invalid-date or
+raw malformed timestamp is displayed. Dated ages keep their existing 7/30-day
+bands and reported timestamp. Unknown dates remain in the artifact list, but
+are omitted from the activity chart and day filters, including future events
+on today's date. The page explains that omission instead of claiming no
+activity from an unreadable date. Inventory replacement refreshes its reference
+clock, so a newly completed point is not compared with the page-mount time.
+Server-owned protection, verification and completion facts remain independent;
+this presentation proves no native restore, thaw or workload liveness.
+
+Verification: the `backup-date-evidence` families in the recovery-model,
+activity, shared-age and mounted backup-table tests cover invalid/future dates,
+known-plus-unknown ordering, independent sources, scoped filtering, incomplete
+artifacts, valid boundaries and later inventory replacement. The production
+fixture `browser-tests/backup-date-chronology.cjs` uses the existing router,
+API readers, components and CSS with synthetic HTTP in desktop Chromium and
+phone-emulated WebKit, not native appliance or published-release acceptance.
+
+Coverage owns independent scalar copies of each latest-artifact pointer.
+In-place stable-row reconciliation must not let an older source pointer mutate
+the last-backup value after a newer point arrives from another source.
+Connected replacement controls and inspected renders cover that boundary.
+
+The compact By date layout reserves enough age space for the full cautionary Unknown word rather than the former numeric-age-only allocation, while keeping independent task/state labels legible and the canonical identity anchor. Both 390px and 320px browser checks measure age text and state clipping, supplemented by inspected renders.
+
+Compact Coverage age cells use the existing metadata-size text and reclaim numeric-age gutters so the full Unknown word stays visible even beside a Job column at 320px; text-range checks account for cell padding, not only the outer box.
+
 ## Canonical Files
 
 1. `internal/recovery/index.go`
@@ -373,13 +480,35 @@ command-capable profile.
 
 ## Shared Boundaries
 
+### Operator storage vocabulary without identity changes
+
+Storage topology names preserve Proxmox plugin vocabulary, including LVM-Thin,
+NFS, SMB/CIFS, iSCSI, ZFS and BTRFS. Explicit topology overrides still win.
+Only a storage explicitly marked shared whose retained location is the synthetic
+cluster/shared marker reads Shared, with the supplied reporting-node count when
+more than one node is present. Node-local storage and shared storage with a
+real native location keep that location. This is host-label presentation, not
+resource consolidation: IDs, parent/node hints, ownership evidence, metrics
+targets, alerts, health and recovery authority are unchanged. Adapter/presentation
+regressions and the production storage table browser fixture verify labels
+without treating shared capacity as a backup or demonstrating native recovery.
+
+
 - After password configuration has been persisted and the runtime local-admin identity changes, authorizer synchronisation must also occur if subsequent API-token persistence fails. Development first-run reset must clear the configured-admin bypass only on successful auth reset, not on its persistence-failure rollback path. No role-store deletion or migration is part of this recovery.
 
 ### PBS host history correlation
 
 Backups hydrates type=pbs,agent with source=pbs and reuses Overview guest inventory. Deduplicate combined snapshots by canonical ID before correlation, avoiding false ambiguity for agents in both queries. Standalone non-PVE PBS telemetry remains available without downloading the guest estate twice.
 
-The same agent can still arrive as two distinct resources: a PVE guest carrying its telemetry and the standalone `source=pbs` host row. Collapse those candidates by agent identity and resolve the Backups PBS row to the guest target, whose persisted host series the drawer charts; keeping the PBS service target leaves History on a key with no host data. Distinct agent identities stay ambiguous, and a missing agent identity is not sameness proof. Do not add a second guest-estate request to compensate.
+The same agent can still arrive as two distinct resources: a PVE guest carrying its telemetry and the standalone `source=pbs` host row. Collapse those candidates by agent identity and resolve the Backups PBS row to the guest target, whose persisted host series the drawer charts. Distinct agent identities stay ambiguous, and a missing agent identity is not sameness proof. Do not add a second guest-estate request to compensate. When no host can be safely correlated, a successful PBS node-status poll now records CPU and memory on the separate PBS service target; those partial service observations do not imply host-agent disk, network, or I/O history.
+
+For token-auth PBS connections that cannot report `nodeName`, a registry-corroborated `pbs.linkedAgentId` takes precedence over connection labels when selecting the Agent-bearing host row. It must resolve to the same source-native Agent ID on a standalone or PVE-merged host; a PVE-only node with no Agent facet cannot supply host History. The PBS row and service target stay canonical; only its drawer presentation uses the host metrics target. If the explicit link changes, retained correlation to the former host is discarded rather than carrying old charts across a replacement.
+
+The backend may establish that explicit link through a running PVE guest's unique, fresh endpoint IP and its state-owned Agent/VM link when the in-guest Agent omits interface IPs. It declines reused/non-unique IPs, stopped or stale guests, and competing Agent links. No connection-name guess or VirtualBox host inference is implied by this fallback; when it cannot identify a host, only the separately observed PBS API CPU/memory service History is available.
+
+The operator's PBS connection label is never sufficient backend host identity. A label matching an unrelated Agent must not win over the endpoint's corroborated PVE guest-IP/Agent link or project that Agent's SMART disks under PBS. If only the label matches, the backend leaves the host link absent and the PBS service series separate; Backups presentation has its own correlation boundary.
+
+The direct backend PBS-to-Agent path requires non-zero observations within five minutes and excludes loopback, link-local, non-unicast and recognisable Docker-local interface addresses. Private management networks, custom management bridges and explicit report-IP hints remain eligible, including correctly parsed IPv6 URL endpoints. A stale Agent at a reused endpoint must lose PBS disk membership and its presentation link; a fresh unique replacement may acquire them, while concurrent eligible Agents remain ambiguous. `pbs_pmg_registry_test.go` covers unsafe direct evidence, management-network controls and fresh/stale/replacement/ambiguity transitions through monitor registry replacement. Its three-PBS/nine-Agent fixture preserves distinct source-native host targets and disk/network/I/O telemetry, but does not establish the reporter's VirtualBox identity or installed History acceptance.
 
 A realtime refresh can briefly omit the correlated host row while the PBS server row remains. Retain the last resolved host per PBS server across that omission instead of falling back to the service target, so the drawer's Identity rows and History series stay on the host key. Reuse the remembered host only while it is still fresh relative to the server and drop it once stale, so a removed or replaced host is not advertised indefinitely; a present but ambiguous host still declines.
 
@@ -863,6 +992,15 @@ state effects remain dormant and a forced Proxmox storage scope is not
 serialized as redundant URL state. Backups reuses the source-scoped Overview
 guest snapshot and adds only the PBS resource family, so it cannot repeat the
 large VM/LXC enumeration under a second request owner.
+Unknown source-scoped resource facets must not advertise optional Proxmox
+workflows as if their providers are present. Estate-wide aggregations are not
+tab evidence: unrelated provider rows can share VM or storage types. The
+navigation rail may expose Replication from its independent positive job count,
+while Storage, Backups, Ceph, and Mail
+wait for positive resource counts. A direct link keeps its requested route
+hydrating while counts are unknown; after counts arrive, an unsupported route
+renders Overview instead. Hiding a tab is navigation presentation, not a
+verdict about backup coverage, artifact recoverability, or stored history.
 PBS server/datastore rows may display backup counts, but the
 counts must come from the PBS backup API artifact identity, not from a
 datastore-capacity approximation. The table owns which PBS artifact count is
@@ -1191,6 +1329,11 @@ recovery scope, or a storage/recovery-owned secret source.
    ledger, and the findings store. They do not represent backup history,
    recovery points, retention policy, restore evidence, or storage provider
    state, and storage/recovery surfaces must not consume them as such.
+   The schema v18 update-discovery fields assembled through `internal/api/`
+   (effective update channel, last update check outcome, and whether it
+   offered a newer release) describe only Pulse server release discovery.
+   They are not backup, retained-update-backup, rollback, or restore evidence,
+   and storage/recovery surfaces must not consume them as such.
    Commercial migration startup behavior in
    `internal/api/licensing_handlers.go` and `internal/api/licensing_bridge.go`
    remains adjacent cloud-paid/API state. Synthetic mock-license suppression
@@ -2667,6 +2810,14 @@ capability over storage or recovery data.
 discriminator` and `falls back to the topology discriminator when no
 vdev layout is reported` in
     `frontend-modern/src/features/storageBackups/__tests__/storageAdapters.test.ts`.
+    When neither is reported, a Proxmox storage plugin type resolves to the
+    name the Proxmox UI gives it (`lvmthin` is LVM-Thin, `nfs` is NFS,
+    `cifs` is SMB/CIFS, `iscsi` is iSCSI, `zfs`, `btrfs`, `glusterfs`,
+    `esxi` likewise); title-casing the raw plugin name is not a label.
+    A storage the poller merged across the cluster carries the synthetic
+    `cluster` node (the mock fixture's `shared`), and its host label reads
+    "Shared" with the reporting node count when the storage lists its
+    nodes, never the raw marker.
 
 27. A rejected legacy RBAC import must not destroy the store. The import is
     transactional and leaves the legacy files in place, so a failure leaves the
@@ -2686,6 +2837,47 @@ vdev layout is reported` in
 
 ## Current State
 
+The agent config-fetch audit suppression cache is bounded to 4,096
+organisation/agent pairs, independently of persisted security audit history.
+Expiry-index pruning forgets only suppression state, never audit rows or
+recovery evidence. Unremembered overflow deliveries remain auditable with
+`reason=capacity`; cache expiry, overflow, or restart is not a successful
+storage operation or a reason to delete historical events.
+
+### Container diagnostics shares private bootstrap transport (1 October 2026)
+
+Recovery-adjacent diagnostics now reuse the canonical complete installer
+fetch/preflight and root/sudo private token-entry boundary, rather than exposing
+credentials in a copied pipeline or reference service. Its existing token
+response remains separate, no-store and durably bound to the unchanged
+host-plus-Docker or workload-only scopes. The default-Linux service reference
+uses a protected token path and instructs users to retain the actual
+installer-generated unit for custom state and privilege profiles. Invalid
+unit structure fails before issuance. This changes no storage permission,
+retention, recovery operation or success condition; executable bootstrap and
+response proof is not persistent-data upgrade/rollback acceptance.
+
+### Credential-safe Proxmox bootstrap (1 October 2026)
+
+The shared Proxmox setup boundary now receives its bootstrap credential from private terminal input via a bounded 0700/0600 file, before native setup mutation, rather than from copied shell literals or newly generated token-bearing download URLs. Existing registration grant binding, PVE/PBS monitoring scopes, and explicit non-rotating Audit/Repair remain unchanged. A private-file validation failure stops setup, and failed attempted registration exits nonzero with fixed guidance rather than echoed credential-bearing responses. This supersedes historical shared-boundary requirements for token-bearing commands and manual download URLs; it does not change storage permissions, recovery or retention.
+
+
+### Update progress stream delivery
+
+Update progress delivery changes observation only. Streaming or polling a
+`backing-up`, `restoring` or `completed` stage does not create a backup,
+perform rollback or establish recovery success. Update history and retained
+backups remain the recovery authority, independent of `/api/updates/stream`.
+
+### Hosted install tokens persist like any other workspace token
+
+Hosted client workspaces now mint agent install tokens where they previously
+returned none. Each token is issued through `issueAndPersistAgentInstallToken`
+into the workspace's own config persistence, the same store and write path as
+every other API token, so backup, restore and recovery of a client workspace
+carry these tokens without any new storage surface. A restored workspace keeps
+its agents' tokens; revoking one remains Settings → Infrastructure → Tokens.
+
 ### Org managers see org-bound settings, not recovery administration
 
 `/api/security/status` now grants an owner or admin of the selected
@@ -2696,15 +2888,6 @@ System → Recovery with backup polling and configuration export/import, stays
 withheld from every org-scoped session, so an org manager is not offered
 instance recovery or configuration transfer. See the api-contracts contract,
 rule 35.
-
-### Hosted install tokens persist like any other workspace token
-
-Hosted client workspaces now mint agent install tokens where they previously
-returned none. Each token is issued through `issueAndPersistAgentInstallToken`
-into the workspace's own config persistence, the same store and write path as
-every other API token, so backup, restore and recovery of a client workspace
-carry these tokens without any new storage surface. A restored workspace keeps
-its agents' tokens; revoking one remains Settings → Infrastructure → Tokens.
 
 ### TLS verification preference survives node re-registration
 
@@ -2742,6 +2925,17 @@ turning inactive rows into recovery state or preloading their inventories. The
 surface contract pins the route query map, the inactive recovery null query,
 and the direct Protection query parameters.
 
+### Agent config fetch auditing leaves recovery evidence unchanged
+
+`/api/agents/agent/{id}/config` now records a successful fetch in the security
+audit log only when it is new audit information (the agent's first delivery
+after start, a token or desired-config change, or once a day), while every
+failed fetch is still recorded. This changes no storage or recovery path:
+recovery actions keep their own action audits, dispatch receipts, and
+verification records, and only routine successful config polls stop producing
+one security-audit row each. The rule is pinned by
+`internal/api/host_agent_removal_lifecycle_integration_test.go`.
+
 ### Fresh agent command policy preserves the existing recovery authority boundary
 
 New self-hosted install-command tokens project their explicit command-policy
@@ -2774,6 +2968,20 @@ facet is loaded; the UI must not require a later WebSocket merge to replace a
 transport-induced absence. Preserving this read-only evidence adds no backup,
 restore, retention, or recovery authority. The behavior is pinned by
 `useUnifiedResources.test.ts` and `useWorkloads.test.ts`.
+
+### Coverage rows name the last backup, not the newest restore point
+
+The Proxmox coverage row's `Last backup` cell is the newest completed PBS
+snapshot or PVE backup file. A guest snapshot never fills it: it shares the
+guest's own storage, and the protection posture engine already refuses to count
+snapshots as independent recovery, so a fresh snapshot beside a stale posture
+must not read as a fresh backup. Snapshot-only rows show `None` and carry the
+engine's own reason on hover; the guest snapshot keeps its dedicated column and
+the restore-evidence disclosure. The backup-location filter re-derives that
+pointer from completed, non-snapshot artifacts under the same rule. This is a
+presentation and sort change only; it adds no backup, restore, or retention
+authority. Pinned by `proxmoxBackupRecoveryModel.test.ts` and
+`ProxmoxCoverageTable.test.tsx`.
 
 ### Retained Patrol objectives do not create recovery authority
 
@@ -2814,6 +3022,16 @@ removed the never-consumed `autoUpdateCheckInterval` / `autoUpdateTime`
 fields. Persisted `system.json` files that still carry the legacy keys load
 cleanly with the keys ignored, so tenant workspace preservation and recovery
 flows that copy `system.json` forward are unaffected.
+
+### Shared telemetry preference updates preserve recovery ownership
+
+Telemetry preference updates remain durable before the sender callback. An
+explicit boolean equal to the effective runtime value still repairs a stale
+disk preference but must not restart the sender. Null/omitted values leave that
+preference alone, and a failed save neither mutates runtime nor invokes the
+callback. The document shape and recovery ownership are unchanged.
+`system_settings_telemetry_test.go` pins repeated saves, transitions, durable
+callback ordering, stale preferences, null input and failed persistence.
 
 ### Shared system-settings boundary gained an SSH backoff reset side effect
 
@@ -6208,3 +6426,84 @@ This does not change token scopes, agent admission, or existing agent cleanup.
 Regression coverage: `TestQuickSecuritySetupForcePreservesSystemSettings` and
 `TestInitializeSystemSettingsPreservesExistingBytes`, `TestInitializeSystemSettingsMissing`,
 `TestInitializeSystemSettingsReadError`.
+
+### Storage pool rows do not retain their whole group
+
+`buildStoragePoolsTableItems` assigns each record row its stable record key and
+record only. Group headers retain group metadata and expansion state. Passing
+the full group through every record row made the shared windowing reconciler
+walk the same group repeatedly during large-estate Storage navigation. The
+windowing test pins the row shape, and the 50-node browser fixture exercises
+expanded rows and History at desktop and phone widths. This is presentation
+work only; it changes no storage evidence, alert state or recovery authority.
+
+### App-shell AI navigation gating opens no recovery path
+
+`App.tsx` now passes the `assistantEnabled` session capability to the keyboard
+shortcuts and the shortcuts help so Patrol entry points hide while AI is off.
+The change is navigation presentation only. It adds no storage, backup,
+snapshot or recovery surface, and it changes no route, authority or recovery
+state. The Recovery settings item and its capability gate are untouched.
+
+### Pulse Mobile pairing copy only
+
+`internal/api/onboarding_handlers.go` changed only the human-readable pairing
+readiness messages so they name Settings > Pulse Mobile. This opens no new
+storage or recovery path.
+
+### Live physical-disk row continuity
+
+Physical Disks uses the canonical keyed windowed renderer, which retains row
+owners across resource snapshots. Disk presentation must therefore stay
+reactive: health and its evidence, temperature, endurance, capacity, device,
+host and placement labels reflect the latest snapshot rather than the mount-time
+sample. Removed readings revert to their existing unknown/placeholders without
+retaining old warning text or colour. Metric summary identities, highlight
+matching and disclosure control IDs track the current canonical disk target.
+Unchanged resource IDs keep their mounted row, focus and expanded detail;
+attention filtering and the displayed health must agree through fault/recovery.
+This changes no collector, health thresholds, history policy or server identity.
+`frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx` exercises
+snapshot replacement, in-place reconciliation, missing evidence, target changes
+and fault/recovery using the real keyed renderer.
+
+Touch inspection in the existing pool and physical-disk History charts selects
+an actual stored reading rather than substituting the latest sample on focus.
+Page pan/cancel and multi-contact gestures do not imply a selected observation;
+browser-owned scrolling remains available. This changes no source target, API,
+units, collection, retention, access or recovery boundary. The production
+disk/pool fixture `frontend-modern/browser-tests/history-touch.cjs` and mounted
+`HistoryChart.test.tsx` regressions verify presentation/input behaviour only,
+not live appliance collection or recovery success.
+
+### Pool-to-physical-disk ownership in Storage details
+
+`storagePoolDetailPresentation.ts` must scope inferred ZFS device and UnRAID
+array/cache-group membership to the owning host. An explicit disk parent equal
+to the canonical pool ID or its retained resource reference remains a direct
+association. Otherwise, matching canonical host parents establishes scope;
+conflicting parents cannot be overridden by names, paths or group labels.
+When canonical parents are unavailable, only a complete matching native
+Proxmox instance/node pair establishes scope. `storageAdapters.ts` retains that
+instance alongside the native node. Display names and unscoped hostnames alone
+are insufficient. Unknown ownership must not present another host's SMART,
+temperature, counters or topology counts as this pool's evidence.
+
+ZFS device matching compares full identifiers with only the optional `/dev/`
+prefix normalized, not arbitrary suffixes or invented partition associations.
+This is read-only presentation: no collector, canonical server identity,
+metrics target, health threshold, persistence or recovery authority changes.
+`storagePoolDiskOwnership.test.ts`, the mounted
+`StoragePoolDetail.ownership.test.tsx` and `browser-tests/pool-ownership.cjs`
+cover repeated paths/groups, direct children, scoped legacy snapshots, missing
+ownership and live target replacement. Synthetic presentation proof does not
+establish native appliance, installation or recovery acceptance.
+
+### Prompt-cache usage buckets open no storage or recovery path
+
+The AI usage ledger and Patrol run records gain two optional integer fields
+(`cache_creation_input_tokens`, `cache_read_input_tokens`) in the files
+Pulse already writes, with `omitempty` encoding so existing records load
+unchanged and older builds ignore the fields. `internal/api/ai_handlers.go`
+reads them for the usage export only. No new file, directory, retention
+window, backup, migration or recovery authority is introduced.

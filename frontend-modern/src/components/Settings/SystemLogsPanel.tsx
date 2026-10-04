@@ -53,7 +53,7 @@ export const SystemLogsPanel: Component = () => {
               </button>
               <button
                 onClick={state.clearLogs}
-                class="min-h-11 sm:min-h-9 min-w-11 sm:min-w-9 p-2.5 rounded hover:bg-surface-hover text-muted transition-colors"
+                class="min-h-11 sm:min-h-9 min-w-11 sm:min-w-9 p-2.5 rounded-sm hover:bg-surface-hover text-muted transition-colors"
                 title={SYSTEM_LOGS_PANEL_COPY.clearTitle}
               >
                 <Trash2 size={18} />
@@ -78,7 +78,7 @@ export const SystemLogsPanel: Component = () => {
           >
             <For each={state.logs()}>
               {(log) => (
-                <div class="animate-enter border-b border-border-subtle last:border-0 pb-0.5 mb-0.5 hover:bg-surface-hover px-1 -mx-1 rounded">
+                <div class="animate-enter border-b border-border-subtle last:border-0 pb-0.5 mb-0.5 hover:bg-surface-hover px-1 -mx-1 rounded-sm">
                   <span class={getSystemLogLineClass(log)}>{log}</span>
                 </div>
               )}

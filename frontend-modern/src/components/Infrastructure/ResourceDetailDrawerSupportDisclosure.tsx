@@ -27,7 +27,7 @@ export const ResourceDetailDrawerSupportDisclosure: Component<
   return (
     <div
       data-testid={props.dataTestId}
-      class={`rounded border border-border bg-surface px-2 py-1.5 ${props.class ?? ''}`}
+      class={`rounded-sm border border-border bg-surface px-2 py-1.5 ${props.class ?? ''}`}
     >
       <div class="flex min-w-0 items-center justify-between gap-2">
         <div class="flex min-w-0 flex-1 items-baseline gap-2">

@@ -241,11 +241,13 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 		m.dockerRestartTracking = make(map[string]*dockerRestartRecord)
 		m.dockerUpdateFirstSeen = make(map[string]time.Time)
 		m.dockerUpdateFirstSeenByIdentity = make(map[string]time.Time)
+		m.dockerUpdateLastObserved = make(map[string]time.Time)
 	}
 	if m.config.DockerDefaults.UpdateAlertDelayHours < 0 && !containersDisabled {
 		m.clearDockerContainerUpdateAlertsLocked()
 		m.dockerUpdateFirstSeen = make(map[string]time.Time)
 		m.dockerUpdateFirstSeenByIdentity = make(map[string]time.Time)
+		m.dockerUpdateLastObserved = make(map[string]time.Time)
 	}
 	if servicesDisabled {
 		var serviceAlerts []string
@@ -606,7 +608,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				Str("alertID", alertID).
 				Msg("Alert auto-resolved after configuration change")
 
-			m.safeCallResolvedAlertCallback(resolvedAlert.Alert, alertID, true)
+			m.safeCallResolvedAlertCallback(resolvedAlert, alertID, true)
 		}
 	}
 

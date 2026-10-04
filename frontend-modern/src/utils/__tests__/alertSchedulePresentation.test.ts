@@ -8,7 +8,7 @@ import {
 describe('alertSchedulePresentation', () => {
   it('returns the selected quiet-day button presentation', () => {
     expect(getAlertQuietDayButtonClass(true)).toBe(
-      'rounded-md px-2 py-2 text-xs font-medium transition-all duration-200 bg-blue-500 text-white shadow-sm',
+      'rounded-md px-2 py-2 text-xs font-medium transition-all duration-200 bg-blue-500 text-white shadow-xs',
     );
   });
 
@@ -32,13 +32,13 @@ describe('alertSchedulePresentation', () => {
 
   it('returns the selected quiet suppress checkbox presentation', () => {
     expect(getAlertQuietSuppressCheckboxClass(true)).toBe(
-      'mt-1 flex h-4 w-4 items-center justify-center rounded border-2 border-blue-500 bg-blue-500',
+      'mt-1 flex h-4 w-4 items-center justify-center rounded-sm border-2 border-blue-500 bg-blue-500',
     );
   });
 
   it('returns the unselected quiet suppress checkbox presentation', () => {
     expect(getAlertQuietSuppressCheckboxClass(false)).toBe(
-      'mt-1 flex h-4 w-4 items-center justify-center rounded border-2 border-border',
+      'mt-1 flex h-4 w-4 items-center justify-center rounded-sm border-2 border-border',
     );
   });
 });

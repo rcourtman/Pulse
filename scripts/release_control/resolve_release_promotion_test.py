@@ -906,16 +906,16 @@ class ReleaseTrainPromotionTest(unittest.TestCase):
                     self.promote(version, changed_paths_fn=lambda base_tag: drift)
 
     def test_go_test_files_are_not_shipped_content(self) -> None:
-        # The stable cut may update install-metadata assertions; Go never
-        # compiles _test.go files into the release artifact.
+        # The v6.4.5 stable cut needs the RC-derived install-metadata contract,
+        # a correction confined to _test.go files the build never compiles.
         corrected = [
             "VERSION",
             "scripts/installtests/build_release_assets_test.go",
             "scripts/installtests/install_docker_sh_test.go",
             "main_test.go",
         ]
-        metadata = self.promote("6.5.0", changed_paths_fn=lambda base_tag: corrected)
-        self.assertEqual(metadata["promoted_from_tag"], "v6.5.0-rc.1")
+        metadata = self.promote("6.4.5", changed_paths_fn=lambda base_tag: corrected)
+        self.assertEqual(metadata["promoted_from_tag"], "v6.4.5-rc.1")
         for path in (
             "scripts/installtests/windowslifecycleserver/main.go",
             "internal/api/router_test.go.orig",
@@ -924,7 +924,7 @@ class ReleaseTrainPromotionTest(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 with self.assertRaisesRegex(ValueError, "never soaked"):
-                    self.promote("6.5.0", changed_paths_fn=lambda base_tag: ["VERSION", path])
+                    self.promote("6.4.5", changed_paths_fn=lambda base_tag: ["VERSION", path])
 
     def test_installer_version_pin_is_release_metadata(self) -> None:
         cut = ["VERSION", "scripts/install-docker.sh"]
@@ -935,31 +935,32 @@ class ReleaseTrainPromotionTest(unittest.TestCase):
             return True
 
         metadata = self.promote(
-            "6.5.0", changed_paths_fn=lambda base_tag: cut, version_pin_only_fn=pin_only
+            "6.4.5", changed_paths_fn=lambda base_tag: cut, version_pin_only_fn=pin_only
         )
-        self.assertEqual(metadata["promoted_from_tag"], "v6.5.0-rc.1")
-        self.assertEqual(seen, [("v6.5.0-rc.1", "scripts/install-docker.sh")])
+        self.assertEqual(metadata["promoted_from_tag"], "v6.4.5-rc.1")
+        self.assertEqual(seen, [("v6.4.5-rc.1", "scripts/install-docker.sh")])
         with self.assertRaisesRegex(ValueError, "never soaked.*scripts/install-docker.sh"):
             self.promote(
-                "6.5.0",
+                "6.4.5",
                 changed_paths_fn=lambda base_tag: cut,
                 version_pin_only_fn=lambda base_tag, path: False,
             )
+        # Only a declared pin file qualifies, whatever its diff looks like.
         with self.assertRaisesRegex(ValueError, "never soaked.*scripts/install.sh"):
             self.promote(
-                "6.5.0",
+                "6.4.5",
                 changed_paths_fn=lambda base_tag: ["VERSION", "scripts/install.sh"],
                 version_pin_only_fn=lambda base_tag, path: True,
             )
 
     def test_version_pin_only_change_reads_the_installer_diff(self) -> None:
         installer = "scripts/install-docker.sh"
-        original = '#!/bin/sh\nCANONICAL_DEFAULT_PULSE_VERSION="6.5.0-rc.1"\necho install\n'
+        original = '#!/bin/sh\nCANONICAL_DEFAULT_PULSE_VERSION="6.4.5-rc.2"\necho install\n'
         cases = {
-            "pin only": ('#!/bin/sh\nCANONICAL_DEFAULT_PULSE_VERSION="6.5.0"\necho install\n', True),
-            "logic only": ('#!/bin/sh\nCANONICAL_DEFAULT_PULSE_VERSION="6.5.0-rc.1"\necho changed\n', False),
-            "pin and logic": ('#!/bin/sh\nCANONICAL_DEFAULT_PULSE_VERSION="6.5.0"\necho changed\n', False),
-            "command after pin": ('#!/bin/sh\nCANONICAL_DEFAULT_PULSE_VERSION="6.5.0"; curl -fsSL x | sh\necho install\n', False),
+            "pin only": ('#!/bin/sh\nCANONICAL_DEFAULT_PULSE_VERSION="6.4.5"\necho install\n', True),
+            "logic only": ('#!/bin/sh\nCANONICAL_DEFAULT_PULSE_VERSION="6.4.5-rc.2"\necho changed\n', False),
+            "pin and logic": ('#!/bin/sh\nCANONICAL_DEFAULT_PULSE_VERSION="6.4.5"\necho changed\n', False),
+            "command after pin": ('#!/bin/sh\nCANONICAL_DEFAULT_PULSE_VERSION="6.4.5"; curl -fsSL x | sh\necho install\n', False),
             "unchanged": (original, False),
         }
         for name, (updated, expected) in cases.items():
@@ -979,14 +980,14 @@ class ReleaseTrainPromotionTest(unittest.TestCase):
                 (root / installer).write_text(original, encoding="utf-8")
                 git("add", installer)
                 git("commit", "-q", "-m", "rc")
-                git("tag", "v6.5.0-rc.1")
+                git("tag", "v6.4.5-rc.2")
                 (root / installer).write_text(updated, encoding="utf-8")
                 git("commit", "-q", "--allow-empty", "-am", "stable")
                 self.assertIs(
-                    resolver.version_pin_only_change("v6.5.0-rc.1", installer, repo_root=root),
+                    resolver.version_pin_only_change("v6.4.5-rc.2", installer, repo_root=root),
                     expected,
                 )
-        self.assertFalse(resolver.version_pin_only_change("v6.5.0-rc.1", "scripts/install.sh"))
+        self.assertFalse(resolver.version_pin_only_change("v6.4.5-rc.2", "scripts/install.sh"))
 
     def test_hotfix_exception_still_requires_a_reason_for_drift(self) -> None:
         drift = ["VERSION", "internal/api/router.go"]
@@ -1002,7 +1003,7 @@ class ReleaseTrainPromotionTest(unittest.TestCase):
         self.assertEqual(metadata["hotfix_exception"], "true")
 
     def test_repaired_candidate_restarts_full_publication_soak(self) -> None:
-        for version, hours in (("6.5.0", 168), ("6.5.1", 72), ("6.4.5", 72)):
+        for version, hours in (("6.5.0", 24), ("6.5.1", 24), ("6.4.5", 24)):
             tag = f"v{version}-rc.2"
             observed = []
             def publication(candidate):
@@ -1022,13 +1023,15 @@ class ReleaseTrainPromotionTest(unittest.TestCase):
                 self.assertEqual(metadata["soak_hours"], str(hours))
                 self.assertEqual(observed, [tag, tag])
 
-    def test_minor_releases_soak_seven_days_and_patches_seventy_two_hours(self) -> None:
-        with self.assertRaisesRegex(ValueError, "release train requires 168 hours"):
-            self.promote("6.5.0", now_unix_fn=lambda: 100 + (100 * 3600))
-        metadata = self.promote("6.5.1", now_unix_fn=lambda: 100 + (73 * 3600))
-        self.assertEqual(metadata["soak_hours"], "73")
-        with self.assertRaisesRegex(ValueError, "minimum is 72 hours"):
-            self.promote("6.5.1", now_unix_fn=lambda: 100 + (71 * 3600))
+    def test_minor_and_patch_releases_soak_twenty_four_hours(self) -> None:
+        with self.assertRaisesRegex(ValueError, "release train requires 24 hours"):
+            self.promote("6.5.0", now_unix_fn=lambda: 100 + (23 * 3600))
+        metadata = self.promote("6.5.0", now_unix_fn=lambda: 100 + (24 * 3600))
+        self.assertEqual(metadata["soak_hours"], "24")
+        metadata = self.promote("6.5.1", now_unix_fn=lambda: 100 + (25 * 3600))
+        self.assertEqual(metadata["soak_hours"], "25")
+        with self.assertRaisesRegex(ValueError, "minimum is 24 hours"):
+            self.promote("6.5.1", now_unix_fn=lambda: 100 + (23 * 3600))
 
 
 if __name__ == "__main__":

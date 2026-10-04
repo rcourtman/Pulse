@@ -164,26 +164,12 @@ func TestConnectionsLedgerSeparatesTelemetryHealthFromCommandAdmission(t *testin
 }
 
 func TestConnectionsHandleListUsesTrueNASPollerRuntimeSummary(t *testing.T) {
-	persistence := config.NewConfigPersistence(t.TempDir())
-	connection := config.TrueNASInstance{
-		ID:                 "tn1",
-		Name:               "TrueNAS",
-		Host:               "truenas.lan",
-		APIKey:             "secret",
-		UseHTTPS:           true,
-		Enabled:            true,
-		PollIntervalSecs:   60,
-		MonitorDatasets:    true,
-		MonitorPools:       true,
-		MonitorReplication: true,
-	}
-	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
-		t.Fatalf("SaveTrueNASConfig: %v", err)
-	}
-
-	poller := monitoring.NewTrueNASPoller(nil, time.Minute, nil)
-	successAt := time.Now().UTC().Add(-30 * time.Second)
-	poller.RecordConnectionTestSuccess("default", connection.ID, connection, successAt)
+	f := newTrueNASPollEvidenceFixture(t)
+	persistence, connection, poller := f.persistence, f.connection, f.poller
+	poller.Start(context.Background())
+	waitForTrueNASPollEvidence(t, f, func(s monitoring.TrueNASConnectionSummary) bool { return s.Poll.LastSuccessAt != nil })
+	poller.Stop()
+	successAt := *f.summary().Poll.LastSuccessAt
 
 	handler := NewConnectionsHandlers(
 		func(context.Context) *config.Config { return nil },
@@ -209,7 +195,7 @@ func TestConnectionsHandleListUsesTrueNASPollerRuntimeSummary(t *testing.T) {
 
 	var tn *Connection
 	for i := range resp.Connections {
-		if resp.Connections[i].ID == "truenas:tn1" {
+		if resp.Connections[i].ID == "truenas:"+connection.ID {
 			tn = &resp.Connections[i]
 			break
 		}

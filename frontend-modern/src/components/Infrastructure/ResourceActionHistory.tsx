@@ -32,7 +32,7 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
   const compensation = () => props.audit.result?.actionResultV2?.compensation;
 
   return (
-    <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
+    <div class="rounded-sm border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
           <div class="font-medium text-base-content">
@@ -46,7 +46,7 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
             </Show>
           </div>
         </div>
-        <span class={`shrink-0 rounded border px-1.5 py-0.5 font-medium ${state().className}`}>
+        <span class={`shrink-0 rounded-sm border px-1.5 py-0.5 font-medium ${state().className}`}>
           {state().label}
         </span>
       </div>
@@ -69,7 +69,7 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
           <InfoCardKeyValueRow
             label="Intent"
             value={preflight()?.intendedChange}
-            valueClass="break-words"
+            valueClass="wrap-break-word"
           />
         </Show>
         <Show when={(preflight()?.safetyChecks || []).length > 0}>
@@ -86,7 +86,7 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
           {(() => {
             const presentation = resultPresentation()!;
             return (
-              <div class={`rounded border px-2 py-1 text-[10px] ${presentation.className}`}>
+              <div class={`rounded-sm border px-2 py-1 text-[10px] ${presentation.className}`}>
                 <div class="font-medium">{presentation.label}</div>
                 <Show when={presentation.kind === 'refusal'}>
                   <div class="mt-0.5 font-medium">Refused before dispatch</div>
@@ -110,14 +110,14 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
         <Show when={apt()?.facts.length}>
           <div
             data-testid="resource-apt-action-facts"
-            class="grid gap-1 rounded border border-border bg-surface px-2 py-1.5 sm:grid-cols-2"
+            class="grid gap-1 rounded-sm border border-border bg-surface px-2 py-1.5 sm:grid-cols-2"
           >
             <For each={apt()?.facts ?? []}>
               {(fact) => (
                 <InfoCardKeyValueRow
                   label={fact.label}
                   value={fact.value}
-                  valueClass="break-words"
+                  valueClass="wrap-break-word"
                 />
               )}
             </For>
@@ -127,7 +127,7 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
           {(() => {
             const outcome = verificationOutcome()!;
             return (
-              <div class={`rounded border px-2 py-1 text-[10px] ${outcome.className}`}>
+              <div class={`rounded-sm border px-2 py-1 text-[10px] ${outcome.className}`}>
                 <div class="font-medium">{outcome.label}</div>
                 <div class="mt-0.5 opacity-80">{outcome.detail}</div>
                 <Show when={outcome.evidenceSummary}>
@@ -144,7 +144,7 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
           {(recovery) => (
             <div
               data-testid="resource-action-recovery-truth"
-              class="rounded border border-border bg-surface px-2 py-1 text-[10px] text-base-content"
+              class="rounded-sm border border-border bg-surface px-2 py-1 text-[10px] text-base-content"
             >
               <div class="font-medium">
                 Recovery: {formatActionCapabilityLabel(recovery().status)}
@@ -162,7 +162,7 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
           {(presentation) => (
             <div
               data-testid="resource-apt-action-next-step"
-              class="rounded border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
+              class="rounded-sm border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-900/25 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
             >
               <span class="font-medium">Next: </span>
               {presentation().nextStep}
@@ -176,7 +176,7 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
               ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
               : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300';
             return (
-              <div class={`rounded border px-2 py-1 text-[10px] ${toneClass}`}>
+              <div class={`rounded-sm border px-2 py-1 text-[10px] ${toneClass}`}>
                 <div class="font-medium">
                   {v.success
                     ? 'Legacy check passed (source unclassified)'
@@ -186,7 +186,7 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
                   <div class="mt-0.5 font-mono text-[10px] opacity-80">{v.command}</div>
                 </Show>
                 <Show when={v.output}>
-                  <div class="mt-0.5 whitespace-pre-wrap break-words">{v.output}</div>
+                  <div class="mt-0.5 whitespace-pre-wrap wrap-break-word">{v.output}</div>
                 </Show>
                 <Show when={v.note}>
                   <div class="mt-0.5 italic">{v.note}</div>
@@ -215,7 +215,10 @@ export const ResourceActionHistory: Component<ResourceActionHistoryProps> = (pro
     </div>
 
     <Show when={props.error}>
-      <div class="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-700 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
+      <div
+        role="alert"
+        class="mt-2 rounded-sm border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-700 dark:border-amber-700 dark:bg-amber-900/25 dark:text-amber-200"
+      >
         <div class="flex items-start justify-between gap-2">
           <span>{props.error}</span>
           <button
@@ -232,9 +235,11 @@ export const ResourceActionHistory: Component<ResourceActionHistoryProps> = (pro
     <Show
       when={props.audits.length > 0}
       fallback={
-        <div class="mt-3 rounded border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
-          No actions yet.
-        </div>
+        <Show when={!props.error}>
+          <div class="mt-3 rounded-sm border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
+            No actions yet.
+          </div>
+        </Show>
       }
     >
       <div class="mt-3 space-y-2">

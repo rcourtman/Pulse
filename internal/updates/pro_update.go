@@ -310,6 +310,7 @@ func (m *Manager) checkProUpdates(ctx context.Context, channel string, currentIn
 			CurrentVersion: currentInfo.Version,
 			LatestVersion:  currentInfo.Version,
 			Warning:        "Update checks are unavailable: " + errProUpdateNotActivated().Error(),
+			checkOutcome:   UpdateCheckOutcomeSkipped,
 		}, nil
 	}
 
@@ -333,6 +334,7 @@ func (m *Manager) checkProUpdates(ctx context.Context, channel string, currentIn
 			CurrentVersion: currentInfo.Version,
 			LatestVersion:  currentInfo.Version,
 			Warning:        fmt.Sprintf("The private Pulse Pro release channel currently serves prerelease %s; stable-channel installs skip prereleases.", manifest.Release.Version),
+			checkOutcome:   UpdateCheckOutcomeNoRelease,
 		}, nil
 	}
 

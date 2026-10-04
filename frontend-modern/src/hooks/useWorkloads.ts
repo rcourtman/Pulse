@@ -1,4 +1,4 @@
-import { onCleanup, createEffect, createSignal, type Accessor } from 'solid-js';
+import { onCleanup, createEffect, createSignal, untrack, type Accessor } from 'solid-js';
 import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
 import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
@@ -113,6 +113,10 @@ type APIResource = {
     lastBackup?: string;
     backupInProgress?: boolean;
     disks?: APIDiskInfo[];
+    diskStatusReason?: string;
+    guestAgentStatus?: string;
+    guestAgentExpected?: boolean;
+    lock?: string;
     swapUsed?: number;
     swapTotal?: number;
     balloon?: number;
@@ -260,6 +264,10 @@ const reconcileWorkloadRowIdentity = (
   let reusedCount = 0;
   const reconciled = next.map((row) => {
     const previousRow = previousById.get(row.id);
+    if (previousRow === row) {
+      reusedCount += 1;
+      return row;
+    }
     if (previousRow && workloadSignature(previousRow) === workloadSignature(row)) {
       reusedCount += 1;
       return previousRow;
@@ -565,7 +573,11 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     })(),
     disk: buildMetric(resource.metrics?.disk),
     disks: normalizeDiskArray(resource.proxmox?.disks ?? resource.agent?.disks),
-    diskStatusReason: undefined,
+    // Both the API and owning platform snapshot pass through this mapper.
+    // A retained numeric metric must not lose the provider's read deferral.
+    diskStatusReason: resource.proxmox?.diskStatusReason,
+    guestAgentStatus: resource.proxmox?.guestAgentStatus,
+    guestAgentExpected: resource.proxmox?.guestAgentExpected,
     ipAddresses: resource.identity?.ipAddresses ?? [],
     // Guest OS info: agent.osName/osVersion is the universal fallback the
     // workload table reads. Proxmox writes to resource.proxmox.osName /
@@ -589,10 +601,11 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     uptime: uptime ?? 0,
     template: resource.proxmox?.template ?? false,
     lastBackup: (() => {
-      if (!resource.proxmox?.lastBackup) return 0;
-      const parsed = Date.parse(resource.proxmox.lastBackup);
-      // Go zero time "0001-01-01T00:00:00Z" parses to a large negative number
-      return parsed > 0 ? parsed : 0;
+      const timestamp = resource.proxmox?.lastBackup?.trim();
+      // Go zero time is an explicit absence sentinel. Keep other invalid
+      // readings (NaN included) distinct so the UI can report uncertainty.
+      if (!timestamp || /^0001-01-01T00:00:00(?:\.0+)?Z$/.test(timestamp)) return 0;
+      return Date.parse(timestamp);
     })(),
     backupInProgress: resource.proxmox?.backupInProgress ?? false,
     // vSphere's flat `resource.tags` is a mixed keyword set: the adapter keeps
@@ -602,7 +615,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     // cell, so the vSphere facet wins for every vSphere workload — including
     // the untagged ones, which must render empty rather than fall back.
     tags: vmwareRowTags(resource) ?? resource.tags ?? [],
-    lock: '',
+    lock: resource.proxmox?.lock ?? '',
     lastSeen: toIsoString(resource.lastSeen),
     isOci: workloadType === 'system-container' ? (resource.proxmox?.isOci ?? false) : false,
     osTemplate: workloadType === 'system-container' ? resource.proxmox?.osTemplate : undefined,
@@ -833,6 +846,11 @@ export const __resetWorkloadsCacheForTests = () => {
 export interface UseWorkloadsOptions {
   /** Optional canonical snapshot owned by a platform page. */
   resourceSnapshot?: Accessor<Resource[] | undefined>;
+  /** Changed IDs from the same committed snapshot, or null for a full refresh. */
+  resourceSnapshotChange?: Accessor<{
+    version: number;
+    changedIds: ReadonlySet<string> | null;
+  }>;
   /** Refetch the owner snapshot when the surface explicitly reconnects. */
   refetchSnapshot?: () => Promise<unknown>;
 }
@@ -852,6 +870,9 @@ export function useWorkloads(
   );
   const [error, setError] = createSignal<unknown>(undefined);
   let requestVersion = 0;
+  let lastSnapshotVersion = 0;
+  let lastSnapshotOrgScope = resolveActiveOrgScope();
+  let lastSnapshotRowsByResourceID = new Map<string, WorkloadGuest | null>();
 
   const mutate = (value: WorkloadGuest[] | ((prev: WorkloadGuest[]) => WorkloadGuest[])) =>
     setWorkloads((previous) => {
@@ -870,7 +891,8 @@ export function useWorkloads(
 
   const applyWorkloads = (next: WorkloadGuest[], targetOrgScope = resolveActiveOrgScope()) => {
     const cacheEntry = getWorkloadsCacheEntry(targetOrgScope);
-    const current = targetOrgScope === resolveActiveOrgScope() ? workloads() : cacheEntry.workloads;
+    const current =
+      targetOrgScope === resolveActiveOrgScope() ? untrack(workloads) : cacheEntry.workloads;
     const reconciled = reconcileWorkloadRowIdentity(current, next);
     if (reconciled === current) {
       setWorkloadsCache(cacheEntry, current, Date.now());
@@ -933,6 +955,8 @@ export function useWorkloads(
   createEffect(() => {
     if (!enabled()) {
       requestVersion += 1;
+      lastSnapshotVersion = 0;
+      lastSnapshotRowsByResourceID.clear();
       setLoading(false);
       return;
     }
@@ -943,9 +967,27 @@ export function useWorkloads(
         return;
       }
 
-      const next = resourceSnapshot
-        .map(mapCanonicalResourceToWorkload)
-        .filter((resource): resource is WorkloadGuest => Boolean(resource));
+      const change = options.resourceSnapshotChange?.();
+      const currentOrgScope = resolveActiveOrgScope();
+      const canReuseStableRows =
+        change?.changedIds !== null &&
+        change?.changedIds !== undefined &&
+        change.version === lastSnapshotVersion + 1 &&
+        currentOrgScope === lastSnapshotOrgScope;
+      const nextRowsByResourceID = new Map<string, WorkloadGuest | null>();
+      const next = resourceSnapshot.flatMap((resource) => {
+        const mapped =
+          canReuseStableRows &&
+          !change!.changedIds!.has(resource.id) &&
+          lastSnapshotRowsByResourceID.has(resource.id)
+            ? lastSnapshotRowsByResourceID.get(resource.id)!
+            : mapCanonicalResourceToWorkload(resource);
+        nextRowsByResourceID.set(resource.id, mapped);
+        return mapped ? [mapped] : [];
+      });
+      lastSnapshotVersion = change?.version ?? 0;
+      lastSnapshotOrgScope = currentOrgScope;
+      lastSnapshotRowsByResourceID = nextRowsByResourceID;
       applyWorkloads(next);
       setLoading(false);
       setError(undefined);

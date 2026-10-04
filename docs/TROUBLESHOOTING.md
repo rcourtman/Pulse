@@ -7,8 +7,9 @@
 Pulse does not provide an email password-reset flow. Choose the path that
 matches how this self-hosted instance authenticates:
 
-- **Local Pulse username and password**: recovery requires shell access to the
-  Pulse host or container. Follow the deployment-specific steps below.
+- **Local Pulse administrator username and password**: recovery requires
+  authorised access to the host or deployment's credential source. Follow the
+  steps below; keep the existing username.
 - **OIDC, SAML, or proxy authentication**: contact the identity-provider or
   Pulse administrator. If the administrator deliberately kept local login as a
   fallback, they can open the Pulse URL with `?show_local=true`; this only
@@ -17,50 +18,112 @@ matches how this self-hosted instance authenticates:
   administrator can use the lockout reset in Pulse; password recovery is not
   required.
 
-The local recovery steps remove only the Pulse-generated authentication file.
-After restart, Pulse still requires the host-only bootstrap token before it
-will accept replacement credentials. If `PULSE_AUTH_USER` or `PULSE_AUTH_PASS`
-is supplied by Docker Compose, Kubernetes, systemd, or another deployment
-manager, update that deployment configuration instead; its environment values
-override the generated file.
+#### Recover the existing local administrator login
 
-**Docker**:
+Do not delete `.env` or repeat first-time setup to recover a password. The file
+can also hold deployment settings, and setup replaces the primary API token.
+Replace only the password in its active credential source instead, preserving
+the username, API tokens, encryption keys, monitoring configuration and data.
+This is login recovery, not a complete response to a compromised account;
+existing sessions and API tokens need separate review if credentials leaked.
 
-```bash
-docker exec pulse rm /data/.env
-docker restart pulse
-# Access UI again. Pulse will require a bootstrap token for setup.
-# Get it with:
-docker exec pulse /app/pulse bootstrap-token
-```
+1. **Find the active credential source locally.** Deployment-supplied
+   `PULSE_AUTH_USER` and `PULSE_AUTH_PASS` take precedence over Pulse's `.env`.
+   Do not post full service units, container inspections or resolved Compose
+   configuration; they can contain secrets.
+   - **Docker**: the generated file is in the mounted data directory, normally
+     `/data/.env` inside the container. If Compose, `--env-file`, Kubernetes or
+     another manager supplies the password, edit that managed source instead.
+   - **Systemd**: check the active service's unit, environment files and
+     drop-ins privately. Root-run setup can also save credentials in
+     `/etc/systemd/system/pulse.service.d/override.conf` (or the corresponding
+     `pulse-backend.service.d` path on legacy installs). Editing only
+     `/etc/pulse/.env` will not override those values. A custom
+     `PULSE_DATA_DIR` changes the generated file's location.
+   - **Proxmox LXC**: perform the systemd steps inside the Pulse container, not
+     on the Proxmox host. Use its console or `pct enter <ctid>`.
+2. **Prepare a new password hash privately.** Use a trusted local bcrypt tool
+   that prompts for a password of at least 12 characters, never one that needs
+   the password in its command arguments. For example, if Apache's `htpasswd`
+   is installed on your trusted administration machine:
 
-**Systemd**:
+   ```bash
+   (
+   set -eu
+   umask 077
+   recovery_dir="$(mktemp -d "${TMPDIR:-/tmp}/pulse-password.XXXXXX")"
+   htpasswd -nB -C 12 pulse-recovery > "$recovery_dir/password-record"
+   printf 'Private password record saved in %s/password-record\n' "$recovery_dir"
+   )
+   ```
 
-```bash
-sudo rm /etc/pulse/.env
-sudo systemctl restart pulse
-sudo pulse bootstrap-token
-```
+   This prints only the file location. Open the record in a private editor and
+   copy the complete 60-character hash after `pulse-recovery:`; that label is
+   not a new Pulse username. Do not post the record or hash. If the tool fails,
+   stop rather than saving a partial hash or putting the password in a shell
+   command.
+3. **Back up and edit only the active password setting.** Keep an owner-only
+   backup of each file you change, then replace `PULSE_AUTH_PASS` in a private
+   editor. Keep `PULSE_AUTH_USER` and unrelated settings unchanged. In a Pulse
+   `.env`, put the hash in single quotes with literal `$` characters. Compose
+   YAML has different interpolation rules; follow the
+   [authentication guide](CONFIGURATION.md#private-docker-authentication-file)
+   for the source you actually use. If a systemd drop-in supplies the password,
+   update it and the generated authentication file consistently so a later
+   restart or reload does not restore the old value. Preserve file permissions
+   and ownership; hashes and backups are sensitive too.
+4. **Apply through the existing deployment.** For a generated Docker data-file
+   change, restart the same container. Changing Docker's managed environment
+   requires its recreate/redeploy operation, not just `docker restart`; preserve
+   the same image, mounted data and other settings. For systemd, reload the
+   service manager after a unit or drop-in change, then restart the active Pulse
+   service during a suitable maintenance window. Do not remove a data volume,
+   reinstall Pulse or re-enrol agents.
+5. **Verify the login.** Use a fresh browser session to sign in with the same
+   local administrator username and new password, then check that monitoring
+   and agent connections remain intact. If it still fails, stop and reconcile
+   the effective source and any lockout; do not delete more state. Restore the
+   private backup through the same deployment path if you need to undo the
+   change. Remove the temporary password record after verification,
+   and retain or dispose of the backup under your normal credential policy.
 
-**Proxmox LXC** (installed from the Proxmox shell):
-Pulse runs inside the container, so run the same steps through `pct exec` on the Proxmox host. The binary needs its absolute path here, because `pct exec` runs with `PATH=/sbin:/bin:/usr/sbin:/usr/bin` and that does not include `/usr/local/bin`:
+#### A fresh install's bootstrap token was missed
 
-```bash
-pct exec <ctid> -- rm /etc/pulse/.env
-pct exec <ctid> -- systemctl restart pulse
-pct exec <ctid> -- /usr/local/bin/pulse bootstrap-token
-```
-
-If you only missed the token during a fresh install (no password set yet), skip the first two commands and just read it back with the last one.
-
-Treat the bootstrap token like a password: enter it only in the Pulse setup
-screen for this instance and do not paste it into support requests or issue
-reports.
+If no local password has ever been set, there is nothing to reset. Follow
+[first login](INSTALL.md#step-1-get-the-token) to read the existing bootstrap
+token for that instance, using its actual data directory. Enter it only in the
+Pulse setup screen, not in command arguments, URLs or issue reports.
 
 ### Port change didn't take effect
-1. Check which service is running: `systemctl status pulse` (legacy installs may use `pulse-backend`).
-2. Verify environment override: `systemctl show pulse --property=Environment`.
-3. Docker: Ensure you updated the `-p` flag (e.g., `-p 8080:7655`).
+
+The web UI and API listen on `FRONTEND_PORT` (default `7655`). The deprecated
+`PORT` alias applies only when `FRONTEND_PORT` is unset; changing
+`frontendPort` in `system.json` has no effect. `PULSE_AGENT_INGEST_PORT` is a
+separate agent listener, not the web UI port. See
+[Port configuration](CONFIGURATION.md#common-overrides-environment-variables).
+
+- **Systemd / Proxmox LXC**: identify the active service with
+  `systemctl is-active pulse` (legacy installs may use `pulse-backend`). Inspect
+  only the port setting in its managed configuration locally. If you change a
+  unit or drop-in, run `sudo systemctl daemon-reload`, then restart the affected
+  service during a suitable maintenance window. For LXC, run these checks inside
+  the Pulse container, not on the Proxmox host.
+- **Docker / Compose**: distinguish the published host port from the listener
+  inside the container. With the default listener, `8080:7655` exposes the UI on
+  host port `8080`; changing the host port does not require `FRONTEND_PORT`.
+  In the repository's Compose file, `PULSE_PORT` controls this host-side mapping.
+  Save the mapping in your existing Compose project and apply it with
+  `docker compose up -d pulse`, keeping the same image and mounted data volume.
+  Restarting an existing container does not apply a new port mapping. For other
+  container managers, use their recreate/redeploy action while preserving the
+  data mount; do not delete the volume.
+- **Reverse proxy**: check its upstream port and the firewall separately. A
+  working agent connection on a split-port deployment does not prove that the
+  web UI is reachable.
+
+Do not post full service environments, `docker inspect` output or resolved
+`docker compose config` output: they can include passwords and tokens. Share
+only the relevant port numbers and a redacted error if help is needed.
 
 ### "Connection Refused"
 - Check if Pulse is running.
@@ -83,19 +146,40 @@ reports.
 - If another admin can log in, use `POST /api/security/reset-lockout` to clear the lockout for your username or IP.
 
 #### Audit Log verification shows unsigned events
-- **Symptom**: Audit Log entries show “Unsigned” or verification fails in the UI.
-- **Root cause**: Audit signing is disabled (crypto manager unavailable), so events are stored without signatures.
-- **Fix**: Ensure `.encryption.key` is present and Pro/legacy Pro+/Cloud audit logging is enabled, then restart Pulse to regenerate `.audit-signing.key`. Newly created events will be signed; existing unsigned events remain unsigned.
+
+**Unsigned** means no signature was stored for that event; it is not the same
+as **Failed** verification or a request **Error**. Signing can be unavailable
+when Pulse cannot initialise its encryption manager. Check a bounded startup
+log excerpt and the persistent data mount and access for the service account,
+without printing key contents. Do not delete or regenerate `.encryption.key`
+or an audit signing key to make the warning disappear. Restoring signing for
+new events cannot authenticate an old unsigned event.
+
+See [Audit verification and safe recovery](AUDIT_LOGGING.md#verification-failures-and-safe-recovery)
+for the different results and evidence to retain.
 
 #### Audit Log is empty
-- **Symptom**: Audit Log shows zero events or "Console Logging Only."
-- **Root cause**: Community plan uses console logging only, or Pro/legacy Pro+/Cloud audit logging is not enabled.
-- **Fix**: Use Pro, legacy Pro+, or Cloud with audit logging enabled, then generate new audit events (logins, token creation, password changes).
+
+Clear the event, user, date and success filters, and check the selected
+organisation first. A query error is not an empty history. **Pulse Pro runtime
+required** means an active licence is running on the public community runtime;
+follow the panel's **Download Pulse Pro** link rather than buying another
+licence or resetting storage. Without the audit capability, reads and exports
+are gated, but Pulse still attempts to capture events persistently on all
+plans. **Console Logging Only** can also reflect unavailable persistent
+storage: inspect the bounded startup logs for audit initialisation errors.
+Do not change passwords or create tokens merely to populate the panel.
 
 #### Audit Log verification fails for older events
-- **Symptom**: Older events fail verification while newer events pass.
-- **Root cause**: The audit signing key changed (for example, `.audit-signing.key` was regenerated), so signatures no longer match.
-- **Fix**: Restore the previous `.audit-signing.key` from backup to verify older events. If rotated intentionally, expect older events to fail verification.
+
+A failed signature check does not by itself prove tampering. An event signed
+with a different key can fail even when its contents are unchanged; missing
+signatures and an unsupported or damaged signature format also cannot verify.
+Keep the failure as evidence. Do not swap an old key into the live instance,
+edit audit rows or re-sign old events. Preserve the current data and keys
+privately before any recovery; compare a matching backup only in an isolated
+restore, not by overwriting today's history. Follow
+[safe audit recovery](AUDIT_LOGGING.md#verification-failures-and-safe-recovery).
 
 ### Monitoring Data
 
@@ -143,10 +227,14 @@ installed service must contain `SyslogLevelPrefix=true` and
 repair an older generated unit rather than adding a JSON-parsing wrapper.
 
 #### VMs show "-" for disk usage
-- Install **QEMU Guest Agent** in the VM.
-- Enable "QEMU Guest Agent" in Proxmox VM Options.
-- Restart the VM.
-- See [VM Disk Monitoring](VM_DISK_MONITORING.md).
+- Read the disk value's explanation and observation time first; a dash is not
+  proof that the agent is missing.
+- Check the guest-local service, current VM Options and the configured API
+  token's read permissions. Schedule any setup change or restart outside backups.
+- Do not run guest-agent probes during backup freeze/thaw. An OK backup task
+  or an absent lock does not confirm thaw.
+- See [VM Disk Monitoring](VM_DISK_MONITORING.md) for the passive host preflight
+  and backup safety precaution; it does not verify a fresh disk poll.
 
 #### Temperature data missing
 - Install `lm-sensors` on the host.
@@ -155,11 +243,112 @@ repair an older generated unit rather than adding a JSON-parsing wrapper.
 - See [Temperature Monitoring](TEMPERATURE_MONITORING.md).
 
 #### Docker hosts appearing/disappearing
-- **Duplicate IDs**: Cloned VMs often share `/etc/machine-id`.
-- **Fix**: Run `rm /etc/machine-id && systemd-machine-id-setup` on the clone.
-- **Identity note**: The displayed IP is not the durable identity. Pulse uses
-  the machine ID or an explicit agent ID, so two clones with the same value can
-  collapse into one record even when their hostnames or IP addresses differ.
+
+Cloned hosts can share a **saved Pulse agent ID**, not just an OS machine ID.
+The agent uses an explicit ID first, then its saved `agent-id` file, and derives
+one from the machine only when neither is available. Changing a hostname, IP or
+`/etc/machine-id` therefore does not necessarily change its Pulse identity.
+
+Compare the affected hosts in **Agent Doctor** and inspect only their configured
+`agent-id` files locally. Do not delete the OS machine ID, agent state or Pulse
+history as a troubleshooting step. If a duplicate is confirmed, give only the
+clone a stable, unique ID in its managed service or container configuration;
+leave the original host unchanged. Follow
+[Clone identity recovery](UNIFIED_AGENT.md#duplicate-agents) for the configuration
+precedence, systemd example and checks after restart.
+
+#### Excessive CPU, writes or database growth
+
+First distinguish **Pulse server activity**, agent activity and total host or
+storage-device activity. A database's size is retained space, not the number of
+bytes written: repeated updates can produce high writes without growing the file.
+Keep the original running version, uptime, measurement time and workload before
+changing anything. A different binary can migrate persistent data; switching
+back to an older version does not make that data a clean older-version baseline.
+
+- For CPU, record the measuring tool, allocated CPUs or container quota and
+  whether its percentage represents one core or the whole allocation. A `ps`
+  `%CPU` value is an average since process start, not a recent sampling window.
+- Note fleet size, polling interval and whether Pulse dashboards are open. If
+  safe, close all Pulse tabs and compare another equal-length window, without
+  restarting the server or changing polling. A decrease narrows the workload;
+  it does not establish the cause or prove monitoring is healthy.
+- If the host is unresponsive or storage is nearly full, do not prolong the
+  failure to collect a benchmark. Keep existing observations and report the
+  interruption instead. Do not enable Debug or repeatedly export diagnostics
+  merely to measure performance; those actions add work and can change the result.
+
+For a responsive **Linux systemd / Proxmox LXC** install, the following reads
+two process-I/O samples, waiting 60 seconds between them. Run it inside the
+Pulse container for LXC, not on the Proxmox host. Substitute the actual service
+name (`pulse-backend` on some older installs). Use an account authorised to
+read the process counters; no service restart or database access is needed.
+
+```bash
+# systemd / Proxmox LXC: bounded process-write samples
+(
+  set -e
+  for sample in 1 2; do
+    date -u +'%Y-%m-%dT%H:%M:%SZ'
+    pid=$(systemctl show pulse --property=MainPID --value)
+    case "$pid" in
+      ''|0|*[!0-9]*) printf 'No running Pulse PID; sample unavailable.\n' >&2; exit 1 ;;
+    esac
+    TZ=UTC ps -p "$pid" -o pid=,lstart=
+    sudo awk '
+      $1 == "write_bytes:" || $1 == "cancelled_write_bytes:" { print; fields++ }
+      END { if (fields != 2) exit 1 }
+    ' "/proc/$pid/io"
+    if [ "$sample" -eq 1 ]; then sleep 60; fi
+  done
+)
+```
+
+Compare `write_bytes` only when both samples have the same PID and process
+start time, no restart occurred, and the counter did not decrease. Divide the
+byte difference by the **actual elapsed seconds**. This is storage-accounted
+process I/O, not filesystem growth or physical SSD wear; cancelled writes and
+background writeback can differ from device measurements. Keep
+`cancelled_write_bytes` alongside it, not as proof of bytes reaching the drive.
+An extrapolated GB/day rate is a projection of that short window, not a measured
+day's total. Preserve the window and units with the result.
+
+For **Docker / Compose**, run this on the Docker host, replacing `pulse` with
+the running container name. It reads only the start time and selected statistics,
+not the container environment or configuration.
+
+```bash
+# Docker: bounded container statistics
+(
+  set -e
+  for sample in 1 2; do
+    date -u +'%Y-%m-%dT%H:%M:%SZ'
+    docker inspect --format 'Started={{.State.StartedAt}}' pulse
+    stats=$(docker stats --no-stream --format \
+      'CPU={{.CPUPerc}} Memory={{.MemUsage}} BlockIO={{.BlockIO}}' pulse)
+    if [ -z "$stats" ]; then
+      printf 'Container statistics unavailable; no zero inferred.\n' >&2
+      exit 1
+    fi
+    printf '%s\n' "$stats"
+    if [ "$sample" -eq 1 ]; then sleep 60; fi
+  done
+)
+```
+
+Docker **BlockIO** is cumulative read / write activity, not bytes per second;
+compare its write side only across the same uninterrupted container run. Its
+displayed units are rounded. Container, process and whole-device counters have
+different scopes and must not be added together or compared as interchangeable
+measurements. A failed, denied or empty read is unavailable, not zero activity.
+
+Keep persistent data on durable storage. Do not delete or truncate history,
+incident, queue or audit files, remove database indexes, or move the data
+directory to tmpfs as a diagnostic workaround. These actions can lose evidence
+or protections without fixing the writer. Do not post databases, profiles, full
+`/proc` dumps, container configuration or raw environments. Share only the bounded
+measurements, workload, versions and a relevant manually redacted error; follow
+[Getting Help](#-getting-help) for any additional evidence.
 
 ### Notifications
 
@@ -195,37 +384,77 @@ A healthy heartbeat indicates Pulse monitoring-loop progress, not successful
 delivery of every resource alert or external reachability of your services.
 Continue checking delivery activity for destination failures.
 
+#### Test succeeds but real alerts are missing
+
+A test sends directly to its destination: it skips the persistent delivery queue
+and is not listed in **Recent delivery activity**. It does not prove that a real
+alert was generated, routed or delivered to the intended recipient.
+
+- Open **Alerts → Notifications**. If **Notifications are paused** is shown,
+  configured destinations and a successful test do not enable real delivery.
+  Turn delivery on there only when you intend to send alerts.
+- Check the affected alert, the destination's **Enabled** state, minimum alert
+  severity and tag filters. Review quiet hours and any mute, acknowledgement or
+  maintenance policy before treating an absent attempt as a transport failure.
+- Use **Recent delivery activity** to correlate the original alert, destination
+  and absolute timestamp, including held-notification reasons. An empty window
+  is not proof of healthy delivery; an **unavailable** read is not an empty log.
+  Do not create an outage or repeat a notification storm to populate it.
+
+#### Recover retained delivery failures
+
+Pulse shows a delivery warning for failed or dead-lettered notifications in its
+persistent queue, not for every recoverable retry. **Recent delivery activity**
+includes safely redacted provider errors; completed attempts remain for 7 days
+and dead-letter attempts for 30 days. Start with the failure class and timestamp:
+
+| Failure | Check before retrying |
+| --- | --- |
+| Authentication | Destination credentials and account permissions, locally; never post them. |
+| Rate limited | Provider limits and delivery volume; repeated tests or retries can make this worse. |
+| Connectivity | DNS, firewall, proxy and reachability from the Pulse server, not just your browser. |
+| TLS | Certificate trust, expiry and hostname matching; do not disable verification to diagnose it. |
+| Configuration / rejected | Enabled destination, required fields and the provider's endpoint or payload requirements. |
+| Server error / unknown | Destination service status and a relevant, bounded local error excerpt. |
+
+Save the corrected destination settings and send one test; check receipt at the
+intended destination. **Retry retained deliveries** gives terminal failures a
+fresh retry budget, but a destination that accepted an earlier attempt may
+receive a duplicate. Review the confirmation's delivery count and provider
+limits before retrying. A successful test does not itself retry retained items.
+
+Use **Dismiss retained failures** only when those deliveries should not be sent.
+Dismissal clears the warning without retrying them; delivery history remains.
+Neither action deletes the audit trail. Do not delete `notification_queue.db`
+or audit data to clear the warning.
+
 #### Emails not sending
-- Open **Alerts → Notifications** first. Pulse shows a delivery warning when
-  failed or dead-lettered notifications remain in the persistent queue; a
-  missing queue-health read is shown as unavailable rather than healthy.
-- **Recent delivery activity** appears directly below that warning. It names
-  the destination and affected alert, shows an absolute timestamp for timeline
-  correlation, and includes safely redacted provider errors. Completed attempts
-  remain for 7 days and dead-letter attempts remain for 30 days.
-- After correcting the destination, use **Retry retained deliveries**. Use
-  **Dismiss retained failures** only when those deliveries should not be sent.
-  Both actions preserve delivery history; do not delete `notification_queue.db`
-  to clear the warning.
-- Check SMTP settings in **Alerts → Notifications**.
-- Check logs: `docker logs pulse | grep email`.
-- Ensure your SMTP provider allows the connection (e.g., Gmail App Passwords).
+
+Follow [retained-failure recovery](#recover-retained-delivery-failures) first.
+Check SMTP host, port, sender, recipients, authentication and TLS settings in
+**Alerts → Notifications** against your provider's requirements (some providers
+require an app password). Keep passwords in the settings form, not a diagnostic
+command or report. If the delivery error is insufficient, inspect
+[bounded notification logs](#inspect-notification-logs) locally.
 
 #### Webhooks failing
-- Check the delivery warning in **Alerts → Notifications** and use **Send test**
-  after correcting the destination. Recoverable retries do not trigger the
-  warning; retained terminal failures do.
-- If the test succeeds, use **Retry retained deliveries** to give the retained
-  items a fresh retry budget. Dismiss them only when delivery is no longer
-  wanted; neither action deletes the audit trail.
-- Verify the URL is reachable from the Pulse server.
-- If targeting private IPs, allow them in **Settings → System → Network → Webhook Security**.
-- Check Pulse logs for HTTP status codes and response bodies.
+
+Follow [retained-failure recovery](#recover-retained-delivery-failures) first.
+Use the failure class and HTTP status to check the provider's endpoint and
+payload requirements. Verify reachability from the Pulse server. For an intended
+private destination, review **Settings → System → Network → Webhook Security**;
+do not broadly weaken network or TLS controls just to make a test pass.
+
+Prefer the redacted delivery error over raw provider response bodies. A provider
+can echo credentials or private content in its response; do not post it wholesale
+or enable debug logging just to collect it. If needed, inspect
+[bounded notification logs](#inspect-notification-logs) and share only the
+consequential, manually redacted error.
 
 ### TrueNAS
 
 #### "TrueNAS service unavailable"
-- Ensure TrueNAS was added in **Settings → TrueNAS** with a valid HTTPS URL,
+- Ensure TrueNAS was added in **Settings → Infrastructure → Platform connections** with a valid HTTPS URL,
   API key, and the username that owns the key.
 - Check that the TrueNAS system is reachable from the Pulse server (default
   HTTPS port).
@@ -234,14 +463,51 @@ Continue checking delivery activity for destination failures.
   transport; TrueNAS 26 removed the former `/api/v2.0` REST endpoints.
 
 #### TrueNAS pools/datasets not appearing
-- TrueNAS data appears in the unified resource model and may take one polling cycle (30s) to appear.
-- Check **Infrastructure** (TrueNAS host), **Storage** (pools/datasets), and **Recovery** (snapshots/replication).
+- TrueNAS data appears in the unified resource model and may take one configured
+  polling cycle (60 seconds by default) to appear.
+- Open **TrueNAS → Overview** for the appliance, **TrueNAS → Storage**
+  (`/truenas/storage`) for pools, datasets and disks, and **TrueNAS → Protection**
+  (`/truenas/protection`) for snapshots and replication. These are tabs within
+  TrueNAS, not separate top-level Storage or Recovery pages.
+- For data that stops refreshing, use the [TrueNAS polling checks](TRUENAS.md#stale-truenas-data)
+  before testing or restarting. A stale badge is not proof of an invalid key,
+  and a successful connection test is not proof that collection has recovered.
 
 ### Navigation (v6)
 
 #### Old bookmarks don't work
-- Legacy URLs (`/proxmox`, `/docker`, `/kubernetes`, `/hosts`, `/services`) are not supported in v6.
-- Update bookmarks to canonical routes. See [Migration Guide](MIGRATION_UNIFIED_NAV.md).
+
+Current Pulse uses platform navigation. `/proxmox`, `/docker` and `/kubernetes`
+are supported; do not replace them with the retired task-based routes.
+Open Pulse at its base URL and use the menu to find the relevant page:
+
+| Menu | Entry route |
+| --- | --- |
+| Proxmox | `/proxmox/overview` |
+| Docker | `/docker/overview` |
+| Kubernetes | `/kubernetes/overview` |
+| TrueNAS | `/truenas/overview` |
+| vSphere | `/vmware/overview` |
+| Machines | `/standalone/machines` |
+
+The short-lived top-level `/workloads`, `/storage` and `/recovery` layout is
+retired. `/infrastructure` now opens the default workspace, not the former
+unified host page. For old `/hosts` or `/services` bookmarks, select the current
+platform or Machines page instead of assuming an automatic redirect. PBS
+backups are under **Proxmox → Backups**, and TrueNAS snapshots and replication
+are under **TrueNAS → Protection**.
+
+Platform-connected hosts can appear under their platform rather than Machines.
+If a menu or expected resource is missing, check its saved connection and last
+successful collection in **Settings → Infrastructure**; a missing page alone
+does not prove a host was deleted. Do not delete connections or re-enrol agents
+just to repair a bookmark.
+
+If menu navigation works but reloading the same URL returns a proxy 404, check
+the proxy's route handling using [Reverse Proxy Configuration](REVERSE_PROXY.md).
+For the current layout, see [FAQ](FAQ.md#how-is-navigation-organised-in-pulse-v6).
+The [unified-navigation migration](MIGRATION_UNIFIED_NAV.md) is historical,
+not a guide to the current menu.
 
 ### Relay / Mobile
 
@@ -254,15 +520,111 @@ Continue checking delivery activity for destination failures.
 
 ## 🛠️ Advanced Diagnostics
 
-### Correlate Logs with Requests
-Every API response has an `X-Request-ID` header. Use it to find the exact log entry:
+### Collect diagnostics safely
+
+**Run Diagnostics** in **Settings → Diagnostics** is not just a passive export.
+It can make live Proxmox/PBS API and guest-agent requests; results may also come
+from a short-lived cache. Do not run it during a backup, freeze/thaw or an
+unresponsive-host incident merely to obtain a report. Keep the original errors
+and existing observations instead. A successful one-off check does not prove
+that normal monitoring has recovered or that a guest has thawed.
+
+After a result is displayed, the download buttons reuse that result without
+running the checks again. They save a local JSON file, **not an upload**:
+
+- **Full (private)** retains identifying diagnostic details. Keep it private;
+  do not attach it to a public issue or discussion.
+- **GitHub (review first)** replaces selected infrastructure and token
+  identifiers, private filesystem paths and raw disk-response fields. Counts,
+  measurements, collection times and diagnostic states remain useful for
+  triage. It is not a guarantee that every free-text error or future field is
+  free of private information. Open the file locally and review it before sharing.
+
+Remove credentials, cookies, secret URLs, private host/network or personal
+information, including details echoed in errors or notes. Do not paste a
+**Copy as cURL** command, full network export, configuration or data directory.
+Share only evidence relevant to the symptom; a screenshot or exact redacted
+error may be enough. See [Getting Help](#-getting-help).
+
+### Inspect Notification Logs
+
+Prefer **Recent delivery activity** in **Alerts → Notifications**. If a local log
+is needed, run only the command for your deployment, on the Pulse host with an
+account authorised to read its logs. For Proxmox LXC, run the systemd command
+inside the Pulse container, not on the Proxmox host. Adjust the time window to
+the original incident and substitute your actual service or container name
+(`pulse-backend` on some older systemd installs). These examples read at most
+200 records from the last 15 minutes; they do not follow the log or send a test.
+
 ```bash
 # systemd / Proxmox LXC
-journalctl -u pulse --no-pager | grep "request_id=abc123"
-
-# Docker
-docker logs pulse 2>&1 | grep "request_id=abc123"
+journalctl -u pulse --since '15 minutes ago' --lines 200 --no-pager
 ```
+
+```bash
+# Docker
+docker logs --since 15m --tail 200 pulse
+```
+
+Docker can write application logs to either stdout or stderr; inspect both.
+Do not pipe the reader into `grep email`: it can miss SMTP or webhook errors
+and hide a failed read behind a matching partial line. A nonzero reader exit,
+access error or missing service/container is a failed read, not “no delivery
+errors”. Even a successful empty read is inconclusive: the window, retained
+logs or selected instance may differ.
+
+These local excerpts are **not sanitised**. Do not post them wholesale. Share
+only the relevant timestamp, method, HTTP status or SMTP error code and a
+manually redacted error. Remove credentials, cookies, secret URLs, addresses
+and private host or personal information, including anything echoed by the
+provider. Never upload full environments, configuration, a queue database or
+audit data. See [Getting Help](#-getting-help).
+
+### Correlate Logs with Requests
+
+For a failed HTTP API request, inspect its response in your authenticated
+browser's **Developer tools → Network** panel. Copy only the `X-Request-ID`
+response header, if present, and keep the HTTP status and time. Do not copy a
+session cookie, **Copy as cURL** command or full network export into a report.
+WebSocket upgrades do not pass through this request-ID middleware.
+
+Service logs normally use JSON (`"request_id":"abc123"`); console logs may use
+`request_id=abc123`. Search for the literal ID value so both formats work.
+Replace `abc123` below with the response's ID. Run only the command for your
+deployment, on the Pulse host using an account authorised to read its logs.
+These examples limit collection to the last 15 minutes and 1,000 lines; adjust
+the time window to the original incident rather than repeating the failed action.
+
+```bash
+# systemd / Proxmox LXC
+set -o pipefail
+REQUEST_ID='abc123'
+journalctl -u pulse --since '15 minutes ago' --lines 1000 --no-pager |
+  grep -F -- "$REQUEST_ID"
+```
+
+```bash
+# Docker
+REQUEST_ID='abc123'
+if pulse_logs=$(docker logs --since 15m --tail 1000 pulse 2>&1); then
+  printf '%s\n' "$pulse_logs" | grep -F -- "$REQUEST_ID"
+else
+  printf '%s\n' "$pulse_logs" >&2
+  false
+fi
+```
+
+A log-reader failure is not an empty search result: resolve any access or
+container/service error locally first. Even a successful read with no match
+does not prove the request succeeded. At the default log level, this middleware
+logs HTTP 5xx failures but not successful requests; HTTP 4xx failures are logged
+at debug level. The selected window, retained logs or deployment may also differ.
+Keep the original response status, time and ID even when there is no matching log;
+do not enable debug logging or retry a state-changing request just to fill that gap.
+
+These local excerpts are **not sanitised**. Before sharing a relevant line,
+remove credentials, cookies, secret URLs and private host, network or personal
+information. See [Getting Help](#-getting-help) for safe evidence collection.
 
 ### Check Permissions (Proxmox)
 If Pulse can't see VMs or storage, check the user permissions on Proxmox:
@@ -283,7 +645,12 @@ For PVE 8 only, use `VM.Monitor` instead of the `VM.GuestAgent.*` privileges.
 
 Note: The built-in `PVEAuditor` role cannot be modified. Create a custom role (e.g. `PulseMonitor`) with the above privileges added, and assign it to your Pulse API token. After upgrading to PVE 9, add the `VM.GuestAgent.*` privileges and remove legacy `VM.Monitor` from the custom role.
 
-**Rocky Linux / RHEL VMs**: The default qemu-guest-agent configuration may block file-read RPCs (`guest-file-open`, `guest-file-read`, `guest-file-close`). If memory or disk data is missing for these VMs, check `/etc/sysconfig/qemu-ga` and ensure those operations are not blocked, then restart the agent. Refer to your distro's qemu-guest-agent documentation for the exact config syntax.
+**Rocky Linux / RHEL VMs**: File-read restrictions in `/etc/sysconfig/qemu-ga`
+can explain missing guest memory; they do not by themselves establish why disk
+usage is absent. Review the guest's policy before changing it. Schedule any
+allowlist change or agent restart outside backups, following the guest OS's
+documentation. See [VM Disk Monitoring](VM_DISK_MONITORING.md) for the distinct
+permissions and backup safety boundary.
 
 ### Proxmox pending-update access
 
@@ -309,25 +676,51 @@ check, report the Pulse version and displayed check time/status separately; API
 success alone does not confirm the Pulse display has recovered.
 
 ### Recovery Mode
-If you are completely locked out, you can trigger a recovery token from localhost:
-```bash
-curl -X POST http://localhost:7655/api/security/recovery \
-  -d '{"action":"generate_token","duration":30}'
-```
-Use the returned token in `X-Recovery-Token` when calling `/api/security/recovery` to enable or disable local-only auth bypass (`disable_auth` / `enable_auth`). Token generation is localhost-only.
 
-Example (enable recovery mode):
-```bash
-curl -X POST http://localhost:7655/api/security/recovery \
-  -H "X-Recovery-Token: <token>" \
-  -d '{"action":"disable_auth"}'
-```
+For a forgotten local administrator password, follow
+[I forgot my password](#i-forgot-my-password) above to update its active
+credential source without deleting configuration or repeating first-time setup.
+For OIDC, SAML or proxy login, use the identity-provider or administrator path
+described there instead.
+
+The advanced `/api/security/recovery` API creates a **browser-bound recovery
+session**, not a server-wide authentication bypass. Despite its legacy name,
+`disable_auth` does not disable authentication for other clients. Recovery
+sessions work only over direct loopback requests; remote and reverse-proxy
+requests cannot use them. A successful curl response does not unlock a separate
+browser: the session cookie belongs to the client that made the request.
+`enable_auth` clears that recovery session; it does not reset a password.
+
+Do not transfer recovery cookies between clients or paste recovery tokens into
+command arguments, URLs, screenshots or GitHub threads. The password-reset steps
+above avoid that credential-handling detour.
 
 ---
 
 ## 🆘 Getting Help
 
 If you're still stuck:
-1. **Check Logs**: `journalctl -u pulse -n 100` or `docker logs --tail 100 pulse`.
-2. **Check Version**: `curl http://localhost:7655/api/version`.
-3. **Open Issue**: Report on [GitHub Issues](https://github.com/rcourtman/Pulse/issues) with your logs and version info.
+
+1. **Keep the original evidence**: note what you did, when it happened and the
+   exact error. Do not repeat an update, outage or notification storm merely to
+   reproduce it. A failed update banner does not prove the action left the
+   target unchanged; check its current state before another attempt.
+2. **Identify the affected version**: give the running Pulse and relevant agent
+   versions, not just the version before an upgrade. For Docker, include the
+   running image tag or digest. If installation never started Pulse, give the
+   attempted release and public installer/helper source, or say "unknown".
+3. **Choose relevant, safe evidence**: if Pulse is running and collection is
+   safe, use **Settings → Diagnostics → GitHub (review first)** for
+   connection or data failures, following [safe diagnostics collection](#collect-diagnostics-safely).
+   For a visual problem, a screenshot or the exact
+   error may be enough. If logs are needed, inspect a bounded local excerpt
+   (`journalctl -u pulse -n 100 --no-pager` or `docker logs --tail 100 pulse`),
+   not a full configuration or data-directory upload.
+4. **Review before posting**: even a sanitized export or screenshot can contain
+   identifying details. Remove credentials, session cookies, webhook URLs and
+   private host, network or personal information. Never post bootstrap/recovery
+   tokens, `.env` files, private keys or an unsanitized export.
+5. **Use the appropriate thread**: [GitHub Issues](https://github.com/rcourtman/Pulse/issues)
+   for a bug, or [Discussions](https://github.com/rcourtman/Pulse/discussions) for
+   a setup question. Add new evidence to an existing matching report rather
+   than opening a duplicate. Do not refile information you have already supplied.

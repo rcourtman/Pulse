@@ -1,6 +1,7 @@
 import { createEffect, createSignal, onMount } from 'solid-js';
 import { apiErrorFromResponse, apiFetch } from '@/utils/apiClient';
 import { showSuccess, showWarning } from '@/utils/toast';
+import { aiChatStore } from '@/stores/aiChat';
 import type { SelectedResource } from '@/components/Settings/ResourcePicker';
 import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
@@ -29,6 +30,7 @@ import {
   type ReportingFormat,
 } from '@/components/Settings/reportingCatalogModel';
 import {
+  applyReportScheduleKind,
   buildReportSchedulePayload,
   DEFAULT_REPORT_SCHEDULE_FORM,
   normalizeReportSchedule,
@@ -37,6 +39,7 @@ import {
   scheduleToSelectedResources,
   type ReportSchedule,
   type ReportScheduleFormState,
+  type ReportScheduleKind,
 } from '@/components/Settings/reportingSchedulesModel';
 
 export const useReportingPanelState = () => {
@@ -256,6 +259,18 @@ export const useReportingPanelState = () => {
     setScheduleForm((current) => ({ ...current, ...patch }));
   };
 
+  // The Patrol weekly summary only has content when Patrol can run, which is
+  // the same session capability that shows the Patrol navigation and the
+  // Assistant launcher: AI switched on with a provider configured.
+  const patrolDigestAvailable = () => aiChatStore.enabled === true;
+
+  const setScheduleKind = (kind: ReportScheduleKind) => {
+    setScheduleForm((current) => applyReportScheduleKind(current, kind));
+    if (kind === 'patrol_digest') {
+      setScheduleResources([]);
+    }
+  };
+
   const startCreateSchedule = () => {
     setScheduleForm(DEFAULT_REPORT_SCHEDULE_FORM());
     setScheduleResources([]);
@@ -283,7 +298,11 @@ export const useReportingPanelState = () => {
       showWarning('Schedule name is required');
       return;
     }
-    if ((payload.scope.resources?.length ?? 0) === 0 && (payload.scope.tags?.length ?? 0) === 0) {
+    if (
+      payload.kind !== 'patrol_digest' &&
+      (payload.scope.resources?.length ?? 0) === 0 &&
+      (payload.scope.tags?.length ?? 0) === 0
+    ) {
       showWarning('Select resources or enter at least one tag');
       return;
     }
@@ -417,6 +436,7 @@ export const useReportingPanelState = () => {
     isLocked,
     isReportingEnabled,
     metricType,
+    patrolDigestAvailable,
     range,
     reportSchedules,
     reportSchedulesError,
@@ -445,6 +465,7 @@ export const useReportingPanelState = () => {
     setFormat,
     setMetricType,
     setRange,
+    setScheduleKind,
     setScheduleResources,
     setSelectedResources,
     setTitle,

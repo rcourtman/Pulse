@@ -134,6 +134,26 @@ func TestMonitorAdapterResolvesCanonicalOperatorIntentCapabilities(t *testing.T)
 	}
 }
 
+func TestMonitorAdapterCanonicalReferencePreservesAliasAmbiguity(t *testing.T) {
+	registry := NewRegistry(nil)
+	adapter := NewMonitorAdapter(registry)
+	registry.IngestResources([]Resource{
+		{ID: "host-a", Type: ResourceTypeAgent, Agent: &AgentData{AgentID: "one"}},
+		{ID: "host-b", Type: ResourceTypeAgent, Agent: &AgentData{AgentID: "shared"}},
+		{ID: "host-c", Type: ResourceTypeAgent, Agent: &AgentData{AgentID: "shared"}},
+	})
+
+	if id, ok := adapter.ResolveCanonicalResourceID("AGENT:ONE"); !ok || id != "host-a" {
+		t.Fatalf("unique alias resolved to %q, %v; want host-a", id, ok)
+	}
+	if id, ok := adapter.ResolveCanonicalResourceID("agent:shared"); ok {
+		t.Fatalf("ambiguous alias resolved to %q", id)
+	}
+	if id, ok := adapter.ResolveCanonicalResourceID("host-b"); !ok || id != "host-b" {
+		t.Fatalf("exact ID resolved to %q, %v; want host-b", id, ok)
+	}
+}
+
 func TestMonitorAdapterResolvesCanonicalResourceAncestorsNearestFirst(t *testing.T) {
 	registry := NewRegistry(NewMemoryStore())
 	adapter := NewMonitorAdapter(registry)
@@ -891,4 +911,63 @@ func TestMonitorAdapterRebuildPersistsIdentityPins(t *testing.T) {
 		}
 	}
 	t.Fatalf("expected delly node resource in boot-window rebuild")
+}
+
+// Host continuity overlays are requested on every canonical read-state lookup.
+// One built from a registry generation is reused until that generation, the
+// requested records, or overlayReadStateMaxAge changes, and never mutates the
+// live adapter.
+func TestHostContinuityOverlayReusedWithinRegistryGeneration(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		LastUpdate: now,
+		Hosts:      []models.Host{{ID: "live-1", Hostname: "live.example", Status: "online", LastSeen: now}},
+	}
+	adapter := NewMonitorAdapter(NewRegistry(nil))
+	adapter.PopulateFromSnapshot(snapshot)
+	offline := models.Host{ID: "offline-1", Hostname: "gone.example", Status: "offline", LastSeen: now.Add(-time.Hour)}
+	hasHost := func(readState ReadState, hostname string) bool {
+		for _, host := range readState.Hosts() {
+			if host.Hostname() == hostname {
+				return true
+			}
+		}
+		return false
+	}
+
+	first := ReadStateWithHostContinuity(adapter, []IngestRecord{HostIngestRecord(offline)})
+	if !hasHost(first, "gone.example") {
+		t.Fatal("continuity overlay does not include the offline host")
+	}
+	// Records are rebuilt per request and carry a fresh UpdatedAt stamp.
+	if again := ReadStateWithHostContinuity(adapter, []IngestRecord{HostIngestRecord(offline)}); again != first {
+		t.Fatal("identical continuity request rebuilt the overlay within one generation")
+	}
+	if hasHost(adapter, "gone.example") {
+		t.Fatal("continuity overlay mutated the live adapter")
+	}
+
+	other := offline
+	other.ID, other.Hostname = "offline-2", "also-gone.example"
+	if changed := ReadStateWithHostContinuity(adapter, []IngestRecord{HostIngestRecord(other)}); changed == first || !hasHost(changed, "also-gone.example") {
+		t.Fatal("different continuity records reused the previous overlay")
+	}
+
+	snapshot.LastUpdate = now.Add(time.Second)
+	adapter.PopulateFromSnapshot(snapshot)
+	next := ReadStateWithHostContinuity(adapter, []IngestRecord{HostIngestRecord(offline)})
+	if next == first || !hasHost(next, "gone.example") {
+		t.Fatal("a new registry generation reused the previous generation's overlay")
+	}
+
+	var cache overlayReadStateCache
+	registry := adapter.currentRegistry()
+	key, _ := overlayRecordsKey(SourceAgent, []IngestRecord{HostIngestRecord(offline)}, true)
+	cache.store(registry, now, key, now, next)
+	if cache.lookup(registry, now, key, now.Add(overlayReadStateMaxAge-time.Millisecond)) != next {
+		t.Fatal("overlay was not reused within its maximum age")
+	}
+	if cache.lookup(registry, now, key, now.Add(overlayReadStateMaxAge)) != nil {
+		t.Fatal("overlay was reused past its maximum age")
+	}
 }

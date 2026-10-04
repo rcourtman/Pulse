@@ -258,9 +258,9 @@ func (c *Client) GetSystemTelemetry(ctx context.Context) (*SystemInfo, error) {
 		if err != nil {
 			return err
 		}
-		telemetry, err = rpc.readSystemTelemetryEvent(ctx, defaultRealtimeIntervalSeconds)
+		telemetry, err = rpc.readSystemTelemetryEvent(ctx, defaultRealtimeIntervalSeconds, subscriptionName)
 		if err != nil {
-			return discardRPCSessionForStreamError(err)
+			return discardRPCSessionForStreamError("reporting.realtime", err)
 		}
 		return rpc.unsubscribe(ctx, subscriptionID)
 	})
@@ -1743,12 +1743,18 @@ func (c *Client) getAppsREST(ctx context.Context) ([]App, error) {
 }
 
 func (c *Client) parseAppsWithStats(ctx context.Context, response []map[string]any) []App {
+	apps := make([]App, 0, len(response))
+	// There is nothing to enrich when app.query returns an empty inventory.
+	// Subscribing anyway can wait on a stopped Apps service and needlessly
+	// discard an otherwise healthy, persistent monitoring session.
+	if len(response) == 0 {
+		return apps
+	}
 	statsByApp, err := c.GetAppStats(ctx)
 	if err != nil {
 		statsByApp = nil
 	}
 
-	apps := make([]App, 0, len(response))
 	for _, item := range response {
 		activeWorkloads := readMapAny(item, "active_workloads", "activeWorkloads")
 
@@ -1811,9 +1817,9 @@ func (c *Client) GetAppStats(ctx context.Context) (map[string]AppStats, error) {
 		if err != nil {
 			return err
 		}
-		stats, err = rpc.readAppStatsEvent(ctx, defaultAppStatsIntervalSeconds)
+		stats, err = rpc.readAppStatsEvent(ctx, defaultAppStatsIntervalSeconds, subscriptionName)
 		if err != nil {
-			return discardRPCSessionForStreamError(err)
+			return discardRPCSessionForStreamError("app.stats", err)
 		}
 		return rpc.unsubscribe(ctx, subscriptionID)
 	})
@@ -1867,9 +1873,12 @@ func (c *Client) GetAppLogs(ctx context.Context, appName, containerID string, ta
 			return err
 		}
 		var reusable bool
-		lines, reusable, err = rpc.readAppLogEvents(ctx, tailLines)
+		lines, reusable, err = rpc.readAppLogEvents(ctx, tailLines, subscriptionName)
+		if errors.Is(err, errRPCSubscriptionComplete) {
+			return nil
+		}
 		if err != nil {
-			return discardRPCSessionForStreamError(err)
+			return discardRPCSessionForStreamError("app.container_log_follow", err)
 		}
 		if !reusable {
 			return errRPCStreamSessionConsumed
@@ -2335,6 +2344,8 @@ func appendDiskTemperature(out map[string]int, diskName string, value any) {
 type trueNASRPCClient struct {
 	conn          *websocket.Conn
 	nextID        int64
+	openedAt      time.Time
+	closeOnce     sync.Once
 	keepaliveStop chan struct{}
 	keepaliveDone chan struct{}
 }
@@ -2346,7 +2357,7 @@ func (c *trueNASRPCClient) subscribe(ctx context.Context, event string) (string,
 	}
 	subscriptionID = strings.TrimSpace(subscriptionID)
 	if subscriptionID == "" {
-		return "", &discardRPCSessionError{err: fmt.Errorf("truenas rpc core.subscribe returned an empty subscription id")}
+		return "", &discardRPCSessionError{method: "core.subscribe", err: fmt.Errorf("truenas rpc core.subscribe returned an empty subscription id")}
 	}
 	return subscriptionID, nil
 }
@@ -2357,7 +2368,7 @@ func (c *trueNASRPCClient) unsubscribe(ctx context.Context, subscriptionID strin
 		return fmt.Errorf("truenas rpc subscription id is required")
 	}
 	if err := c.call(ctx, "core.unsubscribe", []any{subscriptionID}, nil); err != nil {
-		return &discardRPCSessionError{err: fmt.Errorf("unsubscribe %q: %w", subscriptionID, err)}
+		return &discardRPCSessionError{method: "core.unsubscribe", err: fmt.Errorf("unsubscribe %q: %w", subscriptionID, err)}
 	}
 	return nil
 }
@@ -2648,6 +2659,21 @@ func (c *trueNASRPCClient) call(ctx context.Context, method string, params any, 
 			return &RPCTransportError{Method: method, Phase: "read", Err: err}
 		}
 		if message.Method != "" {
+			// A rejection can race with the subscription acknowledgement.
+			// Do not drop it while waiting for the core.subscribe response.
+			if method == "core.subscribe" {
+				if args, ok := params.([]any); ok && len(args) == 1 {
+					if collection, ok := args[0].(string); ok {
+						ended, err := rpcSubscriptionTermination(message, collection, method)
+						if ended || err != nil {
+							if err == nil {
+								err = rpcSubscriptionEndedBeforeData(method)
+							}
+							return discardRPCSessionForStreamError(method, err)
+						}
+					}
+				}
+			}
 			continue
 		}
 		if message.ID != request.ID {
@@ -2666,7 +2692,7 @@ func (c *trueNASRPCClient) call(ctx context.Context, method string, params any, 
 	}
 }
 
-func (c *trueNASRPCClient) readAppStatsEvent(ctx context.Context, intervalSeconds int) (map[string]AppStats, error) {
+func (c *trueNASRPCClient) readAppStatsEvent(ctx context.Context, intervalSeconds int, collection string) (map[string]AppStats, error) {
 	if c == nil || c.conn == nil {
 		return nil, fmt.Errorf("truenas rpc connection is nil")
 	}
@@ -2681,6 +2707,12 @@ func (c *trueNASRPCClient) readAppStatsEvent(ctx context.Context, intervalSecond
 		var message trueNASRPCResponse
 		if err := c.conn.ReadJSON(&message); err != nil {
 			return nil, &RPCTransportError{Method: "app.stats", Phase: "read", Err: err}
+		}
+		if ended, err := rpcSubscriptionTermination(message, collection, "app.stats"); ended || err != nil {
+			if err == nil {
+				err = rpcSubscriptionEndedBeforeData("app.stats")
+			}
+			return nil, err
 		}
 		if message.Method == "" {
 			if message.Error != nil {
@@ -2734,7 +2766,7 @@ func (c *trueNASRPCClient) readAppStatsEvent(ctx context.Context, intervalSecond
 	}
 }
 
-func (c *trueNASRPCClient) readAppLogEvents(ctx context.Context, tailLines int) ([]AppLogLine, bool, error) {
+func (c *trueNASRPCClient) readAppLogEvents(ctx context.Context, tailLines int, collection string) ([]AppLogLine, bool, error) {
 	if c == nil || c.conn == nil {
 		return nil, false, fmt.Errorf("truenas rpc connection is nil")
 	}
@@ -2779,6 +2811,12 @@ func (c *trueNASRPCClient) readAppLogEvents(ctx context.Context, tailLines int) 
 				return trimAppLogLines(lines, tailLines), false, nil
 			}
 			return nil, false, &RPCTransportError{Method: "app.container_log_follow", Phase: "read", Err: err}
+		}
+		if ended, err := rpcSubscriptionTermination(message, collection, "app.container_log_follow"); ended || err != nil {
+			if err != nil {
+				return nil, false, err
+			}
+			return trimAppLogLines(lines, tailLines), true, errRPCSubscriptionComplete
 		}
 		if message.Method == "" {
 			if message.Error != nil {
@@ -3088,7 +3126,7 @@ func (c *trueNASRPCClient) getReportingDataWithQuery(ctx context.Context, graphs
 	return response, nil
 }
 
-func (c *trueNASRPCClient) readSystemTelemetryEvent(ctx context.Context, intervalSeconds int) (*SystemInfo, error) {
+func (c *trueNASRPCClient) readSystemTelemetryEvent(ctx context.Context, intervalSeconds int, collection string) (*SystemInfo, error) {
 	if c == nil || c.conn == nil {
 		return nil, fmt.Errorf("truenas rpc connection is nil")
 	}
@@ -3103,6 +3141,12 @@ func (c *trueNASRPCClient) readSystemTelemetryEvent(ctx context.Context, interva
 		var message trueNASRPCResponse
 		if err := c.conn.ReadJSON(&message); err != nil {
 			return nil, &RPCTransportError{Method: "reporting.realtime", Phase: "read", Err: err}
+		}
+		if ended, err := rpcSubscriptionTermination(message, collection, "reporting.realtime"); ended || err != nil {
+			if err == nil {
+				err = rpcSubscriptionEndedBeforeData("reporting.realtime")
+			}
+			return nil, err
 		}
 		if message.Method == "" {
 			if message.Error != nil {

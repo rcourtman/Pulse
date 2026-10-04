@@ -3,10 +3,10 @@ import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 export function getAgentProfileSuggestionValueBadgeClass(value: unknown): string {
   if (typeof value === 'boolean') {
     return value
-      ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+      ? 'bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300'
       : 'bg-surface-alt text-base-content';
   }
-  return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
+  return 'bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300';
 }
 
 export const AGENT_PROFILE_SUGGESTION_EXAMPLE_PROMPTS = [

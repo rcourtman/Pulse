@@ -185,7 +185,7 @@ func (p *TrueNASPoller) syncConnections() {
 		return
 	}
 
-	orgs, err := p.multiTenant.ListOrganizations()
+	orgIDs, err := p.multiTenant.ListOrganizationIDs()
 	if err != nil {
 		log.Warn().
 			Str("component", "truenas_poller").
@@ -196,17 +196,10 @@ func (p *TrueNASPoller) syncConnections() {
 	}
 
 	// orgID -> connID -> instance
-	configured := make(map[string]map[string]config.TrueNASInstance, len(orgs))
-	active := make(map[string]map[string]config.TrueNASInstance, len(orgs))
+	configured := make(map[string]map[string]config.TrueNASInstance, len(orgIDs))
+	active := make(map[string]map[string]config.TrueNASInstance, len(orgIDs))
 
-	for _, org := range orgs {
-		if org == nil {
-			continue
-		}
-		orgID := strings.TrimSpace(org.ID)
-		if orgID == "" {
-			continue
-		}
+	for _, orgID := range orgIDs {
 		persistence, err := p.multiTenant.GetPersistence(orgID)
 		if err != nil || persistence == nil {
 			log.Warn().
@@ -859,55 +852,6 @@ func (p *TrueNASPoller) recordConnectionFailureLocked(
 		Message:  strings.TrimSpace(err.Error()),
 		Category: category,
 	}
-}
-
-// RecordConnectionTestSuccess updates one saved TrueNAS connection summary after
-// a manual row-level test without clearing the last observed contribution
-// summary.
-func (p *TrueNASPoller) RecordConnectionTestSuccess(
-	orgID string,
-	connID string,
-	instance config.TrueNASInstance,
-	at time.Time,
-) {
-	if p == nil {
-		return
-	}
-	connID = strings.TrimSpace(connID)
-	if connID == "" {
-		return
-	}
-	orgID = normalizeTrueNASOrgID(orgID)
-	instance.ApplyDefaults()
-
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.recordConnectionSuccessLocked(orgID, connID, instance, at, at, nil)
-}
-
-// RecordConnectionTestFailure updates one saved TrueNAS connection summary after
-// a manual row-level test failure while preserving any previously observed
-// resource contribution summary.
-func (p *TrueNASPoller) RecordConnectionTestFailure(
-	orgID string,
-	connID string,
-	instance config.TrueNASInstance,
-	err error,
-	at time.Time,
-) {
-	if p == nil || err == nil {
-		return
-	}
-	connID = strings.TrimSpace(connID)
-	if connID == "" {
-		return
-	}
-	orgID = normalizeTrueNASOrgID(orgID)
-	instance.ApplyDefaults()
-
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.recordConnectionFailureLocked(orgID, connID, instance, err, at)
 }
 
 func buildTrueNASObservedSummary(snapshot *truenas.FixtureSnapshot) *TrueNASConnectionObservedSummary {

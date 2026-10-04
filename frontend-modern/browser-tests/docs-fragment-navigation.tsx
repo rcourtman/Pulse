@@ -16,10 +16,16 @@ const scenario = new URLSearchParams(window.location.search).get('scenario') ?? 
 
 const targets: Record<string, string> = {
   plain: '/docs/API',
+  plans: '/docs/PULSE_PRO',
   direct: '/docs/API#resource-maintenance-and-operator-state',
   reload: '/docs/API#resource-maintenance-and-operator-state',
   malformed: '/docs/API#%invalid',
   missing: '/docs/API#does-not-exist',
+  troubleshooting: '/docs/TROUBLESHOOTING#recovery-mode',
+  truenas: '/docs/TRUENAS',
+  installation: '/docs/INSTALL',
+  configuration: '/docs/CONFIGURATION#-api-tokens',
+  webhooks: '/docs/WEBHOOKS',
 };
 
 window.history.replaceState({}, '', targets[scenario] ?? targets.plain);

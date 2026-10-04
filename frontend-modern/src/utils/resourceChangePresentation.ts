@@ -38,7 +38,7 @@ const RESOURCE_CHANGE_KIND_PRESENTATIONS: Record<
   activity: {
     label: 'Activity',
     plural: 'Activities',
-    className: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
+    className: 'bg-sky-100 text-sky-700 dark:bg-sky-900/25 dark:text-sky-300',
   },
   restart: {
     label: 'Restart',
@@ -48,32 +48,32 @@ const RESOURCE_CHANGE_KIND_PRESENTATIONS: Record<
   config_update: {
     label: 'Config update',
     plural: 'Config updates',
-    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300',
   },
   metric_anomaly: {
     label: 'Anomaly',
     plural: 'Anomalies',
-    className: 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300',
+    className: 'bg-rose-100 text-rose-700 dark:bg-rose-900/25 dark:text-rose-300',
   },
   relationship_change: {
     label: 'Relationship change',
     plural: 'Relationship changes',
-    className: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300',
+    className: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/25 dark:text-indigo-300',
   },
   capability_change: {
     label: 'Capability change',
     plural: 'Capability changes',
-    className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300',
+    className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/25 dark:text-cyan-300',
   },
   alert_fired: {
     label: 'Alert fired',
     plural: 'Alerts fired',
-    className: 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300',
+    className: 'bg-rose-100 text-rose-700 dark:bg-rose-900/25 dark:text-rose-300',
   },
   alert_acknowledged: {
     label: 'Alert acknowledged',
     plural: 'Alerts acknowledged',
-    className: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+    className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
   },
   alert_unacknowledged: {
     label: 'Alert unacknowledged',
@@ -83,17 +83,17 @@ const RESOURCE_CHANGE_KIND_PRESENTATIONS: Record<
   alert_snoozed: {
     label: 'Alert snoozed',
     plural: 'Alerts snoozed',
-    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300',
   },
   alert_unsnoozed: {
     label: 'Alert resumed',
     plural: 'Alerts resumed',
-    className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300',
+    className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/25 dark:text-cyan-300',
   },
   alert_resolved: {
     label: 'Alert resolved',
     plural: 'Alerts resolved',
-    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300',
   },
   command_executed: {
     label: 'Command executed',
@@ -103,7 +103,7 @@ const RESOURCE_CHANGE_KIND_PRESENTATIONS: Record<
   runbook_executed: {
     label: 'Runbook executed',
     plural: 'Runbooks executed',
-    className: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300',
+    className: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/25 dark:text-indigo-300',
   },
 };
 
@@ -125,27 +125,27 @@ const RESOURCE_CHANGE_SOURCE_TYPE_PRESENTATIONS: Record<
   platform_event: {
     label: 'Platform event',
     plural: 'Platform events',
-    className: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
+    className: 'bg-sky-100 text-sky-700 dark:bg-sky-900/25 dark:text-sky-300',
   },
   pulse_diff: {
     label: 'Pulse diff',
     plural: 'Pulse diffs',
-    className: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300',
+    className: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/25 dark:text-indigo-300',
   },
   heuristic: {
     label: 'Heuristic',
     plural: 'Heuristics',
-    className: 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300',
+    className: 'bg-rose-100 text-rose-700 dark:bg-rose-900/25 dark:text-rose-300',
   },
   user_action: {
     label: 'User action',
     plural: 'User actions',
-    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300',
   },
   agent_action: {
     label: 'Agent action',
     plural: 'Agent actions',
-    className: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+    className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
   },
 };
 
@@ -169,22 +169,22 @@ const RESOURCE_CHANGE_SOURCE_ADAPTER_PRESENTATIONS: Record<
   proxmox_adapter: {
     label: 'Proxmox adapter',
     plural: 'Proxmox adapters',
-    className: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
+    className: 'bg-sky-100 text-sky-700 dark:bg-sky-900/25 dark:text-sky-300',
   },
   truenas_adapter: {
     label: 'TrueNAS adapter',
     plural: 'TrueNAS adapters',
-    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300',
   },
   vmware_adapter: {
     label: 'VMware adapter',
     plural: 'VMware adapters',
-    className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300',
+    className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/25 dark:text-cyan-300',
   },
   'agent:ops-helper': {
     label: 'Ops helper',
     plural: 'Ops helpers',
-    className: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+    className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
   },
 };
 

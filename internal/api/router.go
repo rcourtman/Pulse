@@ -7957,6 +7957,12 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		return
 	}
 
+	systemdSnippet, err := buildContainerRuntimeAgentServiceSnippet(baseURL, enableHost)
+	if err != nil {
+		writeConfigAgentInstallBaseURLUnavailable(w)
+		return
+	}
+
 	rawToken, err := auth.GenerateAPIToken()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate container runtime migration token")
@@ -8018,7 +8024,6 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 	config.Mu.Unlock()
 
 	installCommand := buildContainerRuntimeAgentInstallCommand(baseURL, rawToken, enableHost)
-	systemdSnippet := fmt.Sprintf("[Service]\nType=simple\nEnvironment=\"PULSE_URL=%s\"\nEnvironment=\"PULSE_TOKEN=%s\"\nExecStart=/usr/local/bin/pulse-agent --url %s --token %s --enable-docker %s --interval 30s\nRestart=always\nRestartSec=5s\nUser=root", baseURL, rawToken, baseURL, rawToken, containerRuntimeAgentHostFlag(enableHost))
 
 	response := map[string]any{
 		"success": true,
@@ -8034,6 +8039,7 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		"enableHost":            enableHost,
 	}
 
+	w.Header().Set("Cache-Control", "no-store")
 	if err := utils.WriteJSONResponse(w, response); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize container runtime token migration response")
 	}

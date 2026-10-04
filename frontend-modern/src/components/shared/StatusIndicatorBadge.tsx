@@ -29,7 +29,7 @@ const STATUS_INDICATOR_BADGE_SIZE_CLASSES: Record<StatusIndicatorBadgeSize, stri
 };
 const STATUS_INDICATOR_BADGE_SHAPE_CLASSES: Record<StatusIndicatorBadgeShape, string> = {
   pill: 'rounded-full',
-  rounded: 'rounded',
+  rounded: 'rounded-sm',
 };
 
 export function StatusIndicatorBadge(props: StatusIndicatorBadgeProps): JSX.Element {

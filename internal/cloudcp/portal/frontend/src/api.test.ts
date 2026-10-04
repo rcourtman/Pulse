@@ -73,6 +73,31 @@ describe('portal api', function() {
     });
   });
 
+  // A code-plus-sentence payload must show the sentence: the provider saw
+  // "provider_msp_license_lapsed" instead of what to do about it.
+  it('prefers the human message over the machine error code', async function() {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async function() {
+        return { error: 'provider_msp_license_lapsed', message: 'Your Pulse MSP plan has ended, so no new clients can be added.' };
+      },
+    }));
+
+    var api = createPortalAPI({
+      getBootstrap: function() {
+        return bootstrap;
+      },
+    });
+
+    await expect(api.createWorkspace('acct_1', { display_name: 'Acme' })).rejects.toMatchObject({
+      name: 'PortalAPIError',
+      status: 403,
+      message: 'Your Pulse MSP plan has ended, so no new clients can be added.',
+    });
+  });
+
   it('keeps task-specific fallback copy on network failures', async function() {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('socket hang up')));
 

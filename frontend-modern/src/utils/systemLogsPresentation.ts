@@ -40,7 +40,7 @@ const STREAM_PRESENTATION: Record<'live' | 'paused', SystemLogStreamPresentation
   paused: {
     indicatorClass: 'bg-amber-400',
     label: 'Paused',
-    pauseButtonClass: 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400',
+    pauseButtonClass: 'bg-amber-100 text-amber-600 dark:bg-amber-900/25 dark:text-amber-400',
     toggleTitle: 'Resume Stream',
   },
 };

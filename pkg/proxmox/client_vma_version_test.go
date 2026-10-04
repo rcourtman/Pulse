@@ -5,11 +5,17 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
 func TestClient_GetVMAgentVersion_MapResult(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/api2/json/nodes/node1/qemu/100/agent/info" {
 			fmt.Fprint(w, `{"data":{"result":{"version":{"version":"3.1"}}}}`)
@@ -40,6 +46,11 @@ func TestClient_GetVMAgentVersion_MapResult(t *testing.T) {
 
 func TestClient_GetVMAgentVersion_NoVersion(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/api2/json/nodes/node1/qemu/100/agent/info" {
 			fmt.Fprint(w, `{"data":{"result":{"foo":"bar"}}}`)

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "5311a7c6febc5dfd7fcd81b10ca188d925e34527",
+  "verified_at": "2026-10-04T01:22:10Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "b71d9e713e58b05a9072d8cb542fbd540a7aef6574458dc0776fc6b1c52a15e2",
+    "frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx": "dcc9b81a793e43bac8a9e5059a29335bf5699d7d9d82e2643f5b4daaf4181eaa"
+  },
+  "routes": [
+    "/browser-tests/guest-disk-provenance.html"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 360,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production GuestRow, full GuestDrawer, responsive column selection/weights and CSS; synthetic observations. Playwright 1.56.1 matches integration lock, desktop and phone Chromium 141.0.7390.37 plus dark phone WebKit 26.0. All 12 final bitmaps opened.",
+    "96 fixed-deferral states across bars/sparklines, retained/no prior sample, before hover: visible Last known/Prior versus Unavailable/N/A and full safe assistive reason. Retained numbers are announced last known, never current. Independent fresh control and CT rows remain unmarked.",
+    "Cue geometry and every inline sparkline value fit the existing canonical compact/phone/narrow columns, with 32px row height equal to an unmarked control and no horizontal document overflow. Inline plot yields width to its value; phone fresh 75% remains visible.",
+    "This verifies production component presentation/input, not a full application route, physical phone, collector, backup task completion, guest thaw/liveness, installed forward/recovery or containing release. Initial matrix success did not catch numeric clipping; its adverse visual finding and exact original records are retained separately."
+  ],
+  "interactions": [
+    "Mouse and keyboard history lenses preserve visible freshness and last-known accessible numeric context while replacing the bar with a chart. No new event listener, action or tab stop is introduced.",
+    "Trusted phone touch on the noninteractive provenance label activates the existing row exactly once, opens the full readable safe reason and does not create a hover history lens; existing collapse remains usable.",
+    "Clearing a VM lock with a subsequent in-flight read reason does not withdraw the notice. A new same-identity fresh observation clears title/notice, updates 75% and current accessible context without replacing the row node.",
+    "Guest fixtures make only local synthetic GET requests and report no page errors. No real backup, QGA or release operation is sent."
+  ]
+}

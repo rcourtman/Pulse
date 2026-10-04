@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -64,6 +65,82 @@ func TestNewMonitorRoutesStartupCustomSensorWarningBeforeStart(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("custom sensor warning did not reach external delivery before Monitor.Start")
+	}
+}
+
+func TestRAIDRequiredMembersReportAndReadState(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		required int
+		total    int
+		active   int
+		working  int
+		want     storagehealth.RiskLevel
+	}{
+		{"reported legacy clean spare", 0, 5, 4, 5, storagehealth.RiskHealthy},
+		{"new mdadm clean spare", 4, 5, 4, 5, storagehealth.RiskHealthy},
+		{"new mdstat clean spare", 4, 4, 4, 5, storagehealth.RiskHealthy},
+		{"count deficit despite clean state and spare", 4, 4, 3, 4, storagehealth.RiskCritical},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			manager := alerts.NewManagerWithDataDir(t.TempDir())
+			t.Cleanup(manager.Stop)
+			cfg := manager.GetConfig()
+			cfg.Enabled = true
+			cfg.ActivationState = alerts.ActivationActive
+			cfg.TimeThresholds = map[string]int{}
+			manager.UpdateConfig(cfg)
+			monitor := &Monitor{
+				state: models.NewState(), alertManager: manager,
+				hostTokenBindings: make(map[string]string), config: &config.Config{}, rateTracker: NewRateTracker(),
+			}
+			report := agentshost.Report{
+				Agent:     agentshost.AgentInfo{ID: "raid-agent", Version: "test", IntervalSeconds: 30},
+				Host:      agentshost.HostInfo{ID: "raid-host", Hostname: "linux-raid", Platform: "linux"},
+				Timestamp: time.Now().UTC(),
+				RAID:      []agentshost.RAIDArray{{Device: "/dev/md1", Level: "raid5", State: "clean", RequiredDevices: tc.required, TotalDevices: tc.total, ActiveDevices: tc.active, WorkingDevices: tc.working, SpareDevices: 1}},
+			}
+			payload, err := json.Marshal(report)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var decoded agentshost.Report
+			if err := json.Unmarshal(payload, &decoded); err != nil {
+				t.Fatal(err)
+			}
+			host, err := monitor.ApplyHostReport(decoded, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			stored := monitor.state.GetSnapshot().Hosts
+			if len(stored) != 1 || len(stored[0].RAID) != 1 {
+				t.Fatalf("stored host RAID=%+v", stored)
+			}
+			record := unifiedresources.HostIngestRecord(stored[0])
+			view := unifiedresources.NewHostView(&record.Resource)
+			readback := hostRAIDFromReadStateView(view.RAID())
+			for _, array := range []models.HostRAIDArray{host.RAID[0], stored[0].RAID[0], readback[0]} {
+				if array.RequiredDevices != tc.required || array.TotalDevices != tc.total || array.ActiveDevices != tc.active || array.SpareDevices != 1 {
+					t.Fatalf("ingest/state/canonical readback changed count meaning: %+v", array)
+				}
+				if got := storagehealth.AssessHostRAIDArray(array); got.Level != tc.want {
+					t.Fatalf("assessment after round trip=%+v, want %s", got, tc.want)
+				}
+			}
+			var raidAlerts []alerts.Alert
+			for _, alert := range manager.GetActiveAlerts() {
+				if alert.Type == "raid" {
+					raidAlerts = append(raidAlerts, alert)
+				}
+			}
+			if tc.want == storagehealth.RiskHealthy {
+				if len(raidAlerts) != 0 || record.Resource.Agent.RAID[0].Risk != nil {
+					t.Fatalf("healthy spare produced alert or canonical risk: alerts=%+v risk=%+v", raidAlerts, record.Resource.Agent.RAID[0].Risk)
+				}
+			} else if len(raidAlerts) != 1 || raidAlerts[0].Level != alerts.AlertLevelCritical || record.Resource.Agent.RAID[0].Risk == nil || record.Resource.Agent.RAID[0].Risk.Level != storagehealth.RiskCritical {
+				t.Fatalf("real deficit lost alert or canonical risk: alerts=%+v risk=%+v", raidAlerts, record.Resource.Agent.RAID[0].Risk)
+			}
+		})
 	}
 }
 
@@ -5931,6 +6008,177 @@ func TestDedupeUnifiedMetricWritesDropsExactReplays(t *testing.T) {
 	}
 }
 
+// Issue #1966: a host agent and an API-backed TrueNAS connection can report
+// the same hostname without resolving to the same canonical resource. This
+// fixture checks their disk-write source IDs, metrics targets and writer
+// selection, including that TrueNAS pool capacity is a different series. Its
+// deliberately identical synthetic pair tests the replay-key boundary, not
+// whether the reporter's live samples had equal timestamps or values.
+func TestUnifiedDiskWriteMetricsKeepSameHostnameHostAgentAndTrueNASTargetsSeparate(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	const (
+		hostname      = "truenas-iscsi.example.test"
+		hostAgentID   = "host-agent-iscsi"
+		connectionID  = "truenas-connection-2"
+		hostWriteRate = 128_000
+		trueNASRate   = 3_400_000
+	)
+	observedAt := time.Date(2026, time.September, 23, 17, 0, 0, 0, time.UTC)
+
+	fixtures := truenas.DefaultFixtures()
+	fixtures.System.Hostname = hostname
+	fixtures.System.DiskWriteRate = trueNASRate
+	fixtures.System.IntervalSeconds = 30
+	fixtures.System.CollectedAt = observedAt
+	fixtures.CollectedAt = observedAt
+	fixtures.Pools = fixtures.Pools[:1]
+	fixtures.Datasets = nil
+	fixtures.Disks = nil
+	fixtures.Apps = nil
+	fixtures.VMs = nil
+	fixtures.Shares = nil
+	provider := truenas.NewLiveProviderForConnection(
+		&truenas.FixtureFetcher{Snapshot: fixtures}, connectionID,
+	)
+	trueNASRecords := provider.RecordsFromSnapshot(&fixtures)
+	if len(trueNASRecords) == 0 {
+		t.Fatal("connection-scoped TrueNAS provider returned no records")
+	}
+
+	host := models.Host{
+		ID:              hostAgentID,
+		Hostname:        hostname,
+		MachineID:       "host-agent-machine-iscsi",
+		DiskWriteRate:   hostWriteRate,
+		Status:          "online",
+		LastSeen:        observedAt,
+		IntervalSeconds: 30,
+	}
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{Hosts: []models.Host{host}}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceTrueNAS: trueNASRecords,
+	})
+
+	var hostResource, trueNASResource *unifiedresources.Resource
+	for _, resource := range resourceStore.GetAll() {
+		if resource.Type != unifiedresources.ResourceTypeAgent || resource.Name != hostname {
+			continue
+		}
+		resourceCopy := resource
+		switch {
+		case monitorHasSource(resource.Sources, unifiedresources.SourceAgent):
+			hostResource = &resourceCopy
+		case monitorHasSource(resource.Sources, unifiedresources.SourceTrueNAS):
+			trueNASResource = &resourceCopy
+		}
+	}
+	if hostResource == nil || trueNASResource == nil {
+		t.Fatalf("same-hostname resources did not remain separately source-owned: host=%+v TrueNAS=%+v", hostResource, trueNASResource)
+	}
+	if hostResource.ID == trueNASResource.ID {
+		t.Fatalf("same-hostname host agent and connection-scoped TrueNAS resolved to one canonical ID %q", hostResource.ID)
+	}
+
+	hostTarget := resourceStore.MetricsTargetForResource(hostResource.ID)
+	if hostTarget == nil || hostTarget.ResourceType != "agent" || hostTarget.ResourceID != hostAgentID {
+		t.Fatalf("host-agent metrics target = %+v, want agent/%s", hostTarget, hostAgentID)
+	}
+	trueNASTarget := resourceStore.MetricsTargetForResource(trueNASResource.ID)
+	if trueNASTarget == nil || trueNASTarget.ResourceType != "agent" || trueNASTarget.ResourceID != connectionID {
+		t.Fatalf("TrueNAS metrics target = %+v, want agent/%s", trueNASTarget, connectionID)
+	}
+	if hostResource.Metrics == nil || hostResource.Metrics.DiskWrite == nil ||
+		hostResource.Metrics.DiskWrite.Source != unifiedresources.SourceAgent ||
+		hostResource.Metrics.DiskWrite.Value != hostWriteRate {
+		t.Fatalf("host-agent disk-write observation = %+v, want agent rate %v", hostResource.Metrics, hostWriteRate)
+	}
+	if trueNASResource.Metrics == nil || trueNASResource.Metrics.DiskWrite == nil ||
+		trueNASResource.Metrics.DiskWrite.Source != unifiedresources.SourceTrueNAS ||
+		trueNASResource.Metrics.DiskWrite.Value != trueNASRate {
+		t.Fatalf("TrueNAS disk-write observation = %+v, want API rate %v", trueNASResource.Metrics, trueNASRate)
+	}
+
+	var poolTarget *unifiedresources.MetricsTarget
+	for _, resource := range resourceStore.GetAll() {
+		if resource.Type == unifiedresources.ResourceTypeStorage && resource.Name == "tank" &&
+			monitorHasSource(resource.Sources, unifiedresources.SourceTrueNAS) {
+			poolTarget = resourceStore.MetricsTargetForResource(resource.ID)
+			break
+		}
+	}
+	if poolTarget == nil || poolTarget.ResourceType != "storage" ||
+		poolTarget.ResourceID != "system:"+connectionID+"/pool:tank" {
+		t.Fatalf("TrueNAS pool metrics target = %+v, want connection-scoped storage pool", poolTarget)
+	}
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	persistentStore, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = persistentStore.Close() }()
+	monitor := &Monitor{metricsStore: persistentStore}
+	var writes []metrics.WriteMetric
+	monitor.syncUnifiedAgentMetrics(resourceStore, &writes)
+
+	var trueNASWrite *metrics.WriteMetric
+	for i := range writes {
+		write := &writes[i]
+		if write.MetricType != "diskwrite" {
+			continue
+		}
+		if write.ResourceID == hostTarget.ResourceID {
+			t.Fatalf("unified sync selected the host-agent target %q; that source uses the direct agent writer", hostTarget.ResourceID)
+		}
+		if write.ResourceID == trueNASTarget.ResourceID {
+			trueNASWrite = write
+		}
+	}
+	if trueNASWrite == nil {
+		t.Fatalf("unified sync did not select the TrueNAS agent target %q for diskwrite; writes=%+v", trueNASTarget.ResourceID, writes)
+	}
+	if trueNASWrite.Value != trueNASRate || !trueNASWrite.Timestamp.Equal(observedAt) {
+		t.Fatalf("TrueNAS disk-write sample = %+v, want value %v at %s", trueNASWrite, trueNASRate, observedAt)
+	}
+	var storageWrites []metrics.WriteMetric
+	monitor.syncUnifiedStorageMetrics(resourceStore, &storageWrites)
+	if len(storageWrites) != 4 {
+		t.Fatalf("TrueNAS pool capacity writes = %+v, want usage/used/total/avail only", storageWrites)
+	}
+	poolSeries := make(map[string]bool)
+	for _, write := range storageWrites {
+		if write.ResourceType != "storage" || write.ResourceID != poolTarget.ResourceID ||
+			write.MetricType == "diskwrite" {
+			t.Fatalf("TrueNAS pool capacity reached an agent disk-write series: %+v", write)
+		}
+		poolSeries[write.MetricType] = true
+	}
+	for _, metric := range []string{"usage", "used", "total", "avail"} {
+		if !poolSeries[metric] {
+			t.Fatalf("TrueNAS pool missing capacity series %q; writes=%+v", metric, storageWrites)
+		}
+	}
+
+	// The fixture intentionally supplies one identical (type, metric, time,
+	// value) observation under each proven-distinct source target. The replay
+	// guard preserves both first writes because its store key includes ID, then
+	// drops each exact same-target replay. Production-source equality for this
+	// reporter remains unverified until paired values/timestamps are provided.
+	hostWrite := *trueNASWrite
+	hostWrite.ResourceID = hostTarget.ResourceID
+	pairedMonitor := &Monitor{}
+	paired := pairedMonitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{*trueNASWrite, hostWrite})
+	if len(paired) != 2 {
+		t.Fatalf("distinct source targets retained %d of the deliberately identical paired samples; want 2", len(paired))
+	}
+	if replay := pairedMonitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{*trueNASWrite, hostWrite}); len(replay) != 0 {
+		t.Fatalf("exact same-target paired replays retained %d writes, want 0: %+v", len(replay), replay)
+	}
+}
+
 func TestSyncUnifiedStorageMetricsDefersWritesToBatchSink(t *testing.T) {
 	observedAt := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
 	resourceStore := unifiedresources.NewMonitorAdapter(nil)
@@ -6235,5 +6483,295 @@ func TestApplyHostReportHonoursRemovalBlockWhenIdentityWouldFork(t *testing.T) {
 	}
 	if len(monitor.state.GetRemovedHostAgents()) != 0 {
 		t.Fatalf("expected removal block to be cleared, still have %+v", monitor.state.GetRemovedHostAgents())
+	}
+}
+
+// countingResourceStore counts registry clones handed out by the live store.
+type countingResourceStore struct {
+	*unifiedresources.MonitorAdapter
+	getAll atomic.Int32
+}
+
+func (c *countingResourceStore) GetAll() []unifiedresources.Resource {
+	c.getAll.Add(1)
+	return c.MonitorAdapter.GetAll()
+}
+
+// plainResourceStore lacks metrics-target resolution.
+type plainResourceStore struct {
+	ResourceStoreInterface
+}
+
+func TestResourceSnapshotStoreClonesOncePerPass(t *testing.T) {
+	now := time.Now().UTC()
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		LastUpdate: now,
+		VMs: []models.VM{{
+			ID: "lab:pve1:101", VMID: 101, Name: "db", Node: "pve1", Instance: "lab",
+			Status: "running", Type: "qemu", LastSeen: now,
+		}},
+	})
+	counting := &countingResourceStore{MonitorAdapter: adapter}
+
+	store := newResourceSnapshotStore(counting)
+	first := store.GetAll()
+	second := store.GetAll()
+	if got := counting.getAll.Load(); got != 1 {
+		t.Fatalf("underlying GetAll calls = %d, want 1", got)
+	}
+	if len(first) != 1 || len(second) != 1 || &first[0] != &second[0] {
+		t.Fatalf("pass consumers did not share one snapshot: %d and %d resources", len(first), len(second))
+	}
+	resolver, ok := store.(MetricsTargetResourceStore)
+	if !ok || resolver.MetricsTargetForResource(first[0].ID) == nil {
+		t.Fatal("snapshot store does not forward metrics-target resolution")
+	}
+	if again := newResourceSnapshotStore(store); again != store {
+		t.Fatal("wrapping a pass snapshot again must reuse it")
+	}
+
+	plain := plainResourceStore{ResourceStoreInterface: adapter}
+	if wrapped := newResourceSnapshotStore(plain); wrapped != ResourceStoreInterface(plain) {
+		t.Fatal("a store without metrics-target resolution must pass through unwrapped")
+	}
+}
+
+// An accepted agent report refreshes the store once. Every metric sync and the
+// alert sync in that pass must share a single registry clone (#2199).
+func TestAgentReportRefreshClonesRegistryOnce(t *testing.T) {
+	now := time.Now().UTC()
+	state := models.NewState()
+	state.UpdateNodes([]models.Node{{ID: "lab-pve1", Name: "pve1", Instance: "lab", Status: "online", Type: "node", LastSeen: now}})
+	state.UpdateVMs([]models.VM{{
+		ID: "lab:pve1:101", VMID: 101, Name: "db", Node: "pve1", Instance: "lab",
+		Status: "running", Type: "qemu", CPU: 0.2, LastSeen: now,
+	}})
+	state.UpsertHost(models.Host{ID: "agent-1", Hostname: "pve1.example", Status: "online", CPUUsage: 3, LastSeen: now})
+
+	counting := &countingResourceStore{MonitorAdapter: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))}
+	m := &Monitor{
+		state:          state,
+		resourceStore:  counting,
+		metricsHistory: NewMetricsHistory(32, time.Hour),
+	}
+
+	m.refreshUnifiedResourceStoreAfterAgentStateChange()
+	if got := counting.getAll.Load(); got != 1 {
+		t.Fatalf("registry clones for one agent report refresh = %d, want 1", got)
+	}
+}
+
+// newAgentReportThrottleMonitor returns a monitor whose report-driven store
+// refreshes are throttled to window, with one online host agent.
+func newAgentReportThrottleMonitor(t *testing.T, window time.Duration) (*Monitor, *countingResourceStore) {
+	t.Helper()
+	state := models.NewState()
+	state.UpsertHost(models.Host{ID: "agent-1", Hostname: "pve1.example", Status: "online", CPUUsage: 1, LastSeen: time.Now().UTC()})
+	counting := &countingResourceStore{MonitorAdapter: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))}
+	m := &Monitor{
+		state:                    state,
+		resourceStore:            counting,
+		metricsHistory:           NewMetricsHistory(32, time.Hour),
+		agentReportRefreshWindow: window,
+	}
+	t.Cleanup(m.stopAgentReportRefresh)
+	return m, counting
+}
+
+func reportAgentCPU(m *Monitor, cpu float64) {
+	m.state.UpsertHost(models.Host{ID: "agent-1", Hostname: "pve1.example", Status: "online", CPUUsage: cpu, LastSeen: time.Now().UTC()})
+	m.refreshUnifiedResourceStoreAfterAgentReport()
+}
+
+func publishedAgentCPU(t *testing.T, store *countingResourceStore) float64 {
+	t.Helper()
+	for _, resource := range store.MonitorAdapter.GetAll() {
+		if resource.Type == unifiedresources.ResourceTypeAgent && resource.Metrics != nil && resource.Metrics.CPU != nil {
+			return resource.Metrics.CPU.Value
+		}
+	}
+	t.Fatal("no agent CPU in the canonical store")
+	return 0
+}
+
+// Accepted agent reports refresh the estate-wide store at most once per
+// window: the first report after a quiet window is published before the call
+// returns, and reports inside the window fold into one trailing refresh that
+// publishes the latest state (#2199).
+func TestAgentReportRefreshFoldsReportsWithinWindow(t *testing.T) {
+	const window = 500 * time.Millisecond
+	m, store := newAgentReportThrottleMonitor(t, window)
+
+	reportAgentCPU(m, 10)
+	if got := store.getAll.Load(); got != 1 {
+		t.Fatalf("refreshes after the leading report = %d, want 1", got)
+	}
+	if got := publishedAgentCPU(t, store); got != 10 {
+		t.Fatalf("leading report published CPU %v, want 10", got)
+	}
+
+	for cpu := 20.0; cpu <= 60; cpu += 10 {
+		reportAgentCPU(m, cpu)
+	}
+	if got := store.getAll.Load(); got != 1 {
+		t.Fatalf("refreshes during the window = %d, want the burst deferred", got)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for store.getAll.Load() < 2 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := store.getAll.Load(); got != 2 {
+		t.Fatalf("refreshes after the window = %d, want one trailing refresh", got)
+	}
+	if got := publishedAgentCPU(t, store); got != 60 {
+		t.Fatalf("trailing refresh published CPU %v, want the latest report's 60", got)
+	}
+
+	time.Sleep(window + 100*time.Millisecond)
+	reportAgentCPU(m, 70)
+	if got := store.getAll.Load(); got != 3 {
+		t.Fatalf("refreshes after a quiet window = %d, want a synchronous leading refresh", got)
+	}
+	if got := publishedAgentCPU(t, store); got != 70 {
+		t.Fatalf("leading report after a quiet window published CPU %v, want 70", got)
+	}
+}
+
+func TestStopCancelsPendingAgentReportRefresh(t *testing.T) {
+	const window = 100 * time.Millisecond
+	m, store := newAgentReportThrottleMonitor(t, window)
+
+	reportAgentCPU(m, 10)
+	reportAgentCPU(m, 20)
+	m.stopAgentReportRefresh()
+	time.Sleep(3 * window)
+	if got := store.getAll.Load(); got != 1 {
+		t.Fatalf("refreshes after stop = %d, want the pending trailing refresh cancelled", got)
+	}
+}
+
+// A standalone agent offline across a restart is added back to every canonical
+// read-state lookup from host continuity. Alert evaluation makes one lookup per
+// resource per poll, so the overlay must be reused, not rebuilt per lookup.
+func TestStandaloneHostContinuityReadStateReusedAcrossLookups(t *testing.T) {
+	now := time.Now().UTC()
+	state := models.NewState()
+	state.UpsertHost(models.Host{ID: "agent-live", Hostname: "live.example", Status: "online", LastSeen: now})
+	continuity := config.NewHostContinuityStore(t.TempDir(), nil)
+	if err := continuity.Upsert(config.HostContinuityEntry{HostID: "agent-gone", Hostname: "gone.example", LastSeen: now.Add(-time.Hour)}); err != nil {
+		t.Fatalf("seed host continuity: %v", err)
+	}
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	m := &Monitor{state: state, resourceStore: adapter, hostContinuityStore: continuity}
+	m.refreshUnifiedResourceStoreAfterAgentStateChange()
+
+	first := m.GetUnifiedReadStateOrSnapshot()
+	if first == unifiedresources.ReadState(adapter) {
+		t.Fatal("read state has no continuity overlay for the offline standalone agent")
+	}
+	found := false
+	for _, host := range first.Hosts() {
+		found = found || host.Hostname() == "gone.example"
+	}
+	if !found {
+		t.Fatal("continuity overlay does not include the offline standalone agent")
+	}
+	if second := m.GetUnifiedReadStateOrSnapshot(); second != first {
+		t.Fatal("a second read-state lookup rebuilt the continuity overlay")
+	}
+}
+
+// GetLiveHostsSnapshot runs on every agent report, config fetch, and host
+// continuity lookup, so it must copy the hosts alone, not the whole state.
+func TestGetLiveHostsSnapshotCopiesOnlyHosts(t *testing.T) {
+	state := models.NewState()
+	state.UpsertHost(models.Host{ID: "agent-1", Hostname: "pve1.example", Status: "online"})
+	vms := make([]models.VM, 1000)
+	for i := range vms {
+		vms[i] = models.VM{
+			ID: fmt.Sprintf("lab:pve1:%d", 100+i), VMID: 100 + i, Name: fmt.Sprintf("vm-%d", i),
+			Node: "pve1", Instance: "lab", Status: "running", Type: "qemu",
+			Disks: []models.Disk{{Mountpoint: "/", Total: 10 << 30, Used: 1 << 30}},
+		}
+	}
+	state.UpdateVMs(vms)
+	m := &Monitor{state: state}
+
+	if hosts := m.GetLiveHostsSnapshot(); len(hosts) != 1 || hosts[0].ID != "agent-1" {
+		t.Fatalf("live hosts = %+v, want the one registered agent", hosts)
+	}
+	if allocs := testing.AllocsPerRun(10, func() { _ = m.GetLiveHostsSnapshot() }); allocs > 50 {
+		t.Fatalf("GetLiveHostsSnapshot allocated %.0f times with 1 host and 1000 guests; it is copying guests", allocs)
+	}
+}
+
+// Reads model the completed-ingest boundary without persistence/background work.
+// The real adapter still owns clone isolation, mutable facets and identity.
+type broadcastProjectionCountingStore struct {
+	*unifiedresources.MonitorAdapter
+	reads int
+}
+
+func (s *broadcastProjectionCountingStore) GetAll() []unifiedresources.Resource {
+	s.reads++
+	return s.MonitorAdapter.GetAll()
+}
+func (*broadcastProjectionCountingStore) TryReplaceRegistryForRead(models.StateSnapshot, time.Duration, func() map[unifiedresources.DataSource][]unifiedresources.IngestRecord) bool {
+	return false
+}
+
+func TestBroadcastProjectionListsRegistryOnceAndKeepsLiveChanges(t *testing.T) {
+	m, adapter, _ := newReadStateCloneTestMonitor(t, 4)
+	store := &broadcastProjectionCountingStore{MonitorAdapter: adapter}
+	m.resourceStore = store
+	first := m.BuildFrontendState()
+	if store.reads != 1 {
+		t.Fatalf("GetAll calls=%d, want one owned continuity-aware clone", store.reads)
+	}
+	if len(first.Resources) != 4 {
+		t.Fatalf("resources=%d", len(first.Resources))
+	}
+	oldCPU := first.Resources[0].CPU.Current
+	changed := store.GetAll()
+	// Keep LastSeen/overall freshness unchanged: a timestamp-only cache would
+	// miss these metric/status/tag changes.
+	changed[0].Metrics.CPU.Value = 77
+	changed[0].Tags = []string{"new-tag"}
+	changed[0].Status = unifiedresources.StatusOffline
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestResources(changed)
+	store.MonitorAdapter = unifiedresources.NewMonitorAdapter(registry)
+	m.state.UpdateActiveAlerts([]models.Alert{{ID: "live-alert", ResourceID: changed[0].ID, Level: "critical", Type: "cpu"}})
+	m.state.RemovedHostAgents = []models.RemovedHostAgent{{ID: "ignored", Hostname: "ignored.local", RemovedAt: time.Now()}}
+	store.reads = 0
+	second := m.BuildFrontendState()
+	if store.reads != 1 {
+		t.Fatalf("next GetAll calls=%d", store.reads)
+	}
+	var row *models.ResourceFrontend
+	for i := range second.Resources {
+		if second.Resources[i].ID == changed[0].ID {
+			row = &second.Resources[i]
+		}
+	}
+	if row == nil || row.CPU.Current != 77 || len(row.Tags) != 1 || row.Tags[0] != "new-tag" {
+		t.Fatalf("mutable row was stale: %#v", row)
+	}
+	if first.Resources[0].CPU.Current != oldCPU {
+		t.Fatal("later projection mutated an accepted baseline")
+	}
+	if len(second.ActiveAlerts) != 1 || second.ActiveAlerts[0].ID != "live-alert" {
+		t.Fatal("live alert disappeared")
+	}
+	foundIgnored := false
+	for _, item := range second.ConnectedInfrastructure {
+		if item.Status == "ignored" && item.Name == "ignored.local" {
+			foundIgnored = true
+		}
+	}
+	if !foundIgnored {
+		t.Fatal("removed host lifecycle surface disappeared")
 	}
 }

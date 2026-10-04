@@ -198,7 +198,7 @@ function formatTimeDiff(diffMs: number, compact?: boolean): string {
   }
 }
 
-export type BackupStatus = 'fresh' | 'stale' | 'overdue' | 'never';
+export type BackupStatus = 'fresh' | 'stale' | 'overdue' | 'never' | 'unknown';
 
 export interface BackupInfo {
   status: BackupStatus;
@@ -227,7 +227,9 @@ export function getBackupInfo(
   thresholds?: BackupThresholds,
   now: number | Date = Date.now(),
 ): BackupInfo {
-  if (!lastBackup) {
+  // Only the explicit absence sentinels mean no completed backup was found.
+  // A present but unusable timestamp is uncertainty, not absence or freshness.
+  if (lastBackup === null || lastBackup === undefined || lastBackup === '' || lastBackup === 0) {
     return { status: 'never', ageMs: null, ageFormatted: 'Never' };
   }
 
@@ -238,11 +240,34 @@ export function getBackupInfo(
     timestamp = lastBackup;
   }
 
-  if (isNaN(timestamp) || timestamp <= 0) {
-    return { status: 'never', ageMs: null, ageFormatted: 'Never' };
+  if (
+    !Number.isFinite(timestamp) ||
+    timestamp <= 0 ||
+    !Number.isFinite(new Date(timestamp).getTime())
+  ) {
+    return {
+      status: 'unknown',
+      ageMs: null,
+      ageFormatted: 'Backup time unavailable: invalid timestamp.',
+    };
   }
 
   const nowMs = typeof now === 'number' ? now : now.getTime();
+  if (!Number.isFinite(nowMs) || !Number.isFinite(new Date(nowMs).getTime())) {
+    return {
+      status: 'unknown',
+      ageMs: null,
+      ageFormatted: 'Backup age unavailable: invalid current time.',
+    };
+  }
+  if (timestamp > nowMs) {
+    return {
+      status: 'unknown',
+      ageMs: null,
+      ageFormatted:
+        'Backup time unavailable: timestamp is in the future. Check the Proxmox and browser clocks.',
+    };
+  }
   const ageMs = nowMs - timestamp;
 
   // Use provided thresholds or fall back to defaults
@@ -283,13 +308,131 @@ export function formatPowerOnHours(hours: number, condensed = false): string {
   return condensed ? `${hours}h` : `${hours} hours`;
 }
 
+// Metric bar labels are set at text-[10px]: the value semibold (with tabular
+// digits while it animates), any detail after it at normal weight. Glyph
+// widths in that type vary too much for a per-character constant (a digit is
+// more than twice as wide as a full stop), so label widths are summed from
+// per-glyph advances of the font the browser actually renders. A hidden probe
+// carrying the label's own type classes measures them once.
+const LABEL_FONT_PX = 10;
+const LABEL_PROBE_FIRST_CODE = 0x20;
+const LABEL_PROBE_LAST_CODE = 0x7e;
+const LABEL_PROBE_REPEAT = 16;
+
+interface LabelGlyphAdvances {
+  // Semibold; a digit takes the wider of its proportional and tabular advance.
+  value: readonly number[];
+  // Normal weight.
+  detail: readonly number[];
+}
+
+// Advances in px for U+0020..U+007E as the probe reads them in Chrome with the
+// macOS system font (2026-10-03). They stand in wherever layout is
+// unavailable, such as unit tests.
+const FALLBACK_LABEL_GLYPH_ADVANCES: LabelGlyphAdvances = {
+  value: [
+    2.78, 3.54, 5.51, 6.7, 6.7, 10.11, 7.46, 3.43, 4.25, 4.25, 4.92, 6.7, 3.43, 4.92, 3.43, 3.37,
+    6.79, 6.7, 6.7, 6.7, 6.85, 6.7, 6.8, 6.7, 6.88, 6.8, 3.43, 3.43, 6.7, 6.7, 6.7, 5.55, 9.36,
+    7.25, 6.93, 7.45, 7.52, 6.25, 6.01, 7.68, 7.82, 3.13, 5.92, 7.05, 5.98, 9.08, 7.71, 7.93, 6.73,
+    7.93, 6.93, 6.75, 6.64, 7.65, 7.18, 10.08, 7.25, 7.03, 6.83, 4.25, 3.37, 4.25, 6.7, 5.88, 5.12,
+    5.89, 6.51, 5.9, 6.51, 6.03, 4.08, 6.46, 6.3, 2.86, 2.86, 5.94, 2.93, 9.24, 6.25, 6.22, 6.47,
+    6.47, 4.35, 5.55, 4.11, 6.25, 5.82, 8.35, 5.74, 5.91, 5.69, 4.25, 2.98, 4.25, 6.7,
+  ],
+  detail: [
+    2.93, 3.23, 4.9, 6.42, 6.42, 9.38, 7.24, 3.09, 3.94, 3.94, 4.84, 6.42, 3.09, 4.84, 3.09, 3.17,
+    6.42, 4.76, 6.16, 6.39, 6.56, 6.3, 6.49, 6, 6.51, 6.49, 3.09, 3.09, 6.42, 6.42, 6.42, 5.25, 9.3,
+    6.86, 6.69, 7.28, 7.39, 6.08, 5.84, 7.59, 7.54, 2.8, 5.5, 6.71, 5.8, 8.86, 7.54, 7.84, 6.47,
+    7.84, 6.66, 6.49, 6.46, 7.5, 6.86, 9.8, 6.91, 6.67, 6.74, 3.94, 3.17, 3.94, 6.42, 5.59, 5.12,
+    5.64, 6.26, 5.72, 6.26, 5.84, 3.74, 6.22, 6.01, 2.59, 2.59, 5.55, 2.65, 8.82, 5.96, 6.03, 6.23,
+    6.22, 4.02, 5.27, 3.75, 5.96, 5.54, 7.87, 5.37, 5.55, 5.51, 3.94, 2.71, 3.94, 6.42,
+  ],
+};
+
+let labelGlyphAdvances: LabelGlyphAdvances | undefined;
+let labelGlyphAdvancesPixelRatio = 0;
+
+function measureLabelGlyphAdvances(): LabelGlyphAdvances | null {
+  if (typeof document === 'undefined' || !document.body) return null;
+
+  const probe = document.createElement('div');
+  probe.setAttribute('aria-hidden', 'true');
+  probe.className =
+    'pointer-events-none invisible fixed left-0 top-0 whitespace-pre font-sans text-[10px] leading-none';
+  const addGroup = (className: string, firstCode: number, lastCode: number) => {
+    const group = document.createElement('div');
+    group.className = className;
+    for (let code = firstCode; code <= lastCode; code++) {
+      const cell = document.createElement('div');
+      cell.className = 'w-max';
+      cell.textContent = String.fromCharCode(code).repeat(LABEL_PROBE_REPEAT);
+      group.appendChild(cell);
+    }
+    probe.appendChild(group);
+    return group;
+  };
+  const semiboldGroup = addGroup('font-semibold', LABEL_PROBE_FIRST_CODE, LABEL_PROBE_LAST_CODE);
+  const tabularGroup = addGroup('font-semibold tabular-nums', 0x30, 0x39);
+  const normalGroup = addGroup('font-normal', LABEL_PROBE_FIRST_CODE, LABEL_PROBE_LAST_CODE);
+
+  document.body.appendChild(probe);
+  const read = (group: HTMLElement) =>
+    Array.from(group.children, (cell) => cell.getBoundingClientRect().width / LABEL_PROBE_REPEAT);
+  const semibold = read(semiboldGroup);
+  const tabular = read(tabularGroup);
+  const normal = read(normalGroup);
+  probe.remove();
+
+  // No layout (jsdom), or a stubbed one that reports every box alike.
+  const at = (advances: number[], glyph: string) =>
+    advances[glyph.charCodeAt(0) - LABEL_PROBE_FIRST_CODE];
+  if (!(at(normal, '.') > 0 && at(normal, 'M') > at(normal, '.'))) return null;
+
+  const firstDigit = 0x30 - LABEL_PROBE_FIRST_CODE;
+  tabular.forEach((advance, digit) => {
+    semibold[firstDigit + digit] = Math.max(semibold[firstDigit + digit], advance);
+  });
+  return { value: semibold, detail: normal };
+}
+
+function getLabelGlyphAdvances(): LabelGlyphAdvances {
+  // Zoom changes how glyph advances round, so the table is per pixel ratio.
+  const pixelRatio = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
+  if (!labelGlyphAdvances || pixelRatio !== labelGlyphAdvancesPixelRatio) {
+    labelGlyphAdvances = measureLabelGlyphAdvances() ?? FALLBACK_LABEL_GLYPH_ADVANCES;
+    labelGlyphAdvancesPixelRatio = pixelRatio;
+  }
+  return labelGlyphAdvances;
+}
+
+function sumLabelGlyphAdvances(text: string, advances: readonly number[]): number {
+  let width = 0;
+  for (let index = 0; index < text.length; index++) {
+    // A glyph outside the measured range counts as a full em.
+    width += advances[text.charCodeAt(index) - LABEL_PROBE_FIRST_CODE] ?? LABEL_FONT_PX;
+  }
+  return width;
+}
+
+export interface EstimateTextWidthOptions {
+  /** Text that follows at normal weight, such as ` (265 GB/440 GB)`. */
+  detail?: string;
+  /** Label font size in px when it is not the bar label's 10px. */
+  fontPx?: number;
+}
+
 /**
- * Estimate rendered text width based on character count.
+ * Estimate the rendered width in px of a metric bar label: `text` semibold,
+ * `options.detail` after it at normal weight. The result is the text alone,
+ * rounded up; callers add the padding their label sits in.
  * Used for determining if labels fit inside metric bars.
  * ALL text-width estimation MUST use this function.
  */
-export function estimateTextWidth(text: string): number {
-  return text.length * 5.5 + 8;
+export function estimateTextWidth(text: string, options: EstimateTextWidthOptions = {}): number {
+  const advances = getLabelGlyphAdvances();
+  const width =
+    sumLabelGlyphAdvances(text, advances.value) +
+    sumLabelGlyphAdvances(options.detail ?? '', advances.detail);
+  return Math.ceil((width * (options.fontPx ?? LABEL_FONT_PX)) / LABEL_FONT_PX);
 }
 
 /**

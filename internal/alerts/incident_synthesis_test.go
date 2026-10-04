@@ -235,54 +235,6 @@ func TestInfrastructureIncidentSynthesisShowsPartialRecovery(t *testing.T) {
 	}
 }
 
-func TestClassifyIncidentFailureSeparatesApplicationCertificateAndCoverage(t *testing.T) {
-	applicationResource := unifiedresources.Resource{Availability: &unifiedresources.AvailabilityData{
-		AggregateState: "unavailable", TransportOutcome: "reachable", ApplicationOutcome: "failed",
-	}}
-	application := &Alert{Type: "resource-incident", Metadata: map[string]interface{}{"incidentCode": "availability_unreachable"}}
-	if got := classifyIncidentFailure(application, applicationResource); got != AlertFailureClassApplicationResponse {
-		t.Fatalf("application failure class = %q", got)
-	}
-	certificate := &Alert{Type: "resource-incident", Metadata: map[string]interface{}{"incidentCode": "certificate_expired"}}
-	if got := classifyIncidentFailure(certificate, unifiedresources.Resource{}); got != AlertFailureClassCertificate {
-		t.Fatalf("certificate failure class = %q", got)
-	}
-	coverage := &Alert{Type: ExternalProbeUnavailableAlertType}
-	if got := classifyIncidentFailure(coverage, unifiedresources.Resource{}); got != AlertFailureClassEvidenceCoverage {
-		t.Fatalf("coverage failure class = %q", got)
-	}
-}
-
-func TestSupportedInfrastructureSymptomUsesPrimaryNotification(t *testing.T) {
-	manager := newTestManager(t)
-	deliveries := 0
-	manager.SetAlertCallback(func(*Alert) { deliveries++ })
-	symptom := &Alert{
-		ID: "checkout-unreachable", Type: "resource-incident", Level: AlertLevelCritical,
-		ResourceID: "availability:checkout", ResourceName: "Checkout",
-		Correlation: &AlertCorrelation{
-			Key: "infrastructure:host-offline", Kind: AlertCorrelationKindInfrastructureIncident,
-			Role: AlertCorrelationRoleSupporting, Reason: "Grouped beneath Edge host.",
-			FailureClass: AlertFailureClassNetworkPath, Inference: AlertCorrelationInferenceSupportedCause,
-			PrimaryAlertID: "host-offline", PrimaryResourceID: "agent:edge-1",
-		},
-	}
-
-	if manager.dispatchAlert(symptom, false) {
-		t.Fatal("supporting symptom must not dispatch a duplicate notification")
-	}
-	if deliveries != 0 {
-		t.Fatalf("deliveries = %d, want none", deliveries)
-	}
-
-	manager.mu.Lock()
-	diagnosis := manager.diagnoseActiveAlertLocked(symptom)
-	manager.mu.Unlock()
-	if diagnosis.Status != AlertDeliveryStatusSuppressed || diagnosis.Reason != AlertDeliveryReasonCorrelatedPrimary {
-		t.Fatalf("diagnosis = %+v, want correlated-primary suppression", diagnosis)
-	}
-}
-
 func TestSupportedSymptomNotifiesWhenPrimaryRecoversButSymptomPersists(t *testing.T) {
 	manager := newTestManager(t)
 	configureUnifiedEvalManager(t, manager, unifiedEvalBaseConfig())
@@ -387,6 +339,54 @@ func TestPreviouslyNotifiedSymptomDoesNotDuplicateWhenPrimaryRecovers(t *testing
 	manager.SyncUnifiedResourceIncidents([]unifiedresources.Resource{host, endpoint})
 	if len(delivered) != 2 {
 		t.Fatalf("already-notified endpoint duplicated after primary recovery: %v", delivered)
+	}
+}
+
+func TestClassifyIncidentFailureSeparatesApplicationCertificateAndCoverage(t *testing.T) {
+	applicationResource := unifiedresources.Resource{Availability: &unifiedresources.AvailabilityData{
+		AggregateState: "unavailable", TransportOutcome: "reachable", ApplicationOutcome: "failed",
+	}}
+	application := &Alert{Type: "resource-incident", Metadata: map[string]interface{}{"incidentCode": "availability_unreachable"}}
+	if got := classifyIncidentFailure(application, applicationResource); got != AlertFailureClassApplicationResponse {
+		t.Fatalf("application failure class = %q", got)
+	}
+	certificate := &Alert{Type: "resource-incident", Metadata: map[string]interface{}{"incidentCode": "certificate_expired"}}
+	if got := classifyIncidentFailure(certificate, unifiedresources.Resource{}); got != AlertFailureClassCertificate {
+		t.Fatalf("certificate failure class = %q", got)
+	}
+	coverage := &Alert{Type: ExternalProbeUnavailableAlertType}
+	if got := classifyIncidentFailure(coverage, unifiedresources.Resource{}); got != AlertFailureClassEvidenceCoverage {
+		t.Fatalf("coverage failure class = %q", got)
+	}
+}
+
+func TestSupportedInfrastructureSymptomUsesPrimaryNotification(t *testing.T) {
+	manager := newTestManager(t)
+	deliveries := 0
+	manager.SetAlertCallback(func(*Alert) { deliveries++ })
+	symptom := &Alert{
+		ID: "checkout-unreachable", Type: "resource-incident", Level: AlertLevelCritical,
+		ResourceID: "availability:checkout", ResourceName: "Checkout",
+		Correlation: &AlertCorrelation{
+			Key: "infrastructure:host-offline", Kind: AlertCorrelationKindInfrastructureIncident,
+			Role: AlertCorrelationRoleSupporting, Reason: "Grouped beneath Edge host.",
+			FailureClass: AlertFailureClassNetworkPath, Inference: AlertCorrelationInferenceSupportedCause,
+			PrimaryAlertID: "host-offline", PrimaryResourceID: "agent:edge-1",
+		},
+	}
+
+	if manager.dispatchAlert(symptom, false) {
+		t.Fatal("supporting symptom must not dispatch a duplicate notification")
+	}
+	if deliveries != 0 {
+		t.Fatalf("deliveries = %d, want none", deliveries)
+	}
+
+	manager.mu.Lock()
+	diagnosis := manager.diagnoseActiveAlertLocked(symptom)
+	manager.mu.Unlock()
+	if diagnosis.Status != AlertDeliveryStatusSuppressed || diagnosis.Reason != AlertDeliveryReasonCorrelatedPrimary {
+		t.Fatalf("diagnosis = %+v, want correlated-primary suppression", diagnosis)
 	}
 }
 

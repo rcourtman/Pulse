@@ -62,6 +62,14 @@ describe('resourceStoragePresentation', () => {
       ),
     ).toBe('Datastore');
     expect(getResourceStorageTopologyLabel(makeResource(), 'rbd')).toBe('Cluster Storage');
+    // Proxmox plugin names are acronyms or compound words; title-casing them
+    // produced "Lvmthin" for every default local-lvm storage and "Nfs".
+    expect(getResourceStorageTopologyLabel(makeResource(), 'lvmthin')).toBe('LVM-Thin');
+    expect(getResourceStorageTopologyLabel(makeResource(), 'lvm')).toBe('LVM');
+    expect(getResourceStorageTopologyLabel(makeResource(), 'nfs')).toBe('NFS');
+    expect(getResourceStorageTopologyLabel(makeResource(), 'cifs')).toBe('SMB/CIFS');
+    expect(getResourceStorageTopologyLabel(makeResource(), 'iscsi')).toBe('iSCSI');
+    expect(getResourceStorageTopologyLabel(makeResource(), 'btrfs')).toBe('BTRFS');
     expect(getResourceStorageTopologyLabel(makeResource(), 'ignored', 'rebuild target')).toBe(
       'Rebuild Target',
     );

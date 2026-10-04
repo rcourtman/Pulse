@@ -10,11 +10,16 @@ la interfaz se conservan sin traducir de forma intencional.
 
 Pulse es un workspace de monitoreo autohospedado para Proxmox, Docker,
 Kubernetes, TrueNAS e infraestructura relacionada. Community incluye el
-monitoreo principal gratis. Relay añade acceso remoto seguro a la interfaz web
-de Pulse, emparejamiento con Pulse Mobile para handoff, notificaciones push e
-historial de 14 días. Pro añade análisis de causa raíz, flujos de remediación
-seguros, herramientas operativas, funciones de gobernanza e historial de 90
-días.
+monitoreo principal gratis. Pro añade análisis de causa raíz, flujos de
+remediación seguros, herramientas operativas, funciones de gobernanza e
+historial de 90 días.
+
+Relay ya no se vende. Los suscriptores actuales de Relay reciben funciones Pro
+al precio actual mientras continúe su suscripción. Los teléfonos ya emparejados
+siguen funcionando hasta el **31 de marzo de 2027**. Relay conecta la app,
+no la interfaz web. Para acceder a la interfaz web fuera de casa, usa tu propia
+VPN o un túnel. Para alertas en el teléfono, añade un destino de ntfy, Gotify o
+Pushover y abre Pulse en el navegador de tu teléfono.
 
 ## Clientes de pago Relay, Pro y legacy
 
@@ -37,16 +42,19 @@ host Proxmox:
 
 ```bash
 export PULSE_VERSION=vX.Y.Z
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh"
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig"
+curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh" &&
+curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig" &&
 ssh-keygen -Y verify \
   -f <(printf '%s\n' 'pulse-installer namespaces="pulse-install" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer') \
   -I pulse-installer \
   -n pulse-install \
-  -s install.sh.sshsig < install.sh
+  -s install.sh.sshsig < install.sh &&
 bash install.sh --version "${PULSE_VERSION}"
-rm -f install.sh install.sh.sshsig
 ```
+
+Pega el bloque completo: si falla una descarga o la verificación de firma, el
+instalador no se ejecuta. No ejecutes el último comando por separado para omitir
+un fallo.
 
 Las instalaciones de agentes y las actualizaciones de agentes de v5 a v6 usan
 el comando que Pulse genera en **Settings → Infrastructure → Install on a
@@ -81,13 +89,19 @@ services:
       - "7655:7655"
     volumes:
       - pulse_data:/data
-    environment:
-      - PULSE_AUTH_USER=admin
-      - PULSE_AUTH_PASS=secret123
 
 volumes:
   pulse_data:
 ```
+
+Deja `PULSE_AUTH_USER` y `PULSE_AUTH_PASS` sin configurar en una instalación
+nueva y completa el primer acceso con el token de arranque. No uses una
+contraseña de ejemplo compartida. Para una configuración automatizada, usa
+una fuente privada de credenciales gestionada por el despliegue; consulta
+[Configuration](../../CONFIGURATION.md#private-docker-authentication-file).
+No pongas contraseñas en argumentos de comandos ni en un archivo Compose
+compartido. Un administrador de Docker aún puede leer las credenciales en el
+entorno del contenedor, aunque Pulse las convierta en hash para la autenticación.
 
 ## Primer inicio de sesión
 

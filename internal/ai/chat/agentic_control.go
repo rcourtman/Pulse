@@ -165,6 +165,18 @@ func (a *AgenticLoop) GetTotalOutputTokens() int {
 	return a.totalOutputTokens
 }
 
+// GetTotalCacheCreationTokens returns the accumulated prompt-cache writes
+// across all turns; disjoint from GetTotalInputTokens.
+func (a *AgenticLoop) GetTotalCacheCreationTokens() int {
+	return a.totalCacheCreationTokens
+}
+
+// GetTotalCacheReadTokens returns the accumulated prompt-cache reads across
+// all turns; disjoint from GetTotalInputTokens.
+func (a *AgenticLoop) GetTotalCacheReadTokens() int {
+	return a.totalCacheReadTokens
+}
+
 // GetTotalToolCalls returns the accepted model-selected tool call count across all turns.
 func (a *AgenticLoop) GetTotalToolCalls() int {
 	return a.totalToolCalls
@@ -186,5 +198,7 @@ func (a *AgenticLoop) GetTotalEvidenceCalls() int {
 func (a *AgenticLoop) ResetTokenCounts() {
 	a.totalInputTokens = 0
 	a.totalOutputTokens = 0
+	a.totalCacheCreationTokens = 0
+	a.totalCacheReadTokens = 0
 	a.totalToolCalls = 0
 }

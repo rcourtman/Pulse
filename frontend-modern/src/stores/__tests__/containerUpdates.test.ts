@@ -55,4 +55,30 @@ describe('containerUpdates store lifecycle', () => {
 
     expect(store.getContainerUpdateState('agent-1', 'container-1')?.state).toBe('queued');
   });
+
+  it('does not turn a governed pending audit into success from a legacy command or elapsed time', async () => {
+    const store = await loadStore();
+    store.markContainerQueued('agent-1', 'container-1', 'action-1');
+    store.syncWithAgentCommand('agent-1', {
+      id: 'command:container-1',
+      type: 'update_container',
+      status: 'completed',
+    } as never);
+    vi.advanceTimersByTime(6 * 60_000);
+    expect(store.getContainerUpdateState('agent-1', 'container-1')).toMatchObject({
+      state: 'queued',
+      actionId: 'action-1',
+    });
+  });
+
+  it('keeps an operator-closed unknown outcome reviewable without presenting it as failed', async () => {
+    const store = await loadStore();
+    store.markContainerQueued('agent-1', 'container-1', 'action-1');
+    store.markContainerUpdateInconclusive('agent-1', 'container-1', 'action-1');
+    vi.advanceTimersByTime(6 * 60_000);
+    expect(store.getContainerUpdateState('agent-1', 'container-1')).toMatchObject({
+      state: 'inconclusive',
+      actionId: 'action-1',
+    });
+  });
 });

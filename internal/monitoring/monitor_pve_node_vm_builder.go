@@ -51,6 +51,7 @@ func (m *Monitor) pollNodeVMsWithClusterResourceBuilder(
 				Uptime:     vm.Uptime,
 				Template:   vm.Template,
 				Tags:       vm.Tags,
+				Lock:       vm.Lock,
 				IOCounters: vm.IOCounters,
 				ObservedAt: vm.ObservedAt,
 			},

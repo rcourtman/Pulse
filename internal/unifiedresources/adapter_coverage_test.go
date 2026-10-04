@@ -335,6 +335,29 @@ func TestMonitorAdapterPopulateFromSnapshot(t *testing.T) {
 	}
 }
 
+func TestMonitorAdapterPopulateFromSnapshotDoesNotRepeatChangeJournal(t *testing.T) {
+	store := NewMemoryStore()
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	observedAt := time.Date(2026, 9, 24, 6, 0, 0, 0, time.UTC)
+	snapshot := models.StateSnapshot{VMs: []models.VM{{
+		ID:       "lab:node-a:101",
+		VMID:     101,
+		Name:     "database",
+		Node:     "node-a",
+		Instance: "lab",
+		Status:   "running",
+		LastSeen: observedAt,
+	}}}
+	adapter.PopulateFromSnapshot(snapshot)
+	if got := len(store.changes); got != 1 {
+		t.Fatalf("initial snapshot emitted %d change records, want one discovery", got)
+	}
+	adapter.PopulateFromSnapshot(snapshot)
+	if got := len(store.changes); got != 1 {
+		t.Fatalf("identical snapshot emitted %d total change records, want one", got)
+	}
+}
+
 func TestMonitorAdapterPopulateFromSnapshotReplacesPreviousRegistryState(t *testing.T) {
 	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
 	adapter := NewMonitorAdapter(NewRegistry(nil))

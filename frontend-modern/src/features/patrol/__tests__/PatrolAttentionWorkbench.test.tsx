@@ -479,6 +479,33 @@ describe('PatrolAttentionWorkbench', () => {
     expect(window.location.search).toBe('?attention=record-1');
   });
 
+  it('keeps the detail header and queue controls pinned while a long decision scrolls', async () => {
+    const active = item();
+    apiMocks.getList.mockResolvedValue(
+      listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+    );
+    apiMocks.getDetail.mockResolvedValue(detail(active));
+    renderWorkbench();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Open Database VM · Disk pressure' }),
+    );
+    const detailRegion = await screen.findByRole('complementary', {
+      name: 'Database VM · Disk pressure',
+    });
+    const header = within(detailRegion)
+      .getByRole('button', { name: 'Back to attention list' })
+      .closest('div.sticky');
+    expect(header).toHaveClass('top-0', 'bg-surface/95');
+
+    // overflow-hidden would make the inbox section the sticky scroll container,
+    // so on phones the header scrolled away with the page; overflow-clip keeps the
+    // rounded-corner clipping without creating a scroll container.
+    const inbox = screen.getByRole('region', { name: 'Patrol decision inbox' });
+    expect(inbox).toHaveClass('overflow-clip', 'rounded-xl');
+    expect(inbox).not.toHaveClass('overflow-hidden');
+  });
+
   it('uses plain scan-row language while keeping unknown trust metadata in detail', async () => {
     const unknownTrust = item({
       state: 'unknown',

@@ -30,7 +30,10 @@ export interface UseResourceDetailDrawerStateOptions {
 }
 
 export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerStateOptions) => {
-  const { resource, resolveResourceLabel: resolveResourceLabelInput } = options;
+  // Read the caller's getter inside each computation, supporting replacement
+  // snapshots as well as the stable store proxies used by platform rows.
+  const resource = () => options.resource;
+  const resolveResourceLabelInput = options.resolveResourceLabel;
   const [activeTab, setActiveTab] = createSignal<DrawerTab>('overview');
   const { discoveryFeatureEnabled } = useDiscoveryFeatureAvailability();
   const [metricsHistoryRange, setMetricsHistoryRange] = createSignal<HistoryTimeRange>(
@@ -59,11 +62,15 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   const [k8sDeploymentsPrefillNamespace, setK8sDeploymentsPrefillNamespace] = createSignal('');
 
   const history = useResourceDetailDrawerHistoryState({
-    resource,
+    get resource() {
+      return resource();
+    },
     enableRemoteHistory: options.presentation !== 'table-row',
   });
   const derived = useResourceDetailDrawerDerivedState({
-    resource,
+    get resource() {
+      return resource();
+    },
     resolveResourceLabel: resolveResourceLabelInput,
     debugEnabled,
     discoveryFeatureEnabled,
@@ -95,7 +102,7 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   // tab is unavailable, so a same-resource change must not reset the selection.
   let lastResourceId: string | undefined;
   createEffect(() => {
-    const resourceId = resource.id;
+    const resourceId = resource().id;
     const available = new Set(derived.tabs().map((tab) => tab.id));
     if (resourceId !== lastResourceId) {
       if (!available.has(activeTab())) {

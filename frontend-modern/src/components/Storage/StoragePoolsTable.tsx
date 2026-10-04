@@ -9,7 +9,7 @@ import {
 } from '@/components/shared/Table';
 import { getPlatformTableHeadClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import {
-  getStoragePoolColumnWidthPercent,
+  getStoragePoolColumnWidthStyle,
   getStoragePoolTableColumns,
   getStoragePoolTableLayoutModeForContainer,
   getStorageEmptyStateMessage,
@@ -106,9 +106,7 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                 {(column) => (
                   <col
                     class={columnClass(column.colClassName, column.id, 'table-column')}
-                    style={{
-                      width: `${getStoragePoolColumnWidthPercent(layoutMode(), column.id)}%`,
-                    }}
+                    style={getStoragePoolColumnWidthStyle(layoutMode(), column.id)}
                     data-storage-column={column.id}
                   />
                 )}
@@ -141,8 +139,8 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
             </TableHeader>
             <TableBody ref={tableWindow.setBodyRef} class={STORAGE_POOLS_BODY_CLASS}>
               <Show when={tableWindow.topSpacerHeight() > 0}>
-                <TableRow aria-hidden="true" class="h-0 !border-0">
-                  <TableCell colspan={99} class="h-0 !border-0 !p-0 leading-[0]">
+                <TableRow aria-hidden="true" class="h-0 border-0!">
+                  <TableCell colspan={99} class="h-0 border-0! p-0! leading-0">
                     <svg
                       aria-hidden="true"
                       width="1"
@@ -200,8 +198,8 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                 }}
               </For>
               <Show when={tableWindow.bottomSpacerHeight() > 0}>
-                <TableRow aria-hidden="true" class="h-0 !border-0">
-                  <TableCell colspan={99} class="h-0 !border-0 !p-0 leading-[0]">
+                <TableRow aria-hidden="true" class="h-0 border-0!">
+                  <TableCell colspan={99} class="h-0 border-0! p-0! leading-0">
                     <svg
                       aria-hidden="true"
                       width="1"

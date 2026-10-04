@@ -55,7 +55,7 @@ export const OrganizationAccessMembersSection: Component<OrganizationAccessMembe
                       props.state.saving() ||
                       (isOwner() && props.currentUser !== currentOrg().ownerUserId)
                     }
-                    selectBaseClass="rounded-md border border-border bg-surface px-2 py-1 text-xs text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    selectBaseClass="rounded-md border border-border bg-surface px-2 py-1 text-xs text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <For
                       each={ORGANIZATION_MEMBER_ROLE_OPTIONS.filter(

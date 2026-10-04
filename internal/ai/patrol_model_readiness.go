@@ -127,14 +127,16 @@ type PatrolModelReadinessResult struct {
 	// Details carries per-scenario probe and validator evidence ("expected
 	// exactly one tool call, got 0", "nonce did not match"). Without it a
 	// failed evaluation is undiagnosable from the result alone (#1624, #1614).
-	Details       []string                       `json:"details,omitempty"`
-	Metadata      *PatrolModelReadinessMetadata  `json:"metadata,omitempty"`
-	Dimensions    PatrolModelReadinessDimensions `json:"dimensions"`
-	Modes         PatrolModelReadinessModes      `json:"modes"`
-	CacheKey      string                         `json:"-"`
-	inputTokens   int
-	outputTokens  int
-	providerCalls int
+	Details             []string                       `json:"details,omitempty"`
+	Metadata            *PatrolModelReadinessMetadata  `json:"metadata,omitempty"`
+	Dimensions          PatrolModelReadinessDimensions `json:"dimensions"`
+	Modes               PatrolModelReadinessModes      `json:"modes"`
+	CacheKey            string                         `json:"-"`
+	inputTokens         int
+	outputTokens        int
+	cacheCreationTokens int
+	cacheReadTokens     int
+	providerCalls       int
 }
 
 type patrolModelReadinessCache struct {
@@ -583,13 +585,15 @@ type patrolReadinessScenario struct {
 }
 
 type patrolReadinessProbeOutcome struct {
-	toolCalls       []providers.ToolCall
-	stopReason      string
-	duration        time.Duration
-	firstResponse   time.Duration
-	inputTokens     int
-	outputTokens    int
-	completionEvent bool
+	toolCalls           []providers.ToolCall
+	stopReason          string
+	duration            time.Duration
+	firstResponse       time.Duration
+	inputTokens         int
+	outputTokens        int
+	cacheCreationTokens int
+	cacheReadTokens     int
+	completionEvent     bool
 }
 
 func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConfig, providerName, model, modelString string, provider providers.Provider) PatrolModelReadinessResult {
@@ -706,6 +710,8 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 		outcome, err := runPatrolReadinessStreamProbe(ctx, streamingProvider, req)
 		result.inputTokens += outcome.inputTokens
 		result.outputTokens += outcome.outputTokens
+		result.cacheCreationTokens += outcome.cacheCreationTokens
+		result.cacheReadTokens += outcome.cacheReadTokens
 		if err != nil {
 			probeErr = err
 			details = append(details, fmt.Sprintf("Scenario %q probe failed: %v", scenario.name, err))
@@ -780,6 +786,8 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 		outcome, err := runPatrolReadinessStreamProbe(ctx, streamingProvider, followup)
 		result.inputTokens += outcome.inputTokens
 		result.outputTokens += outcome.outputTokens
+		result.cacheCreationTokens += outcome.cacheCreationTokens
+		result.cacheReadTokens += outcome.cacheReadTokens
 		if err != nil {
 			probeErr = err
 			details = append(details, fmt.Sprintf("Multi-turn continuation probe failed: %v", err))
@@ -1106,12 +1114,16 @@ func runPatrolReadinessStreamProbe(ctx context.Context, provider providers.Strea
 				outcome.stopReason = data.StopReason
 				outcome.inputTokens = data.InputTokens
 				outcome.outputTokens = data.OutputTokens
+				outcome.cacheCreationTokens = data.CacheCreationInputTokens
+				outcome.cacheReadTokens = data.CacheReadInputTokens
 				outcome.completionEvent = true
 			} else if data, ok := event.Data.(*providers.DoneEvent); ok && data != nil {
 				outcome.toolCalls = append([]providers.ToolCall(nil), data.ToolCalls...)
 				outcome.stopReason = data.StopReason
 				outcome.inputTokens = data.InputTokens
 				outcome.outputTokens = data.OutputTokens
+				outcome.cacheCreationTokens = data.CacheCreationInputTokens
+				outcome.cacheReadTokens = data.CacheReadInputTokens
 				outcome.completionEvent = true
 			}
 		}
@@ -1261,11 +1273,13 @@ func (s *Service) recordPatrolModelReadinessUsage(result PatrolModelReadinessRes
 		return
 	}
 	costStore.Record(cost.UsageEvent{
-		Timestamp:    time.Now(),
-		Provider:     result.Provider,
-		RequestModel: modelStringForReadinessResult(result),
-		UseCase:      "patrol_readiness",
-		InputTokens:  result.inputTokens,
-		OutputTokens: result.outputTokens,
+		Timestamp:                time.Now(),
+		Provider:                 result.Provider,
+		RequestModel:             modelStringForReadinessResult(result),
+		UseCase:                  "patrol_readiness",
+		InputTokens:              result.inputTokens,
+		OutputTokens:             result.outputTokens,
+		CacheCreationInputTokens: result.cacheCreationTokens,
+		CacheReadInputTokens:     result.cacheReadTokens,
 	})
 }

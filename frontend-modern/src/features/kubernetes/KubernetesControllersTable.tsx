@@ -13,7 +13,10 @@ import {
   PlatformTableToolbar,
   createPlatformTableFilterState,
   createPlatformTableSortState,
+  formatPlatformTableDateTimeValue,
+  formatPlatformTableRelativeTimeValue,
   formatPlatformTableTextValue,
+  getPlatformResourceCountNoun,
   getPlatformTableCellClassForKind,
   PlatformTableShell,
   type PlatformTableSortValue,
@@ -41,15 +44,20 @@ const controllerName = (resource: Resource): string =>
 const controllerKind = (resource: Resource): string =>
   resource.kubernetes?.resourceKind || getResourceTypeLabel(resource.type) || resource.type;
 
+const countedTarget = (count: number | undefined, noun: string): string => {
+  const value = count ?? 0;
+  return `${value} ${getPlatformResourceCountNoun(noun, value)}`;
+};
+
 const targetValue = (resource: Resource): string => {
   switch (resource.type) {
     case 'k8s-replicaset':
     case 'k8s-statefulset':
-      return `${resource.kubernetes?.desiredReplicas ?? 0} pods`;
+      return countedTarget(resource.kubernetes?.desiredReplicas, 'pods');
     case 'k8s-daemonset':
-      return `${resource.kubernetes?.desiredNumberScheduled ?? 0} nodes`;
+      return countedTarget(resource.kubernetes?.desiredNumberScheduled, 'nodes');
     case 'k8s-job':
-      return `${resource.kubernetes?.desiredReplicas ?? 0} completions`;
+      return countedTarget(resource.kubernetes?.desiredReplicas, 'completions');
     case 'k8s-cronjob':
       return formatPlatformTableTextValue(resource.kubernetes?.schedule);
     default:
@@ -120,36 +128,60 @@ const exceptionSummary = (resource: Resource): string => {
   }
 };
 
-const apiDetail = (resource: Resource): string => {
+type ControllerDetail = { text: string; title: string };
+
+const plainDetail = (text: string): ControllerDetail => ({ text, title: text });
+
+// Kubernetes reports job timestamps as RFC 3339 strings with microseconds,
+// which never fit the Detail column. The cell says how long ago the event
+// happened and keeps the absolute time on hover.
+const timeDetail = (label: string, timestamp: string): ControllerDetail => {
+  const relative = formatPlatformTableRelativeTimeValue(timestamp, { emptyText: '' });
+  if (!relative) return plainDetail(`${label}: ${timestamp}`);
+  const absolute = formatPlatformTableDateTimeValue(timestamp, {
+    dateTimeFormat: { year: 'numeric' },
+  });
+  return { text: `${label} ${relative}`, title: `${label}: ${absolute}` };
+};
+
+const apiDetail = (resource: Resource): ControllerDetail => {
   switch (resource.type) {
     case 'k8s-replicaset': {
       if (typeof resource.kubernetes?.fullyLabeledReplicas === 'number') {
-        return `Fully labeled: ${resource.kubernetes.fullyLabeledReplicas}`;
+        return plainDetail(`Fully labeled: ${resource.kubernetes.fullyLabeledReplicas}`);
       }
-      return typeof resource.kubernetes?.observedGeneration === 'number'
-        ? `Observed: ${resource.kubernetes.observedGeneration}`
-        : '—';
+      return plainDetail(
+        typeof resource.kubernetes?.observedGeneration === 'number'
+          ? `Observed: ${resource.kubernetes.observedGeneration}`
+          : '—',
+      );
     }
     case 'k8s-statefulset':
-      return resource.kubernetes?.serviceName ? `Service: ${resource.kubernetes.serviceName}` : '—';
+      return plainDetail(
+        resource.kubernetes?.serviceName ? `Service: ${resource.kubernetes.serviceName}` : '—',
+      );
     case 'k8s-daemonset':
-      return typeof resource.kubernetes?.updatedReplicas === 'number'
-        ? `Updated: ${resource.kubernetes.updatedReplicas}`
-        : '—';
+      return plainDetail(
+        typeof resource.kubernetes?.updatedReplicas === 'number'
+          ? `Updated: ${resource.kubernetes.updatedReplicas}`
+          : '—',
+      );
     case 'k8s-job':
       if (resource.kubernetes?.completionTime) {
-        return `Completed: ${resource.kubernetes.completionTime}`;
+        return timeDetail('Completed', resource.kubernetes.completionTime);
       }
-      return resource.kubernetes?.startTime ? `Started: ${resource.kubernetes.startTime}` : '—';
+      return resource.kubernetes?.startTime
+        ? timeDetail('Started', resource.kubernetes.startTime)
+        : plainDetail('—');
     case 'k8s-cronjob':
       if (resource.kubernetes?.lastSuccessfulTime) {
-        return `Last success: ${resource.kubernetes.lastSuccessfulTime}`;
+        return timeDetail('Last success', resource.kubernetes.lastSuccessfulTime);
       }
       return resource.kubernetes?.lastScheduleTime
-        ? `Last schedule: ${resource.kubernetes.lastScheduleTime}`
-        : '—';
+        ? timeDetail('Last run', resource.kubernetes.lastScheduleTime)
+        : plainDetail('—');
     default:
-      return '—';
+      return plainDetail('—');
   }
 };
 
@@ -291,7 +323,7 @@ export const KubernetesControllersTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="kind"
-                  class="platform-table-mobile-w-15 md:w-[9%]"
+                  class="platform-table-mobile-w-25 md:w-[8%]"
                 >
                   Kind
                 </PlatformSortableTableHead>
@@ -303,11 +335,16 @@ export const KubernetesControllersTable: Component<{
                 >
                   Scope
                 </PlatformSortableTableHead>
+                {/* The phone row keeps controller, kind, ready and issues. A
+                    15% kind track clipped "DaemonSet" and "StatefulSet" and the
+                    target track clipped "1 completions", so target moves to the
+                    row expansion, which also carries the schedule and job
+                    timestamps the narrower layouts drop. */}
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
                   sortKey="target"
-                  class="platform-table-mobile-w-20 md:w-[12%]"
+                  class="platform-table-phone-hidden md:w-[12%]"
                 >
                   Target
                 </PlatformSortableTableHead>
@@ -315,7 +352,7 @@ export const KubernetesControllersTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="current"
-                  class="hidden sm:table-cell md:w-[8%]"
+                  class="hidden sm:table-cell md:w-[7%]"
                 >
                   Current
                 </PlatformSortableTableHead>
@@ -331,7 +368,7 @@ export const KubernetesControllersTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="available"
-                  class="hidden md:table-cell md:w-[9%]"
+                  class="hidden md:table-cell md:w-[8%]"
                 >
                   Available
                 </PlatformSortableTableHead>
@@ -339,14 +376,14 @@ export const KubernetesControllersTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="exceptions"
-                  class="platform-table-mobile-w-20 md:w-[11%]"
+                  class="platform-table-mobile-w-30 md:w-[11%]"
                 >
                   <PlatformResponsiveTableLabel compact="Issues" full="Exceptions" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="hidden lg:table-cell md:w-[9%]"
+                  class="hidden lg:table-cell md:w-[12%]"
                 >
                   Detail
                 </PlatformSortableTableHead>
@@ -400,14 +437,14 @@ export const KubernetesControllersTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
-                            <span class="inline-block max-w-[12rem] truncate" title={scope()}>
+                            <span class="inline-block max-w-48 truncate" title={scope()}>
                               {scope()}
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
-                            <span class="inline-block max-w-[12rem] truncate" title={target()}>
+                            <span class="inline-block max-w-48 truncate" title={target()}>
                               {target()}
                             </span>
                           </TableCell>
@@ -429,15 +466,15 @@ export const KubernetesControllersTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-[13rem] truncate" title={exceptions()}>
+                            <span class="inline-block max-w-52 truncate" title={exceptions()}>
                               {exceptions()}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
-                            <span class="inline-block max-w-[14rem] truncate" title={detail()}>
-                              {detail()}
+                            <span class="block truncate" title={detail().title}>
+                              {detail().text}
                             </span>
                           </TableCell>
                         </TableRow>

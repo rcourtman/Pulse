@@ -25,8 +25,10 @@ import {
   formatReportScheduleTime,
   reportScheduleCadenceLabel,
   reportScheduleDeliveryLabel,
+  reportScheduleKindLabel,
   reportScheduleLastRunLabel,
   reportScheduleScopeLabel,
+  type ReportScheduleKind,
 } from '@/components/Settings/reportingSchedulesModel';
 import { ResourcePicker } from './ResourcePicker';
 
@@ -74,6 +76,7 @@ export function ReportingPanel() {
     isLocked,
     isReportingEnabled,
     metricType,
+    patrolDigestAvailable,
     range,
     reportSchedules,
     reportSchedulesError,
@@ -94,6 +97,7 @@ export function ReportingPanel() {
     setFormat,
     setMetricType,
     setRange,
+    setScheduleKind,
     setScheduleResources,
     setSelectedResources,
     setTitle,
@@ -107,6 +111,10 @@ export function ReportingPanel() {
   } = useReportingPanelState();
 
   const performanceReport = () => reportingCatalog()?.performanceReport ?? null;
+  const isDigestForm = () => scheduleForm().kind === 'patrol_digest';
+  // Offer the Patrol weekly summary only while Patrol can run; an existing
+  // digest schedule still shows its type so it can be edited after AI is off.
+  const showReportTypeSelect = () => patrolDigestAvailable() || isDigestForm();
   const inventoryDefinition = () => reportingCatalog()?.vmInventoryExport ?? null;
   const lockedState = () => {
     const catalog = reportingCatalog();
@@ -309,6 +317,11 @@ export function ReportingPanel() {
                   <p class="text-sm text-muted">
                     Send recurring client performance reports using the same resource scope and
                     branding as generated reports.
+                    <Show when={patrolDigestAvailable()}>
+                      {' '}
+                      A Patrol weekly summary can also be emailed: what Patrol checked, found,
+                      fixed, and spent in the last seven days.
+                    </Show>
                   </p>
                 </div>
                 <div class="flex flex-wrap gap-2">
@@ -439,7 +452,7 @@ export function ReportingPanel() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    class="min-h-11 w-full justify-start gap-2 px-2"
+                                    class="min-h-11 w-full gap-2 px-2"
                                     aria-label={`Run ${schedule.name} now`}
                                     isLoading={runningScheduleID() === schedule.id}
                                     disabled={runningScheduleID() !== ''}
@@ -453,7 +466,7 @@ export function ReportingPanel() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    class="min-h-11 w-full justify-start gap-2 px-2"
+                                    class="min-h-11 w-full gap-2 px-2"
                                     aria-label={`Edit ${schedule.name}`}
                                     onClick={() => startEditSchedule(schedule)}
                                   >
@@ -463,7 +476,7 @@ export function ReportingPanel() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    class="min-h-11 w-full justify-start gap-2 px-2"
+                                    class="min-h-11 w-full gap-2 px-2"
                                     aria-label={`Delete ${schedule.name}`}
                                     isLoading={deletingScheduleID() === schedule.id}
                                     disabled={deletingScheduleID() !== ''}
@@ -526,6 +539,27 @@ export function ReportingPanel() {
 
               <Show when={scheduleFormOpen()}>
                 <section class="space-y-4 border-y border-base-300 py-4">
+                  <Show when={showReportTypeSelect()}>
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <FormSelect
+                        label="Report type"
+                        value={scheduleForm().kind}
+                        onChange={(e) =>
+                          setScheduleKind(e.currentTarget.value as ReportScheduleKind)
+                        }
+                        help={
+                          isDigestForm()
+                            ? 'Emails what Patrol checked, found, fixed, and spent over the last seven days. Nothing is saved to disk.'
+                            : 'A performance report for the resources you pick, as a PDF or CSV.'
+                        }
+                      >
+                        <option value="resources">{reportScheduleKindLabel('resources')}</option>
+                        <option value="patrol_digest">
+                          {reportScheduleKindLabel('patrol_digest')}
+                        </option>
+                      </FormSelect>
+                    </div>
+                  </Show>
                   <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <FormField label="Schedule name">
                       <input
@@ -534,7 +568,9 @@ export function ReportingPanel() {
                         class={formControl}
                         value={scheduleForm().name}
                         onInput={(e) => updateScheduleForm({ name: e.currentTarget.value })}
-                        placeholder="Monthly client report"
+                        placeholder={
+                          isDigestForm() ? 'Patrol weekly summary' : 'Monthly client report'
+                        }
                       />
                     </FormField>
                     <FormField label="Timezone">
@@ -549,21 +585,29 @@ export function ReportingPanel() {
                     </FormField>
                   </div>
 
-                  <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
-                    <FormSelect
-                      label="Cadence"
-                      value={scheduleForm().cadenceType}
-                      onChange={(e) =>
-                        updateScheduleForm({
-                          cadenceType: e.currentTarget.value as 'monthly' | 'weekly',
-                        })
-                      }
-                    >
-                      <option value="monthly">Monthly</option>
-                      <option value="weekly">Weekly</option>
-                    </FormSelect>
+                  <div
+                    class={
+                      isDigestForm()
+                        ? 'grid grid-cols-1 gap-4 md:grid-cols-2'
+                        : 'grid grid-cols-1 gap-4 md:grid-cols-4'
+                    }
+                  >
+                    <Show when={!isDigestForm()}>
+                      <FormSelect
+                        label="Cadence"
+                        value={scheduleForm().cadenceType}
+                        onChange={(e) =>
+                          updateScheduleForm({
+                            cadenceType: e.currentTarget.value as 'monthly' | 'weekly',
+                          })
+                        }
+                      >
+                        <option value="monthly">Monthly</option>
+                        <option value="weekly">Weekly</option>
+                      </FormSelect>
+                    </Show>
                     <Show
-                      when={scheduleForm().cadenceType === 'monthly'}
+                      when={scheduleForm().cadenceType === 'monthly' && !isDigestForm()}
                       fallback={
                         <FormSelect
                           label="Weekday"
@@ -601,66 +645,72 @@ export function ReportingPanel() {
                         onInput={(e) => updateScheduleForm({ time: e.currentTarget.value })}
                       />
                     </FormField>
-                    <FormSelect
-                      label="Format"
-                      value={scheduleForm().format}
-                      onChange={(e) =>
-                        updateScheduleForm({ format: e.currentTarget.value as ReportingFormat })
-                      }
-                    >
-                      <option value="pdf">PDF</option>
-                      <option value="csv">CSV</option>
-                    </FormSelect>
-                  </div>
-
-                  <FormField
-                    label="Resources"
-                    helpText="Use explicit resources, tags, or both. Scheduled reports use the previous reporting boundary."
-                  >
-                    <ResourcePicker
-                      maxSelection={performanceReport()?.multiResourceMax}
-                      selected={scheduleResources}
-                      onSelectionChange={setScheduleResources}
-                    />
-                  </FormField>
-
-                  <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-                    <FormField label="Tag filter" helpText="Comma-separated tags">
-                      <input
-                        aria-label="Tag filter"
-                        type="text"
-                        class={formControl}
-                        value={scheduleForm().tagFilter}
-                        onInput={(e) => updateScheduleForm({ tagFilter: e.currentTarget.value })}
-                        placeholder="production, customer-facing"
-                      />
-                    </FormField>
-                    <FormSelect
-                      label="Delivery"
-                      value={scheduleForm().deliveryMethod}
-                      onChange={(e) =>
-                        updateScheduleForm({
-                          deliveryMethod: e.currentTarget.value as 'email' | 'disk',
-                        })
-                      }
-                    >
-                      <option value="email">Email recipients</option>
-                      <option value="disk">Save to disk</option>
-                    </FormSelect>
-                    <FormField label="Retention">
-                      <input
-                        aria-label="Retention"
-                        type="number"
-                        min="1"
-                        max="120"
-                        class={formControl}
-                        value={scheduleForm().retentionCount}
-                        onInput={(e) =>
-                          updateScheduleForm({ retentionCount: Number(e.currentTarget.value) })
+                    <Show when={!isDigestForm()}>
+                      <FormSelect
+                        label="Format"
+                        value={scheduleForm().format}
+                        onChange={(e) =>
+                          updateScheduleForm({ format: e.currentTarget.value as ReportingFormat })
                         }
+                      >
+                        <option value="pdf">PDF</option>
+                        <option value="csv">CSV</option>
+                      </FormSelect>
+                    </Show>
+                  </div>
+
+                  <Show when={!isDigestForm()}>
+                    <FormField
+                      label="Resources"
+                      helpText="Use explicit resources, tags, or both. Scheduled reports use the previous reporting boundary."
+                    >
+                      <ResourcePicker
+                        maxSelection={performanceReport()?.multiResourceMax}
+                        selected={scheduleResources}
+                        onSelectionChange={setScheduleResources}
                       />
                     </FormField>
-                  </div>
+                  </Show>
+
+                  <Show when={!isDigestForm()}>
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                      <FormField label="Tag filter" helpText="Comma-separated tags">
+                        <input
+                          aria-label="Tag filter"
+                          type="text"
+                          class={formControl}
+                          value={scheduleForm().tagFilter}
+                          onInput={(e) => updateScheduleForm({ tagFilter: e.currentTarget.value })}
+                          placeholder="production, customer-facing"
+                        />
+                      </FormField>
+                      <FormSelect
+                        label="Delivery"
+                        value={scheduleForm().deliveryMethod}
+                        onChange={(e) =>
+                          updateScheduleForm({
+                            deliveryMethod: e.currentTarget.value as 'email' | 'disk',
+                          })
+                        }
+                      >
+                        <option value="email">Email recipients</option>
+                        <option value="disk">Save to disk</option>
+                      </FormSelect>
+                      <FormField label="Retention">
+                        <input
+                          aria-label="Retention"
+                          type="number"
+                          min="1"
+                          max="120"
+                          class={formControl}
+                          value={scheduleForm().retentionCount}
+                          onInput={(e) =>
+                            updateScheduleForm({ retentionCount: Number(e.currentTarget.value) })
+                          }
+                        />
+                      </FormField>
+                    </div>
+                  </Show>
 
                   <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <FormField
@@ -686,25 +736,29 @@ export function ReportingPanel() {
                         />
                         Enabled
                       </label>
-                      <label class="inline-flex items-center gap-2 text-sm text-muted">
-                        <input
-                          type="checkbox"
-                          checked={scheduleForm().attach}
-                          onChange={(e) => updateScheduleForm({ attach: e.currentTarget.checked })}
-                          disabled={scheduleForm().deliveryMethod !== 'email'}
-                        />
-                        Attach
-                      </label>
-                      <label class="inline-flex items-center gap-2 text-sm text-muted">
-                        <input
-                          type="checkbox"
-                          checked={scheduleForm().saveToDisk}
-                          onChange={(e) =>
-                            updateScheduleForm({ saveToDisk: e.currentTarget.checked })
-                          }
-                        />
-                        Save copy
-                      </label>
+                      <Show when={!isDigestForm()}>
+                        <label class="inline-flex items-center gap-2 text-sm text-muted">
+                          <input
+                            type="checkbox"
+                            checked={scheduleForm().attach}
+                            onChange={(e) =>
+                              updateScheduleForm({ attach: e.currentTarget.checked })
+                            }
+                            disabled={scheduleForm().deliveryMethod !== 'email'}
+                          />
+                          Attach
+                        </label>
+                        <label class="inline-flex items-center gap-2 text-sm text-muted">
+                          <input
+                            type="checkbox"
+                            checked={scheduleForm().saveToDisk}
+                            onChange={(e) =>
+                              updateScheduleForm({ saveToDisk: e.currentTarget.checked })
+                            }
+                          />
+                          Save copy
+                        </label>
+                      </Show>
                     </div>
                   </div>
 
@@ -743,7 +797,7 @@ export function ReportingPanel() {
                     <For each={inventoryDefinition()?.columns ?? []}>
                       {(column) => (
                         <div class="space-y-1 rounded-lg border border-base-300/70 bg-base-100/70 p-3">
-                          <div class="text-xs font-semibold uppercase tracking-wide text-base-content/80">
+                          <div class="text-xs font-semibold uppercase tracking-wide">
                             {column.label}
                           </div>
                           <p class="text-xs leading-relaxed text-muted">{column.description}</p>

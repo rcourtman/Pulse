@@ -197,12 +197,6 @@ function buildTriageState(issue, core, latestVersion) {
   }
 
   const hasAdditionalActionableTopics = classifyAdditionalActionableTopics(issue.body);
-  if (hasAdditionalActionableTopics === true) {
-    core.info("Issue declares additional actionable topics; decomposition is required.");
-    nextLabels.add(NEEDS_DECOMPOSITION_LABEL);
-  } else if (hasAdditionalActionableTopics === false) {
-    nextLabels.delete(NEEDS_DECOMPOSITION_LABEL);
-  }
 
   const reportedVersion = extractPulseVersion(issue.title, issue.body);
   core.info(`Reported Pulse version: ${reportedVersion || "not found"}`);
@@ -265,7 +259,18 @@ async function syncLabels({ github, context, core }) {
     isBugLike,
   } = buildTriageState(issue, core, latestVersion);
 
-  if (hasAdditionalActionableTopics === true) {
+  // A form declaration creates a review task only when it is new. A later
+  // empty field cannot prove that comment topics were dispositioned, and an
+  // unrelated edit must not restore a label Community deliberately cleared.
+  const previousBody = context.payload.changes?.body?.from;
+  const newlyDeclared = hasAdditionalActionableTopics === true && (
+    context.payload.action === "opened" ||
+    (context.payload.action === "edited" && previousBody !== undefined &&
+      classifyAdditionalActionableTopics(previousBody) !== true)
+  );
+  if (newlyDeclared) {
+    core.info("Issue newly declares additional actionable topics; decomposition is required.");
+    nextLabels.add(NEEDS_DECOMPOSITION_LABEL);
     await ensureLabel(
       github,
       context,

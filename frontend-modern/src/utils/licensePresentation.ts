@@ -39,10 +39,12 @@ const LEGACY_PLAN_VERSION_LABELS: Record<string, string> = {
   pro_plus: 'Legacy Pro Plus',
 };
 
+// Relay was retired on 29 September 2026; Pro is the lowest plan that still
+// carries these capabilities until Pulse Mobile retires on 31 March 2027.
 const FEATURE_MIN_TIER_LABELS: Record<string, string> = {
-  relay: 'Relay',
-  mobile_app: 'Relay',
-  push_notifications: 'Relay',
+  relay: 'Pro',
+  mobile_app: 'Pro',
+  push_notifications: 'Pro',
   multi_tenant: 'MSP',
 };
 
@@ -474,7 +476,7 @@ export const getGrandfatheredPriceContinuityNotice = (
   }
 
   return {
-    tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
+    tone: 'border-green-200 dark:border-green-900/25 bg-green-50 dark:bg-green-900/25 text-green-900/25 dark:text-green-100',
     title: 'Grandfathered v5 pricing',
     body: 'This migrated v5 Pro subscription keeps its existing recurring price until you cancel. Self-hosted monitoring and child-resource volume are not metered in current v6 self-hosted packaging. If you cancel and return later, current v6 pricing applies for paid features.',
   };
@@ -614,12 +616,10 @@ export const getSelfHostedPlanComparisonPresentation = ({
   entitlements?: LicenseCommercialEntitlements | null;
 }): SelfHostedPlanComparisonPresentation => {
   const normalizedTier = (entitlements?.tier || '').trim().toLowerCase();
+  // Relay was retired on 29 September 2026: it is never offered, and existing
+  // Relay subscribers already carry Pro entitlements, so they see no upsell.
   const comparisonTiers =
-    normalizedTier === 'relay'
-      ? ['pro']
-      : normalizedTier === 'free' || normalizedTier === 'community' || !normalizedTier
-        ? ['relay', 'pro']
-        : [];
+    normalizedTier === 'free' || normalizedTier === 'community' || !normalizedTier ? ['pro'] : [];
 
   return {
     cards: comparisonTiers
@@ -876,14 +876,14 @@ export const getSelfHostedPlanStatusPresentation = (
   items.push(
     buildCapabilityStatusItem({
       capabilities,
-      label: 'Remote access, pairing, and push',
+      label: 'Pulse Mobile pairing and push',
       requiredCapabilities: ['relay', 'mobile_app', 'push_notifications'],
       activeDetail:
-        'Relay, Pulse Mobile pairing, and push notifications are available on this instance.',
+        'Pulse Mobile pairing and push notifications are available on this instance until Pulse Mobile is retired on 31 March 2027.',
       partialDetail:
-        'Some remote-access capabilities are available. Refresh the plan or open recovery if remote access, Pulse Mobile pairing, or push stays unavailable.',
+        'Some Pulse Mobile capabilities are available. Refresh the plan or open recovery if Pulse Mobile pairing or push stays unavailable.',
       missingDetail:
-        'Remote access, Pulse Mobile pairing, or push notifications are not available yet. Refresh the plan or open recovery before relying on Relay.',
+        'Pulse Mobile pairing or push notifications are not available yet. Refresh the plan or open recovery before relying on Pulse Mobile.',
     }),
   );
 
@@ -988,8 +988,8 @@ export const getSelfHostedActivationSuccessPresentation = ({
 
   return {
     tone: runtimeMismatch
-      ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100'
-      : 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
+      ? 'border-amber-200 dark:border-amber-900/25 bg-amber-50 dark:bg-amber-900/25 text-amber-900/25 dark:text-amber-100'
+      : 'border-green-200 dark:border-green-900/25 bg-green-50 dark:bg-green-900/25 text-green-900/25 dark:text-green-100',
     title: runtimeMismatch ? `${planLabel} license is active` : `${planLabel} is now active`,
     body:
       source === 'purchase'
@@ -1075,7 +1075,7 @@ export const getCommercialMigrationNotice = (
     }
 
     return {
-      tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
+      tone: 'border-amber-200 dark:border-amber-900/25 bg-amber-50 dark:bg-amber-900/25 text-amber-900/25 dark:text-amber-100',
       title: 'v5 license migration pending',
       body: `${body} ${actionText}`,
     };
@@ -1116,7 +1116,7 @@ export const getCommercialMigrationNotice = (
   }
 
   return {
-    tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
+    tone: 'border-red-200 dark:border-red-900/25 bg-red-50 dark:bg-red-900/25 text-red-900/25 dark:text-red-100',
     title: 'v5 license migration needs attention',
     body: `${body} ${actionText}`,
   };
@@ -1126,31 +1126,31 @@ export const getPurchaseActivationNotice = (result?: string | null): LicenseInli
   switch ((result || '').trim().toLowerCase()) {
     case 'activated':
       return {
-        tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
+        tone: 'border-green-200 dark:border-green-900/25 bg-green-50 dark:bg-green-900/25 text-green-900/25 dark:text-green-100',
         title: 'Plan activated',
         body: 'Pulse finished checkout and activated this instance automatically. The plan state below is live.',
       };
     case 'cancelled':
       return {
-        tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
+        tone: 'border-amber-200 dark:border-amber-900/25 bg-amber-50 dark:bg-amber-900/25 text-amber-900/25 dark:text-amber-100',
         title: 'Checkout cancelled',
         body: 'Checkout was cancelled before completion. The current plan state below is unchanged until you start the upgrade again.',
       };
     case 'expired':
       return {
-        tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
+        tone: 'border-amber-200 dark:border-amber-900/25 bg-amber-50 dark:bg-amber-900/25 text-amber-900/25 dark:text-amber-100',
         title: 'Upgrade return expired',
         body: 'That secure checkout return link expired or was already used. Start the upgrade again from this instance if you still need it.',
       };
     case 'failed':
       return {
-        tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
+        tone: 'border-red-200 dark:border-red-900/25 bg-red-50 dark:bg-red-900/25 text-red-900/25 dark:text-red-100',
         title: 'Plan needs attention',
         body: 'Checkout completed, but this instance could not apply the plan automatically. Review the current plan below, then open recovery if you already have a key from this purchase.',
       };
     case 'unavailable':
       return {
-        tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
+        tone: 'border-amber-200 dark:border-amber-900/25 bg-amber-50 dark:bg-amber-900/25 text-amber-900/25 dark:text-amber-100',
         title: 'Pulse Account unavailable',
         body: 'Pulse could not open the Pulse Account upgrade flow right now. The current plan state below is unchanged. Retry from this instance in a moment, or use recovery below if you already have a key.',
       };
@@ -1166,28 +1166,28 @@ export const getLicenseSubscriptionStatusPresentation = (
     case 'trial':
       return {
         label: 'Trial',
-        badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+        badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300',
       };
     case 'active':
       return {
         label: 'Active',
-        badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+        badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300',
       };
     case 'grace':
       return {
         label: 'Grace Period',
-        badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+        badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
       };
     case 'suspended':
       return {
         label: 'Suspended',
-        badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+        badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300',
       };
     case 'canceled':
     case 'expired':
       return {
         label: 'Expired',
-        badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+        badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300',
       };
     default:
       return {
@@ -1276,13 +1276,13 @@ export const getBillingAdminOrganizationBadges = (
   if (organization.soft_deleted) {
     badges.push({
       label: 'soft-deleted',
-      badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200',
+      badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-200',
     });
   }
   if (organization.suspended && !organization.soft_deleted) {
     badges.push({
       label: 'suspended',
-      badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200',
+      badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-200',
     });
   }
   return badges;

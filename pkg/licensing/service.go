@@ -935,6 +935,21 @@ func cloneClaims(in Claims) Claims {
 
 // ValidateLicense validates a license key and returns the license if valid.
 func ValidateLicense(licenseKey string) (*License, error) {
+	return validateLicense(licenseKey, false)
+}
+
+// ValidateLicenseAllowingLapse applies every ValidateLicense check (format,
+// Pulse signature, required claims) but returns a licence past its expiry and
+// grace period instead of rejecting it, with GracePeriodEnd set. The caller
+// owns enforcement. A provider-hosted MSP control plane uses it to keep
+// starting on a lapsed licence so its portal can sell the renewal; the client
+// runtimes it serves still verify the licence with ValidateLicense and drop
+// MSP capabilities once it lapses.
+func ValidateLicenseAllowingLapse(licenseKey string) (*License, error) {
+	return validateLicense(licenseKey, true)
+}
+
+func validateLicense(licenseKey string, allowLapsed bool) (*License, error) {
 	// Trim whitespace
 	licenseKey = strings.TrimSpace(licenseKey)
 	if licenseKey == "" {
@@ -1028,6 +1043,8 @@ func ValidateLicense(licenseKey string) (*License, error) {
 			// Within grace period - allow activation but mark as in grace period
 			license.GracePeriodEnd = &gracePeriodEnd
 			// License is still valid during grace period
+		} else if allowLapsed {
+			license.GracePeriodEnd = &gracePeriodEnd
 		} else {
 			// Past grace period - reject
 			return nil, fmt.Errorf("%w: expired on %s (grace period ended %s)",

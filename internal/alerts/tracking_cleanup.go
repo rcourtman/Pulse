@@ -45,9 +45,8 @@ func (m *Manager) cleanupStaleMaps() {
 		}
 	}
 
-	for alertID, suppressUntil := range m.suppressedUntil {
-		if now.After(suppressUntil) {
-			delete(m.suppressedUntil, alertID)
+	for alertID := range m.suppressedUntil {
+		if m.expireSuppressionNoLock(alertID, now) {
 			cleaned++
 		}
 	}
@@ -70,14 +69,24 @@ func (m *Manager) cleanupStaleMaps() {
 	}
 
 	for containerID, firstSeen := range m.dockerUpdateFirstSeen {
-		if now.Sub(firstSeen) > staleThreshold {
+		lastObserved := m.dockerUpdateLastObserved[containerID]
+		if lastObserved.IsZero() {
+			lastObserved = firstSeen
+		}
+		if now.Sub(lastObserved) > staleThreshold {
 			delete(m.dockerUpdateFirstSeen, containerID)
+			delete(m.dockerUpdateLastObserved, containerID)
 			cleaned++
 		}
 	}
 	for containerID, firstSeen := range m.dockerUpdateFirstSeenByIdentity {
-		if now.Sub(firstSeen) > staleThreshold {
+		lastObserved := m.dockerUpdateLastObserved[containerID]
+		if lastObserved.IsZero() {
+			lastObserved = firstSeen
+		}
+		if now.Sub(lastObserved) > staleThreshold {
 			delete(m.dockerUpdateFirstSeenByIdentity, containerID)
+			delete(m.dockerUpdateLastObserved, containerID)
 			cleaned++
 		}
 	}
@@ -129,6 +138,11 @@ func (m *Manager) cleanupStaleMaps() {
 		}
 	}
 	for canonicalID, record := range m.ackStateByCanonical {
+		// As with legacy records and Cleanup, an active incident owns its
+		// acknowledgement until recovery starts the inactive-retention window.
+		if m.hasActiveAlertTrackingKeyNoLock(canonicalID) {
+			continue
+		}
 		checkTime := record.inactiveAt
 		if checkTime.IsZero() {
 			checkTime = record.time

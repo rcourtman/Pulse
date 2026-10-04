@@ -65,11 +65,18 @@ For generic webhooks, use Go templates to format the JSON payload.
 
 These fields and behaviors are stable; ticket-routing integrations can rely on them.
 
-**Events.** Every webhook fires on both `alert` and `resolved` events. `{{.Event}}` is `"alert"` or `"resolved"` — there is no separate "info" event class.
+**Events.** `{{.Event}}` is `"alert"` or `"resolved"` — there is no separate
+"info" event class. Recovery delivery depends on **Notify on resolve** and a
+successful firing-delivery receipt for that occurrence and destination. Do not
+assume that every configured webhook receives both events.
 
-**Severity.** `{{.Level}}` is `"warning"` or `"critical"`. Pulse has exactly these two alert levels.
+**Severity.** Metric alerts commonly use `"warning"` or `"critical"`;
+informational conditions can use `"info"`. Event and severity are separate:
+an informational firing still has event `"alert"`. Preserve and flag an
+unrecognised level rather than silently dropping the notification. Minimum
+severity and other delivery policies still apply.
 
-**Alert type.** `{{.Type}}` is the metric or condition that fired: `cpu`, `memory`, `disk`, `diskRead`, `diskWrite`, `networkIn`, `networkOut`, `connectivity`, and similar. The alert ID (`{{.ID}}`) is stable for the lifetime of an alert occurrence, so the `resolved` event carries the same ID as the `alert` event it closes.
+**Alert type.** `{{.Type}}` is the metric or condition that fired: `cpu`, `memory`, `disk`, `diskRead`, `diskWrite`, `networkIn`, `networkOut`, `connectivity`, and similar. The alert ID (`{{.ID}}`) correlates firing and recovery, but can be reused when the same condition fires again. It is not a unique incident or delivery ID.
 
 **Message key.** `{{.MessageKey}}` is the stable, language-neutral condition key for rebuilding or translating a notification. Canonical alerts use `<kind>.<type>` (for example, `metric-threshold.disk`); older alert paths fall back to `{{.Type}}`. Combine it with `{{.Event}}` and `{{.ResourceType}}` when the receiving system needs separate wording for firing/recovery events or different resource classes. Unlike a numeric message index, the symbolic key does not change when another alert type is added.
 
@@ -79,22 +86,68 @@ These fields and behaviors are stable; ticket-routing integrations can rely on t
 
 **Retries.** Failed deliveries retry with exponential backoff. The persistent notification queue makes up to 3 delivery attempts per notification; webhooks configured with transport-level retry add up to 3 more HTTP retries per attempt (1s doubling to a 30s cap, honoring `Retry-After` on HTTP 429). A receiver may therefore see the same logical event more than once.
 
-**Idempotency.** Every alert delivery carries an `X-Pulse-Event-ID` header of the form `<alertID>:<event>` (e.g. `a1b2c3:alert`, `a1b2c3:resolved`). It is identical across all retries of the same logical event — deduplicate on it.
+**Correlation header.** Alert webhooks carry `X-Pulse-Event-ID` in the form
+`<alertID>:<event>` (e.g. `a1b2c3:alert`, `a1b2c3:resolved`). Retries retain it,
+but later occurrences, severity changes and reminders can share it too. A group
+uses its primary alert's ID, not a unique ID for every member or batch. **Do not
+deduplicate permanently on this header or on alert ID and event alone:** doing
+so can silently discard a later incident or a changed group. See
+[receiver correlation and deduplication](#receiver-correlation-and-deduplication).
 
 **Signed deliveries.** Set a `signingSecret` on the webhook config to enable HMAC signing. Signed requests carry:
 
 - `X-Pulse-Timestamp`: Unix seconds at send time.
 - `X-Pulse-Signature`: `v1=` + hex HMAC-SHA256 over `timestamp + "." + body`, keyed with the shared secret.
 
-To verify: recompute the HMAC over the received timestamp and raw body, compare with constant-time equality, and reject requests whose timestamp is outside your tolerance window (e.g. 5 minutes) to block replays.
+Verify before parsing the JSON or performing any action. Read the original body
+as bytes and the complete `X-Pulse-Timestamp` and `X-Pulse-Signature` header
+values; reject missing or duplicate signing headers. Do not re-serialize JSON,
+trim the body, or trust a timestamp from the payload instead of the header.
+
+This Python example accepts timestamps within five minutes of the receiver's
+clock, rejects malformed headers, and compares the HMAC in constant time. Keep
+both machines' clocks synchronised. Load the shared secret from private receiver
+configuration, not from the request, a command argument or a log. Pulse trims
+surrounding whitespace from its configured secret; the verifier does the same.
+An empty secret must never authenticate a request.
 
 ```python
-import hashlib, hmac
+import hashlib
+import hmac
+import re
+import time
+
+MAX_SKEW_SECONDS = 300
+
 
 def verify(secret: str, timestamp: str, body: bytes, signature: str) -> bool:
-    expected = "v1=" + hmac.new(secret.encode(), f"{timestamp}.".encode() + body, hashlib.sha256).hexdigest()
+    secret = secret.strip()
+    if not secret or not isinstance(body, bytes):
+        return False
+    if not isinstance(timestamp, str) or re.fullmatch(r"[0-9]{1,12}", timestamp) is None:
+        return False
+    if not isinstance(signature, str) or re.fullmatch(r"v1=[0-9a-f]{64}", signature) is None:
+        return False
+    if abs(time.time() - int(timestamp)) > MAX_SKEW_SECONDS:
+        return False
+    expected = "v1=" + hmac.new(
+        secret.encode(), timestamp.encode() + b"." + body, hashlib.sha256
+    ).hexdigest()
     return hmac.compare_digest(expected, signature)
 ```
+
+A time window rejects old captures, **not every replay**: the same signed
+request can arrive more than once within that window, and Pulse signs each
+retry with its current send time. After verification, deduplicate atomically
+using the [receiver rules below](#receiver-correlation-and-deduplication),
+not the signature, send timestamp or alert ID alone. An `alert` and its later
+`resolved` are different events, not duplicates. The `X-Pulse-Event-ID` header is a useful
+correlation hint, but is **not covered by this HMAC**: do not let a changed
+header bypass deduplication of an otherwise identical signed event. The sample
+PSA payload below includes each member's occurrence identity for this purpose. A valid HMAC
+establishes integrity, not that processing succeeded; retain your receiver's
+normal durable processing and retry handling. Never log the secret or full
+credential-bearing request while diagnosing a rejection.
 
 The secret is write-only through the API: list responses mask it, and an update that echoes the masked placeholder keeps the stored secret.
 
@@ -110,6 +163,44 @@ Content-Type: application/json
   "signingSecret": "<random 32+ byte secret>"
 }
 ```
+
+### Receiver correlation and deduplication
+
+Keep ticket correlation separate from suppressing repeated processing:
+
+- Scope durable receiver records to the **configured sender and destination**
+  and tenant, not just a resource name or alert ID. Read identity from the
+  authenticated payload's fields after verifying the request; retain it across
+  receiver restarts. The tenant field is context, not permission to act in an
+  arbitrary account.
+- For normal queued firing and recovery notifications, use each member of
+  `{{.Alerts}}`, not only the primary `{{.ID}}`. The [full PSA template below](#sample-psa-payloads)
+  includes each member's `alertId` and full-precision UTC `startedAt`. These
+  identify its observed occurrence; a later start with the same ID must be
+  processed as a new occurrence. Firing and recovery use the same occurrence
+  record, so an old delayed recovery must not close a newer incident.
+- Within that record, handle `event` **and severity**. A warning becoming
+  critical is an update, not a duplicate warning. Decide explicitly whether
+  reminders update the existing ticket; do not create another ticket for each
+  retry or discard a severity increase. Group membership can change without
+  changing the header: process every member, even when the primary is unchanged.
+- The primary `{{.StartTime}}` string has only whole-second precision. Member
+  `StartTime` values in `{{.Alerts}}` are Go times and can be formatted with
+  fractional seconds as below. Do not assume the shorter string is universally
+  unique. A test or legacy payload can lack member identity; keep incomplete or
+  ambiguous events for reconciliation rather than silently treating them as
+  duplicates. **Send test** alone does not validate this lifecycle.
+- Commit receiver state and the ticket action atomically, or use your ticket
+  system's durable idempotent operation. Do not mark an event processed before
+  its action succeeds. Exact signed-byte replays can be rejected separately,
+  but a queue retry may render a new body or send timestamp: hashing those alone
+  is not logical-event deduplication. There is no universal exactly-once key in
+  this legacy header.
+
+Validate in an authorised test environment with firing, retry, warning-to-critical,
+recovery, recurrence of the same condition and a changed multi-alert group.
+Check actual tickets and receiver restart behaviour before enabling automatic
+actions. Do not cause a production outage or notification storm for this test.
 
 ## 🛡️ Security
 
@@ -162,7 +253,14 @@ Suspended or pending-deletion organizations return `403`, and an unknown org ID 
 
 There are two integration models. The push model is usually the right fit when tickets or incidents should open and close automatically.
 
-**Push (recommended): one outbound webhook per organization.** Create a **Generic** webhook for each organization and point it at your external system's inbound endpoint (an ITSM/PSA inbound webhook, an email connector, or middleware that opens service tickets). Shape the JSON with a [custom template](#-custom-templates) so it matches the receiving system's expected schema: every template variable listed above is available. Pulse fires on both `alert` and `resolved` events (`{{.Event}}` is `"alert"` or `"resolved"`), so the receiving system can open a ticket on alert and auto-resolve it on recovery. Add authentication as a custom header (e.g. `Authorization: Bearer ...`).
+**Push (recommended): one outbound webhook per organization.** Create a
+**Generic** webhook for each organization and point it at your external system's
+inbound endpoint (an ITSM/PSA inbound webhook, an email connector, or middleware
+that opens service tickets). Shape the JSON with a [custom template](#-custom-templates)
+to match the receiving system's schema. The bridge can open or update a ticket
+on `alert` and resolve that occurrence on `resolved`, subject to the [delivery
+conditions above](#-delivery-contract). Add authentication as a custom header
+in the settings form; keep its value private.
 
 Configure it from the UI (**Alerts → Notifications → Add Webhook**) per org, or programmatically with an org-bound admin token:
 
@@ -179,20 +277,25 @@ Content-Type: application/json
   "service": "generic",
   "enabled": true,
   "headers": { "Authorization": "Bearer <psa-token>" },
-  "template": "{\"summary\":\"{{.Level}}: {{.ResourceName}} {{.Message | jsonString}}\",\"event\":\"{{.Event}}\",\"alertId\":\"{{.ID}}\"}"
+  "template": "{\"summary\":\"{{.Level | jsonString}}: {{.ResourceName | jsonString}} {{.Message | jsonString}}\",\"event\":\"{{.Event | jsonString}}\",\"alertId\":\"{{.ID | jsonString}}\",\"startedAt\":\"{{.StartTime | jsonString}}\"}"
 }
 ```
 
-The exact ticket fields differ by platform (ConnectWise, Autotask, Halo, and others each expect their own inbound shape), so map the template to your platform's contract. The `alertId` round-trips through `{{.ID}}`, which lets the receiving system correlate the later `resolved` event to the ticket it opened.
+The exact ticket fields differ by platform (ConnectWise, Autotask, Halo, and
+others each expect their own inbound shape), so map the template to your
+platform's contract. This short example carries only the primary alert and a
+whole-second start. For a bridge handling real grouped notifications, use the
+member-aware template below; do not use the short example as an exactly-once key.
 
 ### Sample PSA payloads
 
-A fuller template suited to ticket routing, including tenant identity and the
-stable severity/type fields from the [delivery contract](#-delivery-contract):
+A fuller template for normal queued firing and recovery notifications includes
+tenant context and every member's occurrence, severity and condition. The
+primary fields remain convenient summary context, **not the whole batch**:
 
 ```json
 {
-  "event": "{{.Event}}",
+  "event": "{{.Event | jsonString}}",
   "alertId": "{{.ID | jsonString}}",
   "messageKey": "{{.MessageKey | jsonString}}",
   "severity": "{{.Level | jsonString}}",
@@ -206,11 +309,24 @@ stable severity/type fields from the [delivery contract](#-delivery-contract):
   "value": {{.Value}},
   "threshold": {{.Threshold}},
   "startedAt": "{{.StartTime | jsonString}}",
-  "duration": "{{.Duration | jsonString}}"
+  "duration": "{{.Duration | jsonString}}",
+  "alertCount": {{.AlertCount}},
+  "alerts": [{{$comma := ""}}{{range .Alerts}}{{if .}}{{$comma}}
+    {
+      "alertId": "{{.ID | jsonString}}",
+      "startedAt": "{{.StartTime.UTC.Format "2006-01-02T15:04:05.999999999Z07:00" | jsonString}}",
+      "severity": "{{.Level | jsonString}}",
+      "alertType": "{{.Type | jsonString}}",
+      "resourceId": "{{.ResourceID | jsonString}}",
+      "resource": "{{.ResourceName | jsonString}}",
+      "summary": "{{.Message | jsonString}}"
+    }{{$comma = ","}}{{end}}{{end}}
+  ]
 }
 ```
 
-What the receiver sees for a **critical** alert:
+An abridged primary summary for a **critical** alert (the template also emits
+the `alerts` member array):
 
 ```json
 {
@@ -230,9 +346,12 @@ What the receiver sees for a **critical** alert:
 }
 ```
 
-A **warning** alert is identical except `"severity": "warning"` — warning and critical are the only two severities Pulse emits, so a two-priority PSA mapping covers the full range.
+A **warning** alert is identical except `"severity": "warning"`. Map
+informational levels too; a two-priority mapping does not cover every condition.
 
-The **resolved** event reuses the same `alertId`, letting the bridge close the ticket it opened:
+The **resolved** event retains the original member `alertId` and `startedAt`,
+letting the bridge close that occurrence's ticket rather than a later incident
+with the same ID. Its primary summary is:
 
 ```json
 {
@@ -252,7 +371,12 @@ The **resolved** event reuses the same `alertId`, letting the bridge close the t
 }
 ```
 
-For ConnectWise specifically, point the webhook at a ConnectWise inbound API callback (or middleware that calls the ConnectWise REST API) and map `severity` to ticket priority, `tenantName` to the company, and `alertId` to your correlation field. Combine with a [`signingSecret`](#-delivery-contract) and the `X-Pulse-Event-ID` dedup header for a production-grade bridge.
+For ConnectWise specifically, point the webhook at a ConnectWise inbound API
+callback (or middleware that calls the ConnectWise REST API). Map each member's
+severity to ticket priority and the tenant to your configured company. Combine
+[`signingSecret`](#-delivery-contract) with the [receiver correlation rules](#receiver-correlation-and-deduplication),
+not header-only deduplication. Verify your platform's processing and recovery
+behaviour before treating the bridge as production-ready.
 
 **Pull (poll): org-scoped read API.** Issue a `monitoring:read` token bound to each organization and poll that org's alerts. Send `X-Pulse-Org-ID` (or rely on the org-bound token) so you get only that organization's data:
 

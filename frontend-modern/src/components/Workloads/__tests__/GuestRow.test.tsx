@@ -3,6 +3,7 @@ import { render, screen, fireEvent, cleanup } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Memory, Disk } from '@/types/api';
+import { guestDiskDeferrals } from '../__fixtures__/guestDiskDeferrals';
 
 // ── Hoisted mocks ──────────────────────────────────────────────────────
 
@@ -75,7 +76,9 @@ vi.mock('@/components/Workloads/EnhancedCPUBar', () => ({
 }));
 
 vi.mock('../StackedDiskBar', () => ({
-  StackedDiskBar: () => <div data-testid="disk-bar" />,
+  StackedDiskBar: (props: { statusMessage?: string }) => (
+    <div data-testid="disk-bar" data-status-message={props.statusMessage} />
+  ),
 }));
 
 vi.mock('../StackedMemoryBar', () => ({
@@ -209,6 +212,7 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
   isMobileMock.mockReturnValue(false);
 });
 
@@ -667,7 +671,272 @@ describe('GuestRow', () => {
     });
   });
 
+  describe('visible filesystem read provenance', () => {
+    const history = {
+      getGuestMetricSeries: () => [
+        {
+          id: 'disk',
+          label: 'Filesystem',
+          color: '#10b981',
+          points: [
+            { timestamp: 1, value: 25 },
+            { timestamp: 2, value: 50 },
+          ],
+        },
+      ],
+      getNodeMetricSeries: () => [],
+    };
+
+    for (const mode of ['bars', 'sparklines'] as const) {
+      it.each(guestDiskDeferrals)(
+        `withdraws stale numeric ${mode} when %s has no retained reading`,
+        (reason) => {
+          const { container } = renderGuestRow({
+            guest: makeGuest({ diskStatusReason: reason, disk: makeDisk({ usage: 50 }) }),
+            visibleColumnIds: ['name', 'disk'],
+            metricDisplayMode: mode,
+          });
+          expect(screen.queryByTestId('disk-bar')).toBeNull();
+          const cell = container.querySelector('[data-workload-col="disk"]')!;
+          expect(cell).toHaveTextContent('Unavailable');
+          const chart = cell.querySelector('[role="img"]');
+          if (chart) expect(chart.getAttribute('aria-label')).not.toMatch(/50%/);
+        },
+      );
+
+      it(`does not revive an unavailable canonical metric in ${mode}, preserving measured zero`, () => {
+        const [guest, setGuest] = createSignal(
+          makeGuest({
+            diskStatusReason: 'prev-vm-locked',
+            telemetryAvailability: {
+              cpu: true,
+              memory: true,
+              disk: false,
+              networkIO: true,
+              diskIO: true,
+              uptime: true,
+            },
+          }),
+        );
+        const { container } = render(() => (
+          <table>
+            <tbody>
+              <GuestRow
+                guest={guest()}
+                visibleColumnIds={['name', 'disk']}
+                metricDisplayMode={mode}
+              />
+            </tbody>
+          </table>
+        ));
+        expect(screen.queryByTestId('disk-bar')).toBeNull();
+        const cell = container.querySelector('[data-workload-col="disk"]')!;
+        const chart = cell.querySelector('[role="img"]');
+        if (chart) expect(chart.getAttribute('aria-label')).not.toMatch(/50%/);
+        setGuest(makeGuest({ disk: makeDisk({ used: 0, usage: 0 }) }));
+        expect(container.querySelector('[data-workload-col="disk"]')).toBe(cell);
+        expect(container.querySelector('[data-workload-disk-read-status]')).toBeNull();
+        if (mode === 'bars') expect(screen.getByTestId('disk-bar')).toBeTruthy();
+        else expect(cell.querySelector('[role="img"]')?.getAttribute('aria-label')).toMatch(/0%/);
+      });
+
+      it.each(guestDiskDeferrals)(
+        `labels retained ${mode} for %s without a hover`,
+        (reason, message) => {
+          const { container } = renderGuestRow({
+            guest: makeGuest({ diskStatusReason: `prev-${reason}` }),
+            visibleColumnIds: ['name', 'disk'],
+            metricDisplayMode: mode,
+          });
+          const notice = container.querySelector('[data-workload-disk-read-status]');
+          expect(notice).toHaveTextContent('Last known');
+          expect(notice).toHaveTextContent(`Using last known disk stats. ${message}`);
+          expect(notice?.querySelector('[aria-hidden="true"]')).toHaveTextContent('Last known');
+          expect(notice).not.toHaveAttribute('tabindex');
+        },
+      );
+
+      it.each(guestDiskDeferrals)(
+        `shows ${mode} read status without a prior sample for %s`,
+        (reason, message) => {
+          const { container } = renderGuestRow({
+            guest: makeGuest({
+              diskStatusReason: reason,
+              disk: makeDisk({ total: 0, used: 0, usage: -1 }),
+              disks: [],
+            }),
+            visibleColumnIds: ['name', 'disk'],
+            metricDisplayMode: mode,
+          });
+          const notice = container.querySelector('[data-workload-disk-read-status]');
+          expect(notice).toHaveTextContent('Unavailable');
+          expect(notice).toHaveTextContent(message);
+          expect(notice).not.toHaveTextContent('Last known');
+        },
+      );
+
+      it(`withdraws the ${mode} notice only on a fresh same-VM observation`, () => {
+        const [guest, setGuest] = createSignal(makeGuest({ diskStatusReason: 'prev-vm-locked' }));
+        const { container } = render(() => (
+          <table>
+            <tbody>
+              <GuestRow
+                guest={guest()}
+                visibleColumnIds={['name', 'disk']}
+                metricDisplayMode={mode}
+              />
+            </tbody>
+          </table>
+        ));
+        const row = container.querySelector('tr');
+        expect(container.querySelector('[data-workload-disk-read-status]')).toHaveTextContent(
+          'Last known',
+        );
+        setGuest(makeGuest({ diskStatusReason: 'prev-agent-busy', lock: '' }));
+        expect(container.querySelector('[data-workload-disk-read-status]')).toHaveTextContent(
+          'earlier guest request',
+        );
+        setGuest(
+          makeGuest({
+            diskStatusReason: undefined,
+            disk: makeDisk({ usage: 75, used: 8053063680 }),
+          }),
+        );
+        expect(container.querySelector('tr')).toBe(row);
+        expect(container.querySelector('[data-workload-disk-read-status]')).toBeNull();
+        expect(container.querySelector('[data-workload-col="disk"]')).not.toHaveAttribute('title');
+        if (mode === 'sparklines')
+          expect(
+            screen.getByRole('img', { name: 'test-vm disk usage history, current 75%' }),
+          ).toBeInTheDocument();
+      });
+    }
+
+    it('keeps provenance when a hover history lens replaces the disk bar', () => {
+      const { container } = renderGuestRow({
+        guest: makeGuest({ diskStatusReason: 'prev-vm-locked' }),
+        visibleColumnIds: ['name', 'disk'],
+        metricDisplayMode: 'bars',
+        metricHistory: history,
+      });
+      const row = container.querySelector('tr')!;
+      fireEvent.pointerEnter(row, { pointerType: 'mouse' });
+      expect(screen.queryByTestId('disk-bar')).not.toBeInTheDocument();
+      expect(container.querySelector('[data-workload-disk-read-status]')).toHaveTextContent(
+        'Last known',
+      );
+      expect(
+        screen.getByRole('img', { name: 'test-vm disk usage history, last known 50%' }),
+      ).toBeInTheDocument();
+      fireEvent.pointerLeave(row, { pointerType: 'mouse' });
+      expect(screen.getByTestId('disk-bar')).toBeInTheDocument();
+      expect(container.querySelector('[data-workload-disk-read-status]')).toHaveTextContent(
+        'Last known',
+      );
+    });
+
+    it('does not announce retained sparkline data as current', () => {
+      renderGuestRow({
+        guest: makeGuest({ diskStatusReason: 'prev-agent-timeout' }),
+        visibleColumnIds: ['name', 'disk'],
+        metricDisplayMode: 'sparklines',
+      });
+      expect(
+        screen.getByRole('img', { name: 'test-vm disk usage history, last known 50%' }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('img', { name: /current/ })).not.toBeInTheDocument();
+    });
+
+    it('fits compact provenance copy without dropping the full accessible reason', () => {
+      const [guest, setGuest] = createSignal(makeGuest({ diskStatusReason: 'prev-agent-timeout' }));
+      const { container } = render(() => (
+        <table>
+          <tbody>
+            <GuestRow
+              guest={guest()}
+              visibleColumnIds={['name', 'disk']}
+              workloadTableLayoutMode="phone"
+            />
+          </tbody>
+        </table>
+      ));
+      let notice = container.querySelector('[data-workload-disk-read-status]');
+      expect(notice?.querySelector('[aria-hidden="true"]')).toHaveTextContent('Prior');
+      expect(notice?.querySelector('.sr-only')).toHaveTextContent(
+        'Using last known disk stats. Guest request timed out. Completion is uncertain. Do not restart the guest agent during a backup.',
+      );
+      setGuest(
+        makeGuest({
+          diskStatusReason: 'vm-locked',
+          disk: makeDisk({ total: 0, used: 0, usage: -1 }),
+        }),
+      );
+      notice = container.querySelector('[data-workload-disk-read-status]');
+      expect(notice?.querySelector('[aria-hidden="true"]')).toHaveTextContent('N/A');
+      expect(notice?.querySelector('.sr-only')).toHaveTextContent(
+        'Guest reads paused while Proxmox reports a VM operation lock',
+      );
+    });
+
+    it('leaves independent fresh data and non-VM rows unmarked', () => {
+      const [guest, setGuest] = createSignal(
+        makeGuest({ agentKind: 'pulse', diskStatusReason: undefined, lock: 'backup' }),
+      );
+      const { container } = render(() => (
+        <table>
+          <tbody>
+            <GuestRow guest={guest()} visibleColumnIds={['name', 'disk']} />
+          </tbody>
+        </table>
+      ));
+      expect(container.querySelector('[data-workload-disk-read-status]')).toBeNull();
+      setGuest(makeGuest({ type: 'lxc', diskStatusReason: 'prev-vm-locked' }));
+      expect(container.querySelector('[data-workload-disk-read-status]')).toBeNull();
+      setGuest(
+        makeGuest({
+          workloadType: 'app-container',
+          type: 'docker',
+          diskStatusReason: 'prev-vm-locked',
+        }),
+      );
+      expect(container.querySelector('[data-workload-disk-read-status]')).toBeNull();
+    });
+  });
+
   describe('lock label', () => {
+    it.each(guestDiskDeferrals)(
+      'annotates retained row and disk tooltip for %s',
+      (reason, message) => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({ diskStatusReason: `prev-${reason}` }),
+        });
+        const expected = `Using last known disk stats. ${message}`;
+        expect(container.querySelector('[data-workload-col="disk"]')).toHaveAttribute(
+          'title',
+          expected,
+        );
+        expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-status-message', expected);
+      },
+    );
+
+    it('clears retained status for a same-VM fresh update in sparkline mode without remounting', () => {
+      const [guest, setGuest] = createSignal(
+        makeGuest({ diskStatusReason: 'prev-agent-cooldown' }),
+      );
+      const { container } = render(() => (
+        <table>
+          <tbody>
+            <GuestRow guest={guest()} metricDisplayMode="sparklines" />
+          </tbody>
+        </table>
+      ));
+      const cell = container.querySelector('[data-workload-col="disk"]');
+      expect(cell).toHaveAttribute('title', expect.stringContaining('Using last known'));
+      setGuest(makeGuest({ diskStatusReason: undefined, disk: makeDisk({ usage: 75 }) }));
+      expect(container.querySelector('[data-workload-col="disk"]')).toBe(cell);
+      expect(cell).not.toHaveAttribute('title');
+    });
+
     it('shows lock label when guest is locked', () => {
       renderGuestRow({ guest: makeGuest({ lock: 'migrate' }) });
       expect(screen.getByText(/Lock:.*migrate/)).toBeTruthy();
@@ -797,6 +1066,70 @@ describe('GuestRow', () => {
       const tr = container.querySelector('tr')!;
       fireEvent.click(tr);
       expect(onClick).toHaveBeenCalledOnce();
+    });
+
+    it('marks only actionable guest rows as native touch click targets', () => {
+      const addListener = vi.spyOn(HTMLTableRowElement.prototype, 'addEventListener');
+      const removeListener = vi.spyOn(HTMLTableRowElement.prototype, 'removeEventListener');
+      const onClick = vi.fn();
+      const [enabled, setEnabled] = createSignal(false);
+      const { container } = render(() => (
+        <table>
+          <tbody>
+            <GuestRow
+              guest={makeGuest()}
+              workloadTableLayoutMode="phone"
+              onClick={enabled() ? onClick : undefined}
+            />
+          </tbody>
+        </table>
+      ));
+      const row = container.querySelector('tr')!;
+      const nativeClickCalls = () => addListener.mock.calls.filter(([type]) => type === 'click');
+
+      expect(nativeClickCalls()).toHaveLength(0);
+      setEnabled(true);
+      expect(nativeClickCalls()).toHaveLength(1);
+      expect(row).not.toHaveAttribute('tabindex');
+      expect(row).not.toHaveAttribute('role', 'button');
+      expect(row).not.toHaveAttribute('aria-expanded');
+
+      // The native compatibility target must never perform the action itself.
+      const nativeClick = nativeClickCalls()[0][1] as EventListener;
+      nativeClick.call(row, new MouseEvent('click'));
+      fireEvent.touchEnd(row);
+      fireEvent.pointerUp(row, { pointerType: 'touch' });
+      expect(onClick).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByText('test-vm'));
+      expect(onClick).toHaveBeenCalledTimes(1);
+
+      setEnabled(false);
+      expect(removeListener.mock.calls.some(([type]) => type === 'click')).toBe(true);
+      fireEvent.click(row);
+      expect(onClick).toHaveBeenCalledTimes(1);
+      setEnabled(true);
+      fireEvent.click(screen.getByText('test-vm'));
+      expect(onClick).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps child disclosure and external-link actions ahead of guest row activation', () => {
+      const onClick = vi.fn();
+      const { container } = renderGuestRow({
+        guest: makeGuest(),
+        customUrl: 'https://guest.example.invalid/',
+        onClick,
+      });
+      fireEvent.click(screen.getByRole('link', { name: 'Open web interface for test-vm' }));
+      expect(onClick).not.toHaveBeenCalled();
+      const button = screen.getByRole('button', { name: 'Expand test-vm' });
+      fireEvent.click(button.querySelector('svg')!);
+      expect(onClick).toHaveBeenCalledTimes(1);
+      fireEvent.keyDown(button, { key: 'Enter' });
+      expect(onClick).toHaveBeenCalledTimes(2);
+      fireEvent.keyDown(button, { key: ' ', code: 'Space' });
+      expect(onClick).toHaveBeenCalledTimes(3);
+      fireEvent.keyDown(container.querySelector('tr')!, { key: 'Enter' });
+      expect(onClick).toHaveBeenCalledTimes(3);
     });
 
     it('calls onHoverChange with canonical guestId on fine-pointer preview', () => {
@@ -1308,23 +1641,26 @@ describe('GUEST_COLUMNS', () => {
   });
 
   it('derives mobile overrides from the canonical guest column model', () => {
+    // The phone name cell carries the toggle, status dot, and backup badge, so
+    // it takes a wider anchor than the shared 30% and the metric chips share
+    // the rest.
     expect(getGuestColumnStyle('name', true)).toEqual({
-      width: '30%',
-      'max-width': '30%',
+      width: '38%',
+      'max-width': '38%',
     });
     expect(getGuestColumnStyle('cpu', true)).toEqual({
-      width: '11.3235%',
-      'max-width': '11.3235%',
+      width: '10.0294%',
+      'max-width': '10.0294%',
     });
     expect(getGuestColumnStyle('availability', true)).toEqual({
-      width: '7.2059%',
-      'max-width': '7.2059%',
+      width: '6.3824%',
+      'max-width': '6.3824%',
     });
     expect(getGuestColumnStyle('type', true)).toEqual({
-      width: '9.2647%',
-      'max-width': '9.2647%',
+      width: '8.2059%',
+      'max-width': '8.2059%',
     });
-    expect(getGuestColumnWidthStyle('name', true)).toEqual({ width: '30%' });
+    expect(getGuestColumnWidthStyle('name', true)).toEqual({ width: '38%' });
     expect(getGuestColumnWidthStyle('diskIo', true)).toEqual({ width: '170px' });
   });
 

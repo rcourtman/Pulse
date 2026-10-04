@@ -64,7 +64,7 @@ describe('getStorageRowAlertPresentation branch coverage', () => {
     );
 
     expect(result.rowClass).toContain('bg-yellow-50');
-    expect(result.rowClass).toContain('dark:bg-yellow-950');
+    expect(result.rowClass).toContain('dark:bg-yellow-950/25');
     expect(result.rowClass).toContain('shadow-[inset_4px_0_0_0_#eab308]');
     // The critical classes must NOT appear on the warning arm.
     expect(result.rowClass).not.toContain('bg-red-50');
@@ -133,7 +133,7 @@ describe('getStorageRowAlertPresentation branch coverage', () => {
     );
 
     expect(result.rowClass).toContain('bg-blue-50');
-    expect(result.rowClass).toContain('dark:bg-blue-900');
+    expect(result.rowClass).toContain('dark:bg-blue-900/25');
     expect(result.rowClass).toContain('ring-1');
     expect(result.rowClass).toContain('ring-blue-300');
     expect(result.rowClass).toContain('dark:ring-blue-600');

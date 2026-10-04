@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "fe42207eb4bfb04461cc780f3f32d3d7bcbe4d4b",
+  "content_sha256": {
+    "frontend-modern/src/utils/format.ts": "52db9924828b2d41af130ce836b9dd41e0b697600b2f1b4afed73c218046b9ea",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "d9a8dfb35b6bbdbb9fde65c724a2b8b1182e1fff3b199dfb55121fdf968b8865",
+    "frontend-modern/src/hooks/useWorkloads.ts": "eb7f649920e134a9e9759324fec319c050f30baceb4c8a662640397f6489256f",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "43c2c631d279719c6f311ec23591c7d62792ca57bf33d3bd847bfad17f69cfd8",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "aaf8b1b31d228461988bead4ad3949aafac8cb51043429b69ae0908539024ffc",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts": "63e46feb843079e27eafb84c65f6985674f576b4b5fbf331f58d77337fe24dc1"
+  },
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/utils/format.ts",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts"
+  ],
+  "routes": [
+    "Existing Proxmox VM/LXC workload row, hidden-column backup indicator and guest Overview through production-component fixture"
+  ],
+  "states": [
+    "Valid fresh/overdue completions",
+    "Future/malformed/non-positive timestamps: unknown, not fresh or missing",
+    "Running activity with unknown completion age",
+    "Absent, empty and explicit Go zero-time timestamps",
+    "Same-guest valid recovery without remount"
+  ],
+  "interactions": [
+    "Resource API replacement",
+    "Canonical full/delta replacement",
+    "Desktop hover tooltip",
+    "Keyboard Enter collapse",
+    "Touch collapse"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-04T08:10:06.767899Z",
+  "browsers": [
+    "Chromium desktop",
+    "WebKit phone emulation; not native iOS"
+  ],
+  "command": "pulse-worker-browser frontend-modern/browser-tests/backup-time-evidence.cjs",
+  "proof": "12 production-component fixture paths, 150 state/identity/accessibility assertions with synthetic timestamps. No native backup, appliance, thaw, restore or shipped acceptance."
+}

@@ -1,6 +1,8 @@
-import { createEffect, createRoot, createSignal } from 'solid-js';
+import { batch, createEffect, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import useWorkloadsSource from '../useWorkloads.ts?raw';
+import { guestDiskDeferrals } from '@/components/Workloads/__fixtures__/guestDiskDeferrals';
+import type { VM } from '@/types/api';
 
 type UseWorkloadsModule = typeof import('@/hooks/useWorkloads');
 
@@ -78,6 +80,25 @@ describe('useWorkloads', () => {
     resetWorkloadsCacheForTests();
   });
 
+  it.each(['invalid', '0002-01-01T00:00:00Z'])(
+    'does not turn a present unusable backup time %s into absence',
+    async (lastBackup) => {
+      const [snapshot] = createSignal([{ ...sampleResource, proxmox: { lastBackup } }] as any);
+      let dispose = () => {};
+      let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+      createRoot((d) => {
+        dispose = d;
+        result = useWorkloads(() => true, { resourceSnapshot: snapshot });
+      });
+      try {
+        await flushAsync();
+        expect(result!.workloads()[0]?.lastBackup).not.toBe(0);
+      } finally {
+        dispose();
+      }
+    },
+  );
+
   it('preserves linked-agent RAID arrays from the VM resource for guest detail', async () => {
     const [snapshot] = createSignal([
       {
@@ -122,6 +143,138 @@ describe('useWorkloads', () => {
     vi.useRealTimers();
     vi.clearAllMocks();
     vi.resetModules();
+  });
+
+  it.each(guestDiskDeferrals)(
+    'preserves %s and the native lock through the resources API',
+    async (reason) => {
+      apiFetchJSONMock.mockResolvedValueOnce({
+        data: [
+          {
+            ...sampleResource,
+            proxmox: {
+              vmid: 101,
+              nodeName: 'pve1',
+              instance: 'cluster-a',
+              diskStatusReason: `prev-${reason}`,
+              guestAgentStatus: 'deferred',
+              guestAgentExpected: true,
+              lock: 'backup',
+            },
+          },
+        ],
+        meta: { totalPages: 1 },
+      });
+      let dispose = () => {};
+      let result: ReturnType<UseWorkloadsModule['useWorkloads']>;
+      createRoot((d) => {
+        dispose = d;
+        result = useWorkloads();
+      });
+      try {
+        await waitForWorkloadCount(() => result.workloads().length);
+        expect(result!.workloads()[0]).toMatchObject({
+          diskStatusReason: `prev-${reason}`,
+          guestAgentStatus: 'deferred',
+          guestAgentExpected: true,
+          lock: 'backup',
+          disk: { usage: 20 },
+        });
+        expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+      } finally {
+        dispose();
+      }
+    },
+  );
+
+  it.each(guestDiskDeferrals)(
+    'preserves %s through the owning Proxmox snapshot without another request',
+    async (reason) => {
+      let dispose = () => {};
+      let result: ReturnType<UseWorkloadsModule['useWorkloads']>;
+      createRoot((d) => {
+        dispose = d;
+        result = useWorkloads(() => true, {
+          resourceSnapshot: () =>
+            [
+              {
+                ...sampleResource,
+                proxmox: {
+                  vmid: 101,
+                  nodeName: 'pve1',
+                  instance: 'cluster-a',
+                  diskStatusReason: reason,
+                  guestAgentStatus: 'deferred',
+                  guestAgentExpected: false,
+                  lock: 'migrate',
+                },
+                disk: { current: 20, used: 20 * 1024, total: 100 * 1024 },
+              },
+            ] as any,
+        });
+      });
+      try {
+        await flushAsync();
+        expect(result!.workloads()[0]).toMatchObject({
+          diskStatusReason: reason,
+          guestAgentStatus: 'deferred',
+          guestAgentExpected: false,
+          lock: 'migrate',
+          disk: { usage: 20 },
+        });
+        expect(apiFetchJSONMock).not.toHaveBeenCalled();
+      } finally {
+        dispose();
+      }
+    },
+  );
+
+  it('updates read evidence even with unchanged metrics, preserving other site rows', async () => {
+    const buildVM = (instance: string, proxmox: Record<string, unknown> = {}, current = 20) =>
+      ({
+        ...sampleResource,
+        id: `${instance}-pve1-101`,
+        proxmox: { vmid: 101, nodeName: 'pve1', instance, ...proxmox },
+        disk: { current, used: current * 1024, total: 100 * 1024 },
+      }) as any;
+    const other = buildVM('cluster-b');
+    const [snapshot, setSnapshot] = createSignal([
+      buildVM('cluster-a', {
+        diskStatusReason: 'prev-vm-locked',
+        guestAgentStatus: 'deferred',
+        guestAgentExpected: true,
+        lock: 'backup',
+      }),
+      other,
+    ]);
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']>;
+    createRoot((d) => {
+      dispose = d;
+      result = useWorkloads(() => true, { resourceSnapshot: snapshot });
+    });
+    const target = () => result!.workloads().find((row) => row.instance === 'cluster-a')! as VM;
+    try {
+      await flushAsync();
+      const prior = target();
+      const otherRow = result!.workloads().find((row) => row.instance === 'cluster-b');
+      expect(prior.diskStatusReason).toBe('prev-vm-locked');
+      setSnapshot([buildVM('cluster-a', { guestAgentStatus: 'available' }), other]);
+      await flushAsync();
+      expect(target()).not.toBe(prior);
+      expect(target().diskStatusReason).toBeUndefined();
+      expect(target().lock).toBe('');
+      expect(target().guestAgentStatus).toBe('available');
+      expect(target().guestAgentExpected).toBeUndefined();
+      expect(target().disk.usage).toBe(20);
+      expect(result!.workloads().find((row) => row.instance === 'cluster-b')).toBe(otherRow);
+      setSnapshot([buildVM('cluster-a', { guestAgentStatus: 'available' }, 0), other]);
+      await flushAsync();
+      expect(target().disk.usage).toBe(0);
+      expect(apiFetchJSONMock).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
   });
 
   it('reuses fresh cache on remount without an extra network fetch', async () => {
@@ -435,6 +588,73 @@ describe('useWorkloads', () => {
     expect(result!.workloads()).toBe(secondRows);
 
     dispose();
+  });
+
+  it('adapts only changed canonical guests and fully refreshes when change history is unavailable', async () => {
+    const buildGuest = (id: string, name: string, cpu: number) =>
+      ({
+        id,
+        type: 'vm',
+        name,
+        status: 'running',
+        platformType: 'proxmox-pve',
+        sources: ['proxmox'],
+        proxmox: { sourceId: id, vmid: id === 'vm-a' ? 101 : 102, nodeName: 'pve1' },
+        cpu: { current: cpu },
+      }) as any;
+    let untouchedNameReads = 0;
+    const untouched = buildGuest('vm-a', 'vm-a', 10);
+    Object.defineProperty(untouched, 'name', {
+      get: () => {
+        untouchedNameReads += 1;
+        return 'vm-a';
+      },
+    });
+    const [snapshot, setSnapshot] = createSignal([untouched, buildGuest('vm-b', 'vm-b', 20)]);
+    const [change, setChange] = createSignal<{
+      version: number;
+      changedIds: ReadonlySet<string> | null;
+    }>({ version: 1, changedIds: null });
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useWorkloads(() => true, {
+        resourceSnapshot: snapshot,
+        resourceSnapshotChange: change,
+      });
+    });
+
+    try {
+      await flushAsync();
+      const originalRow = result!.workloads()[0];
+      untouchedNameReads = 0;
+      batch(() => {
+        setSnapshot([untouched, buildGuest('vm-b', 'vm-b', 85)]);
+        setChange({ version: 2, changedIds: new Set(['vm-b']) });
+      });
+      await flushAsync();
+      expect(untouchedNameReads).toBe(0);
+      expect(result!.workloads()[0]).toBe(originalRow);
+      expect(result!.workloads()[1]?.cpu).toBeCloseTo(0.85);
+
+      batch(() => {
+        setSnapshot([buildGuest('vm-a', 'renamed-a', 10), buildGuest('vm-b', 'vm-b', 85)]);
+        setChange({ version: 3, changedIds: null });
+      });
+      await flushAsync();
+      expect(result!.workloads()[0]?.name).toBe('renamed-a');
+
+      batch(() => {
+        setSnapshot([buildGuest('vm-a', 'renamed-again', 10), buildGuest('vm-b', 'vm-b', 85)]);
+        setChange({ version: 5, changedIds: new Set(['vm-b']) });
+      });
+      await flushAsync();
+      expect(result!.workloads()[0]?.name).toBe('renamed-again');
+    } finally {
+      dispose();
+    }
   });
 
   it('retains the fulfilled workload snapshot when a forced refresh fails', async () => {

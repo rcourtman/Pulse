@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -1005,8 +1007,8 @@ func TestTrueNASHandlers_HandleTestSavedConnection_UsesStoredLegacyAPIKey(t *tes
 		t.Fatalf("unexpected saved client config: %+v", gotConfig)
 	}
 	summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
-	if summary.Poll == nil || summary.Poll.LastSuccessAt == nil {
-		t.Fatalf("expected saved retest to update poll summary success state, got %+v", summary.Poll)
+	if summary.Poll == nil || summary.Poll.LastSuccessAt != nil || summary.Poll.LastAttemptAt != nil || summary.Observed != nil {
+		t.Fatalf("a successful legacy-key probe must not invent runtime polling evidence, got %+v", summary)
 	}
 
 	missingReq := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/missing/test", nil)
@@ -1381,7 +1383,7 @@ func TestTrueNASHandlers_HandlePreviewSavedConnection_ReturnsUnavailableWhenSupp
 	assertMonitoredSystemUsageUnavailableReason(t, rec, monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending)
 }
 
-func TestTrueNASHandlers_HandleTestSavedConnection_UpdatesPollSummaryFailure(t *testing.T) {
+func TestTrueNASHandlers_HandleTestSavedConnection_FailureDoesNotInventPollAttempt(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
 
 	connection := config.TrueNASInstance{
@@ -1415,11 +1417,11 @@ func TestTrueNASHandlers_HandleTestSavedConnection_UpdatesPollSummaryFailure(t *
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
 	summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
-	if summary.Poll == nil || summary.Poll.LastError == nil {
-		t.Fatalf("expected saved retest failure to update poll summary, got %+v", summary.Poll)
+	if summary.Poll == nil || summary.Poll.LastError != nil || summary.Poll.LastAttemptAt != nil || summary.Poll.LastSuccessAt != nil {
+		t.Fatalf("a separate failed probe must not invent a runtime poll attempt, got %+v", summary.Poll)
 	}
-	if summary.Poll.LastError.Message != "authentication failed" {
-		t.Fatalf("expected failure message preserved, got %+v", summary.Poll.LastError)
+	if !strings.Contains(rec.Body.String(), "authentication failed") {
+		t.Fatalf("expected probe failure in its own response, got %s", rec.Body.String())
 	}
 }
 
@@ -1550,5 +1552,80 @@ func trueNASInstanceFromRawURL(t *testing.T, id string, rawURL string, enabled b
 		UseHTTPS:         strings.EqualFold(parsed.Scheme, "https"),
 		Enabled:          enabled,
 		PollIntervalSecs: 60,
+	}
+}
+
+// This is an API + real client + periodic poller fixture, not native appliance
+// acceptance or attribution of either operator's #2382 installation.
+func TestTrueNASHandlers_SavedProbeAndPollingSurviveUnrelatedMetadata(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+	setMockModeForTest(t, false)
+	for _, tc := range []struct{ name, metadataDir, body string }{
+		{name: "default_empty_id", body: `{}`},
+		{name: "default_foreign_id", body: `{"id":"metadata-redirect"}`},
+		{name: "unrelated_corrupt_metadata", metadataDir: "orgs/broken-peer", body: `{broken`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{DataPath: t.TempDir()}
+			handler, persistence, _ := newTrueNASHandlersForTest(t, cfg)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/api/v2.0/system/info":
+					_, _ = w.Write([]byte(`{"hostname":"fixture-nas","version":"TrueNAS-SCALE-24.10.2","system_serial":"FIXTURE-NAS"}`))
+				case "/api/v2.0/pool", "/api/v2.0/pool/dataset", "/api/v2.0/disk", "/api/v2.0/alert/list":
+					_, _ = w.Write([]byte(`[]`))
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			t.Cleanup(server.Close)
+			connection := trueNASInstanceFromRawURL(t, "fixture-saved-id", server.URL, true)
+			if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+				t.Fatal(err)
+			}
+			dir := filepath.Join(cfg.DataPath, tc.metadataDir)
+			if err := os.MkdirAll(dir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "org.json"), []byte(tc.body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			poller := monitoring.NewTrueNASPoller(config.NewMultiTenantPersistence(cfg.DataPath), 50*time.Millisecond, nil)
+			handler.getPoller = func(context.Context) *monitoring.TrueNASPoller { return poller }
+			probe := httptest.NewRecorder()
+			handler.HandleTestSavedConnection(probe, httptest.NewRequest(http.MethodPost, "/api/truenas/connections/fixture-saved-id/test", nil))
+			if probe.Code != http.StatusOK {
+				t.Fatalf("saved probe status = %d: %s", probe.Code, probe.Body.String())
+			}
+			before := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
+			if before.Poll.LastSuccessAt != nil || before.Observed != nil || before.Transport != nil {
+				t.Fatal("standalone saved probe manufactured runtime evidence")
+			}
+			poller.Start(context.Background())
+			t.Cleanup(poller.Stop)
+			deadline := time.Now().Add(3 * time.Second)
+			for time.Now().Before(deadline) {
+				summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
+				if summary.Poll.LastSuccessAt != nil {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			listed := httptest.NewRecorder()
+			handler.HandleList(listed, httptest.NewRequest(http.MethodGet, "/api/truenas/connections", nil))
+			var records []trueNASConnectionResponse
+			if listed.Code != http.StatusOK || json.Unmarshal(listed.Body.Bytes(), &records) != nil || len(records) != 1 {
+				t.Fatalf("invalid list response: %d %s", listed.Code, listed.Body.String())
+			}
+			result := records[0]
+			if result.Poll == nil || result.Poll.IntervalSeconds != 60 || result.Poll.LastSuccessAt == nil ||
+				result.Observed == nil || result.Observed.Host != "fixture-nas" || result.Transport == nil || !result.Transport.Connected {
+				t.Fatalf("API did not expose actual saved polling: %s", listed.Body.String())
+			}
+			if result.APIKey != "********" || strings.Contains(listed.Body.String(), connection.APIKey) {
+				t.Fatal("connected runtime summary disclosed stored credentials")
+			}
+		})
 	}
 }

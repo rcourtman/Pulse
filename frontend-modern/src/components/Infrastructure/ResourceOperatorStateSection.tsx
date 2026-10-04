@@ -27,7 +27,7 @@ import { describeResourceInventoryOwnership } from '@/utils/resourceMonitoringPo
  *   - Lock the resource against automated remediation (action broker
  *     refuses dispatch with resource_remediation_locked:)
  *   - Schedule a maintenance window during which all findings on the
- *     resource get auto-acknowledged with cause=maintenance_window
+ *     resource have their alert and Patrol attention paused
  *
  * The section stays compact and out of the way until the operator has
  * something to say about the resource — fresh-install resources see a
@@ -575,19 +575,17 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       </header>
 
       <Show when={activeMaintenanceWindow()}>
-        <div class="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-200">
-          <span class="font-semibold">Maintenance window active.</span> Findings raised on this
-          resource
+        <div class="rounded-sm border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-200">
+          <span class="font-semibold">Maintenance window active.</span> Attention on this resource
           <Show when={activeMaintenanceWindow()!.maintenanceScope === 'resource_and_descendants'}>
             {' '}
             and its descendants
           </Show>{' '}
-          are auto-acknowledged until{' '}
-          {formatRelativeTime(
+          is paused until{' '}
+          {new Date(
             activeMaintenanceWindow()!.maintenanceActiveEndAt ??
               activeMaintenanceWindow()!.maintenanceEndAt!,
-            { compact: true },
-          )}
+          ).toLocaleString()}
           .
           <Show when={activeMaintenanceWindow()!.maintenanceReason}>
             <span class="block mt-0.5">Reason: {activeMaintenanceWindow()!.maintenanceReason}</span>
@@ -596,12 +594,10 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       </Show>
 
       <Show when={scheduledMaintenanceWindow() && !activeMaintenanceWindow()}>
-        <div class="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200">
-          <span class="font-semibold">Maintenance window scheduled.</span> Auto-acknowledgement will
-          start{' '}
-          {formatRelativeTime(scheduledMaintenanceWindow()!.maintenanceStartAt!, { compact: true })}{' '}
-          and end{' '}
-          {formatRelativeTime(scheduledMaintenanceWindow()!.maintenanceEndAt!, { compact: true })}.
+        <div class="rounded-sm border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-200">
+          <span class="font-semibold">Maintenance window scheduled.</span> Attention will be paused
+          from {new Date(scheduledMaintenanceWindow()!.maintenanceStartAt!).toLocaleString()} until{' '}
+          {new Date(scheduledMaintenanceWindow()!.maintenanceEndAt!).toLocaleString()}.
           <Show when={scheduledMaintenanceWindow()!.maintenanceReason}>
             <span class="block mt-0.5">
               Reason: {scheduledMaintenanceWindow()!.maintenanceReason}
@@ -611,7 +607,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       </Show>
 
       <Show when={persisted()?.maintenanceRecurrence && !activeMaintenanceWindow()}>
-        <div class="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200">
+        <div class="rounded-sm border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-200">
           <span class="font-semibold">Recurring maintenance configured.</span>{' '}
           {persisted()!
             .maintenanceRecurrence!.weekdays.map((weekday) => weekday.slice(0, 3))
@@ -676,7 +672,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                 type="button"
                 onClick={handleOpenScheduler}
                 disabled={saving()}
-                class="min-h-11 self-start rounded border border-border px-2.5 py-1 text-xs font-medium text-base-content hover:bg-surface-hover disabled:opacity-50 sm:min-h-0"
+                class="min-h-11 self-start rounded-sm border border-border px-2.5 py-1 text-xs font-medium text-base-content hover:bg-surface-hover disabled:opacity-50 sm:min-h-0"
               >
                 Schedule window
               </button>
@@ -687,7 +683,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                 type="button"
                 onClick={handleOpenScheduler}
                 disabled={saving()}
-                class="min-h-11 px-2.5 py-1 text-xs font-medium text-base-content border border-border rounded hover:bg-surface-hover disabled:opacity-50 sm:min-h-0"
+                class="min-h-11 px-2.5 py-1 text-xs font-medium text-base-content border border-border rounded-sm hover:bg-surface-hover disabled:opacity-50 sm:min-h-0"
               >
                 Edit window
               </button>
@@ -695,7 +691,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                 type="button"
                 onClick={handleClearMaintenanceWindow}
                 disabled={saving()}
-                class="min-h-11 px-2.5 py-1 text-xs font-medium text-amber-700 border border-amber-200 rounded hover:bg-amber-50 dark:text-amber-300 dark:border-amber-800 dark:hover:bg-amber-900 disabled:opacity-50 sm:min-h-0"
+                class="min-h-11 px-2.5 py-1 text-xs font-medium text-amber-700 border border-amber-200 rounded-sm hover:bg-amber-50 dark:text-amber-300 dark:border-amber-800 dark:hover:bg-amber-900/25 disabled:opacity-50 sm:min-h-0"
               >
                 Cancel window
               </button>
@@ -705,20 +701,20 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       </Show>
 
       <Show when={schedulerOpen()}>
-        <div class="rounded border border-border bg-surface-alt/40 px-3 py-3 space-y-2">
+        <div class="rounded-sm border border-border px-3 py-3 space-y-2">
           <div class="text-xs font-semibold text-base-content">Schedule maintenance window</div>
-          <div class="inline-flex gap-0.5 rounded border border-border bg-surface p-0.5 text-xs">
+          <div class="inline-flex gap-0.5 rounded-sm border border-border bg-surface p-0.5 text-xs">
             <button
               type="button"
               onClick={() => setScheduleKind('once')}
-              class={`rounded px-2.5 py-1 ${scheduleKind() === 'once' ? 'bg-blue-600 text-white' : 'text-muted hover:bg-surface-hover'}`}
+              class={`rounded-sm px-2.5 py-1 ${scheduleKind() === 'once' ? 'bg-blue-600 text-white' : 'text-muted hover:bg-surface-hover'}`}
             >
               One time
             </button>
             <button
               type="button"
               onClick={() => setScheduleKind('recurring')}
-              class={`rounded px-2.5 py-1 ${scheduleKind() === 'recurring' ? 'bg-blue-600 text-white' : 'text-muted hover:bg-surface-hover'}`}
+              class={`rounded-sm px-2.5 py-1 ${scheduleKind() === 'recurring' ? 'bg-blue-600 text-white' : 'text-muted hover:bg-surface-hover'}`}
             >
               Recurring
             </button>
@@ -732,7 +728,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                   type="datetime-local"
                   value={scheduleStart()}
                   onInput={(e) => setScheduleStart(e.currentTarget.value)}
-                  class="mt-0.5 min-h-11 w-full text-xs rounded border border-border bg-surface px-2 py-1 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 sm:min-h-0"
+                  class="mt-0.5 min-h-11 w-full text-xs rounded-sm border border-border bg-surface px-2 py-1 text-base-content focus:outline-hidden focus:ring-1 focus:ring-blue-400 sm:min-h-0"
                   disabled={saving()}
                 />
               </label>
@@ -742,7 +738,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                   type="datetime-local"
                   value={scheduleEnd()}
                   onInput={(e) => setScheduleEnd(e.currentTarget.value)}
-                  class="mt-0.5 min-h-11 w-full text-xs rounded border border-border bg-surface px-2 py-1 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 sm:min-h-0"
+                  class="mt-0.5 min-h-11 w-full text-xs rounded-sm border border-border bg-surface px-2 py-1 text-base-content focus:outline-hidden focus:ring-1 focus:ring-blue-400 sm:min-h-0"
                   disabled={saving()}
                 />
               </label>
@@ -755,7 +751,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                     type="button"
                     onClick={() => applyPresetDuration(hours)}
                     disabled={saving()}
-                    class="min-h-11 min-w-11 px-1.5 py-0.5 rounded border border-border hover:bg-surface-hover disabled:opacity-50 sm:min-h-0 sm:min-w-0"
+                    class="min-h-11 min-w-11 px-1.5 py-0.5 rounded-sm border border-border hover:bg-surface-hover disabled:opacity-50 sm:min-h-0 sm:min-w-0"
                   >
                     {hours}h
                   </button>
@@ -775,7 +771,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                         type="button"
                         aria-pressed={scheduleWeekdays().includes(value)}
                         onClick={() => toggleMaintenanceWeekday(value)}
-                        class={`min-h-9 rounded border px-2 text-xs ${scheduleWeekdays().includes(value) ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200' : 'border-border text-muted hover:bg-surface-hover'}`}
+                        class={`min-h-9 rounded-sm border px-2 text-xs ${scheduleWeekdays().includes(value) ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/25 dark:text-blue-200' : 'border-border text-muted hover:bg-surface-hover'}`}
                       >
                         {label}
                       </button>
@@ -790,7 +786,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                     type="time"
                     value={scheduleRecurringStart()}
                     onInput={(event) => setScheduleRecurringStart(event.currentTarget.value)}
-                    class="mt-0.5 min-h-11 w-full rounded border border-border bg-surface px-2 text-xs text-base-content sm:min-h-0"
+                    class="mt-0.5 min-h-11 w-full rounded-sm border border-border bg-surface px-2 text-xs text-base-content sm:min-h-0"
                   />
                 </label>
                 <label class="block">
@@ -799,7 +795,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                     type="time"
                     value={scheduleRecurringEnd()}
                     onInput={(event) => setScheduleRecurringEnd(event.currentTarget.value)}
-                    class="mt-0.5 min-h-11 w-full rounded border border-border bg-surface px-2 text-xs text-base-content sm:min-h-0"
+                    class="mt-0.5 min-h-11 w-full rounded-sm border border-border bg-surface px-2 text-xs text-base-content sm:min-h-0"
                   />
                 </label>
                 <label class="block">
@@ -808,7 +804,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                     type="text"
                     value={scheduleTimezone()}
                     onInput={(event) => setScheduleTimezone(event.currentTarget.value)}
-                    class="mt-0.5 min-h-11 w-full rounded border border-border bg-surface px-2 text-xs text-base-content sm:min-h-0"
+                    class="mt-0.5 min-h-11 w-full rounded-sm border border-border bg-surface px-2 text-xs text-base-content sm:min-h-0"
                   />
                 </label>
               </div>
@@ -839,7 +835,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
               value={scheduleReason()}
               onInput={(e) => setScheduleReason(e.currentTarget.value)}
               placeholder="e.g. Q3 storage upgrade, kernel patch reboot"
-              class="mt-0.5 min-h-11 w-full text-xs rounded border border-border bg-surface px-2 py-1 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 sm:min-h-0"
+              class="mt-0.5 min-h-11 w-full text-xs rounded-sm border border-border bg-surface px-2 py-1 text-base-content focus:outline-hidden focus:ring-1 focus:ring-blue-400 sm:min-h-0"
               disabled={saving()}
               maxLength={200}
             />
@@ -854,7 +850,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
               type="button"
               onClick={() => setSchedulerOpen(false)}
               disabled={saving()}
-              class="min-h-11 px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-hover rounded transition-colors disabled:opacity-50 sm:min-h-0"
+              class="min-h-11 px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-hover rounded-sm transition-colors disabled:opacity-50 sm:min-h-0"
             >
               Cancel
             </button>
@@ -862,7 +858,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
               type="button"
               onClick={handleScheduleSave}
               disabled={saving() || Boolean(scheduleValidationError())}
-              class="min-h-11 px-2.5 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded transition-colors sm:min-h-0"
+              class="min-h-11 px-2.5 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-sm transition-colors sm:min-h-0"
             >
               {saving() ? 'Saving…' : 'Save window'}
             </button>
@@ -890,7 +886,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
           </div>
 
           <Show when={autoRemediationEnabled()}>
-            <fieldset class="space-y-2 rounded border border-border bg-surface-alt/40 px-3 py-2.5">
+            <fieldset class="space-y-2 rounded-sm border border-border px-3 py-2.5">
               <legend class="px-1 text-xs font-semibold text-base-content">
                 Actions allowed by this limit
               </legend>
@@ -949,7 +945,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                       value={autoWindowStart()}
                       onInput={(event) => setAutoWindowStart(event.currentTarget.value)}
                       disabled={saving()}
-                      class="mt-0.5 w-full rounded border border-border bg-surface px-2 py-1 text-xs text-base-content"
+                      class="mt-0.5 w-full rounded-sm border border-border bg-surface px-2 py-1 text-xs text-base-content"
                     />
                   </label>
                   <label class="block text-[11px] text-muted">
@@ -959,7 +955,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                       value={autoWindowEnd()}
                       onInput={(event) => setAutoWindowEnd(event.currentTarget.value)}
                       disabled={saving()}
-                      class="mt-0.5 w-full rounded border border-border bg-surface px-2 py-1 text-xs text-base-content"
+                      class="mt-0.5 w-full rounded-sm border border-border bg-surface px-2 py-1 text-xs text-base-content"
                     />
                   </label>
                   <label class="block text-[11px] text-muted">
@@ -969,7 +965,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                       value={autoWindowTimezone()}
                       onInput={(event) => setAutoWindowTimezone(event.currentTarget.value)}
                       disabled={saving()}
-                      class="mt-0.5 w-full rounded border border-border bg-surface px-2 py-1 text-xs text-base-content"
+                      class="mt-0.5 w-full rounded-sm border border-border bg-surface px-2 py-1 text-xs text-base-content"
                     />
                   </label>
                 </div>
@@ -1018,7 +1014,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       </div>
 
       <Show when={lifecycleState() === 'retired'}>
-        <div class="rounded border border-border bg-surface-alt px-3 py-2 text-xs text-base-content">
+        <div class="rounded-sm border border-border bg-surface-alt px-3 py-2 text-xs text-base-content">
           Retired resources remain in {inventoryOwnership().ownerLabel} inventory and keep their
           Pulse history. All alert attention and automated remediation are disabled until the
           lifecycle returns to Active.
@@ -1045,7 +1041,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       </div>
 
       <Show when={confirmingLock()}>
-        <div class="rounded border border-red-300 bg-red-50 px-3 py-2.5 text-xs text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-100">
+        <div class="rounded-sm border border-red-300 bg-red-50 px-3 py-2.5 text-xs text-red-900/25 dark:border-red-800 dark:bg-red-950/25 dark:text-red-100">
           <p class="font-semibold">Lock this resource against all automated remediation?</p>
           <p class="mt-1 leading-relaxed">
             Pulse will refuse every dispatch targeting this resource, including approved actions
@@ -1055,14 +1051,14 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
             <button
               type="button"
               onClick={confirmLockToggle}
-              class="rounded border border-red-400 bg-white px-2 py-1 text-xs font-medium text-red-900 hover:bg-red-100 dark:border-red-700 dark:bg-red-900 dark:text-red-100 dark:hover:bg-red-800"
+              class="rounded-sm border border-red-400 bg-white px-2 py-1 text-xs font-medium text-red-900/25 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/25 dark:text-red-100 dark:hover:bg-red-800"
             >
               Lock this resource
             </button>
             <button
               type="button"
               onClick={cancelLockToggle}
-              class="rounded border border-border bg-surface px-2 py-1 text-xs font-medium text-muted hover:bg-surface-hover"
+              class="rounded-sm border border-border bg-surface px-2 py-1 text-xs font-medium text-muted hover:bg-surface-hover"
             >
               Cancel
             </button>
@@ -1076,7 +1072,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
             type="button"
             onClick={handleClear}
             disabled={saving()}
-            class="px-2.5 py-1 text-xs font-medium text-muted hover:text-base-content hover:bg-surface-hover rounded transition-colors disabled:opacity-50"
+            class="px-2.5 py-1 text-xs font-medium text-muted hover:text-base-content hover:bg-surface-hover rounded-sm transition-colors disabled:opacity-50"
           >
             Clear all overrides
           </button>
@@ -1086,7 +1082,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
             type="button"
             onClick={handleDiscard}
             disabled={saving()}
-            class="px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-hover rounded transition-colors disabled:opacity-50"
+            class="px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-hover rounded-sm transition-colors disabled:opacity-50"
           >
             Discard
           </button>
@@ -1094,7 +1090,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
             type="button"
             onClick={handleSave}
             disabled={saving() || Boolean(autoPolicyValidationError())}
-            class="px-2.5 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded transition-colors"
+            class="px-2.5 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-sm transition-colors"
           >
             {saving() ? 'Saving…' : 'Save overrides'}
           </button>

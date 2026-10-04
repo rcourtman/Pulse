@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "9d5fd627f01cb176e5f28b1923a3407fc0867c3a",
+  "content_sha256": {
+    "frontend-modern/src/api/charts.ts": "4a05bd62662ed2e812e02eaaa4f3da7470276e9cd4cfd260ab00ae9a69e6387d"
+  },
+  "changed_paths": [
+    "frontend-modern/src/api/charts.ts"
+  ],
+  "routes": [
+    "Existing PBS service History and disk History, through browser-tests/history-access.html production-component fixture"
+  ],
+  "states": [
+    "Initial HTTP200 with wrong target unavailable, not empty",
+    "Valid response and measured zero recovery",
+    "Wrong range/type/metric or malformed response cannot replace validated evidence",
+    "Same-target remount retention with warning",
+    "Real HTTP403 withdrawal",
+    "Valid observed empty history"
+  ],
+  "interactions": [
+    "Keyboard retry using Enter",
+    "History hide/remount",
+    "Polling refresh",
+    "Keyboard End canvas inspection"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-04T07:31:31Z",
+  "browsers": [
+    "Chromium desktop",
+    "WebKit phone emulation; not native iOS"
+  ],
+  "command": "pulse-worker-browser frontend-modern/browser-tests/history-response.cjs",
+  "proof": "Production History components, real ChartsAPI and API client, synthetic same-origin HTTP; no native appliance or shipped acceptance."
+}

@@ -197,7 +197,7 @@ export const KubernetesEventsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
-                            <span class="inline-block max-w-[12rem] truncate" title={scope()}>
+                            <span class="inline-block max-w-48 truncate" title={scope()}>
                               {scope()}
                             </span>
                           </TableCell>
@@ -210,7 +210,7 @@ export const KubernetesEventsTable: Component<{
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span
-                              class="inline-block max-w-[12rem] truncate"
+                              class="inline-block max-w-48 truncate"
                               title={formatPlatformTableTextValue(resource.kubernetes?.reason)}
                             >
                               {formatPlatformTableTextValue(resource.kubernetes?.reason)}
@@ -220,7 +220,7 @@ export const KubernetesEventsTable: Component<{
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span
-                              class="inline-block max-w-[13rem] truncate"
+                              class="inline-block max-w-52 truncate"
                               title={involvedObject(resource)}
                             >
                               {involvedObject(resource)}
@@ -234,10 +234,7 @@ export const KubernetesEventsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            <span
-                              class="inline-block max-w-[12rem] truncate"
-                              title={observed() || '—'}
-                            >
+                            <span class="inline-block max-w-48 truncate" title={observed() || '—'}>
                               <PlatformTableRelativeTimeValue value={observed()} />
                             </span>
                           </TableCell>

@@ -67,7 +67,12 @@ If you run Proxmox VE, the easiest and most “Pulse-native” deployment is the
 Replace `vX.Y.Z` with the exact release tag you want, then run this on your Proxmox host:
 
 ```bash
+(
+set -e
 export PULSE_VERSION=vX.Y.Z
+pulse_installer_dir="$(mktemp -d)"
+trap 'rm -rf "$pulse_installer_dir"' EXIT
+cd "$pulse_installer_dir"
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh"
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig"
 ssh-keygen -Y verify \
@@ -76,8 +81,16 @@ ssh-keygen -Y verify \
   -n pulse-install \
   -s install.sh.sshsig < install.sh
 bash install.sh --version "${PULSE_VERSION}"
-rm -f install.sh install.sh.sshsig
+)
 ```
+
+The signed server installer uses the `vX.Y.Z` Pulse release, which contains the
+Linux server archive; it does not ask for a GitHub personal access token. A
+`helm-chart-*` release contains a Kubernetes chart, not that archive. If a
+different helper selects a Helm-chart release or asks for a GitHub token, stop
+instead of supplying one or blindly retrying. On the Proxmox host, check
+`pct list` for a partly created Pulse container first; do not run a fresh
+installer over an existing container without checking its state.
 
 > **Note**: The GitHub `install.sh` is the **server** installer. The agent installer is served from your Pulse server at `/install.sh` (see **Settings → Infrastructure → Install on a host**). Do not use the GitHub server installer to install or update `pulse-agent`.
 
@@ -94,6 +107,9 @@ docker run -d \
   rcourtman/pulse:vX.Y.Z
 ```
 
+For a new container, continue with [bootstrap-token setup](#step-1-get-the-token)
+in your browser; do not add an example password to the command.
+
 ### Docker Compose
 Create a `docker-compose.yml` file:
 
@@ -109,8 +125,6 @@ services:
       - pulse_data:/data
     environment:
       - PULSE_DEPLOYMENT_METHOD=docker_compose
-      - PULSE_AUTH_USER=admin
-      - PULSE_AUTH_PASS=secret123
 
 volumes:
   pulse_data:
@@ -121,7 +135,22 @@ to the private Pulse Pro image shown on
 <https://pulserelay.pro/download.html> without rebuilding the file around a
 second deployment path.
 
-> **Note**: Plain text passwords set via `PULSE_AUTH_PASS` are auto-hashed on startup. For production, prefer Quick Security Setup or a pre-hashed bcrypt value.
+Leave authentication overrides unset for a new install and complete
+[bootstrap-token setup](#step-1-get-the-token) in your browser. Do not deploy a
+shared example password. If automation must skip setup, use a private
+deployment-managed credential source. The
+[authentication guide](CONFIGURATION.md#private-docker-authentication-file)
+explains the visibility and override limits; its `docker run --env-file`
+example is not a Compose interpolation recipe.
+
+For an existing installation, preserve its image, data mounts and managed
+configuration; do not reset authentication to repeat first-time setup. If you
+used a shared example password, replace it in your deployment's credential
+source. A deployment-supplied password takes precedence over changes made in
+Pulse's password-change UI. Hashing it inside Pulse does not remove the
+original value from Docker's environment or your deployment file. Never share
+full `docker inspect` or resolved Compose output.
+
 > **Note**: Docker monitoring requires the unified agent on the Docker host with socket access; the Pulse server container does not need `/var/run/docker.sock`. See [UNIFIED_AGENT.md](UNIFIED_AGENT.md).
 
 ---
@@ -144,7 +173,12 @@ See [KUBERNETES.md](KUBERNETES.md) for ingress and persistence configuration.
 For Linux servers (VM or bare metal), use the official installer:
 
 ```bash
+(
+set -e
 export PULSE_VERSION=vX.Y.Z
+pulse_installer_dir="$(mktemp -d)"
+trap 'rm -rf "$pulse_installer_dir"' EXIT
+cd "$pulse_installer_dir"
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh"
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig"
 ssh-keygen -Y verify \
@@ -153,46 +187,57 @@ ssh-keygen -Y verify \
   -n pulse-install \
   -s install.sh.sshsig < install.sh
 sudo bash install.sh --version "${PULSE_VERSION}"
-rm -f install.sh install.sh.sshsig
+)
 ```
 
 > **Note**: This installs the Pulse server. Use the `/install.sh` endpoint from **Settings → Infrastructure → Install on a host** for installing or upgrading `pulse-agent` on monitored hosts.
 
 <details>
-<summary><strong>Manual systemd install (advanced)</strong></summary>
+<summary><strong>Manual or custom systemd services (advanced)</strong></summary>
+
+For a **new Pulse server**, use the signed installer above rather than copying
+one binary and writing a minimal service unit. The installer creates the
+`pulse` service account, prepares the release tree and data ownership, and
+installs the server service and update assets together. Its server unit uses
+`User=pulse`, `Group=pulse`, `NoNewPrivileges=true`, `PrivateTmp=true`,
+`ProtectSystem=strict` and `ProtectHome=true`, with writes limited to the
+installation and data directories. Pulse's server does not need a root service;
+the separate host **agent** has different privilege requirements (see
+[Agent Security](AGENT_SECURITY.md)).
+
+For an **existing manual or custom installation**, first inspect its effective
+service settings locally. This read-only command does not print environment
+values or credentials:
 
 ```bash
-# Download and extract the architecture-specific tarball from GitHub Releases:
-#   https://github.com/rcourtman/Pulse/releases
-# e.g.
-#   curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/pulse-${PULSE_VERSION}-linux-amd64.tar.gz"
-#   tar -xzf "pulse-${PULSE_VERSION}-linux-amd64.tar.gz"
-# The extracted tree contains ./bin/pulse plus ./bin/pulse-agent-* and ./scripts/.
-
-sudo install -m 0755 bin/pulse /usr/local/bin/pulse
-
-# Create systemd service
-sudo tee /etc/systemd/system/pulse.service > /dev/null << 'EOF'
-[Unit]
-Description=Pulse Monitoring
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/pulse
-Restart=always
-RestartSec=10
-Environment=PULSE_DATA_DIR=/etc/pulse
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Start service
-sudo mkdir -p /etc/pulse
-sudo systemctl daemon-reload
-sudo systemctl enable --now pulse
+systemctl show pulse.service \
+  --property=LoadState \
+  --property=User \
+  --property=Group \
+  --property=NoNewPrivileges \
+  --property=PrivateTmp \
+  --property=ProtectSystem \
+  --property=ProtectHome
 ```
+
+Use your actual server unit name if it differs; older installations may use
+`pulse-backend.service`. Interpret these settings only when
+`LoadState=loaded`; `LoadState=not-found` means the selected unit is missing,
+not that a root service is running. For a loaded service, an empty `User=`
+means systemd runs it as root. Missing hardening is not repaired just by
+downloading a new binary:
+**the installer preserves existing service units during updates**, including
+custom units.
+
+Do not overwrite a working unit, change only its service user, or reinstall over
+an existing data directory to match these settings. Before a migration, follow
+[the recovery guide](RECOVERY.md), preserve the data directory and its encryption
+key, and record the active data path and deployment-managed configuration
+privately. Check that the intended service account can access that state and
+that required integrations work with the chosen sandbox. Do not loosen data
+permissions, remove authentication or share a full unit/environment dump as a
+shortcut.
+
 </details>
 
 ---
@@ -206,6 +251,7 @@ Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Tok
 | Platform | Command |
 |----------|---------|
 | **Docker** | `docker exec pulse /app/pulse bootstrap-token` |
+| **Docker app UIs** (Unraid, Portainer, TrueNAS apps) | Open the Pulse container's console and run `/app/pulse bootstrap-token` |
 | **Kubernetes** | `kubectl exec -it <pod> -- /app/pulse bootstrap-token` |
 | **Systemd** | `sudo pulse bootstrap-token` |
 | **Proxmox LXC** | `pct exec <ctid> -- /usr/local/bin/pulse bootstrap-token` (run on the Proxmox host; the installer prints this command with your container ID at the end of the install) |
@@ -250,7 +296,15 @@ Pulse can update the server runtime to the latest stable version.
 |----------|---------|
 | **Docker** | `docker compose pull && docker compose up -d` |
 | **Kubernetes** | `helm repo update && helm upgrade pulse pulse/pulse -n pulse` |
-| **Systemd / Proxmox LXC** | `sudo /bin/update` |
+| **Systemd / Proxmox LXC with the Pulse-owned helper** | `sudo /bin/update` |
+
+Use `/bin/update --version vX.Y.Z` for an exact target only when the helper was
+installed by the Pulse server installer. On Proxmox community-scripts
+containers, `/bin/update` can belong to a different updater that ignores
+`--version`. If the helper is absent or its owner is unknown, use the
+[signed server-installer flow](#2-bare-metal--systemd) with `PULSE_VERSION` set
+to the exact target tag. The same ownership check applies to rollback. After
+the service restarts, verify the installed version with `GET /api/version`.
 
 Docker without Compose: `docker restart` keeps the old image running. Run `docker pull rcourtman/pulse:vX.Y.Z`, then `docker stop pulse && docker rm pulse` and re-run your original `docker run` command.
 
@@ -275,27 +329,127 @@ update. Use **Settings → Infrastructure → Install on a host** for a first in
 or a v5-to-v6 in-place upgrade.
 
 ### Rollback
-If an update causes issues on systemd installations, backups are created automatically during the update process.
+An update error does not establish which version is running. Check the running
+version and service health before retrying or rolling back, and preserve the
+failed installation and update logs.
 
-**Manual rollback**: In-app updates store backups under `/etc/pulse/backup-<timestamp>/`. The systemd auto-update timer uses a temporary `/tmp/pulse-backup-<timestamp>` during the update and auto-restores on failure.
+In-app update snapshots and updater-script backups have different contents and
+lifetimes. Neither is guaranteed to include all active data; an older binary
+also may not understand data migrated by a newer version. Update History is
+not a full-state recovery tool, and a recorded backup path is not proof of a
+complete backup.
+
+Check the [version-specific snapshot scope](AUTO_UPDATE.md#what-an-update-snapshot-contains)
+and use the [stopped-service recovery procedure](AUTO_UPDATE.md#manual-rollback)
+when data needs restoring. Keep matching data and keys together, verify the
+backup privately and preserve reversible copies of the failed state. Do not
+replace live runtime data or delete it to make a rollback fit.
 
 ---
 
 ## 🗑️ Uninstall
 
-**Docker**:
+Removing or stopping the Pulse server also stops monitoring and alert delivery.
+This is not an update, rollback or password-reset procedure. Keep persistent
+data by default; deleting it erases configuration, history, credentials and
+the keys needed to decrypt that installation's data.
+
+Before removing anything, identify the actual service, container or Helm
+release and **every effective data path** privately. Keep a consistent,
+private [full-state backup](MIGRATION.md#full-state-recovery), including the
+matching encryption key and deployment configuration. A configuration export
+alone is not a full backup. Let any in-progress Pulse update finish before
+removing its installation. Do not post backups, environment files or full
+container inspections in an issue.
+
+### Docker and Compose: retain the data mount
+
+The commands below assume `/data` is on a persistent named volume or bind
+mount, as in this guide's examples. **Do not use them for state stored only in
+the container's writable layer or temporary storage until it has a consistent
+backup.** A container created with `--rm` can also delete anonymous volumes
+when stopped. Container removal is not a backup.
+
+For the `docker run` example, stop the container normally before removing it:
+
 ```bash
-docker rm -f pulse && docker volume rm pulse_data
+docker stop pulse
+docker rm pulse
 ```
 
-**Kubernetes**:
+For Compose, run this from the **existing** project, using its actual Pulse
+service name:
+
 ```bash
-helm uninstall pulse -n pulse
+docker compose stop pulse
+docker compose rm pulse
 ```
 
-**Systemd**:
+These commands do not request volume deletion. Keep the named volume or bind
+directory, original image/runtime and deployment settings; a reinstall must
+reattach the **same** data mount. Compose normally prefixes volume names with
+its project name, so creating a new project or an empty `pulse_data` volume
+can look like data loss. Do not add `-v`/`--volumes`, remove the volume or run
+volume pruning as part of a data-preserving removal.
+
+### Kubernetes: check claim ownership before uninstalling
+
+Do not assume `helm uninstall pulse -n pulse` retains data. The default Pulse
+chart creates a PersistentVolumeClaim without a keep policy; Helm removal can
+delete that claim, and the storage reclaim policy can delete its backing data.
+`persistence.existingClaim` refers to a separately managed claim, whose
+lifecycle must be checked separately. With `persistence.enabled=false`, the
+chart uses temporary `emptyDir` storage, lost when the pod is removed.
+
+After verifying persistent storage and its backup, you can stop the default
+deployment without uninstalling the chart:
+
 ```bash
-sudo systemctl disable --now pulse
-sudo rm -rf /etc/pulse /etc/systemd/system/pulse.service /usr/local/bin/pulse
-sudo systemctl daemon-reload
+kubectl scale deployment pulse \
+  --namespace pulse \
+  --replicas=0
 ```
+
+Use the actual deployment and namespace. Record the previous replica count
+and suspend any controller that would recreate pods. Before permanently
+uninstalling, verify the live claim's ownership, retention and reclaim policy
+and test recovery from the private backup; do not delete a PVC or namespace
+as a troubleshooting step.
+
+### Systemd / Proxmox LXC: disable without erasing data
+
+Identify the active service and any updater first; legacy installs can use
+`pulse-backend`, and custom installs can have other names. In an LXC, run
+these steps **inside the Pulse container**, not on the Proxmox host.
+
+For the default signed installation, disable its update timer **if present**:
+
+```bash
+sudo systemctl disable --now \
+  pulse-update.timer
+```
+
+Then stop and disable the server:
+
+```bash
+sudo systemctl disable --now \
+  pulse.service
+```
+
+Disable other deployment-managed updaters through their owner too. These
+commands leave the binary, service account, units and data in place; they
+disable Pulse, not fully uninstall it. Keep `/etc/pulse` (or the actual custom
+data directory), its keys and authentication sources together. Do not remove
+the service account while retained files still need its ownership.
+
+**Complete removal is a separate, destructive choice.** The signed server
+installer's `--uninstall` deletes its configuration/data directory without a
+keep-data prompt; it is not a data-preserving alternative. Use it only after
+checking the effective install/config paths and a tested private backup, when
+you intend that erasure. Do not delete `/bin/update` unless you have verified
+it belongs to Pulse; community-scripts containers can use a different helper.
+
+Removing the server does not remove agents on monitored hosts. Use each
+agent's [uninstall procedure](UNIFIED_AGENT.md#uninstall), or
+[stop an orphaned agent](TROUBLESHOOTING.md#removed-pulse-server-but-pulse-agent-still-logs-connection-failures),
+so it does not keep retrying the absent server.

@@ -97,6 +97,10 @@ func (m *Monitor) syncUnifiedResourceAlertsToState(resources []unifiedresources.
 		return
 	}
 
+	// Resource publication can make persisted canonical policy resolvable for
+	// restored native-ID alerts that preceded the first observation at startup.
+	m.alertManager.ReconcileOperatorIntentState()
+
 	config := m.alertManager.GetConfig()
 	migrationPlan := alerts.PlanAlertIdentityMigration(config, resources)
 	if migrationPlan.UnsupportedVersion {

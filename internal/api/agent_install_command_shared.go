@@ -3,7 +3,6 @@ package api
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
@@ -119,42 +118,30 @@ func containerRuntimeAgentHostFlag(enableHost bool) string {
 }
 
 func buildContainerRuntimeAgentInstallCommand(baseURL string, token string, enableHost bool) string {
-	normalizedBaseURL := normalizeAgentInstallBaseURL(baseURL)
-	installScriptURL := normalizedBaseURL + "/install.sh"
-	command := fmt.Sprintf(`curl -fsSL %s | bash -s -- \
-  --url %s \
-  --enable-docker \
-  %s \
-  --interval 30s`,
-		posixShellQuote(installScriptURL), posixShellQuote(normalizedBaseURL), containerRuntimeAgentHostFlag(enableHost))
+	return configapi.BuildContainerRuntimeAgentInstallCommand(baseURL, token, enableHost)
+}
 
-	if trimmedToken := strings.TrimSpace(token); trimmedToken != "" {
-		command += fmt.Sprintf(` \
-  --token %s`, posixShellQuote(trimmedToken))
+// The diagnostic reference must not compete with the installer's complete
+// service renderer or expose the issued token. Its default Linux state path
+// matches scripts/install.sh; custom/least-privilege profiles keep their
+// installer-generated unit instead of replacing it with this reference.
+func buildContainerRuntimeAgentServiceSnippet(baseURL string, enableHost bool) (string, error) {
+	baseURL = normalizeAgentInstallBaseURL(baseURL)
+	// Environment= does not expand shell variables, but systemd does expand %
+	// specifiers. Escape those as well as the unit's quoting/control boundary.
+	urlLine, err := quoteSystemdEnvironment("PULSE_URL", strings.ReplaceAll(baseURL, "%", "%%"))
+	if err != nil {
+		return "", err
 	}
-
-	if installBaseURLRequiresInsecure(normalizedBaseURL) {
-		command += ` \
-  --insecure`
+	trustArgs := ""
+	if installBaseURLRequiresInsecure(baseURL) {
+		trustArgs = " --insecure"
 	}
-
-	return withPrivilegeEscalation(command)
+	return fmt.Sprintf("# Default Linux reference only. Run installCommand to create the private token file and complete service.\n# Keep the installer-generated unit for custom state directories or privilege profiles.\n[Service]\nType=simple\n%s\nExecStart=/usr/local/bin/pulse-agent --url ${PULSE_URL} --token-file /var/lib/pulse-agent/token --enable-docker %s --interval 30s%s\nRestart=always\nRestartSec=5s\nUser=root", urlLine, containerRuntimeAgentHostFlag(enableHost), trustArgs), nil
 }
 
 func buildSetupScriptCommand(scriptURL string, token string) string {
-	curlCommand := "curl -fsSL " + posixShellQuote(strings.TrimSpace(scriptURL)) + " | "
-	bashCommand := "bash"
-	sudoCommand := "sudo bash"
-	if trimmedToken := strings.TrimSpace(token); trimmedToken != "" {
-		envPrefix := "PULSE_SETUP_TOKEN=" + posixShellQuote(trimmedToken) + " "
-		bashCommand = envPrefix + bashCommand
-		sudoCommand = "sudo env " + envPrefix + "bash"
-	}
-
-	return curlCommand +
-		`{ if [ "$(id -u)" -eq 0 ]; then ` + bashCommand +
-		`; elif command -v sudo >/dev/null 2>&1; then ` + sudoCommand +
-		`; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi; }`
+	return configapi.BuildSetupScriptCommand(scriptURL, token)
 }
 
 func buildSetupScriptTokenHint(token string) string {
@@ -166,40 +153,11 @@ func buildSetupScriptTokenHint(token string) string {
 }
 
 func buildSetupScriptURL(baseURL string, installType string, host string, pulseURL string, backupPerms bool) string {
-	query := url.Values{}
-	query.Set("type", strings.TrimSpace(installType))
-
-	if trimmedHost := strings.TrimSpace(host); trimmedHost != "" {
-		query.Set("host", trimmedHost)
-	}
-
-	if trimmedPulseURL := strings.TrimSpace(pulseURL); trimmedPulseURL != "" {
-		query.Set("pulse_url", trimmedPulseURL)
-	}
-
-	if backupPerms && strings.TrimSpace(installType) == "pve" {
-		query.Set("backup_perms", "true")
-	}
-
-	return normalizeAgentInstallBaseURL(baseURL) + "/api/setup-script?" + query.Encode()
+	return configapi.BuildSetupScriptURL(baseURL, installType, host, pulseURL, backupPerms)
 }
 
 func buildSetupScriptDownloadURL(baseURL string, installType string, host string, pulseURL string, backupPerms bool, setupToken string) string {
-	downloadURL := buildSetupScriptURL(baseURL, installType, host, pulseURL, backupPerms)
-	trimmedToken := strings.TrimSpace(setupToken)
-	if trimmedToken == "" {
-		return downloadURL
-	}
-
-	parsed, err := url.Parse(downloadURL)
-	if err != nil {
-		return downloadURL
-	}
-
-	query := parsed.Query()
-	query.Set("setup_token", trimmedToken)
-	parsed.RawQuery = query.Encode()
-	return parsed.String()
+	return configapi.BuildSetupScriptDownloadURL(baseURL, installType, host, pulseURL, backupPerms, setupToken)
 }
 
 func buildSetupScriptFileName(installType string) string {
@@ -207,22 +165,7 @@ func buildSetupScriptFileName(installType string) string {
 }
 
 func buildSetupScriptInstallArtifact(baseURL string, installType string, host string, pulseURL string, backupPerms bool, setupToken string, expiresAt int64) setupScriptInstallArtifact {
-	scriptURL := buildSetupScriptURL(baseURL, installType, host, pulseURL, backupPerms)
-	commandWithEnv := buildSetupScriptCommand(scriptURL, setupToken)
-
-	return setupScriptInstallArtifact{
-		Type:              strings.TrimSpace(installType),
-		Host:              strings.TrimSpace(host),
-		URL:               scriptURL,
-		DownloadURL:       buildSetupScriptDownloadURL(baseURL, installType, host, pulseURL, backupPerms, setupToken),
-		ScriptFileName:    buildSetupScriptFileName(installType),
-		Command:           commandWithEnv,
-		CommandWithEnv:    commandWithEnv,
-		CommandWithoutEnv: buildSetupScriptCommand(scriptURL, ""),
-		Expires:           expiresAt,
-		SetupToken:        strings.TrimSpace(setupToken),
-		TokenHint:         buildSetupScriptTokenHint(setupToken),
-	}
+	return configapi.BuildSetupScriptInstallArtifact(baseURL, installType, host, pulseURL, backupPerms, setupToken, expiresAt)
 }
 
 func resolveConfigAgentInstallBaseURL(req *http.Request, cfg *config.Config, hostedMode bool) string {

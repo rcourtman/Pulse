@@ -202,6 +202,11 @@ configuration. It may override Pulse's automatic filesystem suppression only;
 it must not override a matching operator exclusion or introduce remote
 authority to expand the reported filesystem set silently.
 
+The local `--disable-cluster-peer-sensors` control may suppress only the
+agent's outbound Proxmox peer sensor SSH probes. It neither accepts a remote
+command nor changes SSH credentials, target authority, agent scopes, token
+handling, enrollment, or the local host/SMART/Ceph/Proxmox reporting boundary.
+
 Retained Patrol objective briefs and optional context are operator-authored AI
 content. They are encrypted at rest in the organization-scoped Pulse data
 directory and loading fails closed if decryption fails. Audit and telemetry
@@ -299,13 +304,7 @@ administrator or settings-scope checks, expose queue contents to new callers, or
 change tenant selection. Missing owners fail with 503 rather than dereferencing
 nil.
 
-The authenticated security-status currentUsername is the validated caller principal, not an administrator configuration disclosure. Public responses omit it. An organisation-scoped local session may receive its own identity while authUsername and instance-settings capabilities remain withheld; clients must not interpret identity availability as privilege.
-
-An organisation-scoped session manager receives only the org-bound
-`infrastructureRead`, `availabilityRead` and `reportingRead` security-status
-capabilities, matching routes that already admit org managers and read only
-that organisation's state. It does not gain instance administration, security
-configuration, SSO, user/role, audit, relay, recovery or billing capabilities.
+The authenticated security-status currentUsername is the validated caller principal, not an administrator configuration disclosure. Public responses omit it. An organisation-scoped local session may receive its own identity while authUsername and instance-settings capabilities remain withheld; clients must not interpret identity availability as privilege. A manager of that organisation additionally receives the org-bound infrastructureRead, availabilityRead and reportingRead capabilities, because their routes already admit org managers through ensureAdminSession and read only that organisation's state; this never extends to authentication, SSO, users, roles, audit, relay, system, diagnostics or billing surfaces.
 
 API token scope copy must match runtime authority. `ai:chat` covers Assistant
 conversation, model selection, sessions, and knowledge reads only. Knowledge
@@ -957,6 +956,23 @@ tokens, and path-normalization variants.
 
 ## Current State
 
+### Container diagnostics keeps copied material credential-free (1 October 2026)
+
+Container migration-token issuance returns its secret separately on the
+existing authenticated route, with a no-store response. Copied install source,
+download URLs and the diagnostic systemd reference must never contain that
+secret, a raw token process argument or a secret-bearing environment directive.
+The installer receives a bounded private file only after complete download and
+preflight, from silent root/sudo terminal input; failure and handled signals
+clean the handoff. The service reference points to the canonical default
+Linux private state file and does not replace installer-owned profile policy.
+URL percent specifiers are literal in the systemd environment, and structural
+control characters are rejected before minting. Monitoring scopes, tenant
+resolution, persistence rollback and HTTPS verification remain unchanged.
+`TestSecurityContainerDiagnosticsRejectsUnitInjectionBeforeTokenIssuance` and
+`TestSecurityContainerDiagnosticsServiceReferenceUsesPrivateState` exercise
+that boundary, including real systemd grammar validation without installation.
+
 ### Node TLS verification preference is operator-owned
 
 A PVE connection's `VerifySSL` value is security-relevant, so the stored
@@ -1493,9 +1509,9 @@ download URLs, command output, log lines, paths, hostnames, release asset URLs,
 checksums, signatures, or operator-entered values.
 Schema v13 adds a direct local service-health observation so a process-level
 telemetry heartbeat is not mistaken for proof that the installed UI and API
-are being served. The runtime probes its bound listener through loopback and
-reports only observed/healthy booleans, one fixed failure class (`listener`,
-`startup`, `runtime`, `api_connectivity`, `api_status`, `ui_status`,
+are being served. The runtime probes the address bound by its TCP listener
+(loopback for wildcard binds) and reports only observed/healthy booleans, one fixed failure class (`listener`,
+`startup`, `runtime`, `api_connectivity`, `timeout`, `api_status`, `ui_status`,
 `frontend_assets`, or `unknown`), a fixed observation cohort, and the
 immediately previous normalized release's observed/healthy booleans. No probe
 target, listener address, URL, IP address, asset path, response content, raw
@@ -1503,6 +1519,30 @@ error, account, customer, or infrastructure identity may enter the payload or
 persisted receiver row. The previous-release fields are direct adjacent-release
 observations, not 30-day update counters, and are the only valid basis for a
 before/after release-health cohort in the adoption report.
+The service-health self-check must preserve the explicit bound TCP address and
+port. It inspects the IPv6-only option of a bound IPv6 wildcard socket: only a
+proven dual-stack listener tries IPv4 then IPv6 loopback. IPv6-only or
+uninspectable IPv6 wildcards remain IPv6-only, while IPv4-only and nil-IP
+wildcards remain IPv4-only. Another socket on the same port is not evidence of
+this listener's health. No external address discovery,
+proxy, redirect, or remote frontend asset fetch is permitted. One bounded
+settling retry may follow a failed observation in the telemetry background
+runner: at most two five-second attempts, separated by one second. Each attempt
+shares its deadline across API/UI/assets and reserves time for an alternate
+loopback family. Once an API responds, status/body/UI/asset failures cannot be
+masked by switching families. Deadline and network timeout failures use only
+the fixed `timeout` bucket; other failure classes remain visible. Tests must
+cover unavailable IPv6 with working IPv4, IPv6-only serving, a stalled family,
+startup recovery, final timeouts, explicit addresses, HTTPS, redirect refusal,
+bounded bodies/assets, closed-category serialization and background execution.
+`service_health_socket_test.go` also pins real HTTP/HTTPS wildcard socket modes,
+both healthy/unhealthy same-port isolation directions, and unavailable socket
+inspection. Socket-mode inspection does not add a telemetry field or export
+its result, target or error. Telemetry preference saves invoke the live toggle
+only for persisted explicit boolean transitions; unchanged/null/omitted values
+do not restart the sender. A `startup` event also follows re-enabling telemetry
+or resetting its ID, so its count alone does not establish process restarts or
+a release regression. Existing payload confidentiality remains unchanged.
 That same outbound usage telemetry floor now also permits only content-free Pulse
 Patrol control and governed Pulse Intelligence operations adoption flags and
 counters inside the same rotating 30-day telemetry window:
@@ -2058,6 +2098,11 @@ plaintext secret file on disk. Canonical runtime persistence must keep the
 token encrypted at rest, and any legacy plaintext bootstrap-token file must be
 treated only as migration input that is rewritten immediately into the
 encrypted canonical format on load.
+Operator guidance for recovering that token, in the startup log and on the
+first-run unlock screen, must name the supported command and never the token
+file, because the file holds ciphertext. The unlock screen lists the host,
+`docker exec`, in-container console (`/app/pulse bootstrap-token`) and
+`pct exec` forms without revealing the server's deployment details.
 Managed first-session proof may reset that boundary only through the dev-only
 `/api/security/dev/reset-first-run` route under authenticated
 `settings:write`; harnesses may not scrape `.env`, delete persisted token
@@ -2502,7 +2547,7 @@ actor, and every audit row read stay on the install.
 
 ### Telemetry ingestion matches the released sender while storage stays compatible
 
-The active outbound contract is schema v17. Schema v8 added content-free
+The active outbound contract is schema v18. Schema v8 added content-free
 approved-action refusal counters for target change, prerequisite failure, and
 invalid typed contract so agent-side pre-mutation failures no longer collapse
 into `other`. Schema v9 completes that split with a content-free `uncoded`
@@ -2538,6 +2583,18 @@ as investigated, one bucket per finding, and add no finding, resource,
 session, or action identity. The receiver canonicalizes every one of the four
 strings to its released vocabulary or `unknown` and clamps the counts like
 every other counter.
+Schema v18 adds `update_channel`, `update_check_outcome`, and
+`update_available` so the fleet can tell an install whose update check cannot
+complete from one that was offered an update and did not apply it. A failed
+check never reaches the update-history counters because nothing was applied,
+which let a 6.4.3-rc.1 check that failed on every call look healthy (#2285).
+The channel is the install's effective update channel. The outcome is one
+closed category recorded by `internal/updates` for the most recent check on
+that channel only, so a Settings preview of the other channel never leaks into
+it. The sender and receiver both force `update_available` false unless the
+outcome is `available`. No version, release tag, URL, response, or error text
+leaves the install, and the receiver canonicalizes both strings to the released
+vocabulary or `unknown`.
 Patrol run and new-finding volumes use bounded local UTC-day tallies in
 `internal/config/persistence.go`, preserving aggregate activity after the
 operator-facing run history is trimmed. Finding volume has its own persistence
@@ -2890,3 +2947,19 @@ trust suite verifies every consumer pin, absence of the affected auth assumption
 workflow trust controls and the retained native Windows command/lifecycle proof
 steps. Native Windows execution remains a hosted check, not a local Linux claim.
 This upgrade is independent of the grouped signing/Docker/Tailscale updates.
+
+### Updates settings copy rename
+
+The System settings item formerly labelled "Pulse server updates" is now
+"Updates" in English, German and Spanish, with a plain-language description
+that still routes agent updates to Infrastructure. This is locale copy only:
+the `system-updates` route id, its `systemSettingsRead` capability gate and
+every update endpoint and authorization check are unchanged.
+
+### Relay privacy description corrected
+
+`PRIVACY.md` states that the relay connects paired Pulse Mobile devices and
+delivers push notifications, and that it does not provide remote access to the
+web UI. The earlier "secure remote web access" wording described a capability
+that never existed. No data flow changed, and the published docs mirror stays
+identical.

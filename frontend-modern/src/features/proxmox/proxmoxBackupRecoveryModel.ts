@@ -47,6 +47,8 @@ export interface RecoverableArtifact {
   /** Operator-facing source/repository label used by the backup-location filter. */
   locationLabel?: string;
   detail: string;
+  /** Full provider identifier behind a shortened `detail`, shown on hover. */
+  detailTitle?: string;
   protected: boolean;
   verified?: boolean;
   /** A still-running backup is writing this artifact; it is not recoverable yet. */
@@ -70,10 +72,19 @@ export interface WorkloadCoverageRow {
   key: string;
   workload: WorkloadReference;
   artifacts: RecoverableArtifact[];
-  latestRecovery?: RecoverableArtifact;
+  /**
+   * Newest completed PBS snapshot or PVE backup file, only when all completed
+   * backup dates can be ordered. Guest snapshots never
+   * fill this slot: they live on the guest's own storage and the protection
+   * posture engine does not count them as independent recovery, so a fresh
+   * snapshot must not read as a fresh backup beside a stale posture.
+   */
+  latestBackup?: RecoverableArtifact;
   latestPBS?: RecoverableArtifact;
   latestArchive?: RecoverableArtifact;
   latestSnapshot?: RecoverableArtifact;
+  /** Unknown chronology is not an absent backup, nor an older dated backup. */
+  ageUnknown?: Record<'backup' | 'pbs' | 'archive' | 'snapshot', boolean>;
   latestTask?: CoverageTask;
   pbsCount: number;
   archiveCount: number;
@@ -130,18 +141,32 @@ export function getRecoveryAgeBand(
   createdMs: number | undefined,
   nowMs: number = Date.now(),
 ): RecoveryAgeBand {
-  if (createdMs === undefined || !Number.isFinite(createdMs)) return 'unknown';
+  if (createdMs === undefined || createdMs <= 0 || !Number.isFinite(new Date(createdMs).getTime()))
+    return 'unknown';
   const ageMs = nowMs - createdMs;
-  if (!Number.isFinite(ageMs)) return 'unknown';
+  if (!Number.isFinite(ageMs) || ageMs < 0) return 'unknown';
   if (ageMs <= CURRENT_RECOVERY_MS) return 'current';
   if (ageMs <= STALE_RECOVERY_MS) return 'aging';
   return 'stale';
+}
+
+// A guest snapshot shares the guest's storage, so it is listed as restore
+// evidence but never counted as a backup. Mirrors the server posture rule that
+// "snapshots alone do not prove independent recovery".
+export function isBackupArtifact(artifact: RecoverableArtifact): boolean {
+  return artifact.sourceKind !== 'snapshot';
 }
 
 function parseTimestampMs(value: string | undefined): number | undefined {
   if (!value) return undefined;
   const ms = Date.parse(value);
   return Number.isFinite(ms) ? ms : undefined;
+}
+
+function archiveFileName(volid: string | undefined): string {
+  const trimmed = volid?.trim() ?? '';
+  if (!trimmed) return '';
+  return trimmed.slice(trimmed.lastIndexOf('/') + 1);
 }
 
 function pbsBackupFileDetailLabel(fileCount: number): string {
@@ -429,6 +454,48 @@ function newest<T>(items: readonly T[], getMs: (item: T) => number | undefined):
   return best;
 }
 
+/** Shared by the full inventory and the location-filtered Coverage view. */
+export function selectWorkloadRecoveryArtifacts(
+  artifacts: readonly RecoverableArtifact[],
+  nowMs: number,
+): Pick<
+  WorkloadCoverageRow,
+  'latestBackup' | 'latestPBS' | 'latestArchive' | 'latestSnapshot' | 'ageUnknown'
+> {
+  // Completion remains independent of age. Keep every artifact listed, but
+  // don't guess the latest when even one completed date cannot be ordered.
+  const completed = artifacts.filter((artifact) => !artifact.running && !artifact.failed);
+  const select = (items: RecoverableArtifact[]) => {
+    const unknown = items.some(
+      (artifact) => getRecoveryAgeBand(artifact.createdMs, nowMs) === 'unknown',
+    );
+    const latest = unknown ? undefined : newest(items, (artifact) => artifact.createdMs);
+    return {
+      unknown,
+      // Coverage reconciles its row store in place. Each pointer needs its
+      // own scalar fields: otherwise updating latestArchive can mutate the
+      // same object also held by latestBackup after a newer PBS point arrives.
+      latest: latest ? { ...latest } : undefined,
+    };
+  };
+  const backup = select(completed.filter(isBackupArtifact));
+  const pbs = select(completed.filter((artifact) => artifact.sourceKind === 'pbs'));
+  const archive = select(completed.filter((artifact) => artifact.sourceKind === 'archive'));
+  const snapshot = select(completed.filter((artifact) => artifact.sourceKind === 'snapshot'));
+  return {
+    latestBackup: backup.latest,
+    latestPBS: pbs.latest,
+    latestArchive: archive.latest,
+    latestSnapshot: snapshot.latest,
+    ageUnknown: {
+      backup: backup.unknown,
+      pbs: pbs.unknown,
+      archive: archive.unknown,
+      snapshot: snapshot.unknown,
+    },
+  };
+}
+
 function taskLabel(task: BackupTask): string {
   const normalized = normalizeKey(task.status);
   if (normalized === 'ok' || normalized === 'success' || normalized === 'completed') return 'OK';
@@ -524,7 +591,9 @@ export function buildProxmoxBackupRecoveryModel(
       backup.namespace,
       backup.datastore,
     ]);
-    const createdMs = parseTimestampMs(backup.backupTime);
+    const parsedMs = parseTimestampMs(backup.backupTime);
+    const createdMs =
+      getRecoveryAgeBand(parsedMs, input.nowMs) === 'unknown' ? undefined : parsedMs;
     const running =
       backup.inProgress === true &&
       (backup.writeActivityObserved !== true || backup.writeActive === true);
@@ -559,7 +628,9 @@ export function buildProxmoxBackupRecoveryModel(
       archive.instance,
       archive.node,
     ]);
-    const createdMs = parseTimestampMs(archive.time);
+    const parsedMs = parseTimestampMs(archive.time);
+    const createdMs =
+      getRecoveryAgeBand(parsedMs, input.nowMs) === 'unknown' ? undefined : parsedMs;
     addArtifact({
       id: `archive:${archive.id}`,
       nativeId: archive.id,
@@ -572,7 +643,12 @@ export function buildProxmoxBackupRecoveryModel(
       size: archive.size,
       location: archive.storage || archive.node || '—',
       ...artifactLocationScope('archive', archive.instance, archive.storage || archive.node),
-      detail: archive.volid || archive.format || archiveSource.detailFallbackLabel,
+      // The volid repeats the storage, guest type, VMID, and timestamp the row
+      // already shows in their own columns and clips at every width; the
+      // archive format is the one fact it adds, so that is the cell and the
+      // volid stays on hover and in search.
+      detail: archive.format || archiveFileName(archive.volid) || archiveSource.detailFallbackLabel,
+      detailTitle: archive.volid || undefined,
       protected: archive.protected,
       verified: archive.inProgress ? undefined : archive.isPBS ? archive.verified : undefined,
       running: archive.inProgress === true,
@@ -585,7 +661,9 @@ export function buildProxmoxBackupRecoveryModel(
       snapshot.instance,
       snapshot.node,
     ]);
-    const createdMs = parseTimestampMs(snapshot.time);
+    const parsedMs = parseTimestampMs(snapshot.time);
+    const createdMs =
+      getRecoveryAgeBand(parsedMs, input.nowMs) === 'unknown' ? undefined : parsedMs;
     addArtifact({
       id: `snapshot:${snapshot.id}`,
       nativeId: snapshot.id,
@@ -622,23 +700,7 @@ export function buildProxmoxBackupRecoveryModel(
   }
 
   for (const row of rows.values()) {
-    // Running and terminally incomplete artifacts cannot be restored from, so
-    // the "latest" pointers (which answer "what can I recover to?") skip them.
-    // The artifacts themselves stay listed with an honest state.
-    const completed = row.artifacts.filter((artifact) => !artifact.running && !artifact.failed);
-    row.latestPBS = newest(
-      completed.filter((artifact) => artifact.sourceKind === 'pbs'),
-      (artifact) => artifact.createdMs,
-    );
-    row.latestArchive = newest(
-      completed.filter((artifact) => artifact.sourceKind === 'archive'),
-      (artifact) => artifact.createdMs,
-    );
-    row.latestSnapshot = newest(
-      completed.filter((artifact) => artifact.sourceKind === 'snapshot'),
-      (artifact) => artifact.createdMs,
-    );
-    row.latestRecovery = newest(completed, (artifact) => artifact.createdMs);
+    Object.assign(row, selectWorkloadRecoveryArtifacts(row.artifacts, input.nowMs));
   }
 
   const coverageRows = Array.from(rows.values()).map((row) => {
@@ -665,7 +727,7 @@ export function buildProxmoxBackupRecoveryModel(
 
   coverageRows.sort((left, right) => {
     if (left.postureRank !== right.postureRank) return left.postureRank - right.postureRank;
-    return (right.latestRecovery?.createdMs ?? 0) - (left.latestRecovery?.createdMs ?? 0);
+    return (right.latestBackup?.createdMs ?? 0) - (left.latestBackup?.createdMs ?? 0);
   });
   artifacts.sort((left, right) => (right.createdMs ?? 0) - (left.createdMs ?? 0));
 
@@ -730,6 +792,7 @@ export function recoverableArtifactMatchesSearch(
     artifact.sourceTitle,
     artifact.location,
     artifact.detail,
+    artifact.detailTitle,
     artifact.verified === true
       ? 'verified'
       : artifact.verified === false

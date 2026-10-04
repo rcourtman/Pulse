@@ -132,6 +132,14 @@ describe('frontend dependency security floors', () => {
     }
   });
 
+  it('keeps braces out of the dependency graph', () => {
+    // GHSA-vfj7-8cjw-p6xm affects every braces release (<= 3.0.3) and has no
+    // patched version, so no override can fix it. Tailwind CSS 3 (via chokidar,
+    // fast-glob and micromatch) and jscpd 4 pulled it in; Tailwind CSS 4 and
+    // jscpd 5 do not. Keep it out rather than allowlisting the advisory.
+    expect(lockedVersions('braces')).toEqual([]);
+  });
+
   it('keeps nanoid custom generators above the zero-size loop floor', () => {
     const versions = lockedVersions('nanoid');
     expect(versions).not.toHaveLength(0);
@@ -187,7 +195,6 @@ describe('frontend dependency security floors', () => {
       ['typescript-eslint', [8, 70, 0]],
       ['@typescript-eslint/eslint-plugin', [8, 70, 0]],
       ['@typescript-eslint/parser', [8, 70, 0]],
-      ['autoprefixer', [10, 6, 1]],
       ['eslint-plugin-solid', [0, 18, 0]],
       ['postcss', [8, 5, 28]],
       ['vite-plugin-solid', [2, 11, 14]],

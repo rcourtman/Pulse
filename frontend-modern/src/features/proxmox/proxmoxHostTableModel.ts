@@ -31,7 +31,7 @@ const HOST_COLUMN_MIN_LAYOUT: Record<ProxmoxHostTableColumnId, WorkloadTableLayo
   cpu: 'narrow',
   memory: 'narrow',
   disk: 'narrow',
-  temp: 'phone',
+  temp: 'mobile',
   uptime: 'narrow',
   cluster: 'tablet',
   vms: 'compact',
@@ -46,8 +46,8 @@ const HOST_COLUMN_MIN_LAYOUT: Record<ProxmoxHostTableColumnId, WorkloadTableLayo
 // columns (version pill, uptime, temp gauge, vms/cts badges, cluster
 // pill) take only what they need.
 const HOST_COLUMN_DESKTOP_WIDTHS: Record<ProxmoxHostTableColumnId, number> = {
-  node: 18,
-  version: 7,
+  node: 20,
+  version: 6,
   uptime: 7,
   cpu: 13,
   memory: 13,
@@ -55,7 +55,7 @@ const HOST_COLUMN_DESKTOP_WIDTHS: Record<ProxmoxHostTableColumnId, number> = {
   temp: 6,
   vms: 5,
   cts: 5,
-  cluster: 13,
+  cluster: 12,
 };
 
 const HOST_COLUMN_RESPONSIVE_WEIGHTS: Record<
@@ -69,13 +69,15 @@ const HOST_COLUMN_RESPONSIVE_WEIGHTS: Record<
     disk: 15,
     uptime: 15,
   },
+  // Phones carry the same five columns as the guest table below them. A sixth
+  // (temperature) left the node name with four characters, which made a
+  // cluster of "Analytics A".."F" rows unreadable.
   phone: {
     node: 32,
-    cpu: 13,
-    memory: 13,
-    disk: 13,
-    temp: 15,
-    uptime: 14,
+    cpu: 15,
+    memory: 15,
+    disk: 15,
+    uptime: 15,
   },
   mobile: {
     node: 32,
@@ -146,6 +148,11 @@ export const getProxmoxHostVisibleColumnsForLayout = (
   );
 };
 
+// The node cell carries the expansion toggle and status dot before the name,
+// so it needs more than the shared 30% phone identity anchor to show a
+// typical node name whole.
+const PROXMOX_HOST_PHONE_IDENTITY_WIDTH_PERCENT = 38;
+
 export const getProxmoxHostColumnWidthStyle = (
   columnId: ProxmoxHostTableColumnId,
   layoutMode: WorkloadTableLayoutMode,
@@ -159,9 +166,11 @@ export const getProxmoxHostColumnWidthStyle = (
     visibleColumnIds,
     layoutMode === 'narrow'
       ? { columnId: 'node', widthPercent: PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT }
-      : layoutMode === 'phone' || layoutMode === 'mobile'
-        ? { columnId: 'node', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
-        : undefined,
+      : layoutMode === 'phone'
+        ? { columnId: 'node', widthPercent: PROXMOX_HOST_PHONE_IDENTITY_WIDTH_PERCENT }
+        : layoutMode === 'mobile'
+          ? { columnId: 'node', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
+          : undefined,
   );
 };
 
@@ -171,11 +180,11 @@ export const getProxmoxHostColumnWidthStyle = (
 // does not collapse into unreadable labels.
 export const getProxmoxHostTableMinWidthClass = (
   layoutMode: WorkloadTableLayoutMode,
-): 'min-w-[0px]' | 'min-w-[50rem]' | 'min-w-[64rem]' | 'min-w-[1240px]' => {
+): 'min-w-0' | 'min-w-200' | 'min-w-5xl' | 'min-w-[1240px]' => {
   if (layoutMode === 'narrow' || layoutMode === 'phone' || layoutMode === 'mobile') {
-    return 'min-w-[0px]';
+    return 'min-w-0';
   }
-  if (layoutMode === 'tablet') return 'min-w-[50rem]';
-  if (layoutMode === 'compact') return 'min-w-[64rem]';
+  if (layoutMode === 'tablet') return 'min-w-200';
+  if (layoutMode === 'compact') return 'min-w-5xl';
   return 'min-w-[1240px]';
 };

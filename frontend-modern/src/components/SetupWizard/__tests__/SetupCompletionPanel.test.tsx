@@ -75,22 +75,39 @@ describe('SetupCompletionPanel', () => {
   it('frames setup completion around the canonical add-infrastructure picker', async () => {
     render(() => <SetupCompletionPanel state={baseState} onComplete={vi.fn()} />);
 
-    expect(screen.getByText('Choose your first infrastructure source')).toBeInTheDocument();
+    expect(screen.getByText('Connect your first system')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add infrastructure' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Install Pulse Agent' })).toBeInTheDocument();
     expect(screen.getByText('Credentials you must save now')).toBeInTheDocument();
     expect(screen.getByText('Shown during setup')).toBeInTheDocument();
     expect(screen.getByText('admin')).toBeInTheDocument();
     expect(screen.getByText('password')).toBeInTheDocument();
-    expect(screen.getByText('Source choices')).toBeInTheDocument();
-    expect(screen.getByText('Platform API')).toBeInTheDocument();
+    expect(screen.getByText('Ways to connect')).toBeInTheDocument();
+    expect(screen.getByText('Connect by API')).toBeInTheDocument();
     expect(screen.getByText('Use both')).toBeInTheDocument();
     expect(
-      screen.getByText('Inventory and health from Proxmox, TrueNAS, VMware, PBS, or PMG.'),
+      screen.getByText(
+        'Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, TrueNAS, or VMware. Pulse reads VMs, storage, and health through the platform API.',
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Node-local telemetry for standalone hosts, services, Docker, and Kubernetes.',
+        'Run the installer on a Linux, Windows, or macOS host. Pulse Agent reports host telemetry. Temperatures, SMART, Docker, and Kubernetes are available only where supported.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Connect Proxmox by API for the whole cluster, then add the agent on nodes where you want host-local telemetry such as temperatures and SMART data where available.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Open Add infrastructure and choose a platform API connection or a host to install Pulse Agent on.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Connect Proxmox, TrueNAS, or VMware through their API, or run the Pulse Agent installer on a standalone host. On Proxmox nodes, the agent can add host-local temperatures and SMART data when available.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('What happens next')).not.toBeInTheDocument();
@@ -202,7 +219,7 @@ describe('SetupCompletionPanel', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Add infrastructure stays available for more Pulse Agent systems or platform API inventory when a platform manages the estate.',
+        'Use Add infrastructure any time to add more machines, or to connect a platform such as Proxmox through its API.',
       ),
     ).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Open Infrastructure' }).length).toBeGreaterThan(
@@ -258,7 +275,7 @@ describe('SetupCompletionPanel', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Add infrastructure stays available for more API-backed systems or Pulse Agent telemetry when a system needs node-local coverage.',
+        'Use Add infrastructure any time to connect more systems, or to install Pulse Agent on Proxmox nodes for host-local telemetry such as temperatures and SMART data where available.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Infrastructure' })).toBeInTheDocument();
@@ -362,7 +379,7 @@ describe('SetupCompletionPanel', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Add infrastructure stays available any time you want to expand from this first system with another API source, Agent source, or both.',
+        'Use Add infrastructure any time to connect more systems through their API, with the agent, or both.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add infrastructure' })).toBeInTheDocument();

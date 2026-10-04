@@ -286,7 +286,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
                 {(prompt) => (
                   <button
                     type="button"
-                    class="w-full rounded-md border border-border bg-surface px-3 py-2 text-left text-sm text-base-content transition-colors hover:border-blue-300 hover:bg-surface-alt focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                    class="w-full rounded-md border border-border bg-surface px-3 py-2 text-left text-sm text-base-content transition-colors hover:border-blue-300 hover:bg-surface-alt focus:outline-hidden focus:ring-2 focus:ring-blue-500/30"
                     onClick={() => props.onSuggestedPrompt?.(prompt)}
                     data-testid="assistant-suggested-prompt"
                   >
@@ -310,7 +310,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
                   return (
                     <button
                       type="button"
-                      class="w-full rounded-md border border-border bg-surface px-3 py-2 text-left transition-colors hover:border-blue-300 hover:bg-surface-alt focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      class="w-full rounded-md border border-border bg-surface px-3 py-2 text-left transition-colors hover:border-blue-300 hover:bg-surface-alt focus:outline-hidden focus:ring-2 focus:ring-blue-500/30"
                       onClick={() => props.onLoadSession?.(session.id)}
                       aria-label={`Resume ${session.title || 'Untitled Assistant session'}`}
                     >

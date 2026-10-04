@@ -140,14 +140,14 @@ export function UpdateBanner() {
     <Show when={updateStore.isUpdateVisible()}>
       <div
         data-testid="update-banner"
-        class="update-banner bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 relative animate-slideDown"
+        class="update-banner bg-blue-50 dark:bg-blue-900/25 border-b border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 relative animate-slideDown"
       >
         <div class="px-4 py-1.5">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
               {/* Update icon */}
               <svg
-                class="w-4 h-4 flex-shrink-0"
+                class="w-4 h-4 shrink-0"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -170,7 +170,7 @@ export function UpdateBanner() {
 
                 {/* Pre-release badge */}
                 <Show when={updateStore.updateInfo()?.isPrerelease && !isExpanded()}>
-                  <span class="px-2 py-0.5 text-xs font-medium bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded">
+                  <span class="px-2 py-0.5 text-xs font-medium bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded-sm">
                     Pre-release
                   </span>
                 </Show>
@@ -180,7 +180,7 @@ export function UpdateBanner() {
                 <Show when={updatePlan()?.canAutoUpdate && !isExpanded()}>
                   <button
                     onClick={handleApplyUpdate}
-                    class="px-3 py-1 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+                    class="px-3 py-1 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-sm transition-colors"
                   >
                     Apply Update
                   </button>
@@ -192,7 +192,7 @@ export function UpdateBanner() {
                     updatePlan() && !updatePlan()?.canAutoUpdate && !isExpanded() && !isProEdition()
                   }
                 >
-                  <span class="px-2 py-0.5 text-xs font-medium bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded">
+                  <span class="px-2 py-0.5 text-xs font-medium bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded-sm">
                     Manual steps required
                   </span>
                 </Show>
@@ -208,7 +208,7 @@ export function UpdateBanner() {
                     href={PRO_RELEASE_ACCESS_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="px-3 py-1 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+                    class="px-3 py-1 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-sm transition-colors"
                   >
                     Update via Private Release Access →
                   </a>
@@ -239,7 +239,7 @@ export function UpdateBanner() {
               {/* Expand/Collapse button */}
               <button
                 onClick={() => setIsExpanded(!isExpanded())}
-                class="p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded transition-colors"
+                class="p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded-sm transition-colors"
                 title={isExpanded() ? 'Show less' : 'Show more'}
               >
                 <svg
@@ -256,7 +256,7 @@ export function UpdateBanner() {
               {/* Dismiss button */}
               <button
                 onClick={() => updateStore.dismissUpdate()}
-                class="p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded transition-colors"
+                class="p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded-sm transition-colors"
                 title="Dismiss this update"
               >
                 <svg
@@ -286,7 +286,7 @@ export function UpdateBanner() {
 
                 {/* What's new preview (customer-facing improvements or historical Highlights) */}
                 <Show when={highlightsHtml()}>
-                  <div class="mt-2 p-3 rounded-md border bg-blue-100 dark:bg-blue-950 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200">
+                  <div class="mt-2 p-3 rounded-md border bg-blue-100 dark:bg-blue-950/25 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200">
                     <div class="font-medium mb-1">
                       What's new in v
                       {normalizeReleaseVersion(updateStore.updateInfo()?.latestVersion)}
@@ -311,7 +311,7 @@ export function UpdateBanner() {
                 {/* Pro edition without auto-update: portal update path (the
                     community instructions below would strip Pro features) */}
                 <Show when={isProEdition() && updatePlan() && !updatePlan()?.canAutoUpdate}>
-                  <div class="mt-2 p-3 rounded-md border bg-blue-100 dark:bg-blue-950 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200">
+                  <div class="mt-2 p-3 rounded-md border bg-blue-100 dark:bg-blue-950/25 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200">
                     <div class="font-medium mb-1">Pulse Pro update</div>
                     <Show
                       when={updateStore.updateInfo()?.dockerUpdate}
@@ -365,7 +365,7 @@ export function UpdateBanner() {
                       href={PRO_RELEASE_ACCESS_URL}
                       target="_blank"
                       rel="noopener noreferrer"
-                      class="inline-block mt-2 underline hover:text-blue-900 dark:hover:text-blue-100"
+                      class="inline-block mt-2 underline hover:text-blue-900/25 dark:hover:text-blue-100"
                     >
                       Open Private Release Access →
                     </a>
@@ -384,13 +384,13 @@ export function UpdateBanner() {
                       updateStore.updateInfo()?.isPrerelease
                         ? 'bg-orange-50 dark:bg-orange-950 border-orange-300 dark:border-orange-700 text-orange-800 dark:text-orange-200'
                         : updateStore.updateInfo()?.isMajorUpgrade
-                          ? 'bg-amber-50 dark:bg-amber-950 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200'
-                          : 'bg-blue-100 dark:bg-blue-950 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200'
+                          ? 'bg-amber-50 dark:bg-amber-950/25 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200'
+                          : 'bg-blue-100 dark:bg-blue-950/25 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200'
                     }`}
                   >
                     <div class="flex items-start gap-2">
                       <svg
-                        class="w-4 h-4 mt-0.5 flex-shrink-0"
+                        class="w-4 h-4 mt-0.5 shrink-0"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -420,14 +420,14 @@ export function UpdateBanner() {
                     <div class="space-y-2">
                       <For each={updatePlan()?.instructions || []}>
                         {(instruction, index) => (
-                          <div class="bg-surface-alt rounded border border-blue-200 dark:border-blue-700 p-2">
+                          <div class="bg-surface-alt rounded-sm border border-blue-200 dark:border-blue-700 p-2">
                             <div class="flex items-start justify-between gap-2">
                               <code class="text-xs text-base-content font-mono flex-1 break-all">
                                 {instruction}
                               </code>
                               <button
                                 onClick={() => handleCopy(instruction, index())}
-                                class="flex-shrink-0 p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded transition-colors"
+                                class="shrink-0 p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded-sm transition-colors"
                                 title="Copy to clipboard"
                               >
                                 <Show
@@ -476,7 +476,7 @@ export function UpdateBanner() {
                   <div class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
                     <button
                       onClick={handleApplyUpdate}
-                      class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+                      class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-sm transition-colors"
                     >
                       Apply Update Automatically
                     </button>

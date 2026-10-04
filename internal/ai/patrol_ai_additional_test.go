@@ -193,21 +193,10 @@ func TestPatrolService_BuildScopedSetForRuntime_TypeOnlyScopeWithCorrelation(t *
 func TestBuildSeedContextState_TypeOnlyScopeUsesRuntimeScopedSet(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 
-	changeDetector := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 10})
-	changeDetector.DetectChanges([]ResourceSnapshot{{
-		ID:           "qemu/101",
-		Name:         "vm-1",
-		Type:         "vm",
-		Status:       "running",
-		SnapshotTime: time.Now().Add(-2 * time.Hour),
-	}})
-	changeDetector.DetectChanges([]ResourceSnapshot{{
-		ID:           "qemu/101",
-		Name:         "vm-1",
-		Type:         "vm",
-		Status:       "stopped",
-		SnapshotTime: time.Now().Add(-time.Hour),
-	}})
+	changeDetector := newLegacyChangeDetector(t,
+		legacyCreatedChange("qemu/101", "vm-1", "vm"),
+		legacyStatusChange("qemu/101", "vm-1", "vm", "running", "stopped"),
+	)
 	ps.SetChangeDetector(changeDetector)
 
 	node := ur.NewNodeView(&ur.Resource{ID: "node-1", Name: "node-1", Type: ur.ResourceTypeAgent})
@@ -230,21 +219,10 @@ func TestBuildSeedContextState_TypeOnlyScopeUsesRuntimeScopedSet(t *testing.T) {
 func TestBuildSeedContextState_TypeOnlyScopeIncludesCorrelatedRuntimeChange(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 
-	changeDetector := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 10})
-	changeDetector.DetectChanges([]ResourceSnapshot{{
-		ID:           "qemu/101",
-		Name:         "vm-1",
-		Type:         "vm",
-		Status:       "running",
-		SnapshotTime: time.Now().Add(-2 * time.Hour),
-	}})
-	changeDetector.DetectChanges([]ResourceSnapshot{{
-		ID:           "qemu/101",
-		Name:         "vm-1",
-		Type:         "vm",
-		Status:       "stopped",
-		SnapshotTime: time.Now().Add(-time.Hour),
-	}})
+	changeDetector := newLegacyChangeDetector(t,
+		legacyCreatedChange("qemu/101", "vm-1", "vm"),
+		legacyStatusChange("qemu/101", "vm-1", "vm", "running", "stopped"),
+	)
 	ps.SetChangeDetector(changeDetector)
 
 	cfg := correlation.DefaultConfig()

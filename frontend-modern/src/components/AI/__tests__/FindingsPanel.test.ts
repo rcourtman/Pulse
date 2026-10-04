@@ -178,7 +178,9 @@ describe('FindingsPanel assistant handoff', () => {
     // row body itself opens the same details panel for normal scanning.
     expect(findingsPanelSource).toContain('role="button"');
     expect(findingsPanelSource).toContain('tabIndex={0}');
-    expect(findingsPanelSource).toContain('class="min-w-0 flex-1 cursor-pointer rounded text-left');
+    expect(findingsPanelSource).toContain(
+      'class="min-w-0 flex-1 cursor-pointer rounded-sm text-left',
+    );
     expect(findingsPanelSource).toContain('aria-expanded={expandedId() === finding.id}');
     expect(findingsPanelSource).toContain(
       "aria-label={`${expandedId() === finding.id ? 'Close issue details' : 'Open issue details'} for ${title.label}`}",
@@ -563,7 +565,7 @@ describe('aiFindingPresentation', () => {
       ).toEqual({
         label: 'Runtime issue',
         badgeClasses:
-          'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900 dark:text-sky-300',
+          'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/25 dark:text-sky-300',
         badgeTone: 'sky',
         uppercase: false,
       });
@@ -671,7 +673,7 @@ describe('aiFindingPresentation', () => {
         kind: 'runtime',
         label: 'Patrol runtime',
         badgeClasses:
-          'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900 dark:text-sky-300',
+          'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/25 dark:text-sky-300',
       });
     });
 
@@ -944,10 +946,10 @@ describe('aiFindingPresentation', () => {
 
     it('keeps Patrol review and sort controls touch-sized on phones', () => {
       expect(findingsPanelSource).toContain(
-        'class="inline-flex min-h-11 items-center gap-1 rounded border border-border',
+        'class="inline-flex min-h-11 items-center gap-1 rounded-sm border border-border',
       );
       expect(findingsPanelSource).toContain(
-        'selectBaseClass="min-h-11 rounded border border-border',
+        'selectBaseClass="min-h-11 rounded-sm border border-border',
       );
       expect(findingsPanelSource).toContain('sm:min-h-0');
     });
@@ -1093,7 +1095,7 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('severityPresentation.badgeTone');
       expect(findingsPanelSource).toContain('severityPresentation.label');
       expect(findingsPanelSource).not.toContain(
-        'px-1.5 py-0.5 border text-[10px] font-medium rounded',
+        'px-1.5 py-0.5 border text-[10px] font-medium rounded-sm',
       );
     });
 

@@ -157,8 +157,6 @@ describe('ResourceOperatorStateSection', () => {
     // nothing once it ends.
     expect(sectionSource).toContain('scheduledMaintenanceWindow');
     expect(sectionSource).toContain('Maintenance window scheduled.');
-    expect(sectionSource).toContain('Auto-acknowledgement will');
-    expect(sectionSource).toContain("start{' '}");
   });
 
   it('exposes Edit window and Cancel window controls when a window exists', () => {
@@ -202,7 +200,7 @@ describe('ResourceOperatorStateSection', () => {
     expect(sectionSource).toContain(
       'flex flex-col items-stretch justify-between gap-3 border-t border-border-subtle pt-2 sm:flex-row sm:items-center',
     );
-    expect(sectionSource).toContain('min-h-11 self-start rounded border border-border');
+    expect(sectionSource).toContain('min-h-11 self-start rounded-sm border border-border');
     expect(sectionSource).toContain(
       'min-h-11 px-2.5 py-1 text-xs font-medium text-white bg-blue-600',
     );

@@ -542,10 +542,10 @@ func TestHandleAgentInstallCommand(t *testing.T) {
 	if resp.Token == "" || resp.Command == "" {
 		t.Fatalf("expected token and command in response")
 	}
-	if !bytes.Contains([]byte(resp.Command), []byte(resp.Token)) {
-		t.Fatalf("expected command to include token")
+	if bytes.Contains([]byte(resp.Command), []byte(resp.Token)) || !strings.Contains(resp.Command, `--token-file "$token_file"`) {
+		t.Fatal("credential must be entered privately, not included in copied command")
 	}
-	if !bytes.Contains([]byte(resp.Command), []byte("--proxmox-type "+posixShellQuote("pve"))) {
+	if resp.Command != BuildProxmoxAgentInstallCommand(AgentInstallCommandOptions{BaseURL: "http://example.com:8080", Token: resp.Token, InstallType: "pve", IncludeInstallType: true, EnableCommands: true}) {
 		t.Fatalf("expected command to include proxmox type")
 	}
 	if len(cfg.APITokens) != 1 {
@@ -633,7 +633,7 @@ func TestHandleAgentInstallCommand_NormalizesType(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if !bytes.Contains([]byte(resp.Command), []byte("--proxmox-type "+posixShellQuote("pbs"))) {
+	if resp.Command != BuildProxmoxAgentInstallCommand(AgentInstallCommandOptions{BaseURL: "http://example.com:8080", Token: resp.Token, InstallType: "pbs", IncludeInstallType: true}) {
 		t.Fatalf("expected normalized proxmox type in command, got: %s", resp.Command)
 	}
 }

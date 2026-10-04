@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReplicationJob } from '@/types/api';
 import {
@@ -54,7 +54,7 @@ describe('ProxmoxReplicationTable', () => {
   });
 
   it('removes phone tracking and excess padding from the tight last-sync column', () => {
-    expect(replicationTableSource).toContain('![padding-inline:2px] !tracking-normal');
+    expect(replicationTableSource).toContain('px-[2px]! tracking-normal!');
   });
 
   it('renders replication duration cells through the shared duration format', () => {
@@ -94,5 +94,41 @@ describe('ProxmoxReplicationTable', () => {
     ));
 
     expect(screen.getByText('backend duration')).toBeInTheDocument();
+  });
+
+  it('reveals the whole error from the row disclosure at desktop width', async () => {
+    const error =
+      "command 'zfs send -- rpool/data/vm-100-disk-0@__replicate_100-0__' failed: exit code 255";
+    render(() => (
+      <ProxmoxReplicationTable
+        jobs={[replicationJob({ lastSyncStatus: 'error', failCount: 3, error })]}
+        error={undefined}
+        onRetry={() => undefined}
+        emptyIcon={<span />}
+        emptyTitle="No replication jobs"
+        emptyDescription="Replication jobs appear here."
+      />
+    ));
+
+    expect(document.querySelector('[data-replication-job-error]')).toBeNull();
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for replication job 100-0' }),
+    );
+
+    const detail = document.querySelector('[data-replication-job-error]');
+    expect(detail).toHaveTextContent(error);
+    // The expansion wraps; only the one-line row cell truncates.
+    expect(detail?.className).toContain('wrap-break-word');
+    expect(detail?.className).not.toContain('truncate');
+  });
+
+  it('gives the error column more room than the 8% that clipped it', () => {
+    expect(replicationTableSource).toContain("error: 'w-[13%]'");
+    expect(replicationTableSource).not.toContain("error: 'w-[8%]'");
+    expect(replicationTableSource).not.toContain('max-w-[18rem] truncate');
+  });
+
+  it('matches jobs by their error text', () => {
+    expect(replicationTableSource).toMatch(/job\.lastSyncStatus,\s*job\.error,\s*job\.comment,/);
   });
 });

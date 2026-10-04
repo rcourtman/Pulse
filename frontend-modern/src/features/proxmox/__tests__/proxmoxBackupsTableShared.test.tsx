@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { WorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
 import proxmoxBackupServersTableSource from '../ProxmoxBackupServersTable.tsx?raw';
@@ -8,7 +8,10 @@ import proxmoxBackupsTableSharedSource from '../proxmoxBackupsTableShared.tsx?ra
 import {
   ArtifactSourceBadge,
   ArtifactStateBadge,
+  ProxmoxBackupAgeText,
   ProxmoxBackupWorkloadTypeBadge,
+  SortableHead,
+  formatCompactBackupAge,
 } from '../proxmoxBackupsTableShared';
 import type { RecoverableArtifact } from '../proxmoxBackupRecoveryModel';
 
@@ -68,7 +71,7 @@ describe('proxmoxBackupsTableShared', () => {
     expect(proxmoxBackupsTableSharedSource).toContain('presentation().badgeTone');
     expect(proxmoxBackupsTableSharedSource).not.toContain('presentation().badgeClassName');
     expect(proxmoxBackupsTableSharedSource).not.toMatch(
-      /inline-flex items-center rounded-sm px-1\.5 py-0\.5 text-\[10px\] font-semibold/,
+      /inline-flex items-center rounded-xs px-1\.5 py-0\.5 text-\[10px\] font-semibold/,
     );
   });
 
@@ -85,6 +88,28 @@ describe('proxmoxBackupsTableShared', () => {
     }
   });
 
+  it('drops the age suffix in the phone projection and keeps the timestamp on hover', () => {
+    const createdAt = new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString();
+    expect(formatCompactBackupAge(createdAt)).toBe('18h');
+    expect(formatCompactBackupAge(new Date().toISOString())).toBe('now');
+
+    const artifact = {
+      id: 'pbs:1',
+      nativeId: '1',
+      sourceKind: 'pbs',
+      sourceLabel: 'PBS',
+      workload: { key: 'w', type: 'vm', typeLabel: 'VM', vmid: '100', label: 'VM 100' },
+      createdAt,
+      createdMs: Date.parse(createdAt),
+      location: 'main',
+      detail: '',
+      protected: false,
+    } as RecoverableArtifact;
+    render(() => <ProxmoxBackupAgeText artifact={artifact} compact />);
+    const age = screen.getByText('18h');
+    expect(age.closest('[title]')?.getAttribute('title')).toContain(createdAt);
+  });
+
   it('keeps backup age text on the shared relative-time primitive', () => {
     expect(proxmoxBackupsTableSharedSource).toContain('PlatformTableRelativeTimeValue');
     expect(proxmoxBackupsTableSharedSource).not.toContain('formatRelativeTime(');
@@ -94,6 +119,28 @@ describe('proxmoxBackupsTableShared', () => {
     expect(proxmoxBackupsTableSharedSource).toContain('getTableSortIndicator');
     expect(proxmoxBackupsTableSharedSource).not.toContain('ArrowUpDownIcon');
     expect(proxmoxBackupsTableSharedSource).not.toContain('SORT_ICON_CLASS');
+  });
+
+  it('keeps sortable headers in the same uppercase as their plain neighbours', () => {
+    render(() => (
+      <table>
+        <thead>
+          <tr>
+            <SortableHead
+              label="Workload"
+              sortKey="workload"
+              currentSort={() => 'posture'}
+              direction={() => 'asc'}
+              onSort={() => undefined}
+              headClass=""
+            />
+          </tr>
+        </thead>
+      </table>
+    ));
+
+    // A button resets text-transform, so the header casing must be restated.
+    expect(screen.getByRole('button', { name: 'Sort by Workload' })).toHaveClass('uppercase');
   });
 });
 
@@ -118,3 +165,43 @@ function artifact(overrides: Partial<RecoverableArtifact> = {}): RecoverableArti
     ...overrides,
   };
 }
+
+describe('backup-date-evidence age cell', () => {
+  const now = Date.parse('2026-10-04T12:00:00Z');
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(now);
+  });
+  afterEach(() => vi.useRealTimers());
+  for (const compact of [false, true]) {
+    it.each(['not-a-date', '0001-01-01T00:00:00Z', '2026-10-04T12:00:01Z'])(
+      '[regression] labels %s unknown in ' + (compact ? 'compact' : 'full') + ' age cells',
+      (createdAt) => {
+        render(() => (
+          <ProxmoxBackupAgeText
+            artifact={artifact({ createdAt, createdMs: Date.parse(createdAt) })}
+            compact={compact}
+          />
+        ));
+        const value = screen.getByText('Unknown');
+        expect(value).toHaveClass('text-amber-600');
+        if (compact) expect(value).toHaveClass('text-[10px]');
+        expect(value).toHaveAccessibleName(/Unknown age/);
+        expect(value.title).not.toContain(createdAt);
+        expect(value.title).toContain('unavailable or in the future');
+      },
+    );
+  }
+  it('[control] valid completed dates retain relative age and their reported timestamp', () => {
+    const createdAt = '2026-10-04T11:00:00Z';
+    render(() => (
+      <ProxmoxBackupAgeText
+        artifact={artifact({ createdAt, createdMs: Date.parse(createdAt) })}
+        compact
+      />
+    ));
+    const value = screen.getByText('1h');
+    expect(value).toHaveClass('text-emerald-600');
+    expect(value.title).toContain(createdAt);
+  });
+});

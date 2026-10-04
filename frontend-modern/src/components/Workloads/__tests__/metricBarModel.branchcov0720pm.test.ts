@@ -2,16 +2,20 @@ import { describe, expect, it } from 'vitest';
 
 import { estimateTextWidth } from '@/utils/format';
 
+import metricBarSource from '../MetricBar.tsx?raw';
 import type { MetricBarProps } from '../metricBarModel';
 import { buildMetricBarPresentation } from '../metricBarModel';
 
-// estimateTextWidth(text) = text.length * 5.5 + 8 (mirrored from @/utils/format).
-// For label='CPU' + sublabel='8c' the composed threshold text is 'CPU (8c)'
-// (length 8) -> estimateTextWidth = 8 * 5.5 + 8 = 52. So a containerWidth of 52
-// trips the >= true arm of the showSublabel check, and 51 trips the false arm.
+// The long form needs its text plus the 4px of padding the label span
+// carries. For label='CPU' + sublabel='8c' the text is 'CPU' semibold (21.83)
+// and ' (8c)' at normal weight (23.04): 44.87, rounded up to 45, plus 4 = 49.
+// So a containerWidth of 49 trips the >= true arm of the showSublabel check,
+// and 48 trips the false arm.
 const LABEL = 'CPU';
 const SUBLABEL = '8c';
-const SUBLABEL_THRESHOLD = estimateTextWidth(`${LABEL} (${SUBLABEL})`); // 52
+const LABEL_PADDING_PX = 4;
+const SUBLABEL_THRESHOLD =
+  estimateTextWidth(LABEL, { detail: ` (${SUBLABEL})` }) + LABEL_PADDING_PX; // 49
 
 // Tailwind background class mirrored from metricThresholds.BG_CLASSES.normal.
 // Default cpu thresholds are warning 80 / critical 90 (METRIC_THRESHOLDS.cpu),
@@ -65,21 +69,45 @@ describe('buildMetricBarPresentation (branch coverage 0720pm)', () => {
     });
   });
 
-  describe('showSublabel threshold branch (containerWidth >= estimateTextWidth(...))', () => {
+  describe('showSublabel threshold branch (containerWidth >= estimateTextWidth(...) + padding)', () => {
     it('returns showSublabel=true when containerWidth meets the threshold exactly (>= true arm)', () => {
-      // estimateTextWidth('CPU (8c)') === 52; containerWidth 52 -> 52 >= 52 true.
-      expect(SUBLABEL_THRESHOLD).toBe(52);
+      // The threshold is 49; containerWidth 49 -> 49 >= 49 true.
+      expect(SUBLABEL_THRESHOLD).toBe(49);
       const p = buildMetricBarPresentation(makeProps(), SUBLABEL_THRESHOLD);
       expect(p.showLabel).toBe(true);
       expect(p.showSublabel).toBe(true);
     });
 
     it('returns showSublabel=false when containerWidth is one below the threshold (false arm)', () => {
-      // containerWidth 51 < 52 -> the >= arm is false -> showSublabel false.
+      // containerWidth 48 < 49 -> the >= arm is false -> showSublabel false.
       // showLabel itself is unaffected by the width check (still true here).
       const p = buildMetricBarPresentation(makeProps(), SUBLABEL_THRESHOLD - 1);
       expect(p.showLabel).toBe(true);
       expect(p.showSublabel).toBe(false);
+    });
+
+    it('keeps a 113px bar on the short label for "60% (265 GB/440 GB)"', () => {
+      // Measured in the browser on 2026-10-03: that label is 110.1px of text
+      // at text-[10px], so it needs 114.1px here and 118.1px in the memory
+      // bar's wider chip. The old 5.5px-per-character estimate put it at
+      // 112.5px, showed the long form in a 113px bar and clipped it.
+      const props = makeProps({ value: 60, label: '60%', sublabel: '265 GB/440 GB' });
+      expect(buildMetricBarPresentation(props, 109).showSublabel).toBe(false);
+      expect(buildMetricBarPresentation(props, 113).showSublabel).toBe(false);
+      expect(buildMetricBarPresentation(props, 114).showSublabel).toBe(false);
+      expect(buildMetricBarPresentation(props, 115).showSublabel).toBe(true);
+    });
+
+    it('fits a dotted label that the per-character estimate turned away', () => {
+      // '71% (5.65/8.00TB)' renders 93.5px wide: full stops and the slash are
+      // half a digit. It fits a 100px bar; 17 characters at 5.5px did not.
+      const props = makeProps({ value: 71, label: '71%', sublabel: '5.65/8.00TB' });
+      expect(buildMetricBarPresentation(props, 100).showSublabel).toBe(true);
+      expect(buildMetricBarPresentation(props, 97).showSublabel).toBe(false);
+    });
+
+    it('counts the padding the label span carries in MetricBar', () => {
+      expect(metricBarSource).toContain('text-ellipsis px-0.5 text-center');
     });
 
     it('returns showSublabel=false when sublabel is empty (Boolean(props.sublabel) false arm)', () => {

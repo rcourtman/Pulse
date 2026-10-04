@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -194,5 +195,27 @@ func TestBuildPatrolDigestEmptyInputIsZeroNotNil(t *testing.T) {
 	order := PatrolDigestOutcomeOrder(map[string]int{"resolved": 1, "needs_attention": 2, "zzz_custom": 1})
 	if len(order) != 3 || order[0] != "needs_attention" || order[1] != "resolved" || order[2] != "zzz_custom" {
 		t.Fatalf("outcome order = %v", order)
+	}
+}
+
+func TestSummarizeDigestSpendPricesPromptCacheBuckets(t *testing.T) {
+	t.Parallel()
+	now := time.Now()
+	events := []cost.UsageEvent{
+		{Timestamp: now, Provider: "anthropic", RequestModel: "anthropic:claude-sonnet-5", UseCase: "patrol",
+			InputTokens: 100_000, OutputTokens: 10_000, CacheCreationInputTokens: 200_000, CacheReadInputTokens: 1_000_000},
+		// Not Patrol: ignored.
+		{Timestamp: now, Provider: "anthropic", RequestModel: "anthropic:claude-sonnet-5", UseCase: "chat", InputTokens: 5},
+	}
+	spend := summarizeDigestSpend(events, func(time.Time) bool { return true })
+	if spend.Calls != 1 || spend.InputTokens != 100_000 || spend.OutputTokens != 10_000 {
+		t.Fatalf("spend = %+v", spend)
+	}
+	if spend.CacheCreationInputTokens != 200_000 || spend.CacheReadInputTokens != 1_000_000 {
+		t.Fatalf("cache buckets missing from digest spend: %+v", spend)
+	}
+	// Priced at Anthropic cache rates, not the input rate for every token.
+	if want := 0.2 + 0.1 + 0.5 + 0.2; !spend.PricingKnown || math.Abs(spend.EstimatedUSD-want) > 1e-9 {
+		t.Fatalf("estimated usd = %f (known=%v), want %f", spend.EstimatedUSD, spend.PricingKnown, want)
 	}
 }

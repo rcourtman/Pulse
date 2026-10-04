@@ -566,7 +566,7 @@ Companion drill:
   2. Confirm the candidate commit has already shipped on `rc` through a real
      release-pipeline run, not only workflow lint or static YAML validation.
      Accidental prerelease git tags do not count as shipped prerelease lineage.
-  3. Confirm the candidate satisfies the minimum 72-hour prerelease soak or that a
+  3. Confirm the candidate satisfies the minimum 24-hour prerelease soak or that a
      hotfix exception and reason are recorded explicitly before promotion.
   4. Confirm the previous stable rollback target and exact reinstall or pin
      command are recorded in the release notes or release ticket.
@@ -1029,6 +1029,14 @@ Companion drill:
     complete missing-package list is a failed boundary check, not qualification.
   `cd scripts/release_control && python3 -m unittest resolve_release_promotion_test release_promotion_policy_test`
   `go test ./scripts/installtests -run 'Test(Demo|DeployDemo|UpdateDemo|Release)' -count=1`
+  - `TestDemoReachabilityStopsBeforeUnreadyOrFailedTailnetProbes` executes
+    synthetic local daemon/probe commands: failed setup diagnostics never
+    contact the host, non-running/malformed status cannot pass readiness,
+    failed tailnet ping cannot fall back to TCP, and workflow output excludes
+    private topology, including stdout/stderr from both probes on success or
+    failure. Running-state success still requires both ping and SSH
+    transport, with bounded TCP failures retained. This is offline helper
+    correctness, not live OAuth access or installed demo acceptance.
 - Manual scenario:
   - Compare the exact selected release notes with the install-metadata verdict.
     Authored grouped notes must retain version identity, unsigned-Windows and

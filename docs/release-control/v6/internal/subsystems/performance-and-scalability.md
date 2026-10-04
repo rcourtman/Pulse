@@ -15,6 +15,181 @@
 
 ## Purpose
 
+### Workload backup projection preserves timestamp uncertainty
+
+Both resource-API and owning-canonical-snapshot paths preserve a present malformed
+backup time for the existing shared age admission, rather than replacing it with
+the numeric zero absence sentinel. Only missing/empty values and the explicit Go
+zero-time value (including zero fractional seconds) map to absence. The drawer
+does not gate its backup presentation on timestamp truthiness: NaN must reach the
+unknown verdict, not disappear as a missing completed backup. Future dates cannot
+be clamped to Today. This adds only constant-time validation to the current mapper
+and presentation memos; it introduces no requests, timers or retained caches.
+
+`useWorkloads.test.ts`, `GuestDrawer.test.tsx` and the focused backup time evidence
+controls pin the boundary. `browser-tests/backup-time-evidence.cjs` exercises real
+resource projection, rows, indicators and drawer replacement with synthetic API
+and canonical full/delta observations; those observations are not native backup
+or release proof.
+
+### Guest discovery evidence and UI state have exact owners
+
+The guest drawer's passive discovery lookup changes only when its explicit
+resource-type/agent/resource target changes, not on same-target metric or name
+snapshot refreshes. Retained/remount evidence is keyed by canonical guest and
+that target. A replacement target cannot display the predecessor's service,
+endpoint, URL suggestion or assurance suggestion while its own read is pending
+or failed. A successful absent-record read is empty; errors are not absence.
+The discovery detail reader preserves final HTTP401/403 on typed failures
+without reading the denied body, including agent-list/detail paths. Those
+failures withdraw cached evidence and show the fixed access message.
+A same-target transient failure may retain its own last successful details,
+but must visibly qualify them and provide an in-place retry without raw error
+text. This preserves the shared query's denial/cache-generation policy.
+
+A different canonical guest disposes its local tabs, range, forms, disclosures
+and outstanding read consumers. Same-ID updates stay mounted. Within that
+identity, a changed discovery target remounts only the existing Discovery tab,
+so late scan/notes completions cannot populate the successor's UI. Already
+sent server-side operations are not cancelled or retried by this boundary;
+saved operator URLs remain separate from derived suggestions.
+
+Verification: `discovery.test.ts` covers final status preservation on all
+three read paths and non-authoritative body claims. `GuestDrawer.test.tsx`
+covers replacement, source stability,
+late reads, HTTP401/403/cache withdrawal, transient retention/retry and
+canonical identity reset. `browser-tests/guest-discovery-identity.cjs` uses
+production drawer/DiscoveryTab/Manage/History, clients and CSS on desktop
+Chromium and touch WebKit. Its synthetic delayed scan is not a native command,
+QGA/thaw, fleet-performance, appliance identity or delivery proof.
+
+### Workload projection preserves native guest-read evidence
+
+`useWorkloads` forwards the existing Proxmox disk-status reason, guest-agent
+state/expected flag and VM operation lock through both its resource-API and
+owned canonical-snapshot paths. Numeric retained metrics cannot erase those
+read-state facts. `useGuestRowState` also withdraws bars/current-value labels
+for non-retained deferrals or unavailable canonical telemetry, rather than
+reviving a richer stale number. Same-identity read-state changes participate in the existing
+row signature even when numeric values are unchanged; unrelated rows retain
+their identity. No extra resource read, timer, workload command or graph is added.
+
+Full and fast canonical facet merges share the same bounded optional-field
+clearing: a native VM facet with positive VMID, runtime state and explicit
+guest-agent outcome supersedes its omitted disk-status reason, lock and
+expected flag. Other richer fields and partial/legacy omission remain retained.
+`useWorkloads.test.ts` and `resourceStateAdapters.test.ts` verify forwarding,
+clearing, false/zero values, unchanged peer-site rows and full/fast equivalence.
+`browser-tests/workload-read-evidence.cjs` composes the real hook, canonical
+merges, row, Overview and History with synthetic inputs. This is no native
+QGA/thaw, installed recovery, fleet-performance or release-availability claim.
+
+
+### Unavailable filesystem values share the existing disk model
+
+The filesystem list and guest Overview use the same nullable measured-byte ratio
+for text, severity and progress. Per-disk validation is constant work within the
+existing linear presentation pass; it adds no reads, queries, timers, remounts or
+resource-identity changes. Unavailable values stay neutral rather than passing a
+fabricated zero into threshold classification. Mounted filesystem evidence tests
+and the production browser fixture verify replacement and rendering, not a new
+latency, fleet-performance or native-collection claim.
+
+### Guest History live filesystem provenance
+
+The guest drawer derives deferred filesystem context from its current snapshot,
+separately from current CPU, memory and I/O. A retained `prev-` value may populate
+only the labelled last-known legend, never the current fallback or chart geometry.
+The added presentation input does not create a polling timer, trigger a guest
+read, or change History target/range ownership. Stable-target context updates
+reuse the mounted chart and existing query; the drawer's pre-existing target
+recomputation on guest-snapshot changes is unchanged. Mounted regressions in
+`GuestDrawer.test.tsx` and `GuestDrawerHistory.disk-provenance.test.tsx` verify
+the actual fallback/resumption path and request counts. This is presentation
+proof, not a native CPU improvement, QGA/thaw result or delivery acceptance.
+
+### Guest filesystem provenance preserves dense row geometry
+
+Visible retained/unavailable filesystem cues must fit the existing dense row
+rhythm, including canonical phone/narrow column weights, without adding a new
+collector, history request, layout observer, focus target or event path. Keep
+compact copy on narrow rows and the full safe reason in assistive text and the
+existing drawer. Inline sparkline plots may shrink to preserve their numeric
+value within the already assigned column; do not add forced minimum widths,
+observers or a larger row to compensate. The cue stays outside the
+bars/sparkline/history-lens branch, so changing display mode cannot discard freshness information; removing it
+requires a changed source observation rather than merely ending a lock.
+
+Verification: `GuestRow.test.tsx`, `MetricMiniSparkline.test.tsx` and production
+row/column-sizing/CSS browser fixture `guest-disk-provenance.cjs` cover all fixed
+deferrals, fresh independent evidence, same-row changes, and equal dense row
+height versus an unmarked control on desktop Chromium and phone Chromium/WebKit.
+Synthetic chart rendering is not fleet CPU, native collection or thaw proof.
+
+### Guest disk status updates retain row ownership
+
+Disk deferral copy follows reactive same-VM props in the existing row and drawer,
+without new guest commands, client polling, History writes or row remounts. Retained
+values are labelled rather than replaced with invented fresh percentages; fresh
+observations update values and remove the status. Mounted row/list/drawer controls
+and `browser-tests/guest-disk-deferral.cjs` verify same-row ownership in bar and
+sparkline modes with desktop and phone CSS. This is client behaviour proof, not
+native backup coordination, new History samples or a fleet performance result.
+
+Completed backup presentation follows the existing same-guest snapshot owner.
+Running activity and completed protection are independent derived detail rows;
+neither starts a command, adds a read/timer nor remounts the drawer. Stopping
+activity cannot synthesize a completed timestamp. `GuestDrawer.test.tsx` and
+`browser-tests/guest-backup-protection.cjs` verify in-place missing/old/new
+completion transitions through the actual drawer. This is ownership/presentation
+proof, not an allocation benchmark, native backup or fleet performance claim.
+
+### Phone workload identity weights
+
+The existing phone guest projection allocates 38 percent to the name cell,
+which includes disclosure, status and backup controls, while normalising every
+remaining visible metric weight. Narrow/mobile/desktop modes and windowing
+ownership remain unchanged. Guest column regressions verify the sums and the
+production composed-table browser fixture checks identity and all configured
+metric tracks at narrow width; this is readability, not a throughput claim.
+
+
+### Bounded confidence/priority work in broadcast grouping — issue #2199
+
+The general identity matcher retains every confidence, reason, ordering and
+review flag. Top-level grouping requests only its existing high-confidence
+floor (0.90), so hostname-only and IP-only peer sets are not built when no
+eligible composite signal exists. High-confidence results are identical to
+filtering the full general matcher; machine ID, UUID and hostname+MAC still
+keep their existing precedence. Host/IP fallback still requires exactly one
+strictly better-priority owner. Equal/worse-priority peers are discarded before
+allocating/sorting fallback candidates, and a best-priority group has no possible
+attachment target. No identity, ambiguity, count, group ID or explanation rule
+changes, and no cached output hides live transitions.
+
+Independent pre-repair matching/grouping oracles, candidate-floor differential
+cases/fuzzing, a discarded-peer allocation bound, mixed grouping records and the
+complete existing identity/topology suites protect these constraints. The
+residual synthetic broadcast profile identified discarded matching/grouping as
+the dominant cost; it is not a profile of the reporter's installed agent fleet.
+
+### Connected-dashboard snapshot ownership — issue #2199
+
+Concrete frontend snapshots encode resources individually into immutable owned
+buffers, avoiding a whole-state resources encode/decode/copy round trip. Each
+resource identity is decoded from its encoded bytes, including every tail entry;
+source ID hints are never authoritative. Unknown shapes and custom marshalers
+retain full generic encoding. The remaining top-level fields use that same
+generic path, preserving future fields, nil/empty/omitempty semantics and keyed
+alert/infrastructure fallback. Reconnect baselines, removals, ordering, queue
+failure and REST-hydration frame limits keep their existing ownership.
+
+Full-wire differential tests and fuzzing compare typed value/pointer snapshots,
+errors and encoded identities with generic encoding; mutation tests protect
+retained buffers. Complete broadcast benchmarks include projection and delta
+queues rather than treating an ID-only or component allocation result as field
+CPU relief. Installed connected/closed-dashboard CPU remains separate evidence.
+
 The resource adapter fast delta path must remain content-equivalent to the full merge for explicit Proxmox memory withdrawal. An absent canonical metric plus incoming Proxmox usageUnavailable clears the old display value; store patch operations must emit that clear even when only the raw facet key changed. This bounded per-changed-row check must not introduce an estate-wide scan or defeat untouched-row identity preservation. Adapter tests cover both delta paths and store writes, including trusted-zero recovery and ordinary partial omission.
 
 The PR #1935 log-level parser benchmark remains an unresolved environment-bound
@@ -133,6 +308,15 @@ asset cache/proxy path in `internal/api/router.go`. They may add no background
 poller, per-agent goroutine, inventory scan, or action-session lookup to normal
 request routing; local assets are streamed once and published fallbacks retain
 the existing bounded HTTP client and artifact-size checks.
+
+The custom Workloads guest row shares `Table`'s singleton non-activating native
+click marker for WebKit touch eligibility. Bind it only while a row action
+exists, without changing row identity, alert/highlight classes, metric derivation
+or delegated child-control ordering. The marker must not perform actions, read
+telemetry, start History work, add polling/timers or activate on pointer-up or
+touch-end. `GuestRow.test.tsx` verifies its conditional lifecycle and
+non-activation; the production row/full-drawer touch fixture verifies first
+activation and unchanged identity independently of native collector acceptance.
 
 ## Canonical Files
 
@@ -265,6 +449,21 @@ the existing bounded HTTP client and artifact-size checks.
 
 ## Shared Boundaries
 
+### Multi-disk Bars summary
+
+The existing vertical-bars workload/node disk cell shows the fullest measured
+disk's percentage beside equal-weight per-disk micro-bars. Its title retains
+the actual mount and percentage. Unknown/invalid usage cannot produce a new
+summary; an aggregate fallback must not masquerade as measured member usage.
+The displayed maximum uses the existing shared disk measurement and threshold
+logic; no collector, sorting key, metric units, History request, resampling or
+performance threshold changes. `StackedDiskBar.test.tsx` and the model branch
+controls cover real/unknown measurements and unchanged per-member bars.
+`browser-tests/proxmox-docker-rows.cjs` checks the actual label, bars and title
+at desktop and phone widths; this is presentation proof, not native collection
+or a measured fleet performance improvement.
+
+
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `unified-resources`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `unified-resources`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 3. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx` shared with `unified-resources`: the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
@@ -320,6 +519,15 @@ leaving broadcast headroom to coalesce several sampler invalidations. A cohort
 must not rebase unchanged guest, node, storage, or disk evidence, and the
 provider-backed fixture set refreshes once per full rotation rather than on
 every tick.
+Mock replication timing is advanced in that same full-rotation refresh, and
+only a job whose schedule phase has passed is rewritten, so keeping demo
+replication on schedule adds no per-tick change for jobs that did not run.
+Shared storage in the mock estate stays one row per cluster per store, so the
+Storage surface grows with the number of storages rather than with the node
+count times the number of shared storages.
+Demo Docker container names stay unique per host (numbered suffixes on reused
+profiles), so image "used by" lists and container rows never collapse two
+distinct containers into what reads as a duplicated row.
 
 The browser applies resource deltas to its connection-scoped raw baseline, but
 canonicalizes and reconciles only changed resources plus the host-merge groups
@@ -876,11 +1084,27 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     the migration boundary.
 11. Extend workload drawer derivations and runtime wiring through `frontend-modern/src/components/Workloads/guestDrawerModel.ts` and `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`, and extend drawer overview rendering through `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`, rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
     Drawer history charts belong to `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`.
-    A current metric may remain visible in a chart legend while history is
-    accumulating, but it must never be expanded into synthetic timestamps or a
-    flat line. Fewer than two stored points remains `Collecting history` and
-    only metrics-store samples may contribute chart geometry, bounds, or hover
-    inspection. Current-value legends must preserve the same availability
+    A current metric may remain visible in a chart legend only when labelled
+    `current`; it must never be expanded into synthetic timestamps or a flat
+    line. One stored sample is a visible point at its actual time, with a dated
+    single-observation caption rather than a collecting claim or invented trend.
+    Successful empty reads say `No stored history in this range`. Only
+    metrics-store samples may contribute chart geometry, bounds, or hover
+    inspection, including valid measured zero. Same-source transient failures
+    retain those observations with a warning, but final HTTP 401/403 responses
+    withdraw the batch charts, inspection and its retained remount entries.
+    The shared query cache advances its generation so a pre-denial read cannot
+    restore a former cached range. Access guidance comes from numeric status,
+    never raw transport text; the existing target/range-scoped retry remains
+    focusable while pending, and only a successful read restores history.
+    Runtime denial/cache/recovery controls are in
+    `GuestDrawerHistory.refresh.test.tsx` and `createNonSuspendingQuery.test.tsx`,
+    with real client 403/503 browser controls in `browser-tests/history-access.cjs`.
+    These are client presentation proofs, not native authorisation or collection. This presentation adds no fetch,
+    point expansion, polling or retention budget. Verify sparse and mixed-series
+    geometry and failed-refresh/source-change behaviour in
+    `GuestDrawerHistory.sparse.test.tsx`, with rendered phone/desktop coverage in
+    `browser-tests/history-window.cjs`. Current-value legends preserve the same availability
     semantics as workload rows: the poller's negative unknown-disk sentinel is
     unavailable and renders `-`, never a fabricated negative percentage.
     History cards must let the plot area stretch to the card height instead of
@@ -1421,6 +1645,22 @@ without contention or cross-delivery.
    close the owned manager set.
 
 ## Current State
+
+### Retained component state in bounded platform windows
+
+`PlatformWindowedRows` and `PlatformWindowedList` retain one keyed renderer
+owner as overlapping visible windows change. Components that remain visible
+keep their local state and unsaved edits. Removed items still unmount, and the
+existing row budgets and spacers remain bounded. The mounted regressions in
+`PlatformWindowedRows.test.tsx` exercise both renderers. The final browser
+receipt exercises a narrow Proxmox Manage form through scrolling, saving and
+viewport changes while the synthetic estate updates.
+
+This correctness proof does not close the large-estate performance gap. The
+final measurements and host-load limitation remain recorded in
+`records/resource-payload-static-metadata-2026-08-24.md`. They do not establish
+a controlled performance improvement or satisfy the open SLO qualification.
+
 
 ### Large API responses negotiate gzip without corrupting edge cases
 
@@ -2449,6 +2689,13 @@ resize-observer plus tooltip lifecycle live in
 `frontend-modern/src/components/Workloads/useStackedDiskBarState.ts`.
 Future disk-bar runtime changes must extend through those owners instead of
 reintroducing mixed resize state and presentation branching into the shell.
+The multi-disk `vertical-bars` mode (Proxmox nodes, Machines, and Docker
+hosts with more than one agent-reported disk) draws one equal-weight micro-bar
+per disk and labels the cell with the fullest disk's usage percentage, derived
+in the model from the existing max-disk summary, so a multi-disk host answers
+"how close is this host to running out of space?" at a glance in Bars mode
+instead of only on hover or in Trends mode. The label names no disk in the
+row; the mount and the per-disk breakdown stay in the title and tooltip.
 The dashboard stacked memory bar now follows that same pattern: the shell
 stays in `frontend-modern/src/components/Workloads/StackedMemoryBar.tsx`,
 while memory-capacity math, balloon/swap tooltip derivation, anomaly label
@@ -2475,6 +2722,22 @@ resize-observer lifecycle lives in
 `frontend-modern/src/components/Workloads/useMetricBarState.ts`. Future
 metric-bar runtime changes must extend through those owners instead of
 reintroducing mixed resize state and label-fit logic into the shell.
+Label fit in the metric, stacked memory, and stacked disk bar models goes
+through `estimateTextWidth` in `frontend-modern/src/utils/format.ts`, which
+sums per-glyph advances rather than multiplying a character count. The
+advances come from one hidden probe of about 200 nodes carrying the label's
+type classes, read once per page load and again only if the device pixel
+ratio changes; that is the estimator's only layout read. It is never per bar,
+the bars still take their width from the resize observer alone, and each
+estimate after the probe is arithmetic over the label's characters. Each model
+adds the padding its own label sits in, the stacked bars count the anomaly
+marker that shares the label's line, and inline disk slots are sized after the
+gap between them. Measured in Chrome on the 429-bar Proxmox overview on
+2026-10-03: 1.7 ms for the probe and about 110 ns per estimate. Where layout
+is unavailable the estimator uses the advances measured for the macOS system
+font. `formatExtra.test.ts` verifies the single probe read and the fallback;
+`useMetricBarState.test.tsx` and `useStackedMemoryBarState.test.tsx` verify
+that the long label appears only at an observed width that fits it.
 The dashboard enhanced CPU bar now follows that same pattern: the shell stays
 in `frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx`, while usage
 formatting, anomaly presentation, tooltip load-average formatting, and
@@ -3151,6 +3414,14 @@ resource results and defensive-copy isolation, while
 `internal/api/alerting/alerts_test.go` proves that mock transport does not need
 the production incident store.
 
+Synthetic linked-host machine identities and Docker machine/agent identities
+are derived from stable fixture host identity when constructing the graph.
+Rebuilding the same estate therefore preserves canonical agent IDs and the
+resource policy attached to them. `internal/mock/generator_test.go` verifies
+nonempty machine and agent IDs and canonical identity across fixture rebuilds.
+This changes fixture generation only, without relaxing production identity
+resolution or adding work to the recurring update path.
+
 ### Update evidence reuses the bounded node observation
 
 Package evidence adds only one bounded status, one bounded reason, and the
@@ -3297,3 +3568,59 @@ a 5-second step previously reserved over a million slots per series; the
 preallocation is now capped at `maxQueryAllSeriesCapacity` and append still
 grows the slice for genuinely dense series. `pkg/metrics/store_additional_test.go`
 pins the cap in `TestEstimateQueryAllBatchSeriesCapacityCapsPreallocation`.
+
+### Large-estate browser work stays bounded by changed resources
+
+The Proxmox overview's canonical Workloads projection consumes the same
+committed resource snapshot as its owning platform page. A consecutive delta
+now carries the changed resource IDs through `useUnifiedResources` to
+`useWorkloads`, so unchanged resource projections and workload rows retain
+their identity. A full REST refresh, missed version, organisation change, or
+unknown delta falls back to a complete projection. The all-resources cache
+captures its previous generation before publication so it can take this
+bounded path too. Hook tests pin both the incremental and fallback boundaries.
+
+The 50-node, 1,508-resource synthetic browser fixture exposed a separate
+quadratic Storage navigation cost: each record row included its entire group,
+and windowed row reconciliation traversed that group for every record. The
+record rows now carry only their own storage record, while group headers retain
+the group. At 390px with 4x CPU throttling, the measured Storage click's
+longest task fell from 5.9s to 1.75s, and final route navigation recorded
+0.66-1.65s Storage long tasks. The fixture uses random metric updates, so
+these are bounded browser observations, not an installed-fleet latency claim.
+The roughly 4MB initial resource payload remains the separately tracked
+`resource-payload-static-metadata` gap and still dominates cold hydration.
+
+### Workload-chart benchmark signal at audit landing
+
+The #2259 CI Benchmarks job reported `HandleWorkloadCharts_StoreBacked-4`
+at 168.7µs on its base and 189.1µs on its candidate (+12.13%, p=0.009,
+ten samples). The chart handler, store query and benchmark body were unchanged
+between those revisions. Two exact-base/candidate runs on `pulse-dev`
+alternated ten 500ms samples each. The first, starting at load 5.63, measured
+mean 426.3µs base versus 386.4µs candidate. The second, at load 1.26-1.54,
+measured 391.8µs base versus 396.0µs candidate (+1.1%), with wide per-pair
+variation. Both compiled benchmark binaries used pinned Go 1.26.8; the
+system `go version` outside the repository reports 1.26.5 but the module's
+toolchain directive selected 1.26.8 for compilation. Neither worker run
+reproduced the CI magnitude or establishes an improvement. Keep the signal
+open as an environment-bound observation under the existing
+`performance-post-rc-headroom` follow-up; no chart-path code change is
+justified by this comparison alone.
+
+### Shared drawer History window calculation
+
+The drawer model computes bounds from the requested API interval and supplied
+valid observation timestamps. The renderer derives one envelope per fulfilled
+query from its configured metric groups and shares it across all panels; it
+does not synthesize, resample or fetch extra points to fill an empty window.
+Invalid dates cannot enter the labelled geometry, and returned edge buckets
+remain inside the common envelope. The existing 240-point request cap per
+metric, 30-second poll and retained-query cache limits are unchanged. No
+backend, metrics-store, performance threshold or latency claim changes here.
+
+`GuestDrawer.test.tsx` verifies requested, expanded, invalid and absent bounds;
+`GuestDrawerHistory.window.test.tsx` verifies the mounted query and geometry,
+including selection retention while a same-source window advances. Browser
+receipts exercise the actual PBS table/drawer renderer with synthetic APIs,
+not installed collection or a performance benchmark.

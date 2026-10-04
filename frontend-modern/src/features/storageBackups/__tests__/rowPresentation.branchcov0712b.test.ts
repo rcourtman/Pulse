@@ -219,12 +219,12 @@ describe('getStoragePoolStateLabel branch coverage', () => {
     expect(getStoragePoolStateLabel(record)).toBe('Online');
   });
 
-  it('returns the raw pool state when it is anything other than "ONLINE"', () => {
+  it('titleizes a non-ONLINE zfs pool state like every other state path', () => {
     const record = {
       ...baseRecord(),
       details: { zfsPool: { state: 'FAULTED', devices: [] } },
     } as unknown as StorageRecord;
-    expect(getStoragePoolStateLabel(record)).toBe('FAULTED');
+    expect(getStoragePoolStateLabel(record)).toBe('Faulted');
   });
 
   it('skips a zfs pool whose state is the empty string (pool?.state truthiness guard false)', () => {

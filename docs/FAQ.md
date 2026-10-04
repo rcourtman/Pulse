@@ -44,11 +44,23 @@ If a setting is disabled with an amber warning, it's being overridden by an envi
 
 ## 🔍 Monitoring & Metrics
 
-### What do Relay, Pro, and Cloud unlock?
-Relay adds secure remote access to the Pulse web UI, Pulse Mobile pairing for handoff, push notifications, and 14-day history. Pro and Cloud unlock **hands-on Patrol modes, issue investigation, governed fixes, verified outcomes, and 90-day history** along with the broader operations feature set. Existing legacy Pro+ holders keep their current continuity, but self-hosted pricing no longer sells more monitoring volume. Pulse Patrol is available to everyone on Community with BYOK and provides scheduled, cross-system analysis that correlates real-time state, recent metrics history, and diagnostics to surface actionable findings.
+### What do Pro and Cloud unlock?
+Pro and Cloud unlock **hands-on Patrol modes, issue investigation, governed fixes, verified outcomes, and 90-day history** along with the broader operations feature set. Existing legacy Pro+ holders keep their current continuity, but self-hosted pricing no longer sells more monitoring volume. Pulse Patrol is available to everyone on Community with BYOK and provides scheduled, cross-system analysis that correlates real-time state, recent metrics history, and diagnostics to surface actionable findings.
 
 Example output includes trend-based capacity warnings, backup regressions, Kubernetes cluster analysis, and correlated container failures that simple threshold alerts miss.
 See [Pulse Intelligence](AI.md), [Plans and entitlements](PULSE_PRO.md), and <https://pulserelay.pro>.
+
+### What happens to Pulse Mobile and Relay?
+
+Pulse Mobile and Relay retire on **31 March 2027**. Existing paired phones keep
+working until then. Relay is no longer sold; existing Relay subscribers receive
+Pro features at their current price for as long as their subscription continues.
+Those Pro features do not end with the app's retirement.
+
+Relay connects the app, not the web UI. To reach Pulse away from home, use your
+own VPN or tunnel. For alerts on your phone afterwards, add an ntfy, Gotify or
+Pushover destination under **Alerts** and open Pulse in your phone's browser.
+See [Relay / Pulse Mobile](RELAY.md) for the existing pairing and security details.
 
 ### Why do VMs show "-" for disk usage?
 Proxmox API returns `0` for VM disk usage by default. You must install the **QEMU Guest Agent** inside the VM and enable it in Proxmox (VM → Options → QEMU Guest Agent).
@@ -106,30 +118,13 @@ discovery are disabled by default. See
 trust boundary and rollout checklist.
 
 ### I forgot my password. How do I reset it?
-**Docker**:
-```bash
-docker exec pulse rm /data/.env
-docker restart pulse
-# Access UI again. Pulse will require a bootstrap token for setup.
-# Get it with:
-docker exec pulse /app/pulse bootstrap-token
-```
-**Systemd**:
-Delete `/etc/pulse/.env` and restart the service. Pulse will require a bootstrap token for setup:
-
-```bash
-sudo pulse bootstrap-token
-```
-**Proxmox LXC** (installed from the Proxmox shell):
-Pulse runs inside the container, so run the same steps through `pct exec` on the Proxmox host. The binary needs its absolute path here, because `pct exec` runs with `PATH=/sbin:/bin:/usr/sbin:/usr/bin` and that does not include `/usr/local/bin`:
-
-```bash
-pct exec <ctid> -- rm /etc/pulse/.env
-pct exec <ctid> -- systemctl restart pulse
-pct exec <ctid> -- /usr/local/bin/pulse bootstrap-token
-```
-
-If you only missed the token during a fresh install (no password set yet), skip the first two commands and just read it back with the last one.
+Use the [password recovery guide](TROUBLESHOOTING.md#i-forgot-my-password).
+For the local administrator, update only the password in its active credential
+source, preserving the username, tokens, configuration and data; deleting `.env`
+is not a universal reset. The guide covers Docker, systemd and Proxmox LXC,
+including deployment overrides, private backups and verification. SSO login,
+temporary lockouts and a fresh install's missed bootstrap token need different
+steps; do not reset a working installation to retrieve that token.
 
 ### How do I enable HTTPS?
 Set `HTTPS_ENABLED=true` and provide `TLS_CERT_FILE` and `TLS_KEY_FILE` environment variables. See [Configuration](CONFIGURATION.md#-https--tls).

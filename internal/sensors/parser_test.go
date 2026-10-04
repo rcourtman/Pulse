@@ -360,6 +360,7 @@ func TestIsCPUChip(t *testing.T) {
 		{"cpu_thermal-virtual-0", true},
 		{"acpitz-acpi-0", true},
 		{"rp1_adc-isa-0000", true}, // Raspberry Pi RP1 ADC
+		{"armada_thermal-virtual-0", true},
 		{"nvme-pci-0100", false},
 		{"amdgpu-pci-0300", false},
 		{"unknown-chip", false},
@@ -372,6 +373,27 @@ func TestIsCPUChip(t *testing.T) {
 				t.Errorf("isCPUChip(%q) = %v, want %v", tc.chip, result, tc.expected)
 			}
 		})
+	}
+}
+
+func TestParseArmadaThermalCPUTemperatureAndOtherSensors(t *testing.T) {
+	input := `{"armada_thermal-virtual-0":{"temp1":{"temp1_input":57}},"nvme-pci-0100":{"Composite":{"temp1_input":39}}}`
+	data, err := Parse(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !data.Available || data.CPUPackage != 57 || data.CPUMax != 57 || data.NVMe["nvme0"] != 39 {
+		t.Fatalf("unexpected ARM and NVMe readings: %+v", data)
+	}
+
+	for _, invalid := range []string{`null`, `"unavailable"`, `150`, `1000000`, `-3`} {
+		data, err := Parse(`{"armada_thermal-virtual-0":{"temp1":{"temp1_input":` + invalid + `}}}`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if data.CPUPackage != 0 {
+			t.Fatalf("invalid armada reading %s became CPU temperature %v", invalid, data.CPUPackage)
+		}
 	}
 }
 

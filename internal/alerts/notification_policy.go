@@ -103,12 +103,7 @@ func (m *Manager) checkFlappingLocked(trackingKey string) (suppress bool, justTr
 		if now.Before(until) {
 			return true, false
 		}
-		// The cooldown has been served. Clear the latch so a later episode can
-		// open a fresh one; flappingActive is otherwise only ever set to true,
-		// which would leave every subsequent episode with no cooldown at all.
-		delete(m.suppressedUntil, trackingKey)
-		delete(m.flappingActive, trackingKey)
-		delete(m.flappingHistory, trackingKey)
+		m.expireSuppressionNoLock(trackingKey, now)
 	}
 
 	// Record this state change
@@ -122,8 +117,12 @@ func (m *Manager) checkFlappingLocked(trackingKey string) (suppress bool, justTr
 			validHistory = append(validHistory, t)
 		}
 	}
-	// Limit to max 10 entries to prevent unbounded growth
-	const maxFlappingHistory = 10
+	// Keep enough observations to reach the configured threshold. A fixed
+	// ten-entry cap silently disabled flapping suppression for accepted
+	// thresholds above ten. Retain the old diagnostic allowance for smaller
+	// thresholds, while still bounding history by configuration rather than
+	// the number of dispatch attempts.
+	maxFlappingHistory := max(10, m.config.FlappingThreshold)
 	if len(validHistory) > maxFlappingHistory {
 		validHistory = validHistory[len(validHistory)-maxFlappingHistory:]
 	}
@@ -158,6 +157,21 @@ func (m *Manager) checkFlappingLocked(trackingKey string) (suppress bool, justTr
 	return false, false
 }
 
+// expireSuppressionNoLock retires a served suppression and its episode together.
+// Cleanup must use the same reset as dispatch: deleting only the deadline leaves
+// a latched flapping episode that can suppress delivery without ever rearming a
+// cooldown or notifying the flapping callback. Caller MUST hold m.mu.
+func (m *Manager) expireSuppressionNoLock(trackingKey string, now time.Time) bool {
+	until, exists := m.suppressedUntil[trackingKey]
+	if !exists || now.Before(until) {
+		return false
+	}
+	delete(m.suppressedUntil, trackingKey)
+	delete(m.flappingActive, trackingKey)
+	delete(m.flappingHistory, trackingKey)
+	return true
+}
+
 func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 	callbacks := m.getAlertCallbacks()
 	if len(callbacks) == 0 || alert == nil {
@@ -189,6 +203,21 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 			AlertDeliveryReasonCorrelatedPrimary,
 			"Notification suppressed: a supported primary infrastructure alert owns delivery for this incident group.",
 			map[string]string{"primaryAlertId": alert.Correlation.PrimaryAlertID})
+		return false
+	}
+	// Resource monitoring policy is a terminal suppression, unlike quiet hours.
+	// An alert already active when the policy changes must not be queued for
+	// replay or reach a callback before reconciliation clears it.
+	if suppressed, reason := m.operatorSuppressionForAlertNoLock(alert, m.policyNow().UTC()); suppressed {
+		clearQuietHoursNotificationReplay(alert)
+		m.recordAlertEvent(eventlog.TypeNotificationSuppressed, alert, "", reason,
+			"Notification suppressed by resource monitoring policy.", nil)
+		return false
+	}
+	if isMonitorOnlyAlert(alert) {
+		clearQuietHoursNotificationReplay(alert)
+		m.recordAlertEvent(eventlog.TypeNotificationSuppressed, alert, "",
+			AlertDeliveryReasonMonitorOnly, "Notification suppressed: alert is monitor-only.", nil)
 		return false
 	}
 
@@ -264,17 +293,6 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 			map[string]string{"replayAt": replayAt.UTC().Format(time.RFC3339)})
 	} else {
 		clearQuietHoursNotificationReplay(alert)
-	}
-
-	if isMonitorOnlyAlert(alert) {
-		log.Info().
-			Str("alertID", alert.ID).
-			Str("resource", alert.ResourceName).
-			Bool("monitorOnly", true).
-			Msg("Monitor-only alert detected, skipping alert dispatch")
-		m.recordAlertEvent(eventlog.TypeNotificationSuppressed, alert, "",
-			AlertDeliveryReasonMonitorOnly, "Notification suppressed: alert is monitor-only.", nil)
-		return false
 	}
 
 	// Record metric for fired alert
@@ -473,17 +491,11 @@ func quietHoursCategoryForAlert(alert *Alert) string {
 }
 
 func (m *Manager) shouldSuppressNotification(alert *Alert) (bool, string) {
-	if alert == nil {
-		return false, ""
-	}
-	if suppressed, reason := m.operatorSuppressionForAlertNoLock(alert, time.Now().UTC()); suppressed {
-		return true, reason
-	}
-
+	// Only quiet-hours matches are replayable. Operator policy is checked by
+	// each caller before this helper, because it must drop rather than defer.
 	if !m.isInQuietHours() {
 		return false, ""
 	}
-
 	return quietHoursSuppressionForAlert(alert, m.config.Schedule.QuietHours.Suppress)
 }
 
@@ -632,6 +644,10 @@ func (m *Manager) ShouldSuppressNotification(alert *Alert) bool {
 		clearQuietHoursNotificationReplay(alert)
 		return true
 	}
+	if isSupportedInfrastructureSymptom(alert) {
+		clearQuietHoursNotificationReplay(alert)
+		return true
+	}
 
 	if suppressed, reason := m.operatorSuppressionForAlertNoLock(alert, time.Now().UTC()); suppressed {
 		clearQuietHoursNotificationReplay(alert)
@@ -642,7 +658,7 @@ func (m *Manager) ShouldSuppressNotification(alert *Alert) bool {
 			Msg("Notification suppressed by resource monitoring policy")
 		return true
 	}
-	if isSupportedInfrastructureSymptom(alert) {
+	if isMonitorOnlyAlert(alert) {
 		clearQuietHoursNotificationReplay(alert)
 		return true
 	}
@@ -696,6 +712,10 @@ func (m *Manager) ShouldSuppressResolvedNotification(alert *Alert) bool {
 			Str("type", alert.Type).
 			Str("operatorPolicy", reason).
 			Msg("Recovery notification suppressed by resource monitoring policy")
+		return true
+	}
+	if isMonitorOnlyAlert(alert) {
+		clearQuietHoursNotificationReplay(alert)
 		return true
 	}
 
@@ -851,6 +871,16 @@ func (m *Manager) diagnoseActiveAlertLocked(alert *Alert) AlertDeliveryDiagnosis
 		diagnosis.setSuppressed(AlertDeliveryReasonSnoozed, "Alert is snoozed, so notifications and escalations are paused until the selected time.")
 		return true
 	}():
+	case func() bool {
+		suppressed, reason := m.operatorSuppressionForAlertNoLock(alert, now.UTC())
+		if !suppressed {
+			return false
+		}
+		diagnosis.setSuppressed(reason, "Alert notification is suppressed by the resource monitoring policy.")
+		return true
+	}():
+	case isMonitorOnlyAlert(alert):
+		diagnosis.setSuppressed(AlertDeliveryReasonMonitorOnly, "Alert is marked monitor-only, so it stays visible without notification delivery.")
 	case !m.config.Enabled:
 		diagnosis.setSuppressed(AlertDeliveryReasonNotificationsDisabled, "Alert notifications are disabled in the alert configuration.")
 	case m.config.ActivationState != ActivationActive:
@@ -886,8 +916,6 @@ func (m *Manager) diagnoseActiveAlertLocked(alert *Alert) AlertDeliveryDiagnosis
 		diagnosis.Message = "Alert delivery is deferred by quiet-hours policy and will be replayed later."
 		return true
 	}():
-	case isMonitorOnlyAlert(alert):
-		diagnosis.setSuppressed(AlertDeliveryReasonMonitorOnly, "Alert is marked monitor-only, so it stays visible without notification delivery.")
 	default:
 		diagnosis.Status = AlertDeliveryStatusWouldSend
 		diagnosis.Reason = AlertDeliveryReasonReady

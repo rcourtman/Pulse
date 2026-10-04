@@ -162,13 +162,13 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
       await loadConfig();
       if (enabled) {
         startStatusPolling();
-        showSuccess('Remote access enabled');
+        showSuccess('Pulse Mobile connections on');
       } else {
         stopStatusPolling();
         setStatus(null);
         await deletePairingTokenIfUnused(pairingTokenId());
         resetPairingState();
-        showSuccess('Remote access disabled');
+        showSuccess('Pulse Mobile connections off');
       }
     } catch (error) {
       showError('Failed to update relay configuration');

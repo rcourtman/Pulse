@@ -199,11 +199,7 @@ try {
   }
   await hashTree(`${root}/src`);
   await hashTree(`${root}/qualification/assistant-identity`);
-  for (const path of [
-    "package-lock.json",
-    "tailwind.config.js",
-    "postcss.config.js",
-  ])
+  for (const path of ["package-lock.json"])
     hashes[path] = createHash("sha256")
       .update(await readFile(`${root}/${path}`))
       .digest("hex");

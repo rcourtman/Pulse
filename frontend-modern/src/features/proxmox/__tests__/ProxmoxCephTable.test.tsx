@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 import {
+  CEPH_COLUMN_WEIGHTS,
   CEPH_PHONE_COLUMNS,
   CEPH_PHONE_COLUMN_WIDTHS,
-  CEPH_NARROW_COLUMNS,
-  CEPH_NARROW_COLUMN_WIDTHS,
   ProxmoxCephTable,
 } from '../ProxmoxCephTable';
+import cephClusterDrawerSource from '../ProxmoxCephClusterDrawer.tsx?raw';
 
 const makeCluster = (id: string): Resource => ({
   id,
@@ -45,29 +45,20 @@ const makeCluster = (id: string): Resource => ({
 afterEach(cleanup);
 
 describe('ProxmoxCephTable', () => {
-  it('keeps the phone projection dense and identity-led', () => {
-    expect(CEPH_PHONE_COLUMNS).toEqual([
-      'cluster',
-      'health',
-      'quorum',
-      'osds',
-      'pools',
-      'capacity',
-    ]);
+  it('keeps one phone projection of five values that each fit whole', () => {
+    // Quorum yields its track on phones: six columns clipped the cluster name,
+    // the health word, and every figure, and the monitor and manager counts are
+    // itemised in the expansion's Services table.
+    expect(CEPH_PHONE_COLUMNS).toEqual(['cluster', 'health', 'osds', 'pools', 'capacity']);
     expect(CEPH_PHONE_COLUMN_WIDTHS).toEqual({
-      cluster: 30,
-      health: 15,
-      quorum: 13,
-      osds: 14,
-      pools: 14,
-      capacity: 14,
+      cluster: 36,
+      health: 21,
+      osds: 13,
+      pools: 12,
+      capacity: 18,
     });
-  });
-
-  it('uses a five-column identity-led projection below 360px', () => {
-    expect(CEPH_NARROW_COLUMNS).toEqual(['cluster', 'health', 'osds', 'pools', 'capacity']);
     expect(
-      CEPH_NARROW_COLUMNS.reduce((total, column) => total + CEPH_NARROW_COLUMN_WIDTHS[column], 0),
+      CEPH_PHONE_COLUMNS.reduce((total, column) => total + CEPH_PHONE_COLUMN_WIDTHS[column], 0),
     ).toBe(100);
   });
 
@@ -129,5 +120,69 @@ describe('ProxmoxCephTable', () => {
 
     await waitFor(() => expect(disclosure).toHaveFocus());
     expect(disclosure).toHaveAccessibleName('Expand details for ceph-lab');
+  });
+
+  it('gives every desktop column a weighted share instead of the remainder', () => {
+    render(() => (
+      <ProxmoxCephTable
+        resources={[
+          {
+            ...makeCluster('ceph-main'),
+            ceph: { ...makeCluster('ceph-main').ceph!, fsid: '8f1c2d3e-fsid' },
+          },
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No Ceph clusters"
+        emptyDescription="No clusters"
+      />
+    ));
+
+    const columns = [...document.querySelectorAll<HTMLElement>('col[data-proxmox-ceph-column]')];
+    expect(columns.map((column) => column.dataset.proxmoxCephColumn)).toEqual([
+      'cluster',
+      'health',
+      'quorum',
+      'osds',
+      'pgs',
+      'pools',
+      'capacity',
+      'services',
+      'detail',
+    ]);
+    const widths = columns.map((column) => Number.parseFloat(column.style.width));
+    // The unsized Services column used to receive ~4% and clip to "mon…".
+    expect(Math.min(...widths)).toBeGreaterThan(4);
+    expect(widths.reduce((total, width) => total + width, 0)).toBeCloseTo(100, 1);
+    expect(Object.values(CEPH_COLUMN_WEIGHTS).every((weight) => weight > 0)).toBe(true);
+  });
+
+  it('keeps the FSID out of the row and whole in the expansion', () => {
+    render(() => (
+      <ProxmoxCephTable
+        resources={[
+          {
+            ...makeCluster('ceph-main'),
+            ceph: { ...makeCluster('ceph-main').ceph!, fsid: '8f1c2d3e-fsid' },
+          },
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No Ceph clusters"
+        emptyDescription="No clusters"
+      />
+    ));
+
+    expect(screen.queryByRole('columnheader', { name: 'FSID' })).toBeNull();
+    expect(document.querySelector('[data-inline-detail-for="ceph-main"]')).toHaveTextContent(
+      '8f1c2d3e-fsid',
+    );
+  });
+
+  it('drops the pool object count, not the usage figure, in a narrow card', () => {
+    expect(cephClusterDrawerSource).toMatch(
+      /platform-table-phone-hidden md:w-\[16%\]`\}\s*>\s*Objects/,
+    );
+    expect(cephClusterDrawerSource).toMatch(
+      /platform-table-mobile-w-20 md:w-\[20%\]`\}\s*>\s*Used/,
+    );
   });
 });

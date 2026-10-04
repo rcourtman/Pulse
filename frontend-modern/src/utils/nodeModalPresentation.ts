@@ -214,21 +214,21 @@ export function getNodeModalTestResultPresentation(
     case 'success':
       return {
         panelClass:
-          'mx-6 p-3 rounded-md text-sm bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200',
+          'mx-6 p-3 rounded-md text-sm bg-green-50 dark:bg-green-900/25 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200',
         textClass: 'text-green-800 dark:text-green-200',
         icon: 'success',
       };
     case 'warning':
       return {
         panelClass:
-          'mx-6 p-3 rounded-md text-sm bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200',
+          'mx-6 p-3 rounded-md text-sm bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200',
         textClass: 'text-amber-800 dark:text-amber-200',
         icon: 'warning',
       };
     default:
       return {
         panelClass:
-          'mx-6 p-3 rounded-md text-sm bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200',
+          'mx-6 p-3 rounded-md text-sm bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200',
         textClass: 'text-red-800 dark:text-red-200',
         icon: 'error',
       };

@@ -7,19 +7,68 @@ import "strings"
 type TokenPrice struct {
 	InputUSDPerMTok  float64
 	OutputUSDPerMTok float64
-	AsOf             string
+	// CacheWriteUSDPerMTok and CacheReadUSDPerMTok price the prompt-cache
+	// buckets a provider reports beside ordinary input tokens. Zero means this
+	// table has no separate cache price for the provider, and the bucket is
+	// charged at the ordinary input rate, the conservative choice.
+	CacheWriteUSDPerMTok float64
+	CacheReadUSDPerMTok  float64
+	AsOf                 string
 }
+
+// TokenUsage is one call's token counts by billing bucket. InputTokens is the
+// provider's ordinary, uncached input count; the cache buckets are disjoint
+// from it, so PromptTokens is their sum.
+type TokenUsage struct {
+	InputTokens              int64
+	OutputTokens             int64
+	CacheCreationInputTokens int64
+	CacheReadInputTokens     int64
+}
+
+// PromptTokens is every token sent to the model, cached or not.
+func (u TokenUsage) PromptTokens() int64 {
+	return u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
+}
+
+// Anthropic prices prompt-cache writes and reads as multiples of the model's
+// input rate: a 5-minute cache write costs 1.25x and a cache read 0.1x
+// (https://platform.claude.com/docs/en/about-claude/pricing, read 2026-10-03).
+// Pulse only requests the 5-minute cache, so the 1-hour write rate is never
+// charged.
+const (
+	anthropicCacheWriteMultiplier = 1.25
+	anthropicCacheReadMultiplier  = 0.10
+)
 
 // EstimateUSD returns an estimated USD cost for the given provider/model and token counts.
 // If the model pricing is unknown, ok is false and usd is 0.
 func EstimateUSD(provider, model string, inputTokens, outputTokens int64) (usd float64, ok bool, price TokenPrice) {
-	price, ok = lookupPrice(provider, model, inputTokens)
+	return EstimateUsageUSD(provider, model, TokenUsage{InputTokens: inputTokens, OutputTokens: outputTokens})
+}
+
+// EstimateUsageUSD prices every bucket of a call's usage: ordinary input and
+// output at the model's rates, and prompt-cache writes and reads at the
+// provider's cache rates when the table knows them, otherwise at the input
+// rate. Tier selection uses the whole prompt, cached or not, because that is
+// the context size providers tier on.
+func EstimateUsageUSD(provider, model string, usage TokenUsage) (usd float64, ok bool, price TokenPrice) {
+	price, ok = lookupPrice(provider, model, usage.PromptTokens())
 	if !ok {
 		return 0, false, TokenPrice{}
 	}
-
-	usd = (float64(inputTokens)/1_000_000.0)*price.InputUSDPerMTok +
-		(float64(outputTokens)/1_000_000.0)*price.OutputUSDPerMTok
+	cacheWrite := price.CacheWriteUSDPerMTok
+	if cacheWrite <= 0 {
+		cacheWrite = price.InputUSDPerMTok
+	}
+	cacheRead := price.CacheReadUSDPerMTok
+	if cacheRead <= 0 {
+		cacheRead = price.InputUSDPerMTok
+	}
+	usd = (float64(usage.InputTokens)/1_000_000.0)*price.InputUSDPerMTok +
+		(float64(usage.OutputTokens)/1_000_000.0)*price.OutputUSDPerMTok +
+		(float64(usage.CacheCreationInputTokens)/1_000_000.0)*cacheWrite +
+		(float64(usage.CacheReadInputTokens)/1_000_000.0)*cacheRead
 	return usd, true, price
 }
 
@@ -173,11 +222,16 @@ func lookupPrice(provider, model string, inputTokens int64) (TokenPrice, bool) {
 			if asOf == "" {
 				asOf = pricingAsOf
 			}
-			return TokenPrice{
+			price := TokenPrice{
 				InputUSDPerMTok:  tier.InputUSDPerMTok,
 				OutputUSDPerMTok: tier.OutputUSDPerMTok,
 				AsOf:             asOf,
-			}, true
+			}
+			if provider == "anthropic" {
+				price.CacheWriteUSDPerMTok = tier.InputUSDPerMTok * anthropicCacheWriteMultiplier
+				price.CacheReadUSDPerMTok = tier.InputUSDPerMTok * anthropicCacheReadMultiplier
+			}
+			return price, true
 		}
 	}
 	return TokenPrice{}, false

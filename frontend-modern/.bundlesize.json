@@ -92,13 +92,13 @@
       "baselineGzip": 7595
     },
     "ActionReviewDialog": {
-      "baselineGzip": 7058
+      "baselineGzip": 8453
     },
     "DrawerDiskListCard": {
       "baselineGzip": 6035
     },
     "DiagnosticsPanel": {
-      "baselineGzip": 6009
+      "baselineGzip": 7245
     },
     "SecurityAuthPanel": {
       "baselineGzip": 5851

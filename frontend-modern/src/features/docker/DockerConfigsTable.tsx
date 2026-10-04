@@ -194,7 +194,7 @@ export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => 
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span
-                              class="inline-block max-w-[14rem] truncate"
+                              class="inline-block max-w-56 truncate"
                               title={dockerTextValue(resource.docker?.objectCreatedAt)}
                             >
                               <PlatformTableRelativeTimeValue
@@ -206,7 +206,7 @@ export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => 
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             <span
-                              class="inline-block max-w-[22rem] truncate"
+                              class="inline-block max-w-88 truncate"
                               title={dockerLabelsSummary(resource.docker?.labels)}
                             >
                               {dockerLabelsSummary(resource.docker?.labels)}

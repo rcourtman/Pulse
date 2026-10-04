@@ -226,6 +226,10 @@ type PatrolStreamResponse struct {
 	Content      string `json:"content"`
 	InputTokens  int    `json:"input_tokens"`
 	OutputTokens int    `json:"output_tokens"`
+	// Prompt-cache buckets summed across the run's provider calls; disjoint
+	// from InputTokens, see providers.ChatResponse.
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
 	// ToolCalls carries calls observed by bounded Patrol follow-up passes so
 	// the parent run's durable audit contains every provider action.
 	ToolCalls []ToolCallRecord `json:"tool_calls,omitempty"`
@@ -1978,14 +1982,16 @@ func (s *Service) QuickAnalysis(ctx context.Context, req QuickAnalysisRequest) (
 			providerName = provider.Name()
 		}
 		costStore.Record(cost.UsageEvent{
-			Timestamp:     time.Now(),
-			Provider:      providerName,
-			RequestModel:  model,
-			ResponseModel: resp.Model,
-			UseCase:       useCase,
-			TargetType:    strings.TrimSpace(req.TargetType),
-			InputTokens:   resp.InputTokens,
-			OutputTokens:  resp.OutputTokens,
+			Timestamp:                time.Now(),
+			Provider:                 providerName,
+			RequestModel:             model,
+			ResponseModel:            resp.Model,
+			UseCase:                  useCase,
+			TargetType:               strings.TrimSpace(req.TargetType),
+			InputTokens:              resp.InputTokens,
+			OutputTokens:             resp.OutputTokens,
+			CacheCreationInputTokens: resp.CacheCreationInputTokens,
+			CacheReadInputTokens:     resp.CacheReadInputTokens,
 		})
 	}
 
@@ -2169,12 +2175,16 @@ func assistantContextScopeForExecuteRequest(req ExecuteRequest) string {
 
 // ExecuteResponse represents the AI's response
 type ExecuteResponse struct {
-	Content          string               `json:"content"`
-	Model            string               `json:"model"`
-	InputTokens      int                  `json:"input_tokens"`
-	OutputTokens     int                  `json:"output_tokens"`
-	ToolCalls        []ToolExecution      `json:"tool_calls"`        // Commands that were executed
-	PendingApprovals []ApprovalNeededData `json:"pending_approvals"` // Commands that require approval (non-streaming)
+	Content      string `json:"content"`
+	Model        string `json:"model"`
+	InputTokens  int    `json:"input_tokens"`
+	OutputTokens int    `json:"output_tokens"`
+	// Prompt-cache buckets summed across the loop's provider calls; disjoint
+	// from InputTokens, see providers.ChatResponse.
+	CacheCreationInputTokens int                  `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     int                  `json:"cache_read_input_tokens,omitempty"`
+	ToolCalls                []ToolExecution      `json:"tool_calls"`        // Commands that were executed
+	PendingApprovals         []ApprovalNeededData `json:"pending_approvals"` // Commands that require approval (non-streaming)
 }
 
 func EmptyExecuteResponse() ExecuteResponse {
@@ -2357,6 +2367,8 @@ Always execute the commands rather than telling the user how to do it.`
 	var toolExecutions []ToolExecution
 	totalInputTokens := 0
 	totalOutputTokens := 0
+	totalCacheCreationTokens := 0
+	totalCacheReadTokens := 0
 	var finalContent string
 	var model string
 
@@ -2393,22 +2405,26 @@ Always execute the commands rather than telling the user how to do it.`
 				providerName = provider.Name()
 			}
 			costStore.Record(cost.UsageEvent{
-				Timestamp:     time.Now(),
-				Provider:      providerName,
-				RequestModel:  modelString,
-				ResponseModel: resp.Model,
-				UseCase:       req.UseCase,
-				ContextScope:  assistantContextScopeForExecuteRequest(req),
-				InputTokens:   resp.InputTokens,
-				OutputTokens:  resp.OutputTokens,
-				TargetType:    req.TargetType,
-				TargetID:      req.TargetID,
-				FindingID:     req.FindingID,
+				Timestamp:                time.Now(),
+				Provider:                 providerName,
+				RequestModel:             modelString,
+				ResponseModel:            resp.Model,
+				UseCase:                  req.UseCase,
+				ContextScope:             assistantContextScopeForExecuteRequest(req),
+				InputTokens:              resp.InputTokens,
+				OutputTokens:             resp.OutputTokens,
+				CacheCreationInputTokens: resp.CacheCreationInputTokens,
+				CacheReadInputTokens:     resp.CacheReadInputTokens,
+				TargetType:               req.TargetType,
+				TargetID:                 req.TargetID,
+				FindingID:                req.FindingID,
 			})
 		}
 
 		totalInputTokens += resp.InputTokens
 		totalOutputTokens += resp.OutputTokens
+		totalCacheCreationTokens += resp.CacheCreationInputTokens
+		totalCacheReadTokens += resp.CacheReadInputTokens
 		model = resp.Model
 		finalContent = resp.Content
 
@@ -2452,22 +2468,26 @@ Always execute the commands rather than telling the user how to do it.`
 		// The caller can execute approvals via /api/ai/run-command and continue.
 		if len(pendingApprovals) > 0 {
 			return &ExecuteResponse{
-				Content:          finalContent,
-				Model:            model,
-				InputTokens:      totalInputTokens,
-				OutputTokens:     totalOutputTokens,
-				ToolCalls:        toolExecutions,
-				PendingApprovals: pendingApprovals,
+				Content:                  finalContent,
+				Model:                    model,
+				InputTokens:              totalInputTokens,
+				OutputTokens:             totalOutputTokens,
+				CacheCreationInputTokens: totalCacheCreationTokens,
+				CacheReadInputTokens:     totalCacheReadTokens,
+				ToolCalls:                toolExecutions,
+				PendingApprovals:         pendingApprovals,
 			}, nil
 		}
 	}
 
 	return &ExecuteResponse{
-		Content:      finalContent,
-		Model:        model,
-		InputTokens:  totalInputTokens,
-		OutputTokens: totalOutputTokens,
-		ToolCalls:    toolExecutions,
+		Content:                  finalContent,
+		Model:                    model,
+		InputTokens:              totalInputTokens,
+		OutputTokens:             totalOutputTokens,
+		CacheCreationInputTokens: totalCacheCreationTokens,
+		CacheReadInputTokens:     totalCacheReadTokens,
+		ToolCalls:                toolExecutions,
 	}, nil
 }
 
@@ -2583,6 +2603,8 @@ Always execute the commands rather than telling the user how to do it.`
 	var toolExecutions []ToolExecution
 	totalInputTokens := 0
 	totalOutputTokens := 0
+	totalCacheCreationTokens := 0
+	totalCacheReadTokens := 0
 	var finalContent string
 	var model string
 
@@ -2636,17 +2658,19 @@ Always execute the commands rather than telling the user how to do it.`
 				providerName = provider.Name()
 			}
 			costStore.Record(cost.UsageEvent{
-				Timestamp:     time.Now(),
-				Provider:      providerName,
-				RequestModel:  modelString,
-				ResponseModel: resp.Model,
-				UseCase:       req.UseCase,
-				ContextScope:  assistantContextScopeForExecuteRequest(req),
-				InputTokens:   resp.InputTokens,
-				OutputTokens:  resp.OutputTokens,
-				TargetType:    req.TargetType,
-				TargetID:      req.TargetID,
-				FindingID:     req.FindingID,
+				Timestamp:                time.Now(),
+				Provider:                 providerName,
+				RequestModel:             modelString,
+				ResponseModel:            resp.Model,
+				UseCase:                  req.UseCase,
+				ContextScope:             assistantContextScopeForExecuteRequest(req),
+				InputTokens:              resp.InputTokens,
+				OutputTokens:             resp.OutputTokens,
+				CacheCreationInputTokens: resp.CacheCreationInputTokens,
+				CacheReadInputTokens:     resp.CacheReadInputTokens,
+				TargetType:               req.TargetType,
+				TargetID:                 req.TargetID,
+				FindingID:                req.FindingID,
 			})
 		}
 
@@ -2654,6 +2678,8 @@ Always execute the commands rather than telling the user how to do it.`
 
 		totalInputTokens += resp.InputTokens
 		totalOutputTokens += resp.OutputTokens
+		totalCacheCreationTokens += resp.CacheCreationInputTokens
+		totalCacheReadTokens += resp.CacheReadInputTokens
 		model = resp.Model
 		finalContent = resp.Content
 
@@ -2877,11 +2903,13 @@ Always execute the commands rather than telling the user how to do it.`
 	callback(StreamEvent{Type: "done"})
 
 	return &ExecuteResponse{
-		Content:      finalContent,
-		Model:        model,
-		InputTokens:  totalInputTokens,
-		OutputTokens: totalOutputTokens,
-		ToolCalls:    toolExecutions,
+		Content:                  finalContent,
+		Model:                    model,
+		InputTokens:              totalInputTokens,
+		OutputTokens:             totalOutputTokens,
+		CacheCreationInputTokens: totalCacheCreationTokens,
+		CacheReadInputTokens:     totalCacheReadTokens,
+		ToolCalls:                toolExecutions,
 	}, nil
 }
 
@@ -3747,11 +3775,13 @@ func (s *Service) AnalyzeForDiscovery(ctx context.Context, prompt string) (strin
 			providerName, _ = config.ParseModelString(model)
 		}
 		costStore.Record(cost.UsageEvent{
-			Provider:     providerName,
-			RequestModel: model,
-			UseCase:      "discovery",
-			InputTokens:  resp.InputTokens,
-			OutputTokens: resp.OutputTokens,
+			Provider:                 providerName,
+			RequestModel:             model,
+			UseCase:                  "discovery",
+			InputTokens:              resp.InputTokens,
+			OutputTokens:             resp.OutputTokens,
+			CacheCreationInputTokens: resp.CacheCreationInputTokens,
+			CacheReadInputTokens:     resp.CacheReadInputTokens,
 		})
 	}
 

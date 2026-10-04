@@ -1,5 +1,6 @@
-import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import { type Accessor, batch, createEffect, createSignal, onCleanup } from 'solid-js';
 import { eventBus } from '@/stores/events';
+import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 
 interface CreateNonSuspendingQueryOptions<T, K> {
   source: Accessor<K | null>;
@@ -229,7 +230,17 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
       return nextValue;
     } catch (nextError) {
       if (requestId === latestRequestId) {
-        setError(nextError);
+        batch(() => {
+          if (getAPIReadAccessErrorMessage(nextError)) {
+            // A permission/session/plan failure is not a transient outage.
+            // Withdraw this value and all remount entries: the same access
+            // context may own other resource/range keys. The generation also
+            // prevents pre-denial reads from repopulating the shared cache.
+            clearRetainedQueryCache();
+            setValue(() => options.initialValue);
+          }
+          setError(nextError);
+        });
       }
       return value();
     } finally {
@@ -243,9 +254,9 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
             value: value(),
           });
         }
-        if (!runOptions.background) {
-          setLoading(false);
-        }
+        // A background poll can replace a pending foreground refresh. The
+        // latest read owns settlement, regardless of how that read started.
+        setLoading(false);
       }
     }
   };

@@ -95,7 +95,8 @@ for (const width of [1280, 390]) {
       id: `pbs-${type}`, type: 'pbs', name: `backup-${type}`, displayName: `backup-${type}`,
       platformId: `backup-${type}`, platformType: 'proxmox-pbs', sources: ['pbs'],
       metricsTarget: { resourceType: 'agent', resourceId: `wrong-${type}` },
-      pbs: { instanceId: `backup-${type}`, hostname: `backup-${type}`, datastores: [] },
+      // Correlate with the machine name PBS reports, never its presentation label.
+      pbs: { instanceId: `backup-${type}`, nodeName: `backup-${type}`, datastores: [] },
     }));
     const hosts = ['vm', 'agent'].map(type => ({ ...common, id: `host-${type}`, type,
       name: `backup-${type}`, displayName: `backup-${type}`, platformId: `host-${type}`,
@@ -115,7 +116,18 @@ for (const width of [1280, 390]) {
     await page.route('**/api/metrics-store/history?**', async route => {
       const q = new URL(route.request().url()).searchParams;
       targets.push(`${q.get('resourceType')}/${q.get('resourceId')}`);
-      await route.fulfill({ json: { metrics: { cpu: [0, 1, 2].map(i => ({ timestamp: Date.now() - (2-i)*60000, value: 10+i, min: 10+i, max: 10+i, count: 1 })), memory: [0, 1, 2].map(i => ({ timestamp: Date.now() - (2-i)*60000, value: 20+i, min: 20+i, max: 20+i, count: 1 })) }, resourceId: q.get('resourceId'), resourceType: q.get('resourceType') } });
+      // Match the real history envelope. Response admission deliberately rejects
+      // missing selection/range bounds, even when the metric points are valid.
+      const end = Date.now();
+      const start = end - 120_000;
+      await route.fulfill({ json: {
+        resourceId: q.get('resourceId'), resourceType: q.get('resourceType'),
+        range: q.get('range') || '24h', start, end, source: 'store',
+        metrics: {
+          cpu: [0, 1, 2].map(i => ({ timestamp: start + i*60000, value: 10+i, min: 10+i, max: 10+i, count: 1 })),
+          memory: [0, 1, 2].map(i => ({ timestamp: start + i*60000, value: 20+i, min: 20+i, max: 20+i, count: 1 })),
+        },
+      } });
     });
     await page.goto('/proxmox/backups', { waitUntil: 'domcontentloaded' });
     for (const type of ['vm', 'agent']) {

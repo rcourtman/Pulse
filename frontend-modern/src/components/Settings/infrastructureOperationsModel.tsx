@@ -333,6 +333,7 @@ export const buildCommandsByPlatform = (
   unixCommand: string,
   windowsInteractiveCommand: string,
   windowsParameterizedCommand: string,
+  unixPrivateFileCommand?: string,
 ): Record<AgentPlatform, InfrastructureCommandSection> => ({
   linux: {
     title: 'Install on Linux',
@@ -345,8 +346,9 @@ export const buildCommandsByPlatform = (
         note: (
           <span>
             Command auto-escalates with <code>sudo</code> when available. Otherwise run from a root
-            shell (for example <code>su -</code>). Auto-detects your init system and works on
-            Debian, Ubuntu, Proxmox, Fedora, Alpine, Unraid, Synology, and more.
+            shell (for example <code>su -</code>). If a token is required, run this command first,
+            then paste the separately revealed token at its silent prompt. Auto-detects your init
+            system and works on Debian, Ubuntu, Proxmox, Fedora, Alpine, Unraid, Synology, and more.
           </span>
         ),
       },
@@ -363,8 +365,10 @@ export const buildCommandsByPlatform = (
         note: (
           <span>
             Command auto-escalates with <code>sudo</code> when available, so macOS may ask for your
-            admin password. Creates <code>/Library/LaunchDaemons/com.pulse.agent.plist</code> and
-            starts the agent automatically.
+            admin password. If a token is required, run this command first, then paste the
+            separately revealed token at its silent prompt. Creates{' '}
+            <code>/Library/LaunchDaemons/com.pulse.agent.plist</code> and starts the agent
+            automatically.
           </span>
         ),
       },
@@ -380,12 +384,33 @@ export const buildCommandsByPlatform = (
         command: unixCommand,
         note: (
           <span>
-            Run as root. <strong>Note:</strong> pfSense/OPNsense don't include bash by default.
-            Install it first: <code>pkg install bash</code>. Creates{' '}
+            Run in a console or SSH session as root. Paste the separately revealed token only at the
+            silent prompt, not into the command. For GUI command fields without a terminal, use the
+            private-file command below. <strong>Note:</strong> pfSense/OPNsense don't include bash
+            by default. Install it first: <code>pkg install bash</code>. Creates{' '}
             <code>/usr/local/etc/rc.d/pulse-agent</code> and starts the agent automatically.
           </span>
         ),
       },
+      ...(unixPrivateFileCommand
+        ? [
+            {
+              label: 'Install from a private token file (no terminal)',
+              command: unixPrivateFileCommand,
+              note: (
+                <span>
+                  Before running, save the separately revealed token to{' '}
+                  <code>/root/.config/pulse-agent/bootstrap-token</code> using a trusted file editor
+                  or upload path. The file must be root-owned with mode <code>0600</code> in a
+                  root-owned <code>0700</code> directory. Never put the token in a GUI command
+                  field. This command does not prompt or delete your file. Remove it through the
+                  same trusted file path afterwards. If your GUI cannot create private files, use
+                  console or SSH instead. Bash must already be installed.
+                </span>
+              ),
+            },
+          ]
+        : []),
     ],
   },
   windows: {

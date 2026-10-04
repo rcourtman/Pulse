@@ -271,6 +271,9 @@ function getTooltipRows(
   return rows;
 }
 
+// Horizontal padding of the label chip inside the bar (px-1 in StackedMemoryBar.tsx).
+const LABEL_PADDING_PX = 8;
+
 export function buildStackedMemoryBarPresentation(
   props: StackedMemoryBarProps,
   containerWidth: number,
@@ -281,16 +284,21 @@ export function buildStackedMemoryBarPresentation(
     !props.unavailable && props.total > 0
       ? `${formatBytes(props.used)}/${formatBytes(props.total)}`
       : '';
+  const anomalyRatio = formatAnomalyRatio(props.anomaly) ?? '';
+  // The anomaly marker shares the label's line whenever it renders.
+  const anomalyMarker = props.anomaly?.description && anomalyRatio ? ` ${anomalyRatio}` : '';
   const showSublabel =
     displaySublabel.length > 0 &&
-    containerWidth >= estimateTextWidth(`${displayLabel} (${displaySublabel})`);
+    containerWidth >=
+      estimateTextWidth(`${displayLabel}${anomalyMarker}`, { detail: ` (${displaySublabel})` }) +
+        LABEL_PADDING_PX;
 
   return {
     anomalyClass: props.anomaly
       ? (ANOMALY_SEVERITY_CLASS[props.anomaly.severity] ?? 'text-yellow-400')
       : 'text-yellow-400',
     anomalyDescription: props.anomaly?.description,
-    anomalyRatio: formatAnomalyRatio(props.anomaly) ?? '',
+    anomalyRatio,
     displayLabel,
     displayPercentValue: utilizationPercent,
     displaySublabel,

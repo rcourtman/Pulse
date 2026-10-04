@@ -7,7 +7,7 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import { Suspense } from 'solid-js';
+import { createSignal, Suspense } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Memory, Disk, GuestNetworkInterface } from '@/types/api';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
@@ -16,8 +16,29 @@ import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeSt
 import guestDrawerSource from './GuestDrawer.tsx?raw';
 import guestDrawerManageSource from './GuestDrawerManage.tsx?raw';
 import guestDrawerOverviewSource from './GuestDrawerOverview.tsx?raw';
+import { getGuestDrawerHistoryRangeBounds } from './guestDrawerModel';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
+
+describe('shared drawer History window geometry', () => {
+  it('preserves the requested interval and edge observations without manufacturing timestamps', () => {
+    const sample = (timestamp: number) => ({ timestamp, value: 0, min: 0, max: 0 });
+    const series = [{ points: [sample(800), sample(900)] }, { points: [sample(300)] }];
+    expect(getGuestDrawerHistoryRangeBounds(series, { start: 0, end: 1000 })).toEqual({
+      startTime: 0,
+      endTime: 1000,
+    });
+    expect(getGuestDrawerHistoryRangeBounds(series, { start: 500, end: 1000 })).toEqual({
+      startTime: 300,
+      endTime: 1000,
+    });
+    expect(getGuestDrawerHistoryRangeBounds(series, { start: 1000, end: 0 })).toEqual({
+      startTime: 300,
+      endTime: 900,
+    });
+    expect(getGuestDrawerHistoryRangeBounds([], { start: 0, end: 0 })).toBeNull();
+  });
+});
 
 const chartsApiMocks = vi.hoisted(() => ({
   getMetricsHistory: vi.fn(),
@@ -169,7 +190,7 @@ beforeEach(() => {
   resetAIRuntimeState();
   syncAIRuntimeSettings({ discovery_enabled: true } as Parameters<typeof syncAIRuntimeSettings>[0]);
   resetCreateNonSuspendingQueryCacheForTest();
-  discoveryApiMocks.getDiscovery.mockResolvedValue(null);
+  discoveryApiMocks.getDiscovery.mockReset().mockResolvedValue(null);
   chartsApiMocks.getMetricsHistory.mockResolvedValue({
     resourceType: 'vm',
     resourceId: 'inst1:node1:100',
@@ -199,6 +220,76 @@ afterEach(() => {
 // ── Tests ──────────────────────────────────────────────────────────────
 
 describe('GuestDrawer', () => {
+  it('keeps malformed and future backup times unknown through same-guest replacement', () => {
+    const [guest, setGuest] = createSignal(makeGuest({ lastBackup: NaN }));
+    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    const details = technicalDetails();
+    expect(details.getByText('Backup time unavailable: invalid timestamp.')).toBeVisible();
+    expect(details.queryByText('No completed backup found')).not.toBeInTheDocument();
+    expect(details.queryByText('Today')).not.toBeInTheDocument();
+    setGuest({ ...guest(), lastBackup: Date.now() + 86_400_000, backupInProgress: true });
+    expect(details.getByText(/timestamp is in the future/)).toBeVisible();
+    expect(details.getByText('Running · not completed yet')).toBeVisible();
+    setGuest({ ...guest(), lastBackup: Date.now() - 3600_000, backupInProgress: false });
+    expect(details.getByText('Today')).toBeVisible();
+    expect(details.queryByText(/unavailable/)).not.toBeInTheDocument();
+    setGuest({ ...guest(), lastBackup: 0 });
+    expect(details.getByText('No completed backup found')).toBeVisible();
+  });
+
+  it('keeps deferred filesystem fallback last-known through History and fresh resumption', async () => {
+    chartsApiMocks.getMetricsHistory.mockResolvedValue({
+      resourceType: 'vm',
+      resourceId: 'inst1:node1:100',
+      range: '24h',
+      start: 1,
+      end: 3,
+      metrics: {},
+      source: 'store',
+    });
+    const [guest, setGuest] = createSignal(
+      makeGuest({
+        disk: { total: 100, used: 50, usage: 50 },
+        diskStatusReason: 'prev-vm-locked',
+        lock: 'backup',
+      }),
+    );
+    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    await waitFor(() =>
+      expect(screen.getAllByText('No stored history in this range')).toHaveLength(3),
+    );
+    const history = screen.getAllByTestId('guest-history-group-chart')[0];
+    expect(history.querySelector('[data-history-current="disk"]')).toBeNull();
+    expect(history.querySelector('[data-history-last-known="disk"]')).toHaveTextContent(
+      'Disk50.0%last known',
+    );
+    expect(history.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+      'Guest reads paused while Proxmox reports a VM operation lock',
+    );
+    setGuest({ ...guest(), lock: '', diskStatusReason: 'prev-agent-busy' });
+    expect(history.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+      'earlier guest request is still in progress',
+    );
+    expect(history.querySelector('[data-history-current="disk"]')).toBeNull();
+    setGuest({ ...guest(), diskStatusReason: '', disk: { total: 100, used: 75, usage: 75 } });
+    expect(history.querySelector('[data-history-last-known]')).toBeNull();
+    expect(history.querySelector('[data-history-deferred]')).toBeNull();
+    expect(history.querySelector('[data-history-current="disk"]')).toHaveTextContent(
+      'Disk75.0%current',
+    );
+    expect(history.querySelector('path')).toBeNull();
+    // Existing drawer target recomputation follows each guest snapshot.
+    // This presentation repair does not change that request ownership.
+    for (const [request] of chartsApiMocks.getMetricsHistory.mock.calls) {
+      expect(request).toMatchObject({
+        resourceType: 'vm',
+        resourceId: 'inst1:node1:100',
+        range: '24h',
+      });
+    }
+  });
+
   it('uses the shared discovery loading fallback instead of a drawer-local spinner row', () => {
     expect(guestDrawerSource).toContain('DiscoveryLoadingFallback');
     expect(guestDrawerSource).not.toContain(
@@ -409,6 +500,188 @@ describe('GuestDrawer', () => {
       expect(screen.getByTestId('url-suggested-reason')).toHaveTextContent('Detected 3000/tcp');
     });
 
+    describe('discovery identity ownership', () => {
+      const service = (name: string) =>
+        ({
+          id: `vm:node1:${name}`,
+          resource_type: 'vm',
+          resource_id: '100',
+          target_id: 'node1',
+          service_name: name,
+          service_type: 'dashboard',
+          confidence: 0.95,
+          suggested_url: `http://${name}.example.test`,
+          ports: [],
+          facts: [],
+        }) as unknown as import('@/types/discovery').ResourceDiscovery;
+
+      it('reuses the lookup and mounted panel across 100 same-target snapshots', async () => {
+        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('original'));
+        const [guest, setGuest] = createSignal(makeGuestWithDiscoveryTarget());
+        render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+        await waitFor(() =>
+          expect(screen.getByTestId('url-suggested')).toHaveTextContent('original'),
+        );
+        const panel = screen.getByTestId('discovery-tab');
+        for (let tick = 0; tick < 100; tick++)
+          setGuest({ ...guest(), name: `renamed-${tick}`, cpu: tick / 1000 });
+        expect(discoveryApiMocks.getDiscovery).toHaveBeenCalledTimes(1);
+        expect(screen.getByTestId('discovery-tab')).toBe(panel);
+        expect(screen.getByTestId('url-suggested')).toHaveTextContent('original');
+      });
+
+      it('withdraws the prior service and URL while a replacement target loads or fails', async () => {
+        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('original'));
+        const [guest, setGuest] = createSignal(makeGuestWithDiscoveryTarget());
+        render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+        await waitFor(() =>
+          expect(screen.getByTestId('url-suggested')).toHaveTextContent('original'),
+        );
+        const originalPanel = screen.getByTestId('discovery-tab');
+        let rejectRead!: (error: Error) => void;
+        discoveryApiMocks.getDiscovery.mockImplementationOnce(
+          () =>
+            new Promise((_resolve, reject) => {
+              rejectRead = reject;
+            }),
+        );
+        setGuest({
+          ...guest(),
+          discoveryTarget: { resourceType: 'vm', agentId: 'replacement-agent', resourceId: '100' },
+        });
+        await waitFor(() => expect(discoveryApiMocks.getDiscovery).toHaveBeenCalledTimes(2));
+        expect(screen.getByTestId('url-suggested')).toHaveTextContent(/^$/);
+        expect(screen.queryByText('original')).toBeNull();
+        expect(screen.getByTestId('discovery-tab')).not.toBe(originalPanel);
+        rejectRead(new Error('temporary outage'));
+        await waitFor(() =>
+          expect(screen.getByText(/Service details could not be loaded/)).toBeInTheDocument(),
+        );
+        expect(screen.getByTestId('url-suggested')).toHaveTextContent(/^$/);
+      });
+
+      it('ignores a late lookup from the old target and restores only the active target', async () => {
+        let finishOld!: (value: import('@/types/discovery').ResourceDiscovery) => void;
+        discoveryApiMocks.getDiscovery.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              finishOld = resolve;
+            }),
+        );
+        const [guest, setGuest] = createSignal(makeGuestWithDiscoveryTarget());
+        render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('replacement'));
+        setGuest({
+          ...guest(),
+          discoveryTarget: { resourceType: 'vm', agentId: 'replacement-agent', resourceId: '100' },
+        });
+        await waitFor(() =>
+          expect(screen.getByTestId('url-suggested')).toHaveTextContent('replacement'),
+        );
+        finishOld(service('original'));
+        await Promise.resolve();
+        expect(screen.getByTestId('url-suggested')).toHaveTextContent('replacement');
+        expect(screen.queryByText('original')).toBeNull();
+      });
+
+      it.each([401, 403])(
+        'withdraws a denied service on HTTP %s and does not resurrect it during retry or remount',
+        async (status) => {
+          discoveryApiMocks.getDiscovery.mockRejectedValueOnce(
+            Object.assign(new Error('do not display raw response'), { status }),
+          );
+          const guest = makeGuestWithDiscoveryTarget();
+          const view = render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
+          await waitFor(() =>
+            expect(
+              screen.getByRole('button', { name: 'Retry service details' }),
+            ).toBeInTheDocument(),
+          );
+          discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('original'));
+          fireEvent.click(screen.getByRole('button', { name: 'Retry service details' }));
+          await waitFor(() =>
+            expect(screen.getByTestId('url-suggested')).toHaveTextContent('original'),
+          );
+          // A remount uses this target's cached result, then observes a final denial.
+          view.unmount();
+          discoveryApiMocks.getDiscovery.mockRejectedValueOnce(
+            Object.assign(new Error('do not display raw response'), { status }),
+          );
+          const denied = render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
+          await waitFor(() =>
+            expect(
+              screen.getByRole('button', { name: 'Retry service details' }),
+            ).toBeInTheDocument(),
+          );
+          expect(screen.getByTestId('url-suggested')).toHaveTextContent(/^$/);
+          expect(screen.queryByText(/do not display raw response/)).toBeNull();
+          denied.unmount();
+          let finish!: (value: import('@/types/discovery').ResourceDiscovery) => void;
+          discoveryApiMocks.getDiscovery.mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                finish = resolve;
+              }),
+          );
+          render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
+          expect(screen.getByTestId('url-suggested')).toHaveTextContent(/^$/);
+          finish(service('recovered'));
+          await waitFor(() =>
+            expect(screen.getByTestId('url-suggested')).toHaveTextContent('recovered'),
+          );
+        },
+      );
+
+      it('labels same-target transient retention and permits a fresh retry without raw error text', async () => {
+        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('original'));
+        const guest = makeGuestWithDiscoveryTarget();
+        const view = render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
+        await waitFor(() =>
+          expect(screen.getByTestId('url-suggested')).toHaveTextContent('original'),
+        );
+        view.unmount();
+        discoveryApiMocks.getDiscovery.mockRejectedValueOnce(new Error('private diagnostic'));
+        render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
+        await waitFor(() =>
+          expect(screen.getByText(/Showing previously loaded service details/)).toBeInTheDocument(),
+        );
+        expect(screen.getByTestId('url-suggested')).toHaveTextContent('original');
+        expect(screen.queryByText(/private diagnostic/)).toBeNull();
+        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('recovered'));
+        fireEvent.click(screen.getByRole('button', { name: 'Retry service details' }));
+        await waitFor(() =>
+          expect(screen.getByTestId('url-suggested')).toHaveTextContent('recovered'),
+        );
+        expect(screen.queryByText(/Showing previously loaded/)).toBeNull();
+      });
+
+      it('resets tabs, range and disclosures only when canonical guest identity changes', async () => {
+        const [guest, setGuest] = createSignal(makeGuestWithDiscoveryTarget());
+        render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+        fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+        const range = screen.getByLabelText('History range');
+        fireEvent.change(range, { target: { value: '7d' } });
+        setGuest({ ...guest(), name: 'renamed', cpu: 0.5 });
+        expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        expect(screen.getByLabelText('History range')).toBe(range);
+        expect(range).toHaveValue('7d');
+        setGuest(
+          makeGuestWithDiscoveryTarget({ id: 'inst1-node1-200', vmid: 200, name: 'new-guest' }),
+        );
+        expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        const details = screen.getByTestId('guest-technical-details');
+        expect(details).not.toHaveAttribute('open');
+        fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+        expect(screen.getByLabelText('History range')).toHaveValue('24h');
+      });
+    });
+
     it('hides the Identified Service card when the discovery record is null or empty', async () => {
       discoveryApiMocks.getDiscovery.mockResolvedValueOnce(null);
       render(() => <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />);
@@ -535,8 +808,8 @@ describe('GuestDrawer', () => {
       await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalled());
 
       const utilizationChart = screen.getAllByTestId('guest-history-group-chart')[0];
-      expect(utilizationChart).toHaveTextContent('CPU25.0%');
-      expect(utilizationChart).toHaveTextContent('Collecting history');
+      expect(utilizationChart).toHaveTextContent('CPU25.0%current');
+      expect(utilizationChart).toHaveTextContent('No stored history in this range');
       expect(utilizationChart.querySelector('path')).toBeNull();
     });
 
@@ -901,7 +1174,7 @@ describe('GuestDrawer', () => {
     it('shows "Today" for a backup from today', () => {
       const now = new Date('2026-03-02T10:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: now })} onClose={vi.fn()} />);
-      expect(screen.getByText('Protection')).toBeInTheDocument();
+      expect(screen.getByText('Last completed backup')).toBeInTheDocument();
       expect(technicalDetails().getByText('Today')).toBeInTheDocument();
     });
 
@@ -945,9 +1218,64 @@ describe('GuestDrawer', () => {
       expect(ageCell).toHaveClass('text-emerald-700');
     });
 
-    it('hides Backup card when lastBackup is 0 (falsy)', () => {
-      render(() => <GuestDrawer guest={makeGuest({ lastBackup: 0 })} onClose={vi.fn()} />);
-      expect(screen.queryByText('Backup')).not.toBeInTheDocument();
+    it.each(['qemu', 'lxc'] as const)(
+      'keeps absent completed protection visible while a %s backup runs',
+      (type) => {
+        solidRender(() => (
+          <GuestDrawer
+            guest={makeGuest({ type, lastBackup: 0, backupInProgress: true })}
+            onClose={vi.fn()}
+          />
+        ));
+        expect(technicalDetails().getByText('Last completed backup')).toBeInTheDocument();
+        expect(technicalDetails().getByText('No completed backup found').closest('td')).toHaveClass(
+          'text-rose-700',
+        );
+        expect(technicalDetails().getByText('Backup activity')).toBeInTheDocument();
+        expect(
+          technicalDetails().getByText('Running · not completed yet').closest('td'),
+        ).toHaveClass('text-amber-700');
+      },
+    );
+
+    it.each([
+      ['2026-02-20T12:00:00Z', '10d ago', 'text-amber-700'],
+      ['2026-03-02T10:00:00Z', 'Today', 'text-emerald-700'],
+    ])('preserves completed backup age and tone during a new backup (%s)', (date, age, tone) => {
+      solidRender(() => (
+        <GuestDrawer
+          guest={makeGuest({ lastBackup: new Date(date).getTime(), backupInProgress: true })}
+          onClose={vi.fn()}
+        />
+      ));
+      expect(technicalDetails().getByText(age).closest('td')).toHaveClass(tone);
+      expect(technicalDetails().getByText('Running · not completed yet').closest('td')).toHaveClass(
+        'text-amber-700',
+      );
+    });
+
+    it('never treats activity stopping as a completed backup and updates only on completion evidence', () => {
+      const [guest, setGuest] = createSignal(makeGuest({ lastBackup: 0 }));
+      const { container } = solidRender(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+      const drawer = container.querySelector('[data-testid="guest-technical-details"]');
+      expect(drawer).not.toBeNull();
+      expect(technicalDetails().queryByText('Backup activity')).not.toBeInTheDocument();
+      setGuest({ ...guest(), backupInProgress: true });
+      expect(technicalDetails().getByText('Running · not completed yet')).toBeInTheDocument();
+      expect(technicalDetails().getByText('No completed backup found')).toBeInTheDocument();
+      setGuest({ ...guest(), backupInProgress: false });
+      expect(technicalDetails().queryByText('Backup activity')).not.toBeInTheDocument();
+      expect(technicalDetails().getByText('No completed backup found')).toBeInTheDocument();
+      setGuest({ ...guest(), lastBackup: new Date('2026-03-02T10:00:00Z').getTime() });
+      expect(technicalDetails().queryByText('No completed backup found')).not.toBeInTheDocument();
+      expect(technicalDetails().getByText('Today').closest('td')).toHaveClass('text-emerald-700');
+      expect(container.querySelector('[data-testid="guest-technical-details"]')).toBe(drawer);
+    });
+
+    it('reports missing completed protection rather than hiding it when lastBackup is 0', () => {
+      solidRender(() => <GuestDrawer guest={makeGuest({ lastBackup: 0 })} onClose={vi.fn()} />);
+      expect(technicalDetails().getByText('No completed backup found')).toBeInTheDocument();
+      expect(technicalDetails().queryByText('Backup activity')).not.toBeInTheDocument();
     });
   });
 

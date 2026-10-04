@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/base64"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -48,9 +49,19 @@ func TestLoad_GuestMetadataOverrides(t *testing.T) {
 }
 
 func TestLoad_OutboundIP(t *testing.T) {
-	// Calling getOutboundIP for coverage
-	ip := getOutboundIP()
-	assert.NotEmpty(t, ip)
+	// An offline proof guest need not have an outbound route. Exercise the
+	// existing dial seam, rather than making coverage depend on that route.
+	original := netDial
+	t.Cleanup(func() { netDial = original })
+	calls := 0
+	netDial = func(network, address string) (net.Conn, error) {
+		calls++
+		require.Equal(t, "udp", network)
+		require.Equal(t, "8.8.8.8:80", address)
+		return &mockConn{localAddr: &net.UDPAddr{IP: net.ParseIP("192.0.2.44")}}, nil
+	}
+	require.Equal(t, "192.0.2.44", getOutboundIP())
+	require.Equal(t, 1, calls)
 }
 
 func TestLoad_Errors(t *testing.T) {

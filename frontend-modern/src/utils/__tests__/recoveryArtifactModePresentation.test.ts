@@ -6,7 +6,7 @@ describe('recoveryArtifactModePresentation', () => {
     expect(getRecoveryArtifactModePresentation('snapshot')).toEqual({
       label: 'Snapshot',
       aggregateLabel: 'Snapshots',
-      badgeClassName: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
+      badgeClassName: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/25 dark:text-yellow-300',
       segmentClassName: 'bg-yellow-500',
     });
     expect(getRecoveryArtifactModePresentation('local')).toEqual({
@@ -18,7 +18,7 @@ describe('recoveryArtifactModePresentation', () => {
     expect(getRecoveryArtifactModePresentation('remote')).toEqual({
       label: 'Remote Copy',
       aggregateLabel: 'Remote Copies',
-      badgeClassName: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300',
+      badgeClassName: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/25 dark:text-indigo-300',
       segmentClassName: 'bg-indigo-500',
     });
   });

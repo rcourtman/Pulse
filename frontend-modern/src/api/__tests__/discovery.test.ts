@@ -21,6 +21,57 @@ describe('discovery api', () => {
     apiFetchMock.mockReset();
   });
 
+  describe('retained discovery access status', () => {
+    it.each([401, 403])(
+      'preserves final HTTP %s without reading or exposing the denied body',
+      async (status) => {
+        const response = new Response('private response body', { status });
+        const read = vi.spyOn(response, 'text');
+        apiFetchMock.mockResolvedValueOnce(response);
+        await expect(getDiscovery('vm', 'host-1', '100')).rejects.toMatchObject({
+          status,
+          message: 'Discovery details unavailable.',
+        });
+        expect(read).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([401, 403])('preserves HTTP %s from the agent collection', async (status) => {
+      apiFetchMock.mockResolvedValueOnce(new Response('private response body', { status }));
+      await expect(getDiscovery('agent', 'host-1', 'host-1')).rejects.toMatchObject({
+        status,
+        message: 'Discovery details unavailable.',
+      });
+      expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([401, 403])('preserves HTTP %s from resolved agent details', async (status) => {
+      apiFetchMock.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            discoveries: [{ resource_type: 'agent', resource_id: 'host-1', agent_id: 'host-1' }],
+          }),
+          { status: 200 },
+        ),
+      );
+      apiFetchMock.mockResolvedValueOnce(new Response('private response body', { status }));
+      await expect(getDiscovery('agent', 'host-1', 'host-1')).rejects.toMatchObject({
+        status,
+        message: 'Discovery details unavailable.',
+      });
+      expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not classify body claims in a transient failure as final access status', async () => {
+      apiFetchMock.mockResolvedValueOnce(
+        new Response('HTTP 403 claimed in a gateway error', { status: 503 }),
+      );
+      const error = await getDiscovery('vm', 'host-1', '100').catch((error: unknown) => error);
+      expect(error).toBeInstanceOf(Error);
+      expect(error).not.toHaveProperty('status');
+    });
+  });
+
   it('records a proposal disposition against the exact evidence fingerprint', async () => {
     apiFetchMock.mockResolvedValueOnce(
       new Response(

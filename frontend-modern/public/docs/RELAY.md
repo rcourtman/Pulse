@@ -1,8 +1,10 @@
-# Relay / Pulse Mobile Handoff (Relay and Above)
+# Relay / Pulse Mobile
 
-Pulse Relay provides **end-to-end encrypted remote access** foundations for Pulse instances. It allows secure remote connectivity without exposing your Pulse server to the public internet.
+> **Pulse Mobile is being retired on 31 March 2027.** Paired phones keep working until then. Relay is no longer sold as a plan; existing Relay subscribers have Pro features at their current price. For alerts on your phone afterwards, add an ntfy, Gotify, or Pushover destination under Alerts, and reach the Pulse web UI away from home through your own VPN or tunnel.
 
-> Supported Pulse Mobile clients pair from **Settings → Remote Access** using a QR code or deep link and connect through Pulse Relay over end-to-end encrypted remote access.
+Pulse Relay is the end-to-end encrypted connection between a Pulse instance and paired Pulse Mobile devices. It lets the app reach your server without exposing it to the public internet. It does not provide remote access to the Pulse web UI.
+
+> Supported Pulse Mobile clients pair from **Settings → Pulse Mobile** using a QR code or deep link and connect through Pulse Relay over an end-to-end encrypted channel.
 
 ## How It Works
 
@@ -20,7 +22,7 @@ Pulse Relay provides **end-to-end encrypted remote access** foundations for Puls
 
 ## Quick Start
 
-1. Go to **Settings → Remote Access**.
+1. Go to **Settings → Pulse Mobile**.
 2. Toggle relay **On**.
 3. Use the **QR Code** or **Deep Link** to pair a supported Pulse Mobile client.
 4. Your paired mobile client connects through relay.
@@ -49,7 +51,7 @@ Relay was designed with a zero-trust model:
 
 ### UI
 
-**Settings → Remote Access** — toggle on/off, view QR code, and manage relay pairing sessions.
+**Settings → Pulse Mobile** — toggle on/off, view QR code, and manage relay pairing sessions.
 
 ### Environment Variables
 
@@ -84,7 +86,7 @@ Relay configuration is stored encrypted in `relay.enc` in the Pulse data directo
 
 1. Pulse Mobile is in early access. Relay and Pro customers get install links from the authenticated [download page](https://pulserelay.pro/download.html).
 2. Open Pulse Mobile and tap **Connect to Server**.
-3. Scan the QR code from **Settings → Remote Access** in your Pulse web UI.
+3. Scan the QR code from **Settings → Pulse Mobile** in your Pulse web UI.
 4. The app connects via the relay for push notifications and secure Open Pulse handoff.
 
 ### Multiple Servers
@@ -109,19 +111,19 @@ Pulse Mobile can pair with multiple Pulse instances. Each pairing has its own en
 
 ### Pulse Mobile can't connect
 
-1. Verify relay is enabled in **Settings → Remote Access**.
+1. Verify relay is enabled in **Settings → Pulse Mobile**.
 2. Confirm your mobile account has beta access.
 3. Re-scan the QR code — sessions can expire.
 4. Ensure your mobile device has internet access.
 
 ### Open Pulse handoff not loading
 
-1. Check the relay connection status in **Settings → Remote Access**.
+1. Check the relay connection status in **Settings → Pulse Mobile**.
 2. Look for WebSocket reconnection messages in Pulse logs.
 3. Restart Pulse Mobile.
 
 ## See Also
 
 - [Configuration Guide](CONFIGURATION.md#relay) — environment variables
-- [Security](../SECURITY.md#relay-security-relay-and-above) — relay security details
+- [Security](../SECURITY.md#existing-mobile-pairings-retirement) — security for existing paired phones
 - [Plans & Entitlements](PULSE_PRO.md) — feature availability by plan
