@@ -5,7 +5,24 @@ import {
   type DiagnosticsData,
 } from '../diagnosticsModel';
 
-type ExportData = DiagnosticsData & Record<string, any>;
+type ExportData = Omit<DiagnosticsData, 'nodes' | 'pbs' | 'apiTokens' | 'dockerAgents'> &
+  Record<string, any> & {
+    nodes: Array<DiagnosticsData['nodes'][number] & Record<string, any>>;
+    pbs: Array<DiagnosticsData['pbs'][number] & { lastError: { kind: string; message: string } }>;
+    apiTokens: NonNullable<DiagnosticsData['apiTokens']> & {
+      tokens: Array<{ id: string; name: string; hint: string }>;
+      usage: Array<{ tokenId: string; agentCount: number; agents: string[] }>;
+    };
+    dockerAgents: NonNullable<DiagnosticsData['dockerAgents']> & {
+      attention: Array<{
+        agentId: string;
+        name: string;
+        tokenHint: string;
+        status: string;
+        issues: string[];
+      }>;
+    };
+  };
 // Synthetic fields use the CURRENT server JSON names, not a second exporter
 // schema. No real report, credential, host or customer data enters this fixture.
 const currentPayload = (): ExportData => ({
@@ -66,7 +83,7 @@ const currentPayload = (): ExportData => ({
           },
         ],
       },
-    } as DiagnosticsData['nodes'][number],
+    },
   ],
   pbs: [
     {
@@ -76,7 +93,7 @@ const currentPayload = (): ExportData => ({
       connected: false,
       lastError: { kind: 'network', message: 'dial tcp 10.20.30.41:8007 failed' },
       probe: { connected: false, errorKind: 'network' },
-    } as DiagnosticsData['pbs'][number],
+    },
   ],
   system: {
     os: 'linux',
@@ -98,7 +115,7 @@ const currentPayload = (): ExportData => ({
       { tokenId: 'private-token-b', agentCount: 2, agents: ['private-agent-b', 'private-agent-a'] },
       { tokenId: 'private-token-a', agentCount: 1, agents: ['private-agent-a'] },
     ],
-  } as DiagnosticsData['apiTokens'],
+  },
   dockerAgents: {
     agentsTotal: 2,
     agentsOnline: 1,
@@ -115,7 +132,7 @@ const currentPayload = (): ExportData => ({
         issues: ['dial tcp 10.20.30.42 failed'],
       },
     ],
-  } as DiagnosticsData['dockerAgents'],
+  },
   nodeSnapshots: [
     {
       instance: 'private-instance-b',
