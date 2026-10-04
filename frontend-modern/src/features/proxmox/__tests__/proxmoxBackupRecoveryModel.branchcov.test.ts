@@ -141,11 +141,11 @@ describe('canonical protection posture ownership', () => {
 });
 
 // ---------------------------------------------------------------------------
-// matchWorkloadByHints — all branches (private; exercised through tasks whose
+// matchPVEWorkload — all branches (private; exercised through tasks whose
 // type maps to "unknown", e.g. vzdump, forcing the hint-matching path).
 // ---------------------------------------------------------------------------
 
-describe('matchWorkloadByHints branches (via vzdump tasks)', () => {
+describe('matchPVEWorkload branches (via vzdump tasks)', () => {
   it('matches prior native node aliases while presenting the current display name', () => {
     const model = buildModel({
       workloads: [
@@ -210,7 +210,7 @@ describe('matchWorkloadByHints branches (via vzdump tasks)', () => {
     expect(model.coverageRows.every((row) => row.latestTask === undefined)).toBe(true);
   });
 
-  it('falls back to the only candidate when its hints do not match', () => {
+  it('leaves the only candidate untouched when the native task node contradicts it', () => {
     const model = buildModel({
       workloads: [workload({ id: 'vm-440', proxmox: { vmid: 440, node: 'alpha' } })],
       tasks: [
@@ -224,7 +224,7 @@ describe('matchWorkloadByHints branches (via vzdump tasks)', () => {
         }),
       ],
     });
-    expect(model.coverageRows[0].latestTask?.label).toBe('OK');
+    expect(model.coverageRows[0].latestTask).toBeUndefined();
   });
 
   it('falls back to the only candidate when hints are all blank', () => {

@@ -442,16 +442,21 @@ describe('proxmoxBackupRecoveryModel', () => {
     });
 
     expect(model.recoverableArtifacts).toHaveLength(3);
-    expect(model.coverageRows).toHaveLength(1);
-    expect(model.coverageSummary.totalWorkloads).toBe(1);
-    expect(model.coverageRows[0].isOrphaned).toBe(false);
-    expect(model.coverageRows[0].workload.type).toBe('host');
-    expect(model.coverageRows[0].workload.vmid).toBe('mail-gateway');
-    expect(model.coverageRows[0].workload.label).toBe('Host mail-gateway');
-    expect(model.coverageRows[0].posture).toBe('not-evaluated');
-    expect(getWorkloadRecoveryPostureLabel(model.coverageRows[0].posture)).toBe('Not evaluated');
-    expect(model.coverageRows[0].pbsCount).toBe(1);
-    expect(model.coverageRows[0].archiveCount).toBe(1);
+    expect(model.coverageRows).toHaveLength(2);
+    expect(model.coverageSummary.totalWorkloads).toBe(2);
+    // Equal host labels on PVE and PBS are not proof of the same backup target.
+    expect(model.coverageRows.every((row) => !row.isOrphaned && row.workload.type === 'host')).toBe(
+      true,
+    );
+    expect(
+      model.coverageRows.every(
+        (row) => row.workload.label === 'Host mail-gateway' && row.posture === 'not-evaluated',
+      ),
+    ).toBe(true);
+    expect(model.coverageRows.map((row) => [row.pbsCount, row.archiveCount]).sort()).toEqual([
+      [0, 1],
+      [1, 0],
+    ]);
     expect(model.recoverableArtifacts.map((artifact) => artifact.workload.label)).toEqual(
       expect.arrayContaining(['LXC backup', 'Host mail-gateway']),
     );

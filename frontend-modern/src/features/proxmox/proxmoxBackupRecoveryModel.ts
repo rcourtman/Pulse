@@ -93,7 +93,7 @@ export interface WorkloadCoverageRow {
   postureRank: number;
   protectionPosture?: ProtectionPosture;
   // True only when a VM/LXC row exists because a backup/task referenced a VMID
-  // with no matching live inventory guest. Host backups can also carry a
+  // with no unambiguous live inventory match (absent or conflicting). Host backups can also carry a
   // `backup:` key, but they are first-class backup targets, not orphaned guests.
   isOrphaned: boolean;
 }
@@ -124,10 +124,7 @@ interface BuildModelInput {
   protectionPosturesResolved?: boolean;
 }
 
-interface WorkloadCandidate extends WorkloadReference {
-  nodeKey?: string;
-  instanceKey?: string;
-}
+type WorkloadCandidate = WorkloadReference;
 
 type WorkloadRowDraft = Omit<WorkloadCoverageRow, 'posture' | 'postureRank' | 'isOrphaned'>;
 
@@ -266,7 +263,7 @@ function resourceBackupType(resource: Resource): WorkloadReference['type'] {
 }
 
 function resourceNode(resource: Resource): string | undefined {
-  return resource.proxmox?.nodeName || resource.proxmox?.node || resource.parentName || undefined;
+  return resource.proxmox?.nodeName || resource.proxmox?.node || undefined;
 }
 
 function resourceNodeDisplayName(resource: Resource): string | undefined {
@@ -316,8 +313,6 @@ function buildCandidateFromResource(resource: Resource): WorkloadCandidate | nul
     nativeNode,
     nativeNodeAliases,
     instance,
-    nodeKey: normalizeKey(nativeNode),
-    instanceKey: normalizeKey(instance),
   };
 }
 
@@ -325,18 +320,24 @@ function fallbackWorkload(
   type: WorkloadReference['type'],
   vmid: string,
   hints: readonly (string | undefined)[],
+  sourceScope: readonly (string | undefined)[],
+  pveInstance?: string,
 ): WorkloadReference {
   const id = fallbackWorkloadId(type, vmid, hints);
-  const scope = hints.map(normalizeKey).find(Boolean) || 'unknown';
-  const keyScope = type === 'host' && id ? 'host' : scope;
+  // A VMID (or host label) and repository name are not cross-source identity.
+  // Keep unresolved evidence listed, with a collision-safe complete source key.
+  const scope = encodeURIComponent(
+    JSON.stringify(sourceScope.map((part) => String(part ?? '').trim())),
+  );
   return {
-    key: `backup:${type}:${id || 'unknown'}:${keyScope}`,
+    key: `backup:${type}:${id || 'unknown'}:${scope}`,
     type,
     typeLabel: typeLabel(type),
     vmid: id,
     label: workloadFallbackLabel(type, id),
     node: type === 'host' ? undefined : hints.find((hint) => !!hint?.trim()),
     nativeNode: type === 'host' ? undefined : hints.find((hint) => !!hint?.trim()),
+    instance: pveInstance,
   };
 }
 
@@ -373,72 +374,118 @@ function buildWorkloadCandidateIndex(
   return { byTypeAndVmid, byVmid };
 }
 
-function resolveWorkload(
+function uniqueWorkload<T>(matches: readonly T[]): T | undefined {
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+function matchesNativeNode(workload: WorkloadReference, node: string): boolean {
+  const key = normalizeKey(node);
+  return (
+    Boolean(key) &&
+    [workload.nativeNode, ...(workload.nativeNodeAliases ?? [])].some(
+      (name) => normalizeKey(name) === key,
+    )
+  );
+}
+
+function matchPVEWorkload<T extends WorkloadReference>(
+  workloads: readonly T[],
+  instance: string,
+  node: string,
+): T | undefined {
+  const instanceKey = normalizeKey(instance);
+  const nodeKey = normalizeKey(node);
+  if (instanceKey) {
+    const scoped = workloads.filter((workload) => normalizeKey(workload.instance) === instanceKey);
+    // A VMID is unique inside its PVE connection. Historical backup/task nodes
+    // can differ after a migration; they must not override that connection.
+    if (scoped.length > 0) {
+      return (
+        uniqueWorkload(scoped) ??
+        uniqueWorkload(scoped.filter((workload) => matchesNativeNode(workload, node)))
+      );
+    }
+    // Older projections may omit the instance. An exact native node can still
+    // identify one of them, but cannot rescue a known conflicting instance.
+    return uniqueWorkload(
+      workloads.filter(
+        (workload) => !normalizeKey(workload.instance) && matchesNativeNode(workload, node),
+      ),
+    );
+  }
+  if (nodeKey)
+    return uniqueWorkload(workloads.filter((workload) => matchesNativeNode(workload, node)));
+  return uniqueWorkload(workloads);
+}
+
+function resolvePVEWorkload(
   candidates: WorkloadCandidateIndex,
   type: WorkloadReference['type'],
   vmid: string,
-  hints: readonly (string | undefined)[],
+  instance: string,
+  node: string,
 ): WorkloadReference {
   const typed = candidates.byTypeAndVmid.get(workloadTypeVmidKey(type, vmid)) ?? [];
-  const normalizedHints = hints.map(normalizeKey).filter(Boolean);
-  if (typed.length > 0 && normalizedHints.length > 0) {
-    const exact = typed.find((candidate) =>
-      normalizedHints.some(
-        (hint) =>
-          hint === candidate.nodeKey ||
-          hint === candidate.instanceKey ||
-          normalizeKey(candidate.node).includes(hint) ||
-          normalizeKey(candidate.nativeNode).includes(hint) ||
-          candidate.nativeNodeAliases?.some((alias) => normalizeKey(alias).includes(hint)) ||
-          normalizeKey(candidate.instance).includes(hint),
-      ),
-    );
-    if (exact) return exact;
-  }
-  if (typed.length === 1) return typed[0];
-  return fallbackWorkload(type, vmid, hints);
+  return (
+    matchPVEWorkload(typed, instance, node) ??
+    fallbackWorkload(
+      type,
+      vmid,
+      type === 'host' ? [instance, node] : [node, instance],
+      ['pve', instance, node],
+      instance,
+    )
+  );
 }
 
-function matchWorkloadByHints<T extends WorkloadReference>(
-  workloads: readonly T[],
-  hints: readonly (string | undefined)[],
-): T | undefined {
-  const normalizedHints = hints.map(normalizeKey).filter(Boolean);
-  if (workloads.length > 0 && normalizedHints.length > 0) {
-    const exact = workloads.find((workload) =>
-      normalizedHints.some(
-        (hint) =>
-          hint === normalizeKey(workload.node) ||
-          hint === normalizeKey(workload.nativeNode) ||
-          hint === normalizeKey(workload.instance) ||
-          normalizeKey(workload.node).includes(hint) ||
-          normalizeKey(workload.nativeNode).includes(hint) ||
-          workload.nativeNodeAliases?.some((alias) => normalizeKey(alias).includes(hint)) ||
-          normalizeKey(workload.instance).includes(hint),
-      ),
-    );
-    if (exact) return exact;
-  }
-  if (workloads.length === 1) return workloads[0];
-  return undefined;
+function resolvePBSWorkload(
+  candidates: WorkloadCandidateIndex,
+  backup: PBSBackup,
+): WorkloadReference {
+  const type = backupTypeLabel(backup.backupType);
+  const typed = candidates.byTypeAndVmid.get(workloadTypeVmidKey(type, backup.vmid)) ?? [];
+  // PBS instance/datastore identify a repository, not a PVE connection. A
+  // namespace can disambiguate a repeated VMID only with one exact native
+  // node/alias or connection match. A display name or substring proves none.
+  const namespace = normalizeKey(backup.namespace);
+  const matched = namespace
+    ? uniqueWorkload(
+        typed.filter(
+          (workload) =>
+            matchesNativeNode(workload, backup.namespace) ||
+            normalizeKey(workload.instance) === namespace,
+        ),
+      )
+    : undefined;
+  return (
+    matched ??
+    uniqueWorkload(typed) ??
+    fallbackWorkload(
+      type,
+      backup.vmid,
+      [backup.namespace, backup.datastore],
+      ['pbs', backup.instance, backup.datastore, backup.namespace],
+    )
+  );
 }
 
 function resolveTaskWorkload(
   candidates: WorkloadCandidateIndex,
-  workloadsByVmid: ReadonlyMap<string, readonly WorkloadReference[]>,
+  pveWorkloadsByVmid: ReadonlyMap<string, readonly WorkloadReference[]>,
   task: BackupTask,
 ): WorkloadReference | undefined {
   const vmid = String(task.vmid);
   if (!vmid || isZeroWorkloadId(vmid)) return undefined;
 
   const explicitType = backupTypeLabel(task.type);
-  const hints = [task.instance, task.node];
-  if (explicitType !== 'unknown') return resolveWorkload(candidates, explicitType, vmid, hints);
+  if (explicitType !== 'unknown')
+    return resolvePVEWorkload(candidates, explicitType, vmid, task.instance, task.node);
 
-  const candidate = matchWorkloadByHints(candidates.byVmid.get(vmid) ?? [], hints);
+  const candidate = matchPVEWorkload(candidates.byVmid.get(vmid) ?? [], task.instance, task.node);
   if (candidate) return candidate;
-
-  return matchWorkloadByHints(workloadsByVmid.get(vmid) ?? [], hints);
+  // Only PVE-backed orphan rows share this source scope. A PBS namespace that
+  // happens to resemble the task node is not evidence that the task owns it.
+  return matchPVEWorkload(pveWorkloadsByVmid.get(vmid) ?? [], task.instance, task.node);
 }
 
 function newest<T>(items: readonly T[], getMs: (item: T) => number | undefined): T | undefined {
@@ -549,9 +596,9 @@ export function buildProxmoxBackupRecoveryModel(
     .filter((candidate): candidate is WorkloadCandidate => candidate !== null);
   const candidateIndex = buildWorkloadCandidateIndex(candidates);
   const rows = new Map<string, WorkloadRowDraft>();
-  const workloadsByVmid = new Map<string, WorkloadReference[]>();
+  const pveWorkloadsByVmid = new Map<string, WorkloadReference[]>();
 
-  const ensureRow = (workload: WorkloadReference) => {
+  const ensureRow = (workload: WorkloadReference, pveSource: boolean) => {
     const existing = rows.get(workload.key);
     if (existing) return existing;
     const row: WorkloadRowDraft = {
@@ -563,13 +610,15 @@ export function buildProxmoxBackupRecoveryModel(
       snapshotCount: 0,
     };
     rows.set(workload.key, row);
-    const matchingVmid = workloadsByVmid.get(workload.vmid);
-    if (matchingVmid) matchingVmid.push(workload);
-    else workloadsByVmid.set(workload.vmid, [workload]);
+    if (pveSource) {
+      const matchingVmid = pveWorkloadsByVmid.get(workload.vmid);
+      if (matchingVmid) matchingVmid.push(workload);
+      else pveWorkloadsByVmid.set(workload.vmid, [workload]);
+    }
     return row;
   };
 
-  for (const candidate of candidates) ensureRow(candidate);
+  for (const candidate of candidates) ensureRow(candidate, true);
 
   const artifacts: RecoverableArtifact[] = [];
   const pbsSource = getProxmoxBackupSourcePresentation('pbs');
@@ -578,7 +627,7 @@ export function buildProxmoxBackupRecoveryModel(
   const addArtifact = (artifact: RecoverableArtifact) => {
     artifacts.push(artifact);
     if (!isCoverageWorkload(artifact.workload)) return;
-    const row = ensureRow(artifact.workload);
+    const row = ensureRow(artifact.workload, artifact.sourceKind !== 'pbs');
     row.artifacts.push(artifact);
     if (artifact.sourceKind === 'pbs') row.pbsCount += 1;
     else if (artifact.sourceKind === 'archive') row.archiveCount += 1;
@@ -586,11 +635,7 @@ export function buildProxmoxBackupRecoveryModel(
   };
 
   for (const backup of input.pbsBackups) {
-    const type = backupTypeLabel(backup.backupType);
-    const workload = resolveWorkload(candidateIndex, type, backup.vmid, [
-      backup.namespace,
-      backup.datastore,
-    ]);
+    const workload = resolvePBSWorkload(candidateIndex, backup);
     const parsedMs = parseTimestampMs(backup.backupTime);
     const createdMs =
       getRecoveryAgeBand(parsedMs, input.nowMs) === 'unknown' ? undefined : parsedMs;
@@ -624,10 +669,13 @@ export function buildProxmoxBackupRecoveryModel(
 
   for (const archive of input.archives) {
     const type = backupTypeLabel(archive.type);
-    const workload = resolveWorkload(candidateIndex, type, String(archive.vmid), [
+    const workload = resolvePVEWorkload(
+      candidateIndex,
+      type,
+      String(archive.vmid),
       archive.instance,
       archive.node,
-    ]);
+    );
     const parsedMs = parseTimestampMs(archive.time);
     const createdMs =
       getRecoveryAgeBand(parsedMs, input.nowMs) === 'unknown' ? undefined : parsedMs;
@@ -657,10 +705,13 @@ export function buildProxmoxBackupRecoveryModel(
 
   for (const snapshot of input.snapshots) {
     const type = backupTypeLabel(snapshot.type);
-    const workload = resolveWorkload(candidateIndex, type, String(snapshot.vmid), [
+    const workload = resolvePVEWorkload(
+      candidateIndex,
+      type,
+      String(snapshot.vmid),
       snapshot.instance,
       snapshot.node,
-    ]);
+    );
     const parsedMs = parseTimestampMs(snapshot.time);
     const createdMs =
       getRecoveryAgeBand(parsedMs, input.nowMs) === 'unknown' ? undefined : parsedMs;
@@ -682,9 +733,9 @@ export function buildProxmoxBackupRecoveryModel(
   }
 
   for (const task of input.tasks) {
-    const workload = resolveTaskWorkload(candidateIndex, workloadsByVmid, task);
+    const workload = resolveTaskWorkload(candidateIndex, pveWorkloadsByVmid, task);
     if (!workload) continue;
-    const row = ensureRow(workload);
+    const row = ensureRow(workload, true);
     const candidateTask: CoverageTask = {
       id: task.id,
       status: task.status,
