@@ -15,6 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
@@ -52,7 +53,7 @@ func testGuestAgentBackupMonitoringLifecycle(t *testing.T) {
 				if p == 3 {
 					available = 4 * 1024
 				}
-				json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"content": fmt.Sprintf("MemTotal: 8192 kB\nMemAvailable: %d kB\n", available)}})
+				json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"content": fmt.Sprintf("MemTotal: 8192 kB\nMemFree: 1024 kB\nMemAvailable: %d kB\n", available)}})
 			case strings.HasSuffix(r.URL.Path, "get-fsinfo"):
 				used := 300 * mib
 				if p == 3 {
@@ -79,6 +80,7 @@ func testGuestAgentBackupMonitoringLifecycle(t *testing.T) {
 	res := proxmox.ClusterResource{Type: "qemu", Node: "node", Name: "guest", VMID: 105, Status: "running", MaxMem: 8 * mib, Mem: 8 * mib, MaxDisk: 1000 * mib, CPU: 0.1}
 	var previous *models.VM
 	identity := "fixture:node:105"
+	registry := unifiedresources.NewRegistry(nil)
 	build := func() (models.VM, string) {
 		vm, raw, source, notes, at, ok := m.buildVMFromClusterResource(context.Background(), "fixture", res, client, identity, nil, previous)
 		if !ok {
@@ -86,7 +88,15 @@ func testGuestAgentBackupMonitoringLifecycle(t *testing.T) {
 		}
 		m.recordGuestSnapshot("fixture", "qemu", "node", 105, GuestMemorySnapshot{Name: vm.Name, Status: vm.Status, RetrievedAt: at, MemorySource: source, Memory: vm.Memory, Raw: raw, Notes: notes})
 		m.recordGuestMetrics([]models.VM{vm}, nil, time.Now().Add(-time.Second))
-		previous = &vm
+		// Production obtains previous guest context from the unified read view,
+		// not the builder's raw model (the context need not contain memory).
+		registry.IngestSnapshot(models.StateSnapshot{VMs: []models.VM{vm}})
+		views := registry.VMs()
+		if len(views) != 1 || views[0].MemoryUsed() != vm.Memory.Used {
+			t.Fatal("memory did not reach the unified read view")
+		}
+		next := previousVMFromView(views[0])
+		previous = &next
 		return vm, source
 	}
 	initial, source := build()
@@ -119,12 +129,21 @@ func testGuestAgentBackupMonitoringLifecycle(t *testing.T) {
 	}
 	phase.Store(1)
 	res.CPU = 0.2
-	locked, source := build()
-	if locked.ID != initial.ID || locked.GuestAgentStatus != "deferred" || locked.DiskStatusReason != "prev-vm-locked" {
-		t.Fatalf("lock lost continuity/truth: %#v", locked)
-	}
-	if locked.Memory.Used != initial.Memory.Used || source != "previous-snapshot" || locked.Disk.Used != initial.Disk.Used || !reflect.DeepEqual(locked.NetworkInterfaces, initial.NetworkInterfaces) {
-		t.Fatalf("last known evidence lost: %s %#v", source, locked)
+	// A normal backup outlives the ordinary memory-read TTL. Deferrals must
+	// keep using the original observation, never the previous poll's fallback
+	// trust label or timestamp. Include truly-free/cache evidence in the check.
+	originalMemory.fetchedAt = time.Now().Add(-2 * vmAgentMemCacheTTL)
+	m.vmAgentMemCache[memKey] = originalMemory
+	const lockedPolls = 8
+	var locked models.VM
+	for poll := 0; poll < lockedPolls; poll++ {
+		locked, source = build()
+		if locked.ID != initial.ID || locked.GuestAgentStatus != "deferred" || locked.DiskStatusReason != "prev-vm-locked" {
+			t.Fatalf("locked poll %d lost continuity/truth: %#v", poll, locked)
+		}
+		if locked.Memory != initial.Memory || source != "previous-snapshot" || locked.Disk.Used != initial.Disk.Used || !reflect.DeepEqual(locked.NetworkInterfaces, initial.NetworkInterfaces) {
+			t.Fatalf("locked poll %d lost last-known evidence: source=%s memory=%#v want=%#v", poll, source, locked.Memory, initial.Memory)
+		}
 	}
 	if calls.Load() != before {
 		t.Fatalf("status-lock sent agent commands: %d -> %d", before, calls.Load())
@@ -132,7 +151,7 @@ func testGuestAgentBackupMonitoringLifecycle(t *testing.T) {
 	if !reflect.DeepEqual(m.guestMetadataCache[metadataKey], originalMetadata) || !reflect.DeepEqual(m.vmAgentMemCache[memKey], originalMemory) {
 		t.Fatal("lock renewed/replaced cached observations")
 	}
-	for metric, want := range map[string]int{"cpu": 3, "memory": 1, "memoryused": 1, "disk": 1} {
+	for metric, want := range map[string]int{"cpu": lockedPolls + 2, "memory": 1, "memoryused": 1, "disk": 1} {
 		if got := len(m.metricsHistory.GetGuestMetrics(identity, metric, time.Hour)); got != want {
 			t.Errorf("%s history points = %d, want %d", metric, got, want)
 		}
@@ -143,7 +162,7 @@ func testGuestAgentBackupMonitoringLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	locked, _ = build()
-	if calls.Load() != before || locked.GuestAgentStatus != "deferred" || locked.AgentVersion != initial.AgentVersion {
+	if calls.Load() != before || locked.GuestAgentStatus != "deferred" || locked.AgentVersion != initial.AgentVersion || locked.Memory != initial.Memory {
 		t.Fatalf("resource-lock fallback queried/lost identity: calls=%d %#v", calls.Load(), locked)
 	}
 	// The per-node inventory fallback must propagate its lock to the same builder.

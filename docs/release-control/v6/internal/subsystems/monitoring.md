@@ -158,6 +158,22 @@ Current non-QGA memory, CPU and I/O may still be observed. History never writes
 retained disk values or deferred cached memory as newly observed telemetry;
 normal unlocked polling resumes and replaces them with fresh data.
 
+Repeated QGA deferrals preserve the complete last-known memory value, including
+truly-free and reclaimable cache, using the original successful memory-read
+cache as authority. The ordinary 60-second read TTL schedules refresh; retained
+evidence remains bounded by the original cache's ten-minute cleanup age.
+Deferral polls never renew that timestamp. Missing, failed, future-dated or
+expired observations, a different instance/node/VM, changed capacity, or a
+previous value inconsistent with the original read cannot support retention.
+Current non-QGA memory remains authoritative when available. The retained
+value stays `previous-snapshot` and does not produce fresh memory History.
+`TestGuestAgentBackupMonitoringContract` includes eight consecutive locked polls
+after ordinary memory-cache expiry, checks complete memory and unchanged cache
+timestamps/History, and then exercises fresh unlocked resumption.
+`TestDeferredVMGuestMemoryRequiresOriginalEvidence` covers the provenance,
+age, identity and availability boundaries, including measured zero usage.
+These are synthetic runtime proofs; they do not qualify the native freeze race.
+
 `TestGuestAgentBackupMonitoringContract` exercises healthy → status lock →
 resource lock with failed status → node fallback → unlocked resumption through
 the real client/builders and History. The client controls cover every read,

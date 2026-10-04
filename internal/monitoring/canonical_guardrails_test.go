@@ -20,6 +20,7 @@ import (
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 var bannedSnapshotResourceAccessPatterns = []struct {
@@ -2973,6 +2974,71 @@ func TestBroadcastProjectionMatchesPreviousPipeline(t *testing.T) {
 // The runtime contract includes both poll builders, protocol admission and truthful History.
 func TestGuestAgentBackupMonitoringContract(t *testing.T) {
 	testGuestAgentBackupMonitoringLifecycle(t)
+}
+
+func TestDeferredVMGuestMemoryRequiresOriginalEvidence(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name   string
+		change func(*agentMemCacheEntry, *GuestMemorySnapshot)
+		key    string
+		want   bool
+	}{
+		{name: "expired read TTL still supports last-known memory", want: true},
+		{name: "derived meminfo", want: true, change: func(e *agentMemCacheEntry, _ *GuestMemorySnapshot) { e.info.Source = "meminfo-derived" }},
+		{name: "last-known age boundary", want: true, change: func(e *agentMemCacheEntry, _ *GuestMemorySnapshot) { e.fetchedAt = now.Add(-vmAgentMemCleanupMaxAge) }},
+		{name: "expired original observation", change: func(e *agentMemCacheEntry, _ *GuestMemorySnapshot) {
+			e.fetchedAt = now.Add(-vmAgentMemCleanupMaxAge - time.Nanosecond)
+		}},
+		{name: "missing observation time", change: func(e *agentMemCacheEntry, _ *GuestMemorySnapshot) { e.fetchedAt = time.Time{} }},
+		{name: "future observation time", change: func(e *agentMemCacheEntry, _ *GuestMemorySnapshot) { e.fetchedAt = now.Add(time.Second) }},
+		{name: "failed guest read", change: func(e *agentMemCacheEntry, _ *GuestMemorySnapshot) { e.negative = true }},
+		{name: "missing source", change: func(e *agentMemCacheEntry, _ *GuestMemorySnapshot) { e.info.Source = "" }},
+		{name: "unsupported source", change: func(e *agentMemCacheEntry, _ *GuestMemorySnapshot) { e.info.Source = "unavailable" }},
+		{name: "different instance cache", key: "other/node/105"},
+		{name: "different node cache", key: "fixture/other/105"},
+		{name: "different VM cache", key: "fixture/node/106"},
+		{name: "different previous identity", change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.VMID++ }},
+		{name: "different guest type", change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.GuestType = "lxc" }},
+		{name: "stopped guest", change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.Status = "stopped" }},
+		{name: "unrelated memory source", change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.MemorySource = "agent" }},
+		{name: "previous-snapshot remains bound to original read", want: true, change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.MemorySource = "previous-snapshot" }},
+		{name: "unknown previous memory", change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.Memory = models.UnavailableMemory(100) }},
+		{name: "changed capacity", change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.Memory.Total++ }},
+		{name: "different observation", change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.Memory.Used++ }},
+		{name: "different free memory observation", change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.Memory.Free++ }},
+		{name: "different reclaimable cache observation", change: func(_ *agentMemCacheEntry, v *GuestMemorySnapshot) { v.Memory.Cache++ }},
+		{name: "impossible availability", change: func(e *agentMemCacheEntry, _ *GuestMemorySnapshot) { e.info.EffectiveAvailable = 101 }},
+		{name: "observed zero usage", want: true, change: func(e *agentMemCacheEntry, v *GuestMemorySnapshot) {
+			e.info.EffectiveAvailable = 100
+			e.info.Free = 20
+			v.Memory = models.Memory{Total: 100, Free: 20, Cache: 80}
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entry := agentMemCacheEntry{info: proxmox.LinuxMemoryAvailability{Source: "meminfo-available", EffectiveAvailable: 60, Free: 10}, fetchedAt: now.Add(-2 * vmAgentMemCacheTTL)}
+			previous := GuestMemorySnapshot{GuestType: "qemu", Status: "running", MemorySource: "guest-agent-meminfo", Instance: "fixture", Node: "node", VMID: 105, Memory: models.Memory{Total: 100, Used: 40, Free: 10, Cache: 50, Usage: 40}}
+			if tt.change != nil {
+				tt.change(&entry, &previous)
+			}
+			key := tt.key
+			if key == "" {
+				key = guestMemoryCacheKey("fixture", "node", 105)
+			}
+			m := &Monitor{vmAgentMemCache: map[string]agentMemCacheEntry{key: entry}}
+			memory, ok := m.deferredVMGuestMemory("fixture", "node", 105, 100, &previous, now)
+			if ok != tt.want || (ok && memory != previous.Memory) {
+				t.Fatalf("retention = %#v, %t; want previous memory, %t", memory, ok, tt.want)
+			}
+			if m.vmAgentMemCache[key] != entry {
+				t.Fatal("last-known evidence was renewed or changed")
+			}
+		})
+	}
+	if _, ok := (&Monitor{}).deferredVMGuestMemory("fixture", "node", 105, 100, nil, now); ok {
+		t.Fatal("invented memory without a previous observation")
+	}
 }
 
 func TestGuestAgentTransportMonitoringContract(t *testing.T) {
