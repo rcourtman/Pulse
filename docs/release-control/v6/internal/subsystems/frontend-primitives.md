@@ -8304,3 +8304,34 @@ chain at desktop and phone widths with keyboard/touch refresh, class-dark CSS,
 403/503 controls and pending recovery. Unit controls separately cover current
 request ownership and disposal. No mutation, route, navigation entry, queue
 policy, permission or recipient-delivery contract is added by these states.
+
+### Drawer History does not interpolate across missing observations
+
+The shared `GuestDrawerHistory` renderer connects a series only across
+consecutive stored times in that configured panel. If another series has a
+stored observation at an intervening time and this series does not, its line
+stops. Each isolated observation, including a measured zero, remains visible
+as a point; separate continuous segments retain all their original values,
+timestamps and common-window coordinates. Independently sampled series must
+not imply simultaneous observations or a continuous trend through absent data.
+
+A visible, SVG-described explanation names the affected configured series and
+states the limit: missing readings do not identify an outage's cause or duration.
+There is no elapsed-time/cadence heuristic, synthetic zero, invented observation,
+new API field or collector change. Times outside the configured panel cannot
+split its series. Entirely absent series retain the existing missing/fallback
+policy. Live or retained snapshot carriers cannot repair a stored gap; only a
+matching stored response can. Source/range/access isolation, transient retained
+reads and exact-time keyboard/pointer/touch inspection remain in force.
+
+`GuestDrawerHistory.gaps.test.tsx` and `guestHistorySegments.test.ts` cover
+split lines, singleton recovery, zero rates, interleaved sampling, multiple
+segments, configured-group isolation, invalid points, elapsed-time controls,
+live updates, stored refresh and denied/transient reads. `GuestDrawer.test.tsx`
+checks the full drawer's live-state recovery and unchanged request budget.
+Updated pointer/sparse
+regressions preserve their original missing-value and fallback obligations.
+`browser-tests/history-observation-gaps.cjs` exercises the production full guest
+drawer with synthetic APIs in Chromium/WebKit desktop and 390/320-pixel light
+and dark views. This is presentation acceptance, not native backup/QGA safety,
+provider outage attribution, installed recovery or release availability.

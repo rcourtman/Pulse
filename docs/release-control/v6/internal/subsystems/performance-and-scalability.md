@@ -3668,3 +3668,17 @@ backend, metrics-store, performance threshold or latency claim changes here.
 including selection retention while a same-source window advances. Browser
 receipts exercise the actual PBS table/drawer renderer with synthetic APIs,
 not installed collection or a performance benchmark.
+
+### Stored drawer History segmentation stays bounded
+
+Missing-observation rendering uses the existing normalized, configured-group
+timestamps and the unchanged maximum of 240 requested points per metric. The
+segment builder indexes those timestamps once per series and walks its stored
+points without nested nearest-point searches. It adds no request, polling timer,
+collector or synthetic reading. Separate singletons/segments retain the source
+data and shared time window; live updates cannot fill absent stored evidence.
+The mounted `GuestDrawerHistory.gaps.test.tsx` controls pin one initial read and
+only explicit matching refreshes; the full `GuestDrawer.test.tsx` pins the
+unchanged cap and no live-recovery read. `guestHistorySegments.test.ts` pins
+complete point preservation at the existing request bound. Neither claims a
+timing benchmark, fleet CPU attribution or native incident relief.

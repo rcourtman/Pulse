@@ -38,6 +38,7 @@ import {
   buildGuestDrawerHistoryPath,
   getGuestDrawerHistoryRangeBounds,
   getGuestDrawerHistoryScale,
+  getGuestDrawerHistorySegments,
   getGuestDrawerHistoryValueLabel,
   normalizeGuestDrawerHistoryPoints,
   type GuestDrawerHistoryGroupConfig,
@@ -277,8 +278,30 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     if (count === 0) return inspectionValueText();
     return `${count} stored observation ${count === 1 ? 'time' : 'times'}. ${inspectionValueText()}`;
   });
-  const drawableSeries = createMemo(() => series().filter((item) => item.points.length >= 2));
-  const singlePointSeries = createMemo(() => series().filter((item) => item.points.length === 1));
+  const segmentedSeries = createMemo(() =>
+    series().map((item) => ({
+      ...item,
+      segments: getGuestDrawerHistorySegments(item.points, observationTimes()),
+    })),
+  );
+  const gapMessage = createMemo(() => {
+    const labels = segmentedSeries()
+      .filter((item) => item.segments.length > 1)
+      .map((item) => item.label);
+    return labels.length > 0
+      ? `Missing observations: ${labels.join(', ')}. Lines stop where a series has no reading at another stored time in this panel. This does not identify the cause or duration of a monitoring outage.`
+      : null;
+  });
+  const drawableSeries = createMemo(() =>
+    segmentedSeries().flatMap((item) =>
+      item.segments.filter((points) => points.length >= 2).map((points) => ({ ...item, points })),
+    ),
+  );
+  const singlePointSeries = createMemo(() =>
+    segmentedSeries().flatMap((item) =>
+      item.segments.filter((points) => points.length === 1).map((points) => ({ ...item, points })),
+    ),
+  );
   const singleObservation = createMemo(() =>
     observationTimes().length === 1 ? { timestamp: observationTimes()[0] } : null,
   );
@@ -443,7 +466,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         </For>
         <svg
           aria-label={`${props.group.label} history`}
-          aria-describedby={`${inspectionId}-description`}
+          aria-describedby={`${inspectionId}-description${gapMessage() ? ` ${inspectionId}-gaps` : ''}`}
           class="absolute inset-0 h-full w-full cursor-crosshair"
           data-testid="guest-history-plot"
           onMouseMove={handleHoverMove}
@@ -585,6 +608,13 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       <p id={`${inspectionId}-description`} class="sr-only">
         {chartDescription()}
       </p>
+      <Show when={gapMessage()}>
+        {(message) => (
+          <p id={`${inspectionId}-gaps`} class="mt-2 text-xs text-muted" data-history-gaps>
+            {message()}
+          </p>
+        )}
+      </Show>
       <Show when={!props.loading && singleObservation()}>
         {(observation) => (
           <p class="mt-2 text-[10px] text-muted">
