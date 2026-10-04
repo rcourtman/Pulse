@@ -5581,3 +5581,24 @@ Installer, signing, update selection, promotion and rollback boundaries are
 unchanged. Exact-lock installation, frontend validation and the enforced
 complete-graph audit remain necessary; a security-floor assertion alone is
 not an audit or release qualification.
+
+### Last v6.4 line build without the obsolete CSS compiler
+
+The directed final v6.4 candidate may retain the complete stylesheet generated
+from its own exact frozen source. This removes the obsolete Tailwind 3 graph
+and uses the provenance-verified jscpd 5 graph, without importing main's broader
+runtime/caller migration. All seven runtime roots and existing security floors
+remain unchanged. The required full advisory audit is not relaxed, and absence
+of the named package is not a fresh audit result.
+
+The frozen stylesheet must bind its original source, generator receipt and
+complete derived bytes. Vite startup and the embedded-asset build reject drift
+in generated output, authored CSS, configuration and all non-test runtime style
+consumers, including additions and removals. This is confined to the retiring
+line; main and subsequent cuts keep their normal compiler. Any later product
+change requires exact-source regeneration and new qualification, not a hash-only
+update. `frontend-modern/src/security/__tests__/dependencySecurity.test.ts`
+checks the removed vulnerable path and preserved runtime roots; the connected
+`verify-frozen-line-styles.test.mjs` controls prove the build guard. Exact-graph
+frontend checks/build, actual browser comparison, strict audit and release
+qualification remain mandatory and independent of the generation receipt.

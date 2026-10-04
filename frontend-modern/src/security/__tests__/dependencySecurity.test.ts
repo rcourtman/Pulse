@@ -61,6 +61,28 @@ const nanoidIsPatched = (version: string): boolean => {
 };
 
 describe('frontend dependency security floors', () => {
+  it('removes every braces path without replacing frozen-line runtime roots', () => {
+    // GHSA-vfj7-8cjw-p6xm has no acceptable braces version. The final line
+    // retains its exact compiled styles instead of importing main's caller
+    // migration. This structural regression is not a fresh advisory audit.
+    expect(lockedVersions('braces')).toHaveLength(0);
+    for (const name of ['tailwindcss', '@tailwindcss/vite', '@tailwindcss/typography']) {
+      expect(manifest.devDependencies[name]).toBeUndefined();
+      expect(lockedVersions(name)).toHaveLength(0);
+    }
+    expect(manifest.devDependencies.jscpd).toBe('^5.4.0');
+    expect(lockedVersions('jscpd')).toEqual(['5.4.0']);
+    expect(manifest.dependencies).toEqual({
+      '@solidjs/router': '^0.10.10',
+      dompurify: '^3.4.13',
+      'highlight.js': '^11.11.1',
+      'lucide-solid': '^0.545.0',
+      marked: '^17.0.1',
+      qrcode: '^1.5.4',
+      'solid-js': '^1.8.0',
+    });
+  });
+
   it('keeps Vitest and its mocker above the redirect-mock file-read floor', () => {
     // GHSA-82fw-gwwq-j7x9: the maintained 4.x fix starts at 4.1.11.
     expect(manifest.devDependencies.vitest).toBe('^4.1.11');
