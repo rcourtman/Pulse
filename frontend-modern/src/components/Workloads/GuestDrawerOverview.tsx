@@ -138,12 +138,22 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         props.guest.vmware?.datacenterName ||
         props.guest.vmware?.clusterName,
       );
+    const diskReason = isGuestDrawerVM(props.guest) ? props.guest.diskStatusReason : undefined;
+    const diskReadState =
+      props.guest.telemetryAvailability?.disk === false
+        ? 'unavailable'
+        : diskReason
+          ? diskReason.startsWith('prev-')
+            ? 'last-known'
+            : 'unavailable'
+          : 'current';
     const diskRows = (props.guest.disks ?? []).map((disk, index) =>
-      buildWorkloadsDiskPresentation(disk, index, props.diskThresholds),
+      buildWorkloadsDiskPresentation(disk, index, props.diskThresholds, diskReadState),
     );
-    const diskStatusMessage =
-      isGuestDrawerVM(props.guest) && props.guest.diskStatusReason
-        ? getWorkloadGuestDiskStatusMessage(props.guest.diskStatusReason)
+    const diskStatusMessage = diskReason
+      ? getWorkloadGuestDiskStatusMessage(diskReason)
+      : diskReadState === 'unavailable'
+        ? 'Filesystem usage is unavailable.'
         : null;
 
     return compactDetailSections([
@@ -217,6 +227,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         ? {
             label: 'Filesystems',
             rows: compactDetailRows([
+              makeDetailRow('Status', diskStatusMessage, { layout: 'stacked', wrap: true }),
               ...diskRows.map((disk) =>
                 makeDetailRow(
                   disk.label,
@@ -238,7 +249,6 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                   },
                 ),
               ),
-              makeDetailRow('Status', diskStatusMessage, { layout: 'stacked', wrap: true }),
             ]),
           }
         : null,
