@@ -28,6 +28,7 @@ const bootstrap = {
     settingsCapabilities: {
       infrastructureRead: true,
       systemSettingsRead: true,
+      diagnosticsRead: true,
       apiAccessRead: true,
       apiAccessWrite: true,
       authenticationRead: true,
