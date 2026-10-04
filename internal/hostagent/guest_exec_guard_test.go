@@ -86,7 +86,7 @@ func TestGuestExecCommandPreflightAndPostflight(t *testing.T) {
 				if name != localGuestExecQM || !reflect.DeepEqual(args, []string{"guest", "exec", "105", "--", "sh", "-c", "echo original"}) {
 					t.Errorf("changed command/identity: %s %#v", name, args)
 				}
-				return exec.CommandContext(ctx, "sh", "-c", "printf 'original-result'")
+				return exec.CommandContext(ctx, "sh", "-c", `printf '%s' '{"exited":1,"exitcode":0,"out-data":"original-result"}'`)
 			}
 			t.Cleanup(func() { execCommandContext = oldExec })
 			payload := testApprovedCommandPayload(t, c, executeCommandPayload{RequestID: "scan", Command: "echo original", TargetType: " VM ", TargetID: "000105", Trusted: true})
@@ -100,7 +100,7 @@ func TestGuestExecCommandPreflightAndPostflight(t *testing.T) {
 			if tc.wantCalls == 0 && (got.Stdout != "" || got.Stderr != "") {
 				t.Fatal("preflight published guest output")
 			}
-			if tc.wantCalls == 1 && (got.Stdout != "original-result" || got.ExitCode != 0) {
+			if tc.wantCalls == 1 && (got.Stdout != `{"exited":1,"exitcode":0,"out-data":"original-result"}` || got.ExitCode != 0) {
 				t.Fatalf("lost actual process completion: %#v", got)
 			}
 			if strings.Contains(got.Error, "private") {
@@ -198,10 +198,10 @@ func TestGuestExecCanceledHandoffNeverRetriesAndRechecksOnExplicitResumption(t *
 	g.mu.Unlock()
 	execCommandContext = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
 		calls.Add(1)
-		return exec.CommandContext(ctx, "sh", "-c", "printf resumed")
+		return exec.CommandContext(ctx, "sh", "-c", `printf '%s' '{"exited":1,"exitcode":0,"out-data":"resumed"}'`)
 	}
 	got = c.executeCommand(context.Background(), payload)
-	if !got.Success || got.Stdout != "resumed" || reads.Load() != 3 || calls.Load() != 2 {
+	if !got.Success || got.Stdout != `{"exited":1,"exitcode":0,"out-data":"resumed"}` || reads.Load() != 3 || calls.Load() != 2 {
 		t.Fatalf("explicit resumption failed: %#v", got)
 	}
 }

@@ -69,7 +69,7 @@ func testGuestExecRealServerAgentDiscoveryAdmission(t *testing.T) {
 				locked.Store(true)
 			}
 		}
-		return exec.CommandContext(ctx, "sh", "-c", "printf safe-observation")
+		return exec.CommandContext(ctx, "sh", "-c", `printf '%s' '{"exited":1,"exitcode":0,"out-data":"safe-observation"}'`)
 	}
 	t.Cleanup(func() { execCommandContext = oldExec })
 	ctx, cancel := context.WithCancel(context.Background())

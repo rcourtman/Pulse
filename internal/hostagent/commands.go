@@ -1668,7 +1668,7 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 	if guard != nil {
 		// Killing the local qm process does not prove a handed-off guest
 		// command stopped. Never retry it or immediately start the next one.
-		if err != nil || cmdCtx.Err() != nil || outputIncomplete {
+		if err != nil || cmdCtx.Err() != nil || outputIncomplete || !guestExecCompleted(result.Stdout) {
 			uncertain = true
 			result.Success = false
 			result.Error = agentexec.GuestExecDeferred(agentexec.GuestExecCompletionUnknown).Error()

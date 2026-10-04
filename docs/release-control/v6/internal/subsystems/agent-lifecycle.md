@@ -743,6 +743,7 @@ installer download and the agent's subsequent Pulse TLS connection.
 
 - `internal/agentexec/guest_exec_safety.go`
 - `internal/hostagent/guest_exec_guard.go`
+- `internal/hostagent/guest_exec_completion.go`
 - `internal/hostagent/guest_exec_config_linux.go`
 - `internal/hostagent/guest_exec_config_other.go`
 
@@ -3550,8 +3551,12 @@ admission serialises concurrent commands, respects cancellation and bounds
 state to 4,096 entries. Unknown handed-off completion or postflight lock/owner
 loss imposes a one-minute uncertainty pause; no command is replayed. The next
 explicit request must pass fresh config admission. A local process exit or kill
-is not proof that guest work stopped; postflight failure retains the actual
-exit/output but disqualifies successful live evidence.
+is not proof that guest work stopped: a zero CLI exit with only a guest PID,
+nonterminal, malformed or ambiguous JSON stays uncertain. Only one complete
+canonical `exited` true/1 dictionary establishes observed guest termination;
+this does not alter the existing CLI exit/output payload semantics or prove
+thaw. Postflight failure retains that actual exit/output but disqualifies
+successful live evidence.
 
 The guard is not shared with the HTTP poller, separate agent processes or PVE
 backup workers, and config checks do not reserve QGA. Agent restart also does
