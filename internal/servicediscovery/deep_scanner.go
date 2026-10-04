@@ -2,6 +2,7 @@ package servicediscovery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -241,11 +242,23 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 
 	var safetyError error
 	runCommand := func(cmd DiscoveryCommand) {
-
+		cancelBeforeAdmission := func() {
+			if vmTarget {
+				mu.Lock()
+				defer mu.Unlock()
+				safetyError = agentexec.GuestExecDeferred("the scan was canceled before guest admission")
+				result.Errors[cmd.Name] = safetyError.Error()
+			}
+		}
+		if ctx.Err() != nil {
+			cancelBeforeAdmission()
+			return
+		}
 		select {
 		case semaphore <- struct{}{}:
 			defer func() { <-semaphore }()
 		case <-ctx.Done():
+			cancelBeforeAdmission()
 			return
 		}
 
@@ -291,6 +304,12 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 				message = err.Error()
 			} else if cmdResult != nil {
 				message = cmdResult.Error
+			}
+			// The server can stop waiting before the agent returns its final
+			// safety result. A canceled/timed-out handoff cannot become an
+			// optional successful scan or fresh metadata fallback meanwhile.
+			if cmdCtx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				message = agentexec.GuestExecDeferred(agentexec.GuestExecCompletionUnknown).Error()
 			}
 			if agentexec.IsGuestExecDeferred(message) {
 				safetyError = fmt.Errorf("%s", message)

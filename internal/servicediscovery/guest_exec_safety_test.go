@@ -106,3 +106,37 @@ func TestVMDiscoveryRequiresUniqueOwningNode(t *testing.T) {
 		})
 	}
 }
+
+type timedOutGuestExecutor struct {
+	*stubExecutor
+	calls int
+}
+
+func (e *timedOutGuestExecutor) ExecuteCommand(context.Context, string, ExecuteCommandPayload) (*CommandResultPayload, error) {
+	e.calls++
+	return nil, context.DeadlineExceeded
+}
+
+func TestVMDiscoveryCancellationIsNotSuccessfulEvidence(t *testing.T) {
+	for _, before := range []bool{true, false} {
+		t.Run(time.Duration(map[bool]int{true: 0, false: 1}[before]).String(), func(t *testing.T) {
+			e := &timedOutGuestExecutor{stubExecutor: &stubExecutor{agents: []ConnectedAgent{{AgentID: "node", Hostname: "node"}}}}
+			scanner := NewDeepScanner(e)
+			var terminal *DiscoveryProgress
+			scanner.SetProgressCallback(func(p *DiscoveryProgress) { copy := *p; terminal = &copy })
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if before {
+				cancel()
+			}
+			result, err := scanner.Scan(ctx, DiscoveryRequest{ResourceType: ResourceTypeVM, ResourceID: "105", TargetID: "node"})
+			wantCalls := 1
+			if before {
+				wantCalls = 0
+			}
+			if err == nil || !agentexec.IsGuestExecDeferred(err.Error()) || result == nil || len(result.CommandOutputs) != 0 || e.calls != wantCalls || terminal == nil || terminal.Error == "" || terminal.PercentComplete == 100 {
+				t.Fatalf("cancellation became successful scan: result=%+v err=%v calls=%d terminal=%+v", result, err, e.calls, terminal)
+			}
+		})
+	}
+}
