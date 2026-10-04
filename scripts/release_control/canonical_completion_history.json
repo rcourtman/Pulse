@@ -83,7 +83,7 @@
     },
     {
       "incomplete_commit": "0baee0bccffca078eb8598b2ed4ff481e4227b1e",
-      "completion_commit": "89b8151f19bdcc1a0ae653b26baf75c0f12d735c",
+      "completion_commit": "f8c5e98819d986398486bce23ae8c68f8c0898fd",
       "reason": "Preserve the retained documentation-link correction while requiring its additive deployment-installability contract and parsed bug/prerelease form verification as one completion unit. The completion tree keeps collection and privacy precautions self-contained without waiving any guard or release proof."
     }
   ]

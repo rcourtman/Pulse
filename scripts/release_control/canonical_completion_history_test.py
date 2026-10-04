@@ -28,7 +28,7 @@ class CanonicalCompletionHistoryTest(unittest.TestCase):
         incomplete = "0baee0bccffca078eb8598b2ed4ff481e4227b1e"
         self.assertEqual(
             load_completions()[incomplete]["completion_commit"],
-            "89b8151f19bdcc1a0ae653b26baf75c0f12d735c",
+            "f8c5e98819d986398486bce23ae8c68f8c0898fd",
         )
         self.assertTrue(validate_completion(incomplete, git("rev-parse", "HEAD")))
 
