@@ -25,6 +25,7 @@ const targets: Record<string, string> = {
   truenas: '/docs/TRUENAS',
   installation: '/docs/INSTALL',
   configuration: '/docs/CONFIGURATION#-api-tokens',
+  webhooks: '/docs/WEBHOOKS',
 };
 
 window.history.replaceState({}, '', targets[scenario] ?? targets.plain);
