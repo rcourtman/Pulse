@@ -241,6 +241,9 @@ describe('ProxmoxBackupsTable', () => {
         servers={servers()}
       />
     ));
+    // The router mounts its page asynchronously. Wait for the capacity notice
+    // before binding page-level queries to the server table.
+    await screen.findByText('Unavailable');
     const table = container.querySelector('[data-proxmox-backups-table="servers"]') as HTMLElement;
     const backupCount = () => {
       const index = Array.from(table.querySelectorAll('th')).findIndex(
