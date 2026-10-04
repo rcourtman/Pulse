@@ -161,6 +161,9 @@ class WebhookVerificationDocsTest(unittest.TestCase):
         self.assertNotIn("two-priority PSA mapping covers the full range", text)
         self.assertIn('"info"', text)
         self.assertIn("successful firing-delivery receipt", text)
+        contract = (ROOT / "docs/release-control/v6/internal/subsystems/notifications.md").read_text()
+        self.assertIn("as a legacy correlation token", contract)
+        self.assertIn("must not prescribe permanent header-only deduplication", contract)
 
 
 if __name__ == "__main__":
