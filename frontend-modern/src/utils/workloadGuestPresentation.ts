@@ -40,6 +40,11 @@ const BACKUP_STATUS_PRESENTATION: Record<
     bgColor: 'bg-red-100 dark:bg-red-900/25',
     icon: 'x',
   },
+  unknown: {
+    color: 'text-yellow-600 dark:text-yellow-400',
+    bgColor: 'bg-yellow-100 dark:bg-yellow-900/25',
+    icon: 'warning',
+  },
   running: {
     color: 'text-blue-600 dark:text-blue-400',
     bgColor: 'bg-blue-100 dark:bg-blue-900/25',
@@ -59,7 +64,11 @@ export function getWorkloadsGuestBackupTooltip(
   backupRunning?: boolean,
 ): string {
   const base =
-    status === 'never' ? 'No completed backup found' : `Last backup: ${ageFormatted || 'Unknown'}`;
+    status === 'never'
+      ? 'No completed backup found'
+      : status === 'unknown'
+        ? ageFormatted || 'Backup age unavailable'
+        : `Last backup: ${ageFormatted || 'Unknown'}`;
   if (backupRunning) {
     return `Backup running now · ${base.toLowerCase()}`;
   }

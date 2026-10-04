@@ -20,6 +20,25 @@
 
 ## Purpose
 
+### Backup age requires a usable completed timestamp
+
+Existing workload indicators, age badges and drawer protection context distinguish
+an absent completed-backup timestamp from a present but unusable one. Finite,
+Date-representable positive timestamps no later than the current time may receive
+the configured freshness verdict. Future, malformed and out-of-range times are
+**Unknown**, cautionary rather than healthy or missing. The fixed explanation
+never renders the invalid raw value; future times direct the operator to check
+the Proxmox and browser clocks. An invalid current clock cannot confer freshness.
+Zero, empty and absent values retain the existing missing-backup interpretation.
+
+Running activity remains separate: it neither validates the timestamp nor creates
+a completed backup. The badge, its tooltip and accessible name retain uncertainty
+while running; valid same-guest replacement restores the ordinary age verdict.
+`backupTimeEvidence.contract.test.tsx`, `format.test.ts` and
+`workloadGuestPresentation.test.ts` cover this admission and presentation. The
+real row/drawer browser fixture is `browser-tests/backup-time-evidence.cjs`.
+No backup execution, thaw, restored workload or installed acceptance is implied.
+
 ### Filesystem capacity is not measured usage
 
 The existing filesystem list and guest Overview require finite positive capacity

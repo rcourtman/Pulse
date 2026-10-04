@@ -242,11 +242,11 @@ describe('getBackupInfo', () => {
     });
   });
 
-  it('returns never status for invalid timestamp', () => {
+  it('keeps invalid timestamps distinct from an absent backup', () => {
     expect(getBackupInfo('invalid')).toEqual({
-      status: 'never',
+      status: 'unknown',
       ageMs: null,
-      ageFormatted: 'Never',
+      ageFormatted: 'Backup time unavailable: invalid timestamp.',
     });
     expect(getBackupInfo(0)).toEqual({
       status: 'never',

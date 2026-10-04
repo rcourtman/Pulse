@@ -80,6 +80,25 @@ describe('useWorkloads', () => {
     resetWorkloadsCacheForTests();
   });
 
+  it.each(['invalid', '0002-01-01T00:00:00Z'])(
+    'does not turn a present unusable backup time %s into absence',
+    async (lastBackup) => {
+      const [snapshot] = createSignal([{ ...sampleResource, proxmox: { lastBackup } }] as any);
+      let dispose = () => {};
+      let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+      createRoot((d) => {
+        dispose = d;
+        result = useWorkloads(() => true, { resourceSnapshot: snapshot });
+      });
+      try {
+        await flushAsync();
+        expect(result!.workloads()[0]?.lastBackup).not.toBe(0);
+      } finally {
+        dispose();
+      }
+    },
+  );
+
   it('preserves linked-agent RAID arrays from the VM resource for guest detail', async () => {
     const [snapshot] = createSignal([
       {
