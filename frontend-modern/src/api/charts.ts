@@ -284,6 +284,68 @@ export interface AllMetricsHistoryResponse {
   source?: 'store' | 'memory' | 'live' | 'mock_synthetic';
 }
 
+const isHistoryObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isFiniteHistoryNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+const isHistoryPointList = (value: unknown): value is AggregatedMetricPoint[] =>
+  Array.isArray(value) &&
+  value.every(
+    (point: unknown) =>
+      isHistoryObject(point) &&
+      isFiniteHistoryNumber(point.timestamp) &&
+      Number.isFinite(new Date(point.timestamp).getTime()) &&
+      isFiniteHistoryNumber(point.value) &&
+      isFiniteHistoryNumber(point.min) &&
+      isFiniteHistoryNumber(point.max),
+  );
+
+// A successful transport is not evidence for the requested selection. Validate
+// before any drawer, chart or hover cache can accept the response. Keep errors
+// fixed: a mismatched body can contain another resource's private details.
+function parseMetricsHistoryResponse(
+  value: unknown,
+  params: MetricsHistoryParams,
+): SingleMetricHistoryResponse | AllMetricsHistoryResponse {
+  const resourceType = toMetricsHistoryAPIResourceType(params.resourceType);
+  const requestedId = params.resourceId.trim();
+  // This is the server's one explicit ID compatibility rule, not an alias
+  // search: legacy Kubernetes pod IDs receive the canonical k8s: prefix.
+  const resourceId =
+    resourceType === 'k8s' && requestedId.includes(':pod:') && !requestedId.startsWith('k8s:')
+      ? `k8s:${requestedId}`
+      : requestedId;
+  if (
+    !isHistoryObject(value) ||
+    value.resourceType !== resourceType ||
+    value.resourceId !== resourceId ||
+    (params.range ? value.range !== params.range : value.range !== '' && value.range !== '24h') ||
+    !isFiniteHistoryNumber(value.start) ||
+    !isFiniteHistoryNumber(value.end) ||
+    (value.source !== undefined &&
+      !['store', 'memory', 'live', 'mock_synthetic'].includes(value.source as string))
+  ) {
+    throw new Error('Invalid metrics history response.');
+  }
+  if (params.metric) {
+    if (value.metric !== params.metric || 'metrics' in value || !isHistoryPointList(value.points)) {
+      throw new Error('Invalid metrics history response.');
+    }
+    return value as unknown as SingleMetricHistoryResponse;
+  }
+  if (
+    'metric' in value ||
+    'points' in value ||
+    !isHistoryObject(value.metrics) ||
+    !Object.values(value.metrics).every(isHistoryPointList)
+  ) {
+    throw new Error('Invalid metrics history response.');
+  }
+  return value as unknown as AllMetricsHistoryResponse;
+}
+
 export type TimeRange = '5m' | '15m' | '30m' | '1h' | '4h' | '12h' | '24h' | '7d' | '30d';
 
 export class ChartsAPI {
@@ -396,25 +458,29 @@ export class ChartsAPI {
   static async getMetricsHistory(
     params: MetricsHistoryParams,
   ): Promise<SingleMetricHistoryResponse | AllMetricsHistoryResponse> {
+    const selection = { ...params };
     const searchParams = new URLSearchParams({
-      resourceType: toMetricsHistoryAPIResourceType(params.resourceType),
-      resourceId: params.resourceId,
+      resourceType: toMetricsHistoryAPIResourceType(selection.resourceType),
+      resourceId: selection.resourceId,
     });
-    if (params.metric) {
-      searchParams.set('metric', params.metric);
+    if (selection.metric) {
+      searchParams.set('metric', selection.metric);
     }
-    if (params.range) {
-      searchParams.set('range', params.range);
+    if (selection.range) {
+      searchParams.set('range', selection.range);
     }
     if (
-      typeof params.maxPoints === 'number' &&
-      Number.isFinite(params.maxPoints) &&
-      params.maxPoints > 0
+      typeof selection.maxPoints === 'number' &&
+      Number.isFinite(selection.maxPoints) &&
+      selection.maxPoints > 0
     ) {
-      searchParams.set('maxPoints', Math.round(params.maxPoints).toString());
+      searchParams.set('maxPoints', Math.round(selection.maxPoints).toString());
     }
     const url = `${this.baseUrl}/metrics-store/history?${searchParams.toString()}`;
-    return params.signal ? apiFetchJSON(url, { signal: params.signal }) : apiFetchJSON(url);
+    const response: unknown = selection.signal
+      ? await apiFetchJSON(url, { signal: selection.signal })
+      : await apiFetchJSON(url);
+    return parseMetricsHistoryResponse(response, selection);
   }
 
   /**

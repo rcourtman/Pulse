@@ -493,9 +493,20 @@ through the canonical webhook transport must send `X-Pulse-Timestamp` and
 `X-Pulse-Signature` (`v1=` + hex HMAC-SHA256 over `timestamp + "." + body`),
 computed at the single request-construction choke point and set after custom
 headers so user-provided header maps cannot shadow them. Alert deliveries also
-send `X-Pulse-Event-ID` (`alertID:event`) as the idempotency token; it must be
+send `X-Pulse-Event-ID` (`alertID:event`) as a legacy correlation token; it must be
 stable across both transport-layer and queue-layer retries of the same alert
-occurrence. The management API must mask a configured signing secret on read
+occurrence. It omits occurrence start, severity and grouped membership and is
+not a unique incident or delivery identity; it is not covered by the HMAC.
+Receiver guidance must not prescribe permanent header-only deduplication.
+Normal queued templates expose every member through `.Alerts`, whose full-
+precision `StartTime` can distinguish later occurrences even when the primary
+RFC3339 start string has the same whole second. Correlate recovery with that
+occurrence and preserve severity updates and changed members. The existing
+wire format and retry stability remain unchanged. `webhook_guide_test.go`
+exercises copied templates through the actual signed sender over loopback for
+retry, escalation, recovery, recurrence, group changes and JSON escaping; it
+does not establish durable ticket actions or installed notification delivery.
+The management API must mask a configured signing secret on read
 and preserve the stored secret when an update echoes the masked placeholder,
 the same ownership rule it applies to header and custom-field secrets.
 That same transport boundary also owns webhook request normalization. Rendered

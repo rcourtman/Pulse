@@ -9,6 +9,13 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT="${ROOT_DIR}/scripts/npm-audit-retry.sh"
 
+# Own the fake-provider baseline. Individual deadline controls below still
+# override these values at the function call, but a CI caller's audit budget
+# must not silently alter all the other canned-verdict tests.
+NPM_AUDIT_ATTEMPTS=3
+NPM_AUDIT_ATTEMPT_TIMEOUT=60
+NPM_AUDIT_MAX_SECONDS=240
+
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "${WORK_DIR}"' EXIT
 

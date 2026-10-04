@@ -84,7 +84,7 @@ func TestNodeToolchainParity(t *testing.T) {
 		setupCount += strings.Count(content, "actions/setup-node@")
 		for _, match := range versionPattern.FindAllStringSubmatch(content, -1) {
 			versionCount++
-			if match[1] != nodeToolchainLine {
+			if !usesNodeToolchainLine(match[1], nodeToolchainLine) {
 				t.Fatalf("%s selects Node.js %s; all workflows must use governed line %s", path, match[1], nodeToolchainLine)
 			}
 		}
@@ -109,5 +109,29 @@ func TestNodeToolchainParity(t *testing.T) {
 	if !strings.Contains(devcontainer, `"version": "`+nodeToolchainLine+`"`) ||
 		!regexp.MustCompile(`ghcr\.io/devcontainers/features/node@sha256:[0-9a-f]{64}`).MatchString(devcontainer) {
 		t.Fatalf("devcontainer must use Node.js %s from a digest-pinned feature", nodeToolchainLine)
+	}
+}
+
+// A reproducible job may pin an exact stable version within the governed
+// major. Reject ranges, previews and unresolved selectors rather than treating
+// a literal same-major pin as a different toolchain line.
+func usesNodeToolchainLine(selector, line string) bool {
+	return regexp.MustCompile(`^` + regexp.QuoteMeta(line) + `(\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*))?$`).MatchString(selector)
+}
+
+func TestNodeToolchainSelectors(t *testing.T) {
+	for _, selector := range []string{"24", "24.0.0", "24.20.0", "24.123.456"} {
+		if !usesNodeToolchainLine(selector, "24") {
+			t.Errorf("governed stable selector %q rejected", selector)
+		}
+	}
+	for _, selector := range []string{
+		"23", "25", "23.20.0", "25.20.0", "240.20.0", "24.20", "24.x", "24.*",
+		"^24.20.0", ">=24", "latest", "node", "lts/*", "${{ matrix.node }}",
+		"24.20.0-rc.1", "24.20.0+build", "24.020.0", "24.20.00", "24.20.0 ", "",
+	} {
+		if usesNodeToolchainLine(selector, "24") {
+			t.Errorf("ungoverned or unresolved selector %q accepted", selector)
+		}
 	}
 }

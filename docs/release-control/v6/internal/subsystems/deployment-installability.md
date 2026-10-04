@@ -3992,7 +3992,12 @@ Every `actions/setup-node` release, governance, security, integration, and
 native-agent job, the release-preflight worker, the developer container, and
 the release frontend stages must stay on Node.js `24`; local integration setup
 must reject a different major instead of treating newer non-LTS majors as
-equivalent. Shipped and test Dockerfiles must pin every external base to a full
+equivalent. Workflow selectors may use the governed major or an exact stable
+`major.minor.patch` pin within it; ranges, previews, other majors and unresolved
+selectors are not parity evidence. `TestNodeToolchainParity` checks the actual
+workflows, and `TestNodeToolchainSelectors` checks both allowed forms and those
+rejections without removing an exact runtime pin from a qualification job.
+Shipped and test Dockerfiles must pin every external base to a full
 manifest-list digest, and checked-in integration Compose images must do the
 same. Node.js `24` is normally supported through `2028-04-30` and Alpine
 `3.24` through `2028-06-01`; a weekly repository check must fail once either
@@ -5003,7 +5008,13 @@ advisory fails whenever the graph moves or the mode value is not exactly
 `false`, that an inherited advisory warns and is still named, that an
 unparseable or unrecognised report is never read as
 clean, and that neither a hung attempt nor an exhausted budget can outlive
-its bound. `frontend-modern/src/security/__tests__/dependencySecurity.test.ts`
+its bound. Both fake-provider suites own their default timing controls rather
+than inheriting a caller's shortened or exhausted budget. Python's hostile-env
+controls exercise both exact single-request advisory verdicts and the real
+shell fixture, including its explicit hung-attempt and total-deadline cases.
+This fixture isolation does not change the production runner, retry budget or
+audit verdict, and cannot establish the cause of an earlier extra invocation.
+`frontend-modern/src/security/__tests__/dependencySecurity.test.ts`
 pins the known safe floors for advisories remediated by commit `6ba85a185`,
 including DOMPurify `GHSA-55q2-fjhq-7xh7`, brace-expansion
 `GHSA-mh99-v99m-4gvg` and `GHSA-rgw5-rvv9-x895`, and nanoid
