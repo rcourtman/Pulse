@@ -35,7 +35,13 @@ const { chromium, webkit } = require('playwright');
         { waitUntil: 'domcontentloaded', timeout: 60_000 });
       const quickStart = page.getByRole('heading', { name: 'Quick Start', exact: true });
       await quickStart.waitFor();
-      if (engine === 'webkit') await page.evaluate(() => document.documentElement.classList.add('dark'));
+      if (engine === 'webkit') {
+        await page.evaluate(async () => {
+          document.documentElement.classList.add('dark');
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          await Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => {})));
+        });
+      }
       const article = await page.locator('article').innerText();
       for (const text of ['it does not validate inventory or metric collection',
         'an elapsed interval is not proof that a poll completed',
