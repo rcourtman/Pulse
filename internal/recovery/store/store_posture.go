@@ -455,21 +455,32 @@ func (s *Store) loadProtectionPointsForKeys(
 func (s *Store) listLatestProtectionProviderObservations(
 	ctx context.Context,
 ) ([]recovery.ProtectionProviderObservation, error) {
+	// Enumerate narrow scope keys from the covering index, then seek the latest
+	// row in each scope. Ranking SELECT * over 90 days of evidence holds the
+	// sole recovery connection while reading every historical payload (#2465).
+	// Keep the existing timestamp/ID tie-break and do not fall back from an
+	// invalid latest observation to older, potentially reassuring evidence.
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT
-			id, provider, source, scope, job_state,
-			history_completeness, permissions, verification_expected,
-			observed_at_ms, ingested_at_ms, evidence_json
-		FROM (
-			SELECT *,
-			       ROW_NUMBER() OVER (
-				       PARTITION BY provider, scope
-				       ORDER BY observed_at_ms DESC, id DESC
-			       ) AS rn
+		WITH scopes AS (
+			SELECT DISTINCT provider, scope
 			FROM protection_provider_observations
 		)
-		WHERE rn = 1
-		ORDER BY provider, scope
+		SELECT
+			observation.id, observation.provider, observation.source,
+			observation.scope, observation.job_state,
+			observation.history_completeness, observation.permissions,
+			observation.verification_expected, observation.observed_at_ms,
+			observation.ingested_at_ms, observation.evidence_json
+		FROM scopes
+		JOIN protection_provider_observations observation
+		  ON observation.id = (
+			SELECT candidate.id
+			FROM protection_provider_observations candidate
+			WHERE candidate.provider = scopes.provider AND candidate.scope = scopes.scope
+			ORDER BY candidate.observed_at_ms DESC, candidate.id DESC
+			LIMIT 1
+		  )
+		ORDER BY observation.provider, observation.scope
 	`)
 	if err != nil {
 		return nil, err

@@ -21,6 +21,95 @@
 
 ## Purpose
 
+### Memory provenance does not imply recoverability
+
+Canonical metric values may carry optional selected guest memory observation
+state/source/original known time. The facet follows that numeric source through
+cloning and frontend conversion; last-known or unavailable memory is not fresh
+backup evidence, a storage-health verdict or confirmation of thaw. This
+annotation changes no backup identity, retention, rollup selection, restore
+policy or snapshot data. The connected monitoring observation and metric
+source-selection controls verify the shared type without weakening recovery
+evidence requirements.
+
+### Latest provider observations do not scan retained evidence payloads
+
+The protection-posture reader enumerates provider/scope keys through the existing
+covering index, then seeks the latest observation by observed time and ID. Only
+that row's evidence payload is read for each scope. The 90-day retention, schema,
+single-connection policy and evidence validation are unchanged; malformed or
+invalid latest evidence never falls back to older reassuring facts. Narrow index
+key enumeration still scales with retained history, but wide historical payloads
+are not ranked on every ingest or posture read.
+
+`store_queryplan_test.go` checks the production SQL's covering enumeration and
+indexed latest-row lookup. `store_posture_test.go` covers timestamp/ID ties,
+provider/scope separation, corrupt latest evidence, cancellation, retained row
+count and connection-pool deadline/recovery. The fixed synthetic history
+benchmark uses 1,000/70,949/180,000 rows and two scopes; it is not native Pi
+performance, backup restore acceptance or release qualification.
+
+
+### Backup inventory ownership is source-scoped and unambiguous
+
+The existing Backups Coverage and By date views do not select a workload from
+an arbitrary substring, display label or first matching row when VMIDs repeat.
+PVE files, guest snapshots and task evidence use the supplied connection scope
+before native node names or aliases. One VMID inside a matching PVE connection
+stays associated after node migration; a known conflicting connection cannot be
+rescued by a reused node name or a singleton fallback. With no connection scope,
+an exact native node/alias must identify one candidate; wholly unscoped singleton
+observations retain their existing compatibility behaviour.
+
+PBS instance and datastore identify a repository, not a PVE workload. A PBS
+namespace disambiguates repeated VMIDs only with a unique exact native node,
+alias or PVE connection label. Unique type/VMID PBS inventory retains the
+existing root-namespace association. This bounded presentation fix does not
+implement the runtime PBS source learner or alter server-owned protection policy.
+
+Unresolved artifacts remain listed once and keep complete, collision-safe source
+keys (PVE connection/node or PBS instance/datastore/namespace), including host
+backup labels. Equal VMIDs, repository labels or host names cannot pool them
+across unproven sources. Untyped PVE tasks may join only PVE-scoped rows, not a
+PBS-only unresolved row with a lookalike namespace. The existing collapsed group
+and count say **unmatched**, not that the guest necessarily ceased to exist;
+its explanation wraps on phones. These rows remain **not evaluated**, separate
+from canonical provider-owned protection posture and live workload counts.
+
+Verification: `proxmoxBackupRecoveryModel.identity.test.ts` reproduces prefix
+and reused-node collisions, order independence, migration/alias controls,
+conflicting scope, ambiguous type/namespace and separated unresolved sources.
+Mounted `ProxmoxBackupsTable.test.tsx` backup-identity cases cover both views,
+artifact preservation, reorder/display rename, expansion identity and no extra
+inventory read. `browser-tests/backup-identity.cjs` uses production tables,
+router, inventory readers and CSS with synthetic responses on desktop Chromium
+and touch WebKit at 390px/320px, including keyboard/touch disclosure, ambiguity,
+readable unmatched explanation and same-resource recovery. No native backup
+identity, restore, guest thaw or containing-release acceptance follows from
+these source/render observations.
+
+
+### PBS datastore capacity is not inferred from failed-read zeros
+
+The existing Backups server table distinguishes a named datastore whose status
+read failed from an empty datastore and from a server without datastore data.
+Provider unavailable/error evidence or an unavailable server connection
+withdraws current capacity and deduplication figures, without dropping the row,
+changing its drawer identity or invalidating independently readable backup
+inventory. Unknown status, missing/nonfinite/negative capacity and invalid
+authoritative percentages cannot receive a healthy usage indication. Capacity
+requires a positive finite total and a finite nonnegative used observation;
+measured zero remains zero, and the existing 75/90-percent warnings and
+over-capacity danger remain intact. A subsequent valid same-identity snapshot
+restores presentation without a remount, timer or new read.
+
+Fixed notices do not expose provider error text. Mounted
+`ProxmoxBackupServersTable.capacity.test.tsx` covers these distinctions and
+direct/canonical replacement; `ProxmoxBackupServersTable.test.ts` preserves
+source evidence and independent datastore identity. The production-component
+browser fixture checks desktop and narrow phone layouts. These synthetic
+checks establish no native datastore repair, backup/thaw or release acceptance.
+
 ### TrueNAS connection probes do not settle recovery inventory
 
 A successful settings probe reads system information only, on a separate client.

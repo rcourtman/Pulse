@@ -299,6 +299,51 @@ test("pre-release evidence keeps screenshots visible and asks only running conta
   assert.doesNotMatch(evidenceField, /render:/);
 });
 
+for (const name of ["bug_report.yml", "v6_rc_feedback.yml"]) {
+  test(`report intake collection safety: ${name}`, () => {
+    const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
+    const introduction = form.split("  - type: markdown\n")[1].split("  - type: ")[0];
+    assert.match(introduction, /Run Diagnostics.*live API and guest-agent requests/);
+    assert.match(introduction, /do not run it during backups, freeze\/thaw or an unresponsive-host incident/);
+    assert.match(introduction, /Prefer existing observations/);
+    assert.match(introduction, /downloads that result without running checks again/);
+    assert.doesNotMatch(introduction, /Export for GitHub \(sanitized\)/);
+  });
+}
+
+for (const name of ["bug_report.yml", "v6_rc_feedback.yml"]) {
+  test(`report intake excludes unreleased branch-tip guidance: ${name}`, () => {
+    const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
+    // Safety instructions must remain self-contained for installed versions.
+    // A main/master link can describe runtime behaviour they do not ship.
+    assert.doesNotMatch(form, /https:\/\/github\.com\/[^/\s)]+\/[^/\s)]+\/(?:blob|tree)\/(?:main|master)\//);
+    assert.match(form, /only collect diagnostics if Pulse is running and collection is safe/);
+    assert.match(form, /downloads that result without running checks again/);
+    assert.match(form, /Review files and screenshots locally before posting/);
+  });
+}
+
+for (const [name, field] of [
+  ["bug_report.yml", "logs"],
+  ["v6_rc_feedback.yml", "evidence"],
+  ["feature_request.yml", "additional_context"],
+]) {
+  test(`report intake privacy at attachment point: ${name}`, () => {
+    const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
+    const introduction = form.split("  - type: markdown\n")[1].split("  - type: ")[0];
+    const attachment = form.split(`    id: ${field}\n`)[1].split("  - type: ")[0];
+    assert.match(introduction, /Anything you attach here is public/);
+    assert.match(introduction, /even when an export is labelled "sanitized"/);
+    for (const sensitive of ["session cookies", "secret URLs", "private host", "personal details", "errors", ".env", "private keys", "Copy as cURL", "full network exports"]) {
+      assert.ok(introduction.includes(sensitive), `${name} must warn about ${sensitive}`);
+    }
+    assert.match(attachment, /Review files and screenshots locally/);
+    assert.match(attachment, /identifying details.*errors/);
+    assert.doesNotMatch(attachment, /render:/);
+    assert.doesNotMatch(attachment, /required: true/);
+  });
+}
+
 test("older-version reports cannot trigger event or scheduled retest posting", async () => {
   const issue = {
     number: 1200,

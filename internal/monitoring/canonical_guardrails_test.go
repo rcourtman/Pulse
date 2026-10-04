@@ -1261,6 +1261,10 @@ func TestBackupOrphanDetectionUsesCanonicalInventoryReadinessScope(t *testing.T)
 			"func (m *Monitor) updatePVEBackupTemplateSubjectsForType(instanceName, guestType string, subjects map[string]struct{}) {",
 			"func (m *Monitor) updatePVEBackupTemplateSubjectsFromClusterResources(instanceName string, resources []proxmox.ClusterResource) {",
 			"func (m *Monitor) backupInventoryScopeForAlerts() *alerts.BackupInventoryScope {",
+			"m.checkBackupAlerts(ctx)",
+			"m.checkBackupAlerts(context.Background())",
+		},
+		"recovery_rollups.go": {
 			"m.alertManager.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, m.backupInventoryScopeForAlerts())",
 		},
 		"monitor_pve_guest_poll.go": {
@@ -2976,6 +2980,26 @@ func TestGuestAgentBackupMonitoringContract(t *testing.T) {
 	testGuestAgentBackupMonitoringLifecycle(t)
 }
 
+func TestGuestMemoryObservationContract(t *testing.T) {
+	t.Run("poll-to-served-observation", testGuestMemoryObservationLifecycle)
+	t.Run("identity-and-origin-boundaries", testGuestMemoryObservationKeepsOriginsSeparate)
+	t.Run("independent-linked-agent", testGuestMemoryObservationPreservesIndependentLinkedAgent)
+}
+
+// Same-target, unambiguous lock evidence is required even with warm caches.
+func TestGuestAgentBackupLockEvidenceContract(t *testing.T) {
+	for _, test := range []struct{ name, config string }{
+		{"redirected config", "redirect"},
+		{"overwritten backup lock", `{"data":{"lock":"backup","lock":""}}`},
+		{"overwritten config envelope", `{"data":{"lock":"backup"},"data":{}}`},
+		{"case-conflicting envelope", `{"data":{"lock":"backup"},"DATA":{}}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			testGuestAgentBackupMonitoringLifecycleWithUnverifiedConfig(t, test.config)
+		})
+	}
+}
+
 func TestDeferredVMGuestMemoryRequiresOriginalEvidence(t *testing.T) {
 	now := time.Now()
 	tests := []struct {
@@ -3042,7 +3066,7 @@ func TestDeferredVMGuestMemoryRequiresOriginalEvidence(t *testing.T) {
 }
 
 func TestGuestAgentTransportMonitoringContract(t *testing.T) {
-	for _, reason := range []string{"agent-redirect", "agent-transport-unverified"} {
+	for _, reason := range []string{"agent-redirect", "agent-transport-unverified", "agent-completion-unverified"} {
 		for _, prefix := range []string{"", "prev-"} {
 			if !guestAgentDiskDeferred(prefix + reason) {
 				t.Errorf("transport uncertainty %q is not labelled deferred", prefix+reason)
@@ -3055,4 +3079,20 @@ func TestGuestAgentTransportMonitoringContract(t *testing.T) {
 		}
 	}
 	testGuestAgentTransportDeferralKeepsLastKnownHistory(t)
+}
+
+func TestBackupAlertEvaluationCallersShareFailureVisibility(t *testing.T) {
+	for path, want := range map[string]int{"monitor_backups.go": 2, "monitor_alerts.go": 1} {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		source := string(raw)
+		if strings.Contains(source, "listBackupRollupsForAlerts(") || strings.Contains(source, "CheckBackupsWithInventory(") {
+			t.Errorf("%s bypasses shared failure-preserving evaluation", path)
+		}
+		if got := strings.Count(source, "m.checkBackupAlerts("); got != want {
+			t.Errorf("%s has %d shared backup evaluations, want %d", path, got, want)
+		}
+	}
 }

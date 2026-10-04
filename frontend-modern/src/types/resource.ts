@@ -466,6 +466,7 @@ export interface ResourcePBSDatastore {
   available?: number;
   usagePercent?: number;
   status?: string;
+  error?: string;
   deduplicationFactor?: number;
 }
 

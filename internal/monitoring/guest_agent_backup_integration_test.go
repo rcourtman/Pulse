@@ -20,6 +20,10 @@ import (
 )
 
 func testGuestAgentBackupMonitoringLifecycle(t *testing.T) {
+	testGuestAgentBackupMonitoringLifecycleWithUnverifiedConfig(t, "")
+}
+
+func testGuestAgentBackupMonitoringLifecycleWithUnverifiedConfig(t *testing.T, unverifiedConfig string) {
 	const mib = uint64(1024 * 1024)
 	var phase, calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -28,13 +32,23 @@ func testGuestAgentBackupMonitoringLifecycle(t *testing.T) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/config"):
 			if p == 4 {
-				w.Header().Set("Content-Length", "1000")
-				fmt.Fprint(w, `{"data":{}}`)
+				switch unverifiedConfig {
+				case "redirect":
+					http.Redirect(w, r, "/unrelated-unlocked-config", http.StatusTemporaryRedirect)
+				case "":
+					w.Header().Set("Content-Length", "1000")
+					fmt.Fprint(w, `{"data":{}}`)
+				default:
+					fmt.Fprint(w, unverifiedConfig)
+				}
 			} else if p == 1 || p == 2 {
 				fmt.Fprint(w, `{"data":{"lock":"backup"}}`)
 			} else {
 				fmt.Fprint(w, `{"data":{}}`)
 			}
+		case r.URL.Path == "/unrelated-unlocked-config":
+			// Never count this unrelated unlocked response as the guest's lock.
+			fmt.Fprint(w, `{"data":{}}`)
 		case strings.HasSuffix(r.URL.Path, "/status/current"):
 			if p == 2 {
 				http.Error(w, "unavailable", 503)
@@ -111,20 +125,20 @@ func testGuestAgentBackupMonitoringLifecycle(t *testing.T) {
 	memKey := guestMemoryCacheKey("fixture", "node", 105)
 	originalMetadata := m.guestMetadataCache[metadataKey]
 	originalMemory := m.vmAgentMemCache[memKey]
-	// A syntactically unlocked prefix is not a completed config observation.
+	// An incomplete, redirected or ambiguous config is not lock clearance.
 	// Warm guest caches must stay labelled last-known rather than becoming new
-	// disk/memory History samples when the lock response is incomplete.
+	// disk/memory History samples when the lock response cannot be trusted.
 	phase.Store(4)
 	unverified, _ := build()
 	if unverified.ID != initial.ID || unverified.GuestAgentStatus != "deferred" || unverified.DiskStatusReason != "prev-lock-unverified" || unverified.Disk.Used != initial.Disk.Used || unverified.Memory.Used != initial.Memory.Used {
-		t.Fatalf("incomplete lock response lost truthful continuity: %#v", unverified)
+		t.Fatalf("unverified lock response lost truthful continuity: %#v", unverified)
 	}
 	if calls.Load() != before || !reflect.DeepEqual(m.guestMetadataCache[metadataKey], originalMetadata) || !reflect.DeepEqual(m.vmAgentMemCache[memKey], originalMemory) {
-		t.Fatal("incomplete lock response sent a guest command or renewed caches")
+		t.Fatal("unverified lock response sent a guest command or renewed caches")
 	}
 	for metric, want := range map[string]int{"cpu": 2, "memory": 1, "memoryused": 1, "disk": 1} {
 		if got := len(m.metricsHistory.GetGuestMetrics(identity, metric, time.Hour)); got != want {
-			t.Errorf("incomplete lock %s history points = %d, want %d", metric, got, want)
+			t.Errorf("unverified lock %s history points = %d, want %d", metric, got, want)
 		}
 	}
 	phase.Store(1)
@@ -141,7 +155,7 @@ func testGuestAgentBackupMonitoringLifecycle(t *testing.T) {
 		if locked.ID != initial.ID || locked.GuestAgentStatus != "deferred" || locked.DiskStatusReason != "prev-vm-locked" {
 			t.Fatalf("locked poll %d lost continuity/truth: %#v", poll, locked)
 		}
-		if locked.Memory != initial.Memory || source != "previous-snapshot" || locked.Disk.Used != initial.Disk.Used || !reflect.DeepEqual(locked.NetworkInterfaces, initial.NetworkInterfaces) {
+		if guestMemoryValuesOnly(locked.Memory) != guestMemoryValuesOnly(initial.Memory) || source != "previous-snapshot" || locked.Disk.Used != initial.Disk.Used || !reflect.DeepEqual(locked.NetworkInterfaces, initial.NetworkInterfaces) {
 			t.Fatalf("locked poll %d lost last-known evidence: source=%s memory=%#v want=%#v", poll, source, locked.Memory, initial.Memory)
 		}
 	}
@@ -162,7 +176,7 @@ func testGuestAgentBackupMonitoringLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	locked, _ = build()
-	if calls.Load() != before || locked.GuestAgentStatus != "deferred" || locked.AgentVersion != initial.AgentVersion || locked.Memory != initial.Memory {
+	if calls.Load() != before || locked.GuestAgentStatus != "deferred" || locked.AgentVersion != initial.AgentVersion || guestMemoryValuesOnly(locked.Memory) != guestMemoryValuesOnly(initial.Memory) {
 		t.Fatalf("resource-lock fallback queried/lost identity: calls=%d %#v", calls.Load(), locked)
 	}
 	// The per-node inventory fallback must propagate its lock to the same builder.
@@ -225,4 +239,10 @@ func TestGuestAgentDeferralPreservesMetadataAndMemoryCache(t *testing.T) {
 	if calls.Load() != 1 || !reflect.DeepEqual(m.guestMetadataCache[gk], metadata) || !reflect.DeepEqual(m.vmAgentMemCache[mk], memory) {
 		t.Fatal("deferral queued work, renewed cache or poisoned supported-OS evidence")
 	}
+}
+
+// Provenance is asserted separately; numeric continuity includes every old field.
+func guestMemoryValuesOnly(memory models.Memory) models.Memory {
+	memory.Observation = models.MemoryObservation{}
+	return memory
 }

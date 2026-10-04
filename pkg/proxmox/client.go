@@ -636,11 +636,14 @@ func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path s
 		// Preserve the established returned-error classification for callers;
 		// this distinction changes only the emitted diagnostic severity.
 		if resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 595 {
-			// Import errors package at top of file
-			return nil, fmt.Errorf("authentication error: %w", apiErr)
+			apiErr = fmt.Errorf("authentication error: %w", apiErr)
 		}
 
-		return nil, apiErr
+		return nil, &apiResponseError{
+			statusCode:           resp.StatusCode,
+			guestCommandRejected: resp.StatusCode == http.StatusInternalServerError && guestAgentTerminalFailure(path, body),
+			cause:                apiErr,
+		}
 	}
 
 	if err := securityutil.LimitResponseBody(resp, maxResponseBodyBytes); err != nil {

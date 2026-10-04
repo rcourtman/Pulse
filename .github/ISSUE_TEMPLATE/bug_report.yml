@@ -9,9 +9,11 @@ body:
       value: |
         Report the version on the running instance where the bug occurs, not just the version you upgraded from. If installation failed before Pulse could start, give the exact version you tried to install, or write "unknown" and identify the installer or helper below. For container installs, include the running image tag or digest; for other installs, leave the image field blank.
 
-        If repeating the action could cause data loss, an outage, duplicate changes, or excessive notifications, do not repeat it just to fill in this form. Describe the original sequence and what you observed instead. If Pulse is running and it is safe to do so, connection- or data-related reports can include diagnostics from `Settings -> Diagnostics -> Export for GitHub (sanitized)`.
+        If repeating the action could cause data loss, an outage, duplicate changes, or excessive notifications, do not repeat it just to fill in this form. Describe the original sequence and what you observed instead.
 
-        Do not post secrets, tokens, private keys, or unsanitized configuration files.
+        For connection or data failures, only collect diagnostics if Pulse is running and collection is safe. **Run Diagnostics** can make live API and guest-agent requests; do not run it during backups, freeze/thaw or an unresponsive-host incident just to file a report. Prefer existing observations; if a result is already displayed, its GitHub export downloads that result without running checks again.
+
+        Anything you attach here is public. Review files and screenshots locally before posting, even when an export is labelled "sanitized". Remove credentials, session cookies, secret URLs, private host/network and personal details, including text echoed in errors. Do not attach full/private diagnostics, .env or configuration files, private keys, Copy as cURL commands or full network exports.
 
   - type: textarea
     id: bug_description
@@ -105,7 +107,9 @@ body:
     id: logs
     attributes:
       label: Logs, screenshots, or diagnostics
-      description: Add relevant logs or sanitized diagnostics for connection and data failures; for visual failures, attach a screenshot or quote the exact error. Redact secrets.
+      description: |
+        Add relevant redacted logs or a reviewed GitHub diagnostics export for connection and data failures; for visual failures, a screenshot or exact error may be enough. Prefer existing evidence when new collection is unsafe.
+        Review files and screenshots locally; remove secrets and identifying details, including those echoed in errors, before attaching them here.
     validations:
       required: false
 

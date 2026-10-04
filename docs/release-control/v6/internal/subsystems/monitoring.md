@@ -17,6 +17,50 @@
 
 ## Purpose
 
+### Guest memory observations are source-owned
+
+QEMU and LXC memory carry an optional `observation` with `state` (`current`,
+`last-known`, `unavailable`), canonical `source`, and original RFC3339
+`observedAt` when known. Normal TTL cache hits keep the original read time.
+Repeated QGA/backup deferrals are last-known, never renewed by a poll or
+diagnostic RetrievedAt; expired/missing usage and powered-off guests expose
+unavailability without inventing a read time. Legacy unannotated values make
+no freshness assertion. Independently selected PVE status/listing or linked
+Pulse-agent memory remains distinct from disk or QGA collection state. Agent
+receipt time belongs to its source status, not a guest row refreshed by PVE.
+
+Annotation preserves numeric selection, capacity, retention, guest identity,
+agent admission, alert thresholds and existing History recording. It grants
+no live-check authority or proof of thaw. Existing legacy state, raw Proxmox
+facets and selected canonical memory metrics preserve the discriminator;
+selected metric provenance must not be borrowed from another merged facet.
+`TestGuestMemoryObservationContract` exercises poll/cache/deferral/expiry/
+resumption through unified and served conversions; wire and source-selection
+controls cover omission, cloning and independent live agent data. These are
+synthetic source proofs, not native QGA/HAOS acceptance or delivered relief.
+
+### Unavailable backup-age evaluation is not silent recovery
+
+PVE, PBS and mock backup checks share one failure-preserving evaluator. The
+existing two-second complete rollup-read budget includes connection waiting;
+it is not extended or bypassed. A failed or partial read does not invoke backup
+age evaluation with an empty result, clear existing age alerts or assert backup
+health. A fixed system warning makes the skipped evaluation visible in the
+existing alert list and served state, with no raw database/provider/path error.
+A complete subsequent evaluation clears that warning; normal cancellation or a
+missing manager does not stand in for read recovery. Deliberately disabled checks
+clear their irrelevant warning without reading recovery history.
+
+Overlapping global checks coalesce instead of queueing. The single evaluation
+owner orders failure/recovery publication so an older success cannot erase a
+newer failure. `backup_alert_evaluation_test.go` exercises actual persisted
+rollups, stale/fresh backups, read failure/reopening, served-state visibility,
+repeated failures, missing dependencies, cancellation/deadlines and concurrent
+coalescing. `TestBackupAlertEvaluationCallersShareFailureVisibility` binds all
+three callers to that path. These are synthetic source controls, not native
+backup thaw, Raspberry Pi relief or published availability.
+
+
 ### Platform connection discovery follows tenant storage identity
 
 TrueNAS and VMware pollers enumerate validated, sorted persistence directory
@@ -105,12 +149,52 @@ holds per-guest admission until body completion; its failure discards the
 payload. Complete responses at the limit, including trailing whitespace, remain
 valid. Ordinary PVE CPU/I/O observations remain independent of this deferral.
 
+Lock verification also requires a direct HTTP 200 from the configured command
+endpoint and one unambiguous `data` configuration object. It never follows a
+redirect, including a same-origin redirect to another configuration path.
+Duplicate fields (including escaped duplicates), differently cased `data` or
+`lock` fields, competing error/failure envelopes and non-string operation locks
+yield `lock-unverified`; a later unlocked value cannot overwrite earlier backup
+evidence. Ordinary `GetVMConfig` remains compatible with its existing decoding
+and redirects. The lock check shares the configured pooled transport, TLS,
+proxy and timeout policy and retains config-read password-session recovery;
+the guest command itself is still single-attempt. This narrows the authority
+of lock evidence, not the ordinary API read contract. Failed post-command lock
+verification discards the guest payload without inventing a transport cooldown;
+subsequent same-target unlocked verification permits normal resumption.
+`TestGuestAgentLockEvidenceRejectsAmbiguity` and
+`TestGuestAgentLockEvidenceRejectsRedirects` exercise all six readers before and
+after dispatch, all five redirect statuses, same/cross endpoint redirects,
+ordinary config compatibility and fresh-client resumption. The connected
+`TestGuestAgentBackupLockEvidenceContract` covers warm-cache continuity, live
+CPU, unrenewed observations and History, then normal fresh poll resumption.
+
 Admission is held through the complete response, not just headers. A transport
 failure, timeout, wrong-command-ID response or incomplete body defers every
 command for that guest for a minute; callers neither immediately retry nor
 replay through another cluster endpoint. Coordination retains at most 4,096
 active/cooling endpoint-guest entries and expires cooldowns. Explicit API
 permission refusals and unsupported commands remain errors, not successes.
+
+The completed-error boundary uses the actual HTTP status retained by the request
+layer, not an `API error` phrase in provider or proxy text. HTTP 408 and
+unexplained server/proxy failures (including PVE 595) retain the same per-VM
+uncertainty cooldown, even when their bodies finish: command completion is still
+unverified. Another method, diagnostic client or configured cluster alias cannot
+immediately send a command. Only complete, exact command-bound terminal QGA
+rejections under HTTP 500 (unsupported/missing command, explicit stopped agent,
+and OS-info's known missing os-release) retain ordinary error handling. Ambiguous
+or conflicting envelopes, duplicate keys, other VM/command identities, extra
+values and gateway responses quoting a rejection do not gain that exemption.
+Existing authentication hints, error text, ordinary API session/retry policy and
+endpoint health remain unchanged. Unknown server failures now defer enrichment
+for a minute rather than inviting a sequence of diagnostic reads; this is a
+safety trade-off, not evidence of a freeze cause or native recovery.
+`TestGuestAgentHTTPFailureDefersEveryRead` exercises all six guest readers,
+independent status counters and cross-client cooldown; cluster and semantic
+controls pin no failover, definitive refusals and conservative error provenance.
+The connected transport/History lifecycle and counter-receipt controls also
+cover complete server/gateway failures without refreshing old guest evidence.
 
 Guest commands also prevent transport-level replay: each uses a fresh single-use
 HTTP/1 connection, with no pooled-connection or HTTP/2-stream retries and no
@@ -120,7 +204,8 @@ transport or custom TLS dialer defers without dispatch rather than substituting
 a different trust policy. A fully received redirect discards its body and
 starts the same per-VM uncertainty cooldown; its destination is never contacted.
 Ordinary config/resource reads retain pooling, HTTP/2, redirects and session
-recovery. This deliberately trades one new connection per guest command for
+recovery, except that authoritative guest lock checks refuse redirects as above.
+This deliberately trades one new connection per guest command for
 single-attempt safety; it does not reserve the QGA channel or establish thaw.
 Wire controls drop a reply only after receiving a command (including when a
 backup lock then appears), and exercise every read and redirect code. TLS

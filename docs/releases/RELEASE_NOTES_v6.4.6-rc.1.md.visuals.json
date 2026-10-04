@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "captures": [],
+  "decision": "Zero captures: these changes repair History attribution, asynchronous update completion, local health probes and installation consent. Static screenshots would not demonstrate their correctness. behavior-specific browser and runtime checks provide the relevant evidence."
+}

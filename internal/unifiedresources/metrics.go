@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mockmode"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -35,9 +36,19 @@ func hasObservedDiskUsage(disk models.Disk) bool {
 }
 
 func metricsFromHost(host models.Host) *ResourceMetrics {
+	// Author freshness from server-owned report receipt time, never from a
+	// guest row refreshed by another source or an agent-supplied annotation.
+	memory := host.Memory
+	memory.Observation = models.MemoryObservation{State: "current", Source: "agent", ObservedAt: host.LastSeen}
+	if host.Status != "online" || host.LastSeen.IsZero() || host.LastSeen.After(time.Now()) {
+		memory.Observation.State = "last-known"
+		if host.LastSeen.After(time.Now()) {
+			memory.Observation.ObservedAt = time.Time{}
+		}
+	}
 	return buildHostMetricPayload(
 		host.CPUUsage,
-		host.Memory,
+		memory,
 		host.Disks,
 		host.NetInRate,
 		host.NetOutRate,
@@ -99,7 +110,7 @@ func buildHostMetricPayload(
 	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: source}
 	if memory.Total > 0 && memory.HasKnownUsage() {
 		percent := percentFromReportedPercent(memory.Usage)
-		metrics.Memory = &MetricValue{Used: &memory.Used, Total: &memory.Total, Percent: percent, Unit: "bytes", Source: source}
+		metrics.Memory = &MetricValue{Used: &memory.Used, Total: &memory.Total, Percent: percent, Unit: "bytes", Source: source, Observation: memory.Observation}
 	}
 	if len(disks) > 0 {
 		disk := disks[0]
@@ -199,7 +210,7 @@ func buildVMMetricPayload(
 	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: source}
 	if memory.Total > 0 && memory.HasKnownUsage() {
 		percent := percentFromUsage(memory.Usage)
-		metrics.Memory = &MetricValue{Used: &memory.Used, Total: &memory.Total, Percent: percent, Unit: "bytes", Source: source}
+		metrics.Memory = &MetricValue{Used: &memory.Used, Total: &memory.Total, Percent: percent, Unit: "bytes", Source: source, Observation: memory.Observation}
 	}
 	if hasObservedDiskUsage(disk) {
 		percent := percentFromUsage(disk.Usage)

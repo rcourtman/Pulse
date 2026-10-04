@@ -256,9 +256,9 @@ export const ProxmoxBackupsTable: Component<{
   const [expandedCoverageRows, setExpandedCoverageRows] = createSignal<ReadonlySet<string>>(
     new Set<string>(),
   );
-  // Orphaned backups (VM/LXC records whose guest no longer exists in inventory)
+  // Unmatched backups (VM/LXC evidence without an unambiguous live identity)
   // are collapsed by default so the main table is active backup targets, not a
-  // pile of nameless dead records sorted to the top.
+  // pile of unassigned artifacts sorted to the top.
   const [showOrphaned, setShowOrphaned] = createSignal(false);
 
   // Chronological feed sort and activity-chart controls.
@@ -746,7 +746,7 @@ export const ProxmoxBackupsTable: Component<{
                 </Show>
                 <Show when={orphanedTotalCount() > 0}>
                   {' · '}
-                  {orphanedTotalCount()} orphaned
+                  {orphanedTotalCount()} unmatched
                 </Show>
               </span>
             }
@@ -936,7 +936,7 @@ export const ProxmoxBackupsTable: Component<{
                 <button
                   type="button"
                   onClick={() => setShowOrphaned((v) => !v)}
-                  class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
+                  class="flex w-full flex-wrap items-center justify-between gap-2 px-3 py-2 text-left"
                   aria-expanded={showOrphaned()}
                 >
                   <span class="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
@@ -944,10 +944,12 @@ export const ProxmoxBackupsTable: Component<{
                       class={`h-3.5 w-3.5 transition-transform ${showOrphaned() ? 'rotate-90' : ''}`}
                       aria-hidden="true"
                     />
-                    {orphanedTotalCount()} orphaned{' '}
+                    {orphanedTotalCount()} unmatched{' '}
                     {orphanedTotalCount() === 1 ? 'backup' : 'backups'}
                   </span>
-                  <span class="text-[11px] text-muted">guest no longer exists in inventory</span>
+                  <span class="w-full text-[11px] text-muted sm:w-auto">
+                    No unambiguous inventory match
+                  </span>
                 </button>
                 <Show when={showOrphaned()}>
                   <div class="border-t border-border-subtle p-2">
@@ -955,8 +957,8 @@ export const ProxmoxBackupsTable: Component<{
                       rows={orphanedCoverageRows()}
                       hasAnyRows={orphanedTotalCount() > 0}
                       emptyIcon={props.emptyIcon}
-                      emptyTitle="No orphaned backups"
-                      emptyDescription="Backups whose guest no longer exists will appear here."
+                      emptyTitle="No unmatched backups"
+                      emptyDescription="Backups without an unambiguous live guest match will appear here."
                       sortKey={coverageSortKey}
                       sortDirection={coverageSortDirection}
                       onSort={handleCoverageSort}

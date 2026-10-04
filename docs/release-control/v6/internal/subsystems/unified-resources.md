@@ -23,6 +23,36 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Guest memory provenance follows metric selection
+
+Raw Proxmox `memory.observation` preserves the guest builder's state, source
+and original known observation time. Canonical memory metrics carry their own
+optional `observation` through clones, merges and served frontend conversion.
+A retained platform facet cannot supply provenance for a different selected
+agent metric. Agent memory annotations are authored from server-owned source
+receipt/freshness, never agent-supplied annotation or merged guest LastSeen.
+Linked-agent views retain that source time after host/guest correlation.
+Absent annotations are unknown/legacy; absent observation times stay absent.
+
+Numeric preference, unavailable same-source withdrawal, cross-source fallback,
+identity and freshness policy remain unchanged. Guest memory and disk-read
+provenance are independent. Adapter/source-selection and linked-view controls
+exercise these boundaries, with the connected monitoring contract pinning the
+actual served projection; this does not prove native recovery or publication.
+
+### PBS capacity consumers preserve explicit read failure
+
+`ResourcePBSDatastore.error` describes existing provider read-failure evidence,
+not a new collection or command. PBS resource facets retain that evidence
+through canonical presentation. The Backups capacity consumer must not treat
+the provider's zero-valued unavailable datastore as a successful empty-store
+observation, nor show retained numbers as current when the connection is
+unavailable. It keeps row/source identity and independent inventory counts;
+fixed unavailable/unknown notices never disclose the error body. Valid capacity
+including measured zero restores the same mounted row. Verification uses
+`ProxmoxBackupServersTable.test.ts` plus the direct/canonical mounted capacity
+controls; native read, backup and published acceptance remain separate.
+
 ### History consumers do not accept a mismatched or malformed success body
 
 The common metrics History client validates the issued selection and response

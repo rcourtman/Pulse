@@ -25195,3 +25195,168 @@ func TestTrueNASSavedProbePreservesRuntimeEvidence(t *testing.T) {
 		})
 	}
 }
+
+// Exercise the real router constructor and monitor ticker: a handler-only
+// summary test cannot detect a closure capturing nil pollers during startup.
+// The appliances are loopback analogues, not native acceptance of #2382.
+func TestRouterPlatformConnectionAlertsFollowRuntime(t *testing.T) {
+	setMockModeForTest(t, false)
+	t.Setenv(truenas.FeatureTrueNAS, "true")
+	t.Setenv(vmware.FeatureVMware, "true")
+	setTrueNASFeatureForTest(t, true)
+	oldVMware := vmware.IsFeatureEnabled()
+	vmware.SetFeatureEnabled(true)
+	t.Cleanup(func() { vmware.SetFeatureEnabled(oldVMware) })
+
+	var failPools atomic.Bool
+	failPools.Store(true)
+	nas := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v2.0/system/info":
+			_, _ = w.Write([]byte(`{"hostname":"fixture-nas","version":"TrueNAS-SCALE-24.10.2","uptime_seconds":100}`))
+		case "/api/v2.0/pool":
+			if failPools.Load() {
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"error":"fixture required inventory denied"}`))
+				return
+			}
+			_, _ = w.Write([]byte(`[{"id":1,"name":"fixture-pool","status":"ONLINE","size":1000,"allocated":400,"free":600}]`))
+		case "/api/v2.0/pool/dataset", "/api/v2.0/disk", "/api/v2.0/alert/list":
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(nas.Close)
+	vc := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "fixture vCenter login denied", http.StatusUnauthorized)
+	}))
+	t.Cleanup(vc.Close)
+
+	dataDir := t.TempDir()
+	cfg := &config.Config{DataPath: dataDir, ConfigPath: dataDir, PVEPollingInterval: 10 * time.Second}
+	persistence := config.NewConfigPersistence(dataDir)
+	tn := trueNASInstanceFromRawURL(t, "fixture-nas", nas.URL, true)
+	pausedTN := tn
+	pausedTN.ID, pausedTN.Enabled = "paused-nas", false
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{tn, pausedTN}); err != nil {
+		t.Fatal(err)
+	}
+	vw := config.NewVMwareVCenterInstance()
+	vw.ID, vw.Name, vw.Host = "fixture-vc", "fixture-vc", vc.URL
+	vw.Username, vw.Password, vw.InsecureSkipVerify = "fixture-user", "fixture-password", true
+	pausedVW := vw
+	pausedVW.ID, pausedVW.Enabled = "paused-vc", false
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{vw, pausedVW}); err != nil {
+		t.Fatal(err)
+	}
+
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(monitor.Stop)
+	router := NewRouter(cfg, monitor, nil, nil, nil, "fixture")
+	cleanupTestRouter(t, router)
+	manager := monitor.GetAlertManager()
+
+	rows := func() map[string]Connection {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		router.connectionsHandlers.HandleList(rec, httptest.NewRequest(http.MethodGet, "/api/connections", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("ledger status=%d", rec.Code)
+		}
+		var response ConnectionsListResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		result := make(map[string]Connection, len(response.Connections))
+		for _, row := range response.Connections {
+			result[row.ID] = row
+		}
+		return result
+	}
+	active := func(id string) *alerts.Alert {
+		for _, alert := range manager.GetActiveAlerts() {
+			if alert.Type == "connection-degraded" && alert.ResourceID == id {
+				return &alert
+			}
+		}
+		return nil
+	}
+	wait := func(timeout time.Duration, predicate func() bool, failure string) {
+		t.Helper()
+		deadline := time.Now().Add(timeout)
+		for time.Now().Before(deadline) {
+			if predicate() {
+				return
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		t.Fatal(failure)
+	}
+	nasID, vcID := "truenas:"+tn.ID, "vmware:"+vw.ID
+	wait(5*time.Second, func() bool {
+		got := rows()
+		return got[nasID].State == ConnectionStateUnauthorized && got[vcID].State == ConnectionStateUnauthorized
+	}, "actual platform failures did not reach the ledger")
+	if active(nasID) != nil || active(vcID) != nil {
+		t.Fatal("alerts bypassed the monitor confirmation ticks")
+	}
+	t.Log("actual TrueNAS required-method and VMware login failures reach the ledger before alerts")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	go func() { defer close(stopped); monitor.Start(ctx, nil) }()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-stopped:
+		case <-time.After(5 * time.Second):
+			t.Error("monitor loop did not stop")
+		}
+	})
+	wait(36*time.Second, func() bool { return active(nasID) != nil && active(vcID) != nil },
+		"ledger failures stayed silent in the real monitor alert loop")
+	for _, id := range []string{nasID, vcID} {
+		alert := active(id)
+		row := rows()[id]
+		if alert.Level != alerts.AlertLevelCritical || alert.Metadata["state"] != string(row.State) || alert.Metadata["lastErrorCategory"] != row.LastError.Category {
+			t.Fatalf("alert did not carry the ledger's observed failure: %+v", alert)
+		}
+	}
+	for _, id := range []string{"truenas:" + pausedTN.ID, "vmware:" + pausedVW.ID} {
+		if rows()[id].State != ConnectionStatePaused || active(id) != nil {
+			t.Fatalf("paused connection %s alerted", id)
+		}
+	}
+	t.Log("both runtime failures raised confirmed critical alerts; paused peers remained silent")
+
+	vw.Enabled = false
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{vw, pausedVW}); err != nil {
+		t.Fatal(err)
+	}
+	wait(13*time.Second, func() bool { return rows()[vcID].State == ConnectionStatePaused && active(vcID) == nil },
+		"authoritative disable did not suppress the existing VMware alert")
+	if active(nasID) == nil {
+		t.Fatal("disabling VMware suppressed the independent TrueNAS failure")
+	}
+	t.Log("disabling VMware clears only its alert, without claiming a successful poll")
+
+	// Recovery comes from the next ordinary saved-connection poll, not a
+	// separate Test or a restart. Keep the real cadence and confirmation policy.
+	failPools.Store(false)
+	wait(65*time.Second, func() bool { return rows()[nasID].State == ConnectionStateActive },
+		"completed required-inventory recovery did not reach the ledger")
+	if active(nasID) == nil {
+		t.Fatal("one successful poll bypassed recovery confirmation")
+	}
+	wait(36*time.Second, func() bool { return active(nasID) == nil },
+		"healthy runtime confirmation did not resolve the TrueNAS alert")
+	if rows()[nasID].LastSeen == nil {
+		t.Fatal("recovery omitted actual observation time")
+	}
+	t.Log("real TrueNAS inventory recovery reaches the ledger and clears only after monitor confirmations")
+}

@@ -1217,10 +1217,11 @@ type ResourceConvertInput struct {
 
 // ResourceMetricInput represents a metric value for resource conversion.
 type ResourceMetricInput struct {
-	Current float64
-	Total   *int64
-	Used    *int64
-	Free    *int64
+	Current     float64
+	Total       *int64
+	Used        *int64
+	Free        *int64
+	Observation MemoryObservation
 }
 
 type ResourceAlertInput struct {
@@ -1321,10 +1322,11 @@ func ConvertResourceToFrontend(input ResourceConvertInput) ResourceFrontend {
 
 	if input.Memory != nil {
 		rf.Memory = &ResourceMetricFrontend{
-			Current: input.Memory.Current,
-			Total:   input.Memory.Total,
-			Used:    input.Memory.Used,
-			Free:    input.Memory.Free,
+			Current:     input.Memory.Current,
+			Total:       input.Memory.Total,
+			Used:        input.Memory.Used,
+			Free:        input.Memory.Free,
+			Observation: input.Memory.Observation,
 		}
 	}
 
