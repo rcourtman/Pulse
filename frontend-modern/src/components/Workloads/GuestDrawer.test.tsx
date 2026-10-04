@@ -1530,6 +1530,46 @@ describe('GuestDrawer', () => {
     });
   });
 
+  describe('header web interface action', () => {
+    it('opens the saved URL from the header without collapsing the drawer', () => {
+      const onClose = vi.fn();
+      render(() => (
+        <GuestDrawer guest={makeGuest()} customUrl="https://auth.home.example" onClose={onClose} />
+      ));
+
+      const open = screen.getByRole('link', { name: 'Open web interface for test-vm' });
+      expect(open).toHaveAttribute('href', 'https://auth.home.example');
+      expect(open).toHaveAttribute('target', '_blank');
+      expect(open).toHaveAttribute('rel', 'noopener noreferrer');
+      expect(open).toHaveTextContent('Open');
+      expect(open.className).toContain('min-h-11');
+
+      fireEvent.click(open);
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it.each([undefined, '   '])(
+      'renders no header action without a saved URL (%j)',
+      (customUrl) => {
+        render(() => <GuestDrawer guest={makeGuest()} customUrl={customUrl} onClose={vi.fn()} />);
+
+        expect(
+          screen.queryByRole('link', { name: 'Open web interface for test-vm' }),
+        ).not.toBeInTheDocument();
+      },
+    );
+
+    it('never turns an unsafe saved URL into a header link', () => {
+      const unsafeUrl = 'data:text/html,<script>alert(1)</script>';
+      render(() => <GuestDrawer guest={makeGuest()} customUrl={unsafeUrl} onClose={vi.fn()} />);
+
+      expect(
+        screen.queryByRole('link', { name: 'Open web interface for test-vm' }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'Invalid web interface URL' })).toBeInTheDocument();
+    });
+  });
+
   // ── Discovery tab integration ──
 
   describe('DiscoveryTab integration', () => {
