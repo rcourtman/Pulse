@@ -40,6 +40,7 @@ function Fixture() {
       id: 'pbs-main',
       type: 'pbs',
       name: 'pbs-main',
+      displayName: 'pbs-main',
       platformId: 'pbs-main',
       platformType: 'proxmox-pbs',
       sourceType: 'api',

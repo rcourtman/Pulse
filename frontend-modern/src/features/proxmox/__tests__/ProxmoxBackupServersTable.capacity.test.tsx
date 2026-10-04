@@ -26,6 +26,7 @@ const server = (store?: ResourcePBSDatastore, health = 'healthy'): Resource => (
   id: 'pbs-capacity',
   type: 'pbs',
   name: 'pbs-capacity',
+  displayName: 'pbs-capacity',
   status: 'online',
   platformId: 'pbs-capacity',
   platformType: 'proxmox-pbs',

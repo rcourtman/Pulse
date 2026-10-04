@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "ccb296676c167d2b948d96a54319bc0d7b52549a",
+  "verified_at": "2026-10-04T11:21:10.896992Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts",
+    "frontend-modern/src/types/resource.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "5d51f3fe36638bde58f0d31b550947a78adc664dc0898ca323aac4fb8db62903",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "00bdd77055a4c1c76bd532361f5bf0905aa253a6a72adf630445eb319f4843d0",
+    "frontend-modern/src/types/resource.ts": "007885931ae929a05ce382fa70d9afd3ed784d5ca32fc4ccf403260675a5a6de"
+  },
+  "routes": [
+    "Local /browser-tests/pbs-capacity.html: production ProxmoxBackupsTable/router/CSS, direct and canonical synthetic resources"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900,
+      "browser": "Chromium",
+      "input": "keyboard",
+      "colour": "light"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "browser": "WebKit",
+      "input": "touch",
+      "colour": "dark"
+    },
+    {
+      "width": 320,
+      "height": 844,
+      "browser": "WebKit",
+      "input": "touch",
+      "colour": "dark"
+    }
+  ],
+  "states": [
+    "Healthy capacity \u2192 failed zero capacity \u2192 unknown \u2192 offline retained values \u2192 safe fixed error notice",
+    "Measured zero remains zero; 95% remains danger; missing datastore stays separate; ordinary readings resume",
+    "All six content-identical product contexts complete; earlier overall init/load failures remain adverse"
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and phone taps switch synthetic observations in the existing page",
+    "Same-identity notice updates preserve the mounted capacity cell; no false success dot, raw error or unreliable deduplication",
+    "Font-aware warning bounds and page overflow checked; all six screenshots inspected",
+    "No external-origin request or API mutation"
+  ],
+  "evidence": "Six exact-content context controls across two retained attempts, not a claim that every browser attempt passed. See browser-context-matrix.json in the lane dossier. Earlier generic-load timeout is not cleared or re-described as a timing pass."
+}
