@@ -393,6 +393,7 @@ if history: os.write(master, (p["command"] + "\\n").encode())
 os.close(slave)
 output = b""
 sent = False
+echo_at_prompt = False
 deadline = time.monotonic() + 15
 while time.monotonic() < deadline:
     ready, _, _ = select.select([master], [], [], .1)
@@ -403,7 +404,13 @@ while time.monotonic() < deadline:
             raise
         if not chunk: break
         output += chunk
-        if output.endswith(b"(paste at this prompt, not in the command): ") and not sent:
+        # The interactive shell's echo of the command line quotes the prompt
+        # text too, so a chunk can end there long before the bootstrap runs.
+        # Only the bootstrap's own stty -echo (recorded by the stty fixture)
+        # marks the real prompt.
+        if (output.endswith(b"(paste at this prompt, not in the command): ") and not sent
+                and os.path.exists(env["READER_PID"])):
+            echo_at_prompt = bool(termios.tcgetattr(tty_watch)[3] & termios.ECHO)
             if p.get("read_signal"):
                 time.sleep(.1)  # read has displayed its own prompt and is waiting
                 with open(env["READER_PID"]) as f: reader = int(f.read())
@@ -425,6 +432,9 @@ final_tty = termios.tcgetattr(tty_watch)
 mode_mask = termios.ECHO | termios.ICANON
 if (initial_tty[3] & mode_mask) != (final_tty[3] & mode_mask):
     output += b"\\nBootstrap did not restore terminal echo/canonical mode\\n"
+    code = 1
+if echo_at_prompt:
+    output += b"\\nBootstrap prompted for the token with terminal echo enabled\\n"
     code = 1
 os.close(tty_watch)
 os.close(master)
