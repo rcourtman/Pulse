@@ -649,3 +649,104 @@ func TestStoreProtectionMetadataBackfillAddsScopeAndTypedEvidence(t *testing.T) 
 		t.Fatalf("ingestedAt = %s, want %s", evidence.IngestedAt, updatedAt)
 	}
 }
+
+func TestLatestProtectionObservationsKeepScopeAndTieSemantics(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "recovery.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	old := observationForHistoryTest(t, recovery.ProviderProxmoxPVE, "same-scope", now.Add(-time.Hour))
+	latest := observationForHistoryTest(t, recovery.ProviderProxmoxPVE, "same-scope", now)
+	tie := latest
+	tie.ID = "zz-latest-tie"
+	tie.Evidence.ID = tie.ID
+	tie.Evidence.PayloadRef = &operationaltrust.EvidencePayloadRef{Kind: "protection-provider-observation", ID: tie.ID}
+	otherProvider := observationForHistoryTest(t, recovery.ProviderProxmoxPBS, "same-scope", now.Add(-time.Minute))
+	otherScope := observationForHistoryTest(t, recovery.ProviderProxmoxPVE, "same-scope-2", now.Add(-time.Minute))
+	if err := s.UpsertProtectionProviderObservations(context.Background(), []recovery.ProtectionProviderObservation{tie, otherScope, old, latest, otherProvider}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.listLatestProtectionProviderObservations(context.Background())
+	if err != nil || len(got) != 3 {
+		t.Fatalf("observations=%+v error=%v", got, err)
+	}
+	want := map[string]string{
+		string(tie.Provider) + "/" + tie.Scope:                     tie.ID,
+		string(otherScope.Provider) + "/" + otherScope.Scope:       otherScope.ID,
+		string(otherProvider.Provider) + "/" + otherProvider.Scope: otherProvider.ID,
+	}
+	previous := ""
+	for _, o := range got {
+		key := string(o.Provider) + "/" + o.Scope
+		if want[key] != o.ID {
+			t.Errorf("scope %q chose %q, want %q", key, o.ID, want[key])
+		}
+		if previous > key {
+			t.Errorf("provider/scope ordering lost: %q > %q", previous, key)
+		}
+		previous = key
+	}
+	// A corrupt latest row must not resurrect an older reassuring observation.
+	if _, err := s.db.Exec("UPDATE protection_provider_observations SET evidence_json='{' WHERE id=?", tie.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.listLatestProtectionProviderObservations(context.Background())
+	if err != nil || len(got) != 2 {
+		t.Fatalf("corrupt latest observations=%+v error=%v", got, err)
+	}
+	for _, o := range got {
+		if o.Provider == tie.Provider && o.Scope == tie.Scope {
+			t.Fatal("fell back from corrupt latest to older evidence")
+		}
+	}
+	// Empty and cancelled reads retain their existing meanings.
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := s.listLatestProtectionProviderObservations(cancelled); err == nil {
+		t.Fatal("cancelled read succeeded")
+	}
+	if _, err := s.db.Exec("DELETE FROM protection_provider_observations"); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.listLatestProtectionProviderObservations(context.Background())
+	if err != nil || len(got) != 0 {
+		t.Fatalf("empty observations=%+v error=%v", got, err)
+	}
+}
+
+func TestLatestProtectionObservationHistoryRemainsRetained(t *testing.T) {
+	s := observationHistoryStore(t, 70949)
+	got, err := s.listLatestProtectionProviderObservations(context.Background())
+	if err != nil || len(got) != 2 {
+		t.Fatalf("observations=%d error=%v", len(got), err)
+	}
+	var count int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM protection_provider_observations").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 70949 {
+		t.Fatalf("retained observations=%d, want 70949", count)
+	}
+}
+
+func TestBackupRollupConnectionWaitingHonoursDeadline(t *testing.T) {
+	s := observationHistoryStore(t, 1000)
+	conn, err := s.db.Conn(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if _, _, err := s.ListRollups(ctx, recovery.ListPointsOptions{Kind: recovery.KindBackup}); err != context.DeadlineExceeded {
+		t.Fatalf("pool wait error=%v, want deadline exceeded", err)
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.ListRollups(context.Background(), recovery.ListPointsOptions{Kind: recovery.KindBackup}); err != nil {
+		t.Fatalf("rollups after releasing held connection: %v", err)
+	}
+}

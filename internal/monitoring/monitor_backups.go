@@ -520,15 +520,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// Sync backup times to VMs/Containers and republish them to canonical resources.
 	m.syncGuestBackupTimesAndResourceStore()
 
-	if m.alertManager != nil {
-		guestsByKey, guestsByVMID := buildGuestLookupsFromReadState(m.GetUnifiedReadStateOrSnapshot(), m.guestMetadataStore)
-		rollups, err := m.listBackupRollupsForAlerts(ctx)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to list recovery rollups for backup alerts")
-		} else {
-			m.alertManager.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, m.backupInventoryScopeForAlerts())
-		}
-	}
+	m.checkBackupAlerts(ctx)
 
 	// Clear permission warning if no permission errors occurred this cycle
 	if !hadPermissionError {
@@ -1881,15 +1873,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	// Sync backup times to VMs/Containers and republish them to canonical resources.
 	m.syncGuestBackupTimesAndResourceStore()
 
-	if m.alertManager != nil {
-		guestsByKey, guestsByVMID := buildGuestLookupsFromReadState(m.GetUnifiedReadStateOrSnapshot(), m.guestMetadataStore)
-		rollups, err := m.listBackupRollupsForAlerts(context.Background())
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to list recovery rollups for backup alerts")
-		} else {
-			m.alertManager.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, m.backupInventoryScopeForAlerts())
-		}
-	}
+	m.checkBackupAlerts(context.Background())
 
 	// Immediately broadcast the updated state so frontend sees new backups
 	m.broadcastStateUpdate()

@@ -1261,6 +1261,10 @@ func TestBackupOrphanDetectionUsesCanonicalInventoryReadinessScope(t *testing.T)
 			"func (m *Monitor) updatePVEBackupTemplateSubjectsForType(instanceName, guestType string, subjects map[string]struct{}) {",
 			"func (m *Monitor) updatePVEBackupTemplateSubjectsFromClusterResources(instanceName string, resources []proxmox.ClusterResource) {",
 			"func (m *Monitor) backupInventoryScopeForAlerts() *alerts.BackupInventoryScope {",
+			"m.checkBackupAlerts(ctx)",
+			"m.checkBackupAlerts(context.Background())",
+		},
+		"recovery_rollups.go": {
 			"m.alertManager.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, m.backupInventoryScopeForAlerts())",
 		},
 		"monitor_pve_guest_poll.go": {
@@ -3069,4 +3073,20 @@ func TestGuestAgentTransportMonitoringContract(t *testing.T) {
 		}
 	}
 	testGuestAgentTransportDeferralKeepsLastKnownHistory(t)
+}
+
+func TestBackupAlertEvaluationCallersShareFailureVisibility(t *testing.T) {
+	for path, want := range map[string]int{"monitor_backups.go": 2, "monitor_alerts.go": 1} {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		source := string(raw)
+		if strings.Contains(source, "listBackupRollupsForAlerts(") || strings.Contains(source, "CheckBackupsWithInventory(") {
+			t.Errorf("%s bypasses shared failure-preserving evaluation", path)
+		}
+		if got := strings.Count(source, "m.checkBackupAlerts("); got != want {
+			t.Errorf("%s has %d shared backup evaluations, want %d", path, got, want)
+		}
+	}
 }

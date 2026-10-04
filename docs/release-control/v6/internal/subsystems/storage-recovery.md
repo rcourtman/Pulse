@@ -21,6 +21,24 @@
 
 ## Purpose
 
+### Latest provider observations do not scan retained evidence payloads
+
+The protection-posture reader enumerates provider/scope keys through the existing
+covering index, then seeks the latest observation by observed time and ID. Only
+that row's evidence payload is read for each scope. The 90-day retention, schema,
+single-connection policy and evidence validation are unchanged; malformed or
+invalid latest evidence never falls back to older reassuring facts. Narrow index
+key enumeration still scales with retained history, but wide historical payloads
+are not ranked on every ingest or posture read.
+
+`store_queryplan_test.go` checks the production SQL's covering enumeration and
+indexed latest-row lookup. `store_posture_test.go` covers timestamp/ID ties,
+provider/scope separation, corrupt latest evidence, cancellation, retained row
+count and connection-pool deadline/recovery. The fixed synthetic history
+benchmark uses 1,000/70,949/180,000 rows and two scopes; it is not native Pi
+performance, backup restore acceptance or release qualification.
+
+
 ### Backup inventory ownership is source-scoped and unambiguous
 
 The existing Backups Coverage and By date views do not select a workload from
