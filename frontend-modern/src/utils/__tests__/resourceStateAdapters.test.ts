@@ -52,6 +52,28 @@ const createServiceResource = (
   }) as Resource;
 
 describe('resourceStateAdapters nodeFromResource', () => {
+  it('keeps selected memory provenance independent of a different raw platform reading', () => {
+    const observation = {
+      state: 'last-known',
+      source: 'guest-agent-meminfo',
+      observedAt: '2026-10-04T14:00:00Z',
+    };
+    const raw = { state: 'current', source: 'status-mem', observedAt: '2026-10-04T17:00:00Z' };
+    const resource = {
+      ...createNodeResource({}),
+      memory: { current: 25, total: 1024, used: 256, observation },
+      proxmox: { memory: { total: 1024, used: 768, usage: 75, observation: raw } },
+    } as Resource;
+    expect(nodeFromResource(resource)?.memory).toMatchObject({ usage: 25, observation });
+    expect(
+      nodeFromResource({ ...resource, memory: { current: 25, total: 1024, used: 256 } })?.memory,
+    ).not.toHaveProperty('observation');
+    expect(nodeFromResource({ ...resource, memory: undefined })?.memory).toMatchObject({
+      usage: 75,
+      observation: raw,
+    });
+  });
+
   it('keeps Proxmox metric coordinates without inventing an agent from discovery routing', () => {
     const resource = {
       ...createNodeResource({ proxmox: { nodeName: 'pve-node-1' } }),

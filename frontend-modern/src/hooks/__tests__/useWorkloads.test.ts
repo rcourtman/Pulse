@@ -489,6 +489,62 @@ describe('useWorkloads', () => {
     dispose();
   });
 
+  it.each(['api', 'snapshot'])(
+    'keeps selected memory provenance through %s without borrowing a raw facet',
+    async (transport) => {
+      const original = {
+        state: 'last-known',
+        source: 'guest-agent-meminfo',
+        observedAt: '2026-10-04T14:00:00Z',
+      };
+      const raw = { state: 'current', source: 'status-mem', observedAt: '2026-10-04T17:00:00Z' };
+      const resource = {
+        ...sampleResource,
+        proxmox: {
+          vmid: 101,
+          nodeName: 'pve1',
+          instance: 'cluster-a',
+          memory: { observation: raw },
+        },
+        metrics: {
+          ...sampleResource.metrics,
+          memory: { ...sampleResource.metrics.memory, observation: original },
+        },
+        memory: { current: 50, total: 4096, used: 2048, observation: original },
+      };
+      apiFetchJSONMock.mockResolvedValue({ data: [resource], meta: { totalPages: 1 } });
+      const [snapshot, setSnapshot] = createSignal([resource]);
+      let dispose = () => {};
+      let result!: ReturnType<UseWorkloadsModule['useWorkloads']>;
+      createRoot((d) => {
+        dispose = d;
+        result = useWorkloads(
+          () => true,
+          transport === 'snapshot' ? { resourceSnapshot: snapshot as any } : {},
+        );
+      });
+      try {
+        await waitForWorkloadCount(() => result.workloads().length);
+        expect(result.workloads()[0].memory).toMatchObject({ usage: 50, observation: original });
+        const legacy = {
+          ...resource,
+          metrics: { ...resource.metrics, memory: sampleResource.metrics.memory },
+          memory: { current: 50, total: 4096, used: 2048 },
+        };
+        if (transport === 'snapshot') setSnapshot([legacy] as any);
+        else {
+          apiFetchJSONMock.mockResolvedValue({ data: [legacy], meta: { totalPages: 1 } });
+          await result.refetch();
+        }
+        await flushAsync();
+        expect(result.workloads()[0].memory).not.toHaveProperty('observation');
+        expect(result.workloads()[0].memory.usage).toBe(50);
+      } finally {
+        dispose();
+      }
+    },
+  );
+
   it('tracks canonical hybrid VM memory without substituting nested agent readings', async () => {
     // #1962: synthetic snapshots exercise Web reactivity, not poller recovery.
     const buildVM = (instance: string, percent?: number) =>
