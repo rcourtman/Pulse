@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { WorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
 import proxmoxBackupServersTableSource from '../ProxmoxBackupServersTable.tsx?raw';
@@ -165,3 +165,43 @@ function artifact(overrides: Partial<RecoverableArtifact> = {}): RecoverableArti
     ...overrides,
   };
 }
+
+describe('backup-date-evidence age cell', () => {
+  const now = Date.parse('2026-10-04T12:00:00Z');
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(now);
+  });
+  afterEach(() => vi.useRealTimers());
+  for (const compact of [false, true]) {
+    it.each(['not-a-date', '0001-01-01T00:00:00Z', '2026-10-04T12:00:01Z'])(
+      '[regression] labels %s unknown in ' + (compact ? 'compact' : 'full') + ' age cells',
+      (createdAt) => {
+        render(() => (
+          <ProxmoxBackupAgeText
+            artifact={artifact({ createdAt, createdMs: Date.parse(createdAt) })}
+            compact={compact}
+          />
+        ));
+        const value = screen.getByText('Unknown');
+        expect(value).toHaveClass('text-amber-600');
+        if (compact) expect(value).toHaveClass('text-[10px]');
+        expect(value).toHaveAccessibleName(/Unknown age/);
+        expect(value.title).not.toContain(createdAt);
+        expect(value.title).toContain('unavailable or in the future');
+      },
+    );
+  }
+  it('[control] valid completed dates retain relative age and their reported timestamp', () => {
+    const createdAt = '2026-10-04T11:00:00Z';
+    render(() => (
+      <ProxmoxBackupAgeText
+        artifact={artifact({ createdAt, createdMs: Date.parse(createdAt) })}
+        compact
+      />
+    ));
+    const value = screen.getByText('1h');
+    expect(value).toHaveClass('text-emerald-600');
+    expect(value.title).toContain(createdAt);
+  });
+});

@@ -26,7 +26,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // transition (DST never changes in February in either hemisphere). Every
 // timestamp below is built with the local Date constructor, matching the
 // module's local-day bucketing, so the assertions are timezone-independent.
-const NOW = new Date(2026, 1, 13, 10, 30, 0);
+// Observe after the same-day mixed-outcome/value fixtures below (up to 14:00).
+const NOW = new Date(2026, 1, 13, 15, 30, 0);
 
 const localMs = (year: number, month: number, day: number, hours = 0, minutes = 0): number =>
   new Date(year, month, day, hours, minutes, 0).getTime();
@@ -496,5 +497,42 @@ describe('proxmoxBackupActivityPresentation', () => {
     it('is a re-export of the recovery timeline day filter state label', () => {
       expect(getBackupActivityDayFilterStateLabel).toBe(getRecoveryTimelineDayFilterStateLabel);
     });
+  });
+});
+
+describe('backup-date-evidence timeline', () => {
+  it.each(['count', 'volume'] as const)(
+    '[regression] does not count future same-day activity in %s mode',
+    (mode) => {
+      const now = new Date('2026-10-04T12:00:00Z');
+      const timeline = buildBackupActivityTimeline(
+        7,
+        [
+          { ts: now.getTime() - 1000, kind: 'pbs' as const, bytes: 2 },
+          { ts: now.getTime() + 1000, kind: 'pbs' as const, bytes: 5 },
+        ],
+        itemMs,
+        classify,
+        { now, getValue: mode === 'volume' ? (item) => item.bytes ?? 0 : undefined },
+      );
+      expect(timeline.points.reduce((total, point) => total + point.total, 0)).toBe(
+        mode === 'volume' ? 2 : 1,
+      );
+    },
+  );
+  it('[control] counts exactly observed now and leaves invalid/unavailable dates out', () => {
+    const now = new Date('2026-10-04T12:00:00Z');
+    const timeline = buildBackupActivityTimeline(
+      7,
+      [
+        { ts: now.getTime(), kind: 'pbs' as const },
+        { ts: NaN, kind: 'pbs' as const },
+        { ts: undefined, kind: 'pbs' as const },
+      ],
+      itemMs,
+      classify,
+      { now },
+    );
+    expect(timeline.points.reduce((total, point) => total + point.total, 0)).toBe(1);
   });
 });

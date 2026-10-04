@@ -486,3 +486,110 @@ describe('proxmoxBackupRecoveryModel', () => {
     expect(model.coverageSummary.totalWorkloads).toBe(0);
   });
 });
+
+describe('backup-date-evidence model', () => {
+  const nowMs = Date.parse('2026-10-04T12:00:00Z');
+  const invalidDates = ['', 'not-a-date', '0001-01-01T00:00:00Z', '2026-10-04T12:00:01Z'];
+  const modelFor = (kind: 'pbs' | 'archive' | 'snapshot', date: string) =>
+    buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: kind === 'pbs' ? [pbsBackup({ backupTime: date })] : [],
+      archives: kind === 'archive' ? [archive({ time: date })] : [],
+      snapshots: kind === 'snapshot' ? [snapshot({ time: date })] : [],
+      tasks: [],
+      nowMs,
+      protectionPostures: new Map([['vm-112', protectionPosture('vm-112', 'protected')]]),
+    });
+
+  for (const kind of ['pbs', 'archive', 'snapshot'] as const) {
+    it.each(invalidDates)('[regression] keeps %s date uncertainty in ' + kind, (date) => {
+      const model = modelFor(kind, date);
+      const row = model.coverageRows[0];
+      expect(model.recoverableArtifacts).toHaveLength(1);
+      expect(model.recoverableArtifacts[0].createdAt).toBe(date);
+      expect(model.recoverableArtifacts[0].createdMs).toBeUndefined();
+      expect(row.ageUnknown?.[kind]).toBe(true);
+      expect(row.ageUnknown?.backup).toBe(kind !== 'snapshot');
+      expect(row.latestBackup).toBeUndefined();
+      expect(row.posture).toBe('protected'); // server posture is a separate fact
+    });
+  }
+
+  it('[regression] cannot call a dated older backup the latest beside an undated completion', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [pbsBackup({ backupTime: 'not-a-date' })],
+      archives: [archive()],
+      snapshots: [],
+      tasks: [],
+      nowMs,
+    });
+    expect(model.coverageRows[0].latestBackup).toBeUndefined();
+    expect(model.coverageRows[0].latestArchive?.nativeId).toBe('archive-112');
+    expect(model.coverageRows[0].ageUnknown?.backup).toBe(true);
+  });
+
+  it.each([nowMs + 1, 0, -1, 9e15])(
+    '[regression] rejects unorderable age %s rather than current/stale',
+    (createdMs) => expect(getRecoveryAgeBand(createdMs, nowMs)).toBe('unknown'),
+  );
+
+  it('[control] keeps valid newest completed backup and guest-local snapshot separate', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [pbsBackup()],
+      archives: [archive()],
+      snapshots: [snapshot({ time: '2026-10-04T11:00:00Z' })],
+      tasks: [],
+      nowMs,
+    });
+    expect(model.coverageRows[0].latestBackup?.sourceKind).toBe('pbs');
+    expect(model.coverageRows[0].latestSnapshot?.sourceKind).toBe('snapshot');
+  });
+
+  it('[control] incomplete unknown-date artifacts do not contaminate completed backup chronology', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [
+        pbsBackup({ id: 'running', inProgress: true, backupTime: 'not-a-date' }),
+        pbsBackup({
+          id: 'failed',
+          inProgress: true,
+          writeActivityObserved: true,
+          writeActive: false,
+          backupTime: '',
+        }),
+      ],
+      archives: [archive()],
+      snapshots: [],
+      tasks: [],
+      nowMs,
+    });
+    expect(model.coverageRows[0].latestBackup?.nativeId).toBe('archive-112');
+    expect(model.recoverableArtifacts).toHaveLength(3);
+    expect(
+      model.recoverableArtifacts.find((artifact) => artifact.nativeId === 'running')?.running,
+    ).toBe(true);
+    expect(
+      model.recoverableArtifacts.find((artifact) => artifact.nativeId === 'failed')?.failed,
+    ).toBe(true);
+  });
+
+  it('[control] keeps explicit absence and snapshot-only inventory distinct', () => {
+    const row = modelFor('snapshot', '2026-10-04T11:00:00Z').coverageRows[0];
+    expect(row.latestBackup).toBeUndefined();
+    expect(row.pbsCount + row.archiveCount).toBe(0);
+    expect(row.latestSnapshot).toBeDefined();
+  });
+
+  it('[control] preserves age-band boundaries and an exactly current completion', () => {
+    expect(getRecoveryAgeBand(Infinity, nowMs)).toBe('unknown');
+    expect(getRecoveryAgeBand(NaN, nowMs)).toBe('unknown');
+    expect(getRecoveryAgeBand(nowMs, NaN)).toBe('unknown');
+    expect(getRecoveryAgeBand(nowMs, nowMs)).toBe('current');
+    expect(getRecoveryAgeBand(nowMs - 7 * 86400000, nowMs)).toBe('current');
+    expect(getRecoveryAgeBand(nowMs - 7 * 86400000 - 1, nowMs)).toBe('aging');
+    expect(getRecoveryAgeBand(nowMs - 30 * 86400000, nowMs)).toBe('aging');
+    expect(getRecoveryAgeBand(nowMs - 30 * 86400000 - 1, nowMs)).toBe('stale');
+  });
+});

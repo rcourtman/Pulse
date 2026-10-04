@@ -205,7 +205,7 @@ const COVERAGE_WEIGHTS: Record<
   // Posture keeps its whole compact word ("Unknown"), the two age cells hold
   // the suffix-free compact age, and the job dot takes what a "Job" header
   // needs.
-  compact: { workload: 40, posture: 21, latest: 14.5, pbs: 14.5, task: 10 },
+  compact: { workload: 40, posture: 20, latest: 15, pbs: 15, task: 10 },
   // Above the phone projection the identity columns (workload, node) take the
   // slack that the short type badge, target id, and age cells cannot use, so
   // names stay whole instead of truncating beside empty space.
@@ -308,10 +308,10 @@ const RECOVERABLE_WEIGHTS: Record<
   ProxmoxBackupsTableLayoutMode,
   Partial<Record<RecoverableColumnId, number>>
 > = {
-  // Reserve enough phone-width space for complete state badges (including
-  // Failed and Running) rather than clipping the recovery answer at the
-  // scroll edge. Identity remains on the canonical 40% anchor.
-  compact: { workload: 40, source: 16, created: 14, state: 30 },
+  // Unknown is a safety answer, not an abbreviated age: reserve room for
+  // the whole word alongside complete state badges (including Failed and
+  // Running). Identity remains on the canonical 40% anchor.
+  compact: { workload: 40, source: 16, created: 21, state: 23 },
   basic: { workload: 28, source: 14, location: 23, created: 18, state: 17 },
   operational: {
     workload: 24,

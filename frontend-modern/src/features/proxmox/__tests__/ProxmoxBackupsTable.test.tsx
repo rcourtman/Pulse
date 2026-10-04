@@ -979,3 +979,116 @@ describe('independent Proxmox backup inventory reads', () => {
     pending.resolve(jsonResponse(emptyPVE));
   });
 });
+
+describe('backup-date-evidence connected inventory', () => {
+  const now = Date.parse('2026-10-04T12:00:00Z');
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(now);
+  });
+  afterEach(() => vi.useRealTimers());
+  const coverageRow = () =>
+    document.querySelector('[data-proxmox-backup-row="coverage"]')! as HTMLElement;
+  const lastBackupCell = () => {
+    const row = coverageRow();
+    const table = row.closest('table')!;
+    const index = [...table.querySelectorAll('thead th')].findIndex((cell) =>
+      /Last backup/.test(cell.textContent ?? ''),
+    );
+    expect(index).toBeGreaterThanOrEqual(0);
+    return row.querySelectorAll('td')[index] as HTMLElement;
+  };
+  const supply = (date: string, withOlderArchive = false) => {
+    mockBackupAPIs(); // actual posture client stays independent
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse(
+          url.endsWith('/pbs')
+            ? { data: { backups: [{ ...pbsPayload.data.backups[0], backupTime: date }] } }
+            : {
+                data: {
+                  backupTasks: [],
+                  guestSnapshots: [],
+                  storageBackups: withOlderArchive ? pvePayload.data.storageBackups : [],
+                },
+              },
+        ),
+      ),
+    );
+  };
+  const mount = () =>
+    renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+
+  it.each(['not-a-date', '0001-01-01T00:00:00Z', '2026-10-04T12:00:01Z'])(
+    '[regression] Coverage preserves %s uncertainty instead of absence or healthy age',
+    async (date) => {
+      window.history.replaceState({}, '', '/?view=coverage');
+      supply(date);
+      mount();
+      await waitFor(() => expect(lastBackupCell()).toHaveTextContent('Unknown'));
+      expect(lastBackupCell().textContent).not.toContain('None');
+      expect(within(lastBackupCell()).getByText('Unknown')).toHaveClass('text-amber-600');
+      expect(within(coverageRow()).getByText('Protected')).toBeInTheDocument();
+      await fireEvent.click(within(coverageRow()).getByRole('button'));
+      expect(document.querySelector('[data-inline-detail-for]')).toHaveTextContent('Unknown');
+      expect(document.body).not.toHaveTextContent('Invalid Date');
+    },
+  );
+
+  it('[regression] all-locations Coverage does not advertise an older known backup as the latest', async () => {
+    window.history.replaceState({}, '', '/?view=coverage');
+    supply('not-a-date', true);
+    mount();
+    await waitFor(() => expect(lastBackupCell()).toHaveTextContent('Unknown'));
+    const calls = apiFetchMock.mock.calls.length;
+    const filter = screen.getByRole('combobox', { name: 'Filter' });
+    const option = screen.getByRole('option', {
+      name: 'Backup location: pve-a / local',
+    }) as HTMLOptionElement;
+    await fireEvent.change(filter, { target: { value: option.value } });
+    await waitFor(() => expect(lastBackupCell()).not.toHaveTextContent('Unknown'));
+    expect(lastBackupCell()).not.toHaveTextContent('None');
+    expect(apiFetchMock).toHaveBeenCalledTimes(calls); // filtering is not another read
+  });
+
+  it('[regression] location-scoped Coverage preserves unknown chronology, not a known older point', async () => {
+    window.history.replaceState({}, '', '/?view=coverage&location=pbs%3Apbs-main%3Amain');
+    supply('2026-10-04T12:00:01Z', true);
+    mount();
+    await waitFor(() => expect(lastBackupCell()).toHaveTextContent('Unknown'));
+  });
+
+  it('[regression] By date retains future artifacts but excludes them from today activity and day filtering', async () => {
+    window.history.replaceState({}, '', '/?view=date');
+    supply('2026-10-04T12:00:01Z', true);
+    mount();
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(2),
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('remain listed');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'excluded from the activity chart and day filters',
+    );
+    expect(screen.getByText(/No dated backup activity/)).toBeInTheDocument();
+    const future = [...document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')].find(
+      (row) => row.textContent?.includes('PBS'),
+    )! as HTMLElement;
+    expect(within(future).getByText('Unknown')).toHaveAccessibleName(/Unknown age/);
+  });
+
+  it('[regression] new inventory after page mount uses its observation time and clears age uncertainty', async () => {
+    window.history.replaceState({}, '', '/?view=coverage');
+    supply('not-a-date', true);
+    mount();
+    await waitFor(() => expect(lastBackupCell()).toHaveTextContent('Unknown'));
+    vi.setSystemTime(now + 120000);
+    supply('2026-10-04T12:01:00Z', true);
+    eventBus.emit('org_switched', 'date-replacement');
+    await waitFor(() => expect(lastBackupCell()).toHaveTextContent('1m ago'));
+    expect(lastBackupCell()).not.toHaveTextContent('None');
+    expect(lastBackupCell()).not.toHaveTextContent('Unknown');
+    expect(within(coverageRow()).getByText('Protected')).toBeInTheDocument();
+  });
+});

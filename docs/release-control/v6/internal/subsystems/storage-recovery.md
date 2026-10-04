@@ -403,6 +403,44 @@ grant no backup mutation, restore, or recovery-state authority; `agent:exec`
 appears only when the operator explicitly requests the transitional
 command-capable profile.
 
+### Restore-point chronology is not completion or protection
+
+The existing Proxmox Backups Coverage and By date views preserve completed
+artifacts with missing, unusable, zero-time or future dates as unknown age,
+not a current/green backup or an absent point. Unknown chronology cannot elect
+an arbitrary or older dated artifact as the latest completed point. PBS, PVE,
+guest-snapshot and independent-backup selections each retain this uncertainty;
+the same selector owns full-inventory and location-filtered Coverage. Running
+and failed artifacts remain listed but never contaminate completed chronology.
+Guest-local snapshots still cannot fill the independent-backup slot.
+
+Unknown ages have a fixed explanation and accessible name; no invalid-date or
+raw malformed timestamp is displayed. Dated ages keep their existing 7/30-day
+bands and reported timestamp. Unknown dates remain in the artifact list, but
+are omitted from the activity chart and day filters, including future events
+on today's date. The page explains that omission instead of claiming no
+activity from an unreadable date. Inventory replacement refreshes its reference
+clock, so a newly completed point is not compared with the page-mount time.
+Server-owned protection, verification and completion facts remain independent;
+this presentation proves no native restore, thaw or workload liveness.
+
+Verification: the `backup-date-evidence` families in the recovery-model,
+activity, shared-age and mounted backup-table tests cover invalid/future dates,
+known-plus-unknown ordering, independent sources, scoped filtering, incomplete
+artifacts, valid boundaries and later inventory replacement. The production
+fixture `browser-tests/backup-date-chronology.cjs` uses the existing router,
+API readers, components and CSS with synthetic HTTP in desktop Chromium and
+phone-emulated WebKit, not native appliance or published-release acceptance.
+
+Coverage owns independent scalar copies of each latest-artifact pointer.
+In-place stable-row reconciliation must not let an older source pointer mutate
+the last-backup value after a newer point arrives from another source.
+Connected replacement controls and inspected renders cover that boundary.
+
+The compact By date layout reserves enough age space for the full cautionary Unknown word rather than the former numeric-age-only allocation, while keeping independent task/state labels legible and the canonical identity anchor. Both 390px and 320px browser checks measure age text and state clipping, supplemented by inspected renders.
+
+Compact Coverage age cells use the existing metadata-size text and reclaim numeric-age gutters so the full Unknown word stays visible even beside a Job column at 320px; text-range checks account for cell padding, not only the outer box.
+
 ## Canonical Files
 
 1. `internal/recovery/index.go`

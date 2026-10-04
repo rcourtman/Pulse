@@ -55,6 +55,23 @@ const COVERAGE_NO_BACKUP_TITLE = 'No PBS snapshot or PVE backup file';
 const COVERAGE_SNAPSHOT_ONLY_TITLE =
   'No PBS snapshot or PVE backup file. Guest snapshots alone do not prove independent recovery.';
 
+function CoverageAgeFallback(props: { unknown?: boolean; emptyTitle: string; compact?: boolean }) {
+  const title = () =>
+    props.unknown
+      ? 'One or more completed restore-point dates are unavailable or in the future. The latest point is unknown; expand this row to inspect the evidence.'
+      : props.emptyTitle;
+  return (
+    <span
+      class={props.unknown ? 'font-semibold text-amber-600 dark:text-amber-300' : 'text-muted'}
+      classList={{ 'text-[10px]': props.unknown && props.compact }}
+      title={title()}
+      aria-label={props.unknown ? `Unknown age. ${title()}` : undefined}
+    >
+      {props.unknown ? 'Unknown' : COVERAGE_EMPTY_LABEL}
+    </span>
+  );
+}
+
 const coveragePostureVariant = (
   posture: WorkloadCoverageRow['posture'],
 ): StatusIndicatorVariant => {
@@ -163,6 +180,10 @@ export function ProxmoxCoverageTable(props: {
   const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
   const columnVisible = (column: CoverageColumnId) => visibleColumnIds().includes(column);
   const columnCount = () => visibleColumns().length;
+  // Full uncertainty words must fit even beside a Job column at 320px. Numeric
+  // ages were short enough for the usual gutters; compact ages use that space.
+  const ageCellClass = (kind: 'text' | 'numeric-value') =>
+    `${layoutMode() === 'compact' ? `px-0.5 py-1 ${kind === 'numeric-value' ? 'text-right' : ''}` : getPlatformTableCellClassForKind(kind)} text-base-content`;
   const pbsSource = getProxmoxBackupSourcePresentation('pbs');
   const archiveSource = getProxmoxBackupSourcePresentation('archive');
   const snapshotSource = getProxmoxBackupSourcePresentation('snapshot');
@@ -413,22 +434,19 @@ export function ProxmoxCoverageTable(props: {
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                        >
+                        <TableCell class={ageCellClass('numeric-value')}>
                           <Show
                             when={row.latestBackup}
                             fallback={
-                              <span
-                                class="text-muted"
-                                title={
-                                  row.latestSnapshot
+                              <CoverageAgeFallback
+                                unknown={row.ageUnknown?.backup}
+                                compact={layoutMode() === 'compact'}
+                                emptyTitle={
+                                  row.snapshotCount > 0
                                     ? COVERAGE_SNAPSHOT_ONLY_TITLE
                                     : COVERAGE_NO_BACKUP_TITLE
                                 }
-                              >
-                                {COVERAGE_EMPTY_LABEL}
-                              </span>
+                              />
                             }
                           >
                             {(artifact) => (
@@ -440,15 +458,15 @@ export function ProxmoxCoverageTable(props: {
                           </Show>
                         </TableCell>
                         <Show when={columnVisible('pbs')}>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
+                          <TableCell class={ageCellClass('text')}>
                             <Show
                               when={row.latestPBS}
                               fallback={
-                                <span class="text-muted" title={pbsSource.coverageFallbackLabel}>
-                                  {COVERAGE_EMPTY_LABEL}
-                                </span>
+                                <CoverageAgeFallback
+                                  unknown={row.ageUnknown?.pbs}
+                                  compact={layoutMode() === 'compact'}
+                                  emptyTitle={pbsSource.coverageFallbackLabel}
+                                />
                               }
                             >
                               {(artifact) => (
@@ -461,18 +479,15 @@ export function ProxmoxCoverageTable(props: {
                           </TableCell>
                         </Show>
                         <Show when={columnVisible('archive')}>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
+                          <TableCell class={ageCellClass('text')}>
                             <Show
                               when={row.latestArchive}
                               fallback={
-                                <span
-                                  class="text-muted"
-                                  title={archiveSource.coverageFallbackLabel}
-                                >
-                                  {COVERAGE_EMPTY_LABEL}
-                                </span>
+                                <CoverageAgeFallback
+                                  unknown={row.ageUnknown?.archive}
+                                  compact={layoutMode() === 'compact'}
+                                  emptyTitle={archiveSource.coverageFallbackLabel}
+                                />
                               }
                             >
                               {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
@@ -480,18 +495,15 @@ export function ProxmoxCoverageTable(props: {
                           </TableCell>
                         </Show>
                         <Show when={columnVisible('snapshot')}>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
+                          <TableCell class={ageCellClass('text')}>
                             <Show
                               when={row.latestSnapshot}
                               fallback={
-                                <span
-                                  class="text-muted"
-                                  title={snapshotSource.coverageFallbackLabel}
-                                >
-                                  {COVERAGE_EMPTY_LABEL}
-                                </span>
+                                <CoverageAgeFallback
+                                  unknown={row.ageUnknown?.snapshot}
+                                  compact={layoutMode() === 'compact'}
+                                  emptyTitle={snapshotSource.coverageFallbackLabel}
+                                />
                               }
                             >
                               {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
