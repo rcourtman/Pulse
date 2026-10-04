@@ -1111,6 +1111,13 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     rows without platform metadata retain the Proxmox-compatible behavior at
     the migration boundary.
 11. Extend workload drawer derivations and runtime wiring through `frontend-modern/src/components/Workloads/guestDrawerModel.ts` and `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`, and extend drawer overview rendering through `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`, rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
+    The guest drawer header owns the saved web-interface launch action. It
+    reuses the shared `WebInterfaceLink` and drawer-header action class, so
+    phone and narrow rows keep hiding the adjacent row link for name legibility
+    while the saved service stays one tap from the expanded row. The action
+    renders only for a saved URL and adds no fetch, polling or per-row work.
+    `GuestDrawer.test.tsx` verifies its target, the unsafe-URL warning, and
+    that opening it does not collapse the drawer.
     Drawer history charts belong to `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`.
     A current metric may remain visible in a chart legend only when labelled
     `current`; it must never be expanded into synthetic timestamps or a flat
