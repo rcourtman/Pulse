@@ -30,8 +30,20 @@ READS = [["status", "100"], ["config", "100", "--current"]]
 
 def guide_section(guide, heading):
     """Select one named H3, never another section's executable examples."""
-    sections = re.findall(r"^### " + re.escape(heading) +
-                          r"\n(.*?)(?=^#{1,3} |\Z)", guide, re.MULTILINE | re.DOTALL)
+    sections, current = [], None
+    fenced = False
+    for line in guide.splitlines(keepends=True):
+        boundary = None if fenced else re.match(r"^(#{1,3}) (.*?)\s*$", line)
+        if boundary:
+            if current is not None:
+                sections.append("".join(current))
+            current = [] if boundary.group(1) == "###" and boundary.group(2) == heading else None
+        elif current is not None:
+            current.append(line)
+        if line.lstrip().startswith("```"):
+            fenced = not fenced
+    if current is not None:
+        sections.append("".join(current))
     if len(sections) != 1:
         raise AssertionError(f"Expected one guide section: {heading}")
     return sections[0]
@@ -287,6 +299,14 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
 
 
 class VMDiskHelpTest(unittest.TestCase):
+    def test_section_selection_preserves_shell_comments_and_rejects_missing_or_duplicate_headings(self):
+        content = "```bash\n# From the reviewed checkout\n### Shell comment, not a heading\ntrue\n```\n"
+        guide = "### Passive host preflight\n" + content + "## Next\nOther text\n"
+        self.assertEqual(guide_section(guide, "Passive host preflight"), content)
+        for invalid in ("## No passive section\n", guide + "### Passive host preflight\n"):
+            with self.subTest(guide=invalid), self.assertRaises(AssertionError):
+                guide_section(invalid, "Passive host preflight")
+
     def assert_guide_commands(self, guide):
         # The planned server pause is intentionally active, unlike the passive
         # hypervisor diagnostic. Admit only the six reviewed server/timer blocks
