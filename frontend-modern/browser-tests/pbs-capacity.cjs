@@ -95,12 +95,17 @@ const runtime = [
             body: JSON.stringify({ data }),
           });
         });
-        await page.goto(`${origin}/browser-tests/pbs-capacity.html?transport=${transport}`);
+        // Verify the actual table and its font metrics, not the dev server's
+        // generic load event. Keep the same bounded navigation/locator deadline.
+        await page.goto(`${origin}/browser-tests/pbs-capacity.html?transport=${transport}`, {
+          waitUntil: 'domcontentloaded',
+        });
         // Imported production theme stores can initialise after addInitScript.
         // Apply the requested CSS context after the fixture is loaded too.
         if (phone) await page.evaluate(() => document.documentElement.classList.add('dark'));
         const table = page.locator('[data-proxmox-backups-table="servers"]');
         await table.waitFor();
+        await page.waitForFunction(() => document.fonts.status === 'loaded');
         const head = await table.locator('th').allTextContents();
         const usedIndex = head.indexOf('Used');
         assert(usedIndex >= 0);
