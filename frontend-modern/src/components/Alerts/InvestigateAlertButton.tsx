@@ -7,6 +7,7 @@ import { notificationStore } from '@/stores/notifications';
 import { triggerPatrolRun } from '@/api/patrol';
 import { t } from '@/i18n';
 import type { Alert } from '@/types/api';
+import { isPulseSystemAlert } from '@/utils/alertScope';
 import { useUpgradeNavigation } from '@/components/shared/useUpgradeNavigation';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
@@ -54,7 +55,10 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
   }
 
   const showPatrolOption = () =>
-    props.patrolOption === true && !isLocked() && !!(props.alert.resourceId || '').trim();
+    props.patrolOption === true &&
+    !isLocked() &&
+    !isPulseSystemAlert(props.alert) &&
+    !!(props.alert.resourceId || '').trim();
   const usesPatrolPrimary = () => showPatrolOption() && props.variant !== 'icon';
   const buttonTitle = () =>
     isLocked()
@@ -97,7 +101,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
 
   const startPatrolInvestigation = async () => {
     const resourceId = (props.alert.resourceId || '').trim();
-    if (!resourceId) {
+    if (isPulseSystemAlert(props.alert) || !resourceId) {
       notificationStore.warning(t('alerts.assistant.patrol.noResource'));
       return;
     }

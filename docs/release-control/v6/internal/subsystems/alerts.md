@@ -15,6 +15,25 @@
 
 ## Purpose
 
+### Pulse system alerts retain their service scope in the existing UI
+
+The `pulse-system-` identity prefix or explicit `systemAlert: true` metadata
+marks a Pulse service condition, not a monitored resource. Overview retains
+the warning, acknowledgement, snooze and occurrence timeline but offers no
+resource link or monitoring-policy action. History preserves this scope for
+active and retained conditions before any resource-name fallback: a machine
+named Pulse is not evidence that it owns the service warning. Ordinary resource
+alerts, including those called Pulse, retain their existing target affordances.
+
+The Assistant explanation keeps the exact alert identity, message and
+approval-required boundary, without invented metric values, a guest target or
+resource Patrol. Reconstructed History explanations preserve the system marker;
+new system types need no frontend allowlist. Connected overview/history/handoff
+and investigation-button controls verify both authoritative markers, legacy
+metadata, name collisions and ordinary resource controls. Browser acceptance
+checks the actual components on desktop and narrow touch views. This changes
+presentation only, not alert evaluation, delivery, API or operator permissions.
+
 ### Backup-age evaluation failures use the existing system-alert lifecycle
 
 `pulse-system-backup-evaluation` is a warning about Pulse's inability to read
