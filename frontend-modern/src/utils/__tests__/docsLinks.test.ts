@@ -61,17 +61,22 @@ function getRuntimeSourceFiles(dir: string): string[] {
 }
 
 describe('docsLinks', () => {
-  const probeGuides = () => [
-    readFileSync(path.join(repoRoot, 'docs', 'CONFIGURATION.md'), 'utf8')
-      .split('### External probes (Pro)')[1].split('### ICMP probe privileges')[0],
-    readFileSync(path.join(repoRoot, 'docs', 'UNIFIED_AGENT.md'), 'utf8')
-      .split('## External Probes (Pro)')[1].split('## Custom metrics')[0],
-  ].map((section) => section.replace(/\s+/g, ' '));
+  const probeGuides = () =>
+    [
+      readFileSync(path.join(repoRoot, 'docs', 'CONFIGURATION.md'), 'utf8')
+        .split('### External probes (Pro)')[1]
+        .split('### ICMP probe privileges')[0],
+      readFileSync(path.join(repoRoot, 'docs', 'UNIFIED_AGENT.md'), 'utf8')
+        .split('## External Probes (Pro)')[1]
+        .split('## Custom metrics')[0],
+    ].map((section) => section.replace(/\s+/g, ' '));
 
   it('keeps external probes dependent on server-side alert delivery', () => {
     for (const guide of probeGuides()) {
       expect(guide).toContain('The agent does not send notifications directly.');
-      expect(guide).toContain('Pulse server must be running and able to reach the notification destination');
+      expect(guide).toContain(
+        'Pulse server must be running and able to reach the notification destination',
+      );
       expect(guide).toContain('agent cannot deliver Pulse alerts in its place');
       expect(guide).toContain('not proof');
       expect(guide).not.toContain('cannot disappear silently');
@@ -93,12 +98,14 @@ describe('docsLinks', () => {
     expect(agentGuide).toContain('not a complete outage record');
     // These limits come from the current implementation, not a new policy.
     const monitor = readFileSync(
-      path.join(repoRoot, 'internal', 'monitoring', 'availability_probe_agent.go'), 'utf8',
+      path.join(repoRoot, 'internal', 'monitoring', 'availability_probe_agent.go'),
+      'utf8',
     );
     expect(monitor).toContain('availabilityProbeStaleFloor = 5 * time.Minute');
     expect(monitor).toContain('target.EffectivePollIntervalSecs()) * 3 * time.Second');
     const agent = readFileSync(
-      path.join(repoRoot, 'internal', 'hostagent', 'availability.go'), 'utf8',
+      path.join(repoRoot, 'internal', 'hostagent', 'availability.go'),
+      'utf8',
     );
     expect(agent).toContain('availabilityPendingCapacity = 200');
   });
@@ -131,14 +138,27 @@ describe('docsLinks', () => {
     expect(api).toContain('`agent:<host-agent-id>` for a connected agent');
     expect(api).toContain('omit `observationLocationIds`');
     expect(api).toContain('clear `probeAgentId` to `""`');
-    const editor = readFileSync(path.join(frontendRoot, 'src', 'components', 'Settings',
-      'ConnectionEditor', 'CredentialSlots', 'AvailabilityTargetSlot.tsx'), 'utf8');
+    const editor = readFileSync(
+      path.join(
+        frontendRoot,
+        'src',
+        'components',
+        'Settings',
+        'ConnectionEditor',
+        'CredentialSlots',
+        'AvailabilityTargetSlot.tsx',
+      ),
+      'utf8',
+    );
     expect(editor).toContain('Observation locations</legend>');
     expect(editor).toContain('observationLocationIds: [...form.observationLocationIds]');
     const handler = readFileSync(
-      path.join(repoRoot, 'internal', 'api', 'availability_handlers.go'), 'utf8',
+      path.join(repoRoot, 'internal', 'api', 'availability_handlers.go'),
+      'utf8',
     );
-    expect(handler).toContain('compatibility.ObservationLocationIDs == nil && compatibility.ProbeAgentID != nil');
+    expect(handler).toContain(
+      'compatibility.ObservationLocationIDs == nil && compatibility.ProbeAgentID != nil',
+    );
     expect(handler).toContain('agentID != "" && len(*compatibility.ObservationLocationIDs) == 1');
   });
 
