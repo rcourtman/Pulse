@@ -179,12 +179,13 @@ describe('proxmoxBackupActivityPresentation', () => {
       expect(feb10.total).toBe(2);
     });
 
-    it('includes the window-start edge and excludes anything at or past start-of-tomorrow', () => {
+    it('includes the window-start and exactly-now edges but excludes future activity even within today', () => {
       const todayStart = localMs(2026, 1, 13);
       const items: ActivityItem[] = [
         { ts: localMs(2026, 1, 6, 23, 59), kind: 'ok' },
         { ts: localMs(2026, 1, 7, 0, 0), kind: 'ok' },
         { ts: todayStart, kind: 'failed' },
+        { ts: NOW.getTime(), kind: 'running' },
         { ts: todayStart + DAY_MS - 1, kind: 'running' },
         { ts: todayStart + DAY_MS, kind: 'ok' },
         { ts: localMs(2026, 1, 14, 12, 0), kind: 'ok' },
@@ -194,6 +195,9 @@ describe('proxmoxBackupActivityPresentation', () => {
 
       expect(totals.get(dateKey(2026, 1, 7))).toBe(1);
       expect(totals.get(dateKey(2026, 1, 13))).toBe(2);
+      expect(
+        timeline.points.find((point) => point.key === dateKey(2026, 1, 13))!.counts.running,
+      ).toBe(1);
       expect(totals.get(dateKey(2026, 1, 6))).toBeUndefined();
       expect(totals.get(dateKey(2026, 1, 14))).toBeUndefined();
     });
