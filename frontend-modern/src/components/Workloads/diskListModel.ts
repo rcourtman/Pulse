@@ -92,18 +92,31 @@ export const buildWorkloadsDiskPresentation = (
   disk: Disk,
   index: number,
   thresholds?: MetricDisplayThresholds | null,
+  readState: 'current' | 'last-known' | 'unavailable' = 'current',
 ): WorkloadsDiskPresentation => {
   const label = getWorkloadsDiskLabel(disk);
+  // Retention preserves identity and capacity, not a current utilization
+  // measurement. Only an explicitly retained read may display old used bytes.
+  const reading = readState === 'unavailable' ? { ...disk, used: undefined } : disk;
+  const percentLabel = getWorkloadsDiskUsagePercentLabel(reading);
 
   return {
     key: `${disk.mountpoint ?? ''}:${disk.device ?? ''}:${index}`,
     label,
     labelTitle: getWorkloadsDiskLabelTitle(label),
-    progressClass: getWorkloadsDiskProgressClass(disk, thresholds),
-    progressValue: getWorkloadsDiskProgressValue(disk),
-    progressWidth: getWorkloadsDiskProgressWidth(disk),
+    progressClass:
+      readState === 'current'
+        ? getWorkloadsDiskProgressClass(reading, thresholds)
+        : 'bg-surface-hover',
+    progressValue: readState === 'current' ? getWorkloadsDiskProgressValue(reading) : null,
+    progressWidth: readState === 'current' ? getWorkloadsDiskProgressWidth(reading) : '0%',
     typeLabel: getWorkloadsDiskTypeLabel(disk),
-    usageText: getWorkloadsDiskUsageText(disk),
-    usagePercentLabel: getWorkloadsDiskUsagePercentLabel(disk),
+    usageText: getWorkloadsDiskUsageText(reading),
+    usagePercentLabel:
+      readState === 'current'
+        ? percentLabel
+        : percentLabel === '—'
+          ? 'Usage unavailable'
+          : `Last known ${percentLabel}`,
   };
 };

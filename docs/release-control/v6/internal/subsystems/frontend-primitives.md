@@ -249,6 +249,24 @@ Fresh linked Pulse-agent disk evidence with no reason remains unmarked, and
 non-VM rows do not inherit QGA guidance. The cue adds no action or tab stop;
 touch on it continues through the existing row disclosure to the full reason.
 
+The opened guest Overview applies the same admission to every filesystem, not
+only the aggregate row or its status sentence. A valid `prev-` value is labelled
+**Last known** beside its mount identity and used/capacity bytes; retained values
+do not receive current utilization bars or threshold colours. Other VM read
+reasons and explicit disk telemetry unavailability show **Usage unavailable**,
+retaining identity and known capacity without promoting old used bytes. Missing
+or invalid retained usage is unavailable, not an empty healthy filesystem. The
+read explanation precedes the filesystem breakdown and remains visible before
+any sample. Clearing a lock alone cannot clear a still-supplied reason. A fresh
+same-guest read restores the normal accessible utilization bar; independent LXC
+and linked-agent readings with no VM reason retain their existing semantics.
+
+Verification: `GuestDrawerOverview.filesystem-provenance.test.tsx`, the existing
+filesystem regressions and builder controls in `DiskList.test.tsx`, plus
+`browser-tests/guest-filesystem-provenance.cjs` using the full production guest
+drawer on desktop/light/dark and touch WebKit. These are synthetic presentation
+and input proofs, not native backup/thaw, covered-filesystem writes or resumption.
+
 Verification: mounted `GuestRow.test.tsx` and `MetricMiniSparkline.test.tsx`
 regressions and `browser-tests/guest-disk-provenance.cjs` exercise retained and
 pre-sample states, display/lens changes, current-value semantics and same-row

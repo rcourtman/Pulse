@@ -1671,6 +1671,15 @@ without contention or cross-delivery.
    lifecycle. Request handlers may reuse the cached manager but must not reopen
    or remigrate SQLite on each role or assignment request, and shutdown must
    close the owned manager set.
+8. Guest Overview filesystem provenance is local presentation over the already
+   supplied snapshot: no additional query, timer, poll, History fetch or guest
+   command may be added to establish it. Its existing linear filesystem mapping
+   may label retained values and omit current utilization bars; it must preserve
+   ordinary current-value builder behaviour and must not mutate the snapshot.
+   `DiskList.test.tsx` verifies the pure builder's retained/unavailable/current
+   controls; mounted drawer regressions and the full-drawer browser proof cover
+   the shipped path. No performance or native workload improvement follows from
+   the presentation proof alone.
 
 ## Current State
 

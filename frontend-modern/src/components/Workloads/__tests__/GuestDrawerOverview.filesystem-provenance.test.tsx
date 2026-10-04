@@ -111,6 +111,18 @@ describe('filesystem details do not promote retained usage to current health', (
     expect(within(filesystemRow()).queryByRole('progressbar')).not.toBeInTheDocument();
   });
 
+  it('explains explicit unavailability even before any filesystem sample', () => {
+    render(() => (
+      <GuestDrawerOverview
+        {...props(guest({ disks: [], telemetryAvailability: { disk: false } }))}
+        hasFilesystemDetails={false}
+      />
+    ));
+    expect(screen.getByText('Filesystems')).toBeVisible();
+    expect(screen.getByText('Filesystem usage is unavailable.')).toBeVisible();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
   it('keeps retained values until the reason clears, then resumes the same drawer', () => {
     const [value, setValue] = createSignal(
       guest({ diskStatusReason: 'prev-vm-locked', lock: 'backup', backupInProgress: true }),
