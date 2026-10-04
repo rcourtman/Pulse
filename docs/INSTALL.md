@@ -349,19 +349,107 @@ replace live runtime data or delete it to make a rollback fit.
 
 ## 🗑️ Uninstall
 
-**Docker**:
+Removing or stopping the Pulse server also stops monitoring and alert delivery.
+This is not an update, rollback or password-reset procedure. Keep persistent
+data by default; deleting it erases configuration, history, credentials and
+the keys needed to decrypt that installation's data.
+
+Before removing anything, identify the actual service, container or Helm
+release and **every effective data path** privately. Keep a consistent,
+private [full-state backup](MIGRATION.md#full-state-recovery), including the
+matching encryption key and deployment configuration. A configuration export
+alone is not a full backup. Let any in-progress Pulse update finish before
+removing its installation. Do not post backups, environment files or full
+container inspections in an issue.
+
+### Docker and Compose: retain the data mount
+
+The commands below assume `/data` is on a persistent named volume or bind
+mount, as in this guide's examples. **Do not use them for state stored only in
+the container's writable layer or temporary storage until it has a consistent
+backup.** A container created with `--rm` can also delete anonymous volumes
+when stopped. Container removal is not a backup.
+
+For the `docker run` example, stop the container normally before removing it:
+
 ```bash
-docker rm -f pulse && docker volume rm pulse_data
+docker stop pulse
+docker rm pulse
 ```
 
-**Kubernetes**:
+For Compose, run this from the **existing** project, using its actual Pulse
+service name:
+
 ```bash
-helm uninstall pulse -n pulse
+docker compose stop pulse
+docker compose rm pulse
 ```
 
-**Systemd**:
+These commands do not request volume deletion. Keep the named volume or bind
+directory, original image/runtime and deployment settings; a reinstall must
+reattach the **same** data mount. Compose normally prefixes volume names with
+its project name, so creating a new project or an empty `pulse_data` volume
+can look like data loss. Do not add `-v`/`--volumes`, remove the volume or run
+volume pruning as part of a data-preserving removal.
+
+### Kubernetes: check claim ownership before uninstalling
+
+Do not assume `helm uninstall pulse -n pulse` retains data. The default Pulse
+chart creates a PersistentVolumeClaim without a keep policy; Helm removal can
+delete that claim, and the storage reclaim policy can delete its backing data.
+`persistence.existingClaim` refers to a separately managed claim, whose
+lifecycle must be checked separately. With `persistence.enabled=false`, the
+chart uses temporary `emptyDir` storage, lost when the pod is removed.
+
+After verifying persistent storage and its backup, you can stop the default
+deployment without uninstalling the chart:
+
 ```bash
-sudo systemctl disable --now pulse
-sudo rm -rf /etc/pulse /etc/systemd/system/pulse.service /usr/local/bin/pulse
-sudo systemctl daemon-reload
+kubectl scale deployment pulse \
+  --namespace pulse \
+  --replicas=0
 ```
+
+Use the actual deployment and namespace. Record the previous replica count
+and suspend any controller that would recreate pods. Before permanently
+uninstalling, verify the live claim's ownership, retention and reclaim policy
+and test recovery from the private backup; do not delete a PVC or namespace
+as a troubleshooting step.
+
+### Systemd / Proxmox LXC: disable without erasing data
+
+Identify the active service and any updater first; legacy installs can use
+`pulse-backend`, and custom installs can have other names. In an LXC, run
+these steps **inside the Pulse container**, not on the Proxmox host.
+
+For the default signed installation, disable its update timer **if present**:
+
+```bash
+sudo systemctl disable --now \
+  pulse-update.timer
+```
+
+Then stop and disable the server:
+
+```bash
+sudo systemctl disable --now \
+  pulse.service
+```
+
+Disable other deployment-managed updaters through their owner too. These
+commands leave the binary, service account, units and data in place; they
+disable Pulse, not fully uninstall it. Keep `/etc/pulse` (or the actual custom
+data directory), its keys and authentication sources together. Do not remove
+the service account while retained files still need its ownership.
+
+**Complete removal is a separate, destructive choice.** The signed server
+installer's `--uninstall` deletes its configuration/data directory without a
+keep-data prompt; it is not a data-preserving alternative. Use it only after
+checking the effective install/config paths and a tested private backup, when
+you intend that erasure. Do not delete `/bin/update` unless you have verified
+it belongs to Pulse; community-scripts containers can use a different helper.
+
+Removing the server does not remove agents on monitored hosts. Use each
+agent's [uninstall procedure](UNIFIED_AGENT.md#uninstall), or
+[stop an orphaned agent](TROUBLESHOOTING.md#removed-pulse-server-but-pulse-agent-still-logs-connection-failures),
+so it does not keep retrying the absent server.
