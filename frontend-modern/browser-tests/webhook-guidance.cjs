@@ -29,6 +29,14 @@ const { chromium, webkit } = require('playwright');
       const errors = [];
       page.on('pageerror', (error) => errors.push(error.message));
       page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+      let securityRequests = 0;
+      // Docs imports runtime context, whose initial auth check is unrelated
+      // to Markdown rendering. Model first-run state explicitly; there is no
+      // authenticated runtime, backend or provider in this offline fixture.
+      await page.route('**/api/security/status', async (route) => {
+        securityRequests++;
+        await route.fulfill({ json: { hasAuthentication: false, requiresAuth: true } });
+      });
       await page.goto('http://127.0.0.1:5253/browser-tests/docs-fragment-navigation.html?scenario=webhooks',
         { waitUntil: 'domcontentloaded', timeout: 60_000 });
       const heading = page.getByRole('heading', { name: 'Receiver correlation and deduplication', exact: true });
@@ -75,11 +83,16 @@ const { chromium, webkit } = require('playwright');
       await page.reload({ waitUntil: 'domcontentloaded' });
       await page.getByRole('heading', { name: 'Sample PSA payloads', exact: true }).waitFor();
       await page.waitForFunction(() => document.activeElement?.id === 'sample-psa-payloads');
+      await page.waitForResponse((response) => response.url().endsWith('/api/security/status')).catch(() => {
+        // It may already have completed before the fragment was focused.
+        assert.ok(securityRequests >= 2);
+      });
       assert.deepEqual(errors, []);
       results.push({ engine, browserVersion: browser.version(), width,
         scope: engine === 'webkit' ? 'phone-emulated, not native' : 'desktop',
         warningsRendered: true, keyboardReceiverLink: true, keyboardTemplateLink: true,
-        templateTextExact: true, reloadFragmentFocus: true, noDocumentOverflow: true, errors });
+        templateTextExact: true, reloadFragmentFocus: true, noDocumentOverflow: true,
+        syntheticFirstRunSecurityRequests: securityRequests, errors });
       await browser.close();
       browser = undefined;
     }
