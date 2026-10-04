@@ -122,6 +122,31 @@ const mergeRecord = <T extends JsonRecord>(incoming?: T, existing?: T): T | unde
   return { ...existing, ...incoming };
 };
 
+// Native VM facets carry a runtime state and an explicit guest-agent outcome.
+// Their optional read reason, lock and false expected flag are omitempty on
+// wire. A new outcome supersedes those fields, not unrelated richer metadata.
+// Partial/legacy facets without that evidence must retain the prior facts.
+const mergeProxmoxFacet = <T extends JsonRecord>(incoming?: T, existing?: T): T | undefined => {
+  const merged = mergeRecord(incoming, existing);
+  if (
+    !incoming ||
+    !merged ||
+    typeof incoming.vmid !== 'number' ||
+    !Number.isInteger(incoming.vmid) ||
+    incoming.vmid <= 0 ||
+    typeof incoming.runtimeStatus !== 'string' ||
+    !incoming.runtimeStatus.trim() ||
+    typeof incoming.guestAgentStatus !== 'string' ||
+    !incoming.guestAgentStatus.trim()
+  )
+    return merged;
+  const next = { ...merged };
+  for (const key of ['diskStatusReason', 'guestAgentExpected', 'lock']) {
+    if (!Object.prototype.hasOwnProperty.call(incoming, key)) delete next[key];
+  }
+  return next;
+};
+
 const mergePlatformData = (
   incomingValue: Resource['platformData'],
   existingValue: Resource['platformData'],
@@ -151,7 +176,10 @@ const mergePlatformData = (
       delete merged[key];
       continue;
     }
-    const nested = mergeRecord(asRecord(incoming[key]), asRecord(existing[key]));
+    const nested =
+      key === 'proxmox'
+        ? mergeProxmoxFacet(asRecord(incoming[key]), asRecord(existing[key]))
+        : mergeRecord(asRecord(incoming[key]), asRecord(existing[key]));
     if (key === 'docker') {
       if (hasDockerFacetEvidence(nested)) {
         merged[key] = nested;
@@ -864,7 +892,9 @@ const mergeCanonicalSourceFacet = <T extends JsonRecord>(
   ...sourceCandidates: string[]
 ): T | undefined =>
   shouldKeepSourceFacet(incomingSources, ...sourceCandidates)
-    ? mergeRecord(incomingFacet, existingFacet)
+    ? sourceCandidates.includes('proxmox-pve')
+      ? mergeProxmoxFacet(incomingFacet, existingFacet)
+      : mergeRecord(incomingFacet, existingFacet)
     : incomingFacet;
 
 // A missing field alone can be a partial snapshot. Explicit unavailable raw
@@ -1130,7 +1160,7 @@ const applyFastResourceMergePatch = (
           getCanonicalSourceList(existing, existing.platformData),
           'proxmox-pve',
         )
-          ? { ...existingFacet, ...cloned }
+          ? mergeProxmoxFacet(cloned, existingFacet)
           : cloned;
       continue;
     }

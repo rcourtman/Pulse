@@ -689,6 +689,58 @@ describe('GuestRow', () => {
 
     for (const mode of ['bars', 'sparklines'] as const) {
       it.each(guestDiskDeferrals)(
+        `withdraws stale numeric ${mode} when %s has no retained reading`,
+        (reason) => {
+          const { container } = renderGuestRow({
+            guest: makeGuest({ diskStatusReason: reason, disk: makeDisk({ usage: 50 }) }),
+            visibleColumnIds: ['name', 'disk'],
+            metricDisplayMode: mode,
+          });
+          expect(screen.queryByTestId('disk-bar')).toBeNull();
+          const cell = container.querySelector('[data-workload-col="disk"]')!;
+          expect(cell).toHaveTextContent('Unavailable');
+          const chart = cell.querySelector('[role="img"]');
+          if (chart) expect(chart.getAttribute('aria-label')).not.toMatch(/50%/);
+        },
+      );
+
+      it(`does not revive an unavailable canonical metric in ${mode}, preserving measured zero`, () => {
+        const [guest, setGuest] = createSignal(
+          makeGuest({
+            diskStatusReason: 'prev-vm-locked',
+            telemetryAvailability: {
+              cpu: true,
+              memory: true,
+              disk: false,
+              networkIO: true,
+              diskIO: true,
+              uptime: true,
+            },
+          }),
+        );
+        const { container } = render(() => (
+          <table>
+            <tbody>
+              <GuestRow
+                guest={guest()}
+                visibleColumnIds={['name', 'disk']}
+                metricDisplayMode={mode}
+              />
+            </tbody>
+          </table>
+        ));
+        expect(screen.queryByTestId('disk-bar')).toBeNull();
+        const cell = container.querySelector('[data-workload-col="disk"]')!;
+        const chart = cell.querySelector('[role="img"]');
+        if (chart) expect(chart.getAttribute('aria-label')).not.toMatch(/50%/);
+        setGuest(makeGuest({ disk: makeDisk({ used: 0, usage: 0 }) }));
+        expect(container.querySelector('[data-workload-col="disk"]')).toBe(cell);
+        expect(container.querySelector('[data-workload-disk-read-status]')).toBeNull();
+        if (mode === 'bars') expect(screen.getByTestId('disk-bar')).toBeTruthy();
+        else expect(cell.querySelector('[role="img"]')?.getAttribute('aria-label')).toMatch(/0%/);
+      });
+
+      it.each(guestDiskDeferrals)(
         `labels retained ${mode} for %s without a hover`,
         (reason, message) => {
           const { container } = renderGuestRow({

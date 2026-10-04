@@ -23,6 +23,37 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Native VM read outcomes survive browser projection and recovery
+
+The existing Proxmox guest read-state facet remains intact at the WorkloadGuest
+boundary: diskStatusReason, guestAgentStatus, guestAgentExpected and lock are
+forwarded from the resource API or the platform's owned canonical snapshot.
+A retained numeric disk reading does not become current merely by passing
+through that adapter, and an operation lock is not silently discarded.
+Rows withdraw numeric bars/sparkline labels for a non-retained deferral or
+explicitly unavailable canonical telemetry, even if the merged resource still
+carries old numeric values. Valid `prev-` and measured-zero readings remain.
+`GuestRow.test.tsx` verifies this with numeric stale props, not only sentinel data.
+
+Optional native VM fields are omitted on the wire when empty/false. When a new
+facet identifies a positive VMID and explicitly reports runtime state and a
+guest-agent outcome, omitted diskStatusReason/lock/guestAgentExpected replace
+the previous values rather than keeping an obsolete deferral or backup lock.
+This applies to the canonical and compatibility provider facets and the
+validated fast-delta path. Partial or legacy facets without that combination
+retain previous evidence; no generic omission-based clearing is introduced.
+Other richer metadata, source withdrawal, canonical identity, History samples
+and permissions remain unchanged. A guest-agent state or cleared lock proves
+neither filesystem thaw nor workload liveness.
+
+The owning hook and adapter regressions cover REST/snapshot forwarding,
+retained/unavailable/fresh transitions with unchanged numbers, explicit false,
+measured zero, partial omissions and full/delta/fast recovery. The connected
+`browser-tests/workload-read-evidence.cjs` checks actual production row, Overview
+and History presentation in desktop Chromium and phone WebKit. Synthetic
+source proof does not establish native backup safety or shipped availability.
+
+
 ### Backup server counts retain their inventory availability
 
 The existing PBS server/datastore row takes backup-inventory read availability
