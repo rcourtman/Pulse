@@ -6431,7 +6431,13 @@ Control is reviewed `main`, bound to `expected_workflow_sha`, its checkout and
 `GITHUB_WORKFLOW_SHA`. Product inputs are only the latest published immutable
 stable and the requested published immutable RC. Peeled commit, release/asset
 IDs, sizes and SHA-256 digests are checked by `release_browser_packet.py`; SSH
-signatures verify before execution. Each installed binary hash must match its
+signatures verify before execution. Archives are bounded to512MiB (current
+stable/RC archives are about265MiB), signatures to16KiB, the fixed regular
+server binary to1GiB and expanded inventory to2GiB/4096 entries. Streaming
+hashes avoid allocating an entire archive; anonymous downloads have the same
+archive-size ceiling. Setup-action caches are explicitly disabled in this
+CI-credential-bearing job, and derived command-file outputs use the reviewed
+collision-safe writer. Each installed binary hash must match its
 signed archive, rather than just a reported version. No rebuilt main binary,
 frozen-product insertion, candidate re-cut or stable promotion is performed.
 

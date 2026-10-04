@@ -177,6 +177,16 @@ class HarnessContractTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
 
 
+class HostedWorkflowCommandFilesTest(unittest.TestCase):
+    def test_bound_pair_uses_the_reviewed_collision_safe_output_writer(self) -> None:
+        source = (REPO_ROOT / '.github/workflows/qualify-browser-update-release.yml').read_text()
+        for field in ('from', 'from_commit', 'to_commit'):
+            self.assertIn(f'python3 scripts/write_github_output.py {field} "${field}"', source)
+        self.assertNotIn('echo "to_commit=', source)
+        self.assertIn("cache: ''", source)
+        self.assertIn('package-manager-cache: false', source)
+
+
 class BrowserRecoveryAccessStopTest(unittest.TestCase):
     def test_refused_upgrade_does_not_launch_another_login(self) -> None:
         source = HARNESS_PATH.read_text(encoding="utf-8")

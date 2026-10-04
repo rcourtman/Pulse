@@ -48,9 +48,19 @@ class BrowserPacketTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             packet.packet(self.baseline, release('v6.4.5-rc.9', 'c' * 40), 'a' * 40, 'c' * 40, 'v6.4.5-rc.9')
 
+    def test_current_published_archives_fit_bounded_admission(self):
+        # Actual GitHub metadata readback: stable276780330 and RC277779060
+        # bytes both exceed the original256MiB limit. No asset bytes executed.
+        self.baseline['assets'][0]['size'] = 276780330
+        self.candidate['assets'][0]['size'] = 277779060
+        self.assertEqual(2, len(self.bind()['releases']))
+        self.candidate['assets'][1]['size'] = packet.MAX_SIGNATURE + 1
+        with self.assertRaises(ValueError):
+            self.bind()
+
     def test_rejects_redirect_asset_duplicate_oversize_or_unbound_digest(self):
         for field, value in [('browser_download_url', 'https://example.com/archive'), ('size', 0),
-                             ('size', 257 * 1024 * 1024), ('digest', None), ('id', True)]:
+                             ('size', 513 * 1024 * 1024), ('digest', None), ('id', True)]:
             with self.subTest(field=field), self.assertRaises(ValueError):
                 candidate = copy.deepcopy(self.candidate)
                 candidate['assets'][0][field] = value

@@ -69,9 +69,9 @@ jobs:
             --from-commit "$from_commit" --to-commit "$to_commit" --tag "$TAG" \
             --output "$RUNNER_TEMP/browser-release/packet.json"
           python3 -c 'import json,os,pathlib; keys=("GITHUB_WORKFLOW_SHA","GITHUB_SHA","GITHUB_RUN_ID","GITHUB_RUN_ATTEMPT"); pathlib.Path(os.environ["RUNNER_TEMP"]+"/browser-release/control.json").write_text(json.dumps({k:os.environ[k] for k in keys},indent=2)+"\n")'
-          echo "from=$from" >> "$GITHUB_OUTPUT"
-          echo "from_commit=$from_commit" >> "$GITHUB_OUTPUT"
-          echo "to_commit=$to_commit" >> "$GITHUB_OUTPUT"
+          python3 scripts/write_github_output.py from "$from"
+          python3 scripts/write_github_output.py from_commit "$from_commit"
+          python3 scripts/write_github_output.py to_commit "$to_commit"
       - name: Authenticate both release archives before execution
         env:
           FROM: ${{ steps.pair.outputs.from }}
@@ -88,7 +88,7 @@ jobs:
             mkdir -m 0700 "$root/$tag"
             name="pulse-$tag-linux-amd64.tar.gz"
             for file in "$name" "$name.sshsig"; do
-              curl --fail --silent --show-error --location --retry 0 --max-time 120 \
+              curl --fail --silent --show-error --location --retry 0 --max-time 120 --max-filesize 536870912 \
                 "https://github.com/rcourtman/Pulse/releases/download/$tag/$file" --output "$root/$tag/$file"
             done
             ssh-keygen -Y verify -f "$root/allowed_signers" -I pulse-installer -n pulse-install \
@@ -101,6 +101,8 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24.20.0'
+          cache: ''
+          package-manager-cache: false
       - name: Prepare Chromium and native tools
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/browser-release/browsers

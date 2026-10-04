@@ -11,6 +11,11 @@ from pathlib import Path
 import re
 import tarfile
 
+MAX_ARCHIVE = 512 * 1024 * 1024
+MAX_SIGNATURE = 16 * 1024
+MAX_BINARY = 1024 * 1024 * 1024
+MAX_EXPANDED = 2 * MAX_BINARY
+
 
 def release_identity(release, *, tag, commit, prerelease):
     pattern = r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
@@ -31,7 +36,7 @@ def release_identity(release, *, tag, commit, prerelease):
         asset = matches[0]
         if (asset.get('browser_download_url') != f'https://github.com/rcourtman/Pulse/releases/download/{tag}/{name}'
                 or type(asset.get('id')) is not int or asset['id'] <= 0
-                or type(asset.get('size')) is not int or not 0 < asset['size'] <= 256 * 1024 * 1024
+                or type(asset.get('size')) is not int or not 0 < asset['size'] <= (MAX_SIGNATURE if name.endswith('.sshsig') else MAX_ARCHIVE)
                 or not re.fullmatch(r'sha256:[0-9a-f]{64}', str(asset.get('digest')))):
             raise ValueError('Unsafe or unbound release asset')
         assets.append({k: asset[k] for k in ['name', 'id', 'size', 'digest']})
@@ -50,13 +55,13 @@ def archive_identity(path):
         total_size = 0
         for i, member in enumerate(archive):
             total_size += member.size
-            if total_size > 1024 * 1024 * 1024:
+            if total_size > MAX_EXPANDED:
                 raise ValueError('Oversized expanded release archive')
             if i >= 4096:
                 raise ValueError('Oversized release archive inventory')
             if member.name in ('./bin/pulse', 'bin/pulse'):
                 matches.append(member)
-        if len(matches) != 1 or not matches[0].isfile() or not 0 < matches[0].size <= 256 * 1024 * 1024:
+        if len(matches) != 1 or not matches[0].isfile() or not 0 < matches[0].size <= MAX_BINARY:
             raise ValueError('Missing or ambiguous regular server binary')
         stream = archive.extractfile(matches[0])
         return hashlib.file_digest(stream, 'sha256').hexdigest()
