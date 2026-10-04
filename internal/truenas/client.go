@@ -1147,7 +1147,13 @@ func (c *Client) getDisksREST(ctx context.Context) ([]Disk, error) {
 
 	disks := make([]Disk, 0, len(response))
 	for _, item := range response {
-		rotationRate := item.RotationRate
+		// CORE reports "unknown" (and sometimes numeric strings) for this
+		// optional classifier. Match the RPC reader without weakening the
+		// required disk fields or treating missing SMART data as healthy.
+		rotationRate, _ := parseInt64Any(item.RotationRate)
+		if rotationRate < math.MinInt32 || rotationRate > math.MaxInt32 {
+			rotationRate = 0
+		}
 		rotational := rotationRate > 0
 		if rotationRate == 0 {
 			switch strings.ToLower(strings.TrimSpace(item.Type)) {
@@ -4862,7 +4868,7 @@ type diskResponse struct {
 	Bus          string          `json:"bus"`
 	Status       string          `json:"status"`
 	SmartStatus  json.RawMessage `json:"smart_status"`
-	RotationRate int             `json:"rotationrate"`
+	RotationRate any             `json:"rotationrate"`
 }
 
 type alertResponse struct {
