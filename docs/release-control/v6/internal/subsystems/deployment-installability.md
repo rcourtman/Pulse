@@ -6614,3 +6614,21 @@ unbound to filesystem-observation code that it actually executes. The closure
 test enumerates all repository-local dependencies of the install-test binary,
 collector and helper and reports every missing package together. No qualification
 gate, source exclusion or production permission is relaxed by this correction.
+
+## Self-contained release feedback precautions (4 October 2026)
+
+Bug and RC feedback forms carry their collection and attachment precautions
+inline. A reporter must not need an unpublished branch-tip or candidate-commit
+documentation link to learn that Run Diagnostics makes live API/guest-agent
+requests, that an already displayed result can be exported without another
+run, or that attachments require local privacy review. Collection during
+backups, freeze/thaw or an unresponsive-host incident is not an intake
+requirement. Removing a documentation link must retain these precautions and
+all existing report fields; it does not change release readiness or installed
+recovery acceptance.
+
+Verification: the report-form regression in
+`frontend-modern/src/utils/__tests__/docsLinks.test.ts` checks both forms for
+self-contained safety/privacy text and rejects candidate or branch-tip docs
+links. The issue-triage tests and repository documentation drift guard retain
+their independent intake and runtime-link checks.
