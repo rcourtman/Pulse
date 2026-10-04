@@ -76,8 +76,8 @@ export const SELF_HOSTED_FEATURE_CATALOG: readonly GeneratedSelfHostedFeatureCat
   },
   {
     key: 'relay',
-    displayName: 'Pulse Relay (Remote Access)',
-    comparisonName: 'Pulse Relay (Remote Access)',
+    displayName: 'Pulse Relay (Mobile Connection)',
+    comparisonName: 'Pulse Relay (Mobile Connection)',
     showInComparisonTable: true,
     displayableInSelfHostedPlan: true,
     roles: {

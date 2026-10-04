@@ -36,6 +36,9 @@ model that active and future release profiles reuse.
    support after the active profile has moved on, that branch mapping must stay
    explicit in `control_plane.json` as a legacy release-line override rather
    than being inferred from the active profile or smuggled into one workflow.
+   The selected and published `6.4.6` packet remains bound to `release/v6.4`
+   for convergence and exact-RC promotion. Its complete-version override does
+   not map future `6.4.7` or similarly prefixed `6.4.60` releases to that line.
 4. Profile changes must reuse the same control-plane machinery.
    Future releases should switch or add profiles rather than fork the guardrail
    system.

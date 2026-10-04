@@ -59,10 +59,10 @@ describe('patrol commercial boundary', () => {
   });
 
   it('does not carry the removed patrol configuration panel chrome', () => {
-    expect(patrolIntelligenceHeaderSource).not.toContain('fixed right-4 top-32 z-[9999] isolate');
+    expect(patrolIntelligenceHeaderSource).not.toContain('fixed right-4 top-32 z-9999 isolate');
     expect(patrolIntelligenceHeaderSource).not.toContain('max-h-[calc(100vh-10rem)]');
     expect(patrolIntelligenceHeaderSource).not.toContain('sm:max-h-[calc(100vh-14rem)]');
-    expect(patrolIntelligenceHeaderSource).not.toContain('sm:top-[13rem]');
+    expect(patrolIntelligenceHeaderSource).not.toContain('sm:top-52');
     expect(patrolIntelligenceHeaderSource).not.toContain('bg-white p-5 shadow-xl');
     expect(patrolIntelligenceHeaderSource).not.toContain('invisible pointer-events-none');
   });

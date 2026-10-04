@@ -63,17 +63,79 @@ export function TableBody(props: TableBodyProps) {
 
 export type TableRowProps = JSX.HTMLAttributes<HTMLTableRowElement>;
 
+// WebKit touch needs a native click target on otherwise-static table rows.
+// Keep actions document-delegated: nested controls must run first and retain
+// their existing stopPropagation behaviour instead of opening the row too.
+// Custom row shells reuse this marker without inheriting TableRow's styling.
+export const nativeRowClickTarget = () => undefined;
+
 export function TableRow(props: TableRowProps) {
   const [local, rest] = splitProps(props, ['class', 'children']);
   return (
     <tr
       class={`group transition-colors duration-150 hover:bg-surface-hover ${local.class || ''}`}
+      on:click={rest.onClick ? nativeRowClickTarget : undefined}
       {...rest}
     >
       {local.children}
     </tr>
   );
 }
+
+// Tailwind emits every padding utility at the same specificity, ordered by the
+// spacing scale, so a caller's `px-1` loses to the base `px-2` no matter where
+// it sits in the class string, and a caller's `px-3` only wins by luck. Like
+// TableHeader's border and TableBody's divider, a side whose padding the caller
+// names belongs to the caller: the base padding for that side is left out.
+// Prefixed variants (`lg:px-0`) layer on top of the base the way they always
+// did, so they do not count as owning the side.
+type TableAxisPadding = { both: string; start: string; end: string };
+
+const TABLE_HORIZONTAL_PADDING: TableAxisPadding = {
+  both: 'px-2 sm:px-3',
+  start: 'pl-2 sm:pl-3',
+  end: 'pr-2 sm:pr-3',
+};
+
+const TABLE_HEAD_VERTICAL_PADDING: TableAxisPadding = {
+  both: 'py-1.5',
+  start: 'pt-1.5',
+  end: 'pb-1.5',
+};
+
+const TABLE_CELL_VERTICAL_PADDING: TableAxisPadding = {
+  both: 'py-0.5',
+  start: 'pt-0.5',
+  end: 'pb-0.5',
+};
+
+const OWNS_PADDING_LEFT = /(?:^|\s)!?(?:p|px|pl|ps)-/;
+const OWNS_PADDING_RIGHT = /(?:^|\s)!?(?:p|px|pr|pe)-/;
+const OWNS_PADDING_TOP = /(?:^|\s)!?(?:p|py|pt)-/;
+const OWNS_PADDING_BOTTOM = /(?:^|\s)!?(?:p|py|pb)-/;
+
+const resolveAxisPadding = (
+  axis: TableAxisPadding,
+  callerOwnsStart: boolean,
+  callerOwnsEnd: boolean,
+): string => {
+  if (callerOwnsStart) return callerOwnsEnd ? '' : axis.end;
+  return callerOwnsEnd ? axis.start : axis.both;
+};
+
+const resolveTablePaddingClass = (vertical: TableAxisPadding, customClass?: string): string => {
+  const custom = customClass ?? '';
+  return [
+    resolveAxisPadding(
+      TABLE_HORIZONTAL_PADDING,
+      OWNS_PADDING_LEFT.test(custom),
+      OWNS_PADDING_RIGHT.test(custom),
+    ),
+    resolveAxisPadding(vertical, OWNS_PADDING_TOP.test(custom), OWNS_PADDING_BOTTOM.test(custom)),
+  ]
+    .filter(Boolean)
+    .join(' ');
+};
 
 export type TableHeadProps = JSX.HTMLAttributes<HTMLTableCellElement> & {
   colSpan?: number;
@@ -85,7 +147,7 @@ export function TableHead(props: TableHeadProps) {
   const [local, rest] = splitProps(props, ['class', 'children']);
   return (
     <th
-      class={`px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-semibold uppercase tracking-wider align-middle ${local.class || ''}`}
+      class={`${resolveTablePaddingClass(TABLE_HEAD_VERTICAL_PADDING, local.class)} text-[11px] sm:text-xs font-semibold uppercase tracking-wider align-middle ${local.class || ''}`.trim()}
       {...rest}
     >
       {local.children}
@@ -103,7 +165,10 @@ export type TableCellProps = JSX.HTMLAttributes<HTMLTableCellElement> & {
 export function TableCell(props: TableCellProps) {
   const [local, rest] = splitProps(props, ['class', 'children']);
   return (
-    <td class={`px-2 sm:px-3 py-0.5 align-middle ${local.class || ''}`} {...rest}>
+    <td
+      class={`${resolveTablePaddingClass(TABLE_CELL_VERTICAL_PADDING, local.class)} align-middle ${local.class || ''}`.trim()}
+      {...rest}
+    >
       {local.children}
     </td>
   );

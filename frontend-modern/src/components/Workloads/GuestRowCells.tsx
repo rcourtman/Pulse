@@ -16,7 +16,7 @@ import {
 function BackupShieldIcon(props: { icon: 'check' | 'warning' | 'x' | 'running'; pulse?: boolean }) {
   return (
     <svg
-      class="h-3.5 w-3.5 flex-shrink-0"
+      class="h-3.5 w-3.5 shrink-0"
       classList={{ 'animate-pulse': props.pulse }}
       viewBox="0 0 24 24"
       fill="none"
@@ -65,11 +65,7 @@ function BackupIndicator(props: {
   });
 
   return (
-    <span
-      class={`flex-shrink-0 ${config().color}`}
-      title={tooltipText()}
-      aria-label={tooltipText()}
-    >
+    <span class={`shrink-0 ${config().color}`} title={tooltipText()} aria-label={tooltipText()}>
       <BackupShieldIcon icon={config().icon} pulse={displayStatus() === 'running'} />
     </span>
   );
@@ -80,6 +76,7 @@ function getBackupAgeBadgeLabel(
   info: BackupInfo,
 ): string {
   if (info.status === 'never') return 'None';
+  if (info.status === 'unknown') return 'Unknown';
   const compact = formatRelativeTime(lastBackup ?? undefined, {
     compact: true,
     emptyText: 'Unknown',
@@ -90,7 +87,7 @@ function getBackupAgeBadgeLabel(
 
 function getBackupAgeBadgeClass(status: WorkloadsGuestBackupDisplayStatus): string {
   const layout =
-    'inline-flex h-5 min-w-[3.25rem] items-center justify-center gap-1 px-1.5 text-[10px] font-semibold leading-none tabular-nums cursor-help';
+    'inline-flex h-5 min-w-13 items-center justify-center gap-1 px-1.5 text-[10px] font-semibold leading-none tabular-nums cursor-help';
   // A healthy backup only needs its shield. Existing backups that cross an age
   // threshold remain amber because age is a policy-relative caution, while red
   // is reserved for the materially different state where no backup exists.
@@ -103,6 +100,7 @@ function getBackupAgeBadgeClass(status: WorkloadsGuestBackupDisplayStatus): stri
     case 'stale':
       return `${pill} border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900/70 dark:bg-yellow-950/40 dark:text-yellow-300`;
     case 'overdue':
+    case 'unknown':
       return `${pill} border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900/70 dark:bg-yellow-950/40 dark:text-yellow-300`;
     case 'never':
       return `${pill} border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-300`;
@@ -336,9 +334,12 @@ function BackupStatusCell(props: {
   const badgeLabel = createMemo(() =>
     displayStatus() === 'running' ? 'Running' : getBackupAgeBadgeLabel(props.lastBackup, info()),
   );
-  const hasCompletedBackup = createMemo(() => info().status !== 'never');
+  const hasCompletedBackup = createMemo(() => info().ageMs !== null);
   const ariaLabel = createMemo(() => {
     const currentInfo = info();
+    if (currentInfo.status === 'unknown') {
+      return `Backup status: ${props.backupRunning ? 'backup running now, ' : ''}${currentInfo.ageFormatted}`;
+    }
     if (props.backupRunning) {
       return hasCompletedBackup()
         ? `Backup status: backup running now, last completed backup ${currentInfo.ageFormatted}`
@@ -391,7 +392,10 @@ function BackupStatusCell(props: {
               </span>
             </div>
           </Show>
-          <Show when={!hasCompletedBackup()}>
+          <Show when={info().status === 'unknown'}>
+            <div class="py-0.5 text-amber-400">{info().ageFormatted}</div>
+          </Show>
+          <Show when={info().status === 'never'}>
             <div class="py-0.5 text-red-400">
               {props.backupRunning
                 ? 'No completed backup yet - the first backup is running now.'
@@ -456,7 +460,7 @@ function AvailabilityProbeCell(props: { presentation: AvailabilityProbePresentat
   return (
     <Show when={badgeText()}>
       <span
-        class={`inline-flex items-center rounded px-1 py-0.5 text-[9px] font-semibold leading-none whitespace-nowrap ${p().toneClassName}`}
+        class={`inline-flex items-center rounded-sm px-1 py-0.5 text-[9px] font-semibold leading-none whitespace-nowrap ${p().toneClassName}`}
         title={p().rowLabel}
       >
         {badgeText()}

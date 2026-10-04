@@ -112,6 +112,32 @@ func TestProviderMSPPreflightPassesWithLicenseDockerAndStorage(t *testing.T) {
 	}
 }
 
+// A paying provider runs on the licence its control plane renewed into the
+// data directory; preflight must treat that signed source like the host
+// licence file rather than refuse it as an environment fallback.
+func TestProviderMSPPreflightAcceptsRenewedLicenseSource(t *testing.T) {
+	docker := &fakeProviderMSPPreflightDocker{
+		report: &cpDocker.RuntimePrerequisiteReport{
+			OK: true, DockerReachable: true, NetworkName: "pulse-provider-msp", NetworkOK: true,
+			NetworkID: "network-test", ImageRef: "pulse:test", ImageID: "sha256:test", ImageAvailable: true,
+		},
+	}
+	storage := &cloudcp.StorageGuardrailReport{Enabled: true, OK: true, BuildCache: cloudcp.StorageBuildCacheReport{OK: true, MaxBytes: 1024}}
+
+	report, err := runProviderMSPPreflightWithDependencies(
+		context.Background(),
+		testProviderMSPPreflightConfig(t, cloudcp.ProviderMSPPlanSourceRenewedLicense),
+		providerMSPPreflightOptions{},
+		fakeProviderMSPPreflightDependencies(docker, storage),
+	)
+	if err != nil {
+		t.Fatalf("runProviderMSPPreflightWithDependencies: %v", err)
+	}
+	if !report.OK {
+		t.Fatalf("preflight refused a renewed licence source: %v", report.Failures)
+	}
+}
+
 func TestProviderMSPPreflightAcceptsPulseHostedMSPMode(t *testing.T) {
 	docker := &fakeProviderMSPPreflightDocker{
 		report: &cpDocker.RuntimePrerequisiteReport{

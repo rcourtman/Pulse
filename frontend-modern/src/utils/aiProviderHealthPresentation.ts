@@ -8,15 +8,15 @@ export interface AIProviderHealthPresentation {
 const PRESENTATION: Record<AIProviderHealthStatus, AIProviderHealthPresentation> = {
   ok: {
     label: 'Healthy',
-    badgeClass: 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300',
+    badgeClass: 'bg-green-100 dark:bg-green-900/25 text-green-700 dark:text-green-300',
   },
   error: {
     label: 'Issue',
-    badgeClass: 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
+    badgeClass: 'bg-red-100 dark:bg-red-900/25 text-red-700 dark:text-red-300',
   },
   checking: {
     label: 'Checking...',
-    badgeClass: 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300',
+    badgeClass: 'bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300',
   },
   not_configured: {
     label: 'Not checked',

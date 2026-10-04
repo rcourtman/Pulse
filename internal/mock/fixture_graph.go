@@ -68,6 +68,7 @@ func (g *FixtureGraph) UpdateMetrics(cfg MockConfig, now time.Time) {
 	applyDemoScenarioGraph(g, cfg, now)
 	syncMetricFixtureRegistriesFromGraph(*g)
 	updateFixtureStateMetricsAt(&g.State, cfg, now)
+	rebaseMockReplicationJobs(g.State.ReplicationJobs, now)
 	g.PlatformFixtures = rebasePlatformFixtures(g.PlatformFixtures, now)
 	g.AvailabilityFixtures = rebaseAvailabilityFixtures(g.AvailabilityFixtures, now)
 	applyDemoScenarioGraph(g, cfg, now)
@@ -125,6 +126,7 @@ func (g *FixtureGraph) UpdateMetricCohort(
 		supplementalUptimeStep: currentMockUpdateStepInt64() * supplementalTicks,
 	})
 	if includeSupplemental {
+		rebaseMockReplicationJobs(g.State.ReplicationJobs, now)
 		g.PlatformFixtures = rebasePlatformFixtures(g.PlatformFixtures, now)
 		g.AvailabilityFixtures = rebaseAvailabilityFixtures(g.AvailabilityFixtures, now)
 		g.DiscoveryFixtures = buildDiscoveryFixtures(g.State, now)

@@ -105,16 +105,62 @@ jobs:
           fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
           # Whether this change moves the frontend dependency graph. It decides
-          # what an unreachable npm advisory endpoint means: unknown answer
-          # (must block) versus the base commit's already-passing answer. A
-          # change to the audit runner itself also demands a real result, so it
-          # can never be relaxed under cover of its own tolerant mode.
+          # whether the audit blocks it: a change that moves the graph answers
+          # for any finding and for an unreachable endpoint, while one that
+          # leaves the graph alone only warns, because its findings are the
+          # base commit's. A change to the audit runner itself also demands a
+          # clean result, so it can never be relaxed under cover of its own
+          # tolerant mode.
           if printf '%s\n' "$changed" | grep -qE '^frontend-modern/package(-lock)?\.json$|^scripts/npm-audit-retry\.sh$'; then
             frontend_deps=true
           else
             frontend_deps=false
           fi
           echo "frontend_deps=$frontend_deps" >> "$GITHUB_OUTPUT"
+
+  provider-pair-docker:
+    name: Provider pair Docker acceptance
+    needs: changes
+    # Security backports need a live, exact-branch result before the steward
+    # freezes a release packet. Candidate qualification repeats the same case
+    # against the verified release image after freeze.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/') && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact release-line source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify exact release-line source
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Preload pinned Docker helper image
+        run: docker pull 'alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6'
+
+      - name: Prove provider pair provisioning and cleanup
+        env:
+          PULSE_RUN_PROVIDER_PAIR_DOCKER_INTEGRATION: '1'
+          PULSE_DOCKER_INTEGRATION_IMAGE: alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+        run: |
+          set -euo pipefail
+          go test -count=1 -timeout 3m ./internal/cloudcp/docker \
+            -run '^TestIntegrationProviderPairNetworkIsolation$' -v \
+            | tee "$RUNNER_TEMP/provider-pair-network-test.log"
+          grep -q '^--- PASS: TestIntegrationProviderPairNetworkIsolation ' \
+            "$RUNNER_TEMP/provider-pair-network-test.log"
 
   frontend:
     name: Frontend
@@ -149,14 +195,15 @@ jobs:
         run: npm ci --no-audit
 
       # npm audit exits 1 both for a real advisory and for an unreachable
-      # advisory endpoint. The runner keeps the advisory verdict exactly as
-      # strict and only retries the endpoint being down; see the script header.
+      # advisory endpoint. The runner retries the endpoint being down, fails a
+      # change that moves the dependency graph on any finding, and only warns,
+      # naming every finding, for a change whose graph is the base commit's;
+      # see the script header.
       #
       # Only the complete graph is audited here. `--omit=dev` audits a subset
-      # of these packages, so it can only report a subset of these advisories;
-      # and because the complete audit fails the job on any finding, the
-      # production step could only ever run in the cases where it was already
-      # guaranteed clean. The dev-versus-production split is still reported
+      # of these packages, so it can only report a subset of these advisories,
+      # under the same blocking rule; a separate production step could never
+      # block a change the complete audit lets through. The dev-versus-production split is still reported
       # for every workspace by the scheduled npm-audit job in
       # security-scan.yml, where it informs rather than blocks delivery.
       - name: Audit complete frontend dependency graph
@@ -223,9 +270,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # internal/api is by far the slowest package under -race (~10m), so it
-        # gets a dedicated shard; every other package splits across the rest.
-        shard: [api, rest-0, rest-1]
+        # internal/api has its own sharded job below; every other package
+        # splits across these two.
+        shard: [rest-0, rest-1]
 
     steps:
       - name: Report documentation-only change
@@ -260,15 +307,11 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         env:
           PULSE_DATA_DIR: /tmp/pulse-test-data
-        # internal/api alone takes ~22m under -race on a fast machine since
-        # the demo estate scaled to 50 nodes, and CI runners have needed
-        # roughly double the fast-machine time, hence the large per-binary
-        # budget. Remaining packages are split deterministically by list
-        # position.
+        # Packages other than internal/api are split deterministically by
+        # list position.
         run: |
           set -euo pipefail
           case "${{ matrix.shard }}" in
-            api)    pkgs="./internal/api" ;;
             rest-0) pkgs=$(go list ./... | grep -v '/internal/api$' | awk 'NR % 2 == 0') ;;
             rest-1) pkgs=$(go list ./... | grep -v '/internal/api$' | awk 'NR % 2 == 1') ;;
             *) echo "unknown shard ${{ matrix.shard }}" >&2; exit 1 ;;
@@ -279,6 +322,151 @@ jobs:
           fi
           printf 'Packages in this shard:\n%s\n' "$pkgs"
           go test -race -timeout 50m $pkgs
+
+  # internal/api alone took ~27 of the ~31 minutes of the old single
+  # `Backend tests (api)` job under -race, which made it the critical path of
+  # every pull request. Its top-level tests are split across these shards
+  # as contiguous runs of the package's own test order, cut by estimated run
+  # time, and the `Backend tests (api)` job below keeps the required check
+  # name by passing only when every shard passed.
+  backend-api:
+    name: Backend tests (api-${{ matrix.index }})
+    needs: changes
+    # Like the rest shards, expand even for documentation-only changes so the
+    # verdict job sees real shard results rather than skipped jobs.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # Keep API_SHARD_COUNT equal to the number of indexes listed here.
+        index: [0, 1, 2, 3, 4]
+    env:
+      API_SHARD_COUNT: 5
+
+    steps:
+      - name: Report documentation-only change
+        if: needs.changes.outputs.code != 'true'
+        run: echo "No backend code changed. Tests are not required for this shard."
+
+      - name: Checkout repository
+        if: needs.changes.outputs.code == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        if: needs.changes.outputs.code == 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Provide frontend embed stub
+        if: needs.changes.outputs.code == 'true'
+        run: |
+          mkdir -p internal/api/frontend-modern/dist
+          [ -f internal/api/frontend-modern/dist/index.html ] || \
+            printf '<!doctype html><title>ci embed stub</title>\n' > internal/api/frontend-modern/dist/index.html
+
+      - name: Go unit tests (internal/api shard ${{ matrix.index }})
+        if: needs.changes.outputs.code == 'true'
+        env:
+          PULSE_DATA_DIR: /tmp/pulse-test-data
+          API_SHARD_INDEX: ${{ matrix.index }}
+        # The test list is computed from the checked-out commit at run time,
+        # so every shard sees the same list and a test added later lands in
+        # exactly one shard with no workflow edit. The list keeps go test's
+        # own order (file name, then declaration), which is also run order,
+        # and each shard takes one contiguous slice of it. Some internal/api
+        # tests still lean on package state left by the tests just before
+        # them (for example admin bypass or session store globals), and an
+        # interleaved split by name broke dozens of them, while contiguous
+        # slices keep those neighbours together. The slices are cut by
+        # estimated run time from .github/scripts/internal-api-test-seconds.txt
+        # rather than by count, because a handful of tests take most of the
+        # time (one contract test runs about six minutes and the integration
+        # server tail about twenty seconds per test). Unlisted tests get a
+        # small default weight, and the weights only move the cut points, so
+        # coverage never depends on them. Listing with -race builds the same
+        # test binary the run then reuses from cache. Benchmarks are left out
+        # because plain go test never runs them. The run goes through
+        # -json so every shard records each test's seconds on the runner
+        # (uploaded below and fed back into the weights by
+        # refresh-internal-api-test-seconds.py). The recorder prints only
+        # package lines and the output of failing or unfinished tests, like
+        # plain go test, and pipefail keeps a go test failure fatal.
+        run: |
+          set -euo pipefail
+          listing=$(go test -race -list . ./internal/api)
+          tests=$(printf '%s\n' "$listing" | grep -E '^(Test|Fuzz|Example)[^[:space:]]*$' || true)
+          if [ -z "$tests" ]; then
+            echo "::error::go test -list found no tests in ./internal/api"
+            exit 1
+          fi
+          total=$(printf '%s\n' "$tests" | wc -l | tr -d ' ')
+          selected=$(printf '%s\n' "$tests" | bash .github/scripts/select-internal-api-shard.sh \
+            .github/scripts/internal-api-test-seconds.txt "$API_SHARD_COUNT" "$API_SHARD_INDEX")
+          if [ -z "$selected" ]; then
+            echo "::error::internal/api shard ${API_SHARD_INDEX} of ${API_SHARD_COUNT} resolved to an empty test list"
+            exit 1
+          fi
+          others=$(printf '%s\n' "$tests" | grep -vxF -f <(printf '%s\n' "$selected") || true)
+          # Name whichever side is shorter. A shard holding most of the tests
+          # is passed as -skip of every other shard's tests, which runs the
+          # same set in the same order. Never pair -skip with -run. The test
+          # binary caches only the last compiled pattern, so alternating the
+          # two recompiles the long skip pattern for every test and subtest,
+          # which added about seven minutes to such a shard.
+          pattern="^($(printf '%s\n' "$selected" | paste -sd '|' -))\$"
+          filter=(-run "$pattern")
+          if [ -n "$others" ]; then
+            skip="^($(printf '%s\n' "$others" | paste -sd '|' -))\$"
+            if [ "${#skip}" -lt "${#pattern}" ]; then
+              pattern=$skip
+              filter=(-skip "$pattern")
+            fi
+          fi
+          # Linux rejects a single argument over 128 KiB. Fail with a clear
+          # instruction instead of an opaque exec error.
+          if [ "${#pattern}" -gt 120000 ]; then
+            echo "::error::internal/api shard pattern is ${#pattern} bytes; add a shard index and raise API_SHARD_COUNT"
+            exit 1
+          fi
+          echo "internal/api shard ${API_SHARD_INDEX} of ${API_SHARD_COUNT} runs $(printf '%s\n' "$selected" | wc -l | tr -d ' ') of ${total} tests (${selected%%$'\n'*} .. ${selected##*$'\n'})"
+          timings="$RUNNER_TEMP/internal-api-test-seconds"
+          mkdir -p "$timings"
+          go test -race -timeout 50m -json "${filter[@]}" ./internal/api \
+            | python3 .github/scripts/record-internal-api-test-seconds.py "$timings/api-${API_SHARD_INDEX}.txt"
+
+      - name: Upload internal/api test timings
+        if: always() && needs.changes.outputs.code == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: internal-api-test-seconds-${{ matrix.index }}
+          path: ${{ runner.temp }}/internal-api-test-seconds/
+          if-no-files-found: warn
+          retention-days: 30
+
+  # Required check name. Branch protection matches `Backend tests (api)`
+  # exactly, so this job must keep that name and must fail unless every
+  # internal/api shard succeeded (a skipped or cancelled shard fails it too).
+  backend-api-verdict:
+    name: Backend tests (api)
+    needs: backend-api
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every internal/api shard
+        env:
+          API_SHARDS_RESULT: ${{ needs.backend-api.result }}
+        run: |
+          if [ "$API_SHARDS_RESULT" != success ]; then
+            echo "::error::internal/api shards did not all pass (result: ${API_SHARDS_RESULT})"
+            exit 1
+          fi
+          echo "Every internal/api shard passed."
 
   scripts-and-build:
     name: Script smoke tests & backend build

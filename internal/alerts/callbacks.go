@@ -23,13 +23,14 @@ type LifecycleEvent struct {
 type callbackBus struct {
 	mu sync.RWMutex
 
-	onAlert        func(alert *Alert)
-	alertSubs      map[int]func(alert *Alert)
-	onAlertForAI   func(alert *Alert)
-	alertForAISubs map[int]func(alert *Alert)
-	onResolved     func(alertID string)
-	resolvedSubs   map[int]func(alertID string)
-	lifecycleSubs  map[int]func(event LifecycleEvent)
+	onAlert         func(alert *Alert)
+	alertSubs       map[int]func(alert *Alert)
+	onAlertForAI    func(alert *Alert)
+	alertForAISubs  map[int]func(alert *Alert)
+	onResolved      func(alertID string)
+	resolvedSubs    map[int]func(alertID string)
+	onResolvedAlert func(resolved *ResolvedAlert)
+	lifecycleSubs   map[int]func(event LifecycleEvent)
 
 	onAcknowledged   func(alert *Alert, user string)
 	onUnacknowledged func(alert *Alert, user string)
@@ -144,6 +145,18 @@ func (b *callbackBus) setResolvedCallback(cb func(alertID string)) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.onResolved = cb
+}
+
+func (b *callbackBus) setResolvedAlertCallback(cb func(resolved *ResolvedAlert)) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.onResolvedAlert = cb
+}
+
+func (b *callbackBus) resolvedAlertCallback() func(resolved *ResolvedAlert) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.onResolvedAlert
 }
 
 func (b *callbackBus) subscribeResolvedCallback(cb func(alertID string)) func() {
@@ -324,6 +337,14 @@ func (m *Manager) SetResolvedCallback(cb func(alertID string)) {
 	m.callbacks.setResolvedCallback(cb)
 }
 
+// SetResolvedAlertCallback installs the occurrence-qualified recovery consumer.
+// The snapshot is captured before asynchronous dispatch; consumers must not
+// look up a reusable alert ID to reconstruct the resolved occurrence later.
+// Legacy ID-only callbacks remain independent and retain their public IDs.
+func (m *Manager) SetResolvedAlertCallback(cb func(resolved *ResolvedAlert)) {
+	m.callbacks.setResolvedAlertCallback(cb)
+}
+
 // SubscribeResolvedCallback registers an additional resolved-alert callback
 // without replacing the legacy single callback slot. The returned function
 // removes the subscription when called.
@@ -402,31 +423,43 @@ func (m *Manager) getEscalateCallback() func(alert *Alert, level int) {
 // safeCallResolvedAlertCallback invokes onResolved with panic recovery while
 // preserving canonical state as the internal identity and emitting the public
 // alert ID to external callbacks for compatibility.
-func (m *Manager) safeCallResolvedAlertCallback(alert *Alert, fallbackID string, async bool) {
+func (m *Manager) safeCallResolvedAlertCallback(resolved *ResolvedAlert, fallbackID string, async bool) {
+	var alert *Alert
+	if resolved != nil {
+		alert = resolved.Alert
+	}
 	// Record the resolution before the callback guard: this funnel is the
 	// resolve seam for every lifecycle path, with or without subscribers.
 	m.recordAlertEvent(eventlog.TypeResolved, alert, fallbackID, "", "Alert resolved.", nil)
 
 	callbacks := m.getResolvedCallbacks()
-	if len(callbacks) == 0 {
+	resolvedCallback := m.callbacks.resolvedAlertCallback()
+	if len(callbacks) == 0 && resolvedCallback == nil {
 		return
 	}
 
 	publicID := exportedAlertID(alert, fallbackID)
 	trackingKey := canonicalTrackingKeyForAlert(alert)
+	var snapshot *ResolvedAlert
+	if resolved != nil && alert != nil {
+		snapshot = &ResolvedAlert{Alert: cloneAlertForOutput(alert), ResolvedTime: resolved.ResolvedTime}
+	}
 
 	callbackFunc := func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().
-					Interface("panic", r).
-					Str("alertID", publicID).
-					Str("trackingKey", trackingKey).
-					Msg("Panic in onResolved callback")
-			}
-		}()
+		callSafely := func(callback func()) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().Interface("panic", r).Str("alertID", publicID).
+						Str("trackingKey", trackingKey).Msg("Panic in onResolved callback")
+				}
+			}()
+			callback()
+		}
 		for _, callback := range callbacks {
-			callback(publicID)
+			callSafely(func() { callback(publicID) })
+		}
+		if resolvedCallback != nil && snapshot != nil {
+			callSafely(func() { resolvedCallback(snapshot) })
 		}
 	}
 

@@ -538,3 +538,121 @@ func TestValidateQuietHoursTimezone(t *testing.T) {
 		}
 	})
 }
+func TestMonitorOnlyAlertNeverEscalates(t *testing.T) {
+	m := newTestManager(t)
+	now := time.Now().UTC()
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.ActivationState = ActivationActive
+	m.config.Schedule.Escalation = EscalationConfig{
+		Enabled:        true,
+		Levels:         []EscalationLevel{{After: 30, Notify: "email"}},
+		RepeatCritical: true,
+		RepeatEvery:    30,
+	}
+	monitorOnly := &Alert{
+		ID:        "vm-monitor-only",
+		Type:      "cpu",
+		StartTime: now.Add(-time.Hour),
+		Metadata:  map[string]interface{}{"monitorOnly": true},
+	}
+	repeatingMonitorOnly := &Alert{
+		ID:              "vm-monitor-only-critical",
+		Type:            "cpu",
+		Level:           AlertLevelCritical,
+		StartTime:       now.Add(-2 * time.Hour),
+		LastEscalation:  1,
+		EscalationTimes: []time.Time{now.Add(-time.Hour)},
+		Metadata:        map[string]interface{}{"monitorOnly": true},
+	}
+	ordinary := &Alert{ID: "vm-ordinary", Type: "cpu", StartTime: now.Add(-time.Hour)}
+	m.setActiveAlertNoLock(monitorOnly.ID, monitorOnly)
+	m.setActiveAlertNoLock(repeatingMonitorOnly.ID, repeatingMonitorOnly)
+	m.setActiveAlertNoLock(ordinary.ID, ordinary)
+	m.mu.Unlock()
+
+	m.checkEscalations()
+	if monitorOnly.LastEscalation != 0 || len(monitorOnly.EscalationTimes) != 0 {
+		t.Fatalf("monitor-only alert scheduled escalation: %+v", monitorOnly)
+	}
+	if repeatingMonitorOnly.LastEscalation != 1 || len(repeatingMonitorOnly.EscalationTimes) != 1 {
+		t.Fatalf("monitor-only critical alert repeated escalation: %+v", repeatingMonitorOnly)
+	}
+	if ordinary.LastEscalation != 1 {
+		t.Fatalf("ordinary alert did not exercise scheduler: %+v", ordinary)
+	}
+}
+
+func TestMonitorOnlyPolicyChangeRejectsPendingEscalation(t *testing.T) {
+	m := newTestManager(t)
+	now := time.Now().UTC()
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.ActivationState = ActivationActive
+	m.config.Schedule.Escalation = EscalationConfig{
+		Enabled: true,
+		Levels:  []EscalationLevel{{After: 30, Notify: "email"}},
+	}
+	alert := &Alert{ID: "vm-becomes-monitor-only", Type: "cpu", StartTime: now.Add(-time.Hour)}
+	m.setActiveAlertNoLock(alert.ID, alert)
+	snapshot := cloneAlertForOutput(alert)
+	alert.Metadata = map[string]interface{}{"monitorOnly": true}
+	m.mu.Unlock()
+
+	if _, _, eligible := m.PrepareEscalationNotification(snapshot, 1); eligible {
+		t.Fatal("queued escalation remained eligible after alert became monitor-only")
+	}
+}
+
+func TestMonitorOnlyAlertCannotAcquireQuietHoursReplay(t *testing.T) {
+	m := newTestManager(t)
+	now := time.Date(2026, time.April, 12, 12, 0, 0, 0, time.UTC)
+	m.now = func() time.Time { return now }
+	m.config.ActivationState = ActivationActive
+	m.config.Schedule.QuietHours = QuietHours{
+		Enabled:  true,
+		Start:    "00:00",
+		End:      "23:59",
+		Timezone: "UTC",
+		Days:     map[string]bool{"sunday": true},
+	}
+	m.SetAlertCallback(func(*Alert) { t.Error("monitor-only firing alert reached callback") })
+	alert := &Alert{
+		ID:        "monitor-only-quiet-hours",
+		Type:      "cpu",
+		Level:     AlertLevelWarning,
+		StartTime: m.policyNow().Add(-time.Hour),
+		Metadata: map[string]interface{}{
+			"monitorOnly":              true,
+			MetadataQuietHoursReplayAt: m.policyNow().Add(time.Hour).Format(time.RFC3339),
+		},
+	}
+	if suppressed, _ := m.shouldSuppressNotification(alert); !suppressed {
+		t.Fatal("fixture did not place alert in quiet hours")
+	}
+	m.mu.Lock()
+	m.setActiveAlertNoLock(alert.ID, alert)
+	if m.dispatchAlert(alert, false) {
+		m.mu.Unlock()
+		t.Fatal("monitor-only firing alert was dispatched")
+	}
+	m.mu.Unlock()
+	if hasQuietHoursNotificationReplay(alert) {
+		t.Fatalf("monitor-only alert retained replay metadata: %+v", alert.Metadata)
+	}
+	if alert.LastNotified != nil {
+		t.Fatalf("monitor-only alert was marked notified at %s", alert.LastNotified)
+	}
+	if !m.ShouldSuppressNotification(alert) || hasQuietHoursNotificationReplay(alert) {
+		t.Fatalf("public suppression helper deferred monitor-only alert: %+v", alert.Metadata)
+	}
+	lastNotified := m.policyNow().Add(-time.Minute)
+	alert.LastNotified = &lastNotified
+	if !m.ShouldSuppressResolvedNotification(alert) {
+		t.Fatal("monitor-only recovery notification was admitted")
+	}
+	diagnosis, exists := m.DiagnoseAlertDelivery(alert.ID)
+	if !exists || diagnosis.Status != AlertDeliveryStatusSuppressed || diagnosis.Reason != AlertDeliveryReasonMonitorOnly || diagnosis.QuietHoursReplayAt != nil {
+		t.Fatalf("monitor-only delivery diagnosis = %+v, exists=%t", diagnosis, exists)
+	}
+}

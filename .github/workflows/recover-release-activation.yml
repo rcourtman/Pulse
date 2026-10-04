@@ -78,14 +78,32 @@ jobs:
             "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RELEASE_RUN_ID}/jobs?per_page=100" \
             | jq '[.[].jobs[]]' > "${source_jobs}"
           # release_readiness is the canonical DAG join for every immutable
-          # gate. Do not duplicate reusable-workflow display names here: those
-          # names are presentation details and can change while the join stays
-          # authoritative. The surrounding all-jobs verdict below still
-          # rejects every failure outside the activation boundary.
+          # gate in runs made before the join was folded into its writers.
+          # Such a run must still prove that join and nothing else, so it
+          # recovers exactly as before. A run without that job carries the
+          # candidate predicate on publish_release_tag itself, and must prove
+          # the tag, every publish_docker reusable job and the Helm chart
+          # publication that the join used to require. Reusable jobs are
+          # matched by caller ID prefix, and at least one must exist. The
+          # surrounding all-jobs verdict below still rejects every failure
+          # outside the activation boundary.
+          immutable_join=release_readiness
+          if ! jq -e 'any(.[]; .name == "release_readiness")' "${source_jobs}" >/dev/null; then
+            immutable_join=publish_release_tag
+            for reusable_job in publish_docker publish_helm_chart; do
+              jq -e --arg name "${reusable_job}" '
+                [.[] | select(.name == $name or (.name | startswith($name + " / ")))] |
+                length > 0 and all(.[]; .status == "completed" and .conclusion == "success")' \
+                "${source_jobs}" >/dev/null || {
+                  echo "::error::Source run lacks successful immutable gate: ${reusable_job}."
+                  exit 1
+                }
+            done
+          fi
           for required_job in \
             prepare \
             create_release \
-            release_readiness \
+            "${immutable_join}" \
             dispatch_release_convergence; do
             jq -e --arg name "${required_job}" \
               'any(.[]; .name == $name and .status == "completed" and .conclusion == "success")' \

@@ -1,6 +1,7 @@
 package truenas
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,12 +17,196 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
+
+// Subscription terminal-message regressions for #2396. The envelope is from
+// the reporter's source-derived 25.04.2.6 example, not a retained wire capture.
+func TestJSONRPCSubscriptionTerminationRejectsWithoutWaitingOrRetry(t *testing.T) {
+	for _, stream := range []string{"app.stats", "reporting.realtime", "app.container_log_follow"} {
+		for _, beforeReply := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/before_reply=%t", stream, beforeReply), func(t *testing.T) {
+				var subscribes, unsubscribes atomic.Int32
+				fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+					switch request.Method {
+					case "auth.login_ex":
+						return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+					case "reporting.get_data":
+						return protocolFixtureReply{result: []any{}}
+					case "core.subscribe":
+						subscribes.Add(1)
+						collection := request.Params.([]any)[0].(string)
+						return protocolFixtureReply{result: "private-sub-id", beforeReply: beforeReply, notifications: []protocolFixtureNotification{{
+							method: "notify_unsubscribed", params: map[string]any{"collection": collection, "error": map[string]any{
+								"error": 14, "errname": "EFAULT", "reason": "private-app-name fixture-key fixture-user https://private.invalid",
+								"trace": "private-trace", "extra": "private-extra",
+							}},
+						}}}
+					case "core.unsubscribe":
+						unsubscribes.Add(1)
+						return protocolFixtureReply{result: nil}
+					case "pool.query":
+						return protocolFixtureReply{result: []any{}}
+					default:
+						t.Errorf("unexpected method %s", request.Method)
+						return protocolFixtureReply{close: true}
+					}
+				}, nil)
+				client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user", Timeout: 2 * time.Second})
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				started := time.Now()
+				var err error
+				switch stream {
+				case "app.stats":
+					var stats map[string]AppStats
+					stats, err = client.GetAppStats(ctx)
+					if stats != nil {
+						t.Error("rejected stats fabricated a sample")
+					}
+				case "reporting.realtime":
+					var telemetry *SystemInfo
+					telemetry, err = client.GetSystemTelemetry(ctx)
+					if telemetry != nil {
+						t.Error("rejected telemetry fabricated a sample")
+					}
+				default:
+					var lines []AppLogLine
+					lines, err = client.GetAppLogs(ctx, "private-app-name", "private-container", 100)
+					if lines != nil {
+						t.Error("rejected logs appeared successful")
+					}
+				}
+				var rpcErr *RPCError
+				if !errors.As(err, &rpcErr) || rpcErr.Code != 14 || rpcErr.Message != "subscription rejected" {
+					t.Fatalf("termination = %v, want structured errno=14 rejection", err)
+				}
+				if elapsed := time.Since(started); elapsed >= time.Second {
+					t.Fatalf("terminal event waited for the operation budget: %s", elapsed)
+				}
+				for _, private := range []string{"private-app-name", "fixture-key", "fixture-user", "private.invalid", "private-trace", "private-extra", "private-sub-id", "private-container"} {
+					if strings.Contains(err.Error(), private) || strings.Contains(client.TransportStatus().LastError, private) {
+						t.Fatalf("termination exposed %s", private)
+					}
+				}
+				if client.rpc != nil || client.TransportStatus().Connected || subscribes.Load() != 1 || unsubscribes.Load() != 0 || fixture.sessions.Load() != 1 {
+					t.Fatal("terminal rejection retried, reused the stream or tried to cancel its ended subscription")
+				}
+				if _, err := client.GetPools(ctx); err != nil || fixture.sessions.Load() != 2 || fixture.restRequests.Load() != 0 {
+					t.Fatalf("next read did not recover on a fresh RPC session: %v", err)
+				}
+			})
+		}
+	}
+}
+
+func TestJSONRPCSubscriptionTerminationIgnoresOtherCollections(t *testing.T) {
+	var unsubscribes atomic.Int32
+	fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+		switch request.Method {
+		case "auth.login_ex":
+			return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+		case "core.subscribe":
+			collection := request.Params.([]any)[0].(string)
+			return protocolFixtureReply{result: "stats-sub", notifications: []protocolFixtureNotification{
+				{method: "notify_unsubscribed", params: map[string]any{"collection": "app.stats:{\"interval\":99}", "error": map[string]any{"error": 14}}},
+				{method: "notify_unsubscribed", params: map[string]any{"collection": "app.stats.extra:{\"interval\":2}", "error": "malformed-unrelated-error"}},
+				{method: "notify_unsubscribed", params: map[string]any{"collection": "reporting.realtime:{\"interval\":2}", "error": nil}},
+				{method: "collection_update", params: map[string]any{"collection": collection, "fields": []any{map[string]any{"app_name": "fixture-app", "cpu_usage": 7}}}},
+			}}
+		case "core.unsubscribe":
+			unsubscribes.Add(1)
+			return protocolFixtureReply{result: nil}
+		default:
+			return protocolFixtureReply{result: []any{}}
+		}
+	}, nil)
+	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user"})
+	for poll := 0; poll < 2; poll++ {
+		stats, err := client.GetAppStats(context.Background())
+		if err != nil || stats["fixture-app"].CPUPercent != 7 {
+			t.Fatalf("unrelated terminal event interrupted stats: %v, %+v", err, stats)
+		}
+	}
+	if fixture.sessions.Load() != 1 || unsubscribes.Load() != 2 || !client.TransportStatus().Connected {
+		t.Fatal("unrelated event prevented ordinary cleanup and session reuse")
+	}
+}
+
+func TestJSONRPCSubscriptionCleanTerminationDoesNotInventStats(t *testing.T) {
+	fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+		if request.Method == "auth.login_ex" {
+			return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+		}
+		if request.Method == "core.subscribe" {
+			return protocolFixtureReply{result: "stats-sub", notifications: []protocolFixtureNotification{{method: "notify_unsubscribed", params: map[string]any{"collection": request.Params.([]any)[0], "error": nil}}}}
+		}
+		return protocolFixtureReply{result: []any{}}
+	}, nil)
+	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user", Timeout: 2 * time.Second})
+	stats, err := client.GetAppStats(context.Background())
+	var rpcErr *RPCError
+	if stats != nil || !errors.As(err, &rpcErr) || rpcErr.Message != "subscription ended before a sample" || client.TransportStatus().Connected {
+		t.Fatalf("clean termination appeared sampled or left an unresolved stream: %v, %+v", err, stats)
+	}
+}
+
+func TestJSONRPCSubscriptionCleanLogEndKeepsSession(t *testing.T) {
+	var unsubscribes atomic.Int32
+	fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+		if request.Method == "auth.login_ex" {
+			return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+		}
+		if request.Method == "core.subscribe" {
+			collection := request.Params.([]any)[0]
+			return protocolFixtureReply{result: "log-sub", notifications: []protocolFixtureNotification{
+				{method: "collection_update", params: map[string]any{"collection": collection, "fields": []any{map[string]any{"data": "fixture-line"}}}},
+				{method: "notify_unsubscribed", params: map[string]any{"collection": "app.container_log_follow:{}", "error": map[string]any{"error": 14}}},
+				{method: "notify_unsubscribed", params: map[string]any{"collection": collection, "error": nil}},
+			}}
+		}
+		if request.Method == "core.unsubscribe" {
+			unsubscribes.Add(1)
+		}
+		return protocolFixtureReply{result: []any{}}
+	}, nil)
+	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user"})
+	lines, err := client.GetAppLogs(context.Background(), "fixture-app", "fixture-container", 100)
+	if err != nil || len(lines) != 1 || lines[0].Data != "fixture-line" {
+		t.Fatalf("clean log end lost the bounded tail: %v, %+v", err, lines)
+	}
+	if _, err := client.GetPools(context.Background()); err != nil || fixture.sessions.Load() != 1 || unsubscribes.Load() != 0 || !client.TransportStatus().Connected {
+		t.Fatalf("clean log end discarded or unsubscribed an already-ended stream: %v", err)
+	}
+}
+
+func TestJSONRPCSubscriptionMalformedTerminalDiscardsWithoutWireText(t *testing.T) {
+	for _, terminal := range []any{map[string]any{"error": "private-invalid-errno", "reason": "private-error"}, "private-error", true} {
+		t.Run(fmt.Sprintf("%T", terminal), func(t *testing.T) {
+			fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+				if request.Method == "auth.login_ex" {
+					return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+				}
+				if request.Method == "core.subscribe" {
+					return protocolFixtureReply{result: "stats-sub", notifications: []protocolFixtureNotification{{method: "notify_unsubscribed", params: map[string]any{"collection": request.Params.([]any)[0], "error": terminal}}}}
+				}
+				return protocolFixtureReply{result: []any{}}
+			}, nil)
+			client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user", Timeout: 2 * time.Second})
+			_, err := client.GetAppStats(context.Background())
+			if err == nil || strings.Contains(err.Error(), "private-") || !strings.Contains(err.Error(), "invalid truenas app.stats termination error") || client.rpc != nil || fixture.sessions.Load() != 1 {
+				t.Fatalf("malformed termination was lost, leaked or reused: %v", err)
+			}
+		})
+	}
+}
 
 type protocolFixtureReply struct {
 	result        any
 	err           *trueNASRPCError
 	notifications []protocolFixtureNotification
+	beforeReply   bool
 	close         bool
 }
 
@@ -86,8 +271,10 @@ func newProtocolFixture(
 				}
 				response.Result = raw
 			}
-			if err := conn.WriteJSON(response); err != nil {
-				return
+			if !reply.beforeReply {
+				if err := conn.WriteJSON(response); err != nil {
+					return
+				}
 			}
 			for _, notification := range reply.notifications {
 				params, err := json.Marshal(notification.params)
@@ -100,6 +287,11 @@ func newProtocolFixture(
 					Method:  notification.method,
 					Params:  params,
 				}); err != nil {
+					return
+				}
+			}
+			if reply.beforeReply {
+				if err := conn.WriteJSON(response); err != nil {
 					return
 				}
 			}
@@ -786,8 +978,8 @@ func TestJSONRPCFetchSnapshotUsesPublishedTrueNAS26MethodsWithoutREST(t *testing
 	subscribeCalls := methodCalls["core.subscribe"]
 	unsubscribeCalls := methodCalls["core.unsubscribe"]
 	methodCallsMu.Unlock()
-	if subscribeCalls != 2 || unsubscribeCalls != 2 {
-		t.Fatalf("subscription lifecycle calls: subscribe=%d unsubscribe=%d, want 2/2", subscribeCalls, unsubscribeCalls)
+	if subscribeCalls != 1 || unsubscribeCalls != 1 {
+		t.Fatalf("subscription lifecycle calls: subscribe=%d unsubscribe=%d, want 1/1 (realtime only for empty apps)", subscribeCalls, unsubscribeCalls)
 	}
 	if fixture.sessions.Load() != 1 || fixture.restRequests.Load() != 0 {
 		t.Fatalf("snapshot sessions=%d REST=%d, want one modern session and no REST",
@@ -1417,5 +1609,274 @@ func TestJSONRPCSnapshotContinuesAfterTelemetryTimeout(t *testing.T) {
 	}
 	if fixture.sessions.Load() != 2 || fixture.restRequests.Load() != 0 {
 		t.Fatalf("inventory did not recover on RPC after discarding the stream: sessions=%d rest=%d", fixture.sessions.Load(), fixture.restRequests.Load())
+	}
+}
+
+func TestJSONRPCEmptyAppsDoNotSubscribeToStats(t *testing.T) {
+	var appQueries, statsSubscriptions atomic.Int32
+	fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+		switch request.Method {
+		case "auth.login_ex":
+			return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+		case "app.query":
+			if appQueries.Add(1) == 1 {
+				return protocolFixtureReply{result: nil}
+			}
+			return protocolFixtureReply{result: []any{}}
+		case "core.subscribe":
+			statsSubscriptions.Add(1)
+			// Deliberately silent stats on an appliance with no apps. The final
+			// client must never issue this request, even with a cancellation-only
+			// caller context like the production poller.
+			return protocolFixtureReply{result: "unavailable-apps"}
+		case "system.info":
+			return protocolFixtureReply{result: map[string]any{"hostname": "empty-app-nas", "version": "TrueNAS-SCALE-25.04.2.6"}}
+		default:
+			t.Errorf("unexpected method %s", request.Method)
+			return protocolFixtureReply{close: true}
+		}
+	}, nil)
+	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user", Timeout: 100 * time.Millisecond})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for i := 0; i < 2; i++ {
+		apps, err := client.GetApps(ctx)
+		if err != nil || apps == nil || len(apps) != 0 {
+			t.Fatalf("empty app query %d did not preserve an empty successful inventory", i)
+		}
+	}
+	if statsSubscriptions.Load() != 0 {
+		t.Fatal("empty inventory still issued a stats subscription")
+	}
+	if _, err := client.GetSystemInfo(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.sessions.Load() != 1 || fixture.restRequests.Load() != 0 || !client.TransportStatus().Connected {
+		t.Fatal("empty apps discarded the healthy authenticated session or changed transport")
+	}
+}
+
+func TestLegacyRESTEmptyAppsDoNotNegotiateStats(t *testing.T) {
+	var appQueries atomic.Int32
+	fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+		t.Errorf("empty legacy app inventory issued RPC method %s", request.Method)
+		return protocolFixtureReply{close: true}
+	}, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v2.0/app" {
+			t.Errorf("unexpected legacy path %s", r.URL.Path)
+			return
+		}
+		appQueries.Add(1)
+		_ = json.NewEncoder(w).Encode([]any{})
+	})
+	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key"})
+	// Negotiation is covered separately; isolate the already-selected legacy
+	// inventory path here, so no attempted JSON-RPC stats lookup is hidden.
+	client.mode = TransportLegacyREST
+	apps, err := client.GetApps(context.Background())
+	if err != nil || apps == nil || len(apps) != 0 || appQueries.Load() != 1 || fixture.sessions.Load() != 0 {
+		t.Fatal("empty legacy app inventory did not stay a single REST read")
+	}
+}
+
+func TestJSONRPCStreamRetryDiscardsUnusableSecondSession(t *testing.T) {
+	for _, failure := range []string{"malformed_event", "empty_subscription", "unsubscribe_error"} {
+		t.Run(failure, func(t *testing.T) {
+			var subscribes atomic.Int32
+			fixture := newProtocolFixture(t, func(session int, request trueNASRPCRequest) protocolFixtureReply {
+				switch request.Method {
+				case "auth.login_ex":
+					return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+				case "core.subscribe":
+					subscribes.Add(1)
+					if session == 1 {
+						return protocolFixtureReply{close: true}
+					}
+					if failure == "empty_subscription" {
+						return protocolFixtureReply{result: ""}
+					}
+					var fields any = []any{map[string]any{"app_name": "fixture-app", "cpu_usage": 3}}
+					if failure == "malformed_event" {
+						fields = "invalid-fields"
+					}
+					return protocolFixtureReply{result: "private-subscription-id", notifications: []protocolFixtureNotification{{method: "collection_update", params: map[string]any{"collection": "app.stats:{\"interval\":2}", "fields": fields}}}}
+				case "core.unsubscribe":
+					return protocolFixtureReply{err: &trueNASRPCError{Code: -32001, Message: "fixture-method-error"}}
+				case "pool.query":
+					if session != 3 {
+						t.Error("next read reused an unusable second stream session")
+					}
+					return protocolFixtureReply{result: []any{}}
+				default:
+					t.Errorf("unexpected method %s", request.Method)
+					return protocolFixtureReply{close: true}
+				}
+			}, nil)
+			client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user"})
+			if _, err := client.GetAppStats(context.Background()); err == nil {
+				t.Fatal("bad second stream session appeared successful")
+			}
+			if client.TransportStatus().Connected {
+				t.Fatal("unusable second stream session remained connected")
+			}
+			if client.rpc != nil {
+				t.Fatal("unusable second stream session was retained")
+			}
+			if _, err := client.GetPools(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if subscribes.Load() != 2 || fixture.sessions.Load() != 3 || fixture.restRequests.Load() != 0 {
+				t.Fatal("stream retry/disposal changed its retry limit or downgraded transport")
+			}
+		})
+	}
+}
+
+func TestJSONRPCStreamRetryReturnsCompletedLogTail(t *testing.T) {
+	fixture := newProtocolFixture(t, func(session int, request trueNASRPCRequest) protocolFixtureReply {
+		switch request.Method {
+		case "auth.login_ex":
+			return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+		case "core.subscribe":
+			if session == 1 {
+				return protocolFixtureReply{close: true}
+			}
+			return protocolFixtureReply{result: "fixture-log-sub", notifications: []protocolFixtureNotification{{method: "collection_update", params: map[string]any{"collection": "app.container_log_follow:{}", "fields": []any{map[string]any{"data": "fixture-line"}}}}}}
+		case "pool.query":
+			if session != 3 {
+				t.Error("timed-out log socket was reused")
+			}
+			return protocolFixtureReply{result: []any{}}
+		default:
+			t.Errorf("unexpected method %s", request.Method)
+			return protocolFixtureReply{close: true}
+		}
+	}, nil)
+	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user"})
+	lines, err := client.GetAppLogs(context.Background(), "fixture-app", "fixture-container", 100)
+	if err != nil || len(lines) != 1 || lines[0].Data != "fixture-line" {
+		t.Fatal("completed retry lost its log tail or returned a consumed-session sentinel")
+	}
+	if client.TransportStatus().Connected || client.rpc != nil {
+		t.Fatal("completed retry kept a timed-out log socket")
+	}
+	if _, err := client.GetPools(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.sessions.Load() != 3 || fixture.restRequests.Load() != 0 {
+		t.Fatal("next read did not open exactly one fresh modern session")
+	}
+}
+
+func TestRPCSessionCloseDetails(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		err              error
+		method, category string
+	}{
+		{"explicit", nil, "", ""},
+		{"idle tail", errRPCStreamSessionConsumed, "app.container_log_follow", "idle_timeout"},
+		{"timeout", &RPCTransportError{Method: "pool.query", Phase: "read", Err: context.DeadlineExceeded}, "pool.query", "timeout"},
+		{"cancel", &RPCTransportError{Method: "app.start", Phase: "read", Err: context.Canceled}, "app.start", "cancelled"},
+		{"transport", &RPCTransportError{Method: "system.info", Phase: "read", Err: errors.New("private-error-text")}, "system.info", "transport_error"},
+		{"stream decode", &discardRPCSessionError{method: "app.stats", err: errors.New("private-event-text")}, "app.stats", "protocol_error"},
+		{"unsubscribe refusal", &discardRPCSessionError{method: "core.unsubscribe", err: &RPCError{Method: "core.unsubscribe", Message: "private-wire-message"}}, "core.unsubscribe", "method_error"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			method, category := rpcSessionCloseDetails(tc.err)
+			if method != tc.method || category != tc.category {
+				t.Fatalf("close classification = %s/%s, want %s/%s", method, category, tc.method, tc.category)
+			}
+		})
+	}
+}
+
+func captureRPCCloseLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var output bytes.Buffer
+	previous := log.Logger
+	log.Logger = zerolog.New(&output)
+	t.Cleanup(func() { log.Logger = previous })
+	return &output
+}
+
+func rpcCloseLogRecords(t *testing.T, output *bytes.Buffer) []map[string]any {
+	t.Helper()
+	var records []map[string]any
+	decoder := json.NewDecoder(bytes.NewReader(output.Bytes()))
+	for decoder.More() {
+		var record map[string]any
+		if err := decoder.Decode(&record); err != nil {
+			t.Fatal("close log is not structured JSON")
+		}
+		records = append(records, record)
+	}
+	return records
+}
+
+func TestRPCSessionCloseLogIsBoundedAndSecretFree(t *testing.T) {
+	output := captureRPCCloseLogs(t)
+	fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+		switch request.Method {
+		case "auth.login_ex":
+			return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+		case "core.subscribe":
+			return protocolFixtureReply{result: "private-subscription-id", notifications: []protocolFixtureNotification{{method: "collection_update", params: map[string]any{"collection": "app.stats:{\"interval\":2}", "fields": []any{}}}}}
+		case "core.unsubscribe":
+			return protocolFixtureReply{err: &trueNASRPCError{Code: -32001, Message: "private-wire-message private-api-key private-password private-subscription-id"}}
+		default:
+			return protocolFixtureReply{close: true}
+		}
+	}, nil)
+	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "private-api-key", Password: "private-password", Username: "private-owner"})
+	if _, err := client.GetAppStats(context.Background()); err == nil {
+		t.Fatal("fixture did not fail its unsubscribe")
+	}
+	client.Close()
+	records := rpcCloseLogRecords(t, output)
+	if len(records) != 1 {
+		t.Fatalf("close records = %d, want exactly one for disposal and subsequent Close", len(records))
+	}
+	record := records[0]
+	if record["reason"] != "stream_error" || record["method"] != "core.unsubscribe" || record["category"] != "method_error" || record["component"] != "truenas_rpc" || record["action"] != "close_session" {
+		t.Fatal("close log lost its fixed local cause")
+	}
+	if _, ok := record["session_age"].(float64); !ok {
+		t.Fatal("close log lost the authenticated session age")
+	}
+	for _, private := range []string{"private-api-key", "private-password", "private-owner", "private-wire-message", "private-subscription-id", fixture.server.URL} {
+		if bytes.Contains(output.Bytes(), []byte(private)) {
+			t.Fatal("close log contains private wire/configuration data")
+		}
+	}
+	for key := range record {
+		switch key {
+		case "component", "action", "reason", "method", "category", "session_age", "level", "message":
+		default:
+			t.Fatalf("unexpected close log field %s", key)
+		}
+	}
+}
+
+func TestRPCSessionCloseLogKeepsFirstKeepaliveCause(t *testing.T) {
+	output := captureRPCCloseLogs(t)
+	fixture := newProtocolFixture(t, func(_ int, _ trueNASRPCRequest) protocolFixtureReply { return protocolFixtureReply{result: true} }, nil)
+	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{})
+	conn, err := client.dialRPC(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rpc := &trueNASRPCClient{conn: conn, nextID: 1, openedAt: time.Now()}
+	rpc.startKeepalive(time.Millisecond)
+	_ = conn.Close() // Inject a control-write failure, without an RPC payload.
+	select {
+	case <-rpc.keepaliveDone:
+	case <-time.After(time.Second):
+		t.Fatal("failed keepalive did not stop")
+	}
+	rpc.close()
+	records := rpcCloseLogRecords(t, output)
+	if len(records) != 1 || records[0]["reason"] != "keepalive_write_error" || records[0]["category"] != "transport_error" {
+		t.Fatal("later client disposal overwrote or duplicated the first keepalive close cause")
 	}
 }

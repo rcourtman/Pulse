@@ -52,13 +52,20 @@ func classifyAPIErrorLog(status int, path string) (apiErrorLogLevel, string) {
 	return apiErrorLogNone, ""
 }
 
+// Preserve an incomplete body through the HTTP error-response wrapper too.
+// An error status alone is not a completed refusal if its body was truncated.
+type responseBodyReadError struct{ cause error }
+
+func (e *responseBodyReadError) Error() string { return e.cause.Error() }
+func (e *responseBodyReadError) Unwrap() error { return e.cause }
+
 func readResponseBodyLimited(r io.Reader) ([]byte, error) {
 	body, err := io.ReadAll(io.LimitReader(r, maxResponseBodyBytes+1))
 	if err != nil {
-		return nil, err
+		return nil, &responseBodyReadError{cause: err}
 	}
 	if int64(len(body)) > maxResponseBodyBytes {
-		return nil, fmt.Errorf("response body exceeds %d bytes", maxResponseBodyBytes)
+		return nil, &responseBodyReadError{cause: fmt.Errorf("response body exceeds %d bytes", maxResponseBodyBytes)}
 	}
 	return body, nil
 }
@@ -516,6 +523,10 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 }
 
 func (c *Client) requestWithRetry(ctx context.Context, method, path string, data url.Values, retriedAfter401 bool) (*http.Response, error) {
+	return c.requestWithRetryUsingClient(ctx, method, path, data, retriedAfter401, c.httpClient)
+}
+
+func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path string, data url.Values, retriedAfter401 bool, httpClient *http.Client) (*http.Response, error) {
 	// Re-authenticate if needed
 	if c.config.Password != "" && c.auth.tokenName == "" && time.Now().After(c.auth.expiresAt) {
 		if err := c.authenticate(ctx); err != nil {
@@ -563,7 +574,7 @@ func (c *Client) requestWithRetry(ctx context.Context, method, path string, data
 		}
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -582,7 +593,7 @@ func (c *Client) requestWithRetry(ctx context.Context, method, path string, data
 			if err := c.authenticate(ctx); err != nil {
 				return nil, fmt.Errorf("re-authentication failed after 401: %w", err)
 			}
-			return c.requestWithRetry(ctx, method, path, data, true)
+			return c.requestWithRetryUsingClient(ctx, method, path, data, true, httpClient)
 		}
 
 		// Create base error with helpful guidance for common issues
@@ -640,6 +651,12 @@ func (c *Client) requestWithRetry(ctx context.Context, method, path string, data
 
 // get performs a GET request
 func (c *Client) get(ctx context.Context, path string) (*http.Response, error) {
+	if node, vmid, ok := guestAgentPath(path); ok {
+		return c.getGuestAgent(ctx, path, node, vmid)
+	}
+	if strings.Contains(path, "/agent/") {
+		return nil, &guestAgentDeferredError{reason: "invalid-guest-key"}
+	}
 	return c.request(ctx, "GET", path, nil)
 }
 
@@ -1583,11 +1600,18 @@ func (c *Client) GetVMConfig(ctx context.Context, node string, vmid int) (map[st
 	}
 	defer resp.Body.Close()
 
+	// Guest-agent admission uses this response as authoritative lock evidence.
+	// Decoding only the first JSON value can accept an unlocked prefix before a
+	// truncated, stalled, oversized or malformed response has been received.
+	body, err := readResponseBodyLimited(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read VM configuration: %w", err)
+	}
 	var result struct {
 		Data map[string]interface{} `json:"data"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, err
 	}
 
@@ -2432,6 +2456,7 @@ type ClusterResource struct {
 	Tags       string            `json:"tags,omitempty"`
 	IOCounters IOCounterPresence `json:"-"`
 	ObservedAt time.Time         `json:"-"`
+	Lock       string            `json:"lock,omitempty"`
 }
 
 // GetClusterResources returns all resources (VMs, containers) across the cluster
@@ -2715,6 +2740,7 @@ type VMStatus struct {
 	Agent       VMAgentField      `json:"agent"`
 	IOCounters  IOCounterPresence `json:"-"`
 	ObservedAt  time.Time         `json:"-"`
+	Lock        string            `json:"lock,omitempty"`
 }
 
 // GetZFSPoolStatus gets the status of ZFS pools on a node

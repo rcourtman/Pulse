@@ -40,7 +40,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| Schema version | `17` | Identify the exact payload contract so old and new signals are not mixed silently |
+| Schema version | `18` | Identify the exact payload contract so old and new signals are not mixed silently |
 | Sent at | `2026-07-23T08:30:00Z` | Date the individual heartbeat without sending a history of client activity |
 | Install ID | `a1b2c3d4-...` | Distinguish active installations within one rotation window without tying telemetry to an account or person |
 | Version | `6.0.0-rc.1` | Track the canonical release identity currently deployed |
@@ -153,9 +153,12 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Update successes 30d | `1` | Count successful update attempts in the current 30-day telemetry window |
 | Update failures 30d | `1` | Count failed or rolled-back update attempts in the current 30-day telemetry window without sending raw errors, logs, URLs, or command output |
 | Update last failure category | `download` | Send only a coarse category for the latest update failure, such as `download`, `signature`, `checksum`, `disk_space`, `extract`, `backup`, `apply`, `restart`, `rolled_back`, or `unknown` |
+| Update channel | `stable` or `rc` | Report which update channel the install follows, so a preview build on the stable channel can be told apart from one on the preview channel |
+| Update check outcome | `up_to_date`, `available`, `no_release`, `rate_limited`, `network_error`, `metadata_error`, `skipped`, `error`, or `not_checked` | Classify the most recent update check on that channel into one fixed category without sending versions, release URLs, or error text, so a check that cannot complete is distinguishable from an offered update that was not applied |
+| Update available | `true`/`false` | Report whether that last check offered a newer release, without sending which release |
 | Service health observed | `true`/`false` | Distinguish a release that performed the bounded local UI/API self-check from an older release with no signal |
 | Service health healthy | `true`/`false` | Report whether Pulse's locally bound listener served a healthy API response, UI document, and every referenced local frontend asset without sending an address, URL, response, or error text |
-| Service health failure category | `listener`, `startup`, `runtime`, `api_connectivity`, `api_status`, `ui_status`, `frontend_assets`, or `unknown` | Classify a failed local self-check or startup path into one fixed category without sending the listener address, request URL, HTTP body, asset name, IP address, or raw error |
+| Service health failure category | `listener`, `startup`, `runtime`, `api_connectivity`, `timeout`, `api_status`, `ui_status`, `frontend_assets`, or `unknown` | Classify a failed local self-check or startup path into one fixed category without sending the listener address, request URL, HTTP body, asset name, IP address, or raw error |
 | Service health cohort | `first_observation`, `same_version`, or `version_change` | Mark whether this direct observation is the first schema-v13 observation, another observation of the same release, or the first observed state after a release-version change |
 | Service health previous version | `6.4.0` | Retain only the normalized immediately previous Pulse release identity so aggregate reporting can compare a post-upgrade before/after cohort without treating rolling counters as new-release activity |
 | Service health previous observed | `true`/`false` | State whether the immediately previous release recorded the bounded local service-health signal |
@@ -307,7 +310,7 @@ occurrence exists, leaving no trustworthy fired-alert denominator. Detected
 flapping episodes are not reported because their diagnostic event path may be
 dropped under pressure. Configuration adoption is reported instead.
 
-The current telemetry contract is schema version 17. Schema v16 adds four
+The current telemetry contract is schema version 18. Schema v16 adds four
 workload-history adoption counts. The browser
 sends only one closed milestone name to the local Pulse server and deduplicates
 each milestone once per browser session. Pulse stores bounded UTC-day counts
@@ -325,6 +328,13 @@ existing local usage ledger, so exact token counts, prices, providers, and
 models stay on the install. The outcome counts partition the findings already
 counted as investigated; no finding, resource, session, or action identity is
 added.
+
+Schema v18 adds three update-discovery fields. The update channel is the
+channel the install follows (stable or preview), and the check outcome is one
+fixed category for the most recent update check on that channel, with a single
+flag for whether it offered a newer release. They exist because a failed check
+never shows up in the update counters, which only see updates that were
+applied. No version, release URL, response, or error text is sent.
 
 #### Server-side handling and retention
 
@@ -378,6 +388,7 @@ Every change to the payload bumps the schema version, is listed here with its da
 
 | Schema | Date | Change |
 |--------|------|--------|
+| 18 | 2026-09-27 | Effective update channel, closed outcome of the last update check on that channel, and whether it offered a newer release |
 | 17 | 2026-09-02 | Closed Patrol provider class, effective Patrol autonomy level, coarse 30-day Patrol token buckets, and per-outcome investigation counts |
 | 16 | 2026-08-30 | Four content-free workload-history adoption counters, each counted at most once per browser session |
 | 15 | 2026-08-29 | Notification destination HTTP 5xx failures separated from rejected HTTP 4xx responses |
@@ -409,5 +420,5 @@ The telemetry implementation is in [`internal/telemetry/telemetry.go`](../intern
 Pulse can make outbound connections when you enable specific features:
 
 - **AI providers**: when AI features are configured, Pulse sends only the context required for your request to the provider you chose. This can include active Patrol objective briefs and their optional operator context when they apply to a Patrol run. Retained objective text and observer artifacts are encrypted at rest in the local organization data directory; objective text is not included in Pulse usage telemetry. A provider may return a model-authored observer proposal for an uncovered objective; Pulse encrypts that artifact with the retained objective, excludes it from public objective reads and later prompt seeds, and does not include its content in usage telemetry or audit messages. Saving an objective by itself does not call a model. Local providers stay on your network; non-local hosted providers receive provider-bound context directly from your Pulse instance. AI prompts from self-managed installs do not transit Pulse infrastructure. Before non-local model requests leave the instance, governed resource details use the same resource-policy redaction shown in Data Handling: local-only resource details are omitted from detailed prompt sections or replaced with policy-safe summaries, and known restricted resource identifiers are redacted where they appear in provider-bound context. See `docs/AI.md`.
-- **Relay / Remote Access**: when relay is enabled, Pulse connects to the configured relay endpoint to enable secure remote web access, Pulse Mobile pairing for handoff, and push notifications. See Settings → Remote Access.
+- **Relay / Pulse Mobile**: when Pulse Mobile connections are on, Pulse connects to the configured relay endpoint so paired Pulse Mobile devices can reach this instance and receive push notifications. Relay does not provide remote access to the web UI. See Settings → Pulse Mobile. Pulse Mobile is being retired on 31 March 2027.
 - **Update checks**: Pulse can check for new releases/updates (for example via GitHub release metadata) depending on your deployment and configuration.

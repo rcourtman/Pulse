@@ -83,7 +83,7 @@ export function PatrolIntelligenceSurface() {
             aria-selected={activeView() === view}
             aria-controls={`patrol-${view}-panel`}
             tabindex={activeView() === view ? 0 : -1}
-            class={`relative min-h-11 rounded-t-md px-4 py-2 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
+            class={`relative min-h-11 rounded-t-md px-4 py-2 text-sm font-medium focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
               activeView() === view
                 ? 'bg-surface text-base-content after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:bg-blue-600'
                 : 'text-muted hover:bg-surface-hover hover:text-base-content'
@@ -97,25 +97,26 @@ export function PatrolIntelligenceSurface() {
       </div>
 
       <Show when={activeView() === 'inbox'}>
-        <div id="patrol-inbox-panel" role="tabpanel" aria-labelledby="patrol-inbox-tab">
-          <Show
-            when={!state.shouldShowPatrolSetupOnly()}
-            fallback={
-              <div
-                class={`rounded-lg border border-border bg-surface p-4 sm:p-5 ${!state.patrolEnabledLocal() ? 'pointer-events-none opacity-50' : ''}`}
-              >
-                <PatrolIntelligenceWorkspace state={state} />
-              </div>
-            }
-          >
-            <PatrolAttentionWorkbench
-              autonomyLevel={state.autonomyLevel()}
-              autonomyLocked={state.autoFixLocked()}
-              pendingActionCount={actionInboxStore.pendingActionCount}
-              onOpenFindings={openFindings}
-              findings={() => aiIntelligenceStore.patrolFindings}
-            />
+        <div
+          id="patrol-inbox-panel"
+          role="tabpanel"
+          aria-labelledby="patrol-inbox-tab"
+          class="space-y-4"
+        >
+          <Show when={state.shouldShowPatrolSetupOnly()}>
+            <div
+              class={`rounded-lg border border-border bg-surface p-4 sm:p-5 ${!state.patrolEnabledLocal() ? 'pointer-events-none opacity-50' : ''}`}
+            >
+              <PatrolIntelligenceWorkspace state={state} />
+            </div>
           </Show>
+          <PatrolAttentionWorkbench
+            autonomyLevel={state.autonomyLevel()}
+            autonomyLocked={state.autoFixLocked()}
+            pendingActionCount={actionInboxStore.pendingActionCount}
+            onOpenFindings={openFindings}
+            findings={() => aiIntelligenceStore.patrolFindings}
+          />
         </div>
       </Show>
 
@@ -153,7 +154,7 @@ export function PatrolIntelligenceSurface() {
                 href="/actions"
                 variant="ghost"
                 size="md"
-                class="group h-auto min-h-20 w-full justify-between rounded-none px-4 py-3 text-left sm:px-5"
+                class="group h-auto min-h-20 w-full justify-between! rounded-none px-4 py-3 text-left sm:px-5"
               >
                 <span class="flex min-w-0 items-start gap-3">
                   <span class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-alt text-muted">
@@ -186,7 +187,7 @@ export function PatrolIntelligenceSurface() {
 
               <button
                 type="button"
-                class="group flex min-h-20 w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:px-5"
+                class="group flex min-h-20 w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-hover focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:px-5"
                 aria-expanded={findingsOpen()}
                 aria-controls="patrol-operational-records"
                 onClick={() => {
@@ -250,7 +251,7 @@ export function PatrolIntelligenceSurface() {
                 <Show when={findingResourceScope()}>
                   <button
                     type="button"
-                    class="min-h-11 shrink-0 self-start text-xs font-medium text-blue-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-300 sm:min-h-0 sm:self-auto"
+                    class="min-h-11 shrink-0 self-start text-xs font-medium text-blue-700 hover:underline focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-300 sm:min-h-0 sm:self-auto"
                     onClick={() => setFindingResourceScope(undefined)}
                   >
                     Show all finding options

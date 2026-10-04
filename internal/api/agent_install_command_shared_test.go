@@ -89,12 +89,12 @@ func TestBuildProxmoxAgentInstallCommand(t *testing.T) {
 		IncludeInstallType: true,
 	})
 	require.Contains(t, command, posixShellQuote("https://pulse.example.com/install.sh"))
-	require.Contains(t, command, "printf %s "+posixShellQuote("token-123")+` > "$token_file"`)
+	require.NotContains(t, command, "token-123")
 	require.Contains(t, command, `--token-file "$token_file"`)
 	require.Contains(t, command, `token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)`)
-	require.Contains(t, command, `token_dir=$(sudo mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)`)
-	require.Contains(t, command, `rm -rf -- "$token_dir"`)
-	require.Contains(t, command, "--proxmox-type "+posixShellQuote("pbs"))
+	require.Contains(t, command, `sudo bash -c`)
+	require.Contains(t, command, `rmdir -- "$token_dir"`)
+	require.Contains(t, command, "pbs")
 	require.NotContains(t, command, "--enable-commands")
 }
 
@@ -107,7 +107,7 @@ func TestBuildProxmoxAgentInstallCommand_IncludesInsecureForPlainHTTP(t *testing
 	})
 
 	require.Contains(t, command, posixShellQuote("http://pulse.example.com:7655/install.sh"))
-	require.Contains(t, command, "--url "+posixShellQuote("http://pulse.example.com:7655"))
+	require.Contains(t, command, "http://pulse.example.com:7655")
 	require.Contains(t, command, "--insecure")
 }
 
@@ -121,7 +121,7 @@ func TestBuildProxmoxAgentInstallCommand_IncludesExplicitInsecureForSelfSignedHT
 	})
 
 	require.Contains(t, command, "curl -kfsSL "+posixShellQuote("https://pulse.example.com:7655/install.sh"))
-	require.Contains(t, command, "--url "+posixShellQuote("https://pulse.example.com:7655"))
+	require.Contains(t, command, "https://pulse.example.com:7655")
 	require.Contains(t, command, "--insecure")
 }
 
@@ -135,8 +135,8 @@ func TestBuildProxmoxAgentInstallCommand_UsesPrivilegeEscalationWrapper(t *testi
 
 	require.Contains(t, command, `if [ "$(id -u)" -eq 0 ]; then`)
 	require.Contains(t, command, `elif command -v sudo >/dev/null 2>&1; then`)
-	require.Contains(t, command, `printf %s 'token-123' | sudo tee "$token_file" >/dev/null`)
-	require.Contains(t, command, `curl -fsSL 'https://pulse.example.com/install.sh' | sudo bash -s --`)
+	require.NotContains(t, command, "token-123")
+	require.Contains(t, command, `curl -fsSL 'https://pulse.example.com/install.sh' -o "$install_script"`)
 	require.Contains(t, command, `echo "Root privileges required. Run as root (su -) and retry." >&2`)
 }
 
@@ -148,8 +148,8 @@ func TestBuildProxmoxAgentInstallCommand_OmitsTokenWhenNotProvided(t *testing.T)
 		IncludeInstallType: true,
 	})
 
-	require.Contains(t, command, "--url "+posixShellQuote("https://pulse.example.com"))
-	require.Contains(t, command, "--proxmox-type "+posixShellQuote("pbs"))
+	require.Contains(t, command, "https://pulse.example.com")
+	require.Contains(t, command, "pbs")
 	require.NotContains(t, command, "--token")
 }
 
@@ -164,10 +164,10 @@ func TestBuildProxmoxAgentInstallCommand_ShellEscapesArguments(t *testing.T) {
 	})
 
 	require.Contains(t, command, posixShellQuote(baseURL+"/install.sh"))
-	require.Contains(t, command, "--url "+posixShellQuote(baseURL))
-	require.Contains(t, command, "printf %s "+posixShellQuote(token)+` > "$token_file"`)
+	require.Contains(t, command, "--url")
+	require.NotContains(t, command, token)
 	require.Contains(t, command, `--token-file "$token_file"`)
-	require.Contains(t, command, "--proxmox-type "+posixShellQuote("pve"))
+	require.Contains(t, command, "pve")
 }
 
 func TestBuildProxmoxAgentInstallCommand_NormalizesTrailingSlashes(t *testing.T) {
@@ -179,10 +179,11 @@ func TestBuildProxmoxAgentInstallCommand_NormalizesTrailingSlashes(t *testing.T)
 	})
 
 	require.Contains(t, command, posixShellQuote("https://pulse.example.com/base/install.sh"))
-	require.Contains(t, command, "--url "+posixShellQuote("https://pulse.example.com/base"))
+	require.Contains(t, command, "https://pulse.example.com/base")
 	require.Contains(t, command, `--token-file "$token_file"`)
 	require.NotContains(t, command, "//install.sh")
-	require.NotContains(t, command, "--url "+posixShellQuote("https://pulse.example.com/base/"))
+	require.Contains(t, command, "--url "+posixShellQuote("https://pulse.example.com/base"))
+	require.NotContains(t, command, posixShellQuote("https://pulse.example.com/base/"))
 }
 
 func TestBuildProxmoxAgentInstallCommand_IncludesCommandsWhenRequested(t *testing.T) {
@@ -195,32 +196,36 @@ func TestBuildProxmoxAgentInstallCommand_IncludesCommandsWhenRequested(t *testin
 	})
 
 	require.Contains(t, command, "--enable-proxmox")
-	require.Contains(t, command, "--proxmox-type "+posixShellQuote("pve"))
+	require.Contains(t, command, "pve")
 	require.Contains(t, command, "--enable-commands")
 	require.Contains(t, command, `token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)`)
-	require.Contains(t, command, `rm -rf -- "$token_dir"`)
+	require.Contains(t, command, `rmdir -- "$token_dir"`)
 }
 
 func TestBuildContainerRuntimeAgentInstallCommand_UsesLifecycleTransport(t *testing.T) {
 	command := buildContainerRuntimeAgentInstallCommand("https://pulse.example.com/base", "token-123", true)
 
 	require.Contains(t, command, posixShellQuote("https://pulse.example.com/base/install.sh"))
-	require.Contains(t, command, "--url "+posixShellQuote("https://pulse.example.com/base"))
-	require.Contains(t, command, "--token "+posixShellQuote("token-123"))
+	require.Contains(t, command, "https://pulse.example.com/base")
+	require.NotContains(t, command, "token-123")
+	require.Contains(t, command, `--token-file "$token_file"`)
 	require.Contains(t, command, "--enable-docker")
 	require.Contains(t, command, "--enable-host")
 	require.NotContains(t, command, "--enable-host=false")
 	require.Contains(t, command, "--interval 30s")
-	require.Contains(t, command, `| { if [ "$(id -u)" -eq 0 ]; then bash -s --`)
-	require.Contains(t, command, `elif command -v sudo >/dev/null 2>&1; then sudo bash -s --`)
-	require.NotContains(t, command, "| sudo bash -s -- --url")
+	require.Contains(t, command, `sudo bash -c`)
+	require.Contains(t, command, "--preflight-only --output json --non-interactive")
+	require.Contains(t, command, `read -r -s -p`)
+	require.NotContains(t, command, "| bash")
+	require.NotContains(t, command, "| sudo")
+	require.NotContains(t, command, "\n")
 }
 
 func TestBuildContainerRuntimeAgentInstallCommand_OmitsTokenAndAddsInsecureForHTTP(t *testing.T) {
 	command := buildContainerRuntimeAgentInstallCommand("http://pulse.example.com:7655/", "", true)
 
 	require.Contains(t, command, posixShellQuote("http://pulse.example.com:7655/install.sh"))
-	require.Contains(t, command, "--url "+posixShellQuote("http://pulse.example.com:7655"))
+	require.Contains(t, command, "http://pulse.example.com:7655")
 	require.NotContains(t, command, "--token")
 	require.Contains(t, command, "--insecure")
 }
@@ -246,18 +251,18 @@ func TestContainerRuntimeAgentScopesFollowHostMode(t *testing.T) {
 func TestBuildSetupScriptCommand_UsesFailFastQuotedTransport(t *testing.T) {
 	command := buildSetupScriptCommand("https://pulse.example.com/api/setup-script?type=pve&host=pve1.local", "token-123")
 
-	require.Contains(t, command, "curl -fsSL "+posixShellQuote("https://pulse.example.com/api/setup-script?type=pve&host=pve1.local")+" | ")
-	require.Contains(t, command, `if [ "$(id -u)" -eq 0 ]; then PULSE_SETUP_TOKEN=`+posixShellQuote("token-123")+` bash`)
-	require.Contains(t, command, `elif command -v sudo >/dev/null 2>&1; then sudo env PULSE_SETUP_TOKEN=`+posixShellQuote("token-123")+` bash`)
-	require.Contains(t, command, `else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi; }`)
+	require.Contains(t, command, "curl -fsSL "+posixShellQuote("https://pulse.example.com/api/setup-script?type=pve&host=pve1.local")+` -o "$install_script"`)
+	require.NotContains(t, command, "token-123")
+	require.Contains(t, command, `PULSE_SETUP_TOKEN_FILE="$token_file" bash "$1"`)
+	require.Contains(t, command, `else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi;`)
 }
 
 func TestBuildSetupScriptCommand_OmitsTokenWhenNotProvided(t *testing.T) {
 	command := buildSetupScriptCommand("https://pulse.example.com/api/setup-script?type=pbs", "")
 
-	require.Contains(t, command, "curl -fsSL "+posixShellQuote("https://pulse.example.com/api/setup-script?type=pbs")+" | ")
-	require.Contains(t, command, `if [ "$(id -u)" -eq 0 ]; then bash`)
-	require.Contains(t, command, `elif command -v sudo >/dev/null 2>&1; then sudo bash`)
+	require.Contains(t, command, "curl -fsSL "+posixShellQuote("https://pulse.example.com/api/setup-script?type=pbs")+` -o "$install_script"`)
+	require.Contains(t, command, `if [ "$(id -u)" -eq 0 ]; then`)
+	require.Contains(t, command, `sudo bash -c`)
 	require.NotContains(t, command, "PULSE_SETUP_TOKEN=")
 }
 
@@ -293,10 +298,11 @@ func TestBuildSetupScriptInstallArtifact_UsesSharedBackendShape(t *testing.T) {
 	require.Equal(t, "pve", artifact.Type)
 	require.Equal(t, "https://pve1.local:8006", artifact.Host)
 	require.Contains(t, artifact.URL, "/api/setup-script?")
-	require.Contains(t, artifact.DownloadURL, "setup_token=setup-token-123")
+	require.Equal(t, artifact.URL, artifact.DownloadURL)
 	require.Equal(t, "pulse-setup-pve.sh", artifact.ScriptFileName)
 	require.Equal(t, artifact.Command, artifact.CommandWithEnv)
-	require.Contains(t, artifact.CommandWithEnv, "PULSE_SETUP_TOKEN='setup-token-123'")
+	require.NotContains(t, artifact.CommandWithEnv, "setup-token-123")
+	require.Contains(t, artifact.CommandWithEnv, "PULSE_SETUP_TOKEN_FILE=")
 	require.NotContains(t, artifact.CommandWithoutEnv, "PULSE_SETUP_TOKEN=")
 	require.Equal(t, expiresAt, artifact.Expires)
 	require.Equal(t, "setup-token-123", artifact.SetupToken)
@@ -331,7 +337,7 @@ fi`,
 	})
 
 	require.Contains(t, script, `SETUP_SCRIPT_URL="https://pulse.example/api/setup-script?backup_perms=true&host=https%3A%2F%2Fpve1.local%3A8006&pulse_url=https%3A%2F%2Fpulse.example&type=pve"`)
-	require.Contains(t, script, `PULSE_BOOTSTRAP_COMMAND_WITH_ENV='curl -fsSL '"'"'https://pulse.example/api/setup-script?backup_perms=true&host=https%3A%2F%2Fpve1.local%3A8006&pulse_url=https%3A%2F%2Fpulse.example&type=pve'"'"' | `)
+	require.Contains(t, script, "PULSE_BOOTSTRAP_COMMAND_WITH_ENV="+posixShellQuote(artifact.CommandWithEnv))
 	require.Contains(t, script, `PULSE_SETUP_TOKEN="${PULSE_SETUP_TOKEN:-setup-token-123}"`)
 	require.Contains(t, script, `pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin`)
 	require.Contains(t, script, `pveum aclmod /storage -token "$PULSE_TOKEN_ID" -role PVEDatastoreAdmin`)

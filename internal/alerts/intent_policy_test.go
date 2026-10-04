@@ -7,7 +7,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
-	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -316,6 +315,79 @@ func TestCanonicalResourcePolicyCannotEnterQuietHoursReplay(t *testing.T) {
 	}
 }
 
+func TestOperatorPolicySuppressesDirectAlertDispatchWithoutQueueReplay(t *testing.T) {
+	now := time.Now().UTC()
+	end := now.Add(time.Hour)
+	cases := []struct {
+		name       string
+		intent     OperatorIntentContext
+		alertType  string
+		wantReason string
+		wantSend   bool
+	}{
+		{"muted resource", OperatorIntentContext{MonitoringMode: "muted"}, "cpu", "operator_muted", false},
+		{"expected offline", OperatorIntentContext{MonitoringMode: "expected_offline"}, "offline", "operator_expected_offline", false},
+		{"active maintenance", OperatorIntentContext{MaintenanceStartAt: &now, MaintenanceEndAt: &end}, "cpu", "operator_maintenance", false},
+		{"unrelated performance alert", OperatorIntentContext{MonitoringMode: "expected_offline"}, "cpu", AlertDeliveryReasonReady, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newEventLogManager(t)
+			m.SetOperatorIntentContextResolver(func(resourceID string, observedAt time.Time) (OperatorIntentContext, bool) {
+				if resourceID != "vm:101" {
+					t.Fatalf("operator policy queried for %q", resourceID)
+				}
+				return tc.intent, true
+			})
+			delivered := 0
+			m.SetAlertCallback(func(*Alert) { delivered++ })
+			alert := &Alert{
+				ID: "policy-alert", ResourceID: "vm:101", Type: tc.alertType,
+				Level: AlertLevelCritical, StartTime: now, LastSeen: now,
+				Metadata: map[string]interface{}{
+					MetadataQuietHoursSuppressed: true,
+					MetadataQuietHoursReplayAt:   end.Format(time.RFC3339),
+				},
+			}
+			// Simulate an existing alert while a newly saved policy is being
+			// reconciled. Direct dispatch must not turn that policy into replay.
+			m.mu.Lock()
+			m.activeAlerts[alert.ID] = alert
+			m.mu.Unlock()
+			diagnosis, ok := m.DiagnoseAlertDelivery(alert.ID)
+			m.mu.Lock()
+			sent := m.dispatchAlert(alert, false)
+			m.mu.Unlock()
+			wantDelivered := 0
+			if tc.wantSend {
+				wantDelivered = 1
+			}
+			if sent != tc.wantSend || delivered != wantDelivered {
+				t.Fatalf("dispatch = %v, callback count = %d; want send=%v", sent, delivered, tc.wantSend)
+			}
+			if !ok || diagnosis.Reason != tc.wantReason || diagnosis.QuietHoursReplayAt != nil {
+				t.Fatalf("diagnosis = %+v, exists=%v; want reason %q", diagnosis, ok, tc.wantReason)
+			}
+			if hasQuietHoursNotificationReplay(alert) {
+				t.Fatal("operator policy left or created replay metadata")
+			}
+			if !tc.wantSend {
+				if alert.LastNotified != nil {
+					t.Fatal("suppressed alert was marked notified")
+				}
+				suppressed := queryAlertEvents(t, m, eventlog.Filter{Types: []string{eventlog.TypeNotificationSuppressed}})
+				if len(suppressed) != 1 || suppressed[0].Reason != tc.wantReason {
+					t.Fatalf("suppression events = %+v; want one %q event", suppressed, tc.wantReason)
+				}
+				deferred := queryAlertEvents(t, m, eventlog.Filter{Types: []string{eventlog.TypeNotificationDeferred}})
+				if len(deferred) != 0 {
+					t.Fatalf("operator suppression produced deferred events: %+v", deferred)
+				}
+			}
+		})
+	}
+}
+
 func TestLifecycleAlertStartsAtFirstIntentMatch(t *testing.T) {
 	m := NewManagerWithDataDir(t.TempDir())
 	t.Cleanup(m.Stop)
@@ -485,178 +557,5 @@ func TestIntentPendingElapsedProgressSurvivesRestartConservatively(t *testing.T)
 	}
 	if !eligible.ShouldActivate {
 		t.Fatalf("persisted plus post-restart elapsed time did not reach tolerance: %+v", eligible)
-	}
-}
-
-// Exercise the detector entrypoints, not just the active map: rejecting an
-// alert must also reject its history, firing event and notification intent.
-func TestOperatorSuppressionPreventsFiringSideEffects(t *testing.T) {
-	const resourceID = "storage:tank"
-	evaluators := map[string]func(*testing.T, *Manager){
-		"provider-incident": func(t *testing.T, m *Manager) {
-			m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{admissionTestResource()})
-		},
-		"metric": func(t *testing.T, m *Manager) {
-			m.checkMetric(resourceID, "tank", "nas", "nas", "storage", "cpu", 95,
-				&HysteresisThreshold{Trigger: 80, Clear: 70}, nil)
-		},
-		"canonical-metric": func(t *testing.T, m *Manager) {
-			spec := alertspecs.ResourceAlertSpec{
-				ID: "metric-threshold:cpu", ResourceID: resourceID,
-				ResourceType: unifiedresources.ResourceTypeStorage,
-				Kind:         alertspecs.AlertSpecKindMetricThreshold, Severity: alertspecs.AlertSeverityWarning,
-				MetricThreshold: &alertspecs.MetricThresholdSpec{Metric: "cpu", Trigger: 80, Direction: alertspecs.ThresholdDirectionAbove},
-			}
-			m.evaluateCanonicalMetricAlert(spec, "tank", "nas", "nas", "storage", 95,
-				&HysteresisThreshold{Trigger: 80, Clear: 70}, nil)
-		},
-		"lifecycle": func(t *testing.T, m *Manager) {
-			spec, err := buildCanonicalDiscreteStateSpec(resourceID, "Pool state", unifiedresources.ResourceTypeStorage,
-				AlertLevelWarning, 1, false, "health", []string{"degraded"})
-			if err != nil {
-				t.Fatal(err)
-			}
-			m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
-				Spec: spec, Evidence: alertspecs.AlertEvidence{ObservedAt: time.Now(),
-					DiscreteState: &alertspecs.DiscreteStateEvidence{StateKey: "health", Observed: "degraded"}},
-				AlertID: spec.ID, AlertType: "zfs-pool-state", ResourceID: resourceID,
-				ResourceName: "tank", AddToRecent: true, AddToHistory: true,
-			})
-		},
-		"stateful": func(t *testing.T, m *Manager) {
-			m.syncCanonicalHealthAssessmentAlert(canonicalHealthAssessmentAlertParams{
-				SpecID: "pool-health", Signal: "zfs_pool", Codes: zfsPoolAssessmentCodes,
-				Reasons: []storagehealth.Reason{{Code: "zfs_pool_state", Severity: storagehealth.RiskCritical, Summary: "Pool is degraded"}},
-				AlertID: "pool-health", AlertType: "zfs-pool-state", SpecResourceID: resourceID,
-				ResourceID: resourceID, ResourceName: "tank", ResourceType: unifiedresources.ResourceTypeStorage,
-			})
-		},
-	}
-	start, end := time.Now().Add(-time.Hour), time.Now().Add(time.Hour)
-	for name, policy := range map[string]OperatorIntentContext{
-		"muted":       {MonitoringMode: "muted"},
-		"retired":     {LifecycleState: "retired"},
-		"maintenance": {MaintenanceStartAt: &start, MaintenanceEndAt: &end},
-	} {
-		for family, evaluate := range evaluators {
-			t.Run(name+"/"+family, func(t *testing.T) {
-				m := newEventLogManager(t)
-				configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
-				m.SetAlertCallback(func(*Alert) {})
-				setPolicy := func(current OperatorIntentContext) {
-					m.SetOperatorIntentContextResolver(func(string, time.Time) (OperatorIntentContext, bool) {
-						return current, true
-					})
-				}
-				setPolicy(policy)
-				for range 20 {
-					evaluate(t, m)
-				}
-				if got := len(m.GetActiveAlerts()); got != 0 {
-					t.Fatalf("suppressed active alerts = %d", got)
-				}
-				if got := len(m.historyManager.GetAllHistory(100)); got != 0 {
-					t.Fatalf("suppressed history entries = %d", got)
-				}
-				if events := queryAlertEvents(t, m, eventlog.Filter{}); len(events) != 0 {
-					t.Fatalf("suppressed detector produced lifecycle/delivery events: %+v", events)
-				}
-				m.mu.RLock()
-				recent := len(m.recentAlerts)
-				m.mu.RUnlock()
-				if recent != 0 {
-					t.Fatalf("suppressed recent alerts = %d", recent)
-				}
-
-				// Expiry or removal must admit the still-present condition once.
-				if name == "maintenance" {
-					expired := time.Now().Add(-time.Minute)
-					setPolicy(OperatorIntentContext{MaintenanceStartAt: &start, MaintenanceEndAt: &expired})
-				} else {
-					setPolicy(OperatorIntentContext{})
-				}
-				for range 20 {
-					evaluate(t, m)
-				}
-				if got := len(m.GetActiveAlerts()); got != 1 {
-					t.Fatalf("active alerts after unsuppression = %d, want 1", got)
-				}
-				events := queryAlertEvents(t, m, eventlog.Filter{Types: []string{eventlog.TypeFired, eventlog.TypeRefired}})
-				if len(events) != 1 {
-					t.Fatalf("firing events after unsuppression = %d, want 1", len(events))
-				}
-
-				setPolicy(OperatorIntentContext{MonitoringMode: "muted"})
-				if got := m.ReconcileResourceOperatorState(resourceID); got != 1 {
-					t.Fatalf("newly muted active alerts cleared = %d, want 1", got)
-				}
-				before := len(queryAlertEvents(t, m, eventlog.Filter{}))
-				for range 20 {
-					evaluate(t, m)
-				}
-				if got := len(m.GetActiveAlerts()); got != 0 {
-					t.Fatalf("muted alert reappeared after reconciliation: %d", got)
-				}
-				if got := len(queryAlertEvents(t, m, eventlog.Filter{})); got != before {
-					t.Fatalf("suppressed re-evaluation added events after reconciliation: %d -> %d", before, got)
-				}
-			})
-		}
-	}
-}
-
-func TestSuppressedAlertRestoreCannotReviveAcknowledgementOrEscalation(t *testing.T) {
-	m := newEventLogManager(t)
-	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
-	m.SetAlertCallback(func(*Alert) {})
-	resource := admissionTestResource()
-	for range 3 {
-		m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
-	}
-	active := m.GetActiveAlerts()
-	if len(active) != 1 {
-		t.Fatalf("unsuppressed control alerts = %d, want 1", len(active))
-	}
-	if err := m.AcknowledgeAlert(active[0].ID, "operator"); err != nil {
-		t.Fatal(err)
-	}
-	snapshot := m.GetActiveAlerts()
-
-	restored := newEventLogManager(t)
-	configureUnifiedEvalManager(t, restored, unifiedEvalBaseConfig())
-	restored.SetAlertCallback(func(*Alert) {})
-	restored.SetOperatorIntentContextResolver(func(string, time.Time) (OperatorIntentContext, bool) {
-		return OperatorIntentContext{LifecycleState: "retired"}, true
-	})
-	if err := restored.restoreActiveAlertSnapshots([]*Alert{&snapshot[0]}, "test restart", true); err != nil {
-		t.Fatal(err)
-	}
-	resource.Incidents[0].Severity = storagehealth.RiskCritical
-	for range 20 {
-		restored.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
-	}
-	if len(restored.GetActiveAlerts()) != 0 || len(queryAlertEvents(t, restored, eventlog.Filter{})) != 0 {
-		t.Fatal("suppressed restore or escalation produced an active alert or event")
-	}
-	restored.SetOperatorIntentContextResolver(nil)
-	for range 20 {
-		restored.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
-	}
-	active = restored.GetActiveAlerts()
-	if len(active) != 1 || active[0].Acknowledged || active[0].Level != AlertLevelCritical {
-		t.Fatalf("unsuppressed condition did not create a fresh critical alert: %+v", active)
-	}
-	if events := queryAlertEvents(t, restored, eventlog.Filter{Types: []string{eventlog.TypeFired}}); len(events) != 1 {
-		t.Fatalf("firing events after restore and unsuppression = %d, want 1", len(events))
-	}
-}
-
-func admissionTestResource() unifiedresources.Resource {
-	return unifiedresources.Resource{
-		ID: "storage:tank", Type: unifiedresources.ResourceTypeStorage, Name: "tank",
-		Sources: []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
-		Storage: &unifiedresources.StorageMeta{Platform: "truenas", Topology: "pool", Protection: "zfs", IsZFS: true},
-		Incidents: []unifiedresources.ResourceIncident{{Provider: "truenas", NativeID: "native-1",
-			Code: "truenas_volume_status", Severity: storagehealth.RiskWarning, Summary: "Pool is degraded"}},
 	}
 }

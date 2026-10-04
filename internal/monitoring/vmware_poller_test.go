@@ -3,6 +3,8 @@ package monitoring
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -480,4 +482,105 @@ func TestVMwarePollerLogsDegradedTransitionsOnlyWhenStateChanges(t *testing.T) {
 func captureVMwarePollerLogs(t *testing.T) *monitoringLogCapture {
 	t.Helper()
 	return newMonitoringLogCapture(t)
+}
+
+func TestVMwarePollerStorageIdentityDiscovery(t *testing.T) {
+	for _, tc := range []struct{ name, metadata, peerMetadata string }{
+		{name: "normal_missing_metadata"},
+		{name: "malformed_metadata", metadata: "{broken"},
+		{name: "missing_metadata_id", metadata: `{}`},
+		{name: "metadata_redirect", metadata: `{"id":"metadata-redirect"}`},
+		{name: "unrelated_malformed_metadata", peerMetadata: "{broken"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mtp, persistence := newTestTenantPersistence(t)
+			connection := config.NewVMwareVCenterInstance()
+			connection.ID = "vc-storage-id"
+			connection.Host = "fixture-vcenter"
+			connection.Username = "fixture-owner"
+			connection.Password = "fixture-password"
+			if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{connection}); err != nil {
+				t.Fatal(err)
+			}
+			if tc.metadata != "" {
+				setDiscoveryOrgMetadata(t, persistence, tc.metadata)
+			}
+			if tc.peerMetadata != "" {
+				setDiscoveryOrgMetadata(t, discoveryTenant(t, mtp, "broken-peer"), tc.peerMetadata)
+			}
+			poller := NewVMwarePoller(mtp, 0)
+			poller.newProvider = func(instance config.VMwareVCenterInstance) (vmwarePollerProvider, error) {
+				return vmware.NewProvider(vmware.InventorySnapshot{
+					ConnectionID: instance.ID, CollectedAt: time.Now().UTC(),
+					Hosts: []vmware.InventoryHost{{Host: "host-1", Name: "storage-owned-host"}},
+				}), nil
+			}
+			t.Cleanup(func() {
+				for _, byConnection := range poller.providersByOrg {
+					for _, provider := range byConnection {
+						provider.Close()
+					}
+				}
+			})
+			poller.syncConnections()
+			poller.pollAll(context.Background())
+			summary := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{connection})[connection.ID]
+			if summary.Poll == nil || summary.Poll.LastSuccessAt == nil || summary.Observed == nil ||
+				summary.Observed.Hosts != 1 || len(poller.GetCurrentRecordsForOrg("default")) != 1 {
+				t.Fatalf("saved VMware config was not discovered independently of metadata: %+v", summary)
+			}
+			if _, err := os.Stat(filepath.Join(mtp.BaseDataDir(), "orgs", "metadata-redirect")); !os.IsNotExist(err) {
+				t.Fatal("metadata created an unrelated tenant directory")
+			}
+		})
+	}
+}
+
+func TestVMwarePollerStorageDiscoveryAppliesRevocationWithBrokenPeerMetadata(t *testing.T) {
+	for _, action := range []string{"disable", "remove", "unreadable_config"} {
+		t.Run(action, func(t *testing.T) {
+			mtp, persistence := newTestTenantPersistence(t)
+			connection := config.NewVMwareVCenterInstance()
+			connection.ID = "vc-storage-id"
+			connection.Host = "fixture-vcenter"
+			connection.Username = "fixture-owner"
+			connection.Password = "fixture-password"
+			if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{connection}); err != nil {
+				t.Fatal(err)
+			}
+			poller := NewVMwarePoller(mtp, 0)
+			poller.newProvider = func(instance config.VMwareVCenterInstance) (vmwarePollerProvider, error) {
+				return vmware.NewProvider(vmware.InventorySnapshot{
+					ConnectionID: instance.ID, CollectedAt: time.Now().UTC(),
+					Hosts: []vmware.InventoryHost{{Host: "host-1", Name: "storage-owned-host"}},
+				}), nil
+			}
+			poller.syncConnections()
+			poller.pollAll(context.Background())
+			if len(poller.GetCurrentRecordsForOrg("default")) != 1 {
+				t.Fatal("initial fixture did not poll")
+			}
+			setDiscoveryOrgMetadata(t, discoveryTenant(t, mtp, "broken-peer"), "{broken")
+			switch action {
+			case "disable":
+				connection.Enabled = false
+				if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{connection}); err != nil {
+					t.Fatal(err)
+				}
+			case "remove":
+				if err := persistence.SaveVMwareConfig(nil); err != nil {
+					t.Fatal(err)
+				}
+			case "unreadable_config":
+				if err := os.WriteFile(filepath.Join(persistence.GetConfigDir(), "vmware.enc"), []byte("{broken"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			poller.syncConnections()
+			poller.pollAll(context.Background())
+			if poller.providersByOrg["default"][connection.ID] != nil || len(poller.GetCurrentRecordsForOrg("default")) != 0 {
+				t.Fatal("unrelated metadata blocked fail-closed config reconciliation")
+			}
+		})
+	}
 }

@@ -1,7 +1,13 @@
 package proxmox
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -113,5 +119,118 @@ func TestInternalCounterMetadataNeverChangesProxmoxWireShape(t *testing.T) {
 		if _, ok := raw[key]; ok {
 			t.Fatalf("internal counter metadata %q leaked into JSON", key)
 		}
+	}
+}
+
+func TestBackupLocksRetainCumulativeCounterPresence(t *testing.T) {
+	payload := []byte(`{"lock":"backup","diskread":0,"diskwrite":null,"netin":42}`)
+	var listing VM
+	var resource ClusterResource
+	var status VMStatus
+	for _, dst := range []any{&listing, &resource, &status} {
+		if err := json.Unmarshal(payload, dst); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, value := range map[string]struct {
+		lock     string
+		presence IOCounterPresence
+	}{"listing": {listing.Lock, listing.IOCounters}, "resource": {resource.Lock, resource.IOCounters}, "status": {status.Lock, status.IOCounters}} {
+		t.Run(name, func(t *testing.T) {
+			p := value.presence.Effective()
+			if value.lock != "backup" || !p.DiskRead || !p.NetworkIn || p.DiskWrite || p.NetworkOut {
+				t.Fatalf("lock decoding corrupted presence: %#v", value)
+			}
+		})
+	}
+}
+
+func TestUnverifiedVMConfigPreservesStatusCounterObservations(t *testing.T) {
+	var commands atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/config"):
+			w.Header().Set("Content-Length", "1000")
+			fmt.Fprint(w, `{"data":{}}`)
+		case strings.HasSuffix(r.URL.Path, "/status/current"):
+			fmt.Fprint(w, `{"data":{"status":"running","cpu":0.25,"diskread":0,"diskwrite":null,"netin":42}}`)
+		default:
+			commands.Add(1)
+			backupAgentPayload(w, r)
+		}
+	}))
+	defer server.Close()
+	c := backupTestClient(t, server.URL)
+	if _, err := c.GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "lock-unverified" {
+		t.Errorf("incomplete config did not defer the guest command: %v", err)
+	}
+	status, err := c.GetVMStatus(context.Background(), "node", 105)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := status.IOCounters.Effective()
+	if status.CPU != 0.25 || status.NetIn != 42 || status.DiskRead != 0 || status.ObservedAt.IsZero() || !p.DiskRead || !p.NetworkIn || p.DiskWrite || p.NetworkOut {
+		t.Fatalf("unverified guest lock suppressed/changed current PVE counters: %+v", status)
+	}
+	if got := commands.Load(); got != 0 {
+		t.Errorf("guest commands with incomplete config = %d, want zero", got)
+	}
+}
+
+func TestGuestAgentTransportDeferralPreservesLiveCounterReceipts(t *testing.T) {
+	for _, kind := range []string{"lost reply", "redirect"} {
+		t.Run(kind, func(t *testing.T) {
+			var commands, statusCalls atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/config"):
+					fmt.Fprint(w, `{"data":{}}`)
+				case strings.HasSuffix(r.URL.Path, "/status/current"):
+					statusCalls.Add(1)
+					fmt.Fprint(w, `{"data":{"status":"running","cpu":0.25,"diskread":0,"diskwrite":null,"netin":42}}`)
+				case strings.Contains(r.URL.Path, "/agent/"):
+					commands.Add(1)
+					if kind == "redirect" {
+						http.Redirect(w, r, "/unverified/agent", http.StatusTemporaryRedirect)
+						return
+					}
+					conn, _, err := w.(http.Hijacker).Hijack()
+					if err != nil {
+						t.Error(err)
+						return
+					}
+					conn.Close()
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+			client := backupTestClient(t, server.URL)
+			wantReason := "agent-timeout"
+			if kind == "redirect" {
+				wantReason = "agent-redirect"
+			}
+			if _, err := client.GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != wantReason {
+				t.Fatalf("uncertain command not deferred: %v", err)
+			}
+			// The QGA uncertainty is not missing or zero CPU/I/O evidence. Ordinary
+			// status still has its own completed response and observation receipt.
+			before := time.Now()
+			status, err := client.GetVMStatus(context.Background(), "node", 105)
+			after := time.Now()
+			if err != nil {
+				t.Fatal(err)
+			}
+			presence := status.IOCounters.Effective()
+			if status.CPU != 0.25 || status.DiskRead != 0 || status.NetIn != 42 || !presence.DiskRead || !presence.NetworkIn || presence.DiskWrite || presence.NetworkOut || status.ObservedAt.Before(before) || status.ObservedAt.After(after) {
+				t.Fatalf("guest transport deferral changed current counter presence/receipt: %+v", status)
+			}
+			if _, err := client.GetVMAgentInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
+				t.Fatalf("status response erased command uncertainty: %v", err)
+			}
+			if commands.Load() != 1 || statusCalls.Load() != 1 {
+				t.Fatalf("guest/status calls = %d/%d, want 1/1", commands.Load(), statusCalls.Load())
+			}
+		})
 	}
 }

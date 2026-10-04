@@ -740,8 +740,7 @@ func TestIntelligence_GetSummary_WithSubsystems(t *testing.T) {
 	patternDetector.RecordEvent(patterns.HistoricalEvent{ResourceID: "vm-sum", EventType: patterns.EventHighCPU, Timestamp: patternStart})
 	patternDetector.RecordEvent(patterns.HistoricalEvent{ResourceID: "vm-sum", EventType: patterns.EventHighCPU, Timestamp: patternStart.Add(60 * time.Minute)})
 
-	changes := memory.NewChangeDetector(memory.ChangeDetectorConfig{MaxChanges: 10})
-	changes.DetectChanges([]memory.ResourceSnapshot{{ID: "vm-sum", Name: "vm-sum", Type: "vm", Status: "running", SnapshotTime: time.Now()}})
+	changes := newLegacyChangeDetector(t, legacyCreatedChange("vm-sum", "vm-sum", "vm"))
 
 	remediations := memory.NewRemediationLog(memory.RemediationLogConfig{MaxRecords: 10})
 	_ = remediations.Log(memory.RemediationRecord{ResourceID: "vm-sum", Problem: "cpu", Action: "restart", Outcome: memory.OutcomeResolved})
@@ -762,7 +761,7 @@ func TestIntelligence_GetSummary_WithSubsystems(t *testing.T) {
 		t.Error("expected recent changes in summary")
 	}
 	if len(summary.RecentChanges) == 0 {
-		t.Error("expected recent change entries in summary")
+		t.Fatal("expected recent change entries in summary")
 	}
 	if summary.RecentChanges[0].SourceType != ur.SourceHeuristic {
 		t.Fatalf("expected heuristic source type for fallback summary, got %s", summary.RecentChanges[0].SourceType)

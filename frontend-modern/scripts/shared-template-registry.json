@@ -265,7 +265,7 @@
           "patterns": [
             "<svg",
             "const icons = {",
-            "flex-shrink-0 text-muted hover:text-base-content hover:bg-surface rounded-md p-1.5 transition-all duration-200"
+            "shrink-0 text-muted hover:text-base-content hover:bg-surface rounded-md p-1.5 transition-all duration-200"
           ]
         }
       ],
@@ -507,7 +507,7 @@
       "forbiddenPatterns": [
         {
           "path": "src/components/Settings/AIProviderConfigurationSection.tsx",
-          "patterns": ["rounded border border-red-200", "bg-red-50 dark:bg-red-900 px-2 py-1.5"]
+          "patterns": ["rounded-sm border border-red-200", "bg-red-50 dark:bg-red-900/25 px-2 py-1.5"]
         },
         {
           "path": "src/components/Settings/ConnectionEditor/AddressProbeStep.tsx",
@@ -549,7 +549,7 @@
           "path": "src/components/Settings/DiscoverySettingsForm.tsx",
           "patterns": [
             "rounded-md border border-amber-200 bg-amber-50/80",
-            "text-amber-900 dark:text-amber-100"
+            "text-amber-900/25 dark:text-amber-100"
           ]
         }
       ],
@@ -573,8 +573,8 @@
           "path": "src/components/ErrorBoundary.tsx",
           "patterns": [
             "<svg",
-            "bg-red-50 dark:bg-red-900 border border-red-200",
-            "p-4 bg-red-50 dark:bg-red-900 border border-red-200"
+            "bg-red-50 dark:bg-red-900/25 border border-red-200",
+            "p-4 bg-red-50 dark:bg-red-900/25 border border-red-200"
           ]
         }
       ],
@@ -602,8 +602,8 @@
           "path": "src/components/UpdateConfirmationModal.tsx",
           "patterns": [
             "<svg",
-            "bg-blue-50 dark:bg-blue-900 border border-blue-200",
-            "bg-yellow-50 dark:bg-yellow-900 border border-yellow-200",
+            "bg-blue-50 dark:bg-blue-900/25 border border-blue-200",
+            "bg-yellow-50 dark:bg-yellow-900/25 border border-yellow-200",
             "rounded-md p-4 border",
             "px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
           ]
@@ -612,10 +612,10 @@
           "path": "src/components/UpdateProgressModal.tsx",
           "patterns": [
             "<svg",
-            "bg-red-50 dark:bg-red-900 border border-red-200",
-            "bg-blue-50 dark:bg-blue-900 border border-blue-200",
-            "bg-yellow-50 dark:bg-yellow-900 border border-yellow-200",
-            "mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded"
+            "bg-red-50 dark:bg-red-900/25 border border-red-200",
+            "bg-blue-50 dark:bg-blue-900/25 border border-blue-200",
+            "bg-yellow-50 dark:bg-yellow-900/25 border border-yellow-200",
+            "mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-sm"
           ]
         }
       ],
@@ -644,14 +644,14 @@
           "path": "src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
           "patterns": [
             "rounded-lg border border-amber-300 bg-amber-50",
-            "text-amber-900 underline-offset-2"
+            "text-amber-900/25 underline-offset-2"
           ]
         },
         {
           "path": "src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx",
           "patterns": [
             "rounded-lg border border-amber-300 bg-amber-50",
-            "text-amber-900 underline-offset-2"
+            "text-amber-900/25 underline-offset-2"
           ]
         }
       ],
@@ -676,8 +676,8 @@
           "patterns": [
             "<svg",
             "<button",
-            "bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800",
-            "p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded text-blue-600"
+            "bg-blue-50 dark:bg-blue-900/25 border-b border-blue-200 dark:border-blue-800",
+            "p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded-sm text-blue-600"
           ]
         }
       ],
@@ -705,9 +705,9 @@
             "<button",
             "toneClasses",
             "buttonClasses",
-            "bg-amber-50 dark:bg-amber-900 border-b border-amber-200",
-            "bg-red-50 dark:bg-red-900 border-b border-red-200",
-            "p-1 rounded transition-colors opacity-70 hover:opacity-100"
+            "bg-amber-50 dark:bg-amber-900/25 border-b border-amber-200",
+            "bg-red-50 dark:bg-red-900/25 border-b border-red-200",
+            "p-1 rounded-sm transition-colors opacity-70 hover:opacity-100"
           ]
         }
       ],
@@ -1195,20 +1195,20 @@
         {
           "path": "src/components/Settings/OrganizationAccessMembersSection.tsx",
           "patterns": [
-            "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
+            "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/25 disabled:cursor-not-allowed disabled:opacity-60"
           ]
         },
         {
           "path": "src/components/Settings/OrganizationIncomingSharesSection.tsx",
           "patterns": [
-            "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-60",
-            "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
+            "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/25 disabled:cursor-not-allowed disabled:opacity-60",
+            "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/25 disabled:cursor-not-allowed disabled:opacity-60"
           ]
         },
         {
           "path": "src/components/Settings/OrganizationOutgoingSharesSection.tsx",
           "patterns": [
-            "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
+            "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/25 disabled:cursor-not-allowed disabled:opacity-60"
           ]
         },
         {
@@ -1255,7 +1255,7 @@
         {
           "path": "src/components/Settings/SecurityAuthPanel.tsx",
           "patterns": [
-            "w-full sm:w-auto px-3 py-2 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100 hover:bg-amber-200 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900 dark:hover:bg-amber-800",
+            "w-full sm:w-auto px-3 py-2 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100 hover:bg-amber-200 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/25 dark:hover:bg-amber-800",
             "w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors",
             "w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors"
           ]
@@ -1270,7 +1270,7 @@
             "px-4 py-2 text-sm font-medium text-base-content border border-border rounded-md hover:bg-surface-hover",
             "px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50",
             "px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-md hover:bg-red-700",
-            "px-2 py-1 text-xs font-medium text-muted bg-surface-hover rounded hover:bg-surface-hover flex items-center gap-1"
+            "px-2 py-1 text-xs font-medium text-muted bg-surface-hover rounded-sm hover:bg-surface-hover flex items-center gap-1"
           ]
         },
         {
@@ -1283,17 +1283,17 @@
           "path": "src/components/Settings/InfrastructureInstallerSection.tsx",
           "patterns": [
             "inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700",
-            "inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100",
-            "inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100",
-            "inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100"
+            "inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 transition-colors hover:bg-emerald-100",
+            "inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100",
+            "inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100"
           ]
         },
         {
           "path": "src/components/ErrorBoundary.tsx",
           "patterns": [
-            "px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700",
-            "px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700",
-            "text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+            "px-4 py-2 bg-blue-600 text-white rounded-sm hover:bg-blue-700",
+            "px-4 py-2 bg-slate-600 text-white rounded-sm hover:bg-slate-700",
+            "text-xs px-2 py-1 bg-red-600 text-white rounded-sm hover:bg-red-700"
           ]
         },
         {
@@ -1306,7 +1306,7 @@
         {
           "path": "src/components/UpdateProgressModal.tsx",
           "patterns": [
-            "mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded",
+            "mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-sm",
             "px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
           ]
         }
@@ -1430,35 +1430,35 @@
         {
           "path": "src/components/AI/Chat/index.tsx",
           "patterns": [
-            "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted",
-            "flex-shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors",
-            "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60",
-            "rounded p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900 dark:hover:text-blue-300",
-            "order-2 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-none",
-            "flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900",
-            "flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900",
-            "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60",
-            "flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45",
-            "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted",
+            "shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors",
+            "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60",
+            "rounded-sm p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900/25 dark:hover:text-blue-300",
+            "order-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-0",
+            "flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25",
+            "flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:text-amber-200 dark:hover:bg-amber-900/25",
+            "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 dark:text-blue-200 dark:hover:bg-blue-900/60",
+            "flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-xs transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45",
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30"
           ]
         },
         {
           "path": "src/components/AI/Chat/MessageItem.tsx",
           "patterns": [
-            "inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            "inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30"
           ]
         },
         {
           "path": "src/features/standalone/AgentsMachinesTable.tsx",
           "patterns": [
-            "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+            "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/60"
           ]
         },
         {
           "path": "src/components/Settings/SSOProvidersPanel.tsx",
           "patterns": [
             "p-2 text-slate-500 hover:text-blue-600 hover:bg-surface-hover rounded-md transition-colors",
-            "p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-md transition-colors",
+            "p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/25 rounded-md transition-colors",
             "class=\"text-slate-400 hover:text-base-content\""
           ]
         },
@@ -1466,7 +1466,7 @@
           "path": "src/components/Settings/RolesPanel.tsx",
           "patterns": [
             "p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-surface-hover dark:hover:text-blue-300",
-            "p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
+            "p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/25"
           ]
         }
       ],
@@ -1498,8 +1498,8 @@
           "patterns": [
             "lucide-solid/icons/copy",
             "lucide-solid/icons/check';",
-            "mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content",
-            "ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content"
+            "mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-xs transition-opacity hover:text-base-content",
+            "ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-xs transition-opacity hover:text-base-content"
           ]
         },
         {
@@ -1507,7 +1507,7 @@
           "patterns": [
             "lucide-solid/icons/copy",
             "lucide-solid/icons/check';",
-            "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30"
           ]
         },
         {
@@ -1574,7 +1574,7 @@
         {
           "path": "src/components/Settings/ProLicensePlanSection.tsx",
           "patterns": [
-            "inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border border-current/20 px-3 py-2 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5",
+            "inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border px-3 py-2 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5",
             "inline-flex items-center gap-1 mt-4 min-h-10 sm:min-h-9 rounded-md border border-border px-3 py-2 text-xs font-medium text-base-content hover:bg-surface-hover"
           ]
         }
@@ -1657,7 +1657,7 @@
           "path": "src/components/Discovery/DiscoveryTab.tsx",
           "patterns": [
             "const CopyableCodeRow",
-            "flex items-start gap-2 rounded bg-surface-alt px-2 py-1.5"
+            "flex items-start gap-2 rounded-sm bg-surface-alt px-2 py-1.5"
           ]
         }
       ],
@@ -2022,7 +2022,7 @@
         {
           "path": "src/components/AI/FindingsPanel.tsx",
           "patterns": [
-            "px-1.5 py-0.5 border text-[10px] font-medium rounded",
+            "px-1.5 py-0.5 border text-[10px] font-medium rounded-sm",
             "getFindingStatusBadgeClasses",
             "getFindingSourceBadgeClasses",
             "getFindingLoopStateBadgeClasses",
@@ -2034,51 +2034,51 @@
         {
           "path": "src/components/patrol/ApprovalBanner.tsx",
           "patterns": [
-            "px-1.5 py-0.5 text-[10px] font-medium rounded",
+            "px-1.5 py-0.5 text-[10px] font-medium rounded-sm",
             "firstApprovalRisk()!.badgeClass"
           ]
         },
         {
           "path": "src/components/patrol/ApprovalSection.tsx",
           "patterns": [
-            "px-1.5 py-0.5 text-[10px] font-medium rounded",
+            "px-1.5 py-0.5 text-[10px] font-medium rounded-sm",
             "approvalRisk.badgeClass",
             "fixRisk.badgeClass",
-            "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+            "bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300"
           ]
         },
         {
           "path": "src/components/patrol/InvestigationSection.tsx",
           "patterns": [
-            "px-1.5 py-0.5 border text-[10px] font-medium rounded",
+            "px-1.5 py-0.5 border text-[10px] font-medium rounded-sm",
             "getInvestigationStatusBadgeClasses",
             "getInvestigationOutcomeBadgeClasses",
-            "rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted",
-            "rounded bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted"
+            "rounded-sm border border-border bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted",
+            "rounded-sm bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted"
           ]
         },
         {
           "path": "src/components/patrol/RunHistoryEntry.tsx",
           "patterns": [
             "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
-            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50"
+            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-blue-50"
           ]
         },
         {
           "path": "src/components/patrol/RunToolCallTrace.tsx",
           "patterns": [
-            "px-1.5 py-0.5 rounded text-[10px] font-medium",
+            "px-1.5 py-0.5 rounded-sm text-[10px] font-medium",
             "getToolCallResultBadgeClass"
           ]
         },
         {
           "path": "src/features/proxmox/proxmoxBackupsTableShared.tsx",
           "patterns": [
-            "inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold",
+            "inline-flex items-center rounded-xs px-1.5 py-0.5 text-[10px] font-semibold",
             "presentation().badgeClassName",
-            "rounded-sm bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold",
-            "rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold",
-            "rounded-sm bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold"
+            "rounded-xs bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold",
+            "rounded-xs bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold",
+            "rounded-xs bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold"
           ]
         },
         {
@@ -3226,7 +3226,7 @@
           "patterns": [
             "const viewButtonClass",
             "inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1",
-            "inline-flex min-h-8 items-center gap-1.5 rounded-sm px-3 text-xs font-medium transition-colors"
+            "inline-flex min-h-8 items-center gap-1.5 rounded-xs px-3 text-xs font-medium transition-colors"
           ]
         }
       ],
@@ -3251,7 +3251,7 @@
           "patterns": [
             "inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition",
             "min-h-10 sm:min-h-10 rounded-full border px-3 py-2 text-sm font-semibold transition",
-            "border-blue-500 bg-blue-600 text-white shadow-sm",
+            "border-blue-500 bg-blue-600 text-white shadow-xs",
             "hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-200"
           ]
         }
@@ -3385,7 +3385,7 @@
       "scopes": ["src/features/standalone/AgentsMachinesTable.tsx"],
       "extensions": [".tsx"],
       "allPatterns": [
-        "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+        "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/60"
       ],
       "legacyReason": "Retired migration debt. Standalone machine action triggers compose ActionIconButton for shared icon-action size, tone, focus, title, and accessible-label behavior.",
       "allowedPaths": [],
@@ -3408,7 +3408,7 @@
       "scopes": ["src/components/AI/Chat/MessageItem.tsx"],
       "extensions": [".tsx"],
       "allPatterns": [
-        "inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+        "inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30"
       ],
       "legacyReason": "Retired migration debt. AI Chat queued message icon actions belong to ActionIconButton.",
       "allowedPaths": [],
@@ -3431,7 +3431,7 @@
       "scopes": ["src/components/AI/Chat"],
       "extensions": [".tsx"],
       "allPatterns": [
-        "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content"
+        "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content"
       ],
       "legacyReason": "Retired migration debt. AI Chat header icon actions belong to ActionIconButton.",
       "allowedPaths": [],
@@ -3457,7 +3457,7 @@
       "scopes": ["src/components/AI/Chat"],
       "extensions": [".tsx"],
       "allPatterns": [
-        "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950"
+        "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25"
       ],
       "legacyReason": "Retired migration debt. AI Chat accent icon actions belong to ActionIconButton.",
       "allowedPaths": [],
@@ -3483,7 +3483,7 @@
       "scopes": ["src/components/AI/Chat"],
       "extensions": [".tsx"],
       "allPatterns": [
-        "flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700"
+        "flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-xs transition-colors hover:bg-blue-700"
       ],
       "legacyReason": "Retired migration debt. AI Chat primary icon actions belong to ActionIconButton.",
       "allowedPaths": [],
@@ -3562,7 +3562,7 @@
       "extensions": [".tsx"],
       "allPatterns": [
         "inline-flex h-7 w-7",
-        "border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content",
+        "border border-border-subtle bg-surface text-muted opacity-0 shadow-xs transition-opacity hover:text-base-content",
         "CopyIcon class=\"h-3.5 w-3.5\""
       ],
       "legacyReason": "Retired migration debt. AI Chat message copy actions belong to CopyValueButton.",
@@ -3586,7 +3586,7 @@
       "scopes": ["src/components/AI/Chat/ToolExecutionBlock.tsx"],
       "extensions": [".tsx"],
       "allPatterns": [
-        "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30",
+        "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30",
         "CopyIcon class=\"h-3 w-3\""
       ],
       "legacyReason": "Retired migration debt. AI Chat tool copy actions belong to CopyValueButton.",
@@ -4027,7 +4027,7 @@
       },
       "scopes": ["src/components", "src/features", "src/pages"],
       "extensions": [".ts", ".tsx"],
-      "allPatterns": ["rounded border border-border bg-surface p-3 shadow-sm"],
+      "allPatterns": ["rounded-sm border border-border bg-surface p-3 shadow-xs"],
       "legacyReason": "Retired migration debt. Repeated compact information card frames must use InfoCardFrame; local card-shell copies are not allowed.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
@@ -5141,7 +5141,7 @@
       },
       "scopes": ["src/components/AI"],
       "extensions": [".tsx"],
-      "allPatterns": ["px-1.5 py-0.5 border text-[10px] font-medium rounded"],
+      "allPatterns": ["px-1.5 py-0.5 border text-[10px] font-medium rounded-sm"],
       "legacyReason": "Retired migration debt. Patrol finding row state, source, severity, investigation, confidence, and regression chips use MetadataBadge for shared shell, sizing, tone, and outline behavior.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
@@ -5161,7 +5161,7 @@
       },
       "scopes": ["src/components/patrol"],
       "extensions": [".tsx"],
-      "allPatterns": ["px-1.5 py-0.5 border text-[10px] font-medium rounded"],
+      "allPatterns": ["px-1.5 py-0.5 border text-[10px] font-medium rounded-sm"],
       "legacyReason": "Retired migration debt. Patrol investigation status, outcome, durable-record, and tool chips use MetadataBadge for shared shell, sizing, tone, and outline behavior.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
@@ -5181,7 +5181,7 @@
       },
       "scopes": ["src/components/patrol"],
       "extensions": [".tsx"],
-      "allPatterns": ["px-1.5 py-0.5", "text-[10px] font-medium rounded"],
+      "allPatterns": ["px-1.5 py-0.5", "text-[10px] font-medium rounded-sm"],
       "legacyReason": "Retired migration debt. Patrol approval risk, approval state, and tool-call result chips use MetadataBadge for shared shell, sizing, tone, and whitespace behavior.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
@@ -5222,7 +5222,7 @@
       },
       "scopes": ["src/features/proxmox"],
       "extensions": [".tsx"],
-      "allPatterns": ["rounded-sm px-1.5 py-0.5 text-[10px] font-semibold"],
+      "allPatterns": ["rounded-xs px-1.5 py-0.5 text-[10px] font-semibold"],
       "legacyReason": "Retired migration debt. Proxmox backup source/state chips use MetadataBadge for shared shell, sizing, tone vocabulary, and whitespace behavior.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
@@ -5456,7 +5456,7 @@
       "extensions": [".tsx"],
       "allPatterns": [
         "inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1",
-        "inline-flex min-h-8 items-center gap-1.5 rounded-sm px-3 text-xs font-medium transition-colors"
+        "inline-flex min-h-8 items-center gap-1.5 rounded-xs px-3 text-xs font-medium transition-colors"
       ],
       "legacyReason": "Retired migration debt. Feature table view toggles must use FilterButtonGroup; local bordered segmented-view selector forks are not allowed.",
       "allowedPaths": [],
@@ -5478,7 +5478,7 @@
       "extensions": [".tsx"],
       "allPatterns": [
         "rounded-full border px-3 py-2 text-sm font-semibold transition",
-        "border-blue-500 bg-blue-600 text-white shadow-sm",
+        "border-blue-500 bg-blue-600 text-white shadow-xs",
         "hover:border-blue-400 hover:text-blue-600"
       ],
       "legacyReason": "Retired migration debt. Pressed/unpressed pill selectors belong to SelectablePillButton.",
@@ -5550,7 +5550,7 @@
       "scopes": ["src/components", "src/features", "src/pages"],
       "extensions": [".tsx"],
       "allPatterns": [
-        "inline-flex h-8 min-h-11 min-w-11 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        "inline-flex h-8 min-h-11 min-w-11 items-center gap-1.5 rounded-sm border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
       ],
       "legacyReason": "Retired migration debt. Drawer header Assistant and context-copy actions belong to the shared Button primitive family.",
       "allowedPaths": [],
@@ -5572,7 +5572,7 @@
       "scopes": ["src/components", "src/features", "src/pages"],
       "extensions": [".tsx"],
       "allPatterns": [
-        "inline-flex h-8 w-8 min-h-11 min-w-11 items-center justify-center rounded-md hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        "inline-flex h-8 w-8 min-h-11 min-w-11 items-center justify-center rounded-md hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
       ],
       "legacyReason": "Retired migration debt. Drawer header close and icon actions belong to the shared Button primitive family.",
       "allowedPaths": [],
@@ -5642,7 +5642,7 @@
       "scopes": ["src/components", "src/features", "src/pages"],
       "extensions": [".tsx"],
       "allPatterns": [
-        "inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded border border-border bg-surface px-2 text-muted transition-colors hover:bg-surface-hover hover:text-base-content",
+        "inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded-sm border border-border bg-surface px-2 text-muted transition-colors hover:bg-surface-hover hover:text-base-content",
         "fallback={<CopyIcon class=\"h-3.5 w-3.5\" />}"
       ],
       "legacyReason": "Retired migration debt. Neutral copy-value icon buttons belong to CopyValueButton.",
@@ -5686,7 +5686,7 @@
       "scopes": ["src/components", "src/features", "src/pages"],
       "extensions": [".tsx"],
       "allPatterns": [
-        "inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-950",
+        "inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-950/25",
         "fallback={<CopyIcon class=\"h-3.5 w-3.5\" />}"
       ],
       "legacyReason": "Retired migration debt. Accent copy-value icon buttons belong to CopyValueButton.",
@@ -5708,7 +5708,7 @@
       "scopes": ["src/components", "src/features", "src/pages"],
       "extensions": [".tsx"],
       "allPatterns": [
-        "flex items-start gap-2 rounded bg-surface-alt px-2 py-1.5",
+        "flex items-start gap-2 rounded-sm bg-surface-alt px-2 py-1.5",
         "break-all font-mono text-xs text-base-content"
       ],
       "legacyReason": "Retired migration debt. Copyable code rows belong to CopyableCodeRow so code styling and copy behavior stay canonical.",
@@ -6012,7 +6012,7 @@
       "extensions": [".tsx"],
       "allPatterns": [
         "px-3 py-1.5 bg-green-600 hover:bg-green-700",
-        "text-white text-xs font-medium rounded"
+        "text-white text-xs font-medium rounded-sm"
       ],
       "legacyReason": "Retired migration debt. Patrol approval execute actions belong to the shared Button primitive family.",
       "allowedPaths": [],
@@ -6035,7 +6035,7 @@
       "extensions": [".tsx"],
       "allPatterns": [
         "px-3 py-1.5 bg-amber-600 hover:bg-amber-700",
-        "text-white text-xs font-medium rounded"
+        "text-white text-xs font-medium rounded-sm"
       ],
       "legacyReason": "Retired migration debt. Patrol approval warning actions belong to the shared Button primitive family.",
       "allowedPaths": [],
@@ -6058,7 +6058,7 @@
       "extensions": [".tsx"],
       "allPatterns": [
         "px-3 py-1.5 bg-blue-600 hover:bg-blue-700",
-        "text-white text-xs font-medium rounded"
+        "text-white text-xs font-medium rounded-sm"
       ],
       "legacyReason": "Retired migration debt. Patrol Assistant handoff actions belong to the shared Button primitive family.",
       "allowedPaths": [],
@@ -6103,7 +6103,7 @@
       "scopes": ["src/components/Settings", "src/features", "src/pages"],
       "extensions": [".tsx"],
       "allPatterns": [
-        "rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900"
+        "rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25"
       ],
       "legacyReason": "Retired migration debt. Positive outlined settings actions belong to the shared Button primitive family.",
       "allowedPaths": [],
@@ -6124,7 +6124,7 @@
       },
       "scopes": ["src/components/Settings", "src/features", "src/pages"],
       "extensions": [".tsx"],
-      "allPatterns": ["rounded-md px-3 py-2 text-sm font-medium text-emerald-900"],
+      "allPatterns": ["rounded-md px-3 py-2 text-sm font-medium text-emerald-900/25"],
       "legacyReason": "Retired migration debt. Positive ghost settings actions belong to the shared Button primitive family.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/Button.test.tsx"],
@@ -6146,7 +6146,7 @@
       "extensions": [".tsx"],
       "allPatterns": [
         "rounded-md px-2 py-1 text-xs font-medium text-emerald-700",
-        "hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900"
+        "hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/25"
       ],
       "legacyReason": "Retired migration debt. Positive row actions belong to the shared Button primitive family.",
       "allowedPaths": [],
@@ -6255,7 +6255,7 @@
       "extensions": [".tsx"],
       "allPatterns": [
         "rounded-md px-2 py-1 text-xs font-medium text-red-600",
-        "hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900"
+        "hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/25"
       ],
       "legacyReason": "Retired migration debt. Destructive row actions belong to the shared Button primitive family.",
       "allowedPaths": [],

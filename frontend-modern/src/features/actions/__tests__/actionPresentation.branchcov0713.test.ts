@@ -9,6 +9,7 @@ import type {
 import {
   formatActionName,
   formatPolicyAuthority,
+  getActionAuditStatePresentation,
   getActionInboxStatePresentation,
   getActionResourcePresentation,
   sortOpenActionsForReview,
@@ -90,6 +91,21 @@ describe('formatActionName', () => {
 });
 
 describe('Actions inbox presentation', () => {
+  it('distinguishes an operator-closed unknown outcome from an observed failure', () => {
+    const audit = {
+      state: 'failed',
+      result: {
+        actionResultV2: { execution: { reasonCode: 'operator_force_failed' } },
+      },
+    } as ActionAuditRecord;
+    expect(getActionAuditStatePresentation(audit)).toEqual({
+      label: 'Outcome unknown',
+      tone: 'warning',
+      accentClass: 'border-l-amber-500',
+    });
+    expect(getActionAuditStatePresentation({ ...audit, result: undefined }).label).toBe('Failed');
+  });
+
   it.each([
     ['pending_approval', 'Approval required', 'warning', 'border-l-amber-500'],
     ['planned', 'Ready to review', 'muted', 'border-l-slate-400'],

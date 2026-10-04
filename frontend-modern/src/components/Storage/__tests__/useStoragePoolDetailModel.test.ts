@@ -23,6 +23,7 @@ const buildRecord = (): StorageRecord => ({
   metricsTarget: { resourceType: 'storage', resourceId: 'pool:tank' },
   details: {
     node: 'truenas01',
+    parentId: 'host-truenas01',
     type: 'pool',
     zfsPool: {
       state: 'ONLINE',
@@ -38,6 +39,7 @@ const buildRecord = (): StorageRecord => ({
 const buildDisk = (): Resource =>
   ({
     id: 'disk-1',
+    parentId: 'host-truenas01',
     type: 'physical_disk',
     name: 'disk-1',
     displayName: 'disk-1',

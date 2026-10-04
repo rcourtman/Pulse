@@ -363,8 +363,6 @@ export async function shouldBuildManagedLocalBackendFrontend(state) {
     'package-lock.json',
     'vite.config.ts',
     'tsconfig.json',
-    'tailwind.config.js',
-    'postcss.config.js',
     'index.html',
   ]) {
     try {

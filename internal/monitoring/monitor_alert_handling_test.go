@@ -1139,3 +1139,330 @@ func TestMonitorLifecycleReplayPreservesOccurrenceTimelines(t *testing.T) {
 		})
 	}
 }
+
+func TestMonitorLifecycleRefireReopensRetainedOccurrence(t *testing.T) {
+	for _, canonical := range []bool{false, true} {
+		name := "local"
+		if canonical {
+			name = "canonical"
+		}
+		t.Run(name, func(t *testing.T) {
+			store := unifiedresources.NewMemoryStore()
+			incidents := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+			m := &Monitor{incidentStore: incidents, resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))}
+			if canonical {
+				incidents.SetResourceTimelineStore(m.resourceStore.(memory.IncidentTimelineStore))
+			}
+			start := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+			alert := &alerts.Alert{ID: "node-connectivity", ResourceID: "node", StartTime: start}
+			fire := alerts.LifecycleEvent{Type: eventlog.TypeFired, OccurredAt: start, Alert: alert}
+			resolve := alerts.LifecycleEvent{Type: eventlog.TypeResolved, OccurredAt: start.Add(time.Minute), Alert: alert}
+			refire := alerts.LifecycleEvent{Type: eventlog.TypeRefired, OccurredAt: start.Add(2 * time.Minute), Alert: alert}
+			m.handleAlertLifecycleEvent(fire)
+			m.handleAlertLifecycleEvent(resolve)
+			original := incidents.GetTimelineByAlertAt(alert.ID, start)
+			require.Equal(t, memory.IncidentStatusResolved, original.Status)
+			m.handleAlertLifecycleEvent(refire)
+			assertOpen := func() {
+				t.Helper()
+				current := incidents.GetTimelineByAlertAt(alert.ID, start)
+				require.Equal(t, original.ID, current.ID)
+				require.Equal(t, memory.IncidentStatusOpen, current.Status)
+				require.Nil(t, current.ClosedAt)
+				require.Len(t, current.Events, 3)
+				require.Len(t, incidents.ListIncidentsByResource(alert.ResourceID, 0), 1)
+			}
+			assertOpen()
+			if canonical {
+				// Canonical history must recover the retained occurrence even when
+				// no incident checkpoint survives.
+				recovered := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+				recovered.SetResourceTimelineStore(m.resourceStore.(memory.IncidentTimelineStore))
+				page, err := recovered.QueryIncidents(memory.IncidentQuery{ResourceID: alert.ResourceID})
+				require.NoError(t, err)
+				require.Len(t, page.Incidents, 1)
+				require.Equal(t, memory.IncidentStatusOpen, page.Incidents[0].Status)
+				require.Equal(t, start, page.Incidents[0].OpenedAt)
+				require.Len(t, page.Incidents[0].Events, 3)
+			}
+			for i := 0; i < 10; i++ {
+				m.handleAlertLifecycleEvent(fire)
+				m.handleAlertLifecycleEvent(resolve)
+				m.handleAlertLifecycleEvent(refire)
+			}
+			assertOpen()
+			// Historical read repair must not close an occurrence that re-fired.
+			incidents.EnsureAlertOccurrence(alert, &resolve.OccurredAt)
+			assertOpen()
+			finalResolve := resolve
+			finalResolve.OccurredAt = start.Add(3 * time.Minute)
+			m.handleAlertLifecycleEvent(finalResolve)
+			m.handleAlertLifecycleEvent(refire)
+			current := incidents.GetTimelineByAlertAt(alert.ID, start)
+			require.Equal(t, memory.IncidentStatusResolved, current.Status)
+			require.Equal(t, &finalResolve.OccurredAt, current.ClosedAt)
+			require.Len(t, current.Events, 4)
+		})
+	}
+}
+
+type occurrenceHTTPReceipt struct {
+	Event  string          `json:"event"`
+	Alerts []*alerts.Alert `json:"alerts"`
+}
+
+func occurrenceNotifier(t *testing.T, dir string, endpoint string) *notifications.NotificationManager {
+	t.Helper()
+	n := notifications.NewNotificationManagerWithDeferredQueue("", dir)
+	t.Cleanup(n.Stop)
+	if err := n.UpdateAllowedPrivateCIDRs("127.0.0.1/32,::1/128"); err != nil {
+		t.Fatal(err)
+	}
+	n.AddWebhook(notifications.WebhookConfig{ID: "ops", Enabled: true, URL: endpoint, Service: "generic"})
+	n.SetGroupingWindow(0)
+	n.SetNotifyOnResolve(false)
+	return n
+}
+
+func occurrenceManager(t *testing.T) (*alerts.Manager, models.PBSInstance) {
+	t.Helper()
+	a := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(a.Stop)
+	cfg := a.GetConfig()
+	cfg.Enabled, cfg.ActivationState, cfg.FlappingEnabled = true, alerts.ActivationActive, false
+	cfg.Schedule.QuietHours.Enabled = false
+	cfg.TimeThresholds["pbs"] = 0
+	cfg.PBSDefaults.CPU = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
+	a.UpdateConfig(cfg)
+	return a, models.PBSInstance{ID: "recurring-pbs", Name: "backup", Host: "pbs.invalid", Status: "online", ConnectionHealth: "healthy", CPU: 99}
+}
+
+func occurrenceEndpoint(t *testing.T) (string, <-chan occurrenceHTTPReceipt) {
+	t.Helper()
+	receipts := make(chan occurrenceHTTPReceipt, 8)
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var receipt occurrenceHTTPReceipt
+		if err := json.NewDecoder(r.Body).Decode(&receipt); err != nil {
+			t.Errorf("decode HTTP acceptance: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		receipts <- receipt
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(s.Close)
+	return s.URL, receipts
+}
+
+func awaitOccurrenceRows(t *testing.T, n *notifications.NotificationManager, count int) []*notifications.QueuedNotification {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		rows, err := n.GetQueue().GetPending(10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) == count {
+			return rows
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("pending rows = %d, want %d", len(rows), count)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func assertOccurrenceHTTP(t *testing.T, n *notifications.NotificationManager, receipts <-chan occurrenceHTTPReceipt, current *alerts.Alert) {
+	t.Helper()
+	n.StartQueueProcessing()
+	select {
+	case got := <-receipts:
+		if len(got.Alerts) != 1 || got.Alerts[0].ID != current.ID || !got.Alerts[0].StartTime.Equal(current.StartTime) {
+			t.Fatalf("wrong HTTP occurrence: %+v", got)
+		}
+		t.Logf("HTTP 200 accepted current occurrence %s at %s", current.ID, current.StartTime.Format(time.RFC3339Nano))
+	case <-time.After(12 * time.Second):
+		t.Fatal("current firing did not reach the local HTTP destination")
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		stats, err := n.GetQueueStats()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stats["sent"] == 1 && stats["cancelled"] == 1 && stats["pending"] == 0 && stats["sending"] == 0 {
+			t.Logf("persistent queue completion: %v", stats)
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("queue completion = %v", stats)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	select {
+	case extra := <-receipts:
+		t.Fatalf("obsolete or duplicate delivery: %+v", extra)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+// This existing-interface control also runs against the exact predecessor.
+// It models a delayed ID callback after the next occurrence has entered the
+// real persistent queue. It does not assert native timing or cause a refire.
+func TestMonitorDelayedIDResolutionPreservesNewQueuedOccurrence(t *testing.T) {
+	endpoint, receipts := occurrenceEndpoint(t)
+	dir := t.TempDir()
+	n := occurrenceNotifier(t, dir, endpoint)
+	a, pbs := occurrenceManager(t)
+	a.CheckPBS(pbs)
+	active := a.GetActiveAlerts()
+	if len(active) != 1 {
+		t.Fatalf("PBS firing = %+v", active)
+	}
+	old := active[0].Clone()
+	pbs.CPU = 0
+	a.CheckPBS(pbs)
+	if r := a.GetResolvedAlert(old.ID); r == nil || !r.Alert.StartTime.Equal(old.StartTime) {
+		t.Fatal("missing resolved PBS snapshot")
+	}
+	current := old.Clone()
+	current.StartTime = current.StartTime.Add(time.Nanosecond)
+	n.SendAlert(old)
+	n.SendAlert(current)
+	awaitOccurrenceRows(t, n, 2)
+	m := &Monitor{alertManager: a, notificationMgr: n}
+	m.handleAlertResolved(old.ID)
+	rows, err := n.GetQueue().GetPending(10)
+	if err != nil || len(rows) != 1 || len(rows[0].Alerts) != 1 || !rows[0].Alerts[0].StartTime.Equal(current.StartTime) {
+		t.Fatalf("delayed recovery cancelled the replacement occurrence: rows=%+v err=%v", rows, err)
+	}
+	// Resume the autonomous processor only after reopening the same disk state.
+	n.Stop()
+	n = occurrenceNotifier(t, dir, endpoint)
+	assertOccurrenceHTTP(t, n, receipts, current)
+}
+
+// One destination accepted the old firing and another still has a retry. After
+// restart, that pending work (and the lost RAM cooldown marker) is not evidence
+// that no recipient saw it. Recovery must use exact persisted receipts.
+func TestMonitorDelayedPartialResolutionKeepsDestinationRecovery(t *testing.T) {
+	endpoint, receipts := occurrenceEndpoint(t)
+	var failedFirings, unwantedRecoveries atomic.Int32
+	broken := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var receipt occurrenceHTTPReceipt
+		if err := json.NewDecoder(r.Body).Decode(&receipt); err != nil {
+			t.Errorf("decode failing destination: %v", err)
+		}
+		if receipt.Event == "resolved" {
+			unwantedRecoveries.Add(1)
+		} else {
+			failedFirings.Add(1)
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(broken.Close)
+	dir := t.TempDir()
+	open := func() *notifications.NotificationManager {
+		n := occurrenceNotifier(t, dir, endpoint)
+		n.SetNotifyOnResolve(true)
+		n.AddWebhook(notifications.WebhookConfig{ID: "unannounced", Enabled: true, URL: broken.URL, Service: "generic"})
+		return n
+	}
+	n := open()
+	a, pbs := occurrenceManager(t)
+	m := &Monitor{alertManager: a, notificationMgr: n}
+	// Use the live firing callback so the detector records notification policy
+	// state. Direct notifier calls would not establish LastNotified, and existing
+	// recovery policy would correctly suppress that unannounced detector alert.
+	a.SetAlertCallback(m.handleAlertFired)
+	a.CheckPBS(pbs)
+	old := a.GetActiveAlerts()[0].Clone()
+	if old.LastNotified == nil {
+		t.Fatal("detector did not admit the firing notification")
+	}
+	awaitOccurrenceRows(t, n, 2)
+	n.StartQueueProcessing()
+	select {
+	case got := <-receipts:
+		if got.Event != "" || len(got.Alerts) != 1 || !got.Alerts[0].StartTime.Equal(old.StartTime) {
+			t.Fatalf("wrong initial firing: %+v", got)
+		}
+	case <-time.After(12 * time.Second):
+		t.Fatal("initial firing did not reach accepting destination")
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		stats, err := n.GetQueueStats()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stats["sent"] == 1 && stats["pending"] == 1 && failedFirings.Load() > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("partial delivery not retained: %v", stats)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	n.Stop()
+	pbs.CPU = 0
+	a.CheckPBS(pbs)
+	n = open() // deferred processor; prior destination receipts are now on disk only
+	m = &Monitor{alertManager: a, notificationMgr: n}
+	a.SetAlertCallback(m.handleAlertFired)
+	pbs.CPU = 95
+	a.CheckPBS(pbs)
+	active := a.GetActiveAlerts()
+	if len(active) != 1 || active[0].ID != old.ID || active[0].StartTime.Equal(old.StartTime) {
+		t.Fatalf("not a new occurrence: %+v", active)
+	}
+	current := active[0].Clone()
+	awaitOccurrenceRows(t, n, 2)
+	m.handleAlertResolved(old.ID)
+	n.StartQueueProcessing()
+	seenFiring, seenRecovery := false, false
+	for i := 0; i < 2; i++ {
+		select {
+		case got := <-receipts:
+			if len(got.Alerts) != 1 || got.Alerts[0].ID != old.ID {
+				t.Fatalf("wrong delivery: %+v", got)
+			}
+			switch got.Event {
+			case "resolved":
+				if seenRecovery || !got.Alerts[0].StartTime.Equal(old.StartTime) {
+					t.Fatalf("wrong recovery occurrence: %+v", got)
+				}
+				seenRecovery = true
+			case "":
+				if seenFiring || !got.Alerts[0].StartTime.Equal(current.StartTime) {
+					t.Fatalf("wrong firing occurrence: %+v", got)
+				}
+				seenFiring = true
+			default:
+				t.Fatalf("unknown event: %+v", got)
+			}
+		case <-time.After(12 * time.Second):
+			t.Fatal("lost current firing or old accepted destination's recovery after restart")
+		}
+	}
+	deadline = time.Now().Add(3 * time.Second)
+	for {
+		stats, err := n.GetQueueStats()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stats["sent"] == 3 && stats["cancelled"] == 1 && stats["pending"]+stats["sending"]+stats["failed"]+stats["dlq"] == 1 {
+			t.Logf("partial destination recovery retained exact old receipt and new firing: %v", stats)
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("partial recovery queue completion: %v", stats)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if unwantedRecoveries.Load() != 0 {
+		t.Fatal("unannounced destination received a recovery")
+	}
+}

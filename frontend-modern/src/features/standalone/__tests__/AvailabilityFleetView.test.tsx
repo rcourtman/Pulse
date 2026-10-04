@@ -1,12 +1,17 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
 import type { AvailabilityHistoryTarget } from '@/api/availabilityHistory';
 import type { Resource } from '@/types/resource';
 import { AvailabilityFleetView } from '../AvailabilityFleetView';
 
 vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
   ResourceDetailDrawer: (props: { resource: Resource; onClose?: () => void }) => (
-    <div data-testid="resource-detail-drawer" data-resource-id={props.resource.id}>
+    <div
+      data-testid="resource-detail-drawer"
+      data-resource-id={props.resource.id}
+      data-resource-status={props.resource.status}
+    >
       <button type="button" onClick={props.onClose}>
         Close
       </button>
@@ -92,6 +97,28 @@ const history = (index: number): AvailabilityHistoryTarget => ({
 afterEach(cleanup);
 
 describe('AvailabilityFleetView', () => {
+  it('keeps open details bound to the selected ID in the current fleet, not the clicked snapshot', () => {
+    const original = resource(1);
+    const [resources, setResources] = createSignal([original]);
+    render(() => (
+      <AvailabilityFleetView
+        resources={resources()}
+        historyByTarget={new Map()}
+        historyLoading={false}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Open details for Service 1' }));
+    setResources([{ ...original, status: 'offline' }]);
+    expect(screen.getByTestId('resource-detail-drawer')).toHaveAttribute(
+      'data-resource-status',
+      'offline',
+    );
+    setResources([]);
+    expect(screen.queryByTestId('resource-detail-drawer')).not.toBeInTheDocument();
+    setResources([original]);
+    expect(screen.queryByTestId('resource-detail-drawer')).not.toBeInTheDocument();
+  });
+
   it('renders fifty keyboard-accessible attention tiles with non-color history labels', () => {
     const resources = Array.from({ length: 50 }, (_, index) => resource(index));
     const historyByTarget = new Map(

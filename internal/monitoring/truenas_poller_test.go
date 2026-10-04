@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -396,7 +397,7 @@ func TestTrueNASPollerConnectionSummariesCaptureFailures(t *testing.T) {
 	}
 }
 
-func TestTrueNASPollerManualConnectionTestsUpdateSummariesWithoutClearingObservedCounts(t *testing.T) {
+func TestTrueNASPollerRuntimeRecoveryUpdatesSummariesAndObservedCounts(t *testing.T) {
 	poller := NewTrueNASPoller(nil, time.Minute, nil)
 	connection := config.TrueNASInstance{
 		ID:               "manual-test-conn",
@@ -416,24 +417,28 @@ func TestTrueNASPollerManualConnectionTestsUpdateSummariesWithoutClearingObserve
 	}
 	firstSuccess := time.Date(2026, time.March, 30, 10, 0, 0, 0, time.UTC)
 	failureAt := firstSuccess.Add(2 * time.Minute)
-	manualSuccessAt := failureAt.Add(2 * time.Minute)
+	recoveryAt := failureAt.Add(2 * time.Minute)
 
 	poller.mu.Lock()
 	poller.recordConnectionSuccessLocked("default", connection.ID, connection, firstSuccess, firstSuccess, snapshot)
 	poller.recordConnectionFailureLocked("default", connection.ID, connection, errors.New("manual auth failed"), failureAt)
 	poller.mu.Unlock()
 
-	poller.RecordConnectionTestSuccess("default", connection.ID, connection, manualSuccessAt)
+	snapshot.CollectedAt = recoveryAt
+	poller.mu.Lock()
+	poller.recordConnectionSuccessLocked("default", connection.ID, connection, recoveryAt, recoveryAt, snapshot)
+	poller.mu.Unlock()
 
 	summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
 	if summary.Poll == nil || summary.Poll.LastSuccessAt == nil {
-		t.Fatalf("expected manual success to update poll summary, got %+v", summary.Poll)
+		t.Fatalf("expected runtime recovery to update poll summary, got %+v", summary.Poll)
 	}
-	if summary.Poll.LastError != nil {
-		t.Fatalf("expected manual success to clear previous error, got %+v", summary.Poll.LastError)
+	if summary.Poll.LastError != nil || summary.Poll.ConsecutiveFailures != 0 || !summary.Poll.LastSuccessAt.Equal(recoveryAt) {
+		t.Fatalf("expected runtime recovery to clear previous error, got %+v", summary.Poll)
 	}
-	if summary.Observed == nil || summary.Observed.Host != "manual-test" || summary.Observed.StoragePools != 1 {
-		t.Fatalf("expected observed summary to be preserved after manual success, got %+v", summary.Observed)
+	if summary.Observed == nil || summary.Observed.Host != "manual-test" || summary.Observed.StoragePools != 1 ||
+		summary.Observed.CollectedAt == nil || !summary.Observed.CollectedAt.Equal(recoveryAt) {
+		t.Fatalf("expected observed summary to advance after runtime recovery, got %+v", summary.Observed)
 	}
 }
 
@@ -1653,7 +1658,9 @@ func TestTrueNASPollerSupplementalInventoryReadyAtUsesPersistedActiveConnections
 	}
 
 	attemptedAt := time.Now().UTC()
-	poller.RecordConnectionTestSuccess("default", connection.ID, connection, attemptedAt)
+	poller.mu.Lock()
+	poller.recordConnectionSuccessLocked("default", connection.ID, connection, attemptedAt, attemptedAt, &truenas.FixtureSnapshot{CollectedAt: attemptedAt})
+	poller.mu.Unlock()
 
 	readyAt, settled := poller.SupplementalInventoryReadyAt(nil, "default")
 	if !settled {
@@ -2012,6 +2019,133 @@ func TestTrueNASPollerUnresponsiveRPCDoesNotFreezeOtherConnections(t *testing.T)
 	recovered := poller.ConnectionSummaries("default", instances)[instances[0].ID]
 	if recovered.Poll.LastError != nil || recovered.Poll.ConsecutiveFailures != 0 || !recovered.Poll.LastSuccessAt.After(*broken.Poll.LastSuccessAt) || recovered.Transport == nil || !recovered.Transport.Connected || recovered.Transport.Mode != truenas.TransportJSONRPC {
 		t.Fatalf("next poll did not recover the original connection over RPC: %+v", recovered)
+	}
+}
+
+// #2396's nonempty Apps path: an accepted subscription is then rejected by
+// middlewared. Keep the inventory, advance the poll ledger, observe native
+// alert disappearance and recover stats on the next ordinary poll. This is a
+// protocol/poller control, not a native appliance or incident-delivery proof.
+func TestTrueNASPollerSubscriptionRejectionKeepsPollingAndRecovers(t *testing.T) {
+	var reject atomic.Bool
+	var sessions, statsSubscriptions atomic.Int32
+	upgrader := websocket.Upgrader{}
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/current" {
+			t.Error("modern polling fell back to REST")
+			http.NotFound(w, r)
+			return
+		}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		sessions.Add(1)
+		for {
+			var request struct {
+				ID     int64             `json:"id"`
+				Method string            `json:"method"`
+				Params []json.RawMessage `json:"params"`
+			}
+			if conn.ReadJSON(&request) != nil {
+				return
+			}
+			var result any = []any{}
+			var collection string
+			switch request.Method {
+			case "auth.login_ex":
+				result = map[string]any{"response_type": "SUCCESS"}
+			case "system.info":
+				result = map[string]any{"hostname": "reject-nas", "version": "TrueNAS-SCALE-25.04.2.6", "system_serial": "REJECT-FIXTURE"}
+			case "pool.query":
+				result = []map[string]any{{"id": 1, "name": "tank", "status": "ONLINE", "size": 1000, "allocated": 400}}
+			case "app.query":
+				result = []map[string]any{{"id": "fixture-app", "name": "fixture-app", "state": "RUNNING"}}
+			case "alert.list":
+				if !reject.Load() {
+					result = []map[string]any{{"id": "fixture-alert", "level": "WARNING", "formatted": "fixture warning", "source": "fixture"}}
+				}
+			case "core.subscribe":
+				if len(request.Params) != 1 || json.Unmarshal(request.Params[0], &collection) != nil {
+					t.Error("invalid subscription")
+					return
+				}
+				result = "fixture-sub"
+			case "core.unsubscribe":
+				result = nil
+			}
+			if conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": request.ID, "result": result}) != nil {
+				return
+			}
+			if collection == "" {
+				continue
+			}
+			var params any
+			method := "collection_update"
+			if strings.HasPrefix(collection, "app.stats:") {
+				statsSubscriptions.Add(1)
+				if reject.Load() {
+					method = "notify_unsubscribed"
+					params = map[string]any{"collection": collection, "error": map[string]any{"error": 14, "errname": "EFAULT", "reason": "[EFAULT] Apps are not available", "trace": nil, "extra": nil}}
+				} else {
+					params = map[string]any{"collection": collection, "fields": []any{map[string]any{"app_name": "fixture-app", "cpu_usage": 12}}}
+				}
+			} else {
+				params = map[string]any{"collection": collection, "fields": map[string]any{"cpu": map[string]any{"usage": 10}}}
+			}
+			if conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "method": method, "params": params}) != nil {
+				return
+			}
+		}
+	}))
+	t.Cleanup(server.Close)
+	client, err := truenas.NewClient(truenas.ClientConfig{
+		Host: server.URL, APIKey: "fixture-key", Username: "fixture-user", Timeout: 2 * time.Second,
+		InsecureSkipVerify: true, Fingerprint: fmt.Sprintf("%x", sha256.Sum256(server.Certificate().Raw)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(client.Close)
+	instance := config.TrueNASInstance{ID: "reject-connection", Host: server.URL, Enabled: true}
+	provider := truenas.NewLiveProviderForConnection(&truenas.APIFetcher{Client: client}, instance.ID)
+	poller := NewTrueNASPoller(nil, 0, nil)
+	poller.providersByOrg["default"] = map[string]*truenas.Provider{instance.ID: provider}
+	poller.configsByOrg["default"] = map[string]config.TrueNASInstance{instance.ID: instance}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var lastSuccess time.Time
+	for poll := 0; poll < 3; poll++ {
+		reject.Store(poll == 1)
+		poller.ensureConnectionRuntimeStatusLocked("default", instance.ID).nextPollAt = time.Now().Add(-time.Second)
+		started := time.Now()
+		poller.pollAll(ctx)
+		if elapsed := time.Since(started); elapsed >= time.Second {
+			t.Fatalf("rejection stalled poll %d for %s", poll, elapsed)
+		}
+		summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{instance})[instance.ID]
+		if summary.Poll.LastError != nil || summary.Poll.LastSuccessAt == nil || !summary.Poll.LastSuccessAt.After(lastSuccess) || summary.Poll.LastAttemptAt == nil {
+			t.Fatalf("optional stats rejection prevented poll progress: %+v", summary)
+		}
+		lastSuccess = *summary.Poll.LastSuccessAt
+		snapshot := provider.Snapshot()
+		if snapshot == nil || snapshot.System.Hostname != "reject-nas" || len(snapshot.Pools) != 1 || len(snapshot.Apps) != 1 || snapshot.System.CPUPercent != 10 {
+			t.Fatalf("poll %d lost usable inventory/telemetry: %+v", poll, snapshot)
+		}
+		if poll == 1 {
+			if snapshot.Apps[0].Stats != nil || len(snapshot.Alerts) != 0 {
+				t.Fatal("rejected stats fabricated data or left the former native alert")
+			}
+		} else if snapshot.Apps[0].Stats == nil || snapshot.Apps[0].Stats.CPUPercent != 12 || len(snapshot.Alerts) != 1 {
+			t.Fatal("healthy stats/native alerts did not return")
+		}
+		if !hasTrueNASHostForOrg(poller, "default", "reject-nas") {
+			t.Fatal("poll lost the appliance identity")
+		}
+	}
+	if statsSubscriptions.Load() != 3 || sessions.Load() != 2 {
+		t.Fatalf("rejection replayed or churned later polls: subscriptions=%d sessions=%d", statsSubscriptions.Load(), sessions.Load())
 	}
 }
 
@@ -2585,5 +2719,231 @@ func TestTrueNASPartialReportingPipeline(t *testing.T) {
 	chart := monitor.GetGuestMetricsForChart("agent:"+instance.ID, "agent", instance.ID, time.Hour)
 	if points := chart["temperature"]; len(points) != 1 || points[0].Value != 42 {
 		t.Fatalf("sufficiently covered local History lost Thermals: %+v", points)
+	}
+}
+
+func setDiscoveryOrgMetadata(t *testing.T, persistence *config.ConfigPersistence, body string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(persistence.GetConfigDir(), "org.json"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func discoveryTenant(t *testing.T, mtp *config.MultiTenantPersistence, orgID string) *config.ConfigPersistence {
+	t.Helper()
+	persistence, err := mtp.GetPersistence(orgID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return persistence
+}
+
+func TestTrueNASPollerStorageIdentityDiscovery(t *testing.T) {
+	for _, tc := range []struct {
+		name, orgID, metadata, peerMetadata string
+	}{
+		{name: "normal_missing_metadata", orgID: "default"},
+		{name: "default_malformed_metadata", orgID: "default", metadata: "{broken"},
+		{name: "default_missing_metadata_id", orgID: "default", metadata: `{}`},
+		{name: "default_metadata_redirect", orgID: "default", metadata: `{"id":"metadata-redirect"}`},
+		{name: "unrelated_malformed_metadata", orgID: "default", peerMetadata: "{broken"},
+		{name: "tenant_malformed_metadata", orgID: "tenant-a", metadata: "{broken"},
+		{name: "tenant_metadata_collision", orgID: "tenant-a", metadata: `{"id":"tenant-b"}`, peerMetadata: `{"id":"tenant-b"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := newTrueNASMockServer(t, "storage-owner-a")
+			t.Cleanup(server.Close)
+			mtp, _ := newTestTenantPersistence(t)
+			persistence := discoveryTenant(t, mtp, tc.orgID)
+			connection := trueNASInstanceForServer(t, "same-local-id", server.URL(), true)
+			connection.Username = "fixture-owner"
+			if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+				t.Fatal(err)
+			}
+			if tc.metadata != "" {
+				setDiscoveryOrgMetadata(t, persistence, tc.metadata)
+			}
+			if tc.peerMetadata != "" {
+				peer := discoveryTenant(t, mtp, "tenant-b")
+				setDiscoveryOrgMetadata(t, peer, tc.peerMetadata)
+			}
+
+			// An actual standalone probe reads system.info even when the
+			// poller's organization discovery cannot reach this saved config.
+			probe, err := truenas.NewClient(truenas.ClientConfig{
+				Host: connection.Host, Port: connection.Port,
+				UseHTTPS: connection.UseHTTPS, APIKey: connection.APIKey, Username: connection.Username,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			defer probe.Close()
+			if err := probe.TestConnection(ctx); err != nil {
+				t.Fatalf("standalone probe failed: %v", err)
+			}
+
+			poller := NewTrueNASPoller(mtp, 0, nil)
+			t.Cleanup(func() {
+				for _, byConnection := range poller.providersByOrg {
+					for _, provider := range byConnection {
+						provider.Close()
+					}
+				}
+			})
+			poller.syncConnections()
+			if poller.providersByOrg[tc.orgID][connection.ID] == nil {
+				projection, _ := json.Marshal(poller.ConnectionSummaries(tc.orgID, []config.TrueNASInstance{connection})[connection.ID])
+				t.Fatalf("standalone probe succeeded but saved provider is absent: %s", projection)
+			}
+			poller.pollAll(ctx)
+			summary := poller.ConnectionSummaries(tc.orgID, []config.TrueNASInstance{connection})[connection.ID]
+			if summary.Poll == nil || summary.Poll.LastSuccessAt == nil || summary.Poll.LastAttemptAt == nil ||
+				summary.Observed == nil || summary.Observed.Host != "storage-owner-a" || summary.Transport == nil ||
+				!summary.Transport.Connected || !hasTrueNASHostForOrg(poller, tc.orgID, "storage-owner-a") {
+				t.Fatalf("ordinary polling did not reach saved connection: %+v", summary)
+			}
+			for _, other := range []string{"default", "tenant-b", "metadata-redirect"} {
+				if other != tc.orgID && len(poller.GetCurrentRecordsForOrg(other)) != 0 {
+					t.Fatalf("resources escaped storage owner into %s", other)
+				}
+			}
+			if _, err := os.Stat(filepath.Join(mtp.BaseDataDir(), "orgs", "metadata-redirect")); !os.IsNotExist(err) {
+				t.Fatal("metadata created an unrelated tenant directory")
+			}
+		})
+	}
+}
+
+func TestTrueNASPollerStorageDiscoveryAppliesRevocationWithBrokenPeerMetadata(t *testing.T) {
+	for _, action := range []string{"disable", "remove"} {
+		t.Run(action, func(t *testing.T) {
+			server := newTrueNASMockServer(t, "revocation-owner")
+			t.Cleanup(server.Close)
+			mtp, persistence := newTestTenantPersistence(t)
+			connection := trueNASInstanceForServer(t, "revocation-id", server.URL(), true)
+			if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+				t.Fatal(err)
+			}
+			poller := NewTrueNASPoller(mtp, 0, nil)
+			t.Cleanup(func() {
+				for _, byConnection := range poller.providersByOrg {
+					for _, provider := range byConnection {
+						provider.Close()
+					}
+				}
+			})
+			poller.syncConnections()
+			poller.pollAll(context.Background())
+			if !hasTrueNASHostForOrg(poller, "default", "revocation-owner") {
+				t.Fatal("initial healthy fixture did not poll")
+			}
+			before := server.RequestCount()
+			setDiscoveryOrgMetadata(t, discoveryTenant(t, mtp, "broken-peer"), "{broken")
+			next := []config.TrueNASInstance{}
+			if action == "disable" {
+				connection.Enabled = false
+				next = append(next, connection)
+			}
+			if err := persistence.SaveTrueNASConfig(next); err != nil {
+				t.Fatal(err)
+			}
+			poller.syncConnections()
+			if poller.providersByOrg["default"][connection.ID] != nil {
+				t.Fatal("unrelated org metadata blocked authoritative connection revocation")
+			}
+			poller.pollAll(context.Background())
+			if server.RequestCount() != before || len(poller.GetCurrentRecordsForOrg("default")) != 0 {
+				t.Fatal("revoked connection still polled or contributed current records")
+			}
+			if action == "remove" && poller.statusByOrg["default"][connection.ID] != nil {
+				t.Fatal("removed connection retained runtime state")
+			}
+		})
+	}
+}
+
+func TestTrueNASPollerStorageIdentitySeparatesTenantsAndTracksRemoval(t *testing.T) {
+	mtp, _ := newTestTenantPersistence(t)
+	servers := map[string]*trueNASMockServer{}
+	for _, orgID := range []string{"tenant-a", "tenant-b"} {
+		server := newTrueNASMockServer(t, orgID+"-nas")
+		t.Cleanup(server.Close)
+		servers[orgID] = server
+		connection := trueNASInstanceForServer(t, "same-local-id", server.URL(), true)
+		persistence := discoveryTenant(t, mtp, orgID)
+		if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+			t.Fatal(err)
+		}
+		setDiscoveryOrgMetadata(t, persistence, `{"id":"tenant-b"}`)
+	}
+	poller := NewTrueNASPoller(mtp, 0, nil)
+	t.Cleanup(func() {
+		for _, byConnection := range poller.providersByOrg {
+			for _, provider := range byConnection {
+				provider.Close()
+			}
+		}
+	})
+	poller.syncConnections()
+	poller.pollAll(context.Background())
+	for _, orgID := range []string{"tenant-a", "tenant-b"} {
+		if !hasTrueNASHostForOrg(poller, orgID, orgID+"-nas") {
+			t.Fatalf("missing own tenant's resources: %s", orgID)
+		}
+		for _, other := range []string{"tenant-a", "tenant-b"} {
+			if other != orgID && hasTrueNASHostForOrg(poller, orgID, other+"-nas") {
+				t.Fatal("same local connection ID merged different tenant inventories")
+			}
+		}
+	}
+	retained := poller.providersByOrg["tenant-b"]["same-local-id"]
+	removedRequests := servers["tenant-a"].RequestCount()
+	if err := mtp.DeleteOrganization("tenant-a"); err != nil {
+		t.Fatal(err)
+	}
+	poller.syncConnections()
+	poller.pollAll(context.Background())
+	if len(poller.GetCurrentRecordsForOrg("tenant-a")) != 0 || len(poller.providersByOrg["tenant-a"]) != 0 ||
+		len(poller.statusByOrg["tenant-a"]) != 0 || servers["tenant-a"].RequestCount() != removedRequests {
+		t.Fatal("removed tenant retained runtime inventory or kept polling")
+	}
+	if poller.providersByOrg["tenant-b"]["same-local-id"] != retained ||
+		!hasTrueNASHostForOrg(poller, "tenant-b", "tenant-b-nas") {
+		t.Fatal("removed tenant disrupted a different storage owner's provider")
+	}
+}
+
+func TestTrueNASPollerStorageDiscoveryDoesNotReuseUnreadableConnectionConfig(t *testing.T) {
+	server := newTrueNASMockServer(t, "config-read-owner")
+	t.Cleanup(server.Close)
+	mtp, persistence := newTestTenantPersistence(t)
+	connection := trueNASInstanceForServer(t, "config-read-id", server.URL(), true)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatal(err)
+	}
+	poller := NewTrueNASPoller(mtp, 0, nil)
+	t.Cleanup(func() {
+		for _, byConnection := range poller.providersByOrg {
+			for _, provider := range byConnection {
+				provider.Close()
+			}
+		}
+	})
+	poller.syncConnections()
+	poller.pollAll(context.Background())
+	if !hasTrueNASHostForOrg(poller, "default", "config-read-owner") {
+		t.Fatal("initial fixture did not poll")
+	}
+	before := server.RequestCount()
+	if err := os.WriteFile(filepath.Join(persistence.GetConfigDir(), "truenas.enc"), []byte("{broken"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	poller.syncConnections()
+	poller.pollAll(context.Background())
+	if poller.providersByOrg["default"][connection.ID] != nil || server.RequestCount() != before ||
+		len(poller.GetCurrentRecordsForOrg("default")) != 0 {
+		t.Fatal("unreadable authoritative config reused old credentials or records")
 	}
 }

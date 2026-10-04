@@ -287,10 +287,10 @@ export const AICostDashboard: Component = () => {
 
   return (
     <Card padding="none" class="overflow-hidden border border-border" border={false}>
-      <div class="bg-blue-50 dark:bg-blue-900 px-4 py-4 border-b border-border sm:px-6">
+      <div class="bg-blue-50 dark:bg-blue-900/25 px-4 py-4 border-b border-border sm:px-6">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div class="flex min-w-0 items-start gap-3 sm:flex-1 sm:items-center">
-            <div class="shrink-0 p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
+            <div class="shrink-0 p-2 bg-blue-100 dark:bg-blue-900/25 rounded-md">
               <svg
                 class="w-5 h-5 text-blue-600 dark:text-blue-300"
                 fill="none"
@@ -340,14 +340,14 @@ export const AICostDashboard: Component = () => {
         </Show>
 
         <Show when={summary()?.truncated}>
-          <div class="text-xs px-3 py-2 rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900 text-blue-900 dark:text-blue-100">
+          <div class="text-xs px-3 py-2 rounded-sm border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/25 text-blue-900/25 dark:text-blue-100">
             Showing the last {summary()?.effective_days} days due to a {summary()?.retention_days}
             -day retention window.
           </div>
         </Show>
 
         <Show when={isOverBudget()}>
-          <div class="text-xs px-3 py-2 rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100">
+          <div class="text-xs px-3 py-2 rounded-sm border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/25 text-red-900/25 dark:text-red-100">
             Estimated spend ({formatUSD(estimatedTotalUSD() ?? 0)}) is above your budget (
             {formatUSD(budgetForRange() ?? 0)}).
           </div>
@@ -357,14 +357,14 @@ export const AICostDashboard: Component = () => {
           <div
             role="alert"
             aria-live="polite"
-            class="flex items-center justify-between gap-3 text-xs px-3 py-2 rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100"
+            class="flex items-center justify-between gap-3 text-xs px-3 py-2 rounded-sm border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 text-amber-900/25 dark:text-amber-100"
           >
             <div class="truncate">Couldn’t refresh. Showing last loaded data. {loadError()}</div>
             <button
               type="button"
               disabled={loading()}
               onClick={() => loadSummary(days())}
-              class={`shrink-0 px-2 py-1 rounded border border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+              class={`shrink-0 px-2 py-1 rounded-sm border border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/25 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               Retry
             </button>
@@ -522,7 +522,7 @@ export const AICostDashboard: Component = () => {
                     type="button"
                     disabled={loading()}
                     onClick={() => downloadExport('csv')}
-                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-border hover:bg-surface-hover ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded-sm border border-border hover:bg-surface-hover ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     Export CSV
                   </button>
@@ -530,7 +530,7 @@ export const AICostDashboard: Component = () => {
                     type="button"
                     disabled={loading()}
                     onClick={() => downloadExport('json')}
-                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-border hover:bg-surface-hover ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded-sm border border-border hover:bg-surface-hover ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     Export JSON
                   </button>
@@ -538,7 +538,7 @@ export const AICostDashboard: Component = () => {
                     type="button"
                     disabled={loading()}
                     onClick={resetHistory}
-                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-border hover:bg-surface-hover ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded-sm border border-border hover:bg-surface-hover ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     {AI_COST_RESET_HISTORY_LABEL}
                   </button>

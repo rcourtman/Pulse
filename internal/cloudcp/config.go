@@ -15,6 +15,7 @@ import (
 	"github.com/joho/godotenv"
 	runtimeconfig "github.com/rcourtman/pulse-go-rewrite/internal/config"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	"github.com/rs/zerolog/log"
 )
 
 // ControlPlaneMode selects the business/runtime shape exposed by cloudcp.
@@ -31,6 +32,10 @@ const (
 	defaultProviderHostedMSPPlanVersion = pkglicensing.PlanVersionMSPEval
 	ProviderMSPPlanSourceLicenseFile    = "license_file"
 	ProviderMSPPlanSourceEnvFallback    = "environment_fallback"
+	// ProviderMSPPlanSourceRenewedLicense is a licence the control plane
+	// fetched from the licence server for its paid subscription and kept in
+	// its data directory (ProviderMSPRenewedLicensePath).
+	ProviderMSPPlanSourceRenewedLicense = "renewed_license"
 	maxProviderMSPLicenseFileBytes      = 64 * 1024
 
 	// cpauthDefaultSessionTTL mirrors cpauth.SessionTTL for Pulse-hosted
@@ -95,6 +100,7 @@ type CPConfig struct {
 	ProviderMSPLicenseEmail           string // Validated provider MSP license holder
 	ProviderMSPLicenseKey             string // Raw validated provider MSP license (chained into tenant leases)
 	ProviderMSPLeaseSigningPublicKey  string // entitlement_signing_public_key claim from the provider MSP license
+	ProviderMSPLicenseExpiresAt       time.Time
 	LicenseServerURL                  string
 	LicenseAdminToken                 string
 	TrialActivationPrivateKey         string
@@ -215,17 +221,26 @@ func LoadConfig() (*CPConfig, error) {
 	providerMSPLicenseEmail := ""
 	providerMSPLicenseKey := ""
 	providerMSPLeaseSigningPublicKey := ""
+	providerMSPLicenseExpiresAt := time.Time{}
 	if isMSPControlPlaneMode(controlPlaneMode) && providerMSPLicenseFile != "" {
-		resolved, err := resolveProviderMSPPlanFromLicenseFile(providerMSPLicenseFile)
+		resolved, source, err := resolveProviderMSPLicense(providerMSPLicenseFile, dataDir)
 		if err != nil {
 			return nil, fmt.Errorf("resolve provider MSP license: %w", err)
 		}
 		providerMSPPlanVersion = resolved.PlanVersion
-		providerMSPPlanSource = ProviderMSPPlanSourceLicenseFile
+		providerMSPPlanSource = source
+		providerMSPLicenseExpiresAt = resolved.ExpiresAt
 		providerMSPLicenseID = resolved.LicenseID
 		providerMSPLicenseEmail = resolved.LicenseEmail
 		providerMSPLicenseKey = resolved.LicenseKey
 		providerMSPLeaseSigningPublicKey = resolved.LeaseSigningPublicKey
+		if resolved.lapsed(time.Now()) {
+			log.Warn().
+				Str("license_id", resolved.LicenseID).
+				Str("plan_version", resolved.PlanVersion).
+				Time("expired_at", resolved.ExpiresAt).
+				Msg("Provider MSP license has lapsed: the portal stays up to sell the renewal, no new clients can be added, and client workspaces drop MSP capabilities")
+		}
 	}
 
 	cfg := &CPConfig{
@@ -280,6 +295,7 @@ func LoadConfig() (*CPConfig, error) {
 		ProviderMSPLicenseFile:            providerMSPLicenseFile,
 		ProviderMSPLicenseKey:             providerMSPLicenseKey,
 		ProviderMSPLeaseSigningPublicKey:  providerMSPLeaseSigningPublicKey,
+		ProviderMSPLicenseExpiresAt:       providerMSPLicenseExpiresAt,
 		ProviderMSPLicenseID:              providerMSPLicenseID,
 		ProviderMSPLicenseEmail:           providerMSPLicenseEmail,
 		LicenseServerURL:                  envOrDefault("PULSE_LICENSE_SERVER_URL", "https://license.pulserelay.pro"),
@@ -614,9 +630,17 @@ type providerMSPLicenseResolution struct {
 	LicenseEmail          string
 	LicenseKey            string // raw signed license, chained into tenant entitlement leases
 	LeaseSigningPublicKey string // entitlement_signing_public_key claim, empty when the license predates lease chaining
+	ExpiresAt             time.Time
 }
 
+// resolveProviderMSPPlanFromLicenseFile validates a licence the control plane
+// is about to adopt, such as one the licence server just returned. It refuses
+// a lapsed licence.
 func resolveProviderMSPPlanFromLicenseFile(path string) (*providerMSPLicenseResolution, error) {
+	return resolveProviderMSPLicenseFile(path, false)
+}
+
+func resolveProviderMSPLicenseFile(path string, allowLapsed bool) (*providerMSPLicenseResolution, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return nil, fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE is required")
@@ -626,7 +650,11 @@ func resolveProviderMSPPlanFromLicenseFile(path string) (*providerMSPLicenseReso
 		return nil, err
 	}
 	pkglicensing.InitEmbeddedPublicKey()
-	license, err := pkglicensing.ValidateLicense(licenseKey)
+	validate := pkglicensing.ValidateLicense
+	if allowLapsed {
+		validate = pkglicensing.ValidateLicenseAllowingLapse
+	}
+	license, err := validate(licenseKey)
 	if err != nil {
 		return nil, fmt.Errorf("validate CP_PROVIDER_MSP_LICENSE_FILE: %w", err)
 	}
@@ -646,13 +674,95 @@ func resolveProviderMSPPlanFromLicenseFile(path string) (*providerMSPLicenseReso
 	if _, known := pkglicensing.WorkspaceLimitForPlan(plan); !known {
 		return nil, fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE plan_version must have a known workspace limit, got %q", plan)
 	}
-	return &providerMSPLicenseResolution{
+	resolution := &providerMSPLicenseResolution{
 		PlanVersion:           plan,
 		LicenseID:             strings.TrimSpace(license.Claims.LicenseID),
 		LicenseEmail:          strings.ToLower(strings.TrimSpace(license.Claims.Email)),
 		LicenseKey:            licenseKey,
 		LeaseSigningPublicKey: strings.TrimSpace(license.Claims.EntitlementSigningPublicKey),
-	}, nil
+	}
+	if license.Claims.ExpiresAt > 0 {
+		resolution.ExpiresAt = time.Unix(license.Claims.ExpiresAt, 0).UTC()
+	}
+	return resolution, nil
+}
+
+// ProviderMSPPlanSourceIsSignedLicense reports whether the plan came from a
+// Pulse-signed licence, either the host licence file or a renewed licence,
+// rather than the development-only environment fallback.
+func ProviderMSPPlanSourceIsSignedLicense(source string) bool {
+	switch strings.TrimSpace(source) {
+	case ProviderMSPPlanSourceLicenseFile, ProviderMSPPlanSourceRenewedLicense:
+		return true
+	default:
+		return false
+	}
+}
+
+// ProviderMSPRenewedLicensePath is where a provider-hosted control plane
+// keeps the licence it fetched for its paid subscription. It lives in the
+// data directory, which the control plane can write and backups carry,
+// because CP_PROVIDER_MSP_LICENSE_FILE is a read-only secret mount.
+func ProviderMSPRenewedLicensePath(dataDir string) string {
+	return filepath.Join(dataDir, "control-plane", "provider-msp-license.jwt")
+}
+
+// lapsed reports whether the licence is past its expiry and grace period, the
+// point at which client runtimes stop accepting leases chained to it.
+func (r *providerMSPLicenseResolution) lapsed(now time.Time) bool {
+	return providerMSPLicenseLapsed(r.ExpiresAt, now)
+}
+
+func providerMSPLicenseLapsed(expiresAt, now time.Time) bool {
+	return !expiresAt.IsZero() && now.After(expiresAt.Add(pkglicensing.DefaultGracePeriod))
+}
+
+// ProviderMSPLicenseLapsed reports whether this platform's licence is past its
+// expiry and grace period. The control plane keeps running so its portal can
+// sell the renewal, but it adds no clients, and client runtimes drop MSP
+// capabilities on their own when they verify the lapsed licence.
+func (c *CPConfig) ProviderMSPLicenseLapsed(now time.Time) bool {
+	if c == nil {
+		return false
+	}
+	return providerMSPLicenseLapsed(c.ProviderMSPLicenseExpiresAt, now)
+}
+
+// resolveProviderMSPLicense picks the licence a provider-hosted control plane
+// starts on: a current renewed licence first, then a current
+// CP_PROVIDER_MSP_LICENSE_FILE. The renewed licence wins because the host file
+// is usually the self-issued evaluation, which expires; a paying provider must
+// keep starting after it does. When neither is current it still starts, on
+// whichever lapsed licence expires later, because refusing to start would take
+// down the portal, which is the only place a provider can buy or renew. Both
+// candidates must be authentic Pulse licences, and validate still ties the
+// chosen one to this control plane's lease signing key.
+func resolveProviderMSPLicense(hostFile, dataDir string) (*providerMSPLicenseResolution, string, error) {
+	now := time.Now()
+	var renewed *providerMSPLicenseResolution
+	renewedPath := ProviderMSPRenewedLicensePath(dataDir)
+	if _, err := os.Stat(renewedPath); err == nil {
+		candidate, err := resolveProviderMSPLicenseFile(renewedPath, true)
+		if err != nil {
+			log.Warn().Err(err).Str("path", renewedPath).Msg("Renewed provider MSP license is unusable; falling back to CP_PROVIDER_MSP_LICENSE_FILE")
+		} else {
+			renewed = candidate
+		}
+	}
+	if renewed != nil && !renewed.lapsed(now) {
+		return renewed, ProviderMSPPlanSourceRenewedLicense, nil
+	}
+	host, err := resolveProviderMSPLicenseFile(hostFile, true)
+	if err != nil {
+		if renewed != nil {
+			return renewed, ProviderMSPPlanSourceRenewedLicense, nil
+		}
+		return nil, "", err
+	}
+	if !host.lapsed(now) || renewed == nil || !renewed.ExpiresAt.After(host.ExpiresAt) {
+		return host, ProviderMSPPlanSourceLicenseFile, nil
+	}
+	return renewed, ProviderMSPPlanSourceRenewedLicense, nil
 }
 
 func readProviderMSPLicenseFile(path string) (string, error) {

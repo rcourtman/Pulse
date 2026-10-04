@@ -82,7 +82,7 @@ export function PatrolRecentWorkPanel() {
       <div aria-live="polite">
         <Show when={error()}>
           {(message) => (
-            <div class="m-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
+            <div class="m-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/25 dark:bg-red-950/30 dark:text-red-200">
               <p class="font-semibold">Verified work is unavailable</p>
               <p class="mt-1 text-xs leading-5">{message()}</p>
             </div>

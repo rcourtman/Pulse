@@ -326,7 +326,7 @@ describe('sanitizeDiagnosticsData / apiTokens', () => {
     });
   });
 
-  it('redacts token hint/name/id by position and nulls usage hosts (both Array guards true)', () => {
+  it('redacts token hint/name/id and keeps anonymous usage joins (both Array guards true)', () => {
     const sanitized = sanitizeDiagnosticsData({
       ...baseData(),
       apiTokens: {
@@ -350,8 +350,8 @@ describe('sanitizeDiagnosticsData / apiTokens', () => {
       { id: 'token-2', name: 'token-2', hint: '[REDACTED]' },
     ]);
     expect(apiTokens.usage).toStrictEqual([
-      { tokenId: 'tok-aaa', hosts: undefined, count: 3 },
-      { tokenId: 'tok-bbb', hosts: undefined, count: 0 },
+      { tokenId: 'token-1', hosts: undefined, count: 3 },
+      { tokenId: 'token-2', hosts: undefined, count: 0 },
     ]);
   });
 });
@@ -553,8 +553,8 @@ describe('sanitizeDiagnosticsData / snapshot arrays', () => {
 
     const out = sanitized as unknown as DiagnosticsDataWithSnapshots;
     expect(out.nodeSnapshots).toStrictEqual([
-      { instance: 'node-1', cpu: 0.4 },
-      { instance: 'node-2', mem: 8192 },
+      { instance: 'instance-1', cpu: 0.4 },
+      { instance: 'instance-2', mem: 8192 },
     ]);
   });
 
@@ -565,7 +565,7 @@ describe('sanitizeDiagnosticsData / snapshot arrays', () => {
     } as DiagnosticsDataWithSnapshots);
 
     const out = sanitized as unknown as DiagnosticsDataWithSnapshots;
-    expect(out.guestSnapshots).toStrictEqual([{ instance: 'node-1', status: 'running' }]);
+    expect(out.guestSnapshots).toStrictEqual([{ instance: 'instance-1', status: 'running' }]);
   });
 
   it('stamps an instance placeholder on every memorySources entry', () => {
@@ -575,7 +575,7 @@ describe('sanitizeDiagnosticsData / snapshot arrays', () => {
     } as DiagnosticsDataWithSnapshots);
 
     const out = sanitized as unknown as DiagnosticsDataWithSnapshots;
-    expect(out.memorySources).toStrictEqual([{ instance: 'node-1', source: 'balloon' }]);
+    expect(out.memorySources).toStrictEqual([{ instance: 'instance-1', source: 'balloon' }]);
   });
 });
 

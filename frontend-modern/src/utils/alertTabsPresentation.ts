@@ -72,7 +72,7 @@ export function getAlertsSidebarTabClass({
   const tone = isDisabled
     ? 'cursor-not-allowed bg-surface-alt text-muted'
     : isActive
-      ? 'bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-200'
+      ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/25 dark:text-blue-200'
       : 'hover:bg-surface-hover hover:text-base-content';
   return `flex w-full items-center rounded-md text-sm font-medium transition-colors ${layout} ${tone}`;
 }
@@ -84,9 +84,9 @@ export function getAlertsMobileTabClass({
   const tone = isDisabled
     ? 'cursor-not-allowed bg-surface-alt text-muted'
     : isActive
-      ? 'bg-surface text-base-content shadow-sm'
+      ? 'bg-surface text-base-content shadow-xs'
       : 'text-muted hover:text-base-content';
-  return `flex-shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-[11px] font-medium transition-all sm:flex-1 sm:min-w-0 sm:px-4 sm:py-2 sm:text-xs ${tone}`;
+  return `shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-[11px] font-medium transition-all sm:flex-1 sm:min-w-0 sm:px-4 sm:py-2 sm:text-xs ${tone}`;
 }
 
 export function getAlertsTabTitle({

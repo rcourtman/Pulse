@@ -19,50 +19,70 @@ verification guidance.
 
 > Note: For agent-based temperature monitoring, use `pulse-agent --enable-proxmox` or SSH-based collection. The legacy sensor proxy has been removed. See `docs/TEMPERATURE_MONITORING.md`.
 
+When each Proxmox cluster node runs an agent, add
+`--disable-cluster-peer-sensors` (or set
+`PULSE_DISABLE_CLUSTER_PEER_SENSORS=true`) to keep temperature collection local
+to each node. This preserves local host telemetry and Proxmox integration while
+preventing duplicate root-SSH sensor polling between cluster peers.
+
 ## Quick Start
 
-Generate an installation command in the UI:
+Choose the host profile and create a monitoring token in the UI:
 **Settings → Infrastructure → Install on a host**
 
 Choose a target profile in that screen when you want explicit install flags for Docker, Kubernetes, Proxmox VE, or Proxmox Backup Server.
 
-The generated command is not tied to a single machine. For a Proxmox VE
-cluster, one API connection already provides cluster-wide inventory; the agent
-is per host, so run the same generated command on each cluster node where you
-want agent-provided telemetry (temperatures, SMART, host identity). Each agent
-registers itself and attaches to its own cluster member.
+Keep the token out of shell commands, history, URLs and screenshots. Use the
+private-file installation steps below; the command arguments contain only the
+file's path. A Pulse agent token is not a Proxmox or PBS API token. Monitoring
+does not require command execution: leave that option off unless you intend
+to grant it. See [Agent Security](AGENT_SECURITY.md) before choosing a root
+host agent instead of an API connection or the opt-in Linux safe profile.
 
-The same generated command is also the supported v5-to-v6 agent upgrade path.
+For a Proxmox VE cluster, one API connection already provides cluster-wide
+inventory; the agent is per host. Repeat the private-file installation on each
+cluster node where you want agent-provided telemetry (temperatures, SMART, host
+identity), using the intended profile. Each agent registers itself and attaches
+to its own cluster member.
+
+The same installer is also the supported v5-to-v6 agent upgrade path.
 Run it on the host that already has the v5 `pulse-agent` service to replace the
 binary and service configuration in place; do not uninstall the old service
 first unless you are intentionally removing that host from Pulse.
 
 ### Moving Pulse to a new address
 
-Configuration export/import restores the server-side agent records and API
-tokens. It cannot rewrite the primary Pulse URL on remote machines because
-agents initiate the connection. Prefer a stable DNS name for the primary URL
-so replacing the Pulse host does not require an agent migration.
+Configuration export/import restores API-token records, not the server-side
+agent inventory, enrolment state, profiles or assignments. See the
+[configuration-transfer scope](MIGRATION.md#configuration-transfer) before
+retiring the old server. Import cannot rewrite the primary Pulse URL on remote
+machines because agents initiate the connection. Prefer a stable DNS name for
+the primary URL, but still verify fresh reports and agent admission after a move.
 
 After importing the configuration on a Pulse server with a different address,
-retarget each existing standard Linux agent from that agent machine:
+retarget each existing standard Linux agent from that agent machine. Download
+and inspect the installer from the **new** Pulse address using the HTTPS
+preparation below; retargeting reuses the saved credential, so do not create
+another token just for this operation:
 
 ```bash
-curl -fsSL https://pulse.example.com:7655/install.sh | \
-  sudo bash -s -- --retarget --url https://pulse.example.com:7655
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --retarget --url https://pulse.example.com
 ```
 
 The retarget operation recovers the existing token, agent ID, enabled
 collectors, and other service options. It does not carry the old endpoint's
 TLS bypass, custom CA, or certificate fingerprint to the new address. Supply
-`--cacert`, `--server-fingerprint`, or (only on a trusted network)
-`--insecure` explicitly when the new endpoint requires it. The script must
-come from the new server so it supports the retarget operation. A newly
-generated full installation command from **Settings → Infrastructure → Install
-on a host** remains the fallback.
+`--cacert` or an independently verified `--server-fingerprint` explicitly
+when the new agent endpoint requires it. The installer download itself must
+use a trusted certificate or a separately verified CA file; an agent
+fingerprint option does not verify that earlier download. The script must
+come from the new server so it supports retargeting. If retargeting is not
+supported on that host, use the private-file installation below with the
+intended profile, rather than uninstalling the existing service first.
 
-On Windows, run the full generated PowerShell installation command from the
-new Pulse server as Administrator, including the desired collector options.
+On Windows, use the PowerShell private-file installation below from the new
+Pulse server as Administrator, including the desired collector options.
 Do not expect the configuration import itself to make agent-only machines
 appear at the new address.
 
@@ -77,42 +97,96 @@ the agent has reported, and confirm the host-local version with
 This is the agent installer served by your Pulse server. It is separate from the
 top-level GitHub `install.sh`, which installs or updates the Pulse server itself.
 
-### Linux (systemd)
-```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <api-token>
-```
+### Private-file installation: Linux, macOS and NAS
 
-### macOS
-```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <api-token>
-```
+Use an administrative shell **on the host being monitored**, not the Pulse
+server or an unrelated container. Linux/systemd, macOS, Synology and TrueNAS
+use the same preparation. TrueNAS SCALE uses systemd; CORE uses rc.d. An API
+connection is usually enough for TrueNAS inventory and usage; an agent is
+optional for host-local data.
+
+1. In that shell, protect the file before opening the editor. Save only the
+   Pulse agent token, with no quotes or header. Use your own private directory
+   and regular files, not shared paths or symlinks:
+
+   ```bash
+   umask 077
+   mkdir -p "$HOME/.config/pulse"
+   chmod 700 "$HOME/.config/pulse"
+   touch "$HOME/.config/pulse/agent-token"
+   chmod 600 "$HOME/.config/pulse/agent-token"
+   vi "$HOME/.config/pulse/agent-token"
+   ```
+
+2. Replace `https://pulse.example.com` with your Pulse server's HTTPS address
+   in both the download and installation commands. Download to a file:
+
+   ```bash
+   curl --fail --silent --show-error --connect-timeout 10 --max-time 60 \
+     --output "$HOME/.config/pulse/agent-install.sh" \
+     https://pulse.example.com/install.sh
+   ```
+
+   **Stop if the download fails.** Inspect the saved script before executing
+   it. Do not bypass certificate verification or pipe an unchecked response
+   into a privileged shell. For a private CA, add curl's `--cacert` with the
+   separately verified CA file, and supply the installer's `--cacert` option
+   for the agent connection as well. Do not substitute GitHub's top-level
+   `install.sh`: that installs the Pulse server, not the agent.
+
+3. Install with the private token file, adding a profile from
+   [Installation Options](#installation-options) when needed:
+
+   ```bash
+   bash "$HOME/.config/pulse/agent-install.sh" \
+     --url https://pulse.example.com \
+     --token-file "$HOME/.config/pulse/agent-token"
+   ```
+
+Keep the bootstrap token file private and remove that copy when no longer
+needed; do not delete the installed agent's runtime credential. Check a fresh
+report in Pulse and `pulse-agent --version` on the host. A started service or
+hardware capacity alone does not prove that every requested metric is present.
 
 ### Windows (PowerShell, run as Administrator)
+
+Use a **new** setup directory under your own Windows profile; if it already
+exists, choose another name. The following preparation grants access only to
+your account and SYSTEM. Stop if directory creation or the ACL command fails:
+
 ```powershell
-irm http://<pulse-ip>:7655/install.ps1 | iex
+$setupDir = Join-Path $env:USERPROFILE 'PulseAgentSetup'
+New-Item -ItemType Directory -Path $setupDir -ErrorAction Stop | Out-Null
+$userSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+icacls.exe $setupDir /inheritance:r /grant:r "*${userSid}:(OI)(CI)F" '*S-1-5-18:(OI)(CI)F'
+if ($LASTEXITCODE -ne 0) { throw 'Could not protect the setup directory' }
+$tokenFile = Join-Path $setupDir 'agent-token.txt'
+New-Item -ItemType File -Path $tokenFile -ErrorAction Stop | Out-Null
+Start-Process -FilePath notepad.exe -ArgumentList "`"$tokenFile`"" -Wait
 ```
 
-With environment variables:
+In Notepad, save only the Pulse agent token, with no quotes or header. Never
+paste it into a PowerShell command or assign a literal secret to an environment
+variable. Replace the example HTTPS address in both commands below. Download
+and inspect the script first; do not use `Invoke-Expression` on a web response:
+
 ```powershell
-$env:PULSE_URL="http://<pulse-ip>:7655"
-$env:PULSE_TOKEN="<api-token>"
-irm http://<pulse-ip>:7655/install.ps1 | iex
+$installerFile = Join-Path $setupDir 'install.ps1'
+Invoke-WebRequest -Uri 'https://pulse.example.com/install.ps1' -OutFile $installerFile -ErrorAction Stop
 ```
 
-### Synology NAS
-```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <api-token>
+Only after a successful download and inspection, run the saved script. Clear
+an old `PULSE_TOKEN` environment value so it cannot override the file:
+
+```powershell
+Remove-Item Env:PULSE_TOKEN -ErrorAction SilentlyContinue
+& $installerFile -Url 'https://pulse.example.com' -TokenFile $tokenFile
 ```
 
-### TrueNAS SCALE/CORE
-TrueNAS SCALE and TrueNAS CORE are both supported. The installer auto-detects the platform and configures the appropriate service manager (systemd for SCALE, rc.d for CORE).
-```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <api-token>
-```
+Keep the setup directory private and remove the bootstrap copy when no longer
+needed, not the installed service's token. Verify a fresh report and the
+installed agent version; the remaining platform trust trade-offs are in
+[Agent Security](AGENT_SECURITY.md).
 
 ## Features
 
@@ -229,42 +303,57 @@ storage nodes to avoid duplicate or ambiguously correlated readings.
 ## External Probes (Pro)
 
 With the Pro `external_probe` entitlement, availability checks configured in
-Pulse can be assigned to run from a specific agent instead of the Pulse
-server (Settings -> Monitoring -> Availability checks -> "Run from"). This is
-how you monitor a site from the outside: deploy the agent on a machine
-elsewhere — a cloud VM, a Docker host at another location — and assign checks
-to it. Target failures are evaluated on the Pulse server through your normal
-alert routes.
+Pulse can run from one or more connected agents. In **Settings → Monitoring →
+Availability checks**, select the agents under **Observation locations** in the
+check editor. Keep **This Pulse server** selected for a local observation too,
+or deselect it for agent-only checks. Each location keeps its own evidence; a
+failure on one path is not a universal outage.
+
+To observe a service from outside its local network, deploy the agent on a
+machine elsewhere — a cloud VM, a Docker host at another location — and assign
+checks to it. **The agent does not send notifications directly.** The
+Pulse server must be running and able to reach the notification destination;
+target failures are evaluated there through your normal alert routes.
 
 There is nothing to configure on the agent itself. Assignments arrive through
 the agent's signed remote configuration, the agent runs each check on its
 configured interval, and results are delivered with its regular reports.
-Results survive temporary connectivity loss to the Pulse server in a bounded
-in-memory queue; if the agent cannot deliver for several check intervals the
-check shows as indeterminate in Pulse until reports resume. After the
-five-minute minimum grace window, Pulse raises one
+Results waiting for delivery use a bounded **in-memory** queue of up to 200
+observations across the agent's checks. Oldest pending observations are dropped
+when it fills, and an agent restart loses the queue; it is not a complete outage
+record. If reports stop arriving, the affected location becomes indeterminate ("no recent
+report from probe agent"). This is missing evidence, not proof the target is
+down. The missing-report window is the
+longer of **five minutes or three check intervals**. During normal server
+evaluation, eligible stale probes raise one
 `availability_probe_unavailable` warning per disconnected probe, regardless of
 how many checks it owns. Pulse measures that reporting window from server receipt
 time rather than the agent's clock, so clock skew cannot create or conceal the
 disconnect. That warning uses the normal email, webhook, Apprise, and
-recovery-notification pipeline. When Pulse Mobile is paired through Relay, Pulse
-also sends a privacy-safe `external_probe_offline` push linked to the canonical
-mobile attention item without exposing target names or addresses. The alert
-identity belongs to the probe agent, so adding or removing an assigned check
-does not resolve and reopen it.
+recovery-notification pipeline, subject to alert and connectivity policies.
+The alert identity belongs to the probe agent, so adding or removing an assigned
+check does not resolve and reopen it.
 
 When the host heartbeat itself is offline, Pulse keeps the existing
 host-offline alert as the single canonical incident and suppresses the
-probe-results warning. Assigned probe hosts still receive the external-probe
-mobile push, but operators do not get two normal alerts for the same agent
-failure.
+probe-results warning, rather than producing two normal alerts for the same
+agent failure.
 
-This has a complementary dark-site path: if the entire Pulse instance or its
-site goes offline, Pulse Relay independently sends its existing instance
-offline push after five minutes. Together, probe-loss alerts while Pulse is
-online and Relay's instance-loss alert while Pulse is dark ensure the
-outside-monitoring path cannot disappear silently. Relay does not evaluate
-individual target results while the Pulse server is offline.
+If Pulse itself stops or loses outbound connectivity, the external agent cannot
+deliver Pulse alerts in its place. Configure an
+[external watchdog](TROUBLESHOOTING.md#no-alert-when-pulse-power-or-internet-goes-down)
+outside the shared power/network failure, with an independently reachable
+notification destination. Verify recipient delivery in an authorised test
+environment, not by interrupting a production site.
+
+Existing paired Pulse Mobile/Relay users retain their current push path until
+**31 March 2027**. Relay is no longer sold. Its instance-disconnect push does not
+evaluate individual targets while Pulse is offline, and is not a permanent
+substitute for the watchdog. See [Mobile retirement](RELAY.md).
+
+If the external-probe entitlement lapses, checks resume on the Pulse server,
+not the agent. That changes the observation location and may change the result;
+see the [configuration guide](CONFIGURATION.md#external-probes-pro).
 
 The module appears as `availability` in the agent's module status when at
 least one check is assigned.
@@ -406,7 +495,7 @@ sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
 | `--insecure` | `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS verification | `false` |
 | `--allow-plaintext-http` | `PULSE_AGENT_ALLOW_PLAINTEXT_HTTP` | Allow plain HTTP to a Pulse server that does not look local (private IP, single-label, `.local`/`.lan`/`.home`/`.home.arpa`/`.internal`, or resolves to private addresses). Sends the API token in cleartext; only for networks you fully control, e.g. internal networks numbered from public IP space | `false` |
 | `--hostname` | `PULSE_HOSTNAME` | Override hostname | *(OS hostname)* |
-| `--agent-id` | `PULSE_AGENT_ID` | Unique agent identifier | *(machine-id)* |
+| `--agent-id` | `PULSE_AGENT_ID` | Unique agent identifier | *(saved ID, then machine ID)* |
 | `--report-ip` | `PULSE_REPORT_IP` | Override reported IP (multi-NIC) | *(auto)* |
 | `--disable-ceph` | `PULSE_DISABLE_CEPH` | Disable local Ceph status polling | `false` |
 | `--tag` | `PULSE_TAGS` | Apply tags (repeatable or CSV) | *(none)* |
@@ -544,46 +633,58 @@ operators are comfortable with Proxmox-side guest probing.
 
 ## Installation Options
 
+These commands use the protected token file and successfully downloaded,
+inspected installer from [Private-file installation](#private-file-installation-linux-macos-and-nas).
+Use the same HTTPS address in preparation and installation. The flags below
+choose collectors; they do not grant command execution.
+
 ### Simple Install (host + Docker auto-detect)
 ```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token>
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token"
 ```
 
 ### Proxmox VE Node (explicit profile)
 ```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-proxmox --proxmox-type pve
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token" --enable-proxmox --proxmox-type pve
 ```
 
 ### Proxmox Backup Server Node (explicit profile)
 ```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-proxmox --proxmox-type pbs
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token" --enable-proxmox --proxmox-type pbs
 ```
 
 ### Force Enable Docker (if auto-detection fails)
 ```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-docker
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token" --enable-docker
 ```
 
 ### Disable Docker (even if detected)
 ```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-docker=false
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token" --enable-docker=false
 ```
 
 ### Host + Kubernetes Monitoring
 ```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-kubernetes
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token" --enable-kubernetes
 ```
 
 ### Docker Monitoring Only
 ```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-host=false --enable-docker
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token" --enable-host=false --enable-docker
 ```
 
 ### Exclude Specific Disks from Monitoring
@@ -687,9 +788,10 @@ installer path instead of relying on a plain-HTTP first hop.
 
 To disable auto-updates:
 ```bash
-# During installation
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --disable-auto-update
+# After private-file preparation and successful installer inspection
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token" --disable-auto-update
 
 # Or set environment variable
 PULSE_DISABLE_AUTO_UPDATE=true
@@ -712,8 +814,11 @@ See [Centralized Agent Management](CENTRALIZED_MANAGEMENT.md) for supported keys
 
 ## Uninstall
 
+Download and inspect the agent installer using the HTTPS preparation above
+before running this on the agent host. Uninstallation needs no new token:
+
 ```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | bash -s -- --uninstall
+bash "$HOME/.config/pulse/agent-install.sh" --uninstall
 ```
 
 This removes:
@@ -799,10 +904,13 @@ Unraid), `/tmp` and `/usr/local/bin` share that filesystem, so both the staged
 and installed copy must fit at once.
 
 If the check fails because `/tmp` is on a constrained root, point `TMPDIR` at a
-directory on a data volume and re-run the installer:
+directory on a data volume and re-run the already downloaded and inspected
+agent installer from the private-file preparation above:
 
 ```bash
-TMPDIR=/share/CACHEDEV1_DATA/tmp bash install.sh --url http://pulse --token <token>
+TMPDIR=/share/CACHEDEV1_DATA/tmp bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token"
 ```
 
 (`mktemp` honours `TMPDIR`, so this moves the staging copy off the RAM root.
@@ -828,26 +936,159 @@ file and re-run the installer to pick up the rotating configuration.
   identity evidence. The endpoint reports repair handoffs but does not run them.
 
 ### Duplicate Agents
-If cloned VMs appear as the same agent:
-```bash
-sudo rm /etc/machine-id && sudo systemd-machine-id-setup
-```
 
-Or set a unique agent ID:
-```bash
---agent-id my-unique-agent-id
-```
+Cloning an installed agent can copy its saved identity and credentials. Different
+hostnames, MAC addresses or IPs do not make those agents distinct in Pulse.
+Identity selection is:
 
-The displayed or reported IP is not the durable agent identity. Pulse normally
-uses the machine ID (or an explicit `--agent-id`), so cloned systems must have
-unique machine and agent IDs even when their hostnames, MAC addresses, and IPs
-differ.
+1. An explicit `--agent-id` argument (which overrides `PULSE_AGENT_ID`).
+2. `PULSE_AGENT_ID` when no explicit argument is supplied.
+3. The saved `agent-id` file, when no override is set.
+4. The machine-derived ID, with hostname as a fallback, when no saved ID exists.
+
+First compare the affected hosts in **Agent Doctor**. Inspect the identity file
+locally: the default Linux path is `/var/lib/pulse-agent/agent-id`; `--state-dir`
+changes that directory and `--agent-id-file` or `PULSE_AGENT_ID_FILE` can select
+another file. Do not upload `connection.env`, token files or whole service and
+environment dumps; older installations can contain credentials there.
+
+**Do not delete `/etc/machine-id`, agent state or Pulse history to repair a
+duplicate.** A saved agent ID survives an OS machine-ID change, and changing the
+OS identity affects more than Pulse. Prepare OS identities when provisioning a
+clone, using the distribution's instructions, not during live Pulse diagnosis.
+
+For a confirmed duplicate, keep the original host unchanged and choose one
+stable, unique override for the clone. Persist it in the configuration that
+actually starts that agent, rather than launching a second agent process:
+
+- **Systemd, without an existing `--agent-id` argument**: use
+  `sudo systemctl edit pulse-agent.service` and add the following drop-in,
+  replacing the example ID with the clone's unique ID:
+
+  ```ini
+  [Service]
+  Environment="PULSE_AGENT_ID=vm-clone-02"
+  ```
+
+  Then restart only that agent with `sudo systemctl restart pulse-agent.service`.
+  If its managed launch command already supplies `--agent-id`, change that
+  existing override instead: the argument wins over the environment variable.
+- **Docker Compose**: set `PULSE_AGENT_ID` for the clone's agent service, keeping
+  its existing volumes, collector options and token-file configuration. An
+  existing `--agent-id` in `command` takes precedence; update it instead if set.
+
+Keep the override across restarts and upgrades. After restart, verify that both
+hosts report fresh, distinct IDs in Agent Doctor and that each row's metrics
+belong to the correct host. Changing an ID does not split or recover historical
+data already combined under the old ID. If authentication or reporting fails,
+keep the bounded, redacted error for diagnosis; do not delete tokens, re-enrol
+blindly or remove the original host's record.
 
 ### Permission Denied (Docker)
-Ensure the agent can access the Docker socket:
+
+Check the account that actually runs the agent, not your interactive `$USER`.
+For a systemd installation, these read-only checks show the service account and
+the default socket's ownership; they do not print service environments or tokens:
+
 ```bash
-sudo usermod -aG docker $USER
+systemctl show pulse-agent.service --property=User --property=Group --property=SupplementaryGroups
+ls -l /var/run/docker.sock
 ```
+
+A blank systemd `User` means the service runs as root. Adding your login user to
+the `docker` group does not change a different agent service account. Access to
+a rootful Docker socket, including membership of its `docker` group, is
+root-equivalent; do not make the socket world-writable or expose the daemon over
+unauthenticated TCP to clear an error.
+
+Use the [supported collector profile](AGENT_SECURITY.md#safe-profile-support-and-qualification-matrix)
+for that service account. The least-privilege profile intentionally limits a
+rootful runtime to typed-helper summary inventory; full collection needs a
+collector-owned rootless socket or an explicitly chosen full-telemetry profile.
+Keep that distinction when diagnosing missing statistics, Swarm data or actions:
+summary-only collection is not a socket-permission defect.
+
+### Docker visible in one LXC but missing in another
+
+Proxmox-side discovery uses the **owning node's** connected command-capable
+agent, not the agent on whichever node hosts Pulse. Check **Discover Docker in
+LXC guests** in Settings → System → General and any configured
+`PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS` allowlist. Collection skips stopped
+guests and guests already linked to an online guest-local agent. In the latter
+case, check that guest agent's Docker monitoring instead.
+
+If the owning node says **Remote control blocked**, first check its
+[command channel](#commands-enabled-but-remote-control-blocked). A successful
+root `pct exec` check does not establish that Pulse can reach that node's agent;
+do not repeat the guest probe when those results are already known.
+
+The host-side path requires the guest's `docker` executable and
+`/var/run/docker.sock` in the root `pct exec` context. A working Docker CLI in a
+user's login session does not prove that this context can reach the daemon;
+rootless or non-default sockets may need guest-local agent monitoring. Different
+Debian or Docker versions alone do not establish the cause.
+
+If the Proxmox node and guest are healthy, run this **once** on the owning node
+as root, replacing `123` with the affected LXC's VMID:
+
+```bash
+timeout --kill-after=2s 15s pct exec 123 -- sh -c '
+  command -v docker || exit
+  if test -S /var/run/docker.sock; then
+    printf "default_socket=present\n"
+  else
+    printf "default_socket=absent\n"
+  fi
+  docker version --format "server={{.Server.Version}}" || exit
+  docker ps -a --format "{{.State}}"
+'
+```
+
+This checks guest entry, the default socket, daemon access and container listing
+without printing container names, images, environment values or credentials.
+`default_socket=absent` explains why the host-side probe skips that guest even if
+another Docker context works. A CLI/daemon error is different from a successful
+empty list. If these checks pass but Pulse still omits the guest, keep the
+bounded error from the existing collection logs and whether the working and
+missing guests share the same PVE node; do not enable debug logging for the whole
+server just to collect this distinction.
+
+Exit `124` means the check timed out; stop rather than loop or restart the host.
+Review output before posting and redact any private endpoint in an error. Do not
+change LXC privilege, `keyctl`, socket permissions or Docker versions merely to
+test a guess.
+
+### Commands enabled but remote control blocked
+
+**Remote control blocked** means the agent reports commands enabled, but Pulse
+has no admitted command channel connected for it. Agent Doctor's
+`commands command-capable · credential grants exec` line describes the reported
+local command ceiling and credential scope, not a connected session. A fresh
+monitoring report or **Automatic updates ready** also does not prove that this
+separate WebSocket channel is working. Changing Proxmox API permissions cannot
+repair a Pulse command-channel connection.
+
+For a systemd agent, inspect the recent journal **locally on the affected node**:
+
+```bash
+sudo journalctl -u pulse-agent.service --since '15 minutes ago' -n 200 --no-pager --output=cat
+```
+
+Look for **Connected and registered with Pulse command server**, or
+**WebSocket connection failed repeatedly, reconnecting** and its error. A
+`dial websocket` error is a connection/handshake failure; `registration failed`
+means registration was attempted but not accepted. Scope alone does not prove
+that the credential's host/agent binding was admitted. No matching entry is
+inconclusive: initial retries may be debug-only; do not restart the host or
+enable server-wide debug logging to manufacture an error.
+
+If reporting the problem, share only the failure stage and redacted error
+reason (or say no command-channel entry is visible), not the full journal or
+service configuration. Omit tokens, cookies, URLs, hostnames, addresses and
+agent/token IDs. Keep saved identity and credentials intact while distinguishing
+connection failures from admission failures; do not delete state, loosen TLS
+verification or broaden permissions to force a connection. Guest-local Docker
+monitoring with commands disabled remains an alternative to host-side discovery.
 
 ### Check Status
 ```bash
@@ -880,10 +1121,10 @@ If your Docker Swarm cluster isn't being detected:
    # Should show "Swarm: active"
    ```
 
-4. **Check socket permissions**: The agent needs access to the Docker socket:
-   ```bash
-   ls -la /var/run/docker.sock
-   ```
+4. **Check the service account and collector profile**: follow
+   [Permission Denied (Docker)](#permission-denied-docker). A rootful
+   typed-helper summary does not include Swarm inventory; granting broader
+   socket access is a security decision, not a routine permission repair.
 
 5. **Enable debug logging**: For more detail:
    ```bash

@@ -82,17 +82,17 @@ export function getFilterButtonGroupButtonClass(
 ): string {
   if (variant === 'settings') {
     return [
-      'flex min-h-11 items-center justify-center gap-1.5 px-3 py-2 text-sm rounded-md transition-all whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-h-9',
-      active ? 'bg-surface text-base-content shadow-sm' : 'text-muted hover:text-base-content',
+      'flex min-h-11 items-center justify-center gap-1.5 px-3 py-2 text-sm rounded-md transition-all whitespace-nowrap outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-h-9',
+      active ? 'bg-surface text-base-content shadow-xs' : 'text-muted hover:text-base-content',
       disabled ? 'opacity-60 cursor-not-allowed' : '',
     ].join(' ');
   }
 
   if (variant === 'prominent') {
     return [
-      'flex min-h-11 w-full items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-medium transition-all whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-h-10',
+      'flex min-h-11 w-full items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-medium transition-all whitespace-nowrap outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-h-10',
       active
-        ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
+        ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300 dark:border-blue-500'
         : 'border-border text-base-content hover:bg-surface-alt',
       disabled ? 'opacity-60 cursor-not-allowed' : '',
     ].join(' ');
@@ -100,9 +100,9 @@ export function getFilterButtonGroupButtonClass(
 
   if (variant === 'compact') {
     return [
-      'inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-all whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-h-0 sm:min-w-0',
+      'inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-sm px-2.5 py-1 text-xs font-medium transition-all whitespace-nowrap outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-h-0 sm:min-w-0',
       active
-        ? `bg-surface shadow-sm ring-1 ${activeToneClassByOptionTone[tone]}`
+        ? `bg-surface shadow-xs ring-1 ${activeToneClassByOptionTone[tone]}`
         : 'text-muted hover:bg-surface-hover hover:text-base-content',
       disabled ? 'opacity-60 cursor-not-allowed' : '',
     ].join(' ');
@@ -110,18 +110,18 @@ export function getFilterButtonGroupButtonClass(
 
   if (variant === 'segmented') {
     return [
-      'min-h-11 flex-1 rounded-md px-2 py-1.5 text-xs font-semibold transition-all whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-h-8',
+      'min-h-11 flex-1 rounded-md px-2 py-1.5 text-xs font-semibold transition-all whitespace-nowrap outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-h-8',
       active
-        ? 'bg-surface text-blue-600 shadow-sm dark:text-blue-400'
+        ? 'bg-surface text-blue-600 shadow-xs dark:text-blue-400'
         : 'text-muted hover:text-base-content hover:bg-surface-hover',
       disabled ? 'opacity-50 cursor-not-allowed' : '',
     ].join(' ');
   }
 
   return [
-    'flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-all whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-h-0 sm:flex-none sm:justify-start sm:px-4 sm:py-2',
+    'flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-all whitespace-nowrap outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-h-0 sm:flex-none sm:justify-start sm:px-4 sm:py-2',
     active
-      ? 'bg-surface border border-border text-blue-600 dark:text-blue-400 shadow-sm'
+      ? 'bg-surface border border-border text-blue-600 dark:text-blue-400 shadow-xs'
       : 'text-muted border border-transparent hover:text-base-content hover:bg-surface-hover',
     disabled ? 'opacity-60 cursor-not-allowed' : '',
   ].join(' ');

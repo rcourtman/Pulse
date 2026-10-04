@@ -23,6 +23,9 @@ func TestIncidentQueryCanonicalOccurrencesAndNotes(t *testing.T) {
 			}
 			config := IncidentStoreConfig{DataDir: t.TempDir()}
 			memory := NewIncidentStore(config)
+			// Registered after TempDir, so it runs first: queued saves must
+			// finish writing before the data directory is removed.
+			t.Cleanup(memory.flush)
 			memory.SetResourceTimelineStore(canonical)
 			start := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
 			second := start.Add(2 * time.Minute)
@@ -64,8 +67,10 @@ func TestIncidentQueryCanonicalOccurrencesAndNotes(t *testing.T) {
 			require.Equal(t, IncidentStatusResolved, noted.Incidents[0].Status)
 			require.Equal(t, IncidentEventNote, noted.Incidents[0].Events[2].Type)
 			require.Equal(t, "operator_note", noted.Incidents[0].Events[2].Source)
-			require.NoError(t, memory.saveToDisk())
+			// Reload from what RecordNote's own asynchronous save wrote.
+			memory.flush()
 			restored := NewIncidentStore(config)
+			t.Cleanup(restored.flush)
 			restored.SetResourceTimelineStore(canonical)
 			persisted, err := restored.QueryIncidents(IncidentQuery{AlertIdentifier: "repeat-alert", StartedAt: start, Limit: 1})
 			require.NoError(t, err)
@@ -220,6 +225,7 @@ func TestIncidentQueryCanonicalAlertContextOwnsLegacyShell(t *testing.T) {
 func TestIncidentAlertContextRetainsOperatorNote(t *testing.T) {
 	canonical := unifiedresources.NewMemoryStore()
 	store := NewIncidentStore(IncidentStoreConfig{DataDir: t.TempDir()})
+	t.Cleanup(store.flush)
 	store.SetResourceTimelineStore(canonical)
 	started := time.Now().UTC().Add(-time.Hour)
 	change := unifiedresources.BuildAlertTimelineChange("resource-a", unifiedresources.ChangeAlertFired, started, "", unifiedresources.AlertTimelineChange{AlertIdentifier: "noted-alert"})
@@ -228,9 +234,6 @@ func TestIncidentAlertContextRetainsOperatorNote(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, page.Incidents, 1)
 	require.True(t, store.RecordNote("noted-alert", page.Incidents[0].ID, "Keep the old pool until its replacement is verified", "operator"))
-	// RecordNote persists asynchronously. Keep the temporary data directory
-	// alive until that write finishes so cleanup cannot race the save goroutine.
-	waitForCompletedSaves(t, store, 1)
 	context := store.FormatForAlert("noted-alert", 10)
 	require.Contains(t, context, "Note added by operator: Keep the old pool until its replacement is verified")
 	require.Contains(t, context, "source=operator_note")

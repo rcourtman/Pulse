@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import {
   createNonSuspendingQuery,
@@ -263,5 +263,179 @@ describe('createNonSuspendingQuery', () => {
       expect(screen.getByTestId('query-probe').textContent).toContain('value-for-stable-key');
       expect(screen.getByTestId('query-probe').textContent).toContain('resolved:true');
     });
+  });
+});
+
+it.each(['success', 'failure'] as const)(
+  'settles a foreground loading state when its latest background replacement ends in %s',
+  async (outcome) => {
+    vi.useFakeTimers();
+    let finishManual!: (value: string) => void;
+    const manual = new Promise<string>((resolve) => {
+      finishManual = resolve;
+    });
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce('first')
+      .mockReturnValueOnce(manual)
+      .mockImplementationOnce(() =>
+        outcome === 'success'
+          ? Promise.resolve('latest')
+          : Promise.reject(new Error('Unavailable')),
+      );
+    const Probe = () => {
+      const query = createNonSuspendingQuery({
+        source: () => 'pbs-host',
+        fetcher,
+        initialValue: '',
+        pollMs: 30_000,
+      });
+      return (
+        <>
+          <button onClick={() => void query.refetch()}>Refresh</button>
+          <output data-testid="query">{`${query.value()}|loading:${query.loading()}`}</output>
+        </>
+      );
+    };
+    render(() => <Probe />);
+    await vi.advanceTimersByTimeAsync(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(screen.getByTestId('query')).toHaveTextContent('first|loading:true');
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher.mock.calls[1][1].aborted).toBe(true);
+    const expected = outcome === 'success' ? 'latest|loading:false' : 'first|loading:false';
+    expect(screen.getByTestId('query')).toHaveTextContent(expected);
+    finishManual('obsolete');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByTestId('query')).toHaveTextContent(expected);
+  },
+);
+
+const settle = async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+};
+const denied = (status: number) => Object.assign(new Error('private transport detail'), { status });
+function mount(key: string, fetcher: () => Promise<string>) {
+  let query!: ReturnType<typeof createNonSuspendingQuery<string, string>>;
+  const view = render(() => {
+    query = createNonSuspendingQuery({
+      source: () => key,
+      cacheKey: (key) => key,
+      fetcher,
+      initialValue: '',
+    });
+    return <output>{query.value()}</output>;
+  });
+  return { query, ...view };
+}
+
+describe('retained query access boundary', () => {
+  it.each([401, 403])(
+    'withdraws the denied value and all remount entries after %s',
+    async (status) => {
+      const oldRange = mount('pbs:1h', async () => 'former reading');
+      await settle();
+      oldRange.unmount();
+      let rejectRead = false;
+      const active = mount('pbs:24h', async () => {
+        if (rejectRead) throw denied(status);
+        return 'current reading';
+      });
+      await settle();
+      expect(getCreateNonSuspendingQueryCacheDiagnosticsForTest().size).toBe(2);
+      rejectRead = true;
+      await active.query.refetch({ background: true });
+      expect(active.query.value()).toBe('');
+      expect(active.query.error()).toMatchObject({ status });
+      expect(active.query.loading()).toBe(false);
+      expect(getCreateNonSuspendingQueryCacheDiagnosticsForTest().size).toBe(0);
+      active.unmount();
+      const remount = mount('pbs:1h', () => new Promise(() => {}));
+      expect(remount.query.value()).toBe('');
+      expect(remount.query.resolvedOnce()).toBe(false);
+    },
+  );
+
+  it('does not repopulate the remount cache from a pre-denial read', async () => {
+    let complete!: (value: string) => void;
+    const pending = mount(
+      'pbs:1h',
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const active = mount('pbs:24h', async () => {
+      throw denied(403);
+    });
+    await settle();
+    expect(active.query.value()).toBe('');
+    complete('before-access-change');
+    await settle();
+    expect(getCreateNonSuspendingQueryCacheDiagnosticsForTest().size).toBe(0);
+    pending.unmount();
+    const remount = mount('pbs:1h', () => new Promise(() => {}));
+    expect(remount.query.value()).toBe('');
+  });
+
+  it.each([500, 503, 429, undefined])(
+    'retains useful readings on transient status %s',
+    async (status) => {
+      let rejectRead = false;
+      const active = mount('pbs:24h', async () => {
+        if (rejectRead) throw denied(status as number);
+        return 'stored reading';
+      });
+      await settle();
+      rejectRead = true;
+      await active.query.refetch();
+      expect(active.query.value()).toBe('stored reading');
+      expect(getCreateNonSuspendingQueryCacheDiagnosticsForTest().size).toBe(1);
+    },
+  );
+
+  it('restores only freshly authorised data after denial', async () => {
+    let result: string | Error = 'before denial';
+    const active = mount('pbs:24h', async () => {
+      if (result instanceof Error) throw result;
+      return result;
+    });
+    await settle();
+    result = denied(403);
+    await active.query.refetch();
+    expect(active.query.value()).toBe('');
+    result = 'newly authorised reading';
+    await active.query.refetch();
+    expect(active.query.value()).toBe(result);
+    expect(active.query.error()).toBeNull();
+    expect(getCreateNonSuspendingQueryCacheDiagnosticsForTest().size).toBe(1);
+  });
+  it('ignores a superseded denial rather than clearing the new target and its cache', async () => {
+    let rejectOld!: (error: Error) => void;
+    let query!: ReturnType<typeof createNonSuspendingQuery<string, string>>;
+    const [source, setSource] = createSignal('old');
+    render(() => {
+      query = createNonSuspendingQuery({
+        source,
+        cacheKey: (key) => key,
+        initialValue: '',
+        fetcher: (key) =>
+          key === 'old'
+            ? new Promise((_, reject) => {
+                rejectOld = reject;
+              })
+            : Promise.resolve('new reading'),
+      });
+      return <output>{query.value()}</output>;
+    });
+    setSource('new');
+    await settle();
+    rejectOld(denied(403));
+    await settle();
+    expect(query.value()).toBe('new reading');
+    expect(query.error()).toBeNull();
+    expect(getCreateNonSuspendingQueryCacheDiagnosticsForTest().keys).toEqual(['new']);
   });
 });

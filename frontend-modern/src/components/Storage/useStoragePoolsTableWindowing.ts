@@ -32,7 +32,6 @@ type StoragePoolsTableGroupItem = {
 type StoragePoolsTableRecordItem = {
   kind: 'record';
   key: string;
-  group: StoragePoolsTableGroupModel;
   record: StorageRecord;
 };
 
@@ -48,7 +47,7 @@ export const buildStoragePoolsTableItems = (
     }
     if (!group.expanded) continue;
     for (const record of group.items) {
-      items.push({ kind: 'record', key: `record:${record.id}`, group, record });
+      items.push({ kind: 'record', key: `record:${record.id}`, record });
     }
   }
   return items;

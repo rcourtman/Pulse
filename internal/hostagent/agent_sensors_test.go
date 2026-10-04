@@ -57,6 +57,21 @@ func TestAgent_collectTemperatures_MapsKeys(t *testing.T) {
 	}
 }
 
+func TestAgent_collectTemperatures_ArmadaThermalFeedsMachineCPU(t *testing.T) {
+	mc := &mockCollector{
+		goos: "linux",
+		sensorsLocalFn: func(context.Context) (string, error) {
+			return `{"armada_thermal-virtual-0":{"temp1":{"temp1_input":57}}}`, nil
+		},
+		sensorsParseFn: sensors.Parse,
+	}
+	a := &Agent{logger: zerolog.Nop(), collector: mc}
+	got := a.collectTemperatures(context.Background())
+	if got.TemperatureCelsius["cpu_package"] != 57 {
+		t.Fatalf("CPU package reading = %v, want 57", got.TemperatureCelsius)
+	}
+}
+
 func TestAgent_collectTemperatures_MergesNVIDIASMITemperatures(t *testing.T) {
 	mc := &mockCollector{
 		goos:           "linux",

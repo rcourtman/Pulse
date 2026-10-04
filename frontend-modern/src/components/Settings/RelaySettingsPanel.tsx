@@ -30,15 +30,15 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
   // Relay feature gate
   if (!state.relayEnabled()) {
     return (
-      <SettingsPanel title="Remote Access">
+      <SettingsPanel title="Pulse Mobile">
         <Show when={!state.loading()} fallback={<div class="text-sm ">Loading...</div>}>
           <Card tone="info" padding="md">
             <FeatureGateSection
               icon={<RadioTower size={20} strokeWidth={2} />}
-              title="Remote Access (Relay)"
+              title="Pulse Mobile"
               body={RELAY_LICENSE_REQUIRED_MESSAGE}
               upgradeDestination={state.upgradeDestination()}
-              showUpgradePrompts={state.showUpgradePrompts()}
+              showUpgradePrompts={false}
             />
           </Card>
         </Show>
@@ -47,14 +47,14 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
   }
 
   return (
-    <SettingsPanel title="Remote Access">
+    <SettingsPanel title="Pulse Mobile">
       <Show
         when={!state.loading()}
         fallback={<div class="text-sm ">{getSettingsConfigurationLoadingState().text}</div>}
       >
         <Show when={!state.canManage()}>
           <Card tone="info" padding="md" class={RELAY_READONLY_NOTICE_CLASS}>
-            Remote access settings are read-only for this account.
+            Pulse Mobile settings are read-only for this account.
           </Card>
         </Show>
 
@@ -95,11 +95,11 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
         <div class={formField}>
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <span class={labelClass()}>Enable Remote Access</span>
+              <span class={labelClass()}>Allow Pulse Mobile connections</span>
               <p class={formHelpText}>{RELAY_ENABLE_HELP_TEXT}</p>
             </div>
             <Toggle
-              ariaLabel="Enable remote access"
+              ariaLabel="Allow Pulse Mobile connections"
               checked={state.config()?.enabled ?? false}
               onChange={(e) => void state.handleToggleEnabled(e.currentTarget.checked)}
               disabled={!state.canManage() || state.saving()}
@@ -142,7 +142,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
         <Show when={state.config()?.identity_fingerprint}>
           <div class={formField}>
             <span class={labelClass()}>Instance Fingerprint</span>
-            <code class="block text-xs font-mono text-base-content bg-surface-alt rounded px-3 py-2 select-all break-all">
+            <code class="block text-xs font-mono text-base-content bg-surface-alt rounded-sm px-3 py-2 select-all break-all">
               {state.config()!.identity_fingerprint}
             </code>
             <p class={formHelpText}>

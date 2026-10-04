@@ -71,14 +71,17 @@ export const DrawerAttentionSection: Component<DrawerAttentionSectionProps> = (p
                       </Show>
                     </p>
                   </Show>
-                  <p class="break-words text-xs leading-5 text-base-content" title={item.message}>
+                  <p
+                    class="wrap-break-word text-xs leading-5 text-base-content"
+                    title={item.message}
+                  >
                     {item.message}
                   </p>
                 </div>
                 <span
                   class={
                     item.acknowledged
-                      ? 'inline-flex shrink-0 self-start items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted'
+                      ? 'inline-flex shrink-0 self-start items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted'
                       : `${getAlertSeverityBadgeClass(item.severity || 'warning')} self-start`
                   }
                 >
@@ -96,7 +99,7 @@ export const DrawerAttentionSection: Component<DrawerAttentionSectionProps> = (p
             <Button
               variant="ghost"
               size="xs"
-              class="w-full justify-start text-muted hover:text-base-content"
+              class="w-full text-muted hover:text-base-content"
               aria-expanded={expanded()}
               onClick={() => setExpanded((current) => !current)}
             >

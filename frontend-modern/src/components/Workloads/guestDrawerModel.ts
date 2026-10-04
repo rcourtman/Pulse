@@ -8,7 +8,10 @@ import type {
 
 import { formatHistoryChartTooltipValue } from '@/components/shared/historyChartModel';
 import { formatBytes, formatPercent, getBackupInfo, type BackupThresholds } from '@/utils/format';
-import { getWorkloadsGuestBackupStatusPresentation } from '@/utils/workloadGuestPresentation';
+import {
+  getWorkloadGuestDiskStatusMessage,
+  getWorkloadsGuestBackupStatusPresentation,
+} from '@/utils/workloadGuestPresentation';
 import { getWorkloadCPUPercent, resolveWorkloadType } from '@/utils/workloads';
 import { getWorkloadMetricHistoryTarget } from '@/utils/workloadMetricHistoryTarget';
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
@@ -55,6 +58,16 @@ export interface GuestDrawerHistoryScale {
   maxValue: number;
 }
 
+export interface GuestDrawerHistoryTimeBounds {
+  startTime: number;
+  endTime: number;
+}
+
+export interface GuestDrawerHistoryDeferredMetric {
+  lastKnownValue?: number;
+  message: string;
+}
+
 export interface GuestDrawerBackupPresentation {
   ageClass: string;
   ageLabel: string;
@@ -88,6 +101,25 @@ export const getGuestDrawerAlertMessage = (
   return `${alert.message} (${comparison})`;
 };
 
+const getGuestDrawerDiskUsage = (guest: Guest): number | undefined => {
+  const usage = guest.telemetryAvailability?.disk === false ? undefined : guest.disk?.usage;
+  return typeof usage === 'number' && Number.isFinite(usage) && usage >= 0 ? usage : undefined;
+};
+
+export const getGuestDrawerDeferredMetrics = (
+  guest: Guest,
+): Record<string, GuestDrawerHistoryDeferredMetric> => {
+  if (!isGuestDrawerVM(guest) || !guest.diskStatusReason) return {};
+  return {
+    disk: {
+      lastKnownValue: guest.diskStatusReason.startsWith('prev-')
+        ? getGuestDrawerDiskUsage(guest)
+        : undefined,
+      message: getWorkloadGuestDiskStatusMessage(guest.diskStatusReason),
+    },
+  };
+};
+
 // Current-value metrics displayed beside history legends while the metrics
 // store is still accumulating samples. These values never become chart points:
 // a current reading is not evidence of a historical trend.
@@ -98,13 +130,10 @@ export const getGuestDrawerCurrentMetrics = (guest: Guest): Record<string, numbe
   const cpuPercent = available('cpu') ? getWorkloadCPUPercent(guest.cpu) : undefined;
   const memUsage =
     available('memory') && !guest.memory?.usageUnavailable ? guest.memory?.usage : undefined;
-  const reportedDiskUsage = available('disk') ? guest.disk?.usage : undefined;
+  // A paused filesystem read is not current, even if the snapshot still
+  // carries a numeric summary. Retained evidence has its own labelled path.
   const diskUsage =
-    typeof reportedDiskUsage === 'number' &&
-    Number.isFinite(reportedDiskUsage) &&
-    reportedDiskUsage >= 0
-      ? reportedDiskUsage
-      : undefined;
+    isGuestDrawerVM(guest) && guest.diskStatusReason ? undefined : getGuestDrawerDiskUsage(guest);
   const finite = (value: number | undefined): number | undefined =>
     typeof value === 'number' && Number.isFinite(value) ? value : undefined;
   return {
@@ -157,12 +186,15 @@ const clampHistoryPointValue = (value: number, unit: string): number => {
   return unit === '%' ? Math.min(100, nonNegative) : nonNegative;
 };
 
+const isHistoryTimestamp = (timestamp: number): boolean =>
+  Number.isFinite(timestamp) && Number.isFinite(new Date(timestamp).getTime());
+
 export const normalizeGuestDrawerHistoryPoints = (
   points: AggregatedMetricPoint[] | undefined,
   unit: string,
 ): AggregatedMetricPoint[] =>
   (points ?? [])
-    .filter((point) => Number.isFinite(point.timestamp) && Number.isFinite(point.value))
+    .filter((point) => isHistoryTimestamp(point.timestamp) && Number.isFinite(point.value))
     .map((point) => {
       const value = clampHistoryPointValue(point.value, unit);
       return {
@@ -271,12 +303,29 @@ export const getGuestDrawerHistoryValueLabel = (
 
 export const getGuestDrawerHistoryRangeBounds = (
   groupedSeries: readonly { points: readonly AggregatedMetricPoint[] }[],
-): { startTime: number; endTime: number } | null => {
-  const timestamps = groupedSeries.flatMap((item) => item.points.map((point) => point.timestamp));
-  if (timestamps.length === 0) return null;
+  window?: { start: number; end: number },
+): GuestDrawerHistoryTimeBounds | null => {
+  const timestamps = groupedSeries
+    .flatMap((item) => item.points.map((point) => point.timestamp))
+    .filter(isHistoryTimestamp);
+  const windowBounds =
+    window &&
+    isHistoryTimestamp(window.start) &&
+    isHistoryTimestamp(window.end) &&
+    window.end > window.start
+      ? { startTime: window.start, endTime: window.end }
+      : null;
+  if (timestamps.length === 0) return windowBounds;
+
+  // The API's requested window is shared across every panel. Do not stretch
+  // a few recent readings across the whole selected range, or scale each
+  // metric group to different times. Preserve returned edge observations
+  // (including aggregate bucket timestamps) by widening the common envelope.
+  const first = Math.min(...timestamps);
+  const last = Math.max(...timestamps);
   return {
-    startTime: Math.min(...timestamps),
-    endTime: Math.max(...timestamps),
+    startTime: Math.min(windowBounds?.startTime ?? first, first),
+    endTime: Math.max(windowBounds?.endTime ?? last, last),
   };
 };
 
@@ -381,17 +430,22 @@ export const normalizeGuestDrawerTags = (tags: Guest['tags']): string[] => {
 };
 
 export const getGuestDrawerBackupPresentation = (
-  lastBackup: string | number | Date,
+  lastBackup: string | number | Date | null | undefined,
   thresholds?: BackupThresholds,
   now: Date = new Date(),
 ): GuestDrawerBackupPresentation => {
-  const backupDate = new Date(lastBackup);
-  const daysSince = Math.max(
-    0,
-    Math.floor((now.getTime() - backupDate.getTime()) / (1000 * 60 * 60 * 24)),
-  );
-  const info = getBackupInfo(backupDate.getTime(), thresholds, now);
+  const timestamp = lastBackup instanceof Date ? lastBackup.getTime() : lastBackup;
+  const info = getBackupInfo(timestamp, thresholds, now);
   const statusPresentation = getWorkloadsGuestBackupStatusPresentation(info.status);
+  if (info.ageMs === null) {
+    return {
+      ageClass: statusPresentation.color,
+      ageLabel: info.status === 'never' ? 'No completed backup found' : info.ageFormatted,
+      dateLabel: 'Unknown',
+    };
+  }
+  const backupDate = new Date(timestamp!);
+  const daysSince = Math.floor(info.ageMs / (1000 * 60 * 60 * 24));
 
   return {
     ageClass: statusPresentation.color,

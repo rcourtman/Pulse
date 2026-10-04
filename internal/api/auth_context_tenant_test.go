@@ -11,49 +11,76 @@ import (
 )
 
 func TestExtractAndStoreAuthContext_UsesTenantConfigForToken(t *testing.T) {
-	setMockModeForTest(t, true)
+	const globalToken = "global-token-123.12345678"
+	const tenantToken = "tenant-token-123.12345678"
+	for _, tc := range []struct {
+		name       string
+		global     bool
+		tenant     bool
+		provided   string
+		wantRecord string
+	}{
+		{"global fallback with empty tenant tokens", true, false, globalToken, "global"},
+		{"tenant token with different global tokens", true, true, tenantToken, "tenant"},
+		{"unknown token is rejected", true, true, "unknown-token-123.12345678", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			baseCfg := &config.Config{}
+			tenantCfg := &config.Config{}
+			for _, token := range []struct {
+				enabled bool
+				cfg     *config.Config
+				raw     string
+				name    string
+			}{
+				{tc.global, baseCfg, globalToken, "global"},
+				{tc.tenant, tenantCfg, tenantToken, "tenant"},
+			} {
+				if !token.enabled {
+					continue
+				}
+				record, err := config.NewAPITokenRecord(token.raw, token.name, []string{config.ScopeMonitoringRead})
+				if err != nil {
+					t.Fatalf("new %s token record: %v", token.name, err)
+				}
+				token.cfg.APITokens = []config.APITokenRecord{*record}
+				token.cfg.SortAPITokens()
+			}
 
-	baseCfg := &config.Config{
-		DataPath:   t.TempDir(),
-		ConfigPath: t.TempDir(),
-	}
+			const tenantID = "org-1"
+			mtPersistence := config.NewMultiTenantPersistence(t.TempDir())
+			if _, err := mtPersistence.GetPersistence(tenantID); err != nil {
+				t.Fatalf("tenant persistence: %v", err)
+			}
+			mtm := monitoring.NewMultiTenantMonitor(baseCfg, mtPersistence, nil)
+			t.Cleanup(mtm.Stop)
 
-	mtPersistence := config.NewMultiTenantPersistence(t.TempDir())
-	mtm := monitoring.NewMultiTenantMonitor(baseCfg, mtPersistence, nil)
-	t.Cleanup(mtm.Stop)
+			// Authentication needs a cached tenant configuration, not a running
+			// demo monitor whose background writers can outlive fixture cleanup.
+			tenantMonitor := &monitoring.Monitor{}
+			setUnexportedField(t, tenantMonitor, "config", tenantCfg)
+			setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{tenantID: tenantMonitor})
 
-	tenantID := "org-1"
-	_, err := mtPersistence.GetPersistence(tenantID)
-	if err != nil {
-		t.Fatalf("tenant persistence: %v", err)
-	}
+			req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+			req.Header.Set("X-Pulse-Org-ID", tenantID)
+			req.Header.Set("X-API-Token", tc.provided)
+			req = extractAndStoreAuthContext(baseCfg, mtm, req)
 
-	rawToken := "tenant-token-123.12345678"
-	record, err := config.NewAPITokenRecord(rawToken, "tenant", []string{config.ScopeMonitoringRead})
-	if err != nil {
-		t.Fatalf("new token record: %v", err)
-	}
-	baseCfg.APITokens = []config.APITokenRecord{*record}
-	baseCfg.SortAPITokens()
-
-	// Ensure tenant monitor/config is initialized
-	tenantMonitor, err := mtm.GetMonitor(tenantID)
-	if err != nil {
-		t.Fatalf("get tenant monitor: %v", err)
-	}
-	tenantMonitor.GetConfig().APITokens = nil
-
-	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	req.Header.Set("X-Pulse-Org-ID", tenantID)
-	req.Header.Set("X-API-Token", rawToken)
-
-	req = extractAndStoreAuthContext(baseCfg, mtm, req)
-
-	user := internalauth.GetUser(req.Context())
-	if user == "" {
-		t.Fatalf("expected user context to be set")
-	}
-	if internalauth.GetAPIToken(req.Context()) == nil {
-		t.Fatalf("expected API token record in context")
+			user := internalauth.GetUser(req.Context())
+			token := internalauth.GetAPIToken(req.Context())
+			if tc.wantRecord == "" {
+				if user != "" || token != nil {
+					t.Fatal("unknown token must not receive user or API token context")
+				}
+				return
+			}
+			if user == "" {
+				t.Fatal("expected authenticated user context")
+			}
+			record, ok := token.(*config.APITokenRecord)
+			if !ok || record.Name != tc.wantRecord || !record.HasScope(config.ScopeMonitoringRead) {
+				t.Fatalf("expected %s monitoring token in context, got %#v", tc.wantRecord, token)
+			}
+		})
 	}
 }

@@ -47,14 +47,20 @@ Sign up via the Pulse Cloud portal. Your instance is provisioned automatically a
 
 ### 2. Connect Agents
 
-Once your instance is running, install agents on your infrastructure:
+Once your instance is running, open **Settings → Infrastructure → Install on a
+host** in your cloud dashboard and choose the target platform and collector
+profile. Run the installer on the host being monitored, not inside the hosted
+Pulse server.
 
-```bash
-curl -fsSL https://yourname.cloud.pulserelay.pro/install.sh | \
-  bash -s -- --url https://yourname.cloud.pulserelay.pro --token <api-token>
-```
-
-Generate installation commands from **Settings → Infrastructure → Install on a host** in your cloud dashboard.
+For manual setup, follow the [private-file installation steps](UNIFIED_AGENT.md#private-file-installation-linux-macos-and-nas)
+(or the Windows section in that guide), replacing `https://pulse.example.com`
+with your instance's HTTPS address in both the download and install commands.
+Save the agent token in a private file and pass only its path with
+`--token-file`; never paste a token into command arguments, a URL or a report.
+Download the agent installer from your own instance's `/install.sh`, stop if
+the download fails, and inspect the saved script before running it. Keep TLS
+verification enabled; do not pipe an unchecked response into a privileged shell
+or substitute the top-level GitHub server installer.
 
 ### 3. Add Proxmox / TrueNAS Connections
 
@@ -62,7 +68,7 @@ Add your Proxmox VE, PBS, PMG, or TrueNAS systems via **Settings → Infrastruct
 
 ### 4. Set Up Mobile Access
 
-Relay is enabled by default on Cloud instances. Open **Settings → Remote Access** to prepare pairing and connect once mobile beta/public access is enabled.
+Relay is enabled by default on Cloud instances. Open **Settings → Pulse Mobile** to pair a phone. Pulse Mobile is being retired on 31 March 2027.
 
 ## Data & Privacy
 

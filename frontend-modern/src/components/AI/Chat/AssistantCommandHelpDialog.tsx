@@ -112,7 +112,7 @@ export function AssistantCommandHelpDialog(props: AssistantCommandHelpDialogProp
       isOpen={true}
       onClose={props.onClose}
       layout="mobile-sheet"
-      panelClass="max-w-[30rem] shadow-xl"
+      panelClass="max-w-120 shadow-xl"
       ariaLabel={AI_CHAT_COMMAND_HELP_TITLE}
     >
       <>
@@ -139,7 +139,7 @@ export function AssistantCommandHelpDialog(props: AssistantCommandHelpDialogProp
           />
         </div>
         <div
-          class="max-h-[25rem] overflow-y-auto p-2"
+          class="max-h-100 overflow-y-auto p-2"
           role="listbox"
           aria-label={AI_CHAT_COMMAND_HELP_TITLE}
         >
@@ -172,7 +172,7 @@ export function AssistantCommandHelpDialog(props: AssistantCommandHelpDialogProp
                           role="option"
                           aria-selected={item.index === selectedCommandIndex()}
                           aria-disabled={command.disabled ? 'true' : undefined}
-                          class={`flex w-full items-start gap-3 rounded-md px-3 py-2.5 text-left transition-colors focus:outline-none ${
+                          class={`flex w-full items-start gap-3 rounded-md px-3 py-2.5 text-left transition-colors focus:outline-hidden ${
                             command.disabled
                               ? 'cursor-help opacity-55'
                               : 'hover:bg-surface-hover focus:bg-surface-hover'

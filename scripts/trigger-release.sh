@@ -280,7 +280,7 @@ echo "Derived rollback command: ${ROLLBACK_COMMAND}"
 
 if [ "$IS_PRERELEASE" != "true" ]; then
     echo ""
-    read -r -p "Hotfix exception to bypass 72-hour prerelease soak? [y/N] " HOTFIX_REPLY
+    read -r -p "Hotfix exception to bypass 24-hour prerelease soak? [y/N] " HOTFIX_REPLY
     if [[ "$HOTFIX_REPLY" =~ ^[Yy]$ ]]; then
       HOTFIX_EXCEPTION="true"
       read -r -p "Hotfix reason: " HOTFIX_REASON

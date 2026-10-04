@@ -47,7 +47,7 @@ const SETUP_HANDOFF_INSTALL_STEPS = new Set<InfrastructurePanelStep>([
   'kubernetes',
 ]);
 const INSTALL_TOKEN_REVEAL_NOTE =
-  'Copy just this token for PULSE_TOKEN or Compose environment configuration. The generated install commands remain available after you close this dialog.';
+  'For Unix installation, run the copied command first, then paste this token only at the silent “Pulse agent token” prompt. The no-terminal command reads the private token file named beside it instead. Never insert the token into a Unix command. For Windows or container configuration, keep copied credentials private.';
 
 const isActiveInfrastructureItem = (item: ConnectedInfrastructureItem) => item.status === 'active';
 
@@ -568,6 +568,15 @@ Pulse prepares the first-host install token from setup so you can move straight 
       unixCommand,
       windowsInteractiveCommand,
       windowsParameterizedCommand,
+      token
+        ? buildUnixAgentInstallCommand({
+            baseUrl: url,
+            tokenFilePath: '/root/.config/pulse-agent/bootstrap-token',
+            insecure: insecureMode(),
+            caCertPath: selectedCustomCaPath(),
+            extraArgs: getInstallerExtraArgs(),
+          })
+        : undefined,
     );
     return Object.entries(commands).map(([platform, meta]) => ({
       platform: platform as AgentPlatform,

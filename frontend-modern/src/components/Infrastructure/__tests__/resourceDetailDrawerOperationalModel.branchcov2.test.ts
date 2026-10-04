@@ -16,9 +16,9 @@ import type { Resource } from '@/types/resource';
 // Mirrors the private badge-class constants in resourceDetailDrawerOperationalModel.ts
 // so the assertions here stay brittle to drift in those exact Tailwind tokens.
 const SUPPORTED_BADGE_CLASS =
-  'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-400';
+  'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900/25 dark:text-cyan-400';
 const UNSUPPORTED_BADGE_CLASS =
-  'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-muted';
+  'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-muted';
 
 type SourceStatusMap = NonNullable<PlatformData['sourceStatus']>;
 

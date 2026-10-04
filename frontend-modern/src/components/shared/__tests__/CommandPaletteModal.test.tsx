@@ -50,10 +50,12 @@ describe('CommandPaletteModal', () => {
     cleanup();
     navigateMock.mockReset();
     vi.restoreAllMocks();
+    aiChatStore.setEnabled(false);
   });
 
   beforeEach(() => {
     window.history.replaceState({}, '', '/proxmox/overview');
+    aiChatStore.setEnabled(true);
   });
 
   it('keeps the command palette on shell, runtime, and model owners', () => {
@@ -477,6 +479,22 @@ describe('CommandPaletteModal', () => {
 
     expect(navigateMock).toHaveBeenCalledWith('/kubernetes/workloads');
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers neither Patrol nor Assistant commands while AI is off (#905)', () => {
+    aiChatStore.setEnabled(false);
+    render(() => (
+      <CommandPaletteModal
+        isOpen={true}
+        onClose={vi.fn()}
+        platformVisibility={platformVisibility}
+      />
+    ));
+
+    expect(screen.getByText('Go to Alerts')).toBeInTheDocument();
+    expect(screen.getByText('Go to Settings')).toBeInTheDocument();
+    expect(screen.queryByText('Go to Patrol')).not.toBeInTheDocument();
+    expect(screen.queryByText('Show Assistant commands')).not.toBeInTheDocument();
   });
 
   it('hides platform commands without supported infrastructure evidence', () => {

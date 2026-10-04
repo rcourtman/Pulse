@@ -98,7 +98,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
       onManageProviders={props.onManageProviders}
       manageProvidersLabel="Open Assistant provider settings"
       align="left"
-      buttonClass="flex flex-shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-[11px] text-muted transition-colors hover:border-border hover:text-base-content"
+      buttonClass="flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-[11px] text-muted transition-colors hover:border-border hover:text-base-content"
       buttonLabelClass="max-w-[90px] truncate font-medium sm:max-w-[180px]"
       dropdownClass="w-80 max-w-[calc(100vw-2rem)]"
     />

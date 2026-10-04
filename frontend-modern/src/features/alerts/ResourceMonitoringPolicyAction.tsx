@@ -175,7 +175,7 @@ export function ResourceMonitoringPolicyAction(props: ResourceMonitoringPolicyAc
             data-monitoring-policy-menu-root
             role="menu"
             aria-labelledby={menuButton.triggerId}
-            class="fixed z-[9999] w-72 rounded-md border border-border bg-surface p-1.5 shadow-lg"
+            class="fixed z-9999 w-72 rounded-md border border-border bg-surface p-1.5 shadow-lg"
             style={{ left: `${menuPosition().left}px`, top: `${menuPosition().top}px` }}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
@@ -194,7 +194,7 @@ export function ResourceMonitoringPolicyAction(props: ResourceMonitoringPolicyAc
                   role="menuitem"
                   tabindex="-1"
                   disabled={saving()}
-                  class="block w-full rounded px-2 py-2 text-left hover:bg-surface-hover disabled:opacity-50"
+                  class="block w-full rounded-sm px-2 py-2 text-left hover:bg-surface-hover disabled:opacity-50"
                   onClick={() => void applyChoice(choice)}
                 >
                   <span class="block text-xs font-medium text-base-content">{choice.label}</span>

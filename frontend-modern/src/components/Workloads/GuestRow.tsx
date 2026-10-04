@@ -1,4 +1,4 @@
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createMemo, createSignal, Show, splitProps } from 'solid-js';
 import BoxIcon from 'lucide-solid/icons/box';
 import type { VM } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
@@ -20,13 +20,17 @@ import { TagBadges } from '@/components/shared/TagBadges';
 import { WorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
 import { getWorkloadCPUPercent, resolveWorkloadType } from '@/utils/workloads';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
-import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline';
+import {
+  MetricMiniSparkline,
+  type MetricMiniSparklineValueLabelContext,
+} from '@/components/Workloads/MetricMiniSparkline';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
 import {
   buildSummaryDisclosureControlsId,
   createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
+import { nativeRowClickTarget } from '@/components/shared/Table';
 import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { getWorkloadGuestDiskStatusMessage } from '@/utils/workloadGuestPresentation';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
@@ -49,6 +53,7 @@ export type { GuestRowProps, WorkloadIOEmphasis } from './guestRowModel';
 import { getGuestColumnStyle } from './guestRowModel';
 
 export function GuestRow(props: GuestRowProps) {
+  const [rowActionProps] = splitProps(props, ['onClick']);
   const {
     agentVersion,
     appContainerRuntimeBadge,
@@ -190,10 +195,12 @@ export function GuestRow(props: GuestRowProps) {
     valueLabelMode: 'inline' | 'tooltip' | 'hidden' = 'inline',
     formatValue?: (value: number) => string,
     seriesOptions?: Parameters<WorkloadMetricHistoryReader['getGuestMetricSeries']>[2],
+    valueLabelContext?: MetricMiniSparklineValueLabelContext,
   ) => (
     <MetricMiniSparkline
       series={props.metricHistory?.getGuestMetricSeries(props.guest, metric, seriesOptions) ?? []}
       valueLabel={valueLabel}
+      valueLabelContext={valueLabelContext}
       valueLabelMode={valueLabelMode}
       title={title}
       unit={unit}
@@ -210,6 +217,27 @@ export function GuestRow(props: GuestRowProps) {
     const vm = props.guest as VM;
     return getWorkloadGuestDiskStatusMessage(vm.diskStatusReason);
   };
+  // A native title or bar tooltip is not a visible freshness cue on touch,
+  // and disappears from the chart's accessible value when the history lens opens.
+  const diskReadStatus = createMemo(() => {
+    const guest = props.guest;
+    if (!isVM(guest) || !guest.diskStatusReason) return undefined;
+    const reason = guest.diskStatusReason;
+    const retained = reason.startsWith('prev-');
+    return {
+      label: retained
+        ? usesCompactTableLayout()
+          ? 'Prior'
+          : 'Last known'
+        : usesCompactTableLayout()
+          ? 'N/A'
+          : 'Unavailable',
+      message: getDiskStatusTooltip(),
+      valueLabelContext: retained ? ('last known' as const) : ('current' as const),
+    };
+  });
+  const diskValueLabelContext = (): MetricMiniSparklineValueLabelContext =>
+    diskReadStatus()?.valueLabelContext ?? 'current';
   const interactiveRowHandlers = createSummaryInteractiveRowPreviewHandlers({
     onPreview: () => {
       if (!rowHistoryPreviewEnabled()) return;
@@ -241,7 +269,8 @@ export function GuestRow(props: GuestRowProps) {
             : undefined
         }
         data-summary-row-active={props.isSummaryHighlighted && !props.isExpanded ? 'true' : 'false'}
-        onClick={props.onClick}
+        on:click={rowActionProps.onClick ? nativeRowClickTarget : undefined}
+        {...rowActionProps}
         {...interactiveRowHandlers}
       >
         {/* Name - always visible */}
@@ -553,7 +582,11 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Disk */}
         <Show when={isColVisible('disk')}>
-          <td class="px-1.5 sm:px-2 py-0.5 align-middle" data-workload-col="disk">
+          <td
+            class="px-1.5 sm:px-2 py-0.5 align-middle"
+            data-workload-col="disk"
+            title={diskReadStatus()?.message}
+          >
             <Show when={isSparklineMode()}>
               {renderMetricSparkline(
                 'disk',
@@ -562,6 +595,8 @@ export function GuestRow(props: GuestRowProps) {
                 '%',
                 'inline',
                 formatMetricPercent,
+                undefined,
+                diskValueLabelContext(),
               )}
             </Show>
             <Show when={!isSparklineMode()}>
@@ -585,6 +620,11 @@ export function GuestRow(props: GuestRowProps) {
                         aggregateDisk={props.guest.disk}
                         anomaly={diskAnomaly()}
                         thresholds={diskThresholds()}
+                        statusMessage={
+                          isVM(props.guest) && props.guest.diskStatusReason
+                            ? getDiskStatusTooltip()
+                            : undefined
+                        }
                       />
                     }
                   >
@@ -596,11 +636,24 @@ export function GuestRow(props: GuestRowProps) {
                         '%',
                         'inline',
                         formatMetricPercent,
+                        undefined,
+                        diskValueLabelContext(),
                       )}
                     </div>
                   </Show>
                 </div>
               </Show>
+            </Show>
+            <Show when={diskReadStatus()}>
+              {(status) => (
+                <p
+                  data-workload-disk-read-status
+                  class="mt-0.5 text-center text-[10px] leading-none text-amber-700 dark:text-amber-300"
+                >
+                  <span aria-hidden="true">{status().label}</span>
+                  <span class="sr-only">{status().message}</span>
+                </p>
+              )}
             </Show>
           </td>
         </Show>
@@ -739,7 +792,7 @@ export function GuestRow(props: GuestRowProps) {
                   <span class="text-xs text-muted truncate max-w-[80px]" title={props.guest.node}>
                     {props.guest.node}
                   </span>
-                  <span class="rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                  <span class="rounded-sm px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300">
                     {clusterName()}
                   </span>
                 </Show>

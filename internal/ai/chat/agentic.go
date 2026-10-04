@@ -667,11 +667,13 @@ type AgenticLoop struct {
 	modelName    string
 
 	// Token accumulation across all turns
-	totalInputTokens   int
-	totalOutputTokens  int
-	totalToolCalls     int
-	totalModelTurns    int
-	totalEvidenceCalls int
+	totalInputTokens         int
+	totalOutputTokens        int
+	totalCacheCreationTokens int
+	totalCacheReadTokens     int
+	totalToolCalls           int
+	totalModelTurns          int
+	totalEvidenceCalls       int
 
 	// State for ongoing executions
 	mu             sync.Mutex
@@ -1222,6 +1224,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						stopReason = data.StopReason
 						toolCalls = agentcapabilities.NormalizeProviderToolCallsForExecution(data.ToolCalls)
 						a.totalInputTokens += data.InputTokens
+						a.totalCacheCreationTokens += data.CacheCreationInputTokens
+						a.totalCacheReadTokens += data.CacheReadInputTokens
 						a.totalOutputTokens += data.OutputTokens
 						log.Info().
 							Int("turn", turn).

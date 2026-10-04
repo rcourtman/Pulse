@@ -193,7 +193,7 @@ func (p *VMwarePoller) syncConnections() {
 		return
 	}
 
-	orgs, err := p.multiTenant.ListOrganizations()
+	orgIDs, err := p.multiTenant.ListOrganizationIDs()
 	if err != nil {
 		log.Warn().
 			Str("component", "vmware_poller").
@@ -203,15 +203,8 @@ func (p *VMwarePoller) syncConnections() {
 		return
 	}
 
-	active := make(map[string]map[string]config.VMwareVCenterInstance, len(orgs))
-	for _, org := range orgs {
-		if org == nil {
-			continue
-		}
-		orgID := strings.TrimSpace(org.ID)
-		if orgID == "" {
-			continue
-		}
+	active := make(map[string]map[string]config.VMwareVCenterInstance, len(orgIDs))
+	for _, orgID := range orgIDs {
 		persistence, err := p.multiTenant.GetPersistence(orgID)
 		if err != nil || persistence == nil {
 			log.Warn().

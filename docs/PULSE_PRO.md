@@ -1,7 +1,19 @@
-# Pulse Plans and Entitlements (Community / Relay / Pro / Cloud / MSP)
+# Pulse Plans and Entitlements (Community / Pro / Cloud / MSP)
 
-This document explains Pulse's user-facing plan structure, the locked self-hosted commercial model, and how those plans map to runtime feature gates.
+This document explains Pulse's current plans, self-hosted commercial model, and
+how those plans map to runtime feature gates.
 
+## Pulse Mobile and Retired Relay Subscriptions
+
+Pulse Mobile and Relay retire on **31 March 2027**. Existing paired phones keep
+working until then. Relay is no longer sold; existing Relay subscribers receive
+Pro features at their current price for as long as their subscription continues.
+Those Pro features do not end with the app's retirement.
+
+Relay connects the app, not the web UI. To reach Pulse away from home, use your
+own VPN or tunnel. For alerts on your phone afterwards, add an ntfy, Gotify or
+Pushover destination under **Alerts** and open Pulse in your phone's browser.
+See [Relay / Pulse Mobile](RELAY.md) for existing pairing and security details.
 
 ## Plan Mapping (User-Facing -> Code Tiers)
 
@@ -9,7 +21,7 @@ Pulse uses capability keys (for example, `ai_autofix`) to gate features at runti
 
 User-facing plans map to internal tiers as follows:
 - **Community**: `free`
-- **Relay**: `relay`
+- **Retired Relay**: `relay` remains a compatibility tier, not a plan to buy. Continuing Relay subscriptions receive Pro entitlements.
 - **Pro**: `pro`, `pro_annual`, `lifetime`
 - **Cloud**: `cloud` for hosted Pro-level instances, with `enterprise` for internal multi-organization add-ons
 - **MSP**: signed provider MSP license using `msp_*` plan versions, with Enterprise/custom terms for higher client counts or white-label report branding
@@ -32,8 +44,11 @@ Self-hosted pricing is:
 | Plan | Price | Core monitoring | Metric history | Purpose |
 |---|---:|---|---:|---|
 | Community | Free | Included | 7 days | Full self-hosted monitoring for normal homelab use |
-| Relay | $39/yr or $4.99/mo | Included | 14 days | Remote web access, Pulse Mobile pairing for handoff, push, and convenience |
 | Pro | $79/yr or $8.99/mo | Included | 90 days | AI operations and advanced admin features |
+
+Legacy Relay payloads can still show 14-day history. That compatibility limit is
+not the entitlement for continuing Relay subscribers, who now receive Pro
+features, including 90-day history, at their existing price.
 
 Counted examples:
 - Proxmox PVE node
@@ -73,9 +88,10 @@ Migration policy:
 |---|---|---|
 | Legacy recurring subscriber from a v5 or earlier Pulse Pro monthly/annual plan, already active before the public v6 pricing cutover | The install can migrate into the v6 activation model without forcing a repurchase. | The existing recurring price stays in place while the subscription remains continuously active; self-hosted monitoring and child-resource volume are not metered under the current v6 policy. |
 | Existing lifetime license holder | The license remains valid through the v6 licensing transition. | Lifetime remains permanently valid; self-hosted monitoring and child-resource volume are not metered under the current v6 policy. |
+| Existing Relay subscriber | The continuing subscription receives Pro entitlements without a new purchase. | The existing price stays in place for as long as the subscription continues. Pro features continue after Pulse Mobile and Relay retire on 31 March 2027. |
 | Legacy paid v5 license migrated into v6 outside the recurring grandfathered path | The install can still exchange into the v6 activation model without forcing a repurchase. Migration records can still preserve the original cohort for support and audit. | Self-hosted monitoring stays available; monitored-system volume is no longer sold as a paid gate on current v6 self-hosted plans. |
 | Former recurring subscriber who already canceled or later lapses/cancels | A later return is treated as a new paid purchase, not as a grandfathered renewal. | The old grandfathered price does not resume automatically; current public v6 pricing applies for paid features while self-hosted monitoring remains included without a monitored-system volume gate. |
-| New self-hosted v6 purchase | The purchase uses the current Community / Relay / Pro self-hosted plans. | Core monitoring is included by default; paid value comes from convenience, AI, history, and advanced admin features. |
+| New self-hosted v6 purchase | Community monitoring is free; Pro is the current paid self-hosted plan. | Core monitoring is included by default; paid value comes from AI, history, and advanced admin features. Relay is no longer sold. |
 
 Support rule:
 - If any self-hosted v6 install shows a finite monitored-system, guest, or child-resource volume limit after activation or migration, treat it as a bug rather than as intended policy.
@@ -113,7 +129,7 @@ into first-class product surfaces:
 
 ## Paid Feature Proof Map
 
-Use this map before adding or changing public Pulse Pro/Relay copy. A feature is safe to sell only
+Use this map before adding or changing public Pulse Pro copy. A feature is safe to sell only
 when the claim has a runtime gate, presentation copy, and at least one regression proof. The
 automated proof bundle also checks that ordinary self-hosted sessions stay free-first and do not
 surface upgrade prompts unless the user deliberately enters a commercial path.
@@ -121,7 +137,7 @@ surface upgrade prompts unless the user deliberately enters a commercial path.
 | Claim | Runtime source | Regression proof |
 |---|---|---|
 | Self-hosted monitoring is not sold by monitored-system or child-resource volume. | `pkg/licensing/features.go` and `pkg/licensing/entitlement_payload.go` normalize self-hosted limits to the current no-volume-gate policy. | `pkg/licensing/grant_claims_contract_test.go`, `pkg/licensing/activation_types_test.go`, and `internal/api/licensing_handlers_auto_migrate_test.go` prove self-hosted paid/legacy continuity does not surface finite monitored-system allowances. |
-| Relay includes secure remote web access, Pulse Mobile pairing for handoff, push notifications, and 14-day history. | `pkg/licensing/features.go` grants `relay`, `mobile_app`, `push_notifications`, and `long_term_metrics` to Relay with `TierHistoryDays[relay] == 14`; relay onboarding/settings routes are gated behind Relay. | `pkg/licensing/features_test.go`, `pkg/licensing/entitlement_payload_test.go`, `internal/api/relay_sso_license_gating_test.go`, and `frontend-modern/src/components/Settings/__tests__/RelaySettingsPanel.runtime.test.tsx`. |
+| Existing Pulse Mobile pairing and push continue until 31 March 2027; Relay does not provide remote access to the web UI. | `pkg/licensing/features.go` retains `relay`, `mobile_app`, and `push_notifications` for compatible paid payloads; relay onboarding/settings routes remain license-gated. These keys do not make Relay a plan to buy. | `pkg/licensing/features_test.go`, `pkg/licensing/entitlement_payload_test.go`, `internal/api/relay_sso_license_gating_test.go`, and `frontend-modern/src/components/Settings/__tests__/RelaySettingsPanel.runtime.test.tsx`. |
 | Pro includes Patrol issue investigation and verified fix actions. | `internal/api/ai_handlers.go` gates alert-triggered analysis behind `ai_alerts` and fix/autonomy behavior behind `ai_autofix`; `internal/ai/service.go` enforces the same capabilities in service-level paths. | `pkg/licensing/features_test.go`, `internal/api/router_routes_ai_execute_stream_test.go`, `internal/api/ai_intelligence_handlers_remediation_more_test.go`, and `frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx`. |
 | Pro includes 90-day history. | `pkg/licensing/features.go` sets `TierHistoryDays[pro] == 90`; `pkg/licensing/entitlement_payload.go` emits `max_history_days`; `frontend-modern/src/stores/license.ts` and `frontend-modern/src/components/shared/useHistoryChartState.ts` lock ranges above the entitlement. | `pkg/licensing/features_test.go`, `pkg/licensing/entitlement_payload_test.go`, and `frontend-modern/src/stores/__tests__/license.test.ts`. |
 | Pro includes business/admin extras: RBAC, audit logging, reporting, and agent profiles. | Router and settings gates use `rbac`, `audit_logging`, `advanced_reporting`, and `agent_profiles`; audit capture is SQLite-backed in `pkg/server/server.go` and `pkg/audit/sqlite_factory.go`, while query/export remains license-gated. | `internal/api/security_regression_test.go`, `internal/api/rbac_lifecycle_test.go`, `pkg/reporting/catalog_test.go`, and `frontend-modern/src/components/Settings/__tests__/settingsNavigation.integration.test.tsx`. |
@@ -132,12 +148,16 @@ Legend:
 - Included: `Y` / `N`
 - `Y*`: Enterprise/custom only (`enterprise` tier or explicit entitlement)
 
-This matrix reflects the entitlement keys enforced in code plus the runtime history and limit semantics exposed through entitlements.
+This matrix reflects the entitlement keys enforced in code plus the runtime
+history and limit semantics exposed through entitlements. **Relay (legacy)**
+describes old `relay` payloads, not a current purchase or continuing subscriber's
+plan. Continuing Relay subscribers receive the **Pro** column; the compatibility
+keys and old 14-day limit remain in code without changing that policy.
 
-| Constant | Capability Key | Display Name | Community | Relay | Pro | Cloud | Primary Gating Mechanism / Notes |
+| Constant | Capability Key | Display Name | Community | Relay (legacy) | Pro | Cloud | Primary Gating Mechanism / Notes |
 |---|---|---|:---:|:---:|:---:|:---:|---|
 | `FeatureAIPatrol` | `ai_patrol` | Pulse Patrol (Background Health Checks) | Y | Y | Y | Y | Patrol itself is available on Community with your own provider or local model. Higher-autonomy outcomes and fix execution are separately gated. |
-| `FeatureRelay` | `relay` | Remote Access (Mobile Relay) | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., relay, ...)` for relay settings and onboarding endpoints. |
+| `FeatureRelay` | `relay` | Pulse Relay (Mobile Connection) | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., relay, ...)` for relay settings and onboarding endpoints. |
 | `FeatureAIAlerts` | `ai_alerts` | Patrol Investigates Issues and Explains the Root Cause | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., ai_alerts, ...)`. |
 | `FeatureAIAutoFix` | `ai_autofix` | Patrol Applies Safe Fixes and Verifies the Result | N | N | Y | Y | Required for governed fix execution and automatic Patrol actions. |
 | `FeatureKubernetesAI` | `kubernetes_ai` | Kubernetes AI Analysis (Compatibility) | N | N | Y | Y | Legacy compatibility gate for `/api/ai/kubernetes/analyze`; not a primary marketed v6 Pro plan pillar. |
@@ -160,7 +180,7 @@ Patrol mode decides how far Pulse can go after Patrol finds something that needs
 
 | Mode | Behavior | Plan |
 |---|---|---|
-| **Watch only** | Detect issues only. No investigation or fix execution. | Community / Relay |
+| **Watch only** | Detect issues only. No investigation or fix execution. | Community / legacy Relay payload |
 | **Ask before changes** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |
 | **Auto-fix safe issues** | Runs approved safe fixes and verifies the outcome. Critical findings require approval by default. | Pro / hosted Cloud |
 | **Policy autopilot** | Runs eligible policy-approved fixes without approval when explicitly enabled. | Pro / hosted Cloud |
@@ -173,19 +193,20 @@ Patrol mode decides how far Pulse can go after Patrol finds something that needs
 - Pulse Patrol with your own provider or local model.
 - Core SSO and update alerts.
 
-### Relay
-- Everything in Community, plus:
-- 14-day history.
-- Remote access via Relay.
-- Pulse Mobile pairing for handoff and push notifications.
+### Retired Relay Subscriptions
+- No new purchases.
+- Existing subscribers receive Pro features at their current price for as long as their subscription continues.
+- Existing paired phones and push notifications keep working until 31 March 2027.
+- Relay connects the app, not the web UI.
 
 ### Pro
-- Everything in Relay, plus:
+- Everything in Community, plus:
 - Patrol investigates issues.
 - Patrol handles safe fixes through Patrol mode.
 - Centralized agent profiles.
 - RBAC, audit logging, and advanced reporting.
 - 90-day history.
+- Existing Pulse Mobile pairing and push notifications until 31 March 2027.
 
 ### Legacy Pro+
 - Existing Pro+ entitlements remain supported for current holders, but Pro+ is no longer presented as a public self-hosted plan because monitored-system volume is no longer the paid boundary.

@@ -205,6 +205,9 @@ func (s *IncidentStore) QueryIncidents(query IncidentQuery) (IncidentPage, error
 			continue
 		}
 		started := incidentEventTimestamp(change)
+		if explicit := incidentChangeStartedAt(change); !explicit.IsZero() {
+			started = explicit
+		}
 		var occurrence *Incident
 		for _, candidate := range byAlert[identifier] {
 			if canonicalBoundary[candidate] {
@@ -241,7 +244,16 @@ func (s *IncidentStore) QueryIncidents(query IncidentQuery) (IncidentPage, error
 			continue
 		}
 		occurrence := firedOwners[change.ID]
-		if occurrence == nil {
+		explicitStart := incidentChangeStartedAt(change)
+		if occurrence == nil && !explicitStart.IsZero() {
+			for _, candidate := range byAlert[identifier] {
+				if sameResource(candidate.ResourceID, change.ResourceID) && boundaries[candidate].Equal(explicitStart) {
+					occurrence = candidate
+					break
+				}
+			}
+		}
+		if occurrence == nil && explicitStart.IsZero() {
 			for _, candidate := range byAlert[identifier] {
 				if change.Kind != unifiedresources.ChangeCommandExecuted && change.Kind != unifiedresources.ChangeRunbookExecuted && !sameResource(candidate.ResourceID, change.ResourceID) {
 					continue
@@ -385,4 +397,19 @@ func incidentStartDelta(a, b time.Time) time.Duration {
 		return -d
 	}
 	return d
+}
+
+// Modern lifecycle events carry occurrence identity separately from transition
+// time. Refires keep the same occurrence even though they happen after recovery.
+// Legacy history without that identity retains its timestamp-based projection.
+func incidentChangeStartedAt(change unifiedresources.ResourceChange) time.Time {
+	value, ok := change.Metadata[unifiedresources.MetadataAlertStartedAt].(string)
+	if !ok {
+		return time.Time{}
+	}
+	started, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil || started.After(incidentEventTimestamp(change)) {
+		return time.Time{}
+	}
+	return started
 }

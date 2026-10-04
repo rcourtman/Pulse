@@ -47,19 +47,19 @@ const STATUS_PRESENTATION: Record<
 > = {
   healthy: {
     label: 'Healthy',
-    badgeClass: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+    badgeClass: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-200',
   },
   waiting: {
     label: 'Waiting for updater',
-    badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+    badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900/25 dark:text-blue-200',
   },
   warning: {
     label: 'Needs attention',
-    badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+    badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-200',
   },
   critical: {
     label: 'Critical',
-    badgeClass: 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200',
+    badgeClass: 'bg-rose-100 text-rose-800 dark:bg-rose-900/25 dark:text-rose-200',
   },
   removed: {
     label: 'Removed',
@@ -310,7 +310,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
       </div>
 
       <Show when={props.diagnosticsError}>
-        <section class="flex flex-col gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100 sm:flex-row sm:items-center sm:justify-between">
+        <section class="flex flex-col gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div class="font-semibold">Structured diagnostics are temporarily unavailable</div>
             <p class="mt-1 text-xs leading-5 text-amber-800 dark:text-amber-200">
@@ -343,7 +343,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
         when={props.targets.length > 0}
         fallback={
           <Show when={!props.diagnosticsLoading}>
-            <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
+            <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
               No Pulse Agent connections are currently in scope.
             </div>
           </Show>
@@ -385,7 +385,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
         </section>
 
         <Show when={anyTargetNeedsRepair()}>
-          <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-900 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-100">
+          <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-800 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-100">
             Update and authentication-repair commands are host-local: copy one to the affected
             machine to repair its Pulse Agent from this server. They do not update the Pulse server
             runtime and Pulse does not run them remotely.
@@ -401,7 +401,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
         >
           <section class="space-y-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800 dark:bg-blue-950/30">
             <div class="space-y-1">
-              <h3 class="text-sm font-semibold text-blue-900 dark:text-blue-100">
+              <h3 class="text-sm font-semibold text-blue-800 dark:text-blue-100">
                 Generate update token
               </h3>
               <p class="text-xs leading-5 text-blue-800 dark:text-blue-200">
@@ -415,10 +415,10 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                 <FormSelect
                   label="Agent installation to repair"
                   fieldClass="flex-1"
-                  labelClass="text-xs font-medium text-blue-900 dark:text-blue-100"
+                  labelClass="text-xs font-medium text-blue-800 dark:text-blue-100"
                   value={selectedTokenTarget()?.key}
                   onChange={(event) => setSelectedTokenTargetKey(event.currentTarget.value)}
-                  selectBaseClass="min-h-10 w-full rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-950 dark:focus:ring-blue-900"
+                  selectBaseClass="min-h-10 w-full rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-950/25 dark:focus:ring-blue-900/25"
                 >
                   <For each={tokenGatedTargets()}>
                     {(target) => (
@@ -440,7 +440,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                   }
                 }}
                 placeholder="Token name (optional)"
-                class="min-h-10 flex-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-950 dark:focus:ring-blue-900"
+                class="min-h-10 flex-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-950/25 dark:focus:ring-blue-900/25"
               />
               <button
                 type="button"
@@ -465,7 +465,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
             !operations.commandsUnlocked()
           }
         >
-          <section class="space-y-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+          <section class="space-y-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
             <p class="text-xs leading-5">
               Tokens are optional on this Pulse instance. Confirm to generate Windows update
               commands without embedding a token.
@@ -483,15 +483,15 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
 
         <div class="rounded-md border border-border bg-surface">
           <Table class="w-full min-w-0 table-fixed text-sm">
-            <TableHeader class="bg-surface-alt/60">
+            <TableHeader class="">
               <TableRow>
-                <TableHead class="w-[26%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                <TableHead class="w-[40%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap sm:w-[26%]">
                   Agent
                 </TableHead>
                 <TableHead class="hidden w-[15%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap sm:table-cell">
                   System
                 </TableHead>
-                <TableHead class="w-[15%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                <TableHead class="w-[38%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap sm:w-[20%] lg:w-[15%]">
                   Status
                 </TableHead>
                 <TableHead class="hidden w-[12%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap sm:table-cell">
@@ -500,7 +500,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                 <TableHead class="agent-doctor-target-column w-[12%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
                   Target
                 </TableHead>
-                <TableHead class="w-[20%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                <TableHead class="w-[22%] px-2 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap sm:w-[20%] sm:px-3">
                   <span class="platform-table-label-compact">Seen</span>
                   <span class="platform-table-label-full">Last seen</span>
                 </TableHead>
@@ -547,7 +547,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                           <div class="flex items-center gap-1.5">
                             <button
                               type="button"
-                              class="inline-flex items-center rounded p-0.5 text-muted transition-colors hover:bg-surface-alt hover:text-base-content"
+                              class="inline-flex items-center rounded-sm p-0.5 text-muted transition-colors hover:bg-surface-alt hover:text-base-content"
                               aria-expanded={expanded()}
                               aria-label={`${expanded() ? 'Hide' : 'Show'} details for ${target.displayName}`}
                               onClick={(event) => {
@@ -583,7 +583,10 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                         <TableCell class="agent-doctor-target-column px-3 py-1.5 text-xs text-base-content">
                           {target.expectedVersion || '—'}
                         </TableCell>
-                        <TableCell class="px-3 py-1.5 text-xs text-muted" title={lastSeen() || ''}>
+                        <TableCell
+                          class="px-2 py-1.5 text-xs text-muted sm:px-3"
+                          title={lastSeen() || ''}
+                        >
                           <span class="platform-table-label-compact">{lastSeenRelative()}</span>
                           <span class="platform-table-label-full">{lastSeen() || '—'}</span>
                         </TableCell>
@@ -616,7 +619,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                               <div class="flex flex-wrap items-center gap-2">
                                 <span class="font-medium text-base-content">Security posture</span>
                                 <Show when={target.safeCollector}>
-                                  <span class="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
+                                  <span class="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-200">
                                     Safe collector confirmed
                                   </span>
                                 </Show>
@@ -747,7 +750,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                     customCaPath: operations.customCaPath(),
                                   });
                                 return (
-                                  <section class="space-y-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-3 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
+                                  <section class="space-y-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-3 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
                                     <div class="font-semibold">Save this credential now</div>
                                     <p class="leading-5">
                                       This secret is held only in this page's memory and cannot be
@@ -914,6 +917,18 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                     <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
                                       <code>{command()}</code>
                                     </pre>
+                                    <Show
+                                      when={
+                                        commandRequiresToken(target) &&
+                                        target.commandPlatform !== 'windows'
+                                      }
+                                    >
+                                      <p class="mt-2 text-xs text-muted">
+                                        Run this command in a console or SSH session first, then
+                                        paste the separately revealed token at the silent Pulse
+                                        agent token prompt. Never insert the token into the command.
+                                      </p>
+                                    </Show>
                                   </div>
                                 </Show>
                               </Show>
@@ -926,7 +941,9 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                     This agent was removed from Pulse, but the agent software may
                                     still be installed on its host. Finish detaching it by running
                                     the uninstall command on the affected host itself. Pulse does
-                                    not run commands remotely.
+                                    not run commands remotely. For Unix commands that require a
+                                    token, run the command first, then paste the separately revealed
+                                    token at its silent prompt. Never insert it into the command.
                                   </p>
                                   <For each={handoff().commands}>
                                     {(entry) => (

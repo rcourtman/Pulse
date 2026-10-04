@@ -156,6 +156,7 @@ func Run(ctx context.Context, version string) error {
 		HostedEntitlements: hostedEntitlements,
 		Version:            version,
 		EmailSender:        emailSender,
+		ProviderMSPLicense: NewProviderMSPLicenseRefresher(cfg),
 	}
 	RegisterRoutes(mux, deps)
 
@@ -187,6 +188,15 @@ func Run(ctx context.Context, version string) error {
 	// Start stuck provisioning cleanup
 	stuckCleanup := NewStuckProvisioningCleanup(reg)
 	go stuckCleanup.Run(ctx)
+
+	// Keep a provider-hosted platform's licence in step with its paid
+	// subscription. A changed licence cancels ctx, which shuts the server
+	// down cleanly; the container restart policy brings it back on the new
+	// licence.
+	if deps.ProviderMSPLicense != nil {
+		deps.ProviderMSPLicense.SetRestart(cancel)
+		go deps.ProviderMSPLicense.Run(ctx)
+	}
 
 	// Start metrics updater
 	go runTenantStateMetrics(ctx, reg)

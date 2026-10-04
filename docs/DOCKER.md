@@ -45,15 +45,19 @@ services:
     environment:
       - TZ=Europe/London
       - PULSE_DEPLOYMENT_METHOD=docker_compose
-      # Optional: Pre-configure auth (skips setup wizard)
-      # - PULSE_AUTH_USER=admin
-      # - PULSE_AUTH_PASS=secret123
 
 volumes:
   pulse_data:
 ```
 
 Run with: `docker compose up -d`
+
+Leave authentication overrides unset for a new install and complete
+[bootstrap-token setup](INSTALL.md#step-1-get-the-token) in your browser. Do not add a
+shared example password to the Compose file. If automation must skip setup,
+use a private deployment-managed credential source; the
+[private Docker authentication file](CONFIGURATION.md#private-docker-authentication-file)
+example is for `docker run`, not Compose interpolation.
 
 The `PULSE_IMAGE` variable lets the same compose file run either the public
 community image or, for eligible paid customers, the private Pulse Pro image
@@ -73,13 +77,16 @@ Pulse is configured via the UI (`system.json`) with optional environment overrid
 | `DISCOVERY_SUBNET` | Custom CIDR to scan | *(auto)* |
 | `ALLOWED_ORIGINS` | CORS allowed origin (`*` or a single origin). Empty = same-origin only. | *(unset)* |
 | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | `info` |
-| `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Hide Docker update buttons (read-only mode) | `false` |
+| `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Disable container image-update actions; does not disable start/stop/restart | `false` |
 | `PULSE_METRICS_DB_PATH` | Optional path for only `metrics.db`, useful with tmpfs | `/data/metrics.db` |
 | `PULSE_METRICS_ROLLUP_INTERVAL` | Metrics aggregation cadence; minimum 5 minutes | `15m` |
 
 > **Tip**: Set `LOG_LEVEL=warn` to reduce log volume while still capturing important events.
 > **Note**: API tokens are managed in the UI and stored in `api_tokens.json`.
-> **Note**: Plain text values in `PULSE_AUTH_PASS` are auto-hashed on startup.
+> **Note**: Plain text values in `PULSE_AUTH_PASS` are hashed for authentication
+> at startup, but remain in the container environment and deployment file.
+> Docker administrators can read those values. Prefer bootstrap setup; never
+> share full `docker inspect` or resolved Compose output.
 
 For SSD-sensitive installs, keep `/data` persistent and put only metrics
 history on tmpfs:
@@ -118,44 +125,92 @@ services:
 
 ## 🔄 Updates
 
-To update Pulse to a specific release tag:
+These steps update the Pulse server, not the containers it monitors. Record the
+current image and take a consistent private backup of the mounted Pulse data
+before changing it. Keep the previous image and data backup for recovery; do
+not delete volumes.
 
 ```bash
-docker pull rcourtman/pulse:vX.Y.Z
-docker stop pulse
-docker rm pulse
-# Re-run your docker run command
+docker inspect pulse --format '{{.Config.Image}} {{.Image}}'
 ```
 
-If using Compose:
+Run commands from the original Compose project directory. First set the exact
+target in your Compose `image:` line, or persist `PULSE_IMAGE` in the project's
+`.env` if the file uses `image: ${PULSE_IMAGE:-rcourtman/pulse:vX.Y.Z}`.
+Setting `PULSE_IMAGE` has no effect on a hardcoded image line. Community uses
+`rcourtman/pulse:vX.Y.Z`; paid Pro installs must keep the private image and
+existing registry login from <https://pulserelay.pro/download.html>. Do not
+replace Pro with the Community image or post registry credentials.
+
+For the `pulse` service in the examples above:
+
 ```bash
-docker compose pull
-docker compose up -d
+(
+set -e
+docker compose pull pulse
+docker compose up -d --no-deps pulse
+)
 ```
+
+If pulling fails, stop rather than recreating with an unverified or old image.
+Pulling a different tag alone does not update your configured image. There is
+no need to bring the whole Compose project down. Use your actual service and
+container names if they differ; legacy `docker-compose` users can substitute
+that command name.
+
+For `docker run` or an app UI, change the image in the existing saved deployment
+and recreate it with the same data mount, ports and settings; do not start a
+second Pulse against that data. Check the running image again, Pulse's displayed
+server version and service health after recreation. See
+[rollback and backup scope](AUTO_UPDATE.md#rollback) before reverting a version:
+an image change alone does not undo data migrations.
 
 ---
 
 ## 🔄 Docker / Podman Updates
 
-Pulse can detect and apply updates to your Docker / Podman containers directly from the UI.
+These actions update **monitored containers**, not the Pulse server. Pulse can
+detect image updates without command execution; applying an update requires a
+separately enabled command channel and administrator review. Leave command
+execution disabled when you only need monitoring.
+
+### Before updating a workload
+
+- Plan for downtime: a running container is stopped and replaced, not updated
+  in place. Check the application's upgrade and data-migration requirements.
+- Take an independent, consistent backup of its application data, including
+  volumes and bind mounts, using the application's backup procedure. The
+  renamed old container is **not a backup of mounted data**: the replacement
+  uses those same mounts and can change their contents.
+- Keep the previous image identity and your deployment definition privately.
+  For Compose, Yacht or another deployment manager, prefer that manager's
+  update procedure so its saved definition records the intended image. Pulse's
+  recreation does not edit your Compose file or manager's desired state.
+- Do not use an update as a diagnostic test or start another container against
+  the same writable data to check a failure.
 
 ### How It Works
 
 1. **Update Detection**: Pulse compares the local image digest with the latest digest from the container registry
 2. **Visual Indicator**: Containers with available updates show a blue upward arrow icon
-3. **Reviewed Update**: Click the update button, approve the reviewed action, and Pulse handles the rest
+3. **Reviewed Update**: Review the target and approve the action, then verify the application yourself
 
 ### Updating a Container
 
-1. Navigate to the **Workloads** page (or filter by Docker sources on **Infrastructure**)
+1. Open **Docker → Overview** (`/docker/overview`) and find the host and container
 2. Look for containers with a blue update arrow (⬆️)
 3. Click the update button and approve the action in the review dialog (admin approval required)
-4. Pulse will:
+4. Pulse attempts to:
    - Pull the latest image
-   - Stop the current container
-   - Create a backup (renamed with `_pulse_backup_` suffix)
-   - Start a new container with the same configuration
-   - Clean up the backup after 15 minutes (if the update succeeds)
+   - Stop the current container if it was running
+   - Rename the original container with the `_pulse_backup_` suffix
+   - Recreate the container from its inspected configuration, reusing its data mounts
+   - Start it only if the original was running, then perform a short runtime check
+   - Schedule removal of the renamed old container after a successful update
+
+Afterwards, check the actual image, container state, application readiness and
+data through your normal administration tools. A successful action is not an
+end-to-end application or data-integrity test.
 
 ### Batch Updates
 
@@ -163,9 +218,29 @@ Updates run as reviewed per-container actions, so there is currently no bulk upd
 
 ### Safety Features
 
-- **Automatic Backup**: The old container is renamed, not deleted, until the update succeeds
-- **Rollback on Failure**: If the new container fails to start, the old one is restored
-- **Configuration Preserved**: Networks, volumes, ports, environment variables are all preserved
+- **Temporary old container**: the `_pulse_backup_` name retains the old
+  container, not a separate copy of its volumes or bind mounts. Current agents
+  schedule removal **five minutes after a successful update**; periodic cleanup
+  also removes old backup containers. Do not rely on a 15-minute recovery window
+  or on a remaining container as a durable backup.
+- **Best-effort rollback**: when recreation, network attachment or the early
+  runtime check fails, Pulse attempts to restore the original name and running
+  state. Removal, rename or restart can fail too. A failed banner does not prove
+  that the original container is running or that no change occurred.
+- **Limited verification**: the running replacement is inspected after a short
+  wait and rejected if stopped or explicitly unhealthy. A missing healthcheck
+  or a `starting` health status is not proof that the application is ready.
+- **Inspected configuration**: Pulse reuses container settings and mounts; it
+  does not reconcile your deployment manager or roll back application data
+  migrations. Verify networks, ports, mounts and the application after the change.
+
+If the result is failed or uncertain, **check the current state before retrying**.
+Retain the action error and time, old/new container and image identities, and
+any rollback error. Inspect these locally; do not post full `docker inspect`
+output, environments or registry credentials. Do not delete the old container
+or volumes to clear a warning. Recover through the application's and deployment
+manager's procedures using a verified matching data backup where required;
+returning to the old image alone does not undo a data migration.
 
 ### Requirements
 
@@ -188,12 +263,10 @@ To keep update detection anonymous-only (no credential store reads, no credentia
 
 Paid Pulse Pro Docker installs use the private Pulse Pro registry rather than
 the public `rcourtman/pulse` image. Open <https://pulserelay.pro/download.html>,
-paste your activation key, run the Docker login command shown there, then run
-the shown `PULSE_IMAGE=license.pulserelay.pro/pulse-pro:<version> docker compose pull`
-and `docker compose up -d` commands from the host that already runs Pulse. If
-your compose file has a hardcoded `image: rcourtman/pulse:...` line, change it
-to `image: ${PULSE_IMAGE:-rcourtman/pulse:vX.Y.Z}` or directly to the private
-image shown on the download page before running those commands.
+enter your activation key in the page and use its registry login instructions
+on the host that already runs Pulse. Persist the private image for both pull
+and recreation as described in [server updates](#-updates); an image override
+used for only the pull does not select it for the later recreation.
 
 ### Disabling Update Features
 
@@ -201,9 +274,9 @@ Pulse provides granular control over update features via environment variables o
 
 | Variable | Description |
 |----------|-------------|
-| `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Hides update buttons from the UI while still detecting updates. Use this for "read-only" monitoring. |
+| `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Disables image-update actions while still detecting updates. Start/stop/restart have separate controls. |
 
-**Example - Read-Only Mode** (detect updates but prevent actions):
+**Example - Disable image updates** (continue detecting updates):
 ```yaml
 services:
   pulse:
@@ -211,6 +284,12 @@ services:
     environment:
       - PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true
 ```
+
+This setting is not a monitoring-only security boundary: it does not disable
+container lifecycle actions or revoke agent command permissions. For
+monitoring-only installs, leave command execution disabled on the agent and do
+not grant command execution permission to monitoring tokens. See
+[container lifecycle requirements](#️-container-lifecycle-actions).
 
 To disable registry checks entirely, set `PULSE_DISABLE_DOCKER_UPDATE_CHECKS=true` on the **agent**.
 
@@ -240,13 +319,11 @@ Pulse can start, stop, and restart Docker / Podman containers directly from the 
 ## 🛠️ Troubleshooting
 
 - **Forgot Password?**
-  ```bash
-  docker exec pulse rm /data/.env
-  docker restart pulse
-  # Access UI again. Pulse will require a bootstrap token for setup.
-  # Get it with:
-  docker exec pulse /app/pulse bootstrap-token
-  ```
+  Follow the [password recovery guide](TROUBLESHOOTING.md#i-forgot-my-password).
+  Update the active credential source; do not delete `.env`, remove the data
+  volume or repeat setup. A deployment-supplied password overrides the generated
+  file, and changing Docker's managed environment needs a recreate/redeploy,
+  not just a restart. SSO accounts and temporary lockouts have separate paths.
 
 - **Logs**
   ```bash

@@ -42,7 +42,7 @@ describe('InlineNotice', () => {
     expect(notice?.className).toContain('border-amber-300');
     expect(notice?.className).toContain('bg-amber-50');
     expect(screen.getByRole('link', { name: 'Open settings' }).className).toContain(
-      'text-amber-900',
+      'text-amber-800',
     );
   });
 

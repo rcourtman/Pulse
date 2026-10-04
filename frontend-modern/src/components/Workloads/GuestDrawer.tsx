@@ -6,13 +6,19 @@ import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessB
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import { getSimpleStatusIndicator } from '@/utils/status';
-import { getGuestDrawerCurrentMetrics, type GuestDrawerProps } from './guestDrawerModel';
+import {
+  getGuestDrawerCurrentMetrics,
+  getGuestDrawerDeferredMetrics,
+  type GuestDrawerProps,
+} from './guestDrawerModel';
+import { getCanonicalWorkloadId } from '@/utils/workloads';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { useGuestDrawerState } from './useGuestDrawerState';
 import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from './GuestDrawerHistory';
 import { GuestDrawerOverview } from './GuestDrawerOverview';
 import { GuestDrawerManage } from './GuestDrawerManage';
 
-export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
+const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
   const {
     activeTab,
     agentHeading,
@@ -21,6 +27,10 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     backupPresentation,
     discoveryAgentId,
     discoveryIdentifiedSummary,
+    discoveryPanelKey,
+    discoveryReadError,
+    discoveryReadLoading,
+    retryDiscoveryRead,
     discoveryLoadingState,
     discoveryReadinessPresentation,
     discoveryResourceId,
@@ -49,6 +59,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
   } = useGuestDrawerState(props);
   const headingId = () => `guest-drawer-heading-${guestId()}`;
   const historyCurrentMetrics = createMemo(() => getGuestDrawerCurrentMetrics(props.guest));
+  const historyDeferredMetrics = createMemo(() => getGuestDrawerDeferredMetrics(props.guest));
 
   const headerIndicator = createMemo(() => getSimpleStatusIndicator(props.guest.status));
 
@@ -73,6 +84,20 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
               {presentation().detail || presentation().statusLabel}
             </span>
           </div>
+        )}
+      </Show>
+      <Show when={discoveryReadError()}>
+        {(message) => (
+          <InlineNotice
+            tone="warning"
+            role="status"
+            actionLabel={
+              discoveryReadLoading() ? 'Retrying service details...' : 'Retry service details'
+            }
+            actionOnClick={retryDiscoveryRead}
+          >
+            {message()}
+          </InlineNotice>
         )}
       </Show>
       <Subtabs
@@ -132,6 +157,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
             target={historyTarget()}
             range={historyRange()}
             currentMetrics={historyCurrentMetrics()}
+            deferredMetrics={historyDeferredMetrics()}
           />
         </div>
       )}
@@ -139,23 +165,25 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
       {/* Always rendered, hidden via CSS. Wrapped in a local Suspense
                      so DiscoveryTab's createResource loading state doesn't bubble
                      up to the app-level Suspense and replace the entire page. */}
-      {hasDiscoverySupport() && (
-        <div
-          class={activeTab() === 'discovery' ? '' : 'hidden'}
-          style={{ 'overflow-anchor': 'none' }}
-        >
-          <Suspense fallback={<DiscoveryLoadingFallback text={discoveryLoadingState.text} />}>
-            <DiscoveryTab
-              resourceType={discoveryResourceType()!}
-              agentId={discoveryAgentId()}
-              resourceId={discoveryResourceId()}
-              hostname={props.guest.name}
-              canonicalResourceId={props.guest.id}
-              showManualRunAction
-            />
-          </Suspense>
-        </div>
-      )}
+      <Show when={discoveryPanelKey()} keyed>
+        {(_targetKey) => (
+          <div
+            class={activeTab() === 'discovery' ? '' : 'hidden'}
+            style={{ 'overflow-anchor': 'none' }}
+          >
+            <Suspense fallback={<DiscoveryLoadingFallback text={discoveryLoadingState.text} />}>
+              <DiscoveryTab
+                resourceType={discoveryResourceType()!}
+                agentId={discoveryAgentId()}
+                resourceId={discoveryResourceId()}
+                hostname={props.guest.name}
+                canonicalResourceId={props.guest.id}
+                showManualRunAction
+              />
+            </Suspense>
+          </div>
+        )}
+      </Show>
 
       <div class={activeTab() === 'manage' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
         <Show when={activeTab() === 'manage'}>
@@ -173,3 +201,11 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     </section>
   );
 };
+
+// A new canonical guest must not inherit another guest's tabs, editable forms
+// or outstanding requests. Ordinary same-ID snapshots remain reactive/mounted.
+export const GuestDrawer: Component<GuestDrawerProps> = (props) => (
+  <Show when={getCanonicalWorkloadId(props.guest)} keyed>
+    {(_guestId) => <GuestDrawerContent {...props} />}
+  </Show>
+);

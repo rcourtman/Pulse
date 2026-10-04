@@ -69,7 +69,7 @@ describe('getDialogPanelClass', () => {
   // The shared leading segment of every result, exactly as emitted by the
   // template literal before the layout branch and panelClass slot.
   const BASE =
-    'relative flex min-h-0 w-full flex-col overflow-hidden bg-surface border border-border outline-none pointer-events-auto';
+    'relative flex min-h-0 w-full flex-col overflow-hidden bg-surface border border-border outline-hidden pointer-events-auto';
   const DRAWER_BRANCH =
     'h-dvh max-w-[720px] rounded-none border-y-0 border-r-0 animate-slide-up sm:h-full sm:max-h-dvh sm:rounded-l-xl sm:border-y sm:border-r-0';
   const MODAL_BRANCH = 'max-h-[calc(100dvh-2rem)] rounded-md animate-slide-up';
@@ -121,8 +121,8 @@ describe('getDialogPanelClass', () => {
     });
 
     it('accepts a custom panel width', () => {
-      expect(getDialogPanelClass('mobile-sheet', 'max-w-[30rem]')).toBe(
-        `${BASE} ${MOBILE_SHEET_BRANCH} max-w-[30rem]`,
+      expect(getDialogPanelClass('mobile-sheet', 'max-w-120')).toBe(
+        `${BASE} ${MOBILE_SHEET_BRANCH} max-w-120`,
       );
     });
   });

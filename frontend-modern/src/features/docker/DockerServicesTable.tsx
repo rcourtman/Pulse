@@ -7,6 +7,7 @@ import {
   PlatformWindowedRows,
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformSortableTableHead,
+  PlatformResponsiveTableLabel,
   PlatformTableNumberValue,
   PlatformTableToolbar,
   PlatformTableEmptyState,
@@ -74,7 +75,12 @@ const formatServiceUpdate = (
     return { label: 'Stable', title: 'No active service update reported' };
   }
 
-  const label = state || 'Updating';
+  // Docker reports the rollout state as a snake_case token
+  // ("rollback_started"); read it as words in the cell and keep the raw
+  // token, message and completion time in the title.
+  const label = state
+    ? state.replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase())
+    : 'Updating';
   const title = [state, message, completedAt].filter(Boolean).join(' | ') || label;
   return { label, title };
 };
@@ -256,7 +262,7 @@ export const DockerServicesTable: Component<{
                   sortKey="running"
                   class="platform-table-mobile-w-10 w-[10%] md:w-[8%]"
                 >
-                  Running
+                  <PlatformResponsiveTableLabel compact="Run" full="Running" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
@@ -325,7 +331,7 @@ export const DockerServicesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-narrow-hidden hidden text-base-content md:table-cell`}
                           >
-                            <span class="truncate inline-block max-w-[8rem]" title={stack()}>
+                            <span class="truncate inline-block max-w-32" title={stack()}>
                               {stack()}
                             </span>
                           </TableCell>
@@ -355,7 +361,7 @@ export const DockerServicesTable: Component<{
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span
-                              class="truncate inline-block max-w-[10rem]"
+                              class="inline-block max-w-full whitespace-normal wrap-break-word leading-3 md:max-w-40 md:truncate md:leading-normal"
                               title={update().title}
                             >
                               {update().label}

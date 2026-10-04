@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "base_sha": "bb4a1372583e28204f9ac825d54855e5e00557ca",
+  "verified_at": "2026-10-03T20:35:27Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx",
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts",
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts",
+    "frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts",
+    "frontend-modern/src/features/storageBackups/storageAdapters.ts",
+    "frontend-modern/src/hooks/useUnifiedResources.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx": "100cc005912a2bef11c55fa8b6961d473d245e8a3fb71ab8a640186c294b26eb",
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts": "9fde1740e300724ef9cab4a3b036c942bdab6e5d2060f262606b27f4b1a40ea6",
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx": "29284b34d9631f118a449da1c274b1028e3cea57aed37a3ac056e48e05b2b613",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx": "0a84ec6834e2aa8f6603c57a3bad168911b9f06bef80c9c7ccbad07d1f04075c",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx": "6cc99405c7bdb2b2edfd992f6b17b2636bb9285a53e949e41609dfa8b339cacf",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts": "b821b9caf65d5c247e543a6d6dbf0925f735b617c6393066d0f8c15a10e05e72",
+    "frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts": "933723fb9afeeb53afa46946a346daca19d50c0d61a81fc0730498ebd8c09bb2",
+    "frontend-modern/src/features/storageBackups/storageAdapters.ts": "daa85c5d99903d5a5fb10070837106b91f06ad130cae320472b2d980b979fb48",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "166e45835c56d00f1a3ddbc37f7127348a0e36dc7c42c921f972db7750c603c6"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/proxmox/storage",
+    "/proxmox/mail",
+    "/docker/overview",
+    "/docker/images",
+    "/docker/storage",
+    "/docker/networks",
+    "/docker/swarm",
+    "/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "PR #2432 rebuilt as one commit on origin/main 1f140a5d38 (after Tailwind 4, #2443/#2444), on a private mock stack whose backend is built from this tree (the mock generator and REST mapper changes are live), Vite serving this tree, light and dark",
+    "Proxmox Storage at 1440 and 390: PBS datastores read Online instead of Unknown, types read NFS, Pool, Filesystem, Datastore and Backup Target, cluster-merged storage reads Shared \u00b7 6 nodes, shared PBS storage is one row; the 390 storage table still clips host and usage values exactly as main does, which open PR #2433 addresses",
+    "Proxmox Overview nodes table at 1440 light and dark in Bars mode: seven multi-disk hosts show their fullest disk percentage beside equal-weight micro-bars with a Highest usage title, none clipped; bar and fill corners compute 2px, matching main's rounded-xs after the Tailwind 4 rename",
+    "Mail Gateway on six fresh loads: both instances fill Version, Nodes, Uptime and mail counters every time, with no dash-only rows",
+    "Docker at 1440, 1280 and 390: Engine reads docker 26.1.3 or podman 4.9.3 whole with the Update control in view; phone containers keep Container, State, CPU, Mem and Update; phone images keep Image, Size and Update; Swarm services read Rollback started and tasks show Started as ages with no raw RFC3339 stamps; storage, networks and swarm phone clipping is limited to identity strings",
+    "The mock estate has no multi-disk Docker host or machine, so Bars mode was seen on Proxmox nodes only; DockerHostsTable and AgentsMachinesTable share the same StackedDiskBar path and its unit tests"
+  ],
+  "interactions": [
+    "scrollWidth-over-clientWidth sweep of every visible table cell (sr-only excluded) on each route and width; read column value distributions for Storage State, Type and Host and Docker Engine",
+    "Opened Mail Gateway from the Proxmox tab strip on six independent page loads and counted dash-only cells per row",
+    "Read computed border radius of the vertical disk bars and the max-label text and title on every multi-disk node row",
+    "go test ./internal/mock ./internal/unifiedresources passed; vitest for src/components/Workloads, src/features/docker, src/features/storageBackups, src/features/platformPage and useUnifiedResources: 174 files, 3384 tests passed"
+  ]
+}

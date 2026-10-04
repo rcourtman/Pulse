@@ -8,13 +8,17 @@ import { describe, expect, it } from 'vitest';
 import type { SelectedResource } from '@/components/Settings/ResourcePicker';
 import {
   DEFAULT_REPORT_SCHEDULE_FORM,
+  applyReportScheduleKind,
   buildReportSchedulePayload,
   formatReportScheduleTime,
+  isPatrolDigestSchedule,
   normalizeReportSchedule,
+  normalizeReportScheduleKind,
   parseCommaList,
   parseReportSchedulesResponse,
   reportScheduleCadenceLabel,
   reportScheduleDeliveryLabel,
+  reportScheduleKindLabel,
   reportScheduleLastRunLabel,
   reportScheduleScopeLabel,
   scheduleToForm,
@@ -337,6 +341,7 @@ describe('scheduleToForm', () => {
     expect(scheduleToForm(schedule)).toStrictEqual({
       id: 'sched-1',
       name: 'Nightly ops digest',
+      kind: 'resources',
       enabled: true,
       cadenceType: 'monthly',
       dayOfMonth: 27,
@@ -694,5 +699,114 @@ describe('formatReportScheduleTime', () => {
     expect(jan).not.toBe(jul);
     expect(jan).not.toBe('');
     expect(jul).not.toBe('');
+  });
+});
+
+// ---- Patrol weekly summary kind --------------------------------------------
+
+describe('report schedule kinds', () => {
+  it('normalizes unknown or missing kinds to the performance report', () => {
+    expect(normalizeReportScheduleKind(undefined)).toBe('resources');
+    expect(normalizeReportScheduleKind('bogus')).toBe('resources');
+    expect(normalizeReportScheduleKind('patrol_digest')).toBe('patrol_digest');
+    expect(normalizeReportSchedule(makeSchedule()).kind).toBe('resources');
+    expect(isPatrolDigestSchedule(makeSchedule({ kind: 'patrol_digest' }))).toBe(true);
+    expect(isPatrolDigestSchedule(makeSchedule())).toBe(false);
+  });
+
+  it('keeps the server-assigned email format on digest schedules and maps it to pdf in the form', () => {
+    const digest = normalizeReportSchedule(
+      makeSchedule({
+        kind: 'patrol_digest',
+        format: 'email',
+        cadence: {
+          type: 'weekly',
+          weekday: 'friday',
+          time: '08:00',
+          timezone: 'Europe/London',
+        },
+      }),
+    );
+    expect(digest.format).toBe('email');
+    const form = scheduleToForm(digest);
+    expect(form.kind).toBe('patrol_digest');
+    expect(form.format).toBe('pdf');
+    expect(form.cadenceType).toBe('weekly');
+    expect(form.weekday).toBe('friday');
+    expect(scheduleToForm(makeSchedule()).kind).toBe('resources');
+  });
+
+  it('builds an email-only weekly payload with no scope for the digest kind', () => {
+    const form = makeForm({
+      kind: 'patrol_digest',
+      name: '  Weekly Patrol  ',
+      cadenceType: 'weekly',
+      weekday: 'sunday',
+      time: '07:30',
+      timezone: '  ',
+      recipients: 'ops@example.com, ops@example.com, lead@example.com',
+      tagFilter: 'ignored',
+      attach: true,
+      saveToDisk: true,
+    });
+    const payload = buildReportSchedulePayload(form, [makeResource()]);
+    expect(payload).toEqual({
+      id: '',
+      name: 'Weekly Patrol',
+      kind: 'patrol_digest',
+      enabled: true,
+      cadence: { type: 'weekly', weekday: 'sunday', time: '07:30', timezone: 'UTC' },
+      scope: { resources: [], tags: [] },
+      format: 'email',
+      delivery: {
+        method: 'email',
+        to: ['ops@example.com', 'lead@example.com'],
+        attach: false,
+        save_to_disk: false,
+      },
+      retention_count: 12,
+    });
+    expect(buildReportSchedulePayload(makeForm(), []).kind).toBe('resources');
+  });
+
+  it('pins digest-only fields when switching kind and restores delivery defaults on the way back', () => {
+    const start = makeForm({
+      cadenceType: 'monthly',
+      deliveryMethod: 'disk',
+      attach: true,
+      saveToDisk: true,
+      tagFilter: 'production',
+    });
+    expect(applyReportScheduleKind(start, 'resources')).toBe(start);
+
+    const digest = applyReportScheduleKind(start, 'patrol_digest');
+    expect(digest).toMatchObject({
+      kind: 'patrol_digest',
+      cadenceType: 'weekly',
+      deliveryMethod: 'email',
+      attach: false,
+      saveToDisk: false,
+      tagFilter: '',
+    });
+    expect(applyReportScheduleKind(digest, 'patrol_digest')).toBe(digest);
+
+    const back = applyReportScheduleKind(digest, 'resources');
+    expect(back).toMatchObject({
+      kind: 'resources',
+      attach: true,
+      saveToDisk: true,
+      deliveryMethod: 'email',
+      cadenceType: 'weekly',
+    });
+  });
+
+  it('labels the digest kind and its scope in plain words', () => {
+    expect(reportScheduleKindLabel('patrol_digest')).toBe('Patrol weekly summary');
+    expect(reportScheduleKindLabel('resources')).toBe('Performance report');
+    expect(reportScheduleKindLabel(undefined)).toBe('Performance report');
+    expect(reportScheduleScopeLabel(makeSchedule({ kind: 'patrol_digest' }))).toBe(
+      'Patrol activity, last 7 days',
+    );
+    expect(reportScheduleScopeLabel(makeSchedule())).toBe('No scope');
   });
 });

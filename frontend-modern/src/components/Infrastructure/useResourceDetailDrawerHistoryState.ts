@@ -13,6 +13,7 @@ import { ActionAuditAPI } from '@/api/actionAudit';
 import { ResourceAPI } from '@/api/resources';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import type { ActionAuditListResponse } from '@/types/actionAudit';
+import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 
 interface UseResourceDetailDrawerHistoryStateOptions {
   resource: Resource;
@@ -35,10 +36,10 @@ type TimelineFacetRequest = {
 export const useResourceDetailDrawerHistoryState = (
   options: UseResourceDetailDrawerHistoryStateOptions,
 ) => {
-  const { resource } = options;
+  const resource = () => options.resource;
   const enableRemoteHistory = options.enableRemoteHistory ?? true;
 
-  const resourceFacetId = createMemo(() => resource.id.trim());
+  const resourceFacetId = createMemo(() => resource().id.trim());
   const [timelineKindFilter, setTimelineKindFilter] = createSignal<ResourceChangeKind | ''>('');
   const [timelineSourceTypeFilter, setTimelineSourceTypeFilter] = createSignal<
     ResourceChangeSourceType | ''
@@ -123,26 +124,44 @@ export const useResourceDetailDrawerHistoryState = (
   const timelineFacets = timelineFacetsState.value;
   const refetchTimelineFacets = timelineFacetsState.refetch;
 
-  const resourceTimeline = createMemo(
-    () => resourceFacets()?.recentChanges ?? resource.recentChanges ?? [],
+  const resourceFacetsAccessError = createMemo(() =>
+    getAPIReadAccessErrorMessage(resourceFacetsState.error()),
   );
-  const resourceFacetCapabilities = createMemo<readonly ResourceCapability[]>(
-    () => resourceFacets()?.capabilities ?? resource.capabilities ?? [],
+  const timelineFacetsAccessError = createMemo(() =>
+    timelineFacetRequest() ? getAPIReadAccessErrorMessage(timelineFacetsState.error()) : null,
   );
-  const resourceFacetRelationships = createMemo<readonly ResourceRelationship[]>(
-    () => resourceFacets()?.relationships ?? resource.relationships ?? [],
+  // The query owner withdraws its value on denial. Snapshot/unfiltered
+  // fallbacks must not put that evidence back under the denied request.
+  const resourceTimeline = createMemo(() =>
+    resourceFacetsAccessError()
+      ? []
+      : (resourceFacets()?.recentChanges ?? resource().recentChanges ?? []),
   );
-  const resourceFacetCounts = createMemo(
-    () => resourceFacets()?.counts ?? resource.facetCounts ?? null,
+  const resourceFacetCapabilities = createMemo<readonly ResourceCapability[]>(() =>
+    resourceFacetsAccessError()
+      ? []
+      : (resourceFacets()?.capabilities ?? resource().capabilities ?? []),
+  );
+  const resourceFacetRelationships = createMemo<readonly ResourceRelationship[]>(() =>
+    resourceFacetsAccessError()
+      ? []
+      : (resourceFacets()?.relationships ?? resource().relationships ?? []),
+  );
+  const resourceFacetCounts = createMemo(() =>
+    resourceFacetsAccessError()
+      ? null
+      : (resourceFacets()?.counts ?? resource().facetCounts ?? null),
   );
   const historyFacetBundle = createMemo(() =>
     timelineFacetRequest() ? (timelineFacets() ?? resourceFacets()) : resourceFacets(),
   );
-  const historyFacetCounts = createMemo(
-    () => historyFacetBundle()?.counts ?? resourceFacetCounts() ?? null,
+  const historyFacetCounts = createMemo(() =>
+    timelineFacetsAccessError()
+      ? null
+      : (historyFacetBundle()?.counts ?? resourceFacetCounts() ?? null),
   );
-  const historyRecentChanges = createMemo(
-    () => historyFacetBundle()?.recentChanges ?? resourceTimeline(),
+  const historyRecentChanges = createMemo(() =>
+    timelineFacetsAccessError() ? [] : (historyFacetBundle()?.recentChanges ?? resourceTimeline()),
   );
   const historyTimeline = createMemo(() => historyRecentChanges());
   const hasTimelineFilters = createMemo(() =>
@@ -152,9 +171,15 @@ export const useResourceDetailDrawerHistoryState = (
     if (timelineFacetRequest()) {
       return timelineFacetsState.loading()
         ? 'Refreshing filtered changes...'
-        : 'Filtered changes loaded';
+        : timelineFacetsState.error()
+          ? 'Filtered changes unavailable'
+          : 'Filtered changes loaded';
     }
-    return resourceFacetsState.loading() ? 'Refreshing changes...' : 'Changes loaded';
+    return resourceFacetsState.loading()
+      ? 'Refreshing changes...'
+      : resourceFacetsState.error()
+        ? 'Changes unavailable'
+        : 'Changes loaded';
   });
   const resourceTimelineCount = createMemo(
     () => historyFacetCounts()?.recentChanges ?? historyRecentChanges().length,
@@ -176,7 +201,11 @@ export const useResourceDetailDrawerHistoryState = (
     Boolean(actionAuditResponse().available || resourceActionAudits().length > 0),
   );
   const actionAuditLoadingLabel = createMemo(() =>
-    actionAuditState.loading() ? 'Refreshing actions...' : 'Actions loaded',
+    actionAuditState.loading()
+      ? 'Refreshing actions...'
+      : actionAuditState.error()
+        ? 'Actions unavailable'
+        : 'Actions loaded',
   );
   const sortedActionAudits = createMemo(() =>
     [...resourceActionAudits()].sort((left, right) => {
@@ -192,12 +221,20 @@ export const useResourceDetailDrawerHistoryState = (
       ? timelineFacetsState.error()
       : resourceFacetsState.error();
     if (!error) return '';
-    return (error as Error)?.message || 'Failed to load resource history';
+    return (
+      getAPIReadAccessErrorMessage(error) ||
+      (error as Error)?.message ||
+      'Failed to load resource history'
+    );
   });
   const actionAuditError = createMemo(() => {
     const error = actionAuditState.error();
-    if (!error || !actionAuditAvailable()) return '';
-    return (error as Error)?.message || 'Failed to load action history';
+    if (!error) return '';
+    return (
+      getAPIReadAccessErrorMessage(error) ||
+      (error as Error)?.message ||
+      'Failed to load action history'
+    );
   });
 
   const refetchHistoryFacets = () => {

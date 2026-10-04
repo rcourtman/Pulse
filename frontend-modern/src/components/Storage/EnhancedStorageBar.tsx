@@ -25,6 +25,7 @@ import {
   getStorageBarTooltipTitle,
   getStorageBarZfsHeadingLabel,
 } from '@/features/storageBackups/storageBarPresentation';
+import { PlatformResponsiveTableLabel } from '@/features/platformPage/sharedPlatformPage';
 import { useTooltip } from '@/hooks/useTooltip';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
@@ -42,13 +43,14 @@ interface EnhancedStorageBarProps {
 export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
   const tip = useTooltip();
   const alertsActivation = useAlertsActivation();
-  const { usagePercent, barColor, label, tooltipRows, zfsSummary } = useEnhancedStorageBarModel({
-    used: () => props.used,
-    total: () => props.total,
-    free: () => props.free,
-    zfsPool: () => props.zfsPool,
-    thresholds: () => alertsActivation.getMetricThresholds('storage', 'disk'),
-  });
+  const { usagePercent, barColor, label, compactLabel, tooltipRows, zfsSummary } =
+    useEnhancedStorageBarModel({
+      used: () => props.used,
+      total: () => props.total,
+      free: () => props.free,
+      zfsPool: () => props.zfsPool,
+      thresholds: () => alertsActivation.getMetricThresholds('storage', 'disk'),
+    });
 
   return (
     <div class={STORAGE_BAR_ROOT_CLASS}>
@@ -71,7 +73,12 @@ export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
         }
         label={
           <span class={STORAGE_BAR_LABEL_WRAP_CLASS}>
-            <span class={STORAGE_BAR_LABEL_TEXT_CLASS}>{label()}</span>
+            <span class={STORAGE_BAR_LABEL_TEXT_CLASS}>
+              {/* The phone projection of the table container keeps the
+                  percentage only; the used/total sublabel returns with the
+                  wider container and always lives in the tooltip. */}
+              <PlatformResponsiveTableLabel compact={compactLabel()} full={label()} />
+            </span>
           </span>
         }
       />
@@ -100,7 +107,7 @@ export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
                 </span>
               </div>
               <Show when={zfsSummary()?.scan}>
-                <div class={`${getZfsScanTextClass()} mt-0.5 max-w-[200px] break-words`}>
+                <div class={`${getZfsScanTextClass()} mt-0.5 max-w-[200px] wrap-break-word`}>
                   {zfsSummary()?.scan}
                 </div>
               </Show>

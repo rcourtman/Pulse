@@ -24,13 +24,13 @@ describe('getAuditEventTypeBadgeClass (branch coverage)', () => {
     // Exercises the `(event ?? '').trim()` normalisation: padded input must
     // still resolve to the canonical case arm.
     expect(getAuditEventTypeBadgeClass('  login  ')).toBe(
-      'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+      'bg-blue-100 text-blue-800 dark:bg-blue-900/25 dark:text-blue-200',
     );
     expect(getAuditEventTypeBadgeClass('\tconfig_change\n')).toBe(
-      'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+      'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/25 dark:text-yellow-200',
     );
     expect(getAuditEventTypeBadgeClass(' startup ')).toBe(
-      'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+      'bg-green-100 text-green-800 dark:bg-green-900/25 dark:text-green-200',
     );
   });
 

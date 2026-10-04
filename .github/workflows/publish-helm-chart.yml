@@ -163,6 +163,9 @@ jobs:
         with:
           name: pulse-chart-${{ steps.versions.outputs.chart_version }}
           path: dist/pulse-${{ steps.versions.outputs.chart_version }}.tgz
+          # Inspection copy only. The chart is published to GHCR and Pages, and
+          # no job or workflow downloads this artifact.
+          retention-days: 3
 
       - name: Authenticate with GHCR
         env:

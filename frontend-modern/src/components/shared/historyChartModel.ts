@@ -241,14 +241,21 @@ export function createHistoryChartGeometry({
   rightInset?: number;
 }) {
   const timeSpan = Math.max(1, endTime - startTime);
+  const plotWidth = width - leftInset - rightInset;
+  const singleTimestamp = startTime === endTime;
   const getX = (timestamp: number) =>
-    leftInset + ((timestamp - startTime) / timeSpan) * (width - leftInset - rightInset);
+    singleTimestamp
+      ? leftInset + plotWidth / 2
+      : leftInset + ((timestamp - startTime) / timeSpan) * plotWidth;
+  const getTimestamp = (x: number) =>
+    singleTimestamp ? startTime : startTime + ((x - leftInset) / plotWidth) * timeSpan;
   const getY = (value: number) =>
     height - 20 - ((value - minValue) / (maxValue - minValue)) * (height - 40);
 
   return {
     timeSpan,
     getX,
+    getTimestamp,
     getY,
   };
 }

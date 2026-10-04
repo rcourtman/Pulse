@@ -149,3 +149,27 @@ func TestCostPersistenceAdapter_NilConfigFailsClosed(t *testing.T) {
 		t.Fatal("expected load to return normalized empty slice on failure")
 	}
 }
+
+func TestCostPersistenceAdapterRoundTripsPromptCacheBuckets(t *testing.T) {
+	adapter := NewCostPersistenceAdapter(config.NewConfigPersistence(t.TempDir()))
+	saved := []cost.UsageEvent{{
+		Timestamp:                time.Now(),
+		Provider:                 "anthropic",
+		RequestModel:             "anthropic:claude-sonnet-5",
+		UseCase:                  "patrol",
+		InputTokens:              100,
+		OutputTokens:             20,
+		CacheCreationInputTokens: 1000,
+		CacheReadInputTokens:     5000,
+	}}
+	if err := adapter.SaveUsageHistory(saved); err != nil {
+		t.Fatalf("SaveUsageHistory: %v", err)
+	}
+	loaded, err := adapter.LoadUsageHistory()
+	if err != nil {
+		t.Fatalf("LoadUsageHistory: %v", err)
+	}
+	if len(loaded) != 1 || loaded[0].CacheCreationInputTokens != 1000 || loaded[0].CacheReadInputTokens != 5000 || loaded[0].InputTokens != 100 {
+		t.Fatalf("round trip lost cache buckets: %+v", loaded)
+	}
+}

@@ -12,7 +12,7 @@ export function AlertQueueActionFeedback(props: { message: string | null; onClea
         <Show when={props.message}>
           <Card tone="warning" padding="sm">
             <div class="flex flex-wrap items-start justify-between gap-3">
-              <p class="min-w-0 flex-1 basis-72 break-words text-sm text-base-content">
+              <p class="min-w-0 flex-1 basis-72 wrap-break-word text-sm text-base-content">
                 {props.message}
               </p>
               <Button

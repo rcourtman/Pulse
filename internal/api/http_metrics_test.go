@@ -1,6 +1,7 @@
 package api
 
 import (
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -192,6 +193,46 @@ func TestNormalizeSegment(t *testing.T) {
 	}
 }
 
+// normalizeSegment runs on every path segment of every request, and each class
+// returns a constant label or the segment itself. The sink makes the result
+// escape, as it does in normalizeRoute. Without it, an inlined normalizeSegment
+// could copy a short segment into a stack buffer and hide the allocation.
+var normalizeSegmentSink string
+
+// allocIsolationEnv names the test that a child process re-runs on its own.
+const allocIsolationEnv = "PULSE_TEST_ALLOC_ISOLATION"
+
+// measureAllocsInIsolation keeps the upstream test entry point while using the
+// bounded, measurement-marked child launcher shared with the background-fixture
+// control. The child flag and upstream environment marker both select the actual
+// measurement; the parent must observe that measurement, not just a passing test.
+func measureAllocsInIsolation(t *testing.T) bool {
+	t.Helper()
+	if *routeAllocationChild || os.Getenv(allocIsolationEnv) == t.Name() {
+		t.Cleanup(func() { t.Log("ROUTE_ALLOCATION_MEASURED " + t.Name()) })
+		return true
+	}
+	runRouteAllocationTest(t, t.Name())
+	return false
+}
+
+func TestNormalizeSegment_DoesNotAllocate(t *testing.T) {
+	if !measureAllocsInIsolation(t) {
+		return
+	}
+	for _, seg := range []string{
+		"12345",
+		"550e8400-e29b-41d4-a716-446655440000",
+		"abcdefghijklmnopqrstuvwxyz1234567890abcdef",
+		"resources",
+		"metrics-store",
+	} {
+		if allocs := testing.AllocsPerRun(100, func() { normalizeSegmentSink = normalizeSegment(seg) }); allocs != 0 {
+			t.Errorf("normalizeSegment(%q) allocated %v times per call, want 0", seg, allocs)
+		}
+	}
+}
+
 func TestNormalizeRoute(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -243,6 +284,21 @@ func TestNormalizeRoute(t *testing.T) {
 				t.Errorf("normalizeRoute(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+// The root and empty paths must return before splitting. Without the fast
+// path, "/" still normalizes to "/" but allocates a split slice on every call.
+var normalizeRouteSink string
+
+func TestNormalizeRoute_RootFastPathDoesNotAllocate(t *testing.T) {
+	if !measureAllocsInIsolation(t) {
+		return
+	}
+	for _, path := range []string{"/", ""} {
+		if allocs := testing.AllocsPerRun(100, func() { normalizeRouteSink = normalizeRoute(path) }); allocs != 0 {
+			t.Errorf("normalizeRoute(%q) allocated %v times per call, want 0", path, allocs)
+		}
 	}
 }
 

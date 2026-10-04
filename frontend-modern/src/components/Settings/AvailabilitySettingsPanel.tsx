@@ -226,7 +226,7 @@ export const AvailabilitySettingsPanel: Component = () => {
             {(message) => (
               <div
                 role="alert"
-                class="border-b border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+                class="border-b border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200"
               >
                 {message()}
               </div>
@@ -246,7 +246,7 @@ export const AvailabilitySettingsPanel: Component = () => {
                     type="button"
                     variant="primary"
                     size="mdCompact"
-                    class="min-h-9 gap-2"
+                    class="min-h-9! gap-2"
                     onClick={() => openAddDialog('service')}
                   >
                     <Plus class="h-4 w-4" />

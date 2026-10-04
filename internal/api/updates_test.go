@@ -1,12 +1,15 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -642,6 +645,165 @@ func TestHandleUpdateStream(t *testing.T) {
 
 	if w.Header().Get("Content-Type") != "text/event-stream" {
 		t.Error("Expected text/event-stream content type")
+	}
+}
+
+// streamFlushRecorder is a goroutine-safe ResponseWriter that records what
+// had actually been flushed to the wire at each Flush, so tests can tell a
+// flushed SSE frame from one sitting in a buffer.
+type streamFlushRecorder struct {
+	mu      sync.Mutex
+	header  http.Header
+	code    int
+	written bytes.Buffer
+	flushed string
+	flushCh chan struct{}
+}
+
+func newStreamFlushRecorder() *streamFlushRecorder {
+	return &streamFlushRecorder{header: make(http.Header), flushCh: make(chan struct{}, 64)}
+}
+
+func (r *streamFlushRecorder) Header() http.Header { return r.header }
+
+func (r *streamFlushRecorder) WriteHeader(code int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.code == 0 {
+		r.code = code
+	}
+}
+
+func (r *streamFlushRecorder) Write(p []byte) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.code == 0 {
+		r.code = http.StatusOK
+	}
+	return r.written.Write(p)
+}
+
+func (r *streamFlushRecorder) Flush() {
+	r.mu.Lock()
+	r.flushed = r.written.String()
+	r.mu.Unlock()
+	select {
+	case r.flushCh <- struct{}{}:
+	default:
+	}
+}
+
+func (r *streamFlushRecorder) flushedBody() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.flushed
+}
+
+// waitForFlushed blocks until the flushed body contains every needle.
+func (r *streamFlushRecorder) waitForFlushed(t *testing.T, needles ...string) string {
+	t.Helper()
+	deadline := time.After(2 * time.Second)
+	for {
+		body := r.flushedBody()
+		missing := false
+		for _, needle := range needles {
+			if !strings.Contains(body, needle) {
+				missing = true
+				break
+			}
+		}
+		if !missing {
+			return body
+		}
+		select {
+		case <-r.flushCh:
+		case <-time.After(20 * time.Millisecond):
+		case <-deadline:
+			t.Fatalf("timed out waiting for flushed %q, flushed so far:\n%s", needles, body)
+		}
+	}
+}
+
+// The update modal stalled at "Downloading 10%" when the progress stream
+// went quiet. The stream must advertise itself as unbufferable, put the
+// current status on the wire the moment a client connects, and flush every
+// later stage in order.
+func TestHandleUpdateStream_HeadersImmediateStatusAndFlushedStages(t *testing.T) {
+	broadcaster := updates.NewSSEBroadcaster()
+	defer broadcaster.Close()
+
+	broadcaster.Broadcast(updates.UpdateStatus{Status: "downloading", Progress: 10, Message: "Downloading update..."})
+
+	h := NewUpdateHandlers(&MockUpdateManager{
+		AddSSEClientFunc:    broadcaster.AddClient,
+		RemoveSSEClientFunc: broadcaster.RemoveClient,
+	}, nil)
+
+	rec := newStreamFlushRecorder()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req := httptest.NewRequest(http.MethodGet, "/api/updates/stream", nil).WithContext(ctx)
+
+	done := make(chan struct{})
+	go func() {
+		h.HandleUpdateStream(rec, req)
+		close(done)
+	}()
+
+	first := rec.waitForFlushed(t, ": connected", `"status":"downloading"`, `"progress":10`)
+	if !strings.Contains(first, "data: {") || !strings.HasSuffix(first, "\n\n") {
+		t.Fatalf("initial status must be a complete, flushed SSE data frame, got:\n%s", first)
+	}
+
+	if got := rec.Header().Get("Content-Type"); got != "text/event-stream" {
+		t.Fatalf("Content-Type = %q, want text/event-stream", got)
+	}
+	if got := rec.Header().Get("Cache-Control"); !strings.Contains(got, "no-cache") || !strings.Contains(got, "no-transform") {
+		t.Fatalf("Cache-Control = %q, want no-cache and no-transform", got)
+	}
+	if got := rec.Header().Get("X-Accel-Buffering"); got != "no" {
+		t.Fatalf("X-Accel-Buffering = %q, want no", got)
+	}
+	if got := rec.Header().Get("Content-Encoding"); got != "" {
+		t.Fatalf("Content-Encoding = %q, the stream must never be compressed", got)
+	}
+
+	stages := []updates.UpdateStatus{
+		{Status: "verifying", Progress: 25, Message: "Verifying signature..."},
+		{Status: "verifying", Progress: 30, Message: "Verifying download..."},
+		{Status: "extracting", Progress: 40, Message: "Extracting update..."},
+		{Status: "verifying", Progress: 50, Message: "Validating new binary..."},
+		{Status: "backing-up", Progress: 60, Message: "Creating backup..."},
+		{Status: "applying", Progress: 80, Message: "Applying update..."},
+		{Status: "restarting", Progress: 95, Message: "Restarting service..."},
+		{Status: "completed", Progress: 100, Message: "Update completed, restarting..."},
+	}
+	for _, stage := range stages {
+		broadcaster.Broadcast(stage)
+	}
+
+	body := rec.waitForFlushed(t, `"status":"completed"`)
+	last := strings.Index(body, `"progress":10,`)
+	for _, stage := range stages {
+		marker := fmt.Sprintf(`"progress":%d,`, stage.Progress)
+		idx := strings.Index(body, marker)
+		if idx < 0 {
+			t.Fatalf("stage %s %d never reached the wire:\n%s", stage.Status, stage.Progress, body)
+		}
+		if idx < last {
+			t.Fatalf("stage %s %d was delivered out of order:\n%s", stage.Status, stage.Progress, body)
+		}
+		last = idx
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("HandleUpdateStream didn't return after client disconnect")
+	}
+	if n := broadcaster.GetClientCount(); n != 0 {
+		t.Fatalf("expected disconnected client to be removed, %d remain", n)
 	}
 }
 

@@ -206,7 +206,7 @@ describe('StoragePoolDetail', () => {
     );
     expect(screen.getByText('London Edge Standalone')).toHaveClass(
       'min-w-0',
-      'break-words',
+      'wrap-break-word',
       'text-right',
       'sm:text-left',
     );
@@ -238,6 +238,7 @@ describe('StoragePoolDetail', () => {
               [
                 {
                   id: 'disk1',
+                  parentId: 'storage-1',
                   type: 'physical_disk',
                   name: 'Disk 1',
                   displayName: 'Disk 1',

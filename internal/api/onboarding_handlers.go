@@ -307,7 +307,7 @@ func (r *Router) buildOnboardingPayload(req *http.Request, relayCfg *relay.Confi
 			Code:     "relay_disabled",
 			Severity: "error",
 			Field:    "relay.enabled",
-			Message:  "Remote Access is disabled. Turn on Remote Access and wait for the relay status to show Connected before pairing Pulse Mobile.",
+			Message:  "Pulse Mobile connections are off. Turn them on in Settings > Pulse Mobile and wait for the status to show Connected before pairing a phone.",
 		})
 	}
 	if payload.InstanceID == "" {
@@ -315,7 +315,7 @@ func (r *Router) buildOnboardingPayload(req *http.Request, relayCfg *relay.Confi
 			Code:     "relay_registration_unavailable",
 			Severity: "error",
 			Field:    "instance_id",
-			Message:  "Remote Access is enabled, but this Pulse instance is not connected to the relay yet. Wait for the status to show Connected before generating a mobile pairing code.",
+			Message:  "Pulse Mobile connections are on, but this Pulse instance is not connected to the relay yet. Wait for the status to show Connected before generating a pairing code.",
 		})
 	}
 	if payload.AuthToken == "" {

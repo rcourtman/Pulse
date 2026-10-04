@@ -214,7 +214,7 @@ describe('aiChatUtils', () => {
       expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
     });
 
-    it.each(['beforeSanitizeElements', 'uponSanitizeElement'] as const)(
+    it.each(['beforeSanitizeElements', 'uponSanitizeElement', 'afterSanitizeAttributes'] as const)(
       'neutralizes a hook-detached IN_PLACE subtree through the %s hook',
       (hookName) => {
         // Configure the same singleton hooks used by renderMarkdown before
@@ -232,8 +232,10 @@ describe('aiChatUtils', () => {
         };
         if (hookName === 'beforeSanitizeElements') {
           DOMPurify.addHook('beforeSanitizeElements', removeSection);
-        } else {
+        } else if (hookName === 'uponSanitizeElement') {
           DOMPurify.addHook('uponSanitizeElement', removeSection);
+        } else {
+          DOMPurify.addHook('afterSanitizeAttributes', removeSection);
         }
 
         try {
@@ -253,8 +255,10 @@ describe('aiChatUtils', () => {
         } finally {
           if (hookName === 'beforeSanitizeElements') {
             DOMPurify.removeHook('beforeSanitizeElements', removeSection);
-          } else {
+          } else if (hookName === 'uponSanitizeElement') {
             DOMPurify.removeHook('uponSanitizeElement', removeSection);
+          } else {
+            DOMPurify.removeHook('afterSanitizeAttributes', removeSection);
           }
         }
       },

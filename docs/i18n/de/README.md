@@ -10,10 +10,17 @@ absichtlich unverändert.
 
 Pulse ist ein self-hosted Monitoring-Arbeitsbereich für Proxmox, Docker,
 Kubernetes, TrueNAS und verwandte Infrastruktur. Community deckt das
-Kernmonitoring kostenlos ab. Relay ergänzt sicheren Remote-Zugriff auf die
-Pulse-Weboberfläche, Pulse-Mobile-Handoff-Pairing, Push-Benachrichtigungen und
-14 Tage Verlauf. Pro ergänzt Ursachenanalyse, sichere Remediation-Workflows,
-Operations-Werkzeuge, Governance-Funktionen und 90 Tage Verlauf.
+Kernmonitoring kostenlos ab. Pro ergänzt Ursachenanalyse, sichere
+Remediation-Workflows, Operations-Werkzeuge, Governance-Funktionen und 90 Tage
+Verlauf.
+
+Relay wird nicht mehr verkauft. Bestehende Relay-Abonnenten erhalten
+Pro-Funktionen zum bisherigen Preis, solange ihr Abonnement weiterläuft.
+Bereits gekoppelte Telefone funktionieren bis zum **31. März 2027** weiter.
+Relay verbindet Pulse mit der App, nicht mit der Weboberfläche. Für den
+Remote-Zugriff auf die Weboberfläche nutze ein eigenes VPN oder einen Tunnel.
+Für Warnmeldungen auf dem Telefon füge ein Ziel für ntfy, Gotify oder Pushover
+hinzu und öffne Pulse im Browser deines Telefons.
 
 ## Bezahlte Relay-, Pro- und Legacy-Kunden
 
@@ -37,16 +44,19 @@ Installer-Datei und führe den Installer auf deinem Proxmox-Host aus:
 
 ```bash
 export PULSE_VERSION=vX.Y.Z
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh"
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig"
+curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh" &&
+curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig" &&
 ssh-keygen -Y verify \
   -f <(printf '%s\n' 'pulse-installer namespaces="pulse-install" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer') \
   -I pulse-installer \
   -n pulse-install \
-  -s install.sh.sshsig < install.sh
+  -s install.sh.sshsig < install.sh &&
 bash install.sh --version "${PULSE_VERSION}"
-rm -f install.sh install.sh.sshsig
 ```
+
+Füge den gesamten Block ein: Schlägt ein Download oder die Signaturprüfung fehl,
+wird der Installer nicht ausgeführt. Führe den letzten Befehl nicht separat aus,
+um einen Fehler zu umgehen.
 
 Agent-Installationen und v5-zu-v6-Agent-Upgrades verwenden den Befehl, den
 Pulse unter **Settings → Infrastructure → Install on a host** erzeugt. Dieser
@@ -80,13 +90,19 @@ services:
       - "7655:7655"
     volumes:
       - pulse_data:/data
-    environment:
-      - PULSE_AUTH_USER=admin
-      - PULSE_AUTH_PASS=secret123
 
 volumes:
   pulse_data:
 ```
+
+Lass `PULSE_AUTH_USER` und `PULSE_AUTH_PASS` bei einer neuen Installation
+ungesetzt und richte den Zugang beim ersten Anmelden mit dem Bootstrap-Token
+ein. Verwende kein gemeinsames Beispielpasswort. Für automatisierte Einrichtung
+nutze eine private, vom Deployment verwaltete Zugangsdatenquelle; siehe
+[Configuration](../../CONFIGURATION.md#private-docker-authentication-file).
+Passwörter gehören nicht in Befehlsargumente oder eine geteilte Compose-Datei.
+Ein Docker-Administrator kann Zugangsdaten in der Container-Umgebung weiterhin
+lesen, auch wenn Pulse sie für die Anmeldung hasht.
 
 ## Erste Anmeldung
 

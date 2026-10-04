@@ -33,26 +33,7 @@ export const useInfrastructureOperationsState = (
 ) => {
   const installState = useInfrastructureInstallState(options);
 
-  const withPrivilegeEscalation = (command: string) => {
-    if (!command.includes('| bash -s --')) return command;
-    return command.replace(/\|\s*bash -s --([\s\S]*)$/, (_match, args: string) => {
-      return `| { if [ "$(id -u)" -eq 0 ]; then bash -s --${args}; elif command -v sudo >/dev/null 2>&1; then sudo bash -s --${args}; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi; }`;
-    });
-  };
-
   const selectedCustomCaPath = () => installState.customCaPath().trim();
-  const urlRequiresInstallerInsecure = (url: string) =>
-    installState.insecureMode() || url.trim().toLowerCase().startsWith('http://');
-  const getInsecureFlag = (url: string) => (urlRequiresInstallerInsecure(url) ? ' --insecure' : '');
-  const getCurlFlags = () => (installState.insecureMode() ? '-kfsSL' : '-fsSL');
-  const getShellCustomCaCurlFlag = () => {
-    const caPath = selectedCustomCaPath();
-    return caPath ? ` --cacert ${shellQuoteArg(caPath)}` : '';
-  };
-  const getShellCustomCaInstallerFlag = () => {
-    const caPath = selectedCustomCaPath();
-    return caPath ? ` --cacert ${shellQuoteArg(caPath)}` : '';
-  };
   const getPowerShellTransportEnv = () => {
     const envAssignments: string[] = [];
     if (installState.insecureMode()) {
@@ -99,16 +80,19 @@ export const useInfrastructureOperationsState = (
   const getUninstallCommand = (row?: AgentUninstallIdentity) => {
     const url = installState.selectedAgentUrl();
     const token = resolvedCommandToken();
-    const insecure = getInsecureFlag(url);
     const agentId = getCanonicalUninstallAgentId(row);
     const hostname = getCanonicalUninstallHostname(row);
-    const baseArgs = token
-      ? `--uninstall --url ${shellQuoteArg(url)} --token ${shellQuoteArg(token)}${insecure}${getShellCustomCaInstallerFlag()}`
-      : `--uninstall --url ${shellQuoteArg(url)}${insecure}${getShellCustomCaInstallerFlag()}`;
-    const identityArgs = `${agentId ? ` --agent-id ${shellQuoteArg(agentId)}` : ''}${hostname ? ` --hostname ${shellQuoteArg(hostname)}` : ''}`;
-    return withPrivilegeEscalation(
-      `curl ${getCurlFlags()}${getShellCustomCaCurlFlag()} ${shellQuoteArg(`${url}/install.sh`)} | bash -s -- ${baseArgs}${identityArgs}`,
-    );
+    return buildUnixAgentInstallCommand({
+      baseUrl: url,
+      token,
+      insecure: installState.insecureMode(),
+      caCertPath: selectedCustomCaPath(),
+      extraArgs: [
+        '--uninstall',
+        ...(agentId ? [`--agent-id ${shellQuoteArg(agentId)}`] : []),
+        ...(hostname ? [`--hostname ${shellQuoteArg(hostname)}`] : []),
+      ],
+    });
   };
 
   const getWindowsUninstallCommand = (row?: AgentUninstallIdentity) => {
@@ -163,24 +147,17 @@ export const useInfrastructureOperationsState = (
         extraEnvAssignments: envAssignments,
       });
     }
-    let command = `curl ${getCurlFlags()}${getShellCustomCaCurlFlag()} ${shellQuoteArg(`${url}/install.sh`)} | bash -s -- --url ${shellQuoteArg(url)}`;
-    if (token) {
-      command += ` --token ${shellQuoteArg(token)}`;
-    }
-    if (row.installFlags.length > 0) {
-      command += ` ${row.installFlags.join(' ')}`;
-    }
-    if (urlRequiresInstallerInsecure(url)) {
-      command += getInsecureFlag(url);
-    }
-    command += getShellCustomCaInstallerFlag();
-    if (agentId) {
-      command += ` --agent-id ${shellQuoteArg(agentId)}`;
-    }
-    if (hostname) {
-      command += ` --hostname ${shellQuoteArg(hostname)}`;
-    }
-    return withPrivilegeEscalation(command);
+    return buildUnixAgentInstallCommand({
+      baseUrl: url,
+      token,
+      insecure: installState.insecureMode(),
+      caCertPath: selectedCustomCaPath(),
+      extraArgs: [
+        ...row.installFlags,
+        ...(agentId ? [`--agent-id ${shellQuoteArg(agentId)}`] : []),
+        ...(hostname ? [`--hostname ${shellQuoteArg(hostname)}`] : []),
+      ],
+    });
   };
 
   const getAgentConnectionUpgradeCommand = (
@@ -218,41 +195,23 @@ export const useInfrastructureOperationsState = (
       });
     }
 
-    if (replaceCredential) {
-      const extraArgs = ['--update', ...installFlags];
-      if (commandsEnabled || installState.enableCommands()) {
-        extraArgs.push('--enable-commands');
-      }
-      // Pin the existing identity the way the Windows path does. A repair
-      // reinstall without it can register a fresh suffixed agent identity
-      // for the same machine instead of converging on this one.
-      if (agentId) {
-        extraArgs.push(`--agent-id ${shellQuoteArg(agentId)}`);
-      }
-      if (hostname) {
-        extraArgs.push(`--hostname ${shellQuoteArg(hostname)}`);
-      }
-      return buildUnixAgentInstallCommand({
-        baseUrl: url,
-        token,
-        insecure: installState.insecureMode(),
-        caCertPath: selectedCustomCaPath(),
-        extraArgs,
-      });
-    }
-
-    let command = `curl ${getCurlFlags()}${getShellCustomCaCurlFlag()} ${shellQuoteArg(`${url}/install.sh`)} | bash -s -- --update --url ${shellQuoteArg(url)} --non-interactive`;
-    if (installFlags.length > 0) {
-      command += ` ${installFlags.join(' ')}`;
-    }
+    const extraArgs = ['--update', ...installFlags];
     if (commandsEnabled || installState.enableCommands()) {
-      command += ' --enable-commands';
+      extraArgs.push('--enable-commands');
     }
-    if (urlRequiresInstallerInsecure(url)) {
-      command += getInsecureFlag(url);
+    if (replaceCredential) {
+      // Credential replacement pins the existing identity; ordinary updates
+      // recover saved identity and credentials through the installer's route.
+      if (agentId) extraArgs.push(`--agent-id ${shellQuoteArg(agentId)}`);
+      if (hostname) extraArgs.push(`--hostname ${shellQuoteArg(hostname)}`);
     }
-    command += getShellCustomCaInstallerFlag();
-    return withPrivilegeEscalation(command);
+    return buildUnixAgentInstallCommand({
+      baseUrl: url,
+      token: replaceCredential ? token : null,
+      insecure: installState.insecureMode(),
+      caCertPath: selectedCustomCaPath(),
+      extraArgs,
+    });
   };
 
   const getAgentConnectionUpgradeCommandRequiresToken = (

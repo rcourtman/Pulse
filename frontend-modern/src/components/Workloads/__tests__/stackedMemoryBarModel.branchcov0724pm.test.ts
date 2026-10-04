@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { AnomalyReport } from '@/types/aiIntelligence';
 
+import stackedMemoryBarSource from '../StackedMemoryBar.tsx?raw';
 import type { StackedMemoryBarProps } from '../stackedMemoryBarModel';
 import { buildStackedMemoryBarPresentation } from '../stackedMemoryBarModel';
 
@@ -192,6 +193,45 @@ describe('stackedMemoryBarModel (branch coverage 0724pm)', () => {
       expect(p.anomalyClass).toBe('text-yellow-400');
       // description is still threaded through the optional-chain true arm.
       expect(p.anomalyDescription).toBe('Memory spike');
+    });
+  });
+
+  describe('showSublabel fit (label text plus the chip padding)', () => {
+    // 265 of 440 GiB reads '60% (265 GB/440 GB)': 110.1px of text in the
+    // browser, 118.1px with the chip's 8px of padding. This is the label the
+    // Kubernetes clusters table clipped in a 113px bar on 2026-10-03.
+    const clusterMemory = makeProps({ used: 265 * GiB, total: 440 * GiB });
+
+    it('keeps a 113px bar on the short label for "60% (265 GB/440 GB)"', () => {
+      const p = buildStackedMemoryBarPresentation(clusterMemory, 113);
+      expect(p.displayLabel).toBe('60%');
+      expect(p.displaySublabel).toBe('265 GB/440 GB');
+      expect(p.showSublabel).toBe(false);
+      expect(buildStackedMemoryBarPresentation(clusterMemory, 118).showSublabel).toBe(false);
+    });
+
+    it('shows the long label once the bar is wide enough for it', () => {
+      expect(buildStackedMemoryBarPresentation(clusterMemory, 119).showSublabel).toBe(true);
+    });
+
+    it('leaves room for the anomaly marker that shares the line', () => {
+      // ' 3.0x' adds 25.44px, taking the threshold from 119 to 145.
+      const withMarker = makeProps({ ...clusterMemory, anomaly: makeAnomaly() });
+      expect(buildStackedMemoryBarPresentation(withMarker, 144).showSublabel).toBe(false);
+      expect(buildStackedMemoryBarPresentation(withMarker, 145).showSublabel).toBe(true);
+    });
+
+    it('ignores an anomaly that renders no marker', () => {
+      // The marker needs both a description and a ratio.
+      const noDescription = makeProps({
+        ...clusterMemory,
+        anomaly: makeAnomaly({ description: '' }),
+      });
+      expect(buildStackedMemoryBarPresentation(noDescription, 119).showSublabel).toBe(true);
+    });
+
+    it('counts the padding the label chip carries in StackedMemoryBar', () => {
+      expect(stackedMemoryBarSource).toContain('px-1 text-center');
     });
   });
 });

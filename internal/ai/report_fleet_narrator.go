@@ -204,15 +204,17 @@ func (s *Service) NarrateFleet(ctx context.Context, in reporting.FleetNarrativeI
 			providerName = provider.Name()
 		}
 		costStore.Record(cost.UsageEvent{
-			Timestamp:     time.Now(),
-			Provider:      providerName,
-			RequestModel:  model,
-			ResponseModel: resp.Model,
-			UseCase:       reportFleetNarratorUseCase,
-			InputTokens:   resp.InputTokens,
-			OutputTokens:  resp.OutputTokens,
-			TargetType:    "fleet",
-			TargetID:      strings.TrimSpace(in.Title),
+			Timestamp:                time.Now(),
+			Provider:                 providerName,
+			RequestModel:             model,
+			ResponseModel:            resp.Model,
+			UseCase:                  reportFleetNarratorUseCase,
+			InputTokens:              resp.InputTokens,
+			OutputTokens:             resp.OutputTokens,
+			CacheCreationInputTokens: resp.CacheCreationInputTokens,
+			CacheReadInputTokens:     resp.CacheReadInputTokens,
+			TargetType:               "fleet",
+			TargetID:                 strings.TrimSpace(in.Title),
 		})
 	}
 

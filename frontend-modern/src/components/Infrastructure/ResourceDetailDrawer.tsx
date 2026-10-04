@@ -43,7 +43,7 @@ interface ResourceDetailDrawerProps {
 }
 
 const TabAvailabilityNotice: Component<{ message: string }> = (props) => (
-  <div class="rounded border border-dashed border-border bg-surface-hover p-4 text-sm text-muted">
+  <div class="rounded-sm border border-dashed border-border bg-surface-hover p-4 text-sm text-muted">
     {props.message}
   </div>
 );
@@ -65,7 +65,9 @@ export const getSpecializedTabAvailabilityMessage = (tab: SpecializedDrawerTab):
 const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const presentation = () => props.presentation ?? DEFAULT_RESOURCE_DETAIL_DRAWER_PRESENTATION;
   const drawer = useResourceDetailDrawerState({
-    resource: props.resource,
+    get resource() {
+      return props.resource;
+    },
     presentation: presentation(),
     resolveResourceLabel: props.resolveResourceLabel,
     initialShowAccessContext: props.initialShowAccessContext,
@@ -84,7 +86,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         />
         <h2
           id={headingId()}
-          class="text-sm font-semibold text-base-content min-w-0 [overflow-wrap:anywhere] m-0"
+          class="text-sm font-semibold text-base-content min-w-0 wrap-anywhere m-0"
           title={drawer.displayName()}
         >
           {drawer.displayName()}
@@ -101,7 +103,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         <Show when={drawer.healthIssue()}>
           {(issue) => (
             <span
-              class="inline-flex max-w-full items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+              class="inline-flex max-w-full items-center rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/25 dark:text-amber-300"
               title={issue().title}
             >
               {issue().compactLabel}
@@ -217,7 +219,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             <Show when={presentation() !== 'table-row'}>
               <MaintenanceVerificationSection resourceId={props.resource.id} />
             </Show>
-            <Show when={drawer.actionAuditAvailable()}>
+            <Show when={drawer.actionAuditAvailable() || drawer.actionAuditError()}>
               <ResourceActionHistory
                 audits={drawer.sortedActionAudits()}
                 count={drawer.actionAuditCount()}
@@ -378,16 +380,22 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
 export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props) => {
   return (
-    <DrawerContent
-      resource={props.resource}
-      onClose={props.onClose}
-      presentation={props.presentation}
-      resolveResourceLabel={props.resolveResourceLabel}
-      initialShowAccessContext={props.initialShowAccessContext}
-      initialShowHostDetails={props.initialShowHostDetails}
-      initialShowTrueNASDetails={props.initialShowTrueNASDetails}
-      onResourceActionSettled={props.onResourceActionSettled}
-    />
+    // Local tabs, disclosures and asynchronous reads belong to one canonical
+    // resource. Same-ID snapshots stay mounted; a different ID starts fresh.
+    <Show when={props.resource.id} keyed>
+      {(_resourceId) => (
+        <DrawerContent
+          resource={props.resource}
+          onClose={props.onClose}
+          presentation={props.presentation}
+          resolveResourceLabel={props.resolveResourceLabel}
+          initialShowAccessContext={props.initialShowAccessContext}
+          initialShowHostDetails={props.initialShowHostDetails}
+          initialShowTrueNASDetails={props.initialShowTrueNASDetails}
+          onResourceActionSettled={props.onResourceActionSettled}
+        />
+      )}
+    </Show>
   );
 };
 

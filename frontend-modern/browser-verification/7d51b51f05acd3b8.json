@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "d78aabaf3959aa1e7b90b94543a6a211b1062c24",
+  "content_sha256": {
+    "frontend-modern/src/utils/diagnosticsPresentation.ts": "6956ea3a37927309d840cf076a178f84e25726639316f04158c64f37e80cde9f"
+  },
+  "changed_paths": [
+    "frontend-modern/src/utils/diagnosticsPresentation.ts"
+  ],
+  "routes": [
+    "Existing Settings Diagnostics through production-component fixture",
+    "Existing shipped Troubleshooting Docs viewer and safety-section anchor"
+  ],
+  "states": [
+    "No result: no automatic request, visible and accessible live-check warnings",
+    "Explicit request pending: both run controls disabled",
+    "Displayed result: private full export and reviewed sanitised export",
+    "Pending refresh: export controls disabled",
+    "Failed refresh: original result retained, readable error toast",
+    "Shipped help: exact safety section, desktop and phone wrapping"
+  ],
+  "interactions": [
+    "Keyboard Enter starts one explicit diagnostic request",
+    "Local Blob JSON downloads do not rerun diagnostics or upload",
+    "Sanitised download checked for identity redaction and real token/snapshot joins",
+    "Full download checked against unchanged synthetic displayed data",
+    "Touch-sized buttons, accessible descriptions and no horizontal overflow",
+    "Safety link opens the production Docs viewer at the exact anchor"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-04T09:50:07.646466Z",
+  "browsers": [
+    "Chromium 141.0.7390.37 desktop",
+    "WebKit 26.0 phone emulation; not native iOS"
+  ],
+  "command": "pulse-worker-browser frontend-modern/browser-tests/diagnostics-safety.cjs",
+  "proof": "Fresh complete production-component/browser pass after punctuation repair. Playwright 1.56.1 matches the integration lock; fourteen behavioral groups and ten settled screenshots inspected. All five component/model source hashes measured. Synthetic API responses and real local JSON downloads, no native API/QGA target, installed or release acceptance.",
+  "document_sha256": {
+    "docs/TROUBLESHOOTING.md": "c7e35be379e2bdcda3162f21e629b04ca474132c71c2628c851aff5bcc2ff547",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "c7e35be379e2bdcda3162f21e629b04ca474132c71c2628c851aff5bcc2ff547"
+  },
+  "verified_component_content_sha256": {
+    "frontend-modern/src/components/Settings/diagnosticsModel.ts": "11972278d12ffe6a0dd9bdd540c00df98f83b4038eab0620b3871112aacae451",
+    "frontend-modern/src/components/Settings/DiagnosticsPanel.tsx": "ad3ca811d42241f6f8bb51cebb2ff90d1daaf5d360438d4f7fa8c6d947cca975",
+    "frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx": "6188a848d9dde43b91cf30ee127820e545b0f10a9dcfbd6fe90dd73a9231e6cd",
+    "frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts": "acc6a054beb5cde80e387b1b2193712c29865c05512ae767c9e9faa821f0a2f7",
+    "frontend-modern/src/utils/diagnosticsPresentation.ts": "6956ea3a37927309d840cf076a178f84e25726639316f04158c64f37e80cde9f"
+  }
+}

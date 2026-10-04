@@ -289,8 +289,8 @@ describe('FilterBar', () => {
     expect(select).toHaveClass('min-h-11');
     expect(select).toHaveClass('sm:h-7');
     expect(select).toHaveClass('sm:min-h-0');
-    expect(select).toHaveClass('w-[7.5rem]');
-    expect(select).not.toHaveClass('min-w-[7.5rem]');
+    expect(select).toHaveClass('w-30');
+    expect(select).not.toHaveClass('min-w-30');
     expect(select.parentElement).not.toHaveClass('p-0.5');
   });
 

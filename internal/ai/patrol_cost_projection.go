@@ -120,12 +120,21 @@ type PatrolCostProjection struct {
 	PricingAsOf      string  `json:"pricing_as_of,omitempty"`
 	InputUSDPerMTok  float64 `json:"input_usd_per_mtok"`
 	OutputUSDPerMTok float64 `json:"output_usd_per_mtok"`
+	// Cache rates are reported when the provider prices prompt-cache writes
+	// and reads separately (Anthropic); zero means the input rate applies.
+	CacheWriteUSDPerMTok float64 `json:"cache_write_usd_per_mtok,omitempty"`
+	CacheReadUSDPerMTok  float64 `json:"cache_read_usd_per_mtok,omitempty"`
 
-	PerRunInputTokens  int64   `json:"per_run_input_tokens"`
-	PerRunOutputTokens int64   `json:"per_run_output_tokens"`
-	PerRunSource       string  `json:"per_run_source"`
-	HistoryRunCount    int     `json:"history_run_count"`
-	PerRunUSD          float64 `json:"per_run_usd"`
+	PerRunInputTokens  int64 `json:"per_run_input_tokens"`
+	PerRunOutputTokens int64 `json:"per_run_output_tokens"`
+	// Per-run prompt-cache buckets from the install's own history, disjoint
+	// from PerRunInputTokens. The measured default has none because it was
+	// taken from an uncached run.
+	PerRunCacheCreationInputTokens int64   `json:"per_run_cache_creation_input_tokens,omitempty"`
+	PerRunCacheReadInputTokens     int64   `json:"per_run_cache_read_input_tokens,omitempty"`
+	PerRunSource                   string  `json:"per_run_source"`
+	HistoryRunCount                int     `json:"history_run_count"`
+	PerRunUSD                      float64 `json:"per_run_usd"`
 
 	IntervalMinutes          int                          `json:"interval_minutes"`
 	ScheduledRunsPerDay      float64                      `json:"scheduled_runs_per_day"`
@@ -221,10 +230,11 @@ func ProjectPatrolCost(in PatrolCostProjectionInput) PatrolCostProjection {
 	// enough priced history, else the measured default.
 	windowStart := now.AddDate(0, 0, -patrolCostProjectionWindowDays)
 	oldest := now
-	var fullInputs, fullOutputs, trigInputs, trigOutputs []int64
+	var fullInputs, fullOutputs, fullCacheWrites, fullCacheReads []int64
+	var trigInputs, trigOutputs, trigCacheWrites, trigCacheReads []int64
 	triggeredCount := 0
 	for _, run := range in.Runs {
-		if run.InputTokens <= 0 || run.StartedAt.Before(windowStart) {
+		if !patrolHasTokenUsage(run.InputTokens, run.OutputTokens, run.CacheCreationInputTokens, run.CacheReadInputTokens) || run.StartedAt.Before(windowStart) {
 			continue
 		}
 		if run.StartedAt.Before(oldest) {
@@ -233,11 +243,15 @@ func ProjectPatrolCost(in PatrolCostProjectionInput) PatrolCostProjection {
 		if patrolRunIsFull(run) {
 			fullInputs = append(fullInputs, int64(run.InputTokens))
 			fullOutputs = append(fullOutputs, int64(run.OutputTokens))
+			fullCacheWrites = append(fullCacheWrites, int64(run.CacheCreationInputTokens))
+			fullCacheReads = append(fullCacheReads, int64(run.CacheReadInputTokens))
 			continue
 		}
 		triggeredCount++
 		trigInputs = append(trigInputs, int64(run.InputTokens))
 		trigOutputs = append(trigOutputs, int64(run.OutputTokens))
+		trigCacheWrites = append(trigCacheWrites, int64(run.CacheCreationInputTokens))
+		trigCacheReads = append(trigCacheReads, int64(run.CacheReadInputTokens))
 	}
 	out.PerRunSource = PatrolCostPerRunSourceDefault
 	out.PerRunInputTokens = DefaultPatrolRunInputTokens
@@ -246,6 +260,8 @@ func ProjectPatrolCost(in PatrolCostProjectionInput) PatrolCostProjection {
 		out.PerRunSource = PatrolCostPerRunSourceHistory
 		out.PerRunInputTokens = medianInt64(fullInputs)
 		out.PerRunOutputTokens = medianInt64(fullOutputs)
+		out.PerRunCacheCreationInputTokens = medianInt64(fullCacheWrites)
+		out.PerRunCacheReadInputTokens = medianInt64(fullCacheReads)
 		out.HistoryRunCount = len(fullInputs)
 	}
 
@@ -267,24 +283,37 @@ func ProjectPatrolCost(in PatrolCostProjectionInput) PatrolCostProjection {
 	}
 
 	// Pricing.
-	_, known, price := cost.EstimateUSD(provider, model, out.PerRunInputTokens, out.PerRunOutputTokens)
+	perRunUsage := cost.TokenUsage{
+		InputTokens:              out.PerRunInputTokens,
+		OutputTokens:             out.PerRunOutputTokens,
+		CacheCreationInputTokens: out.PerRunCacheCreationInputTokens,
+		CacheReadInputTokens:     out.PerRunCacheReadInputTokens,
+	}
+	_, known, price := cost.EstimateUsageUSD(provider, model, perRunUsage)
 	out.PricingKnown = known
 	if known {
 		out.PricingAsOf = price.AsOf
 		out.InputUSDPerMTok = price.InputUSDPerMTok
 		out.OutputUSDPerMTok = price.OutputUSDPerMTok
+		out.CacheWriteUSDPerMTok = price.CacheWriteUSDPerMTok
+		out.CacheReadUSDPerMTok = price.CacheReadUSDPerMTok
 		out.BilledPerToken = price.InputUSDPerMTok > 0 || price.OutputUSDPerMTok > 0
 	}
-	perRun := func(inputTokens, outputTokens int64) float64 {
+	perRun := func(usage cost.TokenUsage) float64 {
 		if !known {
 			return 0
 		}
-		usd, _, _ := cost.EstimateUSD(provider, model, inputTokens, outputTokens)
+		usd, _, _ := cost.EstimateUsageUSD(provider, model, usage)
 		return usd
 	}
-	out.PerRunUSD = roundUSD(perRun(out.PerRunInputTokens, out.PerRunOutputTokens))
+	out.PerRunUSD = roundUSD(perRun(perRunUsage))
 	if triggeredCount > 0 {
-		out.TriggeredPerRunUSD = roundUSD(perRun(medianInt64(trigInputs), medianInt64(trigOutputs)))
+		out.TriggeredPerRunUSD = roundUSD(perRun(cost.TokenUsage{
+			InputTokens:              medianInt64(trigInputs),
+			OutputTokens:             medianInt64(trigOutputs),
+			CacheCreationInputTokens: medianInt64(trigCacheWrites),
+			CacheReadInputTokens:     medianInt64(trigCacheReads),
+		}))
 	}
 	scheduled30d := func(intervalMinutes int) float64 {
 		if intervalMinutes <= 0 {

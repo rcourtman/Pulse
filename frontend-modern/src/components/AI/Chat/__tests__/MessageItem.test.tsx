@@ -134,10 +134,10 @@ describe('MessageItem', () => {
     expect(messageItemSource).not.toContain('lucide-solid/icons/copy');
     expect(messageItemSource).not.toContain("lucide-solid/icons/check';");
     expect(messageItemSource).not.toContain(
-      'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content',
+      'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-xs transition-opacity hover:text-base-content',
     );
     expect(messageItemSource).not.toContain(
-      'inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+      'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
     );
   });
 

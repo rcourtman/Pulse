@@ -24,10 +24,12 @@ SEMVER_PUBLISHED_PRERELEASE_RE = re.compile(
 )
 SEMVER_RC_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)-rc\.(\d+)$")
 MIN_PRERELEASE_OBSERVATION_HOURS = 24
-# Release train (RELEASE_PROMOTION_POLICY.md, "Release Train"): a patch keeps
-# the 72 hour candidate soak; a minor release soaks its candidate for a week.
-MIN_STABLE_SOAK_HOURS = 72
-MIN_MINOR_STABLE_SOAK_HOURS = 168
+# Release train (RELEASE_PROMOTION_POLICY.md, "Release Train"): since the
+# founder direction of 28 September 2026 every candidate, minor or patch, soaks
+# for 24 hours. Few installs run previews, so a longer soak saw little more
+# than the first day while keeping stable users on an older build.
+MIN_STABLE_SOAK_HOURS = 24
+MIN_MINOR_STABLE_SOAK_HOURS = 24
 RELEASE_TRAIN_MIN_VERSION = (6, 5, 0)
 # Paths a stable promotion may change relative to its promoted candidate.
 # Everything else is content the candidate never soaked, so the resolver
@@ -586,11 +588,12 @@ def resolve_metadata(
                 raise ValueError(
                     f"Minor stable promotion {tag} has only {soak_hours_value} hours of prerelease soak since "
                     f"{promoted_from_tag}; the release train requires {MIN_MINOR_STABLE_SOAK_HOURS} hours "
-                    "(seven days) for a minor release unless hotfix_exception is true."
+                    "for a minor release unless hotfix_exception is true."
                 )
             elif soak_hours_value < MIN_STABLE_SOAK_HOURS:
                 raise ValueError(
-                    f"Stable promotion {tag} has only {soak_hours_value} hours of prerelease soak since {promoted_from_tag}; minimum is 72 hours unless hotfix_exception is true."
+                    f"Stable promotion {tag} has only {soak_hours_value} hours of prerelease soak since "
+                    f"{promoted_from_tag}; minimum is {MIN_STABLE_SOAK_HOURS} hours unless hotfix_exception is true."
                 )
 
         if version == "6.0.0":

@@ -17,7 +17,7 @@ export const NetworkInterfacesCard: Component<NetworkInterfacesCardProps> = (pro
       <div class="max-h-[140px] overflow-y-auto custom-scrollbar space-y-2">
         <For each={props.interfaces}>
           {(iface) => (
-            <div class="rounded border border-dashed border-border p-2 overflow-hidden">
+            <div class="rounded-sm border border-dashed border-border p-2 overflow-hidden">
               <div class="flex items-center gap-2 text-[11px] font-medium text-base-content min-w-0">
                 <span class="truncate min-w-0">{iface.name}</span>
                 <Show when={iface.mac}>
@@ -34,7 +34,7 @@ export const NetworkInterfacesCard: Component<NetworkInterfacesCardProps> = (pro
                   <For each={iface.addresses}>
                     {(ip) => (
                       <span
-                        class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200 max-w-full truncate"
+                        class="inline-block rounded-sm bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/25 dark:text-blue-200 max-w-full truncate"
                         title={ip}
                       >
                         {ip}

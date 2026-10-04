@@ -179,11 +179,19 @@ func TestHandleDiagnosticsDockerPrepareToken_Success(t *testing.T) {
 	if !strings.Contains(payload["installCommand"].(string), "--enable-docker") {
 		t.Fatalf("expected install command to enable docker metrics: %q", payload["installCommand"])
 	}
-	if !strings.Contains(payload["installCommand"].(string), `| { if [ "$(id -u)" -eq 0 ]; then bash -s --`) {
-		t.Fatalf("expected install command to use lifecycle privilege wrapper: %q", payload["installCommand"])
+	if !strings.Contains(payload["installCommand"].(string), `sudo bash -c`) || !strings.Contains(payload["installCommand"].(string), `--token-file "$token_file"`) {
+		t.Fatal("expected install command to preserve private token input through root or sudo")
 	}
-	if strings.Contains(payload["installCommand"].(string), "| sudo bash -s -- --url") {
-		t.Fatalf("expected install command to preserve the governed root-or-sudo wrapper instead of a raw sudo pipe: %q", payload["installCommand"])
+	for _, field := range []string{"installCommand", "systemdServiceSnippet"} {
+		if strings.Contains(payload[field].(string), payload["token"].(string)) || strings.Contains(payload[field].(string), "PULSE_TOKEN=") || strings.Contains(payload[field].(string), "--token ") {
+			t.Fatalf("credential leaked into copied %s", field)
+		}
+	}
+	if rec.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("issued credential response can be cached")
+	}
+	if !strings.Contains(payload["systemdServiceSnippet"].(string), "--token-file /var/lib/pulse-agent/token") {
+		t.Fatal("reference snippet does not use the installer's default private token path")
 	}
 	if !strings.Contains(payload["systemdServiceSnippet"].(string), "--enable-host") ||
 		strings.Contains(payload["systemdServiceSnippet"].(string), "--enable-host=false") {

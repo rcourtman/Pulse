@@ -108,14 +108,14 @@ const UpdatePills: Component<{ app: ResourceTrueNASAppMeta | undefined }> = (pro
       <Show
         when={hasAppUpdate() || hasImageUpdate()}
         fallback={
-          <span class="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted">
+          <span class="rounded-sm border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted">
             Current
           </span>
         }
       >
         <Show when={hasAppUpdate()}>
           <span
-            class="rounded border border-amber-300/50 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300"
+            class="rounded-sm border border-amber-300/50 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300"
             title="App update available"
           >
             <PlatformResponsiveTableLabel compact="A" full="App" />
@@ -123,7 +123,7 @@ const UpdatePills: Component<{ app: ResourceTrueNASAppMeta | undefined }> = (pro
         </Show>
         <Show when={hasImageUpdate()}>
           <span
-            class="rounded border border-blue-300/50 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-300"
+            class="rounded-sm border border-blue-300/50 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-300"
             title="Image update available"
           >
             <PlatformResponsiveTableLabel compact="I" full="Image" />

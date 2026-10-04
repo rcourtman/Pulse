@@ -1,6 +1,9 @@
 package cost
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestLookupPriceUsesCurrentAnthropicOpusPricing(t *testing.T) {
 	tests := []struct {
@@ -76,5 +79,48 @@ func TestLookupPriceUsesCurrentAnthropicGeneration5Pricing(t *testing.T) {
 				t.Fatalf("Anthropic generation 5 pricing date = %q, want 2026-08-29", price.AsOf)
 			}
 		})
+	}
+}
+
+func TestEstimateUsageUSDPricesAnthropicCacheBucketsAtCacheRates(t *testing.T) {
+	usage := TokenUsage{InputTokens: 100_000, OutputTokens: 10_000, CacheCreationInputTokens: 200_000, CacheReadInputTokens: 1_000_000}
+	usd, ok, price := EstimateUsageUSD("anthropic", "claude-sonnet-5", usage)
+	if !ok {
+		t.Fatal("expected known pricing for claude-sonnet-5")
+	}
+	// Sonnet 5 input is 2.00/M, so a 5-minute cache write is 2.50/M and a
+	// cache read 0.20/M.
+	if price.CacheWriteUSDPerMTok != 2.5 || price.CacheReadUSDPerMTok != 0.2 {
+		t.Fatalf("unexpected cache rates: %+v", price)
+	}
+	want := 0.1*2.00 + 0.01*10.00 + 0.2*2.50 + 1.0*0.20
+	if math.Abs(usd-want) > 1e-9 {
+		t.Fatalf("usd = %f, want %f", usd, want)
+	}
+	// Charging the whole prompt at the input rate overstates a cached run.
+	flat, _, _ := EstimateUSD("anthropic", "claude-sonnet-5", usage.PromptTokens(), usage.OutputTokens)
+	if flat <= usd {
+		t.Fatalf("flat input-rate estimate %f should exceed cache-aware %f", flat, usd)
+	}
+}
+
+func TestEstimateUsageUSDFallsBackToInputRateWithoutCachePrices(t *testing.T) {
+	usage := TokenUsage{InputTokens: 100_000, CacheReadInputTokens: 100_000}
+	usd, ok, price := EstimateUsageUSD("openai", "gpt-4o-mini", usage)
+	if !ok {
+		t.Fatal("expected known pricing for gpt-4o-mini")
+	}
+	if price.CacheWriteUSDPerMTok != 0 || price.CacheReadUSDPerMTok != 0 {
+		t.Fatalf("openai rows carry no cache prices: %+v", price)
+	}
+	// Both buckets at 0.15/M: conservative, never below the provider's bill.
+	if want := 0.2 * 0.15; math.Abs(usd-want) > 1e-9 {
+		t.Fatalf("usd = %f, want %f", usd, want)
+	}
+	// Without cache buckets the two estimators agree exactly.
+	a, _, _ := EstimateUSD("openai", "gpt-4o-mini", 100_000, 2_000)
+	b, _, _ := EstimateUsageUSD("openai", "gpt-4o-mini", TokenUsage{InputTokens: 100_000, OutputTokens: 2_000})
+	if a != b {
+		t.Fatalf("EstimateUSD %f != EstimateUsageUSD %f", a, b)
 	}
 }

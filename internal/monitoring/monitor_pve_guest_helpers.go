@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -134,7 +135,17 @@ func (m *Monitor) recordGuestMetrics(allVMs []models.VM, allContainers []models.
 		}
 		if vm.Status == "running" {
 			diskRead, diskWrite, networkIn, networkOut := guestHistoryRates(vm.DiskRead, vm.DiskWrite, vm.NetworkIn, vm.NetworkOut, vm.IORateValidity)
-			m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), historyMemoryUsage(vm.Memory), historyMemoryUsed(vm.Memory), vm.Disk.Usage, diskRead, diskWrite, networkIn, networkOut, now)
+			memoryUsage, memoryUsed, diskUsage := historyMemoryUsage(vm.Memory), historyMemoryUsed(vm.Memory), vm.Disk.Usage
+			if strings.HasPrefix(vm.DiskStatusReason, "prev-") {
+				diskUsage = -1
+			}
+			if vm.GuestAgentStatus == "deferred" {
+				snapshot := m.previousGuestSnapshot(vm.Instance, "qemu", vm.Node, vm.VMID)
+				if snapshot == nil || snapshot.MemorySource == "previous-snapshot" || strings.HasPrefix(CanonicalMemorySource(snapshot.MemorySource), "guest-agent-meminfo") {
+					memoryUsage, memoryUsed = -1, -1
+				}
+			}
+			m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), memoryUsage, memoryUsed, diskUsage, diskRead, diskWrite, networkIn, networkOut, now)
 		}
 	}
 	for _, ct := range allContainers {

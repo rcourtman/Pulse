@@ -1464,6 +1464,141 @@ describe('fast merge path for metrics-only delta patches', () => {
       new Set(raw.map((row) => row.id)),
     );
 
+  it('clears omitted guest read-state fields on a new native outcome in full and fast deltas', () => {
+    const raw = createPveGuestRaw();
+    raw.proxmox = {
+      ...raw.proxmox,
+      runtimeStatus: 'running',
+      guestAgentStatus: 'deferred',
+      diskStatusReason: 'prev-vm-locked',
+      guestAgentExpected: true,
+      lock: 'backup',
+    };
+    const previous = seedDisplayRows([raw]);
+    const incoming = structuredClone(raw);
+    incoming.proxmox = {
+      vmid: 100,
+      nodeName: 'pve-node-1',
+      runtimeStatus: 'running',
+      guestAgentStatus: 'available',
+    };
+    const changed = new Set([raw.id]);
+    const keys = new Map([[raw.id, ['proxmox']]]);
+    expect(getFastResourceMergePatchKeys(keys, raw.id, previous[0])).toEqual(['proxmox']);
+    const full = mergeCanonicalResourceSnapshot([incoming], previous);
+    const delta = mergeCanonicalResourceDeltaSnapshot([incoming], previous, changed);
+    const fast = mergeCanonicalResourceDeltaSnapshot([incoming], previous, changed, keys);
+    expect(fast[0]).toEqual(delta[0]);
+    expect(fast[0]).toEqual(full[0]);
+    for (const [merged] of [full, delta, fast]) {
+      expect(merged.proxmox?.guestAgentStatus).toBe('available');
+      expect(merged.proxmox?.diskStatusReason).toBeUndefined();
+      expect(merged.proxmox?.lock).toBeUndefined();
+      expect(merged.proxmox?.guestAgentExpected).toBeUndefined();
+      expect(merged.proxmox?.uptime).toBe(1000); // unrelated richer facet is retained
+      expect(buildFastResourceStorePatchOps(merged, ['proxmox'])).toContainEqual({
+        key: 'proxmox',
+        value: merged.proxmox,
+        mode: 'reconcile',
+      });
+    }
+  });
+
+  it('applies the same read-state clearing to the compatibility provider facet', () => {
+    const raw = createPveGuestRaw();
+    raw.proxmox = {
+      ...raw.proxmox,
+      runtimeStatus: 'running',
+      guestAgentStatus: 'deferred',
+      diskStatusReason: 'prev-vm-locked',
+      guestAgentExpected: true,
+      lock: 'backup',
+    };
+    raw.platformData = { ...raw.platformData, proxmox: raw.proxmox };
+    const previous = seedDisplayRows([raw]);
+    const incoming = structuredClone(raw);
+    incoming.proxmox = {
+      vmid: 100,
+      nodeName: 'pve-node-1',
+      runtimeStatus: 'running',
+      guestAgentStatus: 'available',
+    };
+    incoming.platformData = { ...incoming.platformData, proxmox: incoming.proxmox };
+    const [merged] = mergeCanonicalResourceSnapshot([incoming], previous);
+    expect(merged.platformData?.proxmox).toEqual(merged.proxmox);
+    expect(merged.proxmox?.diskStatusReason).toBeUndefined();
+    expect(merged.proxmox?.lock).toBeUndefined();
+  });
+
+  it('preserves read-state evidence on partial facet omission, including the fast path', () => {
+    const raw = createPveGuestRaw();
+    raw.proxmox = {
+      ...raw.proxmox,
+      runtimeStatus: 'running',
+      guestAgentStatus: 'deferred',
+      diskStatusReason: 'prev-agent-timeout',
+      guestAgentExpected: true,
+      lock: 'backup',
+    };
+    const previous = seedDisplayRows([raw]);
+    for (const proxmox of [
+      undefined,
+      { vmid: 100, uptime: 1001 },
+      { guestAgentStatus: 'available' },
+      { vmid: 0, runtimeStatus: 'running', guestAgentStatus: 'available' },
+      { vmid: 1.5, runtimeStatus: 'running', guestAgentStatus: 'available' },
+      { vmid: Infinity, runtimeStatus: 'running', guestAgentStatus: 'available' },
+      { vmid: 100, runtimeStatus: ' ', guestAgentStatus: 'available' },
+      { vmid: 100, runtimeStatus: 'running', guestAgentStatus: ' ' },
+    ]) {
+      const incoming = { ...raw, proxmox } as Resource;
+      const full = mergeCanonicalResourceSnapshot([incoming], previous);
+      const fast = mergeCanonicalResourceDeltaSnapshot(
+        [incoming],
+        previous,
+        new Set([raw.id]),
+        new Map([[raw.id, ['proxmox']]]),
+      );
+      for (const [merged] of [full, fast]) {
+        expect(merged.proxmox).toMatchObject({
+          diskStatusReason: 'prev-agent-timeout',
+          guestAgentExpected: true,
+          lock: 'backup',
+        });
+      }
+    }
+  });
+
+  it('keeps explicit lock and deferral evidence on a new outcome, including false expected', () => {
+    const raw = createPveGuestRaw();
+    raw.proxmox = {
+      ...raw.proxmox,
+      runtimeStatus: 'running',
+      guestAgentStatus: 'available',
+    };
+    const previous = seedDisplayRows([raw]);
+    const incoming = structuredClone(raw);
+    incoming.proxmox = {
+      ...raw.proxmox,
+      guestAgentStatus: 'deferred',
+      diskStatusReason: 'agent-busy',
+      guestAgentExpected: false,
+      lock: 'migrate',
+    };
+    const [merged] = mergeCanonicalResourceDeltaSnapshot(
+      [incoming],
+      previous,
+      new Set([raw.id]),
+      new Map([[raw.id, ['proxmox']]]),
+    );
+    expect(merged.proxmox).toMatchObject({
+      guestAgentStatus: 'deferred',
+      diskStatusReason: 'agent-busy',
+      guestAgentExpected: false,
+      lock: 'migrate',
+    });
+  });
+
   it('produces the same merged row as the full path for a metrics-only patch', () => {
     const raw = createPveGuestRaw();
     const display = seedDisplayRows([raw]);

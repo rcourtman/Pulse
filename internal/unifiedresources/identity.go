@@ -167,6 +167,14 @@ type MatchCandidate struct {
 
 // FindCandidates returns possible matches based on the identity signals.
 func (m *IdentityMatcher) FindCandidates(identity ResourceIdentity) []MatchCandidate {
+	return m.findCandidatesAtLeast(identity, 0)
+}
+
+// findCandidatesAtLeast avoids materializing signals the caller will discard.
+// Top-level grouping accepts only high-confidence matches; producing every
+// hostname-only peer made broadcast projection quadratic on shared hostnames.
+// General matching still requests the complete candidate/review vocabulary.
+func (m *IdentityMatcher) findCandidatesAtLeast(identity ResourceIdentity, minimum float64) []MatchCandidate {
 	candidates := make(map[string]MatchCandidate)
 
 	// Machine ID match
@@ -183,9 +191,16 @@ func (m *IdentityMatcher) FindCandidates(identity ResourceIdentity) []MatchCandi
 		}
 	}
 
-	hostnameIDs := m.collectIDs(m.byHostname, identity.Hostnames, NormalizeHostname)
-	ipIDs := m.collectIDs(m.byIP, identity.IPAddresses, NormalizeIP)
-	macIDs := m.collectIDs(m.byMAC, identity.MACAddresses, NormalizeMAC)
+	var hostnameIDs, ipIDs, macIDs map[string]struct{}
+	if minimum <= 0.90 && len(identity.MACAddresses) > 0 {
+		macIDs = m.collectIDs(m.byMAC, identity.MACAddresses, NormalizeMAC)
+	}
+	if minimum <= 0.80 && len(identity.IPAddresses) > 0 {
+		ipIDs = m.collectIDs(m.byIP, identity.IPAddresses, NormalizeIP)
+	}
+	if minimum <= 0.50 || (minimum <= 0.90 && len(macIDs) > 0) || (minimum <= 0.80 && len(ipIDs) > 0) {
+		hostnameIDs = m.collectIDs(m.byHostname, identity.Hostnames, NormalizeHostname)
+	}
 
 	// Hostname + MAC overlap
 	for id := range intersectIDs(hostnameIDs, macIDs) {
@@ -214,7 +229,9 @@ func (m *IdentityMatcher) FindCandidates(identity ResourceIdentity) []MatchCandi
 
 	list := make([]MatchCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
-		list = append(list, candidate)
+		if candidate.Confidence >= minimum {
+			list = append(list, candidate)
+		}
 	}
 
 	sort.Slice(list, func(i, j int) bool {

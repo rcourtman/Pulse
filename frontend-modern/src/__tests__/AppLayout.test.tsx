@@ -291,6 +291,22 @@ describe('AppLayout navigation icons', () => {
     expect(within(mobileNav).queryByText('Needs Attention')).toBeNull();
   });
 
+  it('hides the Patrol tab on desktop and mobile while AI is off (#905)', () => {
+    aiChatStore.setEnabled(false);
+    renderLayout();
+
+    const desktopNav = screen.getByRole('navigation', { name: 'Primary navigation' });
+    const systemGroup = desktopNav.querySelector('[aria-label="System"]');
+    expect(systemGroup).toBeTruthy();
+    expect(within(systemGroup as HTMLElement).queryByRole('link', { name: 'Patrol' })).toBeNull();
+    expect(within(systemGroup as HTMLElement).getByRole('link', { name: 'Actions' })).toBeTruthy();
+
+    const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
+    expect(mobileNav.querySelector('[data-tab-id="ai"]')).toBeNull();
+    expect(mobileNav.querySelector('[data-tab-id="alerts"]')).toBeTruthy();
+    expect(mobileNav.querySelector('[data-tab-id="actions"]')).toBeTruthy();
+  });
+
   it('gives Actions its own navigation state and approval count', () => {
     actionInboxMockState.pendingActionCount = 3;
     renderLayout([], '/actions');

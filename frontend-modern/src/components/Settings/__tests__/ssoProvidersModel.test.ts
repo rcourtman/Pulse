@@ -32,6 +32,32 @@ describe('ssoProvidersModel', () => {
     });
   });
 
+  it('keeps multi-word OIDC group names through save and edit without changing scope lists', () => {
+    const saved = {
+      id: 'corp-oidc',
+      name: 'Corporate OIDC',
+      type: 'oidc' as const,
+      enabled: true,
+      oidc: { scopes: ['openid', 'profile', 'email'] },
+      groupRoleMappings: { 'Server Access': 'admin', Everyone: 'viewer' },
+    };
+    const form = mapProviderDetailsToForm(saved);
+    expect(form.groupRoleMappings).toBe('Server Access=admin, Everyone=viewer');
+
+    const payload = buildProviderPayload({
+      ...form,
+      groupRoleMappings: ' Server Access = admin,\n Everyone = viewer ',
+      allowedGroups: 'admins operators',
+    });
+    expect(payload.groupRoleMappings).toEqual({ 'Server Access': 'admin', Everyone: 'viewer' });
+    expect(payload.allowedGroups).toEqual(['admins', 'operators']);
+    expect((payload.oidc as Record<string, unknown>).scopes).toEqual([
+      'openid',
+      'profile',
+      'email',
+    ]);
+  });
+
   it('serializes custom OIDC scopes into the provider payload', () => {
     const form = {
       ...createEmptyProviderForm(),

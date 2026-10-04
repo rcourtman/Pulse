@@ -78,7 +78,7 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
             type="button"
             onClick={() => void props.runProviderPreflight()}
             disabled={props.preflightRunning() || props.saving()}
-            class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+            class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
           >
             {props.preflightRunning() ? 'Checking...' : 'Run Preflight'}
           </button>
@@ -163,13 +163,13 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                   <div class="flex items-center gap-2">
                     <span class="font-medium text-sm">{config.title}</span>
                     <Show when={configured()}>
-                      <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
+                      <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900/25 text-green-700 dark:text-green-300 rounded-sm">
                         {config.configuredLabel}
                       </span>
                     </Show>
                     <Show when={configured()}>
                       <span
-                        class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getAIProviderHealthPresentation(health().status).badgeClass}`}
+                        class={`px-1.5 py-0.5 text-[10px] font-semibold rounded-sm ${getAIProviderHealthPresentation(health().status).badgeClass}`}
                       >
                         {getAIProviderHealthPresentation(health().status).label}
                       </span>
@@ -235,7 +235,7 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                           }
                           disabled={props.saving()}
                           aria-label={`Enable ${getAIProviderDisplayName(config.provider)}`}
-                          class="mt-0.5 h-4 w-4 rounded border-border"
+                          class="mt-0.5 h-4 w-4 rounded-sm border-border"
                         />
                         <span>
                           Use this machine's existing subscription login. Pulse stores no OAuth
@@ -324,7 +324,7 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                             type="button"
                             onClick={() => void props.handleTestProvider(config.provider)}
                             disabled={props.testingProvider() === config.provider || props.saving()}
-                            class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                            class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
                           >
                             {props.testingProvider() === config.provider ? 'Testing...' : 'Test'}
                           </button>
@@ -332,7 +332,7 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                             type="button"
                             onClick={() => void props.handleClearProvider(config.provider)}
                             disabled={props.saving()}
-                            class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                            class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-red-100 dark:bg-red-900/25 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
                             title={config.clearTitle}
                           >
                             Remove

@@ -100,7 +100,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
                   onClick={() => props.selectService(service.id)}
                   class={`min-h-11 px-2 py-1.5 text-left border transition-colors text-xs sm:min-h-0 ${
                     props.formData().service === service.id
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/25'
                       : 'border-border hover:bg-surface-hover'
                   }`}
                 >
@@ -114,7 +114,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
 
         <Show when={props.currentTemplate()?.instructions}>
           <div class="mb-3 border-l-2 border-blue-300 pl-3 text-xs leading-relaxed text-blue-800 dark:border-blue-700 dark:text-blue-200">
-            <h4 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+            <h4 class="text-sm font-medium text-blue-900/25 dark:text-blue-100 mb-2">
               {getAlertWebhookSetupInstructionsTitle()}
             </h4>
             {props.currentTemplate()!.instructions}
@@ -411,7 +411,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
       <div class="flex justify-end gap-2 text-xs">
         <button
           onClick={props.cancelForm}
-          class="min-h-11 px-3 py-1.5 border border-border rounded text-xs hover:bg-surface-hover sm:min-h-0"
+          class="min-h-11 px-3 py-1.5 border border-border rounded-sm text-xs hover:bg-surface-hover sm:min-h-0"
         >
           {ALERT_WEBHOOK_CANCEL_LABEL}
         </button>
@@ -419,7 +419,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
           <button
             onClick={props.testWebhookForm}
             disabled={props.testing === (props.editingId() || 'temp-new-webhook')}
-            class="min-h-11 px-3 py-1.5 border border-border rounded text-xs hover:bg-slate-100 sm:min-h-0"
+            class="min-h-11 px-3 py-1.5 border border-border rounded-sm text-xs hover:bg-slate-100 sm:min-h-0"
           >
             {getAlertWebhookTestLabel(
               props.testing === (props.editingId() || 'temp-new-webhook'),
@@ -430,7 +430,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
         <button
           onClick={props.saveWebhook}
           disabled={!props.formData().name || !props.formData().url}
-          class="min-h-11 px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed sm:min-h-0"
+          class="min-h-11 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed sm:min-h-0"
         >
           {getAlertWebhookSubmitLabel(Boolean(props.editingId()))}
         </button>

@@ -129,12 +129,28 @@ These endpoints require authentication with the `monitoring:read` scope.
 - `range` (optional): `1h`, `6h`, `12h`, `24h`, `1d`, `7d`, `30d`, `90d` (default `24h`; duration strings also accepted)
 - `maxPoints` (optional): Downsample to a target number of points
 
-Example:
+For a one-off read, open `/api/metrics-store/stats` in your signed-in Pulse
+browser; do not extract its session cookie. For curl, prepare the private
+header file described in [API authentication](API.md#-authentication), using a
+token with only `monitoring:read`. The example requires curl 7.76 or later and
+runs **on the Pulse host**:
 
 ```bash
-curl -H "X-API-Token: $TOKEN" \
-  "http://localhost:7655/api/metrics-store/history?resourceType=vm&resourceId=pve1:node1:100&range=7d&metric=cpu"
+curl --disable --fail-with-body --connect-timeout 10 --max-time 30 \
+  --header "@$HOME/.config/pulse/api-header" --get \
+  --data-urlencode 'resourceType=vm' \
+  --data-urlencode 'resourceId=pve1:node1:100' \
+  --data-urlencode 'range=7d' --data-urlencode 'metric=cpu' \
+  http://127.0.0.1:7655/api/metrics-store/history
 ```
+
+Replace the example resource ID with the ID reported by your instance. For a
+remote request, use your Pulse HTTPS address and keep certificate verification
+enabled. Keep `--disable` first to ignore local curl defaults that could enable
+credential-bearing traces. HTTP errors, including 401, 402 and 403, return a
+non-zero exit; do not treat the error body as history. Never put a token in a
+command, URL or report, and share only the relevant redacted error rather than
+the whole infrastructure response.
 
 > **License**: Requests beyond Community's `7d` floor require the paid `long_term_metrics` entitlement. Relay unlocks `14d`, Pro and legacy Pro+ unlock `90d`, and requests beyond the active tier's limit return `402 Payment Required`.
 > **Aliases**: `guest` (VM/LXC) and `docker` (Docker container) are accepted, but persistent store data uses the canonical types above.

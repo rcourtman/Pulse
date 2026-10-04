@@ -7,13 +7,16 @@
 import { createSignal } from 'solid-js';
 import type { DockerRuntimeCommand } from '@/types/api';
 
-export type ContainerUpdateState = 'queued' | 'updating' | 'success' | 'error';
+export type ContainerUpdateState = 'queued' | 'updating' | 'success' | 'error' | 'inconclusive';
 
 interface UpdateEntry {
   state: ContainerUpdateState;
   startedAt: number;
   message?: string;
   commandId?: string;
+  // A governed action must be reconciled from its audit, not inferred from an
+  // unrelated image-registry check or a legacy command on the same container.
+  actionId?: string;
   // Real-time progress from backend
   backendStatus?: string;
   acknowledgedAt?: number;
@@ -104,11 +107,7 @@ export function markContainerUpdating(
 /**
  * Mark a container update as queued (command sent, waiting for agent)
  */
-export function markContainerQueued(
-  agentId: string,
-  containerId: string,
-  commandId?: string,
-): void {
+export function markContainerQueued(agentId: string, containerId: string, actionId?: string): void {
   const key = `${agentId}:${containerId}`;
   clearPendingAutoClearTimer(key);
   setUpdateStates((prev) => ({
@@ -116,8 +115,21 @@ export function markContainerQueued(
     [key]: {
       state: 'queued',
       startedAt: Date.now(),
-      commandId,
+      actionId,
     },
+  }));
+}
+
+export function markContainerUpdateInconclusive(
+  agentId: string,
+  containerId: string,
+  actionId: string,
+): void {
+  const key = `${agentId}:${containerId}`;
+  clearPendingAutoClearTimer(key);
+  setUpdateStates((prev) => ({
+    ...prev,
+    [key]: { state: 'inconclusive', startedAt: prev[key]?.startedAt || Date.now(), actionId },
   }));
 }
 
@@ -140,6 +152,7 @@ export function syncWithAgentCommand(
   // Check if we're tracking this update
   const existing = updateStates()[key];
   if (!existing) return;
+  if (existing.actionId) return;
 
   // Update based on backend status
   if (command.status === 'completed' || command.completedAt) {
@@ -225,7 +238,12 @@ export function cleanupStaleUpdates(): void {
   setUpdateStates((prev) => {
     const next: Record<string, UpdateEntry> = {};
     for (const [key, entry] of Object.entries(prev)) {
-      if (now - entry.startedAt < STALE_THRESHOLD_MS) {
+      // Keep an unresolved governed action reviewable until its audit has a
+      // known outcome. Time passing is not an execution result.
+      if (
+        (entry.actionId && (entry.state === 'queued' || entry.state === 'inconclusive')) ||
+        now - entry.startedAt < STALE_THRESHOLD_MS
+      ) {
         next[key] = entry;
       } else {
         clearPendingAutoClearTimer(key);

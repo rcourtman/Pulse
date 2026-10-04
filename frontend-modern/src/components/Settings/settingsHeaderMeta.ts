@@ -25,9 +25,9 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     description: 'Configure the public URL, CORS, embedding, and webhook network boundaries.',
   },
   'system-updates': {
-    title: 'Pulse server updates',
+    title: 'Updates',
     description:
-      'Manage Pulse server runtime version checks, update channels, and automatic updates. Agent updates stay under Infrastructure.',
+      'Check for new Pulse versions, choose an update channel, and manage automatic updates. Agent updates stay under Infrastructure.',
   },
   'system-recovery': {
     title: 'Recovery',
@@ -52,7 +52,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
       'Configure the model-backed service context Assistant and Patrol use. Infrastructure discovery and onboarding stay under Infrastructure.',
   },
   'system-relay': {
-    title: 'Remote Access',
+    title: 'Pulse Mobile',
     description: RELAY_SETTINGS_DESCRIPTION,
   },
   'system-billing': {

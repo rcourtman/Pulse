@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"os"
 	"testing"
 	"time"
 )
@@ -47,5 +48,41 @@ func TestIncidentStoreSaveCoalescing(t *testing.T) {
 	}
 	if len(timeline.Events) != 101 {
 		t.Fatalf("persisted events = %d, want all 101 mutations captured", len(timeline.Events))
+	}
+}
+
+func TestIncidentStoreFlushJoinsQueuedSave(t *testing.T) {
+	dir := t.TempDir()
+	store := NewIncidentStore(IncidentStoreConfig{DataDir: dir})
+
+	// Hold the save lock so the save queued by the mutation cannot start. This
+	// is the window where TempDir cleanup used to race it: the mutation has
+	// returned, but the goroutine has not yet created its temp file.
+	store.saveMu.Lock()
+	store.RecordAnalysis("alert-flush", "analysis", nil)
+
+	flushed := make(chan struct{})
+	go func() {
+		store.flush()
+		close(flushed)
+	}()
+	select {
+	case <-flushed:
+		store.saveMu.Unlock()
+		t.Fatal("flush returned while a queued save had not run")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	store.saveMu.Unlock()
+	select {
+	case <-flushed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("flush did not return after the queued save ran")
+	}
+	if saves := store.savesCompleted.Load(); saves != 1 {
+		t.Fatalf("saves completed when flush returned = %d, want 1", saves)
+	}
+	if _, err := os.Stat(store.filePath + ".tmp"); !os.IsNotExist(err) {
+		t.Fatalf("temp file left behind after flush: %v", err)
 	}
 }

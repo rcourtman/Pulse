@@ -132,13 +132,13 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
   const toneClasses = () => {
     switch (tone()) {
       case 'success':
-        return 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900 text-green-700 dark:text-green-300';
+        return 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/25 text-green-700 dark:text-green-300';
       case 'warning':
-        return 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-300';
+        return 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300';
       case 'neutral':
         return 'border-border bg-surface-alt text-base-content';
       case 'error':
-        return 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 text-red-700 dark:text-red-300';
+        return 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300';
       default:
         return '';
     }
@@ -268,8 +268,8 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
           disabled={state.saving()}
           class={`inline-flex min-h-9 items-center rounded-md px-3 py-1.5 text-sm disabled:opacity-50 whitespace-nowrap ${
             state.patrolModelReadinessRunning()
-              ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800'
-              : 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800'
+              ? 'bg-amber-100 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800'
+              : 'bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800'
           }`}
         >
           {state.patrolModelReadinessRunning() ? 'Cancel check' : 'Check Patrol model'}
@@ -282,7 +282,7 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
       </Show>
       <Show when={result()}>
         {(r) => (
-          <div class={`rounded border px-3 py-2 ${toneClasses()}`}>
+          <div class={`rounded-sm border px-3 py-2 ${toneClasses()}`}>
             <div class="flex items-baseline justify-between gap-2">
               <p class="text-xs font-medium">{headline()}</p>
               <Show when={r().duration_ms > 0}>
@@ -295,7 +295,7 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
             <div class="mt-2 grid gap-1 sm:grid-cols-2">
               <For each={dimensionRows()}>
                 {(dimension) => (
-                  <div class="rounded bg-white/40 px-2 py-1 dark:bg-black/10">
+                  <div class="rounded-sm bg-white/40 px-2 py-1 dark:bg-black/10">
                     <div class="flex items-center justify-between gap-2">
                       <span class="text-[11px]">{dimension.label}</span>
                       <span
@@ -378,11 +378,11 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
 const patrolCostToneClasses = (tone: PatrolCostTone) => {
   switch (tone) {
     case 'positive':
-      return 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-200';
+      return 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/25 text-green-800 dark:text-green-200';
     case 'warning':
-      return 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200';
+      return 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 text-amber-800 dark:text-amber-200';
     case 'danger':
-      return 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 text-red-800 dark:text-red-200';
+      return 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/25 text-red-800 dark:text-red-200';
     default:
       return 'border-border bg-surface-alt text-base-content';
   }
@@ -411,7 +411,7 @@ export const PatrolCostPreview: Component<{ state: AISettingsState }> = (props) 
     <Show when={presentation()}>
       {(view) => (
         <div
-          class={`mt-2 rounded border px-3 py-2 ${patrolCostToneClasses(view().tone)}`}
+          class={`mt-2 rounded-sm border px-3 py-2 ${patrolCostToneClasses(view().tone)}`}
           data-testid="patrol-cost-preview"
           role="status"
         >
@@ -583,12 +583,7 @@ export const AIModelOverrideField: Component<{
       <SelectedModelGuidanceNote annotation={selectedAnnotation} />
       <Show when={selectedModel() && !isModelProviderConfigured(selectedModel(), state.settings())}>
         <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
-          <svg
-            class="w-3.5 h-3.5 flex-shrink-0"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
+          <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -701,12 +696,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
         <SelectedModelGuidanceNote annotation={sharedSelectedAnnotation} />
         <Show when={state.modelsError()}>
           <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
-            <svg
-              class="w-3.5 h-3.5 flex-shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -722,12 +712,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
           when={state.form.model && !isModelProviderConfigured(state.form.model, state.settings())}
         >
           <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
-            <svg
-              class="w-3.5 h-3.5 flex-shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"

@@ -131,20 +131,20 @@ export function getAvailabilityTargetStatusLabel(target: AvailabilityTarget): st
 
 export function getAvailabilityTargetStatusClass(target: AvailabilityTarget): string {
   if (!target.enabled) return 'bg-surface-alt text-muted';
-  if (!target.status) return 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300';
+  if (!target.status) return 'bg-sky-100 text-sky-700 dark:bg-sky-900/25 dark:text-sky-300';
   if (target.status.aggregateState === 'degraded' || target.status.aggregateState === 'unknown') {
-    return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300';
+    return 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300';
   }
   if (target.status.aggregateState === 'unavailable') {
-    return 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300';
+    return 'bg-rose-100 text-rose-700 dark:bg-rose-900/25 dark:text-rose-300';
   }
   if (target.status.outcome === 'indeterminate') {
-    return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300';
+    return 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300';
   }
   if (target.status.available) {
-    return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300';
+    return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300';
   }
-  return 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300';
+  return 'bg-rose-100 text-rose-700 dark:bg-rose-900/25 dark:text-rose-300';
 }
 
 /**

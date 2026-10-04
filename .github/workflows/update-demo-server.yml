@@ -40,6 +40,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 # GitHub environments gate secret access and deployment admission, but do not
 # serialize jobs. Share one resource lock with the recovery workflow so two
@@ -74,6 +75,13 @@ jobs:
       mock_update_interval: ${{ steps.runtime_profile.outputs.mock_update_interval }}
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+
       - name: Resolve target tag and demo environment
         id: target
         env:
@@ -137,13 +145,6 @@ jobs:
           echo "environment_name=$ENVIRONMENT_NAME" >> "$GITHUB_OUTPUT"
           echo "Resolved demo deployment: tag=${TAG}, target=${TARGET}, environment=${ENVIRONMENT_NAME}"
 
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-          fetch-tags: true
-
       - name: Validate governed release line for selected tag
         env:
           WORKFLOW_OUTPUT_1: ${{ steps.target.outputs.tag }}
@@ -189,7 +190,7 @@ jobs:
     needs: resolve
     if: needs.resolve.outputs.skip != 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     environment: ${{ needs.resolve.outputs.environment_name }}
     env:
       DEMO_EXPECTED_HOSTNAME: ${{ vars.DEMO_EXPECTED_HOSTNAME }}
@@ -343,23 +344,27 @@ jobs:
           echo "::error::Timeout waiting for release assets"
           exit 1
 
-      - name: Materialize tagged installer
+      - name: Verify signed release and select only demo server runtime
         if: inputs.verify_only != true
         env:
           PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
-          WORKFLOW_OUTPUT_1: ${{ needs.resolve.outputs.tag }}
+          EXPECTED_VERSION: ${{ needs.resolve.outputs.tag }}
         run: |
           set -euo pipefail
-          TAG="${WORKFLOW_OUTPUT_1}"
           TRUSTED_SSH_PUBLIC_KEY="$(
             go run ./scripts/release_update_key.go public-key-ssh \
               --public-key "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" \
               --comment pulse-installer
           )"
-          git show "refs/tags/${TAG}:install.sh" > /tmp/pulse-install.sh
-          sed -i "s|^PINNED_RELEASE_SSH_PUBLIC_KEY=.*|PINNED_RELEASE_SSH_PUBLIC_KEY=\"${TRUSTED_SSH_PUBLIC_KEY}\"|" /tmp/pulse-install.sh
-          grep -F "PINNED_RELEASE_SSH_PUBLIC_KEY=\"${TRUSTED_SSH_PUBLIC_KEY}\"" /tmp/pulse-install.sh
-          chmod +x /tmp/pulse-install.sh
+          asset="pulse-${EXPECTED_VERSION}-linux-amd64.tar.gz"
+          curl --disable --fail --location --silent --show-error --max-time 300 \
+            -o /tmp/pulse-demo-release.tgz "https://github.com/rcourtman/Pulse/releases/download/${EXPECTED_VERSION}/${asset}"
+          curl --disable --fail --location --silent --show-error --max-time 30 \
+            -o /tmp/pulse-demo-release.sshsig "https://github.com/rcourtman/Pulse/releases/download/${EXPECTED_VERSION}/${asset}.sshsig"
+          printf 'pulse-installer %s\n' "$TRUSTED_SSH_PUBLIC_KEY" > /tmp/pulse-demo-signers
+          ssh-keygen -Y verify -f /tmp/pulse-demo-signers -I pulse-installer \
+            -n pulse-install -s /tmp/pulse-demo-release.sshsig < /tmp/pulse-demo-release.tgz
+          python3 .github/scripts/dispatch-demo-runtime.py prepare
 
       - name: Tailscale
         id: tailscale
@@ -450,309 +455,42 @@ jobs:
           echo "::error::Verification-only check found a demo version mismatch; refusing to update the host."
           exit 1
 
-      - name: Prepare demo host storage
-        if: inputs.verify_only != true && steps.current.outputs.skip_current != 'true'
-        env:
-          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
-          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
-          WORKFLOW_OUTPUT_1: ${{ steps.config.outputs.service_name }}
-        run: |
-          set -euo pipefail
-          SERVICE_NAME="${WORKFLOW_OUTPUT_1}"
-          REMOTE_SCRIPT=$(cat <<'EOF'
-          set -euo pipefail
-          SERVICE_NAME="$1"
-          CONFIG_DIR="/etc/${SERVICE_NAME:-pulse}"
-          BACKUP_PARENT="$(dirname "$CONFIG_DIR")"
-          BACKUP_BASENAME="$(basename "$CONFIG_DIR")"
-          KEEP_BACKUPS=2
-          BACKUP_MARGIN_KB=$((64 * 1024))
-
-          echo "Demo host filesystem before cleanup:"
-          df -h "$BACKUP_PARENT" /tmp || true
-
-          mapfile -t old_backups < <(
-            sudo find "$BACKUP_PARENT" -maxdepth 1 -type d -name "${BACKUP_BASENAME}.backup.*" -printf '%T@ %p\n' 2>/dev/null \
-              | sort -nr \
-              | awk -v keep="$KEEP_BACKUPS" 'NR > keep {sub(/^[^ ]+ /, ""); print}'
-          )
-          if ((${#old_backups[@]} > 0)); then
-            printf 'Removing %d old demo backup directorie(s).\n' "${#old_backups[@]}"
-            printf '%s\0' "${old_backups[@]}" | sudo xargs -0 rm -rf --
-          fi
-
-          if [[ -d "$CONFIG_DIR" ]]; then
-            config_kb="$(sudo du -sk "$CONFIG_DIR" | awk 'NR == 1 {print $1}')"
-            free_kb="$(df -Pk "$BACKUP_PARENT" | awk 'NR == 2 {print $4}')"
-            required_kb=$((config_kb + BACKUP_MARGIN_KB))
-            if ((free_kb < required_kb)); then
-              mapfile -t remaining_backups < <(
-                sudo find "$BACKUP_PARENT" -maxdepth 1 -type d -name "${BACKUP_BASENAME}.backup.*" -printf '%T@ %p\n' 2>/dev/null \
-                  | sort -n \
-                  | awk '{sub(/^[^ ]+ /, ""); print}'
-              )
-              for backup_dir in "${remaining_backups[@]}"; do
-                printf 'Removing demo backup to restore install headroom: %s\n' "$backup_dir"
-                sudo rm -rf -- "$backup_dir"
-                free_kb="$(df -Pk "$BACKUP_PARENT" | awk 'NR == 2 {print $4}')"
-                if ((free_kb >= required_kb)); then
-                  break
-                fi
-              done
-            fi
-            pruned_volatile=false
-            if ((free_kb < required_kb)); then
-              echo "Pruning demo volatile runtime stores to restore install headroom."
-              if command -v systemctl >/dev/null 2>&1; then
-                sudo systemctl stop "$SERVICE_NAME" || true
-              fi
-              mapfile -d '' volatile_paths < <(
-                sudo find "$CONFIG_DIR" -xdev -type f \( \
-                  -name "metrics.db" -o \
-                  -name "metrics.db-shm" -o \
-                  -name "metrics.db-wal" -o \
-                  -name "notification_queue.db" -o \
-                  -name "notification_queue.db-shm" -o \
-                  -name "notification_queue.db-wal" -o \
-                  -name "deploy.db" -o \
-                  -name "deploy.db-shm" -o \
-                  -name "deploy.db-wal" \
-                \) -print0 2>/dev/null || true
-              )
-              for volatile_path in "${volatile_paths[@]}"; do
-                printf 'Removing demo volatile store: %s\n' "$(basename "$volatile_path")"
-                sudo rm -f -- "$volatile_path"
-                pruned_volatile=true
-              done
-              config_kb="$(sudo du -sk "$CONFIG_DIR" | awk 'NR == 1 {print $1}')"
-              free_kb="$(df -Pk "$BACKUP_PARENT" | awk 'NR == 2 {print $4}')"
-              required_kb=$((config_kb + BACKUP_MARGIN_KB))
-            fi
-            if ((free_kb < required_kb)); then
-              echo "::error::Demo host does not have enough free space to back up $CONFIG_DIR before install."
-              echo "Config: ${config_kb}KB, available: ${free_kb}KB, required: ${required_kb}KB"
-              sudo find "$BACKUP_PARENT" -maxdepth 1 -type d -name "${BACKUP_BASENAME}.backup.*" -printf '%TY-%Tm-%Td %TH:%TM %p\n' 2>/dev/null | sort || true
-              if [[ "$pruned_volatile" == "true" ]] && command -v systemctl >/dev/null 2>&1; then
-                sudo systemctl start "$SERVICE_NAME" || true
-              fi
-              exit 1
-            fi
-          fi
-
-          echo "Demo host filesystem after cleanup:"
-          df -h "$BACKUP_PARENT" /tmp || true
-          EOF
-          )
-          ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" "bash -s -- $(printf '%q ' "$SERVICE_NAME")" <<<"$REMOTE_SCRIPT"
-
-      - name: Upload tagged installer
-        if: inputs.verify_only != true && steps.current.outputs.skip_current != 'true'
-        env:
-          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
-          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
-        run: |
-          set -euo pipefail
-          scp -i ~/.ssh/id_ed25519 /tmp/pulse-install.sh "$DEMO_SERVER_USER@$DEMO_SERVER_HOST:/tmp/pulse-install.sh"
-
-      - name: Update demo server
-        if: inputs.verify_only != true && steps.current.outputs.skip_current != 'true'
-        env:
-          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
-          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
-          WORKFLOW_OUTPUT_1: ${{ needs.resolve.outputs.tag }}
-          WORKFLOW_OUTPUT_2: ${{ steps.config.outputs.service_name }}
-        run: |
-          set -euo pipefail
-          TAG="${WORKFLOW_OUTPUT_1}"
-          SERVICE_NAME="${WORKFLOW_OUTPUT_2}"
-          REMOTE_SCRIPT=$(cat <<'EOF'
-          set -euo pipefail
-          TAG="$1"
-          SERVICE_NAME="$2"
-          INSTALLER_ENV=()
-          if [ -n "$SERVICE_NAME" ]; then
-            INSTALLER_ENV+=("PULSE_SERVICE_NAME=$SERVICE_NAME")
-          fi
-          sudo env "${INSTALLER_ENV[@]}" bash /tmp/pulse-install.sh --version "$TAG"
-          rm -f /tmp/pulse-install.sh
-          EOF
-          )
-          ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
-            "bash -s -- $(printf '%q ' "$TAG" "$SERVICE_NAME")" <<<"$REMOTE_SCRIPT"
-
-      - name: Restore demo runtime configuration
+      - name: Apply guarded demo transaction
         if: inputs.verify_only != true
         env:
+          GH_TOKEN: ${{ github.token }}
           DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
-          WORKFLOW_OUTPUT_1: ${{ steps.config.outputs.service_name }}
-          WORKFLOW_OUTPUT_2: ${{ needs.resolve.outputs.mock_nodes }}
-          WORKFLOW_OUTPUT_3: ${{ needs.resolve.outputs.mock_vms_per_node }}
-          WORKFLOW_OUTPUT_4: ${{ needs.resolve.outputs.mock_lxcs_per_node }}
-          WORKFLOW_OUTPUT_5: ${{ needs.resolve.outputs.mock_docker_hosts }}
-          WORKFLOW_OUTPUT_6: ${{ needs.resolve.outputs.mock_docker_containers }}
-          WORKFLOW_OUTPUT_7: ${{ needs.resolve.outputs.mock_generic_hosts }}
-          WORKFLOW_OUTPUT_8: ${{ needs.resolve.outputs.mock_k8s_clusters }}
-          WORKFLOW_OUTPUT_9: ${{ needs.resolve.outputs.mock_k8s_nodes }}
-          WORKFLOW_OUTPUT_10: ${{ needs.resolve.outputs.mock_k8s_pods }}
-          WORKFLOW_OUTPUT_11: ${{ needs.resolve.outputs.mock_k8s_deployments }}
-          WORKFLOW_OUTPUT_12: ${{ needs.resolve.outputs.mock_seed_duration }}
-          WORKFLOW_OUTPUT_13: ${{ needs.resolve.outputs.mock_sample_interval }}
-          WORKFLOW_OUTPUT_14: ${{ needs.resolve.outputs.mock_update_interval }}
+          EXPECTED_VERSION: ${{ needs.resolve.outputs.tag }}
+          CURRENT_MATCHES: ${{ steps.current.outputs.skip_current }}
+          MOCK_NODES: ${{ needs.resolve.outputs.mock_nodes }}
+          MOCK_VMS_PER_NODE: ${{ needs.resolve.outputs.mock_vms_per_node }}
+          MOCK_LXCS_PER_NODE: ${{ needs.resolve.outputs.mock_lxcs_per_node }}
+          MOCK_DOCKER_HOSTS: ${{ needs.resolve.outputs.mock_docker_hosts }}
+          MOCK_DOCKER_CONTAINERS: ${{ needs.resolve.outputs.mock_docker_containers }}
+          MOCK_GENERIC_HOSTS: ${{ needs.resolve.outputs.mock_generic_hosts }}
+          MOCK_K8S_CLUSTERS: ${{ needs.resolve.outputs.mock_k8s_clusters }}
+          MOCK_K8S_NODES: ${{ needs.resolve.outputs.mock_k8s_nodes }}
+          MOCK_K8S_PODS: ${{ needs.resolve.outputs.mock_k8s_pods }}
+          MOCK_K8S_DEPLOYMENTS: ${{ needs.resolve.outputs.mock_k8s_deployments }}
+          MOCK_SEED_DURATION: ${{ needs.resolve.outputs.mock_seed_duration }}
+          MOCK_SAMPLE_INTERVAL: ${{ needs.resolve.outputs.mock_sample_interval }}
+          MOCK_UPDATE_INTERVAL: ${{ needs.resolve.outputs.mock_update_interval }}
         run: |
           set -euo pipefail
-          SERVICE_NAME="${WORKFLOW_OUTPUT_1}"
-          MOCK_NODES="${WORKFLOW_OUTPUT_2}"
-          MOCK_VMS_PER_NODE="${WORKFLOW_OUTPUT_3}"
-          MOCK_LXCS_PER_NODE="${WORKFLOW_OUTPUT_4}"
-          MOCK_DOCKER_HOSTS="${WORKFLOW_OUTPUT_5}"
-          MOCK_DOCKER_CONTAINERS="${WORKFLOW_OUTPUT_6}"
-          MOCK_GENERIC_HOSTS="${WORKFLOW_OUTPUT_7}"
-          MOCK_K8S_CLUSTERS="${WORKFLOW_OUTPUT_8}"
-          MOCK_K8S_NODES="${WORKFLOW_OUTPUT_9}"
-          MOCK_K8S_PODS="${WORKFLOW_OUTPUT_10}"
-          MOCK_K8S_DEPLOYMENTS="${WORKFLOW_OUTPUT_11}"
-          MOCK_SEED_DURATION="${WORKFLOW_OUTPUT_12}"
-          MOCK_SAMPLE_INTERVAL="${WORKFLOW_OUTPUT_13}"
-          MOCK_UPDATE_INTERVAL="${WORKFLOW_OUTPUT_14}"
-          REMOTE_SCRIPT=$(cat <<'EOF'
-          set -euo pipefail
-          SERVICE_NAME="${1:-pulse}"
-          DEMO_LOCAL_BASE_URL="$2"
-          MOCK_NODES="$3"
-          MOCK_VMS_PER_NODE="$4"
-          MOCK_LXCS_PER_NODE="$5"
-          MOCK_DOCKER_HOSTS="$6"
-          MOCK_DOCKER_CONTAINERS="$7"
-          MOCK_GENERIC_HOSTS="$8"
-          MOCK_K8S_CLUSTERS="$9"
-          MOCK_K8S_NODES="${10}"
-          MOCK_K8S_PODS="${11}"
-          MOCK_K8S_DEPLOYMENTS="${12}"
-          MOCK_SEED_DURATION="${13}"
-          MOCK_SAMPLE_INTERVAL="${14}"
-          MOCK_UPDATE_INTERVAL="${15}"
-          CONFIG_DIR="/etc/${SERVICE_NAME:-pulse}"
-          SERVICE_USER="$(systemctl show "$SERVICE_NAME" --property=User --value 2>/dev/null || true)"
-          SERVICE_GROUP="$(systemctl show "$SERVICE_NAME" --property=Group --value 2>/dev/null || true)"
-          SERVICE_USER="${SERVICE_USER:-pulse}"
-          SERVICE_GROUP="${SERVICE_GROUP:-$SERVICE_USER}"
+          MODE=update
+          if [ "$CURRENT_MATCHES" = "true" ]; then MODE=recover; fi
+          python3 .github/scripts/dispatch-demo-runtime.py "$MODE" > demo-runtime-transaction.json
+          jq -e '.schema_version == 2 and (.status == "committed" or .status == "healthy_noop") and .forward.elapsed_seconds >= 300' demo-runtime-transaction.json
 
-          resolve_config_dir() {
-            local fallback="$CONFIG_DIR"
-            local unit_env=""
-            local fragment=""
-            unit_env="$(systemctl show "$SERVICE_NAME" --property=Environment --value 2>/dev/null || true)"
-            for entry in $unit_env; do
-              case "$entry" in
-                PULSE_DATA_DIR=*)
-                  printf '%s\n' "${entry#PULSE_DATA_DIR=}"
-                  return 0
-                  ;;
-              esac
-            done
-
-            fragment="$(systemctl show "$SERVICE_NAME" --property=FragmentPath --value 2>/dev/null || true)"
-            if [ -n "$fragment" ] && sudo test -r "$fragment"; then
-              local unit_data_dir
-              unit_data_dir="$(sudo sed -n -E 's/^Environment="?PULSE_DATA_DIR=([^"]*)"?$/\1/p' "$fragment" | tail -1)"
-              if [ -n "$unit_data_dir" ]; then
-                printf '%s\n' "$unit_data_dir"
-                return 0
-              fi
-            fi
-
-            printf '%s\n' "$fallback"
-          }
-
-          CONFIG_DIR="$(resolve_config_dir)"
-          ENV_FILE="$CONFIG_DIR/.env"
-
-          set_env_value() {
-            local key="$1"
-            local value="$2"
-            sudo mkdir -p "$CONFIG_DIR"
-            if sudo test -f "$ENV_FILE"; then
-              if sudo grep -Eq "^[[:space:]]*${key}=" "$ENV_FILE"; then
-                sudo sed -i "s|^[[:space:]]*${key}=.*|${key}=${value}|" "$ENV_FILE"
-              else
-                printf '\n%s=%s\n' "$key" "$value" | sudo tee -a "$ENV_FILE" >/dev/null
-              fi
-            else
-              printf '# Pulse demo runtime configuration\n%s=%s\n' "$key" "$value" | sudo tee "$ENV_FILE" >/dev/null
-            fi
-          }
-
-          ensure_demo_fixture_entitlement() {
-            local billing_file="$CONFIG_DIR/billing.json"
-            local tmp_file
-            tmp_file="$(mktemp)"
-            sudo mkdir -p "$CONFIG_DIR"
-
-            if sudo test -s "$billing_file" && sudo jq '
-                .capabilities = (((.capabilities // []) + ["demo_fixtures"]) | unique)
-                | .limits = (.limits // {})
-                | .meters_enabled = (.meters_enabled // [])
-                | .plan_version = (if (.plan_version // "") == "" then "community" else .plan_version end)
-                | .subscription_state = (if (.subscription_state // "") == "" then "active" else .subscription_state end)
-                | del(.integrity)
-              ' "$billing_file" > "$tmp_file"; then
-              :
-            else
-              cat > "$tmp_file" <<'JSON'
-          {"capabilities":["demo_fixtures"],"limits":{},"meters_enabled":[],"plan_version":"community","subscription_state":"active"}
-          JSON
-            fi
-
-            sudo tee "$billing_file" < "$tmp_file" >/dev/null
-            rm -f "$tmp_file"
-            sudo chown "$SERVICE_USER:$SERVICE_GROUP" "$billing_file" || sudo chown "$SERVICE_USER" "$billing_file" || true
-            sudo chmod 600 "$billing_file"
-            echo "Demo fixture entitlement ensured in governed demo billing state."
-          }
-
-          set_env_value DEMO_MODE true
-          set_env_value PULSE_MOCK_MODE true
-          set_env_value PULSE_MOCK_NODES "$MOCK_NODES"
-          set_env_value PULSE_MOCK_VMS_PER_NODE "$MOCK_VMS_PER_NODE"
-          set_env_value PULSE_MOCK_LXCS_PER_NODE "$MOCK_LXCS_PER_NODE"
-          set_env_value PULSE_MOCK_DOCKER_HOSTS "$MOCK_DOCKER_HOSTS"
-          set_env_value PULSE_MOCK_DOCKER_CONTAINERS "$MOCK_DOCKER_CONTAINERS"
-          set_env_value PULSE_MOCK_GENERIC_HOSTS "$MOCK_GENERIC_HOSTS"
-          set_env_value PULSE_MOCK_K8S_CLUSTERS "$MOCK_K8S_CLUSTERS"
-          set_env_value PULSE_MOCK_K8S_NODES "$MOCK_K8S_NODES"
-          set_env_value PULSE_MOCK_K8S_PODS "$MOCK_K8S_PODS"
-          set_env_value PULSE_MOCK_K8S_DEPLOYMENTS "$MOCK_K8S_DEPLOYMENTS"
-          set_env_value PULSE_MOCK_RANDOM_METRICS true
-          set_env_value PULSE_MOCK_STOPPED_PERCENT 6
-          # Never carry the isolated local-dev metrics-store opt-in onto the
-          # persistent public demo data directory.
-          set_env_value PULSE_MOCK_SEED_METRICS_STORE false
-          set_env_value PULSE_MOCK_TRENDS_SEED_DURATION "$MOCK_SEED_DURATION"
-          set_env_value PULSE_MOCK_TRENDS_SAMPLE_INTERVAL "$MOCK_SAMPLE_INTERVAL"
-          set_env_value PULSE_MOCK_UPDATE_INTERVAL "$MOCK_UPDATE_INTERVAL"
-
-          ensure_demo_fixture_entitlement
-
-          sudo chown "$SERVICE_USER:$SERVICE_GROUP" "$ENV_FILE" || sudo chown "$SERVICE_USER" "$ENV_FILE" || true
-          sudo chmod 600 "$ENV_FILE"
-          sudo systemctl daemon-reload
-          sudo systemctl restart "$SERVICE_NAME"
-
-          for attempt in $(seq 1 30); do
-            if curl -fsS "${DEMO_LOCAL_BASE_URL}/api/health" >/dev/null; then
-              echo "Demo service restarted with governed demo runtime configuration."
-              exit 0
-            fi
-            sleep 2
-          done
-
-          echo "::error::Demo service did not become healthy after restoring demo runtime configuration."
-          exit 1
-          EOF
-          )
-          ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
-            "bash -s -- $(printf '%q ' "$SERVICE_NAME" "$DEMO_LOCAL_BASE_URL" "$MOCK_NODES" "$MOCK_VMS_PER_NODE" "$MOCK_LXCS_PER_NODE" "$MOCK_DOCKER_HOSTS" "$MOCK_DOCKER_CONTAINERS" "$MOCK_GENERIC_HOSTS" "$MOCK_K8S_CLUSTERS" "$MOCK_K8S_NODES" "$MOCK_K8S_PODS" "$MOCK_K8S_DEPLOYMENTS" "$MOCK_SEED_DURATION" "$MOCK_SAMPLE_INTERVAL" "$MOCK_UPDATE_INTERVAL")" <<<"$REMOTE_SCRIPT"
+      - name: Retain guarded demo transaction evidence
+        if: always() && inputs.verify_only != true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: stable-demo-transaction-${{ github.run_id }}
+          path: demo-runtime-transaction.json
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Verify demo runtime
         env:

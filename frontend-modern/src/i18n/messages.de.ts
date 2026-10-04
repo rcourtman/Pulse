@@ -222,42 +222,42 @@ export const DE_MESSAGE_OVERRIDES = {
     'Ihr Admin-Konto ist bereit und Pulse empfaengt bereits Telemetrie. Oeffnen Sie Infrastruktur, um das erste System zu pruefen, und kehren Sie zu Infrastruktur hinzufuegen zurueck, wenn Sie eine weitere Plattform-API- oder Agent-Quelle wollen.',
   'setup.completion.hero.connected.title': 'Erstes ueberwachtes System verbunden',
   'setup.completion.hero.empty.description':
-    'Ihr Admin-Konto ist bereit. Waehlen Sie als Naechstes, wie das erste System in das einheitliche Infrastrukturmodell gelangt: Plattform-API-Inventar, Pulse Agent-Telemetrie oder beides.',
-  'setup.completion.hero.empty.title': 'Erste Infrastrukturquelle waehlen',
+    'Ihr Admin-Konto ist bereit. Legen Sie als Naechstes fest, was Pulse ueberwachen soll: einen Proxmox-Server, ein NAS, VMware oder einen beliebigen Linux-, Windows- oder macOS-Rechner.',
+  'setup.completion.hero.empty.title': 'Erstes System verbinden',
   'setup.completion.nextStep.ariaLabel': 'Naechster Einrichtungsschritt',
   'setup.completion.nextStep.badge': 'Empfohlener naechster Schritt',
   'setup.completion.nextStep.detail.agent':
-    'Infrastruktur hinzufuegen bleibt fuer weitere Pulse Agent-Systeme oder Plattform-API-Inventar verfuegbar, wenn eine Plattform die Umgebung verwaltet.',
+    'Ueber Infrastruktur hinzufuegen koennen Sie jederzeit weitere Rechner hinzufuegen oder eine Plattform wie Proxmox ueber ihre API verbinden.',
   'setup.completion.nextStep.detail.api':
-    'Infrastruktur hinzufuegen bleibt fuer weitere API-gestuetzte Systeme oder Pulse Agent-Telemetrie verfuegbar, wenn ein System lokale Knotenabdeckung braucht.',
+    'Ueber Infrastruktur hinzufuegen koennen Sie jederzeit weitere Systeme verbinden oder Pulse Agent auf Proxmox-Knoten fuer lokale Telemetrie wie Temperaturen und SMART-Daten installieren, sofern verfuegbar.',
   'setup.completion.nextStep.detail.both':
-    'Infrastruktur hinzufuegen bleibt jederzeit verfuegbar, wenn Sie dieses erste System um eine weitere API-Quelle, Agent-Quelle oder beides erweitern wollen.',
+    'Ueber Infrastruktur hinzufuegen koennen Sie jederzeit weitere Systeme per API, mit dem Agent oder mit beidem verbinden.',
   'setup.completion.nextStep.detail.empty':
-    'Beginnen Sie mit einer Plattform-API, wenn eine Plattform die Umgebung verwaltet. Installieren Sie Pulse Agent, wenn das System selbst lokale Knotentelemetrie melden soll.',
+    'Verbinden Sie Proxmox, TrueNAS oder VMware ueber ihre API oder fuehren Sie den Pulse Agent-Installer auf einem eigenstaendigen Rechner aus. Auf Proxmox-Knoten kann der Agent verfuegbare lokale Temperaturen und SMART-Daten ergaenzen.',
   'setup.completion.nextStep.label': 'Naechster Schritt',
   'setup.completion.nextStep.summary.connected.singular':
     'Oeffnen Sie Infrastruktur, um Ihr erstes verbundenes System zu pruefen.',
   'setup.completion.nextStep.summary.connected.plural':
     'Oeffnen Sie Infrastruktur, um Ihre verbundenen Systeme zu pruefen.',
   'setup.completion.nextStep.summary.empty':
-    'Oeffnen Sie Infrastruktur hinzufuegen, um eine Plattform-API, Pulse Agent oder beides zu waehlen.',
+    'Oeffnen Sie Infrastruktur hinzufuegen und waehlen Sie eine Plattform-API oder einen Rechner, auf dem Sie Pulse Agent installieren.',
   'setup.completion.nextStep.title.connected': 'Infrastruktur oeffnen',
-  'setup.completion.nextStep.title.empty': 'Strategie fuer erste Quelle waehlen',
+  'setup.completion.nextStep.title.empty': 'Erstes System zur Ueberwachung hinzufuegen',
   'setup.completion.proActivation.action': 'Aktivierungsschluessel eingeben',
   'setup.completion.proActivation.description':
     'Dieser Server laeuft mit dem Pulse Pro Build, aber ohne aktive Lizenz. Geben Sie den Aktivierungsschluessel aus Ihrer Kauf-E-Mail ein, um die Pro-Funktionen freizuschalten.',
   'setup.completion.proActivation.title': 'Pulse Pro aktivieren',
   'setup.completion.resource.unknownName': 'Unbekannt',
   'setup.completion.sourceOptions.agent.description':
-    'Knotenlokale Telemetrie fuer eigenstaendige Hosts, Dienste, Docker und Kubernetes.',
+    'Fuehren Sie den Installer auf einem Linux-, Windows- oder macOS-Rechner aus. Der Agent meldet Rechnertelemetrie. Temperaturen, SMART, Docker und Kubernetes sind nur verfuegbar, wenn Rechner und Einrichtung sie unterstuetzen.',
   'setup.completion.sourceOptions.agent.title': 'Pulse Agent',
   'setup.completion.sourceOptions.both.description':
-    'Kombinieren Sie Plattforminventar mit Agent-Telemetrie, wenn vollstaendige Abdeckung wichtig ist.',
+    'Verbinden Sie Proxmox per API fuer den ganzen Cluster und fuegen Sie den Agent auf Knoten hinzu, auf denen Sie lokale Telemetrie wie Temperaturen und SMART-Daten sehen moechten, sofern verfuegbar.',
   'setup.completion.sourceOptions.both.title': 'Beides verwenden',
   'setup.completion.sourceOptions.platformApi.description':
-    'Inventar und Zustand aus Proxmox, TrueNAS, VMware, PBS oder PMG.',
-  'setup.completion.sourceOptions.platformApi.title': 'Plattform-API',
-  'setup.completion.sourceOptions.title': 'Quellenoptionen',
+    'Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, TrueNAS oder VMware. Pulse liest VMs, Speicher und Zustand ueber die Plattform-API.',
+  'setup.completion.sourceOptions.platformApi.title': 'Per API verbinden',
+  'setup.completion.sourceOptions.title': 'Verbindungswege',
   'setup.progress.ariaLabel': 'Einrichtungsfortschritt',
   'setup.progress.state.completed': ', abgeschlossen',
   'setup.progress.state.current': ', aktuell',
@@ -317,6 +317,8 @@ export const DE_MESSAGE_OVERRIDES = {
     'Pulse scheint in Docker zu laufen. Fuehren Sie den Befehl auf dem Docker-Host aus und ersetzen Sie <pulse-container> durch den Namen des laufenden Pulse-Containers.',
   'setup.welcome.deploymentHint.lxc':
     'Pulse scheint in LXC-Container {ctid} zu laufen. Fuehren Sie den Befehl auf dem Proxmox-Host aus, um in diesen Container zu wechseln und das einmalige Setup-Token auszugeben.',
+  'setup.welcome.deploymentLabel.containerConsole':
+    'Container-Konsole (Unraid, Portainer, TrueNAS-Apps)',
   'setup.welcome.deploymentLabel.containerized': 'Containerisierte Bereitstellung',
   'setup.welcome.deploymentLabel.direct': 'Direkte Host-Installation',
   'setup.welcome.deploymentLabel.docker': 'Docker-Bereitstellung',
@@ -486,11 +488,11 @@ export const DE_MESSAGE_OVERRIDES = {
     'Verwalten Sie Backup-/Snapshot-Abfragen sowie Export- und Importablaeufe der Konfiguration.',
   'settings.header.systemRecovery.title': 'Wiederherstellung',
   'settings.header.systemRelay.description':
-    'Behalten Sie Ihre Systeme von ueberall im Blick und erhalten Sie Alarm-Push-Benachrichtigungen ueber die Pulse-Mobile-App — ohne Portfreigaben oder VPN.',
-  'settings.header.systemRelay.title': 'Remote-Zugriff',
+    'Verbinden Sie gekoppelte Pulse-Mobile-Geraete mit dieser Instanz. Pulse Mobile wird am 31. Maerz 2027 eingestellt. Gekoppelte Telefone funktionieren bis dahin weiter.',
+  'settings.header.systemRelay.title': 'Pulse Mobile',
   'settings.header.systemUpdates.description':
-    'Verwalten Sie Versionspruefungen, Update-Kanaele und automatische Updates der Pulse-Server-Laufzeit. Agent-Updates bleiben unter Infrastruktur.',
-  'settings.header.systemUpdates.title': 'Pulse-Server-Updates',
+    'Suchen Sie nach neuen Pulse-Versionen, waehlen Sie einen Update-Kanal und verwalten Sie automatische Updates. Agent-Updates bleiben unter Infrastruktur.',
+  'settings.header.systemUpdates.title': 'Updates',
   'settings.header.supportDiagnostics.description':
     'Fuehren Sie Zustandspruefungen aus, validieren Sie Verbindungen und exportieren Sie Troubleshooting-Snapshots.',
   'settings.header.supportDiagnostics.title': 'Diagnose & Zustand',
@@ -527,14 +529,14 @@ export const DE_MESSAGE_OVERRIDES = {
   'settings.nav.item.plans': 'Plaene & Abrechnung',
   'settings.nav.item.providerModels': 'Anbieter & Modelle',
   'settings.nav.item.recovery': 'Wiederherstellung',
-  'settings.nav.item.remoteAccess': 'Remote-Zugriff',
+  'settings.nav.item.remoteAccess': 'Pulse Mobile',
   'settings.nav.item.resourcePrivacy': 'Ressourcenschutz',
   'settings.nav.item.roles': 'Rollen',
   'settings.nav.item.securityOverview': 'Sicherheitsuebersicht',
   'settings.nav.item.sharing': 'Freigabe',
   'settings.nav.item.singleSignOn': 'Single Sign-On',
   'settings.nav.item.systemLogs': 'Systemprotokolle',
-  'settings.nav.item.updates': 'Pulse-Server-Updates',
+  'settings.nav.item.updates': 'Updates',
   'settings.nav.item.users': 'Benutzer',
   'settings.shell.collapseSidebarLabel': 'Einstellungsnavigation einklappen',
   'settings.shell.configurationLoading': 'Konfiguration wird geladen...',

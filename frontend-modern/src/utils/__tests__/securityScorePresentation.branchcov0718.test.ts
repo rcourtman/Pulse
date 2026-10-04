@@ -39,13 +39,13 @@ describe('securityScorePresentation — branch coverage (batch 0718)', () => {
       expect(out).toMatchObject({ label: 'Strong', icon: 'shield-check' });
       // Pin every tone field so a silent class rename fails loudly.
       expect(out.tone).toEqual({
-        headerBg: 'bg-emerald-50 dark:bg-emerald-950',
+        headerBg: 'bg-emerald-50 dark:bg-emerald-950/25',
         headerBorder: 'border-b border-emerald-200 dark:border-emerald-800',
-        iconWrap: 'bg-emerald-100 dark:bg-emerald-900',
+        iconWrap: 'bg-emerald-100 dark:bg-emerald-900/25',
         icon: 'text-emerald-700 dark:text-emerald-300',
         subtitle: 'text-emerald-700 dark:text-emerald-300',
         score: 'text-emerald-800 dark:text-emerald-200',
-        badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+        badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300',
       });
     });
 
@@ -55,7 +55,7 @@ describe('securityScorePresentation — branch coverage (batch 0718)', () => {
         icon: 'shield',
       });
       expect(getSecurityScorePresentation(79).tone.badge).toBe(
-        'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+        'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
       );
     });
 
@@ -64,7 +64,9 @@ describe('securityScorePresentation — branch coverage (batch 0718)', () => {
         label: 'Moderate',
         icon: 'shield',
       });
-      expect(getSecurityScorePresentation(50).tone.headerBg).toBe('bg-amber-50 dark:bg-amber-950');
+      expect(getSecurityScorePresentation(50).tone.headerBg).toBe(
+        'bg-amber-50 dark:bg-amber-950/25',
+      );
     });
 
     it('treats score === 49 as Weak (one below the Moderate boundary)', () => {
@@ -81,7 +83,7 @@ describe('securityScorePresentation — branch coverage (batch 0718)', () => {
       const out = getSecurityScorePresentation(0);
       expect(out).toMatchObject({ label: 'Weak', icon: 'shield-alert' });
       expect(out.tone.score).toBe('text-rose-800 dark:text-rose-200');
-      expect(out.tone.iconWrap).toBe('bg-rose-100 dark:bg-rose-900');
+      expect(out.tone.iconWrap).toBe('bg-rose-100 dark:bg-rose-900/25');
     });
   });
 
@@ -100,7 +102,7 @@ describe('securityScorePresentation — branch coverage (batch 0718)', () => {
         'Authentication is enabled, but this Pulse instance is still missing HTTPS, an API token, and protected exports.',
       );
       // Score 60 -> Moderate posture -> yellow tone.
-      expect(out.background).toBe('bg-yellow-50 dark:bg-yellow-900');
+      expect(out.background).toBe('bg-yellow-50 dark:bg-yellow-900/25');
       expect(out.border).toBe('border-yellow-200 dark:border-yellow-800');
       expect(out.messageClass).toBe('text-base-content');
     });
@@ -135,7 +137,7 @@ describe('securityScorePresentation — branch coverage (batch 0718)', () => {
         'Review the remaining security settings before using this instance for live infrastructure.',
       );
       // Weak score (40 < 50) -> non-Moderate arm -> red tone despite auth ok.
-      expect(out.background).toBe('bg-red-50 dark:bg-red-900');
+      expect(out.background).toBe('bg-red-50 dark:bg-red-900/25');
       expect(out.border).toBe('border-red-200 dark:border-red-800');
     });
 
@@ -167,7 +169,7 @@ describe('securityScorePresentation — branch coverage (batch 0718)', () => {
       expect(out.message).toBe(
         'Authentication is enabled, but this Pulse instance is still missing HTTPS.',
       );
-      expect(out.background).toBe('bg-red-50 dark:bg-red-900');
+      expect(out.background).toBe('bg-red-50 dark:bg-red-900/25');
       expect(out.border).toBe('border-red-200 dark:border-red-800');
     });
   });

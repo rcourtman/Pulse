@@ -61,6 +61,12 @@ class WorkflowTrustTest(unittest.TestCase):
         self.assertIn("^Test(InstallPS1|WindowsAgentLifecycle)", native)
         self.assertIn("node-version: '24'", native)
 
+    def test_browser_release_uses_governed_node_line(self) -> None:
+        browser = (REPO_ROOT / ".github/workflows/qualify-browser-update-release.yml").read_text()
+        self.assertEqual(browser.count("actions/setup-node@"), 1)
+        self.assertIn("node-version: '24'", browser)
+        self.assertNotIn("node-version: '24.", browser)
+
     def test_accepts_immutable_dependencies_and_explicit_checkout_credentials(self) -> None:
         findings = self.audit(
             f"""permissions:

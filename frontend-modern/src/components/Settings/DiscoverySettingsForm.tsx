@@ -29,7 +29,7 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
   const scanScopeOptionClass = (mode: 'auto' | 'custom') =>
     `flex w-full items-start gap-3 rounded-md border p-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
       props.discoveryMode() === mode
-        ? 'border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900'
+        ? 'border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/25'
         : scanScopeLocked()
           ? 'border-transparent'
           : 'border-transparent hover:border-border'
@@ -193,7 +193,7 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
                             class={`rounded border px-2.5 py-1 text-[0.7rem] transition-colors ${
                               isActive
                                 ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500'
-                                : 'border-border text-base-content hover:border-blue-400 hover:bg-blue-50 dark:hover:border-blue-500 dark:hover:bg-blue-900'
+                                : 'border-border text-base-content hover:border-blue-400 hover:bg-blue-50 dark:hover:border-blue-500 dark:hover:bg-blue-900/25'
                             }`}
                             onClick={async () => {
                               if (scanScopeLocked()) {
@@ -263,9 +263,9 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
                 type="text"
                 value={props.discoverySubnetDraft()}
                 placeholder={subnetPresentation().placeholder}
-                class={`w-full min-h-10 rounded-md border px-3 py-2.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 sm:min-h-10 ${
+                class={`w-full min-h-10 rounded-md border px-3 py-2.5 text-sm transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500 sm:min-h-10 ${
                   props.envOverrides().discoverySubnet
-                    ? 'cursor-not-allowed border-amber-300 bg-amber-50 text-amber-800 opacity-60 dark:border-amber-600 dark:bg-amber-900 dark:text-amber-200'
+                    ? 'cursor-not-allowed border-amber-300 bg-amber-50 text-amber-800 opacity-60 dark:border-amber-600 dark:bg-amber-900/25 dark:text-amber-200'
                     : 'border-border bg-surface'
                 }`}
                 disabled={props.envOverrides().discoverySubnet}
@@ -329,7 +329,7 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
         </Show>
 
         <Show when={props.envOverrides().discoveryEnabled || props.envOverrides().discoverySubnet}>
-          <div class="rounded-md border border-amber-200 bg-amber-100 p-3 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
+          <div class="rounded-md border border-amber-200 bg-amber-100 p-3 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/25 dark:text-amber-200">
             {sectionPresentation().environmentOverrideMessage}
           </div>
         </Show>

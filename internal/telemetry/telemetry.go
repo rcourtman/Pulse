@@ -220,7 +220,12 @@ const (
 	// install, or see how the investigations that produced no plan ended. No
 	// provider ID, model name, endpoint, account identity, exact token count,
 	// finding ID, or resource ID is exported.
-	TelemetrySchemaVersion = 17
+	// Schema v18 adds update_channel (stable or rc), update_check_outcome (a
+	// closed category for the last check on that channel) and update_available.
+	// A 6.4.3-rc.1 update check failed on every call for weeks while its
+	// telemetry looked healthy, because the update counters only see applied
+	// updates. No version, URL, or error text is exported.
+	TelemetrySchemaVersion = 18
 )
 
 type installIDRecord struct {
@@ -249,6 +254,7 @@ const (
 	ServiceHealthFailureStartup         = "startup"
 	ServiceHealthFailureRuntime         = "runtime"
 	ServiceHealthFailureAPIConnectivity = "api_connectivity"
+	ServiceHealthFailureTimeout         = "timeout"
 	ServiceHealthFailureAPIStatus       = "api_status"
 	ServiceHealthFailureUIStatus        = "ui_status"
 	ServiceHealthFailureFrontendAssets  = "frontend_assets"
@@ -351,6 +357,12 @@ type Ping struct {
 	UpdateFailures30d      int `json:"update_failures_30d"`
 	// Last coarse update failure category; never raw error text.
 	UpdateLastFailureCategory string `json:"update_last_failure_category,omitempty"`
+	// Schema v18 update discovery: the channel the install follows and the
+	// closed outcome of its last check on that channel. A failed check never
+	// reaches the update counters above because nothing was applied.
+	UpdateChannel      string `json:"update_channel"`
+	UpdateCheckOutcome string `json:"update_check_outcome"`
+	UpdateAvailable    bool   `json:"update_available"`
 
 	// Local release-service observation. The probe checks the local API, UI
 	// document, and referenced frontend assets. Only booleans, a fixed failure
@@ -593,6 +605,9 @@ type Snapshot struct {
 	UpdateSuccesses30d                                                   int
 	UpdateFailures30d                                                    int
 	UpdateLastFailureCategory                                            string
+	UpdateChannel                                                        string
+	UpdateCheckOutcome                                                   string
+	UpdateAvailable                                                      bool
 	NodeTestAttempts30d                                                  int
 	NodeTestFailures30d                                                  int
 	WorkloadHistoryPreviewSessions30d                                    int
@@ -845,6 +860,48 @@ func ApplyUpdateTelemetrySnapshot(s *Snapshot, history *updates.UpdateHistory, n
 	}
 }
 
+// ApplyUpdateCheckTelemetrySnapshot adds the effective update channel and the
+// closed outcome of the last check on it. Only fixed categories leave the
+// instance; versions, URLs, and error text never do.
+func ApplyUpdateCheckTelemetrySnapshot(s *Snapshot, check updates.UpdateCheckObservation) {
+	if s == nil {
+		return
+	}
+	s.UpdateChannel = normalizeUpdateChannelForTelemetry(check.Channel)
+	s.UpdateCheckOutcome = normalizeUpdateCheckOutcomeForTelemetry(check.Outcome)
+	s.UpdateAvailable = check.Available && s.UpdateCheckOutcome == updates.UpdateCheckOutcomeAvailable
+}
+
+func normalizeUpdateChannelForTelemetry(channel string) string {
+	switch strings.ToLower(strings.TrimSpace(channel)) {
+	case "stable":
+		return "stable"
+	case "rc":
+		return "rc"
+	default:
+		return "unknown"
+	}
+}
+
+func normalizeUpdateCheckOutcomeForTelemetry(outcome string) string {
+	switch outcome = strings.ToLower(strings.TrimSpace(outcome)); outcome {
+	case updates.UpdateCheckOutcomeNotChecked,
+		updates.UpdateCheckOutcomeUpToDate,
+		updates.UpdateCheckOutcomeAvailable,
+		updates.UpdateCheckOutcomeNoRelease,
+		updates.UpdateCheckOutcomeRateLimited,
+		updates.UpdateCheckOutcomeNetworkError,
+		updates.UpdateCheckOutcomeMetadataError,
+		updates.UpdateCheckOutcomeSkipped,
+		updates.UpdateCheckOutcomeError:
+		return outcome
+	case "":
+		return updates.UpdateCheckOutcomeNotChecked
+	default:
+		return updates.UpdateCheckOutcomeError
+	}
+}
+
 func classifyUpdateFailureCategory(entry updates.UpdateHistoryEntry) string {
 	switch entry.Status {
 	case updates.StatusRolledBack:
@@ -1068,6 +1125,12 @@ var (
 //
 // This is a no-op when outbound usage telemetry is disabled.
 func Start(ctx context.Context, cfg Config) {
+	startWithDelay(ctx, cfg, startupDelay)
+}
+
+// Keep the production settling delay constant while allowing deterministic
+// tests to exercise the same background runner without a two-minute sleep.
+func startWithDelay(ctx context.Context, cfg Config, initialDelay time.Duration) {
 	if !cfg.Enabled {
 		log.Info().Msg("Outbound usage telemetry is disabled (enable via PULSE_TELEMETRY=true or Settings → System)")
 		return
@@ -1097,7 +1160,7 @@ func Start(ctx context.Context, cfg Config) {
 		defer r.wg.Done()
 
 		// Wait for the monitor to connect and populate state before the first ping.
-		startTimer := time.NewTimer(startupDelay)
+		startTimer := time.NewTimer(initialDelay)
 		select {
 		case <-ctx.Done():
 			startTimer.Stop()
@@ -1286,6 +1349,9 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.UpdateSuccesses30d = s.UpdateSuccesses30d
 	ping.UpdateFailures30d = s.UpdateFailures30d
 	ping.UpdateLastFailureCategory = s.UpdateLastFailureCategory
+	ping.UpdateChannel = normalizeUpdateChannelForTelemetry(s.UpdateChannel)
+	ping.UpdateCheckOutcome = normalizeUpdateCheckOutcomeForTelemetry(s.UpdateCheckOutcome)
+	ping.UpdateAvailable = s.UpdateAvailable && ping.UpdateCheckOutcome == updates.UpdateCheckOutcomeAvailable
 	ping.NodeTestAttempts30d = s.NodeTestAttempts30d
 	ping.NodeTestFailures30d = s.NodeTestFailures30d
 	ping.WorkloadHistoryPreviewSessions30d = s.WorkloadHistoryPreviewSessions30d

@@ -1,4 +1,5 @@
 import type { PortalBootstrapData, PortalAccessMember } from './types';
+import type { ProviderPlanAPI, ProviderPlanRefreshResult, ProviderPlanState } from './provider_plan';
 
 interface PortalAPIContext {
   getBootstrap(): PortalBootstrapData;
@@ -49,7 +50,7 @@ export interface PortalMemberRoleRequest {
   role: string;
 }
 
-export interface PortalAPI {
+export interface PortalAPI extends ProviderPlanAPI {
   fetchBootstrap(): Promise<PortalBootstrapData>;
   requestMagicLink(email: string): Promise<PortalMagicLinkResponse>;
   logout(): Promise<void>;
@@ -108,15 +109,18 @@ export function createPortalAPI(context: PortalAPIContext): PortalAPI {
     return null;
   }
 
+  // Control plane errors carry a machine code in "error" and, when there is
+  // something to tell the person, a sentence in "message". Show the sentence;
+  // older handlers put their only human text in "error", so fall back to it.
   function messageFromPayload(payload: unknown, fallback: string): string {
     if (payload && typeof payload === 'object') {
-      var errorMessage = (payload as { error?: unknown }).error;
-      if (typeof errorMessage === 'string' && errorMessage.trim()) {
-        return errorMessage;
-      }
       var message = (payload as { message?: unknown }).message;
       if (typeof message === 'string' && message.trim()) {
         return message;
+      }
+      var errorMessage = (payload as { error?: unknown }).error;
+      if (typeof errorMessage === 'string' && errorMessage.trim()) {
+        return errorMessage;
       }
     }
     if (typeof payload === 'string' && payload.trim()) {
@@ -222,6 +226,28 @@ export function createPortalAPI(context: PortalAPIContext): PortalAPI {
       return request<void>(accountURL(accountID, '/members/' + encodeURIComponent(userID)), {
         method: 'DELETE',
       }, 'Failed to remove member.');
+    },
+    fetchPlan: function(accountID: string) {
+      return request<ProviderPlanState>(accountURL(accountID, '/provider-msp/plan'), {
+        headers: { Accept: 'application/json' },
+      }, 'Your plan could not be loaded.');
+    },
+    startCheckout: function(accountID: string, planVersion: string, billingCycle: string) {
+      return request<{ url?: string }>(accountURL(accountID, '/provider-msp/checkout'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan_version: planVersion, billing_cycle: billingCycle }),
+      }, 'Checkout is unavailable right now.');
+    },
+    openBillingPortal: function(accountID: string) {
+      return request<{ url?: string }>(accountURL(accountID, '/provider-msp/billing-portal'), {
+        method: 'POST',
+      }, 'Billing is unavailable right now.');
+    },
+    refreshLicense: function(accountID: string) {
+      return request<ProviderPlanRefreshResult>(accountURL(accountID, '/provider-msp/license/refresh'), {
+        method: 'POST',
+      }, 'The licence could not be refreshed right now.');
     },
   };
 }

@@ -126,3 +126,36 @@ func TestCleanupReleasesSeedSizedCapacity(t *testing.T) {
 		t.Fatalf("cleanup still aliases the seed-sized backing array (len=%d cap-was=%d)", len(series), before)
 	}
 }
+
+func TestCleanupUsedMemoryReleasesSeedSizedCapacity(t *testing.T) {
+	for _, scope := range []string{"guest", "node"} {
+		t.Run(scope, func(t *testing.T) {
+			mh := NewMetricsHistory(3500, 4*time.Hour)
+			add := mh.AddGuestMetric
+			entries := mh.guestMetrics
+			if scope == "node" {
+				add, entries = mh.AddNodeMetric, mh.nodeMetrics
+			}
+			now := time.Now()
+			for i := 0; i < 2000; i++ {
+				add("resource", "memoryused", float64(i), now.Add(-2*time.Hour).Add(time.Duration(i)*time.Second))
+			}
+			add("resource", "memoryused", 4096, now.Add(-time.Minute))
+			add("resource", "cpu", 25, now)
+			original := entries["resource"].MemoryUsed
+			mh.retentionTime = time.Hour
+			mh.Cleanup()
+			series := entries["resource"].MemoryUsed
+			if len(series) != 1 || series[0].Value != 4096 || !series[0].Timestamp.Equal(now.Add(-time.Minute)) {
+				t.Fatalf("used-memory retention kept %d points, want the unchanged live point", len(series))
+			}
+			if cap(series) > 4*len(series)+64 {
+				t.Fatalf("used-memory cleanup pinned an oversized array: len=%d cap=%d", len(series), cap(series))
+			}
+			if &series[0] == &original[0] || &series[0] == &original[len(original)-1] {
+				t.Fatal("used-memory cleanup still aliases the seed-sized array")
+			}
+			t.Logf("used-memory samples %d -> %d; backing capacity %d -> %d", len(original), len(series), cap(original), cap(series))
+		})
+	}
+}

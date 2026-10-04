@@ -73,7 +73,11 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 	if m.config.MaxAlertAgeDays > 0 {
 		alertTTL := time.Duration(m.config.MaxAlertAgeDays) * 24 * time.Hour
 		for id, alert := range m.activeAlerts {
-			if !alert.Acknowledged && now.Sub(alert.StartTime) > alertTTL {
+			// Retention is housekeeping for inactive alerts, not recovery
+			// evidence. As with acknowledged alerts, keep a condition still
+			// observed; deleting it would re-fire on the next failing poll.
+			if !alert.Acknowledged && now.Sub(alert.StartTime) > alertTTL &&
+				lastSeenTooOld(alert, alertTTL) {
 				log.Info().
 					Str("alertID", id).
 					Dur("age", now.Sub(alert.StartTime)).
@@ -126,10 +130,8 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 		}
 	}
 
-	for id, suppressUntil := range m.suppressedUntil {
-		if now.After(suppressUntil) {
-			delete(m.suppressedUntil, id)
-		}
+	for id := range m.suppressedUntil {
+		m.expireSuppressionNoLock(id, now)
 	}
 
 	cutoff := now.Add(-1 * time.Hour)
@@ -349,6 +351,7 @@ func (m *Manager) ClearActiveAlerts() {
 	m.dockerRestartTracking = make(map[string]*dockerRestartRecord)
 	m.dockerUpdateFirstSeen = make(map[string]time.Time)
 	m.dockerUpdateFirstSeenByIdentity = make(map[string]time.Time)
+	m.dockerUpdateLastObserved = make(map[string]time.Time)
 	m.smartCounterSnapshots = make(map[string]smartCounterSnapshot)
 	m.ackState = make(map[string]ackRecord)
 	m.ackStateByCanonical = make(map[string]ackRecord)

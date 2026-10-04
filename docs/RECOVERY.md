@@ -1,173 +1,188 @@
 # Recovery
 
-Pulse v6 includes a **provider-neutral recovery view** that aggregates backup, snapshot, and replication artifacts across all connected platforms into a single interface.
+Pulse collects backup, snapshot and replication evidence from connected
+providers. Use it to find recorded artifacts, identify gaps in protection and
+check the source of a backup before using the provider's own recovery tools.
+Pulse does not restore workloads from these views.
 
-## Overview
+## Where to look
 
-Recovery is event-first and answers two questions:
+There is no top-level Recovery page. Open the existing platform view:
 
-1. **"What happened?"** → The **Recovery events** table shows individual recovery points (artifacts) with timestamps, outcomes, and sizes.
-2. **"What can I actually recover?"** → **Protection coverage** shows the canonical posture for each resource: protected, attention, unprotected, or unknown.
+- **Proxmox → Backups** (`/proxmox/backups`): **By date** lists recorded
+  artifacts; **Coverage** groups them by workload. Expand a coverage row to
+  inspect its posture reason and individual artifacts. Backup servers have
+  their own rows on the same page.
+- **TrueNAS → Protection** (`/truenas/protection`): snapshots and replication
+  activity reported by the TrueNAS connection.
+- **Kubernetes**: recovery records depend on the agent reporting VolumeSnapshot
+  or Velero inventory. An installed agent or a connected cluster does not
+  establish that either is available.
 
-## Supported Providers
+Provider collection is separate from presentation. Not every platform displays
+the same columns or filters, and a missing reading is not proof that no backup
+exists. [Check missing evidence](#missing-or-inconsistent-evidence) before
+changing the provider or Pulse's stored data.
 
-| Provider | Recovery Point Types |
-|---|---|
-| **Proxmox Backup Server (PBS)** | Full and incremental backups, sync jobs, verify tasks |
-| **Proxmox VE (PVE)** | Local dump-style backups (`vzdump`) |
-| **TrueNAS** | ZFS snapshots, replication tasks |
-| **Kubernetes** | VolumeSnapshots, Velero backups (when available) |
+## What the evidence means
 
-## Concepts
+Keep these observations separate:
 
-### Subject (What Was Protected)
-
-A subject is the thing being protected:
-
-- A Proxmox VM or container
-- A TrueNAS dataset (e.g., `tank/apps/postgres`)
-- A Kubernetes PVC (e.g., `monitoring/prometheus-pvc`)
-
-Subjects link to unified resources via `subjectResourceId` when possible.
-
-### Recovery Point (An Artifact / Event)
-
-A recovery point is a single concrete artifact:
-
-- A PBS backup snapshot
-- A local `vzdump` backup file
-- A ZFS snapshot
-- A replication run result
-
-### Rollup (A Subject Summary)
-
-A rollup groups recovery points for a subject to show:
-
-- **Protection status** — is this subject actively protected?
-- **Latest point** — when was the most recent successful backup/snapshot?
-- **Health** — are there recent failures or warnings?
-
-### Protection Posture (A Trust Decision)
-
-A protection posture combines subject-linked recovery points with the latest
-provider collection evidence. It deliberately keeps four operator-facing
-states:
-
-- **Protected** — a qualifying current recovery point is linked to the resource
-  and complete provider evidence does not invalidate the claim.
-- **Attention** — evidence exists, but it is stale, failing, incomplete, or
-  unverified when verification is expected.
-- **Unprotected** — complete evidence confirms that no qualifying protection
-  exists.
-- **Unknown** — identity, permissions, provider history, or collection
-  completeness cannot support a stronger claim.
-
-A backup or snapshot artifact may still be shown while posture is unknown.
-Artifacts answer what Pulse found; posture answers what Pulse can safely claim.
-Snapshot presence alone is never presented as independent recovery.
-
-## Navigating Recovery
-
-### Recovery Events
-
-Shows individual recovery points. Key columns:
-
-| Column | Description |
-|---|---|
-| Time | When the point was created (started/completed) |
-| Subject | What was backed up |
-| Method | Kind + mode of the backup |
-| Outcome | success / warning / failed / running |
-| Size | Size of the artifact (when available) |
-| Verified | Whether the backup has been verified (tri-state) |
-
-### Protection Coverage
-
-The Proxmox **Backups → Coverage** view shows one row per workload. The default
-table stays compact; expanding a row reveals the plain-language posture reason,
-provider evidence quality, and individual restore artifacts.
-
-| Column | Description |
-|---|---|
-| Item | The protected resource (VM name, dataset path, etc.) |
-| Item Type | Canonical resource category |
-| Posture | Protected, attention, unprotected, or unknown |
-| Restore | Most recent successful recovery point timestamp |
-| Provider columns | Latest PBS, PVE, or guest-snapshot artifact where available |
-
-### Filtering
-
-Both workspaces support:
-
-- **Platform filter** — show only points from a specific platform
-- **Outcome filter** — show only failed, successful, or running points
-- **Time range** — filter to a specific time window
-- **Search** — full-text search across items and details
-
-## API Reference
-
-| Method | Endpoint | Description |
+| Observation | What it establishes | What it does not establish |
 |---|---|---|
-| `GET` | `/api/recovery/points` | List individual recovery points |
-| `GET` | `/api/recovery/rollups` | List subject rollups (protection coverage) |
-| `GET` | `/api/recovery/postures` | List canonical per-resource protection postures |
-| `GET` | `/api/recovery/series` | Time-series data for recovery charts |
-| `GET` | `/api/recovery/facets` | Available filter facets (providers, kinds, outcomes) |
+| Successful task or `success` outcome | A provider-reported result or collected artifact | Guest thaw, application health or a tested restore |
+| Running task or partial artifact | Work or an incomplete artifact is observed | A completed recovery point, even if a size is shown |
+| Verified backup | The provider's verification result for that artifact | A successful application restore or guest thaw |
+| Recent snapshot | A point on the source system | An independent copy that survives loss of that system |
+| Protected posture | Current, linked evidence meets Pulse's protection policy | A recovery guarantee or permission to discard other backups |
 
-### Query Parameters
+**A backup task's OK status is not confirmation that the guest has thawed.**
+For freeze-enabled Proxmox backups, stop Pulse before the backup and restart it
+only after independently confirming guest thaw. Pulse monitoring and alert
+delivery are unavailable while it is stopped. Do not send additional
+guest-agent commands during freeze/thaw to diagnose the problem, or disable
+filesystem freezing merely to make a task look successful. Follow the
+[backup safety precaution](VM_DISK_MONITORING.md#backup-safety); it is not a
+claim that Pulse has repaired or reproduced a native thaw failure.
 
-All recovery endpoints support:
+Before relying on an artifact, confirm its provider, repository, workload
+identity and time in the provider's own tools. For recovery assurance, test a
+restore to an isolated destination using that provider's procedure and check
+the restored application's data and operation. Do not overwrite the live
+workload as a diagnostic test, delete older backups, or change retention to
+hide a Pulse display problem.
 
-| Parameter | Description |
+### Artifacts and subjects
+
+A **recovery point** is a collected backup, snapshot or replication result.
+Its **subject** is the protected workload, dataset or PVC; its **repository**
+is the storage location. Pulse links subjects to monitored resources where it
+can, and retains provider-local references when it cannot.
+
+Independent Proxmox installations can reuse a VMID. Compare the connection,
+node, guest type/ID, datastore, namespace and artifact time; matching names or
+VMIDs alone are not sufficient to identify a duplicate or the right restore.
+Direct PBS observations and PBS-through-PVE observations can differ in detail.
+See [PBS data sources](PBS.md#data-source-indicator).
+
+### Outcomes and verification
+
+Recorded outcomes are `success`, `warning`, `failed`, `running` or `unknown`.
+An unknown outcome is not success; an error fetching records is not an empty
+history. Where available, the API returns `startedAt`, `completedAt`,
+`sizeBytes` and provider-specific `details`. Missing times and sizes are not
+zero-valued measurements. A source backup timestamp is not necessarily the
+completion time of a later copy or sync task.
+
+The `verified` field is optional: `true` is a positive provider verification
+observation; `false` supplies no positive verification, so inspect the
+provider's detailed state; an omitted value supplies no verification result.
+Do not interpret an omitted field as a failed verification. Rollups may also
+report `verifyIntent` (`verified`, `stale` or `unknown`) and `lastVerifiedAt`;
+these summarise observed verification recency, not an end-to-end restore test.
+
+### Protection posture
+
+Pulse combines subject-linked artifacts with current provider collection
+evidence:
+
+- **Protected**: a qualifying current recovery point is linked to the resource
+  and complete provider evidence does not invalidate the claim.
+- **Attention**: evidence is stale, failing, incomplete or unverified when
+  verification is expected.
+- **Unprotected**: complete evidence confirms that no qualifying protection
+  exists.
+- **Unknown**: identity, permissions or collection completeness cannot support
+  a stronger claim.
+
+A retained artifact can remain visible while posture is unknown. A running
+backup is not a new completed recovery point; inspect any earlier completed
+point separately rather than treating current activity as protection.
+
+## Missing or inconsistent evidence
+
+1. Open the relevant platform view, clear its search and filters, and check the
+   selected connection and organisation. Record the route that is affected.
+2. Inspect connection health, the latest observation time and any collection
+   error. Wait for that provider's configured polling interval, not a fixed
+   30-second assumption. A green connection badge does not prove that every
+   history or backup read succeeded.
+3. Check the expected artifact in the provider's own inventory using an
+   existing authorised session. Verify its identity, location and permissions;
+   do not grant write or restore permissions merely to fill a monitoring row.
+4. For an **Unknown** posture, expand the coverage row and use the specific
+   limiting evidence. Resolve that collection or identity gap; do not turn
+   retained artifacts into a protection claim by clearing Pulse history.
+
+If the guest stopped responding during backup, preserve the task's warning or
+thaw error and the observations already available. Do not repeat the backup,
+reset the guest, or run active guest-agent probes just to reproduce it. Use
+the provider's recovery procedure and a separate trusted guest console to
+assess guest liveness and thaw, not Pulse's backup badge.
+
+When reporting missing records, share the failing view, running Pulse version,
+affected provider, time range, expected reading and relevant redacted error.
+Use consistent placeholders for private hostnames, datasets and IDs. Do not
+share full backup inventories, request headers, tokens, cookies or recovery
+keys. See [safe issue reporting](TROUBLESHOOTING.md#-getting-help).
+
+## API reference
+
+These are read-only monitoring endpoints. Use an existing authenticated browser
+session or a `monitoring:read` token supplied through a private header file,
+never a token in a URL or diagnostic command argument. See [API access](API.md).
+
+| Method | Endpoint | Result |
+|---|---|---|
+| `GET` | `/api/recovery/points` | Paged recovery points |
+| `GET` | `/api/recovery/rollups` | Paged subject summaries |
+| `GET` | `/api/recovery/series` | Completed-point counts grouped by day |
+| `GET` | `/api/recovery/facets` | Filter values from matching points |
+| `GET` | `/api/recovery/postures` | Canonical resource postures and limiting evidence |
+
+### Point and rollup filters
+
+Points, rollups, series and facets accept these filters:
+
+| Parameter | Values or meaning |
 |---|---|
-| `provider` | Filter by provider (`pve`, `pbs`, `truenas`, `k8s`) |
-| `kind` | Filter by kind (`backup`, `snapshot`, `replication`) |
-| `outcome` | Filter by outcome (`success`, `failed`, `warning`, `running`) |
-| `since` | ISO 8601 timestamp — only points after this time |
-| `until` | ISO 8601 timestamp — only points before this time |
-| `subject` | Filter by subject reference |
-| `limit` | Max results (default: 500) |
+| `platform` | `proxmox-pve`, `proxmox-pbs`, `truenas` or `kubernetes`; `provider` is an alias |
+| `kind` | `backup`, `snapshot` or `other`; TrueNAS replication results use `backup` |
+| `mode` | `local`, `remote` or `snapshot` |
+| `outcome` | `success`, `warning`, `failed`, `running` or `unknown` |
+| `from` | Lower time bound in RFC3339, for example `2026-10-01T00:00:00Z` |
+| `to` | Upper time bound in RFC3339 |
+| `subjectResourceId` | Exact linked resource identity; `itemResourceId` is an alias |
+| `rollupId` | Exact subject summary identity |
+| `q` | Text search; `query` is an alias |
 
-`/api/recovery/postures` has a deliberately bounded table contract. Supply one
-or more repeated `resourceId` parameters for a resource or batch lookup (at
-most 200), or omit them for a paged list. It also accepts `state`, `page`, and
-`limit`; `state=attention` returns the actionable attention list. The response
-includes the posture policy and provider evidence states so clients do not
-re-derive trust from raw artifacts.
+For example, this relative browser request selects PBS backup records within
+the stated time bounds without putting a credential in the URL:
 
-## Troubleshooting
+```text
+/api/recovery/points?platform=proxmox-pbs&kind=backup&from=2026-10-01T00:00:00Z&to=2026-10-02T00:00:00Z&page=1&limit=100
+```
 
-### No recovery data showing
+Use `from`/`to`, not `since`/`until`, and `subjectResourceId`, not `subject`.
+Unrecognised query names do not apply those filters. Invalid `from` or `to`
+values return an error rather than an empty result.
 
-1. Verify at least one data source provides backup/snapshot data:
-   - **PBS**: Ensure a PBS connection exists in Settings → Infrastructure.
-   - **TrueNAS**: Ensure a TrueNAS connection exists in Settings → TrueNAS.
-   - **PVE**: Local backups from PVE are included automatically.
-2. Wait one polling cycle (~30 seconds) for data to appear.
-3. Check the source filter — make sure you're not filtering to an empty source.
+Points and rollups accept `page` (starting at 1) and `limit` (default **100**,
+maximum **500**). Their response has a `data` array and `meta` pagination;
+inspect every required page rather than assuming the first is the inventory.
+Series and facets return aggregate data, not that paged-list contract.
 
-### PBS backups showing but not TrueNAS snapshots (or vice versa)
+### Posture lookup
 
-Check the **Source** filter on the Recovery page. Each provider surfaces its recovery points independently. Clear all filters to see everything.
+`/api/recovery/postures` uses a separate filter contract. Repeat `resourceId`
+for a batch of at most **200** resource IDs, or omit it for a paged list.
+`state=attention` selects attention postures; `page` and `limit` control list
+pagination. Its response includes policy and provider evidence states. Do not
+apply point filters to this endpoint or re-derive posture from artifact count.
 
-### Recovery points showing as "failed"
+## See also
 
-Click the row to expand the details drawer, which shows the provider-specific error message. Common causes:
-
-- **PBS**: Datastore unreachable, verification failed, prune job errors
-- **TrueNAS**: Replication target unreachable, dataset locked, insufficient space
-- **PVE**: Backup storage full, vzdump process error
-
-### Current backups show an unknown posture
-
-Expand the workload row and inspect the limiting evidence. Pulse uses unknown
-when the current poll cannot prove provider-history completeness, permission
-scope, or subject identity. Fix the reported collection or access gap and wait
-for the next provider poll; Pulse does not promote retained backup artifacts to
-protected while that uncertainty remains.
-
-## See Also
-
-- [PBS Integration](PBS.md) — Proxmox Backup Server monitoring
-- [TrueNAS Integration](TRUENAS.md) — TrueNAS snapshot and replication monitoring
-- [Unified Resource Model](UNIFIED_RESOURCES.md) — how recovery integrates with the unified model
+- [PBS integration](PBS.md) — access, data sources and host History
+- [TrueNAS integration](TRUENAS.md) — snapshots and replication monitoring
+- [VM disk monitoring](VM_DISK_MONITORING.md) — guest-agent and backup safety
+- [Migrating Pulse](MIGRATION.md) — configuration transfer versus a full-state backup of Pulse itself

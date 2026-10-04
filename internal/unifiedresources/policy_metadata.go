@@ -113,18 +113,24 @@ func RefreshCanonicalMetadataSlice(resources []Resource) []Resource {
 }
 
 func classifyResourceSensitivity(resource Resource) ResourceSensitivity {
-	tagSet := normalizedTagSet(resource.Tags)
-
-	switch {
-	case tagSet["public"]:
-		return ResourceSensitivityPublic
-	case tagSet["restricted"] || tagSet["customer-data"] || tagSet["customer_data"] ||
-		tagSet["pii"] || tagSet["phi"] || tagSet["pci"] || tagSet["regulated"] ||
-		tagSet["secret"] || tagSet["secrets"]:
-		return ResourceSensitivityRestricted
-	case tagSet["sensitive"] || tagSet["backup"] || tagSet["mail"] ||
-		tagSet["storage"] || tagSet["database"] || tagSet["dataset"]:
-		return ResourceSensitivitySensitive
+	// Clones classify every registry read. Scan once without building a tag
+	// map, preserving public > restricted > sensitive precedence independently
+	// of tag order, and normalising each tag only once.
+	tagSensitivity := ResourceSensitivityInternal
+	for _, tag := range resource.Tags {
+		switch strings.ToLower(strings.TrimSpace(tag)) {
+		case "public":
+			return ResourceSensitivityPublic
+		case "restricted", "customer-data", "customer_data", "pii", "phi", "pci", "regulated", "secret", "secrets":
+			tagSensitivity = ResourceSensitivityRestricted
+		case "sensitive", "backup", "mail", "storage", "database", "dataset":
+			if tagSensitivity != ResourceSensitivityRestricted {
+				tagSensitivity = ResourceSensitivitySensitive
+			}
+		}
+	}
+	if tagSensitivity != ResourceSensitivityInternal {
+		return tagSensitivity
 	}
 
 	if resource.PMG != nil {
@@ -365,18 +371,6 @@ func resourceSummaryType(resource Resource) string {
 		}
 		return "resource"
 	}
-}
-
-func normalizedTagSet(tags []string) map[string]bool {
-	out := make(map[string]bool, len(tags))
-	for _, tag := range tags {
-		trimmed := strings.ToLower(strings.TrimSpace(tag))
-		if trimmed == "" {
-			continue
-		}
-		out[trimmed] = true
-	}
-	return out
 }
 
 func resourceHasHostname(resource Resource) bool {

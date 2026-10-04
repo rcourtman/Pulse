@@ -88,4 +88,18 @@ export class ResourceActionsAPI {
       },
     );
   }
+
+  static async forceFailAction(actionId: string, reason: string): Promise<ActionExecutionResponse> {
+    const justification = reason.trim();
+    if (!justification) {
+      throw new Error('Record what you verified directly before closing the action audit.');
+    }
+    return apiFetchJSON<ActionExecutionResponse>(
+      `/api/actions/${encodeURIComponent(actionId)}/force-fail`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ reason: justification }),
+      },
+    );
+  }
 }
