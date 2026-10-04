@@ -1,12 +1,32 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DiagnosticsResultsPanel } from '@/components/Settings/DiagnosticsResultsPanel';
 import type { DiagnosticsData } from '@/components/Settings/diagnosticsModel';
 
 describe('DiagnosticsResultsPanel', () => {
   afterEach(() => {
     cleanup();
+  });
+
+  it('keeps the empty-state action linked to its live-check safety explanation', () => {
+    const run = vi.fn();
+    render(() => (
+      <>
+        <p id="run-safety">Do not run during a backup or freeze/thaw.</p>
+        <DiagnosticsResultsPanel
+          diagnosticsData={null}
+          loading={false}
+          onRunDiagnostics={run}
+          runDescriptionId="run-safety"
+        />
+      </>
+    ));
+    const action = screen.getByRole('button', { name: 'Run Diagnostics' });
+    expect(action).toHaveAccessibleDescription('Do not run during a backup or freeze/thaw.');
+    expect(run).not.toHaveBeenCalled();
+    fireEvent.click(action);
+    expect(run).toHaveBeenCalledOnce();
   });
 
   it('distinguishes live heap, retained runtime memory, and process RSS', () => {

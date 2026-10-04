@@ -68,6 +68,7 @@ interface DiagnosticsResultsPanelProps {
   diagnosticsData: DiagnosticsData | null;
   loading: boolean;
   onRunDiagnostics: () => void;
+  runDescriptionId?: string;
 }
 
 export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = (props) => {
@@ -89,6 +90,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                 class="gap-2"
                 onClick={props.onRunDiagnostics}
                 disabled={props.loading}
+                aria-describedby={props.runDescriptionId}
               >
                 <RefreshCw class={`h-4 w-4 ${props.loading ? 'animate-spin' : ''}`} />
                 {DIAGNOSTICS_EMPTY_STATE_COPY.actionLabel}

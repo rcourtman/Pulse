@@ -1,6 +1,7 @@
 import { createSignal } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { showError, showSuccess } from '@/utils/toast';
+import { DIAGNOSTICS_PANEL_COPY } from '@/utils/diagnosticsPresentation';
 import {
   buildDiagnosticsExportFilename,
   sanitizeDiagnosticsData,
@@ -47,7 +48,11 @@ export const useDiagnosticsPanelState = () => {
       anchor.click();
       document.body.removeChild(anchor);
       URL.revokeObjectURL(url);
-      showSuccess(`Diagnostics exported (${sanitize ? 'sanitized' : 'full'})`);
+      showSuccess(
+        sanitize
+          ? DIAGNOSTICS_PANEL_COPY.exportGithubSuccess
+          : DIAGNOSTICS_PANEL_COPY.exportFullSuccess,
+      );
     } finally {
       setExportLoading(false);
     }

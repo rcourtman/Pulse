@@ -20,6 +20,36 @@
 
 ## Purpose
 
+### Diagnostics are live checks; downloads require a privacy review
+
+The existing Settings Diagnostics panel explains before either run action that
+checks can make live API and guest-agent requests, must not run during backup,
+freeze/thaw or an unresponsive-host incident, and cannot prove ongoing collection
+has recovered. Both run controls reference that visible explanation. Export
+controls distinguish **Full (private)** from **GitHub (review first)** and reference
+the visible sharing warning. They download the displayed result locally without
+another diagnostics request or upload, and remain disabled during a refresh.
+The existing Troubleshooting viewer links to matching shipped guidance.
+
+Sanitised exports redact the server's actual token usage IDs and agent names,
+memory snapshot identities and breakdown instances, nested guest IDs/names,
+mount paths and physical disk paths. Per-download aliases preserve actual token,
+agent and snapshot joins across differently ordered arrays. Counts, memory
+measurements, failure states and known fixed API failure categories remain useful;
+unrecognised upstream response bodies are redacted. Nested IPv4 prose receives
+the same IP redaction as top-level errors. The full/displayed result is unchanged.
+This is not an anonymity guarantee: arbitrary prose, future fields, credentials,
+secret URLs and other private information still require manual review.
+
+Verification: `diagnosticsExportPrivacy.test.ts` exercises current server field
+names, reordered identity joins, nested privacy gaps, unchanged measurements and
+unchanged full data. Diagnostics presentation, hook, results and Settings tests
+cover the connected actions and warnings; shipped docs remain byte-synchronised.
+`browser-tests/diagnostics-safety.cjs` exercises production components, the real
+API reader and local downloads with synthetic responses on Chromium and touch
+WebKit, including loading/failure, keyboard, narrow layouts and the Docs link.
+These proofs do not run native guest checks or establish release availability.
+
 ### Backup age requires a usable completed timestamp
 
 Existing workload indicators, age badges and drawer protection context distinguish

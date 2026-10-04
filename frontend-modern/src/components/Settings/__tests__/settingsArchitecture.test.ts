@@ -2077,6 +2077,25 @@ describe('settings architecture guardrails', () => {
     expect(brandingSettingsCardSource).toContain('BRAND_LOGO_MAX_BYTES = 36 * 1024');
   });
 
+  it('keeps actual token usage names and IDs inside the same export privacy boundary', () => {
+    const payload = {
+      apiTokens: {
+        enabled: true,
+        tokenCount: 1,
+        recommendTokenSetup: false,
+        tokens: [{ id: 'private-token', name: 'private-purpose' }],
+        usage: [{ tokenId: 'private-token', agents: ['private-agent'], agentCount: 1 }],
+      },
+    } as unknown as DiagnosticsData;
+    const sanitized = sanitizeDiagnosticsData(payload);
+    expect(JSON.stringify(sanitized)).not.toContain('private-');
+    expect(sanitized.apiTokens).toMatchObject({
+      tokenCount: 1,
+      usage: [{ tokenId: 'token-1', agents: ['docker-host-1'], agentCount: 1 }],
+    });
+    expect(JSON.stringify(payload)).toContain('private-agent');
+  });
+
   it('keeps every PBS diagnostic failure string inside the export redaction boundary', () => {
     // Behavioural guard, not a source scan: the redaction gap that shipped was
     // a field added to the payload after the sanitizer was written, which no
