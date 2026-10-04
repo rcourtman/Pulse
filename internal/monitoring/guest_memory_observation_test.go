@@ -46,7 +46,7 @@ func testGuestMemoryObservationLifecycle(t *testing.T) {
 	const gib = uint64(1024 * 1024 * 1024)
 	identity := makeGuestID("provenance", "node", 105)
 	registry := unifiedresources.NewRegistry(nil)
-	m := &Monitor{rateTracker: NewRateTracker(), metricsHistory: NewMetricsHistory(32, time.Hour), resourceStore: unifiedresources.NewMonitorAdapter(registry)}
+	m := &Monitor{guestMetadataLimiter: make(map[string]time.Time), rateTracker: NewRateTracker(), metricsHistory: NewMetricsHistory(32, time.Hour), resourceStore: unifiedresources.NewMonitorAdapter(registry)}
 	client := &vmMemoryTrustStubClient{stubPVEClient: &stubPVEClient{}, vmAgentMemAvailable: 5 * gib,
 		vmStatus: &proxmox.VMStatus{Status: "running", MaxMem: 8 * gib, Mem: 8 * gib, Agent: proxmox.VMAgentField{Value: 1}}}
 	res := proxmox.ClusterResource{Type: "qemu", Node: "node", Name: "guest", VMID: 105, Status: "running", MaxMem: 8 * gib, Mem: 8 * gib}
