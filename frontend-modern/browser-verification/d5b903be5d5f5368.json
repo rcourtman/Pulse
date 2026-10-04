@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "d77f56bee4e2e79c9c41f1244f9a1b3e65b60dbb",
+  "verified_at": "2026-10-04T03:28:54Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "8713b06fd7a8ec67d111b1b97ff84c9421e9bd738b769b28c09d5217dd41f50a",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "7422c574ca1dc1ce8ffc9d28b176656a9f9be951f319f1fa8ef38e8a9b4aec8c",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "eb057472aa06df1aa2f687a6d99f6409ecf849817fc70fad1e4c23e623bb1d9f"
+  },
+  "routes": [
+    "/browser-tests/guest-history-provenance.html"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 360,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production full GuestDrawer, History renderer, model, API client and CSS with synthetic transport/observations; desktop/phone Chromium and dark phone WebKit. Playwright 1.56.1 matches integration lock. All twelve final screenshots opened.",
+    "48 fixed-deferral states: eight reasons x retained/unavailable x three contexts, visible safe reason with fitting geometry, independently current CPU/memory and never a current disk during deferral. Retained zero and pre-sample unavailable controls pass.",
+    "Stored disk 20/30% remains dated chart evidence, independent from retained live 50%; dated CPU-only inspection reports no disk observation. Fallbacks never become plotted points.",
+    "No physical phone, native QGA/backup/thaw/collection, installed recovery, release publication or customer acceptance established. Earlier failed fixture assertions/startup/tab attempts retained separately; only corrected fixture is accepted."
+  ],
+  "interactions": [
+    "Real mouse/phone touch opens the existing full drawer History tab and native refresh; desktop keyboard Home and phone touch range inspection use actual stored 20% at its own date without altering paths.",
+    "Lock clearance with an in-flight read reason keeps the live note and last-known context. Successful fresh same-VM 75% withdraws provenance, updates current fallback and creates no history. Non-VM control is unaffected.",
+    "Real same-origin synthetic 503 retains stored observations with warning; final 403 withdraws chart, fallback and deferral note until successful recovery. Private fixture error body stays hidden. All API requests are GET and no page errors occurred."
+  ]
+}

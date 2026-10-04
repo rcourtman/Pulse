@@ -69,6 +69,27 @@ The legacy Workloads `DiskList` is exercised only by tests/fixtures, not a
 shipped caller. Its empty-state title is not evidence of readable touch guidance;
 the shipped guest Overview supplies the readable pre-sample explanation.
 
+Guest History applies the same provenance to its live legend fallback. A VM
+filesystem reason withdraws the `current` disk fallback; only a `prev-` reason
+with a valid retained value supplies a separately labelled `last known` value.
+Explicit telemetry unavailability and unknown/non-finite values stay unavailable,
+not zero. The readable fixed-reason notice remains beside the utilization group
+even when stored disk observations exist. Its wording identifies a live read,
+not the date or provenance of those stored points. Legend assistive descriptions
+reference that notice. CPU, memory and I/O evidence remain independent.
+
+Deferred live evidence never supplies a chart point, timestamp or dated
+inspection value. Keyboard/pointer inspection continues to show only the
+selected stored observations, and denied History withdraws the whole chart
+including its deferred evidence. Fresh same-VM evidence clears the notice;
+lock clearance without a new read does not. `GuestDrawer.test.tsx`,
+`GuestDrawerHistory.disk-provenance.test.tsx` and `GuestDrawerHistory.sparse.test.tsx`
+cover the model, actual drawer plumbing, shared fallback precedence, retained
+zero, pre-sample status, dated inspection, access denial and resumption.
+`browser-tests/guest-history-provenance.cjs` uses the production full drawer
+and History API client at desktop and touch widths with synthetic responses.
+These checks do not establish native guest thaw, collection or release availability.
+
 ### Completed guest backup evidence versus current activity
 
 The guest Overview keeps the last completed backup age and its existing
