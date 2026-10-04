@@ -3003,11 +3003,17 @@ func TestTrueNASPollerCOREUnknownRotationRate(t *testing.T) {
 		diskFailure.Store(cycle == 2)
 		if cycle > 0 {
 			poller.mu.Lock()
-			poller.statusByOrg["default"][connection.ID].nextPollAt = time.Time{}
+			// Zero re-derives the normal interval from lastAttemptAt. Use a
+			// nonzero past deadline to exercise the next explicit due cycle.
+			poller.statusByOrg["default"][connection.ID].nextPollAt = time.Unix(1, 0)
 			poller.mu.Unlock()
 		}
 		prior := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
+		priorRequests := diskRequests.Load()
 		poller.pollAll(context.Background())
+		if diskRequests.Load() <= priorRequests {
+			t.Fatalf("cycle %d never reached the disk endpoint", cycle)
+		}
 		summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
 		if summary.Poll == nil || summary.Poll.LastAttemptAt == nil {
 			t.Fatalf("no ordinary poll attempt in cycle %d: %+v", cycle, summary)
