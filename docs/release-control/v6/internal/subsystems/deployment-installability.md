@@ -15,6 +15,25 @@
 
 ## Purpose
 
+### Report intake remains safe without unreleased documentation
+
+The bug and prerelease report forms carry their collection and attachment
+precautions in the form itself. A branch-tip troubleshooting link must not be
+needed to understand the advice for an installed release. Keep live API and
+guest-agent checks distinct from downloading an already displayed result;
+never request another run during backup freeze/thaw or an unresponsive-host
+incident merely to file a report. Existing observations and the original
+sequence remain valid evidence.
+
+Both forms require local privacy review even for exports labelled sanitized,
+and warn against attaching credentials, session cookies, secret URLs, private
+host/network or personal details, configuration files and raw request exports.
+Removing or pinning a documentation link must not remove those precautions or
+turn evidence fields into mandatory live checks. The form parsing controls in
+`scripts/release_control/release_promotion_policy_test.py` and the existing
+community intake tests preserve this installed-version-safe behaviour; they
+are source checks, not native diagnostic, guest-thaw or release acceptance.
+
 ### Update History consent does not infer the backup's restore scope
 
 The confirmation names the observed running server separately from the selected

@@ -1756,6 +1756,40 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("I upgraded to the current v6 RC build", template)
         self.assertNotIn("v6.0.0-rc.1", template)
 
+    def test_report_intake_safety_is_self_contained_for_installed_releases(self) -> None:
+        for name in ("bug_report.yml", "v6_rc_feedback.yml"):
+            with self.subTest(form=name):
+                template = read(f".github/ISSUE_TEMPLATE/{name}")
+                form = yaml.safe_load(template)
+                introduction = form["body"][0]
+                self.assertEqual(introduction["type"], "markdown")
+                prose = introduction["attributes"]["value"]
+                self.assertNotRegex(
+                    template,
+                    r"https://github\.com/[^/\s)]+/[^/\s)]+/(?:blob|tree)/(?:main|master)/",
+                )
+                # The precautions must survive without following any link;
+                # putting them only in a link label is insufficient.
+                standalone = re.sub(r"\[[^\]]+\]\([^)]*\)", "", prose)
+                for precaution in (
+                    "only collect diagnostics if Pulse is running and collection is safe",
+                    "live API and guest-agent requests",
+                    "do not run it during backups, freeze/thaw or an unresponsive-host incident",
+                    "Prefer existing observations",
+                    "downloads that result without running checks again",
+                    "Review files and screenshots locally before posting",
+                    "even when an export is labelled",
+                    "session cookies",
+                    "secret URLs",
+                    "personal details",
+                    "private keys",
+                    "Copy as cURL",
+                    "full network exports",
+                ):
+                    self.assertIn(precaution, standalone)
+                evidence = next(field for field in form["body"] if field.get("id") == "evidence")
+                self.assertFalse(evidence.get("validations", {}).get("required", False))
+
     def test_demo_site_copy_points_at_current_release_packet_index(self) -> None:
         demo_copy = read("docs/releases/V6_RC_DEMO_SITE_COPY.md")
         self.assertIn("docs/RELEASE_NOTES.md", demo_copy)
