@@ -25,6 +25,21 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Fully cached Patrol usage — issues #2118 / #2350
+
+Zero ordinary input tokens do not mean a run was free or skipped. Any positive
+ordinary-input, output, cache-creation or cache-read bucket retains the Patrol
+result and usage event, including a partial result returned with a provider
+error. The budget ledger and scheduled/scoped cost-history projection use the
+same nonempty-usage rule; genuinely empty skipped runs and expired history stay
+excluded. Ordinary input remains disjoint from cache buckets, with the existing
+five-minute write/read pricing and next-run budget check unchanged.
+`TestPatrolCacheOnlyUsageReachesBudget` checks the real Patrol-result, usage-ledger
+and budget boundary with successful/partial write/read and uncached/empty controls.
+`TestProjectPatrolCostIncludesFullyCachedRuns` checks six-hour schedule arithmetic,
+scoped spend and history exclusions. These are synthetic accounting controls,
+not provider-bill reconciliation, inter-run cache reuse or installed savings.
+
 ### RAID configured-member read evidence — issue #2369
 
 The existing host RAID status tool preserves optional `required_devices` from
