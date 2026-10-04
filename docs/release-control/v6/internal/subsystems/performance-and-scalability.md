@@ -15,6 +15,37 @@
 
 ## Purpose
 
+### Guest discovery evidence and UI state have exact owners
+
+The guest drawer's passive discovery lookup changes only when its explicit
+resource-type/agent/resource target changes, not on same-target metric or name
+snapshot refreshes. Retained/remount evidence is keyed by canonical guest and
+that target. A replacement target cannot display the predecessor's service,
+endpoint, URL suggestion or assurance suggestion while its own read is pending
+or failed. A successful absent-record read is empty; errors are not absence.
+The discovery detail reader preserves final HTTP401/403 on typed failures
+without reading the denied body, including agent-list/detail paths. Those
+failures withdraw cached evidence and show the fixed access message.
+A same-target transient failure may retain its own last successful details,
+but must visibly qualify them and provide an in-place retry without raw error
+text. This preserves the shared query's denial/cache-generation policy.
+
+A different canonical guest disposes its local tabs, range, forms, disclosures
+and outstanding read consumers. Same-ID updates stay mounted. Within that
+identity, a changed discovery target remounts only the existing Discovery tab,
+so late scan/notes completions cannot populate the successor's UI. Already
+sent server-side operations are not cancelled or retried by this boundary;
+saved operator URLs remain separate from derived suggestions.
+
+Verification: `discovery.test.ts` covers final status preservation on all
+three read paths and non-authoritative body claims. `GuestDrawer.test.tsx`
+covers replacement, source stability,
+late reads, HTTP401/403/cache withdrawal, transient retention/retry and
+canonical identity reset. `browser-tests/guest-discovery-identity.cjs` uses
+production drawer/DiscoveryTab/Manage/History, clients and CSS on desktop
+Chromium and touch WebKit. Its synthetic delayed scan is not a native command,
+QGA/thaw, fleet-performance, appliance identity or delivery proof.
+
 ### Workload projection preserves native guest-read evidence
 
 `useWorkloads` forwards the existing Proxmox disk-status reason, guest-agent

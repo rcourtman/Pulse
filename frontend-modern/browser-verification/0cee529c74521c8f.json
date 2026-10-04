@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "903dc08d23d4278103950e0df6ed5f7b8fb97760",
+  "verified_at": "2026-10-04T06:41:09.676Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/discovery.ts",
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "6c8776232e1cf6e82311c978848ca0c935e653f6a504c49c0ecb0b551a1bdc90",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts": "6366d199a56adfb826b9102fc47ae4143bdd32ceaabdbdc206c68376ee42a109",
+    "frontend-modern/src/api/discovery.ts": "0d06629b71afd213599b9548b85c37b351ddafb1902f60d51b20f2e15d5b47e3"
+  },
+  "routes": [
+    "/browser-tests/guest-discovery-identity.html",
+    "/browser-tests/guest-discovery-identity.html?dark=1"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production GuestDrawer, DiscoveryTab, Manage URL field and History with real clients/CSS; desktop Chromium and dark touch WebKit, Playwright 1.56.1 matches integration lock. Eight final screenshots inspected.",
+    "100 same-target metric/name snapshot changes preserve existing query reuse (zero extra reads; parent also passes). Changed targets withdraw predecessor service/URL, retain independent operator URL and ignore old-target lookup/scan completions.",
+    "Final HTTP403 withdraws cached suggestions; retry remains empty until active-target success. Same-target HTTP503 retains only its own qualified evidence; successful HTTP404 clears it. API source tests separately cover HTTP401 and every agent-list/detail read path.",
+    "A new canonical guest disposes tabs/range/disclosures; same-ID updates retain selected History range. No current values become stored History points.",
+    "This is synthetic source/render proof, not a native agent command, QGA/thaw, workload liveness, appliance identity, fleet CPU relief, installed recovery, physical phone, source publication or release acceptance."
+  ],
+  "interactions": [
+    "Real mouse/touch tab activation, keyboard-focused retry and URL href checks; old scan is one explicit local synthetic POST, never repeated or sent to a native target.",
+    "Inspected pending-replacement, late-scan successor, denied retry and transient-retention views on both engines. Safe fixed error text, no page errors/off-origin requests or horizontal main overflow.",
+    "Initial fixture selector failure is retained. Browser then exposed real API status loss; typed final-access propagation corrects it without generic parser relaxation. Canonical identity fixture correction is retained separately.",
+    "The initial unnecessary memo rewrite failed TypeScript and was removed. This fresh browser pass binds the final original memo semantics plus the identity/access repair; no polling or fleet CPU improvement is claimed."
+  ]
+}
