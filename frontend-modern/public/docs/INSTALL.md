@@ -211,13 +211,21 @@ values or credentials:
 
 ```bash
 systemctl show pulse.service \
-  --property=User --property=Group --property=NoNewPrivileges \
-  --property=PrivateTmp --property=ProtectSystem --property=ProtectHome
+  --property=LoadState \
+  --property=User \
+  --property=Group \
+  --property=NoNewPrivileges \
+  --property=PrivateTmp \
+  --property=ProtectSystem \
+  --property=ProtectHome
 ```
 
 Use your actual server unit name if it differs; older installations may use
-`pulse-backend.service`. An empty `User=` means systemd runs the service as
-root. Missing hardening is not repaired just by downloading a new binary:
+`pulse-backend.service`. Interpret these settings only when
+`LoadState=loaded`; `LoadState=not-found` means the selected unit is missing,
+not that a root service is running. For a loaded service, an empty `User=`
+means systemd runs it as root. Missing hardening is not repaired just by
+downloading a new binary:
 **the installer preserves existing service units during updates**, including
 custom units.
 

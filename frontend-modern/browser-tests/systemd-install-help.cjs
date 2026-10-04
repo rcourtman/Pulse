@@ -53,7 +53,8 @@ const { chromium, webkit } = require('playwright');
       assert.notEqual(await details.getAttribute('open'), null);
       const content = await details.innerText();
       for (const text of ['use the signed installer above', 'User=pulse', 'Group=pulse',
-        'NoNewPrivileges=true', 'ProtectSystem=strict', 'An empty User= means',
+        'NoNewPrivileges=true', 'ProtectSystem=strict', 'LoadState=loaded',
+        'not that a root service is running', 'an empty User=',
         'the installer preserves existing service units during updates',
         'Do not overwrite a working unit, change only its service user',
         'preserve the data directory and its encryption key',
@@ -61,6 +62,8 @@ const { chromium, webkit } = require('playwright');
         assert.ok(content.includes(text), text);
       const command = await details.locator('pre').innerText();
       assert.ok(command.startsWith('systemctl show pulse.service'));
+      assert.ok(command.includes('--property=LoadState'));
+      assert.ok(Math.max(...command.split('\n').map((line) => line.length)) < 34);
       assert.ok(!/--property=(Environment|ExecStart)|sudo|tee|install -m/.test(command));
       assert.ok(!await page.locator('article').innerText().then((text) =>
         text.includes('sudo tee /etc/systemd/system/pulse.service')));
@@ -78,7 +81,8 @@ const { chromium, webkit } = require('playwright');
       assert.deepEqual(errors, []);
       results.push({ engine, version: browser.version(), width,
         keyboardDisclosure: true, nonRootServer: true, agentBoundary: true,
-        readOnlyCredentialSafeCommand: true, preservationWarning: true,
+        readOnlyCredentialSafeCommand: true, loadedUnitRequired: true, phoneCommandFits: true,
+        preservationWarning: true,
         noDocumentOverflow: true, keyboardRecoveryLink: true, errors });
       await browser.close();
       browser = undefined;

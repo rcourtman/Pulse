@@ -69,7 +69,9 @@ describe('docsLinks', () => {
     expect(custom).toContain('use the signed installer above');
     expect(custom).toContain('`User=pulse`, `Group=pulse`');
     expect(custom).toContain('`ProtectSystem=strict` and `ProtectHome=true`');
-    expect(custom).toContain('An empty `User=` means');
+    expect(custom).toContain('`LoadState=loaded`');
+    expect(custom).toContain('not that a root service is running');
+    expect(custom).toContain('an empty `User=`');
     expect(custom).toContain('the installer preserves existing service units during updates');
     expect(custom).toContain('Do not overwrite a working unit, change only its service user');
     expect(custom).toContain('preserve the data directory and its encryption');
@@ -77,6 +79,8 @@ describe('docsLinks', () => {
     const commands = [...custom.matchAll(/```bash\n([\s\S]*?)```/g)].map((match) => match[1]);
     expect(commands).toHaveLength(1);
     expect(commands[0]).toContain('systemctl show pulse.service');
+    expect(commands[0]).toContain('--property=LoadState');
+    expect(Math.max(...commands[0].split('\n').map((line) => line.length))).toBeLessThan(34);
     expect(commands[0]).not.toMatch(/--property=(Environment|ExecStart)|sudo|tee|install -m/);
     expect(installation).not.toContain('sudo tee /etc/systemd/system/pulse.service');
     expect(installation).not.toContain('ExecStart=/usr/local/bin/pulse');
