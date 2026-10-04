@@ -66,7 +66,8 @@ export type TableRowProps = JSX.HTMLAttributes<HTMLTableRowElement>;
 // WebKit touch needs a native click target on otherwise-static table rows.
 // Keep actions document-delegated: nested controls must run first and retain
 // their existing stopPropagation behaviour instead of opening the row too.
-const nativeRowClickTarget = () => undefined;
+// Custom row shells reuse this marker without inheriting TableRow's styling.
+export const nativeRowClickTarget = () => undefined;
 
 export function TableRow(props: TableRowProps) {
   const [local, rest] = splitProps(props, ['class', 'children']);

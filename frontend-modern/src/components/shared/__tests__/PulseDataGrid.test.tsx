@@ -5,7 +5,7 @@ import pulseDataGridSource from '@/components/shared/PulseDataGrid.tsx?raw';
 import pulseDataGridModelSource from '@/components/shared/pulseDataGridModel.ts?raw';
 import pulseDataGridStateSource from '@/components/shared/usePulseDataGridState.ts?raw';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
-import { TableCell } from '@/components/shared/Table';
+import { TableCell, nativeRowClickTarget } from '@/components/shared/Table';
 import tableSource from '@/components/shared/Table.tsx?raw';
 
 type TestRow = {
@@ -105,16 +105,23 @@ describe('PulseDataGrid', () => {
 
   it('inherits the native touch click target from the shared TableRow', () => {
     const nativeListener = vi.spyOn(HTMLTableRowElement.prototype, 'addEventListener');
+    const onRowClick = vi.fn();
     try {
       render(() => (
         <PulseDataGrid<TestRow>
           data={[{ id: '1', name: 'Touch tower' }]}
           columns={[{ key: 'name', label: 'Name' }]}
           keyExtractor={(row) => row.id}
-          onRowClick={vi.fn()}
+          onRowClick={onRowClick}
         />
       ));
-      expect(nativeListener.mock.calls.some(([type]) => type === 'click')).toBe(true);
+      expect(nativeListener.mock.calls.find(([type]) => type === 'click')?.[1]).toBe(
+        nativeRowClickTarget,
+      );
+      nativeRowClickTarget();
+      expect(onRowClick).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByText('Touch tower'));
+      expect(onRowClick).toHaveBeenCalledTimes(1);
     } finally {
       nativeListener.mockRestore();
     }

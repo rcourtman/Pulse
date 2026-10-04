@@ -198,6 +198,15 @@ poller, per-agent goroutine, inventory scan, or action-session lookup to normal
 request routing; local assets are streamed once and published fallbacks retain
 the existing bounded HTTP client and artifact-size checks.
 
+The custom Workloads guest row shares `Table`'s singleton non-activating native
+click marker for WebKit touch eligibility. Bind it only while a row action
+exists, without changing row identity, alert/highlight classes, metric derivation
+or delegated child-control ordering. The marker must not perform actions, read
+telemetry, start History work, add polling/timers or activate on pointer-up or
+touch-end. `GuestRow.test.tsx` verifies its conditional lifecycle and
+non-activation; the production row/full-drawer touch fixture verifies first
+activation and unchanged identity independently of native collector acceptance.
+
 ## Canonical Files
 
 1. `pkg/metrics/store.go`
