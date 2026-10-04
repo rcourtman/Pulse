@@ -526,3 +526,7 @@ func TestGuestExecRealServerAgentDiscoveryAdmission(t *testing.T) {
 func TestCommandClientGuestCompletionContract(t *testing.T) {
 	TestGuestExecZeroCLIExitDoesNotProveGuestCompletion(t)
 }
+
+func TestCommandClientGuestOutcomeContract(t *testing.T) {
+	testGuestExecProjectsGuestOutcome(t)
+}

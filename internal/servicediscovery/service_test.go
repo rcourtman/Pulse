@@ -2765,6 +2765,11 @@ func TestDiscoveryGuestSafetyStopsAndPreservesSavedEvidence(t *testing.T) {
 	testDiscoveryGuestSafetyStopsAndPreservesSavedEvidence(t)
 }
 
+func TestDiscoveryFailedCommandEvidenceContract(t *testing.T) {
+	testDiscoveryRejectsFailedCommandEvidence(t)
+	testDiscoveryAllFailedCommandsKeepSavedEvidence(t)
+}
+
 func TestDiscoveryGuestCancellationContract(t *testing.T) {
 	TestVMDiscoveryCancellationIsNotSuccessfulEvidence(t)
 }
