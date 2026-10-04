@@ -65,7 +65,9 @@ describe('docsLinks', () => {
   it('keeps report collection precautions usable without unpublished documentation links', () => {
     for (const form of ['bug_report.yml', 'v6_rc_feedback.yml']) {
       const source = readFileSync(path.join(repoRoot, '.github', 'ISSUE_TEMPLATE', form), 'utf8');
-      expect(source).toContain('do not run it during backups, freeze/thaw or an unresponsive-host incident');
+      expect(source).toContain(
+        'do not run it during backups, freeze/thaw or an unresponsive-host incident',
+      );
       expect(source).toContain('downloads that result without running checks again');
       expect(source).toContain('Review files and screenshots locally before posting');
       expect(source).not.toMatch(/https:\/\/github\.com\/rcourtman\/Pulse\/blob\/[^\s)]+\/docs\//);
