@@ -1326,6 +1326,58 @@ describe('useWorkloads', () => {
     dispose();
   });
 
+  it('never labels a vSphere or standalone Proxmox workload as its own cluster', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [
+        {
+          ...sampleResource,
+          id: 'vmware-vm-etl',
+          name: 'etl-batch-01',
+          sources: ['vmware'],
+          parentName: 'esxi-01.lab.local',
+          proxmox: undefined,
+          vmware: {
+            managedObjectId: 'vm-206',
+            runtimeHostName: 'esxi-01.lab.local',
+            clusterName: 'Production Cluster',
+            connectionName: 'Lab vCenter',
+            powerState: 'poweredOn',
+          },
+        },
+        {
+          ...sampleResource,
+          id: 'pve-home-pve1-102',
+          name: 'standalone-vm',
+          vmid: 102,
+          instance: 'pve-home',
+          proxmox: {},
+        },
+      ],
+      meta: { totalPages: 1 },
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled);
+    });
+
+    await flushAsync();
+    await waitForWorkloadCount(() => result!.workloads().length, 2);
+
+    const byName = new Map(result!.workloads().map((workload) => [workload.name, workload]));
+    expect(byName.get('etl-batch-01')?.clusterName).toBe('Production Cluster');
+    expect(byName.get('etl-batch-01')?.contextLabel).toBe('esxi-01.lab.local (Production Cluster)');
+    expect(byName.get('etl-batch-01')?.instance).toBe('Production Cluster');
+    expect(byName.get('standalone-vm')?.clusterName).toBeUndefined();
+    expect(byName.get('standalone-vm')?.contextLabel).toBe('pve1 (pve-home)');
+    expect(byName.get('standalone-vm')?.instance).toBe('pve-home');
+
+    dispose();
+  });
+
   it('uses the shared cluster-name helper for proxmox workload labels', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       data: [
