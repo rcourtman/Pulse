@@ -53,7 +53,7 @@ const { chromium, webkit } = require('playwright');
       assert.equal(await presetTable.getByRole('row').count(), 8);
       const scopesTable = page.getByRole('table').filter({ has: page.getByRole('columnheader',
         { name: 'Scope', exact: true }) });
-      assert.equal(await scopesTable.getByRole('row').count(), 16);
+      assert.equal(await scopesTable.getByRole('row').count(), 17);
       for (const table of [presetTable, scopesTable]) {
         assert.ok(await table.evaluate((element) => {
           const parent = element.parentElement;
@@ -97,7 +97,7 @@ const { chromium, webkit } = require('playwright');
       assert.deepEqual(errors, []);
       results.push({ engine, version: browser.version(), width,
         tokenAnchorFocus: true, leastPrivilegeAgentRow: true, actualPresetCount: 7,
-        scopeCount: 15, semanticContainedTables: true, noDocumentOverflow: true,
+        scopeCount: 16, semanticContainedTables: true, noDocumentOverflow: true,
         kioskCredentialWarning: true, keyboardApiHelp: true, keyboardAgentRetargeting: true, errors });
       await browser.close();
       browser = undefined;
