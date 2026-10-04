@@ -3085,6 +3085,17 @@ type PMGQueueStatus struct {
 	UpdatedAt time.Time `json:"updatedAt"` // When this queue data was collected
 }
 
+// MemoryObservation describes the provenance of a selected guest reading, not
+// guest-agent liveness or permission to run a diagnostic. Current may include a
+// normal TTL cache hit; ObservedAt remains the original source observation.
+// Last-known values are retained evidence, not a new measurement. A missing
+// observation is legacy/unknown, never an assertion of current freshness.
+type MemoryObservation struct {
+	State      string    `json:"state"` // current, last-known, unavailable
+	Source     string    `json:"source"`
+	ObservedAt time.Time `json:"observedAt,omitzero"`
+}
+
 // Memory represents memory usage
 type Memory struct {
 	Total int64 `json:"total"`
@@ -3095,11 +3106,12 @@ type Memory struct {
 	// UsageUnavailable is true when total capacity is known but no cache-aware
 	// source can establish current usage. Consumers must not interpret the
 	// zero-valued Used, Free, or Usage fields as a measurement in that state.
-	UsageUnavailable bool    `json:"usageUnavailable,omitempty"`
-	Usage            float64 `json:"usage"`
-	Balloon          int64   `json:"balloon,omitempty"`
-	SwapUsed         int64   `json:"swapUsed,omitempty"`
-	SwapTotal        int64   `json:"swapTotal,omitempty"`
+	UsageUnavailable bool              `json:"usageUnavailable,omitempty"`
+	Usage            float64           `json:"usage"`
+	Balloon          int64             `json:"balloon,omitempty"`
+	SwapUsed         int64             `json:"swapUsed,omitempty"`
+	SwapTotal        int64             `json:"swapTotal,omitempty"`
+	Observation      MemoryObservation `json:"observation,omitzero"`
 }
 
 // HasKnownUsage reports whether this memory value is safe for live

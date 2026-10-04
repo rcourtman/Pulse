@@ -17,6 +17,28 @@
 
 ## Purpose
 
+### Guest memory observations are source-owned
+
+QEMU and LXC memory carry an optional `observation` with `state` (`current`,
+`last-known`, `unavailable`), canonical `source`, and original RFC3339
+`observedAt` when known. Normal TTL cache hits keep the original read time.
+Repeated QGA/backup deferrals are last-known, never renewed by a poll or
+diagnostic RetrievedAt; expired/missing usage and powered-off guests expose
+unavailability without inventing a read time. Legacy unannotated values make
+no freshness assertion. Independently selected PVE status/listing or linked
+Pulse-agent memory remains distinct from disk or QGA collection state. Agent
+receipt time belongs to its source status, not a guest row refreshed by PVE.
+
+Annotation preserves numeric selection, capacity, retention, guest identity,
+agent admission, alert thresholds and existing History recording. It grants
+no live-check authority or proof of thaw. Existing legacy state, raw Proxmox
+facets and selected canonical memory metrics preserve the discriminator;
+selected metric provenance must not be borrowed from another merged facet.
+`TestGuestMemoryObservationContract` exercises poll/cache/deferral/expiry/
+resumption through unified and served conversions; wire and source-selection
+controls cover omission, cloning and independent live agent data. These are
+synthetic source proofs, not native QGA/HAOS acceptance or delivered relief.
+
 ### Unavailable backup-age evaluation is not silent recovery
 
 PVE, PBS and mock backup checks share one failure-preserving evaluator. The
