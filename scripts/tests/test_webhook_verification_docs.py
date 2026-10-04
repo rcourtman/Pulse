@@ -156,7 +156,7 @@ class WebhookVerificationDocsTest(unittest.TestCase):
                        "event and severity", "whole-second precision",
                        "incomplete or ambiguous events", "atomically",
                        "Do not mark an event processed before its action succeeds"):
-            self.assertIn(phrase, text.replace("**", ""))
+            self.assertIn(phrase, text.replace("**", "").replace("`", ""))
         self.assertNotIn("deduplicate on it", text)
         self.assertNotIn("two-priority PSA mapping covers the full range", text)
         self.assertIn('"info"', text)

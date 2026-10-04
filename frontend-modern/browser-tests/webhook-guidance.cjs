@@ -27,8 +27,15 @@ const { chromium, webkit } = require('playwright');
       const page = await browser.newPage({ viewport: { width, height: 1000 },
         ...(engine === 'webkit' ? { isMobile: true, hasTouch: true } : {}) });
       const errors = [];
+      const unexpectedAPIRequests = [];
       page.on('pageerror', (error) => errors.push(error.message));
       page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+      page.on('request', (request) => {
+        const pathname = new URL(request.url()).pathname;
+        if (pathname.startsWith('/api/') && pathname !== '/api/security/status') {
+          unexpectedAPIRequests.push(pathname);
+        }
+      });
       let securityRequests = 0;
       // Docs imports runtime context, whose initial auth check is unrelated
       // to Markdown rendering. Model first-run state explicitly; there is no
@@ -83,16 +90,17 @@ const { chromium, webkit } = require('playwright');
       await page.reload({ waitUntil: 'domcontentloaded' });
       await page.getByRole('heading', { name: 'Sample PSA payloads', exact: true }).waitFor();
       await page.waitForFunction(() => document.activeElement?.id === 'sample-psa-payloads');
-      await page.waitForResponse((response) => response.url().endsWith('/api/security/status')).catch(() => {
-        // It may already have completed before the fragment was focused.
-        assert.ok(securityRequests >= 2);
-      });
+      // An incidental import is not obliged to make an auth request on every
+      // engine/reload. Observe those requests, but assert only the Docs result
+      // and absence of unintended backend activity or errors.
+      await page.waitForLoadState('networkidle');
       assert.deepEqual(errors, []);
+      assert.deepEqual(unexpectedAPIRequests, []);
       results.push({ engine, browserVersion: browser.version(), width,
         scope: engine === 'webkit' ? 'phone-emulated, not native' : 'desktop',
         warningsRendered: true, keyboardReceiverLink: true, keyboardTemplateLink: true,
         templateTextExact: true, reloadFragmentFocus: true, noDocumentOverflow: true,
-        syntheticFirstRunSecurityRequests: securityRequests, errors });
+        syntheticFirstRunSecurityRequests: securityRequests, unexpectedAPIRequests, errors });
       await browser.close();
       browser = undefined;
     }
