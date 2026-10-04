@@ -2,12 +2,17 @@ package ai
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
+
+	"golang.org/x/net/dns/dnsmessage"
 )
 
 func TestFetchURL(t *testing.T) {
@@ -59,15 +64,24 @@ func TestFetchURL(t *testing.T) {
 
 func TestParseAndValidateFetchURL(t *testing.T) {
 	ctx := context.Background()
+	// Exercise the actual hostname resolution/SSRF path without requiring
+	// external DNS or weakening production address checks in offline CI.
+	oldResolver := net.DefaultResolver
+	net.DefaultResolver = &net.Resolver{PreferGo: true, Dial: fetchURLTestDNSDial(t)}
+	t.Cleanup(func() { net.DefaultResolver = oldResolver })
 
 	tests := []struct {
 		url     string
 		wantErr bool
 		errSub  string
 	}{
-		{"http://example.com", false, ""},
-		{"https://example.com/path", false, ""},
-		{"  http://example.com  ", false, ""},
+		{"http://public.example.test", false, ""},
+		{"https://public.example.test/path", false, ""},
+		{"  http://public.example.test  ", false, ""},
+		{"http://8.8.8.8/path", false, ""},
+		{"http://private.example.test", true, "blocked address"},
+		{"http://mixed.example.test", true, "blocked address"},
+		{"http://missing.example.test", true, "failed to resolve host"},
 		{"", true, "url is required"},
 		{"http://localhost", true, "blocked"},
 		{"http://localhost.", true, "blocked"},
@@ -89,6 +103,70 @@ func TestParseAndValidateFetchURL(t *testing.T) {
 				t.Errorf("error %v does not contain %q", err, tt.errSub)
 			}
 		})
+	}
+}
+
+// Go's resolver accepts a stream Conn from Dial even for its initial UDP
+// query. These framed in-process responses cannot contact the configured DNS
+// server. Both A and AAAA remain real parsed responses, including mixed sets.
+func fetchURLTestDNSDial(t *testing.T) func(context.Context, string, string) (net.Conn, error) {
+	t.Helper()
+	return func(ctx context.Context, _, _ string) (net.Conn, error) {
+		client, server := net.Pipe()
+		_ = server.SetDeadline(time.Now().Add(2 * time.Second))
+		stop := context.AfterFunc(ctx, func() { _ = server.Close() })
+		go func() {
+			defer stop()
+			defer server.Close()
+			var size [2]byte
+			if _, err := io.ReadFull(server, size[:]); err != nil {
+				return
+			}
+			query := make([]byte, binary.BigEndian.Uint16(size[:]))
+			if _, err := io.ReadFull(server, query); err != nil {
+				return
+			}
+			var request dnsmessage.Message
+			if err := request.Unpack(query); err != nil || len(request.Questions) != 1 {
+				return
+			}
+			q := request.Questions[0]
+			response := dnsmessage.Message{Header: dnsmessage.Header{ID: request.ID, Response: true, RecursionDesired: true, RecursionAvailable: true}, Questions: request.Questions}
+			ips := []string{"8.8.8.8", "2001:4860:4860::8888"}
+			switch q.Name.String() {
+			case "public.example.test.":
+			case "private.example.test.":
+				ips = []string{"10.0.0.1", "fd00::1"}
+			case "mixed.example.test.":
+				ips = append(ips, "10.0.0.1", "fd00::1")
+			default:
+				response.RCode = dnsmessage.RCodeNameError
+				ips = nil
+			}
+			for _, raw := range ips {
+				ip := net.ParseIP(raw)
+				var body dnsmessage.ResourceBody
+				if v4 := ip.To4(); v4 != nil && q.Type == dnsmessage.TypeA {
+					var address [4]byte
+					copy(address[:], v4)
+					body = &dnsmessage.AResource{A: address}
+				} else if ip.To4() == nil && q.Type == dnsmessage.TypeAAAA {
+					var address [16]byte
+					copy(address[:], ip.To16())
+					body = &dnsmessage.AAAAResource{AAAA: address}
+				}
+				if body != nil {
+					response.Answers = append(response.Answers, dnsmessage.Resource{Header: dnsmessage.ResourceHeader{Name: q.Name, Type: q.Type, Class: dnsmessage.ClassINET, TTL: 60}, Body: body})
+				}
+			}
+			packet, err := response.Pack()
+			if err != nil {
+				return
+			}
+			binary.BigEndian.PutUint16(size[:], uint16(len(packet)))
+			_, _ = server.Write(append(size[:], packet...))
+		}()
+		return client, nil
 	}
 }
 
