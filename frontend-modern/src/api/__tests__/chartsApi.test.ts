@@ -78,7 +78,15 @@ describe('ChartsAPI', () => {
   });
 
   it('builds metrics history query params including maxPoints', async () => {
-    apiFetchJSONMock.mockResolvedValueOnce({} as any);
+    apiFetchJSONMock.mockResolvedValueOnce({
+      resourceType: 'agent',
+      resourceId: 'agent-1',
+      metric: 'cpu',
+      range: '14d',
+      start: 1,
+      end: 2,
+      points: [],
+    });
 
     await ChartsAPI.getMetricsHistory({
       resourceType: 'agent',
@@ -94,7 +102,15 @@ describe('ChartsAPI', () => {
   });
 
   it('builds canonical physical-disk history queries for 30m live I/O charts', async () => {
-    apiFetchJSONMock.mockResolvedValueOnce({} as any);
+    apiFetchJSONMock.mockResolvedValueOnce({
+      resourceType: 'disk',
+      resourceId: 'SERIAL884006359727',
+      metric: 'diskread',
+      range: '30m',
+      start: 1,
+      end: 2,
+      points: [],
+    });
 
     await ChartsAPI.getMetricsHistory({
       resourceType: 'disk',
@@ -109,7 +125,15 @@ describe('ChartsAPI', () => {
   });
 
   it('passes through agent metrics history requests', async () => {
-    apiFetchJSONMock.mockResolvedValueOnce({} as any);
+    apiFetchJSONMock.mockResolvedValueOnce({
+      resourceType: 'agent',
+      resourceId: 'agent-1',
+      metric: 'cpu',
+      range: '24h',
+      start: 1,
+      end: 2,
+      points: [],
+    });
 
     await ChartsAPI.getMetricsHistory({
       resourceType: 'agent',
@@ -124,7 +148,15 @@ describe('ChartsAPI', () => {
   });
 
   it('maps canonical kubernetes resource types to the backend k8s history token', async () => {
-    apiFetchJSONMock.mockResolvedValueOnce({} as any);
+    apiFetchJSONMock.mockResolvedValueOnce({
+      resourceType: 'k8s',
+      resourceId: 'k8s:cluster-a:pod:api-1',
+      metric: 'cpu',
+      range: '24h',
+      start: 1,
+      end: 2,
+      points: [],
+    });
 
     await ChartsAPI.getMetricsHistory({
       resourceType: 'pod',
