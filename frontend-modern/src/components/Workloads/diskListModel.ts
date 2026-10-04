@@ -22,21 +22,32 @@ export interface WorkloadsDiskPresentation {
   usagePercentLabel: string;
 }
 
-export const hasWorkloadsDiskCapacity = (disk: Disk): boolean =>
-  typeof disk.total === 'number' && disk.total > 0;
+export const hasWorkloadsDiskCapacity = (disk: Disk): disk is Disk & { total: number } =>
+  typeof disk.total === 'number' && Number.isFinite(disk.total) && disk.total > 0;
 
 // The poller reports usage -1 for mounts it can only see in the container
 // config (capacity may be known, live usage is not).
 export const isWorkloadsDiskUsageUnknown = (disk: Disk): boolean =>
-  typeof disk.usage === 'number' && disk.usage < 0;
+  typeof disk.used !== 'number' ||
+  !Number.isFinite(disk.used) ||
+  disk.used < 0 ||
+  (typeof disk.usage === 'number' && (!Number.isFinite(disk.usage) || disk.usage < 0));
 
-export const getWorkloadsDiskUsagePercent = (disk: Disk): number => {
-  const total = disk.total ?? 0;
-  if (total <= 0) {
-    return 0;
+// Capacity alone is not a measurement. In particular, an omitted `used`
+// field must not become a healthy empty filesystem, even if usage/free exist.
+export const getWorkloadsDiskUsagePercent = (disk: Disk): number | null => {
+  const { total, used } = disk;
+  if (
+    !hasWorkloadsDiskCapacity(disk) ||
+    isWorkloadsDiskUsageUnknown(disk) ||
+    typeof total !== 'number' ||
+    typeof used !== 'number'
+  ) {
+    return null;
   }
 
-  return ((disk.used ?? 0) / total) * 100;
+  const percent = (used / total) * 100;
+  return Number.isFinite(percent) ? percent : null;
 };
 
 export const getWorkloadsDiskLabel = (disk: Disk): string =>
@@ -46,35 +57,34 @@ export const getWorkloadsDiskLabelTitle = (label: string): string | undefined =>
   label !== 'Unknown' ? label : undefined;
 
 export const getWorkloadsDiskUsageText = (disk: Disk): string => {
-  if (isWorkloadsDiskUsageUnknown(disk)) {
-    return hasWorkloadsDiskCapacity(disk)
-      ? `?/${formatBytes(disk.total ?? 0)}`
-      : 'Usage unavailable';
-  }
-  return hasWorkloadsDiskCapacity(disk)
-    ? `${formatBytes(disk.used ?? 0)}/${formatBytes(disk.total ?? 0)}`
-    : 'Usage unavailable';
+  if (!hasWorkloadsDiskCapacity(disk)) return 'Usage unavailable';
+  const used =
+    getWorkloadsDiskUsagePercent(disk) === null || typeof disk.used !== 'number'
+      ? '?'
+      : formatBytes(disk.used);
+  return `${used}/${formatBytes(disk.total)}`;
 };
 
-export const getWorkloadsDiskUsagePercentLabel = (disk: Disk): string =>
-  hasWorkloadsDiskCapacity(disk) && !isWorkloadsDiskUsageUnknown(disk)
-    ? `${getWorkloadsDiskUsagePercent(disk).toFixed(0)}%`
-    : '—';
+export const getWorkloadsDiskUsagePercentLabel = (disk: Disk): string => {
+  const percent = getWorkloadsDiskUsagePercent(disk);
+  return percent === null ? '—' : `${percent.toFixed(0)}%`;
+};
 
 export const getWorkloadsDiskProgressClass = (
   disk: Disk,
   thresholds?: MetricDisplayThresholds | null,
-): string => getMetricColorClass(getWorkloadsDiskUsagePercent(disk), 'disk', thresholds);
+): string => {
+  const percent = getWorkloadsDiskUsagePercent(disk);
+  return percent === null ? 'bg-surface-hover' : getMetricColorClass(percent, 'disk', thresholds);
+};
 
 export const getWorkloadsDiskProgressValue = (disk: Disk): number | null =>
-  hasWorkloadsDiskCapacity(disk) && !isWorkloadsDiskUsageUnknown(disk)
-    ? getWorkloadsDiskUsagePercent(disk)
-    : null;
+  getWorkloadsDiskUsagePercent(disk);
 
-export const getWorkloadsDiskProgressWidth = (disk: Disk): string =>
-  isWorkloadsDiskUsageUnknown(disk)
-    ? '0%'
-    : `${Math.min(getWorkloadsDiskUsagePercent(disk), 100)}%`;
+export const getWorkloadsDiskProgressWidth = (disk: Disk): string => {
+  const percent = getWorkloadsDiskUsagePercent(disk);
+  return percent === null ? '0%' : `${Math.min(percent, 100)}%`;
+};
 
 export const getWorkloadsDiskTypeLabel = (disk: Disk): string => disk.type?.toUpperCase() ?? '';
 

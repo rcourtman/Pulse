@@ -8,7 +8,10 @@ import type {
 
 import { formatHistoryChartTooltipValue } from '@/components/shared/historyChartModel';
 import { formatBytes, formatPercent, getBackupInfo, type BackupThresholds } from '@/utils/format';
-import { getWorkloadsGuestBackupStatusPresentation } from '@/utils/workloadGuestPresentation';
+import {
+  getWorkloadGuestDiskStatusMessage,
+  getWorkloadsGuestBackupStatusPresentation,
+} from '@/utils/workloadGuestPresentation';
 import { getWorkloadCPUPercent, resolveWorkloadType } from '@/utils/workloads';
 import { getWorkloadMetricHistoryTarget } from '@/utils/workloadMetricHistoryTarget';
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
@@ -60,6 +63,11 @@ export interface GuestDrawerHistoryTimeBounds {
   endTime: number;
 }
 
+export interface GuestDrawerHistoryDeferredMetric {
+  lastKnownValue?: number;
+  message: string;
+}
+
 export interface GuestDrawerBackupPresentation {
   ageClass: string;
   ageLabel: string;
@@ -93,6 +101,25 @@ export const getGuestDrawerAlertMessage = (
   return `${alert.message} (${comparison})`;
 };
 
+const getGuestDrawerDiskUsage = (guest: Guest): number | undefined => {
+  const usage = guest.telemetryAvailability?.disk === false ? undefined : guest.disk?.usage;
+  return typeof usage === 'number' && Number.isFinite(usage) && usage >= 0 ? usage : undefined;
+};
+
+export const getGuestDrawerDeferredMetrics = (
+  guest: Guest,
+): Record<string, GuestDrawerHistoryDeferredMetric> => {
+  if (!isGuestDrawerVM(guest) || !guest.diskStatusReason) return {};
+  return {
+    disk: {
+      lastKnownValue: guest.diskStatusReason.startsWith('prev-')
+        ? getGuestDrawerDiskUsage(guest)
+        : undefined,
+      message: getWorkloadGuestDiskStatusMessage(guest.diskStatusReason),
+    },
+  };
+};
+
 // Current-value metrics displayed beside history legends while the metrics
 // store is still accumulating samples. These values never become chart points:
 // a current reading is not evidence of a historical trend.
@@ -103,13 +130,10 @@ export const getGuestDrawerCurrentMetrics = (guest: Guest): Record<string, numbe
   const cpuPercent = available('cpu') ? getWorkloadCPUPercent(guest.cpu) : undefined;
   const memUsage =
     available('memory') && !guest.memory?.usageUnavailable ? guest.memory?.usage : undefined;
-  const reportedDiskUsage = available('disk') ? guest.disk?.usage : undefined;
+  // A paused filesystem read is not current, even if the snapshot still
+  // carries a numeric summary. Retained evidence has its own labelled path.
   const diskUsage =
-    typeof reportedDiskUsage === 'number' &&
-    Number.isFinite(reportedDiskUsage) &&
-    reportedDiskUsage >= 0
-      ? reportedDiskUsage
-      : undefined;
+    isGuestDrawerVM(guest) && guest.diskStatusReason ? undefined : getGuestDrawerDiskUsage(guest);
   const finite = (value: number | undefined): number | undefined =>
     typeof value === 'number' && Number.isFinite(value) ? value : undefined;
   return {

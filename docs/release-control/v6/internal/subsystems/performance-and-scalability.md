@@ -15,6 +15,29 @@
 
 ## Purpose
 
+### Unavailable filesystem values share the existing disk model
+
+The filesystem list and guest Overview use the same nullable measured-byte ratio
+for text, severity and progress. Per-disk validation is constant work within the
+existing linear presentation pass; it adds no reads, queries, timers, remounts or
+resource-identity changes. Unavailable values stay neutral rather than passing a
+fabricated zero into threshold classification. Mounted filesystem evidence tests
+and the production browser fixture verify replacement and rendering, not a new
+latency, fleet-performance or native-collection claim.
+
+### Guest History live filesystem provenance
+
+The guest drawer derives deferred filesystem context from its current snapshot,
+separately from current CPU, memory and I/O. A retained `prev-` value may populate
+only the labelled last-known legend, never the current fallback or chart geometry.
+The added presentation input does not create a polling timer, trigger a guest
+read, or change History target/range ownership. Stable-target context updates
+reuse the mounted chart and existing query; the drawer's pre-existing target
+recomputation on guest-snapshot changes is unchanged. Mounted regressions in
+`GuestDrawer.test.tsx` and `GuestDrawerHistory.disk-provenance.test.tsx` verify
+the actual fallback/resumption path and request counts. This is presentation
+proof, not a native CPU improvement, QGA/thaw result or delivery acceptance.
+
 ### Guest filesystem provenance preserves dense row geometry
 
 Visible retained/unavailable filesystem cues must fit the existing dense row

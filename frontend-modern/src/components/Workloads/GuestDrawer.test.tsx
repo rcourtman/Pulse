@@ -220,6 +220,59 @@ afterEach(() => {
 // ── Tests ──────────────────────────────────────────────────────────────
 
 describe('GuestDrawer', () => {
+  it('keeps deferred filesystem fallback last-known through History and fresh resumption', async () => {
+    chartsApiMocks.getMetricsHistory.mockResolvedValue({
+      resourceType: 'vm',
+      resourceId: 'inst1:node1:100',
+      range: '24h',
+      start: 1,
+      end: 3,
+      metrics: {},
+      source: 'store',
+    });
+    const [guest, setGuest] = createSignal(
+      makeGuest({
+        disk: { total: 100, used: 50, usage: 50 },
+        diskStatusReason: 'prev-vm-locked',
+        lock: 'backup',
+      }),
+    );
+    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    await waitFor(() =>
+      expect(screen.getAllByText('No stored history in this range')).toHaveLength(3),
+    );
+    const history = screen.getAllByTestId('guest-history-group-chart')[0];
+    expect(history.querySelector('[data-history-current="disk"]')).toBeNull();
+    expect(history.querySelector('[data-history-last-known="disk"]')).toHaveTextContent(
+      'Disk50.0%last known',
+    );
+    expect(history.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+      'Guest reads paused while Proxmox reports a VM operation lock',
+    );
+    setGuest({ ...guest(), lock: '', diskStatusReason: 'prev-agent-busy' });
+    expect(history.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+      'earlier guest request is still in progress',
+    );
+    expect(history.querySelector('[data-history-current="disk"]')).toBeNull();
+    setGuest({ ...guest(), diskStatusReason: '', disk: { total: 100, used: 75, usage: 75 } });
+    expect(history.querySelector('[data-history-last-known]')).toBeNull();
+    expect(history.querySelector('[data-history-deferred]')).toBeNull();
+    expect(history.querySelector('[data-history-current="disk"]')).toHaveTextContent(
+      'Disk75.0%current',
+    );
+    expect(history.querySelector('path')).toBeNull();
+    // Existing drawer target recomputation follows each guest snapshot.
+    // This presentation repair does not change that request ownership.
+    for (const [request] of chartsApiMocks.getMetricsHistory.mock.calls) {
+      expect(request).toMatchObject({
+        resourceType: 'vm',
+        resourceId: 'inst1:node1:100',
+        range: '24h',
+      });
+    }
+  });
+
   it('uses the shared discovery loading fallback instead of a drawer-local spinner row', () => {
     expect(guestDrawerSource).toContain('DiscoveryLoadingFallback');
     expect(guestDrawerSource).not.toContain(
