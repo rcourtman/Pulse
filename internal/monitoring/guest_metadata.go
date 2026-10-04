@@ -43,9 +43,9 @@ type guestMetadataCacheEntry struct {
 	osName             string
 	osVersion          string
 	agentVersion       string
-	fetchedAt          time.Time
-	osInfoFailureCount int  // Track consecutive OS info failures
-	osInfoSkip         bool // Skip OS info calls after repeated failures (refs #692)
+	fetchedAt          time.Time // Last accepted useful metadata, not the last attempt.
+	osInfoFailureCount int       // Track consecutive OS info failures
+	osInfoSkip         bool      // Skip OS info calls after repeated failures (refs #692)
 }
 
 func guestMetadataCacheHasUsefulData(entry guestMetadataCacheEntry) bool {
@@ -267,6 +267,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	osName := cached.osName
 	osVersion := cached.osVersion
 	agentVersion := cached.agentVersion
+	metadataObserved := false
 
 	if reserved {
 		if !m.acquireGuestMetadataSlot(ctx) {
@@ -295,6 +296,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 		processedIPs, processedIfaces := processGuestNetworkInterfaces(ifaces)
 		if len(processedIPs) > 0 || len(processedIfaces) > 0 {
 			ipAddresses, networkIfaces = processedIPs, processedIfaces
+			metadataObserved = true
 		} else if len(cached.ipAddresses) == 0 && len(cached.networkInterfaces) == 0 {
 			ipAddresses = nil
 			networkIfaces = nil
@@ -359,6 +361,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 			extractedOSName, extractedOSVersion := extractGuestOSInfo(agentInfo)
 			if extractedOSName != "" || extractedOSVersion != "" {
 				osName, osVersion = extractedOSName, extractedOSVersion
+				metadataObserved = true
 			}
 			osInfoFailureCount = 0 // Reset on success
 			osInfoSkip = false
@@ -392,17 +395,25 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 			Msg("Guest agent version unavailable")
 	} else if version, ok := versionRaw.(string); ok && version != "" {
 		agentVersion = version
+		metadataObserved = true
 	} else if cached.agentVersion == "" {
 		agentVersion = ""
 	}
 
+	// Errors and empty/unusable replies may retain display identity, but cannot
+	// make that identity new evidence that the guest agent is still responsive.
+	// Retry timing is tracked separately by the limiter, not by renewing its age.
+	fetchedAt := cached.fetchedAt
+	if metadataObserved {
+		fetchedAt = time.Now()
+	}
 	entry := guestMetadataCacheEntry{
 		ipAddresses:        cloneStringSlice(ipAddresses),
 		networkInterfaces:  cloneGuestNetworkInterfaces(networkIfaces),
 		osName:             osName,
 		osVersion:          osVersion,
 		agentVersion:       agentVersion,
-		fetchedAt:          time.Now(),
+		fetchedAt:          fetchedAt,
 		osInfoFailureCount: osInfoFailureCount,
 		osInfoSkip:         osInfoSkip,
 	}
@@ -414,7 +425,11 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	m.guestMetadataCache[key] = entry
 	m.guestMetadataMu.Unlock()
 	if reserved {
-		m.scheduleGuestMetadataFetchForEntry(key, time.Now(), entry)
+		if metadataObserved {
+			m.scheduleGuestMetadataFetchForEntry(key, time.Now(), entry)
+		} else {
+			m.deferGuestMetadataRetry(key, time.Now())
+		}
 	}
 
 	return ipAddresses, networkIfaces, osName, osVersion, agentVersion
