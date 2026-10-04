@@ -1596,11 +1596,18 @@ func (c *Client) GetVMConfig(ctx context.Context, node string, vmid int) (map[st
 	}
 	defer resp.Body.Close()
 
+	// Guest-agent admission uses this response as authoritative lock evidence.
+	// Decoding only the first JSON value can accept an unlocked prefix before a
+	// truncated, stalled, oversized or malformed response has been received.
+	body, err := readResponseBodyLimited(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read VM configuration: %w", err)
+	}
 	var result struct {
 		Data map[string]interface{} `json:"data"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, err
 	}
 
