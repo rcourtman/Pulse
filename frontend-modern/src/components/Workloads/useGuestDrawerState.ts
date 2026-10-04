@@ -99,12 +99,10 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
   const hasNetworkInterfaces = createMemo(() => networkInterfaces().length > 0);
   const normalizedTags = createMemo(() => normalizeGuestDrawerTags(props.guest.tags));
   const backupPresentation = createMemo(() =>
-    props.guest.lastBackup
-      ? getGuestDrawerBackupPresentation(
-          props.guest.lastBackup,
-          alertsActivation.getBackupThresholds(),
-        )
-      : null,
+    getGuestDrawerBackupPresentation(
+      props.guest.lastBackup,
+      alertsActivation.getBackupThresholds(),
+    ),
   );
   const hasDiscoverySupport = createMemo(
     () => discoveryFeatureEnabled() && hasDiscoverySupportForWorkload(props.guest),

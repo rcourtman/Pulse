@@ -15,6 +15,23 @@
 
 ## Purpose
 
+### Workload backup projection preserves timestamp uncertainty
+
+Both resource-API and owning-canonical-snapshot paths preserve a present malformed
+backup time for the existing shared age admission, rather than replacing it with
+the numeric zero absence sentinel. Only missing/empty values and the explicit Go
+zero-time value (including zero fractional seconds) map to absence. The drawer
+does not gate its backup presentation on timestamp truthiness: NaN must reach the
+unknown verdict, not disappear as a missing completed backup. Future dates cannot
+be clamped to Today. This adds only constant-time validation to the current mapper
+and presentation memos; it introduces no requests, timers or retained caches.
+
+`useWorkloads.test.ts`, `GuestDrawer.test.tsx` and the focused backup time evidence
+controls pin the boundary. `browser-tests/backup-time-evidence.cjs` exercises real
+resource projection, rows, indicators and drawer replacement with synthetic API
+and canonical full/delta observations; those observations are not native backup
+or release proof.
+
 ### Guest discovery evidence and UI state have exact owners
 
 The guest drawer's passive discovery lookup changes only when its explicit
