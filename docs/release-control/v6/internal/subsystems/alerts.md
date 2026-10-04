@@ -461,6 +461,20 @@ operator-visible message evidence. Window changes never change the canonical
 `metric-threshold:<metric>` identity, so start time, acknowledgement, history,
 timeline, escalation, and recovery stay one occurrence.
 
+Current metric observations must be finite in both instantaneous and rolling
+evaluation, including a manager without a history provider. After selecting
+in-range observations and last-duplicate authority, any non-finite History
+sample or non-finite weighted result makes the whole window unknown. Invalid
+samples are not dropped to manufacture coverage, substituted with an older
+duplicate, clamped, or treated as zero. Both legacy and canonical evaluation
+retain the last trusted incident value, identity, acknowledgement and delivery
+state; no new lifecycle or notification evidence is emitted. Fresh finite
+evidence resumes normal evaluation, and explicitly disabling a rule still
+clears it independently of telemetry. `windowed_metric_test.go` verifies
+NaN/infinities, arithmetic overflow, duplicate authority, input isolation,
+JSON-safe incident snapshots, transition-ledger continuity and local dispatch.
+These source controls do not prove installed or external recipient acceptance.
+
 Active-alert restore is opt-out at construction. `NewManagerWithDataDir` accepts
 `ManagerOption` values, and `WithoutPersistedAlertRestore` starts the manager
 with an empty active-alert set instead of reading `active-alerts.json`. Mock

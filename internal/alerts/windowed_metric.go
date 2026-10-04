@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -66,6 +67,12 @@ func (m *Manager) evaluateMetricWindow(resourceID, resourceType, metricType stri
 	provider := m.metricWindowProvider
 	m.mu.RUnlock()
 
+	// Unknown telemetry is neither a trigger nor recovery evidence, including
+	// instantaneous evaluation and embedders without a history provider.
+	if !finiteMetricValue(current) {
+		return metricWindowObservation{CurrentValue: current, WindowSeconds: windowSeconds}
+	}
+
 	instant := metricWindowObservation{Value: current, CurrentValue: current, Ready: true}
 	if windowSeconds <= 0 {
 		return instant
@@ -92,6 +99,9 @@ func (m *Manager) evaluateMetricWindow(resourceID, resourceType, metricType stri
 
 func calculateMetricWindow(points []MetricWindowPoint, start, end time.Time, current float64, windowSeconds int) metricWindowObservation {
 	result := metricWindowObservation{CurrentValue: current, WindowSeconds: windowSeconds}
+	if !finiteMetricValue(current) {
+		return result
+	}
 	filtered := make([]MetricWindowPoint, 0, len(points))
 	for _, point := range points {
 		if point.Timestamp.Before(start) || point.Timestamp.After(end) {
@@ -112,6 +122,14 @@ func calculateMetricWindow(points []MetricWindowPoint, start, end time.Time, cur
 		unique = append(unique, point)
 	}
 	result.SampleCount = len(unique)
+	// Validate after duplicate authority is resolved. Dropping bad values would
+	// invent continuous coverage across unavailable observations; using an older
+	// finite duplicate would override the latest evidence.
+	for _, point := range unique {
+		if !finiteMetricValue(point.Value) {
+			return result
+		}
+	}
 	if len(unique) < minimumMetricWindowSamples {
 		return result
 	}
@@ -141,9 +159,17 @@ func calculateMetricWindow(points []MetricWindowPoint, start, end time.Time, cur
 	if weightedDuration <= 0 {
 		return result
 	}
-	result.Value = weightedTotal / weightedDuration.Seconds()
+	value := weightedTotal / weightedDuration.Seconds()
+	if !finiteMetricValue(value) {
+		return result
+	}
+	result.Value = value
 	result.Ready = true
 	return result
+}
+
+func finiteMetricValue(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0)
 }
 
 func metricWindowOptions(opts *metricOptions, metricType, resourceType string, observation metricWindowObservation) *metricOptions {
