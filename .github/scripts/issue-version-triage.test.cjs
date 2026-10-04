@@ -307,8 +307,19 @@ for (const name of ["bug_report.yml", "v6_rc_feedback.yml"]) {
     assert.match(introduction, /do not run it during backups, freeze\/thaw or an unresponsive-host incident/);
     assert.match(introduction, /Prefer existing observations/);
     assert.match(introduction, /downloads that result without running checks again/);
-    assert.match(introduction, /docs\/TROUBLESHOOTING\.md#collect-diagnostics-safely/);
     assert.doesNotMatch(introduction, /Export for GitHub \(sanitized\)/);
+  });
+}
+
+for (const name of ["bug_report.yml", "v6_rc_feedback.yml"]) {
+  test(`report intake excludes unreleased branch-tip guidance: ${name}`, () => {
+    const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
+    // Safety instructions must remain self-contained for installed versions.
+    // A main/master link can describe runtime behaviour they do not ship.
+    assert.doesNotMatch(form, /https:\/\/github\.com\/[^/\s)]+\/[^/\s)]+\/(?:blob|tree)\/(?:main|master)\//);
+    assert.match(form, /only collect diagnostics if Pulse is running and collection is safe/);
+    assert.match(form, /downloads that result without running checks again/);
+    assert.match(form, /Review files and screenshots locally before posting/);
   });
 }
 
