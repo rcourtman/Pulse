@@ -44,6 +44,27 @@ previous data and fresh resumption with production components and CSS on desktop
 Chromium and touch WebKit. Synthetic observations do not establish the native
 command-ID cause, guest thaw, fresh History collection or containing release.
 
+The shipped row also keeps a visible filesystem provenance cue in every disk
+presentation: resting bars, selected sparklines, the pointer/focus history lens
+and the pre-sample empty state. `prev-` is labelled **Last known** (**Prior** in
+compact rows); an unavailable read is **Unavailable** (**N/A** in compact rows).
+The full fixed-reason explanation is ordinary assistive text as well as the
+existing cell title and drawer content, not a live region repeated across a
+fleet. Retained sparkline values are announced as **last known**, never current;
+other metrics keep their existing current-value semantics. The inline sparkline
+plot yields width to the numeric value instead of reserving 40px and clipping
+that value in canonical phone columns. Clearing only a VM
+operation lock does not clear a reason still supplied for an in-flight read.
+Fresh linked Pulse-agent disk evidence with no reason remains unmarked, and
+non-VM rows do not inherit QGA guidance. The cue adds no action or tab stop;
+touch on it continues through the existing row disclosure to the full reason.
+
+Verification: mounted `GuestRow.test.tsx` and `MetricMiniSparkline.test.tsx`
+regressions and `browser-tests/guest-disk-provenance.cjs` exercise retained and
+pre-sample states, display/lens changes, current-value semantics and same-row
+resumption. Native thaw, workload liveness and released acceptance remain
+independent obligations, not facts inferred from these synthetic observations.
+
 The legacy Workloads `DiskList` is exercised only by tests/fixtures, not a
 shipped caller. Its empty-state title is not evidence of readable touch guidance;
 the shipped guest Overview supplies the readable pre-sample explanation.
