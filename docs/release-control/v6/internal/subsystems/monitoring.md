@@ -17,6 +17,30 @@
 
 ## Purpose
 
+### Platform connection discovery follows tenant storage identity
+
+TrueNAS and VMware pollers enumerate validated, sorted persistence directory
+keys, including `default`, independently of `org.json` metadata. A missing,
+malformed or foreign metadata ID cannot prevent a saved connection from
+acquiring a provider, redirect its config read, or block authoritative
+disable/removal in an unrelated tenant. Configs, credentials, runtime statuses
+and discovered records remain keyed by that storage identity and connection
+ID. Existing path validation, disabled-connection pruning, encrypted config
+loading and poll intervals are unchanged. A directory-list failure still
+returns no partial inventory; a connection-config read failure does not gain
+an old-credential fallback. Metadata-dependent account and authentication
+consumers retain strict organization loading: storage discovery is not
+authorization, membership or a substitute for request tenant resolution.
+
+The storage-key, TrueNAS and VMware discovery tests pin malformed/absent IDs,
+metadata redirection and unrelated corruption, plus disable/removal without
+additional polling. API controls use the actual saved Test, periodic poller
+and redacted list response: a probe cannot manufacture runtime evidence, and
+ordinary polling supplies transport, attempt/success and observed inventory.
+These synthetic source controls reproduce a family matching #2382's second
+operator response, not that operator's cause, the original downgrade-resolved
+regression, native appliance acceptance or release availability.
+
 ### Lightweight detached History reads
 
 Guest, node, disk and storage History readers allocate one exact-sized snapshot

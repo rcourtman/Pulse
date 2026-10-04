@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -2718,5 +2719,231 @@ func TestTrueNASPartialReportingPipeline(t *testing.T) {
 	chart := monitor.GetGuestMetricsForChart("agent:"+instance.ID, "agent", instance.ID, time.Hour)
 	if points := chart["temperature"]; len(points) != 1 || points[0].Value != 42 {
 		t.Fatalf("sufficiently covered local History lost Thermals: %+v", points)
+	}
+}
+
+func setDiscoveryOrgMetadata(t *testing.T, persistence *config.ConfigPersistence, body string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(persistence.GetConfigDir(), "org.json"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func discoveryTenant(t *testing.T, mtp *config.MultiTenantPersistence, orgID string) *config.ConfigPersistence {
+	t.Helper()
+	persistence, err := mtp.GetPersistence(orgID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return persistence
+}
+
+func TestTrueNASPollerStorageIdentityDiscovery(t *testing.T) {
+	for _, tc := range []struct {
+		name, orgID, metadata, peerMetadata string
+	}{
+		{name: "normal_missing_metadata", orgID: "default"},
+		{name: "default_malformed_metadata", orgID: "default", metadata: "{broken"},
+		{name: "default_missing_metadata_id", orgID: "default", metadata: `{}`},
+		{name: "default_metadata_redirect", orgID: "default", metadata: `{"id":"metadata-redirect"}`},
+		{name: "unrelated_malformed_metadata", orgID: "default", peerMetadata: "{broken"},
+		{name: "tenant_malformed_metadata", orgID: "tenant-a", metadata: "{broken"},
+		{name: "tenant_metadata_collision", orgID: "tenant-a", metadata: `{"id":"tenant-b"}`, peerMetadata: `{"id":"tenant-b"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := newTrueNASMockServer(t, "storage-owner-a")
+			t.Cleanup(server.Close)
+			mtp, _ := newTestTenantPersistence(t)
+			persistence := discoveryTenant(t, mtp, tc.orgID)
+			connection := trueNASInstanceForServer(t, "same-local-id", server.URL(), true)
+			connection.Username = "fixture-owner"
+			if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+				t.Fatal(err)
+			}
+			if tc.metadata != "" {
+				setDiscoveryOrgMetadata(t, persistence, tc.metadata)
+			}
+			if tc.peerMetadata != "" {
+				peer := discoveryTenant(t, mtp, "tenant-b")
+				setDiscoveryOrgMetadata(t, peer, tc.peerMetadata)
+			}
+
+			// An actual standalone probe reads system.info even when the
+			// poller's organization discovery cannot reach this saved config.
+			probe, err := truenas.NewClient(truenas.ClientConfig{
+				Host: connection.Host, Port: connection.Port,
+				UseHTTPS: connection.UseHTTPS, APIKey: connection.APIKey, Username: connection.Username,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			defer probe.Close()
+			if err := probe.TestConnection(ctx); err != nil {
+				t.Fatalf("standalone probe failed: %v", err)
+			}
+
+			poller := NewTrueNASPoller(mtp, 0, nil)
+			t.Cleanup(func() {
+				for _, byConnection := range poller.providersByOrg {
+					for _, provider := range byConnection {
+						provider.Close()
+					}
+				}
+			})
+			poller.syncConnections()
+			if poller.providersByOrg[tc.orgID][connection.ID] == nil {
+				projection, _ := json.Marshal(poller.ConnectionSummaries(tc.orgID, []config.TrueNASInstance{connection})[connection.ID])
+				t.Fatalf("standalone probe succeeded but saved provider is absent: %s", projection)
+			}
+			poller.pollAll(ctx)
+			summary := poller.ConnectionSummaries(tc.orgID, []config.TrueNASInstance{connection})[connection.ID]
+			if summary.Poll == nil || summary.Poll.LastSuccessAt == nil || summary.Poll.LastAttemptAt == nil ||
+				summary.Observed == nil || summary.Observed.Host != "storage-owner-a" || summary.Transport == nil ||
+				!summary.Transport.Connected || !hasTrueNASHostForOrg(poller, tc.orgID, "storage-owner-a") {
+				t.Fatalf("ordinary polling did not reach saved connection: %+v", summary)
+			}
+			for _, other := range []string{"default", "tenant-b", "metadata-redirect"} {
+				if other != tc.orgID && len(poller.GetCurrentRecordsForOrg(other)) != 0 {
+					t.Fatalf("resources escaped storage owner into %s", other)
+				}
+			}
+			if _, err := os.Stat(filepath.Join(mtp.BaseDataDir(), "orgs", "metadata-redirect")); !os.IsNotExist(err) {
+				t.Fatal("metadata created an unrelated tenant directory")
+			}
+		})
+	}
+}
+
+func TestTrueNASPollerStorageDiscoveryAppliesRevocationWithBrokenPeerMetadata(t *testing.T) {
+	for _, action := range []string{"disable", "remove"} {
+		t.Run(action, func(t *testing.T) {
+			server := newTrueNASMockServer(t, "revocation-owner")
+			t.Cleanup(server.Close)
+			mtp, persistence := newTestTenantPersistence(t)
+			connection := trueNASInstanceForServer(t, "revocation-id", server.URL(), true)
+			if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+				t.Fatal(err)
+			}
+			poller := NewTrueNASPoller(mtp, 0, nil)
+			t.Cleanup(func() {
+				for _, byConnection := range poller.providersByOrg {
+					for _, provider := range byConnection {
+						provider.Close()
+					}
+				}
+			})
+			poller.syncConnections()
+			poller.pollAll(context.Background())
+			if !hasTrueNASHostForOrg(poller, "default", "revocation-owner") {
+				t.Fatal("initial healthy fixture did not poll")
+			}
+			before := server.RequestCount()
+			setDiscoveryOrgMetadata(t, discoveryTenant(t, mtp, "broken-peer"), "{broken")
+			next := []config.TrueNASInstance{}
+			if action == "disable" {
+				connection.Enabled = false
+				next = append(next, connection)
+			}
+			if err := persistence.SaveTrueNASConfig(next); err != nil {
+				t.Fatal(err)
+			}
+			poller.syncConnections()
+			if poller.providersByOrg["default"][connection.ID] != nil {
+				t.Fatal("unrelated org metadata blocked authoritative connection revocation")
+			}
+			poller.pollAll(context.Background())
+			if server.RequestCount() != before || len(poller.GetCurrentRecordsForOrg("default")) != 0 {
+				t.Fatal("revoked connection still polled or contributed current records")
+			}
+			if action == "remove" && poller.statusByOrg["default"][connection.ID] != nil {
+				t.Fatal("removed connection retained runtime state")
+			}
+		})
+	}
+}
+
+func TestTrueNASPollerStorageIdentitySeparatesTenantsAndTracksRemoval(t *testing.T) {
+	mtp, _ := newTestTenantPersistence(t)
+	servers := map[string]*trueNASMockServer{}
+	for _, orgID := range []string{"tenant-a", "tenant-b"} {
+		server := newTrueNASMockServer(t, orgID+"-nas")
+		t.Cleanup(server.Close)
+		servers[orgID] = server
+		connection := trueNASInstanceForServer(t, "same-local-id", server.URL(), true)
+		persistence := discoveryTenant(t, mtp, orgID)
+		if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+			t.Fatal(err)
+		}
+		setDiscoveryOrgMetadata(t, persistence, `{"id":"tenant-b"}`)
+	}
+	poller := NewTrueNASPoller(mtp, 0, nil)
+	t.Cleanup(func() {
+		for _, byConnection := range poller.providersByOrg {
+			for _, provider := range byConnection {
+				provider.Close()
+			}
+		}
+	})
+	poller.syncConnections()
+	poller.pollAll(context.Background())
+	for _, orgID := range []string{"tenant-a", "tenant-b"} {
+		if !hasTrueNASHostForOrg(poller, orgID, orgID+"-nas") {
+			t.Fatalf("missing own tenant's resources: %s", orgID)
+		}
+		for _, other := range []string{"tenant-a", "tenant-b"} {
+			if other != orgID && hasTrueNASHostForOrg(poller, orgID, other+"-nas") {
+				t.Fatal("same local connection ID merged different tenant inventories")
+			}
+		}
+	}
+	retained := poller.providersByOrg["tenant-b"]["same-local-id"]
+	removedRequests := servers["tenant-a"].RequestCount()
+	if err := mtp.DeleteOrganization("tenant-a"); err != nil {
+		t.Fatal(err)
+	}
+	poller.syncConnections()
+	poller.pollAll(context.Background())
+	if len(poller.GetCurrentRecordsForOrg("tenant-a")) != 0 || len(poller.providersByOrg["tenant-a"]) != 0 ||
+		len(poller.statusByOrg["tenant-a"]) != 0 || servers["tenant-a"].RequestCount() != removedRequests {
+		t.Fatal("removed tenant retained runtime inventory or kept polling")
+	}
+	if poller.providersByOrg["tenant-b"]["same-local-id"] != retained ||
+		!hasTrueNASHostForOrg(poller, "tenant-b", "tenant-b-nas") {
+		t.Fatal("removed tenant disrupted a different storage owner's provider")
+	}
+}
+
+func TestTrueNASPollerStorageDiscoveryDoesNotReuseUnreadableConnectionConfig(t *testing.T) {
+	server := newTrueNASMockServer(t, "config-read-owner")
+	t.Cleanup(server.Close)
+	mtp, persistence := newTestTenantPersistence(t)
+	connection := trueNASInstanceForServer(t, "config-read-id", server.URL(), true)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatal(err)
+	}
+	poller := NewTrueNASPoller(mtp, 0, nil)
+	t.Cleanup(func() {
+		for _, byConnection := range poller.providersByOrg {
+			for _, provider := range byConnection {
+				provider.Close()
+			}
+		}
+	})
+	poller.syncConnections()
+	poller.pollAll(context.Background())
+	if !hasTrueNASHostForOrg(poller, "default", "config-read-owner") {
+		t.Fatal("initial fixture did not poll")
+	}
+	before := server.RequestCount()
+	if err := os.WriteFile(filepath.Join(persistence.GetConfigDir(), "truenas.enc"), []byte("{broken"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	poller.syncConnections()
+	poller.pollAll(context.Background())
+	if poller.providersByOrg["default"][connection.ID] != nil || server.RequestCount() != before ||
+		len(poller.GetCurrentRecordsForOrg("default")) != 0 {
+		t.Fatal("unreadable authoritative config reused old credentials or records")
 	}
 }

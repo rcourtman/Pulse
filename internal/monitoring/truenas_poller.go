@@ -185,7 +185,7 @@ func (p *TrueNASPoller) syncConnections() {
 		return
 	}
 
-	orgs, err := p.multiTenant.ListOrganizations()
+	orgIDs, err := p.multiTenant.ListOrganizationIDs()
 	if err != nil {
 		log.Warn().
 			Str("component", "truenas_poller").
@@ -196,17 +196,10 @@ func (p *TrueNASPoller) syncConnections() {
 	}
 
 	// orgID -> connID -> instance
-	configured := make(map[string]map[string]config.TrueNASInstance, len(orgs))
-	active := make(map[string]map[string]config.TrueNASInstance, len(orgs))
+	configured := make(map[string]map[string]config.TrueNASInstance, len(orgIDs))
+	active := make(map[string]map[string]config.TrueNASInstance, len(orgIDs))
 
-	for _, org := range orgs {
-		if org == nil {
-			continue
-		}
-		orgID := strings.TrimSpace(org.ID)
-		if orgID == "" {
-			continue
-		}
+	for _, orgID := range orgIDs {
 		persistence, err := p.multiTenant.GetPersistence(orgID)
 		if err != nil || persistence == nil {
 			log.Warn().
