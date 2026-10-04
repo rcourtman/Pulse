@@ -220,8 +220,9 @@ export function GuestRow(props: GuestRowProps) {
   // A native title or bar tooltip is not a visible freshness cue on touch,
   // and disappears from the chart's accessible value when the history lens opens.
   const diskReadStatus = createMemo(() => {
-    const reason = props.guest.diskStatusReason;
-    if (!isVM(props.guest) || !reason) return undefined;
+    const guest = props.guest;
+    if (!isVM(guest) || !guest.diskStatusReason) return undefined;
+    const reason = guest.diskStatusReason;
     const retained = reason.startsWith('prev-');
     return {
       label: retained
