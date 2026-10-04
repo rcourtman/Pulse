@@ -2760,3 +2760,18 @@ func TestService_BackfillPreservesConcurrentManualRepair(t *testing.T) {
 		}
 	}
 }
+
+func TestDiscoveryGuestSafetyStopsAndPreservesSavedEvidence(t *testing.T) {
+	testDiscoveryGuestSafetyStopsAndPreservesSavedEvidence(t)
+}
+
+func TestDiscoveryFailedCommandEvidenceContract(t *testing.T) {
+	t.Run("successful-stdout-only", testDiscoveryRejectsFailedCommandEvidence)
+	t.Run("saved-evidence-and-recovery", testDiscoveryAllFailedCommandsKeepSavedEvidence)
+	t.Run("stderr-is-not-evidence", TestDeepScanner_OutputHandling)
+	t.Run("failed-scan-outcome", TestDeepScanner_CommandErrorHandling)
+}
+
+func TestDiscoveryGuestCancellationContract(t *testing.T) {
+	TestVMDiscoveryCancellationIsNotSuccessfulEvidence(t)
+}

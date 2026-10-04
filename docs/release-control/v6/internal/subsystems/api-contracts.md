@@ -20,6 +20,16 @@
 
 ## Purpose
 
+### Optional guest-memory observation reaches existing frontend consumers
+
+Frontend Memory and ResourceMetric model the existing optional server-owned
+`observation` fields (state, source, original observedAt). The shared wire
+reader selects only those fields and never invents an annotation for a legacy
+metric. API/canonical workload mapping preserves the selected annotation, not
+that of a conflicting platform facet. Unknown states/times stay non-current in
+the Proxmox guest drawer. Numeric selection, permissions and existing endpoint
+shape remain unchanged; hook/adapter/History controls verify this consumer.
+
 ### Platform connection alerts share the constructed runtime owners
 
 The default monitor's connection-alert snapshot callback is installed only after

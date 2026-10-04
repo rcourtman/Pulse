@@ -31,6 +31,7 @@ import type { AlertOverviewState } from './useAlertOverviewState';
 import { ResourceMonitoringPolicyAction } from './ResourceMonitoringPolicyAction';
 import { AlertSnoozeAction } from './AlertSnoozeAction';
 import { isAlertSnoozed } from './useAlertSnoozeState';
+import { isPulseSystemAlert } from '@/utils/alertScope';
 
 interface AlertOverviewAlertCardProps {
   alert: Alert;
@@ -40,6 +41,8 @@ interface AlertOverviewAlertCardProps {
 
 export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
   const alertKey = () => getCanonicalAlertId(props.alert);
+  const hasResource = () =>
+    !isPulseSystemAlert(props.alert) && Boolean(props.alert.resourceId?.trim());
   const processing = () =>
     props.state.processingAlerts().has(alertKey()) ||
     props.state.snoozeProcessingAlerts().has(alertKey());
@@ -124,20 +127,29 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
           </div>
           <div class="flex-1 min-w-0">
             <div class="flex flex-wrap items-center gap-2">
-              <A
-                href={resourceLink()}
-                class={`${alertCardPresentation().resourceClassName} hover:underline cursor-pointer`}
-                title="View resource"
+              <Show
+                when={hasResource()}
+                fallback={
+                  <span class={alertCardPresentation().resourceClassName}>
+                    {props.alert.resourceName}
+                  </span>
+                }
               >
-                {props.alert.resourceName}
-              </A>
+                <A
+                  href={resourceLink()}
+                  class={`${alertCardPresentation().resourceClassName} hover:underline cursor-pointer`}
+                  title="View resource"
+                >
+                  {props.alert.resourceName}
+                </A>
+              </Show>
               <span class="text-xs text-muted">({alertTypeDisplayLabel(props.alert.type)})</span>
               <Show when={!props.alert.acknowledged}>
                 <span class={getAlertSeverityBadgeClass(props.alert.level)}>
                   {formatAlertSeverityLabel(props.alert.level)}
                 </span>
               </Show>
-              <Show when={props.alert.node}>
+              <Show when={!isPulseSystemAlert(props.alert) && props.alert.node}>
                 <span class="text-xs text-muted">
                   {getAlertOverviewNodeLabel(props.alert.nodeDisplayName || props.alert.node)}
                 </span>
@@ -158,7 +170,7 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
               <p class={getAlertOverviewStartedAtClass()}>
                 {getAlertOverviewStartedAtLabel(new Date(props.alert.startTime).toLocaleString())}
               </p>
-              <Show when={props.alert.threshold > 0}>
+              <Show when={!isPulseSystemAlert(props.alert) && props.alert.threshold > 0}>
                 <span class="text-xs text-muted">
                   limit: {props.alert.threshold}
                   {props.alert.type === 'temperature' || props.alert.type === 'diskTemperature'
@@ -231,7 +243,7 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
               props.timelineState.expandedIncidents().has(alertKey()),
             )}
           </button>
-          <Show when={(props.alert.resourceId || '').trim()}>
+          <Show when={hasResource()}>
             <ResourceMonitoringPolicyAction
               resourceId={props.alert.resourceId}
               resourceName={props.alert.resourceName || props.alert.resourceId}

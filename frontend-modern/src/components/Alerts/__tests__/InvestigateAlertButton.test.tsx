@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import type { Alert } from '@/types/api';
+import { makeSystemAlert } from '@/features/alerts/__fixtures__/systemAlerts';
 import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
 // ---------------------------------------------------------------------------
@@ -153,6 +154,44 @@ beforeEach(() => {
   notificationStoreMock.error.mockReset();
   notificationStoreMock.warning.mockReset();
   notificationStoreMock.info.mockReset();
+});
+
+describe('system-alert investigation', () => {
+  it('retains resource Patrol for a monitored VM named Pulse', async () => {
+    const alert = makeAlert({ resourceName: 'Pulse' });
+    render(() => <InvestigateAlertButton alert={alert} variant="full" patrolOption />);
+    fireEvent.click(screen.getByRole('button', { name: 'Have Patrol investigate' }));
+    await waitFor(() => expect(triggerPatrolRunMock).toHaveBeenCalledTimes(1));
+    expect(triggerPatrolRunMock).toHaveBeenCalledWith({
+      resource_ids: ['vm-101'],
+      alert_identifier: alert.id,
+      alert_type: 'cpu',
+    });
+    expect(explainMock).not.toHaveBeenCalled();
+  });
+
+  it('retains metadata-only system scope on a historical ID', () => {
+    const alert = makeSystemAlert('future-condition', { id: 'legacy-id', resourceId: 'vm-wrong' });
+    render(() => <InvestigateAlertButton alert={alert} variant="full" patrolOption />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Pulse Assistant about this alert' }));
+    expect(triggerPatrolRunMock).not.toHaveBeenCalled();
+    expect(openedContext().targetId).toBeUndefined();
+    expect(openedContext().handoffResources).toEqual([]);
+  });
+
+  it.each([undefined, { systemAlert: true, resourceType: 'vm' }])(
+    'opens explanation, never resource Patrol, for a system alert with metadata %j',
+    (metadata) => {
+      const alert = makeSystemAlert('backup-evaluation', { resourceId: 'vm-wrong', metadata });
+      render(() => <InvestigateAlertButton alert={alert} variant="full" patrolOption />);
+      fireEvent.click(screen.getByRole('button', { name: 'Ask Pulse Assistant about this alert' }));
+      expect(explainMock).toHaveBeenCalledTimes(1);
+      expect(triggerPatrolRunMock).not.toHaveBeenCalled();
+      expect(openedContext().targetId).toBeUndefined();
+      expect(openedContext().handoffResources).toEqual([]);
+      expect(formatAlertValueMock).not.toHaveBeenCalled();
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------

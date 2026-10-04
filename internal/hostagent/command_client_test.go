@@ -514,3 +514,20 @@ func TestCommandClient_ReplayedRequestWaitsForInFlightHandlerInsteadOfDropping(t
 		t.Fatal("replay handler did not release the slot")
 	}
 }
+
+func TestCommandClientGuestExecutionAdmissionContract(t *testing.T) {
+	testVMGuestExecNoUnverifiedHandoff(t)
+}
+
+func TestGuestExecRealServerAgentDiscoveryAdmission(t *testing.T) {
+	testGuestExecRealServerAgentDiscoveryAdmission(t)
+}
+
+func TestCommandClientGuestCompletionContract(t *testing.T) {
+	TestGuestExecZeroCLIExitDoesNotProveGuestCompletion(t)
+}
+
+func TestCommandClientGuestOutcomeContract(t *testing.T) {
+	t.Run("execution-and-admission", testGuestExecProjectsGuestOutcome)
+	t.Run("terminal-dictionary", TestGuestExecTerminalDictionary)
+}

@@ -1,5 +1,6 @@
 import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import { isPulseSystemAlert } from '@/utils/alertScope';
 
 import { alertTypeDisplayLabel, unifiedTypeToAlertDisplayType } from './helpers';
 
@@ -25,6 +26,7 @@ export interface HistoryItem {
   rawAlertType?: string;
   description?: string;
   acknowledged?: boolean;
+  systemAlert?: boolean;
 }
 
 export interface AlertTrendSeries {
@@ -121,15 +123,18 @@ export function resolveAlertHistoryResourceType({
   resourceName,
   metadata,
   resourceId,
+  alertId,
   getResource,
   allResources,
 }: {
   resourceName: string;
   metadata?: Record<string, unknown>;
   resourceId?: string;
+  alertId?: string;
   getResource: (resourceId: string) => Resource | undefined;
   allResources: Resource[];
 }) {
+  if (isPulseSystemAlert({ id: alertId || '', metadata })) return 'Pulse';
   const metadataType =
     typeof metadata?.resourceType === 'string' ? (metadata.resourceType as string) : undefined;
   if (metadataType && metadataType.trim().length > 0) {
@@ -169,6 +174,7 @@ export function buildAlertHistoryItems({
   const items: HistoryItem[] = [];
 
   Object.values(activeAlerts).forEach((alert) => {
+    const systemScoped = isPulseSystemAlert(alert);
     items.push({
       id: alert.id,
       source: 'alert',
@@ -177,15 +183,17 @@ export function buildAlertHistoryItems({
       duration: formatAlertHistoryDuration(alert.startTime, undefined, now),
       resourceName: alert.resourceName,
       resourceType: resolveAlertHistoryResourceType({
+        alertId: alert.id,
         resourceName: alert.resourceName,
         metadata: alert.metadata,
         resourceId: alert.resourceId,
         getResource,
         allResources,
       }),
-      resourceId: alert.resourceId,
-      node: alert.node,
-      nodeDisplayName: alert.nodeDisplayName,
+      resourceId: systemScoped ? '' : alert.resourceId,
+      node: systemScoped ? undefined : alert.node,
+      nodeDisplayName: systemScoped ? undefined : alert.nodeDisplayName,
+      ...(systemScoped ? { systemAlert: true } : {}),
       severity: alert.level,
       title: alertTypeDisplayLabel(alert.type),
       rawAlertType: alert.type,
@@ -197,6 +205,7 @@ export function buildAlertHistoryItems({
   const activeAlertIds = new Set(Object.keys(activeAlerts));
   alertHistory.forEach((alert) => {
     if (activeAlertIds.has(alert.id)) return;
+    const systemScoped = isPulseSystemAlert(alert);
 
     items.push({
       id: alert.id,
@@ -207,15 +216,17 @@ export function buildAlertHistoryItems({
       duration: formatAlertHistoryDuration(alert.startTime, alert.lastSeen, now),
       resourceName: alert.resourceName,
       resourceType: resolveAlertHistoryResourceType({
+        alertId: alert.id,
         resourceName: alert.resourceName,
         metadata: alert.metadata,
         resourceId: alert.resourceId,
         getResource,
         allResources,
       }),
-      resourceId: alert.resourceId,
-      node: alert.node,
-      nodeDisplayName: alert.nodeDisplayName,
+      resourceId: systemScoped ? '' : alert.resourceId,
+      node: systemScoped ? undefined : alert.node,
+      nodeDisplayName: systemScoped ? undefined : alert.nodeDisplayName,
+      ...(systemScoped ? { systemAlert: true } : {}),
       severity: alert.level,
       title: alertTypeDisplayLabel(alert.type),
       rawAlertType: alert.type,

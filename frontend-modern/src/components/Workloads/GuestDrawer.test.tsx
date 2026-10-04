@@ -309,14 +309,22 @@ describe('GuestDrawer', () => {
     );
     expect(history.querySelector('[data-history-current="disk"]')).toBeNull();
     setGuest({ ...guest(), diskStatusReason: '', disk: { total: 100, used: 75, usage: 75 } });
-    expect(history.querySelector('[data-history-last-known]')).toBeNull();
-    expect(history.querySelector('[data-history-deferred]')).toBeNull();
+    expect(history.querySelector('[data-history-last-known="disk"]')).toBeNull();
+    expect(history.querySelector('[data-history-deferred="disk"]')).toBeNull();
     expect(history.querySelector('[data-history-current="disk"]')).toHaveTextContent(
       'Disk75.0%current',
     );
+    // Fresh disk evidence cannot qualify the independent legacy memory value.
+    expect(history.querySelector('[data-history-current="memory"]')).toBeNull();
+    expect(history.querySelector('[data-history-unknown="memory"]')).toHaveTextContent(
+      'freshness unknown',
+    );
+    expect(history.querySelector('[data-history-deferred="memory"]')).toHaveTextContent(
+      'Not a current measurement.',
+    );
     expect(history.querySelector('path')).toBeNull();
-    // Existing drawer target recomputation follows each guest snapshot.
-    // This presentation repair does not change that request ownership.
+    // Same target/range snapshots retain the chart and original History read.
+    expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1);
     for (const [request] of chartsApiMocks.getMetricsHistory.mock.calls) {
       expect(request).toMatchObject({
         resourceType: 'vm',

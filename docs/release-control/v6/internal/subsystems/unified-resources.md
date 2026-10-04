@@ -23,6 +23,32 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Guest drawers consume selected memory provenance
+
+Existing guest drawers consume optional server-owned `memory.observation` and
+selected canonical/API metric annotations without renewing their original
+observation time from resource LastSeen, disk-read deferral or another platform
+facet. `useWorkloads`, `useUnifiedResources` and the legacy resource adapter
+preserve the selected annotation. A selected unannotated metric cannot borrow a
+conflicting raw platform annotation. Raw-memory fallback retains its own
+annotation only when its numeric reading is actually selected.
+
+Proxmox VM/LXC Overview states current, last known, unavailable or freshness
+unknown with the original known UTC time and an allowlisted source label.
+Missing, unrecognised or unusable provenance is not current. Unavailable usage
+keeps known capacity but never invents zero used/free/swap measurements. History
+keeps retained/unknown numeric context separate from current legends and stored
+points, dated inspection and denied source access. Same-guest source changes
+update without resetting the drawer or refetching History. Independent valid
+PVE/Pulse Agent readings remain current even while QGA disk reads are deferred;
+unannotated unrelated platforms keep existing presentation.
+
+Connected original-source/normalizer/adapter and mounted History controls plus
+`browser-tests/guest-memory-provenance.cjs` exercise these boundaries. They do
+not establish native thaw, covered-filesystem writes, liveness, reporter relief,
+publication or an installed containing release. No route, collection, numeric
+selection, retention, alert policy or diagnostic permission is added.
+
 ### Guest memory provenance follows metric selection
 
 Raw Proxmox `memory.observation` preserves the guest builder's state, source

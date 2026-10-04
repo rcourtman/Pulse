@@ -25,6 +25,6 @@ func BenchmarkClassifyResourceSensitivity(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		benchmarkSensitivity = classifyResourceSensitivity(resource)
+		benchmarkSensitivity = classifyResourceSensitivity(&resource)
 	}
 }

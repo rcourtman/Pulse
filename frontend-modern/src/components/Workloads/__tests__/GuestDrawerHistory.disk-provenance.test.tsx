@@ -30,7 +30,13 @@ const guest = (reason: string, usage = 50): WorkloadGuest => ({
   status: 'running',
   cpu: 0.1,
   cpus: 2,
-  memory: { total: 100, used: 25, free: 75, usage: 25 },
+  memory: {
+    total: 100,
+    used: 25,
+    free: 75,
+    usage: 25,
+    observation: { state: 'current', source: 'status-mem', observedAt: '2026-10-04T03:00:00Z' },
+  },
   disk: { total: 100, used: usage, usage },
   networkIn: 100,
   networkOut: 200,
@@ -86,7 +92,7 @@ describe('GuestDrawerHistory filesystem provenance', () => {
       const retained = chart.querySelector('[data-history-last-known="disk"]')!;
       expect(retained).toHaveTextContent('Disk50.0%last known');
       expect(retained).toHaveAccessibleDescription(
-        `Disk live reading: Using last known disk stats. ${message}`,
+        `Disk reading: Using last known disk stats. ${message}`,
       );
       expect(chart.querySelector('[data-history-deferred="disk"]')).toBeVisible();
       expect(chart.querySelector('[data-history-current="cpu"]')).toHaveTextContent(

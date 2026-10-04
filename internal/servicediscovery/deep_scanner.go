@@ -2,11 +2,14 @@ package servicediscovery
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -65,6 +68,12 @@ const (
 	defaultDeepScannerMaxParallel = 3
 	defaultDeepScannerTimeout     = 30 * time.Second
 )
+
+// ErrNoCommandEvidence prevents an attempted but failed scan from replacing
+// saved observations through metadata-only fallback. It contains no command
+// output or provider error. Individual optional failures can still coexist
+// with independent, successful stdout evidence.
+var ErrNoCommandEvidence = errors.New("Discovery commands produced no successful output")
 
 // NewDeepScanner creates a new deep scanner.
 func NewDeepScanner(executor CommandExecutor) *DeepScanner {
@@ -191,7 +200,14 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 	}
 
 	// Find the agent for this host
+	vmTarget := s.getTargetType(req.ResourceType) == "vm"
 	agentID := s.findAgentForTarget(requestTargetID, req.Hostname)
+	if vmTarget {
+		agentID = s.findAgentForVMTarget(requestTargetID)
+		if agentID == "" {
+			return nil, agentexec.GuestExecDeferred(agentexec.GuestExecTargetUnverified)
+		}
+	}
 	if agentID == "" {
 		scanLog.Warn().
 			Str("action", "scan_precondition_failed").
@@ -230,113 +246,170 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	for _, cmd := range commands {
-		wg.Add(1)
-		go func(cmd DiscoveryCommand) {
-			defer wg.Done()
+	var safetyError error
+	failedCommands := 0
+	runCommand := func(cmd DiscoveryCommand) {
+		cancelBeforeAdmission := func() {
+			if vmTarget {
+				mu.Lock()
+				defer mu.Unlock()
+				safetyError = agentexec.GuestExecDeferred("the scan was canceled before guest admission")
+				result.Errors[cmd.Name] = safetyError.Error()
+			}
+		}
+		if ctx.Err() != nil {
+			cancelBeforeAdmission()
+			return
+		}
+		select {
+		case semaphore <- struct{}{}:
+			defer func() { <-semaphore }()
+		case <-ctx.Done():
+			cancelBeforeAdmission()
+			return
+		}
 
-			select {
-			case semaphore <- struct{}{}:
-				defer func() { <-semaphore }()
-			case <-ctx.Done():
+		// Build the actual command to run
+		actualCmd := s.buildCommand(req.ResourceType, req.ResourceID, cmd.Command)
+
+		// Get the target ID for the agent
+		targetID := s.getTargetID(req.ResourceType, req.ResourceID)
+
+		// Only validate TargetID when it will be interpolated into shell commands
+		// by the agent (container/vm types). Agent/docker types don't use TargetID
+		// in command wrapping, so they can have any format (including colons for IPv6).
+		targetType := s.getTargetType(req.ResourceType)
+		if targetType == "container" || targetType == "vm" {
+			if err := ValidateResourceID(targetID); err != nil {
+				mu.Lock()
+				failedCommands++
+				result.Errors[cmd.Name] = fmt.Sprintf("invalid target ID: %v", err)
+				mu.Unlock()
 				return
 			}
+		}
 
-			// Build the actual command to run
-			actualCmd := s.buildCommand(req.ResourceType, req.ResourceID, cmd.Command)
+		// Execute the command
+		cmdCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
 
-			// Get the target ID for the agent
-			targetID := s.getTargetID(req.ResourceType, req.ResourceID)
+		cmdResult, err := s.executor.ExecuteCommand(cmdCtx, agentID, ExecuteCommandPayload{
+			RequestID:  uuid.New().String(),
+			Command:    actualCmd,
+			TargetType: s.getTargetType(req.ResourceType),
+			TargetID:   targetID,
+			Timeout:    cmd.Timeout,
+		})
 
-			// Only validate TargetID when it will be interpolated into shell commands
-			// by the agent (container/vm types). Agent/docker types don't use TargetID
-			// in command wrapping, so they can have any format (including colons for IPv6).
-			targetType := s.getTargetType(req.ResourceType)
-			if targetType == "container" || targetType == "vm" {
-				if err := ValidateResourceID(targetID); err != nil {
-					mu.Lock()
-					result.Errors[cmd.Name] = fmt.Sprintf("invalid target ID: %v", err)
-					mu.Unlock()
-					return
-				}
-			}
+		mu.Lock()
+		defer mu.Unlock()
 
-			// Execute the command
-			cmdCtx, cancel := context.WithTimeout(ctx, timeout)
-			defer cancel()
-
-			cmdResult, err := s.executor.ExecuteCommand(cmdCtx, agentID, ExecuteCommandPayload{
-				RequestID:  uuid.New().String(),
-				Command:    actualCmd,
-				TargetType: s.getTargetType(req.ResourceType),
-				TargetID:   targetID,
-				Timeout:    cmd.Timeout,
-			})
-
-			mu.Lock()
-			defer mu.Unlock()
-
+		// A safety deferral is never an optional probe failure or usable
+		// partial evidence. Stop this VM scan, including nested Docker.
+		if vmTarget {
+			message := ""
 			if err != nil {
-				if !cmd.Optional {
-					result.Errors[cmd.Name] = err.Error()
+				message = err.Error()
+			} else if cmdResult != nil {
+				message = cmdResult.Error
+			}
+			// The server can stop waiting before the agent returns its final
+			// safety result. A canceled/timed-out handoff cannot become an
+			// optional successful scan or fresh metadata fallback meanwhile.
+			if cmdCtx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				message = agentexec.GuestExecDeferred(agentexec.GuestExecCompletionUnknown).Error()
+			}
+			if agentexec.IsGuestExecDeferred(message) {
+				safetyError = fmt.Errorf("%s", message)
+				result.Errors[cmd.Name] = message
+				return
+			}
+		}
+
+		if err != nil {
+			failedCommands++
+			if !cmd.Optional {
+				result.Errors[cmd.Name] = err.Error()
+			}
+			scanLog.Debug().
+				Str("action", "command_execute_failed").
+				Err(err).
+				Str("command", cmd.Name).
+				Bool("optional", cmd.Optional).
+				Msg("Command failed during discovery")
+			return
+		}
+
+		if cmdResult == nil {
+			failedCommands++
+			if !cmd.Optional {
+				result.Errors[cmd.Name] = "command returned no result"
+			}
+		} else {
+			successful := cmdResult.Success && cmdResult.ExitCode == 0 && cmdResult.Error == ""
+			if successful {
+				// stdout from a successful command is observation evidence.
+				// Failed/partial stdout and any stderr are diagnostics only;
+				// they must not identify a service or enter saved evidence.
+				if cmdResult.Stdout != "" {
+					result.CommandOutputs[cmd.Name] = cmdResult.Stdout
 				}
-				scanLog.Debug().
-					Str("action", "command_execute_failed").
-					Err(err).
+			} else {
+				failedCommands++
+				if !cmd.Optional {
+					message := cmdResult.Error
+					if message == "" {
+						message = fmt.Sprintf("command failed with status %d", cmdResult.ExitCode)
+					}
+					result.Errors[cmd.Name] = message
+				}
+				event := scanLog.Debug()
+				if !cmd.Optional {
+					event = scanLog.Warn()
+				}
+				event.
+					Str("action", "command_result_failed").
 					Str("command", cmd.Name).
 					Bool("optional", cmd.Optional).
-					Msg("Command failed during discovery")
-				return
+					Int("exit_code", cmdResult.ExitCode).
+					Str("request_id", cmdResult.RequestID).
+					Str("command_error", cmdResult.Error).
+					Msg("Deep scan command reported failure")
 			}
+		}
 
-			if cmdResult != nil {
-				output := cmdResult.Stdout
-				if cmdResult.Stderr != "" && output != "" {
-					output += "\n--- stderr ---\n" + cmdResult.Stderr
-				} else if cmdResult.Stderr != "" {
-					output = cmdResult.Stderr
-				}
-
-				if output != "" {
-					result.CommandOutputs[cmd.Name] = output
-				}
-
-				if !cmdResult.Success && cmdResult.Error != "" && !cmd.Optional {
-					result.Errors[cmd.Name] = cmdResult.Error
-				}
-
-				if !cmdResult.Success {
-					event := scanLog.Debug()
-					if !cmd.Optional {
-						event = scanLog.Warn()
-					}
-					event.
-						Str("action", "command_result_failed").
-						Str("command", cmd.Name).
-						Bool("optional", cmd.Optional).
-						Int("exit_code", cmdResult.ExitCode).
-						Str("request_id", cmdResult.RequestID).
-						Str("command_error", cmdResult.Error).
-						Msg("Deep scan command reported failure")
-				}
+		// Update progress and broadcast
+		s.mu.Lock()
+		if prog, ok := s.progress[resourceID]; ok {
+			prog.CompletedSteps++
+			prog.CurrentCommand = cmd.Name
+			progressCopy := *prog
+			s.mu.Unlock()
+			s.notifyProgress(&progressCopy)
+		} else {
+			s.mu.Unlock()
+		}
+	}
+	for _, cmd := range commands {
+		if vmTarget {
+			// QGA has a serial command channel; parallel Discovery probes are
+			// not useful and can queue behind a backup or uncertain command.
+			runCommand(cmd)
+			if safetyError != nil {
+				break
 			}
-
-			// Update progress and broadcast
-			s.mu.Lock()
-			if prog, ok := s.progress[resourceID]; ok {
-				prog.CompletedSteps++
-				prog.CurrentCommand = cmd.Name
-				progressCopy := *prog
-				s.mu.Unlock()
-				s.notifyProgress(&progressCopy)
-			} else {
-				s.mu.Unlock()
-			}
-		}(cmd)
+		} else {
+			wg.Add(1)
+			go func(cmd DiscoveryCommand) { defer wg.Done(); runCommand(cmd) }(cmd)
+		}
 	}
 
 	wg.Wait()
 	result.CompletedAt = time.Now()
+	scanError := safetyError
+	if scanError == nil && failedCommands > 0 && len(result.CommandOutputs) == 0 {
+		scanError = ErrNoCommandEvidence
+	}
 
 	// Broadcast scan completion
 	completionProgress := DiscoveryProgress{
@@ -349,6 +422,15 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 		ElapsedMs:       result.CompletedAt.Sub(startTime).Milliseconds(),
 		PercentComplete: 100,
 	}
+	if scanError != nil {
+		completionProgress.CurrentStep = "No command evidence"
+		if safetyError != nil {
+			completionProgress.CurrentStep = "Guest execution paused"
+		}
+		completionProgress.Error = scanError.Error()
+		completionProgress.CompletedSteps = len(result.CommandOutputs)
+		completionProgress.PercentComplete = float64(completionProgress.CompletedSteps) / float64(len(commands)) * 100
+	}
 	s.notifyProgress(&completionProgress)
 
 	scanLog.Info().
@@ -358,7 +440,7 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 		Dur("duration", result.CompletedAt.Sub(result.StartedAt)).
 		Msg("Deep scan completed")
 
-	return result, nil
+	return result, scanError
 }
 
 // buildCommand wraps the command appropriately for the resource type.
@@ -477,6 +559,31 @@ func (s *DeepScanner) findAgentForTarget(targetID, hostname string) string {
 	}
 
 	return ""
+}
+
+// VM execution never falls back to an unrelated sole agent or a guest-name
+// hint. A short hostname alias is admitted only when it uniquely names a node.
+func (s *DeepScanner) findAgentForVMTarget(targetID string) string {
+	targetID = strings.TrimSpace(targetID)
+	if targetID == "" {
+		return ""
+	}
+	agents := s.executor.GetConnectedAgents()
+	for _, agent := range agents {
+		if agent.AgentID == targetID {
+			return agent.AgentID
+		}
+	}
+	matched := ""
+	for _, agent := range agents {
+		if unifiedresources.HostnamesEquivalent(agent.Hostname, targetID) {
+			if matched != "" {
+				return ""
+			}
+			matched = agent.AgentID
+		}
+	}
+	return matched
 }
 
 // GetProgress returns a copy of the current progress of a scan.

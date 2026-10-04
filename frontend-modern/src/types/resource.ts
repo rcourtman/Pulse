@@ -16,6 +16,7 @@ import type {
   HostSensorSummary,
   HostRAIDArray,
   Memory,
+  MemoryObservation,
   DockerRuntimeCommand,
   PBSBackupJob,
   PBSGarbageJob,
@@ -119,7 +120,8 @@ export interface ResourceHealth {
 
 // Metric value with optional limits
 export interface ResourceMetric {
-  current: number; // Current value (percentage or bytes)
+  current: number; // Selected numeric value (percentage or bytes), not a freshness assertion.
+  observation?: MemoryObservation;
   total?: number; // Total capacity (bytes) - null for percentages
   used?: number; // Used amount (bytes)
   free?: number; // Free amount (bytes)

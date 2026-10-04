@@ -2117,6 +2117,23 @@ service-history reads plus denial/recovery without fabricated samples.
 
 ## Completion Obligations
 
+### Discovery accepts successful command evidence only
+
+Only stdout from a successful result with zero exit status and no error enters
+Discovery analysis or saved observations. Stderr, failed/partial output, a nil
+result and contradictory success/status cannot identify a service. Independent
+healthy output survives optional probe failures. When an attempted scan has
+failures and no successful stdout evidence, return a fixed no-evidence error
+and truthful terminal progress; manual metadata fallback and background
+enhancement must not replace saved results, notes or observation times. An
+explicit later healthy scan resumes normally; no failed command is replayed.
+
+`TestDiscoveryFailedCommandEvidenceContract` covers VM/nested-Docker/LXC/host/
+Docker output admission, optional partial evidence, saved manual/background
+results and explicit recovery. Registered server/agent controls cover actual
+guest result propagation, with fake config/provider boundaries. This is source
+truthfulness, not native thaw, containing-release or workload acceptance.
+
 1. Update this contract when monitoring truth ownership changes
 2. Tighten guardrails when `GetState()`-centric paths are removed
 3. Keep discovery-provider, host-agent ingest, guest-memory trust, metrics-history, storage-risk, Docker/Podman container collection, Docker report/model payloads, Proxmox Ceph and ZFS compatibility, Docker Swarm collection, mock runtime fixtures, and container bootstrap proof routes explicit in `registry.json`
@@ -2251,6 +2268,41 @@ service-history reads plus denial/recovery without fabricated samples.
 
 
 ## Current State
+
+### Discovery observes VM guest execution pauses
+
+Verified VM results describe the guest's terminal status and decoded output,
+not successful CLI delivery. Discovery admits only successful stdout as command
+evidence for every resource type; stderr and failed/partial output are not
+observations. An attempted scan with failures but no successful stdout returns
+an error without replacing saved results or invoking analysis. Normal empty
+successful probes and independent healthy output alongside optional failures
+retain their existing semantics.
+
+Manual, automatic and nested-Docker VM scans use the existing agent execution
+boundary; they cannot infer safety from the Web drawer's snapshot. VM routing
+requires an exact connected agent ID or a unique owning-node hostname, never a
+sole unrelated agent or guest-name hint. The agent independently requires its
+current local VM config and checks the operation lock. Discovery runs VM probes
+serially and stops on any explicit guest safety deferral, including optional
+probes. Deferred in-flight output is not fresh discovery evidence; progress
+retains an error and actual partial completion rather than 100% success.
+
+A manual deferral is returned as an error without replacing saved discoveries,
+notes or raw observations with metadata fallback. Background enhancement keeps
+its existing evidence rather than analysing partial deferred output. Clearing
+a pause triggers no scan or retry by itself; an existing normal trigger or
+explicit request starts a new, guarded attempt. Healthy catalogue commands,
+non-VM parallelism, permissions, feature gates and saved-result access remain.
+
+`TestDiscoveryGuestSafetyStopsAndPreservesSavedEvidence` covers both VM/nested
+Docker scans, first/later optional-command deferral, manual error and automatic
+saved-evidence preservation. Node ambiguity controls exclude misrouting. These
+source-connected controls and the agent protocol guard do not reserve QGA
+against PVE backup start, establish native thaw, or satisfy the existing native
+overlap/covered-write/liveness/resumption dependency. Preserve the monitoring
+and alert outage precaution until that operational outcome is verified.
+
 
 ### Saved quiet-hours policy before queue activation
 
@@ -4358,6 +4410,25 @@ proves stable-ID reuse, overlap handoff, clone-safety vetoes, duplicate cleanup,
 and the live-generation guard.
 
 ### Native pool-health collection and appliance isolation
+
+CORE's legacy REST disk inventory treats `rotationrate` as optional provider
+metadata, just like the RPC reader: integers and numeric strings retain their
+classification, while null, absent, unknown and unrecognised values provide no
+rotation evidence. The existing explicit HDD/SSD/NVMe type fallback remains;
+an unknown QEMU/VTSCSI disk gains no SMART health, temperature, serial or SSD
+type assertion. Required disk-field decoding, complete JSON inventory shape
+and HTTP errors still fail collection. Both inventory and disk-temperature
+identifier discovery use the tolerant shape.
+
+`TestRESTDiskRotationRateSnapshot` and
+`TestRESTDiskRotationRatePreservesErrorsAndTopology` in
+`internal/truenas/client_api_shapes_test.go` bind complete snapshots, mixed
+alert arguments, RPC parity, healthy neighbours and actual topology evidence.
+`TestTrueNASPollerCOREUnknownRotationRate` in
+`internal/monitoring/truenas_poller_test.go` binds saved-config ordinary polling,
+canonical unknowns, failure without renewed evidence, recovery and disable.
+These synthetic controls reproduce and repair #2466's disk failure; they do
+not establish native appliance acceptance or a containing release.
 
 TrueNAS monitoring preserves the complete native `pool.query` observation
 needed by the shared storage-health contract: pool GUID and status detail,

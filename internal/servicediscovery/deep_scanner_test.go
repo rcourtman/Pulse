@@ -3,11 +3,13 @@ package servicediscovery
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -80,7 +82,9 @@ func (outputExecutor) IsAgentConnected(string) bool { return true }
 type errorExecutor struct{}
 
 func (errorExecutor) ExecuteCommand(ctx context.Context, agentID string, cmd ExecuteCommandPayload) (*CommandResultPayload, error) {
-	return nil, context.DeadlineExceeded
+	// This control covers ordinary catalogue failure, not an uncertain
+	// timed-out VM handoff (which now stops the scan in its own controls).
+	return nil, errors.New("fixture command failed")
 }
 
 func (errorExecutor) GetConnectedAgents() []ConnectedAgent {
@@ -352,11 +356,11 @@ func TestDeepScanner_OutputHandling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Scan error: %v", err)
 	}
-	if out := result.CommandOutputs["docker_containers"]; !strings.Contains(out, "--- stderr ---") {
-		t.Fatalf("expected combined stderr output, got %s", out)
+	if out := result.CommandOutputs["docker_containers"]; out != "out" {
+		t.Fatalf("expected successful stdout only, got %s", out)
 	}
-	if out := result.CommandOutputs["docker_images"]; out != "err-only" {
-		t.Fatalf("expected stderr-only output, got %s", out)
+	if out, exists := result.CommandOutputs["docker_images"]; exists {
+		t.Fatalf("stderr-only diagnostic became evidence: %s", out)
 	}
 }
 
@@ -370,8 +374,8 @@ func TestDeepScanner_CommandErrorHandling(t *testing.T) {
 		TargetID:     "host1",
 		Hostname:     "host1",
 	})
-	if err != nil {
-		t.Fatalf("Scan error: %v", err)
+	if !errors.Is(err, ErrNoCommandEvidence) {
+		t.Fatalf("expected failed scan to retain no-evidence outcome, got %v", err)
 	}
 	if _, ok := result.Errors["docker_containers"]; !ok {
 		t.Fatalf("expected error for non-optional command")
@@ -393,8 +397,8 @@ func TestDeepScanner_ScanCanceledContext(t *testing.T) {
 		ResourceID:   "101:web",
 		TargetID:     "host1",
 		Hostname:     "host1",
-	}); err != nil {
-		t.Fatalf("Scan error: %v", err)
+	}); err == nil || !agentexec.IsGuestExecDeferred(err.Error()) || len(exec.commands) != 0 {
+		t.Fatalf("canceled VM scan must defer before dispatch: err=%v commands=%v", err, exec.commands)
 	}
 }
 
