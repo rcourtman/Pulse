@@ -180,6 +180,22 @@ export function sanitizeDiagnosticsData(raw: DiagnosticsData): DiagnosticsData {
   const data = stripInternalAnalyticsDiagnosticsFields(raw);
   const ipv4Re = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(\/\d{1,2})?\b/g;
   const redactString = (value: string): string => value.replace(ipv4Re, '[REDACTED_IP]');
+  // Aliases belong to this download, not to array positions. In particular,
+  // token usage and memory breakdowns must join the same anonymised identity
+  // as the corresponding summary even when their arrays have different orders.
+  const aliases = (prefix: string) => {
+    const values = new Map<string, string>();
+    return (value: unknown): string => {
+      if (typeof value !== 'string' || !value) return '[REDACTED]';
+      if (!values.has(value)) values.set(value, `${prefix}-${values.size + 1}`);
+      return values.get(value)!;
+    };
+  };
+  const tokenAlias = aliases('token');
+  const agentAlias = aliases('docker-host');
+  const instanceAlias = aliases('instance');
+  const nodeAlias = aliases('host');
+  const guestAlias = aliases('guest');
 
   if (Array.isArray(data.nodes)) {
     data.nodes = data.nodes.map((node, index) => ({
@@ -246,7 +262,7 @@ export function sanitizeDiagnosticsData(raw: DiagnosticsData): DiagnosticsData {
       apiTokens.tokens = apiTokens.tokens.map((token, index) => ({
         ...token,
         hint: '[REDACTED]',
-        id: `token-${index + 1}`,
+        id: tokenAlias(token.id ?? `missing-token-${index}`),
         name: `token-${index + 1}`,
       }));
     }
@@ -254,6 +270,10 @@ export function sanitizeDiagnosticsData(raw: DiagnosticsData): DiagnosticsData {
     if (Array.isArray(apiTokens.usage)) {
       apiTokens.usage = apiTokens.usage.map((usage) => ({
         ...usage,
+        tokenId: tokenAlias(usage.tokenId),
+        // The server emits agents, not hosts. Retain the count and joins,
+        // never the configured agent names or the original token ID.
+        ...(Array.isArray(usage.agents) ? { agents: usage.agents.map(agentAlias) } : {}),
         hosts: undefined,
       }));
     }
@@ -268,7 +288,7 @@ export function sanitizeDiagnosticsData(raw: DiagnosticsData): DiagnosticsData {
       dockerAgents.attention = dockerAgents.attention.map((attention, index) => ({
         ...attention,
         agentId: `docker-host-${index + 1}`,
-        name: `docker-host-${index + 1}`,
+        name: agentAlias(attention.name ?? `missing-agent-${index}`),
         tokenHint: attention.tokenHint ? '[REDACTED]' : undefined,
       }));
     }
@@ -296,30 +316,118 @@ export function sanitizeDiagnosticsData(raw: DiagnosticsData): DiagnosticsData {
     nodeSnapshots?: Array<Record<string, unknown>>;
     guestSnapshots?: Array<Record<string, unknown>>;
     memorySources?: Array<Record<string, unknown>>;
+    memorySourceBreakdown?: Array<Record<string, unknown>>;
   };
 
   if (Array.isArray(rawSnapshotData.nodeSnapshots)) {
-    rawSnapshotData.nodeSnapshots = rawSnapshotData.nodeSnapshots.map((snapshot, index) => ({
+    rawSnapshotData.nodeSnapshots = rawSnapshotData.nodeSnapshots.map((snapshot) => ({
       ...snapshot,
-      instance: `node-${index + 1}`,
+      instance: instanceAlias(snapshot.instance),
+      ...(snapshot.node !== undefined ? { node: nodeAlias(snapshot.node) } : {}),
     }));
   }
 
   if (Array.isArray(rawSnapshotData.guestSnapshots)) {
-    rawSnapshotData.guestSnapshots = rawSnapshotData.guestSnapshots.map((snapshot, index) => ({
-      ...snapshot,
-      instance: `node-${index + 1}`,
-    }));
+    rawSnapshotData.guestSnapshots = rawSnapshotData.guestSnapshots.map((snapshot) => {
+      const { vmid, ...rest } = snapshot;
+      return {
+        ...rest,
+        instance: instanceAlias(snapshot.instance),
+        ...(snapshot.node !== undefined ? { node: nodeAlias(snapshot.node) } : {}),
+        ...(snapshot.name !== undefined
+          ? {
+              name: guestAlias(
+                JSON.stringify([snapshot.instance, snapshot.node, vmid, snapshot.name]),
+              ),
+            }
+          : {}),
+      };
+    });
   }
 
   if (Array.isArray(rawSnapshotData.memorySources)) {
-    rawSnapshotData.memorySources = rawSnapshotData.memorySources.map((snapshot, index) => ({
+    rawSnapshotData.memorySources = rawSnapshotData.memorySources.map((snapshot) => ({
       ...snapshot,
-      instance: `node-${index + 1}`,
+      instance: instanceAlias(snapshot.instance),
     }));
   }
 
-  return data;
+  if (Array.isArray(rawSnapshotData.memorySourceBreakdown)) {
+    rawSnapshotData.memorySourceBreakdown = rawSnapshotData.memorySourceBreakdown.map(
+      (snapshot) => ({
+        ...snapshot,
+        instance: instanceAlias(snapshot.instance),
+      }),
+    );
+  }
+
+  // These nested PVE results were added after the original export redactor.
+  // Keep status, permissions and measurements, but not guest names/IDs,
+  // private mount paths, disk paths or raw upstream response bodies.
+  for (const node of Array.isArray(data.nodes) ? data.nodes : []) {
+    const nested = node as DiagnosticsNode & {
+      vmDiskCheck?: Record<string, unknown>;
+      physicalDisks?: Record<string, unknown>;
+    };
+    if (nested.vmDiskCheck) {
+      const check = nested.vmDiskCheck;
+      delete check.testVMID;
+      if (check.testVMName !== undefined) check.testVMName = '[REDACTED]';
+      if (Array.isArray(check.problematicVMs)) {
+        check.problematicVMs = check.problematicVMs.map(
+          ({ vmid: _vmid, name: _name, ...issue }) => ({
+            ...issue,
+            name: '[REDACTED]',
+          }),
+        );
+      }
+      if (Array.isArray(check.filesystemsFound)) {
+        check.filesystemsFound = check.filesystemsFound.map((filesystem) => ({
+          ...filesystem,
+          mountpoint: '[REDACTED_PATH]',
+        }));
+      }
+    }
+    if (nested.physicalDisks && Array.isArray(nested.physicalDisks.nodeResults)) {
+      nested.physicalDisks.nodeResults = nested.physicalDisks.nodeResults.map((result) => ({
+        ...result,
+        nodeName: nodeAlias(result.nodeName),
+        ...(Array.isArray(result.diskDevices)
+          ? { diskDevices: result.diskDevices.map(() => '[REDACTED_PATH]') }
+          : {}),
+        ...(result.apiResponse
+          ? {
+              apiResponse: [
+                'Permission denied',
+                'Timeout',
+                'Endpoint not available',
+                'API error',
+                'Empty response (no traditional disks found)',
+              ].includes(result.apiResponse)
+                ? result.apiResponse
+                : '[REDACTED]',
+            }
+          : {}),
+      }));
+    }
+  }
+
+  // Apply the existing IP redaction to every nested prose field, including
+  // lastError, notes and recommendations. This is deliberately not a promise
+  // that arbitrary error text or future fields are safe to publish: the UI
+  // and help require a manual privacy review before sharing any download.
+  const redactNestedText = (value: unknown): unknown => {
+    if (typeof value === 'string') return redactString(value);
+    if (Array.isArray(value)) return value.map(redactNestedText);
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, field]) => [key, redactNestedText(field)]),
+      );
+    }
+    return value;
+  };
+
+  return redactNestedText(data) as DiagnosticsData;
 }
 
 export function buildDiagnosticsExportFilename(sanitize: boolean, now = new Date()): string {

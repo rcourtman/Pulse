@@ -176,3 +176,61 @@ func TestUnverifiedVMConfigPreservesStatusCounterObservations(t *testing.T) {
 		t.Errorf("guest commands with incomplete config = %d, want zero", got)
 	}
 }
+
+func TestGuestAgentTransportDeferralPreservesLiveCounterReceipts(t *testing.T) {
+	for _, kind := range []string{"lost reply", "redirect"} {
+		t.Run(kind, func(t *testing.T) {
+			var commands, statusCalls atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/config"):
+					fmt.Fprint(w, `{"data":{}}`)
+				case strings.HasSuffix(r.URL.Path, "/status/current"):
+					statusCalls.Add(1)
+					fmt.Fprint(w, `{"data":{"status":"running","cpu":0.25,"diskread":0,"diskwrite":null,"netin":42}}`)
+				case strings.Contains(r.URL.Path, "/agent/"):
+					commands.Add(1)
+					if kind == "redirect" {
+						http.Redirect(w, r, "/unverified/agent", http.StatusTemporaryRedirect)
+						return
+					}
+					conn, _, err := w.(http.Hijacker).Hijack()
+					if err != nil {
+						t.Error(err)
+						return
+					}
+					conn.Close()
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+			client := backupTestClient(t, server.URL)
+			wantReason := "agent-timeout"
+			if kind == "redirect" {
+				wantReason = "agent-redirect"
+			}
+			if _, err := client.GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != wantReason {
+				t.Fatalf("uncertain command not deferred: %v", err)
+			}
+			// The QGA uncertainty is not missing or zero CPU/I/O evidence. Ordinary
+			// status still has its own completed response and observation receipt.
+			before := time.Now()
+			status, err := client.GetVMStatus(context.Background(), "node", 105)
+			after := time.Now()
+			if err != nil {
+				t.Fatal(err)
+			}
+			presence := status.IOCounters.Effective()
+			if status.CPU != 0.25 || status.DiskRead != 0 || status.NetIn != 42 || !presence.DiskRead || !presence.NetworkIn || presence.DiskWrite || presence.NetworkOut || status.ObservedAt.Before(before) || status.ObservedAt.After(after) {
+				t.Fatalf("guest transport deferral changed current counter presence/receipt: %+v", status)
+			}
+			if _, err := client.GetVMAgentInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
+				t.Fatalf("status response erased command uncertainty: %v", err)
+			}
+			if commands.Load() != 1 || statusCalls.Load() != 1 {
+				t.Fatalf("guest/status calls = %d/%d, want 1/1", commands.Load(), statusCalls.Load())
+			}
+		})
+	}
+}

@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "1ff46c4261e11b4a8edcd573df415a217ecd34cd",
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/diagnosticsModel.ts": "11972278d12ffe6a0dd9bdd540c00df98f83b4038eab0620b3871112aacae451",
+    "frontend-modern/src/components/Settings/DiagnosticsPanel.tsx": "ad3ca811d42241f6f8bb51cebb2ff90d1daaf5d360438d4f7fa8c6d947cca975",
+    "frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx": "6188a848d9dde43b91cf30ee127820e545b0f10a9dcfbd6fe90dd73a9231e6cd",
+    "frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts": "acc6a054beb5cde80e387b1b2193712c29865c05512ae767c9e9faa821f0a2f7",
+    "frontend-modern/src/utils/diagnosticsPresentation.ts": "c14464ac48b915d1a7e6a3a4b3cbd93ec6cb916ab685d8668698abfe97950bc2"
+  },
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/diagnosticsModel.ts",
+    "frontend-modern/src/components/Settings/DiagnosticsPanel.tsx",
+    "frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx",
+    "frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts",
+    "frontend-modern/src/utils/diagnosticsPresentation.ts"
+  ],
+  "routes": [
+    "Existing Settings Diagnostics through production-component fixture",
+    "Existing shipped Troubleshooting Docs viewer and safety-section anchor"
+  ],
+  "states": [
+    "No result: no automatic request, visible and accessible live-check warnings",
+    "Explicit request pending: both run controls disabled",
+    "Displayed result: private full export and reviewed sanitised export",
+    "Pending refresh: export controls disabled",
+    "Failed refresh: original result retained, readable error toast",
+    "Shipped help: exact safety section, desktop and phone wrapping"
+  ],
+  "interactions": [
+    "Keyboard Enter starts one explicit diagnostic request",
+    "Local Blob JSON downloads do not rerun diagnostics or upload",
+    "Sanitised download checked for identity redaction and real token/snapshot joins",
+    "Full download checked against unchanged synthetic displayed data",
+    "Touch-sized buttons, accessible descriptions and no horizontal overflow",
+    "Safety link opens the production Docs viewer at the exact anchor"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-04T09:29:23.288646Z",
+  "browsers": [
+    "Chromium 141.0.7390.37 desktop",
+    "WebKit 26.0 phone emulation; not native iOS"
+  ],
+  "command": "pulse-worker-browser frontend-modern/browser-tests/diagnostics-safety.cjs",
+  "proof": "Playwright 1.56.1 matches integration lock. Fourteen behavioral groups, ten screenshots inspected. Production components/API reader/exporter/Docs with synthetic responses and real local downloads; no native API/QGA requests, installed or release acceptance. Earlier dependency and fixture failures retained privately.",
+  "document_sha256": {
+    "docs/TROUBLESHOOTING.md": "c7e35be379e2bdcda3162f21e629b04ca474132c71c2628c851aff5bcc2ff547",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "c7e35be379e2bdcda3162f21e629b04ca474132c71c2628c851aff5bcc2ff547"
+  }
+}

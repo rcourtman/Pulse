@@ -2974,3 +2974,19 @@ func TestBroadcastProjectionMatchesPreviousPipeline(t *testing.T) {
 func TestGuestAgentBackupMonitoringContract(t *testing.T) {
 	testGuestAgentBackupMonitoringLifecycle(t)
 }
+
+func TestGuestAgentTransportMonitoringContract(t *testing.T) {
+	for _, reason := range []string{"agent-redirect", "agent-transport-unverified"} {
+		for _, prefix := range []string{"", "prev-"} {
+			if !guestAgentDiskDeferred(prefix + reason) {
+				t.Errorf("transport uncertainty %q is not labelled deferred", prefix+reason)
+			}
+		}
+	}
+	for _, reason := range []string{"", "permission-denied", "agent-not-running", "agent-error"} {
+		if guestAgentDiskDeferred(reason) {
+			t.Errorf("completed/ordinary error %q became transport uncertainty", reason)
+		}
+	}
+	testGuestAgentTransportDeferralKeepsLastKnownHistory(t)
+}

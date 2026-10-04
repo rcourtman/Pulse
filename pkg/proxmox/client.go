@@ -523,6 +523,10 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 }
 
 func (c *Client) requestWithRetry(ctx context.Context, method, path string, data url.Values, retriedAfter401 bool) (*http.Response, error) {
+	return c.requestWithRetryUsingClient(ctx, method, path, data, retriedAfter401, c.httpClient)
+}
+
+func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path string, data url.Values, retriedAfter401 bool, httpClient *http.Client) (*http.Response, error) {
 	// Re-authenticate if needed
 	if c.config.Password != "" && c.auth.tokenName == "" && time.Now().After(c.auth.expiresAt) {
 		if err := c.authenticate(ctx); err != nil {
@@ -570,7 +574,7 @@ func (c *Client) requestWithRetry(ctx context.Context, method, path string, data
 		}
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -589,7 +593,7 @@ func (c *Client) requestWithRetry(ctx context.Context, method, path string, data
 			if err := c.authenticate(ctx); err != nil {
 				return nil, fmt.Errorf("re-authentication failed after 401: %w", err)
 			}
-			return c.requestWithRetry(ctx, method, path, data, true)
+			return c.requestWithRetryUsingClient(ctx, method, path, data, true, httpClient)
 		}
 
 		// Create base error with helpful guidance for common issues

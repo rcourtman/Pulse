@@ -520,6 +520,32 @@ not a guide to the current menu.
 
 ## 🛠️ Advanced Diagnostics
 
+### Collect diagnostics safely
+
+**Run Diagnostics** in **Settings → Diagnostics** is not just a passive export.
+It can make live Proxmox/PBS API and guest-agent requests; results may also come
+from a short-lived cache. Do not run it during a backup, freeze/thaw or an
+unresponsive-host incident merely to obtain a report. Keep the original errors
+and existing observations instead. A successful one-off check does not prove
+that normal monitoring has recovered or that a guest has thawed.
+
+After a result is displayed, the download buttons reuse that result without
+running the checks again. They save a local JSON file, **not an upload**:
+
+- **Full (private)** retains identifying diagnostic details. Keep it private;
+  do not attach it to a public issue or discussion.
+- **GitHub (review first)** replaces selected infrastructure and token
+  identifiers, private filesystem paths and raw disk-response fields. Counts,
+  measurements, collection times and diagnostic states remain useful for
+  triage. It is not a guarantee that every free-text error or future field is
+  free of private information. Open the file locally and review it before sharing.
+
+Remove credentials, cookies, secret URLs, private host/network or personal
+information, including details echoed in errors or notes. Do not paste a
+**Copy as cURL** command, full network export, configuration or data directory.
+Share only evidence relevant to the symptom; a screenshot or exact redacted
+error may be enough. See [Getting Help](#-getting-help).
+
 ### Inspect Notification Logs
 
 Prefer **Recent delivery activity** in **Alerts → Notifications**. If a local log
@@ -684,8 +710,9 @@ If you're still stuck:
    running image tag or digest. If installation never started Pulse, give the
    attempted release and public installer/helper source, or say "unknown".
 3. **Choose relevant, safe evidence**: if Pulse is running and collection is
-   safe, use **Settings → Diagnostics → Export for GitHub (sanitized)** for
-   connection or data failures. For a visual problem, a screenshot or the exact
+   safe, use **Settings → Diagnostics → GitHub (review first)** for
+   connection or data failures, following [safe diagnostics collection](#collect-diagnostics-safely).
+   For a visual problem, a screenshot or the exact
    error may be enough. If logs are needed, inspect a bounded local excerpt
    (`journalctl -u pulse -n 100 --no-pager` or `docker logs --tail 100 pulse`),
    not a full configuration or data-directory upload.
