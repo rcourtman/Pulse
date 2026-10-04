@@ -518,3 +518,7 @@ func TestCommandClient_ReplayedRequestWaitsForInFlightHandlerInsteadOfDropping(t
 func TestCommandClientGuestExecutionAdmissionContract(t *testing.T) {
 	testVMGuestExecNoUnverifiedHandoff(t)
 }
+
+func TestGuestExecRealServerAgentDiscoveryAdmission(t *testing.T) {
+	testGuestExecRealServerAgentDiscoveryAdmission(t)
+}

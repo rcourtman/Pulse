@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/jsonresponse"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
@@ -1883,6 +1884,12 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	var scanError error
 	if s.scanner != nil && s.IsCommandScanningEnabled() {
 		scanResult, scanError = s.scanner.Scan(ctx, req)
+		if scanError != nil && agentexec.IsGuestExecDeferred(scanError.Error()) {
+			// Keep saved observations/notes and the original in-flight outcome;
+			// metadata fallback must not turn a paused live scan into success.
+			inProg.err = scanError
+			return nil, inProg.err
+		}
 		if scanError != nil {
 			log.Warn().
 				Err(scanError).

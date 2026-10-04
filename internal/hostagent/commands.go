@@ -108,6 +108,7 @@ type CommandClient struct {
 	caCertPath                string
 	serverFingerprint         string
 	deploySSHUser             string
+	guestExecAdmission        *guestExecGuard // nil selects the process-wide local guard
 	commandPolicy             *agentexec.CommandPolicy
 	packageUpdates            *packageUpdateManager
 	storageCleanup            *storageCleanupManager
@@ -274,6 +275,7 @@ type registerPayload struct {
 	OperationReceiptVersion  int      `json:"operation_receipt_version,omitempty"`
 	ActionPreflightVersion   int      `json:"action_preflight_version,omitempty"`
 	DockerObservationVersion int      `json:"docker_observation_version,omitempty"`
+	GuestExecGuardVersion    int      `json:"guest_exec_guard_version,omitempty"`
 }
 
 type registeredPayload struct {
@@ -538,6 +540,7 @@ func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {
 		OperationReceiptVersion:  c.operationReceiptVersion(),
 		ActionPreflightVersion:   agentexec.ActionPreflightProtocolVersion,
 		DockerObservationVersion: agentexec.DockerContainerObservationProtocolVersion,
+		GuestExecGuardVersion:    c.guestExecGuardVersion(),
 	})
 	if err != nil {
 		return fmt.Errorf("marshal registration payload: %w", err)
@@ -550,6 +553,13 @@ func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {
 	}
 
 	return conn.WriteJSON(msg)
+}
+
+func (c *CommandClient) guestExecGuardVersion() int {
+	if runtime.GOOS == "linux" && !c.actionRunnerOnly {
+		return agentexec.GuestExecGuardProtocolVersion
+	}
+	return 0
 }
 
 func (c *CommandClient) operationReceiptVersion() int {
@@ -1556,11 +1566,44 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	var guard *guestExecGuard
+	var vmid string
+	uncertain := false
+	if strings.EqualFold(strings.TrimSpace(payload.TargetType), "vm") {
+		var valid bool
+		vmid, valid = canonicalGuestExecVMID(payload.TargetID)
+		if !valid {
+			result.Error = agentexec.GuestExecDeferred(agentexec.GuestExecInvalidTarget).Error()
+			result.ExitCode = -1
+			return result
+		}
+		guard = c.guestExecAdmission
+		if guard == nil {
+			guard = localGuestExecGuard
+		}
+		release, err := guard.acquire(cmdCtx, vmid)
+		if err != nil {
+			result.Error = err.Error()
+			result.ExitCode = -1
+			return result
+		}
+		defer func() { release(uncertain) }()
+		if err := guard.verifyUnlocked(cmdCtx, vmid); err != nil {
+			result.Error = err.Error()
+			result.ExitCode = -1
+			return result
+		}
+	}
+
 	command := wrapCommand(payload)
 
 	// Execute the command
 	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
+	if guard != nil {
+		// No host-shell or PATH interpretation of the owning VM/CLI. The
+		// guest shell still receives the original, policy-approved command.
+		cmd = execCommandContext(cmdCtx, localGuestExecQM, "guest", "exec", vmid, "--", "sh", "-c", payload.Command)
+	} else if runtime.GOOS == "windows" {
 		cmd = execCommandContext(cmdCtx, "cmd", "/C", command)
 	} else {
 		cmd = execCommandContext(cmdCtx, "sh", "-c", command)
@@ -1585,6 +1628,7 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 	cmd.Stderr = stderr
 
 	err := cmd.Run()
+	outputIncomplete := errors.Is(err, exec.ErrWaitDelay)
 
 	result.Stdout = stdout.String()
 	result.Stderr = stderr.String()
@@ -1616,6 +1660,22 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 	} else {
 		result.ExitCode = 0
 		result.Success = true
+	}
+
+	if guard != nil {
+		// Killing the local qm process does not prove a handed-off guest
+		// command stopped. Never retry it or immediately start the next one.
+		if err != nil || cmdCtx.Err() != nil || outputIncomplete {
+			uncertain = true
+			result.Success = false
+			result.Error = agentexec.GuestExecDeferred(agentexec.GuestExecCompletionUnknown).Error()
+		} else if err := guard.verifyUnlocked(cmdCtx, vmid); err != nil {
+			uncertain = true
+			result.Success = false
+			result.Error = err.Error()
+		}
+		// Retain the actual process exit/output, even if postflight safety
+		// is unknown. Discovery must not treat that output as fresh evidence.
 	}
 
 	return result

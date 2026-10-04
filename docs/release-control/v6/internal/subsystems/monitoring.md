@@ -2252,6 +2252,33 @@ service-history reads plus denial/recovery without fabricated samples.
 
 ## Current State
 
+### Discovery observes VM guest execution pauses
+
+Manual, automatic and nested-Docker VM scans use the existing agent execution
+boundary; they cannot infer safety from the Web drawer's snapshot. VM routing
+requires an exact connected agent ID or a unique owning-node hostname, never a
+sole unrelated agent or guest-name hint. The agent independently requires its
+current local VM config and checks the operation lock. Discovery runs VM probes
+serially and stops on any explicit guest safety deferral, including optional
+probes. Deferred in-flight output is not fresh discovery evidence; progress
+retains an error and actual partial completion rather than 100% success.
+
+A manual deferral is returned as an error without replacing saved discoveries,
+notes or raw observations with metadata fallback. Background enhancement keeps
+its existing evidence rather than analysing partial deferred output. Clearing
+a pause triggers no scan or retry by itself; an existing normal trigger or
+explicit request starts a new, guarded attempt. Healthy catalogue commands,
+non-VM parallelism, permissions, feature gates and saved-result access remain.
+
+`TestDiscoveryGuestSafetyStopsAndPreservesSavedEvidence` covers both VM/nested
+Docker scans, first/later optional-command deferral, manual error and automatic
+saved-evidence preservation. Node ambiguity controls exclude misrouting. These
+source-connected controls and the agent protocol guard do not reserve QGA
+against PVE backup start, establish native thaw, or satisfy the existing native
+overlap/covered-write/liveness/resumption dependency. Preserve the monitoring
+and alert outage precaution until that operational outcome is verified.
+
+
 ### Saved quiet-hours policy before queue activation
 
 `Monitor.New` binds `alerts.Manager.QuietHoursNotificationPolicy` to the

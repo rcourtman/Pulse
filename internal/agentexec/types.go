@@ -107,6 +107,7 @@ type AgentRegisterPayload struct {
 	OperationReceiptVersion  int      `json:"operation_receipt_version,omitempty"`
 	ActionPreflightVersion   int      `json:"action_preflight_version,omitempty"`
 	DockerObservationVersion int      `json:"docker_observation_version,omitempty"`
+	GuestExecGuardVersion    int      `json:"guest_exec_guard_version,omitempty"`
 }
 
 // RegisteredPayload is sent by server after successful registration
