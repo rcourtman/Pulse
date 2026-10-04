@@ -112,6 +112,25 @@ replay through another cluster endpoint. Coordination retains at most 4,096
 active/cooling endpoint-guest entries and expires cooldowns. Explicit API
 permission refusals and unsupported commands remain errors, not successes.
 
+Guest commands also prevent transport-level replay: each uses a fresh single-use
+HTTP/1 connection, with no pooled-connection or HTTP/2-stream retries and no
+redirect following. The client preserves its configured TLS verification or
+fingerprint, proxy, DNS dialer, authentication and request bounds. An opaque
+transport or custom TLS dialer defers without dispatch rather than substituting
+a different trust policy. A fully received redirect discards its body and
+starts the same per-VM uncertainty cooldown; its destination is never contacted.
+Ordinary config/resource reads retain pooling, HTTP/2, redirects and session
+recovery. This deliberately trades one new connection per guest command for
+single-attempt safety; it does not reserve the QGA channel or establish thaw.
+Wire controls drop a reply only after receiving a command (including when a
+backup lock then appears), and exercise every read and redirect code. TLS
+controls retain CA/fingerprint trust, reject untrusted peers and verify command
+HTTP/1 isolation alongside ordinary HTTP/2. The connected monitoring controls
+retain old cache timestamps and History while live CPU continues through lost
+reply/redirect deferral. `TestGuestAgentTransportDeferralPreservesLiveCounterReceipts`
+also pins independent current CPU/I/O, explicit zero/null/missing counter presence
+and receipt timestamps without clearing guest-command uncertainty.
+
 Deferrals retain the original metadata/memory cache timestamps and supported-OS
 failure evidence. Locked guests retain labelled last-known disks/identity and
 previous-snapshot memory, or unavailable memory without trustworthy evidence.

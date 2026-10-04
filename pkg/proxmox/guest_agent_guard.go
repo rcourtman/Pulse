@@ -168,13 +168,18 @@ func (c *Client) getGuestAgent(ctx context.Context, path, node string, vmid int)
 	}
 	uncertain := false
 	defer func() { release(uncertain) }()
+	commandClient, err := guestAgentCommandClient(c.httpClient)
+	if err != nil {
+		return nil, err
+	}
+	defer commandClient.CloseIdleConnections()
 	if err := c.verifyGuestAgentUnlocked(ctx, node, vmid); err != nil {
 		return nil, err
 	}
 	// A password-session 401 must not replay this command after re-authentication:
 	// the operation lock could change between attempts. Ordinary API reads still
 	// own their usual session recovery; this guest admission is single-attempt.
-	resp, err := c.requestWithRetry(ctx, http.MethodGet, path, nil, true)
+	resp, err := c.requestWithRetryUsingClient(ctx, http.MethodGet, path, nil, true, commandClient)
 	if err != nil {
 		var incomplete *responseBodyReadError
 		if errors.As(err, &incomplete) {
@@ -197,6 +202,12 @@ func (c *Client) getGuestAgent(ctx context.Context, path, node string, vmid int)
 	if readErr != nil || closeErr != nil {
 		uncertain = true
 		return nil, &guestAgentDeferredError{reason: "agent-response-incomplete", cause: errors.Join(readErr, closeErr)}
+	}
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		// The original endpoint may have consumed the command. Neither its
+		// completion nor another endpoint's operation lock is established.
+		uncertain = true
+		return nil, &guestAgentDeferredError{reason: "agent-redirect"}
 	}
 	// A backup may have started while the command was in flight. Do not publish
 	// its payload as fresh telemetry if lock clearance cannot still be verified.
