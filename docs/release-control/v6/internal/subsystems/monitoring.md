@@ -17,6 +17,28 @@
 
 ## Purpose
 
+### Unavailable backup-age evaluation is not silent recovery
+
+PVE, PBS and mock backup checks share one failure-preserving evaluator. The
+existing two-second complete rollup-read budget includes connection waiting;
+it is not extended or bypassed. A failed or partial read does not invoke backup
+age evaluation with an empty result, clear existing age alerts or assert backup
+health. A fixed system warning makes the skipped evaluation visible in the
+existing alert list and served state, with no raw database/provider/path error.
+A complete subsequent evaluation clears that warning; normal cancellation or a
+missing manager does not stand in for read recovery. Deliberately disabled checks
+clear their irrelevant warning without reading recovery history.
+
+Overlapping global checks coalesce instead of queueing. The single evaluation
+owner orders failure/recovery publication so an older success cannot erase a
+newer failure. `backup_alert_evaluation_test.go` exercises actual persisted
+rollups, stale/fresh backups, read failure/reopening, served-state visibility,
+repeated failures, missing dependencies, cancellation/deadlines and concurrent
+coalescing. `TestBackupAlertEvaluationCallersShareFailureVisibility` binds all
+three callers to that path. These are synthetic source controls, not native
+backup thaw, Raspberry Pi relief or published availability.
+
+
 ### Platform connection discovery follows tenant storage identity
 
 TrueNAS and VMware pollers enumerate validated, sorted persistence directory

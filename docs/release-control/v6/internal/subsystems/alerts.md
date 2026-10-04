@@ -15,6 +15,22 @@
 
 ## Purpose
 
+### Backup-age evaluation failures use the existing system-alert lifecycle
+
+`pulse-system-backup-evaluation` is a warning about Pulse's inability to read
+complete backup rollups, not a claim that a workload's backup failed. It has no
+resource target and carries the standard system metadata. A stable fingerprint
+keeps repeated failed polls on one alert without repeat notification; existing
+backup-age alerts are retained. Only complete evaluation or deliberate disablement
+clears the warning. The public message names the lost evaluation and points to
+Pulse logs without including raw database paths or provider errors.
+
+`backup_evaluation_system_test.go` verifies stable identity, idempotence, node
+cleanup survival and recovery. Monitoring's connected evaluator tests exercise
+persisted stale/fresh data and failures through this helper. No new route,
+navigation entry, destination or monitored-resource health signal is added.
+
+
 ### RAID spare-count lifecycle — issue #2369
 
 Canonical host RAID alerts use the shared required-member health assessment,

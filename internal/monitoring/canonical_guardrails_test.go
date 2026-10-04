@@ -3070,3 +3070,19 @@ func TestGuestAgentTransportMonitoringContract(t *testing.T) {
 	}
 	testGuestAgentTransportDeferralKeepsLastKnownHistory(t)
 }
+
+func TestBackupAlertEvaluationCallersShareFailureVisibility(t *testing.T) {
+	for path, want := range map[string]int{"monitor_backups.go": 2, "monitor_alerts.go": 1} {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		source := string(raw)
+		if strings.Contains(source, "listBackupRollupsForAlerts(") || strings.Contains(source, "CheckBackupsWithInventory(") {
+			t.Errorf("%s bypasses shared failure-preserving evaluation", path)
+		}
+		if got := strings.Count(source, "m.checkBackupAlerts("); got != want {
+			t.Errorf("%s has %d shared backup evaluations, want %d", path, got, want)
+		}
+	}
+}
