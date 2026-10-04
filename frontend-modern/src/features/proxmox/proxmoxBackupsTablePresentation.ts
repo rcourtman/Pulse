@@ -107,7 +107,9 @@ const BACKUP_SERVER_WEIGHTS: Record<
   ProxmoxBackupsTableLayoutMode,
   Partial<Record<BackupServerColumnId, number>>
 > = {
-  compact: { server: 40, status: 23, datastore: 22, used: 15 },
+  // Capacity must fit "Unavailable", not just a short percentage. Keep the
+  // shared 40% identity anchor; the compact status omits its redundant dot.
+  compact: { server: 40, status: 18, datastore: 17, used: 25 },
   // Just above the phone projection the used cell carries its used/total
   // pair again, the longest value in the row, so it takes the most room.
   basic: { server: 24, status: 13.6, datastore: 18.2, used: 28.4, backups: 9.8 },

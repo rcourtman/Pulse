@@ -21,6 +21,27 @@
 
 ## Purpose
 
+### PBS datastore capacity is not inferred from failed-read zeros
+
+The existing Backups server table distinguishes a named datastore whose status
+read failed from an empty datastore and from a server without datastore data.
+Provider unavailable/error evidence or an unavailable server connection
+withdraws current capacity and deduplication figures, without dropping the row,
+changing its drawer identity or invalidating independently readable backup
+inventory. Unknown status, missing/nonfinite/negative capacity and invalid
+authoritative percentages cannot receive a healthy usage indication. Capacity
+requires a positive finite total and a finite nonnegative used observation;
+measured zero remains zero, and the existing 75/90-percent warnings and
+over-capacity danger remain intact. A subsequent valid same-identity snapshot
+restores presentation without a remount, timer or new read.
+
+Fixed notices do not expose provider error text. Mounted
+`ProxmoxBackupServersTable.capacity.test.tsx` covers these distinctions and
+direct/canonical replacement; `ProxmoxBackupServersTable.test.ts` preserves
+source evidence and independent datastore identity. The production-component
+browser fixture checks desktop and narrow phone layouts. These synthetic
+checks establish no native datastore repair, backup/thaw or release acceptance.
+
 ### TrueNAS connection probes do not settle recovery inventory
 
 A successful settings probe reads system information only, on a separate client.

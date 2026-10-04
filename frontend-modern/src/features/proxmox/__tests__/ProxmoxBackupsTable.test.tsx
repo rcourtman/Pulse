@@ -214,6 +214,55 @@ beforeEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
+  it('keeps successful backup inventory independent of unavailable datastore capacity', async () => {
+    mockBackupAPIs();
+    const failed = {
+      ...pbsServerResource,
+      pbs: {
+        ...pbsServerResource.pbs!,
+        datastores: [
+          {
+            name: 'main',
+            total: 0,
+            used: 0,
+            available: 0,
+            usagePercent: 0,
+            status: 'unavailable',
+            error: 'PRIVATE_PROVIDER_ERROR_SENTINEL',
+          },
+        ],
+      },
+    } as Resource;
+    const [servers, setServers] = createSignal([failed]);
+    const { container } = renderInRouter(() => (
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[workloadResource]}
+        servers={servers()}
+      />
+    ));
+    // The router mounts its page asynchronously. Wait for the capacity notice
+    // before binding page-level queries to the server table.
+    await screen.findByText('Unavailable');
+    const table = container.querySelector('[data-proxmox-backups-table="servers"]') as HTMLElement;
+    const backupCount = () => {
+      const index = Array.from(table.querySelectorAll('th')).findIndex(
+        (head) => head.getAttribute('aria-label') === 'Backups',
+      );
+      return table.querySelector('tbody tr')!.querySelectorAll('td')[index].textContent;
+    };
+    await within(table).findByText('Unavailable');
+    await waitFor(() => expect(backupCount()).toBe('1'));
+    await screen.findAllByText('Protected');
+    expect(container.innerHTML).not.toContain('PRIVATE_PROVIDER_ERROR_SENTINEL');
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
+
+    setServers([pbsServerResource]);
+    await waitFor(() => expect(within(table).queryByText('Unavailable')).not.toBeInTheDocument());
+    expect(backupCount()).toBe('1');
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
+  });
+
   it('uses a corroborated PBS host link for Backups History despite a PVE-only name collision', () => {
     const pbs = {
       ...pbsServerResource,

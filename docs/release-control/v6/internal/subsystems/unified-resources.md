@@ -23,6 +23,19 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### PBS capacity consumers preserve explicit read failure
+
+`ResourcePBSDatastore.error` describes existing provider read-failure evidence,
+not a new collection or command. PBS resource facets retain that evidence
+through canonical presentation. The Backups capacity consumer must not treat
+the provider's zero-valued unavailable datastore as a successful empty-store
+observation, nor show retained numbers as current when the connection is
+unavailable. It keeps row/source identity and independent inventory counts;
+fixed unavailable/unknown notices never disclose the error body. Valid capacity
+including measured zero restores the same mounted row. Verification uses
+`ProxmoxBackupServersTable.test.ts` plus the direct/canonical mounted capacity
+controls; native read, backup and published acceptance remain separate.
+
 ### History consumers do not accept a mismatched or malformed success body
 
 The common metrics History client validates the issued selection and response
