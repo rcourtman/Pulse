@@ -112,6 +112,26 @@ replay through another cluster endpoint. Coordination retains at most 4,096
 active/cooling endpoint-guest entries and expires cooldowns. Explicit API
 permission refusals and unsupported commands remain errors, not successes.
 
+The completed-error boundary uses the actual HTTP status retained by the request
+layer, not an `API error` phrase in provider or proxy text. HTTP 408 and
+unexplained server/proxy failures (including PVE 595) retain the same per-VM
+uncertainty cooldown, even when their bodies finish: command completion is still
+unverified. Another method, diagnostic client or configured cluster alias cannot
+immediately send a command. Only complete, exact command-bound terminal QGA
+rejections under HTTP 500 (unsupported/missing command, explicit stopped agent,
+and OS-info's known missing os-release) retain ordinary error handling. Ambiguous
+or conflicting envelopes, duplicate keys, other VM/command identities, extra
+values and gateway responses quoting a rejection do not gain that exemption.
+Existing authentication hints, error text, ordinary API session/retry policy and
+endpoint health remain unchanged. Unknown server failures now defer enrichment
+for a minute rather than inviting a sequence of diagnostic reads; this is a
+safety trade-off, not evidence of a freeze cause or native recovery.
+`TestGuestAgentHTTPFailureDefersEveryRead` exercises all six guest readers,
+independent status counters and cross-client cooldown; cluster and semantic
+controls pin no failover, definitive refusals and conservative error provenance.
+The connected transport/History lifecycle and counter-receipt controls also
+cover complete server/gateway failures without refreshing old guest evidence.
+
 Guest commands also prevent transport-level replay: each uses a fresh single-use
 HTTP/1 connection, with no pooled-connection or HTTP/2-stream retries and no
 redirect following. The client preserves its configured TLS verification or

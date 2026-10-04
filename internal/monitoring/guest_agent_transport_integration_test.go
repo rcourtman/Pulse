@@ -18,7 +18,7 @@ import (
 )
 
 func testGuestAgentTransportDeferralKeepsLastKnownHistory(t *testing.T) {
-	for _, kind := range []string{"lost reply", "redirect"} {
+	for _, kind := range []string{"lost reply", "redirect", "server error", "gateway error"} {
 		t.Run(kind, func(t *testing.T) {
 			const mib = uint64(1024 * 1024)
 			var phase, calls, redirected atomic.Int32
@@ -35,6 +35,15 @@ func testGuestAgentTransportDeferralKeepsLastKnownHistory(t *testing.T) {
 						redirected.Add(1)
 					}
 					if phase.Load() == 1 && lost.CompareAndSwap(false, true) {
+						if kind == "server error" || kind == "gateway error" {
+							status := http.StatusInternalServerError
+							if kind == "gateway error" {
+								status = http.StatusBadGateway
+							}
+							w.WriteHeader(status)
+							fmt.Fprint(w, "upstream unavailable")
+							return
+						}
 						if kind == "redirect" {
 							http.Redirect(w, r, r.URL.Path+"?redirect=1", http.StatusTemporaryRedirect)
 							return
