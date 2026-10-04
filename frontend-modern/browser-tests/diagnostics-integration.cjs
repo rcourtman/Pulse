@@ -57,6 +57,8 @@ const bootstrap = {
   const paths = [
     'tests/integration/tests/69-diagnostics-onboarding.spec.ts',
     'tests/integration/playwright.config.ts',
+    'tests/integration/tests/helpers.ts',
+    'tests/integration/tsconfig.json',
     'frontend-modern/src/App.tsx',
     'frontend-modern/src/components/Settings/DiagnosticsPanel.tsx',
     'frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx',
@@ -127,7 +129,8 @@ const bootstrap = {
     const { devices } = require('/workspace/tests/integration/node_modules/@playwright/test');
     module.exports = {
       testDir: '/workspace/tests/integration/tests', testMatch: '69-diagnostics-onboarding.spec.ts',
-      workers: 1, retries: 0, timeout: 180000, expect: { timeout: 20000 },
+      workers: 1, retries: 0, maxFailures: 1, globalTimeout: 135000,
+      timeout: 180000, expect: { timeout: 20000 },
       outputDir: '${out}/results', reporter: [['list'], ['json', { outputFile: '${out}/result.json' }]],
       use: { baseURL: '${origin}', trace: 'off', screenshot: 'only-on-failure', acceptDownloads: true },
       projects: [
@@ -164,7 +167,7 @@ const bootstrap = {
         },
       );
       child.on('error', reject);
-      child.on('exit', (exit, signal) => resolve({ exit, signal }));
+      child.on('exit', (exit, signal) => resolve({ pid: child.pid, exit, signal }));
     });
   } finally {
     for (const socket of sockets.clients) socket.terminate();

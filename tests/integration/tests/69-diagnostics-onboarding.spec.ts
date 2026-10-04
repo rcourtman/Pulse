@@ -515,6 +515,15 @@ async function assertControlsInViewport(
 test.describe("Diagnostics safe collection and local exports", () => {
   test.setTimeout(180_000);
 
+  test.afterEach(async ({ page }, testInfo) => {
+    if (testInfo.status === "passed") {
+      await page.screenshot({
+        path: testInfo.outputPath("diagnostics-completed-state.png"),
+        fullPage: true,
+      });
+    }
+  });
+
   test("keeps internal analytics absent and connects safety guidance to keyboard-accessible controls", async ({
     page,
   }, testInfo) => {
@@ -730,6 +739,10 @@ test.describe("Diagnostics safe collection and local exports", () => {
     await expect(full).toBeDisabled();
     await expect(github).toBeDisabled();
     expect(reads).toBe(2);
+    await page.screenshot({
+      path: testInfo.outputPath("diagnostics-refresh-disabled.png"),
+      fullPage: true,
+    });
     release!();
     await expect(
       page.getByRole("heading", {
