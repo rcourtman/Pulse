@@ -664,19 +664,36 @@ docker run --init -e HTTPS_ENABLED=true \
 
 ## 🔑 API Tokens
 
-API tokens provide scoped, revocable access to Pulse. Manage tokens in **Settings → Security → API Tokens**.
+API tokens provide scoped, revocable access to Pulse. Manage them in
+**Settings → API Access**, in the **Security** group. An account without token
+management permission can review the inventory but cannot create or revoke tokens.
 
 The token shown during first-run setup is the primary automation API token for
-that Pulse instance. It is separate from your web login password and is meant
-for agents, scripts, integrations, kiosks, and temporary setup handoffs. Tokens
-are shown once; later token rows show only identifying hints such as prefix,
-suffix, label, scopes, and last-used metadata.
+that Pulse instance, not your web login password. Do not reuse a full-access
+setup token for every consumer. Give each agent, script, integration or display
+only the scopes it needs, with a name that identifies its use. Tokens are shown
+once; later rows show hints and metadata, not a recoverable secret. Store the
+secret privately before dismissing it.
 
-Revoking a token is safe for Pulse itself, but it immediately breaks any agent,
-script, kiosk, or integration still using that token. When a consumer needs to
-stay online, create and install a replacement token first, then revoke the old
-one. An agent whose token has been revoked stops authenticating until it is
-reinstalled or reconfigured with a valid token.
+### Replace or revoke a token
+
+Revoking a token stops consumers still using it from authenticating. For a
+planned rotation, create a least-privilege replacement, install it privately
+in each affected consumer and verify a fresh authenticated result before
+revoking the old token. Last-used metadata alone does not account for every
+consumer. Do not reinstall an agent or delete its saved identity just to
+replace a credential; use its private token-file or managed configuration.
+
+**If a token or kiosk link has been exposed, revoke it promptly**, even if that
+interrupts monitoring or a display. Replace it through the same private setup
+path. Do not leave a leaked token active while arranging a gradual rotation.
+For a server-address change without credential exposure, follow
+[agent retargeting](UNIFIED_AGENT.md#moving-pulse-to-a-new-address) instead.
+
+Never put a token or session cookie in a diagnostic command, screenshot or
+issue thread. For scripted API access, use the
+[private header-file procedure](API.md#api-token-recommended), keep TLS
+verification enabled and do not share verbose or trace output.
 
 ### Token Scopes
 
@@ -684,53 +701,81 @@ reinstalled or reconfigured with a valid token.
 | ------- | ------------- |
 | `*` (Full access) | All permissions (legacy, not recommended) |
 | `monitoring:read` | View dashboards, metrics, alerts |
-| `monitoring:write` | Acknowledge/silence alerts |
+| `monitoring:write` | Acknowledge, silence and clear alerts |
 | `docker:report` | Docker / Podman agent telemetry submission |
 | `docker:manage` | Docker / Podman container lifecycle actions (restart, stop) |
 | `kubernetes:report` | Kubernetes agent telemetry submission |
 | `kubernetes:manage` | Kubernetes cluster management |
 | `agent:report` | Agent host telemetry submission |
 | `agent:config:read` | Read agent config payloads |
-| `agent:manage` | Manage registered agents (unlink/delete/config) |
-| `agent:exec` | Establish agent command WebSocket connections |
+| `agent:manage` | Agent lifecycle/configuration changes and unregistering; not needed by the reporting preset |
+| `agent:exec` | Establish agent command WebSocket connections; not a reporting permission |
 | `ai:chat` | Use Pulse Assistant chat and read knowledge |
 | `ai:execute` | Use governed Patrol plans, approvals, actions, and history |
 | `settings:read` | Read configuration |
-| `settings:write` | Modify configuration |
+| `settings:write` | Modify configuration, manage tokens and trigger updates |
 | `audit:read` | Read audit events, verification results, summaries, and exports |
 
 ### Presets
 
-The UI offers quick presets for common use cases:
+Use **New token**, enter a name under **Create token**, select a **Quick preset**
+and choose **Generate**. The current presets are:
 
 | Preset | Scopes | Use Case |
 | -------- | -------- | ---------- |
-| **Kiosk / Dashboard** | `monitoring:read` | Read-only dashboard displays |
-| **Agent host** | `agent:report`, `agent:config:read`, `agent:manage` | Agent telemetry, configuration fetch, and uninstall cleanup |
+| **Kiosk / Monitoring** | `monitoring:read` | Read-only dashboard displays |
+| **Agent** | `agent:report`, `agent:config:read` | Host telemetry and the agent's bound configuration |
 | **Docker / Podman report** | `docker:report` | Docker / Podman agent (read-only) |
 | **Docker / Podman manage** | `docker:report`, `docker:manage` | Docker / Podman agent with actions |
 | **Settings read** | `settings:read` | Read-only config access |
 | **Settings admin** | `settings:read`, `settings:write` | Full config access |
+| **Audit read** | `audit:read` | Audit events, verification history, summaries and exports |
+
+**Reporting is not remote execution.** The Agent preset does not grant
+`agent:manage` or `agent:exec`; Docker / Podman report does not grant
+`docker:manage`. Add lifecycle or action authority only for the operation you
+intend, not to fix a missing reading. A settings-read token can read sensitive
+configuration and diagnostics; it is not a public-display credential. See
+[agent security](AGENT_SECURITY.md) for the separate collector and action-runner
+requirements.
+
+If **Patrol external agent** is offered, its scopes come from the current Patrol
+requirements. Use the displayed set rather than guessing or adding **Full access**.
+The separate **Full access** choice grants the legacy `*` wildcard, not a
+least-privilege preset. Hiding controls does not reduce a token's permissions.
 
 ### Kiosk Mode
 
-For unattended displays (wall monitors, dashboards), use a kiosk token to avoid cookie persistence issues:
+For a wall monitor, create a dedicated **Kiosk / Monitoring** token with only
+`monitoring:read`. Never use **Full access**, a settings token or your
+administrator's logged-in browser profile on an unattended display.
 
-1. Go to **Settings → Security → API Tokens**
-2. Click **New token** and select the **Kiosk / Dashboard** preset
-3. Copy the generated token
-4. Access Pulse via URL with token:
-   ```text
-   https://your-pulse-url/?token=YOUR_TOKEN_HERE
-   ```
+1. Open Pulse at its trusted **HTTPS** address and go to **Settings → API Access**.
+2. Use **New token**, name the display, select **Kiosk / Monitoring** and
+   choose **Generate**. Store the secret privately.
+3. After closing the token-reveal dialog, the **Magic Kiosk Link** offers
+   **Copy Link** for this monitoring-only token. Transfer that link privately
+   to the display; do not put it in shared bookmarks, screenshots or reports.
+4. Check the display using the link in a separate browser profile with no
+   administrator session. Confirm it shows the intended monitoring data and
+   does not offer settings or write actions. A hidden control alone is not
+   proof of restricted access.
 
-**Kiosk tokens:**
-- Grant read-only dashboard access (`monitoring:read` scope)
-- Hide the Settings tab automatically
-- Work without cookies (token in URL)
-- Can be revoked anytime from the UI
+The link is a **bearer credential**: anyone with it can read the permitted
+infrastructure data until the token expires or is revoked. The `kiosk=1`
+option only hides navigation and filters; it does not authenticate a browser
+or change the token's scopes.
 
-> **Security note**: URL tokens appear in browser history and server logs. Use only for read-only dashboard access on trusted networks.
+Pulse removes the token from the page URL after loading and keeps it in that
+tab's session storage. **The initial request already carried the token**;
+HTTPS and the cleaned address bar do not remove copies from proxy/server logs,
+browser history or the clipboard. Do not rely on this session surviving a
+closed tab, browser restart or cleared site data. Keep the original link private
+if the display needs it again, and clear clipboard copies after setup.
+
+If the display or link is lost or exposed, revoke its dedicated token in
+**API Access** and create a replacement. Revoking a display token should not
+require rotating unrelated agents' credentials.
 
 ---
 

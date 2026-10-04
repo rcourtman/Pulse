@@ -24,6 +24,7 @@ const targets: Record<string, string> = {
   troubleshooting: '/docs/TROUBLESHOOTING#recovery-mode',
   truenas: '/docs/TRUENAS',
   installation: '/docs/INSTALL',
+  configuration: '/docs/CONFIGURATION#-api-tokens',
 };
 
 window.history.replaceState({}, '', targets[scenario] ?? targets.plain);
