@@ -8,6 +8,14 @@ import type { WorkloadGuest } from '@/types/workloads';
 vi.mock('../GuestPhysicalDisks', () => ({ GuestPhysicalDisks: () => null }));
 
 const path = '/srv/backups/covered-filesystem';
+const unavailableDisk = {
+  cpu: true,
+  memory: true,
+  disk: false,
+  networkIO: true,
+  diskIO: true,
+  uptime: true,
+} satisfies NonNullable<WorkloadGuest['telemetryAvailability']>;
 const disk = {
   mountpoint: path,
   device: '/dev/vda1',
@@ -105,7 +113,7 @@ describe('filesystem details do not promote retained usage to current health', (
 
   it('withdraws a numeric bar on explicit unavailability even without a reason', () => {
     render(() => (
-      <GuestDrawerOverview {...props(guest({ telemetryAvailability: { disk: false } }))} />
+      <GuestDrawerOverview {...props(guest({ telemetryAvailability: unavailableDisk }))} />
     ));
     expect(within(filesystemRow()).getByText('Usage unavailable · ?/10.0 GB · EXT4')).toBeVisible();
     expect(within(filesystemRow()).queryByRole('progressbar')).not.toBeInTheDocument();
@@ -114,7 +122,7 @@ describe('filesystem details do not promote retained usage to current health', (
   it('explains explicit unavailability even before any filesystem sample', () => {
     render(() => (
       <GuestDrawerOverview
-        {...props(guest({ disks: [], telemetryAvailability: { disk: false } }))}
+        {...props(guest({ disks: [], telemetryAvailability: unavailableDisk }))}
         hasFilesystemDetails={false}
       />
     ));
