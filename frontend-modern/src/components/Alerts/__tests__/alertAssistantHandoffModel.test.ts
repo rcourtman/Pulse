@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Alert } from '@/types/api';
 import { buildAlertAssistantHandoff } from '../alertAssistantHandoffModel';
+import { makeSystemAlert, SYSTEM_ALERT_TYPES } from '@/features/alerts/__fixtures__/systemAlerts';
 
 function makeAlert(overrides: Partial<Alert> = {}): Alert {
   return {
@@ -22,6 +23,39 @@ function makeAlert(overrides: Partial<Alert> = {}): Alert {
 }
 
 describe('alertAssistantHandoffModel', () => {
+  it.each(SYSTEM_ALERT_TYPES)(
+    'explains Pulse %s without fabricated metric or resource context',
+    (type) => {
+      const alert = makeSystemAlert(type);
+      const { context } = buildAlertAssistantHandoff({ alert, resourceType: 'vm', vmid: 101 });
+      expect(context.targetType).toBeUndefined();
+      expect(context.targetId).toBeUndefined();
+      expect(context.handoffResources).toEqual([]);
+      expect(context.autonomousMode).toBe(false);
+      expect(context.handoffContext).toContain('Scope: Pulse itself (not a monitored resource)');
+      expect(context.handoffContext).toContain(alert.message);
+      expect(context.handoffContext).toContain(`Alert Identifier: ${alert.id}`);
+      expect(context.handoffContext).toContain('Operator Boundary:');
+      expect(context.handoffContext).not.toMatch(/Current Value:|Threshold:|Resource ID:|Node:/);
+      expect(context.context?.guestName).toBeUndefined();
+      expect(context.context?.vmid).toBeUndefined();
+      expect(context.briefing?.detailLines?.join('\n')).not.toMatch(/Current value|threshold/);
+    },
+  );
+
+  it('retains system scope for future types and legacy IDs carrying system metadata', () => {
+    const { context } = buildAlertAssistantHandoff({
+      alert: makeSystemAlert('future-condition', {
+        id: 'legacy-system-id',
+        resourceId: 'vm-wrong',
+        node: 'wrong-node',
+        metadata: { systemAlert: true, resourceType: 'vm' },
+      }),
+    });
+    expect(context.targetId).toBeUndefined();
+    expect(context.handoffResources).toEqual([]);
+    expect(context.handoffContext).not.toMatch(/wrong-node|vm-wrong/);
+  });
   it('builds a visible approval-required alert handoff without command payloads', () => {
     const handoff = buildAlertAssistantHandoff({
       alert: makeAlert(),

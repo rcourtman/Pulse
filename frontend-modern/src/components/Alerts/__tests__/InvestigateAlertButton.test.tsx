@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import type { Alert } from '@/types/api';
+import { makeSystemAlert } from '@/features/alerts/__fixtures__/systemAlerts';
 import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
 // ---------------------------------------------------------------------------
@@ -153,6 +154,22 @@ beforeEach(() => {
   notificationStoreMock.error.mockReset();
   notificationStoreMock.warning.mockReset();
   notificationStoreMock.info.mockReset();
+});
+
+describe('system-alert investigation', () => {
+  it.each([undefined, { systemAlert: true, resourceType: 'vm' }])(
+    'opens explanation, never resource Patrol, for a system alert with metadata %j',
+    (metadata) => {
+      const alert = makeSystemAlert('backup-evaluation', { resourceId: 'vm-wrong', metadata });
+      render(() => <InvestigateAlertButton alert={alert} variant="full" patrolOption />);
+      fireEvent.click(screen.getByRole('button', { name: 'Ask Pulse Assistant about this alert' }));
+      expect(explainMock).toHaveBeenCalledTimes(1);
+      expect(triggerPatrolRunMock).not.toHaveBeenCalled();
+      expect(openedContext().targetId).toBeUndefined();
+      expect(openedContext().handoffResources).toEqual([]);
+      expect(formatAlertValueMock).not.toHaveBeenCalled();
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
