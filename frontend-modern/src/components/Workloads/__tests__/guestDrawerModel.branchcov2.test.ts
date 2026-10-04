@@ -80,7 +80,17 @@ describe('guestDrawerModel (branch coverage)', () => {
     it('scales the canonical workload cpu ratio by 100 and returns finite metric values', () => {
       const guest = makeGuest({
         cpu: 1.0,
-        memory: { total: 100, used: 40, free: 60, usage: 0.4 },
+        memory: {
+          total: 100,
+          used: 40,
+          free: 60,
+          usage: 0.4,
+          observation: {
+            state: 'current',
+            source: 'status-mem',
+            observedAt: '2026-10-04T03:00:00Z',
+          },
+        },
         disk: { total: 100, used: 30, free: 70, usage: 0.3 },
         networkIn: 100,
         networkOut: 200,

@@ -328,7 +328,8 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         deferred,
         descriptionId: `${inspectionId}-deferred-${index}`,
         isCurrent: isFallback && !deferred,
-        isLastKnown: isFallback && Boolean(deferred),
+        isLastKnown: isFallback && Boolean(deferred) && !deferred?.valueLabel,
+        isUnknown: isFallback && deferred?.valueLabel === 'freshness unknown',
         valueLabel: hovered
           ? getGuestDrawerHistoryValueLabel([hovered.point], item.unit)
           : activeTimestamp() !== null
@@ -393,6 +394,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
                 class="inline-flex items-center gap-1"
                 data-history-current={item.isCurrent ? item.metric : undefined}
                 data-history-last-known={item.isLastKnown ? item.metric : undefined}
+                data-history-unknown={item.isUnknown ? item.metric : undefined}
                 aria-describedby={item.deferred ? item.descriptionId : undefined}
               >
                 <svg aria-hidden="true" class="h-2.5 w-2.5 shrink-0" viewBox="0 0 10 10">
@@ -402,6 +404,9 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
                 <span>{item.valueLabel}</span>
                 <Show when={item.isCurrent}>
                   <span>current</span>
+                </Show>
+                <Show when={item.isUnknown}>
+                  <span>freshness unknown</span>
                 </Show>
                 <Show when={item.isLastKnown}>
                   <span>last known</span>
@@ -419,7 +424,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
             class="mb-2 text-xs leading-relaxed text-muted"
             data-history-deferred={item.metric}
           >
-            {item.label} live reading: {item.deferred?.message}
+            {item.label} reading: {item.deferred?.message}
           </p>
         )}
       </For>
@@ -637,11 +642,10 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
   });
 
   const locked = createMemo(() => isRangeLocked(props.range));
-  const historyQuery = createNonSuspendingQuery<
-    AllMetricsHistoryResponse,
-    GuestDrawerHistoryQueryKey
-  >({
-    source: () => {
+  // Snapshot replacement often creates a new target object with unchanged
+  // coordinates. Only a real target/range/access change owns a new read.
+  const historySource = createMemo<GuestDrawerHistoryQueryKey | null>(
+    () => {
       const target = props.target;
       if (!target || locked()) return null;
       return {
@@ -650,6 +654,24 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
         range: props.range,
       };
     },
+    null,
+    {
+      equals: (previous, next) =>
+        previous === next ||
+        Boolean(
+          previous &&
+          next &&
+          previous.resourceType === next.resourceType &&
+          previous.resourceId === next.resourceId &&
+          previous.range === next.range,
+        ),
+    },
+  );
+  const historyQuery = createNonSuspendingQuery<
+    AllMetricsHistoryResponse,
+    GuestDrawerHistoryQueryKey
+  >({
+    source: historySource,
     fetcher: async (key, signal) =>
       normalizeHistoryResponse(
         await ChartsAPI.getMetricsHistory({

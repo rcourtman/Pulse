@@ -155,6 +155,53 @@ describe('useUnifiedResources', () => {
   let resolveIncrementalResourcePatchIndices: UseUnifiedResourcesModule['resolveIncrementalResourcePatchIndices'];
   let eventBus: (typeof import('@/stores/events'))['eventBus'];
 
+  it('keeps API-selected memory annotation through the canonical normalizer', async () => {
+    setWsConnected(false);
+    setWsState('resources', []);
+    const observation = {
+      state: 'last-known',
+      source: 'guest-agent-meminfo',
+      observedAt: '2026-10-04T14:00:00Z',
+    };
+    apiFetchMock.mockResolvedValue(
+      resourceResponse([
+        {
+          ...v2Resource,
+          metrics: { ...v2Resource.metrics, memory: { ...v2Resource.metrics.memory, observation } },
+        },
+      ]),
+    );
+    let dispose = () => {};
+    let result!: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']>;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+    try {
+      await waitForResourceCount(() => result.resources().length);
+      expect(result.resources()[0].memory).toMatchObject({ current: 50, observation });
+      apiFetchMock.mockResolvedValue(
+        resourceResponse([
+          {
+            ...v2Resource,
+            lastSeen: '2026-10-04T17:00:00Z',
+            metrics: {
+              ...v2Resource.metrics,
+              memory: { ...v2Resource.metrics.memory, observation },
+            },
+          },
+        ]),
+      );
+      await result.refetch();
+      expect(result.resources()[0].memory).toMatchObject({ current: 50, observation });
+      apiFetchMock.mockResolvedValue(resourceResponse([v2Resource]));
+      await result.refetch();
+      expect(result.resources()[0].memory).not.toHaveProperty('observation');
+    } finally {
+      dispose();
+    }
+  });
+
   beforeEach(async () => {
     vi.useFakeTimers();
     vi.resetModules();

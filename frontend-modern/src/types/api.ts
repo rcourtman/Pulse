@@ -1170,6 +1170,15 @@ export interface PBSJobHealthEvidence {
   error?: string;
 }
 
+/** Server-owned provenance of the selected guest-memory reading. */
+export interface MemoryObservation {
+  /** current, last-known or unavailable. Unrecognised/absent states are unknown. */
+  state: string;
+  source: string;
+  /** Original source time, never the refreshed resource LastSeen. */
+  observedAt?: string;
+}
+
 export interface Memory {
   total: number;
   used: number;
@@ -1178,6 +1187,7 @@ export interface Memory {
   cache?: number;
   /** Total is known, but no cache-aware source can establish current usage. */
   usageUnavailable?: boolean;
+  observation?: MemoryObservation;
   usage: number;
   balloon?: number;
   swapUsed?: number;

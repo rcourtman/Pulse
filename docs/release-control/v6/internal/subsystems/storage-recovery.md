@@ -21,6 +21,18 @@
 
 ## Purpose
 
+### Guest-memory read state stays independent of backup disk state
+
+The existing guest drawer retains Core's selected memory provenance through
+both resources-API and canonical snapshot consumers. Retained memory remains
+last-known at its original observation time, even after a new poll or cleared
+backup lock. Missing provenance is unknown, unavailable memory is not zero,
+and an independent current Proxmox/Pulse Agent memory reading remains current
+while guest-agent filesystem reads are deferred. History samples and its
+access-denial boundary remain authoritative. This client repair does not run
+backup/QGA operations or establish independent thaw, covered-filesystem writes,
+liveness, resumption or delivery. Existing outage precautions remain effective.
+
 ### Memory provenance does not imply recoverability
 
 Canonical metric values may carry optional selected guest memory observation
