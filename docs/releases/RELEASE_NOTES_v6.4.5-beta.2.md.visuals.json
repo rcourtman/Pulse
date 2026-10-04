@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "decision": "Text describes targeted reliability and existing-layout corrections. Retained regression evidence covers disk mount-list visibility without nested clipping and keyboard reachability. No new explanatory release screenshot is needed. Static captures cannot establish tenant-switch latency, delivery or rollback.",
+  "captures": []
+}

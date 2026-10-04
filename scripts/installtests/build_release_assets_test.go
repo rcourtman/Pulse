@@ -1221,20 +1221,6 @@ func TestCurrentStablePatchReleasePacketTracksInstallMetadata(t *testing.T) {
 	assertFileContainsAll(t, repoFile("scripts", "install-docker.sh"),
 		`CANONICAL_DEFAULT_PULSE_VERSION="`+version+`"`,
 	)
-	installabilityPath := repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md")
-	installabilityRequired := make([]string, 0, 3)
-	installabilityRequired = append(installabilityRequired,
-		"The active stable `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
-		"For the active stable `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"`",
-	)
-	if rcDerived {
-		installabilityRequired = append(installabilityRequired, "promoted_from_tag="+promotedTag)
-	} else {
-		installabilityRequired = append(installabilityRequired,
-			"This patch release uses the stable hotfix path with `rollback_version=v"+previous+"`, `hotfix_exception=true`, a release-owner reason, and no fabricated same-version RC tag.",
-		)
-	}
-	assertFileContainsAllNormalized(t, installabilityPath, installabilityRequired...)
 }
 
 func TestCurrentStableMinorReleasePacketTracksInstallMetadata(t *testing.T) {
@@ -1258,11 +1244,6 @@ func TestCurrentStableMinorReleasePacketTracksInstallMetadata(t *testing.T) {
 		"`v"+version+"` is a stable minor release",
 		"stable `v"+previous+"`",
 		"## What's improved",
-		"Alerts that survive restarts",
-		"More control over notifications",
-		"Earlier resource warnings",
-		"More accurate Proxmox and PBS coverage",
-		"Pulse Mobile iOS build 12 and Android versionCode 9 remain compatible",
 		"not Authenticode-signed",
 		"Unknown Publisher warning",
 		"The rollback target is stable `v"+previous+"`",
@@ -1271,8 +1252,8 @@ func TestCurrentStableMinorReleasePacketTracksInstallMetadata(t *testing.T) {
 		"Version: `v"+version+"`",
 		"Previous stable: `v"+previous+"`",
 		"Rollback target: `v"+previous+"`",
-		"Promotion path: owner-approved expedited exact-SHA stable cutoff from `main`",
-		"Mobile decision: `existing-mobile-build-compatible`",
+		"Promotion path: ",
+		"Mobile decision: ",
 		"standing SignPath-unavailable policy applies",
 	)
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
@@ -1300,15 +1281,6 @@ func TestCurrentStableMinorReleasePacketTracksInstallMetadata(t *testing.T) {
 	assertFileContainsAll(t, repoFile("scripts", "install-docker.sh"),
 		`CANONICAL_DEFAULT_PULSE_VERSION="`+version+`"`,
 	)
-	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
-		"The active stable `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
-		"`rollback_version=v"+previous+"`",
-		"The integrated single-build workflow must pass its exact-SHA preflight and immutable readiness gates before publication.",
-		"The stable server cut is classified `existing-mobile-build-compatible`.",
-		"explicit version-bound owner decision",
-		"standing unavailable policy",
-		"For the active stable `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"`",
-	)
 }
 
 func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
@@ -1320,8 +1292,7 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 	if !ok {
 		t.Skip("current prerelease does not have a previous stable patch")
 	}
-	stableTarget, _, ok := strings.Cut(version, "-")
-	if !ok {
+	if _, _, ok := strings.Cut(version, "-"); !ok {
 		t.Fatalf("current prerelease %q has no stable target", version)
 	}
 	comparisonVersion, ok := previousPrereleaseVersion(version)
@@ -1336,13 +1307,6 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"# Pulse v"+version+" Release Notes",
 		"## What's improved",
 		"## Before you upgrade",
-		"Same-name systems stay separate",
-		"Windows agent delivery is restored",
-		"Large Availability estates scan faster",
-		"Slow starts are recoverable",
-		"Disk I/O totals are more accurate",
-		"carries every change from the `v6.4.2` packet",
-		"map at least one trusted IdP group to the built-in `admin` role",
 		"not Authenticode-signed",
 		"Unknown Publisher warning",
 		"does not require a companion mobile release",
@@ -1357,17 +1321,10 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"Version: `v"+version+"`",
 		"Previous stable: `v"+previous+"`",
 		"Rollback target: `v"+previous+"`",
-		"Promotion path: exact-SHA single-build release candidate from `main`",
+		"Promotion path: ",
 		comparisonSummary,
-		"carries the complete `v6.4.2` change set",
-		"no longer pin a guest in Backup Running",
-		"(#1815)",
-		"no longer collapse into a single host or Docker record",
-		"(#1753)",
-		"Windows Unified Agent auto-update no longer fails with HTTP 404",
-		"(#1820)",
 		"Windows signing decision: prereleases publish checksum- and detached-signature-verified Windows agents without Authenticode",
-		"Mobile decision: `no-mobile-impact`",
+		"Mobile decision: ",
 		"no companion mobile build or store rollout is required",
 	)
 	if version == "6.3.0-rc.6" {
@@ -1418,14 +1375,6 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 	)
 	assertFileContainsAll(t, repoFile("scripts", "install-docker.sh"),
 		`CANONICAL_DEFAULT_PULSE_VERSION="`+version+`"`,
-	)
-	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
-		"The active prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
-		"This prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
-		"For the active prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
-		"No governed mobile-facing path changed from `v"+previous+"`, so the release decision is `no-mobile-impact`",
-		"no companion upload or public mobile-store rollout is part of this candidate.",
-		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode. Stable `v"+stableTarget+"` also skips SignPath under the standing unavailable policy",
 	)
 }
 

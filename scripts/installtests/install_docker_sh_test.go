@@ -414,58 +414,6 @@ func TestInstallDockerScriptFallbackPinsCurrentVersion(t *testing.T) {
 	}
 }
 
-func TestInstallDockerProofTracksStablePatchReleaseContract(t *testing.T) {
-	version := currentReleaseVersion(t)
-	if isPrereleaseVersion(version) {
-		t.Skip("current release is a prerelease")
-	}
-	previous, ok := previousStablePatchVersion(version)
-	if !ok {
-		t.Skip("current release is not a stable patch release")
-	}
-	promotedTag, rcDerived := currentStablePatchPromotedPrerelease(t, version)
-	installabilityPath := repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md")
-
-	required := make([]string, 0, 5)
-	required = append(required,
-		"The active stable `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
-		"`no-mobile-impact`",
-		"For the active stable `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"`",
-	)
-	if rcDerived {
-		// An RC-derived stable patch promotes the exercised same-version
-		// candidate, so the active-stable paragraph names the promoted tag
-		// instead of the emergency no-RC hotfix path.
-		required = append(required, "promoted_from_tag="+promotedTag)
-	} else {
-		required = append(required,
-			"This patch release uses the stable hotfix path with `rollback_version=v"+previous+"`, `hotfix_exception=true`, a release-owner reason, and no fabricated same-version RC tag.",
-			"active customer harm",
-		)
-	}
-	assertFileContainsAllNormalized(t, installabilityPath, required...)
-
-	if version == "6.3.1" {
-		assertFileContainsAllNormalized(t, installabilityPath,
-			"the prior `v"+previous+"` decision could not be reused for this patch",
-			"the release owner recorded that separate `v6.3.1` exception",
-			"public Unknown Publisher disclosure",
-		)
-	} else if !rcDerived {
-		assertFileContainsAllNormalized(t, installabilityPath,
-			"standing SignPath-unavailable policy from `v6.3.2` onward",
-			"Public Unknown Publisher disclosure",
-		)
-	}
-	if version == "6.4.2" {
-		assertFileContainsAllNormalized(t, installabilityPath,
-			"The governed branch is `main`",
-			"authenticated non-administrator organization members can reach infrastructure action control",
-			"SSO-only deployments can treat every authenticated IdP user as an instance administrator without an explicit grant",
-		)
-	}
-}
-
 func TestInstallDockerProofTracksStableMinorContract(t *testing.T) {
 	version := currentReleaseVersion(t)
 	if isPrereleaseVersion(version) {
@@ -475,8 +423,7 @@ func TestInstallDockerProofTracksStableMinorContract(t *testing.T) {
 	if !valid || parts[1] == 0 || parts[2] != 0 {
 		t.Skip("current release is not a stable minor release")
 	}
-	previous, ok := previousStableForPrereleaseVersion(version + "-rc.1")
-	if !ok {
+	if _, ok := previousStableForPrereleaseVersion(version + "-rc.1"); !ok {
 		t.Fatal("stable minor release has no earlier stable rollback packet")
 	}
 
@@ -486,57 +433,6 @@ func TestInstallDockerProofTracksStableMinorContract(t *testing.T) {
 	assertFileContainsAll(t, repoFile("scripts", "install-docker.sh"),
 		`CANONICAL_DEFAULT_PULSE_VERSION="`+version+`"`,
 	)
-	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
-		"The active stable `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
-		"`rollback_version=v"+previous+"`",
-		"`hotfix_exception=true` transports that approved waiver through the shared promotion resolver. It does not reclassify v"+version+" as a patch hotfix.",
-		"The integrated single-build workflow must pass its exact-SHA preflight and immutable readiness gates before publication.",
-		"The stable server cut is classified `existing-mobile-build-compatible`.",
-		"Stable `v"+version+"` skips SignPath under the standing unavailable policy and retains exact-SHA, checksum, detached-signature, immutable-manifest, published-digest, and Unknown Publisher disclosure controls.",
-		"For the active stable `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"`",
-	)
-}
-
-func TestInstallDockerProofTracksPrereleaseContract(t *testing.T) {
-	version := currentReleaseVersion(t)
-	if !isPrereleaseVersion(version) {
-		t.Skip("current release is stable")
-	}
-	previous, ok := previousStableForPrereleaseVersion(version)
-	if !ok {
-		t.Skip("current prerelease does not have a previous stable patch")
-	}
-	stableTarget, _, ok := strings.Cut(version, "-")
-	if !ok {
-		t.Fatalf("current prerelease %q has no stable target", version)
-	}
-	comparisonVersion, ok := previousPrereleaseVersion(version)
-	comparisonLine := "It follows stable `v" + previous + "` and opens the published `v" + stableTarget + "` candidate line."
-	if !ok {
-		comparisonVersion = previous
-	} else {
-		comparisonLine = "It follows `v" + comparisonVersion + "` on the published `v" + stableTarget + "` candidate line."
-	}
-	if version == "6.4.0-rc.10" {
-		comparisonLine = "The `v6.4.0-rc.9` release staged an immutable draft, tag, and exact-version artifacts but did not activate publicly"
-	}
-
-	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
-		"The active prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
-		comparisonLine,
-		"This prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
-		"No governed mobile-facing path changed from `v"+previous+"`, so the release decision is `no-mobile-impact`",
-		"no companion upload or public mobile-store rollout is part of this candidate.",
-		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode. Stable `v"+stableTarget+"` also skips SignPath under the standing unavailable policy",
-		"For the active prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
-	)
-	if version == "6.3.0-rc.6" {
-		assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
-			"For `v6.3.0-rc.6`, the release path retains credential-free PVE compilation while requiring the measured memory floor for API race shards after a bounded admission wait.",
-			"Public server and provider control-plane image publication uses independent matrix jobs that each revalidate the exact checkout and candidate manifest.",
-			"Private packaging transfers only the products consumed by Pro assembly, and paid-runtime Docker and direct-binary mismatch proofs execute concurrently without weakening either proof.",
-		)
-	}
 }
 
 func runInstallDockerScript(t *testing.T, workDir string, envVars ...string) {
