@@ -83,8 +83,8 @@
     },
     {
       "incomplete_commit": "0baee0bccffca078eb8598b2ed4ff481e4227b1e",
-      "completion_commit": "a8d049cc585e10083dcf3b29334a0643ab063e6b",
-      "reason": "Evaluate the intermediate reviewed report-form documentation-link correction together with its additive self-contained feedback safety contract and connected docsLinks regression. The final forms preserve all precautions without links to unpublished documentation; reviewed history is unchanged."
+      "completion_commit": "f8c5e98819d986398486bce23ae8c68f8c0898fd",
+      "reason": "Preserve the retained documentation-link correction while requiring its additive deployment-installability contract and parsed bug/prerelease form verification as one completion unit. The completion tree keeps collection and privacy precautions self-contained without waiving any guard or release proof."
     }
   ]
 }
