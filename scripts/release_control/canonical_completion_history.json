@@ -80,6 +80,11 @@
       "incomplete_commit": "8b56fc72e4ee79f3c219cf51f4c002e2e9343286",
       "completion_commit": "1026f5293b4c4e5a11651933e7ed36d398fd2f69",
       "reason": "Evaluate the Proxmox LXC linked-agent memory preference runtime change together with the follow-up commit that records its monitoring and unified-resources contract sections, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "0baee0bccffca078eb8598b2ed4ff481e4227b1e",
+      "completion_commit": "89b8151f19bdcc1a0ae653b26baf75c0f12d735c",
+      "reason": "Preserve the retained documentation-link correction while requiring its additive deployment-installability contract and parsed bug/prerelease form verification as one completion unit. The completion tree keeps collection and privacy precautions self-contained without waiving any guard or release proof."
     }
   ]
 }

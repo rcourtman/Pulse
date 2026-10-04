@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from canonical_completion_history import load_completions, validate_completion
+from canonical_completion_history import git, load_completions, validate_completion
 
 
 class CanonicalCompletionHistoryTest(unittest.TestCase):
@@ -23,6 +23,14 @@ class CanonicalCompletionHistoryTest(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "only version and completions"):
                 load_completions(path)
+
+    def test_report_intake_completion_satisfies_the_real_guard(self):
+        incomplete = "0baee0bccffca078eb8598b2ed4ff481e4227b1e"
+        self.assertEqual(
+            load_completions()[incomplete]["completion_commit"],
+            "89b8151f19bdcc1a0ae653b26baf75c0f12d735c",
+        )
+        self.assertTrue(validate_completion(incomplete, git("rev-parse", "HEAD")))
 
     def test_unregistered_commit_uses_the_normal_guard(self):
         self.assertFalse(validate_completion("0" * 40, "1" * 40))
