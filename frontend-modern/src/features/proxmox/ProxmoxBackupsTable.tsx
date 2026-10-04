@@ -802,8 +802,8 @@ export const ProxmoxBackupsTable: Component<{
               )}
             >
               <p class="text-xs text-amber-700 dark:text-amber-300" role="status">
-                Restore points with unavailable or future dates remain listed. Their ages are
-                unknown; they are excluded from the activity chart and day filters.
+                Backup entries with unavailable or future dates remain listed. Their ages are
+                unknown. They are excluded from the activity chart and day filters.
               </p>
             </Show>
             <Show

@@ -1068,7 +1068,7 @@ describe('backup-date-evidence connected inventory', () => {
       expect(document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(2),
     );
     const warning = screen.getByText(
-      /Restore points with unavailable or future dates remain listed/,
+      /Backup entries with unavailable or future dates remain listed/,
     );
     expect(warning).toHaveAttribute('role', 'status');
     expect(warning).toHaveTextContent('excluded from the activity chart and day filters');

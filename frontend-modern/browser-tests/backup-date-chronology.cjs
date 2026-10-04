@@ -351,7 +351,7 @@ const runtime = [
       );
       await page
         .getByRole('status')
-        .filter({ hasText: 'Restore points with unavailable or future dates remain listed' })
+        .filter({ hasText: 'Backup entries with unavailable or future dates remain listed' })
         .waitFor();
       assert.equal(await rows('recoverable').getByText('Unknown', { exact: true }).count(), 5);
       const today = page.getByRole('button', { name: /: 1 backup$/ });

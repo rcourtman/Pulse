@@ -58,7 +58,7 @@ const COVERAGE_SNAPSHOT_ONLY_TITLE =
 function CoverageAgeFallback(props: { unknown?: boolean; emptyTitle: string; compact?: boolean }) {
   const title = () =>
     props.unknown
-      ? 'One or more completed restore-point dates are unavailable or in the future. The latest point is unknown; expand this row to inspect the evidence.'
+      ? 'One or more completed restore-point dates are unavailable or in the future. The latest point is unknown. Expand this row to inspect the evidence.'
       : props.emptyTitle;
   return (
     <span
