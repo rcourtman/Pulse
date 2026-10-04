@@ -259,7 +259,7 @@ const payload = {
             for (const button of [full, github])
               assert.match(
                 await describedBy(button),
-                /Nothing is uploaded.*review even a sanitised file/,
+                /Nothing is uploaded.*review even a sanitised file/i,
               );
             await verifyLayout();
           },

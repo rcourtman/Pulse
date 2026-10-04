@@ -24,7 +24,9 @@ describe('diagnosticsPresentation', () => {
     expect(DIAGNOSTICS_PANEL_COPY.runSafety).toContain('backup, freeze/thaw');
     expect(DIAGNOSTICS_PANEL_COPY.runSafety).toContain('does not prove ongoing collection');
     expect(DIAGNOSTICS_PANEL_COPY.exportSafety).toContain('Nothing is uploaded');
-    expect(DIAGNOSTICS_PANEL_COPY.exportSafety).toContain('review even a sanitised file');
+    expect(DIAGNOSTICS_PANEL_COPY.exportSafety).toContain('Review even a sanitised file');
+    expect(DIAGNOSTICS_PANEL_COPY.runSafety).not.toContain(';');
+    expect(DIAGNOSTICS_PANEL_COPY.exportSafety).not.toContain(';');
   });
 
   it('exports canonical diagnostics empty-state copy', () => {
