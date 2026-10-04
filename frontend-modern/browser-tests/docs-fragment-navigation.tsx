@@ -23,6 +23,7 @@ const targets: Record<string, string> = {
   missing: '/docs/API#does-not-exist',
   troubleshooting: '/docs/TROUBLESHOOTING#recovery-mode',
   truenas: '/docs/TRUENAS',
+  installation: '/docs/INSTALL',
 };
 
 window.history.replaceState({}, '', targets[scenario] ?? targets.plain);

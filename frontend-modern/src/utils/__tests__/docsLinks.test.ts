@@ -61,6 +61,27 @@ function getRuntimeSourceFiles(dir: string): string[] {
 }
 
 describe('docsLinks', () => {
+  it('keeps custom systemd server help on the signed non-root install path', () => {
+    const installation = readFileSync(path.join(repoRoot, 'docs', 'INSTALL.md'), 'utf8');
+    const custom = installation
+      .split('<summary><strong>Manual or custom systemd services (advanced)</strong></summary>')[1]
+      .split('</details>')[0];
+    expect(custom).toContain('use the signed installer above');
+    expect(custom).toContain('`User=pulse`, `Group=pulse`');
+    expect(custom).toContain('`ProtectSystem=strict` and `ProtectHome=true`');
+    expect(custom).toContain('An empty `User=` means');
+    expect(custom).toContain('the installer preserves existing service units during updates');
+    expect(custom).toContain('Do not overwrite a working unit, change only its service user');
+    expect(custom).toContain('preserve the data directory and its encryption');
+    expect(custom).toContain('separate host **agent** has different privilege requirements');
+    const commands = [...custom.matchAll(/```bash\n([\s\S]*?)```/g)].map((match) => match[1]);
+    expect(commands).toHaveLength(1);
+    expect(commands[0]).toContain('systemctl show pulse.service');
+    expect(commands[0]).not.toMatch(/--property=(Environment|ExecStart)|sudo|tee|install -m/);
+    expect(installation).not.toContain('sudo tee /etc/systemd/system/pulse.service');
+    expect(installation).not.toContain('ExecStart=/usr/local/bin/pulse');
+  });
+
   it('keeps TrueNAS setup acceptance separate from a system-information probe', () => {
     const truenas = readFileSync(path.join(repoRoot, 'docs', 'TRUENAS.md'), 'utf8');
     const setup = truenas.split('## Quick Start')[1].split('## Creating a TrueNAS API Key')[0];
