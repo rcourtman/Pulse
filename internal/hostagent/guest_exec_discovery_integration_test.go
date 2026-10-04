@@ -40,23 +40,27 @@ func (e guestSafetyDiscoveryExecutor) IsAgentConnected(id string) bool {
 // Real server/session/registration/agent/Discovery paths, with a fake non-QGA
 // config reader and fake provider process. This is NOT native PVE acceptance.
 func testGuestExecRealServerAgentDiscoveryAdmission(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		// This connected fixture models a Linux PVE host. Non-Linux agents
-		// must not advertise the production QGA guard, even with injected
-		// readers; pretending their registration is Linux would weaken that
-		// contract. The native suites retain their other command controls.
-		if c := new(CommandClient); c.guestExecGuardVersion() != 0 {
-			t.Fatal("non-Linux agent advertised Linux guest-execution safety")
+	platforms := []string{runtime.GOOS, "linux", "darwin", "windows"}
+	seen := make(map[string]bool)
+	for _, platform := range platforms {
+		if seen[platform] {
+			continue
 		}
-		t.Skip("connected PVE guest-execution fixture requires a Linux agent runtime")
+		seen[platform] = true
+		t.Run(platform, func(t *testing.T) {
+			testGuestExecRealServerAgentDiscoveryPlatform(t, platform)
+		})
 	}
+}
+
+func testGuestExecRealServerAgentDiscoveryPlatform(t *testing.T, platform string) {
 	s := agentexec.NewServer(func(token, agent, host string) bool {
 		return token == "fixture" && agent == "node-agent" && host == "node"
 	})
 	ts := httptest.NewServer(http.HandlerFunc(s.HandleWebSocket))
 	defer ts.Close()
 	logger := zerolog.Nop()
-	c := NewCommandClient(Config{PulseURL: ts.URL, APIToken: "fixture", StateDir: t.TempDir(), Logger: &logger}, "node-agent", "node", "linux", "6")
+	c := NewCommandClient(Config{PulseURL: ts.URL, APIToken: "fixture", StateDir: t.TempDir(), Logger: &logger}, "node-agent", "node", platform, "6")
 	var locked, lockDuringHandoff, failedGuest atomic.Bool
 	var qgaCalls, configReads atomic.Int32
 	locked.Store(true)
@@ -120,6 +124,27 @@ func testGuestExecRealServerAgentDiscoveryAdmission(t *testing.T) {
 		}
 	}
 	locked.Store(false)
+	if runtime.GOOS != "linux" || platform != "linux" {
+		// PVE admission belongs to a Linux host agent. A platform label must
+		// not make a non-Linux executable advertise that capability, and a
+		// Linux executable labelled as another platform must still be refused.
+		// Exercise the real registration and server gate, not a skipped test
+		// or an artificial capability override just to reach the happy path.
+		for _, rt := range []servicediscovery.ResourceType{servicediscovery.ResourceTypeVM, servicediscovery.ResourceTypeDockerVM} {
+			id := "105"
+			if rt == servicediscovery.ResourceTypeDockerVM {
+				id = "105:app"
+			}
+			got, err := scanner.Scan(context.Background(), servicediscovery.DiscoveryRequest{ResourceType: rt, ResourceID: id, TargetID: "node-agent"})
+			if err == nil || err.Error() != agentexec.GuestExecDeferred(agentexec.GuestExecGuardUnavailable).Error() || got == nil || len(got.CommandOutputs) != 0 || qgaCalls.Load() != 0 || configReads.Load() != 0 {
+				t.Fatalf("unsupported platform reached guest admission: %+v %v calls=%d reads=%d", got, err, qgaCalls.Load(), configReads.Load())
+			}
+		}
+		if !s.IsAgentConnected("node-agent") {
+			t.Fatal("platform deferral dropped session liveness")
+		}
+		return
+	}
 	got, err := scanner.ScanVM(context.Background(), "node-agent", "node", "105")
 	want := int32(len(servicediscovery.GetCommandsForResource(servicediscovery.ResourceTypeVM)))
 	if err != nil || got == nil || int32(len(got.CommandOutputs)) != want || qgaCalls.Load() != want {
