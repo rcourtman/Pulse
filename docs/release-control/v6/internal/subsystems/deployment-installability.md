@@ -6360,7 +6360,7 @@ defaulted and nothing newer is published, the pair is the previous stable to
 the latest stable. An explicit pair must be published and move forward, so a
 same-version or missing-target run fails instead of passing.
 
-`scripts/release_lifecycle_rehearsal.sh` runs every phase inside the same
+`scripts/release_lifecycle_rehearsal.sh` defaults to running every phase inside the same
 digest-pinned `jrei/systemd-debian:12` container as the install smoke.
 
 1. Install FROM with that release's own `install.sh --version`, after the
@@ -6418,6 +6418,87 @@ shape. A local podman run (amd64 emulation) of `v6.4.1 -> v6.4.5 -> v6.4.1`
 passed all four phases. An earlier run correctly failed phase 1 on a new failed
 unit (`systemd-hostnamed`), which led to the container-only list above. The
 hosted Docker run is not yet claimed.
+
+### Exact published-RC Tailscale browser acceptance
+
+`qualify-browser-update-release.yml` uses the lifecycle harness's separate
+`--hosted-browser` mode on a **fresh public hosted Ubuntu 24.04 VM**. The shadow
+container mode above remains unchanged in purpose. A real native install is
+required for browser updates: Docker detection stays truthful, with no marker
+removal, mock updater, TLS bypass or `PULSE_ALLOW_DOCKER_UPDATES` override.
+
+Control is reviewed `main`, bound to `expected_workflow_sha`, its checkout and
+`GITHUB_WORKFLOW_SHA`. Product inputs are only the latest published immutable
+stable and the requested published immutable RC. Peeled commit, release/asset
+IDs, sizes and SHA-256 digests are checked by `release_browser_packet.py`; SSH
+signatures verify before execution. Archives are bounded to512MiB (current
+stable/RC archives are about265MiB), signatures to16KiB, the fixed regular
+server binary to1GiB and expanded inventory to2GiB/4096 entries. Streaming
+hashes avoid allocating an entire archive; anonymous downloads have the same
+archive-size ceiling. Setup-action caches are explicitly disabled in this
+CI-credential-bearing job, and derived command-file outputs use the reviewed
+collision-safe writer. Each installed binary hash must match its
+signed archive, rather than just a reported version. No rebuilt main binary,
+frozen-product insertion, candidate re-cut or stable promotion is performed.
+
+A pinned Tailscale action registers an ephemeral project CI node; Serve exposes
+only its own loopback Pulse install through its derived `tawny-powan.ts.net`
+HTTPS identity. No caller-selected endpoint, peer or previous stopped target is
+used. Registration alone receives the existing CI OAuth credential; acceptance
+commands receive a scrubbed environment with no provider, production or
+publishing credential. State is synthetic, disabled resources and throwaway
+admin/API authentication, with the existing telemetry opt-out.
+
+The real Chromium UI signs in once, chooses Preview, checks the actual feed's
+exact RC/archive, and confirms one Install Update. The observer requires real
+EventSource open/progress, exact served version, healthy status, authenticated
+readiness and progress-modal completion; wrong selection, silent progress,
+rejected apply or a stuck modal fails. API interception and fabricated version
+or progress are not acceptance. HTTP401/403 on main-frame navigation, login,
+or any same-origin API/SSE request started after successful login stops browser
+access immediately and closes the context to prevent UI/SSE reconnects. The
+receipt records only bounded endpoint classes, numeric status and the fixed
+journey step, never the URL, response body or credentials. Anonymous pre-login
+auth probes are not authenticated refusals; their request-start identity remains
+anonymous even if a response arrives after login. Version/health denial is not
+a restart transport gap and is never polled again. Recovery requires a readable
+terminal upgrade receipt explicitly recording `access_refused:false`; missing,
+malformed or incomplete evidence also stops before another auth file or browser
+process. No alternate identity, recovery login after refusal or apply replay is
+used.
+
+The same harness checks systemd, the seeded settings/encrypted stores and the
+original auto-update/timer intent after forward update and documented CLI
+`/bin/update --version FROM` recovery. Browser authentication/health readback
+then checks the restored baseline. This is CLI recovery plus browser readback,
+**not** the separate history-based UI rollback action. Cleanup stops the
+throwaway service/timer, records its result and fails the process on failure;
+the workflow resets the new Serve route and its hosted VM is disposed of.
+
+Bounded control, signed packet, installer/binary, phase, browser, cleanup and
+redacted settings receipts are retained for seven days. Successful screenshots
+contain only synthetic state. Auth files, bootstrap/API/node tokens, encrypted
+file manifests and raw installer/updater/service logs are not artifacts.
+Delivery must reconcile terminal logs and all receipts with the exact RC;
+a workflow conclusion alone is insufficient. Existing qualification, soak,
+release-steward judgment and publication boundaries remain unchanged. The
+previous target's undiagnosed HTTP401 is not diagnosed or cleared by this mode.
+
+Verification: `scripts/tests/test_release_browser_packet.py` executes immutable
+release/asset/binary identity rejection, worker-mode exclusion, scrubbed command
+environment and cleanup exit controls. `test_release_lifecycle_rehearsal.py`
+executes the recovery-access stop before another browser process can start.
+`tests/integration/scripts/release-browser-journey.test.cjs` exercises the real
+observer against offline Chromium success/recovery, anonymous auth probes,
+restart transport gaps, wrong-target, silent-SSE and stuck-modal fixtures, plus
+navigation (before/after login), login, initial/readiness version, health,
+authenticated API, check/apply, SSE and protected-read HTTP401/403. Each browser
+upgrade receipt is then passed to the actual shell recovery guard with a fixed
+local process sentinel, proving denied access prevents later auth preparation
+and browser launch while non-refused recovery remains available. These are observer
+and tooling proofs, **not native Tailscale/update/recovery acceptance**. That
+requires reviewed publication, infrastructure activation and a terminal hosted
+collection through the fixed Delivery dispatcher.
 
 ### Release-line dependency advisory watch (1 October 2026)
 
