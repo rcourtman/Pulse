@@ -371,6 +371,28 @@ non-mutating wrapper that verifies the current committed stable target. All
 stable demo writes require an exact stable tag and activation marker and run
 from `release-convergence.yml` under the global customer-promotion lease.
 
+## Published-RC browser qualification registration
+
+`qualify-browser-update-release.yml` must **not** reuse the demo binding above.
+It uses the separate repository secrets **TS_CI_DEPLOY_OAUTH_CLIENT_ID** and
+**TS_CI_DEPLOY_OAUTH_SECRET** for a dedicated business-tailnet OAuth client with
+only **Auth Keys write**, restricted to **tag:ci-deploy**. These names must not
+alias/copy the `tag:infra` demo client or a full-access administrative client.
+The Tailnet/credential owner verifies that client scope and tag restriction when
+configuring the pair; source inspection and the node's observed tag do not prove
+OAuth scope. No secret value belongs in source, logs or receipts.
+
+The workflow fails before joining when either dedicated secret is unavailable;
+there is no demo-credential, auth-key or caller-input fallback. It checks the
+actual running node's **Self.Tags == ["tag:ci-deploy"]** and its own business
+DNS name before starting Serve. Only its own `127.0.0.1:7655` is served over
+HTTPS, with no peer selection, SSH, routes or private demo/production target.
+This journey needs no expansion of CI access to private services. Cleanup resets
+that new Serve route even if route setup fails after the successful join; the
+pinned Tailscale action and fresh hosted VM own node teardown. A configured
+binding, source tests or a joined node is not native update/recovery acceptance.
+
+
 ## Helm CI
 
 **File**: `helm-ci.yml`

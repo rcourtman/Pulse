@@ -177,6 +177,58 @@ class HarnessContractTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
 
 
+class HostedWorkflowCommandFilesTest(unittest.TestCase):
+    def test_bound_pair_uses_the_reviewed_collision_safe_output_writer(self) -> None:
+        source = (REPO_ROOT / '.github/workflows/qualify-browser-update-release.yml').read_text()
+        for field in ('from', 'from_commit', 'to_commit'):
+            self.assertIn(f'python3 scripts/write_github_output.py {field} "${field}"', source)
+        self.assertNotIn('echo "to_commit=', source)
+        node_setup = source.split('uses: actions/setup-node@', 1)[1].split('      - name:', 1)[0]
+        self.assertNotRegex(node_setup, r'(?m)^\s*cache:')
+        self.assertIn('package-manager-cache: false', source)
+
+
+class BrowserRecoveryAccessStopTest(unittest.TestCase):
+    def test_refused_upgrade_does_not_launch_another_login(self) -> None:
+        source = HARNESS_PATH.read_text(encoding="utf-8")
+        function = "run_browser_journey() {" + source.split("run_browser_journey() {", 1)[1].split("\n}\n", 1)[0] + "\n}"
+        for status in (401, 403):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as tmp:
+                work = Path(tmp)
+                (work / "state").mkdir()
+                (work / "state/browser-upgrade.json").write_text(json.dumps({"status": "failed", "access_refused": True, "login_status": status}))
+                script = "set -euo pipefail\nWORK_DIR=" + json.dumps(tmp) + "\n"
+                script += function + "\nrun_browser_journey recovery v6.4.5\n"
+                # NODE/auth/origin variables are intentionally absent. Reaching
+                # process/auth preparation would fail this exact guard test.
+                result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+                self.assertEqual(1, result.returncode, result.stderr)
+                self.assertEqual({"status": "not-executed", "reason": "stopped-access-no-reauthentication"},
+                    json.loads((work / "state/browser-recovery.json").read_text()))
+                self.assertFalse((work / "state/browser-auth.json").exists())
+                self.assertEqual("", result.stderr)
+
+    def test_missing_or_malformed_upgrade_receipt_stops_before_auth_preparation(self) -> None:
+        source = HARNESS_PATH.read_text(encoding="utf-8")
+        function = "run_browser_journey() {" + source.split("run_browser_journey() {", 1)[1].split("\n}\n", 1)[0] + "\n}"
+        for receipt in (None, "not JSON", "[]", '{"status":"failed"}',
+                        '{"status":"incomplete","access_refused":false}',
+                        '{"status":"failed","access_refused":"false"}'):
+            with self.subTest(receipt=receipt), tempfile.TemporaryDirectory() as tmp:
+                work = Path(tmp)
+                (work / "state").mkdir()
+                if receipt is not None:
+                    (work / "state/browser-upgrade.json").write_text(receipt)
+                result = subprocess.run(["bash", "-c", "set -euo pipefail\nWORK_DIR="
+                    + json.dumps(tmp) + "\n" + function + "\nrun_browser_journey recovery v6.4.5\n"],
+                    capture_output=True, text=True)
+                self.assertEqual(1, result.returncode, result.stderr)
+                self.assertEqual({"status": "not-executed", "reason": "upgrade-receipt-unavailable"},
+                    json.loads((work / "state/browser-recovery.json").read_text()))
+                self.assertFalse((work / "state/browser-auth.json").exists())
+                self.assertEqual("", result.stderr)
+
+
 class AutoUpdateIntentTest(unittest.TestCase):
     """Execute the real observer/comparator, with guest systemctl observations."""
 
@@ -425,5 +477,73 @@ class WorkflowContractTest(unittest.TestCase):
                 self.assertNotIn("release-lifecycle-rehearsal", path.read_text(encoding="utf-8"))
 
 
+def verify_browser_recovery_controls(controls_path: Path) -> None:
+    """Feed exact Chromium receipts into the real guard in a jq-equipped proof VM.
+
+    The guard's permitted process is a local sentinel, not native recovery.
+    Source proof binds both this source and the browser input's exact hash.
+    """
+    controls = json.loads(controls_path.read_text(encoding="utf-8"))
+    assert controls["schema_version"] == 1
+    assert controls["scope"] == "offline adversarial observer controls only"
+    assert controls["client_version"] == "1.56.1"
+    fixed = {(kind, "upgrade") for kind in ("success", "anonymous-probes", "restart-gap",
+                                           "wrong-preview", "silent-stream", "stuck-modal")}
+    fixed.add(("success", "recovery"))
+    fixed.update((f"cleanup-{status}", "upgrade") for status in (401, 403))
+    for endpoint in ("navigation", "authenticated-navigation", "login", "initial-version",
+                     "authenticated-api", "check", "apply", "stream", "version", "health", "read"):
+        fixed.update((f"{endpoint}-{status}", "upgrade") for status in (401, 403))
+    results = controls["results"]
+    assert len(results) == len(fixed) == 31
+    assert {(row["fixture"], row["mode"]) for row in results} == fixed
+    source = HARNESS_PATH.read_text(encoding="utf-8")
+    function = "run_browser_journey() {" + source.split("run_browser_journey() {", 1)[1].split("\n}\n", 1)[0] + "\n}"
+    observed = []
+    for row in results:
+        kind, mode, receipt = row["fixture"], row["mode"], row["receipt"]
+        refused = re.search(r"-(401|403)$", kind) is not None
+        assert receipt["mode"] == mode and receipt["context_closed"] is True
+        assert receipt["access_refused"] is refused
+        assert row["requests_after_denial"] == 0
+        if refused:
+            assert receipt["status"] == "failed" and row["denials"] == 1
+            assert receipt["access_refusals"][0]["status"] == int(kind[-3:])
+        if mode != "upgrade":
+            continue
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            (work / "state").mkdir()
+            (work / "state/browser-upgrade.json").write_text(json.dumps(receipt), encoding="utf-8")
+            started = work / "process-started"
+            sentinel = work / "process-sentinel.sh"
+            sentinel.write_text("#!/bin/sh\nprintf started > " + json.dumps(str(started)) + "\n", encoding="utf-8")
+            sentinel.chmod(0o700)
+            result = subprocess.run(["bash", "-c", "set -euo pipefail\n" + function
+                + "\nrun_browser_journey recovery v6.4.5\n"], capture_output=True, text=True, timeout=5,
+                env={"PATH": "/usr/local/bin:/usr/bin:/bin", "WORK_DIR": tmp, "ROOT_DIR": str(REPO_ROOT),
+                     "SEED_ADMIN_USER": "synthetic", "ADMIN_PASSWORD": "synthetic", "PULSE_REHEARSAL_NODE": str(sentinel),
+                     "PULSE_REHEARSAL_BROWSER_ORIGIN": "https://ephemeral.tawny-powan.ts.net",
+                     "FROM_TAG": "v6.4.5", "TO_TAG": "v6.4.6-rc.1"})
+            assert result.returncode == (1 if refused else 0) and result.stderr == ""
+            assert started.exists() is (not refused)
+            auth_prepared = (work / "state/browser-auth.json").exists()
+            assert auth_prepared is (not refused)
+            if refused:
+                assert json.loads((work / "state/browser-recovery.json").read_text()) == {
+                    "status": "not-executed", "reason": "stopped-access-no-reauthentication"}
+            observed.append({"fixture": kind, "guard_exit": result.returncode,
+                             "browser_process_started": started.exists(), "auth_prepared": auth_prepared})
+    print(json.dumps({"scope": "actual shell guard with bound offline Chromium receipts, not native recovery",
+                      "browser_controls": len(results), "executed_recovery_guards": len(observed), "results": observed}))
+
+
 if __name__ == "__main__":
-    unittest.main()
+    if len(sys.argv) == 3 and sys.argv[1] == "--browser-controls":
+        try:
+            verify_browser_recovery_controls(Path(sys.argv[2]))
+        except Exception:
+            print("Bound browser receipts failed recovery controls; no installed proof.", file=sys.stderr)
+            sys.exit(1)
+    else:
+        unittest.main()
