@@ -37,11 +37,6 @@
       "version_prefix": "6.4.6",
       "prerelease_branch": "release/v6.4",
       "stable_branch": "release/v6.4"
-    },
-    {
-      "version_prefix": "6.5.",
-      "prerelease_branch": "release/v6.5",
-      "stable_branch": "release/v6.5"
     }
   ],
   "profiles": [
