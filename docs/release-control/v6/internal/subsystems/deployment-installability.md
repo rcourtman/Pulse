@@ -6454,9 +6454,18 @@ exact RC/archive, and confirms one Install Update. The observer requires real
 EventSource open/progress, exact served version, healthy status, authenticated
 readiness and progress-modal completion; wrong selection, silent progress,
 rejected apply or a stuck modal fails. API interception and fabricated version
-or progress are not acceptance. HTTP401/403 stops browser access, including
-skipping a recovery login after recorded refusal; no alternate identity or apply
-replay is used.
+or progress are not acceptance. HTTP401/403 on main-frame navigation, login,
+or any same-origin API/SSE request started after successful login stops browser
+access immediately and closes the context to prevent UI/SSE reconnects. The
+receipt records only bounded endpoint classes, numeric status and the fixed
+journey step, never the URL, response body or credentials. Anonymous pre-login
+auth probes are not authenticated refusals; their request-start identity remains
+anonymous even if a response arrives after login. Version/health denial is not
+a restart transport gap and is never polled again. Recovery requires a readable
+terminal upgrade receipt explicitly recording `access_refused:false`; missing,
+malformed or incomplete evidence also stops before another auth file or browser
+process. No alternate identity, recovery login after refusal or apply replay is
+used.
 
 The same harness checks systemd, the seeded settings/encrypted stores and the
 original auto-update/timer intent after forward update and documented CLI
@@ -6480,8 +6489,13 @@ release/asset/binary identity rejection, worker-mode exclusion, scrubbed command
 environment and cleanup exit controls. `test_release_lifecycle_rehearsal.py`
 executes the recovery-access stop before another browser process can start.
 `tests/integration/scripts/release-browser-journey.test.cjs` exercises the real
-observer against offline Chromium success/recovery and login401, wrong-target,
-silent-SSE, stuck-modal and authenticated-read401 fixtures. These are observer
+observer against offline Chromium success/recovery, anonymous auth probes,
+restart transport gaps, wrong-target, silent-SSE and stuck-modal fixtures, plus
+navigation (before/after login), login, initial/readiness version, health,
+authenticated API, check/apply, SSE and protected-read HTTP401/403. Each browser
+upgrade receipt is then passed to the actual shell recovery guard with a fixed
+local process sentinel, proving denied access prevents later auth preparation
+and browser launch while non-refused recovery remains available. These are observer
 and tooling proofs, **not native Tailscale/update/recovery acceptance**. That
 requires reviewed publication, infrastructure activation and a terminal hosted
 collection through the fixed Delivery dispatcher.

@@ -818,11 +818,21 @@ run_updater() {
 
 run_browser_journey() {
     local mode="$1" expected="$2"
-    if [[ "$mode" == recovery && -f "${WORK_DIR}/state/browser-upgrade.json" ]] \
-        && jq -e '.access_refused == true' "${WORK_DIR}/state/browser-upgrade.json" >/dev/null; then
-        printf '{"status":"not-executed","reason":"stopped-access-no-reauthentication"}\n' \
-            > "${WORK_DIR}/state/browser-recovery.json"
-        return 1
+    if [[ "$mode" == recovery ]]; then
+        # An unreadable/missing/incomplete receipt cannot authorise another
+        # browser process either. Only an explicit non-refused terminal result
+        # permits readback after the independent documented CLI recovery.
+        local receipt="${WORK_DIR}/state/browser-upgrade.json" reason
+        if ! jq -e 'type == "object" and .access_refused == false
+                and (.status == "passed" or .status == "failed")' "$receipt" >/dev/null 2>&1; then
+            reason=upgrade-receipt-unavailable
+            if jq -e '.access_refused == true' "$receipt" >/dev/null 2>&1; then
+                reason=stopped-access-no-reauthentication
+            fi
+            printf '{"status":"not-executed","reason":"%s"}\n' "$reason" \
+                > "${WORK_DIR}/state/browser-recovery.json"
+            return 1
+        fi
     fi
     (umask 077; jq -cn --arg username "$SEED_ADMIN_USER" --arg password "$ADMIN_PASSWORD" \
         '{username:$username,password:$password}' > "${WORK_DIR}/state/browser-auth.json")

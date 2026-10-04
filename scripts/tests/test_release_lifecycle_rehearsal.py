@@ -196,7 +196,7 @@ class BrowserRecoveryAccessStopTest(unittest.TestCase):
             with self.subTest(status=status), tempfile.TemporaryDirectory() as tmp:
                 work = Path(tmp)
                 (work / "state").mkdir()
-                (work / "state/browser-upgrade.json").write_text(json.dumps({"access_refused": True, "login_status": status}))
+                (work / "state/browser-upgrade.json").write_text(json.dumps({"status": "failed", "access_refused": True, "login_status": status}))
                 script = "set -euo pipefail\nWORK_DIR=" + json.dumps(tmp) + "\n"
                 script += function + "\nrun_browser_journey recovery v6.4.5\n"
                 # NODE/auth/origin variables are intentionally absent. Reaching
@@ -204,6 +204,26 @@ class BrowserRecoveryAccessStopTest(unittest.TestCase):
                 result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
                 self.assertEqual(1, result.returncode, result.stderr)
                 self.assertEqual({"status": "not-executed", "reason": "stopped-access-no-reauthentication"},
+                    json.loads((work / "state/browser-recovery.json").read_text()))
+                self.assertFalse((work / "state/browser-auth.json").exists())
+                self.assertEqual("", result.stderr)
+
+    def test_missing_or_malformed_upgrade_receipt_stops_before_auth_preparation(self) -> None:
+        source = HARNESS_PATH.read_text(encoding="utf-8")
+        function = "run_browser_journey() {" + source.split("run_browser_journey() {", 1)[1].split("\n}\n", 1)[0] + "\n}"
+        for receipt in (None, "not JSON", "[]", '{"status":"failed"}',
+                        '{"status":"incomplete","access_refused":false}',
+                        '{"status":"failed","access_refused":"false"}'):
+            with self.subTest(receipt=receipt), tempfile.TemporaryDirectory() as tmp:
+                work = Path(tmp)
+                (work / "state").mkdir()
+                if receipt is not None:
+                    (work / "state/browser-upgrade.json").write_text(receipt)
+                result = subprocess.run(["bash", "-c", "set -euo pipefail\nWORK_DIR="
+                    + json.dumps(tmp) + "\n" + function + "\nrun_browser_journey recovery v6.4.5\n"],
+                    capture_output=True, text=True)
+                self.assertEqual(1, result.returncode, result.stderr)
+                self.assertEqual({"status": "not-executed", "reason": "upgrade-receipt-unavailable"},
                     json.loads((work / "state/browser-recovery.json").read_text()))
                 self.assertFalse((work / "state/browser-auth.json").exists())
                 self.assertEqual("", result.stderr)
