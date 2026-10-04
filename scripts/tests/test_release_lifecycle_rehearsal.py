@@ -183,7 +183,8 @@ class HostedWorkflowCommandFilesTest(unittest.TestCase):
         for field in ('from', 'from_commit', 'to_commit'):
             self.assertIn(f'python3 scripts/write_github_output.py {field} "${field}"', source)
         self.assertNotIn('echo "to_commit=', source)
-        self.assertIn("cache: ''", source)
+        node_setup = source.split('uses: actions/setup-node@', 1)[1].split('      - name:', 1)[0]
+        self.assertNotRegex(node_setup, r'(?m)^\s*cache:')
         self.assertIn('package-manager-cache: false', source)
 
 
