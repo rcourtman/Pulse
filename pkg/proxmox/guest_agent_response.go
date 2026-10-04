@@ -61,7 +61,7 @@ func guestAgentErrorMessage(body []byte) (string, bool) {
 	if body[0] != '{' {
 		return string(body), true // Still requires an exact, command-bound match.
 	}
-	fields, ok := guestAgentErrorFields(body, "data", "message", "errors")
+	fields, ok := guestAgentResponseFields(body, "data", "message", "errors")
 	if !ok {
 		return "", false
 	}
@@ -73,7 +73,7 @@ func guestAgentErrorMessage(body []byte) (string, bool) {
 		if hasMessage {
 			return "", false // Conflicting or duplicate failure evidence.
 		}
-		errors, ok := guestAgentErrorFields(nested, "message")
+		errors, ok := guestAgentResponseFields(nested, "message")
 		if !ok {
 			return "", false
 		}
@@ -88,7 +88,8 @@ func guestAgentErrorMessage(body []byte) (string, bool) {
 
 // Reject ambiguous envelopes (including duplicate keys and trailing values)
 // instead of letting a favourable final field override other error evidence.
-func guestAgentErrorFields(body []byte, allowed ...string) (map[string]json.RawMessage, bool) {
+// Without an allowlist, arbitrary unique configuration fields are permitted.
+func guestAgentResponseFields(body []byte, allowed ...string) (map[string]json.RawMessage, bool) {
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	start, err := decoder.Token()
 	if err != nil || start != json.Delim('{') {
@@ -104,7 +105,7 @@ func guestAgentErrorFields(body []byte, allowed ...string) (map[string]json.RawM
 		if !ok {
 			return nil, false
 		}
-		permitted := false
+		permitted := len(allowed) == 0
 		for _, candidate := range allowed {
 			permitted = permitted || name == candidate
 		}

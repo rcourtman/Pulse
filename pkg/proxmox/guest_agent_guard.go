@@ -142,18 +142,31 @@ func guestAgentPath(path string) (string, int, bool) {
 func (c *Client) verifyGuestAgentUnlocked(ctx context.Context, node string, vmid int) error {
 	// The config endpoint contains the authoritative PVE operation lock even
 	// when a PVE version omits it from status/current or cluster/resources.
-	config, err := c.GetVMConfig(ctx, node, vmid)
-	if err != nil || config == nil {
+	// Unlike an ordinary config read, redirected or ambiguous evidence cannot
+	// establish the lock on the endpoint about to receive this guest command.
+	lockClient := *c.httpClient
+	lockClient.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	resp, err := c.requestWithRetryUsingClient(ctx, http.MethodGet, fmt.Sprintf("/nodes/%s/qemu/%d/config", node, vmid), nil, false, &lockClient)
+	if err != nil {
 		return &guestAgentDeferredError{reason: "lock-unverified", cause: err}
 	}
-	if value, exists := config["lock"]; exists {
-		lock, ok := value.(string)
-		if !ok {
-			return &guestAgentDeferredError{reason: "lock-unverified"}
-		}
-		if strings.TrimSpace(lock) != "" {
-			return &guestAgentDeferredError{reason: "vm-locked"}
-		}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return &guestAgentDeferredError{reason: "lock-unverified"}
+	}
+	body, readErr := readResponseBodyLimited(resp.Body)
+	closeErr := resp.Body.Close()
+	if readErr != nil || closeErr != nil {
+		return &guestAgentDeferredError{reason: "lock-unverified", cause: errors.Join(readErr, closeErr)}
+	}
+	lock, valid := guestAgentConfigLock(body)
+	if !valid {
+		return &guestAgentDeferredError{reason: "lock-unverified"}
+	}
+	if strings.TrimSpace(lock) != "" {
+		return &guestAgentDeferredError{reason: "vm-locked"}
 	}
 	return nil
 }
