@@ -26,7 +26,10 @@ func testGuestAgentBackupMonitoringLifecycle(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/config"):
-			if p == 1 || p == 2 {
+			if p == 4 {
+				w.Header().Set("Content-Length", "1000")
+				fmt.Fprint(w, `{"data":{}}`)
+			} else if p == 1 || p == 2 {
 				fmt.Fprint(w, `{"data":{"lock":"backup"}}`)
 			} else {
 				fmt.Fprint(w, `{"data":{}}`)
@@ -98,6 +101,22 @@ func testGuestAgentBackupMonitoringLifecycle(t *testing.T) {
 	memKey := guestMemoryCacheKey("fixture", "node", 105)
 	originalMetadata := m.guestMetadataCache[metadataKey]
 	originalMemory := m.vmAgentMemCache[memKey]
+	// A syntactically unlocked prefix is not a completed config observation.
+	// Warm guest caches must stay labelled last-known rather than becoming new
+	// disk/memory History samples when the lock response is incomplete.
+	phase.Store(4)
+	unverified, _ := build()
+	if unverified.ID != initial.ID || unverified.GuestAgentStatus != "deferred" || unverified.DiskStatusReason != "prev-lock-unverified" || unverified.Disk.Used != initial.Disk.Used || unverified.Memory.Used != initial.Memory.Used {
+		t.Fatalf("incomplete lock response lost truthful continuity: %#v", unverified)
+	}
+	if calls.Load() != before || !reflect.DeepEqual(m.guestMetadataCache[metadataKey], originalMetadata) || !reflect.DeepEqual(m.vmAgentMemCache[memKey], originalMemory) {
+		t.Fatal("incomplete lock response sent a guest command or renewed caches")
+	}
+	for metric, want := range map[string]int{"cpu": 2, "memory": 1, "memoryused": 1, "disk": 1} {
+		if got := len(m.metricsHistory.GetGuestMetrics(identity, metric, time.Hour)); got != want {
+			t.Errorf("incomplete lock %s history points = %d, want %d", metric, got, want)
+		}
+	}
 	phase.Store(1)
 	res.CPU = 0.2
 	locked, source := build()
@@ -113,7 +132,7 @@ func testGuestAgentBackupMonitoringLifecycle(t *testing.T) {
 	if !reflect.DeepEqual(m.guestMetadataCache[metadataKey], originalMetadata) || !reflect.DeepEqual(m.vmAgentMemCache[memKey], originalMemory) {
 		t.Fatal("lock renewed/replaced cached observations")
 	}
-	for metric, want := range map[string]int{"cpu": 2, "memory": 1, "memoryused": 1, "disk": 1} {
+	for metric, want := range map[string]int{"cpu": 3, "memory": 1, "memoryused": 1, "disk": 1} {
 		if got := len(m.metricsHistory.GetGuestMetrics(identity, metric, time.Hour)); got != want {
 			t.Errorf("%s history points = %d, want %d", metric, got, want)
 		}
