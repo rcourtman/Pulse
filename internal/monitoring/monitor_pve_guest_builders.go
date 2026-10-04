@@ -461,6 +461,13 @@ func (m *Monitor) buildVMFromClusterResource(
 	if state.detailedStatus != nil && state.detailedStatus.Balloon > 0 {
 		memory.Balloon = int64(state.detailedStatus.Balloon)
 	}
+	if state.guestAgentStatus == "deferred" && (CanonicalMemorySource(state.memorySource) == "unavailable" || state.memorySource == "previous-snapshot") {
+		if retained, ok := m.deferredVMGuestMemory(instanceName, res.Node, res.VMID, state.memTotal, prevSnapshot, sampleTime); ok {
+			memory = retained
+			state.memorySource = "previous-snapshot"
+			snapshotNotes = append(snapshotNotes, "preserved-original-guest-memory-during-deferral")
+		}
+	}
 
 	vm := models.VM{
 		ID:       guestID,
