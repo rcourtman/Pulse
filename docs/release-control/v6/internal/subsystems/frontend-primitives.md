@@ -20,6 +20,45 @@
 
 ## Purpose
 
+### Backup inventory ownership is source-scoped and unambiguous
+
+The existing Backups Coverage and By date views do not select a workload from
+an arbitrary substring, display label or first matching row when VMIDs repeat.
+PVE files, guest snapshots and task evidence use the supplied connection scope
+before native node names or aliases. One VMID inside a matching PVE connection
+stays associated after node migration; a known conflicting connection cannot be
+rescued by a reused node name or a singleton fallback. With no connection scope,
+an exact native node/alias must identify one candidate; wholly unscoped singleton
+observations retain their existing compatibility behaviour.
+
+PBS instance and datastore identify a repository, not a PVE workload. A PBS
+namespace disambiguates repeated VMIDs only with a unique exact native node,
+alias or PVE connection label. Unique type/VMID PBS inventory retains the
+existing root-namespace association. This bounded presentation fix does not
+implement the runtime PBS source learner or alter server-owned protection policy.
+
+Unresolved artifacts remain listed once and keep complete, collision-safe source
+keys (PVE connection/node or PBS instance/datastore/namespace), including host
+backup labels. Equal VMIDs, repository labels or host names cannot pool them
+across unproven sources. Untyped PVE tasks may join only PVE-scoped rows, not a
+PBS-only unresolved row with a lookalike namespace. The existing collapsed group
+and count say **unmatched**, not that the guest necessarily ceased to exist;
+its explanation wraps on phones. These rows remain **not evaluated**, separate
+from canonical provider-owned protection posture and live workload counts.
+
+Verification: `proxmoxBackupRecoveryModel.identity.test.ts` reproduces prefix
+and reused-node collisions, order independence, migration/alias controls,
+conflicting scope, ambiguous type/namespace and separated unresolved sources.
+Mounted `ProxmoxBackupsTable.test.tsx` backup-identity cases cover both views,
+artifact preservation, reorder/display rename, expansion identity and no extra
+inventory read. `browser-tests/backup-identity.cjs` uses production tables,
+router, inventory readers and CSS with synthetic responses on desktop Chromium
+and touch WebKit at 390px/320px, including keyboard/touch disclosure, ambiguity,
+readable unmatched explanation and same-resource recovery. No native backup
+identity, restore, guest thaw or containing-release acceptance follows from
+these source/render observations.
+
+
 ### Diagnostics are live checks; downloads require a privacy review
 
 The existing Settings Diagnostics panel explains before either run action that
