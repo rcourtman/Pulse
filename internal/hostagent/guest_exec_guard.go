@@ -102,10 +102,10 @@ func (g *guestExecGuard) acquire(ctx context.Context, vmid string) (func(bool), 
 
 func (g *guestExecGuard) verifyUnlocked(ctx context.Context, vmid string) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return agentexec.GuestExecDeferred(agentexec.GuestExecLockUnverified)
 	}
 	config, err := g.readConfig(ctx, vmid)
-	if err != nil {
+	if err != nil || ctx.Err() != nil {
 		return agentexec.GuestExecDeferred(agentexec.GuestExecLockUnverified)
 	}
 	lock, valid := guestExecConfigLock(config)

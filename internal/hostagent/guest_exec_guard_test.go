@@ -205,3 +205,24 @@ func TestGuestExecCanceledHandoffNeverRetriesAndRechecksOnExplicitResumption(t *
 		t.Fatalf("explicit resumption failed: %#v", got)
 	}
 }
+
+func TestGuestExecCanceledLockCheckCannotPublishSuccessfulEvidence(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var reads atomic.Int32
+	g := newGuestExecGuard(func(context.Context, string) ([]byte, error) {
+		reads.Add(1)
+		cancel() // config completion races the caller's cancellation
+		return []byte("name: vm\n"), nil
+	})
+	if err := g.verifyUnlocked(ctx, "105"); err == nil || !agentexec.IsGuestExecDeferred(err.Error()) {
+		t.Fatalf("canceled read became unlocked evidence: %v", err)
+	}
+	if err := g.verifyUnlocked(ctx, "105"); err == nil || !agentexec.IsGuestExecDeferred(err.Error()) || reads.Load() != 1 {
+		t.Fatalf("already canceled check lost deferral or reread: %v reads=%d", err, reads.Load())
+	}
+	c := &CommandClient{guestExecAdmission: g}
+	payload := testApprovedCommandPayload(t, c, executeCommandPayload{Command: "echo original", TargetType: "vm", TargetID: "105", Trusted: true})
+	if got := c.executeCommand(ctx, payload); got.Success || !agentexec.IsGuestExecDeferred(got.Error) || got.Stdout != "" || reads.Load() != 1 {
+		t.Fatalf("canceled admission was not an explicit safety pause: %#v", got)
+	}
+}

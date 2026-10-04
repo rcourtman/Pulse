@@ -1584,6 +1584,9 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 		release, err := guard.acquire(cmdCtx, vmid)
 		if err != nil {
 			result.Error = err.Error()
+			if !agentexec.IsGuestExecDeferred(result.Error) {
+				result.Error = agentexec.GuestExecDeferred("the command was canceled before guest admission").Error()
+			}
 			result.ExitCode = -1
 			return result
 		}
