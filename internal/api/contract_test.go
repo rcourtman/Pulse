@@ -2903,7 +2903,7 @@ func TestContract_TrueNASConnectionsDisabledMessageIsExplicit(t *testing.T) {
 	}
 }
 
-func TestContract_TrueNASSavedConnectionTestsUpdateRuntimeSummary(t *testing.T) {
+func TestContract_TrueNASSavedConnectionTestsPreserveRuntimeSummary(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
 
 	connection := config.TrueNASInstance{
@@ -2934,8 +2934,8 @@ func TestContract_TrueNASSavedConnectionTestsUpdateRuntimeSummary(t *testing.T) 
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 	summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
-	if summary.Poll == nil || summary.Poll.LastSuccessAt == nil {
-		t.Fatalf("expected saved manual test to refresh poll summary, got %+v", summary.Poll)
+	if summary.Poll == nil || summary.Poll.LastAttemptAt != nil || summary.Poll.LastSuccessAt != nil || summary.Observed != nil {
+		t.Fatalf("a saved probe must not invent runtime polling or inventory, got %+v", summary)
 	}
 }
 
@@ -25129,5 +25129,69 @@ func TestContract_HostedRuntimeAgentInstallCommandCarriesToken(t *testing.T) {
 		if command, _ := payload["command"].(string); command != "" && (strings.Contains(command, token) || !strings.Contains(command, `--token-file "$token_file"`)) {
 			t.Fatalf("%s: minted credential must be entered privately, not embedded", body)
 		}
+	}
+}
+
+func TestTrueNASSavedProbePreservesRuntimeEvidence(t *testing.T) {
+	for _, state := range []string{"never polled", "failed after observed inventory"} {
+		t.Run(state, func(t *testing.T) {
+			f := newTrueNASPollEvidenceFixture(t)
+			if state != "never polled" {
+				f.poller.Start(context.Background())
+				waitForTrueNASPollEvidence(t, f, func(s monitoring.TrueNASConnectionSummary) bool {
+					return s.Poll.LastSuccessAt != nil && s.Observed != nil
+				})
+				f.failPools.Store(true)
+				waitForTrueNASPollEvidence(t, f, func(s monitoring.TrueNASConnectionSummary) bool { return s.Poll.LastError != nil })
+				f.poller.Stop()
+				if !strings.Contains(f.summary().Poll.LastError.Message, "pools") {
+					t.Fatalf("expected required inventory failure: %+v", f.summary().Poll)
+				}
+			}
+			before, err := json.Marshal(f.summary())
+			if err != nil {
+				t.Fatal(err)
+			}
+			readyBefore, settledBefore := f.poller.SupplementalInventoryReadyAt(nil, "default")
+			for _, failProbe := range []bool{false, true, false} {
+				f.failLogin.Store(failProbe)
+				rec := httptest.NewRecorder()
+				f.handler.HandleTestSavedConnection(rec, httptest.NewRequest(http.MethodPost, "/api/truenas/connections/"+f.connection.ID+"/test", nil))
+				wantStatus := http.StatusOK
+				if failProbe {
+					wantStatus = http.StatusBadRequest
+				}
+				if rec.Code != wantStatus {
+					t.Fatalf("probe status = %d, want %d: %s", rec.Code, wantStatus, rec.Body.String())
+				}
+				after, err := json.Marshal(f.summary())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(after) != string(before) {
+					t.Errorf("probe changed runtime polling evidence: before=%s after=%s", before, after)
+				}
+				readyAfter, settledAfter := f.poller.SupplementalInventoryReadyAt(nil, "default")
+				if settledAfter != settledBefore || !readyAfter.Equal(readyBefore) {
+					t.Errorf("probe changed inventory readiness: (%v,%t) -> (%v,%t)", readyBefore, settledBefore, readyAfter, settledAfter)
+				}
+			}
+			// Verify the same runtime truth is exposed through the actual list
+			// handler, not just the poller's internal summary accessor.
+			rec := httptest.NewRecorder()
+			f.handler.HandleList(rec, httptest.NewRequest(http.MethodGet, "/api/truenas/connections", nil))
+			var rows []trueNASConnectionResponse
+			if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &rows) != nil || len(rows) != 1 {
+				t.Fatalf("list failed: %d %s", rec.Code, rec.Body.String())
+			}
+			exposed, _ := json.Marshal(rows[0].Poll)
+			poll, _ := json.Marshal(f.summary().Poll)
+			if string(exposed) != string(poll) {
+				t.Fatalf("list poll evidence = %s, want %s", exposed, poll)
+			}
+			if strings.Contains(rec.Body.String(), f.connection.APIKey) {
+				t.Fatal("list exposed the stored key")
+			}
+		})
 	}
 }

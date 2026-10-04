@@ -412,11 +412,6 @@ func (h *TrueNASHandlers) HandleTestSavedConnection(w http.ResponseWriter, r *ht
 		}
 		invalidConfig, err := h.testConnectionInstance(r, instance)
 		if err != nil {
-			if !hasPayload && h != nil && h.getPoller != nil {
-				if poller := h.getPoller(r.Context()); poller != nil {
-					poller.RecordConnectionTestFailure(resolveTenantOrgID(r), connectionID, instance, err, time.Now().UTC())
-				}
-			}
 			if invalidConfig {
 				writeErrorResponse(w, http.StatusBadRequest, "truenas_invalid_config", "Invalid TrueNAS connection configuration", map[string]string{"error": err.Error()})
 				return
@@ -424,11 +419,10 @@ func (h *TrueNASHandlers) HandleTestSavedConnection(w http.ResponseWriter, r *ht
 			writeErrorResponse(w, http.StatusBadRequest, "truenas_connection_failed", "Failed to connect to TrueNAS", map[string]string{"error": err.Error()})
 			return
 		}
-		if !hasPayload && h != nil && h.getPoller != nil {
-			if poller := h.getPoller(r.Context()); poller != nil {
-				poller.RecordConnectionTestSuccess(resolveTenantOrgID(r), connectionID, instance, time.Now().UTC())
-			}
-		}
+		// This probe reads system information through a separate client. It
+		// neither refreshes the runtime provider nor contributes inventory, so
+		// it must not clear poll errors, advance freshness/readiness or defer
+		// the next scheduled poll. Its result belongs to this response only.
 		writeJSON(w, http.StatusOK, map[string]any{"success": true})
 		return
 	}

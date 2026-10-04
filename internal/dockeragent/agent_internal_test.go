@@ -1840,3 +1840,137 @@ func TestCollectorRuntimeBoundaryLossIsDaemonUnavailable(t *testing.T) {
 		}
 	}
 }
+
+// Exercise the compatibility JSON through the actual container collector, not
+// just the delta helper. These are synthetic inputs, not a native Podman trace.
+func TestCollectContainerPodmanCPUIntervals(t *testing.T) {
+	type sample struct {
+		second  int
+		total   uint64
+		percent string // Empty means absent; other values are literal JSON.
+		start   int
+		stopped bool
+		want    float64
+	}
+	tests := []struct {
+		name    string
+		runtime RuntimeKind
+		cpus    int
+		samples []sample
+	}{
+		{"zero with advancing and idle counters", RuntimePodman, 16, []sample{
+			{second: 0, total: 100_000_000, percent: "0"},
+			{second: 1, total: 130_000_000, percent: "0", want: 3},
+			{second: 2, total: 130_000_000, percent: "0"},
+			{second: 3, total: 1_630_000_000, percent: "0", want: 150},
+		}},
+		{"absent percentage uses nanosecond wall clock units", RuntimePodman, 1, []sample{
+			{second: 0, total: 100_000_000},
+			{second: 1, total: 130_000_000, want: 3},
+		}},
+		{"null percentage", RuntimePodman, 16, []sample{
+			{second: 0, total: 100_000_000, percent: "null"},
+			{second: 1, total: 130_000_000, percent: "null", want: 3},
+		}},
+		{"positive percentages keep units and retain the baseline", RuntimePodman, 16, []sample{
+			{second: 0, total: 100_000_000, percent: "0.32", want: 0.32},
+			{second: 1, total: 130_000_000, percent: "0.64", want: 0.64},
+			{second: 2, total: 160_000_000, percent: "0", want: 3},
+			{second: 3, total: 190_000_000, want: 3},
+		}},
+		{"absent then reported then zero", RuntimePodman, 16, []sample{
+			{second: 0, total: 100_000_000},
+			{second: 1, total: 130_000_000, percent: "0.32", want: 0.32},
+			{second: 2, total: 160_000_000, percent: "0", want: 3},
+		}},
+		{"invalid negative percentage", RuntimePodman, 16, []sample{
+			{second: 0, total: 100_000_000, percent: "-1"},
+			{second: 1, total: 130_000_000, percent: "-1", want: 3},
+		}},
+		{"unparseable optional percentage", RuntimePodman, 16, []sample{
+			{second: 0, total: 100_000_000, percent: `"unknown"`},
+			{second: 1, total: 130_000_000, percent: `"unknown"`, want: 3},
+		}},
+		{"counter reset rebaselines rather than using new lifetime", RuntimePodman, 16, []sample{
+			{second: 0, total: 100_000_000, percent: "0"},
+			{second: 1, total: 10_000_000, percent: "0"},
+			{second: 2, total: 40_000_000, percent: "0", want: 3},
+		}},
+		{"restart with an already larger counter", RuntimePodman, 16, []sample{
+			{second: 0, total: 100_000_000, percent: "0"},
+			{second: 1, total: 260_000_000, percent: "0", start: 1},
+			{second: 2, total: 290_000_000, percent: "0", start: 1, want: 3},
+		}},
+		{"repeated and old timestamps do not move the baseline", RuntimePodman, 16, []sample{
+			{second: 0, total: 100_000_000, percent: "0"},
+			{second: 1, total: 130_000_000, percent: "0", want: 3},
+			{second: 1, total: 150_000_000, percent: "0"},
+			{second: 0, total: 170_000_000, percent: "0"},
+			{second: 2, total: 160_000_000, percent: "0", want: 3},
+		}},
+		{"missing timestamp cannot invent an interval", RuntimePodman, 16, []sample{
+			{second: -1, total: 100_000_000, percent: "0"},
+			{second: 1, total: 130_000_000, percent: "0"},
+			{second: 2, total: 160_000_000, percent: "0", want: 3},
+		}},
+		{"stop clears the baseline", RuntimePodman, 16, []sample{
+			{second: 0, total: 100_000_000, percent: "0.32", want: 0.32},
+			{second: 1, stopped: true},
+			{second: 2, total: 260_000_000, percent: "0"},
+			{second: 3, total: 290_000_000, percent: "0", want: 3},
+		}},
+		{"docker ignores compat percentage and retains system delta", RuntimeDocker, 16, []sample{
+			{second: 0, total: 100_000_000, percent: "0.32"},
+			{second: 1, total: 130_000_000, percent: "0.32", want: 48},
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			epoch := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
+			var current sample
+			agent := &Agent{
+				runtime:  tt.runtime,
+				logger:   zerolog.Nop(),
+				cpuCount: tt.cpus,
+				docker: &fakeDockerClient{
+					containerInspectWithRawFn: func(context.Context, string, bool) (containertypes.InspectResponse, []byte, error) {
+						inspect := baseInspect()
+						inspect.State = &containertypes.State{
+							Running:   !current.stopped,
+							StartedAt: epoch.Add(time.Duration(current.start-60) * time.Second).Format(time.RFC3339Nano),
+						}
+						return inspect, nil, nil
+					},
+					containerStatsOneShotFn: func(context.Context, string) (dockerStatsResponseReader, error) {
+						read := "null"
+						if current.second >= 0 {
+							read = fmt.Sprintf("%q", epoch.Add(time.Duration(current.second)*time.Second).Format(time.RFC3339Nano))
+						}
+						percent := ""
+						if current.percent != "" {
+							percent = `,"cpu":` + current.percent
+						}
+						payload := fmt.Sprintf(`{"read":%s,"cpu_stats":{"cpu_usage":{"total_usage":%d},"system_cpu_usage":%d,"online_cpus":%d%s},"memory_stats":{"usage":1000000,"limit":4000000}}`,
+							read, current.total, uint64(current.second+2)*1_000_000_000, tt.cpus, percent)
+						return dockerStatsResponseReader{Body: io.NopCloser(strings.NewReader(payload))}, nil
+					},
+				},
+			}
+			for i, s := range tt.samples {
+				current = s
+				container, err := agent.collectContainer(context.Background(), containertypes.Summary{
+					ID: "container-123456", Names: []string{"/cpu-fixture"}, Image: "fixture:local",
+				})
+				if err != nil {
+					t.Fatalf("sample %d: %v", i, err)
+				}
+				if math.Abs(container.CPUPercent-s.want) > 1e-9 {
+					t.Errorf("sample %d: CPU = %g%%, want %g%%", i, container.CPUPercent, s.want)
+				}
+				if !s.stopped && (container.MemoryUsageBytes != 1_000_000 || container.MemoryLimitBytes != 4_000_000) {
+					t.Fatalf("sample %d: memory collection changed: %+v", i, container)
+				}
+			}
+		})
+	}
+}

@@ -229,6 +229,7 @@ type cpuSample struct {
 	systemUsage uint64
 	onlineCPUs  uint32
 	read        time.Time
+	startedAt   time.Time
 }
 
 // New creates a new Docker / Podman module instance.

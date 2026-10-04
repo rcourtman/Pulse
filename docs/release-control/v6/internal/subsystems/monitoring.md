@@ -17,6 +17,20 @@
 
 ## Purpose
 
+### Podman zero-percentage fallback — issue #2447
+
+One-shot compatibility stats with `cpu:0` do not suppress advancing cumulative
+CPU samples. The collector records every interval and uses Podman's CPU-time
+nanoseconds over elapsed wall-clock nanoseconds, independent of host core count.
+A positive finite reported percentage remains authoritative, preserving #1391.
+Counter resets or a changed container start establish a new baseline; duplicate
+and out-of-order reads cannot create subsequent spikes. No timestamp means no
+measurable counter interval. The existing report CPU field, graph/alert units,
+Docker system-counter calculation, memory and permission scopes are unchanged.
+`TestCollectContainerPodmanCPUIntervals` in `agent_internal_test.go` covers the
+actual JSON/collector boundary, including changing percentage availability.
+Native Podman shape and graph/alert acceptance remain separate evidence.
+
 ### Guest-agent coordination around backups — issue #2439
 
 All PVE QEMU guest-agent reads, including disk diagnostics and legacy meminfo
@@ -259,8 +273,11 @@ or appliance health, and sending keepalives is not proactive pong-timeout detect
 Successful TrueNAS refreshes target start-to-start cadence, bounded below by
 completion plus min(five seconds, configured interval), preventing back-to-back
 load on slow appliances. Failed refreshes retain a full completion-based retry
-interval. Manual connection tests retain completion-based scheduling. Observed
-last-attempt and last-success timestamps remain completion timestamps; resource
+interval. Manual connection probes use a separate client and do not alter
+scheduling or poll evidence: success must not clear a runtime error or advance
+last-attempt, last-success, observed collection or inventory readiness. Failure
+remains in the probe response, not a fabricated runtime attempt. Observed
+last-attempt and last-success timestamps remain runtime completion timestamps; resource
 freshness thresholds must not be extended to hide genuinely stale devices.
 
 `TestAuthenticatedRPCSurvivesIdleTransportTimeout` and
@@ -271,6 +288,11 @@ server, opening-context cancellation, concurrent controls/RPCs and sender dispos
 `internal/monitoring/truenas_poller_test.go` verifies due boundaries, short/slow
 cycles, completion timestamps and unchanged failure backoff. These are synthetic
 runtime proofs, not native firmware timeout or reporter-resolution evidence.
+`TestTrueNASSavedProbePreservesRuntimeEvidence` in `internal/api/contract_test.go`
+checks the actual saved probe and list handlers against never-polled and
+previously observed-but-failing runtime states. A synthetic successful login
+with a required pool-method failure is not attribution of the native #2382
+regression; the failing appliance/session method remains field evidence.
 
 ### TrueNAS empty app inventories and session-disposal evidence
 
