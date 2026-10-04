@@ -20,6 +20,22 @@
 
 ## Purpose
 
+### Discovery detail reads preserve final access status
+
+`getDiscovery` retains final HTTP401/403 in a typed client error before any
+response-body read. The fixed message exposes no denied body. This applies to
+the typed resource detail, agent collection and resolved agent detail paths.
+A body or transport message claiming an access status is not that status, and
+ordinary transient failures retain their existing error behaviour. Successful
+absent-record semantics (detail HTTP404 or an empty agent list) are unchanged.
+Retained query consumers can therefore withdraw a denied service/endpoint
+rather than treating it as a transient read or a successful empty discovery.
+No endpoint, server permission, wire schema or mutation policy changes.
+`src/api/__tests__/discovery.test.ts` exercises all three paths with actual
+Response status/body objects, denied-body non-read and a misleading 503 body.
+The production guest browser fixture verifies the connected final HTTP403
+withdrawal, pending retry, transient retention and successful HTTP404 recovery.
+
 ### TrueNAS saved probes do not rewrite runtime evidence — issue #2382
 
 The saved connection test uses stored server-owned secrets, or merges an edited

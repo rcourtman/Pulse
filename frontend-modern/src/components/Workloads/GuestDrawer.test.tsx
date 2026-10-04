@@ -190,7 +190,7 @@ beforeEach(() => {
   resetAIRuntimeState();
   syncAIRuntimeSettings({ discovery_enabled: true } as Parameters<typeof syncAIRuntimeSettings>[0]);
   resetCreateNonSuspendingQueryCacheForTest();
-  discoveryApiMocks.getDiscovery.mockResolvedValue(null);
+  discoveryApiMocks.getDiscovery.mockReset().mockResolvedValue(null);
   chartsApiMocks.getMetricsHistory.mockResolvedValue({
     resourceType: 'vm',
     resourceId: 'inst1:node1:100',
@@ -481,6 +481,188 @@ describe('GuestDrawer', () => {
       expect(screen.getAllByText('http://192.0.2.10:3000').length).toBeGreaterThan(0);
       expect(screen.getByTestId('url-suggested')).toHaveTextContent('http://192.0.2.10:3000');
       expect(screen.getByTestId('url-suggested-reason')).toHaveTextContent('Detected 3000/tcp');
+    });
+
+    describe('discovery identity ownership', () => {
+      const service = (name: string) =>
+        ({
+          id: `vm:node1:${name}`,
+          resource_type: 'vm',
+          resource_id: '100',
+          target_id: 'node1',
+          service_name: name,
+          service_type: 'dashboard',
+          confidence: 0.95,
+          suggested_url: `http://${name}.example.test`,
+          ports: [],
+          facts: [],
+        }) as unknown as import('@/types/discovery').ResourceDiscovery;
+
+      it('reuses the lookup and mounted panel across 100 same-target snapshots', async () => {
+        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('original'));
+        const [guest, setGuest] = createSignal(makeGuestWithDiscoveryTarget());
+        render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+        await waitFor(() =>
+          expect(screen.getByTestId('url-suggested')).toHaveTextContent('original'),
+        );
+        const panel = screen.getByTestId('discovery-tab');
+        for (let tick = 0; tick < 100; tick++)
+          setGuest({ ...guest(), name: `renamed-${tick}`, cpu: tick / 1000 });
+        expect(discoveryApiMocks.getDiscovery).toHaveBeenCalledTimes(1);
+        expect(screen.getByTestId('discovery-tab')).toBe(panel);
+        expect(screen.getByTestId('url-suggested')).toHaveTextContent('original');
+      });
+
+      it('withdraws the prior service and URL while a replacement target loads or fails', async () => {
+        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('original'));
+        const [guest, setGuest] = createSignal(makeGuestWithDiscoveryTarget());
+        render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+        await waitFor(() =>
+          expect(screen.getByTestId('url-suggested')).toHaveTextContent('original'),
+        );
+        const originalPanel = screen.getByTestId('discovery-tab');
+        let rejectRead!: (error: Error) => void;
+        discoveryApiMocks.getDiscovery.mockImplementationOnce(
+          () =>
+            new Promise((_resolve, reject) => {
+              rejectRead = reject;
+            }),
+        );
+        setGuest({
+          ...guest(),
+          discoveryTarget: { resourceType: 'vm', agentId: 'replacement-agent', resourceId: '100' },
+        });
+        await waitFor(() => expect(discoveryApiMocks.getDiscovery).toHaveBeenCalledTimes(2));
+        expect(screen.getByTestId('url-suggested')).toHaveTextContent(/^$/);
+        expect(screen.queryByText('original')).toBeNull();
+        expect(screen.getByTestId('discovery-tab')).not.toBe(originalPanel);
+        rejectRead(new Error('temporary outage'));
+        await waitFor(() =>
+          expect(screen.getByText(/Service details could not be loaded/)).toBeInTheDocument(),
+        );
+        expect(screen.getByTestId('url-suggested')).toHaveTextContent(/^$/);
+      });
+
+      it('ignores a late lookup from the old target and restores only the active target', async () => {
+        let finishOld!: (value: import('@/types/discovery').ResourceDiscovery) => void;
+        discoveryApiMocks.getDiscovery.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              finishOld = resolve;
+            }),
+        );
+        const [guest, setGuest] = createSignal(makeGuestWithDiscoveryTarget());
+        render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('replacement'));
+        setGuest({
+          ...guest(),
+          discoveryTarget: { resourceType: 'vm', agentId: 'replacement-agent', resourceId: '100' },
+        });
+        await waitFor(() =>
+          expect(screen.getByTestId('url-suggested')).toHaveTextContent('replacement'),
+        );
+        finishOld(service('original'));
+        await Promise.resolve();
+        expect(screen.getByTestId('url-suggested')).toHaveTextContent('replacement');
+        expect(screen.queryByText('original')).toBeNull();
+      });
+
+      it.each([401, 403])(
+        'withdraws a denied service on HTTP %s and does not resurrect it during retry or remount',
+        async (status) => {
+          discoveryApiMocks.getDiscovery.mockRejectedValueOnce(
+            Object.assign(new Error('do not display raw response'), { status }),
+          );
+          const guest = makeGuestWithDiscoveryTarget();
+          const view = render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
+          await waitFor(() =>
+            expect(
+              screen.getByRole('button', { name: 'Retry service details' }),
+            ).toBeInTheDocument(),
+          );
+          discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('original'));
+          fireEvent.click(screen.getByRole('button', { name: 'Retry service details' }));
+          await waitFor(() =>
+            expect(screen.getByTestId('url-suggested')).toHaveTextContent('original'),
+          );
+          // A remount uses this target's cached result, then observes a final denial.
+          view.unmount();
+          discoveryApiMocks.getDiscovery.mockRejectedValueOnce(
+            Object.assign(new Error('do not display raw response'), { status }),
+          );
+          const denied = render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
+          await waitFor(() =>
+            expect(
+              screen.getByRole('button', { name: 'Retry service details' }),
+            ).toBeInTheDocument(),
+          );
+          expect(screen.getByTestId('url-suggested')).toHaveTextContent(/^$/);
+          expect(screen.queryByText(/do not display raw response/)).toBeNull();
+          denied.unmount();
+          let finish!: (value: import('@/types/discovery').ResourceDiscovery) => void;
+          discoveryApiMocks.getDiscovery.mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                finish = resolve;
+              }),
+          );
+          render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
+          expect(screen.getByTestId('url-suggested')).toHaveTextContent(/^$/);
+          finish(service('recovered'));
+          await waitFor(() =>
+            expect(screen.getByTestId('url-suggested')).toHaveTextContent('recovered'),
+          );
+        },
+      );
+
+      it('labels same-target transient retention and permits a fresh retry without raw error text', async () => {
+        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('original'));
+        const guest = makeGuestWithDiscoveryTarget();
+        const view = render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
+        await waitFor(() =>
+          expect(screen.getByTestId('url-suggested')).toHaveTextContent('original'),
+        );
+        view.unmount();
+        discoveryApiMocks.getDiscovery.mockRejectedValueOnce(new Error('private diagnostic'));
+        render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
+        await waitFor(() =>
+          expect(screen.getByText(/Showing previously loaded service details/)).toBeInTheDocument(),
+        );
+        expect(screen.getByTestId('url-suggested')).toHaveTextContent('original');
+        expect(screen.queryByText(/private diagnostic/)).toBeNull();
+        discoveryApiMocks.getDiscovery.mockResolvedValueOnce(service('recovered'));
+        fireEvent.click(screen.getByRole('button', { name: 'Retry service details' }));
+        await waitFor(() =>
+          expect(screen.getByTestId('url-suggested')).toHaveTextContent('recovered'),
+        );
+        expect(screen.queryByText(/Showing previously loaded/)).toBeNull();
+      });
+
+      it('resets tabs, range and disclosures only when canonical guest identity changes', async () => {
+        const [guest, setGuest] = createSignal(makeGuestWithDiscoveryTarget());
+        render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+        fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+        const range = screen.getByLabelText('History range');
+        fireEvent.change(range, { target: { value: '7d' } });
+        setGuest({ ...guest(), name: 'renamed', cpu: 0.5 });
+        expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        expect(screen.getByLabelText('History range')).toBe(range);
+        expect(range).toHaveValue('7d');
+        setGuest(
+          makeGuestWithDiscoveryTarget({ id: 'inst1-node1-200', vmid: 200, name: 'new-guest' }),
+        );
+        expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        const details = screen.getByTestId('guest-technical-details');
+        expect(details).not.toHaveAttribute('open');
+        fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+        expect(screen.getByLabelText('History range')).toHaveValue('24h');
+      });
     });
 
     it('hides the Identified Service card when the discovery record is null or empty', async () => {

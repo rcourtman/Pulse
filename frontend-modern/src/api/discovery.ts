@@ -48,6 +48,15 @@ const buildAgentDiscoveryCollectionPath = (agentId: string): string =>
 const buildAgentDiscoveryDetailPath = (agentId: string, resourceId: string): string =>
   `${buildAgentDiscoveryCollectionPath(agentId)}/${encodeURIComponent(resourceId)}`;
 
+// Discovery reads feed retained drawer evidence. Only a final access status
+// may revoke it; do not discard that status in the generic body parser or
+// expose a denied response's body as the reason shown to the user.
+function assertDiscoveryReadAccess(response: Response): void {
+  if (response.status === 401 || response.status === 403) {
+    throw Object.assign(new Error('Discovery details unavailable.'), { status: response.status });
+  }
+}
+
 /**
  * List all discoveries
  */
@@ -98,6 +107,7 @@ export async function getDiscovery(
     // Agent discovery is frequently absent before first scan. Resolve via list endpoint
     // first to avoid noisy 404s for expected "not discovered yet" states.
     const agentListResponse = await apiFetch(buildAgentDiscoveryCollectionPath(targetId));
+    assertDiscoveryReadAccess(agentListResponse);
     const agentList = await parseRequiredAPIResponse<DiscoveryListResponse>(
       agentListResponse,
       'Failed to list agent discoveries',
@@ -128,6 +138,7 @@ export async function getDiscovery(
     const response = await apiFetch(
       buildAgentDiscoveryDetailPath(resolvedAgentId, resolvedAgentDiscovery.resource_id),
     );
+    assertDiscoveryReadAccess(response);
     return parseRequiredAPIResponseOrNull(
       response,
       404,
@@ -137,6 +148,7 @@ export async function getDiscovery(
   }
 
   const response = await apiFetch(buildTypedDiscoveryPath(resourceType, targetId, resourceId));
+  assertDiscoveryReadAccess(response);
   return parseRequiredAPIResponseOrNull(
     response,
     404,

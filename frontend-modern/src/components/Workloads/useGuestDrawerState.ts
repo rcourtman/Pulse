@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createSignal } from 'solid-js';
 
 import { getDiscovery } from '@/api/discovery';
+import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 import type { HistoryTimeRange } from '@/api/charts';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { useDiscoveryFeatureAvailability } from '@/components/Discovery/useDiscoveryFeatureAvailability';
@@ -138,18 +139,32 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
   >({
     source: discoverySourceKey,
     initialValue: null,
-    cacheKey: (key) => `guest-drawer-discovery:${key.type}:${key.agent}:${key.resource}`,
-    fetcher: async (key) => {
-      try {
-        return await getDiscovery(key.type, key.agent, key.resource);
-      } catch {
-        return null;
-      }
-    },
+    cacheKey: (key) =>
+      `guest-drawer-discovery:${JSON.stringify([guestId(), key.type, key.agent, key.resource])}`,
+    // Retained evidence belongs to this exact target, never its replacement.
+    // Let the query distinguish HTTP access denial from a transient failure;
+    // null is reserved for a successful read with no saved discovery.
+    retainPreviousValueOnSourceChange: false,
+    fetcher: (key) => getDiscovery(key.type, key.agent, key.resource),
   });
   const discoveryIdentifiedSummary = createMemo(() =>
     hasDiscoverySupport() ? getDiscoveryIdentifiedSummary(discoveryRecord.value()) : null,
   );
+  const discoveryPanelKey = createMemo(() => {
+    const key = discoverySourceKey();
+    return key ? JSON.stringify([key.type, key.agent, key.resource]) : null;
+  });
+  const discoveryReadError = createMemo(() => {
+    if (!hasDiscoverySupport() || !discoveryRecord.error()) return null;
+    const accessError = getAPIReadAccessErrorMessage(discoveryRecord.error());
+    if (accessError) return `Service details unavailable. ${accessError}`;
+    return discoveryIdentifiedSummary()
+      ? 'Service details could not be refreshed. Showing previously loaded service details.'
+      : 'Service details could not be loaded.';
+  });
+  const retryDiscoveryRead = () => {
+    if (!discoveryRecord.loading()) void discoveryRecord.refetch();
+  };
   const discoveryReadinessPresentation = createMemo(() =>
     hasDiscoverySupport()
       ? getDiscoveryReadinessPresentation(props.guest.discoveryReadiness, true)
@@ -177,6 +192,10 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     backupPresentation,
     discoveryAgentId,
     discoveryIdentifiedSummary,
+    discoveryPanelKey,
+    discoveryReadError,
+    discoveryReadLoading: discoveryRecord.loading,
+    retryDiscoveryRead,
     discoveryReadinessPresentation,
     discoveryLoadingState: getDiscoveryLoadingState(),
     discoveryResourceId,
