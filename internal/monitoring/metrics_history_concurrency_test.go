@@ -13,13 +13,14 @@ func TestMetricsHistoryConcurrentAccess(t *testing.T) {
 	const iterations = 1000
 
 	var wg sync.WaitGroup
-	wg.Add(4)
+	wg.Add(5)
 
 	go func() {
 		defer wg.Done()
 		for i := 0; i < iterations; i++ {
 			mh.AddGuestMetric("guest-1", "cpu", rand.Float64()*100, time.Now())
 			mh.AddGuestMetric("guest-1", "memory", rand.Float64()*100, time.Now())
+			mh.AddGuestMetric("guest-1", "memoryused", 4096, time.Now())
 			mh.AddGuestMetric("guest-2", "disk", rand.Float64()*100, time.Now())
 			time.Sleep(time.Microsecond)
 		}
@@ -30,6 +31,7 @@ func TestMetricsHistoryConcurrentAccess(t *testing.T) {
 		for i := 0; i < iterations; i++ {
 			mh.AddNodeMetric("node-1", "cpu", rand.Float64()*100, time.Now())
 			mh.AddNodeMetric("node-1", "memory", rand.Float64()*100, time.Now())
+			mh.AddNodeMetric("node-1", "memoryused", 8192, time.Now())
 			mh.AddStorageMetric("storage-1", "usage", rand.Float64()*100, time.Now())
 			time.Sleep(time.Microsecond)
 		}
@@ -40,6 +42,7 @@ func TestMetricsHistoryConcurrentAccess(t *testing.T) {
 		for i := 0; i < iterations; i++ {
 			mh.GetGuestMetrics("guest-1", "cpu", time.Minute)
 			mh.GetGuestMetrics("guest-1", "memory", time.Minute)
+			mh.GetGuestMetrics("guest-1", "memoryused", time.Minute)
 			mh.GetGuestMetrics("guest-2", "disk", time.Minute)
 			time.Sleep(time.Microsecond)
 		}
@@ -50,13 +53,26 @@ func TestMetricsHistoryConcurrentAccess(t *testing.T) {
 		for i := 0; i < iterations; i++ {
 			mh.GetNodeMetrics("node-1", "cpu", time.Minute)
 			mh.GetNodeMetrics("node-1", "memory", time.Minute)
+			mh.GetNodeMetrics("node-1", "memoryused", time.Minute)
 			// Storage metrics are exposed through Monitor, but simulate reads via guest metrics map
 			mh.GetGuestMetrics("storage-1", "usage", time.Minute)
 			time.Sleep(time.Microsecond)
 		}
 	}()
 
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			mh.Cleanup()
+			time.Sleep(time.Microsecond)
+		}
+	}()
+
 	wg.Wait()
+	if len(mh.GetGuestMetrics("guest-1", "memoryused", time.Minute)) == 0 ||
+		len(mh.GetNodeMetrics("node-1", "memoryused", time.Minute)) == 0 {
+		t.Fatal("concurrent cleanup lost live used-memory samples")
+	}
 }
 
 // rand is automatically seeded in Go 1.20+

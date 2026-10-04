@@ -17,6 +17,20 @@
 
 ## Purpose
 
+### Used-memory history retention
+
+Periodic in-memory History cleanup applies the existing retention window and
+backing-array release policy to raw `memoryused` bytes as well as `memory`
+percentages, for guests and nodes. A live byte series alone keeps its resource
+entry; an expired byte series cannot remain pinned by ongoing CPU or other
+observations. Missing current memory does not refresh its last-known samples.
+The existing poll recorder, chart readers and metric-window provider retain
+in-window byte values and their original timestamps through cleanup, then
+accept fresh memory on resumption. SQL retention, sampling limits, memory
+source selection and wire formats are unchanged. The History cleanup tests
+cover every supported series, byte-array reclamation and connected readers;
+these controls do not attribute a reporter's native process-memory growth.
+
 ### Podman zero-percentage fallback — issue #2447
 
 One-shot compatibility stats with `cpu:0` do not suppress advancing cumulative
