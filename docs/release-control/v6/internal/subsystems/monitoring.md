@@ -105,6 +105,26 @@ holds per-guest admission until body completion; its failure discards the
 payload. Complete responses at the limit, including trailing whitespace, remain
 valid. Ordinary PVE CPU/I/O observations remain independent of this deferral.
 
+Lock verification also requires a direct HTTP 200 from the configured command
+endpoint and one unambiguous `data` configuration object. It never follows a
+redirect, including a same-origin redirect to another configuration path.
+Duplicate fields (including escaped duplicates), differently cased `data` or
+`lock` fields, competing error/failure envelopes and non-string operation locks
+yield `lock-unverified`; a later unlocked value cannot overwrite earlier backup
+evidence. Ordinary `GetVMConfig` remains compatible with its existing decoding
+and redirects. The lock check shares the configured pooled transport, TLS,
+proxy and timeout policy and retains config-read password-session recovery;
+the guest command itself is still single-attempt. This narrows the authority
+of lock evidence, not the ordinary API read contract. Failed post-command lock
+verification discards the guest payload without inventing a transport cooldown;
+subsequent same-target unlocked verification permits normal resumption.
+`TestGuestAgentLockEvidenceRejectsAmbiguity` and
+`TestGuestAgentLockEvidenceRejectsRedirects` exercise all six readers before and
+after dispatch, all five redirect statuses, same/cross endpoint redirects,
+ordinary config compatibility and fresh-client resumption. The connected
+`TestGuestAgentBackupLockEvidenceContract` covers warm-cache continuity, live
+CPU, unrenewed observations and History, then normal fresh poll resumption.
+
 Admission is held through the complete response, not just headers. A transport
 failure, timeout, wrong-command-ID response or incomplete body defers every
 command for that guest for a minute; callers neither immediately retry nor
@@ -140,7 +160,8 @@ transport or custom TLS dialer defers without dispatch rather than substituting
 a different trust policy. A fully received redirect discards its body and
 starts the same per-VM uncertainty cooldown; its destination is never contacted.
 Ordinary config/resource reads retain pooling, HTTP/2, redirects and session
-recovery. This deliberately trades one new connection per guest command for
+recovery, except that authoritative guest lock checks refuse redirects as above.
+This deliberately trades one new connection per guest command for
 single-attempt safety; it does not reserve the QGA channel or establish thaw.
 Wire controls drop a reply only after receiving a command (including when a
 backup lock then appears), and exercise every read and redirect code. TLS

@@ -2976,6 +2976,20 @@ func TestGuestAgentBackupMonitoringContract(t *testing.T) {
 	testGuestAgentBackupMonitoringLifecycle(t)
 }
 
+// Same-target, unambiguous lock evidence is required even with warm caches.
+func TestGuestAgentBackupLockEvidenceContract(t *testing.T) {
+	for _, test := range []struct{ name, config string }{
+		{"redirected config", "redirect"},
+		{"overwritten backup lock", `{"data":{"lock":"backup","lock":""}}`},
+		{"overwritten config envelope", `{"data":{"lock":"backup"},"data":{}}`},
+		{"case-conflicting envelope", `{"data":{"lock":"backup"},"DATA":{}}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			testGuestAgentBackupMonitoringLifecycleWithUnverifiedConfig(t, test.config)
+		})
+	}
+}
+
 func TestDeferredVMGuestMemoryRequiresOriginalEvidence(t *testing.T) {
 	now := time.Now()
 	tests := []struct {
