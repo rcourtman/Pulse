@@ -3,6 +3,7 @@ package servicediscovery
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 

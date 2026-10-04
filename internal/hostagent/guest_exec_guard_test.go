@@ -20,6 +20,7 @@ func TestGuestExecConfigLockDictionary(t *testing.T) {
 	}{
 		{"unlocked", "cores: 2\nname: home-assistant\n", "", true},
 		{"unicode name", "name: café\nmemory: 8192\n", "", true},
+		{"hyphenated PVE key", "name: vm\namd-sev: type=sev\n", "", true},
 		{"backup", "name: vm\nlock: backup\n", "backup", true},
 		{"other operation", "lock: migrate\n", "migrate", true},
 		{"comment", "# lock: backup\nname: vm\n", "", true},
