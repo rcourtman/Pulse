@@ -146,6 +146,22 @@ class WebhookVerificationDocsTest(unittest.TestCase):
                        "not from the request", "Never log the secret"):
             self.assertIn(phrase, text)
 
+    def test_receiver_guidance_preserves_recurrences_and_all_group_members(self):
+        # The Go sender tests render the copied PSA templates over actual
+        # loopback HTTP. Keep the safety explanation beside those examples.
+        text = " ".join(DOC.read_text().split())
+        for phrase in ("not a unique incident or delivery ID", "later occurrences",
+                       "Do not deduplicate permanently", "every member",
+                       "old delayed recovery must not close a newer incident",
+                       "event and severity", "whole-second precision",
+                       "incomplete or ambiguous events", "atomically",
+                       "Do not mark an event processed before its action succeeds"):
+            self.assertIn(phrase, text.replace("**", ""))
+        self.assertNotIn("deduplicate on it", text)
+        self.assertNotIn("two-priority PSA mapping covers the full range", text)
+        self.assertIn('"info"', text)
+        self.assertIn("successful firing-delivery receipt", text)
+
 
 if __name__ == "__main__":
     unittest.main()

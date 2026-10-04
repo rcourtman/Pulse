@@ -280,7 +280,7 @@ type webhookHTTPResult struct {
 
 type webhookRequestOptions struct {
 	alertType       string
-	eventID         string // Idempotency token sent as X-Pulse-Event-ID (stable across retries)
+	eventID         string // Legacy X-Pulse-Event-ID correlation header, not a unique delivery ID
 	timeout         time.Duration
 	userAgent       string
 	responseLogging bool
@@ -3344,9 +3344,9 @@ func signWebhookPayload(secret, timestamp string, payload []byte) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-// webhookEventID builds the idempotency token for a delivery: stable for the
-// same alert occurrence and event so receivers can deduplicate retries at
-// either retry layer (transport or queue).
+// webhookEventID builds the legacy correlation header, stable across retries.
+// It omits occurrence start, severity and grouped membership, so it is not a
+// unique incident/delivery identity or a sufficient durable deduplication key.
 func webhookEventID(alertID, event string) string {
 	if alertID == "" {
 		return ""
