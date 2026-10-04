@@ -1,21 +1,26 @@
 {
   "version": 1,
-  "base_sha": "a5b531998f80d4bfdd7df06d4b37802e6cc054eb",
-  "verified_at": "2026-10-02T18:07:50Z",
+  "base_sha": "556eb8d5b3f15dd0ac9a9e3157fe86fd421af3e3",
+  "verified_at": "2026-10-04T15:36:47.169Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts"
+    "frontend-modern/src/final-line-styles.generated.css",
+    "frontend-modern/src/index.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts": "035614af7ddee52c5ee56099b4f447b0137afd9dccf07be9981d44a486eb19a4"
+    "frontend-modern/src/final-line-styles.generated.css": "17f3d4dd478c4b91d168f222a0fb777eb06228fcc114bb6891053de6b999e8cf",
+    "frontend-modern/src/index.tsx": "eccc98eafe692dc3c535a45f9d74bf27c6ba55a1dfa495c2d3cbfe09b652dc39"
   },
   "routes": [
-    "/browser-tests/disk-temperature.html"
+    "/login",
+    "/alerts",
+    "/docs/TROUBLESHOOTING",
+    "/browser-tests/line-acceptance.html"
   ],
   "viewports": [
     {
-      "width": 1365,
-      "height": 900
+      "width": 1280,
+      "height": 800
     },
     {
       "width": 390,
@@ -23,20 +28,23 @@
     }
   ],
   "states": [
-    "Reported temperature without optional extended SMART attributes",
-    "Hot replacement reading with configured severity",
-    "Fahrenheit display of hot reading",
-    "Missing reading with accessible unavailable-details status",
-    "Extended SMART counters restored without invented absent values"
+    "Original App login with fixed invalid-login response in light/dark desktop/phone",
+    "Original App empty-estate Alerts, including mocked unavailable-notification-queue state, in light/dark desktop/phone",
+    "Original App shipped Troubleshooting Markdown in light/dark desktop/phone",
+    "Existing shared select/input/toggle/button and focused dialog controls in light/dark desktop/phone"
   ],
   "interactions": [
-    "Click Hot reading, Fahrenheit, No reading and Extended SMART synthetic snapshot controls; inspect production DiskDetail Overview on Chromium and WebKit",
-    "Confirm 42 C then 65 C then 149 F, severity classes, counter absence/presence, no horizontal overflow or uncaught page errors",
-    "Inspect all ten retained screenshots; exact predecessor-helper controls reproduce hidden 42 C on both viewports"
+    "Submit fixture login, observe fixed 401 error; no real authentication service",
+    "Select Push alert, toggle shared alert-delivery control, open dialog, focus Cancel and dismiss using Escape",
+    "Compare sixteen source-bound before/after rendered states: visible text, recorded computed styles and geometry match; zero page errors or horizontal overflow; eight Escape dismissals",
+    "Inspect all sixteen baseline PNG contents and three byte-different candidate PNGs. The other thirteen candidate PNGs are byte-identical to the inspected corresponding baseline. No pixel-identity claim for the three different PNGs."
   ],
   "playwright": "1.56.1",
   "browser_versions": [
-    "chromium 141.0.7390.37",
-    "webkit 26.0"
-  ]
+    "chromium 141.0.7390.37"
+  ],
+  "qualification_scope": "Rendered-state preview only. Exact source files unchanged; original App entrypoints; fixed synthetic APIs. Lazy-module completion observed, source-isolated Vite lifecycle and shared source context for the final fourteen captures. No cold-start, live authentication, installed update, audit or complete source-suite acceptance.",
+  "receipt_status": "First committed record of the retained browser proof; no previous committed record was amended or rebound.",
+  "captured_source_sha": "84fb674ab756eb9b166be0361870fa32416d301e",
+  "recording_scope": "Original 32 captures and sixteen comparisons at captured_source_sha retained without rerun. The verified parent changes only the guard test runner; both tested frontend hashes and all production frontend source/manifests are identical. This record does not claim a new browser execution."
 }

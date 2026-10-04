@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { withExclusiveLock } from '../../scripts/exclusive-lock.mjs';
 import { syncEmbedDir } from './sync-embed-dist.mjs';
 import { syncPublicDocs } from './sync-public-docs.mjs';
+import { verifyFrozenLineStyles } from './verify-frozen-line-styles.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,6 +31,7 @@ function run(command, args, options = {}) {
 await withExclusiveLock(
   lockPath,
   async () => {
+    verifyFrozenLineStyles();
     await syncPublicDocs();
     await run(npxCmd, ['vite', 'build'], { cwd: frontendRoot });
     await syncEmbedDir({ lock: false });

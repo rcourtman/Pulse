@@ -4,6 +4,9 @@ import sri from 'vite-plugin-sri-gen';
 import path from 'path';
 import { URL } from 'node:url';
 import { configDefaults } from 'vitest/config';
+import { verifyFrozenLineStyles } from './scripts/verify-frozen-line-styles.mjs';
+
+verifyFrozenLineStyles();
 
 const frontendDevHost = process.env.FRONTEND_DEV_HOST ?? '127.0.0.1';
 const frontendDevPort = Number(
@@ -13,10 +16,7 @@ const frontendDevPort = Number(
 const backendProtocol = process.env.PULSE_DEV_API_PROTOCOL ?? 'http';
 const backendHost = process.env.PULSE_DEV_API_HOST ?? '127.0.0.1';
 const backendPort = Number(
-  process.env.PULSE_DEV_API_PORT ??
-  process.env.FRONTEND_PORT ??
-  process.env.PORT ??
-  7655,
+  process.env.PULSE_DEV_API_PORT ?? process.env.FRONTEND_PORT ?? process.env.PORT ?? 7655,
 );
 
 const backendUrl =
@@ -30,9 +30,7 @@ const backendWsUrl =
       parsed.protocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
       return parsed.toString();
     } catch {
-      return backendUrl
-        .replace(/^http:\/\//i, 'ws://')
-        .replace(/^https:\/\//i, 'wss://');
+      return backendUrl.replace(/^http:\/\//i, 'ws://').replace(/^https:\/\//i, 'wss://');
     }
   })();
 
@@ -291,10 +289,6 @@ export default defineConfig(({ mode }) => ({
     alias: {
       '@': srcAlias,
     },
-    exclude: [
-      ...configDefaults.exclude,
-      'tests/integration/**',
-      '**/tests/integration/**',
-    ],
+    exclude: [...configDefaults.exclude, 'tests/integration/**', '**/tests/integration/**'],
   },
 }));

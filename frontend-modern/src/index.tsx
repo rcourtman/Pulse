@@ -1,6 +1,6 @@
 /* @refresh reload */
 import { render } from 'solid-js/web';
-import './index.css';
+import './final-line-styles.generated.css';
 import App from './App';
 import { logger } from './utils/logger';
 
