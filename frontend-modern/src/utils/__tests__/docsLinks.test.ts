@@ -61,6 +61,84 @@ function getRuntimeSourceFiles(dir: string): string[] {
 }
 
 describe('docsLinks', () => {
+  it('separates server removal from persistent-data erasure', () => {
+    const installation = readFileSync(path.join(repoRoot, 'docs', 'INSTALL.md'), 'utf8');
+    const removal = installation.split('## 🗑️ Uninstall')[1];
+    expect(removal).toContain('stops monitoring and alert delivery');
+    expect(removal).toContain('Keep persistent\ndata by default');
+    expect(removal).toContain('every effective data path');
+    expect(removal).toContain('[full-state backup](MIGRATION.md#full-state-recovery)');
+    expect(removal).toContain('A configuration export\nalone is not a full backup');
+    expect(removal).toContain('Let any in-progress Pulse update finish');
+    expect(removal).toContain('without a\nkeep-data prompt');
+    expect(removal).toContain('Do not remove\nthe service account');
+    expect(removal).toContain('Do not delete `/bin/update` unless');
+    expect(removal).toContain('Removing the server does not remove agents');
+
+    // Pin the copyable recipes, not merely the surrounding warnings. The old
+    // Docker/root commands erased the complete data store as part of removal.
+    const commands = [...removal.matchAll(/```bash\n([\s\S]*?)```/g)].flatMap((match) =>
+      match[1]
+        .replace(/\\\n\s*/g, ' ')
+        .trim()
+        .split('\n')
+        .map((line) => line.replace(/\s+/g, ' ').trim()),
+    );
+    expect(commands).toEqual([
+      'docker stop pulse',
+      'docker rm pulse',
+      'docker compose stop pulse',
+      'docker compose rm pulse',
+      'kubectl scale deployment pulse --namespace pulse --replicas=0',
+      'sudo systemctl disable --now pulse-update.timer',
+      'sudo systemctl disable --now pulse.service',
+    ]);
+  });
+
+  it('bounds container-removal advice to retained persistent mounts', () => {
+    const installation = readFileSync(path.join(repoRoot, 'docs', 'INSTALL.md'), 'utf8');
+    const docker = (
+      installation.split('### Docker and Compose: retain the data mount')[1] ?? ''
+    ).split('### Kubernetes:')[0];
+    expect(docker).toContain('persistent named volume or bind');
+    expect(docker).toContain("container's writable layer or temporary storage");
+    expect(docker).toContain('`--rm` can also delete anonymous volumes');
+    expect(docker).toContain('**existing** project');
+    expect(docker).toContain('reattach the **same** data mount');
+    expect(docker).toContain('prefixes volume names');
+    expect(docker).toContain('Do not add `-v`/`--volumes`');
+    expect(docker).not.toContain('docker rm -f');
+    expect(docker).not.toContain('docker volume rm');
+  });
+
+  it('does not promise Helm retention where the current chart owns the claim', () => {
+    const installation = readFileSync(path.join(repoRoot, 'docs', 'INSTALL.md'), 'utf8');
+    const kubernetes = (
+      installation.split('### Kubernetes: check claim ownership before uninstalling')[1] ?? ''
+    ).split('### Systemd / Proxmox LXC:')[0];
+    expect(kubernetes).toContain('Do not assume `helm uninstall pulse -n pulse` retains data');
+    expect(kubernetes).toContain('without a keep policy');
+    expect(kubernetes).toContain('reclaim policy can delete its backing data');
+    expect(kubernetes).toContain('`persistence.existingClaim`');
+    expect(kubernetes).toContain('`emptyDir` storage, lost when the pod is removed');
+    expect(kubernetes.indexOf('After verifying persistent storage and its backup')).toBeLessThan(
+      kubernetes.indexOf('```bash'),
+    );
+    expect(kubernetes).toContain('suspend any controller');
+    const chart = readFileSync(
+      path.join(repoRoot, 'deploy', 'helm', 'pulse', 'templates', 'pvc.yaml'),
+      'utf8',
+    );
+    expect(chart).toContain('kind: PersistentVolumeClaim');
+    expect(chart).toContain('(not .Values.persistence.existingClaim)');
+    expect(chart).not.toContain('helm.sh/resource-policy');
+    const values = readFileSync(
+      path.join(repoRoot, 'deploy', 'helm', 'pulse', 'values.yaml'),
+      'utf8',
+    );
+    expect(values.split('persistence:')[1].split('server:')[0]).toContain('annotations: {}');
+  });
+
   it('keeps custom systemd server help on the signed non-root install path', () => {
     const installation = readFileSync(path.join(repoRoot, 'docs', 'INSTALL.md'), 'utf8');
     const custom = installation
