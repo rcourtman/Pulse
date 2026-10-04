@@ -24,6 +24,8 @@ export interface DiscoveryTabStateProps {
   resourceId: string;
   hostname: string;
   commandsEnabled?: boolean;
+  /** Snapshot-based safety pause for manual runs; saved reads remain available. */
+  runBlockReason?: string | null;
 }
 
 const makeResourceId = (type: ResourceType, agentId: string, resourceId: string) =>
@@ -120,8 +122,13 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
   // the tab-wide banner already tells the user to configure one before
   // scanning. (Command/connectivity gaps are surfaced separately, not blocked
   // here, since their backend semantics are murkier.)
+  const runBlockReason = createMemo(() => props.runBlockReason?.trim() || null);
   const canTriggerDiscovery = createMemo(
-    () => discoveryFeatureEnabled() && aiProviderConfigured() && Boolean(targetAgentId()),
+    () =>
+      discoveryFeatureEnabled() &&
+      aiProviderConfigured() &&
+      Boolean(targetAgentId()) &&
+      !runBlockReason(),
   );
 
   const [discovery, { refetch, mutate }] = createResource(
@@ -185,6 +192,10 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
   });
 
   const handleTriggerDiscovery = async (force = false) => {
+    // Check the current snapshot at the dispatch boundary as well as disabling
+    // buttons. A retained handler must not use an earlier enabled verdict.
+    // Do not cancel an already dispatched scan or hide its eventual outcome.
+    if (runBlockReason() || isScanning()) return;
     if (!discoveryFeatureEnabled()) {
       setScanError('Service context is disabled in Settings -> Pulse Intelligence -> Assistant.');
       return;
@@ -347,6 +358,7 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
     notesText,
     mutateDiscovery: mutate,
     refetchDiscovery: refetch,
+    runBlockReason,
     saveError,
     scanError,
     scanProgress,

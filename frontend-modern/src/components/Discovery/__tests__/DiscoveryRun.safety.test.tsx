@@ -20,21 +20,43 @@ vi.mock('@/api/discovery', async (importOriginal) => ({
 }));
 
 const reason = 'Discovery paused for this guest. Saved results remain available.';
-const target = { resourceType: 'vm' as const, agentId: 'node-agent', resourceId: '100', hostname: 'guest' };
+const target = {
+  resourceType: 'vm' as const,
+  agentId: 'node-agent',
+  resourceId: '100',
+  hostname: 'guest',
+};
 const saved = {
-  id: 'vm:node-agent:100', resource_type: 'vm', resource_id: '100', target_id: 'node-agent',
-  hostname: 'guest', service_type: 'home-assistant', service_name: 'Saved service', category: 'app',
-  facts: [], config_paths: [], data_paths: [], log_paths: [], ports: [], user_notes: '',
-  discovered_at: '2026-10-03T12:00:00Z', updated_at: '2026-10-03T12:00:00Z', confidence: 0.9,
+  id: 'vm:node-agent:100',
+  resource_type: 'vm',
+  resource_id: '100',
+  target_id: 'node-agent',
+  hostname: 'guest',
+  service_type: 'home-assistant',
+  service_name: 'Saved service',
+  category: 'home_automation',
+  facts: [],
+  config_paths: [],
+  data_paths: [],
+  log_paths: [],
+  ports: [],
+  user_notes: '',
+  discovered_at: '2026-10-03T12:00:00Z',
+  updated_at: '2026-10-03T12:00:00Z',
+  confidence: 0.9,
 } as ResourceDiscovery;
 
 beforeEach(() => {
   resetAIRuntimeState();
   syncAIRuntimeSettings({ discovery_enabled: true } as Parameters<typeof syncAIRuntimeSettings>[0]);
   vi.mocked(discoveryApi.getDiscovery).mockResolvedValue(null);
-  vi.mocked(discoveryApi.triggerDiscovery).mockResolvedValue(null);
+  vi.mocked(discoveryApi.triggerDiscovery).mockResolvedValue(saved);
 });
-afterEach(() => { cleanup(); resetAIRuntimeState(); vi.clearAllMocks(); });
+afterEach(() => {
+  cleanup();
+  resetAIRuntimeState();
+  vi.clearAllMocks();
+});
 
 describe('manual discovery safety', () => {
   it.each([
@@ -42,25 +64,38 @@ describe('manual discovery safety', () => {
     ['absent', async () => null],
     ['empty', async () => ({ ...saved, service_type: '', service_name: '', confidence: 0 })],
     ['saved', async () => saved],
-  ] as const)('blocks all run affordances with %s discovery while retaining passive reads', async (_name, lookup) => {
-    vi.mocked(discoveryApi.getDiscovery).mockImplementation(lookup);
-    const props = { ...target, runBlockReason: reason };
-    render(() => <Suspense><DiscoveryTab {...props} /></Suspense>);
-    await waitFor(() => expect(discoveryApi.getDiscoveryInfo).toHaveBeenCalled());
-    await waitFor(() => {
-      const buttons = screen.getAllByRole('button', { name: /^(Run|Re-scan|Update) Discovery/ });
-      for (const button of buttons) expect(button).toBeDisabled();
-    });
-    expect(screen.getByTestId('discovery-run-block')).toHaveTextContent(reason);
-    expect(discoveryApi.getDiscovery).toHaveBeenCalledWith('vm', 'node-agent', '100');
-    expect(discoveryApi.triggerDiscovery).not.toHaveBeenCalled();
-  });
+  ] as const)(
+    'blocks all run affordances with %s discovery while retaining passive reads',
+    async (_name, lookup) => {
+      vi.mocked(discoveryApi.getDiscovery).mockImplementation(lookup);
+      const props = { ...target, runBlockReason: reason };
+      render(() => <DiscoveryTab {...props} />);
+      await waitFor(() => expect(discoveryApi.getDiscoveryInfo).toHaveBeenCalled());
+      await waitFor(() => {
+        const buttons = screen.getAllByRole('button', { name: /^(Run|Re-scan|Update) Discovery/ });
+        for (const button of buttons) expect(button).toBeDisabled();
+      });
+      expect(screen.getByTestId('discovery-run-block')).toHaveTextContent(reason);
+      expect(discoveryApi.getDiscovery).toHaveBeenCalledWith('vm', 'node-agent', '100');
+      expect(discoveryApi.triggerDiscovery).not.toHaveBeenCalled();
+    },
+  );
 
   it('keeps saved evidence mounted and restores only the explicit run action, not an automatic scan', async () => {
     vi.mocked(discoveryApi.getDiscovery).mockResolvedValue(saved);
     const [block, setBlock] = createSignal<string | null>(reason);
-    const props = { ...target, get runBlockReason() { return block(); }, showManualRunAction: true };
-    render(() => <Suspense><DiscoveryTab {...props} /></Suspense>);
+    const props = {
+      ...target,
+      get runBlockReason() {
+        return block();
+      },
+      showManualRunAction: true,
+    };
+    render(() => (
+      <Suspense>
+        <DiscoveryTab {...props} />
+      </Suspense>
+    ));
     const button = await screen.findByRole('button', { name: 'Run Discovery' });
     await waitFor(() => expect(button).toBeDisabled());
     const evidence = await screen.findByText('Saved service');
@@ -76,9 +111,17 @@ describe('manual discovery safety', () => {
 
   it('checks the current block inside the handler even when a caller retained the old enabled verdict', async () => {
     const [block, setBlock] = createSignal<string | null>(null);
-    const props = { ...target, get runBlockReason() { return block(); } };
+    const props = {
+      ...target,
+      get runBlockReason() {
+        return block();
+      },
+    };
     let state!: ReturnType<typeof useDiscoveryTabState>;
-    render(() => { state = useDiscoveryTabState(props); return <span>state</span>; });
+    render(() => {
+      state = useDiscoveryTabState(props);
+      return <span>state</span>;
+    });
     await waitFor(() => expect(state.canTriggerDiscovery()).toBe(true));
     setBlock(reason);
     await state.handleTriggerDiscovery(true);
@@ -88,21 +131,37 @@ describe('manual discovery safety', () => {
   });
 
   it('does not cancel or hide an in-flight scan when a new snapshot blocks further runs', async () => {
-    let finish!: (value: ResourceDiscovery | null) => void;
-    vi.mocked(discoveryApi.triggerDiscovery).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    const finishes: Array<(value: ResourceDiscovery) => void> = [];
+    vi.mocked(discoveryApi.triggerDiscovery).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishes.push(resolve);
+        }),
+    );
     const [block, setBlock] = createSignal<string | null>(null);
-    const props = { ...target, get runBlockReason() { return block(); } };
+    const props = {
+      ...target,
+      get runBlockReason() {
+        return block();
+      },
+    };
     let state!: ReturnType<typeof useDiscoveryTabState>;
-    render(() => { state = useDiscoveryTabState(props); return <span>state</span>; });
+    render(() => {
+      state = useDiscoveryTabState(props);
+      return <span>state</span>;
+    });
     await waitFor(() => expect(state.canTriggerDiscovery()).toBe(true));
     const original = state.handleTriggerDiscovery(true);
     expect(state.isScanning()).toBe(true);
     setBlock(reason);
-    await state.handleTriggerDiscovery(true);
-    expect(discoveryApi.triggerDiscovery).toHaveBeenCalledTimes(1);
-    expect(state.isScanning()).toBe(true);
-    finish(saved);
-    await original;
+    const second = state.handleTriggerDiscovery(true);
+    try {
+      expect(discoveryApi.triggerDiscovery).toHaveBeenCalledTimes(1);
+      expect(state.isScanning()).toBe(true);
+    } finally {
+      for (const finish of finishes) finish(saved);
+      await Promise.all([original, second]);
+    }
     expect(state.isScanning()).toBe(false);
     expect(state.discovery()).toBe(saved);
     expect(state.scanSuccess()).toBe(true);
