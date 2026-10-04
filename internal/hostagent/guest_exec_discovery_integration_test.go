@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -39,6 +40,16 @@ func (e guestSafetyDiscoveryExecutor) IsAgentConnected(id string) bool {
 // Real server/session/registration/agent/Discovery paths, with a fake non-QGA
 // config reader and fake provider process. This is NOT native PVE acceptance.
 func testGuestExecRealServerAgentDiscoveryAdmission(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		// This connected fixture models a Linux PVE host. Non-Linux agents
+		// must not advertise the production QGA guard, even with injected
+		// readers; pretending their registration is Linux would weaken that
+		// contract. The native suites retain their other command controls.
+		if c := new(CommandClient); c.guestExecGuardVersion() != 0 {
+			t.Fatal("non-Linux agent advertised Linux guest-execution safety")
+		}
+		t.Skip("connected PVE guest-execution fixture requires a Linux agent runtime")
+	}
 	s := agentexec.NewServer(func(token, agent, host string) bool {
 		return token == "fixture" && agent == "node-agent" && host == "node"
 	})

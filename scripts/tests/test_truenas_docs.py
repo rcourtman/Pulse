@@ -27,10 +27,12 @@ PAYLOAD = {"name": "test-nas", "host": "https://nas.example.invalid",
 
 
 def commands():
-    blocks = re.findall(r"```bash\n(.*?)```", DOC.read_text(), re.DOTALL)
-    preparation = next(block for block in blocks if "umask 077" in block)
-    requests = [block for block in blocks if block.startswith("curl ")]
-    return preparation, requests
+    section = DOC.read_text().split("### Testing and adding a connection (API)\n", 1)[1]
+    section = section.split("\n## Troubleshooting", 1)[0]
+    blocks = re.findall(r"```bash\n(.*?)```", section, re.DOTALL)
+    if len(blocks) != 3:
+        raise AssertionError("expected separate preparation, test and save recipes")
+    return blocks[0], blocks[1:]
 
 
 @contextmanager
@@ -41,7 +43,7 @@ def server(status=200):
         def do_POST(self):
             body = self.rfile.read(int(self.headers["Content-Length"]))
             requests.append((self.path, dict(self.headers), json.loads(body)))
-            self.send_response(status)
+            self.send_response(status if status != 200 or self.path.endswith("/test") else 201)
             self.end_headers()
             self.wfile.write(b'{"fixture":true}\n')
 
@@ -192,6 +194,11 @@ class TrueNASDocsTest(unittest.TestCase):
         for secret in (TOKEN, NAS_KEY):
             self.assertNotIn(secret, " ".join(argv))
             self.assertNotIn(secret.encode(), result.stdout + result.stderr)
+        output = Path(argv[argv.index("--output") + 1])
+        self.assertEqual(output.parent, private)
+        self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o600)
+        self.assertEqual(output.read_bytes(), b'{"fixture":true}\n')
+        self.assertNotIn(b'{"fixture":true}', result.stdout + result.stderr)
         return result
 
     def test_test_and_save_send_header_and_json_from_private_files(self):
@@ -215,7 +222,7 @@ class TrueNASDocsTest(unittest.TestCase):
                     with server(status) as (port, _):
                         result = self.request(Path(temporary), command, port)
                         self.assertEqual(result.returncode, 22, result.stderr.decode())
-                        self.assertIn(b'{"fixture":true}', result.stdout)
+                        self.assertNotIn(b'{"fixture":true}', result.stdout + result.stderr)
 
 
 if __name__ == "__main__":
