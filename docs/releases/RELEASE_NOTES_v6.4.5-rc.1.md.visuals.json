@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "decision": "The release owner declined the model-selected visual plan. The listed repairs are behavioural changes in alerting, telemetry, installation and upgrade handling that a static screenshot cannot establish, and the previously considered Patrol and History captures depend on live data that is not deterministic at capture time. This candidate publishes no screenshots.",
+  "captures": []
+}

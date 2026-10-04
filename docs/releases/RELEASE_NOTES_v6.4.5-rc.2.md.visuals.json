@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "decision": "The release owner selected zero captures. The listed repairs are behavioural changes in alerting, identity, telemetry, installation, upgrade handling and drawer interaction that a static image cannot establish. A staged image would add no proof beyond the qualified journey and could expose environment-specific mount names. This candidate therefore publishes no screenshots.",
+  "captures": []
+}
