@@ -1,9 +1,11 @@
+// @vitest-environment node
+
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import { test } from 'vitest';
 import { frozenLineStyleInputs, verifyFrozenLineStyles } from './verify-frozen-line-styles.mjs';
 
 function fixture() {
