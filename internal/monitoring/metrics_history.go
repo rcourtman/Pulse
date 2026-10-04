@@ -457,15 +457,7 @@ func (mh *MetricsHistory) GetGuestMetrics(guestID string, metricType string, dur
 		return []MetricPoint{}
 	}
 
-	// Filter by duration
-	result := make([]MetricPoint, 0)
-	for _, point := range data {
-		if point.Timestamp.After(cutoffTime) {
-			result = append(result, point)
-		}
-	}
-
-	return result
+	return filterMetricsByTime(data, cutoffTime)
 }
 
 // GetNodeMetrics returns historical metrics for a node
@@ -500,23 +492,38 @@ func (mh *MetricsHistory) GetNodeMetrics(nodeID string, metricType string, durat
 		return []MetricPoint{}
 	}
 
-	// Filter by duration
-	result := make([]MetricPoint, 0)
-	for _, point := range data {
-		if point.Timestamp.After(cutoffTime) {
-			result = append(result, point)
-		}
-	}
-
-	return result
+	return filterMetricsByTime(data, cutoffTime)
 }
 
 // filterMetricsByTime returns only the points whose timestamp is after cutoffTime.
 func filterMetricsByTime(data []MetricPoint, cutoffTime time.Time) []MetricPoint {
-	filtered := make([]MetricPoint, 0)
+	// Skip the expired prefix, then count the survivors before allocating.
+	// Dense chart reads otherwise repeatedly grow and copy their result under
+	// the History read lock. Allocate only the requested window, not all stored
+	// points, and keep caller-owned snapshots rather than aliasing live History.
+	first := 0
+	for first < len(data) && !data[first].Timestamp.After(cutoffTime) {
+		first++
+	}
+	data = data[first:]
+	count := 0
 	for _, point := range data {
 		if point.Timestamp.After(cutoffTime) {
-			filtered = append(filtered, point)
+			count++
+		}
+	}
+	filtered := make([]MetricPoint, count) // Preserve [] (not null) for empty series.
+	if count == len(data) {
+		copy(filtered, data)
+		return filtered
+	}
+	// Usually the retained window is a contiguous suffix. Preserve the original
+	// per-point filtering and order even when an input is not chronological.
+	next := 0
+	for _, point := range data {
+		if point.Timestamp.After(cutoffTime) {
+			filtered[next] = point
+			next++
 		}
 	}
 	return filtered
