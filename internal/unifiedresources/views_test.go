@@ -35,6 +35,13 @@ func TestLinkedAgentMemoryObservationUsesItsOwnSourceTime(t *testing.T) {
 			}
 		})
 	}
+	for _, unknownTime := range []time.Time{{}, time.Now().Add(time.Hour)} {
+		resource.SourceStatus[SourceAgent] = SourceStatus{Status: "online", LastSeen: unknownTime}
+		memory, ok := linkedAgentMemoryFromResource(resource)
+		if !ok || memory.Observation.State != "last-known" || !memory.Observation.ObservedAt.IsZero() {
+			t.Fatalf("unknown/future receipt manufactured a current reading: %+v", memory)
+		}
+	}
 	resource.SourceStatus[SourceAgent] = SourceStatus{Status: "offline", LastSeen: observedAt}
 	if _, ok := linkedAgentMemoryFromResource(resource); ok {
 		t.Fatal("provenance made an offline agent sample selectable")

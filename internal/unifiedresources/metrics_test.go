@@ -575,7 +575,3 @@ func TestGuestMemoryMetricObservationFollowsSelectedSource(t *testing.T) {
 		t.Fatalf("cross-source selection lost agent receipt or trusts supplied provenance: %+v", merged.Memory)
 	}
 }
-
-// Proxmox guest adapters must publish the node-independent identity key so
-// canonical ID derivation survives live migration (#1669); guests without an
-// instance+VMID stay keyless and fall back to source-specific derivation.

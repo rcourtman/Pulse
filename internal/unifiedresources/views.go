@@ -101,6 +101,10 @@ func linkedAgentMemoryFromResource(r *Resource) (models.Memory, bool) {
 	// Guest-row LastSeen can be renewed by PVE alone. The surviving agent
 	// sample keeps the agent source's timestamp after host/guest correlation.
 	memory.Observation = models.MemoryObservation{State: "current", Source: "agent", ObservedAt: status.LastSeen}
+	if status.LastSeen.IsZero() || status.LastSeen.After(time.Now()) {
+		memory.Observation.State = "last-known"
+		memory.Observation.ObservedAt = time.Time{}
+	}
 	return memory, memory.HasKnownUsage()
 }
 
