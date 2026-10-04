@@ -577,30 +577,51 @@ alerts, and resource projections keep one canonical protocol value.
 
 ### External probes (Pro)
 
-By default every availability check runs from the Pulse server itself, which
-means a check cannot report the one failure that matters most: the site
-running Pulse losing its connectivity. With the Pro `external_probe`
-entitlement, a check can instead be assigned to any connected Pulse agent
-(`probeAgentId` in the API, "Run from" in the UI) — for example an agent on a
-cloud VM or at another site. The assigned agent receives the check through
-its signed agent configuration, runs it on the configured interval, and
-reports results back with its reports; results are only accepted from the
-currently assigned agent. An assigned check is not also run locally. If no
-report arrives for several intervals the check shows as indeterminate
-("no recent report from probe agent"). Freshness uses the Pulse server's receipt
-time, so clock drift on the probe cannot create or hide a disconnect. After at
-least five minutes without a report, Pulse raises one warning per disconnected
-probe through the normal notification routes, even when that probe owns several
-checks. The incident is keyed to the probe agent rather than an arbitrary check,
-so changing assignments does not reopen it. If the agent heartbeat is also
-offline, the existing
-host-offline alert owns the incident instead of producing a duplicate probe
-warning. A paired Pulse Mobile client receives a privacy-safe
-`external_probe_offline` Relay push linked to that canonical alert. If the whole
-Pulse instance becomes unreachable, Relay's independent five-minute
-instance-offline push covers the dark-site case. If the entitlement lapses, the
-check automatically resumes running from the Pulse server. Checks without an
-assignment are unaffected and remain available in every edition.
+External probes change **where a check runs**, not where alerts are sent.
+By default, checks run on the Pulse server. With the Pro `external_probe`
+entitlement, select one or more connected agents under **Observation locations**
+in the check editor. An agent on a cloud VM or at another site can observe a
+service from outside its local network. Keep **This Pulse server** selected if
+you also want a local observation; deselect it for agent-only checks. Pulse keeps
+each location's evidence separate, so a failure on one path is not a universal
+outage. The API uses `observationLocationIds`; see the
+[target fields](API.md#availability-checks).
+
+The assigned agent receives signed configuration, runs the check and reports
+results back to Pulse. Only agents assigned to that target may submit results;
+the server runs a local check only when **This Pulse server** is selected.
+**The agent does not send
+notifications directly.** The Pulse server must be running and able to reach
+the notification destination to evaluate results and send alerts.
+
+| Situation | What the check can tell you |
+| --- | --- |
+| Pulse is running and receives probe results | Target observations are evaluated through the normal alert and notification policies. |
+| Pulse is running but probe results stop arriving | The affected location becomes indeterminate: "no recent report from probe agent". This is missing evidence, not proof the target is down. Other locations retain their own evidence. |
+| Pulse is stopped or cannot reach its notification destination | An external agent cannot deliver Pulse alerts in its place. Use an independent external watchdog for this failure. |
+
+The missing-report window is the longer of **five minutes or three check
+intervals**, measured from server receipt time, not the agent's clock. During
+normal server evaluation, eligible stale probes raise one warning per agent,
+not per assigned check. Alert and connectivity policies still apply. If the
+agent heartbeat is also offline, the host-offline alert owns the incident
+instead of a duplicate probe warning. See the
+[agent probe guide](UNIFIED_AGENT.md#external-probes-pro) for buffering limits.
+
+For an outage of Pulse itself, configure an
+[external watchdog](TROUBLESHOOTING.md#no-alert-when-pulse-power-or-internet-goes-down)
+outside the power and network failure you need to detect, with an independently
+reachable notification destination. Verify actual receipt in an authorised test
+environment; a successful destination test does not prove outage coverage.
+
+Existing paired Pulse Mobile/Relay users retain their current push path until
+**31 March 2027**. Relay is no longer sold. Its instance-disconnect push does not
+evaluate individual targets while Pulse is offline, and is not a permanent
+substitute for the watchdog. See [Mobile retirement](RELAY.md).
+
+If the entitlement lapses, the check resumes running from the Pulse server:
+this changes its observation location and may change its result. Checks without
+an agent assignment remain available in every edition.
 
 ### ICMP probe privileges
 
