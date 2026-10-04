@@ -48,6 +48,12 @@ func testDiscoveryGuestSafetyStopsAndPreservesSavedEvidence(t *testing.T) {
 						t.Fatal("unverified output became fresh evidence")
 					}
 				}
+				// docker_vm is an execution-only scanner type, not a public
+				// canonical Discovery/store identity. Pin its low-level pause
+				// above; saved/manual/automatic behavior uses canonical VM.
+				if rt != ResourceTypeVM {
+					return
+				}
 				store, err := NewStore(t.TempDir())
 				if err != nil {
 					t.Fatal(err)
