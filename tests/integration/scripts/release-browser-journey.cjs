@@ -50,7 +50,7 @@ async function runJourney(browser, options) {
   let closing;
   const closeContext = () => closing ||= context.close().then(
     () => { record.context_closed = true; },
-    () => { record.context_closed = false; },
+    () => { record.context_closed = false; record.status = 'failed'; record.failure_type = 'ContextCleanupError'; },
   );
   const requireAccess = () => assert.equal(record.access_refused, false,
     'access refused; stop without another login, read or apply');

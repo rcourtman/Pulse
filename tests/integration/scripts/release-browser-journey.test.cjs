@@ -4,7 +4,6 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
 const { chromium } = require('playwright');
 const { validate, judge, runJourney } = require('./release-browser-journey.cjs');
 const from = 'v6.4.5', to = 'v6.4.6-rc.1';
@@ -134,33 +133,6 @@ function fixture(kind) {
   } };
 }
 
-function recoveryGuard(folder, refused) {
-  // Exercise the ACTUAL shell guard with this browser's receipt. The permitted
-  // branch's process is a fixed local sentinel, not installation or recovery.
-  const state = path.join(folder, 'state'); fs.mkdirSync(state);
-  fs.copyFileSync(path.join(folder, 'browser-upgrade.json'), path.join(state, 'browser-upgrade.json'));
-  const invocation = path.join(folder, 'guard-process-started');
-  const sentinel = path.join(folder, 'process-sentinel.sh');
-  fs.writeFileSync(sentinel, `#!/bin/sh\nprintf started > ${JSON.stringify(invocation)}\n`, { mode: 0o700 });
-  const harness = fs.readFileSync(path.resolve(__dirname, '../../../scripts/release_lifecycle_rehearsal.sh'), 'utf8');
-  const body = 'run_browser_journey() {' + harness.split('run_browser_journey() {')[1].split('\n}\n')[0] + '\n}';
-  const result = spawnSync('bash', ['-c', `set -euo pipefail\n${body}\nrun_browser_journey recovery v6.4.5\n`], {
-    env: { PATH: '/usr/local/bin:/usr/bin:/bin', WORK_DIR: folder, ROOT_DIR: path.resolve(__dirname, '../../..'),
-      SEED_ADMIN_USER: 'synthetic', ADMIN_PASSWORD: 'synthetic', PULSE_REHEARSAL_NODE: sentinel,
-      PULSE_REHEARSAL_BROWSER_ORIGIN: 'https://ephemeral.tawny-powan.ts.net', FROM_TAG: from, TO_TAG: to },
-    encoding: 'utf8', timeout: 5000,
-  });
-  assert.equal(result.error, undefined, 'shell guard must execute');
-  assert.equal(result.stderr, '', 'no raw error/receipt contents');
-  assert.equal(result.status, refused ? 1 : 0, 'actual recovery guard verdict');
-  assert.equal(fs.existsSync(invocation), !refused, 'no later browser process after refusal');
-  assert.equal(fs.existsSync(path.join(state, 'browser-auth.json')), !refused, 'no later auth preparation after refusal');
-  if (refused) assert.deepEqual(JSON.parse(fs.readFileSync(path.join(state, 'browser-recovery.json'))),
-    { status: 'not-executed', reason: 'stopped-access-no-reauthentication' });
-  else fs.writeFileSync(path.join(state, 'browser-auth.json'), '');
-  return { executed_guard: true, exit: result.status, browser_process_started: !refused, auth_prepared: !refused };
-}
-
 async function runControls(outputDir) {
   pureControls();
   const browser = await chromium.launch({ headless: true, channel: 'chromium', args: ['--no-sandbox'] });
@@ -211,11 +183,10 @@ async function runControls(outputDir) {
       if (kind.startsWith('read-')) assert.equal(receipt.protected_read_status, Number(kind.slice(-3)));
       if (kind === 'anonymous-probes') assert.equal(counts.anonymous_probes, 2, 'normal pre-login denial controls ran');
       if (kind === 'restart-gap') assert.equal(counts.transport_gaps, 1, 'restart transport control ran');
-      const recovery = mode === 'upgrade' ? recoveryGuard(folder, refusal) : null;
       results.push({ fixture: kind, mode, expected_rejection: !expectedPass, observed_status: receipt.status,
-        active_step: receipt.active_step, ...counts, recovery_guard: recovery, receipt });
+        active_step: receipt.active_step, ...counts, receipt });
     }
-    fs.writeFileSync(path.join(outputDir, 'observer-controls.json'), JSON.stringify({ scope: 'offline adversarial observer controls only',
+    fs.writeFileSync(path.join(outputDir, 'observer-controls.json'), JSON.stringify({ schema_version: 1, scope: 'offline adversarial observer controls only',
       browser_version: browser.version(), client_version: require('playwright/package.json').version, results }, null, 2) + '\n');
     console.log(JSON.stringify({ observer_controls: results.length, scope: 'fixtures, not native qualification', results }));
   } finally { await browser.close(); }
