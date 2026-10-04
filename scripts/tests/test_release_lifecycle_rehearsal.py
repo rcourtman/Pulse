@@ -490,11 +490,12 @@ def verify_browser_recovery_controls(controls_path: Path) -> None:
     fixed = {(kind, "upgrade") for kind in ("success", "anonymous-probes", "restart-gap",
                                            "wrong-preview", "silent-stream", "stuck-modal")}
     fixed.add(("success", "recovery"))
+    fixed.update((f"cleanup-{status}", "upgrade") for status in (401, 403))
     for endpoint in ("navigation", "authenticated-navigation", "login", "initial-version",
                      "authenticated-api", "check", "apply", "stream", "version", "health", "read"):
         fixed.update((f"{endpoint}-{status}", "upgrade") for status in (401, 403))
     results = controls["results"]
-    assert len(results) == len(fixed) == 29
+    assert len(results) == len(fixed) == 31
     assert {(row["fixture"], row["mode"]) for row in results} == fixed
     source = HARNESS_PATH.read_text(encoding="utf-8")
     function = "run_browser_journey() {" + source.split("run_browser_journey() {", 1)[1].split("\n}\n", 1)[0] + "\n}"

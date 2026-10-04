@@ -243,8 +243,13 @@ async function runJourney(browser, options) {
     throw error;
   } finally {
     await closeContext();
+    if (record.access_refused) {
+      record.status = 'failed';
+      record.failure_type ||= 'AssertionOrOperationError';
+    }
     if (options.outputDir) fs.writeFileSync(path.join(options.outputDir, `browser-${options.mode}.json`), JSON.stringify(record, null, 2) + '\n');
     assert.equal(record.context_closed, true, 'browser context cleanup failed');
+    requireAccess(); // A response received during cleanup cannot become a pass.
   }
   return record;
 }

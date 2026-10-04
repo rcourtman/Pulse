@@ -79,6 +79,7 @@ function fixture(kind) {
       if (refuse('authenticated-api')) return;
       return json(200, {});
     }
+    if (url.pathname === '/api/cleanup-control') { refuse('cleanup'); return; }
     if (url.pathname === '/api/updates/check') {
       if (refuse('check')) return;
       return json(200, { latestVersion: kind === 'wrong-preview' ? '6.5.0-rc.1' : to.slice(1), downloadUrl });
@@ -143,6 +144,7 @@ async function runControls(outputDir) {
       ['anonymous-probes', 'upgrade', true, 1, 1], ['restart-gap', 'upgrade', true, 1, 1],
       ['wrong-preview', 'upgrade', false, 0, 1], ['silent-stream', 'upgrade', false, 1, 1],
       ['stuck-modal', 'upgrade', false, 1, 1],
+      ['cleanup-401', 'upgrade', false, 1, 1], ['cleanup-403', 'upgrade', false, 1, 1],
     ];
     for (const endpoint of ['navigation', 'authenticated-navigation', 'login', 'initial-version',
       'authenticated-api', 'check', 'apply', 'stream', 'version', 'health', 'read']) {
@@ -158,7 +160,22 @@ async function runControls(outputDir) {
       const folder = path.resolve(outputDir, `${kind}-${mode}`); fs.mkdirSync(folder, { recursive: true });
       let passed = false;
       try {
-        await runJourney(browser, { origin: `http://127.0.0.1:${target.server.address().port}`, mode, from, to,
+        // A real denied HTTP response deliberately arrives during cleanup,
+        // after the main checks. The observer must not leave a passed receipt.
+        // Only this fixture delays context disposal; no response is fabricated.
+        const testBrowser = kind.startsWith('cleanup-') ? {
+          version: () => browser.version(),
+          newContext: async options => {
+            const context = await browser.newContext(options);
+            const close = context.close.bind(context);
+            context.close = async () => {
+              await context.pages()[0].evaluate(() => fetch('/api/cleanup-control'));
+              await close();
+            };
+            return context;
+          },
+        } : browser;
+        await runJourney(testBrowser, { origin: `http://127.0.0.1:${target.server.address().port}`, mode, from, to,
           expected: mode === 'upgrade' ? to : from, auth: { username: 'synthetic', password: 'synthetic' },
           timeout: 1500, readinessTimeout: 3000, outputDir: folder });
         passed = true;
