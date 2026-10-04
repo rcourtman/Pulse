@@ -1261,6 +1261,10 @@ func TestBackupOrphanDetectionUsesCanonicalInventoryReadinessScope(t *testing.T)
 			"func (m *Monitor) updatePVEBackupTemplateSubjectsForType(instanceName, guestType string, subjects map[string]struct{}) {",
 			"func (m *Monitor) updatePVEBackupTemplateSubjectsFromClusterResources(instanceName string, resources []proxmox.ClusterResource) {",
 			"func (m *Monitor) backupInventoryScopeForAlerts() *alerts.BackupInventoryScope {",
+			"m.checkBackupAlerts(ctx)",
+			"m.checkBackupAlerts(context.Background())",
+		},
+		"recovery_rollups.go": {
 			"m.alertManager.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, m.backupInventoryScopeForAlerts())",
 		},
 		"monitor_pve_guest_poll.go": {
