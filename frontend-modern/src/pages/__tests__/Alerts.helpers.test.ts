@@ -578,7 +578,7 @@ describe('tab path helpers', () => {
     );
     expect(alertIncidentTimelineStateSource).toContain('AlertsAPI.getIncidentTimeline');
     expect(alertIncidentTimelineStateSource).toContain('AlertsAPI.addIncidentNote');
-    expect(alertOverviewTabSource).toContain('AlertOverviewStatsCards');
+    expect(alertOverviewActiveAlertsSectionSource).toContain('AlertOverviewStatsCards');
     expect(alertOverviewTabSource).toContain('AlertOverviewActiveAlertsSection');
     expect(alertOverviewTabSource).toContain('useAlertOverviewState');
     expect(alertOverviewTabSource).toContain('useAlertIncidentTimelineState');
@@ -593,7 +593,8 @@ describe('tab path helpers', () => {
     expect(alertOverviewStateSource).not.toContain('AlertsAPI.unacknowledge');
     expect(alertOverviewStatsCardsSource).toContain('props.state.alertStats().acknowledged');
     expect(alertOverviewStatsCardsSource).toContain('props.state.alertStats().total24h');
-    expect(alertOverviewStatsCardsSource).toContain('props.state.alertStats().overrides');
+    // Override count is configuration, not alert status; it left the overview.
+    expect(alertOverviewStatsCardsSource).not.toContain('alertStats().overrides');
     expect(alertOverviewActiveAlertsSectionSource).toContain('AlertOverviewAlertCard');
     expect(alertOverviewActiveAlertsSectionSource).toContain('getAlertListEmptyState');
     expect(alertOverviewAlertCardSource).toContain('getAlertOverviewCardPresentation');

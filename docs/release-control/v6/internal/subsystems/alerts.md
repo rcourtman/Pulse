@@ -2851,6 +2851,27 @@ notification truth: the delivery log card must not resolve, suppress, or
 re-evaluate alerts, and it does not alter the `AlertConfig.enabled` versus
 `activationState` ownership boundary above.
 
+### Overview states paused delivery once and keeps rows scannable
+
+The Alerts overview is where a notification lands, so it answers "what is
+broken now" before configuration. When notification delivery is gated off,
+`OverviewTab` renders the shared `AlertDeliveryPausedCard` once, driven by
+`useAlertDeliveryPausedReason` (the same activation reading the destinations
+tab uses), with overview wording and a link to the Notifications route. While
+that banner is shown, per-alert delivery lines for the global holds
+`notifications_inactive` and `notifications_disabled` are suppressed; every
+alert-specific hold (cooldown, quiet hours, rate limit, flapping, suppression
+window, monitor-only) still renders on its row. With detection switched off
+the banner must not claim Pulse is still detecting alerts. Active alerts
+render as compact rows: severity on the left edge, icon and badge, the alert
+type, the start time as a locale-aware relative age on the overview's minute
+clock, Acknowledge, Snooze and Investigate visible, and Timeline plus
+resource monitoring policy behind a More disclosure that also closes an open
+timeline. A one-line summary beside the heading counts open alerts by
+severity and the triggered-in-24h total; threshold override counts are
+configuration and do not appear on the overview. None of this changes alert
+lifecycle, acknowledgement, snooze, or delivery evaluation.
+
 ### External watchdog is Pulse-availability evidence, not notification delivery
 
 The Alerts destinations surface owns the operator contract for an external

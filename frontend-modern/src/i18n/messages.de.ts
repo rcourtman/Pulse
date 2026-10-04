@@ -63,6 +63,8 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.overview.action.cancel': 'Abbrechen',
   'alerts.overview.action.hideAcknowledged': 'Bestaetigte ausblenden',
   'alerts.overview.action.hideTimeline': 'Zeitleiste ausblenden',
+  'alerts.overview.action.moreActions': 'Mehr',
+  'alerts.overview.action.lessActions': 'Weniger',
   'alerts.overview.action.processing': 'Wird verarbeitet...',
   'alerts.overview.action.resume': 'Fortsetzen',
   'alerts.overview.action.showAcknowledged': 'Bestaetigte anzeigen',
@@ -124,6 +126,25 @@ export const DE_MESSAGE_OVERRIDES = {
     'Schalten Sie Warnmeldungen ein, um die Ueberwachung fortzusetzen und Konfigurationstabs freizugeben',
   'alerts.overview.paused.title': 'Warnmeldungen sind pausiert',
   'alerts.overview.section.activeAlerts': 'Aktive Warnmeldungen',
+  'alerts.overview.summary.warning': '{count} Warnung',
+  'alerts.overview.summary.critical': '{count} kritisch',
+  'alerts.delivery.paused.title': 'Benachrichtigungen sind pausiert',
+  'alerts.delivery.paused.action': 'Zustellung einschalten',
+  'alerts.delivery.paused.setupLink': 'Ziele fuer Warnmeldungen einrichten',
+  'alerts.delivery.paused.reason.detectionOff':
+    'Warnmeldungen sind in der Warnkonfiguration ausgeschaltet.',
+  'alerts.delivery.paused.reason.snoozed':
+    'Die Zustellung von Benachrichtigungen ist zurueckgestellt.',
+  'alerts.delivery.paused.reason.notActivated':
+    'Die Zustellung von Benachrichtigungen wurde fuer diese Installation noch nicht eingeschaltet.',
+  'alerts.delivery.paused.consequence.destinations':
+    'Pulse erkennt weiterhin Warnmeldungen, sendet aber keine davon an die Ziele unten. Testnachrichten umgehen die Pause, ein erfolgreicher Test bedeutet also nicht, dass echte Warnmeldungen ankommen.',
+  'alerts.delivery.paused.consequence.destinationsDetectionOff':
+    'Solange Warnmeldungen ausgeschaltet sind, meldet Pulse keine neuen, und keine wird an die Ziele unten gesendet. Testnachrichten umgehen die Pause, ein erfolgreicher Test bedeutet also nicht, dass echte Warnmeldungen ankommen.',
+  'alerts.delivery.paused.consequence.overview':
+    'Pulse erkennt die Warnmeldungen unten weiterhin, aber niemand wird darueber benachrichtigt.',
+  'alerts.delivery.paused.consequence.overviewDetectionOff':
+    'Solange Warnmeldungen ausgeschaltet sind, meldet Pulse keine neuen, und niemand wird benachrichtigt.',
   'alerts.overview.snooze.description':
     'Pausiert Benachrichtigungen und Eskalationen fuer diesen Vorfall. Ueberwachung und Erkennung der Behebung laufen weiter.',
   'alerts.overview.snooze.option.eightHours': 'Fuer 8 Stunden',

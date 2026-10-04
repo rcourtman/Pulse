@@ -1,4 +1,4 @@
-import { t } from '@/i18n';
+import { getActiveLocale, t } from '@/i18n';
 import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
 
 export const ALERTS_EMPTY_STATE = 'No active alerts';
@@ -182,6 +182,40 @@ export function getAlertOverviewTimelineActionLabel(isExpanded: boolean): string
   return isExpanded
     ? t('alerts.overview.action.hideTimeline')
     : t('alerts.overview.action.timeline');
+}
+
+export function getAlertOverviewMoreActionsLabel(isExpanded: boolean): string {
+  return isExpanded
+    ? t('alerts.overview.action.lessActions')
+    : t('alerts.overview.action.moreActions');
+}
+
+// How long ago an alert started, in the active locale ("10 min ago",
+// "vor 10 Min."). `now` comes from the overview's shared minute clock so the
+// text keeps moving while the page stays open.
+export function formatAlertOverviewStartedAgo(startTime: string, now: number): string {
+  const started = new Date(startTime).getTime();
+  if (Number.isNaN(started)) return '';
+  const seconds = Math.max(0, Math.round((now - started) / 1000));
+  const format = new Intl.RelativeTimeFormat(getActiveLocale(), {
+    numeric: 'auto',
+    style: 'short',
+  });
+  if (seconds < 60) return format.format(0, 'minute');
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return format.format(-minutes, 'minute');
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return format.format(-hours, 'hour');
+  return format.format(-Math.floor(hours / 24), 'day');
+}
+
+export function getAlertOverviewSeverityCountLabel(
+  level: 'critical' | 'warning',
+  count: number,
+): string {
+  return level === 'critical'
+    ? t('alerts.overview.summary.critical', { count })
+    : t('alerts.overview.summary.warning', { count });
 }
 
 export function getAlertOverviewSnoozeLabel(): string {
@@ -398,28 +432,31 @@ export function getAlertOverviewCardPresentation(
   const isCritical = level === 'critical';
   const isInformational = level === 'info';
   const opacityClass = processing ? 'opacity-50' : acknowledged ? 'opacity-60' : '';
+  // Severity rides on a left edge, the icon and the badge rather than a fully
+  // tinted card, so a page of warnings stays scannable instead of one block
+  // of colour.
   const stateClass = acknowledged
-    ? 'border-border bg-surface-alt'
+    ? 'border-border border-l-border bg-surface-alt'
     : isCritical
-      ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/25'
+      ? 'border-border border-l-red-500 dark:border-l-red-500 bg-surface'
       : isInformational
-        ? 'border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/25'
-        : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/25';
+        ? 'border-border border-l-blue-500 dark:border-l-blue-400 bg-surface'
+        : 'border-border border-l-yellow-500 dark:border-l-yellow-400 bg-surface';
   const iconClassName = acknowledged
-    ? 'mr-3 mt-0.5 transition-all text-green-600 dark:text-green-400'
+    ? 'mr-2.5 mt-0.5 shrink-0 transition-all text-green-600 dark:text-green-400'
     : isCritical
-      ? 'mr-3 mt-0.5 transition-all text-red-600 dark:text-red-400'
+      ? 'mr-2.5 mt-0.5 shrink-0 transition-all text-red-600 dark:text-red-400'
       : isInformational
-        ? 'mr-3 mt-0.5 transition-all text-blue-600 dark:text-blue-400'
-        : 'mr-3 mt-0.5 transition-all text-yellow-600 dark:text-yellow-400';
-  const resourceClassName = isCritical
-    ? 'text-sm font-medium truncate text-red-700 dark:text-red-400'
-    : isInformational
-      ? 'text-sm font-medium truncate text-blue-700 dark:text-blue-400'
-      : 'text-sm font-medium truncate text-yellow-700 dark:text-yellow-400';
+        ? 'mr-2.5 mt-0.5 shrink-0 transition-all text-blue-600 dark:text-blue-400'
+        : 'mr-2.5 mt-0.5 shrink-0 transition-all text-yellow-600 dark:text-yellow-400';
+  const resourceClassName = 'text-sm font-semibold truncate text-base-content';
 
   return {
-    cardClassName: ['border rounded-md p-3 sm:p-4 transition-all', opacityClass, stateClass]
+    cardClassName: [
+      'border border-l-4 rounded-md px-3 py-2.5 transition-all',
+      opacityClass,
+      stateClass,
+    ]
       .filter(Boolean)
       .join(' '),
     iconClassName,

@@ -114,8 +114,11 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
       const age = tick() - ts;
       return age >= 0 && age < 86_400_000;
     });
+    const unacknowledged = alerts.filter((alert) => !alert.acknowledged);
     return {
-      active: alerts.filter((alert) => !alert.acknowledged).length,
+      active: unacknowledged.length,
+      activeCritical: unacknowledged.filter((alert) => alert.level === 'critical').length,
+      activeWarning: unacknowledged.filter((alert) => alert.level === 'warning').length,
       acknowledged: alerts.filter((alert) => alert.acknowledged).length,
       total24h: recent.length,
       critical24h: recent.filter((alert) => alert.level === 'critical').length,
@@ -167,6 +170,7 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
   });
 
   return {
+    tick,
     alertStats,
     filteredAlerts,
     groupedAlerts,
