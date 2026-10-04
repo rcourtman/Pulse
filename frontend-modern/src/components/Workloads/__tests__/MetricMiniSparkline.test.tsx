@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 
-import { MetricMiniSparkline } from '../MetricMiniSparkline';
+import { createSignal } from 'solid-js';
+import {
+  MetricMiniSparkline,
+  type MetricMiniSparklineValueLabelContext,
+} from '../MetricMiniSparkline';
 
 describe('MetricMiniSparkline', () => {
   it('renders a compact history path and current value label', () => {
@@ -27,8 +31,39 @@ describe('MetricMiniSparkline', () => {
 
     const sparkline = screen.getByTestId('metric-mini-sparkline');
     expect(sparkline.dataset.renderedSeriesCount).toBe('1');
+    expect(sparkline).toHaveClass('grid-cols-[minmax(0,1fr)_auto]');
+    expect(screen.getByRole('img', { name: 'CPU history, current 45%' })).toBeInTheDocument();
     expect(screen.getByText('45%')).toBeInTheDocument();
     expect(sparkline.querySelector('path')?.getAttribute('d')).toContain('M');
+  });
+
+  it('announces last-known values without changing historical points and withdraws that context reactively', () => {
+    const [context, setContext] = createSignal<MetricMiniSparklineValueLabelContext>('last known');
+    const { container } = render(() => (
+      <MetricMiniSparkline
+        title="Disk history"
+        unit="%"
+        valueLabel="50%"
+        valueLabelContext={context()}
+        series={[
+          {
+            id: 'disk',
+            label: 'Filesystem',
+            color: '#10b981',
+            points: [
+              { timestamp: 1, value: 25 },
+              { timestamp: 2, value: 50 },
+            ],
+          },
+        ]}
+      />
+    ));
+    const chart = screen.getByRole('img', { name: 'Disk history, last known 50%' });
+    const path = chart.querySelector('path')?.getAttribute('d');
+    expect(screen.getByText('50%')).toBeInTheDocument();
+    setContext('current');
+    expect(screen.getByRole('img', { name: 'Disk history, current 50%' })).toBe(chart);
+    expect(container.querySelector('path')?.getAttribute('d')).toBe(path);
   });
 
   it('keeps the label visible when history has no renderable line', () => {
