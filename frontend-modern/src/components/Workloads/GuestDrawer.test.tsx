@@ -220,6 +220,23 @@ afterEach(() => {
 // ── Tests ──────────────────────────────────────────────────────────────
 
 describe('GuestDrawer', () => {
+  it('keeps malformed and future backup times unknown through same-guest replacement', () => {
+    const [guest, setGuest] = createSignal(makeGuest({ lastBackup: NaN }));
+    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    const details = technicalDetails();
+    expect(details.getByText('Backup time unavailable: invalid timestamp.')).toBeVisible();
+    expect(details.queryByText('No completed backup found')).not.toBeInTheDocument();
+    expect(details.queryByText('Today')).not.toBeInTheDocument();
+    setGuest({ ...guest(), lastBackup: Date.now() + 86_400_000, backupInProgress: true });
+    expect(details.getByText(/timestamp is in the future/)).toBeVisible();
+    expect(details.getByText('Running · not completed yet')).toBeVisible();
+    setGuest({ ...guest(), lastBackup: Date.now() - 3600_000, backupInProgress: false });
+    expect(details.getByText('Today')).toBeVisible();
+    expect(details.queryByText(/unavailable/)).not.toBeInTheDocument();
+    setGuest({ ...guest(), lastBackup: 0 });
+    expect(details.getByText('No completed backup found')).toBeVisible();
+  });
+
   it('keeps deferred filesystem fallback last-known through History and fresh resumption', async () => {
     chartsApiMocks.getMetricsHistory.mockResolvedValue({
       resourceType: 'vm',

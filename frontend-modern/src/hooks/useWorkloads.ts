@@ -601,10 +601,11 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     uptime: uptime ?? 0,
     template: resource.proxmox?.template ?? false,
     lastBackup: (() => {
-      if (!resource.proxmox?.lastBackup) return 0;
-      const parsed = Date.parse(resource.proxmox.lastBackup);
-      // Go zero time "0001-01-01T00:00:00Z" parses to a large negative number
-      return parsed > 0 ? parsed : 0;
+      const timestamp = resource.proxmox?.lastBackup?.trim();
+      // Go zero time is an explicit absence sentinel. Keep other invalid
+      // readings (NaN included) distinct so the UI can report uncertainty.
+      if (!timestamp || /^0001-01-01T00:00:00(?:\.0+)?Z$/.test(timestamp)) return 0;
+      return Date.parse(timestamp);
     })(),
     backupInProgress: resource.proxmox?.backupInProgress ?? false,
     // vSphere's flat `resource.tags` is a mixed keyword set: the adapter keeps

@@ -44,6 +44,19 @@ describe('workloadGuestPresentation', () => {
     expect(getWorkloadsGuestBackupTooltip('stale', '3d')).toBe('Last backup: 3d');
   });
 
+  it('keeps an unknown backup age cautionary and distinct from no backup', () => {
+    expect(getWorkloadsGuestBackupStatusPresentation('unknown')).toEqual({
+      color: 'text-yellow-600 dark:text-yellow-400',
+      bgColor: 'bg-yellow-100 dark:bg-yellow-900/25',
+      icon: 'warning',
+    });
+    const reason = 'Backup time unavailable: invalid timestamp.';
+    expect(getWorkloadsGuestBackupTooltip('unknown', reason)).toBe(reason);
+    expect(getWorkloadsGuestBackupTooltip('unknown', reason, true)).toBe(
+      `Backup running now · ${reason.toLowerCase()}`,
+    );
+  });
+
   it('returns canonical compact protection context for object drawers', () => {
     expect(getWorkloadsGuestProtectionPresentation({})).toEqual({
       label: 'No completed backup found',

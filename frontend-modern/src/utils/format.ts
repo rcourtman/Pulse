@@ -198,7 +198,7 @@ function formatTimeDiff(diffMs: number, compact?: boolean): string {
   }
 }
 
-export type BackupStatus = 'fresh' | 'stale' | 'overdue' | 'never';
+export type BackupStatus = 'fresh' | 'stale' | 'overdue' | 'never' | 'unknown';
 
 export interface BackupInfo {
   status: BackupStatus;
@@ -227,7 +227,9 @@ export function getBackupInfo(
   thresholds?: BackupThresholds,
   now: number | Date = Date.now(),
 ): BackupInfo {
-  if (!lastBackup) {
+  // Only the explicit absence sentinels mean no completed backup was found.
+  // A present but unusable timestamp is uncertainty, not absence or freshness.
+  if (lastBackup === null || lastBackup === undefined || lastBackup === '' || lastBackup === 0) {
     return { status: 'never', ageMs: null, ageFormatted: 'Never' };
   }
 
@@ -238,11 +240,34 @@ export function getBackupInfo(
     timestamp = lastBackup;
   }
 
-  if (isNaN(timestamp) || timestamp <= 0) {
-    return { status: 'never', ageMs: null, ageFormatted: 'Never' };
+  if (
+    !Number.isFinite(timestamp) ||
+    timestamp <= 0 ||
+    !Number.isFinite(new Date(timestamp).getTime())
+  ) {
+    return {
+      status: 'unknown',
+      ageMs: null,
+      ageFormatted: 'Backup time unavailable: invalid timestamp.',
+    };
   }
 
   const nowMs = typeof now === 'number' ? now : now.getTime();
+  if (!Number.isFinite(nowMs) || !Number.isFinite(new Date(nowMs).getTime())) {
+    return {
+      status: 'unknown',
+      ageMs: null,
+      ageFormatted: 'Backup age unavailable: invalid current time.',
+    };
+  }
+  if (timestamp > nowMs) {
+    return {
+      status: 'unknown',
+      ageMs: null,
+      ageFormatted:
+        'Backup time unavailable: timestamp is in the future. Check the Proxmox and browser clocks.',
+    };
+  }
   const ageMs = nowMs - timestamp;
 
   // Use provided thresholds or fall back to defaults

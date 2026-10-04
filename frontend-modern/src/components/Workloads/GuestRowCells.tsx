@@ -76,6 +76,7 @@ function getBackupAgeBadgeLabel(
   info: BackupInfo,
 ): string {
   if (info.status === 'never') return 'None';
+  if (info.status === 'unknown') return 'Unknown';
   const compact = formatRelativeTime(lastBackup ?? undefined, {
     compact: true,
     emptyText: 'Unknown',
@@ -99,6 +100,7 @@ function getBackupAgeBadgeClass(status: WorkloadsGuestBackupDisplayStatus): stri
     case 'stale':
       return `${pill} border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900/70 dark:bg-yellow-950/40 dark:text-yellow-300`;
     case 'overdue':
+    case 'unknown':
       return `${pill} border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900/70 dark:bg-yellow-950/40 dark:text-yellow-300`;
     case 'never':
       return `${pill} border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-300`;
@@ -332,9 +334,12 @@ function BackupStatusCell(props: {
   const badgeLabel = createMemo(() =>
     displayStatus() === 'running' ? 'Running' : getBackupAgeBadgeLabel(props.lastBackup, info()),
   );
-  const hasCompletedBackup = createMemo(() => info().status !== 'never');
+  const hasCompletedBackup = createMemo(() => info().ageMs !== null);
   const ariaLabel = createMemo(() => {
     const currentInfo = info();
+    if (currentInfo.status === 'unknown') {
+      return `Backup status: ${props.backupRunning ? 'backup running now, ' : ''}${currentInfo.ageFormatted}`;
+    }
     if (props.backupRunning) {
       return hasCompletedBackup()
         ? `Backup status: backup running now, last completed backup ${currentInfo.ageFormatted}`
@@ -387,7 +392,10 @@ function BackupStatusCell(props: {
               </span>
             </div>
           </Show>
-          <Show when={!hasCompletedBackup()}>
+          <Show when={info().status === 'unknown'}>
+            <div class="py-0.5 text-amber-400">{info().ageFormatted}</div>
+          </Show>
+          <Show when={info().status === 'never'}>
             <div class="py-0.5 text-red-400">
               {props.backupRunning
                 ? 'No completed backup yet - the first backup is running now.'

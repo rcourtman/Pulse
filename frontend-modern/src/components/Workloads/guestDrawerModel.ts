@@ -430,17 +430,22 @@ export const normalizeGuestDrawerTags = (tags: Guest['tags']): string[] => {
 };
 
 export const getGuestDrawerBackupPresentation = (
-  lastBackup: string | number | Date,
+  lastBackup: string | number | Date | null | undefined,
   thresholds?: BackupThresholds,
   now: Date = new Date(),
 ): GuestDrawerBackupPresentation => {
-  const backupDate = new Date(lastBackup);
-  const daysSince = Math.max(
-    0,
-    Math.floor((now.getTime() - backupDate.getTime()) / (1000 * 60 * 60 * 24)),
-  );
-  const info = getBackupInfo(backupDate.getTime(), thresholds, now);
+  const timestamp = lastBackup instanceof Date ? lastBackup.getTime() : lastBackup;
+  const info = getBackupInfo(timestamp, thresholds, now);
   const statusPresentation = getWorkloadsGuestBackupStatusPresentation(info.status);
+  if (info.ageMs === null) {
+    return {
+      ageClass: statusPresentation.color,
+      ageLabel: info.status === 'never' ? 'No completed backup found' : info.ageFormatted,
+      dateLabel: 'Unknown',
+    };
+  }
+  const backupDate = new Date(timestamp!);
+  const daysSince = Math.floor(info.ageMs / (1000 * 60 * 60 * 24));
 
   return {
     ageClass: statusPresentation.color,
