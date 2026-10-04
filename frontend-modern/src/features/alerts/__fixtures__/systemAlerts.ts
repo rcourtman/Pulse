@@ -23,7 +23,7 @@ export function makeSystemAlert(
     instance: '',
     level: 'warning',
     message:
-      "Backup-age alerts were not evaluated because recovery data could not be read. Existing backup alerts have been kept; check Pulse's logs.",
+      "Backup-age alerts were not evaluated because recovery data could not be read. Existing backup alerts have been kept. Check Pulse's logs.",
     value: 0,
     threshold: 0,
     startTime: '2026-10-04T15:00:00Z',
