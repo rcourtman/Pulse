@@ -9,7 +9,7 @@ body:
       value: |
         Lead with one primary operator outcome. If context exposes another actionable topic, list it in the dedicated field below; triage will preserve it rather than silently folding it into the primary request.
 
-        Do not include credentials, tokens, private keys, or unsanitized configuration files.
+        Anything you attach here is public. Review files and screenshots locally before posting, even when an export is labelled "sanitized". Remove credentials, session cookies, secret URLs, private host/network and personal details, including text echoed in errors. Do not attach full/private diagnostics, .env or configuration files, private keys, Copy as cURL commands or full network exports.
 
   - type: textarea
     id: problem
@@ -54,7 +54,9 @@ body:
     id: additional_context
     attributes:
       label: Additional context
-      description: Add screenshots, examples, or related issues. Do not include credentials, tokens, private keys, or unsanitized configuration files.
+      description: |
+        Add screenshots, examples, or related issues if useful.
+        Review files and screenshots locally; remove secrets and identifying details, including those echoed in errors, before attaching them here.
 
   - type: checkboxes
     id: confirmations
