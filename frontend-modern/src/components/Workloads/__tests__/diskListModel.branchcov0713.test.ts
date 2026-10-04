@@ -60,8 +60,8 @@ describe('diskListModel (branch coverage 0713)', () => {
   });
 
   describe('getWorkloadsDiskUsagePercent', () => {
-    it('returns 0 when the disk has no capacity (false arm of the guard)', () => {
-      expect(getWorkloadsDiskUsagePercent(makeDisk({ total: 0 }))).toBe(0);
+    it('returns null when the disk has no capacity rather than a measured zero', () => {
+      expect(getWorkloadsDiskUsagePercent(makeDisk({ total: 0 }))).toBeNull();
     });
 
     it('returns (used / total) * 100 for a normal ratio (true arm of the guard)', () => {
@@ -142,8 +142,8 @@ describe('diskListModel (branch coverage 0713)', () => {
       );
     });
 
-    it('maps a no-capacity disk (percent 0) to the normal class', () => {
-      expect(getWorkloadsDiskProgressClass(makeDisk({ total: 0 }))).toBe(NORMAL_CLASS);
+    it('keeps a no-capacity disk neutral rather than classifying an unmeasured zero', () => {
+      expect(getWorkloadsDiskProgressClass(makeDisk({ total: 0 }))).toBe('bg-surface-hover');
     });
 
     it('falls back to the default disk thresholds when thresholds is null (nullish arm)', () => {
@@ -280,7 +280,7 @@ describe('diskListModel (branch coverage 0713)', () => {
         key: '/foo:/dev/sdb:5',
         label: '/foo',
         labelTitle: '/foo',
-        progressClass: NORMAL_CLASS,
+        progressClass: 'bg-surface-hover',
         progressValue: null,
         progressWidth: '0%',
         typeLabel: 'EXT4',

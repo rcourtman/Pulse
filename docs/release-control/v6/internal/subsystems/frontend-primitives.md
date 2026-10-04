@@ -20,6 +20,24 @@
 
 ## Purpose
 
+### Filesystem capacity is not measured usage
+
+The existing filesystem list and guest Overview require finite positive capacity
+and finite non-negative measured used bytes before displaying a percentage or
+utilization bar. Missing used bytes, invalid numeric fields, the negative
+unknown-usage sentinel and an overflowing ratio remain unavailable, not a healthy
+zero. Known capacity is still useful as `?/capacity`; filesystem identity and
+type remain visible. An explicitly measured zero stays `0%`, and omitted redundant
+percentage metadata does not discard valid bytes. Valid over-capacity readings
+retain their percentage and severity while the visual fill stays capped at 100%.
+No percentage or free-byte field is used to invent an absent used-byte reading.
+
+`filesystemUsage.evidence.test.tsx` covers the model and both production consumers,
+including same-filesystem known → unavailable → measured-zero replacement.
+`browser-tests/filesystem-usage-evidence.cjs` covers these rendered boundaries on
+desktop Chromium and touch Chromium/WebKit. These synthetic observations are
+not proof of appliance collection, backup thaw, installed recovery or delivery.
+
 ### Guest disk deferral and retained observations
 
 The existing workload row, disk breakdown tooltip and guest Overview use

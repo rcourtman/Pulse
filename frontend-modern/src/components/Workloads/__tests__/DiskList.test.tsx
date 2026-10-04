@@ -168,6 +168,27 @@ describe('DiskList', () => {
   });
 
   describe('usage calculation', () => {
+    it('withdraws one incomplete filesystem reading without losing another mount or inventing zero', () => {
+      const stable = makeDisk({ mountpoint: '/stable', used: 26843545600 });
+      const changing = makeDisk({ mountpoint: '/changing', device: '/dev/sda2' });
+      const [disks, update] = createSignal([stable, changing]);
+      render(() => <DiskList disks={disks()} />);
+      expect(screen.getByText('25%')).toBeInTheDocument();
+      expect(screen.getByText('50%')).toBeInTheDocument();
+
+      update([stable, { ...changing, used: undefined }]);
+      expect(screen.getByText('25%')).toBeInTheDocument();
+      expect(screen.getByText('/changing').parentElement).toHaveTextContent('?/100 GB');
+      expect(screen.getByText('—')).toBeInTheDocument();
+      expect(screen.queryByText('0%')).not.toBeInTheDocument();
+      expect(screen.queryByText('50%')).not.toBeInTheDocument();
+
+      update([stable, { ...changing, used: 0, usage: undefined }]);
+      expect(screen.getByText('25%')).toBeInTheDocument();
+      expect(screen.getByText('0%')).toBeInTheDocument();
+      expect(screen.queryByText('—')).not.toBeInTheDocument();
+    });
+
     it('derives usage percent through the canonical disk-list model', () => {
       const disk = makeDisk({ used: 26843545600, total: 107374182400 });
       expect(getWorkloadsDiskUsagePercent(disk)).toBe(25);

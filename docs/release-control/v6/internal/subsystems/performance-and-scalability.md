@@ -15,6 +15,16 @@
 
 ## Purpose
 
+### Unavailable filesystem values share the existing disk model
+
+The filesystem list and guest Overview use the same nullable measured-byte ratio
+for text, severity and progress. Per-disk validation is constant work within the
+existing linear presentation pass; it adds no reads, queries, timers, remounts or
+resource-identity changes. Unavailable values stay neutral rather than passing a
+fabricated zero into threshold classification. Mounted filesystem evidence tests
+and the production browser fixture verify replacement and rendering, not a new
+latency, fleet-performance or native-collection claim.
+
 ### Guest History live filesystem provenance
 
 The guest drawer derives deferred filesystem context from its current snapshot,
