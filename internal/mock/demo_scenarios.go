@@ -267,6 +267,19 @@ var demoKubernetesDeploymentProfiles = []demoKubernetesDeploymentProfile{
 	{Name: "checkout-api", Namespace: "services", DesiredReplicas: 3, ReadyReplicas: 3},
 	{Name: "payments-worker", Namespace: "services", DesiredReplicas: 2, ReadyReplicas: 1},
 	{Name: "platform-observability", Namespace: "monitoring", DesiredReplicas: 2, ReadyReplicas: 2},
+	// Healthy services that fill out the default deployment count, so the
+	// demo never shows one deployment name repeated within a namespace (the
+	// Kubernetes API forbids that, and the demo looked broken with it).
+	{Name: "ingress-nginx-controller", Namespace: "ingress-nginx", DesiredReplicas: 2, ReadyReplicas: 2},
+	{Name: "storefront-web", Namespace: "apps", DesiredReplicas: 2, ReadyReplicas: 2},
+	{Name: "account-portal", Namespace: "apps", DesiredReplicas: 2, ReadyReplicas: 2},
+	{Name: "search-api", Namespace: "services", DesiredReplicas: 3, ReadyReplicas: 3},
+	{Name: "inventory-api", Namespace: "services", DesiredReplicas: 2, ReadyReplicas: 2},
+	{Name: "order-events-consumer", Namespace: "services", DesiredReplicas: 2, ReadyReplicas: 2},
+	{Name: "notification-worker", Namespace: "services", DesiredReplicas: 1, ReadyReplicas: 1},
+	{Name: "image-resizer", Namespace: "services", DesiredReplicas: 2, ReadyReplicas: 2},
+	{Name: "session-cache", Namespace: "services", DesiredReplicas: 1, ReadyReplicas: 1},
+	{Name: "metrics-gateway", Namespace: "monitoring", DesiredReplicas: 1, ReadyReplicas: 1},
 }
 
 var demoKubernetesPodProfiles = []demoKubernetesPodProfile{
@@ -750,6 +763,13 @@ func applyDemoKubernetesScenario(state *models.StateSnapshot, now time.Time) {
 		clusterCarriesDeployCrash := profile.Scenario == demoK8sScenarioCrashLoopBackOff
 		for i := range cluster.Deployments {
 			deploymentProfile := demoKubernetesDeploymentProfiles[i%len(demoKubernetesDeploymentProfiles)]
+			if round := i / len(demoKubernetesDeploymentProfiles); round > 0 {
+				// Repeats keep the name unique and stay healthy, so a curated
+				// degradation such as the under-replicated payments-worker
+				// is told once rather than once per round.
+				deploymentProfile.Name = fmt.Sprintf("%s-%d", deploymentProfile.Name, round+1)
+				deploymentProfile.ReadyReplicas = deploymentProfile.DesiredReplicas
+			}
 			desired := deploymentProfile.DesiredReplicas
 			ready := deploymentProfile.ReadyReplicas
 			// payments-worker is under-replicated only in the cluster that
@@ -770,11 +790,35 @@ func applyDemoKubernetesScenario(state *models.StateSnapshot, now time.Time) {
 			}
 		}
 
+		readyNodeIndexes := make([]int, 0, len(cluster.Nodes))
+		for i := range cluster.Nodes {
+			if cluster.Nodes[i].Ready {
+				readyNodeIndexes = append(readyNodeIndexes, i)
+			}
+		}
 		for i := range cluster.Pods {
-			podProfile := applyDemoKubernetesPodScenario(
-				demoKubernetesPodProfiles[i%len(demoKubernetesPodProfiles)],
-				profile.Scenario,
-			)
+			var podProfile demoKubernetesPodProfile
+			switch {
+			case i < len(demoKubernetesPodProfiles):
+				podProfile = applyDemoKubernetesPodScenario(demoKubernetesPodProfiles[i], profile.Scenario)
+			case len(cluster.Deployments) == 0:
+				// No deployments to own replicas: repeat a curated pod under
+				// a unique name, healthy, so its story is not told twice.
+				podProfile = demoKubernetesHealthyRepeatPodProfile(
+					demoKubernetesPodProfiles[i%len(demoKubernetesPodProfiles)],
+					i/len(demoKubernetesPodProfiles)+1,
+				)
+			default:
+				// Past the curated story, pods are healthy replicas of the
+				// cluster's deployments with unique names, so the curated
+				// failures appear once and no pod name repeats.
+				podProfile = demoKubernetesReplicaPodProfile(
+					cluster.ID,
+					cluster.Deployments[(i-len(demoKubernetesPodProfiles))%len(cluster.Deployments)],
+					i,
+					readyNodeIndexes,
+				)
+			}
 			pod := &cluster.Pods[i]
 			pod.Name = podProfile.Name
 			pod.Namespace = podProfile.Namespace
@@ -823,6 +867,49 @@ func applyDemoKubernetesScenario(state *models.StateSnapshot, now time.Time) {
 	}
 
 	syncMockKubernetesNodeHosts(state)
+}
+
+// demoKubernetesReplicaPodProfile describes one healthy pod of a demo
+// deployment, named the way a ReplicaSet names its pods. The pod index feeds
+// the suffix so every replica stays unique within the cluster.
+func demoKubernetesReplicaPodProfile(
+	clusterID string,
+	deployment models.KubernetesDeployment,
+	podIndex int,
+	readyNodeIndexes []int,
+) demoKubernetesPodProfile {
+	nodeIndex := -1
+	if len(readyNodeIndexes) > 0 {
+		nodeIndex = readyNodeIndexes[podIndex%len(readyNodeIndexes)]
+	}
+	replicaSetHash := mockStableHexString(10, clusterID, deployment.Namespace, deployment.Name, "replicaset")
+	// A hash alone can collide; ending the suffix with the pod index keeps
+	// every replica unique while the fixed-width hash keeps it looking real.
+	podSuffix := mockStableHexString(3, clusterID, deployment.Namespace, deployment.Name, "pod") +
+		strconv.FormatInt(int64(podIndex), 36)
+	return demoKubernetesPodProfile{
+		Name:        fmt.Sprintf("%s-%s-%s", deployment.Name, replicaSetHash, podSuffix),
+		Namespace:   deployment.Namespace,
+		NodeIndex:   nodeIndex,
+		OwnerKind:   "Deployment",
+		OwnerName:   deployment.Name,
+		Phase:       "Running",
+		Container:   deployment.Name,
+		Image:       fmt.Sprintf("ghcr.io/pulse-demo/%s:2026.04", deployment.Name),
+		ContainerOK: true,
+	}
+}
+
+// demoKubernetesHealthyRepeatPodProfile reuses a curated pod's shape under a
+// unique name with its failure story scrubbed.
+func demoKubernetesHealthyRepeatPodProfile(profile demoKubernetesPodProfile, round int) demoKubernetesPodProfile {
+	profile.Name = fmt.Sprintf("%s-%d", profile.Name, round)
+	profile.Phase = "Running"
+	profile.Reason = ""
+	profile.Message = ""
+	profile.Restarts = 0
+	profile.ContainerOK = true
+	return profile
 }
 
 // applyDemoKubernetesPodScenario rewrites a global pod profile so the

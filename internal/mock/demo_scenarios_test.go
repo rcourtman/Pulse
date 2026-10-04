@@ -1,6 +1,8 @@
 package mock
 
 import (
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -1010,4 +1012,104 @@ func TestDemoDockerContainerNamesAreUniquePerHost(t *testing.T) {
 	if !dockerContainerNameExists(graph, "customer-portal") {
 		t.Fatal("expected the first round of curated names to stay unchanged")
 	}
+}
+
+func TestDemoKubernetesWorkloadNamesAreUniquePerNamespace(t *testing.T) {
+	curatedPods := map[string]struct{}{}
+	for _, profile := range demoKubernetesPodProfiles {
+		curatedPods[profile.Name] = struct{}{}
+	}
+	for _, tc := range []struct {
+		name        string
+		deployments int
+		pods        int
+	}{
+		{name: "default", deployments: DefaultConfig.K8sDeploymentsPerCluster, pods: DefaultConfig.K8sPodsPerCluster},
+		{name: "beyond curated profiles", deployments: 30, pods: 60},
+		{name: "no deployments", deployments: 0, pods: 40},
+		{name: "many replicas", deployments: 15, pods: 631},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := DefaultConfig
+			cfg.RandomMetrics = false
+			cfg.K8sDeploymentsPerCluster = tc.deployments
+			cfg.K8sPodsPerCluster = tc.pods
+
+			start := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+			graph := buildFixtureGraph(cfg, start)
+			before := kubernetesWorkloadKeys(graph)
+
+			// Kubernetes refuses two deployments or two pods with one name in
+			// a namespace. The demo cycled four deployment names and ten pod
+			// names, so the overview showed "checkout-api" four times and the
+			// curated crash-looping pod more than once.
+			totalCrashLooping := 0
+			for _, cluster := range graph.State.KubernetesClusters {
+				readyNodes := map[string]bool{}
+				for _, node := range cluster.Nodes {
+					readyNodes[node.Name] = node.Ready
+				}
+				deployments := map[string]struct{}{}
+				for _, deployment := range cluster.Deployments {
+					key := deployment.Namespace + "/" + deployment.Name
+					if _, dup := deployments[key]; dup {
+						t.Fatalf("cluster %s names two deployments %q", cluster.DisplayName, key)
+					}
+					deployments[key] = struct{}{}
+					if deployment.ReadyReplicas < deployment.DesiredReplicas && deployment.Name != "payments-worker" {
+						t.Fatalf("cluster %s repeats a degraded deployment as %q", cluster.DisplayName, key)
+					}
+				}
+				pods := map[string]struct{}{}
+				crashLooping := 0
+				for _, pod := range cluster.Pods {
+					key := pod.Namespace + "/" + pod.Name
+					if _, dup := pods[key]; dup {
+						t.Fatalf("cluster %s names two pods %q", cluster.DisplayName, key)
+					}
+					pods[key] = struct{}{}
+					if _, curated := curatedPods[pod.Name]; !curated && pod.NodeName != "" && !readyNodes[pod.NodeName] {
+						t.Fatalf("cluster %s placed replica %q on not-ready node %q", cluster.DisplayName, key, pod.NodeName)
+					}
+					if tc.deployments >= len(demoKubernetesDeploymentProfiles) && pod.OwnerKind == "Deployment" {
+						if _, ok := deployments[pod.Namespace+"/"+pod.OwnerName]; !ok {
+							t.Fatalf("cluster %s pod %q is owned by missing deployment %q", cluster.DisplayName, key, pod.OwnerName)
+						}
+					}
+					for _, container := range pod.Containers {
+						if container.Reason == "CrashLoopBackOff" {
+							crashLooping++
+							break
+						}
+					}
+				}
+				if crashLooping > 1 {
+					t.Fatalf("cluster %s repeats the curated crash loop on %d pods", cluster.DisplayName, crashLooping)
+				}
+				totalCrashLooping += crashLooping
+			}
+			if totalCrashLooping != 1 {
+				t.Fatalf("expected the curated crash loop exactly once across the estate, got %d", totalCrashLooping)
+			}
+
+			graph.UpdateMetrics(cfg, start.Add(45*time.Minute))
+			if after := kubernetesWorkloadKeys(graph); !reflect.DeepEqual(before, after) {
+				t.Fatal("expected Kubernetes workload names to survive a metric refresh unchanged")
+			}
+		})
+	}
+}
+
+func kubernetesWorkloadKeys(graph FixtureGraph) []string {
+	keys := []string{}
+	for _, cluster := range graph.State.KubernetesClusters {
+		for _, deployment := range cluster.Deployments {
+			keys = append(keys, cluster.ID+"/deploy/"+deployment.Namespace+"/"+deployment.Name)
+		}
+		for _, pod := range cluster.Pods {
+			keys = append(keys, cluster.ID+"/pod/"+pod.Namespace+"/"+pod.Name)
+		}
+	}
+	sort.Strings(keys)
+	return keys
 }
