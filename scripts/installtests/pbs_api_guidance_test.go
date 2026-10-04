@@ -274,7 +274,8 @@ func TestPBSAPIGuidanceRejectsUnsafeRecipesAndExactParent(t *testing.T) {
 // and identifying data. This proves copied transport/file safety, not native
 // PBS permissions, installed collection, backup recovery or agent installation.
 func TestPBSAPIGuidanceCopiedRequestsKeepSecretsPrivate(t *testing.T) {
-	for index, recipe := range pbsAPIGuidance(t)[2:] {
+	blocks := pbsAPIGuidance(t)
+	for index, recipe := range blocks[2:] {
 		for _, scenario := range []string{"success", "401", "403", "redirect", "wrong success status", "untrusted HTTPS", "truncated installer", "existing installer", "symlinked header"} {
 			if (index == 0 && scenario == "symlinked header") || (index == 1 && strings.Contains(scenario, "installer")) {
 				continue
