@@ -52,7 +52,7 @@ const runtime = [
           hasTouch: phone,
           colorScheme: phone ? 'dark' : 'light',
         });
-        if (phone) await page.addInitScript(() => document.documentElement.classList.add('dark'));
+        if (phone) await page.addInitScript(() => document.documentElement?.classList.add('dark'));
         page.setDefaultTimeout(20000);
         await page.clock.setFixedTime(new Date('2026-10-04T12:00:00Z'));
         const errors = [],
