@@ -345,7 +345,8 @@ const test = base.extend<{}, WorkerFixtures>({
 
 async function prepareDiagnosticsRoute(
   page: Page,
-  payload = DIAGNOSTICS_PAYLOAD,
+  payload: typeof DIAGNOSTICS_PAYLOAD | typeof EXPORT_DIAGNOSTICS_PAYLOAD =
+    DIAGNOSTICS_PAYLOAD,
 ): Promise<DiagnosticsTraffic> {
   const traffic: DiagnosticsTraffic = { reads: 0, writes: [] };
   page.on("request", (request) => {
