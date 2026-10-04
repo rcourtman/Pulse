@@ -4,7 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { chromium, webkit } = require('playwright');
 const root = '/workspace/frontend-modern';
-const output = '/workspace/tmp/guest-agent-coverage-final-proof';
+const output = '/workspace/tmp/guest-agent-coverage-corrected-proof';
 const runtime = [
   'frontend-modern/src/components/Workloads/GuestDrawer.tsx',
   'frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx',
@@ -77,7 +77,7 @@ const initial = {
         if (document.documentElement) apply();
         else document.addEventListener('DOMContentLoaded', apply, { once: true });
       }, dark);
-      await page.routeWebSocket('**/ws', (ws) => ws.close());
+      await page.routeWebSocket(/.*/, (ws) => ws.close());
       await page.route('**/*', async (route) => {
         const req = route.request(),
           url = new URL(req.url());

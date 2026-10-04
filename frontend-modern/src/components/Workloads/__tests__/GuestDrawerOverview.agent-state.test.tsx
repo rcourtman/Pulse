@@ -3,6 +3,7 @@ import { createSignal, type ComponentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GuestDrawerOverview } from '../GuestDrawerOverview';
 import type { WorkloadGuest } from '@/types/workloads';
+import type { VM } from '@/types/api';
 import {
   GUEST_DRAWER_BACKUP_PRECAUTION,
   getGuestDrawerGuestReadPresentation,
@@ -255,6 +256,6 @@ describe('backup activity is not a confirmed VM lock', () => {
     expect(getGuestDrawerGuestReadPresentation(value)?.label).toBe('Backup in progress');
     expect(getGuestDrawerGuestReadPrecaution(value)).toContain('A backup is reported in progress');
     expect(getGuestDrawerGuestReadPrecaution(value)).not.toContain('VM operation lock');
-    expect(value.guestAgentStatus).toBe('available');
+    expect((value as VM).guestAgentStatus).toBe('available');
   });
 });
