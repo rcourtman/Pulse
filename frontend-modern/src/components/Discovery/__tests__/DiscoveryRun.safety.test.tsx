@@ -26,7 +26,7 @@ const target = {
   resourceId: '100',
   hostname: 'guest',
 };
-const saved = {
+const saved: ResourceDiscovery = {
   id: 'vm:node-agent:100',
   resource_type: 'vm',
   resource_id: '100',
@@ -35,6 +35,11 @@ const saved = {
   service_type: 'home-assistant',
   service_name: 'Saved service',
   category: 'home_automation',
+  service_version: 'fixture',
+  cli_access: '',
+  user_secrets: {},
+  ai_reasoning: 'Synthetic saved evidence',
+  scan_duration: 0,
   facts: [],
   config_paths: [],
   data_paths: [],
@@ -44,7 +49,7 @@ const saved = {
   discovered_at: '2026-10-03T12:00:00Z',
   updated_at: '2026-10-03T12:00:00Z',
   confidence: 0.9,
-} as ResourceDiscovery;
+};
 
 beforeEach(() => {
   resetAIRuntimeState();
@@ -60,10 +65,18 @@ afterEach(() => {
 
 describe('manual discovery safety', () => {
   it.each([
-    ['loading', () => new Promise<ResourceDiscovery | null>(() => undefined)],
-    ['absent', async () => null],
-    ['empty', async () => ({ ...saved, service_type: '', service_name: '', confidence: 0 })],
-    ['saved', async () => saved],
+    ['loading', (): Promise<ResourceDiscovery | null> => new Promise(() => undefined)],
+    ['absent', async (): Promise<ResourceDiscovery | null> => null],
+    [
+      'empty',
+      async (): Promise<ResourceDiscovery | null> => ({
+        ...saved,
+        service_type: '',
+        service_name: '',
+        confidence: 0,
+      }),
+    ],
+    ['saved', async (): Promise<ResourceDiscovery | null> => saved],
   ] as const)(
     'blocks all run affordances with %s discovery while retaining passive reads',
     async (_name, lookup) => {
