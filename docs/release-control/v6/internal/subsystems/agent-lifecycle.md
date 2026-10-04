@@ -741,6 +741,12 @@ installer download and the agent's subsequent Pulse TLS connection.
 
 ## Canonical Files
 
+- `internal/agentexec/guest_exec_safety.go`
+- `internal/hostagent/guest_exec_guard.go`
+- `internal/hostagent/guest_exec_completion.go`
+- `internal/hostagent/guest_exec_config_linux.go`
+- `internal/hostagent/guest_exec_config_other.go`
+
 1. `internal/api/agent_install_command_shared.go`
 2. `internal/api/configapi/config_setup_handlers.go`
    2a. `internal/api/configapi/setup_script_render.go`
@@ -3526,6 +3532,48 @@ Agent` secondary handoff against the live setup wizard instead of relying
     `internal/hostagent/smartctl_discovery_test.go`.
 
 ## Current State
+
+### VM guest execution admission (backup precaution)
+
+`AgentRegisterPayload.guest_exec_guard_version` is optional; version 1 on a
+Linux full-trust command session means the agent implements the local guard,
+not that the VM is thawed or safe to overlap a backup. The server binds it to
+the authenticated session and refuses VM command/file dispatch to absent,
+unknown-version or non-Linux support. Version strings, user approval and the
+internal Trusted flag cannot substitute for that capability. Host/LXC commands,
+tenant admission, approvals and typed action-runner exclusions are unchanged.
+
+The host agent validates and canonicalises the numeric VMID, requires its
+current local-node config, and reads the fixed trusted `qm config --current`
+without QGA before and after one absolute-path `qm guest exec`. Missing,
+ambiguous, oversized or locked config fails closed. Per-VM process-wide
+admission serialises concurrent commands, respects cancellation and bounds
+state to 4,096 entries. Unknown handed-off completion or postflight lock/owner
+loss imposes a one-minute uncertainty pause; no command is replayed. The next
+explicit request must pass fresh config admission. A local process exit or kill
+is not proof that guest work stopped: a zero CLI exit with only a guest PID,
+nonterminal, malformed or ambiguous JSON stays uncertain. Only one complete
+canonical `exited` true/1 dictionary establishes observed guest termination;
+this does not alter the existing CLI exit/output payload semantics or prove
+thaw. Postflight failure retains that actual exit/output but disqualifies
+successful live evidence.
+
+The guard is not shared with the HTTP poller, separate agent processes or PVE
+backup workers, and config checks do not reserve QGA. Agent restart also does
+not retain the in-memory uncertainty pause. Continue the stop-before-affected-
+backup / independent covered-filesystem-write restart precaution until native
+overlap, thaw, writes, liveness and resumption are verified. Do not unlock,
+thaw or automatically restart from this guard. Raw host-shell commands and
+typed VM lifecycle operations are not relabelled as guarded guest reads.
+
+`TestCommandClientGuestExecutionAdmissionContract` pins no unverified handoff;
+`TestGuestExecRealServerAgentDiscoveryAdmission` connects real registration,
+server/agent WebSockets and VM/nested-Docker Discovery with fake config/provider
+boundaries. `TestVMGuestExecCapabilityBoundToRegisteredSession` pins old/unknown
+agent rejection and retained deferral. Config ambiguity, cancellation,
+serialization/capacity and explicit-resumption controls are source proofs, not
+native PVE/HAOS-QGA, thaw, installed-agent or release acceptance.
+
 
 ### Credential-safe container diagnostics bootstrap (1 October 2026)
 

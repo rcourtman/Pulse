@@ -2760,3 +2760,11 @@ func TestService_BackfillPreservesConcurrentManualRepair(t *testing.T) {
 		}
 	}
 }
+
+func TestDiscoveryGuestSafetyStopsAndPreservesSavedEvidence(t *testing.T) {
+	testDiscoveryGuestSafetyStopsAndPreservesSavedEvidence(t)
+}
+
+func TestDiscoveryGuestCancellationContract(t *testing.T) {
+	TestVMDiscoveryCancellationIsNotSuccessfulEvidence(t)
+}

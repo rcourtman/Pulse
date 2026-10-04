@@ -3,11 +3,13 @@ package servicediscovery
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -80,7 +82,9 @@ func (outputExecutor) IsAgentConnected(string) bool { return true }
 type errorExecutor struct{}
 
 func (errorExecutor) ExecuteCommand(ctx context.Context, agentID string, cmd ExecuteCommandPayload) (*CommandResultPayload, error) {
-	return nil, context.DeadlineExceeded
+	// This control covers ordinary catalogue failure, not an uncertain
+	// timed-out VM handoff (which now stops the scan in its own controls).
+	return nil, errors.New("fixture command failed")
 }
 
 func (errorExecutor) GetConnectedAgents() []ConnectedAgent {
@@ -393,8 +397,8 @@ func TestDeepScanner_ScanCanceledContext(t *testing.T) {
 		ResourceID:   "101:web",
 		TargetID:     "host1",
 		Hostname:     "host1",
-	}); err != nil {
-		t.Fatalf("Scan error: %v", err)
+	}); err == nil || !agentexec.IsGuestExecDeferred(err.Error()) || len(exec.commands) != 0 {
+		t.Fatalf("canceled VM scan must defer before dispatch: err=%v commands=%v", err, exec.commands)
 	}
 }
 
