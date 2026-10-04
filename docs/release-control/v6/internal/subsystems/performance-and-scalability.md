@@ -15,6 +15,19 @@
 
 ## Purpose
 
+### Guest History live filesystem provenance
+
+The guest drawer derives deferred filesystem context from its current snapshot,
+separately from current CPU, memory and I/O. A retained `prev-` value may populate
+only the labelled last-known legend, never the current fallback or chart geometry.
+The added presentation input does not create a polling timer, trigger a guest
+read, or change History target/range ownership. Stable-target context updates
+reuse the mounted chart and existing query; the drawer's pre-existing target
+recomputation on guest-snapshot changes is unchanged. Mounted regressions in
+`GuestDrawer.test.tsx` and `GuestDrawerHistory.disk-provenance.test.tsx` verify
+the actual fallback/resumption path and request counts. This is presentation
+proof, not a native CPU improvement, QGA/thaw result or delivery acceptance.
+
 ### Guest filesystem provenance preserves dense row geometry
 
 Visible retained/unavailable filesystem cues must fit the existing dense row
