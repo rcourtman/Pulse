@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import textwrap
 import unittest
+from unittest.mock import patch
 
 import yaml
 
@@ -99,6 +100,8 @@ class NpmAuditRetryTest(unittest.TestCase):
                     "FAKE_NPM_MODE": mode,
                     "FAKE_NPM_REPORT": str(report_path),
                     "NPM_AUDIT_ATTEMPTS": "3",
+                    "NPM_AUDIT_ATTEMPT_TIMEOUT": "60",
+                    "NPM_AUDIT_MAX_SECONDS": "240",
                     "NPM_AUDIT_CMD": str(fake_npm),
                     "NPM_AUDIT_REQUIRE_RESULT": require,
                     "NPM_AUDIT_RETRY_DELAY": "0",
@@ -118,6 +121,44 @@ class NpmAuditRetryTest(unittest.TestCase):
                 else []
             )
             return result, recorded_calls
+
+    def test_fake_audit_budget_is_not_inherited_from_the_caller(self) -> None:
+        # These are fixture controls, not a real advisory query. A caller's
+        # exhausted/short budget must not prevent the canned verdict from
+        # being read or change the exact one-request assertion.
+        with patch.dict(os.environ, {
+            "NPM_AUDIT_ATTEMPTS": "0",
+            "NPM_AUDIT_ATTEMPT_TIMEOUT": "0",
+            "NPM_AUDIT_MAX_SECONDS": "0",
+            "NPM_AUDIT_RETRY_DELAY": "10000",
+            "NPM_AUDIT_CMD": "/must-not-be-executed",
+            "NPM_AUDIT_REQUIRE_RESULT": "false",
+        }):
+            for require, status, annotation in [
+                ("true", 1, "::error::"), ("false", 0, "::warning::")
+            ]:
+                with self.subTest(require=require):
+                    result, calls = self.run_check("vulnerability", "all", require=require)
+                    self.assertEqual(result.returncode, status, result.stdout)
+                    self.assertEqual(calls, ["audit --json"])
+                    self.assertIn(annotation, result.stdout)
+                    self.assertIn("vulnerabilities present", result.stdout)
+                    self.assertNotIn("retrying", result.stdout)
+
+    def test_shell_fixture_owns_its_default_and_explicit_timing_controls(self) -> None:
+        env = os.environ.copy()
+        env.update(NPM_AUDIT_ATTEMPTS="0", NPM_AUDIT_ATTEMPT_TIMEOUT="0",
+                   NPM_AUDIT_MAX_SECONDS="0", NPM_AUDIT_RETRY_DELAY="10000",
+                   NPM_AUDIT_CMD="/must-not-be-executed")
+        result = subprocess.run(
+            ["bash", str(ROOT / "scripts/tests/test-npm-audit-retry.sh")],
+            cwd=ROOT, env=env, text=True, capture_output=True, check=False,
+            timeout=90,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("all npm-audit-retry tests passed", result.stdout)
+        self.assertIn("a hung audit is stopped at the per-attempt limit", result.stdout)
+        self.assertIn("the wall-clock budget ends the retry sequence", result.stdout)
 
     def test_passes_a_clean_production_audit_and_forwards_arguments(self) -> None:
         result, calls = self.run_check(
