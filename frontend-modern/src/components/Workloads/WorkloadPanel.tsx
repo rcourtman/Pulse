@@ -32,6 +32,7 @@ import { GuestDrawer } from './GuestDrawer';
 import { GuestRow } from './GuestRow';
 import { NodeDrawer } from './NodeDrawer';
 import { buildWorkloadSummaryGroupScope } from './workloadSelectors';
+import { getWorkloadGuestMetadataRecord } from './workloadWebLinksModel';
 import type { WorkloadsState } from './useWorkloadsState';
 import type { WorkloadTableMetric } from './workloadMetricHistoryModel';
 
@@ -550,15 +551,8 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                   const detailControlsId = createMemo(() =>
                     buildSummaryDisclosureControlsId(guestId()),
                   );
-                  const metadata = () => {
-                    const byId = props.guestMetadata();
-                    for (const metadataId of metadataIdCandidates()) {
-                      if (metadataId && byId[metadataId]) {
-                        return byId[metadataId];
-                      }
-                    }
-                    return byId[`${guest().instance}:${guest().node}:${guest().vmid}`];
-                  };
+                  const metadata = () =>
+                    getWorkloadGuestMetadataRecord(guest(), props.guestMetadata());
                   const parentNode = () => node() ?? props.guestParentNodeMap()[guestId()];
                   const parentNodeOnline = () => {
                     const pn = parentNode();

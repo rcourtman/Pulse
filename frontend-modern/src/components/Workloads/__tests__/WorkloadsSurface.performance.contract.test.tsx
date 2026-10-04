@@ -10,6 +10,7 @@ import workloadsFilterSource from '../WorkloadsFilter.tsx?raw';
 import workloadsWorkloadTableSource from '../WorkloadsTable.tsx?raw';
 import metricDisplayModeSegmentedControlSource from '../MetricDisplayModeSegmentedControl.tsx?raw';
 import workloadPanelSource from '../WorkloadPanel.tsx?raw';
+import workloadWebLinksDialogSource from '../WorkloadWebLinksDialog.tsx?raw';
 import workloadTableHeaderSource from '../WorkloadTableHeader.tsx?raw';
 import workloadsFilterModelSource from '../workloadsFilterModel.ts?raw';
 import workloadsControlsStateSource from '../useWorkloadsControlsState.ts?raw';
@@ -1393,7 +1394,20 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadTableSource).toContain('data-summary-clear-surface');
       expect(workloadsWorkloadTableSource).toContain('data-testid="workloads-table-surface"');
       expect(workloadsWorkloadTableSource).toContain('TableCard');
-      expect(workloadsWorkloadTableSource).toContain('<TableCardHeader title={props.title} />');
+      expect(workloadsWorkloadTableSource).toContain(
+        '<TableCardHeader title={props.title} actions={props.actions} />',
+      );
+      expect(workloadsSource).toContain('<WorkloadWebLinksAction');
+      expect(workloadsSource).toContain('guests={state.filteredGuests}');
+      expect(workloadPanelSource).toContain(
+        'getWorkloadGuestMetadataRecord(guest(), props.guestMetadata())',
+      );
+      // The bulk link editor must not rebuild rows on inventory ticks while closed.
+      expect(workloadWebLinksDialogSource).toContain('keepStableWorkloadWebLinkRows(');
+      expect(workloadWebLinksDialogSource).toMatch(
+        /open\(\)\s*\?\s*keepStableWorkloadWebLinkRows\(/,
+      );
+      expect(workloadWebLinksDialogSource).toContain(': previous,');
       expect(workloadsSource).toContain('<TableCardHeader title={props.tableTitle} />');
       expect(workloadsSource).toContain('title={props.tableTitle}');
       expect(workloadsWorkloadTableSource).toContain(
