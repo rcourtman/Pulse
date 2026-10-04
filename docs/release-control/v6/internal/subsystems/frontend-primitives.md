@@ -20,6 +20,16 @@
 
 ## Purpose
 
+Pulse system-alert presentation uses the existing reserved ID/metadata markers,
+not the displayed name or a platform fallback. Overview and both History layouts
+keep service warnings, occurrence timelines and acknowledgement usable without
+a false resource link/policy action. History retains the system marker when
+reconstructing Assistant context; the explanation has no fabricated metric,
+guest target or targeted Patrol. Ordinary monitored resources named Pulse keep
+their original affordances. The shared scope helper, mounted alert controls and
+desktop/narrow-touch browser fixture cover this boundary. No navigation entry,
+page, API, alert policy or operator permission is introduced.
+
 ### Guest-agent coverage is not inferred from metadata
 
 The existing workload drawer distinguishes assigned Pulse Agent action ownership,

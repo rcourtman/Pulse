@@ -4,6 +4,7 @@ import { DEFAULT_LOCALE, t, type SupportedLocale } from '@/i18n';
 import { getCanonicalAlertId } from '@/features/alerts/identity';
 import { formatAlertValue } from '@/utils/alertFormatters';
 import { isMetricAlertType } from '@/utils/alerts';
+import { isPulseSystemAlert } from '@/utils/alertScope';
 import { resolveAlertTargetType } from '@/utils/alertTargetTypes';
 
 interface BuildAlertAssistantHandoffInput {
@@ -32,23 +33,27 @@ export function buildAlertAssistantHandoff({
   // threshold 0.0%" in operator-facing copy is misleading default-zero
   // noise. Suppress those fields and rely on alert.type + alert.message
   // to convey what's wrong.
-  const hasMetricValues = isMetricAlertType(alert.type);
+  const systemScoped = isPulseSystemAlert(alert);
+  const hasMetricValues = !systemScoped && isMetricAlertType(alert.type);
   const currentValue = hasMetricValues ? formatAlertValue(alert.value, alert.type) : '';
   const thresholdValue = hasMetricValues ? formatAlertValue(alert.threshold, alert.type) : '';
-  const nodeLabel = alert.node ? alert.nodeDisplayName || alert.node : '';
+  const nodeLabel = !systemScoped && alert.node ? alert.nodeDisplayName || alert.node : '';
   const levelLabel = formatAlertLevel(alert.level);
   const modelLevelLabel = formatAlertLevel(alert.level, DEFAULT_LOCALE);
-  const targetType = resolveAlertTargetType({
-    alertType: alert.type,
-    resourceType,
-    metadataResourceType:
-      typeof alert.metadata?.resourceType === 'string'
-        ? (alert.metadata.resourceType as string)
-        : undefined,
-    resourceId: alert.resourceId,
-  });
+  const targetType = systemScoped
+    ? undefined
+    : resolveAlertTargetType({
+        alertType: alert.type,
+        resourceType,
+        metadataResourceType:
+          typeof alert.metadata?.resourceType === 'string'
+            ? (alert.metadata.resourceType as string)
+            : undefined,
+        resourceId: alert.resourceId,
+      });
   const handoffContext = buildAlertAssistantModelContext({
     alert,
+    systemScoped,
     alertIdentifier,
     currentValue,
     thresholdValue,
@@ -60,17 +65,19 @@ export function buildAlertAssistantHandoff({
   return {
     context: {
       targetType,
-      targetId: alert.resourceId,
+      targetId: systemScoped ? undefined : alert.resourceId,
       autonomousMode: false,
       handoffContext,
-      handoffResources: [
-        {
-          id: alert.resourceId,
-          name: alert.resourceName,
-          type: targetType,
-          node: alert.node,
-        },
-      ],
+      handoffResources: systemScoped
+        ? []
+        : [
+            {
+              id: alert.resourceId,
+              name: alert.resourceName,
+              type: targetType,
+              node: alert.node,
+            },
+          ],
       briefing: {
         sourceLabel: t('alerts.assistant.sourceLabel'),
         title: t('alerts.assistant.title'),
@@ -103,9 +110,9 @@ export function buildAlertAssistantHandoff({
         alertType: alert.type,
         alertLevel: alert.level,
         alertMessage: alert.message,
-        guestName: alert.resourceName,
-        node: alert.node,
-        vmid,
+        guestName: systemScoped ? undefined : alert.resourceName,
+        node: systemScoped ? undefined : alert.node,
+        vmid: systemScoped ? undefined : vmid,
       },
     },
   };
@@ -113,6 +120,7 @@ export function buildAlertAssistantHandoff({
 
 function buildAlertAssistantModelContext({
   alert,
+  systemScoped,
   alertIdentifier,
   currentValue,
   thresholdValue,
@@ -121,6 +129,7 @@ function buildAlertAssistantModelContext({
   levelLabel,
 }: {
   alert: Alert;
+  systemScoped: boolean;
   alertIdentifier: string;
   currentValue: string;
   thresholdValue: string;
@@ -135,8 +144,9 @@ function buildAlertAssistantModelContext({
     formatContextLine('Alert Type', alert.type),
     formatContextLine('Alert Level', levelLabel),
     formatContextLine('Alert Status', 'active'),
-    formatContextLine('Resource', alert.resourceName),
-    formatContextLine('Resource ID', alert.resourceId),
+    systemScoped ? 'Scope: Pulse itself (not a monitored resource)' : undefined,
+    formatContextLine(systemScoped ? 'Service' : 'Resource', alert.resourceName),
+    systemScoped ? undefined : formatContextLine('Resource ID', alert.resourceId),
     formatContextLine('Current Value', currentValue),
     formatContextLine('Threshold', thresholdValue),
     formatContextLine('Duration', durationText),

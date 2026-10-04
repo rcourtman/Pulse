@@ -91,6 +91,7 @@ export function AlertHistoryItemActions(props: AlertHistoryItemActionsProps) {
             startTime: props.alert.startTime,
             lastSeen: props.alert.startTime,
             acknowledged: props.alert.status === 'acknowledged',
+            metadata: props.alert.systemAlert ? { systemAlert: true } : undefined,
           }}
           resourceType={props.alert.resourceType}
           variant="icon"
