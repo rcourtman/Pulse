@@ -63,6 +63,28 @@ func TestGuestSnapshotObservationAvailability(t *testing.T) {
 	}
 }
 
+func TestGuestAlertRetainedDiskStillHonoursExplicitOverride(t *testing.T) {
+	for _, override := range []ThresholdConfig{{Disabled: true}, {Disk: &HysteresisThreshold{Trigger: -1}}} {
+		m := guestObservationManager(t)
+		vm := guestObservationVM()
+		vm.Memory.Usage = 10
+		m.CheckGuest(vm, "site")
+		if len(m.GetActiveAlerts()) != 2 {
+			t.Fatal("expected two current filesystem incidents")
+		}
+		_, keySource, key := guestDiskIdentity(vm.Disks[0], 0)
+		cfg := m.GetConfig()
+		cfg.Overrides[guestDiskOverrideKey(vm, vm.ID, keySource)] = override
+		m.UpdateConfig(cfg)
+		vm.DiskStatusReason = "prev-vm-locked"
+		m.CheckGuest(vm, "site")
+		active := m.GetActiveAlerts()
+		if len(active) != 1 || active[0].ResourceID == vm.ID+"-disk-"+key {
+			t.Fatalf("explicit filesystem disablement was lost or crossed disk identity: %+v", active)
+		}
+	}
+}
+
 func TestGuestSnapshotUsesCanonicalProxmoxCPUPercent(t *testing.T) {
 	for _, tc := range []struct {
 		name string

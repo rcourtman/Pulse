@@ -30,7 +30,8 @@ Existing incidents retain their last trusted value, occurrence, acknowledgement,
 observation time and lifecycle/delivery evidence until a current observation
 resumes evaluation. Successful current inventory still resolves removed
 filesystems. Explicit disablement, suppression and stopped-guest behavior remain
-effective independently of telemetry. Legacy unannotated memory and independent
+effective independently of telemetry, including per-filesystem disable overrides
+on retained identities. Legacy unannotated memory and independent
 current PVE/Pulse-agent memory/disks keep their existing policy, even while QGA
 is deferred; current CPU and I/O continue to evaluate. Producers own freshness;
 no new age threshold, QGA request, payload, alert family or UI surface is added.

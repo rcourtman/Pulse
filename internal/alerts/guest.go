@@ -300,11 +300,9 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 
 	// Retained/failed filesystem evidence is useful to display, but neither
 	// its values nor an empty result can establish a breach, recovery or disk
-	// removal. CPU/I/O and independent current memory were evaluated above;
-	// explicit suppression/disablement and stopped-guest handling stay earlier.
-	if snapshot.DiskUnavailable {
-		return
-	}
+	// removal. CPU/I/O and independent current memory were evaluated above.
+	// Still apply explicit per-filesystem disablement to retained identities;
+	// this is operator policy, not recovery inferred from an old value.
 
 	if len(disks) > 0 {
 		seenDiskKeys := make(map[string]struct{})
@@ -341,6 +339,12 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				if diskOverride.Disk != nil {
 					effectiveDiskThreshold = ensureHysteresisThreshold(diskOverride.Disk)
 				}
+			}
+			if snapshot.DiskUnavailable {
+				if effectiveDiskThreshold == nil || effectiveDiskThreshold.Trigger <= 0 {
+					m.clearAlert(canonicalMetricStateID(perDiskResourceID, "disk"))
+				}
+				continue
 			}
 
 			log.Debug().
@@ -387,11 +391,15 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				MonitorOnly: monitorOnly,
 			})
 		}
-		if cleared := m.cleanupGuestDiskAlerts(guestID, seenDiskResources); cleared > 0 {
-			m.saveActiveAlertsAsync("guest-disk-set-changed")
+		if !snapshot.DiskUnavailable {
+			if cleared := m.cleanupGuestDiskAlerts(guestID, seenDiskResources); cleared > 0 {
+				m.saveActiveAlertsAsync("guest-disk-set-changed")
+			}
 		}
-	} else if cleared := m.cleanupGuestDiskAlerts(guestID, nil); cleared > 0 {
-		m.saveActiveAlertsAsync("guest-disk-alerts-cleared")
+	} else if !snapshot.DiskUnavailable {
+		if cleared := m.cleanupGuestDiskAlerts(guestID, nil); cleared > 0 {
+			m.saveActiveAlertsAsync("guest-disk-alerts-cleared")
+		}
 	}
 }
 
