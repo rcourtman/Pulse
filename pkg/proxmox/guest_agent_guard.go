@@ -186,12 +186,23 @@ func (c *Client) getGuestAgent(ctx context.Context, path, node string, vmid int)
 			uncertain = true
 			return nil, &guestAgentDeferredError{reason: "agent-response-incomplete", cause: err}
 		}
-		// Explicit refusals/unsupported commands remain ordinary errors. An
-		// uncertain completion blocks every command, not just this method.
+		// A complete gateway/server error can follow a consumed command. Use
+		// the actual wire status, never an "API error" quoted in body text.
+		// Specific terminal rejections remain errors, not successful telemetry.
 		lower := strings.ToLower(err.Error())
-		uncertain = !strings.Contains(lower, "api error") || ctx.Err() != nil || strings.Contains(lower, "timeout") || strings.Contains(lower, "timed out") || strings.Contains(lower, "wrong command id")
+		uncertain = ctx.Err() != nil || strings.Contains(lower, "timeout") || strings.Contains(lower, "timed out") || strings.Contains(lower, "wrong command id")
 		if uncertain {
 			return nil, &guestAgentDeferredError{reason: "agent-timeout", cause: err}
+		}
+		var response *apiResponseError
+		if !errors.As(err, &response) {
+			uncertain = true
+			return nil, &guestAgentDeferredError{reason: "agent-timeout", cause: err}
+		}
+		if response.statusCode == http.StatusRequestTimeout ||
+			(response.statusCode >= 500 && !response.guestCommandRejected) {
+			uncertain = true
+			return nil, &guestAgentDeferredError{reason: "agent-completion-unverified", cause: err}
 		}
 		return nil, err
 	}

@@ -2976,7 +2976,7 @@ func TestGuestAgentBackupMonitoringContract(t *testing.T) {
 }
 
 func TestGuestAgentTransportMonitoringContract(t *testing.T) {
-	for _, reason := range []string{"agent-redirect", "agent-transport-unverified"} {
+	for _, reason := range []string{"agent-redirect", "agent-transport-unverified", "agent-completion-unverified"} {
 		for _, prefix := range []string{"", "prev-"} {
 			if !guestAgentDiskDeferred(prefix + reason) {
 				t.Errorf("transport uncertainty %q is not labelled deferred", prefix+reason)
