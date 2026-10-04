@@ -15,6 +15,28 @@
 
 ## Purpose
 
+### Workload projection preserves native guest-read evidence
+
+`useWorkloads` forwards the existing Proxmox disk-status reason, guest-agent
+state/expected flag and VM operation lock through both its resource-API and
+owned canonical-snapshot paths. Numeric retained metrics cannot erase those
+read-state facts. `useGuestRowState` also withdraws bars/current-value labels
+for non-retained deferrals or unavailable canonical telemetry, rather than
+reviving a richer stale number. Same-identity read-state changes participate in the existing
+row signature even when numeric values are unchanged; unrelated rows retain
+their identity. No extra resource read, timer, workload command or graph is added.
+
+Full and fast canonical facet merges share the same bounded optional-field
+clearing: a native VM facet with positive VMID, runtime state and explicit
+guest-agent outcome supersedes its omitted disk-status reason, lock and
+expected flag. Other richer fields and partial/legacy omission remain retained.
+`useWorkloads.test.ts` and `resourceStateAdapters.test.ts` verify forwarding,
+clearing, false/zero values, unchanged peer-site rows and full/fast equivalence.
+`browser-tests/workload-read-evidence.cjs` composes the real hook, canonical
+merges, row, Overview and History with synthetic inputs. This is no native
+QGA/thaw, installed recovery, fleet-performance or release-availability claim.
+
+
 ### Unavailable filesystem values share the existing disk model
 
 The filesystem list and guest Overview use the same nullable measured-byte ratio

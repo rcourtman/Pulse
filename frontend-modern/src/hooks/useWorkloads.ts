@@ -113,6 +113,10 @@ type APIResource = {
     lastBackup?: string;
     backupInProgress?: boolean;
     disks?: APIDiskInfo[];
+    diskStatusReason?: string;
+    guestAgentStatus?: string;
+    guestAgentExpected?: boolean;
+    lock?: string;
     swapUsed?: number;
     swapTotal?: number;
     balloon?: number;
@@ -569,7 +573,11 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     })(),
     disk: buildMetric(resource.metrics?.disk),
     disks: normalizeDiskArray(resource.proxmox?.disks ?? resource.agent?.disks),
-    diskStatusReason: undefined,
+    // Both the API and owning platform snapshot pass through this mapper.
+    // A retained numeric metric must not lose the provider's read deferral.
+    diskStatusReason: resource.proxmox?.diskStatusReason,
+    guestAgentStatus: resource.proxmox?.guestAgentStatus,
+    guestAgentExpected: resource.proxmox?.guestAgentExpected,
     ipAddresses: resource.identity?.ipAddresses ?? [],
     // Guest OS info: agent.osName/osVersion is the universal fallback the
     // workload table reads. Proxmox writes to resource.proxmox.osName /
@@ -606,7 +614,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     // cell, so the vSphere facet wins for every vSphere workload — including
     // the untagged ones, which must render empty rather than fall back.
     tags: vmwareRowTags(resource) ?? resource.tags ?? [],
-    lock: '',
+    lock: resource.proxmox?.lock ?? '',
     lastSeen: toIsoString(resource.lastSeen),
     isOci: workloadType === 'system-container' ? (resource.proxmox?.isOci ?? false) : false,
     osTemplate: workloadType === 'system-container' ? resource.proxmox?.osTemplate : undefined,
