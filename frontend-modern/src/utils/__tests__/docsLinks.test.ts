@@ -21,6 +21,7 @@ import apiTokenManagerModelSource from '@/components/Settings/apiTokenManagerMod
 import securityOverviewPanelSource from '@/components/Settings/SecurityOverviewPanel.tsx?raw';
 import selfHostedCommercialRecoverySectionSource from '@/components/Settings/SelfHostedCommercialRecoverySection.tsx?raw';
 import securityWarningSource from '@/components/SecurityWarning.tsx?raw';
+import { DIAGNOSTICS_PANEL_COPY } from '@/utils/diagnosticsPresentation';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -419,10 +420,30 @@ describe('docsLinks', () => {
 
     const help = troubleshooting.split('## 🆘 Getting Help')[1];
     expect(help).toContain('Do not repeat an update, outage or notification storm');
-    expect(help).toContain('Export for GitHub (sanitized)');
+    expect(help).toContain(DIAGNOSTICS_PANEL_COPY.exportGithubLabel);
+    expect(help).toContain('#collect-diagnostics-safely');
     expect(help).toContain('Review before posting');
     expect(help).toContain('session cookies, webhook URLs');
     expect(help).toContain('If installation never started Pulse');
+  });
+
+  it('separates live diagnostics from private local downloads and manual sharing review', () => {
+    const troubleshooting = readFileSync(path.join(repoRoot, 'docs', 'TROUBLESHOOTING.md'), 'utf8');
+    const collection = troubleshooting
+      .split('### Collect diagnostics safely')[1]
+      .split('\n### ')[0]
+      .replace(/\s+/g, ' ');
+    expect(collection).toContain('live Proxmox/PBS API and guest-agent requests');
+    expect(collection).toContain('Do not run it during a backup, freeze/thaw');
+    expect(collection).toContain('unresponsive-host incident');
+    expect(collection).toContain('does not prove that normal monitoring has recovered');
+    expect(collection).toContain('without running the checks again');
+    expect(collection).toContain('not an upload');
+    expect(collection).toContain(DIAGNOSTICS_PANEL_COPY.exportFullLabel);
+    expect(collection).toContain(DIAGNOSTICS_PANEL_COPY.exportGithubLabel);
+    expect(collection).toContain('not a guarantee');
+    expect(collection).toContain('review it before sharing');
+    expect(collection).toContain('Do not paste a **Copy as cURL** command');
   });
 
   it('keeps port troubleshooting specific without exposing deployment credentials', () => {
