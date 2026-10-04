@@ -177,6 +177,27 @@ class HarnessContractTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
 
 
+class BrowserRecoveryAccessStopTest(unittest.TestCase):
+    def test_refused_upgrade_does_not_launch_another_login(self) -> None:
+        source = HARNESS_PATH.read_text(encoding="utf-8")
+        function = "run_browser_journey() {" + source.split("run_browser_journey() {", 1)[1].split("\n}\n", 1)[0] + "\n}"
+        for status in (401, 403):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as tmp:
+                work = Path(tmp)
+                (work / "state").mkdir()
+                (work / "state/browser-upgrade.json").write_text(json.dumps({"access_refused": True, "login_status": status}))
+                script = "set -euo pipefail\nWORK_DIR=" + json.dumps(tmp) + "\n"
+                script += function + "\nrun_browser_journey recovery v6.4.5\n"
+                # NODE/auth/origin variables are intentionally absent. Reaching
+                # process/auth preparation would fail this exact guard test.
+                result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+                self.assertEqual(1, result.returncode, result.stderr)
+                self.assertEqual({"status": "not-executed", "reason": "stopped-access-no-reauthentication"},
+                    json.loads((work / "state/browser-recovery.json").read_text()))
+                self.assertFalse((work / "state/browser-auth.json").exists())
+                self.assertEqual("", result.stderr)
+
+
 class AutoUpdateIntentTest(unittest.TestCase):
     """Execute the real observer/comparator, with guest systemctl observations."""
 

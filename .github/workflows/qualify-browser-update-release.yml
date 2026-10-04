@@ -1,0 +1,164 @@
+name: Qualify Published RC Browser Update
+run-name: Browser update ${{ inputs.tag }} at ${{ inputs.expected_workflow_sha }}
+
+# Control runs only from reviewed public main. No source build, production
+# target, publishing credential, old stopped-target retry or arbitrary URL.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Exact published immutable vX.Y.Z-rc.N'
+        required: true
+        type: string
+      expected_workflow_sha:
+        description: 'Exact reviewed main control SHA'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: browser-release-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  journey:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout reviewed control without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Bind control and exact published release pair
+        id: pair
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          EXPECTED_CONTROL: ${{ inputs.expected_workflow_sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = rcourtman/Pulse
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_WORKFLOW_SHA" = "$EXPECTED_CONTROL"
+          test "$GITHUB_SHA" = "$EXPECTED_CONTROL"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CONTROL"
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]
+          mkdir -m 0700 "$RUNNER_TEMP/browser-release"
+          gh api repos/rcourtman/Pulse/releases/latest > "$RUNNER_TEMP/browser-release/baseline.json"
+          gh api "repos/rcourtman/Pulse/releases/tags/$TAG" > "$RUNNER_TEMP/browser-release/candidate.json"
+          from=$(jq -er '.tag_name | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))' "$RUNNER_TEMP/browser-release/baseline.json")
+          peel() {
+            local object type sha
+            object=$(gh api "repos/rcourtman/Pulse/git/ref/tags/$1")
+            type=$(jq -er '.object.type' <<<"$object")
+            sha=$(jq -er '.object.sha' <<<"$object")
+            if [[ "$type" == tag ]]; then
+              object=$(gh api "repos/rcourtman/Pulse/git/tags/$sha")
+              test "$(jq -er '.tag' <<<"$object")" = "$1"
+              type=$(jq -er '.object.type' <<<"$object")
+              sha=$(jq -er '.object.sha' <<<"$object")
+            fi
+            test "$type" = commit
+            [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+            printf '%s' "$sha"
+          }
+          from_commit=$(peel "$from")
+          to_commit=$(peel "$TAG")
+          python3 scripts/release_browser_packet.py \
+            --baseline "$RUNNER_TEMP/browser-release/baseline.json" \
+            --candidate "$RUNNER_TEMP/browser-release/candidate.json" \
+            --from-commit "$from_commit" --to-commit "$to_commit" --tag "$TAG" \
+            --output "$RUNNER_TEMP/browser-release/packet.json"
+          python3 -c 'import json,os,pathlib; keys=("GITHUB_WORKFLOW_SHA","GITHUB_SHA","GITHUB_RUN_ID","GITHUB_RUN_ATTEMPT"); pathlib.Path(os.environ["RUNNER_TEMP"]+"/browser-release/control.json").write_text(json.dumps({k:os.environ[k] for k in keys},indent=2)+"\n")'
+          echo "from=$from" >> "$GITHUB_OUTPUT"
+          echo "from_commit=$from_commit" >> "$GITHUB_OUTPUT"
+          echo "to_commit=$to_commit" >> "$GITHUB_OUTPUT"
+      - name: Authenticate both release archives before execution
+        env:
+          FROM: ${{ steps.pair.outputs.from }}
+          TAG: ${{ inputs.tag }}
+          FROM_COMMIT: ${{ steps.pair.outputs.from_commit }}
+          TO_COMMIT: ${{ steps.pair.outputs.to_commit }}
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/browser-release"
+          key=$(grep -oE 'ssh-ed25519 [A-Za-z0-9+/=]+ pulse-installer' README.md | head -1)
+          test -n "$key"
+          printf 'pulse-installer %s\n' "$key" > "$root/allowed_signers"
+          for tag in "$FROM" "$TAG"; do
+            mkdir -m 0700 "$root/$tag"
+            name="pulse-$tag-linux-amd64.tar.gz"
+            for file in "$name" "$name.sshsig"; do
+              curl --fail --silent --show-error --location --retry 0 --max-time 120 \
+                "https://github.com/rcourtman/Pulse/releases/download/$tag/$file" --output "$root/$tag/$file"
+            done
+            ssh-keygen -Y verify -f "$root/allowed_signers" -I pulse-installer -n pulse-install \
+              -s "$root/$tag/$name.sshsig" < "$root/$tag/$name"
+          done
+          python3 scripts/release_browser_packet.py --baseline "$root/baseline.json" --candidate "$root/candidate.json" \
+            --from-commit "$FROM_COMMIT" --to-commit "$TO_COMMIT" --tag "$TAG" \
+            --archives "$root" --output "$root/packet.json"
+      - name: Prepare pinned browser without lifecycle hooks
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24.20.0'
+      - name: Prepare Chromium and native tools
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/browser-release/browsers
+        run: |
+          set -euo pipefail
+          cd tests/integration
+          npm ci --ignore-scripts
+          npx --no-install playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends jq curl openssh-client
+      - name: Register a fresh ephemeral project CI node
+        uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:infra
+          version: '1.94.2'
+      - name: Serve only this disposable install
+        id: serve
+        run: |
+          set -euo pipefail
+          # Never enumerate peer/private targets or use a supplied hostname.
+          origin=$(tailscale status --json | python3 -c 'import json,re,sys; n=json.load(sys.stdin)["Self"]["DNSName"].rstrip("."); assert re.fullmatch(r"[a-z0-9-]+\.tawny-powan\.ts\.net", n); print("https://"+n)')
+          tailscale serve --bg --https=443 http://127.0.0.1:7655
+          echo "origin=$origin" >> "$GITHUB_OUTPUT"
+      - name: Exercise native browser update and documented recovery
+        env:
+          FROM: ${{ steps.pair.outputs.from }}
+          TAG: ${{ inputs.tag }}
+          ORIGIN: ${{ steps.serve.outputs.origin }}
+        run: |
+          set -euo pipefail
+          sudo env -i PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8 \
+            GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted GITHUB_REPOSITORY=rcourtman/Pulse GITHUB_REF=refs/heads/main \
+            PULSE_REHEARSAL_WORKDIR="$RUNNER_TEMP/browser-release/journey" \
+            PULSE_REHEARSAL_BROWSER_ORIGIN="$ORIGIN" PULSE_REHEARSAL_NODE="$(command -v node)" \
+            PULSE_REHEARSAL_PACKET_MANIFEST="$RUNNER_TEMP/browser-release/packet.json" \
+            PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/browser-release/browsers" \
+            bash scripts/release_lifecycle_rehearsal.sh --hosted-browser --from "$FROM" --to "$TAG"
+      - name: Close ephemeral Serve route
+        if: always() && steps.serve.outcome == 'success'
+        run: tailscale serve reset
+      - name: Retain bounded identity and terminal receipts, never credentials
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-release-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/browser-release/control.json
+            ${{ runner.temp }}/browser-release/packet.json
+            ${{ runner.temp }}/browser-release/journey/state/browser-upgrade.json
+            ${{ runner.temp }}/browser-release/journey/state/browser-recovery.json
+            ${{ runner.temp }}/browser-release/journey/state/browser-cleanup.json
+            ${{ runner.temp }}/browser-release/journey/state/lifecycle-result.json
+            ${{ runner.temp }}/browser-release/journey/state/installer.json
+            ${{ runner.temp }}/browser-release/journey/state/browser-*.png
+            ${{ runner.temp }}/browser-release/journey/state/installed-*.json
+            ${{ runner.temp }}/browser-release/journey/state/settings.*.json
+            ${{ runner.temp }}/browser-release/journey/state/auto-updates.*.tsv
+          if-no-files-found: error
+          retention-days: 7
