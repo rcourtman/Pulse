@@ -233,8 +233,11 @@ repair an older generated unit rather than adding a JSON-parsing wrapper.
   token's read permissions. Schedule any setup change or restart outside backups.
 - Do not run guest-agent probes during backup freeze/thaw. An OK backup task
   or an absent lock does not confirm thaw.
-- See [VM Disk Monitoring](VM_DISK_MONITORING.md) for the passive host preflight
-  and backup safety precaution; it does not verify a fresh disk poll.
+- See [VM Disk Monitoring](VM_DISK_MONITORING.md) for the passive host preflight;
+  it does not verify a fresh disk poll. If an affected installation needs to
+  pause monitoring, follow the [manual backup precaution](VM_DISK_MONITORING.md#pause-pulse-for-a-planned-freeze-enabled-backup).
+  It checks the server service and update timer before the backup, then requires
+  independent guest thaw confirmation before starting Pulse again.
 
 #### Temperature data missing
 - Install `lm-sensors` on the host.
