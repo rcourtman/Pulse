@@ -44,6 +44,15 @@ backup), missing/malformed config or an unverifiable lock defers the command.
 Known locks in node inventory, cluster resources or detailed status suppress
 polling enrichment even when status fails and recent agent evidence exists.
 
+The VM config body must finish within the existing response-size and request
+bounds and contain exactly one complete JSON value. An unlocked JSON prefix
+does not establish lock clearance: a short Content-Length body, stalled suffix,
+extra JSON/garbage or chunked body exceeding 8 MiB yields `lock-unverified` both
+before dispatch and after a completed guest command. Post-command verification
+holds per-guest admission until body completion; its failure discards the
+payload. Complete responses at the limit, including trailing whitespace, remain
+valid. Ordinary PVE CPU/I/O observations remain independent of this deferral.
+
 Admission is held through the complete response, not just headers. A transport
 failure, timeout, wrong-command-ID response or incomplete body defers every
 command for that guest for a minute; callers neither immediately retry nor
@@ -63,6 +72,12 @@ resource lock with failed status → node fallback → unlocked resumption throu
 the real client/builders and History. The client controls cover every read,
 unknown lock state, diagnostic overlap, aliases/source/VM isolation, in-flight
 lock changes, incomplete bodies, cooldown and absence of failover replay.
+`TestGuestAgentConfigResponseMustBeComplete` covers every guest read before and
+after dispatch and subsequent healthy resumption; the stalled-prefix and
+post-config-body controls pin completion and cross-client admission.
+`TestUnverifiedVMConfigPreservesStatusCounterObservations` and the monitoring
+lifecycle pin live counter presence and rejection of cached disk/memory History
+refresh during an incomplete lock read, not just a decoder error.
 These reproduce missing Pulse safety controls, **not** the reported native
 PVE/QGA command-ID collision or successful backup thaw. HTTP lock checks cannot
 atomically reserve PVE's serial channel against a backup beginning afterwards,

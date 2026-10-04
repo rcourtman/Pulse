@@ -1,7 +1,13 @@
 package proxmox
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -136,5 +142,37 @@ func TestBackupLocksRetainCumulativeCounterPresence(t *testing.T) {
 				t.Fatalf("lock decoding corrupted presence: %#v", value)
 			}
 		})
+	}
+}
+
+func TestUnverifiedVMConfigPreservesStatusCounterObservations(t *testing.T) {
+	var commands atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/config"):
+			w.Header().Set("Content-Length", "1000")
+			fmt.Fprint(w, `{"data":{}}`)
+		case strings.HasSuffix(r.URL.Path, "/status/current"):
+			fmt.Fprint(w, `{"data":{"status":"running","cpu":0.25,"diskread":0,"diskwrite":null,"netin":42}}`)
+		default:
+			commands.Add(1)
+			backupAgentPayload(w, r)
+		}
+	}))
+	defer server.Close()
+	c := backupTestClient(t, server.URL)
+	if _, err := c.GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "lock-unverified" {
+		t.Errorf("incomplete config did not defer the guest command: %v", err)
+	}
+	status, err := c.GetVMStatus(context.Background(), "node", 105)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := status.IOCounters.Effective()
+	if status.CPU != 0.25 || status.NetIn != 42 || status.DiskRead != 0 || status.ObservedAt.IsZero() || !p.DiskRead || !p.NetworkIn || p.DiskWrite || p.NetworkOut {
+		t.Fatalf("unverified guest lock suppressed/changed current PVE counters: %+v", status)
+	}
+	if got := commands.Load(); got != 0 {
+		t.Errorf("guest commands with incomplete config = %d, want zero", got)
 	}
 }
