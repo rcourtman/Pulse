@@ -17,6 +17,20 @@
 
 ## Purpose
 
+### Lightweight detached History reads
+
+Guest, node, disk and storage History readers allocate one exact-sized snapshot
+per populated metric series, rather than repeatedly growing temporary arrays.
+Empty series remain non-nil arrays for the existing JSON representation. The
+copy preserves the exclusive time cutoff, original values, timestamps, order
+and duplicates, including non-chronological input; it never aliases mutable
+retained History. Single/batch chart and metric-window consumers retain the
+same observations. Retention, sampling, source authority and SQL are unchanged.
+`metrics_history_read_test.go` covers every public series, caller mutation,
+cutoff/empty/unordered semantics and connected poll-to-chart/window readers.
+Allocation controls and paired same-executable in-memory benchmarks measure
+copy cost, not native CPU/RSS relief or attribution of an existing report.
+
 ### Used-memory history retention
 
 Periodic in-memory History cleanup applies the existing retention window and
