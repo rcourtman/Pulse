@@ -1,4 +1,4 @@
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createMemo, createSignal, Show, splitProps } from 'solid-js';
 import BoxIcon from 'lucide-solid/icons/box';
 import type { VM } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
@@ -27,6 +27,7 @@ import {
   createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
+import { nativeRowClickTarget } from '@/components/shared/Table';
 import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { getWorkloadGuestDiskStatusMessage } from '@/utils/workloadGuestPresentation';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
@@ -49,6 +50,7 @@ export type { GuestRowProps, WorkloadIOEmphasis } from './guestRowModel';
 import { getGuestColumnStyle } from './guestRowModel';
 
 export function GuestRow(props: GuestRowProps) {
+  const [rowActionProps] = splitProps(props, ['onClick']);
   const {
     agentVersion,
     appContainerRuntimeBadge,
@@ -241,7 +243,8 @@ export function GuestRow(props: GuestRowProps) {
             : undefined
         }
         data-summary-row-active={props.isSummaryHighlighted && !props.isExpanded ? 'true' : 'false'}
-        onClick={props.onClick}
+        on:click={rowActionProps.onClick ? nativeRowClickTarget : undefined}
+        {...rowActionProps}
         {...interactiveRowHandlers}
       >
         {/* Name - always visible */}

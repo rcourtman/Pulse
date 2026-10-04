@@ -2643,8 +2643,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("MOCK_SEED_DURATION=2h", demo_profile)
         self.assertIn("MOCK_SAMPLE_INTERVAL=5m", demo_profile)
         self.assertIn("MOCK_UPDATE_INTERVAL=15s", demo_profile)
-        # Profile application moved into the owned transaction; retain runtime
-        # settings but require an existing capability without rewriting billing.
+        # The owned transaction adjusts only the demo runtime profile. It
+        # requires an existing entitlement; it must not grant one by rewriting
+        # signed billing state or clearing its integrity check.
         transaction = read(".github/scripts/demo-runtime-transaction.py")
         for required in ('"DEMO_MODE": "true"', '"PULSE_MOCK_MODE": "true"',
                          '"PULSE_MOCK_SEED_METRICS_STORE": "false"',
@@ -2652,11 +2653,15 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                          '"PULSE_MOCK_" + key.upper()', 'self.profile_admission()',
                          'if "demo_fixtures" not in billing["capabilities"]:',
                          'raise Failure("billing-demo-capability-required")',
+                         'os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK',
+                         'self.host.profile_admission()',
                          'self.host.profile(self.request, not healthy_baseline)', 'self.host.start()'):
             self.assertIn(required, transaction)
         self.assertNotIn('billing.pop("integrity", None)', transaction)
         self.assertNotIn('billing["capabilities"] = ["demo_fixtures"]', transaction)
         self.assertNotIn('atomic_json(billing_file, billing)', transaction)
+        self.assertNotIn('billing_file.write_text(', transaction)
+        self.assertNotIn('billing_file.write_bytes(', transaction)
         self.assertIn("MOCK_NODES: ${{ needs.resolve.outputs.mock_nodes }}", demo)
         self.assertIn("MOCK_UPDATE_INTERVAL: ${{ needs.resolve.outputs.mock_update_interval }}", demo)
         self.assertIn("/api/license/runtime-capabilities", demo)
