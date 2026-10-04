@@ -26,7 +26,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // transition (DST never changes in February in either hemisphere). Every
 // timestamp below is built with the local Date constructor, matching the
 // module's local-day bucketing, so the assertions are timezone-independent.
-const NOW = new Date(2026, 1, 13, 10, 30, 0);
+// Observe after the same-day mixed-outcome/value fixtures below (up to 14:00).
+const NOW = new Date(2026, 1, 13, 15, 30, 0);
 
 const localMs = (year: number, month: number, day: number, hours = 0, minutes = 0): number =>
   new Date(year, month, day, hours, minutes, 0).getTime();
@@ -178,12 +179,13 @@ describe('proxmoxBackupActivityPresentation', () => {
       expect(feb10.total).toBe(2);
     });
 
-    it('includes the window-start edge and excludes anything at or past start-of-tomorrow', () => {
+    it('includes the window-start and exactly-now edges but excludes future activity even within today', () => {
       const todayStart = localMs(2026, 1, 13);
       const items: ActivityItem[] = [
         { ts: localMs(2026, 1, 6, 23, 59), kind: 'ok' },
         { ts: localMs(2026, 1, 7, 0, 0), kind: 'ok' },
         { ts: todayStart, kind: 'failed' },
+        { ts: NOW.getTime(), kind: 'running' },
         { ts: todayStart + DAY_MS - 1, kind: 'running' },
         { ts: todayStart + DAY_MS, kind: 'ok' },
         { ts: localMs(2026, 1, 14, 12, 0), kind: 'ok' },
@@ -193,6 +195,9 @@ describe('proxmoxBackupActivityPresentation', () => {
 
       expect(totals.get(dateKey(2026, 1, 7))).toBe(1);
       expect(totals.get(dateKey(2026, 1, 13))).toBe(2);
+      expect(
+        timeline.points.find((point) => point.key === dateKey(2026, 1, 13))!.counts.running,
+      ).toBe(1);
       expect(totals.get(dateKey(2026, 1, 6))).toBeUndefined();
       expect(totals.get(dateKey(2026, 1, 14))).toBeUndefined();
     });
@@ -496,5 +501,42 @@ describe('proxmoxBackupActivityPresentation', () => {
     it('is a re-export of the recovery timeline day filter state label', () => {
       expect(getBackupActivityDayFilterStateLabel).toBe(getRecoveryTimelineDayFilterStateLabel);
     });
+  });
+});
+
+describe('backup-date-evidence timeline', () => {
+  it.each(['count', 'volume'] as const)(
+    '[regression] does not count future same-day activity in %s mode',
+    (mode) => {
+      const now = new Date('2026-10-04T12:00:00Z');
+      const timeline = buildBackupActivityTimeline(
+        7,
+        [
+          { ts: now.getTime() - 1000, kind: 'pbs' as const, bytes: 2 },
+          { ts: now.getTime() + 1000, kind: 'pbs' as const, bytes: 5 },
+        ],
+        itemMs,
+        classify,
+        { now, getValue: mode === 'volume' ? (item) => item.bytes ?? 0 : undefined },
+      );
+      expect(timeline.points.reduce((total, point) => total + point.total, 0)).toBe(
+        mode === 'volume' ? 2 : 1,
+      );
+    },
+  );
+  it('[control] counts exactly observed now and leaves invalid/unavailable dates out', () => {
+    const now = new Date('2026-10-04T12:00:00Z');
+    const timeline = buildBackupActivityTimeline(
+      7,
+      [
+        { ts: now.getTime(), kind: 'pbs' as const },
+        { ts: NaN, kind: 'pbs' as const },
+        { ts: undefined, kind: 'pbs' as const },
+      ],
+      itemMs,
+      classify,
+      { now },
+    );
+    expect(timeline.points.reduce((total, point) => total + point.total, 0)).toBe(1);
   });
 });

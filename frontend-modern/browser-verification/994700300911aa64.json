@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "1ff46c4261e11b4a8edcd573df415a217ecd34cd",
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "a6aa5af3dd99b02b373facbc12ddfbcbe496d4d1d4c004a7ef120660e37bd2e9",
+    "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts": "e2baa45cc6ac3d3f936ed28523dde741b9ef7c6426b3e36884b8b5338c2a7781",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "adc0ef66540233d281b4a589750996e9b31a0f477bad166e657bf39d60264f58",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "6f61304d998450c77b1a18c77d188d2667a384fbbcd0eb65897fa55e7a703fb4",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "4ae82b8e48fef3eeda13d7ad41a85d6120e3b44fc35cb4ebaf7974fcd7f5e47d",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "782d1fae95d709e83eb6e57587878009c428c9ef2bde7221cd507952c5e5be44"
+  },
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"
+  ],
+  "routes": [
+    "Existing Proxmox Backups Coverage and By date via production-component/router fixture"
+  ],
+  "states": [
+    "Mixed dated/unknown completed PBS and PVE backups",
+    "Future/malformed/Go zero-time dates",
+    "Independent server Protected posture and verified/running/failed artifact states",
+    "Valid newest PBS replacement with older archive companion",
+    "Known and unknown date groups, observed activity only"
+  ],
+  "interactions": [
+    "Actual Coverage navigation",
+    "Client-side backup-location filter and clear without new reads",
+    "Organization inventory replacement with advancing observation time",
+    "Keyboard/touch day filter and clear without new reads"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-04T09:32:11.797203Z",
+  "browsers": [
+    "Chromium desktop",
+    "WebKit 390px and 320px phone emulation, not native iOS"
+  ],
+  "command": "pulse-worker-browser frontend-modern/browser-tests/backup-date-chronology.cjs",
+  "proof": "Three contexts, 21 recorded check groups and nine individually inspected screenshots. Synthetic inventory/HTTP only; no native backup, restore, thaw or release acceptance."
+}

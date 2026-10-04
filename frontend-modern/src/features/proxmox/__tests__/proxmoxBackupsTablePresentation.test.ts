@@ -128,7 +128,8 @@ describe('Proxmox backups responsive table presentation', () => {
       'state',
     ]);
     expect(getRecoverableColumnWidthStyle('workload', 'compact')).toEqual({ width: '40%' });
-    expect(getRecoverableColumnWidthStyle('state', 'compact')).toEqual({ width: '30%' });
+    expect(getRecoverableColumnWidthStyle('created', 'compact')).toEqual({ width: '21%' });
+    expect(getRecoverableColumnWidthStyle('state', 'compact')).toEqual({ width: '23%' });
     expect(ids(getRecoverableColumns('basic'))).toEqual([
       'workload',
       'source',
