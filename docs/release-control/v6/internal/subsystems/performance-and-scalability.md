@@ -15,6 +15,24 @@
 
 ## Purpose
 
+### Guest filesystem provenance preserves dense row geometry
+
+Visible retained/unavailable filesystem cues must fit the existing dense row
+rhythm, including canonical phone/narrow column weights, without adding a new
+collector, history request, layout observer, focus target or event path. Keep
+compact copy on narrow rows and the full safe reason in assistive text and the
+existing drawer. Inline sparkline plots may shrink to preserve their numeric
+value within the already assigned column; do not add forced minimum widths,
+observers or a larger row to compensate. The cue stays outside the
+bars/sparkline/history-lens branch, so changing display mode cannot discard freshness information; removing it
+requires a changed source observation rather than merely ending a lock.
+
+Verification: `GuestRow.test.tsx`, `MetricMiniSparkline.test.tsx` and production
+row/column-sizing/CSS browser fixture `guest-disk-provenance.cjs` cover all fixed
+deferrals, fresh independent evidence, same-row changes, and equal dense row
+height versus an unmarked control on desktop Chromium and phone Chromium/WebKit.
+Synthetic chart rendering is not fleet CPU, native collection or thaw proof.
+
 ### Guest disk status updates retain row ownership
 
 Disk deferral copy follows reactive same-VM props in the existing row and drawer,

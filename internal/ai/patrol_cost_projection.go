@@ -234,7 +234,7 @@ func ProjectPatrolCost(in PatrolCostProjectionInput) PatrolCostProjection {
 	var trigInputs, trigOutputs, trigCacheWrites, trigCacheReads []int64
 	triggeredCount := 0
 	for _, run := range in.Runs {
-		if run.InputTokens <= 0 || run.StartedAt.Before(windowStart) {
+		if !patrolHasTokenUsage(run.InputTokens, run.OutputTokens, run.CacheCreationInputTokens, run.CacheReadInputTokens) || run.StartedAt.Before(windowStart) {
 			continue
 		}
 		if run.StartedAt.Before(oldest) {

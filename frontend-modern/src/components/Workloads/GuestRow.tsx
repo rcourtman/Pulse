@@ -20,7 +20,10 @@ import { TagBadges } from '@/components/shared/TagBadges';
 import { WorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
 import { getWorkloadCPUPercent, resolveWorkloadType } from '@/utils/workloads';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
-import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline';
+import {
+  MetricMiniSparkline,
+  type MetricMiniSparklineValueLabelContext,
+} from '@/components/Workloads/MetricMiniSparkline';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
 import {
   buildSummaryDisclosureControlsId,
@@ -192,10 +195,12 @@ export function GuestRow(props: GuestRowProps) {
     valueLabelMode: 'inline' | 'tooltip' | 'hidden' = 'inline',
     formatValue?: (value: number) => string,
     seriesOptions?: Parameters<WorkloadMetricHistoryReader['getGuestMetricSeries']>[2],
+    valueLabelContext?: MetricMiniSparklineValueLabelContext,
   ) => (
     <MetricMiniSparkline
       series={props.metricHistory?.getGuestMetricSeries(props.guest, metric, seriesOptions) ?? []}
       valueLabel={valueLabel}
+      valueLabelContext={valueLabelContext}
       valueLabelMode={valueLabelMode}
       title={title}
       unit={unit}
@@ -212,6 +217,27 @@ export function GuestRow(props: GuestRowProps) {
     const vm = props.guest as VM;
     return getWorkloadGuestDiskStatusMessage(vm.diskStatusReason);
   };
+  // A native title or bar tooltip is not a visible freshness cue on touch,
+  // and disappears from the chart's accessible value when the history lens opens.
+  const diskReadStatus = createMemo(() => {
+    const guest = props.guest;
+    if (!isVM(guest) || !guest.diskStatusReason) return undefined;
+    const reason = guest.diskStatusReason;
+    const retained = reason.startsWith('prev-');
+    return {
+      label: retained
+        ? usesCompactTableLayout()
+          ? 'Prior'
+          : 'Last known'
+        : usesCompactTableLayout()
+          ? 'N/A'
+          : 'Unavailable',
+      message: getDiskStatusTooltip(),
+      valueLabelContext: retained ? ('last known' as const) : ('current' as const),
+    };
+  });
+  const diskValueLabelContext = (): MetricMiniSparklineValueLabelContext =>
+    diskReadStatus()?.valueLabelContext ?? 'current';
   const interactiveRowHandlers = createSummaryInteractiveRowPreviewHandlers({
     onPreview: () => {
       if (!rowHistoryPreviewEnabled()) return;
@@ -559,9 +585,7 @@ export function GuestRow(props: GuestRowProps) {
           <td
             class="px-1.5 sm:px-2 py-0.5 align-middle"
             data-workload-col="disk"
-            title={
-              isVM(props.guest) && props.guest.diskStatusReason ? getDiskStatusTooltip() : undefined
-            }
+            title={diskReadStatus()?.message}
           >
             <Show when={isSparklineMode()}>
               {renderMetricSparkline(
@@ -571,6 +595,8 @@ export function GuestRow(props: GuestRowProps) {
                 '%',
                 'inline',
                 formatMetricPercent,
+                undefined,
+                diskValueLabelContext(),
               )}
             </Show>
             <Show when={!isSparklineMode()}>
@@ -610,11 +636,24 @@ export function GuestRow(props: GuestRowProps) {
                         '%',
                         'inline',
                         formatMetricPercent,
+                        undefined,
+                        diskValueLabelContext(),
                       )}
                     </div>
                   </Show>
                 </div>
               </Show>
+            </Show>
+            <Show when={diskReadStatus()}>
+              {(status) => (
+                <p
+                  data-workload-disk-read-status
+                  class="mt-0.5 text-center text-[10px] leading-none text-amber-700 dark:text-amber-300"
+                >
+                  <span aria-hidden="true">{status().label}</span>
+                  <span class="sr-only">{status().message}</span>
+                </p>
+              )}
             </Show>
           </td>
         </Show>

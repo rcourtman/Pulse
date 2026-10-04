@@ -875,7 +875,7 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 				cacheReadTokens = attempt.response.CacheReadInputTokens
 			}
 			candidate := buildAnalysisResult(attempt.finalContent, attempt.toolCalls, inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens)
-			if candidate.Response != "" || inputTokens > 0 || outputTokens > 0 || len(candidate.ToolCalls) > 0 ||
+			if candidate.Response != "" || patrolHasTokenUsage(inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens) || len(candidate.ToolCalls) > 0 ||
 				len(candidate.Findings) > 0 || len(candidate.ResolvedIDs) > 0 || len(candidate.Assessments) > 0 || len(candidate.QueriedFindingIDs) > 0 {
 				partialResult = candidate
 			}
@@ -921,8 +921,14 @@ func patrolDetectionMaxTurns(scope *PatrolScope) int {
 	return 40
 }
 
+// Ordinary input can be zero when the entire prompt was cached. Cache-only
+// usage is still billable, including usage returned with a partial failure.
+func patrolHasTokenUsage(inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens int) bool {
+	return inputTokens > 0 || outputTokens > 0 || cacheCreationTokens > 0 || cacheReadTokens > 0
+}
+
 func (p *PatrolService) recordPatrolUsage(inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens int) {
-	if p == nil || p.aiService == nil || (inputTokens <= 0 && outputTokens <= 0) {
+	if p == nil || p.aiService == nil || !patrolHasTokenUsage(inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens) {
 		return
 	}
 
