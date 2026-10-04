@@ -1,10 +1,13 @@
 import { Component, Show, Suspense, createMemo } from 'solid-js';
+import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
+import { getDrawerHeaderActionButtonClass } from '@/components/shared/buttonModel';
 import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
+import { WebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import {
   GUEST_DRAWER_BACKUP_PRECAUTION,
@@ -70,9 +73,23 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()}>
+      {/* Phone rows hide the adjacent web link so names stay distinguishable;
+          the header keeps the saved service one tap from the expanded row. */}
       <ObjectDrawerHeader
         collapseLabel={`Collapse ${props.guest.name} details`}
         onCollapse={props.onClose}
+        actions={
+          <Show when={props.customUrl?.trim()}>
+            <WebInterfaceLink
+              url={props.customUrl}
+              ariaLabel={`Open web interface for ${props.guest.name}`}
+              class={getDrawerHeaderActionButtonClass()}
+            >
+              <ExternalLinkIcon class="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Open</span>
+            </WebInterfaceLink>
+          </Show>
+        }
       >
         <DrawerSubjectHeading
           headingId={headingId()}

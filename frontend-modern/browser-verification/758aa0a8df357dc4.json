@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "f5157115b7b224000ef7035285d9ce64bbe60bb7",
+  "verified_at": "2026-10-04T22:49:37Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "7e2b570d0af3b0cdf15ddd0c8944520094434937a71774d5f6eba5d7578b69c9"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 393,
+      "height": 852
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock stack built from this tree (backend :7701, Vite :5221, 3 nodes, 31 guests); web-interface URLs saved on five pve1 guests, one through the real Manage-tab field and four through PUT /api/guests/metadata.",
+    "Before: at 375 and 393 widths the saved row links were display:none in phone/narrow rows and the drawer header held only the name and collapse chevron, so the URL was reachable only from the Manage tab field.",
+    "Rejected alternative measured live: un-hiding the row link at 393 truncated names to 'checkout-w...' and 'postgres-p...', indistinguishable from checkout-web-02 and postgres-replica-01, so phone rows stay unchanged.",
+    "After: auth-service-01 and postgres-primary-01 drawers show an 'Open' header action at 69x44 on 375/393 phones and 69x32 at 1280, href to the saved URL, target _blank, rel noopener noreferrer; drawer heading not truncated; no document horizontal overflow at any width.",
+    "edge-proxy-01 (no saved URL) shows no header action. Desktop rows keep the adjacent row link. This is not physical-device, real-service reachability or release acceptance."
+  ],
+  "interactions": [
+    "Tapped guest rows to expand drawers at 375, 393 and 1280 widths; switched to the Manage tab and saved a URL with Enter; the row link and header action appeared without reload.",
+    "Activated the header Open link with navigation prevented in the capture phase: the drawer stayed expanded at 393 and 1280 (the link stops propagation and does not hit the collapse overlay)."
+  ]
+}
