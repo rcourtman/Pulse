@@ -20,6 +20,24 @@
 
 ## Purpose
 
+### Filesystem capacity is not measured usage
+
+The existing filesystem list and guest Overview require finite positive capacity
+and finite non-negative measured used bytes before displaying a percentage or
+utilization bar. Missing used bytes, invalid numeric fields, the negative
+unknown-usage sentinel and an overflowing ratio remain unavailable, not a healthy
+zero. Known capacity is still useful as `?/capacity`; filesystem identity and
+type remain visible. An explicitly measured zero stays `0%`, and omitted redundant
+percentage metadata does not discard valid bytes. Valid over-capacity readings
+retain their percentage and severity while the visual fill stays capped at 100%.
+No percentage or free-byte field is used to invent an absent used-byte reading.
+
+`filesystemUsage.evidence.test.tsx` covers the model and both production consumers,
+including same-filesystem known → unavailable → measured-zero replacement.
+`browser-tests/filesystem-usage-evidence.cjs` covers these rendered boundaries on
+desktop Chromium and touch Chromium/WebKit. These synthetic observations are
+not proof of appliance collection, backup thaw, installed recovery or delivery.
+
 ### Guest disk deferral and retained observations
 
 The existing workload row, disk breakdown tooltip and guest Overview use
@@ -68,6 +86,27 @@ independent obligations, not facts inferred from these synthetic observations.
 The legacy Workloads `DiskList` is exercised only by tests/fixtures, not a
 shipped caller. Its empty-state title is not evidence of readable touch guidance;
 the shipped guest Overview supplies the readable pre-sample explanation.
+
+Guest History applies the same provenance to its live legend fallback. A VM
+filesystem reason withdraws the `current` disk fallback; only a `prev-` reason
+with a valid retained value supplies a separately labelled `last known` value.
+Explicit telemetry unavailability and unknown/non-finite values stay unavailable,
+not zero. The readable fixed-reason notice remains beside the utilization group
+even when stored disk observations exist. Its wording identifies a live read,
+not the date or provenance of those stored points. Legend assistive descriptions
+reference that notice. CPU, memory and I/O evidence remain independent.
+
+Deferred live evidence never supplies a chart point, timestamp or dated
+inspection value. Keyboard/pointer inspection continues to show only the
+selected stored observations, and denied History withdraws the whole chart
+including its deferred evidence. Fresh same-VM evidence clears the notice;
+lock clearance without a new read does not. `GuestDrawer.test.tsx`,
+`GuestDrawerHistory.disk-provenance.test.tsx` and `GuestDrawerHistory.sparse.test.tsx`
+cover the model, actual drawer plumbing, shared fallback precedence, retained
+zero, pre-sample status, dated inspection, access denial and resumption.
+`browser-tests/guest-history-provenance.cjs` uses the production full drawer
+and History API client at desktop and touch widths with synthetic responses.
+These checks do not establish native guest thaw, collection or release availability.
 
 ### Completed guest backup evidence versus current activity
 

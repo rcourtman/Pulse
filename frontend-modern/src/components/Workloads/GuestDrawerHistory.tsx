@@ -41,12 +41,14 @@ import {
   getGuestDrawerHistoryValueLabel,
   normalizeGuestDrawerHistoryPoints,
   type GuestDrawerHistoryGroupConfig,
+  type GuestDrawerHistoryDeferredMetric,
   type GuestDrawerHistoryTarget,
   type GuestDrawerHistoryTimeBounds,
 } from './guestDrawerModel';
 
 interface GuestDrawerHistoryProps {
   currentMetrics?: Record<string, number | null | undefined>;
+  deferredMetrics?: Record<string, GuestDrawerHistoryDeferredMetric | undefined>;
   groups?: GuestDrawerHistoryGroupConfig[];
   range: HistoryTimeRange;
   target: GuestDrawerHistoryTarget | null;
@@ -65,6 +67,7 @@ interface GuestDrawerHistoryQueryKey {
 
 interface GuestDrawerHistoryGroupChartProps {
   currentMetrics?: Record<string, number | null | undefined>;
+  deferredMetrics?: Record<string, GuestDrawerHistoryDeferredMetric | undefined>;
   group: GuestDrawerHistoryGroupConfig;
   loading: boolean;
   metrics: Record<string, AggregatedMetricPoint[] | undefined>;
@@ -309,24 +312,31 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     return byMetric;
   });
   const displaySeries = createMemo(() =>
-    series().map((item) => {
+    series().map((item, index) => {
       const hovered = hoveredByMetric().get(item.metric);
-      const currentValue = props.currentMetrics?.[item.metric];
+      const deferred = props.deferredMetrics?.[item.metric];
+      const fallbackValue = deferred
+        ? deferred.lastKnownValue
+        : props.currentMetrics?.[item.metric];
+      const isFallback =
+        activeTimestamp() === null &&
+        item.points.length === 0 &&
+        typeof fallbackValue === 'number' &&
+        Number.isFinite(fallbackValue);
       return {
         ...item,
-        isCurrent:
-          activeTimestamp() === null &&
-          item.points.length === 0 &&
-          typeof currentValue === 'number' &&
-          Number.isFinite(currentValue),
+        deferred,
+        descriptionId: `${inspectionId}-deferred-${index}`,
+        isCurrent: isFallback && !deferred,
+        isLastKnown: isFallback && Boolean(deferred),
         valueLabel: hovered
           ? getGuestDrawerHistoryValueLabel([hovered.point], item.unit)
           : activeTimestamp() !== null
             ? '-'
             : item.points.length > 0
               ? getGuestDrawerHistoryValueLabel(item.points, item.unit)
-              : typeof currentValue === 'number' && Number.isFinite(currentValue)
-                ? formatHistoryChartTooltipValue(currentValue, item.unit)
+              : typeof fallbackValue === 'number' && Number.isFinite(fallbackValue)
+                ? formatHistoryChartTooltipValue(fallbackValue, item.unit)
                 : '-',
       };
     }),
@@ -382,6 +392,8 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
               <span
                 class="inline-flex items-center gap-1"
                 data-history-current={item.isCurrent ? item.metric : undefined}
+                data-history-last-known={item.isLastKnown ? item.metric : undefined}
+                aria-describedby={item.deferred ? item.descriptionId : undefined}
               >
                 <svg aria-hidden="true" class="h-2.5 w-2.5 shrink-0" viewBox="0 0 10 10">
                   <circle cx="5" cy="5" r="4" fill={item.color} />
@@ -391,11 +403,26 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
                 <Show when={item.isCurrent}>
                   <span>current</span>
                 </Show>
+                <Show when={item.isLastKnown}>
+                  <span>last known</span>
+                </Show>
               </span>
             )}
           </For>
         </div>
       </div>
+
+      <For each={displaySeries().filter((item) => item.deferred)}>
+        {(item) => (
+          <p
+            id={item.descriptionId}
+            class="mb-2 text-xs leading-relaxed text-muted"
+            data-history-deferred={item.metric}
+          >
+            {item.label} live reading: {item.deferred?.message}
+          </p>
+        )}
+      </For>
 
       <div class="relative min-h-24 flex-1">
         <For each={[0, 0.5, 1]}>
@@ -720,6 +747,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                     loading={historyQuery.loading() && !historyQuery.resolvedOnce()}
                     metrics={metrics()}
                     currentMetrics={props.currentMetrics}
+                    deferredMetrics={props.deferredMetrics}
                     range={props.range}
                     sourceKey={`${props.target?.resourceType}:${props.target?.resourceId}:${props.range}`}
                     timeBounds={timeBounds()}

@@ -49,6 +49,30 @@ const group = (id = 'utilization') =>
 const dots = () => document.querySelectorAll('[data-history-observation]');
 
 describe('GuestDrawerHistory sparse observations and current provenance', () => {
+  it('gives explicit deferred evidence precedence over a numeric current fallback', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response());
+    render(() => (
+      <GuestDrawerHistory
+        target={target}
+        range="1h"
+        currentMetrics={{ disk: 99 }}
+        deferredMetrics={{ disk: { lastKnownValue: 50, message: 'Guest reads paused.' } }}
+      />
+    ));
+    await waitFor(() =>
+      expect(screen.getAllByText('No stored history in this range')).toHaveLength(3),
+    );
+    expect(group().querySelector('[data-history-current]')).toBeNull();
+    expect(group().querySelector('[data-history-last-known="disk"]')).toHaveTextContent(
+      'Disk50.0%last known',
+    );
+    expect(group().querySelector('[data-history-last-known="disk"]')).toHaveAccessibleDescription(
+      'Disk live reading: Guest reads paused.',
+    );
+    expect(group().querySelector('path')).toBeNull();
+    expect(dots()).toHaveLength(0);
+  });
+
   it.each([
     ['cpu', 'utilization', 'CPU 0.0%'],
     ['netin', 'network', 'In 0 B/s'],
