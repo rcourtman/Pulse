@@ -112,21 +112,33 @@ jobs:
           npx --no-install playwright install --with-deps chromium
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends jq curl openssh-client
-      - name: Register a fresh ephemeral project CI node
+      - name: Require the dedicated narrow CI registration binding
+        env:
+          CI_CLIENT_ID: ${{ secrets.TS_CI_DEPLOY_OAUTH_CLIENT_ID }}
+          CI_CLIENT_SECRET: ${{ secrets.TS_CI_DEPLOY_OAUTH_SECRET }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$CI_CLIENT_ID" || -z "$CI_CLIENT_SECRET" ]]; then
+            echo 'Dedicated tag:ci-deploy OAuth binding is not configured; no demo credential fallback is permitted.' >&2
+            exit 2
+          fi
+      - name: Register a fresh ephemeral narrow CI node
+        id: tailnet
         uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3
         with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:infra
+          oauth-client-id: ${{ secrets.TS_CI_DEPLOY_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_CI_DEPLOY_OAUTH_SECRET }}
+          tags: tag:ci-deploy
           version: '1.94.2'
       - name: Serve only this disposable install
         id: serve
         run: |
           set -euo pipefail
-          # Never enumerate peer/private targets or use a supplied hostname.
-          origin=$(tailscale status --json | python3 -c 'import json,re,sys; n=json.load(sys.stdin)["Self"]["DNSName"].rstrip("."); assert re.fullmatch(r"[a-z0-9-]+\.tawny-powan\.ts\.net", n); print("https://"+n)')
+          # Validate the actual Self tag before Serve. Never select a peer or
+          # fall back to the demo client's broader tag:infra identity.
+          origin=$(tailscale status --json | python3 scripts/release_browser_tailnet.py)
           tailscale serve --bg --https=443 http://127.0.0.1:7655
-          echo "origin=$origin" >> "$GITHUB_OUTPUT"
+          python3 scripts/write_github_output.py origin "$origin"
       - name: Exercise native browser update and documented recovery
         env:
           FROM: ${{ steps.pair.outputs.from }}
@@ -142,7 +154,7 @@ jobs:
             PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/browser-release/browsers" \
             bash scripts/release_lifecycle_rehearsal.sh --hosted-browser --from "$FROM" --to "$TAG"
       - name: Close ephemeral Serve route
-        if: always() && steps.serve.outcome == 'success'
+        if: always() && steps.tailnet.outcome == 'success'
         run: tailscale serve reset
       - name: Retain bounded identity and terminal receipts, never credentials
         if: always()

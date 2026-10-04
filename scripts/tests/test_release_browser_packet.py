@@ -138,10 +138,13 @@ class BrowserPacketTest(unittest.TestCase):
         function = source.split('cexec() {', 1)[1].split('\nprint_diagnostics()', 1)[0]
         script = 'HOSTED_BROWSER=true\ncexec() {' + function + '\ncexec env EXTRA=fixture\n'
         result = subprocess.run(['bash', '-c', script], env={'PATH': '/usr/bin:/bin',
-                                 'GH_TOKEN': 'synthetic-secret', 'TS_OAUTH_SECRET': 'synthetic-secret'},
+                                 'GH_TOKEN': 'synthetic-secret', 'TS_OAUTH_SECRET': 'synthetic-secret',
+                                 'TS_CI_DEPLOY_OAUTH_CLIENT_ID': 'synthetic-narrow-id',
+                                 'TS_CI_DEPLOY_OAUTH_SECRET': 'synthetic-narrow-secret'},
                                 capture_output=True, text=True)
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertNotIn('synthetic-secret', result.stdout)
+        self.assertNotIn('synthetic-narrow', result.stdout)
         self.assertNotIn('PULSE_INSTALL_ALLOW_DOCKER', result.stdout)
         self.assertIn('EXTRA=fixture', result.stdout)
 
@@ -152,11 +155,12 @@ class BrowserPacketTest(unittest.TestCase):
         self.assertNotIn('ignoreHTTPSErrors', (ROOT / 'tests/integration/scripts/release-browser-journey.cjs').read_text())
         self.assertIn('test "$GITHUB_WORKFLOW_SHA" = "$EXPECTED_CONTROL"', source)
         self.assertIn('runs-on: ubuntu-24.04', source)
-        self.assertIn('"Self"]["DNSName"]', source)
+        self.assertIn('tailscale status --json | python3 scripts/release_browser_tailnet.py', source)
         self.assertIn('ssh-keygen -Y verify', source)
         acceptance = source.split('- name: Exercise native browser update', 1)[1].split('- name: Close', 1)[0]
         self.assertIn('sudo env -i', acceptance)
-        for name in ('GH_TOKEN', 'TS_OAUTH_SECRET', 'PULSE_ALLOW_DOCKER_UPDATES', 'ignoreHTTPSErrors'):
+        for name in ('GH_TOKEN', 'TS_OAUTH_SECRET', 'TS_CI_DEPLOY_OAUTH_CLIENT_ID',
+                     'TS_CI_DEPLOY_OAUTH_SECRET', 'PULSE_ALLOW_DOCKER_UPDATES', 'ignoreHTTPSErrors'):
             self.assertNotIn(name, acceptance)
         artifact = source.split('- name: Retain bounded', 1)[1]
         for private in ('browser-auth.json', 'private-install.log', 'private-updater.log', 'datadir.'):

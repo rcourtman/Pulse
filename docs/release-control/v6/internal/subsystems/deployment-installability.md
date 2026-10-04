@@ -6441,10 +6441,20 @@ collision-safe writer. Each installed binary hash must match its
 signed archive, rather than just a reported version. No rebuilt main binary,
 frozen-product insertion, candidate re-cut or stable promotion is performed.
 
-A pinned Tailscale action registers an ephemeral project CI node; Serve exposes
-only its own loopback Pulse install through its derived `tawny-powan.ts.net`
-HTTPS identity. No caller-selected endpoint, peer or previous stopped target is
-used. Registration alone receives the existing CI OAuth credential; acceptance
+A pinned Tailscale action registers an ephemeral project CI node using only
+`tag:ci-deploy` and the dedicated `TS_CI_DEPLOY_OAUTH_CLIENT_ID` /
+`TS_CI_DEPLOY_OAUTH_SECRET` binding. Its OAuth client has only Auth Keys write,
+restricted to that tag; it must not alias the `tag:infra` demo or full-access
+administrative identity. The credential owner verifies that configured scope;
+source and Self observations are not proof of OAuth/ACL authority. Missing
+dedicated registration configuration stops before join, with no credential,
+auth-key or caller-input fallback. `release_browser_tailnet.py` rejects anything
+except a running, online Self node with exactly that one tag and its own valid
+business DNS name before Serve or origin output. No peers or raw status enter
+receipts. Serve exposes only its own loopback Pulse install through that derived
+`tawny-powan.ts.net` HTTPS identity; no private-service ACL expansion is needed.
+No caller-selected endpoint, peer or previous stopped target is used. Only the
+fixed prerequisite/registration steps receive the dedicated OAuth pair; acceptance
 commands receive a scrubbed environment with no provider, production or
 publishing credential. State is synthetic, disabled resources and throwaway
 admin/API authentication, with the existing telemetry opt-out.
@@ -6473,7 +6483,8 @@ original auto-update/timer intent after forward update and documented CLI
 then checks the restored baseline. This is CLI recovery plus browser readback,
 **not** the separate history-based UI rollback action. Cleanup stops the
 throwaway service/timer, records its result and fails the process on failure;
-the workflow resets the new Serve route and its hosted VM is disposed of.
+the workflow resets the new Serve route after any successful join, including
+partial route setup failure, and its hosted VM is disposed of.
 
 Bounded control, signed packet, installer/binary, phase, browser, cleanup and
 redacted settings receipts are retained for seven days. Successful screenshots
@@ -6488,6 +6499,11 @@ Verification: `scripts/tests/test_release_browser_packet.py` executes immutable
 release/asset/binary identity rejection, worker-mode exclusion, scrubbed command
 environment and cleanup exit controls. `test_release_lifecycle_rehearsal.py`
 executes the recovery-access stop before another browser process can start.
+`scripts/tests/test_release_browser_tailnet.py` executes the actual prerequisite
+and Serve shell with fixed offline node observations: absent dedicated
+configuration cannot borrow the demo credential, broad/extra/missing tags and
+foreign/unsafe Self identities cannot start Serve or write an origin. Its binding
+controls reject broad demo secret reuse and caller-selected registration inputs.
 `tests/integration/scripts/release-browser-journey.test.cjs` exercises the real
 observer against offline Chromium success/recovery, anonymous auth probes,
 restart transport gaps, wrong-target, silent-SSE and stuck-modal fixtures, plus
