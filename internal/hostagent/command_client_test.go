@@ -514,3 +514,7 @@ func TestCommandClient_ReplayedRequestWaitsForInFlightHandlerInsteadOfDropping(t
 		t.Fatal("replay handler did not release the slot")
 	}
 }
+
+func TestCommandClientGuestExecutionAdmissionContract(t *testing.T) {
+	testVMGuestExecNoUnverifiedHandoff(t)
+}
