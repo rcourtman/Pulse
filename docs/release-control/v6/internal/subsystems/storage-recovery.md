@@ -21,6 +21,17 @@
 
 ## Purpose
 
+### TrueNAS connection probes do not settle recovery inventory
+
+A successful settings probe reads system information only, on a separate client.
+It cannot advance the runtime poll watermark, manufacture an initial settled
+inventory or update the last observed recovery/resource contribution. A probe
+failure likewise does not impersonate a completed inventory refresh. Actual
+runtime auth/permission failures and existing cache withdrawal remain effective;
+a later probe success must not erase them. Source controls cover never-polled
+and previously observed-but-failing states through the real API boundary.
+No restore, guest mutation or native appliance acceptance is implied.
+
 ### Partial backup inventory is not empty recovery evidence
 
 The existing Proxmox Backups view treats PVE and PBS inventories as independent

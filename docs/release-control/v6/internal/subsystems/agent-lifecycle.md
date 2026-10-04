@@ -15,6 +15,32 @@
 
 ## Purpose
 
+### TrueNAS probes are not fleet or inventory liveness
+
+A separate settings connection probe does not establish runtime provider
+freshness, verified fleet credentials, observed resources or readiness for
+monitored-system accounting. These remain tied to actual scheduled refreshes.
+Stored-secret selection, tenant isolation and authentication responses remain
+unchanged. The connections continuity test seeds its success from a real local
+runtime poll rather than a probe-shaped synthetic success. The API contract
+control retains a runtime inventory error despite a subsequent successful
+system-information probe; no synthetic success establishes installed acceptance.
+
+### Podman interval CPU evidence — issue #2447
+
+Every one-shot container stats response retains a cumulative CPU baseline,
+even when a positive Podman compatibility percentage takes precedence. Zero,
+absent or invalid percentages use the valid nanosecond/wall-clock interval,
+without Docker's host-core multiplier. First samples, counter resets and changes
+of container start time rebaseline rather than presenting lifetime CPU as current
+usage. Repeated or older read timestamps cannot move the baseline backwards.
+Positive native percentages keep the units established by #1391; a genuine idle
+counter interval remains zero. Report shapes, enrollment, runtime transport trust
+and command authority are unchanged. `TestCollectContainerPodmanCPUIntervals`
+in `internal/dockeragent/agent_internal_test.go` exercises decoding through the
+real collector, idle/advancing counters, start changes and Docker isolation.
+Synthetic controls do not establish a native Podman payload or reporter recovery.
+
 ### MD RAID required members and spares — issue #2369
 
 Host RAID reports carry optional `requiredDevices`: the configured member count

@@ -20,6 +20,21 @@
 
 ## Purpose
 
+### TrueNAS saved probes do not rewrite runtime evidence — issue #2382
+
+The saved connection test uses stored server-owned secrets, or merges an edited
+payload under the existing validation and tenant boundary. It reads system
+information on a separate client and reports the probe's result in its existing
+response. Neither success nor failure rewrites the runtime provider's `poll`
+timestamps, last error, failure count, retry schedule, `observed` contribution
+or supplemental-inventory readiness. A successful probe can coexist with failed
+required inventory collection; only a completed runtime refresh can clear that
+runtime failure. No new route, response field or permission is added.
+`TestTrueNASSavedProbePreservesRuntimeEvidence` in `internal/api/contract_test.go`
+uses an HTTP appliance analogue through the actual client, poller and handlers,
+including prior inventory followed by required-method failure and no initial poll.
+This is diagnostic truthfulness, not native appliance/session recovery.
+
 ### Resource maintenance API reference
 
 The canonical and shipped API references document the existing authenticated
