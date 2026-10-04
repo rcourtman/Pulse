@@ -219,6 +219,11 @@ func TestTrueNASAPIGuidanceRejectsUnsafeRecipesAndExactParent(t *testing.T) {
 	}
 	if inputs := os.Getenv("PULSE_PROOF_INPUTS"); inputs != "" {
 		parent, err := os.ReadFile(filepath.Join(inputs, "truenas-parent.md"))
+		if os.IsNotExist(err) {
+			// Other source proofs can supply unrelated inputs. The mutation
+			// controls above still apply without this optional parent receipt.
+			return
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
