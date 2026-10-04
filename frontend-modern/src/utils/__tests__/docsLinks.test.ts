@@ -61,6 +61,24 @@ function getRuntimeSourceFiles(dir: string): string[] {
 }
 
 describe('docsLinks', () => {
+  it('keeps TrueNAS setup acceptance separate from a system-information probe', () => {
+    const truenas = readFileSync(path.join(repoRoot, 'docs', 'TRUENAS.md'), 'utf8');
+    const setup = truenas.split('## Quick Start')[1].split('## Creating a TrueNAS API Key')[0];
+    expect(setup).toContain('it does not validate inventory or metric collection');
+    expect(setup).toContain('an elapsed interval is not proof');
+    expect(setup).toContain('[polling checks](#stale-truenas-data)');
+    expect(setup).not.toContain('Data appears within one configured polling cycle');
+    const noData = truenas
+      .split('### No data appearing after adding connection')[1]
+      .split('### Inventory works')[0];
+    expect(noData).toContain('Pools,\n  datasets, disks and alerts can still fail');
+    expect(noData).toContain('does not establish live CPU, memory');
+    expect(truenas).toContain('Some older builds, including Pulse\n6.4.1 and 6.4.5');
+    expect(truenas).toContain('use the inventory observation time rather than the test time');
+    expect(truenas).toContain('do not copy a token or cookie');
+    expect(truenas).toContain('Do not post the full connection response');
+  });
+
   it('keeps restored Proxmox node network details in the candidate packet', () => {
     const releaseNotes = readFileSync(
       path.join(repoRoot, 'docs', 'releases', 'RELEASE_NOTES_v6.4.0-rc.1.md'),
