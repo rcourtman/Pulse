@@ -20,6 +20,7 @@ import {
   getPreferredResourceClusterName,
   getPreferredResourceKubernetesContext,
 } from '@/utils/resourceIdentity';
+import { getExplicitResourceClusterName } from '@/utils/agentResources';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { HostRAIDArray } from '@/types/api';
 import type {
@@ -448,6 +449,14 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     '';
   const kubernetesContext = getPreferredResourceKubernetesContext(resource);
   const preferredClusterName = getPreferredResourceClusterName(resource);
+  // The preferred helper falls back to the resource's own name, which is the
+  // right label for a cluster resource but not for a workload: a vSphere VM
+  // or a standalone Proxmox guest would otherwise be labelled as its own
+  // cluster. Only an explicit cluster may become the workload's cluster.
+  const workloadClusterName =
+    (platformType === 'vmware-vsphere'
+      ? resource.vmware?.clusterName?.trim() || undefined
+      : undefined) ?? getExplicitResourceClusterName(resource);
   const instance =
     vmwareInstance ??
     resource.instance ??
@@ -638,7 +647,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
       workloadType === 'vm' || workloadType === 'system-container'
         ? node
           ? (() => {
-              const cluster = preferredClusterName || '';
+              const cluster = workloadClusterName || '';
               if (cluster && cluster !== node) return `${node} (${cluster})`;
               if (instance && instance !== node) return `${node} (${instance})`;
               return node;
@@ -647,9 +656,9 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
         : workloadType === 'app-container'
           ? resource.parentName || resource.docker?.hostname
           : workloadType === 'pod'
-            ? preferredClusterName
+            ? workloadClusterName
             : undefined,
-    clusterName: preferredClusterName || undefined,
+    clusterName: workloadClusterName || undefined,
     containerRuntime:
       workloadType === 'app-container'
         ? (resource.docker?.runtime || '').trim() || undefined

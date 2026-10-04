@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "f5157115b7b224000ef7035285d9ce64bbe60bb7",
+  "verified_at": "2026-10-04T22:46:28Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/hooks/useWorkloads.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/hooks/useWorkloads.ts": "ef6459b28c2ce225e5f5ec56731f135b1a2b1788af40aad14724e108167d86ec"
+  },
+  "routes": [
+    "/vmware/overview",
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1100
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Mock estate (PULSE_MOCK_MODE, 5 Proxmox nodes in one cluster, Lab vCenter with 7 ESXi hosts in Production Cluster and Edge Services). Before the fix every vSphere host group header carried a chip naming its first VM (esxi-01.lab.local [etl-batch-01]); after it each header names the host cluster and matches the hosts table Cluster column.",
+    "Proxmox overview group headers still render the node row with the Production West cluster chip and Agent badge, unchanged.",
+    "Phone width (390x844, touch, DPR 2): vSphere group headers show Production Cluster / Edge Services chips without truncation.",
+    "Unit proof: useWorkloads test fails on the old helper (Received etl-batch-01) and passes with the explicit cluster; a standalone Proxmox guest now has no cluster and labels its context with the instance."
+  ],
+  "interactions": [
+    "Loaded each route signed in with Playwright Chromium at desktop and phone widths and inspected the screenshots; no console errors besides the dev-build update check."
+  ]
+}
