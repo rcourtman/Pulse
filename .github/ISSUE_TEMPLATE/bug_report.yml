@@ -11,7 +11,7 @@ body:
 
         If repeating the action could cause data loss, an outage, duplicate changes, or excessive notifications, do not repeat it just to fill in this form. Describe the original sequence and what you observed instead.
 
-        For connection or data failures, only collect diagnostics if Pulse is running and collection is safe. **Run Diagnostics** can make live API and guest-agent requests; do not run it during backups, freeze/thaw or an unresponsive-host incident just to file a report. Prefer existing observations; if a result is already displayed, its GitHub export downloads that result without running checks again. See [safe diagnostics collection](https://github.com/rcourtman/Pulse/blob/main/docs/TROUBLESHOOTING.md#collect-diagnostics-safely).
+        For connection or data failures, only collect diagnostics if Pulse is running and collection is safe. **Run Diagnostics** can make live API and guest-agent requests; do not run it during backups, freeze/thaw or an unresponsive-host incident just to file a report. Prefer existing observations; if a result is already displayed, its GitHub export downloads that result without running checks again. See [safe diagnostics collection](https://github.com/rcourtman/Pulse/blob/3fd44b8325679e4ce7f470572af84687458aefcc/docs/TROUBLESHOOTING.md#collect-diagnostics-safely).
 
         Anything you attach here is public. Review files and screenshots locally before posting, even when an export is labelled "sanitized". Remove credentials, session cookies, secret URLs, private host/network and personal details, including text echoed in errors. Do not attach full/private diagnostics, .env or configuration files, private keys, Copy as cURL commands or full network exports.
 
