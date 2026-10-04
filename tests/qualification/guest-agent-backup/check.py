@@ -187,6 +187,16 @@ def check_record(record, root, expected_source):
             resumed["memory_source"] == "guest-agent-meminfo" and resumed["disk_reason"] == "", "guest did not resume")
     require(all(resumed[k] > backup["completed_ms"] + skew for k in ("disk_history_latest_ms", "memory_history_latest_ms", "cpu_latest_ms")),
             "fresh post-backup History absent")
+    # A fresh timestamp is not evidence of a new guest read. The complete
+    # native trace must include both kinds of reads supporting this resumed
+    # snapshot, not just the pre-lock in-flight command or an old cached result.
+    # Allow the recorded clock error when comparing completion with readback;
+    # do not accept a start inside the post-task uncertainty interval.
+    for method in ("get-fsinfo", "file-read"):
+        require(any(command["method"] == method and
+                    command["start_ms"] > backup["completed_ms"] + skew and
+                    command["end_ms"] <= resumed["at_ms"] + skew for command in commands),
+                "post-task " + method + " read supporting resumption missing")
 
     witnesses = record["witnesses"]
     require(type(witnesses) is list and 1 <= len(witnesses) <= 16, "filesystem witness bound")

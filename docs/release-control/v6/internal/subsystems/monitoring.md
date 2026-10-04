@@ -77,7 +77,13 @@ provide an independent guest filesystem writer (file/directory fsync and
 synthetic readback over non-QGA stdout) and a fail-closed checker for native
 overlap, truthful deferred readings/History and post-task writes/resumption.
 An OK task without fresh writes on every covered filesystem cannot pass those
-record checks. Local tests are not native freeze/thaw evidence; supplied
+record checks. Resumed memory/disk History also needs successful native
+`file-read`/`get-fsinfo` dispatches newly started after task completion and its
+clock uncertainty, and completed by the resumed readback within the recorded
+clock allowance. Old in-flight results, metadata-only reads, fresh timestamps
+alone and later polling cannot substitute for those reads. The checker tests
+record consistency, not independent payload-to-command provenance.
+Local tests are not native freeze/thaw evidence; supplied
 platform/artifact provenance and mount completeness still need independent
 review. The tools add no runtime interface, recovery action or release gate.
 

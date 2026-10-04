@@ -59,7 +59,11 @@ def record():
                        "lock_end_ms": 106200, "completed_ms": 107000, "status": "OK", "trace_sha256": HASH},
             "coverage": {"start_ms": 100000, "end_ms": 120000, "dropped_events": 0, "trace_sha256": HASH},
             "commands": [{"id": "request-01", "method": "get-fsinfo", "start_ms": 103100,
-                          "end_ms": 103500, "result": "ok"}],
+                          "end_ms": 103500, "result": "ok"},
+                         {"id": "resume-disk", "method": "get-fsinfo", "start_ms": 108100,
+                          "end_ms": 108200, "result": "ok"},
+                         {"id": "resume-memory", "method": "file-read", "start_ms": 108300,
+                          "end_ms": 108400, "result": "ok"}],
             "snapshots": [baseline, locked, {**locked, "at_ms": 105500, "cpu_latest_ms": 105000}, resumed],
             "witnesses": []}
 
@@ -108,6 +112,90 @@ class BackupRecordTests(unittest.TestCase):
         self.add_witness(events=events)
         with self.assertRaisesRegex(CHECK.InvalidRecord, "post-task fsync"):
             self.check()
+
+    def test_resumed_history_and_writes_need_both_post_task_guest_reads(self):
+        original = copy.deepcopy(self.record["commands"])
+        for missing in (("resume-disk",), ("resume-memory",), ("resume-disk", "resume-memory")):
+            with self.subTest(missing=missing):
+                self.record["commands"] = [c for c in original if c["id"] not in missing]
+                with self.assertRaisesRegex(CHECK.InvalidRecord, "read supporting resumption missing"):
+                    self.check()
+
+    def test_metadata_reads_cannot_support_resumed_memory_or_filesystems(self):
+        original = copy.deepcopy(self.record["commands"])
+        for index in (1, 2):
+            for method in ("info", "get-osinfo", "network-get-interfaces"):
+                with self.subTest(index=index, method=method):
+                    self.record["commands"] = copy.deepcopy(original)
+                    self.record["commands"][index]["method"] = method
+                    with self.assertRaisesRegex(CHECK.InvalidRecord, "read supporting resumption missing"):
+                        self.check()
+
+    def test_old_or_task_uncertain_reads_cannot_support_resumed_history(self):
+        original = copy.deepcopy(self.record["commands"])
+        # These all start after the lock clears, so the lock-dispatch oracle
+        # cannot reject them. Only a genuinely new post-task read may qualify.
+        completed = self.record["backup"]["completed_ms"]
+        skew = self.record["window"]["clock_error_ms"]
+        for method in ("get-fsinfo", "file-read"):
+            for began in (completed - 100, completed, completed + skew):
+                with self.subTest(method=method, began=began):
+                    self.record["commands"] = [copy.deepcopy(original[0])]
+                    self.record["commands"].extend([
+                        {"id": "old-read", "method": method, "start_ms": began,
+                         "end_ms": completed + 100, "result": "ok"},
+                        {"id": "new-other-read", "method": "file-read" if method == "get-fsinfo" else "get-fsinfo",
+                         "start_ms": 108100, "end_ms": 108200, "result": "ok"},
+                    ])
+                    with self.assertRaisesRegex(CHECK.InvalidRecord, "read supporting resumption missing"):
+                        self.check()
+
+    def test_future_reads_cannot_support_an_earlier_resumed_snapshot(self):
+        original = copy.deepcopy(self.record["commands"])
+        at = self.record["snapshots"][-1]["at_ms"]
+        skew = self.record["window"]["clock_error_ms"]
+        for index in (1, 2):
+            for began, finished in ((at - 100, at + skew + 1), (at + 100, at + 200)):
+                with self.subTest(index=index, began=began, finished=finished):
+                    self.record["commands"] = copy.deepcopy(original)
+                    self.record["commands"][index].update(start_ms=began, end_ms=finished)
+                    with self.assertRaisesRegex(CHECK.InvalidRecord, "read supporting resumption missing"):
+                        self.check()
+
+    def test_post_task_read_clock_boundaries_and_later_polling_remain_valid(self):
+        original = copy.deepcopy(self.record)
+        completed = self.record["backup"]["completed_ms"]
+        at = self.record["snapshots"][-1]["at_ms"]
+        for skew in (0, 10, 1000):
+            with self.subTest(skew=skew):
+                self.record = copy.deepcopy(original)
+                self.record["window"]["clock_error_ms"] = skew
+                # Give the maximum-skew control enough independent margins
+                # for baseline, overlap, lock-time snapshots and liveness too.
+                if skew == 1000:
+                    self.record["backup"].update(lock_start_ms=103000, freeze_ms=103100,
+                                                  thaw_request_ms=106500, lock_end_ms=106900)
+                    self.record["commands"][0].update(start_ms=101100, end_ms=104100)
+                    self.record["snapshots"][0]["at_ms"] = 101500
+                    self.record["snapshots"][1]["at_ms"] = 104100
+                    self.record["snapshots"][2]["at_ms"] = 105800
+                self.record["commands"][1].update(start_ms=completed + skew + 1, end_ms=completed + skew + 2)
+                self.record["commands"][2].update(start_ms=at - 10, end_ms=at + skew)
+                self.record["commands"].append({"id": "later-poll", "method": "file-read", "start_ms": 115000,
+                                                "end_ms": 115100, "result": "ok"})
+                self.assertTrue(self.check()["record_checks_passed"])
+
+    def test_cli_rejects_unsupported_resumption_without_native_acceptance_claim(self):
+        self.record["commands"] = self.record["commands"][:1]
+        path = self.root / "record.json"
+        path.write_text(json.dumps(self.record))
+        result = subprocess.run([sys.executable, str(Path(__file__).with_name("check.py")),
+                                 "--record", str(path), "--expected-source", SOURCE], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        failure = json.loads(result.stderr)
+        self.assertFalse(failure["record_checks_passed"])
+        self.assertFalse(failure["native_acceptance_complete"])
+        self.assertEqual(failure["failure"], "post-task get-fsinfo read supporting resumption missing")
 
     def test_wrong_id_timeout_and_incomplete_native_commands_stay_adverse(self):
         for result in ("wrong-command-id", "timeout", "response-incomplete", "permission-denied"):
