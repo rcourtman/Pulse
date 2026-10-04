@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "70493f5e1c238e35bd3cca1bca814c5925b739a1",
+  "verified_at": "2026-10-04T23:18:40.484Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "a1d197b12aa0bed084664472aeeca1d4b0415911a8aa94c8aa3742e59ce77789"
+  },
+  "routes": [
+    "/proxmox/overview (production drawer and canonical projection in offline synthetic fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Combined published saved-URL header action and reviewed guest read/Discovery precaution on exact production bytes. Playwright 1.56.1 Chromium desktop light and WebKit phone dark; eight screenshots inspected.",
+    "Locked and uncertain retained readings keep saved results visible but live Discovery disabled; healthy clear permits only explicit dispatch. In-flight completion remains attributed when observation becomes deferred.",
+    "Header Open retains safe href, target _blank, noopener noreferrer, desktop 32px/phone 44px target and expanded drawer. Missing and unsafe URLs expose no link. No horizontal overflow, page errors or external requests."
+  ],
+  "interactions": [
+    "Saved header Open retains safe href/target/rel, phone target and expansion; absent/unsafe URLs expose no link, without sending Discovery",
+    "Native canonical projection, row and real drawer/Discovery: assigned node agent, saved results readable, backup blocks live run with associated wrapping reason",
+    "All eight read deferrals, retained variants and same-ID tab/snapshot updates block without remount, POST or automatic rescan",
+    "Explicit healthy keyboard run sends exactly the original target/body once; clearing safety pause alone sends nothing",
+    "A newly blocked snapshot neither hides nor cancels dispatched work; original completion is shown and no further run is sent",
+    "Saved header Open retains safe href/target/rel, phone target and expansion; absent/unsafe URLs expose no link, without sending Discovery",
+    "Native canonical projection, row and real drawer/Discovery: assigned node agent, saved results readable, backup blocks live run with associated wrapping reason",
+    "All eight read deferrals, retained variants and same-ID tab/snapshot updates block without remount, POST or automatic rescan",
+    "Explicit healthy keyboard run sends exactly the original target/body once; clearing safety pause alone sends nothing",
+    "A newly blocked snapshot neither hides nor cancels dispatched work; original completion is shown and no further run is sent"
+  ]
+}
