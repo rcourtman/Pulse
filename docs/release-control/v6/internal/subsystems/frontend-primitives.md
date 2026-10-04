@@ -20,6 +20,23 @@
 
 ## Purpose
 
+### PBS capacity warnings stay truthful and readable
+
+The existing Backups server table distinguishes unavailable or unusable named
+datastore capacity from an explicitly measured empty store. Fixed **Unavailable**
+and **Unknown** notices replace unreliable percentages, bytes and deduplication
+figures without exposing a provider error body. Server reachability, independent
+backup inventory and drawer identity retain their own evidence and semantics.
+Measured zero and the existing high-capacity warning thresholds stay unchanged.
+
+At compact widths, the shared 40% server-identity anchor stays in place; the Used
+column receives 25% so the warning remains readable without horizontal overflow.
+The redundant connection dot yields to its textual status. Datastore hover text
+does not change disclosure or row identity. The mounted capacity, drawer and
+full-page Backups tests plus `browser-tests/pbs-capacity.cjs` cover replacement,
+independent inventory, keyboard/touch and 320px/390px/desktop rendering. Synthetic
+presentation proof is not native datastore, backup, guest-thaw or release proof.
+
 ### Backup age requires a usable completed timestamp
 
 Existing workload indicators, age badges and drawer protection context distinguish

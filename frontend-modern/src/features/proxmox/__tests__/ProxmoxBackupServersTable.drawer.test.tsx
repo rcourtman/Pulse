@@ -100,7 +100,9 @@ describe('ProxmoxBackupServersTable details', () => {
     const [servers, setServers] = createSignal(makeServers());
     const { container } = render(() => <ProxmoxBackupServersTable servers={servers()} />);
     const datastoreNames = () =>
-      Array.from(container.querySelectorAll('td[title]')).map((cell) => cell.getAttribute('title'));
+      Array.from(container.querySelectorAll('tbody tr td:first-child[title]')).map((cell) =>
+        cell.getAttribute('title'),
+      );
     fireEvent.click(screen.getAllByRole('button', { name: 'Expand details for pbs-main' })[1]);
     const detail = screen.getByTestId('pbs-resource-detail');
     expect(datastoreNames()).toEqual(['pbs-main · archive', 'pbs-main · tank']);

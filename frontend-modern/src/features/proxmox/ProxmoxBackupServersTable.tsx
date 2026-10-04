@@ -72,7 +72,7 @@ function buildBackupCounts(backups: readonly PBSBackup[]): Map<string, number> {
 
 function serverIsOnline(resource: Resource): boolean {
   const status = (resource.status ?? '').toLowerCase();
-  const conn = (resource.pbs?.connectionHealth ?? '').toLowerCase();
+  const conn = (resource.pbs?.connectionHealth ?? '').trim().toLowerCase();
   if (conn) return conn === 'healthy' || conn === 'ok';
   return status === 'online' || status === 'running';
 }
@@ -83,10 +83,39 @@ function connectionLabel(resource: Resource): string {
   return serverIsOnline(resource) ? 'Online' : 'Offline';
 }
 
-function usagePercent(datastore: ResourcePBSDatastore): number | undefined {
-  if (typeof datastore.usagePercent === 'number') return datastore.usagePercent;
-  if (datastore.total > 0) return (datastore.used / datastore.total) * 100;
-  return undefined;
+// PBS retains a named datastore when its status read fails, with zero-valued
+// capacity and explicit unavailable/error evidence. Those zeros are not an
+// empty datastore. Reachability alone cannot establish a successful store read.
+function datastoreCapacity(datastore: ResourcePBSDatastore | undefined, online: boolean) {
+  if (!datastore) return { state: 'absent' as const, percent: undefined };
+  const status =
+    typeof datastore.status === 'string' ? datastore.status.trim().toLowerCase() : datastore.status;
+  if (
+    !online ||
+    (typeof datastore.error === 'string' && Boolean(datastore.error.trim())) ||
+    ['unavailable', 'offline', 'error', 'failed'].includes(status ?? '')
+  ) {
+    return { state: 'unavailable' as const, percent: undefined };
+  }
+  // Empty status is supported by older payloads; an unrecognised explicit
+  // status must not be interpreted as current healthy capacity.
+  if (
+    (status && !['available', 'online', 'healthy', 'ok'].includes(status)) ||
+    !Number.isFinite(datastore.total) ||
+    datastore.total <= 0 ||
+    !Number.isFinite(datastore.used) ||
+    datastore.used < 0
+  ) {
+    return { state: 'unknown' as const, percent: undefined };
+  }
+  const percent =
+    datastore.usagePercent !== undefined
+      ? datastore.usagePercent
+      : (datastore.used / datastore.total) * 100;
+  if (!Number.isFinite(percent) || percent < 0) {
+    return { state: 'unknown' as const, percent: undefined };
+  }
+  return { state: 'available' as const, percent };
 }
 
 // >=90% is the silent-backup-failure danger zone; >=75% is the early warning.
@@ -480,7 +509,12 @@ export function ProxmoxBackupServersTable(props: {
                 estimatedRowHeight={32}
               >
                 {(row) => {
-                  const pct = () => (row.datastore ? usagePercent(row.datastore) : undefined);
+                  const capacity = () => datastoreCapacity(row.datastore, row.online);
+                  const pct = () => capacity().percent;
+                  const capacityNotice = () =>
+                    capacity().state === 'unavailable'
+                      ? 'Datastore capacity is unavailable. This does not mean the datastore is empty.'
+                      : 'Datastore capacity is unknown. This does not mean the datastore is empty.';
                   const rowIdentity = { id: row.key };
                   const isExpanded = () => detail.isExpanded(rowIdentity);
                   const detailRowId = () => detail.detailRowId(rowIdentity);
@@ -510,13 +544,18 @@ export function ProxmoxBackupServersTable(props: {
                         </TableCell>
                         <TableCell class={getPlatformTableCellClassForKind('text')}>
                           <div class="flex items-center gap-2">
-                            <StatusDot
-                              size="sm"
-                              variant={row.online ? 'success' : 'danger'}
+                            <Show when={layoutMode() !== 'compact'}>
+                              <StatusDot
+                                size="sm"
+                                variant={row.online ? 'success' : 'danger'}
+                                title={row.connectionLabel}
+                                ariaHidden
+                              />
+                            </Show>
+                            <span
+                              class="truncate text-[11px] text-base-content"
                               title={row.connectionLabel}
-                              ariaHidden
-                            />
-                            <span class="truncate text-[11px] text-base-content">
+                            >
                               {row.connectionLabel}
                             </span>
                           </div>
@@ -579,6 +618,7 @@ export function ProxmoxBackupServersTable(props: {
                         <Show when={columnVisible('datastore')}>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content truncate font-mono text-[11px]`}
+                            title={row.datastore?.name}
                           >
                             {row.datastore?.name ?? '—'}
                           </TableCell>
@@ -589,25 +629,39 @@ export function ProxmoxBackupServersTable(props: {
                             fallback={<span class="text-muted">No datastore data</span>}
                           >
                             {(datastore) => (
-                              <div class="flex items-center justify-end gap-2">
-                                <Show when={layoutMode() !== 'compact' && layoutMode() !== 'basic'}>
-                                  <StatusDot
-                                    size="sm"
-                                    variant={usageVariant(pct())}
-                                    title={`Datastore ${formatPlatformTablePercentValue(pct())} used`}
-                                    ariaHidden
-                                  />
-                                </Show>
-                                <span class={`tabular-nums font-medium ${usageToneClass(pct())}`}>
-                                  <PlatformTablePercentValue value={pct()} />
-                                </span>
-                                <Show when={layoutMode() !== 'compact'}>
-                                  <span class="truncate text-[10px] text-muted tabular-nums">
-                                    {formatPlatformTableBytesValue(datastore().used, '0 B')} /{' '}
-                                    {formatPlatformTableBytesValue(datastore().total)}
+                              <Show
+                                when={capacity().state === 'available'}
+                                fallback={
+                                  <span
+                                    class="text-[11px] text-amber-600 dark:text-amber-300"
+                                    title={capacityNotice()}
+                                  >
+                                    {capacity().state === 'unavailable' ? 'Unavailable' : 'Unknown'}
                                   </span>
-                                </Show>
-                              </div>
+                                }
+                              >
+                                <div class="flex items-center justify-end gap-2">
+                                  <Show
+                                    when={layoutMode() !== 'compact' && layoutMode() !== 'basic'}
+                                  >
+                                    <StatusDot
+                                      size="sm"
+                                      variant={usageVariant(pct())}
+                                      title={`Datastore ${formatPlatformTablePercentValue(pct())} used`}
+                                      ariaHidden
+                                    />
+                                  </Show>
+                                  <span class={`tabular-nums font-medium ${usageToneClass(pct())}`}>
+                                    <PlatformTablePercentValue value={pct()} />
+                                  </span>
+                                  <Show when={layoutMode() !== 'compact'}>
+                                    <span class="truncate text-[10px] text-muted tabular-nums">
+                                      {formatPlatformTableBytesValue(datastore().used, '0 B')} /{' '}
+                                      {formatPlatformTableBytesValue(datastore().total)}
+                                    </span>
+                                  </Show>
+                                </div>
+                              </Show>
                             )}
                           </Show>
                         </TableCell>
@@ -645,10 +699,15 @@ export function ProxmoxBackupServersTable(props: {
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted tabular-nums text-[11px]`}
                           >
                             <Show
-                              when={row.datastore?.deduplicationFactor}
+                              when={
+                                capacity().state === 'available' &&
+                                typeof row.datastore?.deduplicationFactor === 'number' &&
+                                Number.isFinite(row.datastore.deduplicationFactor) &&
+                                row.datastore.deduplicationFactor > 0
+                              }
                               fallback={<span class="text-muted">—</span>}
                             >
-                              {(factor) => <>{factor().toFixed(1)}×</>}
+                              {row.datastore?.deduplicationFactor?.toFixed(1)}×
                             </Show>
                           </TableCell>
                         </Show>
