@@ -468,6 +468,15 @@ func (m *Monitor) buildVMFromClusterResource(
 			snapshotNotes = append(snapshotNotes, "preserved-original-guest-memory-during-deferral")
 		}
 	}
+	providerObservedAt := observedAtOr(res.ObservedAt, sampleTime)
+	if state.detailedStatus != nil && CanonicalMemorySource(state.memorySource) != "cluster-resources" {
+		providerObservedAt = observedAtOr(state.detailedStatus.ObservedAt, sampleTime)
+	}
+	memory.Observation = m.guestMemoryObservation(instanceName, "qemu", res.Node, res.VMID, memory, guestMemoryObservationContext{
+		source: state.memorySource, providerObservedAt: providerObservedAt,
+		deferred: state.guestAgentStatus == "deferred", previous: prevSnapshot,
+		linkedAgent: vmIDToHostAgent[guestID],
+	}, sampleTime)
 
 	vm := models.VM{
 		ID:       guestID,

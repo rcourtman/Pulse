@@ -21,6 +21,17 @@
 
 ## Purpose
 
+### Memory provenance does not imply recoverability
+
+Canonical metric values may carry optional selected guest memory observation
+state/source/original known time. The facet follows that numeric source through
+cloning and frontend conversion; last-known or unavailable memory is not fresh
+backup evidence, a storage-health verdict or confirmation of thaw. This
+annotation changes no backup identity, retention, rollup selection, restore
+policy or snapshot data. The connected monitoring observation and metric
+source-selection controls verify the shared type without weakening recovery
+evidence requirements.
+
 ### Latest provider observations do not scan retained evidence payloads
 
 The protection-posture reader enumerates provider/scope keys through the existing

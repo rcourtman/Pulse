@@ -12,6 +12,35 @@ import (
 func ptrInt64(v int64) *int64 { return &v }
 func ptrInt(v int) *int       { return &v }
 
+func TestLinkedAgentMemoryObservationUsesItsOwnSourceTime(t *testing.T) {
+	observedAt := time.Now().Add(-time.Minute)
+	resource := &Resource{
+		Type: ResourceTypeVM, LastSeen: time.Now(),
+		Agent:        &AgentData{Memory: &AgentMemoryMeta{Total: 100, Used: 25, Free: 75}},
+		SourceStatus: map[DataSource]SourceStatus{SourceAgent: {Status: "online", LastSeen: observedAt}},
+	}
+	for _, guest := range []string{"qemu", "lxc"} {
+		t.Run(guest, func(t *testing.T) {
+			var memory models.Memory
+			var ok bool
+			if guest == "qemu" {
+				view := NewVMView(resource)
+				memory, ok = view.LinkedAgentMemory()
+			} else {
+				view := NewContainerView(resource)
+				memory, ok = view.LinkedAgentMemory()
+			}
+			if !ok || memory.Observation.State != "current" || memory.Observation.Source != "agent" || !memory.Observation.ObservedAt.Equal(observedAt) {
+				t.Fatalf("agent memory uses guest-row time or loses provenance: %+v", memory)
+			}
+		})
+	}
+	resource.SourceStatus[SourceAgent] = SourceStatus{Status: "offline", LastSeen: observedAt}
+	if _, ok := linkedAgentMemoryFromResource(resource); ok {
+		t.Fatal("provenance made an offline agent sample selectable")
+	}
+}
+
 func assertStringSlice(t *testing.T, got, want []string) {
 	t.Helper()
 	if len(got) != len(want) {

@@ -155,7 +155,7 @@ func testGuestAgentBackupMonitoringLifecycleWithUnverifiedConfig(t *testing.T, u
 		if locked.ID != initial.ID || locked.GuestAgentStatus != "deferred" || locked.DiskStatusReason != "prev-vm-locked" {
 			t.Fatalf("locked poll %d lost continuity/truth: %#v", poll, locked)
 		}
-		if locked.Memory != initial.Memory || source != "previous-snapshot" || locked.Disk.Used != initial.Disk.Used || !reflect.DeepEqual(locked.NetworkInterfaces, initial.NetworkInterfaces) {
+		if guestMemoryValuesOnly(locked.Memory) != guestMemoryValuesOnly(initial.Memory) || source != "previous-snapshot" || locked.Disk.Used != initial.Disk.Used || !reflect.DeepEqual(locked.NetworkInterfaces, initial.NetworkInterfaces) {
 			t.Fatalf("locked poll %d lost last-known evidence: source=%s memory=%#v want=%#v", poll, source, locked.Memory, initial.Memory)
 		}
 	}
@@ -176,7 +176,7 @@ func testGuestAgentBackupMonitoringLifecycleWithUnverifiedConfig(t *testing.T, u
 		t.Fatal(err)
 	}
 	locked, _ = build()
-	if calls.Load() != before || locked.GuestAgentStatus != "deferred" || locked.AgentVersion != initial.AgentVersion || locked.Memory != initial.Memory {
+	if calls.Load() != before || locked.GuestAgentStatus != "deferred" || locked.AgentVersion != initial.AgentVersion || guestMemoryValuesOnly(locked.Memory) != guestMemoryValuesOnly(initial.Memory) {
 		t.Fatalf("resource-lock fallback queried/lost identity: calls=%d %#v", calls.Load(), locked)
 	}
 	// The per-node inventory fallback must propagate its lock to the same builder.
@@ -239,4 +239,10 @@ func TestGuestAgentDeferralPreservesMetadataAndMemoryCache(t *testing.T) {
 	if calls.Load() != 1 || !reflect.DeepEqual(m.guestMetadataCache[gk], metadata) || !reflect.DeepEqual(m.vmAgentMemCache[mk], memory) {
 		t.Fatal("deferral queued work, renewed cache or poisoned supported-OS evidence")
 	}
+}
+
+// Provenance is asserted separately; numeric continuity includes every old field.
+func guestMemoryValuesOnly(memory models.Memory) models.Memory {
+	memory.Observation = models.MemoryObservation{}
+	return memory
 }

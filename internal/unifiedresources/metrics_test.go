@@ -544,3 +544,38 @@ func TestCanonicalDiskUsagePreservesUnavailableAndObservedZero(t *testing.T) {
 		}
 	}
 }
+
+func TestGuestMemoryMetricObservationFollowsSelectedSource(t *testing.T) {
+	at := time.Now().Add(-time.Minute)
+	retained := models.Memory{Total: 100, Used: 25, Free: 75, Usage: 25,
+		Observation: models.MemoryObservation{State: "last-known", Source: "guest-agent-meminfo", ObservedAt: at}}
+	vm, _ := resourceFromVM(models.VM{VMID: 105, Memory: retained})
+	ct, _ := resourceFromContainer(models.Container{VMID: 106, Memory: retained})
+	for _, resource := range []Resource{vm, ct} {
+		if resource.Metrics.Memory.Observation != retained.Observation || resource.Proxmox.Memory.Observation != retained.Observation {
+			t.Fatal("guest adapter lost selected/raw observation")
+		}
+		copy := cloneResource(&resource)
+		copy.Metrics.Memory.Observation.State = "current"
+		copy.Proxmox.Memory.Observation.Source = "changed"
+		if resource.Metrics.Memory.Observation != retained.Observation || resource.Proxmox.Memory.Observation != retained.Observation {
+			t.Fatal("clone aliases memory provenance")
+		}
+	}
+	// Missing platform usage must not mark a surviving live agent metric
+	// unavailable just because the retained platform facet says so.
+	unavailable := models.UnavailableMemory(100)
+	unavailable.Observation = models.MemoryObservation{State: "unavailable", Source: "unavailable"}
+	platform, _ := resourceFromVM(models.VM{VMID: 105, Memory: unavailable})
+	agent := metricsFromHost(models.Host{Status: "online", LastSeen: at,
+		Memory: models.Memory{Total: 100, Used: 40, Free: 60, Usage: 40,
+			Observation: models.MemoryObservation{State: "current", Source: "untrusted", ObservedAt: time.Now()}}})
+	merged := mergeMetrics(&platform, agent, platform.Metrics, SourceProxmox, time.Now(), nil, nil)
+	if merged.Memory == nil || merged.Memory.Observation.State != "current" || merged.Memory.Observation.Source != "agent" || !merged.Memory.Observation.ObservedAt.Equal(at) || *merged.Memory.Used != 40 {
+		t.Fatalf("cross-source selection lost agent receipt or trusts supplied provenance: %+v", merged.Memory)
+	}
+}
+
+// Proxmox guest adapters must publish the node-independent identity key so
+// canonical ID derivation survives live migration (#1669); guests without an
+// instance+VMID stay keyless and fall back to source-specific derivation.

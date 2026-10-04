@@ -6985,7 +6985,7 @@ func monitorMetricInput(metric *unifiedresources.MetricValue) *models.ResourceMe
 		current = math.Max(metric.Percent, metric.Value)
 	}
 
-	result := &models.ResourceMetricInput{Current: current}
+	result := &models.ResourceMetricInput{Current: current, Observation: metric.Observation}
 	if metric.Total != nil {
 		total := *metric.Total
 		result.Total = &total

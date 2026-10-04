@@ -2981,7 +2981,9 @@ func TestGuestAgentBackupMonitoringContract(t *testing.T) {
 }
 
 func TestGuestMemoryObservationContract(t *testing.T) {
-	testGuestMemoryObservationLifecycle(t)
+	t.Run("poll-to-served-observation", testGuestMemoryObservationLifecycle)
+	t.Run("identity-and-origin-boundaries", testGuestMemoryObservationKeepsOriginsSeparate)
+	t.Run("independent-linked-agent", testGuestMemoryObservationPreservesIndependentLinkedAgent)
 }
 
 // Same-target, unambiguous lock evidence is required even with warm caches.

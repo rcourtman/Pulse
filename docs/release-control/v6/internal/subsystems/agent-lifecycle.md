@@ -15,6 +15,18 @@
 
 ## Purpose
 
+### Memory annotation is not agent admission
+
+The shared Memory model's optional guest `observation` records selected metric
+state/source/original known time. Missing annotation is legacy/unknown. It
+changes neither numeric validity nor enrollment, identity, removal, token scope
+or guest-command authority. Canonical agent metric annotations use server-owned
+report/source receipt time rather than a client-supplied annotation, and a
+PVE-refreshed guest row cannot renew the correlated agent observation.
+`TestGuestMemoryObservationWireContract` pins omission, round-trip preservation
+and unchanged numeric validity; linked-agent/source-selection controls pin
+receipt ownership and offline exclusion. No native liveness/thaw is asserted.
+
 ### TrueNAS probes are not fleet or inventory liveness
 
 A separate settings connection probe does not establish runtime provider

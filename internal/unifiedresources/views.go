@@ -88,7 +88,8 @@ func linkedAgentMemoryFromResource(r *Resource) (models.Memory, bool) {
 	if r == nil || r.Agent == nil || r.Agent.Stale || r.Agent.Memory == nil {
 		return models.Memory{}, false
 	}
-	if status, ok := r.SourceStatus[SourceAgent]; !ok || status.Status != "online" {
+	status, ok := r.SourceStatus[SourceAgent]
+	if !ok || status.Status != "online" {
 		return models.Memory{}, false
 	}
 	m := r.Agent.Memory
@@ -97,6 +98,9 @@ func linkedAgentMemoryFromResource(r *Resource) (models.Memory, bool) {
 		return models.Memory{}, false
 	}
 	memory.Usage = float64(m.Used) / float64(m.Total) * 100
+	// Guest-row LastSeen can be renewed by PVE alone. The surviving agent
+	// sample keeps the agent source's timestamp after host/guest correlation.
+	memory.Observation = models.MemoryObservation{State: "current", Source: "agent", ObservedAt: status.LastSeen}
 	return memory, memory.HasKnownUsage()
 }
 

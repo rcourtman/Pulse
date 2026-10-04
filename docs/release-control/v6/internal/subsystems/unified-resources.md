@@ -23,6 +23,23 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Guest memory provenance follows metric selection
+
+Raw Proxmox `memory.observation` preserves the guest builder's state, source
+and original known observation time. Canonical memory metrics carry their own
+optional `observation` through clones, merges and served frontend conversion.
+A retained platform facet cannot supply provenance for a different selected
+agent metric. Agent memory annotations are authored from server-owned source
+receipt/freshness, never agent-supplied annotation or merged guest LastSeen.
+Linked-agent views retain that source time after host/guest correlation.
+Absent annotations are unknown/legacy; absent observation times stay absent.
+
+Numeric preference, unavailable same-source withdrawal, cross-source fallback,
+identity and freshness policy remain unchanged. Guest memory and disk-read
+provenance are independent. Adapter/source-selection and linked-view controls
+exercise these boundaries, with the connected monitoring contract pinning the
+actual served projection; this does not prove native recovery or publication.
+
 ### PBS capacity consumers preserve explicit read failure
 
 `ResourcePBSDatastore.error` describes existing provider read-failure evidence,
