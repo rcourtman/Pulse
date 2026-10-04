@@ -1505,6 +1505,8 @@ describe('Docker native tables', () => {
     ));
 
     expect(screen.getByText('Update')).toBeInTheDocument();
+    expect(screen.getByText('Run')).toHaveClass('platform-table-label-compact');
+    expect(screen.getByText('Running')).toHaveClass('platform-table-label-full');
     expect(screen.getByText('Stack')).toBeInTheDocument();
     expect(screen.getByText('shop')).toBeInTheDocument();
     expect(screen.getByText('checkout-api')).toBeInTheDocument();
@@ -1514,6 +1516,10 @@ describe('Docker native tables', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
     // The snake_case rollout token reads as words; the raw token stays in the title.
     expect(screen.getByText('Rollback started')).toBeInTheDocument();
+    expect(screen.getByText('Rollback started')).toHaveClass(
+      'whitespace-normal',
+      'wrap-break-word',
+    );
     expect(
       screen.getByText('Rollback started').closest('[title]')?.getAttribute('title'),
     ).toContain('rollback_started');

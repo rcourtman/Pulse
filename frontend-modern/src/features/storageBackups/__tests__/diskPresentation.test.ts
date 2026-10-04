@@ -19,6 +19,7 @@ import {
   PHYSICAL_DISK_TABLE_CLASS,
   PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS,
   getPhysicalDiskEmptyStatePresentation,
+  getPhysicalDiskCellPaddingClass,
   getPhysicalDiskColumnWidthStyle,
   getPhysicalDiskCollectionMessages,
   getPhysicalDiskFieldStatusMessage,
@@ -194,6 +195,13 @@ describe('diskPresentation', () => {
       '7%',
       '12%',
     ]);
+  });
+
+  it('sheds the shared cell padding only on the phone disk layouts', () => {
+    expect(getPhysicalDiskCellPaddingClass('narrow')).toBe('px-1!');
+    expect(getPhysicalDiskCellPaddingClass('compact')).toBe('px-1!');
+    expect(getPhysicalDiskCellPaddingClass('basic')).toBe('');
+    expect(getPhysicalDiskCellPaddingClass('full')).toBe('');
   });
 
   it('shortens only the health words that cannot fit a phone health column', () => {

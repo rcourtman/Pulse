@@ -188,7 +188,7 @@ export const COVERAGE_COLUMNS: readonly BackupTableColumn<CoverageColumnId>[] = 
 
 const COVERAGE_VISIBLE: Record<ProxmoxBackupsTableLayoutMode, readonly CoverageColumnId[]> = {
   // On narrow surfaces answer: which workload, what posture, how recent is the
-  // newest restore point, and did the latest task succeed? Provider-by-provider
+  // newest independent backup, and did the latest task succeed? Provider-by-provider
   // evidence is progressive detail in the expansion row; target identity folds
   // beneath the name so the scan stays legible at 320px.
   compact: ['workload', 'posture', 'latest', 'pbs', 'task'],

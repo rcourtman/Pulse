@@ -248,6 +248,7 @@ type NotificationManager struct {
 	groupWindow        time.Duration
 	groupingEnabled    bool
 	pendingAlerts      []*alerts.Alert
+	pendingAlertIndex  map[pendingFiringOccurrence]int
 	groupTimer         *time.Timer
 	pendingResolved    []*alerts.Alert
 	resolvedGroupTimer *time.Timer
@@ -1007,7 +1008,9 @@ func (n *NotificationManager) SetGroupingConfig(enabled bool, seconds int, byNod
 	if !enabled || seconds == 0 {
 		resolved = n.takePendingResolvedLocked()
 		pending = append(pending, n.pendingAlerts...)
+		clear(n.pendingAlerts)
 		n.pendingAlerts = n.pendingAlerts[:0]
+		n.pendingAlertIndex = nil
 		if n.groupTimer != nil {
 			n.groupTimer.Stop()
 			n.groupTimer = nil
@@ -1118,10 +1121,9 @@ func (n *NotificationManager) SetEnabled(enabled bool) {
 	n.enabled = enabled
 	if !enabled {
 		n.takePendingResolvedLocked()
-		for i := range n.pendingAlerts {
-			n.pendingAlerts[i] = nil
-		}
+		clear(n.pendingAlerts)
 		n.pendingAlerts = n.pendingAlerts[:0]
+		n.pendingAlertIndex = nil
 		if n.groupTimer != nil {
 			n.groupTimer.Stop()
 			n.groupTimer = nil
@@ -1251,8 +1253,9 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 		Bool("inCooldown", exists).
 		Msg("alert passed cooldown check - adding to pending notifications")
 
-	// Add to pending alerts for grouping
-	n.pendingAlerts = append(n.pendingAlerts, alert)
+	// Group occurrences, not callback invocations. A repeat before delivery has
+	// no cooldown receipt yet, but must not inflate the batch's count or payload.
+	n.addPendingFiringAlertLocked(alert)
 
 	// If this is the first alert in the group, start the timer
 	if n.groupTimer == nil {
@@ -1265,6 +1268,52 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 			Msg("started alert grouping timer")
 	}
 	n.mu.Unlock()
+}
+
+type pendingFiringOccurrence struct {
+	id    string
+	start time.Time
+}
+
+func pendingFiringKey(alert *alerts.Alert) (pendingFiringOccurrence, bool) {
+	if alert == nil || alert.ID == "" || alert.StartTime.IsZero() {
+		// Incomplete legacy identity cannot prove that two callbacks refer to
+		// the same occurrence. Preserve both rather than silently lose one.
+		return pendingFiringOccurrence{}, false
+	}
+	// time.Time's map equality includes location and monotonic clock data;
+	// occurrence identity must use instant equality, as cancellation does.
+	return pendingFiringOccurrence{alert.ID, alert.StartTime.UTC().Round(0)}, true
+}
+
+// addPendingFiringAlertLocked takes an already-cloned snapshot under n.mu.
+// The index belongs only to the current grouping window; cancellation rebuilds
+// it lazily, and every flush/disable discards it. No delivery is recorded here.
+func (n *NotificationManager) addPendingFiringAlertLocked(alert *alerts.Alert) {
+	if key, known := pendingFiringKey(alert); known {
+		if n.pendingAlertIndex == nil {
+			n.pendingAlertIndex = make(map[pendingFiringOccurrence]int, len(n.pendingAlerts)+1)
+			for index, pending := range n.pendingAlerts {
+				if key, known := pendingFiringKey(pending); known {
+					n.pendingAlertIndex[key] = index
+				}
+			}
+		}
+		if index, exists := n.pendingAlertIndex[key]; exists {
+			previous := n.pendingAlerts[index]
+			// Keep the newest observation's complete snapshot, including its
+			// operational links. Equal-time callbacks prefer higher severity;
+			// unknown observation time cannot evict a known newer observation.
+			if previous.LastSeen.After(alert.LastSeen) ||
+				(previous.LastSeen.Equal(alert.LastSeen) && notificationSeverityRank(previous.Level) > notificationSeverityRank(alert.Level)) {
+				return
+			}
+			n.pendingAlerts[index] = alert
+			return
+		}
+		n.pendingAlertIndex[key] = len(n.pendingAlerts)
+	}
+	n.pendingAlerts = append(n.pendingAlerts, alert)
 }
 
 // Unknown levels cannot opt into the severity cooldown exception.
@@ -1291,14 +1340,29 @@ func (n *NotificationManager) markAlertsNotified(alertsToSend []*alerts.Alert, s
 			continue
 		}
 		level := alert.Level
-		// Destinations and retries can complete out of order. A late warning
-		// receipt must not re-enable critical delivery for this occurrence.
-		if previous, ok := n.lastNotified[alert.ID]; ok && previous.alertStart.Equal(alert.StartTime) && notificationSeverityRank(previous.level) > notificationSeverityRank(level) {
-			level = previous.level
+		lastSent := sentAt
+		if previous, ok := n.lastNotified[alert.ID]; ok {
+			// Destinations and retries can complete out of order. An older
+			// occurrence still owns its delivery receipt, but must not replace
+			// the current occurrence's repeat-delivery cooldown. Unknown legacy
+			// starts likewise cannot evict a known occurrence.
+			if previous.alertStart.After(alert.StartTime) {
+				continue
+			}
+			if previous.alertStart.Equal(alert.StartTime) {
+				// A late warning cannot re-enable critical delivery, and an
+				// earlier completion cannot shorten the same occurrence's hold.
+				if notificationSeverityRank(previous.level) > notificationSeverityRank(level) {
+					level = previous.level
+				}
+				if previous.lastSent.After(lastSent) {
+					lastSent = previous.lastSent
+				}
+			}
 		}
 		n.lastNotified[alert.ID] = notificationRecord{
 			level:      level,
-			lastSent:   sentAt,
+			lastSent:   lastSent,
 			alertStart: alert.StartTime,
 		}
 	}
@@ -1580,9 +1644,24 @@ func (n *NotificationManager) dispatchResolvedAlerts(alertList []*alerts.Alert) 
 // the grouping window or waiting in the queue), so sending a recovery
 // notification would reference an alert that was never announced.
 func (n *NotificationManager) CancelAlert(alertID string) bool {
+	return n.cancelAlert(alertID, nil)
+}
+
+// CancelResolvedAlert cancels firing work for one resolved occurrence, without
+// deleting a newer occurrence's grouping entries or delivery cooldown.
+// ID-wide cancellation remains available for explicit administrative callers.
+func (n *NotificationManager) CancelResolvedAlert(alert *alerts.Alert) bool {
+	if alert == nil || alert.ID == "" || alert.StartTime.IsZero() {
+		return false
+	}
+	return n.cancelAlert(alert.ID, &alert.StartTime)
+}
+
+func (n *NotificationManager) cancelAlert(alertID string, start *time.Time) bool {
 	n.mu.Lock()
 	queue := n.queue
-	_, firingDelivered := n.lastNotified[alertID]
+	record, firingDelivered := n.lastNotified[alertID]
+	firingDelivered = firingDelivered && (start == nil || record.alertStart.Equal(*start))
 
 	removed := 0
 	if len(n.pendingAlerts) > 0 {
@@ -1591,7 +1670,7 @@ func (n *NotificationManager) CancelAlert(alertID string) bool {
 			if pending == nil {
 				continue
 			}
-			if pending.ID == alertID {
+			if pending.ID == alertID && (start == nil || pending.StartTime.Equal(*start)) {
 				removed++
 				continue
 			}
@@ -1603,6 +1682,9 @@ func (n *NotificationManager) CancelAlert(alertID string) bool {
 		}
 
 		n.pendingAlerts = filtered
+		if removed > 0 {
+			n.pendingAlertIndex = nil
+		}
 
 		if len(n.pendingAlerts) == 0 && n.groupTimer != nil {
 			if n.groupTimer.Stop() {
@@ -1613,14 +1695,21 @@ func (n *NotificationManager) CancelAlert(alertID string) bool {
 	}
 
 	// Clean up cooldown record for resolved alert
-	delete(n.lastNotified, alertID)
+	if start == nil || record.alertStart.Equal(*start) {
+		delete(n.lastNotified, alertID)
+	}
+	remaining := len(n.pendingAlerts)
 	n.mu.Unlock()
 
 	// Cancel any queued notifications containing this alert
 	cancelledPending := 0
 	if queue != nil {
 		var err error
-		cancelledPending, err = queue.CancelByAlertIdentifiers([]string{alertID})
+		if start == nil {
+			cancelledPending, err = queue.CancelByAlertIdentifiers([]string{alertID})
+		} else {
+			cancelledPending, err = queue.CancelByAlertOccurrence(alertID, *start)
+		}
 		if err != nil {
 			log.Error().Err(err).Str("alertID", alertID).Msg("failed to cancel queued notifications")
 		}
@@ -1630,7 +1719,7 @@ func (n *NotificationManager) CancelAlert(alertID string) bool {
 
 	log.Debug().
 		Str("alertID", alertID).
-		Int("remaining", len(n.pendingAlerts)).
+		Int("remaining", remaining).
 		Bool("firingNeverDelivered", firingNeverDelivered).
 		Msg("removed resolved alert from pending notifications and cooldown map")
 
@@ -1650,7 +1739,9 @@ func (n *NotificationManager) sendGroupedAlerts() {
 	copy(alertsToSend, n.pendingAlerts)
 
 	// Clear pending alerts
+	clear(n.pendingAlerts)
 	n.pendingAlerts = n.pendingAlerts[:0]
+	n.pendingAlertIndex = nil
 	if n.groupTimer != nil {
 		n.groupTimer.Stop()
 	}
@@ -2944,6 +3035,12 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 			Str("webhook", webhook.Name).
 			Str("service", "ntfy").
 			Msg("failed to read resolved ntfy webhook response body")
+		// A rejected recovery has the same authoritative HTTP verdict as a
+		// firing delivery, even if its diagnostic body is interrupted. Keep
+		// permanent refusals out of the connectivity retry path.
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return FailfWithClass(ClassFromHTTPStatus(resp.StatusCode), "ntfy webhook returned HTTP %d: failed to read ntfy webhook response: %w", resp.StatusCode, err)
+		}
 		return fmt.Errorf("failed to read ntfy webhook response: %w", err)
 	}
 
@@ -4177,6 +4274,13 @@ func (n *NotificationManager) Stop() {
 		n.mu.Lock()
 		n.enabled = false
 		n.takePendingResolvedLocked()
+		clear(n.pendingAlerts)
+		n.pendingAlerts = n.pendingAlerts[:0]
+		n.pendingAlertIndex = nil
+		if n.groupTimer != nil {
+			n.groupTimer.Stop()
+			n.groupTimer = nil
+		}
 		queue := n.queue
 		cleanupDone := n.cleanupDone
 		client := n.webhookClient

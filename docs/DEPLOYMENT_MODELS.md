@@ -4,7 +4,7 @@ Pulse supports multiple deployment models. This page clarifies what differs betw
 
 ## Summary
 
-| Model | Recommended for | Data/config path | Updates |
+| Model | Recommended for | Default data/config path | Updates |
 | --- | --- | --- | --- |
 | Proxmox VE LXC (installer) | Proxmox-first deployments | `/etc/pulse` | In-app updates supported |
 | systemd (bare metal / VM) | Traditional Linux hosts | `/etc/pulse` | In-app updates supported |
@@ -59,10 +59,15 @@ Pulse uses a split config model:
 - **Relay config**: `relay.enc` (encrypted, Relay and above)
 - **RBAC roles**: `rbac_roles.json` (Pro/legacy Pro+/Cloud)
 
-Path mapping:
+Default path mapping:
 
 - systemd/LXC: `/etc/pulse/*`
 - Docker/Helm: `/data/*`
+
+These are defaults, not a backup inventory. Check the active deployment's
+`PULSE_DATA_DIR`, mounts and any external stores before copying or restoring
+files. Metrics can use a separate `PULSE_METRICS_DB_PATH`; see
+[Metrics storage](METRICS_HISTORY.md#storage-location).
 
 The audit paths above are the default store, not a licence-dependent guarantee
 that storage initialised successfully. Runtime-specific storage can differ;
@@ -84,30 +89,54 @@ Provider-hosted MSP layout:
 
 ## Updates by Model
 
+Before changing the server binary or image, record its running version and
+edition, keep the saved deployment configuration, and take a consistent private
+backup of the actual data and external stores. Preserve encrypted files with
+their matching `.encryption.key` and audit signing key. Use a stopped, consistent
+filesystem/volume backup or supported backup tooling; copying a live `.db` file
+alone can omit SQLite sidecar files. Do not post configuration files, environment
+dumps or Helm secret values in an issue.
+
+An update snapshot is not necessarily a complete data backup, and reverting a
+binary or image does not undo data migrations. Check
+[rollback and backup scope](AUTO_UPDATE.md#rollback) before updating or reverting;
+keep the previous binary/image and matching data backup until recovery is checked.
+
 ### systemd and Proxmox LXC
 
-Use the UI:
+Use **Settings → System → Updates**. Follow
+[server update guidance](AUTO_UPDATE.md) for the deployment's update controls and
+Update History. Pulse attempts snapshot and rollback operations; a recorded
+backup path alone does not establish that all active data was copied or that
+recovery succeeded.
 
-- **Settings → System → Updates**
-
-These deployments can apply updates by downloading a release and swapping binaries/config safely with backups and history.
+For LXC, Pulse's service and data are inside the container, not on the Proxmox
+host. Keep the failed state and check the running version and service health
+before retrying a failed update.
 
 ### Docker
 
-Pull a new image and restart:
+Follow [Docker server updates](DOCKER.md#-updates) from the original Compose
+project or saved container deployment. Persist the exact target in its `image:`
+line, or in `PULSE_IMAGE` when that line uses the variable; pulling a different
+tag alone does not change the configured image. Paid Pro installs must keep
+their private image, not replace it with the Community image.
 
-```bash
-docker pull rcourtman/pulse:latest
-docker compose up -d
-```
+Pull and recreate only the Pulse service, stopping if the pull fails. Preserve
+its data volume, ports and settings, and check the running image and server
+version afterwards. This updates the Pulse server, not its agents or the
+containers it monitors; there is no need to restart unrelated Compose services.
+
 ### Kubernetes (Helm)
 
-Upgrade the chart:
+Use the existing Helm release and namespace, the chosen chart version and your
+saved deployment values. Review changes to persistence, Secret references and
+image edition before rollout; keep the current PVC, keys and settings. Do not
+let a default Community image replace paid Pro.
 
-```bash
-helm repo update
-helm upgrade pulse pulse/pulse -n pulse
-```
+See [Kubernetes deployment settings](KUBERNETES.md) and use your cluster's
+rollout and recovery procedure. A Helm rollback changes release resources; it
+does not guarantee restoration of Pulse data changed by a newer binary.
 
 ### Provider-hosted MSP
 

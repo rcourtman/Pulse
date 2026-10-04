@@ -108,4 +108,20 @@ describe('useDiskDetailModel', () => {
       'Disk I/O is unsupported: per-member counters unavailable',
     ]);
   });
+
+  it('keeps catalog entries stable across matching current-field snapshots', () => {
+    const initial = buildDisk();
+    const [disk, setDisk] = createSignal(initial);
+    const { result } = renderHook(() => useDiskDetailModel({ disk }));
+    const charts = result.historyCharts();
+    setDisk({ ...initial, physicalDisk: { ...initial.physicalDisk!, temperature: 65 } });
+    expect(result.historyCharts()).toBe(charts);
+    setDisk({
+      ...initial,
+      physicalDisk: { ...initial.physicalDisk!, temperature: undefined, smart: undefined },
+    });
+    expect(result.historyCharts()).toBe(charts);
+    expect(result.historyResourceId()).toBe('agent-tower:sda');
+    expect(result.attributeCards()).toEqual([]);
+  });
 });

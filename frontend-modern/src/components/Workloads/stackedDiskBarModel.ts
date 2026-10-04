@@ -18,6 +18,7 @@ export interface StackedDiskBarProps {
   showDiskCount?: boolean;
   anomaly?: AnomalyReport | null;
   thresholds?: MetricDisplayThresholds | null;
+  statusMessage?: string;
 }
 
 export interface StackedDiskSegment {

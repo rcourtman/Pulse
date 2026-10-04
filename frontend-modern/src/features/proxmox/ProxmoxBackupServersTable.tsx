@@ -380,6 +380,7 @@ export function buildBackupServerRows(
 export function ProxmoxBackupServersTable(props: {
   servers: readonly Resource[];
   backups?: readonly PBSBackup[];
+  backupInventoryState?: 'available' | 'loading' | 'unavailable';
   emptyIcon?: JSX.Element;
   layoutWidth?: Accessor<number | null | undefined>;
 }) {
@@ -615,10 +616,27 @@ export function ProxmoxBackupServersTable(props: {
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             <Show when={row.datastore} fallback={<span class="text-muted">—</span>}>
-                              <PlatformTableNumberValue
-                                value={row.backupCount}
-                                format={formatPlatformTableIntegerValue}
-                              />
+                              <Show
+                                when={
+                                  !props.backupInventoryState ||
+                                  props.backupInventoryState === 'available'
+                                }
+                                fallback={
+                                  <span
+                                    class="text-muted text-[11px]"
+                                    title={`PBS backup inventory is ${props.backupInventoryState}`}
+                                  >
+                                    {props.backupInventoryState === 'loading'
+                                      ? 'Loading'
+                                      : 'Unavailable'}
+                                  </span>
+                                }
+                              >
+                                <PlatformTableNumberValue
+                                  value={row.backupCount}
+                                  format={formatPlatformTableIntegerValue}
+                                />
+                              </Show>
                             </Show>
                           </TableCell>
                         </Show>

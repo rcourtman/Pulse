@@ -131,6 +131,60 @@ describe('docsLinks', () => {
     }
   });
 
+  it('keeps reverse-proxy help explicit about forwarded HTTPS and peer trust', () => {
+    const proxy = readFileSync(path.join(repoRoot, 'docs', 'REVERSE_PROXY.md'), 'utf8');
+    const configuration = readFileSync(path.join(repoRoot, 'docs', 'CONFIGURATION.md'), 'utf8');
+    const setup = proxy
+      .split('## Before configuring the proxy')[1]
+      ?.split('## ⚡ Quick Configs')[0];
+    expect(setup).toBeDefined();
+    expect(setup).toContain('configured immediate peer');
+    expect(setup).toContain('PULSE_TRUSTED_PROXY_CIDRS=127.0.0.1/32');
+    expect(setup).toContain('::1/128');
+    expect(setup).toContain('Wildcard ranges `0.0.0.0/0` and `::/0` are rejected');
+    expect(setup).toContain('not an authentication bypass');
+    expect(setup).toContain('[proxy authentication guide](PROXY_AUTH.md)');
+    expect(setup).toContain('including its Header Trust Boundary');
+    const nginx = proxy.split('### Nginx')[1].split('### Caddy')[0];
+    expect(nginx).toContain('HTTPS `server` block');
+    expect(nginx).toContain('proxy_set_header X-Forwarded-Proto $scheme;');
+    expect(nginx).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
+    expect(nginx).toContain('proxy_set_header X-Forwarded-Host $host;');
+    expect(nginx).toContain('proxy_set_header Forwarded "";');
+    expect(proxy).not.toContain('$proxy_add_x_forwarded_for');
+    const troubleshooting = proxy.split('### "HTTPS: HTTP only"')[1].split('### Other Issues')[0];
+    expect(troubleshooting).toContain('Adding the header alone is not sufficient');
+    expect(troubleshooting).toContain('inside** its\n`reverse_proxy` block');
+    expect(troubleshooting).toContain('does not verify authentication, WebSockets or proxy');
+    expect(configuration).toContain('REVERSE_PROXY.md#before-configuring-the-proxy');
+    expect(configuration).toContain('forwarded client IP, scheme, host and port');
+  });
+
+  it('keeps configuration transfer separate from full-state recovery', () => {
+    const migration = readFileSync(path.join(repoRoot, 'docs', 'MIGRATION.md'), 'utf8');
+    const agent = readFileSync(path.join(repoRoot, 'docs', 'UNIFIED_AGENT.md'), 'utf8');
+    const scope = migration
+      .split('### Configuration transfer')[1]
+      .split('### Full-state recovery')[0];
+    expect(scope).toContain('Proxmox VE, PBS and PMG');
+    expect(scope).toContain('| TrueNAS, vSphere and Machine Availability');
+    expect(scope).toContain('SSO configuration **is included**');
+    expect(scope).toContain(
+      'Server-side host/Docker/Kubernetes agent inventory and enrolment state',
+    );
+    expect(migration).toContain('not a full backup of the installation');
+    expect(migration).toContain('Stop Pulse before taking that');
+    expect(migration).toContain('matching `.encryption.key`');
+    expect(migration).toContain('reload/apply failure');
+    expect(migration).toContain('it does not merge');
+    expect(migration).toContain('UNIFIED_AGENT.md#moving-pulse-to-a-new-address');
+    expect(migration).not.toContain('Update the `--token` flag');
+    expect(migration).not.toContain('Restored in < 5 minutes');
+    expect(migration).not.toContain('re-enable in Settings');
+    expect(agent).toContain('restores API-token records, not the server-side');
+    expect(agent).toContain('MIGRATION.md#configuration-transfer');
+  });
+
   it('keeps lockout and incident reporting guidance safe for the affected client', () => {
     const troubleshooting = readFileSync(path.join(repoRoot, 'docs', 'TROUBLESHOOTING.md'), 'utf8');
     const recovery = troubleshooting.split('### Recovery Mode')[1].split('\n---')[0];

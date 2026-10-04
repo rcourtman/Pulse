@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -3785,7 +3786,12 @@ func labelsToTags(labels map[string]string) []string {
 		}
 		out = append(out, key+":"+v)
 	}
-	return uniqueStrings(out)
+	// Labels are a set, but tags are sent as an ordered JSON array. Stabilise
+	// only this map-derived list so rebuilds do not create spurious socket
+	// deltas. uniqueStrings also serves ordered identity lists; do not sort it.
+	out = uniqueStrings(out)
+	slices.Sort(out)
+	return out
 }
 
 func convertInterfaces(interfaces []models.HostNetworkInterface) []NetworkInterface {

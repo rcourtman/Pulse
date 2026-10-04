@@ -669,7 +669,8 @@ func (e *EnhancedEmailManager) sendTLS(addr string, msg []byte, addresses resolv
 		return fmt.Errorf("message close failed: %w", err)
 	}
 
-	return client.Quit()
+	finishAcceptedSMTPSession(client)
+	return nil
 }
 
 // sendStartTLS sends email using STARTTLS
@@ -739,7 +740,8 @@ func (e *EnhancedEmailManager) sendStartTLS(addr string, msg []byte, addresses r
 		return fmt.Errorf("message close failed: %w", err)
 	}
 
-	return client.Quit()
+	finishAcceptedSMTPSession(client)
+	return nil
 }
 
 // TestConnection tests the email server connection
@@ -859,5 +861,18 @@ func (e *EnhancedEmailManager) sendPlain(addr string, msg []byte, addresses reso
 		return fmt.Errorf("message close failed: %w", err)
 	}
 
-	return client.Quit()
+	finishAcceptedSMTPSession(client)
+	return nil
+}
+
+// The successful final DATA reply has transferred responsibility for the
+// message to the server. QUIT is session cleanup, not another delivery verdict:
+// returning its error would resend an accepted message at either retry layer.
+// Missing or rejected DATA replies still take the ordinary failure path.
+func finishAcceptedSMTPSession(client *smtp.Client) {
+	if err := client.Quit(); err != nil {
+		// Reply text may contain private provider details; keep this diagnostic
+		// fixed and separate from the successful delivery audit.
+		log.Debug().Msg("SMTP session cleanup failed after message acceptance")
+	}
 }

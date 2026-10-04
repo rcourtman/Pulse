@@ -100,6 +100,21 @@ def _contract_reference(contract_path: str, needle: str, runtime_path: str) -> d
 
 
 class SubsystemLookupTest(unittest.TestCase):
+
+    def test_demo_transaction_sources_have_connected_proof_without_widening_release_metadata(self):
+        for path in (".github/scripts/demo-runtime-transaction.py", ".github/scripts/dispatch-demo-runtime.py",
+                     ".github/scripts/tests/demo_runtime_native.py", ".github/workflows/demo-runtime-native.yml"):
+            with self.subTest(path=path):
+                result = lookup_paths([path])
+                self.assertEqual(result["unowned_runtime_files"], [])
+                self.assertEqual({item["subsystem"] for item in result["impacted_subsystems"]}, {"deployment-installability"})
+                requirement = result["files"][0]["matches"][0]["verification_requirement"]
+                self.assertEqual(requirement["id"], "demo-runtime-transaction")
+                self.assertEqual(sorted(requirement["exact_files"]), [
+                    ".github/scripts/tests/test_demo_runtime_transaction.py",
+                    "scripts/installtests/demo_transaction_test.go",
+                ])
+
     def git(self, repo_root: Path, *args: str) -> None:
         subprocess.run(
             ["git", *args],

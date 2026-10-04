@@ -15,14 +15,26 @@ needed for your task. The read-only example below requires `monitoring:read`.
 Pass the token in the `X-API-Token` header, using a private header file so the
 secret does not appear in shell history or process arguments.
 
-On the machine running curl, prepare the file and open it in an editor:
+On a trusted machine, as the account running curl, prepare the file and open
+it in an editor. This preserves an existing file, restricts its directory and
+stops before editing if preparation fails or a credential path is a symlink:
 
 ```bash
-umask 077
-mkdir -p "$HOME/.config/pulse"
-touch "$HOME/.config/pulse/api-header"
-chmod 600 "$HOME/.config/pulse/api-header"
-vi "$HOME/.config/pulse/api-header"
+(
+  set -eu
+  umask 077
+  auth_dir="$HOME/.config/pulse"
+  auth_file="$auth_dir/api-header"
+  if [ -L "$HOME/.config" ] || [ -L "$auth_dir" ] || [ -L "$auth_file" ]; then
+    printf 'Refusing a symlinked credential path.\n' >&2
+    exit 1
+  fi
+  mkdir -p "$auth_dir"
+  chmod 700 "$auth_dir"
+  touch "$auth_file"
+  chmod 600 "$auth_file"
+  vi "$auth_file"
+)
 ```
 
 In the editor, save just this line, replacing `<token>` with the API token:

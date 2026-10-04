@@ -143,9 +143,12 @@ describe('DiskDetail', () => {
 
     const health = screen.getByTestId('disk-detail-health');
     expect(within(health).getByText('Replace Now')).toHaveClass('text-red-700');
-    expect(
-      within(health).getByText('Disk health has degraded to a critical state.'),
-    ).toBeInTheDocument();
+    expect(within(health).getByText('Disk health has degraded to a critical state.')).toHaveClass(
+      'min-w-0',
+      'max-w-full',
+      'whitespace-normal',
+      'wrap-break-word',
+    );
   });
 
   it('keeps the drawer header to the verdict alone when the disk is healthy', () => {
@@ -169,5 +172,18 @@ describe('DiskDetail', () => {
     expect(
       screen.getByText('Detailed SMART attributes are not available for this disk.'),
     ).toHaveAttribute('role', 'status');
+  });
+
+  it('offers the stored disk-family catalog when current SMART and temperature disappear', () => {
+    const disk = buildDisk();
+    delete disk.physicalDisk!.temperature;
+    delete disk.physicalDisk!.smart;
+    disk.physicalDisk!.collection = { io: { state: 'unsupported' } };
+    render(() => <DiskDetail disk={disk} nodes={[]} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    expect(screen.getAllByTestId('history-chart').map((chart) => chart.textContent)).toEqual([
+      'disk:agent-tower:sda:smart_temp:24h',
+      'disk:agent-tower:sda:smart_reallocated_sectors:24h',
+    ]);
   });
 });

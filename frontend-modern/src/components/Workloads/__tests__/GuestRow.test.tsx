@@ -3,6 +3,7 @@ import { render, screen, fireEvent, cleanup } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Memory, Disk } from '@/types/api';
+import { guestDiskDeferrals } from '../__fixtures__/guestDiskDeferrals';
 
 // ── Hoisted mocks ──────────────────────────────────────────────────────
 
@@ -75,7 +76,9 @@ vi.mock('@/components/Workloads/EnhancedCPUBar', () => ({
 }));
 
 vi.mock('../StackedDiskBar', () => ({
-  StackedDiskBar: () => <div data-testid="disk-bar" />,
+  StackedDiskBar: (props: { statusMessage?: string }) => (
+    <div data-testid="disk-bar" data-status-message={props.statusMessage} />
+  ),
 }));
 
 vi.mock('../StackedMemoryBar', () => ({
@@ -668,6 +671,39 @@ describe('GuestRow', () => {
   });
 
   describe('lock label', () => {
+    it.each(guestDiskDeferrals)(
+      'annotates retained row and disk tooltip for %s',
+      (reason, message) => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({ diskStatusReason: `prev-${reason}` }),
+        });
+        const expected = `Using last known disk stats. ${message}`;
+        expect(container.querySelector('[data-workload-col="disk"]')).toHaveAttribute(
+          'title',
+          expected,
+        );
+        expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-status-message', expected);
+      },
+    );
+
+    it('clears retained status for a same-VM fresh update in sparkline mode without remounting', () => {
+      const [guest, setGuest] = createSignal(
+        makeGuest({ diskStatusReason: 'prev-agent-cooldown' }),
+      );
+      const { container } = render(() => (
+        <table>
+          <tbody>
+            <GuestRow guest={guest()} metricDisplayMode="sparklines" />
+          </tbody>
+        </table>
+      ));
+      const cell = container.querySelector('[data-workload-col="disk"]');
+      expect(cell).toHaveAttribute('title', expect.stringContaining('Using last known'));
+      setGuest(makeGuest({ diskStatusReason: undefined, disk: makeDisk({ usage: 75 }) }));
+      expect(container.querySelector('[data-workload-col="disk"]')).toBe(cell);
+      expect(cell).not.toHaveAttribute('title');
+    });
+
     it('shows lock label when guest is locked', () => {
       renderGuestRow({ guest: makeGuest({ lock: 'migrate' }) });
       expect(screen.getByText(/Lock:.*migrate/)).toBeTruthy();

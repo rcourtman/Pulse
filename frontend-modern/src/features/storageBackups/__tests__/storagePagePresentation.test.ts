@@ -71,8 +71,8 @@ describe('storagePagePresentation', () => {
   });
 
   it('sheds the desktop cell gutter only on the phone pool layouts', () => {
-    expect(getStoragePoolCellPaddingClass('narrow')).toBe('!px-1');
-    expect(getStoragePoolCellPaddingClass('compact')).toBe('!px-1');
+    expect(getStoragePoolCellPaddingClass('narrow')).toBe('px-1!');
+    expect(getStoragePoolCellPaddingClass('compact')).toBe('px-1!');
     expect(getStoragePoolCellPaddingClass('operational')).toBe('');
     expect(getStoragePoolCellPaddingClass('full')).toBe('');
   });

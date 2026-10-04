@@ -1,9 +1,10 @@
-import { Show, createMemo, createResource, createSignal, type Component, type JSX } from 'solid-js';
+import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import { useLocation, useSearchParams } from '@solidjs/router';
 import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useProtectionPostures } from '@/hooks/useProtectionPostures';
+import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import {
   buildProxmoxBackupsPath,
   PROXMOX_BACKUPS_DEFAULT_VIEW,
@@ -12,6 +13,7 @@ import {
   type ProxmoxBackupsView,
 } from '@/routing/resourceLinks';
 import { apiFetch } from '@/utils/apiClient';
+import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 import {
   PlatformErrorState,
   PlatformResourceCounter,
@@ -27,9 +29,7 @@ import type {
   GuestSnapshot,
   PBSBackup,
   PBSBackupsPayload,
-  PBSBackupsResponse,
   PVEBackupsPayload,
-  PVEBackupsResponse,
   StorageBackup,
 } from '@/types/api';
 import type { Resource } from '@/types/resource';
@@ -68,6 +68,12 @@ import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
 import { ProxmoxBackupServersTable } from './ProxmoxBackupServersTable';
 import { ProxmoxCoverageTable } from './ProxmoxCoverageTable';
 import { ProxmoxRecoverableTable } from './ProxmoxRecoverableTable';
+import {
+  BackupInventoryFormatError,
+  parsePBSBackupInventory,
+  parsePVEBackupInventory,
+  readBackupInventoryJSON,
+} from './proxmoxBackupInventory';
 
 // One backups surface, two operator views: a chronological recoverable-artifact
 // feed for "what ran when", and a guest coverage table for "what is protected".
@@ -79,28 +85,33 @@ const BACKUP_VIEW_TABS: readonly { id: BackupView; label: string }[] = [
   { id: 'coverage', label: 'Coverage' },
 ];
 
-async function fetchPVEBackups(): Promise<PVEBackupsPayload> {
-  const response = await apiFetch('/api/backups/pve');
+const EMPTY_PVE_BACKUPS: PVEBackupsPayload = {
+  backupTasks: [],
+  storageBackups: [],
+  guestSnapshots: [],
+};
+const EMPTY_PBS_BACKUPS: PBSBackupsPayload = { backups: [] };
+const BACKUP_READ_NOTICE_CLASS =
+  'rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100';
+
+async function fetchPVEBackups(signal: AbortSignal): Promise<PVEBackupsPayload> {
+  const response = await apiFetch('/api/backups/pve', { signal });
   if (!response.ok) {
-    throw new Error(`Failed to load PVE backups (${response.status})`);
+    throw Object.assign(new Error(`Failed to load PVE backups (${response.status})`), {
+      status: response.status,
+    });
   }
-  const payload = (await response.json()) as PVEBackupsResponse;
-  return (
-    payload?.data ?? {
-      backupTasks: [],
-      storageBackups: [],
-      guestSnapshots: [],
-    }
-  );
+  return parsePVEBackupInventory(await readBackupInventoryJSON(response));
 }
 
-async function fetchPBSBackups(): Promise<PBSBackupsPayload> {
-  const response = await apiFetch('/api/backups/pbs');
+async function fetchPBSBackups(signal: AbortSignal): Promise<PBSBackupsPayload> {
+  const response = await apiFetch('/api/backups/pbs', { signal });
   if (!response.ok) {
-    throw new Error(`Failed to load PBS backups (${response.status})`);
+    throw Object.assign(new Error(`Failed to load PBS backups (${response.status})`), {
+      status: response.status,
+    });
   }
-  const payload = (await response.json()) as PBSBackupsResponse;
-  return payload?.data ?? { backups: [] };
+  return parsePBSBackupInventory(await readBackupInventoryJSON(response));
 }
 
 export const ProxmoxBackupsTable: Component<{
@@ -108,8 +119,31 @@ export const ProxmoxBackupsTable: Component<{
   workloads?: readonly Resource[];
   servers?: readonly Resource[];
 }> = (props) => {
-  const [backups, { refetch }] = createResource<PVEBackupsPayload>(fetchPVEBackups);
-  const [pbsBackups] = createResource<PBSBackupsPayload>(fetchPBSBackups);
+  // Independent read owners contain source failures and replace pending reads
+  // on org changes/disposal. No new polling or cross-route inventory cache.
+  const backups = createNonSuspendingQuery({
+    source: () => 'pve',
+    fetcher: (_source, signal) => fetchPVEBackups(signal),
+    initialValue: EMPTY_PVE_BACKUPS,
+  });
+  const pbsBackups = createNonSuspendingQuery({
+    source: () => 'pbs',
+    fetcher: (_source, signal) => fetchPBSBackups(signal),
+    initialValue: EMPTY_PBS_BACKUPS,
+  });
+  const inventorySources = [
+    { label: 'PVE', query: backups },
+    { label: 'PBS', query: pbsBackups },
+  ];
+  const inventoryIncomplete = () =>
+    inventorySources.some(({ query }) => !query.resolvedOnce() || Boolean(query.error()));
+  const hasReadableInventory = () =>
+    inventorySources.some(({ query }) => query.resolvedOnce() && !query.error());
+  const allInventoriesFailed = () => inventorySources.every(({ query }) => Boolean(query.error()));
+  const retryAllInventories = () => {
+    if (inventorySources.some(({ query }) => query.loading())) return;
+    void Promise.all([backups.refetch(), pbsBackups.refetch(), protectionPostures.refetch()]);
+  };
   const { isMobile } = useBreakpoint();
   const location = useLocation();
   const protectionPostures = useProtectionPostures(() =>
@@ -261,10 +295,20 @@ export const ProxmoxBackupsTable: Component<{
     });
   const toggleDay = (key: string) => setSelectedDateKey(selectedDateKey() === key ? null : key);
 
-  const pbsArtifacts = createMemo<PBSBackup[]>(() => pbsBackups()?.backups ?? []);
-  const snapshots = createMemo<GuestSnapshot[]>(() => backups()?.guestSnapshots ?? []);
-  const archives = createMemo<StorageBackup[]>(() => backups()?.storageBackups ?? []);
-  const tasks = createMemo<BackupTask[]>(() => backups()?.backupTasks ?? []);
+  // Retain readable observations while a retry is pending, but never treat a
+  // settled failed read as a complete inventory or expose its old artifacts.
+  const pbsArtifacts = createMemo<PBSBackup[]>(() =>
+    pbsBackups.error() ? [] : (pbsBackups.value().backups ?? []),
+  );
+  const snapshots = createMemo<GuestSnapshot[]>(() =>
+    backups.error() ? [] : (backups.value().guestSnapshots ?? []),
+  );
+  const archives = createMemo<StorageBackup[]>(() =>
+    backups.error() ? [] : (backups.value().storageBackups ?? []),
+  );
+  const tasks = createMemo<BackupTask[]>(() =>
+    backups.error() ? [] : (backups.value().backupTasks ?? []),
+  );
 
   // Render-time `now` snapshot so all age comparisons within a render share a
   // reference moment; not reactive to ticking time (fine for sysadmin grouping).
@@ -628,17 +672,19 @@ export const ProxmoxBackupsTable: Component<{
 
   return (
     <Show
-      when={!backups.error}
+      when={!allInventoriesFailed()}
       fallback={
         <PlatformErrorState
           title="Could not load Proxmox backup inventory"
-          description={(backups.error as Error | undefined)?.message ?? 'Refresh to retry.'}
-          onRefresh={() => void refetch()}
+          description="PVE and PBS backup inventories are unavailable. Counts are incomplete. Refresh to retry both sources."
+          onRefresh={retryAllInventories}
         />
       }
     >
       <Show
-        when={backups() !== undefined}
+        when={
+          hasReadableInventory() || inventorySources.some(({ query }) => Boolean(query.error()))
+        }
         fallback={
           <PlatformTableLoadingState
             title="Loading Proxmox backup inventory"
@@ -648,17 +694,55 @@ export const ProxmoxBackupsTable: Component<{
       >
         <div class="space-y-3">
           <PlatformSectionTabs tabs={backupViewTabs()} active={view()} ariaLabel="Backup views" />
+          <For each={inventorySources}>
+            {({ label, query }) => (
+              <Show when={!query.resolvedOnce() || query.error()}>
+                <div
+                  role="status"
+                  class={`${BACKUP_READ_NOTICE_CLASS} flex flex-wrap items-center justify-between gap-2`}
+                >
+                  <span>
+                    {label} backup inventory is {query.error() ? 'unavailable' : 'loading'}. Counts
+                    are incomplete. {getAPIReadAccessErrorMessage(query.error())}
+                    <Show when={query.error() instanceof BackupInventoryFormatError}>
+                      {' '}
+                      The response format is invalid. Missing restore points do not mean no backups
+                      exist.
+                    </Show>
+                  </span>
+                  <Show when={query.error()}>
+                    <button
+                      type="button"
+                      class="min-h-10 shrink-0 rounded-md border border-current px-3 font-medium hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
+                      aria-label={`Retry ${label} inventory`}
+                      disabled={query.loading()}
+                      onClick={() => void query.refetch()}
+                    >
+                      {query.loading() ? 'Retrying…' : `Retry ${label} inventory`}
+                    </button>
+                  </Show>
+                </div>
+              </Show>
+            )}
+          </For>
           <Show when={protectionPostures.response.error}>
-            <div
-              role="status"
-              class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900/25 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
-            >
+            <div role="status" class={BACKUP_READ_NOTICE_CLASS}>
               Protection posture is unavailable. Pulse is showing restore evidence without guessing
               whether workloads are protected.
             </div>
           </Show>
           <Show when={(props.servers?.length ?? 0) > 0}>
-            <ProxmoxBackupServersTable servers={props.servers ?? []} backups={pbsArtifacts()} />
+            <ProxmoxBackupServersTable
+              servers={props.servers ?? []}
+              backups={pbsArtifacts()}
+              backupInventoryState={
+                pbsBackups.error()
+                  ? 'unavailable'
+                  : pbsBackups.resolvedOnce()
+                    ? 'available'
+                    : 'loading'
+              }
+            />
           </Show>
 
           {/* The health strip renders identically in both route-backed views. */}
@@ -667,7 +751,7 @@ export const ProxmoxBackupsTable: Component<{
             tail={
               <span>
                 {liveTotalCount()} targets · {recoveryModel().coverageSummary.recoverableArtifacts}{' '}
-                restore points
+                restore points{inventoryIncomplete() ? ' read' : ''}
                 <Show when={recoveryModel().coverageSummary.withPBS > 0}>
                   {' · '}
                   {recoveryModel().coverageSummary.withPBS} with{' '}
@@ -800,7 +884,13 @@ export const ProxmoxBackupsTable: Component<{
               <PlatformResourceCounter
                 visible={view() === 'date' ? visibleRecoverableCount() : visibleLiveCount()}
                 total={view() === 'date' ? totalRecoverableCount() : liveTotalCount()}
-                rowNoun={view() === 'date' ? 'backups' : 'targets'}
+                rowNoun={
+                  view() === 'date'
+                    ? inventoryIncomplete()
+                      ? 'backups read'
+                      : 'backups'
+                    : 'targets'
+                }
               />
             }
           />
@@ -810,8 +900,14 @@ export const ProxmoxBackupsTable: Component<{
               artifacts={filteredRecoverableArtifacts()}
               hasAnyArtifacts={recoveryModel().recoverableArtifacts.length > 0}
               emptyIcon={props.emptyIcon}
-              emptyTitle="No backups yet"
-              emptyDescription="PBS snapshots, PVE backup files, and guest snapshots will appear here once backups run."
+              emptyTitle={
+                inventoryIncomplete() ? 'Backup inventory is incomplete' : 'No backups yet'
+              }
+              emptyDescription={
+                inventoryIncomplete()
+                  ? 'Some backup sources are still loading or unavailable. Missing restore points do not mean no backups exist.'
+                  : 'PBS snapshots, PVE backup files, and guest snapshots will appear here once backups run.'
+              }
               sortKey={recoverableSortKey}
               sortDirection={recoverableSortDirection}
               onSort={handleRecoverableSort}

@@ -52,10 +52,12 @@ first unless you are intentionally removing that host from Pulse.
 
 ### Moving Pulse to a new address
 
-Configuration export/import restores the server-side agent records and API
-tokens. It cannot rewrite the primary Pulse URL on remote machines because
-agents initiate the connection. Prefer a stable DNS name for the primary URL
-so replacing the Pulse host does not require an agent migration.
+Configuration export/import restores API-token records, not the server-side
+agent inventory, enrolment state, profiles or assignments. See the
+[configuration-transfer scope](MIGRATION.md#configuration-transfer) before
+retiring the old server. Import cannot rewrite the primary Pulse URL on remote
+machines because agents initiate the connection. Prefer a stable DNS name for
+the primary URL, but still verify fresh reports and agent admission after a move.
 
 After importing the configuration on a Pulse server with a different address,
 retarget each existing standard Linux agent from that agent machine. Download

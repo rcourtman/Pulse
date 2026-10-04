@@ -86,15 +86,57 @@ These fields and behaviors are stable; ticket-routing integrations can rely on t
 - `X-Pulse-Timestamp`: Unix seconds at send time.
 - `X-Pulse-Signature`: `v1=` + hex HMAC-SHA256 over `timestamp + "." + body`, keyed with the shared secret.
 
-To verify: recompute the HMAC over the received timestamp and raw body, compare with constant-time equality, and reject requests whose timestamp is outside your tolerance window (e.g. 5 minutes) to block replays.
+Verify before parsing the JSON or performing any action. Read the original body
+as bytes and the complete `X-Pulse-Timestamp` and `X-Pulse-Signature` header
+values; reject missing or duplicate signing headers. Do not re-serialize JSON,
+trim the body, or trust a timestamp from the payload instead of the header.
+
+This Python example accepts timestamps within five minutes of the receiver's
+clock, rejects malformed headers, and compares the HMAC in constant time. Keep
+both machines' clocks synchronised. Load the shared secret from private receiver
+configuration, not from the request, a command argument or a log. Pulse trims
+surrounding whitespace from its configured secret; the verifier does the same.
+An empty secret must never authenticate a request.
 
 ```python
-import hashlib, hmac
+import hashlib
+import hmac
+import re
+import time
+
+MAX_SKEW_SECONDS = 300
+
 
 def verify(secret: str, timestamp: str, body: bytes, signature: str) -> bool:
-    expected = "v1=" + hmac.new(secret.encode(), f"{timestamp}.".encode() + body, hashlib.sha256).hexdigest()
+    secret = secret.strip()
+    if not secret or not isinstance(body, bytes):
+        return False
+    if not isinstance(timestamp, str) or re.fullmatch(r"[0-9]{1,12}", timestamp) is None:
+        return False
+    if not isinstance(signature, str) or re.fullmatch(r"v1=[0-9a-f]{64}", signature) is None:
+        return False
+    if abs(time.time() - int(timestamp)) > MAX_SKEW_SECONDS:
+        return False
+    expected = "v1=" + hmac.new(
+        secret.encode(), timestamp.encode() + b"." + body, hashlib.sha256
+    ).hexdigest()
     return hmac.compare_digest(expected, signature)
 ```
+
+A time window rejects old captures, **not every replay**: the same signed
+request can arrive more than once within that window, and Pulse signs each
+retry with its current send time. After verification, deduplicate atomically
+before creating a ticket or taking another action. Use a durable key scoped to
+the configured Pulse sender and destination, built from the authenticated
+payload's alert ID and event (`{{.ID}}` and `{{.Event}}` in your template); keep
+it across retries and receiver restarts. An `alert` and its later `resolved`
+are different events, not duplicates. The `X-Pulse-Event-ID` header is a useful
+correlation hint, but is **not covered by this HMAC**: do not let a changed
+header bypass deduplication of an otherwise identical signed event. The sample
+PSA payloads below include `alertId` and `event` for this purpose. A valid HMAC
+establishes integrity, not that processing succeeded; retain your receiver's
+normal durable processing and retry handling. Never log the secret or full
+credential-bearing request while diagnosing a rejection.
 
 The secret is write-only through the API: list responses mask it, and an update that echoes the masked placeholder keeps the stored secret.
 

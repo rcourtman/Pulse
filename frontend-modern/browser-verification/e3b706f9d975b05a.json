@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "ffac59b6dcccaf03f52fb4ba747b6f99a79ba9b0",
+  "verified_at": "2026-10-03T22:38:46.141Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts": "9f50f630df8379673032052970e7cc6d287c02ecd212b3df5d16f1032be42413"
+  },
+  "routes": [
+    "/browser-tests/composed-disk-labels.html",
+    "/browser-tests/guest-disk-deferral.html"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Exact combined deferred-read statusMessage and measured-glyph disk model; production StackedDiskBar, ResizeObserver, GuestRow, Overview, disk list and stylesheet, synthetic observations only. Playwright 1.56.1 matches the integration lock; Chromium 141.0.7390.37 light desktop and WebKit 26.0 dark 390px phone.",
+    "100px bars retain percentages and omit optional capacity detail; equal inline slots retain iiii 67% but drop the wider MMMM label. 320px bars show whole capacity, anomaly, fullest-disk/count and inline labels without ellipsis. The micro-bars keep a truthful 67% highest-disk label.",
+    "Paused guest evidence retains last-known disk values and caller-owned VM-operation-lock context in row, Overview, disk list and desktop tooltip. Same-VM fresh observations clear stale context without remount; row, Overview and disk list settle at 75%. All eight final screenshots inspected.",
+    "Phone drawer rendering is verified using an emulated mouse click on the guest name. Separate trusted WebKit row/name taps emitted no click and did not open the drawer; this pass does not establish touch acceptance or clear that adverse observation. No native collection, QGA/thaw, installation or release claim."
+  ],
+  "interactions": [
+    "Chromium keyboard focus and Enter / WebKit tap on the native Roomy button drive ResizeObserver from 100px to 320px. Independent DOM scrollWidth/clientWidth checks verify rendered label fit.",
+    "Desktop hover reads paused provenance beside unchanged /data evidence, then confirms fresh same-disk update removes only that status. Production GuestRow/Overview/list callers are exercised at both viewports; the phone guest is opened by mouse click, not a claimed tap success.",
+    "Fresh source update preserves the same row node, clears stale status, updates the Overview progressbar and waits for AnimatedNumber to settle at 75% before capture. No page error, off-origin request, non-GET request or horizontal page overflow."
+  ]
+}

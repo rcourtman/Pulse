@@ -74,7 +74,7 @@ export const isStoragePoolColumnVisible = (
 // headers (via the shared container query) and the physical-disk rows do:
 // four cells at 12px each were 48px of a 361px row, and the measured values
 // fit the tracks with only a pixel or two to spare.
-export const STORAGE_POOL_PHONE_CELL_PADDING_CLASS = '!px-1';
+export const STORAGE_POOL_PHONE_CELL_PADDING_CLASS = 'px-1!';
 
 export const getStoragePoolCellPaddingClass = (layout: StoragePoolTableLayoutMode): string =>
   layout === 'narrow' || layout === 'compact' ? STORAGE_POOL_PHONE_CELL_PADDING_CLASS : '';

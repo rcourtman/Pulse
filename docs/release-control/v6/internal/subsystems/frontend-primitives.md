@@ -20,6 +20,158 @@
 
 ## Purpose
 
+### Guest disk deferral and retained observations
+
+The existing workload row, disk breakdown tooltip and guest Overview use
+one presentation for the fixed guest-read reason vocabulary. Operation locks,
+unverified lock clearance, an in-flight request, cooldown, incomplete response
+and capacity deferrals are not evidence that QGA is missing. Invalid VM identity
+remains distinct. A timeout describes uncertain completion and must not recommend
+restarting QGA during a backup or changing freeze settings.
+
+`prev-` marks last-known disk values, not a fresh sample. Keep those values and
+their identity visible, with the explanation beside the disk evidence, including
+the breakdown tooltip and the phone-readable Overview. Show readable status even
+before the first filesystem sample; do not hide it behind an empty disk list or
+expose only a raw reason. A same-VM fresh observation withdraws the notice and
+updates values without remounting the row. Permission, disabled-agent and actual
+unavailable cases retain their own explanations.
+
+Verification: `workloadGuestPresentation.test.ts`, the mounted `GuestRow`,
+`StackedDiskBar` and `GuestDrawerOverview.filesystems` regressions,
+and `browser-tests/guest-disk-deferral.cjs` cover the fixed reasons, retained/no
+previous data and fresh resumption with production components and CSS on desktop
+Chromium and touch WebKit. Synthetic observations do not establish the native
+command-ID cause, guest thaw, fresh History collection or containing release.
+
+The legacy Workloads `DiskList` is exercised only by tests/fixtures, not a
+shipped caller. Its empty-state title is not evidence of readable touch guidance;
+the shipped guest Overview supplies the readable pre-sample explanation.
+
+### Completed guest backup evidence versus current activity
+
+The guest Overview keeps the last completed backup age and its existing
+threshold-derived tone visible independently of current backup activity.
+Starting a backup must not hide absent or old completed evidence or turn it
+green. A separate cautionary activity row reports a running backup as not yet
+completed. Ending that activity without a new completed timestamp does not
+manufacture protection. A new completed timestamp updates the existing drawer
+without remounting it. Both values wrap at phone widths, rather than requiring
+hover to distinguish them.
+
+Verification: the mounted `GuestDrawer.test.tsx` backup regressions,
+`workloadGuestPresentation.test.ts` and production full-drawer fixture
+`browser-tests/guest-backup-protection.cjs` cover VM/CT missing, stale and fresh
+completion evidence, concurrent activity, stopped activity with no completion,
+and later completed observations. They preserve independent disk-lock/timeout
+guidance and existing touch/keyboard collapse. Synthetic observations establish
+presentation, not native task success, archive restorability, QGA/thaw or release
+availability; those require their own containing native and delivery evidence.
+
+### Independent backup inventory read ownership
+
+PVE files/snapshots/tasks and PBS inventory have independent, non-suspending
+read owners on the existing Backups page. A pending or failed source is not an
+empty successful inventory. Keep the other source's readable artifacts, filters
+and server health usable; name the missing source beside the evidence, mark
+restore-point totals as incomplete and retry only that source. If neither source
+can be read, the shared error action retries both. An initial pending read must
+not show “No backups yet” or a measured zero PBS count. Only a fulfilled empty
+PBS inventory establishes a zero count.
+
+Pending retries retain independently readable evidence. A settled failed read
+withdraws that source's artifacts and counts until it recovers, without clearing
+the other source or inferring server-owned protection posture. A retry remains
+disabled and its previous warning visible while pending. Organisation switches
+withdraw prior inventory, replace/abort the read owners and refetch in the new
+API context; late responses cannot repopulate old evidence. Disposal aborts
+reads and removes subscriptions. This uses the existing query lifecycle, without
+new inventory polling or a remount cache.
+
+Successful HTTP responses still need a readable backup envelope, collections
+and consumed row fields. Invalid JSON, missing data and malformed rows produce
+a source-local unavailable state with fixed format guidance, never raw response
+content, a fabricated empty inventory or a page-level rendering failure that
+hides another source. No invalid rows are silently dropped, no completion flags
+are coerced, and only a validated response clears the warning. Explicitly nil
+PVE collections remain compatible with the existing Go encoding.
+`proxmoxBackupInventory.test.ts`, mounted backup-table controls and
+`browser-tests/backup-inventory-format.cjs` verify these boundaries and isolated
+keyboard/touch recovery, not native backup or released availability.
+
+Verification: mounted `ProxmoxBackupsTable.test.tsx` covers source pending,
+partial/both-source failure, isolated retry, fulfilled empty counts, 401/403,
+organisation replacement, late response and disposal. Production component,
+router, API adapter and stylesheet fixture `browser-tests/backup-inventory.cjs`
+checks desktop Chromium and touch WebKit recovery, warning readability, keyboard
+or touch retry, source isolation and actual new organisation headers. Synthetic
+HTTP results establish frontend truthfulness/lifecycle, not native PBS/PVE
+permission, archive restorability, guest thaw or released availability.
+
+
+### Composed operator tables and conservative rollback consent
+
+Phone storage tables use the canonical weighted-width helper and matching
+header/cell gutters. Compact labels shorten disk verdicts and capacity values,
+not their underlying health or measured units; full reasons stay in the real
+disk header and tooltips. Structured ZFS scan activity supplies a compact badge
+only during reported rebuild activity; its complete provider summary remains
+available. Stable disk History catalog/organisation/access ownership is unchanged.
+
+Controller expansions carry the supplied kind-specific targets, absolute times,
+duration and cluster/namespace when the phone row omits those columns. Proxmox
+coverage distinguishes independent backups from guest-local snapshots; By date
+retains archive identifiers in hover/search while showing the format as detail.
+Phone identity weights leave every configured metric column visible.
+
+UpdateHistory consent names both the requested target and the observed running
+version, separately from the version on the selected history entry. The API does
+not expose backup restore scope: do not infer it from a version cutoff, notes or
+a retained path. Explain installation-only versus legacy recovery and stopped,
+consistent full-state recovery without promising later settings will be reverted
+or preserved. Opening/cancelling never starts a write, rejection retains consent,
+and a pending request cannot be submitted again or cancelled.
+
+Verification: the mounted UpdateHistory regression tests, existing kind-specific
+controller/storage/backup/workload tests and production-CSS browser fixture
+`frontend-modern/browser-tests/operator-tables-consent.cjs` exercise the composed
+source at desktop, intermediate and phone widths. Synthetic HTTP/snapshots do
+not establish native collectors, tenancy, installation recovery or release delivery.
+
+
+### Organisation-scoped single-metric History
+
+Fetched HistoryChart observations belong to the active organisation as well as
+the resource type/ID, metric and range. `org_switched` replaces the request owner
+even when those chart props are unchanged: withdraw old samples, provenance,
+errors and touch/keyboard/group inspection, abort superseded reads and replace
+the polling timer before immediately requesting the same selection in the new
+API context. Late success or failure from an earlier organisation cannot update
+or settle that request. Disposal removes both timer and org subscription.
+
+Same-organisation transport/5xx failures still retain their own successful
+observations with explicit refresh warnings. A failed first read in a new org
+must not fall back to the previous org. Locked or missing targets do not fetch;
+explicit supplied samples remain caller-owned, not silently converted to fetched
+history. Matching same-org supplied-sample refreshes retain inspection.
+Runtime ownership and keyboard/touch rendering regressions plus the production
+`browser-tests/history-org.cjs` HTTP fixture verify these boundaries with the
+real API org header and the existing org-safe batch reader as a control. This is
+client presentation/isolation proof, not native tenancy, collector or release
+acceptance.
+
+### Stable physical-disk History composition
+
+Disk detail composes shared HistoryChart owners from stable disk-family catalog
+entries, independently of the latest optional temperature/SMART fields. Matching
+snapshots must not recreate chart DOM, reset inspection or restart reads. Stored
+series retain their own sample provenance; current collection unavailability is
+still reported in Overview, and empty history is not a manufactured zero. The
+shared target/range owner continues to cancel old selections and reject late
+responses. `DiskDetail.history-collection.test.tsx` and the production
+`browser-tests/disk-history-collection.cjs` fixture verify these boundaries with
+synthetic data; neither establishes native NAS health or installed acceptance.
+
 Storage pool Configuration key/value rows keep capacity absence distinct from
 measured zero: unavailable bytes and percentages render as `n/a`, while valid
 independent observations survive a missing total. Live partial snapshots must
@@ -341,7 +493,30 @@ PBS browser runner verifies delayed range and withdrawn-target reads at desktop
 and phone widths; neither proof establishes installed collection or #1723 relief.
 
 Failed same-source history refreshes keep valid previously loaded observations
-visible with an explicit warning, rather than hiding the entire chart. Initial
+visible with an explicit warning, rather than hiding the entire chart. That
+retention applies to transient transport/server failures, never a final HTTP
+`401` or `403`. Both the batch drawer and shared canvas reader withdraw stored
+samples and inspection on access failure; denied history is not an empty,
+collecting, or stale-but-still-readable result. Their guidance is bounded by
+numeric status, not transport bodies or guessed diagnostic text. The shared
+canvas announces its error, and the drawer keeps its scoped, focusable retry.
+Only a successful replacement read restores observations.
+
+The retained-value query helper also withdraws its active value on a final
+`401`/`403` and clears its shared remount cache. Other resource/range entries
+were read under the same access context, so they cannot be resurrected after
+that context is denied. Advancing the cache generation rejects cache writes
+from already-running pre-denial reads. A superseded denied completion cannot
+clear the current target or its cache. This does not broadcast a session reset
+or claim revocation of independently mounted consumers; their current response
+still owns their presentation. Transient failures keep the existing retained
+value, and a newly successful read may populate the cache normally. Verification
+uses runtime assertions in `createNonSuspendingQuery.test.tsx`,
+`GuestDrawerHistory.refresh.test.tsx`, `useHistoryChartState.test.tsx`,
+`HistoryChart.test.tsx`, and `browser-tests/history-access.cjs` (both production
+readers/client, real same-origin 403/503 responses, cache/range/remount and
+fresh-read recovery on desktop Chromium and touch WebKit). These controls do
+not establish appliance authorisation, collection or released acceptance. Initial
 or uncached replacement failures show unavailable history, never borrowed points
 or a collecting claim. The existing target/range owns every manual refresh;
 locked or absent targets expose no refresh control. The control remains mounted
@@ -662,6 +837,9 @@ that manual-channel consequence must stay visible at desktop and narrow widths.
 108. `frontend-modern/src/components/shared/summaryInteractionA11y.ts`
 109. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
 110. `frontend-modern/src/hooks/createNonSuspendingQuery.ts`
+    Shared API read-access classification is owned by
+    `frontend-modern/src/utils/apiAccessError.ts`; it recognises only final
+    numeric 401/403 statuses and never renders transport diagnostics.
      111a. `frontend-modern/src/utils/storageSummaryCache.ts`
 111. `frontend-modern/src/components/shared/TableCardHeader.tsx`
 112. `frontend-modern/src/components/shared/UpgradeLink.tsx`
@@ -715,6 +893,28 @@ that manual-channel consequence must stay visible at desktop and narrow widths.
 143. `frontend-modern/src/i18n/__tests__/i18n.test.ts`
 
 ## Shared Boundaries
+
+### Transport-independent operator rows
+
+Proxmox/Storage and Docker presenters retain the shared table/detail, responsive
+column weighting, relative-time and governed action primitives. Display names
+for Proxmox storage plugins preserve their operator vocabulary (LVM-Thin, NFS,
+SMB/CIFS and the other supported acronyms); only explicitly shared storage on a
+synthetic cluster/shared location gets the shared label. That label does not
+alter canonical identity, parent, History target or pool-to-disk ownership.
+
+The Docker image phone projection pairs hidden headers and cells and gives
+measured size and update verdict room without hiding identity or dropping the
+existing detail disclosure. The container projection retains its shared 30%
+phone identity reservation and five scan signals; off-row restart/host/consumer
+evidence remains in detail. Swarm rollout tokens read as words, with compact
+Running headings and wrapping rollout states on phones; raw rollout and
+placement evidence remain reachable through keyboard/touch row disclosure.
+`platformOverviewLayout.guardrails.test.ts`, mounted
+Docker table tests and the desktop/touch-phone production-component browser
+fixture check these priorities, rather than treating an old percentage as an
+immutable primitive contract. No new public route or navigation entry is added.
+
 
 ### Maintenance schedule copy
 
@@ -7806,3 +8006,21 @@ kind normalisation, the kind switch, the email-only payload, and the plain
 cover the gating, the reduced form, the pinned fields, and the saved payload.
 This is a presentation and form-state boundary; the schedule API contract,
 report rendering, and email delivery are unchanged.
+
+### Notifications activity has independent evidence-read states
+
+The Notifications tab composes the delivery-log card with both attempt-read
+and held/deferred-event loading and unavailable state from its owned reader.
+Pending or failed evidence is never rendered as a confirmed empty activity
+window. Each failed source withdraws its own rows without hiding independently
+readable rows from the other source. Source-specific warnings have `role="alert"`
+and loading text has `role="status"`; a slow held-event read does not block the
+existing attempt-refresh button. Recovery clears a warning only after a
+successful read, without remounting the destination editors or changing their
+unfinished input.
+
+The connected Notifications browser fixture uses the real tab/state/API/card
+chain at desktop and phone widths with keyboard/touch refresh, class-dark CSS,
+403/503 controls and pending recovery. Unit controls separately cover current
+request ownership and disposal. No mutation, route, navigation entry, queue
+policy, permission or recipient-delivery contract is added by these states.

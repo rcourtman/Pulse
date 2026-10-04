@@ -1,138 +1,124 @@
 #!/usr/bin/env bash
 
-set -uo pipefail
+# Passive Proxmox preflight only. A lock read is not a synchronisation gate:
+# a backup can start immediately afterwards. Never send guest-agent commands.
+set -euo pipefail
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-info() {
-    printf "%b[INFO]%b %s\n" "$BLUE" "$NC" "$1"
+usage() {
+    printf '%s\n' 'Usage: test-vm-disk.sh VMID' \
+        'Read local VM status and current configuration on its Proxmox host.' \
+        'No guest-agent, guest filesystem, ACL or service changes are made.'
 }
 
-ok() {
-    printf "    %b✓%b %s\n" "$GREEN" "$NC" "$1"
-}
+if [[ $# -eq 1 && $1 == --help ]]; then
+    usage
+    exit 0
+fi
+if [[ $# -ne 1 || ! $1 =~ ^[1-9][0-9]{0,8}$ ]]; then
+    usage >&2
+    exit 2
+fi
+vmid=$1
 
-warn() {
-    printf "    %b⚠%b %s\n" "$YELLOW" "$NC" "$1"
-}
-
-fail() {
-    printf "    %b✗%b %s\n" "$RED" "$NC" "$1"
-}
-
-require_cmd() {
-    if ! command -v "$1" >/dev/null 2>&1; then
-        printf "%b[ERROR]%b Required command '%s' not found.\n" "$RED" "$NC" "$1" >&2
+for command in qm timeout; do
+    if ! command -v "$command" >/dev/null 2>&1; then
+        printf 'Required command unavailable: %s. Run on the owning Proxmox host.\n' "$command" >&2
         exit 1
     fi
+done
+
+read_failure() {
+    local operation=$1 code=$2
+    if [[ $code -eq 124 || $code -eq 137 ]]; then
+        printf 'VM %s read timed out; no guest-agent commands were sent.\n' "$operation" >&2
+    else
+        printf 'VM %s read failed (exit %s); no guest-agent commands were sent.\n' "$operation" "$code" >&2
+    fi
+    printf '%s\n' 'Check the VM ID, owning host and local read permissions. Inspect any error privately.' >&2
+    exit 1
 }
 
-# Ensure we are running on a Proxmox host
-require_cmd qm
-require_cmd pveversion
+printf '%s\n' 'Passive VM preflight: no guest-agent commands will be sent.'
+# Bound even host-local reads. Do not print raw config or command errors:
+# those can contain private guest names, paths and other infrastructure data.
+if status_output=$(timeout --signal=TERM --kill-after=2s 10s qm status "$vmid" 2>/dev/null); then
+    case "$status_output" in
+        'status: running') status=running ;;
+        'status: stopped') status=stopped ;;
+        *) printf '%s\n' 'VM status response was not understood; preflight incomplete.' >&2; exit 1 ;;
+    esac
+else
+    read_failure status "$?"
+fi
+printf 'VM status: %s\n' "$status"
 
-if [[ $EUID -ne 0 ]]; then
-    printf "%b[ERROR]%b This script must be run as root on the Proxmox host.\n" "$RED" "$NC" >&2
+if config=$(timeout --signal=TERM --kill-after=2s 10s qm config "$vmid" --current 2>/dev/null); then
+    if [[ -z $config ]]; then
+        printf '%s\n' 'VM current configuration was empty; preflight incomplete.' >&2
+        exit 1
+    fi
+else
+    read_failure configuration "$?"
+fi
+
+agent_seen=false
+lock_seen=false
+field_seen=false
+agent_value=''
+lock_value=''
+while IFS= read -r line; do
+    if [[ $line =~ ^[A-Za-z][A-Za-z0-9_-]*: ]]; then
+        field_seen=true
+    fi
+    case "$line" in
+        agent:*)
+            if [[ $agent_seen == true ]]; then
+                printf '%s\n' 'Repeated agent configuration; preflight incomplete.' >&2
+                exit 1
+            fi
+            agent_seen=true
+            agent_value=${line#agent:}
+            agent_value=${agent_value//[[:space:]]/}
+            ;;
+        lock:*)
+            if [[ $lock_seen == true ]]; then
+                printf '%s\n' 'Repeated VM lock configuration; preflight incomplete.' >&2
+                exit 1
+            fi
+            lock_seen=true
+            lock_value=${line#lock:}
+            lock_value=${lock_value//[[:space:]]/}
+            ;;
+    esac
+done <<< "$config"
+if [[ $field_seen != true ]]; then
+    printf '%s\n' 'VM current configuration was not understood; preflight incomplete.' >&2
     exit 1
 fi
 
-VMID=${1:-}
-if [[ -z "${VMID}" ]]; then
-    read -rp "Enter the VMID to inspect: " VMID
+agent=disabled
+if [[ $agent_seen == true ]]; then
+    agent=unknown
+    enabled_options=0
+    IFS=, read -r -a options <<< "$agent_value"
+    for option in "${options[@]}"; do
+        case "$option" in
+            1|enabled=1) agent=enabled; enabled_options=$((enabled_options + 1)) ;;
+            0|enabled=0) agent=disabled; enabled_options=$((enabled_options + 1)) ;;
+        esac
+    done
+    if [[ $enabled_options -ne 1 ]]; then
+        agent=unknown
+    fi
 fi
-
-if [[ ! $VMID =~ ^[0-9]+$ ]]; then
-    printf "%b[ERROR]%b VMID must be a numeric value.\n" "$RED" "$NC" >&2
-    exit 1
-fi
-
-info "Running disk diagnostics for VMID ${VMID}"
-
-# --- Check VM existence and status ---
-status_output=$(qm status "$VMID" 2>&1)
-if [[ $? -ne 0 ]]; then
-    printf "%b[ERROR]%b Unable to query VM %s.\n" "$RED" "$NC" "$VMID" >&2
-    printf "%s\n" "$status_output" >&2
-    exit 1
-fi
-
-status=$(awk -F': ' '/status/ {print $2}' <<<"$status_output")
-status=${status:-unknown}
-ok "VM found (status: ${status})"
-
-running=false
-if [[ $status == "running" ]]; then
-    running=true
-else
-    warn "VM is not running. Start the VM before re-running disk checks for accurate results."
-fi
-
-# --- Check guest agent configuration ---
-agent_line=$(qm config "$VMID" | grep '^agent:' || true)
-agent_enabled=false
-if [[ -n $agent_line ]]; then
-    if grep -Eq '1|enabled' <<<"$agent_line"; then
-        agent_enabled=true
-        ok "QEMU guest agent is enabled in VM configuration (${agent_line})."
+printf 'Guest agent configured: %s (not a responsiveness test).\n' "$agent"
+if [[ $lock_seen == true ]]; then
+    if [[ $lock_value == backup ]]; then
+        printf '%s\n' 'VM lock: backup. Defer guest-agent diagnostics and configuration changes.'
     else
-        warn "QEMU guest agent is defined but not enabled (current config: ${agent_line})."
+        printf '%s\n' 'VM lock: present or unknown. Check the existing Proxmox task before making changes.'
     fi
 else
-    warn "QEMU guest agent is not enabled for this VM. Add 'agent: 1' in the VM options."
+    printf '%s\n' 'VM lock: not reported. This does not establish that a backup is idle or the guest is thawed.'
 fi
-
-if [[ $agent_enabled == true && $running == true ]]; then
-    # Guest agent ping
-    ping_output=$(qm agent "$VMID" ping 2>&1)
-    if [[ $? -eq 0 ]]; then
-        ok "Guest agent responded to ping."
-    else
-        warn "Guest agent did not respond to ping."
-        printf "      %s\n" "$ping_output"
-    fi
-
-    # Filesystem info
-    fs_output=$(qm agent "$VMID" get-fsinfo 2>&1)
-    if [[ $? -eq 0 ]]; then
-        if grep -Eq "(mount|fsname|filesystem)" <<<"$fs_output"; then
-            ok "Fetched filesystem information from guest."
-        else
-            warn "Guest agent returned no filesystem entries. Review the guest OS permissions."
-        fi
-    else
-        warn "Failed to retrieve filesystem information via guest agent."
-        printf "      %s\n" "$fs_output"
-    fi
-else
-    warn "Skipping guest agent checks because the VM is not running or the agent is disabled."
-fi
-
-# --- Validate pulse monitoring account (optional) ---
-if pveum user list 2>/dev/null | grep -q 'pulse_monitor@pam'; then
-    acl_output=$(pveum acl list / -user pulse_monitor@pam 2>&1)
-    if [[ $? -eq 0 && -n $acl_output ]]; then
-        ok "pulse_monitor@pam user has ACL entries configured."
-    else
-        warn "pulse_monitor@pam user exists but no ACLs were found. Ensure it has proper permissions."
-    fi
-else
-    warn "pulse_monitor@pam user not found. Create it if Pulse is expected to collect agent data."
-fi
-
-cat <<'SUMMARY'
-
-Next steps:
-  • If the guest agent is disabled, enable it in the VM Options tab (set "QEMU Guest Agent" to "Enabled").
-  • Inside the guest OS, ensure the qemu-guest-agent service is installed, running, and has access to disk information.
-  • Verify the pulse_monitor@pam user (or your service account) has proper permissions:
-    - Proxmox 9: VM.GuestAgent.Audit privilege (Pulse setup adds via PulseMonitor role)
-    - Proxmox 8: VM.Monitor privilege (Pulse setup adds via PulseMonitor role)
-    - Sys.Audit is recommended for Ceph metrics and included when available
-    - Both API tokens and passwords work fine for guest agent access
-
-Diagnostics complete.
-SUMMARY
+printf '%s\n' 'Read-only preflight completed. Disk freshness, guest-agent responsiveness and guest thaw were not tested.'

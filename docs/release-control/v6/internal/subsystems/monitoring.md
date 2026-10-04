@@ -17,6 +17,56 @@
 
 ## Purpose
 
+### Guest-agent coordination around backups — issue #2439
+
+All PVE QEMU guest-agent reads, including disk diagnostics and legacy meminfo
+callers, share fail-fast per-guest admission within this Pulse process. Clients
+for the same endpoint and configured cluster aliases coordinate across methods;
+VMIDs remain serial through node migration. Other VMs and independent endpoints
+remain independent. No guest payload or credentials enter coordination state.
+Before each command and before returning its fully received bounded payload,
+Pulse reads the operation lock from VM config. Any nonempty lock (not just
+backup), missing/malformed config or an unverifiable lock defers the command.
+Known locks in node inventory, cluster resources or detailed status suppress
+polling enrichment even when status fails and recent agent evidence exists.
+
+Admission is held through the complete response, not just headers. A transport
+failure, timeout, wrong-command-ID response or incomplete body defers every
+command for that guest for a minute; callers neither immediately retry nor
+replay through another cluster endpoint. Coordination retains at most 4,096
+active/cooling endpoint-guest entries and expires cooldowns. Explicit API
+permission refusals and unsupported commands remain errors, not successes.
+
+Deferrals retain the original metadata/memory cache timestamps and supported-OS
+failure evidence. Locked guests retain labelled last-known disks/identity and
+previous-snapshot memory, or unavailable memory without trustworthy evidence.
+Current non-QGA memory, CPU and I/O may still be observed. History never writes
+retained disk values or deferred cached memory as newly observed telemetry;
+normal unlocked polling resumes and replaces them with fresh data.
+
+`TestGuestAgentBackupMonitoringContract` exercises healthy → status lock →
+resource lock with failed status → node fallback → unlocked resumption through
+the real client/builders and History. The client controls cover every read,
+unknown lock state, diagnostic overlap, aliases/source/VM isolation, in-flight
+lock changes, incomplete bodies, cooldown and absence of failover replay.
+These reproduce missing Pulse safety controls, **not** the reported native
+PVE/QGA command-ID collision or successful backup thaw. HTTP lock checks cannot
+atomically reserve PVE's serial channel against a backup beginning afterwards,
+cancel work already running in pvedaemon, detect a guest left frozen after its
+lock clears, or coordinate separate Pulse processes. Native freeze/thaw acceptance
+on a containing build remains required. Until then, stopping Pulse before a
+freeze-enabled backup and restarting only after verified thaw remains the safe
+workaround, with monitoring and alerts unavailable during that window.
+
+The [bounded backup observation tools](../../../../../tests/qualification/guest-agent-backup/README.md)
+provide an independent guest filesystem writer (file/directory fsync and
+synthetic readback over non-QGA stdout) and a fail-closed checker for native
+overlap, truthful deferred readings/History and post-task writes/resumption.
+An OK task without fresh writes on every covered filesystem cannot pass those
+record checks. Local tests are not native freeze/thaw evidence; supplied
+platform/artifact provenance and mount completeness still need independent
+review. The tools add no runtime interface, recovery action or release gate.
+
 ### Exact TrueNAS subscription termination — issue #2396
 
 JSON-RPC stream readers and the subscription-acknowledgement wait recognise
@@ -4641,3 +4691,33 @@ proof lives in `internal/truenas/provider_test.go`
 (`TestMaxTrueNASSystemTemperaturePrefersCoresOverSynthesisedAggregate`). This
 is source-level proof, not reporter acceptance or appliance confirmation
 (#2122).
+
+### Recovery callbacks retain the resolved occurrence
+
+`wireExternalAlertCallbacks` binds the occurrence-qualified recovery callback,
+not the legacy ID-only callback. The monitor uses its immutable alert/start/end
+snapshot for AI recovery and for exact notification cancellation, so a delayed
+recovery cannot remove a newer firing admitted under the same reusable ID.
+AI receives a separate clone. An ID-only websocket removal is omitted when the
+manager already exposes that ID as active; the regular state stream continues
+to own current alert truth. The legacy local ID adapter resolves a snapshot once
+and fails closed when no resolved record exists; it is not the live delivery
+binding. No browser payload, retention or notification routing contract changes.
+
+`monitor_alert_handling_test.go` and
+`monitor_notification_startup_test.go` covers a delayed ID-adapter cancellation
+with queue restart/readback, and a real PBS breach/recovery/new breach held at
+the callback boundary. Both require the replacement firing's exact ID/start to
+reach a loopback HTTP destination with one sent row and one cancelled old row.
+No clock, reducer map or configured cooldown is altered. This establishes local
+source-connected delivery, not the outstanding natural flapping cooldown check,
+a native appliance result or containing stable availability.
+
+Recovery eligibility is destination-receipt-owned, not the cancellation helper's
+pending-work count or the RAM cooldown marker. After partial delivery/restart,
+a cancelled retry at one destination cannot suppress a recovery to another
+that actually accepted the same occurrence. The connected
+`TestMonitorDelayedPartialResolutionKeepsDestinationRecovery` retains a real
+HTTP 200/503 split, reopens the persistent queue, and requires the old accepted
+destination's recovery plus the new firing, with no recovery to the unannounced
+destination. Quiet hours and disabled recovery controls still apply.

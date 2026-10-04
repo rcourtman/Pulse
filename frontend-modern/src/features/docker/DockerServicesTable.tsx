@@ -7,6 +7,7 @@ import {
   PlatformWindowedRows,
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformSortableTableHead,
+  PlatformResponsiveTableLabel,
   PlatformTableNumberValue,
   PlatformTableToolbar,
   PlatformTableEmptyState,
@@ -261,7 +262,7 @@ export const DockerServicesTable: Component<{
                   sortKey="running"
                   class="platform-table-mobile-w-10 w-[10%] md:w-[8%]"
                 >
-                  Running
+                  <PlatformResponsiveTableLabel compact="Run" full="Running" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
@@ -359,7 +360,10 @@ export const DockerServicesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="truncate inline-block max-w-40" title={update().title}>
+                            <span
+                              class="inline-block max-w-full whitespace-normal wrap-break-word leading-3 md:max-w-40 md:truncate md:leading-normal"
+                              title={update().title}
+                            >
                               {update().label}
                             </span>
                           </TableCell>

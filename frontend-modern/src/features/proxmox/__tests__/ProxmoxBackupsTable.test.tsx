@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,6 +15,7 @@ import {
 import { TABLE_CARD_FRAME_CLASS } from '@/components/shared/TableCard';
 import type { Resource } from '@/types/resource';
 import { getRecoveryFullDateLabel } from '@/utils/recoveryDatePresentation';
+import { eventBus } from '@/stores/events';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 
 // ProxmoxBackupsTable reads URL search params (node/type scope filters), so it
@@ -342,8 +343,12 @@ describe('ProxmoxBackupsTable', () => {
     for (const table of tables) {
       expectCanonicalPlatformTableShell(table);
     }
-    expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pbs');
-    expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pve');
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pbs', {
+      signal: expect.any(AbortSignal),
+    });
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pve', {
+      signal: expect.any(AbortSignal),
+    });
     expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
     const postureURL = new URL(apiFetchJSONMock.mock.calls[0][0], 'https://pulse.invalid');
     expect(postureURL.pathname).toBe('/api/recovery/postures');
@@ -701,5 +706,276 @@ describe('ProxmoxBackupsTable', () => {
     expect(proxmoxPageSurfaceSource).not.toContain('aria-label="Proxmox Patrol coverage"');
     expect(proxmoxPageSurfaceSource).not.toContain('aria-label="Patrol protection posture"');
     expect(proxmoxBackupsTableSource).not.toContain('Proxmox Patrol coverage');
+  });
+});
+
+const emptyPVE = { data: { backupTasks: [], storageBackups: [], guestSnapshots: [] } };
+const emptyPBS = { data: { backups: [] } };
+const readPvePayload = { data: { ...pvePayload.data, guestSnapshots: [] } };
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => (resolve = res));
+  return { promise, resolve };
+};
+const mountBackupReadState = () =>
+  renderInRouter(() => (
+    <ProxmoxBackupsTable
+      emptyIcon={<span />}
+      workloads={[workloadResource]}
+      servers={[pbsServerResource]}
+    />
+  ));
+const recoverableRows = () => document.querySelectorAll('[data-proxmox-backup-row="recoverable"]');
+const serverTable = () => document.querySelector('[data-proxmox-backups-table="servers"]')!;
+const sourceCalls = (source: 'pve' | 'pbs') =>
+  apiFetchMock.mock.calls.filter(([url]) => url === `/api/backups/${source}`);
+
+describe('independent Proxmox backup inventory reads', () => {
+  beforeEach(() => {
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    apiFetchJSONMock.mockResolvedValue({ data: [], policy: {}, meta: {} });
+  });
+
+  it.each(['pve', 'pbs'] as const)(
+    'keeps malformed HTTP200 %s responses source-local and recovers with an isolated retry',
+    async (source) => {
+      const bad = source === 'pbs' ? { data: { backups: [null] } } : { data: {} };
+      let response = Promise.resolve(jsonResponse(bad));
+      apiFetchMock.mockImplementation((url) =>
+        url.endsWith(`/${source}`)
+          ? response
+          : Promise.resolve(jsonResponse(source === 'pve' ? pbsPayload : readPvePayload)),
+      );
+      mountBackupReadState();
+      await screen.findByText(/The response format is invalid/);
+      await waitFor(() => expect(recoverableRows()).toHaveLength(1));
+      expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      if (source === 'pbs') expect(serverTable()).toHaveTextContent('Unavailable');
+      const pending = deferred<Response>();
+      response = pending.promise;
+      const retry = screen.getByRole('button', { name: `Retry ${source.toUpperCase()} inventory` });
+      fireEvent.click(retry);
+      expect(retry).toBeDisabled();
+      expect(screen.getByText(/The response format is invalid/)).toBeInTheDocument();
+      expect(recoverableRows()).toHaveLength(1);
+      pending.resolve(jsonResponse(source === 'pbs' ? pbsPayload : readPvePayload));
+      await waitFor(() => expect(recoverableRows()).toHaveLength(2));
+      expect(screen.queryByText(/The response format is invalid/)).not.toBeInTheDocument();
+      expect(sourceCalls(source === 'pbs' ? 'pve' : 'pbs')).toHaveLength(1);
+    },
+  );
+
+  it('does not infer empty PBS inventory from a missing data envelope', async () => {
+    apiFetchMock.mockImplementation((url) =>
+      Promise.resolve(jsonResponse(url.endsWith('/pbs') ? {} : emptyPVE)),
+    );
+    mountBackupReadState();
+    await screen.findByText('Backup inventory is incomplete');
+    expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+    expect(serverTable()).toHaveTextContent('Unavailable');
+  });
+
+  it('keeps undecodable successful bodies out of user-facing diagnostics', async () => {
+    apiFetchMock.mockImplementation((url) =>
+      Promise.resolve(
+        url.endsWith('/pbs')
+          ? new Response('SYNTHETIC_PRIVATE_BODY_DO_NOT_DISPLAY', { status: 200 })
+          : jsonResponse(readPvePayload),
+      ),
+    );
+    mountBackupReadState();
+    await screen.findByText(/The response format is invalid/);
+    await waitFor(() => expect(recoverableRows()).toHaveLength(1));
+    expect(document.body).not.toHaveTextContent('SYNTHETIC_PRIVATE_BODY_DO_NOT_DISPLAY');
+  });
+
+  it('accepts Go nil PVE collections as explicitly observed empty inventory', async () => {
+    apiFetchMock.mockImplementation((url) =>
+      Promise.resolve(
+        jsonResponse(
+          url.endsWith('/pbs')
+            ? emptyPBS
+            : { data: { backupTasks: null, storageBackups: null, guestSnapshots: null } },
+        ),
+      ),
+    );
+    mountBackupReadState();
+    await screen.findByText('No backups yet');
+    expect(screen.queryByText(/inventory is unavailable/)).not.toBeInTheDocument();
+    expect(
+      within(serverTable() as HTMLElement).getByText('0', { exact: true }),
+    ).toBeInTheDocument();
+  });
+
+  it('does not present an unread PBS inventory as empty or a measured zero', async () => {
+    const pending = deferred<Response>();
+    apiFetchMock.mockImplementation((url) =>
+      url.endsWith('/pbs') ? pending.promise : Promise.resolve(jsonResponse(emptyPVE)),
+    );
+    mountBackupReadState();
+    await screen.findByText(/PBS backup inventory is loading/);
+    expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+    expect(screen.getByText('Backup inventory is incomplete')).toBeInTheDocument();
+    expect(serverTable()).toHaveTextContent('Loading');
+    pending.resolve(jsonResponse(emptyPBS));
+    await screen.findByText('No backups yet');
+    expect(serverTable()).not.toHaveTextContent('Loading');
+    expect(
+      within(serverTable() as HTMLElement).getByText('0', { exact: true }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows fulfilled PBS evidence without waiting for PVE', async () => {
+    const pending = deferred<Response>();
+    apiFetchMock.mockImplementation((url) =>
+      url.endsWith('/pve') ? pending.promise : Promise.resolve(jsonResponse(pbsPayload)),
+    );
+    mountBackupReadState();
+    await screen.findByText(/PVE backup inventory is loading/);
+    expect(recoverableRows()).toHaveLength(1);
+    expect(screen.getByText(/1 restore points read/)).toBeInTheDocument();
+    pending.resolve(jsonResponse(readPvePayload));
+    await waitFor(() => expect(recoverableRows()).toHaveLength(2));
+    expect(screen.queryByText(/inventory is loading/)).not.toBeInTheDocument();
+  });
+
+  it('keeps a source failure actionable even before the other read settles', async () => {
+    const pending = deferred<Response>();
+    apiFetchMock.mockImplementation((url) =>
+      url.endsWith('/pve') ? pending.promise : Promise.resolve(new Response('{}', { status: 503 })),
+    );
+    mountBackupReadState();
+    await screen.findByText(/PBS backup inventory is unavailable/);
+    expect(screen.getByText(/PVE backup inventory is loading/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry PBS inventory' })).toBeEnabled();
+    expect(screen.getByText('Backup inventory is incomplete')).toBeInTheDocument();
+    expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+    pending.resolve(jsonResponse(readPvePayload));
+    await waitFor(() => expect(recoverableRows()).toHaveLength(1));
+  });
+
+  it.each(['pve', 'pbs'] as const)(
+    'contains a %s failure, preserves the other source and retries only the failed source',
+    async (source) => {
+      let response = Promise.resolve(new Response('{}', { status: 503 }));
+      apiFetchMock.mockImplementation((url) =>
+        url.endsWith(`/${source}`)
+          ? response
+          : Promise.resolve(jsonResponse(source === 'pve' ? pbsPayload : readPvePayload)),
+      );
+      mountBackupReadState();
+      await screen.findByText(
+        new RegExp(`${source.toUpperCase()} backup inventory is unavailable`),
+      );
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      // A failed source can now be actionable before the independent read
+      // settles. Wait for that read's evidence, not the failure notice.
+      await waitFor(() => expect(recoverableRows()).toHaveLength(1));
+      if (source === 'pbs') expect(serverTable()).toHaveTextContent('Unavailable');
+      const retry = screen.getByRole('button', { name: `Retry ${source.toUpperCase()} inventory` });
+      const pending = deferred<Response>();
+      response = pending.promise;
+      fireEvent.click(retry);
+      expect(retry).toBeDisabled();
+      fireEvent.click(retry);
+      expect(sourceCalls(source)).toHaveLength(2);
+      expect(recoverableRows()).toHaveLength(1);
+      expect(screen.getByText(/inventory is unavailable/)).toBeInTheDocument();
+      pending.resolve(jsonResponse(source === 'pbs' ? pbsPayload : readPvePayload));
+      await waitFor(() => expect(recoverableRows()).toHaveLength(2));
+      expect(screen.queryByText(/inventory is unavailable/)).not.toBeInTheDocument();
+      expect(sourceCalls(source === 'pbs' ? 'pve' : 'pbs')).toHaveLength(1);
+    },
+  );
+
+  it('retries both failed inventories and allows the first recovered source to render', async () => {
+    apiFetchMock.mockResolvedValue(new Response('{}', { status: 500 }));
+    mountBackupReadState();
+    await screen.findByText('Could not load Proxmox backup inventory');
+    expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+    const pending = deferred<Response>();
+    apiFetchMock.mockImplementation((url) =>
+      url.endsWith('/pve') ? pending.promise : Promise.resolve(jsonResponse(pbsPayload)),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await screen.findByText(/PVE backup inventory is unavailable/);
+    expect(recoverableRows()).toHaveLength(1);
+    pending.resolve(jsonResponse(readPvePayload));
+    await waitFor(() => expect(recoverableRows()).toHaveLength(2));
+    expect(sourceCalls('pve')).toHaveLength(2);
+    expect(sourceCalls('pbs')).toHaveLength(2);
+  });
+
+  it('does not turn a rejected empty source into proof that no backups exist', async () => {
+    apiFetchMock.mockImplementation((url) =>
+      Promise.resolve(
+        url.endsWith('/pbs') ? new Response('{}', { status: 403 }) : jsonResponse(emptyPVE),
+      ),
+    );
+    mountBackupReadState();
+    await screen.findByText(/PBS backup inventory is unavailable/);
+    expect(screen.getByText('Backup inventory is incomplete')).toBeInTheDocument();
+    expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+    expect(serverTable()).toHaveTextContent('Unavailable');
+    expect(screen.getByText(/Access denied/)).toBeInTheDocument();
+  });
+
+  it.each([401, 403])(
+    'withdraws the old organisation before a new %s PBS denial',
+    async (status) => {
+      apiFetchMock.mockImplementation((url) =>
+        Promise.resolve(jsonResponse(url.endsWith('/pbs') ? pbsPayload : readPvePayload)),
+      );
+      mountBackupReadState();
+      await waitFor(() => expect(recoverableRows()).toHaveLength(2));
+      const pending = deferred<Response>();
+      apiFetchMock.mockImplementation((url) =>
+        url.endsWith('/pbs') ? pending.promise : Promise.resolve(jsonResponse(emptyPVE)),
+      );
+      eventBus.emit('org_switched', 'other-fixture-org');
+      expect(recoverableRows()).toHaveLength(0);
+      await screen.findByText(/PBS backup inventory is loading/);
+      expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+      pending.resolve(new Response('{}', { status }));
+      await screen.findByText(/PBS backup inventory is unavailable/);
+      expect(recoverableRows()).toHaveLength(0);
+      expect(serverTable()).toHaveTextContent('Unavailable');
+    },
+  );
+
+  it('aborts replaced org reads and ignores a late earlier response', async () => {
+    const old = deferred<Response>();
+    apiFetchMock.mockImplementation((url) =>
+      url.endsWith('/pbs') ? old.promise : Promise.resolve(jsonResponse(emptyPVE)),
+    );
+    mountBackupReadState();
+    await waitFor(() => expect(sourceCalls('pbs')).toHaveLength(1));
+    const oldSignal = sourceCalls('pbs')[0][1].signal as AbortSignal;
+    apiFetchMock.mockImplementation((url) =>
+      Promise.resolve(jsonResponse(url.endsWith('/pbs') ? emptyPBS : emptyPVE)),
+    );
+    eventBus.emit('org_switched', 'other-fixture-org');
+    expect(oldSignal.aborted).toBe(true);
+    await screen.findByText('No backups yet');
+    old.resolve(jsonResponse(pbsPayload));
+    await old.promise;
+    await waitFor(() => expect(recoverableRows()).toHaveLength(0));
+    expect(
+      within(serverTable() as HTMLElement).getByText('0', { exact: true }),
+    ).toBeInTheDocument();
+  });
+
+  it('aborts pending reads on disposal and leaves no org-switch readers', async () => {
+    const pending = deferred<Response>();
+    apiFetchMock.mockReturnValue(pending.promise);
+    const view = mountBackupReadState();
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2));
+    const signals = apiFetchMock.mock.calls.map(([, options]) => options.signal as AbortSignal);
+    view.unmount();
+    expect(signals.every((signal) => signal.aborted)).toBe(true);
+    eventBus.emit('org_switched', 'after-disposal');
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    pending.resolve(jsonResponse(emptyPVE));
   });
 });

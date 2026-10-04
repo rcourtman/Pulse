@@ -172,6 +172,7 @@ func sanitizeEndpointError(errMsg string) string {
 // endpointFingerprints is an optional map of endpoint URL -> TLS fingerprint for per-node certificate verification.
 // This enables TOFU (Trust On First Use) for clusters with unique self-signed certs per node.
 func NewClusterClient(name string, config ClientConfig, endpoints []string, endpointFingerprints map[string]string) *ClusterClient {
+	registerGuestAgentEndpoints(config.Host, endpoints)
 	if endpointFingerprints == nil {
 		endpointFingerprints = make(map[string]string)
 	}
@@ -1373,7 +1374,7 @@ func (cc *ClusterClient) GetVMConfig(ctx context.Context, node string, vmid int)
 
 func (cc *ClusterClient) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
 	var result map[string]interface{}
-	err := cc.executeWithFailover(ctx, func(client *Client) error {
+	err := cc.executeGuestAgent(ctx, func(client *Client) error {
 		info, err := client.GetVMAgentInfo(ctx, node, vmid)
 		if err != nil {
 			return err
@@ -1387,7 +1388,7 @@ func (cc *ClusterClient) GetVMAgentInfo(ctx context.Context, node string, vmid i
 // GetVMAgentVersion returns the guest agent version for the VM.
 func (cc *ClusterClient) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
 	var version string
-	err := cc.executeWithFailover(ctx, func(client *Client) error {
+	err := cc.executeGuestAgent(ctx, func(client *Client) error {
 		v, err := client.GetVMAgentVersion(ctx, node, vmid)
 		if err != nil {
 			return err
@@ -1401,7 +1402,7 @@ func (cc *ClusterClient) GetVMAgentVersion(ctx context.Context, node string, vmi
 // GetVMFSInfo returns filesystem information from QEMU guest agent
 func (cc *ClusterClient) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFileSystem, error) {
 	var result []VMFileSystem
-	err := cc.executeWithFailover(ctx, func(client *Client) error {
+	err := cc.executeGuestAgent(ctx, func(client *Client) error {
 		info, err := client.GetVMFSInfo(ctx, node, vmid)
 		if err != nil {
 			return err
@@ -1415,7 +1416,7 @@ func (cc *ClusterClient) GetVMFSInfo(ctx context.Context, node string, vmid int)
 // GetVMNetworkInterfaces returns guest network interfaces from the QEMU agent
 func (cc *ClusterClient) GetVMNetworkInterfaces(ctx context.Context, node string, vmid int) ([]VMNetworkInterface, error) {
 	var result []VMNetworkInterface
-	err := cc.executeWithFailover(ctx, func(client *Client) error {
+	err := cc.executeGuestAgent(ctx, func(client *Client) error {
 		interfaces, err := client.GetVMNetworkInterfaces(ctx, node, vmid)
 		if err != nil {
 			return err
@@ -1429,7 +1430,7 @@ func (cc *ClusterClient) GetVMNetworkInterfaces(ctx context.Context, node string
 // GetVMMemAvailableFromAgent reads /proc/meminfo via the QEMU guest agent to get MemAvailable.
 func (cc *ClusterClient) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
 	var result uint64
-	err := cc.executeWithFailover(ctx, func(client *Client) error {
+	err := cc.executeGuestAgent(ctx, func(client *Client) error {
 		available, err := client.GetVMMemAvailableFromAgent(ctx, node, vmid)
 		if err != nil {
 			return err
@@ -1444,7 +1445,7 @@ func (cc *ClusterClient) GetVMMemAvailableFromAgent(ctx context.Context, node st
 // through the first healthy cluster client.
 func (cc *ClusterClient) GetVMMemoryAvailabilityFromAgent(ctx context.Context, node string, vmid int) (LinuxMemoryAvailability, error) {
 	var result LinuxMemoryAvailability
-	err := cc.executeWithFailover(ctx, func(client *Client) error {
+	err := cc.executeGuestAgent(ctx, func(client *Client) error {
 		availability, err := client.GetVMMemoryAvailabilityFromAgent(ctx, node, vmid)
 		if err != nil {
 			return err

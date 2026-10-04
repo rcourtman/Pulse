@@ -45,6 +45,16 @@ def normalize_ws(text: str) -> str:
     return " ".join(text.split())
 
 
+def release_notes_have_exact_title(notes: str, version: str) -> bool:
+    """Match the first title, as the reader-facing Go notes contract does.
+
+    The optional legacy suffix is presentation, not version identity. Neither
+    a later heading nor a version repeated in prose establishes that identity.
+    """
+    first = notes.strip().split("\n", 1)[0].strip()
+    return re.fullmatch(r"# Pulse v" + re.escape(version) + r"(?: Release Notes)?", first) is not None
+
+
 _MATERIAL_APPROVAL_RE = re.compile(
     r"(?i)(?:"
     r"\brichard[- ]approved\b|"
@@ -1590,6 +1600,25 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         )
         self.assertNotIn("Limits are applied to canonical top-level monitored systems", changelog)
 
+    def test_release_notes_title_uses_exact_first_heading(self) -> None:
+        for version in ("6.4.5", "6.5.0", "6.5.0-rc.1"):
+            for suffix in ("", " Release Notes"):
+                with self.subTest(version=version, suffix=suffix):
+                    self.assertTrue(release_notes_have_exact_title(
+                        f"\n# Pulse v{version}{suffix}\n\nUser-facing changes.\n", version))
+        for title in (
+            "# Pulse v6.5.1", "# Pulse v6.5.0-rc.1", "# Pulse v6.5.00",
+            "# Pulse v6.5.0-beta.1", "## Pulse v6.5.0", "# Other Pulse v6.5.0",
+            "# Pulse v6x5x0", "# Pulse v6.5.0 Release Notes extra",
+            "# Pulse v6.5.0extra", "User-facing changes before the title.",
+        ):
+            with self.subTest(title=title):
+                self.assertFalse(release_notes_have_exact_title(
+                    title + "\n\n# Pulse v6.5.0 Release Notes\n\n`v6.5.0`\n", "6.5.0"))
+        self.assertFalse(release_notes_have_exact_title("\n \n", "6.5.0"))
+        authored = read("scripts/installtests/testdata/release-notes-v6.4.5-authored.md")
+        self.assertTrue(release_notes_have_exact_title(authored, "6.4.5"))
+
     def test_version_file_matches_current_rc_packet(self) -> None:
         current_version = read("VERSION").strip()
         release_index = read("docs/RELEASE_NOTES.md")
@@ -1600,8 +1629,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             changelog = read(changelog_path)
             self.assertIn(release_notes_path, release_index)
             self.assertIn(changelog_path, release_index)
-            self.assertIn(f"Pulse v{current_version} Release Notes", release_notes)
-            self.assertIn(f"`v{current_version}`", release_notes)
+            self.assertTrue(release_notes_have_exact_title(release_notes, current_version))
             self.assertIn(f"Pulse v{current_version}", changelog)
         else:
             packet_paths = rc_packet_paths_for_version(current_version)
@@ -1636,7 +1664,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 self.assertIn("current v6 release candidate packet", release_index)
                 self.assertIn(release_notes_path, release_index)
                 self.assertIn(changelog_path, release_index)
-                self.assertIn(f"Pulse v{current_version} Release Notes", release_notes)
+                self.assertTrue(release_notes_have_exact_title(release_notes, current_version))
                 self.assertIn(f"Pulse v{current_version}", changelog)
 
     def test_v611_packet_records_proxmox_backup_posture_identity_fix(self) -> None:
@@ -2163,7 +2191,12 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("scripts/install-mcp.ps1 release/install-mcp.ps1", candidate_workflow)
         self.assertIn("$PinnedReleaseSshPublicKey = '${TRUSTED_SSH_PUBLIC_KEY}'", candidate_workflow)
         self.assertIn("TRUSTED_SSH_PUBLIC_KEY", update_demo_workflow)
-        self.assertIn('sed -i "s|^PINNED_RELEASE_SSH_PUBLIC_KEY=.*|PINNED_RELEASE_SSH_PUBLIC_KEY=\\"${TRUSTED_SSH_PUBLIC_KEY}\\"|" /tmp/pulse-install.sh', update_demo_workflow)
+        self.assertIn("Verify signed release and select only demo server runtime", update_demo_workflow)
+        self.assertIn('printf \'pulse-installer %s\\n\' "$TRUSTED_SSH_PUBLIC_KEY" > /tmp/pulse-demo-signers', update_demo_workflow)
+        self.assertIn("ssh-keygen -Y verify -f /tmp/pulse-demo-signers -I pulse-installer", update_demo_workflow)
+        self.assertIn("-n pulse-install -s /tmp/pulse-demo-release.sshsig < /tmp/pulse-demo-release.tgz", update_demo_workflow)
+        self.assertIn("python3 .github/scripts/dispatch-demo-runtime.py prepare", update_demo_workflow)
+        self.assertNotIn("bash /tmp/pulse-install.sh", update_demo_workflow)
         self.assertIn("bash .github/scripts/setup-demo-ssh.sh", update_demo_workflow)
         self.assertIn("bash .github/scripts/check-demo-reachability.sh", update_demo_workflow)
         self.assertIn("ping: ${{ secrets.DEMO_SERVER_HOST }}", update_demo_workflow)
@@ -2589,7 +2622,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("DEMO_EXPECTED_HOSTNAME", demo)
         self.assertIn("Verify target host identity", demo)
         self.assertIn("Demo environment points at host $REMOTE_HOSTNAME but expected $DEMO_EXPECTED_HOSTNAME.", demo)
-        self.assertIn("Restore demo runtime configuration", demo)
+        self.assertIn("Apply guarded demo transaction", demo)
+        self.assertIn("dispatch-demo-runtime.py", demo)
+        self.assertIn("Retain guarded demo transaction evidence", demo)
         self.assertIn("Resolve target-compatible demo runtime profile", demo)
         self.assertIn("mockEagerHistoryPVEGuestLimit", demo_profile)
         self.assertIn("UpdateMetricCohort", demo_profile)
@@ -2608,19 +2643,22 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("MOCK_SEED_DURATION=2h", demo_profile)
         self.assertIn("MOCK_SAMPLE_INTERVAL=5m", demo_profile)
         self.assertIn("MOCK_UPDATE_INTERVAL=15s", demo_profile)
-        self.assertIn("resolve_config_dir", demo)
-        self.assertIn("set_env_value DEMO_MODE true", demo)
-        self.assertIn("set_env_value PULSE_MOCK_MODE true", demo)
-        self.assertIn('set_env_value PULSE_MOCK_NODES "$MOCK_NODES"', demo)
-        self.assertIn("set_env_value PULSE_MOCK_SEED_METRICS_STORE false", demo)
-        self.assertIn('set_env_value PULSE_MOCK_TRENDS_SEED_DURATION "$MOCK_SEED_DURATION"', demo)
-        self.assertIn('set_env_value PULSE_MOCK_TRENDS_SAMPLE_INTERVAL "$MOCK_SAMPLE_INTERVAL"', demo)
-        self.assertIn('set_env_value PULSE_MOCK_UPDATE_INTERVAL "$MOCK_UPDATE_INTERVAL"', demo)
-        self.assertIn("ensure_demo_fixture_entitlement", demo)
-        self.assertIn('"demo_fixtures"', demo)
-        self.assertIn("del(.integrity)", demo)
-        self.assertIn("Demo fixture entitlement ensured in governed demo billing state.", demo)
-        self.assertIn("Demo service restarted with governed demo runtime configuration.", demo)
+        # Profile application moved into the owned transaction; retain runtime
+        # settings but require an existing capability without rewriting billing.
+        transaction = read(".github/scripts/demo-runtime-transaction.py")
+        for required in ('"DEMO_MODE": "true"', '"PULSE_MOCK_MODE": "true"',
+                         '"PULSE_MOCK_SEED_METRICS_STORE": "false"',
+                         '"seed_duration": "trends_seed_duration"', '"sample_interval": "trends_sample_interval"',
+                         '"PULSE_MOCK_" + key.upper()', 'self.profile_admission()',
+                         'if "demo_fixtures" not in billing["capabilities"]:',
+                         'raise Failure("billing-demo-capability-required")',
+                         'self.host.profile(self.request, not healthy_baseline)', 'self.host.start()'):
+            self.assertIn(required, transaction)
+        self.assertNotIn('billing.pop("integrity", None)', transaction)
+        self.assertNotIn('billing["capabilities"] = ["demo_fixtures"]', transaction)
+        self.assertNotIn('atomic_json(billing_file, billing)', transaction)
+        self.assertIn("MOCK_NODES: ${{ needs.resolve.outputs.mock_nodes }}", demo)
+        self.assertIn("MOCK_UPDATE_INTERVAL: ${{ needs.resolve.outputs.mock_update_interval }}", demo)
         self.assertIn("/api/license/runtime-capabilities", demo)
         self.assertIn("Mock mode enabled", demo)
         self.assertIn("Demo server mock mode did not enable after entitlement sync", demo)
@@ -2749,73 +2787,46 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
     def test_stable_demo_recovery_is_fixed_current_bits_only(self) -> None:
         workflow = read(".github/workflows/recover-demo-server.yml")
         recovery = read(".github/scripts/recover-demo-runtime.sh")
+        transaction = read(".github/scripts/demo-runtime-transaction.py")
+        dispatcher = read(".github/scripts/dispatch-demo-runtime.py")
 
-        self.assertIn("workflow_dispatch:", workflow)
-        self.assertNotIn("workflow_call:", workflow)
-        self.assertNotIn("inputs:", workflow)
-        self.assertIn("environment: demo-stable", workflow)
-        self.assertIn("contents: read", workflow)
-        self.assertIn("cancel-in-progress: false", workflow)
-        self.assertIn('gh api "repos/${GITHUB_REPOSITORY}/releases/latest"', workflow)
-        self.assertIn("Resolve target-compatible recovery profile", workflow)
-        self.assertIn("resolve-demo-runtime-profile.sh", workflow)
-        self.assertIn(".github/scripts/recover-demo-runtime.sh", workflow)
-        self.assertIn("Verify public health", workflow)
-        self.assertIn("Verify public frontend parity", workflow)
-        self.assertIn("./scripts/run_demo_public_browser_smoke.sh", workflow)
-        self.assertIn("Compensate failed mutated recovery", workflow)
-        self.assertIn("Capture bounded Pulse failure diagnostics", workflow)
-        self.assertIn("demo-runtime-diagnostics.txt", workflow)
-        self.assertIn("journalctl -u pulse --since '-30 minutes'", workflow)
-        self.assertIn("journalctl -u pulse --since '-10 minutes'", workflow)
-        self.assertIn("tail -400", workflow)
-        self.assertIn("sudo systemctl stop pulse", workflow)
-        self.assertIn("Retain bounded recovery evidence", workflow)
-        self.assertNotIn("release-convergence.yml", workflow)
-        self.assertNotIn("install.sh", workflow)
-        self.assertNotIn("scp ", workflow)
+        for required in ("workflow_dispatch:", "environment: demo-stable", "contents: read",
+                         "cancel-in-progress: false", 'gh api "repos/${GITHUB_REPOSITORY}/releases/latest"',
+                         "Resolve target-compatible recovery profile", "resolve-demo-runtime-profile.sh",
+                         ".github/scripts/recover-demo-runtime.sh", "Verify public health",
+                         "Verify public frontend parity", "./scripts/run_demo_public_browser_smoke.sh",
+                         "Capture bounded Pulse failure diagnostics", "demo-runtime-diagnostics.txt",
+                         "journalctl -u pulse --since '-30 minutes'", "journalctl -u pulse --since '-10 minutes'",
+                         "tail -400", "Retain bounded recovery evidence", ".forward.elapsed_seconds >= 300"):
+            self.assertIn(required, workflow)
+        for forbidden in ("workflow_call:", "inputs:", "release-convergence.yml", "install.sh", "scp ",
+                          "Compensate failed mutated recovery", "sudo systemctl stop pulse"):
+            self.assertNotIn(forbidden, workflow)
+        self.assertIn('exec python3 .github/scripts/dispatch-demo-runtime.py recover', recovery)
+        self.assertIn("if mode == 'update' else b''", dispatcher)
+        self.assertIn("/var/lib/pulse-deploy/relay/deploy.lock", transaction)
+        self.assertIn('if self.request["mode"] == "update":', transaction)
+        self.assertIn('self.host.install(self.attempt, self.request)', transaction)
+        self.assertIn('raise Failure("recovery-source-mismatch")', transaction)
+        self.assertIn('copy_path(path, snapshot / label)', transaction)
+        self.assertIn('copy_path(snapshot / label, PATHS[label])', transaction)
+        self.assertIn('estate_hash(PATHS) != self.receipt["snapshot_sha256"]', transaction)
+        self.assertIn('WINDOW = 300', transaction)
+        self.assertIn('self.watch("recovery", original_version, cursors)', transaction)
+        self.assertIn('signal.signal(sig, signal.SIG_IGN)', transaction)
+        self.assertIn('outcome = "rolled_back"', transaction)
+        self.assertIn('outcome = "rollback_failed"', transaction)
+        self.assertIn('self.finish(outcome)', transaction)
+        self.assertIn('self.receipt["observed_outcome"] = status', transaction)
+        self.assertIn('self.receipt["status"] = "observation_failed"', transaction)
+        self.assertIn('self.save(terminal)', transaction)
+        for required in ("alerts/events.db", "alerts/alert-history.json.imported",
+                         "alerts/alert-history.backup.json.imported", "ai_incidents.json", "snapshot_retained"):
+            self.assertIn(required, transaction)
+        self.assertNotIn('kill -QUIT', transaction + recovery + workflow)
+        self.assertNotIn('eval ', transaction + recovery)
+        self.assertNotIn("'--wait'", dispatcher)
 
-        self.assertIn('if [ "$#" -ne 16 ]', recovery)
-        self.assertIn('SERVICE_NAME="pulse"', recovery)
-        self.assertIn('RELAY_SERVICE_NAME="pulse-relay"', recovery)
-        self.assertIn('EXPECTED_BINARY="/opt/pulse/bin/pulse"', recovery)
-        self.assertIn('EXPECTED_UNIT="/etc/systemd/system/pulse.service"', recovery)
-        self.assertIn('set_env_value PULSE_MOCK_NODES "$MOCK_NODES"', recovery)
-        self.assertIn('set_env_value PULSE_MOCK_VMS_PER_NODE "$MOCK_VMS_PER_NODE"', recovery)
-        self.assertIn('set_env_value PULSE_MOCK_LXCS_PER_NODE "$MOCK_LXCS_PER_NODE"', recovery)
-        self.assertIn('set_env_value PULSE_MOCK_DOCKER_HOSTS "$MOCK_DOCKER_HOSTS"', recovery)
-        self.assertIn('set_env_value PULSE_MOCK_DOCKER_CONTAINERS "$MOCK_DOCKER_CONTAINERS"', recovery)
-        self.assertIn('set_env_value PULSE_MOCK_GENERIC_HOSTS "$MOCK_GENERIC_HOSTS"', recovery)
-        self.assertIn('set_env_value PULSE_MOCK_K8S_CLUSTERS "$MOCK_K8S_CLUSTERS"', recovery)
-        self.assertIn('set_env_value PULSE_MOCK_K8S_NODES "$MOCK_K8S_NODES"', recovery)
-        self.assertIn('set_env_value PULSE_MOCK_K8S_PODS "$MOCK_K8S_PODS"', recovery)
-        self.assertIn('set_env_value PULSE_MOCK_K8S_DEPLOYMENTS "$MOCK_K8S_DEPLOYMENTS"', recovery)
-        self.assertIn("set_env_value PULSE_MOCK_SEED_METRICS_STORE false", recovery)
-        self.assertIn('grep -Fxq "PULSE_MOCK_SEED_METRICS_STORE=false"', recovery)
-        self.assertIn('set_env_value PULSE_MOCK_TRENDS_SEED_DURATION "$MOCK_SEED_DURATION"', recovery)
-        self.assertIn('set_env_value PULSE_MOCK_TRENDS_SAMPLE_INTERVAL "$MOCK_SAMPLE_INTERVAL"', recovery)
-        self.assertIn('set_env_value PULSE_MOCK_UPDATE_INTERVAL "$MOCK_UPDATE_INTERVAL"', recovery)
-        self.assertIn('sudo systemctl restart "$SERVICE_NAME"', recovery)
-        self.assertIn('sudo systemctl stop "$SERVICE_NAME"', recovery)
-        self.assertIn('sudo kill -QUIT "$failed_pid"', recovery)
-        self.assertIn("clear_demo_operational_history", recovery)
-        self.assertIn("restore_demo_operational_history", recovery)
-        self.assertIn("alerts/events.db", recovery)
-        self.assertIn("alerts/alert-history.json.imported", recovery)
-        self.assertIn("alerts/alert-history.backup.json.imported", recovery)
-        self.assertIn("ai_incidents.json", recovery)
-        self.assertIn("demo-operational-history.tar", recovery)
-        self.assertNotIn('rm -f "/etc/pulse/', recovery)
-        self.assertIn('AFTER_RELAY_PID" = "$BEFORE_RELAY_PID', recovery)
-        self.assertIn('AFTER_BINARY_SHA" = "$BEFORE_BINARY_SHA', recovery)
-        self.assertIn('AFTER_UNIT_SHA" = "$BEFORE_UNIT_SHA', recovery)
-        self.assertIn('AFTER_DROPINS_SHA" = "$BEFORE_DROPINS_SHA', recovery)
-        self.assertNotIn('AFTER_CONFIG_SHA" = "$BEFORE_CONFIG_SHA', recovery)
-        self.assertIn("/etc/pulse/.env /etc/pulse/billing.json", recovery)
-        self.assertIn("restore_runtime_config", recovery)
-        self.assertIn("sudo cp --archive", recovery)
-        self.assertNotIn("eval ", recovery)
-        self.assertNotIn("sudo bash", recovery)
 
     def test_blocked_record_tracks_current_target_and_candidate_version(self) -> None:
         blocked_record_surface = {

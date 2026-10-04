@@ -553,7 +553,13 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Disk */}
         <Show when={isColVisible('disk')}>
-          <td class="px-1.5 sm:px-2 py-0.5 align-middle" data-workload-col="disk">
+          <td
+            class="px-1.5 sm:px-2 py-0.5 align-middle"
+            data-workload-col="disk"
+            title={
+              isVM(props.guest) && props.guest.diskStatusReason ? getDiskStatusTooltip() : undefined
+            }
+          >
             <Show when={isSparklineMode()}>
               {renderMetricSparkline(
                 'disk',
@@ -585,6 +591,11 @@ export function GuestRow(props: GuestRowProps) {
                         aggregateDisk={props.guest.disk}
                         anomaly={diskAnomaly()}
                         thresholds={diskThresholds()}
+                        statusMessage={
+                          isVM(props.guest) && props.guest.diskStatusReason
+                            ? getDiskStatusTooltip()
+                            : undefined
+                        }
                       />
                     }
                   >

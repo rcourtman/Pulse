@@ -71,6 +71,7 @@ import {
   PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS,
   PHYSICAL_DISK_TABLE_ROW_SELECTED_CLASS,
   PHYSICAL_DISK_TABLE_ROW_STYLE,
+  getPhysicalDiskCellPaddingClass,
   getPhysicalDiskColumnWidthStyle,
   getPhysicalDiskEmptyStatePresentation,
   getPhysicalDiskHealthCompactLabel,
@@ -117,8 +118,16 @@ export const DiskList: Component<DiskListProps> = (props) => {
     baseClass: string,
     columnId: PhysicalDiskTableColumnId,
     visibleClass: 'table-column' | 'table-cell',
-  ) =>
-    `${baseClass} ${isPhysicalDiskColumnVisible(layoutMode(), columnId) ? visibleClass : 'hidden'}`.trim();
+  ) => {
+    const visibility = isPhysicalDiskColumnVisible(layoutMode(), columnId)
+      ? visibleClass
+      : 'hidden';
+    // Rendered cells and headers shed the shared primitives' desktop padding
+    // on the phone layouts; `<col>` elements carry no padding.
+    const padding =
+      visibleClass === 'table-cell' ? getPhysicalDiskCellPaddingClass(layoutMode()) : '';
+    return `${baseClass} ${padding} ${visibility}`.replace(/\s+/g, ' ').trim();
+  };
   const columnStyle = (columnId: PhysicalDiskTableColumnId) =>
     getPhysicalDiskColumnWidthStyle(layoutMode(), columnId);
   const { getDiskTemperatureThresholds } = useAlertsActivation();

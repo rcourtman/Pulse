@@ -2,6 +2,7 @@ import { batch, createRoot, createSignal } from 'solid-js';
 import { createStore, reconcile, type SetStoreFunction } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildProxmoxPageModel } from '@/features/proxmox/proxmoxPageModel';
+import { getDockerContainerLifecycleDisabledReason } from '@/features/docker/dockerContainerLifecycleActions';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import useUnifiedResourcesSource from '../useUnifiedResources.ts?raw';
@@ -1682,6 +1683,115 @@ describe('useUnifiedResources', () => {
     expect(row?.technology).toBe('pmg');
 
     dispose();
+  });
+
+  it.each([
+    {
+      label: 'stale inventory',
+      sourceStatus: { docker: { status: 'stale', lastSeen: '2026-02-06T12:00:00Z' } },
+      actionReadiness: [],
+      expected: 'Docker inventory is stale. Refresh inventory before running lifecycle actions.',
+    },
+    {
+      label: 'failed inventory',
+      sourceStatus: {
+        docker: { status: 'online', lastSeen: '2026-02-06T12:00:00Z', error: 'Collector refused' },
+      },
+      actionReadiness: [],
+      expected: 'Docker inventory is not healthy: Collector refused',
+    },
+    {
+      label: 'server action refusal',
+      sourceStatus: { docker: { status: 'online', lastSeen: '2026-02-06T12:00:00Z' } },
+      actionReadiness: [
+        { name: 'restart', available: false, reason: 'Command agent disconnected' },
+      ],
+      expected: 'Command agent disconnected',
+    },
+    {
+      label: 'no invented action grant',
+      sourceStatus: { docker: { status: 'online', lastSeen: '2026-02-06T12:00:00Z' } },
+      actionReadiness: [],
+      expected:
+        'Pulse does not currently advertise a fresh restart command capability for this container.',
+    },
+  ])('preserves $label through REST mapping into lifecycle controls', async (testCase) => {
+    apiFetchMock.mockResolvedValue(
+      resourceResponse([
+        {
+          id: 'docker-container-1',
+          type: 'app-container',
+          name: 'edge-web',
+          status: 'running',
+          lastSeen: '2026-02-06T12:00:00Z',
+          sources: ['docker'],
+          technology: 'docker',
+          docker: { runtime: 'docker', agentId: 'agent-edge', containerState: 'running' },
+          sourceStatus: testCase.sourceStatus,
+          actionReadiness: testCase.actionReadiness,
+        },
+      ]),
+    );
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({ query: 'type=app-container', cacheKey: testCase.label });
+    });
+    try {
+      await result!.refetch();
+      const row = result!.resources()[0];
+      expect(row.sourceStatus).toEqual(testCase.sourceStatus);
+      expect(row.actionReadiness).toEqual(testCase.actionReadiness);
+      expect(row.technology).toBe('docker');
+      expect(getDockerContainerLifecycleDisabledReason(row, 'restart')).toBe(testCase.expected);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('replaces REST facets without retaining a removed PMG counter or action refusal', async () => {
+    const base = {
+      id: 'pmg-1',
+      type: 'pmg',
+      name: 'mail-gateway',
+      status: 'online',
+      sources: ['pmg'],
+      lastSeen: '2026-02-06T12:00:00Z',
+    };
+    apiFetchMock.mockResolvedValue(
+      resourceResponse([
+        {
+          ...base,
+          technology: 'pmg',
+          pmg: { version: '8.1-2', queueTotal: 11 },
+          sourceStatus: { pmg: { status: 'stale', lastSeen: base.lastSeen } },
+          actionReadiness: [{ name: 'restart', available: false, reason: 'Old refusal' }],
+        },
+      ]),
+    );
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({ query: 'type=pmg', cacheKey: 'removed-rest-facets' });
+    });
+    try {
+      await result!.refetch();
+      expect(result!.resources()[0].pmg?.queueTotal).toBe(11);
+      apiFetchMock.mockResolvedValue(
+        resourceResponse([{ ...base, actionReadiness: [], sourceStatus: {} }]),
+      );
+      await result!.refetch();
+      const row = result!.resources()[0];
+      expect(row.pmg).toBeUndefined();
+      expect(row.platformData?.pmg).toBeUndefined();
+      expect(row.actionReadiness).toEqual([]);
+      expect(row.sourceStatus).toEqual({});
+      expect(row.technology).toBeUndefined();
+    } finally {
+      dispose();
+    }
   });
 
   it('falls back to canonical resource.uptime when no platform-specific field is set (vSphere)', async () => {

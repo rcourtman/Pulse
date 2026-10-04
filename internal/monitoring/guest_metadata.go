@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -206,7 +207,7 @@ func (m *Monitor) retryGuestAgentCall(ctx context.Context, timeout time.Duration
 		lastErr = err
 
 		// Don't retry non-timeout errors or if this was the last attempt
-		if attempt >= maxRetries || !strings.Contains(err.Error(), "timeout") {
+		if errors.Is(err, proxmox.ErrGuestAgentDeferred) || attempt >= maxRetries || !strings.Contains(err.Error(), "timeout") {
 			break
 		}
 
@@ -228,6 +229,11 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	m.guestMetadataMu.RLock()
 	cached, ok := m.guestMetadataCache[key]
 	m.guestMetadataMu.RUnlock()
+
+	if vmStatus != nil && vmStatus.Lock != "" {
+		// Deliberately retained identity, not a newly fetched observation.
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+	}
 
 	agentAvailable := client != nil && ((vmStatus != nil && vmStatus.Agent.IsAvailable()) || allowWithoutStatus)
 	if !agentAvailable {
@@ -274,6 +280,10 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	interfaces, err := m.retryGuestAgentCall(ctx, m.guestAgentNetworkTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
 		return client.GetVMNetworkInterfaces(ctx, nodeName, vmid)
 	})
+	if errors.Is(err, proxmox.ErrGuestAgentDeferred) {
+		m.deferGuestMetadataRetry(key, time.Now())
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+	}
 	if err != nil {
 		log.Debug().
 			Str("instance", instanceName).
@@ -311,6 +321,10 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 		agentInfoRaw, err := m.retryGuestAgentCall(ctx, m.guestAgentOSInfoTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
 			return client.GetVMAgentInfo(ctx, nodeName, vmid)
 		})
+		if errors.Is(err, proxmox.ErrGuestAgentDeferred) {
+			m.deferGuestMetadataRetry(key, time.Now())
+			return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+		}
 		if err != nil {
 			if isGuestAgentOSInfoUnsupportedError(err) {
 				osInfoSkip = true
@@ -365,6 +379,10 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	versionRaw, err := m.retryGuestAgentCall(ctx, m.guestAgentVersionTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
 		return client.GetVMAgentVersion(ctx, nodeName, vmid)
 	})
+	if errors.Is(err, proxmox.ErrGuestAgentDeferred) {
+		m.deferGuestMetadataRetry(key, time.Now())
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+	}
 	if err != nil {
 		log.Debug().
 			Str("instance", instanceName).

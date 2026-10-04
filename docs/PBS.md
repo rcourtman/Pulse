@@ -152,7 +152,7 @@ It does **not** allow:
 
 If you have multiple PBS servers, add each one separately in Settings. Pulse will:
 - Monitor each server independently
-- Show backups from all servers in the unified Recovery view
+- Show backups from all servers under **Proxmox → Backups** (`/proxmox/backups`)
 - Deduplicate if the same backup appears via both PVE passthrough and direct PBS
 
 ---
@@ -301,7 +301,8 @@ or change retention to hide a display problem.
 
 ## Data Source Indicator
 
-In the Recovery view, PBS backups show a data source indicator:
+Under **Proxmox → Backups** (`/proxmox/backups`), PBS backups show a data source
+indicator. There is no current top-level Recovery page:
 
 - **"PBS"** badge alone = Direct PBS connection (full data)
 - **"PBS via PVE"** = Passthrough via PVE storage (limited data)

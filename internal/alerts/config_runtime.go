@@ -608,7 +608,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				Str("alertID", alertID).
 				Msg("Alert auto-resolved after configuration change")
 
-			m.safeCallResolvedAlertCallback(resolvedAlert.Alert, alertID, true)
+			m.safeCallResolvedAlertCallback(resolvedAlert, alertID, true)
 		}
 	}
 

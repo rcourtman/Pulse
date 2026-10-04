@@ -197,7 +197,58 @@ class APIAuthDocsTest(unittest.TestCase):
                     header.chmod(0o644)
                 subprocess.run(["bash", "-eu", "-c", preparation], env=env, check=True)
                 self.assertEqual(stat.S_IMODE(header.stat().st_mode), 0o600)
+                self.assertEqual(stat.S_IMODE(header.parent.stat().st_mode), 0o700)
                 self.assertEqual(header.read_text(), f"X-API-Token: {TEST_TOKEN}\n" if existing else "")
+
+    def test_preparation_rejects_symlinked_paths_without_editing_or_chmodding_targets(self):
+        preparation, _request = commands()
+        for component in (".config", ".config/pulse", ".config/pulse/api-header"):
+            with self.subTest(component=component), tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary) / "home"
+                home.mkdir()
+                target = Path(temporary) / "target"
+                if component.endswith("api-header"):
+                    target.write_text("preserve target\n")
+                    target.chmod(0o644)
+                else:
+                    target.mkdir()
+                    target.chmod(0o755)
+                link = home / component
+                link.parent.mkdir(parents=True, exist_ok=True)
+                link.symlink_to(target)
+                tools = home / "tools"
+                tools.mkdir()
+                editor = tools / "vi"
+                editor.write_text('#!/bin/sh\ntouch "$HOME/editor-called"\n')
+                editor.chmod(0o700)
+                before = stat.S_IMODE(target.stat().st_mode)
+                env = dict(os.environ, HOME=str(home), PATH=f"{tools}:{os.environ['PATH']}")
+                result = subprocess.run(["bash", "-c", preparation], env=env, capture_output=True, timeout=10)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse((home / "editor-called").exists())
+                self.assertEqual(stat.S_IMODE(target.stat().st_mode), before)
+                if target.is_file():
+                    self.assertEqual(target.read_text(), "preserve target\n")
+                else:
+                    self.assertEqual(list(target.iterdir()), [])
+
+    def test_preparation_failure_stops_before_editor_in_an_ordinary_shell(self):
+        preparation, _request = commands()
+        for failing_command in ("mkdir", "touch", "chmod"):
+            with self.subTest(command=failing_command), tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary)
+                tools = home / "tools"
+                tools.mkdir()
+                failure = tools / failing_command
+                failure.write_text("#!/bin/sh\nexit 73\n")
+                failure.chmod(0o700)
+                editor = tools / "vi"
+                editor.write_text('#!/bin/sh\n: > "$HOME/editor-called"\n')
+                editor.chmod(0o700)
+                env = dict(os.environ, HOME=str(home), PATH=f"{tools}:{os.environ['PATH']}")
+                result = subprocess.run(["bash", "-c", preparation], env=env, capture_output=True, timeout=10)
+                self.assertEqual(result.returncode, 73)
+                self.assertFalse((home / "editor-called").exists())
 
     def run_documented_request(self, home: Path, header_text: str, port: int, request=None):
         return exercise_curl(self, home, header_text, port, request if request is not None else commands()[1])

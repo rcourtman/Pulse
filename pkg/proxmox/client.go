@@ -52,13 +52,20 @@ func classifyAPIErrorLog(status int, path string) (apiErrorLogLevel, string) {
 	return apiErrorLogNone, ""
 }
 
+// Preserve an incomplete body through the HTTP error-response wrapper too.
+// An error status alone is not a completed refusal if its body was truncated.
+type responseBodyReadError struct{ cause error }
+
+func (e *responseBodyReadError) Error() string { return e.cause.Error() }
+func (e *responseBodyReadError) Unwrap() error { return e.cause }
+
 func readResponseBodyLimited(r io.Reader) ([]byte, error) {
 	body, err := io.ReadAll(io.LimitReader(r, maxResponseBodyBytes+1))
 	if err != nil {
-		return nil, err
+		return nil, &responseBodyReadError{cause: err}
 	}
 	if int64(len(body)) > maxResponseBodyBytes {
-		return nil, fmt.Errorf("response body exceeds %d bytes", maxResponseBodyBytes)
+		return nil, &responseBodyReadError{cause: fmt.Errorf("response body exceeds %d bytes", maxResponseBodyBytes)}
 	}
 	return body, nil
 }
@@ -640,6 +647,12 @@ func (c *Client) requestWithRetry(ctx context.Context, method, path string, data
 
 // get performs a GET request
 func (c *Client) get(ctx context.Context, path string) (*http.Response, error) {
+	if node, vmid, ok := guestAgentPath(path); ok {
+		return c.getGuestAgent(ctx, path, node, vmid)
+	}
+	if strings.Contains(path, "/agent/") {
+		return nil, &guestAgentDeferredError{reason: "invalid-guest-key"}
+	}
 	return c.request(ctx, "GET", path, nil)
 }
 
@@ -2432,6 +2445,7 @@ type ClusterResource struct {
 	Tags       string            `json:"tags,omitempty"`
 	IOCounters IOCounterPresence `json:"-"`
 	ObservedAt time.Time         `json:"-"`
+	Lock       string            `json:"lock,omitempty"`
 }
 
 // GetClusterResources returns all resources (VMs, containers) across the cluster
@@ -2715,6 +2729,7 @@ type VMStatus struct {
 	Agent       VMAgentField      `json:"agent"`
 	IOCounters  IOCounterPresence `json:"-"`
 	ObservedAt  time.Time         `json:"-"`
+	Lock        string            `json:"lock,omitempty"`
 }
 
 // GetZFSPoolStatus gets the status of ZFS pools on a node

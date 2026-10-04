@@ -15,6 +15,106 @@
 
 ## Purpose
 
+### Update History consent does not infer the backup's restore scope
+
+The confirmation names the observed running server separately from the selected
+entry's pre-/post-update versions. No version threshold or free-form notes stand
+in for actual scope: the current History API does not describe the manifest or
+active-store layout. Explain that installation-only recovery leaves active stores
+in place but may restore independent installation files; legacy recovery can
+also replace install-local configuration/data. Do not promise a settings/alerts
+rewind. Full-state recovery still requires a stopped service and a consistent
+backup of every active store, via the existing shipped recovery instructions.
+
+Opening/cancelling consent sends no rollback request, pending consent rejects
+duplicate actions and cancellation, and a rejected request retains the warning
+and refreshes history. Mounted UpdateHistory tests and the production-CSS offline
+browser fixture exercise those states; neither proves a binary/data rollback.
+
+
+### Demo transactions share the service host, not just a workflow queue
+
+The demo runtime profile does not grant or rewrite billing entitlements. Before
+the first stop/install/profile mutation, the transaction requires regular,
+bounded, unambiguous existing billing state containing `demo_fixtures`; missing
+capability or malformed/unavailable state refuses without estate mutation. The
+helper rechecks before profile writes and leaves all billing/key bytes,
+ownership and modes unchanged, including encrypted or legacy plaintext secrets
+and integrity. Only the canonical application verifies HMAC/entitlements and
+performs encrypted-at-rest migration; the read-only shape check cannot make a
+tampered signature valid. Recovery retains the full original private estate.
+Synthetic native fixtures provision their non-secret capability before starting
+the transaction on their admitted fresh empty runner, not by granting it during
+recovery. Connected Python and `TestBillingState_DemoProfilePreservesCanonicalState`
+controls cover these boundaries without asserting installed acceptance.
+
+Stable demo update and recovery keep their existing publication/activation,
+exact-tag installer signing key, Tailscale, pinned SSH and environment boundaries.
+The mutating paths now share the Relay host's existing
+`/var/lib/pulse-deploy/relay/deploy.lock` and one retained systemd transaction.
+Every successful path, including a healthy no-op, needs a complete 300-second
+local/public/Relay health, version, service PID/restart and new-journal-crash
+window. Readiness is separate. Missing observations fail closed.
+The fixed Relay observation is its existing `/healthz` endpoint, not a guessed
+new route; disposable acceptance also rejects an unknown route rather than
+responding healthy to every URL.
+
+Before installation or runtime-profile mutation, stop only Pulse and durably
+capture its executable, VERSION, unit/drop-ins and entire persistent data estate. Refuse
+insufficient space rather than prune backups/databases. A failed healthy change
+restores that complete estate and observes another 300 seconds; the original
+operation still fails. An unhealthy recovery baseline is never claimed as a
+healthy rollback. Retain its original generated demo history, all snapshots and
+failed/uncertain terminal evidence privately. An unresolved estate blocks later
+mutation. No source-worker production capability, package upgrade, Relay copy
+activation or credential is added.
+
+Receipt I/O failure must not skip the owned stop/restore or shorten either
+recovery observation window, including an OSError at the phase/terminal writer
+interface itself. Physical restoration and complete observations
+remain distinct from retained evidence: any phase/terminal write loss yields
+failed, unverified `observation_failed` evidence and blocks later mutation,
+even when the old runtime/data are restored. The capture remains private and
+retained. No OS error text or private path is returned. A missing terminal may
+remain nonterminal on disk; it cannot be fabricated as verified.
+
+The bootstrap observes the exact child's closed systemd result before accepting
+a terminal, including favourable JSON made visible by replacement before a
+failed directory fsync. The child retains `RemainAfterExit=yes` and failed
+units are not automatically collected. Running, missing, malformed or
+contradictory child/receipt evidence is not acceptance. This is terminal
+observation of the existing transaction, not another dispatch/admission route.
+Receipt loss exits 2 rather than an ordinary failed-operation exit 1; new
+attempts cannot clear a prior child-bound terminal whose exit disagrees. Older
+unbound receipts gain no retrospective result.
+Connected verification is in `test_demo_runtime_transaction.py`: receipt I/O
+faults after stop/replacement and through recovery preserve complete watches,
+capture/runtime/data and cancellation ownership; collector controls cover
+writer closure, contradictory exits, unavailable state and repeated non-replay.
+
+SSH observes, but never owns or cancels, the systemd child. Durable intent
+precedes submission; the exact request identity is not replayed after a lost
+response. Forward cancellation initiates restoration; recovery ignores
+TERM/INT/HUP until its watch and terminal receipt are retained. Child, stop,
+observer and workflow deadlines cover both full windows. A later browser or
+network check must not stop a committed or unrelated service in another SSH
+session. These connected source controls do not establish native systemd,
+signed installed forward/reverse acceptance, ingress enforcement or customer
+recovery. See [demo transaction acceptance](../DEMO_RUNTIME_TRANSACTION.md).
+
+The secret-free public `demo-runtime-native.yml` checks the exact PR/push source
+on a fresh hosted runner, using actual systemd and Caddy with disposable TLS and
+synthetic executable/data fixtures through the real narrow atomic swaps. Its two real-window cases exercise a
+changed executable, a 55-second delayed synthetic failure, observer loss and
+TERM during full restoration. It records original/fixture source identities,
+actual bounded service observations and cleanup; a missing or failed record is
+not acceptance. Only the fixed Relay health URL is rebound to that fixture.
+This neither exercises a signed published installer nor proves customer or
+production recovery. The driver refuses a non-empty or non-disposable estate
+before service operations. Neither this driver nor worker source tests install
+host policy. Production activation still requires independent review and the
+operational owner's acceptance of the native result and published-source path.
+
 ### Superseded pull request validation
 
 Build and Test and Core E2E cancel an older run for the same pull request when
@@ -732,6 +832,8 @@ release-latency optimization.
 23. `.github/workflows/update-demo-server.yml`
 23a. `.github/workflows/recover-demo-server.yml`
 23b. `.github/scripts/recover-demo-runtime.sh`
+23c. `.github/scripts/demo-runtime-transaction.py`
+23d. `.github/scripts/dispatch-demo-runtime.py`
 23c. `.github/scripts/resolve-demo-runtime-profile.sh`
 24. `.github/workflows/validate-release-assets.yml`
 25. `.github/workflows/install-sh-smoke.yml`
@@ -2585,6 +2687,21 @@ artifact-selection behaviour.
    `ES2022` lib declaration stay in step.
 
 ## Current State
+
+### Demo runtime footprint qualification
+
+The demo transaction executes no general installer. It verifies the activated
+stable archive with the pinned SSH key/namespace, selects only regular bounded
+Linux/amd64 server and VERSION members, and rechecks their exact hashes before
+atomic sibling swaps. VERSION is in the owned rollback snapshot; runtime hashes
+remain fixed through forward and restored 300-second observations. No agent,
+script, helper, unit/timer, service-account, package or backup-rotation effect is
+claimed or applied. CI production mutation requires a successful main native
+run whose engine/dispatcher/driver/workflow final content matches current main,
+and refuses newer matching failures, pending runs and unavailable evidence.
+The v6.4.5 full-installer VERSION rollback defect and this route's signed/native
+limits are retained in DEMO_RUNTIME_TRANSACTION.md.
+
 
 ### Existing-install auto-update consent (1 October 2026)
 

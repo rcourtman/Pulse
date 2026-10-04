@@ -259,7 +259,7 @@ describe('DestinationsTab recovery while editing SMTP', () => {
         ).toBeInTheDocument();
         expect(
           await screen.findByText(
-            'Pulse could not read the delivery log, so recent delivery activity cannot be shown.',
+            'Pulse could not read the delivery log. Refresh to check delivery attempts.',
           ),
         ).toBeInTheDocument();
         expect(screen.queryByText('SMTP fixture rejected')).not.toBeInTheDocument();

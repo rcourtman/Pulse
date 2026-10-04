@@ -21,6 +21,85 @@
 
 ## Purpose
 
+### Partial backup inventory is not empty recovery evidence
+
+The existing Proxmox Backups view treats PVE and PBS inventories as independent
+reads. Fulfilled artifacts remain usable when the other source is loading or
+unavailable. The page identifies that source, marks totals as incomplete and
+does not claim no backups exist until both inventories have fulfilled. PBS server
+backup counts show loading/unavailable rather than a fabricated zero; current
+server health and server-owned protection posture remain independent facts.
+Isolated retry preserves filters and the other source, while settled failures
+withdraw the failed source's artifacts. Both failed reads have a shared retry.
+Organisation changes and disposal cancel/replace reads and prevent late responses
+from restoring former inventory. No polling, recovery operation, native identity
+rule, protection-policy or provider contract is changed.
+
+Verification: `ProxmoxBackupsTable.test.tsx` exercises pending/partial/both-source
+failure, retries, measured empty counts, access denial, org-switch races and
+disposal. `browser-tests/backup-inventory.cjs` uses production components,
+API adapters, router and CSS in Chromium/WebKit with synthetic HTTP responses;
+these controls are not native backup, permission, thaw or release acceptance.
+
+An HTTP success alone does not establish readable recovery evidence. The client
+validates the data envelope, source collections and consumed row fields before
+publishing that inventory. Malformed or undecodable responses invalidate that
+source atomically, not a silently truncated list or confirmed empty inventory.
+PVE's explicitly nil Go collections remain valid empty observations; absent
+fields are not nil collections. Optional unknown facts and additional fields
+retain their existing meaning, and completion flags are never coerced.
+`proxmoxBackupInventory.test.ts`, the mounted backup-table tests and
+`browser-tests/backup-inventory-format.cjs` cover this response boundary, source
+isolation and recovery without extending native protection or thaw claims.
+
+### Backup identity, phone storage and History consent composition
+
+The Proxmox Coverage last-backup pointer selects completed PBS snapshots or PVE
+backup files, never guest-local snapshots. Guest snapshots remain listed as
+restore evidence but cannot make an old independent backup look current.
+Archive detail uses its format (or filename fallback), preserving the full
+provider volid for hover and search in both Coverage and By date.
+
+Phone pool/disk rows preserve health and identity while using weighted widths,
+consistent gutters and compact capacity/health labels. Full disk risk reasons
+move into the existing expanded header; the ZFS activity badge uses supplied
+scan data only when rebuild is reported and keeps the full summary as its title.
+Collection-independent, organisation-owned disk History remains intact.
+
+The UpdateHistory confirmation is a version-rollback consent, not a full-state
+recovery promise. Its current API exposes no verified restore-scope metadata;
+copy must retain installation-only and legacy differences and direct full-state
+recovery to the stopped-service procedure. Regressions cover these distinctions,
+archive/snapshot attribution and storage values; the composed browser fixture
+checks real table/drawer rendering, not native or installed recovery.
+
+
+### Disk History is independent of current collection
+
+The existing physical-disk History catalog is selected by disk family, not by
+whether the latest snapshot contains temperature or extended SMART values.
+Temperature and ATA reallocated-sector charts, or temperature and NVMe
+endurance/spare charts, query only the already-resolved canonical disk target.
+A missing current field must not hide stored observations. An empty series is
+shown as no history samples, never a fabricated zero or current-value fallback.
+Overview continues to report current collection availability; explicit
+unavailable/unsupported I/O still suppresses the existing live I/O section.
+
+Catalog entries retain their identity across matching snapshots so ordinary
+current-temperature changes cannot remount charts, drop inspection or restart
+History reads. The shared chart owner still invalidates reads and inspection
+when the explicit target or range changes; a late cancelled response cannot
+populate its replacement. This changes neither disk correlation nor collector,
+retention, permission or entitlement policy, and proves no appliance recovery.
+
+Verification: `DiskDetail.test.tsx` and `useDiskDetailModel.test.ts` pin the
+catalog and matching-snapshot boundary; `DiskDetail.history-collection.test.tsx`
+uses the actual chart owner to cover absent current fields, stored zero versus
+empty, NVMe/ATA catalogs, request counts, preserved inspection and late former
+target responses. `frontend-modern/browser-tests/disk-history-collection.cjs`
+checks the production components/client/CSS with synthetic API data on desktop
+Chromium and touch/dark phone WebKit, not native NAS or installed acceptance.
+
 ### Independent physical disk temperature
 
 Disk Overview displays a finite positive reported temperature even when the
@@ -351,6 +430,20 @@ command-capable profile.
 34. `frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts`
 
 ## Shared Boundaries
+
+### Operator storage vocabulary without identity changes
+
+Storage topology names preserve Proxmox plugin vocabulary, including LVM-Thin,
+NFS, SMB/CIFS, iSCSI, ZFS and BTRFS. Explicit topology overrides still win.
+Only a storage explicitly marked shared whose retained location is the synthetic
+cluster/shared marker reads Shared, with the supplied reporting-node count when
+more than one node is present. Node-local storage and shared storage with a
+real native location keep that location. This is host-label presentation, not
+resource consolidation: IDs, parent/node hints, ownership evidence, metrics
+targets, alerts, health and recovery authority are unchanged. Adapter/presentation
+regressions and the production storage table browser fixture verify labels
+without treating shared capacity as a backup or demonstrating native recovery.
+
 
 - After password configuration has been persisted and the runtime local-admin identity changes, authorizer synchronisation must also occur if subsequent API-token persistence fails. Development first-run reset must clear the configured-admin bypass only on successful auth reset, not on its persistence-failure rollback path. No role-store deletion or migration is part of this recovery.
 

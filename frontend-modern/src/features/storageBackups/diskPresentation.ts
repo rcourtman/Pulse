@@ -184,6 +184,14 @@ export const getPhysicalDiskColumnWidthStyle = (
     PHYSICAL_DISK_VISIBLE_COLUMNS[layout],
   );
 
+// The shared table cell primitives pad every cell for desktop density. On the
+// phone layouts that padding alone is a fifth of the row, so rendered cells
+// and headers shed it the same way the Proxmox replication table does.
+export const PHYSICAL_DISK_PHONE_CELL_PADDING_CLASS = 'px-1!';
+
+export const getPhysicalDiskCellPaddingClass = (layout: PhysicalDiskTableLayoutMode): string =>
+  layout === 'narrow' || layout === 'compact' ? PHYSICAL_DISK_PHONE_CELL_PADDING_CLASS : '';
+
 // Health words that do not fit a phone-width health column fall back to a
 // shorter form; the full label stays in the wider projections and the detail.
 export const getPhysicalDiskHealthCompactLabel = (label: string): string => {
