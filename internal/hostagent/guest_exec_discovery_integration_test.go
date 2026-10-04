@@ -2,6 +2,7 @@ package hostagent
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
@@ -45,7 +46,7 @@ func testGuestExecRealServerAgentDiscoveryAdmission(t *testing.T) {
 	defer ts.Close()
 	logger := zerolog.Nop()
 	c := NewCommandClient(Config{PulseURL: ts.URL, APIToken: "fixture", StateDir: t.TempDir(), Logger: &logger}, "node-agent", "node", "linux", "6")
-	var locked, lockDuringHandoff atomic.Bool
+	var locked, lockDuringHandoff, failedGuest atomic.Bool
 	var qgaCalls, configReads atomic.Int32
 	locked.Store(true)
 	c.guestExecAdmission = newGuestExecGuard(func(_ context.Context, vmid string) ([]byte, error) {
@@ -69,7 +70,11 @@ func testGuestExecRealServerAgentDiscoveryAdmission(t *testing.T) {
 				locked.Store(true)
 			}
 		}
-		return exec.CommandContext(ctx, "sh", "-c", `printf '%s' '{"exited":1,"exitcode":0,"out-data":"safe-observation"}'`)
+		reply := `{"exited":1,"exitcode":0,"out-data":"safe-observation"}`
+		if name == localGuestExecQM && failedGuest.Load() {
+			reply = `{"exited":1,"exitcode":7,"out-data":"misleading service identity","err-data":"failed probe"}`
+		}
+		return exec.CommandContext(ctx, "sh", "-c", "printf '%s' "+shellQuote(reply))
 	}
 	t.Cleanup(func() { execCommandContext = oldExec })
 	ctx, cancel := context.WithCancel(context.Background())
@@ -109,19 +114,34 @@ func testGuestExecRealServerAgentDiscoveryAdmission(t *testing.T) {
 	if err != nil || got == nil || int32(len(got.CommandOutputs)) != want || qgaCalls.Load() != want {
 		t.Fatalf("healthy explicit scan changed: %+v %v calls=%d", got, err, qgaCalls.Load())
 	}
+	for _, output := range got.CommandOutputs {
+		if output != "safe-observation" {
+			t.Fatalf("CLI wrapper became discovery evidence: %q", output)
+		}
+	}
+	failedGuest.Store(true)
+	got, err = scanner.ScanVM(context.Background(), "node-agent", "node", "105")
+	if !errors.Is(err, servicediscovery.ErrNoCommandEvidence) || got == nil || len(got.CommandOutputs) != 0 || qgaCalls.Load() != 2*want {
+		t.Fatalf("known failed guest became discovery evidence or uncertainty: %+v %v calls=%d", got, err, qgaCalls.Load())
+	}
+	failedGuest.Store(false)
+	got, err = scanner.ScanVM(context.Background(), "node-agent", "node", "105")
+	if err != nil || got == nil || int32(len(got.CommandOutputs)) != want || qgaCalls.Load() != 3*want {
+		t.Fatalf("explicit healthy scan could not resume: %+v %v calls=%d", got, err, qgaCalls.Load())
+	}
 	lockDuringHandoff.Store(true)
 	got, err = scanner.ScanVM(context.Background(), "node-agent", "node", "105")
-	if err == nil || !agentexec.IsGuestExecDeferred(err.Error()) || got == nil || len(got.CommandOutputs) != 0 || qgaCalls.Load() != want+1 {
+	if err == nil || !agentexec.IsGuestExecDeferred(err.Error()) || got == nil || len(got.CommandOutputs) != 0 || qgaCalls.Load() != 3*want+1 {
 		t.Fatalf("in-flight deferral was lost/retried: %+v %v calls=%d", got, err, qgaCalls.Load())
 	}
 	// Host probes do not use this QGA guard, even while VM admission is paused.
-	if host, err := scanner.ScanHost(context.Background(), "node-agent", "node"); err != nil || host == nil || len(host.CommandOutputs) == 0 || qgaCalls.Load() != want+1 {
+	if host, err := scanner.ScanHost(context.Background(), "node-agent", "node"); err != nil || host == nil || len(host.CommandOutputs) == 0 || qgaCalls.Load() != 3*want+1 {
 		t.Fatalf("host control changed: %+v %v", host, err)
 	}
 	if !s.IsAgentConnected("node-agent") {
 		t.Fatal("deferral dropped session liveness")
 	}
-	if configReads.Load() != 2+want*2+2 {
+	if configReads.Load() != 2+3*want*2+2 {
 		t.Fatalf("config retries/unexpected reads: %d", configReads.Load())
 	}
 	if !strings.Contains(err.Error(), "operation lock") {

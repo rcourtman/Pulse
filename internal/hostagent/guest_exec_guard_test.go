@@ -100,7 +100,11 @@ func TestGuestExecCommandPreflightAndPostflight(t *testing.T) {
 			if tc.wantCalls == 0 && (got.Stdout != "" || got.Stderr != "") {
 				t.Fatal("preflight published guest output")
 			}
-			if tc.wantCalls == 1 && (got.Stdout != `{"exited":1,"exitcode":0,"out-data":"original-result"}` || got.ExitCode != 0) {
+			wantOutput := `{"exited":1,"exitcode":0,"out-data":"original-result"}`
+			if tc.wantSuccess {
+				wantOutput = "original-result"
+			}
+			if tc.wantCalls == 1 && (got.Stdout != wantOutput || got.ExitCode != 0) {
 				t.Fatalf("lost actual process completion: %#v", got)
 			}
 			if strings.Contains(got.Error, "private") {
@@ -201,7 +205,7 @@ func TestGuestExecCanceledHandoffNeverRetriesAndRechecksOnExplicitResumption(t *
 		return exec.CommandContext(ctx, "sh", "-c", `printf '%s' '{"exited":1,"exitcode":0,"out-data":"resumed"}'`)
 	}
 	got = c.executeCommand(context.Background(), payload)
-	if !got.Success || got.Stdout != `{"exited":1,"exitcode":0,"out-data":"resumed"}` || reads.Load() != 3 || calls.Load() != 2 {
+	if !got.Success || got.Stdout != "resumed" || reads.Load() != 3 || calls.Load() != 2 {
 		t.Fatalf("explicit resumption failed: %#v", got)
 	}
 }

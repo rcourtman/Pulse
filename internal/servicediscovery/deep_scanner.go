@@ -69,6 +69,12 @@ const (
 	defaultDeepScannerTimeout     = 30 * time.Second
 )
 
+// ErrNoCommandEvidence prevents an attempted but failed scan from replacing
+// saved observations through metadata-only fallback. It contains no command
+// output or provider error. Individual optional failures can still coexist
+// with independent, successful stdout evidence.
+var ErrNoCommandEvidence = errors.New("Discovery commands produced no successful output")
+
 // NewDeepScanner creates a new deep scanner.
 func NewDeepScanner(executor CommandExecutor) *DeepScanner {
 	return &DeepScanner{
@@ -241,6 +247,7 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 	var mu sync.Mutex
 
 	var safetyError error
+	failedCommands := 0
 	runCommand := func(cmd DiscoveryCommand) {
 		cancelBeforeAdmission := func() {
 			if vmTarget {
@@ -275,6 +282,7 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 		if targetType == "container" || targetType == "vm" {
 			if err := ValidateResourceID(targetID); err != nil {
 				mu.Lock()
+				failedCommands++
 				result.Errors[cmd.Name] = fmt.Sprintf("invalid target ID: %v", err)
 				mu.Unlock()
 				return
@@ -319,6 +327,7 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 		}
 
 		if err != nil {
+			failedCommands++
 			if !cmd.Optional {
 				result.Errors[cmd.Name] = err.Error()
 			}
@@ -331,23 +340,29 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 			return
 		}
 
-		if cmdResult != nil {
-			output := cmdResult.Stdout
-			if cmdResult.Stderr != "" && output != "" {
-				output += "\n--- stderr ---\n" + cmdResult.Stderr
-			} else if cmdResult.Stderr != "" {
-				output = cmdResult.Stderr
+		if cmdResult == nil {
+			failedCommands++
+			if !cmd.Optional {
+				result.Errors[cmd.Name] = "command returned no result"
 			}
-
-			if output != "" {
-				result.CommandOutputs[cmd.Name] = output
-			}
-
-			if !cmdResult.Success && cmdResult.Error != "" && !cmd.Optional {
-				result.Errors[cmd.Name] = cmdResult.Error
-			}
-
-			if !cmdResult.Success {
+		} else {
+			successful := cmdResult.Success && cmdResult.ExitCode == 0 && cmdResult.Error == ""
+			if successful {
+				// stdout from a successful command is observation evidence.
+				// Failed/partial stdout and any stderr are diagnostics only;
+				// they must not identify a service or enter saved evidence.
+				if cmdResult.Stdout != "" {
+					result.CommandOutputs[cmd.Name] = cmdResult.Stdout
+				}
+			} else {
+				failedCommands++
+				if !cmd.Optional {
+					message := cmdResult.Error
+					if message == "" {
+						message = fmt.Sprintf("command failed with status %d", cmdResult.ExitCode)
+					}
+					result.Errors[cmd.Name] = message
+				}
 				event := scanLog.Debug()
 				if !cmd.Optional {
 					event = scanLog.Warn()
@@ -391,6 +406,10 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 
 	wg.Wait()
 	result.CompletedAt = time.Now()
+	scanError := safetyError
+	if scanError == nil && failedCommands > 0 && len(result.CommandOutputs) == 0 {
+		scanError = ErrNoCommandEvidence
+	}
 
 	// Broadcast scan completion
 	completionProgress := DiscoveryProgress{
@@ -403,9 +422,12 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 		ElapsedMs:       result.CompletedAt.Sub(startTime).Milliseconds(),
 		PercentComplete: 100,
 	}
-	if safetyError != nil {
-		completionProgress.CurrentStep = "Guest execution paused"
-		completionProgress.Error = safetyError.Error()
+	if scanError != nil {
+		completionProgress.CurrentStep = "No command evidence"
+		if safetyError != nil {
+			completionProgress.CurrentStep = "Guest execution paused"
+		}
+		completionProgress.Error = scanError.Error()
 		completionProgress.CompletedSteps = len(result.CommandOutputs)
 		completionProgress.PercentComplete = float64(completionProgress.CompletedSteps) / float64(len(commands)) * 100
 	}
@@ -418,7 +440,7 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 		Dur("duration", result.CompletedAt.Sub(result.StartedAt)).
 		Msg("Deep scan completed")
 
-	return result, safetyError
+	return result, scanError
 }
 
 // buildCommand wraps the command appropriately for the resource type.

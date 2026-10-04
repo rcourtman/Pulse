@@ -3143,6 +3143,24 @@ traverse an agent.
 
 ## Completion Obligations
 
+### VM command results describe the guest, not transport success
+
+A verified terminal `qm guest exec` dictionary must project its guest exit or
+signal and decoded stdout/stderr through the existing command-result fields.
+Zero CLI exit alone cannot supply success. Nonzero guest exits, signals and
+explicit output truncation are failures, but known termination does not require
+an uncertainty cooldown. Missing, malformed or conflicting terminal outcomes
+remain deferred; postflight lock failure retains the raw CLI diagnostic and
+cannot publish usable guest evidence. Preserve single-attempt execution,
+approval/identity checks, output bounds and fresh config admission.
+
+`TestCommandClientGuestOutcomeContract` covers status/output projection,
+truncation, ambiguity and independent subsequent admission.
+`TestGuestExecRealServerAgentDiscoveryAdmission` must carry decoded healthy
+evidence, exclude failed guest output, and resume on an explicit healthy scan
+over the real registered server/agent WebSocket boundary. Fake provider/config
+fixtures do not establish native PVE/HAOS safety or delivered behaviour.
+
 ### Docker update readback is not mutation history
 
 The agent's post-update inspect can observe a running replacement whose health
@@ -3553,10 +3571,14 @@ loss imposes a one-minute uncertainty pause; no command is replayed. The next
 explicit request must pass fresh config admission. A local process exit or kill
 is not proof that guest work stopped: a zero CLI exit with only a guest PID,
 nonterminal, malformed or ambiguous JSON stays uncertain. Only one complete
-canonical `exited` true/1 dictionary establishes observed guest termination;
-this does not alter the existing CLI exit/output payload semantics or prove
-thaw. Postflight failure retains that actual exit/output but disqualifies
-successful live evidence.
+canonical `exited` true/1 dictionary with exactly one valid guest exit code or
+signal supplies observed termination. Verified completion projects guest
+stdout/stderr and exit status in the existing payload; it cannot promote a
+failed guest command from `qm`'s zero exit. A Linux signal uses the conventional
+128+signal exit status. Explicit truncated output is a known failed observation,
+not an unknown handoff. Missing/ambiguous status or malformed output stays
+deferred. Postflight failure retains the actual raw CLI exit/output instead of
+qualifying it as live evidence. None of these outcomes establishes thaw.
 
 The guard is not shared with the HTTP poller, separate agent processes or PVE
 backup workers, and config checks do not reserve QGA. Agent restart also does

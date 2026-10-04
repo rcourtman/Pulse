@@ -1666,9 +1666,10 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 	}
 
 	if guard != nil {
+		guest, terminal := decodeGuestExecOutcome(result.Stdout)
 		// Killing the local qm process does not prove a handed-off guest
 		// command stopped. Never retry it or immediately start the next one.
-		if err != nil || cmdCtx.Err() != nil || outputIncomplete || !guestExecCompleted(result.Stdout) {
+		if err != nil || cmdCtx.Err() != nil || outputIncomplete || !terminal {
 			uncertain = true
 			result.Success = false
 			result.Error = agentexec.GuestExecDeferred(agentexec.GuestExecCompletionUnknown).Error()
@@ -1676,9 +1677,21 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 			uncertain = true
 			result.Success = false
 			result.Error = err.Error()
+		} else {
+			// For verified completion, the command payload describes the
+			// guest, not qm's successful delivery of a failing command.
+			// Wrapper stderr remains diagnostic output, never evidence.
+			if result.Stderr != "" && guest.stderr != "" {
+				guest.stderr += "\n" + result.Stderr
+			} else if result.Stderr != "" {
+				guest.stderr = result.Stderr
+			}
+			result.Stdout, result.Stderr = guest.stdout, guest.stderr
+			result.ExitCode, result.Error = guest.exitCode, guest.error
+			result.Success = guest.error == ""
 		}
-		// Retain the actual process exit/output, even if postflight safety
-		// is unknown. Discovery must not treat that output as fresh evidence.
+		// Unverified completion/postflight retains the actual CLI exit/output.
+		// Discovery must not treat that raw diagnostic as fresh evidence.
 	}
 
 	return result

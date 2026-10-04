@@ -2117,6 +2117,23 @@ service-history reads plus denial/recovery without fabricated samples.
 
 ## Completion Obligations
 
+### Discovery accepts successful command evidence only
+
+Only stdout from a successful result with zero exit status and no error enters
+Discovery analysis or saved observations. Stderr, failed/partial output, a nil
+result and contradictory success/status cannot identify a service. Independent
+healthy output survives optional probe failures. When an attempted scan has
+failures and no successful stdout evidence, return a fixed no-evidence error
+and truthful terminal progress; manual metadata fallback and background
+enhancement must not replace saved results, notes or observation times. An
+explicit later healthy scan resumes normally; no failed command is replayed.
+
+`TestDiscoveryFailedCommandEvidenceContract` covers VM/nested-Docker/LXC/host/
+Docker output admission, optional partial evidence, saved manual/background
+results and explicit recovery. Registered server/agent controls cover actual
+guest result propagation, with fake config/provider boundaries. This is source
+truthfulness, not native thaw, containing-release or workload acceptance.
+
 1. Update this contract when monitoring truth ownership changes
 2. Tighten guardrails when `GetState()`-centric paths are removed
 3. Keep discovery-provider, host-agent ingest, guest-memory trust, metrics-history, storage-risk, Docker/Podman container collection, Docker report/model payloads, Proxmox Ceph and ZFS compatibility, Docker Swarm collection, mock runtime fixtures, and container bootstrap proof routes explicit in `registry.json`
@@ -2253,6 +2270,14 @@ service-history reads plus denial/recovery without fabricated samples.
 ## Current State
 
 ### Discovery observes VM guest execution pauses
+
+Verified VM results describe the guest's terminal status and decoded output,
+not successful CLI delivery. Discovery admits only successful stdout as command
+evidence for every resource type; stderr and failed/partial output are not
+observations. An attempted scan with failures but no successful stdout returns
+an error without replacing saved results or invoking analysis. Normal empty
+successful probes and independent healthy output alongside optional failures
+retain their existing semantics.
 
 Manual, automatic and nested-Docker VM scans use the existing agent execution
 boundary; they cannot infer safety from the Web drawer's snapshot. VM routing

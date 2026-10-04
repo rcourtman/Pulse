@@ -1884,9 +1884,9 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	var scanError error
 	if s.scanner != nil && s.IsCommandScanningEnabled() {
 		scanResult, scanError = s.scanner.Scan(ctx, req)
-		if scanError != nil && agentexec.IsGuestExecDeferred(scanError.Error()) {
+		if scanError != nil && (agentexec.IsGuestExecDeferred(scanError.Error()) || errors.Is(scanError, ErrNoCommandEvidence)) {
 			// Keep saved observations/notes and the original in-flight outcome;
-			// metadata fallback must not turn a paused live scan into success.
+			// metadata fallback must not turn a paused or failed live scan into success.
 			inProg.err = scanError
 			return nil, inProg.err
 		}

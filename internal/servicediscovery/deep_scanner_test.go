@@ -356,11 +356,11 @@ func TestDeepScanner_OutputHandling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Scan error: %v", err)
 	}
-	if out := result.CommandOutputs["docker_containers"]; !strings.Contains(out, "--- stderr ---") {
-		t.Fatalf("expected combined stderr output, got %s", out)
+	if out := result.CommandOutputs["docker_containers"]; out != "out" {
+		t.Fatalf("expected successful stdout only, got %s", out)
 	}
-	if out := result.CommandOutputs["docker_images"]; out != "err-only" {
-		t.Fatalf("expected stderr-only output, got %s", out)
+	if out, exists := result.CommandOutputs["docker_images"]; exists {
+		t.Fatalf("stderr-only diagnostic became evidence: %s", out)
 	}
 }
 
@@ -374,8 +374,8 @@ func TestDeepScanner_CommandErrorHandling(t *testing.T) {
 		TargetID:     "host1",
 		Hostname:     "host1",
 	})
-	if err != nil {
-		t.Fatalf("Scan error: %v", err)
+	if !errors.Is(err, ErrNoCommandEvidence) {
+		t.Fatalf("expected failed scan to retain no-evidence outcome, got %v", err)
 	}
 	if _, ok := result.Errors["docker_containers"]; !ok {
 		t.Fatalf("expected error for non-optional command")

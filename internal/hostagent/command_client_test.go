@@ -528,5 +528,6 @@ func TestCommandClientGuestCompletionContract(t *testing.T) {
 }
 
 func TestCommandClientGuestOutcomeContract(t *testing.T) {
-	testGuestExecProjectsGuestOutcome(t)
+	t.Run("execution-and-admission", testGuestExecProjectsGuestOutcome)
+	t.Run("terminal-dictionary", TestGuestExecTerminalDictionary)
 }
