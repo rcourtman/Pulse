@@ -85,6 +85,14 @@ export function formatPercent(value: number): string {
   return `${Math.round(value)}%`;
 }
 
+/** Keep small observed CPU readings distinct from an actual zero. */
+export function formatCpuPercent(value: number): string {
+  if (!Number.isFinite(value)) return '—';
+  if (value > 0 && value < 0.1) return '<0.1%';
+  if (value > 0 && value < 10) return `${value.toFixed(1).replace(/\.0$/, '')}%`;
+  return formatPercent(value);
+}
+
 export function formatNumber(value: number): string {
   if (!Number.isFinite(value)) return '0';
   return value.toLocaleString();

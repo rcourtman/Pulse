@@ -23,6 +23,20 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Container CPU presentation explains its existing scale
+
+The existing Docker/Podman container table and drawer visibly explain that CPU
+is a percentage of total host capacity: 100% means all host CPUs. Runtime stats
+may use a per-core scale; the client never guesses core count or renormalises
+readings to match a screenshot. The explanation remains visible in Overview and
+History, including narrow screens, without relying on hover-only help.
+
+Small positive CPU labels stay distinct from true zero in the real responsive
+row and stored History inspection. Numeric sorting, metric identity, requests,
+collector/ingest units, stored values and alert thresholds remain unchanged.
+Connected container row/drawer controls establish presentation, not accurate
+native collection, every-container continuity, alert delivery or reporter relief.
+
 ### Guest drawers consume selected memory provenance
 
 Existing guest drawers consume optional server-owned `memory.observation` and

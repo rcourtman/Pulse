@@ -30,6 +30,7 @@ import { isDockerContainerLifecycleResource } from '@/features/docker/dockerCont
 import { ResourceOperatorStateSection } from './ResourceOperatorStateSection';
 import { MaintenanceVerificationSection } from './MaintenanceVerificationSection';
 import { ResourceActionHistory } from './ResourceActionHistory';
+import { CONTAINER_CPU_CAPACITY_DESCRIPTION } from '@/features/docker/dockerCpuPresentation';
 
 interface ResourceDetailDrawerProps {
   resource: Resource;
@@ -148,6 +149,14 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             <HeaderIdentity />
           </ObjectDrawerHeader>
         )}
+      </Show>
+
+      <Show
+        when={props.resource.type === 'app-container' && props.resource.platformType === 'docker'}
+      >
+        <p class="text-xs leading-relaxed text-muted" data-testid="container-drawer-cpu-scale">
+          {CONTAINER_CPU_CAPACITY_DESCRIPTION}
+        </p>
       </Show>
 
       <Subtabs

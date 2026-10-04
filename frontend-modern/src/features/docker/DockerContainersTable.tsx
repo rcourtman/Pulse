@@ -80,6 +80,7 @@ import {
 import type { DockerContainerUpdateStatus } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { DockerContainerLifecycleControls } from './DockerContainerLifecycleControls';
+import { CONTAINER_CPU_CAPACITY_DESCRIPTION } from './dockerCpuPresentation';
 
 type DockerNetwork = NonNullable<NonNullable<Resource['docker']>['networks']>[number];
 type DockerMount = NonNullable<NonNullable<Resource['docker']>['mounts']>[number];
@@ -783,6 +784,14 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
         >
           <PlatformTableShell
             title={props.title ?? 'Containers'}
+            footer={
+              <p
+                class="px-3 py-2 text-xs leading-relaxed text-muted"
+                data-testid="container-table-cpu-scale"
+              >
+                {CONTAINER_CPU_CAPACITY_DESCRIPTION}
+              </p>
+            }
             tableClass={`${getDockerContainerTableMinWidthClass()} table-fixed text-xs`}
             colgroup={
               <colgroup>

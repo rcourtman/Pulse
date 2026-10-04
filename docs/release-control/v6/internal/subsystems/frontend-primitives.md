@@ -20,6 +20,21 @@
 
 ## Purpose
 
+### Observed CPU labels preserve small positives
+
+Shared responsive CPU cells distinguish actual zero from small positive readings:
+positive values below 0.1% display `<0.1%`, other values below 10% retain one
+decimal without a trailing zero, and larger values keep whole-percent labels.
+Both compact text and animated bars use the same formatter. Explicit labels,
+non-CPU table formatting, unavailable/offline fallbacks, raw progress widths and
+threshold colouring retain their existing contracts.
+
+Shared percentage History legends, inspection and accessible descriptions never
+round positive values below 0.1% to zero. Actual zero remains `0.0%`; all other
+History units and precision stay unchanged. This changes displayed text only,
+not readings, coordinates, stored points, selection, requests or alert policy.
+Mounted responsive-cell and container row/drawer tests exercise these boundaries.
+
 ### Guest drawers consume selected memory provenance
 
 Existing guest drawers consume optional server-owned `memory.observation` and
