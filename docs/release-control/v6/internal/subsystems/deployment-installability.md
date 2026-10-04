@@ -29,7 +29,9 @@ Both forms require local privacy review even for exports labelled sanitized,
 and warn against attaching credentials, session cookies, secret URLs, private
 host/network or personal details, configuration files and raw request exports.
 Removing or pinning a documentation link must not remove those precautions or
-turn evidence fields into mandatory live checks. The form parsing controls in
+turn evidence fields into mandatory live checks. The existing optional
+attachment fields are `logs` in the bug form and `evidence` in the prerelease
+form; their common label is "Logs, screenshots, or diagnostics". The form parsing controls in
 `scripts/release_control/release_promotion_policy_test.py` and the existing
 community intake tests preserve this installed-version-safe behaviour; they
 are source checks, not native diagnostic, guest-thaw or release acceptance.

@@ -1757,7 +1757,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertNotIn("v6.0.0-rc.1", template)
 
     def test_report_intake_safety_is_self_contained_for_installed_releases(self) -> None:
-        for name in ("bug_report.yml", "v6_rc_feedback.yml"):
+        for name, evidence_id in (("bug_report.yml", "logs"), ("v6_rc_feedback.yml", "evidence")):
             with self.subTest(form=name):
                 template = read(f".github/ISSUE_TEMPLATE/{name}")
                 form = yaml.safe_load(template)
@@ -1787,7 +1787,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                     "full network exports",
                 ):
                     self.assertIn(precaution, standalone)
-                evidence = next(field for field in form["body"] if field.get("id") == "evidence")
+                evidence = next(field for field in form["body"] if field.get("id") == evidence_id)
+                self.assertEqual(evidence["attributes"]["label"], "Logs, screenshots, or diagnostics")
                 self.assertFalse(evidence.get("validations", {}).get("required", False))
 
     def test_demo_site_copy_points_at_current_release_packet_index(self) -> None:
