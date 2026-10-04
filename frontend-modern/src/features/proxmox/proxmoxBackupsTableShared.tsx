@@ -45,14 +45,14 @@ const recoveryAgeClassByBand: Record<RecoveryAgeBand, string> = {
   current: 'text-emerald-600 dark:text-emerald-300',
   aging: 'text-amber-600 dark:text-amber-300',
   stale: 'text-red-600 dark:text-red-300',
-  unknown: 'text-muted',
+  unknown: 'text-amber-600 dark:text-amber-300',
 };
 
 const recoveryAgeTitleByBand: Record<RecoveryAgeBand, string> = {
   current: 'Current backup age',
   aging: 'Aging backup age',
   stale: 'Stale backup age',
-  unknown: 'Backup age unavailable',
+  unknown: 'Restore-point date is unavailable or in the future. Its age is unknown.',
 };
 
 export const ARCHIVE_STATUS_FILTERS: FilterOption<
@@ -233,17 +233,25 @@ export function formatCompactBackupAge(createdAt: string): string {
 export function ProxmoxBackupAgeText(props: { artifact: RecoverableArtifact; compact?: boolean }) {
   const band = () => getRecoveryAgeBand(props.artifact.createdMs);
   const title = () => {
+    if (band() === 'unknown') return recoveryAgeTitleByBand.unknown;
     const parts = [recoveryAgeTitleByBand[band()], props.artifact.createdAt].filter(Boolean);
     return parts.join(' · ');
   };
 
   return (
-    <span class={`font-semibold tabular-nums ${recoveryAgeClassByBand[band()]}`} title={title()}>
-      <Show
-        when={props.compact}
-        fallback={<PlatformTableRelativeTimeValue value={props.artifact.createdAt} />}
-      >
-        {formatCompactBackupAge(props.artifact.createdAt)}
+    <span
+      class={`font-semibold tabular-nums ${recoveryAgeClassByBand[band()]}`}
+      classList={{ 'text-[10px]': props.compact && band() === 'unknown' }}
+      title={title()}
+      aria-label={band() === 'unknown' ? `Unknown age. ${title()}` : undefined}
+    >
+      <Show when={band() !== 'unknown'} fallback="Unknown">
+        <Show
+          when={props.compact}
+          fallback={<PlatformTableRelativeTimeValue value={props.artifact.createdAt} />}
+        >
+          {formatCompactBackupAge(props.artifact.createdAt)}
+        </Show>
       </Show>
     </span>
   );

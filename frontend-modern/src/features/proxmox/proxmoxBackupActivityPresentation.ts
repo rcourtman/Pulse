@@ -116,6 +116,8 @@ export function buildBackupActivityTimeline<T>(
   for (const item of items) {
     const ts = getTimestampMs(item);
     if (ts === undefined || !Number.isFinite(ts)) continue;
+    // A future time on today's date is still not observed past activity.
+    if (ts > now.getTime()) continue;
     if (ts < windowStart) continue;
     if (ts >= todayStart + 24 * 60 * 60 * 1000) continue;
     const kind = classify(item);

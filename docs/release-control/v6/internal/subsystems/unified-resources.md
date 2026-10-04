@@ -565,6 +565,33 @@ distinction afterwards. The unified risk projection gates wearout on
 `storagehealth.WearoutReported` so its verdict and the server-side alert verdict
 about the same disk cannot diverge.
 
+
+### Coverage rows preserve unknown backup chronology
+
+The existing Proxmox backup Coverage projection carries unknown-date flags
+separately for PBS, PVE files, guest snapshots and independent backups. A
+completed point with an unavailable or future date remains evidence, but
+cannot elect a latest point or be displayed as absence. Full and location-
+scoped projections share this selection rule, refresh the inventory observation
+clock and clear uncertainty on valid replacement. Provider-owned protection
+and verification remain untouched; guest-local snapshots are never independent
+backups. This is a local view model, not new wire or identity/correlation policy.
+
+Verification: recovery-model and connected backup-table `backup-date-evidence`
+cases plus the production browser fixture cover mixed chronology, source-scoped
+uncertainty, independent posture and valid replacement. Native guest/backup
+acceptance and containing release delivery remain with their existing owners.
+
+
+Coverage owns independent scalar copies of each latest-artifact pointer.
+In-place stable-row reconciliation must not let an older source pointer mutate
+the last-backup value after a newer point arrives from another source.
+Connected replacement controls and inspected renders cover that boundary.
+
+The compact By date layout reserves enough age space for the full cautionary Unknown word rather than the former numeric-age-only allocation, while keeping independent task/state labels legible and the canonical identity anchor. Both 390px and 320px browser checks measure age text and state clipping, supplemented by inspected renders.
+
+Compact Coverage age cells use the existing metadata-size text and reclaim numeric-age gutters so the full Unknown word stays visible even beside a Job column at 320px; text-range checks account for cell padding, not only the outer box.
+
 ## Canonical Files
 
 1. `internal/unifiedresources/types.go`

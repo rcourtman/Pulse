@@ -810,6 +810,22 @@ display label or permission to describe every preview as release-ready.
 Automatic stable updates remain unavailable while Preview is selected, and
 that manual-channel consequence must stay visible at desktop and narrow widths.
 
+
+### Backup date uncertainty uses existing age cells
+
+Proxmox Coverage and By date age cells label unorderable restore-point dates
+as cautionary Unknown with fixed hover and accessible explanations, rather
+than using the generic relative-time formatter's future-to-now fallback.
+Valid ages still use the shared relative-time primitive and existing table
+layouts. Coverage distinguishes unknown chronology from None in each source
+and the independent-backup slot; expansion preserves every artifact and its
+separate completion/verification state. No new route or native safety claim.
+Production-component browser verification covers desktop and 390/320px phone
+layouts, scoped filtering, day selection and later inventory replacement.
+
+
+Compact Coverage age cells use the existing metadata-size text and reclaim numeric-age gutters so the full Unknown word stays visible even beside a Job column at 320px; text-range checks account for cell padding, not only the outer box.
+
 ## Canonical Files
 
 1. `frontend-modern/src/components/shared/`

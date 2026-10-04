@@ -210,8 +210,12 @@ func (mtp *MultiTenantPersistence) SaveOrganization(org *models.Organization) er
 	return nil
 }
 
-// ListOrganizations returns all known organizations (including the default org).
-func (mtp *MultiTenantPersistence) ListOrganizations() ([]*models.Organization, error) {
+// ListOrganizationIDs returns sorted persistence keys, including the default
+// organization, without reading organization metadata. Background inventory
+// readers use these keys so one malformed org.json cannot interrupt unrelated
+// monitoring or redirect a connection into another tenant's storage.
+// This is storage discovery, not a membership or authorization decision.
+func (mtp *MultiTenantPersistence) ListOrganizationIDs() ([]string, error) {
 	orgIDs := map[string]struct{}{
 		"default": {},
 	}
@@ -239,9 +243,18 @@ func (mtp *MultiTenantPersistence) ListOrganizations() ([]*models.Organization, 
 		sortedIDs = append(sortedIDs, orgID)
 	}
 	sort.Strings(sortedIDs)
+	return sortedIDs, nil
+}
 
-	orgs := make([]*models.Organization, 0, len(sortedIDs))
-	for _, orgID := range sortedIDs {
+// ListOrganizations returns all known organizations (including the default org).
+// Metadata-dependent consumers retain strict loading of every organization.
+func (mtp *MultiTenantPersistence) ListOrganizations() ([]*models.Organization, error) {
+	orgIDs, err := mtp.ListOrganizationIDs()
+	if err != nil {
+		return nil, err
+	}
+	orgs := make([]*models.Organization, 0, len(orgIDs))
+	for _, orgID := range orgIDs {
 		org, loadErr := mtp.LoadOrganization(orgID)
 		if loadErr != nil {
 			return nil, fmt.Errorf("failed to load organization %s: %w", orgID, loadErr)

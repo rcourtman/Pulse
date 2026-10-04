@@ -43,7 +43,7 @@ import {
 import {
   buildProxmoxBackupRecoveryModel,
   coverageRowMatchesSearch,
-  isBackupArtifact,
+  selectWorkloadRecoveryArtifacts,
   recoverableArtifactMatchesSearch,
   type RecoverableArtifact,
   type WorkloadCoverageRow,
@@ -310,9 +310,14 @@ export const ProxmoxBackupsTable: Component<{
     backups.error() ? [] : (backups.value().backupTasks ?? []),
   );
 
-  // Render-time `now` snapshot so all age comparisons within a render share a
-  // reference moment; not reactive to ticking time (fine for sysadmin grouping).
-  const nowMs = createMemo(() => Date.now());
+  // Share the observation moment, refreshing it when inventory is replaced.
+  // A newly completed backup must not be "future" relative to page mount.
+  const nowMs = createMemo(() => {
+    pbsArtifacts();
+    archives();
+    snapshots();
+    return Date.now();
+  });
 
   const recoveryModel = createMemo(() =>
     buildProxmoxBackupRecoveryModel({
@@ -380,33 +385,14 @@ export const ProxmoxBackupsTable: Component<{
   const coverageRowsForLocation = createMemo<WorkloadCoverageRow[]>(() => {
     const selected = locationFilter();
     if (!selected) return recoveryModel().coverageRows;
-    const newestArtifact = (artifacts: RecoverableArtifact[]): RecoverableArtifact | undefined =>
-      artifacts.reduce<RecoverableArtifact | undefined>((latest, artifact) => {
-        if (!latest) return artifact;
-        return (artifact.createdMs ?? Number.NEGATIVE_INFINITY) >
-          (latest.createdMs ?? Number.NEGATIVE_INFINITY)
-          ? artifact
-          : latest;
-      }, undefined);
-
     return recoveryModel().coverageRows.flatMap((row) => {
       const artifacts = row.artifacts.filter(locationMatches);
       if (artifacts.length === 0) return [];
-      // Same rule as the model: running or failed artifacts stay listed but
-      // never become a "latest" pointer, and snapshots never become the backup.
-      const completed = artifacts.filter((artifact) => !artifact.running && !artifact.failed);
       return [
         {
           ...row,
           artifacts,
-          latestBackup: newestArtifact(completed.filter(isBackupArtifact)),
-          latestPBS: newestArtifact(completed.filter((artifact) => artifact.sourceKind === 'pbs')),
-          latestArchive: newestArtifact(
-            completed.filter((artifact) => artifact.sourceKind === 'archive'),
-          ),
-          latestSnapshot: newestArtifact(
-            completed.filter((artifact) => artifact.sourceKind === 'snapshot'),
-          ),
+          ...selectWorkloadRecoveryArtifacts(artifacts, nowMs()),
           pbsCount: artifacts.filter((artifact) => artifact.sourceKind === 'pbs').length,
           archiveCount: artifacts.filter((artifact) => artifact.sourceKind === 'archive').length,
           snapshotCount: artifacts.filter((artifact) => artifact.sourceKind === 'snapshot').length,
@@ -521,6 +507,7 @@ export const ProxmoxBackupsTable: Component<{
             ? 'archive'
             : 'snapshot',
       {
+        now: new Date(nowMs()),
         getValue:
           recoverableMetricMode() === 'volume'
             ? (artifact) => (artifact.size && artifact.size > 0 ? artifact.size : 0)
@@ -810,10 +797,20 @@ export const ProxmoxBackupsTable: Component<{
 
           <Show when={view() === 'date' && recoveryModel().recoverableArtifacts.length > 0}>
             <Show
+              when={recoveryModel().recoverableArtifacts.some(
+                (artifact) => artifact.createdMs === undefined,
+              )}
+            >
+              <p class="text-xs text-amber-700 dark:text-amber-300" role="status">
+                Backup entries with unavailable or future dates remain listed. Their ages are
+                unknown. They are excluded from the activity chart and day filters.
+              </p>
+            </Show>
+            <Show
               when={hasRecoverableActivityInRange()}
               fallback={
                 <div class="flex flex-col gap-2 rounded-md border border-border-subtle px-3 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
-                  <span>No backup activity in the selected {chartRange()}-day window.</span>
+                  <span>No dated backup activity in the selected {chartRange()}-day window.</span>
                   <div class="flex items-center gap-2">
                     <button
                       type="button"
