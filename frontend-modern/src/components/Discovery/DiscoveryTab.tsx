@@ -474,7 +474,10 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
         {/* Scan Error */}
         <Show when={scanError()}>
-          <div class="mb-4 rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/25">
+          <div
+            role="alert"
+            class="mb-4 rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/25"
+          >
             <div class="flex items-start gap-3">
               <svg
                 class="w-5 h-5 text-red-500 dark:text-red-400 shrink-0 mt-0.5"
@@ -490,10 +493,14 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 />
               </svg>
               <div>
-                <p class="text-sm font-medium text-red-800 dark:text-red-200">Discovery Failed</p>
+                <p class="text-sm font-medium text-red-800 dark:text-red-200">
+                  Discovery did not complete
+                </p>
                 <p class="text-sm text-red-700 dark:text-red-300 mt-1">{scanError()}</p>
               </div>
               <button
+                type="button"
+                aria-label="Dismiss Discovery error"
                 onClick={() => setScanError(null)}
                 class="ml-auto text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
               >

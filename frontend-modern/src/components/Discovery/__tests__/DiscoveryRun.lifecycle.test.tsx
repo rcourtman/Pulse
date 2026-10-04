@@ -144,9 +144,13 @@ describe('Discovery outcome ownership', () => {
     vi.mocked(api.triggerDiscovery).mockReturnValueOnce(old.promise);
     const { state } = await mount();
     const first = state.handleTriggerDiscovery(true);
-    syncAIRuntimeSettings({ discovery_enabled: false } as Parameters<typeof syncAIRuntimeSettings>[0]);
+    syncAIRuntimeSettings({ discovery_enabled: false } as Parameters<
+      typeof syncAIRuntimeSettings
+    >[0]);
     await waitFor(() => expect(state.canTriggerDiscovery()).toBe(false));
-    syncAIRuntimeSettings({ discovery_enabled: true } as Parameters<typeof syncAIRuntimeSettings>[0]);
+    syncAIRuntimeSettings({ discovery_enabled: true } as Parameters<
+      typeof syncAIRuntimeSettings
+    >[0]);
     await waitFor(() => expect(state.canTriggerDiscovery()).toBe(true));
     old.resolve({ ...saved(), service_name: 'Disabled run result' });
     await first;
@@ -188,6 +192,19 @@ describe('Discovery outcome ownership', () => {
     expect(state.scanSuccess()).toBe(false);
   });
 
+  it('does not leave the previous HTTP success visible forever after a later completion event', async () => {
+    const { state } = await mount();
+    vi.useFakeTimers();
+    await state.handleTriggerDiscovery(true);
+    eventBus.emit('ai_discovery_progress', {
+      resource_id: 'vm:node-agent:100',
+      status: 'completed',
+    });
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(state.scanSuccess()).toBe(false);
+    expect(state.discovery()?.resource_id).toBe('100');
+  });
+
   it.each(['failed', 'completed'] as const)(
     'retains a background %s-with-error outcome and the saved evidence, not silent success',
     async (status) => {
@@ -219,10 +236,16 @@ describe('Discovery outcome ownership', () => {
       current_step: 'Collecting guest evidence',
     });
     expect(state.isScanning()).toBe(true);
-    eventBus.emit('ai_discovery_progress', { resource_id: 'vm:node-agent:100', status: 'completed' });
+    eventBus.emit('ai_discovery_progress', {
+      resource_id: 'vm:node-agent:100',
+      status: 'completed',
+    });
     expect(state.isScanning()).toBe(false);
     const first = state.handleTriggerDiscovery(true);
-    eventBus.emit('ai_discovery_progress', { resource_id: 'vm:node-agent:100', status: 'completed' });
+    eventBus.emit('ai_discovery_progress', {
+      resource_id: 'vm:node-agent:100',
+      status: 'completed',
+    });
     expect(state.isScanning()).toBe(true);
     expect(state.scanSuccess()).toBe(false);
     http.resolve(saved());
@@ -233,7 +256,10 @@ describe('Discovery outcome ownership', () => {
   it('drops a delayed background refresh when its target changed before dispatch', async () => {
     const { state, setId } = await mount();
     vi.useFakeTimers();
-    eventBus.emit('ai_discovery_progress', { resource_id: 'vm:node-agent:100', status: 'completed' });
+    eventBus.emit('ai_discovery_progress', {
+      resource_id: 'vm:node-agent:100',
+      status: 'completed',
+    });
     setId('101');
     await Promise.resolve();
     const before = vi.mocked(api.getDiscovery).mock.calls.length;
@@ -248,14 +274,49 @@ describe('Discovery outcome ownership', () => {
     const { state } = await mount();
     vi.mocked(api.getDiscovery).mockReturnValueOnce(refresh.promise);
     vi.useFakeTimers();
-    eventBus.emit('ai_discovery_progress', { resource_id: 'vm:node-agent:100', status: 'completed' });
+    eventBus.emit('ai_discovery_progress', {
+      resource_id: 'vm:node-agent:100',
+      status: 'completed',
+    });
     await vi.advanceTimersByTimeAsync(500);
-    vi.mocked(api.triggerDiscovery).mockResolvedValueOnce({ ...saved(), service_name: 'New manual result' });
+    vi.mocked(api.triggerDiscovery).mockResolvedValueOnce({
+      ...saved(),
+      service_name: 'New manual result',
+    });
     await state.handleTriggerDiscovery(true);
     refresh.resolve({ ...saved(), service_name: 'Old background result' });
     await Promise.resolve();
     expect(state.discovery()?.service_name).toBe('New manual result');
     expect(state.scanSuccess()).toBe(true);
+  });
+
+  it.each([401, 403])(
+    'withdraws saved evidence when a completion refresh is denied with %s',
+    async (status) => {
+      const { state } = await mount();
+      vi.mocked(api.getDiscovery).mockRejectedValueOnce(
+        Object.assign(new Error('Discovery details unavailable.'), { status }),
+      );
+      vi.useFakeTimers();
+      eventBus.emit('ai_discovery_progress', {
+        resource_id: 'vm:node-agent:100',
+        status: 'completed',
+      });
+      await vi.advanceTimersByTimeAsync(500);
+      expect(state.discovery()).toBeNull();
+      expect(state.scanSuccess()).toBe(false);
+      expect(api.triggerDiscovery).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps saved evidence without success when HTTP supplies no result', async () => {
+    vi.mocked(api.triggerDiscovery).mockResolvedValueOnce(null as unknown as ResourceDiscovery);
+    const { state } = await mount();
+    await state.handleTriggerDiscovery(true);
+    expect(state.scanError()).toBe('Discovery returned no saved result.');
+    expect(state.scanSuccess()).toBe(false);
+    expect(state.discovery()?.service_name).toBe('Saved service 100');
+    expect(state.isScanning()).toBe(false);
   });
 
   it('does not close another guest’s notes editor when an old save finishes', async () => {
