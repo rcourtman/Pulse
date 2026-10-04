@@ -91,6 +91,9 @@ class TrueNASDocsTest(unittest.TestCase):
 
     def test_polling_guidance_preserves_evidence_before_a_manual_test(self):
         text = DOC.read_text().split("### Stale TrueNAS data", 1)[1].split("### Disabling", 1)[0]
+        # Markdown wrapping and sentence capitalization do not change the
+        # safety guidance. Still require every complete warning and field.
+        prose = " ".join(text.split()).casefold()
         for required in (
             "Record the existing state before testing or restarting",
             "signed-in Pulse admin browser session",
@@ -107,7 +110,7 @@ class TrueNASDocsTest(unittest.TestCase):
             "Do not post the full connection response",
         ):
             with self.subTest(required=required):
-                self.assertIn(required, text)
+                self.assertIn(" ".join(required.split()).casefold(), prose)
         self.assertNotIn("```", text)
         self.assertNotIn("Check TrueNAS connectivity and API key validity", text)
         # Every suggested field belongs to the existing read-only projection,
