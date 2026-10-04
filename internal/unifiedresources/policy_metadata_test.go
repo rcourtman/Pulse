@@ -17,13 +17,13 @@ func TestClassifyResourceSensitivityTagAliasesAndPrecedence(t *testing.T) {
 			t.Run(tag, func(t *testing.T) {
 				normalised := " " + strings.ToUpper(tag) + " "
 				for _, tags := range [][]string{{normalised, "unknown", normalised}, {"unknown", normalised}} {
-					if got := classifyResourceSensitivity(Resource{Type: ResourceTypeVM, Tags: tags}); got != group.want {
+					if got := classifyResourceSensitivity(&Resource{Type: ResourceTypeVM, Tags: tags}); got != group.want {
 						t.Fatalf("tags %v sensitivity = %q, want %q", tags, got, group.want)
 					}
 				}
 				for _, tags := range [][]string{{" PUBLIC ", normalised}, {normalised, "public"}} {
 					// Explicit public wins even over secret-type defaults, as before.
-					if got := classifyResourceSensitivity(Resource{Type: ResourceTypeK8sSecret, Tags: tags}); got != ResourceSensitivityPublic {
+					if got := classifyResourceSensitivity(&Resource{Type: ResourceTypeK8sSecret, Tags: tags}); got != ResourceSensitivityPublic {
 						t.Fatalf("public precedence changed for %v: %q", tags, got)
 					}
 				}

@@ -13,6 +13,10 @@ import (
 func TestCloneResourceRefreshesScopeAndPolicyMetadata(t *testing.T) {
 	// Registry mutation paths can leave derived metadata stale until the next
 	// read. Keep refresh on every clone, including after source/tag edits.
+	observation := models.MemoryObservation{
+		State: "last-known", Source: "guest-agent-meminfo",
+		ObservedAt: time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC),
+	}
 	original := &Resource{
 		ID: "app-container:lab", Type: ResourceTypeAppContainer,
 		Sources:        []DataSource{SourceDocker, SourceAgent, SourceDocker},
@@ -21,6 +25,9 @@ func TestCloneResourceRefreshesScopeAndPolicyMetadata(t *testing.T) {
 		Docker:         &DockerData{HostSourceID: "proxmox-lxc-docker:lab:node:100"},
 		Policy:         &ResourcePolicy{Sensitivity: ResourceSensitivityRestricted},
 		AISafeSummary:  "stale",
+		Metrics: &ResourceMetrics{Memory: &MetricValue{
+			Percent: 50, Source: SourceProxmox, Observation: observation,
+		}},
 	}
 	for _, test := range []struct {
 		name        string
@@ -44,6 +51,14 @@ func TestCloneResourceRefreshesScopeAndPolicyMetadata(t *testing.T) {
 			}
 			cloned.PlatformScopes[0] = "mutated"
 			cloned.Policy.Sensitivity = ResourceSensitivityPublic
+			if cloned.Metrics == original.Metrics || cloned.Metrics.Memory == original.Metrics.Memory || cloned.Metrics.Memory.Observation != observation || cloned.Metrics.Memory.Source != SourceProxmox {
+				t.Fatal("metadata read aliased or renewed the selected memory observation")
+			}
+			cloned.Metrics.Memory.Observation.State = "current"
+			cloned.Metrics.Memory.Observation.ObservedAt = observation.ObservedAt.Add(time.Hour)
+			if original.Metrics.Memory.Observation != observation {
+				t.Fatal("borrowed metadata readers lost detached metric ownership")
+			}
 			if !reflect.DeepEqual(original.PlatformScopes, []string{"stale"}) || original.Policy.Sensitivity != ResourceSensitivityRestricted || original.AISafeSummary != "stale" {
 				t.Fatal("clone modified the original derived metadata")
 			}

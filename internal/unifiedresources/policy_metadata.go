@@ -77,7 +77,7 @@ func RefreshPolicyMetadata(resource *Resource) {
 		return
 	}
 
-	sensitivity := classifyResourceSensitivity(*resource)
+	sensitivity := classifyResourceSensitivity(resource)
 	resource.Policy = &ResourcePolicy{
 		Sensitivity: sensitivity,
 		Routing:     buildResourceRoutingPolicy(*resource, sensitivity),
@@ -112,7 +112,10 @@ func RefreshCanonicalMetadataSlice(resources []Resource) []Resource {
 	return out
 }
 
-func classifyResourceSensitivity(resource Resource) ResourceSensitivity {
+// Borrow the detached resource for this read-only scan. A full value copy on
+// every registry read is unnecessary, including when tag precedence returns
+// before any of the resource's other fields are read.
+func classifyResourceSensitivity(resource *Resource) ResourceSensitivity {
 	// Clones classify every registry read. Scan once without building a tag
 	// map, preserving public > restricted > sensitive precedence independently
 	// of tag order, and normalising each tag only once.
