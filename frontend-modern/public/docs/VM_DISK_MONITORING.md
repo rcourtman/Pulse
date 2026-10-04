@@ -24,6 +24,89 @@ or force-reset a guest as a disk-monitoring diagnostic. Those operations can
 affect workloads or backup consistency. Preserve the existing backup task and
 redacted error, rather than repeat a potentially harmful backup for a report.
 
+### Pause Pulse for a planned freeze-enabled backup
+
+This manual precaution is for an affected **systemd installation**, before a
+scheduled backup starts. It is **not a recovery procedure** for a backup already
+in progress or an unresponsive guest, and **not an automatic backup hook**.
+
+1. **Identify the Pulse server service.** Run these commands on the machine
+   running the Pulse server: for Proxmox LXC, **inside the Pulse LXC**,
+   **not the Proxmox host or the backed-up VM**. The examples use
+   `pulse.service`; substitute your actual server unit throughout
+   (`pulse-backend.service` on some older installs), **not pulse-agent.service**.
+
+   ```bash
+   systemctl show pulse.service --property=LoadState,ActiveState,MainPID
+   ```
+
+   Require `LoadState=loaded` and record whether Pulse was active. If the unit
+   is missing, do not assume monitoring has stopped: identify your deployment's
+   actual stop control. Docker and other supervisors need their own controls.
+
+2. **Prevent an update from starting Pulse again.** Do not install or update
+   Pulse during this window. If you use unattended updates, inspect the actual
+   matching timer (the default is `pulse-update.timer`):
+
+   ```bash
+   systemctl show pulse-update.timer --property=LoadState,ActiveState
+   ```
+
+   Record whether the timer was active. For a loaded timer, pause it and check
+   both it and its update service, substituting your actual unit names:
+
+   ```bash
+   sudo systemctl stop pulse-update.timer
+   systemctl show pulse-update.timer pulse-update.service \
+     --property=Id,LoadState,ActiveState,MainPID
+   ```
+
+   The timer must be inactive. If the update service is active, activating or
+   deactivating, let it finish normally before continuing. Do not interrupt an
+   installation. A missing update unit is not proof that a custom updater is
+   idle; check your deployment's update controls too.
+
+3. **Stop Pulse and confirm it is stopped, before the backup starts.**
+
+   ```bash
+   sudo systemctl stop pulse.service
+   systemctl show pulse.service --property=LoadState,ActiveState,MainPID
+   ```
+
+   Require `LoadState=loaded`, `ActiveState=inactive` and `MainPID=0` after a
+   successful stop. Do not start the backup if the stop fails, the state is
+   unknown or another Pulse server is still polling the affected guests.
+   **Pulse monitoring and alerts are unavailable while stopped.** Do not run
+   an update, start another Pulse instance or reboot its host during the pause.
+
+4. **Verify the guest independently, then restore only what you paused.**
+   Keep Pulse stopped until the backup has ended **and** your established
+   guest-console or workload checks confirm thaw, including **fresh successful
+   workload writes** to the filesystems covered by the backup. A console
+   connection or a successful read alone is not enough. If thaw cannot be
+   confirmed, leave Pulse stopped and use the guest/platform's recovery
+   procedure; do not repeat the backup or use guest-agent probes to test it.
+
+   Only after that confirmation, if Pulse was active beforehand:
+
+   ```bash
+   sudo systemctl start pulse.service
+   systemctl is-active pulse.service
+   ```
+
+   `active` confirms service startup, not proof that polling or alerts have
+   recovered. Check normal observation times in Pulse without Run Diagnostics
+   or manual guest-agent probes. Restore the update timer **only if it was
+   active beforehand**, after Pulse has started:
+
+   ```bash
+   sudo systemctl start pulse-update.timer
+   ```
+
+   Leave previously inactive services/timers inactive. Arrange independent
+   outage coverage and repeat the precaution for each affected backup window;
+   this manual sequence does not schedule future pauses or prove a fix.
+
 ## 🚀 Setup
 
 Plan changes outside backup windows and follow the guest's normal maintenance

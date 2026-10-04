@@ -42,10 +42,10 @@ export const IN_GUEST_AGENT_INSTALL_SUMMARY_LABEL = 'Install agent';
 export const IN_GUEST_AGENT_INSTALL_ACTION_LABEL = 'Add agent for AI actions';
 export const IN_GUEST_AGENT_INSTALL_TITLE =
   'Install Pulse Agent for this workload path to unlock deep telemetry and AI actions.';
-export const WORKLOAD_ACTION_AGENT_LABEL = 'Node agent connected';
+export const WORKLOAD_ACTION_AGENT_LABEL = 'Node agent assigned';
 export const getWorkloadActionAgentTitle = (guest: WorkloadGuest): string => {
   const node = (guest.node || '').trim();
   return node
-    ? `Discovery and governed actions use the Pulse Agent connected to ${node}.`
-    : 'Discovery and governed actions use the connected parent node Pulse Agent.';
+    ? `Discovery and governed actions are assigned to the Pulse Agent on ${node}. Assignment is not a current connection check.`
+    : 'Discovery and governed actions are assigned to the parent node Pulse Agent. Assignment is not a current connection check.';
 };

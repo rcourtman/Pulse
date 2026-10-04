@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "795f0b4863e46b81584c82152cc7e66974e5c9a1",
+  "verified_at": "2026-10-04T11:36:56.829475Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts",
+    "frontend-modern/src/types/resource.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "d2063f2d535c08980f57708a9cd4871f5cd1b98de1bb007c3eb78940463a2ded",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "00bdd77055a4c1c76bd532361f5bf0905aa253a6a72adf630445eb319f4843d0",
+    "frontend-modern/src/types/resource.ts": "007885931ae929a05ce382fa70d9afd3ed784d5ca32fc4ccf403260675a5a6de"
+  },
+  "routes": [
+    "Local /browser-tests/pbs-capacity.html: production ProxmoxBackupsTable/router/CSS, direct and canonical synthetic resources"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900,
+      "browser": "Chromium",
+      "input": "keyboard",
+      "colour": "light"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "browser": "WebKit",
+      "input": "touch",
+      "colour": "dark"
+    },
+    {
+      "width": 320,
+      "height": 844,
+      "browser": "WebKit",
+      "input": "touch",
+      "colour": "dark"
+    }
+  ],
+  "states": [
+    "Healthy capacity \u2192 failed zero capacity \u2192 unknown \u2192 offline retained values \u2192 safe fixed error notice",
+    "Measured zero remains zero; 95% remains danger; missing datastore stays separate; ordinary readings resume",
+    "All six desktop/touch product contexts complete in one final execution; earlier init/load/source failures retained separately"
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and phone taps switch synthetic observations in the existing page",
+    "Same-identity notice updates preserve the mounted capacity cell; no false success dot, raw error or unreliable deduplication",
+    "Font-aware warning bounds and page overflow checked; all six screenshots inspected",
+    "No external-origin request or API mutation"
+  ],
+  "evidence": "Final complete six-context execution, source-bound by browser-qualified-binding/result in the lane dossier. Earlier generic-load timeout and all source failures are retained, not cleared or claimed as timing passes."
+}

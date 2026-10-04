@@ -1199,6 +1199,7 @@ type Monitor struct {
 	pveBackupInventoryReady    map[string]map[string]bool                 // Track PVE guest inventory readiness for backup orphan detection
 	pveBackupTemplateSubjects  map[string]map[string]struct{}             // Track template VMIDs excluded from runtime workloads but valid for backups
 	backupPermissionWarnings   map[string]string                          // Track backup permission issues per instance (instance -> warning message)
+	backupAlertEvalMu          sync.Mutex                                 // Coalesce global rollup reads and order failure/recovery publication.
 	persistence                *config.ConfigPersistence                  // Add persistence for saving updated configs
 	pbsBackupPollers           map[string]bool                            // Track PBS backup polling goroutines per instance
 	pbsBackupCacheTime         map[string]map[pbsBackupGroupKey]time.Time // Track when each PBS backup group was last fetched
@@ -6984,7 +6985,7 @@ func monitorMetricInput(metric *unifiedresources.MetricValue) *models.ResourceMe
 		current = math.Max(metric.Percent, metric.Value)
 	}
 
-	result := &models.ResourceMetricInput{Current: current}
+	result := &models.ResourceMetricInput{Current: current, Observation: metric.Observation}
 	if metric.Total != nil {
 		total := *metric.Total
 		result.Total = &total

@@ -20,6 +20,76 @@
 
 ## Purpose
 
+### Guest-agent coverage is not inferred from metadata
+
+The existing workload drawer distinguishes assigned Pulse Agent action ownership,
+observed agent version metadata and Proxmox-reported guest-read state. Neither a
+version string nor a parent-node Discovery target may be called **connected**.
+Reported available, deferred, expected-unreachable, not-running, disabled and
+unknown states remain visible even before a version or filesystem sample exists.
+A current operation lock/backup takes precedence over a cached available flag.
+QEMU read state remains separate from Pulse Agent metadata/assignment and does
+not appear for an unrelated vSphere VM or a system container from version alone.
+Unknown raw provider states/reasons are not printed in the new state explanation.
+
+During a fixed guest-read deferral or uncertain completion, a visible, wrapping
+precaution remains outside the drawer tabs. It links the existing backup-safety
+guide, cautions against live diagnostics or restarting QGA during backup, and
+requires independent thaw and writes to covered filesystems. Running power
+state, an OK backup or reported agent availability establishes none of those.
+Fresh same-guest evidence withdraws the precaution without a new diagnostic or
+collector request. Existing filesystem provenance, metric values, History,
+Discovery/action permissions and monitoring policy are unchanged. No disk-read
+reason is used to invent memory provenance that the workload API does not expose.
+
+Verification: `GuestDrawerOverview.agent-state.test.tsx` covers each current state
+with/without cached version, unknown private fields, action ownership, platform
+separation, lock/uncertainty/recovery and unchanged measurements. Mounted
+`GuestDrawer.test.tsx` covers the notice across Overview/History/Manage and the
+shipped-doc link without a guest check. `browser-tests/guest-agent-coverage.cjs`
+uses production row/drawer/router/docs and CSS, keyboard/touch, light/dark and
+320px/390px/desktop, with synthetic responses. Source/render proof is not native
+thaw, safe writes, installed acceptance or a containing published release.
+
+### Backup inventory ownership is source-scoped and unambiguous
+
+The existing Backups Coverage and By date views do not select a workload from
+an arbitrary substring, display label or first matching row when VMIDs repeat.
+PVE files, guest snapshots and task evidence use the supplied connection scope
+before native node names or aliases. One VMID inside a matching PVE connection
+stays associated after node migration; a known conflicting connection cannot be
+rescued by a reused node name or a singleton fallback. With no connection scope,
+an exact native node/alias must identify one candidate; wholly unscoped singleton
+observations retain their existing compatibility behaviour.
+
+PBS instance and datastore identify a repository, not a PVE workload. A PBS
+namespace disambiguates repeated VMIDs only with a unique exact native node,
+alias or PVE connection label. Unique type/VMID PBS inventory retains the
+existing root-namespace association. This bounded presentation fix does not
+implement the runtime PBS source learner or alter server-owned protection policy.
+
+Unresolved artifacts remain listed once and keep complete, collision-safe source
+keys (PVE connection/node or PBS instance/datastore/namespace), including host
+backup labels. Equal VMIDs, repository labels or host names cannot pool them
+across unproven sources. Untyped PVE tasks may join only PVE-scoped rows, not a
+PBS-only unresolved row with a lookalike namespace. The existing collapsed group
+and count say **unmatched**, not that the guest necessarily ceased to exist;
+its explanation wraps on phones. These rows remain **not evaluated**, separate
+from canonical provider-owned protection posture and live workload counts.
+
+Verification: `proxmoxBackupRecoveryModel.identity.test.ts` reproduces prefix
+and reused-node collisions, order independence, migration/alias controls,
+conflicting scope, ambiguous type/namespace and separated unresolved sources.
+Mounted `ProxmoxBackupsTable.test.tsx` backup-identity cases cover both views,
+artifact preservation, reorder/display rename, expansion identity and no extra
+inventory read. `browser-tests/backup-identity.cjs` uses production tables,
+router, inventory readers and CSS with synthetic responses on desktop Chromium
+and touch WebKit at 390px/320px, including keyboard/touch disclosure, ambiguity,
+readable unmatched explanation and same-resource recovery. No native backup
+identity, restore, guest thaw or containing-release acceptance follows from
+these source/render observations.
+
+
 ### Diagnostics are live checks; downloads require a privacy review
 
 The existing Settings Diagnostics panel explains before either run action that
@@ -49,6 +119,23 @@ cover the connected actions and warnings; shipped docs remain byte-synchronised.
 API reader and local downloads with synthetic responses on Chromium and touch
 WebKit, including loading/failure, keyboard, narrow layouts and the Docs link.
 These proofs do not run native guest checks or establish release availability.
+
+### PBS capacity warnings stay truthful and readable
+
+The existing Backups server table distinguishes unavailable or unusable named
+datastore capacity from an explicitly measured empty store. Fixed **Unavailable**
+and **Unknown** notices replace unreliable percentages, bytes and deduplication
+figures without exposing a provider error body. Server reachability, independent
+backup inventory and drawer identity retain their own evidence and semantics.
+Measured zero and the existing high-capacity warning thresholds stay unchanged.
+
+At compact widths, the shared 40% server-identity anchor stays in place; the Used
+column receives 25% so the warning remains readable without horizontal overflow.
+The redundant connection dot yields to its textual status. Datastore hover text
+does not change disclosure or row identity. The mounted capacity, drawer and
+full-page Backups tests plus `browser-tests/pbs-capacity.cjs` cover replacement,
+independent inventory, keyboard/touch and 320px/390px/desktop rendering. Synthetic
+presentation proof is not native datastore, backup, guest-thaw or release proof.
 
 ### Backup age requires a usable completed timestamp
 

@@ -23,6 +23,7 @@ import { buildWorkloadsDiskPresentation } from './diskListModel';
 import {
   getGuestDrawerAlertMessage,
   getGuestDrawerMemoryRows,
+  getGuestDrawerGuestReadPresentation,
   isGuestDrawerVM,
 } from './guestDrawerModel';
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
@@ -67,9 +68,10 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       ageLabel: props.backupPresentation?.ageLabel,
       ageClass: props.backupPresentation?.ageClass,
     });
+  const guestReadPresentation = () => getGuestDrawerGuestReadPresentation(props.guest);
   const coverageLabel = () => {
     if (props.hasWorkloadActionAgent) return WORKLOAD_ACTION_AGENT_LABEL;
-    if (props.hasAgentInfo) return `${props.agentHeading} connected`;
+    if (props.hasAgentInfo) return `${props.agentHeading} observed`;
     if (props.showInGuestAgentInstallCue) return 'Agent recommended';
     return null;
   };
@@ -85,6 +87,12 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
               : props.hasAgentInfo
                 ? props.agentTitle
                 : undefined,
+            wrap: true,
+          }),
+          makeDetailRow('Guest-agent reads', guestReadPresentation()?.label, {
+            title: guestReadPresentation()?.detail,
+            tone: guestReadPresentation()?.tone,
+            wrap: true,
           }),
           makeDetailRow('Primary IP', props.ipAddresses[0]),
           // Starting or ending an operation is not evidence of a completed

@@ -8,9 +8,11 @@ body:
         Use this form for actionable Pulse v6 pre-release feedback.
 
         For general impressions or smaller notes, use the pinned v6 pre-release feedback hub.
-        Give the version on the affected running instance, or the version or release asset attempted if installation never completed. For a running container (Docker, Compose, or Kubernetes), include the Pulse image tag or digest; non-container installs do not need an image reference. Include sanitized evidence where available. Do not repeat an action just to fill in this form if it could cause data loss, an outage, duplicate changes, or excessive notifications; describe the original sequence instead.
+        Give the version on the affected running instance, or the version or release asset attempted if installation never completed. For a running container (Docker, Compose, or Kubernetes), include the Pulse image tag or digest; non-container installs do not need an image reference. Do not repeat an action just to fill in this form if it could cause data loss, an outage, duplicate changes, or excessive notifications; describe the original sequence instead.
 
-        Do not post secrets, tokens, private keys, or unsanitized config files.
+        For connection or data failures, only collect diagnostics if Pulse is running and collection is safe. **Run Diagnostics** can make live API and guest-agent requests; do not run it during backups, freeze/thaw or an unresponsive-host incident just to file a report. Prefer existing observations; if a result is already displayed, its GitHub export downloads that result without running checks again.
+
+        Anything you attach here is public. Review files and screenshots locally before posting, even when an export is labelled "sanitized". Remove credentials, session cookies, secret URLs, private host/network and personal details, including text echoed in errors. Do not attach full/private diagnostics, .env or configuration files, private keys, Copy as cURL commands or full network exports.
 
   - type: dropdown
     id: feedback_type
@@ -145,7 +147,9 @@ body:
     id: evidence
     attributes:
       label: Logs, screenshots, or diagnostics
-      description: Attach screenshots or paste relevant redacted logs. For connection or data failures, include sanitized diagnostics if Pulse is running and it is safe to collect them. Do not include credentials.
+      description: |
+        Attach screenshots or paste relevant redacted logs if useful. For connection or data failures, a reviewed GitHub diagnostics export can help; prefer existing evidence when new collection is unsafe.
+        Review files and screenshots locally; remove secrets and identifying details, including those echoed in errors, before attaching them here.
 
   - type: checkboxes
     id: confirmations

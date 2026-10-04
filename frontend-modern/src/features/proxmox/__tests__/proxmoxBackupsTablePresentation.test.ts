@@ -46,8 +46,9 @@ describe('Proxmox backups responsive table presentation', () => {
       'used',
     ]);
     expect(getBackupServerColumnWidthStyle('server', 'compact')).toEqual({ width: '40%' });
-    expect(getBackupServerColumnWidthStyle('status', 'compact')).toEqual({ width: '23%' });
-    expect(getBackupServerColumnWidthStyle('used', 'compact')).toEqual({ width: '15%' });
+    expect(getBackupServerColumnWidthStyle('status', 'compact')).toEqual({ width: '18%' });
+    expect(getBackupServerColumnWidthStyle('used', 'compact')).toEqual({ width: '25%' });
+    expect(getBackupServerColumnWidthStyle('datastore', 'compact')).toEqual({ width: '17%' });
     expect(ids(getBackupServerColumns('basic'))).toEqual([
       'server',
       'status',

@@ -30,6 +30,25 @@ const makePbsResource = (overrides: Partial<Resource> = {}): Resource =>
   }) as Resource;
 
 describe('buildBackupServerRows', () => {
+  it('retains failed datastore-read evidence without changing server or row identity', () => {
+    const server = makePbsResource();
+    server.pbs!.datastores![0] = {
+      name: 'tank',
+      total: 0,
+      used: 0,
+      available: 0,
+      usagePercent: 0,
+      status: 'unavailable',
+      error: 'synthetic status failure',
+    };
+    const rows = buildBackupServerRows([server]);
+    const tank = rows.find((row) => row.datastore?.name === 'tank')!;
+    expect(tank.key).toBe('pbs-1:tank');
+    expect(tank.online).toBe(true);
+    expect(tank.datastore).toEqual(server.pbs!.datastores![0]);
+    expect(rows.find((row) => row.datastore?.name === 'offsite')?.datastore?.usagePercent).toBe(95);
+  });
+
   it('carries host CPU, memory, and uptime onto every datastore row of the server', () => {
     const rows = buildBackupServerRows([makePbsResource()]);
 

@@ -134,35 +134,35 @@ describe('workloadAgentReadiness (branch coverage)', () => {
     it('interpolates the node when node is a non-empty string (truthy ternary arm)', () => {
       const guest = makeGuest({ node: 'pve' });
       expect(getWorkloadActionAgentTitle(guest)).toBe(
-        'Discovery and governed actions use the Pulse Agent connected to pve.',
+        'Discovery and governed actions are assigned to the Pulse Agent on pve. Assignment is not a current connection check.',
       );
     });
 
     it('trims surrounding whitespace from node before interpolating', () => {
       const guest = makeGuest({ node: '  pve-node  ' });
       expect(getWorkloadActionAgentTitle(guest)).toBe(
-        'Discovery and governed actions use the Pulse Agent connected to pve-node.',
+        'Discovery and governed actions are assigned to the Pulse Agent on pve-node. Assignment is not a current connection check.',
       );
     });
 
     it('falls back to the parent-node title when node is an empty string (falsy ternary arm)', () => {
       const guest = makeGuest({ node: '' });
       expect(getWorkloadActionAgentTitle(guest)).toBe(
-        'Discovery and governed actions use the connected parent node Pulse Agent.',
+        'Discovery and governed actions are assigned to the parent node Pulse Agent. Assignment is not a current connection check.',
       );
     });
 
     it('falls back to the parent-node title when node is whitespace-only (trim -> empty)', () => {
       const guest = makeGuest({ node: '   ' });
       expect(getWorkloadActionAgentTitle(guest)).toBe(
-        'Discovery and governed actions use the connected parent node Pulse Agent.',
+        'Discovery and governed actions are assigned to the parent node Pulse Agent. Assignment is not a current connection check.',
       );
     });
 
     it('falls back to the parent-node title when node is undefined (|| "" coalesce arm)', () => {
       const guest = makeGuest({ node: undefined });
       expect(getWorkloadActionAgentTitle(guest)).toBe(
-        'Discovery and governed actions use the connected parent node Pulse Agent.',
+        'Discovery and governed actions are assigned to the parent node Pulse Agent. Assignment is not a current connection check.',
       );
     });
   });

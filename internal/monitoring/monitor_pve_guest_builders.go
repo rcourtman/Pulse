@@ -468,6 +468,15 @@ func (m *Monitor) buildVMFromClusterResource(
 			snapshotNotes = append(snapshotNotes, "preserved-original-guest-memory-during-deferral")
 		}
 	}
+	providerObservedAt := observedAtOr(res.ObservedAt, sampleTime)
+	if state.detailedStatus != nil && CanonicalMemorySource(state.memorySource) != "cluster-resources" {
+		providerObservedAt = observedAtOr(state.detailedStatus.ObservedAt, sampleTime)
+	}
+	memory.Observation = m.guestMemoryObservation(instanceName, "qemu", res.Node, res.VMID, memory, guestMemoryObservationContext{
+		source: state.memorySource, providerObservedAt: providerObservedAt,
+		deferred: state.guestAgentStatus == "deferred", previous: prevSnapshot,
+		linkedAgent: vmIDToHostAgent[guestID],
+	}, sampleTime)
 
 	vm := models.VM{
 		ID:       guestID,
@@ -898,7 +907,7 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 
 func guestAgentDiskDeferred(reason string) bool {
 	switch strings.TrimPrefix(reason, "prev-") {
-	case "vm-locked", "lock-unverified", "agent-busy", "agent-cooldown", "agent-capacity", "agent-timeout", "agent-response-incomplete", "agent-redirect", "agent-transport-unverified":
+	case "vm-locked", "lock-unverified", "agent-busy", "agent-cooldown", "agent-capacity", "agent-timeout", "agent-response-incomplete", "agent-redirect", "agent-transport-unverified", "agent-completion-unverified":
 		return true
 	}
 	return false

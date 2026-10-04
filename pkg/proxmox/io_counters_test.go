@@ -178,7 +178,7 @@ func TestUnverifiedVMConfigPreservesStatusCounterObservations(t *testing.T) {
 }
 
 func TestGuestAgentTransportDeferralPreservesLiveCounterReceipts(t *testing.T) {
-	for _, kind := range []string{"lost reply", "redirect"} {
+	for _, kind := range []string{"lost reply", "redirect", "server error", "gateway error"} {
 		t.Run(kind, func(t *testing.T) {
 			var commands, statusCalls atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -190,6 +190,15 @@ func TestGuestAgentTransportDeferralPreservesLiveCounterReceipts(t *testing.T) {
 					fmt.Fprint(w, `{"data":{"status":"running","cpu":0.25,"diskread":0,"diskwrite":null,"netin":42}}`)
 				case strings.Contains(r.URL.Path, "/agent/"):
 					commands.Add(1)
+					if kind == "server error" || kind == "gateway error" {
+						status := http.StatusInternalServerError
+						if kind == "gateway error" {
+							status = http.StatusBadGateway
+						}
+						w.WriteHeader(status)
+						fmt.Fprint(w, "upstream unavailable")
+						return
+					}
 					if kind == "redirect" {
 						http.Redirect(w, r, "/unverified/agent", http.StatusTemporaryRedirect)
 						return
@@ -209,6 +218,9 @@ func TestGuestAgentTransportDeferralPreservesLiveCounterReceipts(t *testing.T) {
 			wantReason := "agent-timeout"
 			if kind == "redirect" {
 				wantReason = "agent-redirect"
+			}
+			if kind == "server error" || kind == "gateway error" {
+				wantReason = "agent-completion-unverified"
 			}
 			if _, err := client.GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != wantReason {
 				t.Fatalf("uncertain command not deferred: %v", err)
