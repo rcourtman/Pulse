@@ -67,9 +67,17 @@ field_seen=false
 agent_value=''
 lock_value=''
 while IFS= read -r line; do
-    if [[ $line =~ ^[A-Za-z][A-Za-z0-9_-]*: ]]; then
-        field_seen=true
+    if [[ $line =~ ^[[:space:]]*$ || $line =~ ^[[:space:]]*# ]]; then
+        continue
     fi
+    # qm's fields are unindented lowercase keys. Do not let one valid field
+    # turn malformed/truncated lock or agent lines into an absent setting.
+    # Unknown well-formed fields remain valid; never echo an unparsed line.
+    if [[ ! $line =~ ^[a-z][a-z0-9_-]*: ]]; then
+        printf '%s\n' 'VM current configuration contains an unrecognised line; preflight incomplete.' >&2
+        exit 1
+    fi
+    field_seen=true
     case "$line" in
         agent:*)
             if [[ $agent_seen == true ]]; then

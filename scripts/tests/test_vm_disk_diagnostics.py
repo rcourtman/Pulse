@@ -185,6 +185,44 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
                 self.assertNotIn("preflight completed", result.stdout)
                 self.assert_passive(calls, operations=READS[:1] if "status_output" in settings else READS)
 
+    def test_malformed_lines_cannot_hide_agent_or_lock_configuration(self):
+        lines = (
+            " lock: backup", "\tlock: backup", "lock=backup", "lock : backup",
+            "Lock: backup", "LOCK: backup", "lock", "agent 1", "Agent: 1",
+            "warning " + PRIVATE,
+        )
+        for line in lines:
+            for suffix in ("", "\n"):
+                with self.subTest(line=line, suffix=suffix):
+                    config = f"agent: 1\nname: {PRIVATE}\n{line}{suffix}"
+                    result, calls = self.exercise(settings={"config_output": config})
+                    self.assertEqual(result.returncode, 1, result.stdout)
+                    self.assertIn("unrecognised line; preflight incomplete", result.stderr)
+                    self.assertNotIn("Guest agent configured:", result.stdout)
+                    self.assertNotIn("VM lock:", result.stdout)
+                    self.assertNotIn("preflight completed", result.stdout)
+                    self.assert_passive(calls)
+
+    def test_blank_comments_and_unknown_well_formed_fields_remain_passive(self):
+        for agent in (None, "0", "1"):
+            with self.subTest(agent=agent):
+                config = (f"\n# {PRIVATE}\n \t\nfuture_read_option: {PRIVATE}\n"
+                          f"\t# lock: backup {PRIVATE}\nname: {PRIVATE}\n")
+                if agent is not None:
+                    config += f"agent: {agent}\n"
+                result, calls = self.exercise(settings={"config_output": config})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("Guest agent configured: enabled" if agent == "1"
+                              else "Guest agent configured: disabled", result.stdout)
+                self.assertIn("VM lock: not reported", result.stdout)
+                self.assert_passive(calls)
+
+        result, calls = self.exercise(settings={"config_output": f"\n# {PRIVATE}\n \t\n"})
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("preflight incomplete", result.stderr)
+        self.assertNotIn("VM lock:", result.stdout)
+        self.assert_passive(calls)
+
     def test_help_and_invalid_arguments_never_contact_proxmox(self):
         for args in ([], ["0"], ["-1"], ["100;touch BAD"], ["100", "--probe"],
                      ["9999999999"], ["--probe"], ["--help"]):
