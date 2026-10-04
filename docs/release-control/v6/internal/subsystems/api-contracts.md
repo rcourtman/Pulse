@@ -20,6 +20,33 @@
 
 ## Purpose
 
+### Metrics History responses are bound to the issued selection
+
+The shared History client admits HTTP200 JSON only when the response resource
+type, resource ID, range and single/all-metric shape match the issued request.
+Validation uses a captured selection, not a subsequently mutated params object.
+It preserves only the server's explicit compatibility rules: Kubernetes types
+use the `k8s` wire token, legacy pod IDs receive the `k8s:` prefix and IDs are
+trimmed. An omitted range accepts the empty or 24h default echo; explicit ranges
+and metrics must match exactly. No host, node or disk alias is guessed.
+
+Metrics containers and point arrays must have the declared shape, finite
+readings/aggregate bounds and representable timestamps. Zero and observed empty
+arrays/maps are valid; omitted source remains compatible, and declared store,
+memory, live and mock_synthetic provenance is preserved. Finite but unusable
+window bounds still reach the existing observation-based window fallback.
+Rejected bodies produce a fixed diagnostic without their IDs, values or text;
+body status claims are not HTTP status. Real transport/access failures remain
+unchanged. No endpoint, server permission, collector or wire schema changes.
+
+`chartsHistoryResponse.test.ts` covers the response matrix, legitimate protocol
+variants and mutable input; existing `chartsApi.test.ts` uses actual-shaped
+responses to verify request construction. `HistoryResponse.contract.test.tsx`
+exercises the real client with production drawer, shared chart-state and row
+warming consumers. The connected browser fixture verifies actual History
+components/CSS on desktop Chromium and phone WebKit, not native identity,
+appliance history, workload safety or released availability.
+
 ### Discovery detail reads preserve final access status
 
 `getDiscovery` retains final HTTP401/403 in a typed client error before any

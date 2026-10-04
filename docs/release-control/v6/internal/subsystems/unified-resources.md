@@ -23,6 +23,24 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### History consumers do not accept a mismatched or malformed success body
+
+The common metrics History client validates the issued selection and response
+shape before a drawer, shared chart or opportunistic row-history cache can accept
+it. An invalid first HTTP200 is unavailable, not an observed empty series or a
+current-value substitute. A rejected same-target refresh may retain only that
+target's previously validated result with the existing refresh-failure notice;
+rejected values never populate remount or row caches. A valid subsequent read,
+including measured zero or observed empty history, restores normal presentation.
+HTTP401/403 still withdraws cached evidence rather than becoming format failure.
+
+The mounted `HistoryResponse.contract.test.tsx` uses the actual client admission
+boundary, not a mocked ChartsAPI result. `browser-tests/history-response.cjs`
+drives the production PBS-service and disk History fixture with wrong-target,
+wrong-type/range/metric, malformed, denied, valid-zero and empty bodies, keyboard
+retry/inspection and remounts. These synthetic controls do not diagnose #1723,
+establish native panels/identity or prove #2439 thaw or workload liveness.
+
 ### Guest discovery evidence and UI state have exact owners
 
 The guest drawer's passive discovery lookup changes only when its explicit
