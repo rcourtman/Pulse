@@ -15,6 +15,51 @@
 
 ## Purpose
 
+### Workload projection preserves native guest-read evidence
+
+`useWorkloads` forwards the existing Proxmox disk-status reason, guest-agent
+state/expected flag and VM operation lock through both its resource-API and
+owned canonical-snapshot paths. Numeric retained metrics cannot erase those
+read-state facts. `useGuestRowState` also withdraws bars/current-value labels
+for non-retained deferrals or unavailable canonical telemetry, rather than
+reviving a richer stale number. Same-identity read-state changes participate in the existing
+row signature even when numeric values are unchanged; unrelated rows retain
+their identity. No extra resource read, timer, workload command or graph is added.
+
+Full and fast canonical facet merges share the same bounded optional-field
+clearing: a native VM facet with positive VMID, runtime state and explicit
+guest-agent outcome supersedes its omitted disk-status reason, lock and
+expected flag. Other richer fields and partial/legacy omission remain retained.
+`useWorkloads.test.ts` and `resourceStateAdapters.test.ts` verify forwarding,
+clearing, false/zero values, unchanged peer-site rows and full/fast equivalence.
+`browser-tests/workload-read-evidence.cjs` composes the real hook, canonical
+merges, row, Overview and History with synthetic inputs. This is no native
+QGA/thaw, installed recovery, fleet-performance or release-availability claim.
+
+
+### Unavailable filesystem values share the existing disk model
+
+The filesystem list and guest Overview use the same nullable measured-byte ratio
+for text, severity and progress. Per-disk validation is constant work within the
+existing linear presentation pass; it adds no reads, queries, timers, remounts or
+resource-identity changes. Unavailable values stay neutral rather than passing a
+fabricated zero into threshold classification. Mounted filesystem evidence tests
+and the production browser fixture verify replacement and rendering, not a new
+latency, fleet-performance or native-collection claim.
+
+### Guest History live filesystem provenance
+
+The guest drawer derives deferred filesystem context from its current snapshot,
+separately from current CPU, memory and I/O. A retained `prev-` value may populate
+only the labelled last-known legend, never the current fallback or chart geometry.
+The added presentation input does not create a polling timer, trigger a guest
+read, or change History target/range ownership. Stable-target context updates
+reuse the mounted chart and existing query; the drawer's pre-existing target
+recomputation on guest-snapshot changes is unchanged. Mounted regressions in
+`GuestDrawer.test.tsx` and `GuestDrawerHistory.disk-provenance.test.tsx` verify
+the actual fallback/resumption path and request counts. This is presentation
+proof, not a native CPU improvement, QGA/thaw result or delivery acceptance.
+
 ### Guest filesystem provenance preserves dense row geometry
 
 Visible retained/unavailable filesystem cues must fit the existing dense row

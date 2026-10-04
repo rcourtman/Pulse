@@ -9,8 +9,13 @@ Pulse v6 includes first-class monitoring for **TrueNAS SCALE** and **TrueNAS COR
    are listed under **Platform connections**.
 3. Enter the TrueNAS URL (e.g., `https://truenas.local`), the API key, and the
    username that owns the key.
-4. Click **Test Connection** → **Save**.
-5. Data appears within one configured polling cycle (60 seconds by default).
+4. Click **Test Connection**, then **Save**. The test reads system information
+   on a separate connection; it does not validate inventory or metric collection.
+5. Leave the saved connection enabled and allow at least one configured polling
+   interval (60 seconds by default). Check that the appliance and expected
+   inventory appear. If they do not, follow the [polling checks](#stale-truenas-data)
+   without repeatedly testing or restarting; an elapsed interval is not proof
+   that a poll completed.
 
 ## Creating a TrueNAS API Key
 
@@ -155,9 +160,11 @@ its trusted HTTPS origin without disabling certificate verification.
 ### No data appearing after adding connection
 - Allow one configured polling cycle (60 seconds by default), not a fixed
   30-second wait. Check that the saved connection is enabled.
-- **Test Connection** checks authentication and the selected transport, not
-  successful collection of every metric. The legacy REST diagnostic is
-  expected for recognized CORE 13 systems; it is not itself a connection error.
+- **Test Connection** reads system information on a separate connection. Pools,
+  datasets, disks and alerts can still fail during ordinary polling, even when
+  the test succeeds. A successful test also does not establish live CPU, memory
+  or History readings. The legacy REST diagnostic is expected for recognized
+  CORE 13 systems; it is not itself a connection error.
 - Inspect a bounded local log excerpt for TrueNAS-related errors:
   ```bash
   journalctl -u pulse -n 100 --no-pager | grep -i truenas
@@ -236,11 +243,13 @@ collection step.
 | No timestamps advance, or no completed attempt is recorded | Check that the connection and integration are enabled, then preserve the bounded local error above. This is not proof of an invalid key. |
 | Reconnects or TrueNAS sign-ins increase while `observed.collectedAt` advances | Session turnover alone does not establish failed authentication or stopped polling. Record the timing and any existing close/error message separately from the data freshness. |
 
-**Test Connection** checks connectivity and authentication, not a complete
-poll. Testing a saved connection can update `lastAttemptAt` and `lastSuccessAt`
-and reset its failure count without refreshing `observed.collectedAt`. Record
-any manual test and its time separately; a successful test is not evidence
-that missing data or stopped polling has recovered.
+**Test Connection** is not a complete poll. Some older builds, including Pulse
+6.4.1 and 6.4.5, also let a saved-connection test update `lastAttemptAt` and
+`lastSuccessAt` and reset its failure count without refreshing
+`observed.collectedAt`. Record any manual test and its time separately, and
+use the inventory observation time rather than the test time to check freshness.
+A successful test is not evidence that missing data or stopped polling has
+recovered.
 
 An `app.stats` error such as **Apps are not available** concerns Apps
 collection, not necessarily the key. Check the existing Apps status in

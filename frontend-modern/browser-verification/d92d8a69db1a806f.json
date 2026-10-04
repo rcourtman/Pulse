@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "ba8b9fcd32f4f4d486e33d952ab09ecdc3d3b8a7",
+  "verified_at": "2026-10-04T04:10:01.032Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/diskListModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/diskListModel.ts": "1afb2fa866a8c4772e56ce38861610705d43a619537c6d57e0a79b95d288394b"
+  },
+  "routes": [
+    "/browser-tests/filesystem-usage-evidence.html"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 360,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production DiskList and GuestDrawerOverview with actual CSS; 57 synthetic states across desktop Chromium, phone Chromium and dark phone WebKit. Playwright 1.56.1 matches the integration lock.",
+    "Missing, negative, non-finite and sentinel usage/capacity plus overflow never render a healthy zero, invalid percentage or numeric progress. Known capacity, mount identity and type remain visible.",
+    "Explicit measured zero, ordinary bytes, omitted redundant usage, over-capacity and valid retained values preserve their labels and capped visual fill. Twelve final bitmap contents were inspected; eight phone bitmaps match already opened captures exactly.",
+    "No native collection, backup thaw, installed recovery, physical phone, publication or release acceptance; full types/build qualification remains unavailable."
+  ],
+  "interactions": [
+    "Replaced each same-filesystem synthetic observation through the fixture select without remounting either production panel; list/Overview agree on unavailable versus measured values.",
+    "Real fixture keyboard Home/Enter restores a live observation after unavailable. There is no new product action, route, tab, network call or collector change.",
+    "No page errors, API requests or off-origin requests; unknown-state layout fits the document, and full-width drawer copy remains readable."
+  ]
+}

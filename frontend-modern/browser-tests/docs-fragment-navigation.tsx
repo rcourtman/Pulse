@@ -22,6 +22,9 @@ const targets: Record<string, string> = {
   malformed: '/docs/API#%invalid',
   missing: '/docs/API#does-not-exist',
   troubleshooting: '/docs/TROUBLESHOOTING#recovery-mode',
+  truenas: '/docs/TRUENAS',
+  installation: '/docs/INSTALL',
+  configuration: '/docs/CONFIGURATION#-api-tokens',
 };
 
 window.history.replaceState({}, '', targets[scenario] ?? targets.plain);

@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "53cfdf6020f91f14981007e9723d666113d24c7b",
+  "verified_at": "2026-10-04T05:28:12.394Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/hooks/useWorkloads.ts": "40833d2d47d7a8a41646a47568d92f1df375bc252e37d70d5303e22889441ce0",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts": "ef0e31343f20759c3d628653179fcfb424fa5e9e255f37643114714222215729",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "9ba757addef70fff50d0fe00accd06f3ef8ee44a86ce2b88de7ab93478b2d09a"
+  },
+  "routes": [
+    "/browser-tests/workload-read-evidence.html?transport=api",
+    "/browser-tests/workload-read-evidence.html?transport=canonical-full",
+    "/browser-tests/workload-read-evidence.html?transport=canonical-delta",
+    "/browser-tests/workload-read-evidence.html?transport=canonical-fast"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "40 same-VM synthetic read transitions through actual useWorkloads, canonical full/delta/fast merges and production GuestRow/GuestDrawer with real CSS; desktop Chromium and dark phone WebKit, Playwright 1.56.1 matches integration lock.",
+    "Retained lock/deferred readings remain visibly prior; lock clearance alone does not restore a current reading. New explicit native outcomes clear obsolete omitted optional fields even when numeric readings are unchanged.",
+    "Non-retained and unavailable read states have no numeric bar, animated numeric label, current History disk value or invented chart point. Explicit false is forwarded, measured zero remains current, and History no-data stays empty.",
+    "Six final screenshots inspected. Superseded script-only pass showed an adverse retained green bar; mounted source controls and no-bar browser assertions now cover it. Number text and aria target converge before final captures.",
+    "This is not native guest-agent/freeze/thaw, workload liveness, installed recovery, physical-phone, publication or release acceptance."
+  ],
+  "interactions": [
+    "Same-identity API refetch and full/delta/fast snapshot replacement preserve row cell and active History DOM. Real Overview/History tab activation uses desktop mouse and phone touch.",
+    "Owned canonical snapshots issue no second workload-inventory GET. All fixture API traffic is local and GET-only, no off-origin request/page error and no guest/backup command.",
+    "Labels and safety notices fit the narrow viewport; measured-zero numeric text is checked at the final animation value, not an intermediate frame."
+  ]
+}

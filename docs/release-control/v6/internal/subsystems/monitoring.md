@@ -17,6 +17,20 @@
 
 ## Purpose
 
+### Used-memory history retention
+
+Periodic in-memory History cleanup applies the existing retention window and
+backing-array release policy to raw `memoryused` bytes as well as `memory`
+percentages, for guests and nodes. A live byte series alone keeps its resource
+entry; an expired byte series cannot remain pinned by ongoing CPU or other
+observations. Missing current memory does not refresh its last-known samples.
+The existing poll recorder, chart readers and metric-window provider retain
+in-window byte values and their original timestamps through cleanup, then
+accept fresh memory on resumption. SQL retention, sampling limits, memory
+source selection and wire formats are unchanged. The History cleanup tests
+cover every supported series, byte-array reclamation and connected readers;
+these controls do not attribute a reporter's native process-memory growth.
+
 ### Podman zero-percentage fallback — issue #2447
 
 One-shot compatibility stats with `cpu:0` do not suppress advancing cumulative
@@ -44,6 +58,15 @@ backup), missing/malformed config or an unverifiable lock defers the command.
 Known locks in node inventory, cluster resources or detailed status suppress
 polling enrichment even when status fails and recent agent evidence exists.
 
+The VM config body must finish within the existing response-size and request
+bounds and contain exactly one complete JSON value. An unlocked JSON prefix
+does not establish lock clearance: a short Content-Length body, stalled suffix,
+extra JSON/garbage or chunked body exceeding 8 MiB yields `lock-unverified` both
+before dispatch and after a completed guest command. Post-command verification
+holds per-guest admission until body completion; its failure discards the
+payload. Complete responses at the limit, including trailing whitespace, remain
+valid. Ordinary PVE CPU/I/O observations remain independent of this deferral.
+
 Admission is held through the complete response, not just headers. A transport
 failure, timeout, wrong-command-ID response or incomplete body defers every
 command for that guest for a minute; callers neither immediately retry nor
@@ -63,6 +86,12 @@ resource lock with failed status → node fallback → unlocked resumption throu
 the real client/builders and History. The client controls cover every read,
 unknown lock state, diagnostic overlap, aliases/source/VM isolation, in-flight
 lock changes, incomplete bodies, cooldown and absence of failover replay.
+`TestGuestAgentConfigResponseMustBeComplete` covers every guest read before and
+after dispatch and subsequent healthy resumption; the stalled-prefix and
+post-config-body controls pin completion and cross-client admission.
+`TestUnverifiedVMConfigPreservesStatusCounterObservations` and the monitoring
+lifecycle pin live counter presence and rejection of cached disk/memory History
+refresh during an incomplete lock read, not just a decoder error.
 These reproduce missing Pulse safety controls, **not** the reported native
 PVE/QGA command-ID collision or successful backup thaw. HTTP lock checks cannot
 atomically reserve PVE's serial channel against a backup beginning afterwards,
@@ -77,7 +106,13 @@ provide an independent guest filesystem writer (file/directory fsync and
 synthetic readback over non-QGA stdout) and a fail-closed checker for native
 overlap, truthful deferred readings/History and post-task writes/resumption.
 An OK task without fresh writes on every covered filesystem cannot pass those
-record checks. Local tests are not native freeze/thaw evidence; supplied
+record checks. Resumed memory/disk History also needs successful native
+`file-read`/`get-fsinfo` dispatches newly started after task completion and its
+clock uncertainty, and completed by the resumed readback within the recorded
+clock allowance. Old in-flight results, metadata-only reads, fresh timestamps
+alone and later polling cannot substitute for those reads. The checker tests
+record consistency, not independent payload-to-command provenance.
+Local tests are not native freeze/thaw evidence; supplied
 platform/artifact provenance and mount completeness still need independent
 review. The tools add no runtime interface, recovery action or release gate.
 

@@ -193,40 +193,51 @@ sudo bash install.sh --version "${PULSE_VERSION}"
 > **Note**: This installs the Pulse server. Use the `/install.sh` endpoint from **Settings → Infrastructure → Install on a host** for installing or upgrading `pulse-agent` on monitored hosts.
 
 <details>
-<summary><strong>Manual systemd install (advanced)</strong></summary>
+<summary><strong>Manual or custom systemd services (advanced)</strong></summary>
+
+For a **new Pulse server**, use the signed installer above rather than copying
+one binary and writing a minimal service unit. The installer creates the
+`pulse` service account, prepares the release tree and data ownership, and
+installs the server service and update assets together. Its server unit uses
+`User=pulse`, `Group=pulse`, `NoNewPrivileges=true`, `PrivateTmp=true`,
+`ProtectSystem=strict` and `ProtectHome=true`, with writes limited to the
+installation and data directories. Pulse's server does not need a root service;
+the separate host **agent** has different privilege requirements (see
+[Agent Security](AGENT_SECURITY.md)).
+
+For an **existing manual or custom installation**, first inspect its effective
+service settings locally. This read-only command does not print environment
+values or credentials:
 
 ```bash
-# Download and extract the architecture-specific tarball from GitHub Releases:
-#   https://github.com/rcourtman/Pulse/releases
-# e.g.
-#   curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/pulse-${PULSE_VERSION}-linux-amd64.tar.gz"
-#   tar -xzf "pulse-${PULSE_VERSION}-linux-amd64.tar.gz"
-# The extracted tree contains ./bin/pulse plus ./bin/pulse-agent-* and ./scripts/.
-
-sudo install -m 0755 bin/pulse /usr/local/bin/pulse
-
-# Create systemd service
-sudo tee /etc/systemd/system/pulse.service > /dev/null << 'EOF'
-[Unit]
-Description=Pulse Monitoring
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/pulse
-Restart=always
-RestartSec=10
-Environment=PULSE_DATA_DIR=/etc/pulse
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Start service
-sudo mkdir -p /etc/pulse
-sudo systemctl daemon-reload
-sudo systemctl enable --now pulse
+systemctl show pulse.service \
+  --property=LoadState \
+  --property=User \
+  --property=Group \
+  --property=NoNewPrivileges \
+  --property=PrivateTmp \
+  --property=ProtectSystem \
+  --property=ProtectHome
 ```
+
+Use your actual server unit name if it differs; older installations may use
+`pulse-backend.service`. Interpret these settings only when
+`LoadState=loaded`; `LoadState=not-found` means the selected unit is missing,
+not that a root service is running. For a loaded service, an empty `User=`
+means systemd runs it as root. Missing hardening is not repaired just by
+downloading a new binary:
+**the installer preserves existing service units during updates**, including
+custom units.
+
+Do not overwrite a working unit, change only its service user, or reinstall over
+an existing data directory to match these settings. Before a migration, follow
+[the recovery guide](RECOVERY.md), preserve the data directory and its encryption
+key, and record the active data path and deployment-managed configuration
+privately. Check that the intended service account can access that state and
+that required integrations work with the chosen sandbox. Do not loosen data
+permissions, remove authentication or share a full unit/environment dump as a
+shortcut.
+
 </details>
 
 ---
@@ -338,19 +349,107 @@ replace live runtime data or delete it to make a rollback fit.
 
 ## 🗑️ Uninstall
 
-**Docker**:
+Removing or stopping the Pulse server also stops monitoring and alert delivery.
+This is not an update, rollback or password-reset procedure. Keep persistent
+data by default; deleting it erases configuration, history, credentials and
+the keys needed to decrypt that installation's data.
+
+Before removing anything, identify the actual service, container or Helm
+release and **every effective data path** privately. Keep a consistent,
+private [full-state backup](MIGRATION.md#full-state-recovery), including the
+matching encryption key and deployment configuration. A configuration export
+alone is not a full backup. Let any in-progress Pulse update finish before
+removing its installation. Do not post backups, environment files or full
+container inspections in an issue.
+
+### Docker and Compose: retain the data mount
+
+The commands below assume `/data` is on a persistent named volume or bind
+mount, as in this guide's examples. **Do not use them for state stored only in
+the container's writable layer or temporary storage until it has a consistent
+backup.** A container created with `--rm` can also delete anonymous volumes
+when stopped. Container removal is not a backup.
+
+For the `docker run` example, stop the container normally before removing it:
+
 ```bash
-docker rm -f pulse && docker volume rm pulse_data
+docker stop pulse
+docker rm pulse
 ```
 
-**Kubernetes**:
+For Compose, run this from the **existing** project, using its actual Pulse
+service name:
+
 ```bash
-helm uninstall pulse -n pulse
+docker compose stop pulse
+docker compose rm pulse
 ```
 
-**Systemd**:
+These commands do not request volume deletion. Keep the named volume or bind
+directory, original image/runtime and deployment settings; a reinstall must
+reattach the **same** data mount. Compose normally prefixes volume names with
+its project name, so creating a new project or an empty `pulse_data` volume
+can look like data loss. Do not add `-v`/`--volumes`, remove the volume or run
+volume pruning as part of a data-preserving removal.
+
+### Kubernetes: check claim ownership before uninstalling
+
+Do not assume `helm uninstall pulse -n pulse` retains data. The default Pulse
+chart creates a PersistentVolumeClaim without a keep policy; Helm removal can
+delete that claim, and the storage reclaim policy can delete its backing data.
+`persistence.existingClaim` refers to a separately managed claim, whose
+lifecycle must be checked separately. With `persistence.enabled=false`, the
+chart uses temporary `emptyDir` storage, lost when the pod is removed.
+
+After verifying persistent storage and its backup, you can stop the default
+deployment without uninstalling the chart:
+
 ```bash
-sudo systemctl disable --now pulse
-sudo rm -rf /etc/pulse /etc/systemd/system/pulse.service /usr/local/bin/pulse
-sudo systemctl daemon-reload
+kubectl scale deployment pulse \
+  --namespace pulse \
+  --replicas=0
 ```
+
+Use the actual deployment and namespace. Record the previous replica count
+and suspend any controller that would recreate pods. Before permanently
+uninstalling, verify the live claim's ownership, retention and reclaim policy
+and test recovery from the private backup; do not delete a PVC or namespace
+as a troubleshooting step.
+
+### Systemd / Proxmox LXC: disable without erasing data
+
+Identify the active service and any updater first; legacy installs can use
+`pulse-backend`, and custom installs can have other names. In an LXC, run
+these steps **inside the Pulse container**, not on the Proxmox host.
+
+For the default signed installation, disable its update timer **if present**:
+
+```bash
+sudo systemctl disable --now \
+  pulse-update.timer
+```
+
+Then stop and disable the server:
+
+```bash
+sudo systemctl disable --now \
+  pulse.service
+```
+
+Disable other deployment-managed updaters through their owner too. These
+commands leave the binary, service account, units and data in place; they
+disable Pulse, not fully uninstall it. Keep `/etc/pulse` (or the actual custom
+data directory), its keys and authentication sources together. Do not remove
+the service account while retained files still need its ownership.
+
+**Complete removal is a separate, destructive choice.** The signed server
+installer's `--uninstall` deletes its configuration/data directory without a
+keep-data prompt; it is not a data-preserving alternative. Use it only after
+checking the effective install/config paths and a tested private backup, when
+you intend that erasure. Do not delete `/bin/update` unless you have verified
+it belongs to Pulse; community-scripts containers can use a different helper.
+
+Removing the server does not remove agents on monitored hosts. Use each
+agent's [uninstall procedure](UNIFIED_AGENT.md#uninstall), or
+[stop an orphaned agent](TROUBLESHOOTING.md#removed-pulse-server-but-pulse-agent-still-logs-connection-failures),
+so it does not keep retrying the absent server.

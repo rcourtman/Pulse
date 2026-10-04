@@ -61,6 +61,127 @@ function getRuntimeSourceFiles(dir: string): string[] {
 }
 
 describe('docsLinks', () => {
+  it('separates server removal from persistent-data erasure', () => {
+    const installation = readFileSync(path.join(repoRoot, 'docs', 'INSTALL.md'), 'utf8');
+    const removal = installation.split('## 🗑️ Uninstall')[1];
+    expect(removal).toContain('stops monitoring and alert delivery');
+    expect(removal).toContain('Keep persistent\ndata by default');
+    expect(removal).toContain('every effective data path');
+    expect(removal).toContain('[full-state backup](MIGRATION.md#full-state-recovery)');
+    expect(removal).toContain('A configuration export\nalone is not a full backup');
+    expect(removal).toContain('Let any in-progress Pulse update finish');
+    expect(removal).toContain('without a\nkeep-data prompt');
+    expect(removal).toContain('Do not remove\nthe service account');
+    expect(removal).toContain('Do not delete `/bin/update` unless');
+    expect(removal).toContain('Removing the server does not remove agents');
+
+    // Pin the copyable recipes, not merely the surrounding warnings. The old
+    // Docker/root commands erased the complete data store as part of removal.
+    const commands = [...removal.matchAll(/```bash\n([\s\S]*?)```/g)].flatMap((match) =>
+      match[1]
+        .replace(/\\\n\s*/g, ' ')
+        .trim()
+        .split('\n')
+        .map((line) => line.replace(/\s+/g, ' ').trim()),
+    );
+    expect(commands).toEqual([
+      'docker stop pulse',
+      'docker rm pulse',
+      'docker compose stop pulse',
+      'docker compose rm pulse',
+      'kubectl scale deployment pulse --namespace pulse --replicas=0',
+      'sudo systemctl disable --now pulse-update.timer',
+      'sudo systemctl disable --now pulse.service',
+    ]);
+  });
+
+  it('bounds container-removal advice to retained persistent mounts', () => {
+    const installation = readFileSync(path.join(repoRoot, 'docs', 'INSTALL.md'), 'utf8');
+    const docker = (
+      installation.split('### Docker and Compose: retain the data mount')[1] ?? ''
+    ).split('### Kubernetes:')[0];
+    expect(docker).toContain('persistent named volume or bind');
+    expect(docker).toContain("container's writable layer or temporary storage");
+    expect(docker).toContain('`--rm` can also delete anonymous volumes');
+    expect(docker).toContain('**existing** project');
+    expect(docker).toContain('reattach the **same** data mount');
+    expect(docker).toContain('prefixes volume names');
+    expect(docker).toContain('Do not add `-v`/`--volumes`');
+    expect(docker).not.toContain('docker rm -f');
+    expect(docker).not.toContain('docker volume rm');
+  });
+
+  it('does not promise Helm retention where the current chart owns the claim', () => {
+    const installation = readFileSync(path.join(repoRoot, 'docs', 'INSTALL.md'), 'utf8');
+    const kubernetes = (
+      installation.split('### Kubernetes: check claim ownership before uninstalling')[1] ?? ''
+    ).split('### Systemd / Proxmox LXC:')[0];
+    expect(kubernetes).toContain('Do not assume `helm uninstall pulse -n pulse` retains data');
+    expect(kubernetes).toContain('without a keep policy');
+    expect(kubernetes).toContain('reclaim policy can delete its backing data');
+    expect(kubernetes).toContain('`persistence.existingClaim`');
+    expect(kubernetes).toContain('`emptyDir` storage, lost when the pod is removed');
+    expect(kubernetes.indexOf('After verifying persistent storage and its backup')).toBeLessThan(
+      kubernetes.indexOf('```bash'),
+    );
+    expect(kubernetes).toContain('suspend any controller');
+    const chart = readFileSync(
+      path.join(repoRoot, 'deploy', 'helm', 'pulse', 'templates', 'pvc.yaml'),
+      'utf8',
+    );
+    expect(chart).toContain('kind: PersistentVolumeClaim');
+    expect(chart).toContain('(not .Values.persistence.existingClaim)');
+    expect(chart).not.toContain('helm.sh/resource-policy');
+    const values = readFileSync(
+      path.join(repoRoot, 'deploy', 'helm', 'pulse', 'values.yaml'),
+      'utf8',
+    );
+    expect(values.split('persistence:')[1].split('server:')[0]).toContain('annotations: {}');
+  });
+
+  it('keeps custom systemd server help on the signed non-root install path', () => {
+    const installation = readFileSync(path.join(repoRoot, 'docs', 'INSTALL.md'), 'utf8');
+    const custom = installation
+      .split('<summary><strong>Manual or custom systemd services (advanced)</strong></summary>')[1]
+      .split('</details>')[0];
+    expect(custom).toContain('use the signed installer above');
+    expect(custom).toContain('`User=pulse`, `Group=pulse`');
+    expect(custom).toContain('`ProtectSystem=strict` and `ProtectHome=true`');
+    expect(custom).toContain('`LoadState=loaded`');
+    expect(custom).toContain('not that a root service is running');
+    expect(custom).toContain('an empty `User=`');
+    expect(custom).toContain('the installer preserves existing service units during updates');
+    expect(custom).toContain('Do not overwrite a working unit, change only its service user');
+    expect(custom).toContain('preserve the data directory and its encryption');
+    expect(custom).toContain('separate host **agent** has different privilege requirements');
+    const commands = [...custom.matchAll(/```bash\n([\s\S]*?)```/g)].map((match) => match[1]);
+    expect(commands).toHaveLength(1);
+    expect(commands[0]).toContain('systemctl show pulse.service');
+    expect(commands[0]).toContain('--property=LoadState');
+    expect(Math.max(...commands[0].split('\n').map((line) => line.length))).toBeLessThan(34);
+    expect(commands[0]).not.toMatch(/--property=(Environment|ExecStart)|sudo|tee|install -m/);
+    expect(installation).not.toContain('sudo tee /etc/systemd/system/pulse.service');
+    expect(installation).not.toContain('ExecStart=/usr/local/bin/pulse');
+  });
+
+  it('keeps TrueNAS setup acceptance separate from a system-information probe', () => {
+    const truenas = readFileSync(path.join(repoRoot, 'docs', 'TRUENAS.md'), 'utf8');
+    const setup = truenas.split('## Quick Start')[1].split('## Creating a TrueNAS API Key')[0];
+    expect(setup).toContain('it does not validate inventory or metric collection');
+    expect(setup).toContain('an elapsed interval is not proof');
+    expect(setup).toContain('[polling checks](#stale-truenas-data)');
+    expect(setup).not.toContain('Data appears within one configured polling cycle');
+    const noData = truenas
+      .split('### No data appearing after adding connection')[1]
+      .split('### Inventory works')[0];
+    expect(noData).toContain('Pools,\n  datasets, disks and alerts can still fail');
+    expect(noData).toContain('does not establish live CPU, memory');
+    expect(truenas).toContain('Some older builds, including Pulse\n6.4.1 and 6.4.5');
+    expect(truenas).toContain('use the inventory observation time rather than the test time');
+    expect(truenas).toContain('do not copy a token or cookie');
+    expect(truenas).toContain('Do not post the full connection response');
+  });
+
   it('keeps restored Proxmox node network details in the candidate packet', () => {
     const releaseNotes = readFileSync(
       path.join(repoRoot, 'docs', 'releases', 'RELEASE_NOTES_v6.4.0-rc.1.md'),

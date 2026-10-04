@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -50,6 +51,44 @@ func TestMetricWindowPointsUsesInMemoryMetricAlias(t *testing.T) {
 	}
 	if len(points) != 2 || points[0].Value != 12 || points[1].Value != 18 {
 		t.Fatalf("metricWindowPoints = %+v, want canonical netin history", points)
+	}
+}
+
+func TestUsedMemoryHistoryCleanupThroughMonitorAndReaders(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mustSetMockEnabled(t, false)
+	defer mustSetMockEnabled(t, previous)
+	for _, resourceType := range []string{"vm", "container"} {
+		t.Run(resourceType, func(t *testing.T) {
+			now := time.Now()
+			history := NewMetricsHistory(32, 4*time.Hour)
+			monitor := &Monitor{metricsHistory: history}
+			const id = "instance:node:105"
+			monitor.recordGuestMetric(resourceType, id, 20, 60, 4096, -1, -1, -1, -1, -1, now.Add(-2*time.Hour))
+			monitor.recordGuestMetric(resourceType, id, 25, -1, -1, -1, -1, -1, -1, -1, now.Add(-time.Minute))
+			monitor.cleanupMetricsHistory()
+			if got := monitor.GetGuestMetrics(id, 4*time.Hour)["memoryused"]; len(got) != 1 || got[0].Value != 4096 {
+				t.Fatalf("in-window last-known bytes were lost or refreshed: %+v", got)
+			}
+			history.retentionTime = time.Hour
+			monitor.cleanupMetricsHistory()
+			if got := monitor.GetGuestMetrics(id, 4*time.Hour)["memoryused"]; len(got) != 0 {
+				t.Fatalf("ongoing CPU retained expired byte samples: %+v", got)
+			}
+			monitor.recordGuestMetric(resourceType, id, 30, 70, 8192, -1, -1, -1, -1, -1, now)
+			monitor.cleanupMetricsHistory()
+			chart := monitor.GetGuestMetricsForChart(id, resourceType, id, 4*time.Hour)["memoryused"]
+			if len(chart) != 1 || chart[0].Value != 8192 || !chart[0].Timestamp.Equal(now) {
+				t.Fatalf("chart did not retain the fresh byte observation: %+v", chart)
+			}
+			points, err := monitor.metricWindowPoints(alerts.MetricWindowRequest{
+				ResourceID: id, ResourceType: resourceType, Metric: "memoryused",
+				Start: now.Add(-4 * time.Hour), End: now,
+			})
+			if err != nil || len(points) != 1 || points[0].Value != 8192 || !points[0].Timestamp.Equal(now) {
+				t.Fatalf("metric window diverged from fresh chart bytes: points=%+v err=%v", points, err)
+			}
+		})
 	}
 }
 

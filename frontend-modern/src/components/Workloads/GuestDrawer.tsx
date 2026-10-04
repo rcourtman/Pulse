@@ -6,7 +6,11 @@ import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessB
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import { getSimpleStatusIndicator } from '@/utils/status';
-import { getGuestDrawerCurrentMetrics, type GuestDrawerProps } from './guestDrawerModel';
+import {
+  getGuestDrawerCurrentMetrics,
+  getGuestDrawerDeferredMetrics,
+  type GuestDrawerProps,
+} from './guestDrawerModel';
 import { useGuestDrawerState } from './useGuestDrawerState';
 import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from './GuestDrawerHistory';
 import { GuestDrawerOverview } from './GuestDrawerOverview';
@@ -49,6 +53,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
   } = useGuestDrawerState(props);
   const headingId = () => `guest-drawer-heading-${guestId()}`;
   const historyCurrentMetrics = createMemo(() => getGuestDrawerCurrentMetrics(props.guest));
+  const historyDeferredMetrics = createMemo(() => getGuestDrawerDeferredMetrics(props.guest));
 
   const headerIndicator = createMemo(() => getSimpleStatusIndicator(props.guest.status));
 
@@ -132,6 +137,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
             target={historyTarget()}
             range={historyRange()}
             currentMetrics={historyCurrentMetrics()}
+            deferredMetrics={historyDeferredMetrics()}
           />
         </div>
       )}

@@ -771,6 +771,7 @@ func (mh *MetricsHistory) Cleanup() {
 	for key, metrics := range mh.guestMetrics {
 		metrics.CPU = mh.cleanupMetrics(metrics.CPU, cutoffTime)
 		metrics.Memory = mh.cleanupMetrics(metrics.Memory, cutoffTime)
+		metrics.MemoryUsed = mh.cleanupMetrics(metrics.MemoryUsed, cutoffTime)
 		metrics.Disk = mh.cleanupMetrics(metrics.Disk, cutoffTime)
 		metrics.GPU = mh.cleanupMetrics(metrics.GPU, cutoffTime)
 		metrics.GPUMemory = mh.cleanupMetrics(metrics.GPUMemory, cutoffTime)
@@ -782,7 +783,7 @@ func (mh *MetricsHistory) Cleanup() {
 		metrics.Temperature = mh.cleanupMetrics(metrics.Temperature, cutoffTime)
 
 		// If all slices are empty, remove the map entry entirely to free memory
-		if len(metrics.CPU) == 0 && len(metrics.Memory) == 0 && len(metrics.Disk) == 0 &&
+		if len(metrics.CPU) == 0 && len(metrics.Memory) == 0 && len(metrics.MemoryUsed) == 0 && len(metrics.Disk) == 0 &&
 			len(metrics.GPU) == 0 && len(metrics.GPUMemory) == 0 && len(metrics.GPUTemperature) == 0 &&
 			len(metrics.DiskRead) == 0 && len(metrics.DiskWrite) == 0 &&
 			len(metrics.NetworkIn) == 0 && len(metrics.NetworkOut) == 0 &&
@@ -796,12 +797,13 @@ func (mh *MetricsHistory) Cleanup() {
 	for key, metrics := range mh.nodeMetrics {
 		metrics.CPU = mh.cleanupMetrics(metrics.CPU, cutoffTime)
 		metrics.Memory = mh.cleanupMetrics(metrics.Memory, cutoffTime)
+		metrics.MemoryUsed = mh.cleanupMetrics(metrics.MemoryUsed, cutoffTime)
 		metrics.Disk = mh.cleanupMetrics(metrics.Disk, cutoffTime)
 		metrics.NetworkIn = mh.cleanupMetrics(metrics.NetworkIn, cutoffTime)
 		metrics.NetworkOut = mh.cleanupMetrics(metrics.NetworkOut, cutoffTime)
 		metrics.Temperature = mh.cleanupMetrics(metrics.Temperature, cutoffTime)
 
-		if len(metrics.CPU) == 0 && len(metrics.Memory) == 0 && len(metrics.Disk) == 0 &&
+		if len(metrics.CPU) == 0 && len(metrics.Memory) == 0 && len(metrics.MemoryUsed) == 0 && len(metrics.Disk) == 0 &&
 			len(metrics.NetworkIn) == 0 && len(metrics.NetworkOut) == 0 &&
 			len(metrics.Temperature) == 0 {
 			delete(mh.nodeMetrics, key)

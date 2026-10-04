@@ -121,7 +121,17 @@ Obtain them from the existing read-state, memory diagnostics and History APIs;
 normalise only the target guest's fixed fields, without raw snapshots in public
 evidence. Locked values/History cannot be renewed as fresh; CPU must progress.
 Resumption needs available/agent memory, no disk deferral and fresh post-task
-memory/disk History. **Internal cache timestamp preservation is source-tested;
+memory/disk History. The complete command trace must also contain successful
+`get-fsinfo` and `file-read` reads newly started after task completion and its
+clock-uncertainty interval, and completed by the resumed readback within the
+recorded clock allowance. Fresh History timestamps, independent filesystem
+writes, the pre-lock overlap or metadata-only reads cannot substitute for those
+post-task guest reads. Later polling cannot support an earlier resumed snapshot.
+This is a consistency check: independently reconcile the raw command trace and
+returned payloads with the target guest and History observations before judging
+resumption. Do not send extra guest probes to make a record pass; observe normal
+polling and retain an incomplete window as inconclusive.
+**Internal cache timestamp preservation is source-tested;
 these public readbacks do not directly inspect those internal timestamps.**
 
 ```sh
@@ -146,8 +156,11 @@ python3 -m unittest discover -s tests/qualification/guest-agent-backup -v
 go test -race ./tests/qualification/guest-agent-backup/guest-writer -count=1
 ```
 
-Use the assigned source-proof VM for worker execution. The real local writer
-smoke is ordinary synthetic fsync/readback, **not** a filesystem-freeze test.
+Use the assigned source-proof VM for full source suites, builds and the Go
+writer checks. The focused Python record/CLI controls use only synthetic local
+files and can run locally without a native target or listener. They do not
+validate the runtime lock guard or restore an interrupted executor attempt.
+The real local writer smoke is ordinary synthetic fsync/readback, **not** a filesystem-freeze test.
 Do not replay unchanged guard/app suites to disguise the missing native target.
 
 Delivery's next material result is verified native inputs and a completed (or

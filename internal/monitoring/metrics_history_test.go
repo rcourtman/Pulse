@@ -60,6 +60,83 @@ func TestNewMetricsHistory(t *testing.T) {
 	}
 }
 
+// Use the public writers and readers for every supported series. In particular,
+// MemoryUsed must participate in both retention and resource-entry ownership;
+// testing cleanupMetrics alone cannot detect an omitted field in Cleanup.
+func TestMetricsHistoryCleanupEverySeries(t *testing.T) {
+	for _, scope := range []string{"guest", "node", "storage", "disk"} {
+		metricTypes := map[string][]string{
+			"guest":   {"cpu", "memory", "memoryused", "disk", "gpu", "gpu_memory", "gpu_temperature", "diskread", "diskwrite", "netin", "netout", "temperature"},
+			"node":    {"cpu", "memory", "memoryused", "disk", "netin", "netout", "temperature"},
+			"storage": {"usage", "used", "total", "avail"},
+			"disk":    {"smart_temp", "disk", "diskread", "diskwrite"},
+		}[scope]
+		for _, metric := range metricTypes {
+			for _, scenario := range []string{"live-only", "expired-with-live-neighbour", "mixed"} {
+				t.Run(scope+"/"+metric+"/"+scenario, func(t *testing.T) {
+					mh := NewMetricsHistory(32, 4*time.Hour)
+					now := time.Now()
+					const id = "resource"
+					add := mh.AddGuestMetric
+					read := mh.GetGuestMetrics
+					exists := func() bool { return mh.guestMetrics[id] != nil }
+					switch scope {
+					case "node":
+						add, read = mh.AddNodeMetric, mh.GetNodeMetrics
+						exists = func() bool { return mh.nodeMetrics[id] != nil }
+					case "storage":
+						add = mh.AddStorageMetric
+						read = func(id, metric string, duration time.Duration) []MetricPoint {
+							return mh.GetAllStorageMetrics(id, duration)[metric]
+						}
+						exists = func() bool { return mh.storageMetrics[id] != nil }
+					case "disk":
+						add, read = mh.AddDiskMetric, mh.GetDiskMetrics
+						exists = func() bool { return mh.diskMetrics[id] != nil }
+					}
+					if scenario != "live-only" {
+						add(id, metric, 11, now.Add(-2*time.Hour))
+					}
+					if scenario != "expired-with-live-neighbour" {
+						add(id, metric, 22, now.Add(-time.Minute))
+					} else {
+						// Another fresh series must not pin this expired one.
+						keeper := metricTypes[0]
+						if keeper == metric {
+							keeper = metricTypes[1]
+						}
+						add(id, keeper, 33, now)
+					}
+					// Model elapsed retention without waiting or weakening the
+					// writer's immediate expiry check for backfilled samples.
+					mh.retentionTime = time.Hour
+					mh.Cleanup()
+					if !exists() {
+						t.Fatal("cleanup removed a resource with a live series")
+					}
+					points := read(id, metric, 4*time.Hour)
+					if scenario == "expired-with-live-neighbour" {
+						if len(points) != 0 {
+							t.Fatalf("expired series remains: %+v", points)
+						}
+					} else if len(points) != 1 || points[0].Value != 22 || !points[0].Timestamp.Equal(now.Add(-time.Minute)) {
+						t.Fatalf("cleanup changed live values/timestamps or retained old points: %+v", points)
+					}
+					mh.Cleanup()
+					if len(read(id, metric, 4*time.Hour)) != len(points) {
+						t.Fatal("repeated cleanup changed the retained series")
+					}
+					mh.retentionTime = 0
+					mh.Cleanup()
+					if exists() {
+						t.Fatal("fully expired resource remains in History")
+					}
+				})
+			}
+		}
+	}
+}
+
 func TestAppendMetric(t *testing.T) {
 	now := time.Now()
 

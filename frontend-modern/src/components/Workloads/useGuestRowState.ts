@@ -226,9 +226,22 @@ export function useGuestRowState(props: GuestRowProps) {
   });
 
   const hasDiskUsage = createMemo(() => {
-    if (!props.guest.disk) return false;
-    if ((props.guest.disk.total ?? 0) <= 0) return false;
-    return diskPercent() !== -1;
+    const guest = props.guest;
+    if (!guest.disk || guest.telemetryAvailability?.disk === false) return false;
+    const total = guest.disk.total ?? 0;
+    if (!Number.isFinite(total) || total <= 0) return false;
+    // A generic canonical merge can retain the previous numeric metric while
+    // the provider explicitly reports no usable guest reading. Only prev-
+    // reasons allow that number to remain visible as last-known evidence.
+    if (
+      workloadType() === 'vm' &&
+      'diskStatusReason' in guest &&
+      guest.diskStatusReason &&
+      !guest.diskStatusReason.startsWith('prev-')
+    )
+      return false;
+    const percent = diskPercent();
+    return Number.isFinite(percent) && percent >= 0;
   });
 
   const parentOnline = createMemo(() => props.parentNodeOnline !== false);

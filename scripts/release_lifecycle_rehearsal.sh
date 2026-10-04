@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 #
 # Release lifecycle rehearsal: install, upgrade and roll back Pulse between two
-# PUBLISHED releases on a real systemd host (a privileged systemd container).
+# PUBLISHED releases on a real systemd host. Default: shadow systemd container.
+# --hosted-browser: fresh public GitHub VM, authenticated Tailscale Serve UI
+# update/SSE, documented CLI recovery and browser/session readback.
 #
 #   1. install FROM with that release's signature-verified install.sh --version
 #   2. assert FROM identity, health and unit state
@@ -49,10 +51,12 @@ SEED_ADMIN_USER="rehearsal-admin"
 
 FROM_TAG=""
 TO_TAG=""
+HOSTED_BROWSER=false
 CHECK_SNAPSHOT=""
 COMPARE_DATADIR=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --hosted-browser) HOSTED_BROWSER=true; shift ;;
         --from) FROM_TAG="${2:-}"; shift 2 ;;
         --to) TO_TAG="${2:-}"; shift 2 ;;
         # Offline self-tests used by the contract tests: apply the fixed
@@ -74,6 +78,30 @@ if [[ -z "$CHECK_SNAPSHOT" && ${#COMPARE_DATADIR[@]} -eq 0 ]]; then
     done
     if [[ "$FROM_TAG" == "$TO_TAG" ]]; then
         echo "::error::--from and --to must differ; a same-version run proves no upgrade" >&2
+        exit 2
+    fi
+fi
+
+# The browser route is a real first-level public CI host, not a container
+# overriding Docker detection. It must never install onto a maintainer host.
+if [[ "$HOSTED_BROWSER" == true ]]; then
+    if [[ "$EUID" != 0 || "${GITHUB_ACTIONS:-}" != true \
+        || "${RUNNER_ENVIRONMENT:-}" != github-hosted \
+        || "${GITHUB_REPOSITORY:-}" != rcourtman/Pulse \
+        || "${GITHUB_REF:-}" != refs/heads/main \
+        || -e /opt/pulse || -e /etc/pulse \
+        || -e /etc/systemd/system/pulse.service || -e /rehearsal ]]; then
+        echo "::error::Browser lifecycle requires a fresh disposable public hosted runner."
+        exit 2
+    fi
+    if [[ ! -f "${PULSE_REHEARSAL_PACKET_MANIFEST:-}" ]]; then
+        echo "::error::A verified immutable release asset manifest is required."
+        exit 2
+    fi
+    # The workflow derives this from the new runner's own Tailscale identity.
+    # No caller endpoint, old stopped target or TLS-verification bypass exists.
+    if [[ ! "${PULSE_REHEARSAL_BROWSER_ORIGIN:-}" =~ ^https://[a-z0-9-]+\.tawny-powan\.ts\.net$ ]]; then
+        echo "::error::Browser lifecycle requires the ephemeral runner's HTTPS Serve origin."
         exit 2
     fi
 fi
@@ -126,11 +154,22 @@ cexec() {
     for pair in "$@"; do
         env_args+=(-e "$pair")
     done
-    "$ENGINE" exec "${env_args[@]}" "$CONTAINER" bash -c "$program"
+    if [[ "$HOSTED_BROWSER" == true ]]; then
+        # Never pass workflow, GitHub or tailnet-registration credentials to
+        # the installed application or an acceptance command.
+        env -i PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8 \
+            "${@}" bash -c "$program"
+    else
+        "$ENGINE" exec "${env_args[@]}" "$CONTAINER" bash -c "$program"
+    fi
 }
 
 print_diagnostics() {
     [[ "$CONTAINER_STARTED" == "true" ]] || return 0
+    if [[ "$HOSTED_BROWSER" == true ]]; then
+        echo "::error::Hosted lifecycle failed; inspect bounded browser/identity receipts. No raw credentials or journal retained."
+        return
+    fi
     echo "::group::Diagnostics: pulse journal (tail)"
     cexec 'journalctl -u pulse --no-pager | tail -n 150' || true
     echo "::endgroup::"
@@ -155,8 +194,28 @@ cleanup() {
         print_diagnostics
     fi
     if [[ "$CONTAINER_STARTED" == "true" ]]; then
-        "$ENGINE" rm -f "$CONTAINER" >/dev/null 2>&1 || true
+        if [[ "$HOSTED_BROWSER" == true ]]; then
+            local cleanup_status=0
+            systemctl stop pulse.service || cleanup_status=1
+            if [[ "$(systemctl show pulse-update.timer --property=LoadState --value)" != not-found ]]; then
+                systemctl stop pulse-update.timer || cleanup_status=1
+            fi
+            if systemctl is-active --quiet pulse.service; then cleanup_status=1; fi
+            if systemctl is-active --quiet pulse-update.timer; then cleanup_status=1; fi
+            printf '{"cleanup_exit":%s,"host_disposal":"github-hosted-job"}\n' "$cleanup_status" > "${WORK_DIR}/state/browser-cleanup.json"
+            [[ "$cleanup_status" == 0 ]] || status=1
+        else
+            "$ENGINE" rm -f "$CONTAINER" >/dev/null 2>&1 || true
+        fi
     fi
+    if [[ "$HOSTED_BROWSER" == true ]]; then
+        # Ephemeral application credentials are never retained as evidence.
+        if [[ -f "${WORK_DIR}/state/browser-auth.json" ]]; then
+            : > "${WORK_DIR}/state/browser-auth.json"
+        fi
+    fi
+    trap - EXIT
+    exit "$status"
 }
 trap cleanup EXIT
 
@@ -165,7 +224,11 @@ write_summary() {
     table=$(
         echo "## Release lifecycle rehearsal"
         echo
-        echo "\`${FROM_TAG}\` -> \`${TO_TAG}\` -> \`${FROM_TAG}\` on a systemd host (${SYSTEMD_IMAGE%%@*}). Shadow run, not a release gate."
+        if [[ "$HOSTED_BROWSER" == true ]]; then
+            echo "\`${FROM_TAG}\` -> \`${TO_TAG}\` -> \`${FROM_TAG}\` on a fresh public hosted VM with HTTPS Tailscale Serve. Browser acceptance evidence, not a stable promotion decision."
+        else
+            echo "\`${FROM_TAG}\` -> \`${TO_TAG}\` -> \`${FROM_TAG}\` on a systemd host (${SYSTEMD_IMAGE%%@*}). Shadow run, not a release gate."
+        fi
         echo
         echo "| Phase | Expected | Reported version | Health | Settings | Data dir | Units | Result |"
         echo "| --- | --- | --- | --- | --- | --- | --- | --- |"
@@ -182,6 +245,12 @@ write_summary() {
             done
         fi
     )
+    if [[ "$HOSTED_BROWSER" == true ]]; then
+        jq -cn --argjson overall_status "$OVERALL_STATUS" \
+            --argjson phases "$(printf '%s\n' "${PHASE_ROWS[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')" \
+            '{schema_version:1, overall_status:$overall_status, phases:$phases}' \
+            > "${WORK_DIR}/state/lifecycle-result.json"
+    fi
     echo
     echo "$table"
     if [[ -n "$SUMMARY_FILE" ]]; then
@@ -216,8 +285,10 @@ fetch_and_verify_installer() {
     local dest="${WORK_DIR}/assets"
     local base="https://github.com/${REPO}/releases/download/${tag}"
     local asset
+    local -a retry_args=(--retry 5 --retry-delay 5 --retry-all-errors)
+    if [[ "$HOSTED_BROWSER" == true ]]; then retry_args=(--retry 0 --max-time 120); fi
     for asset in install.sh install.sh.sshsig; do
-        if ! curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
+        if ! curl -fsSL "${retry_args[@]}" \
                 -o "${dest}/${asset}" "${base}/${asset}"; then
             echo "::error::could not download ${base}/${asset}"
             return 1
@@ -246,6 +317,13 @@ fetch_and_verify_installer() {
         echo "::error::${tag} install.sh is not the Pulse server installer with --version support"
         return 1
     fi
+    if [[ "$HOSTED_BROWSER" == true ]]; then
+        jq -cn --arg tag "$tag" \
+            --arg installer_sha256 "$(sha256sum "${dest}/install.sh" | cut -d' ' -f1)" \
+            --arg signature_sha256 "$(sha256sum "${dest}/install.sh.sshsig" | cut -d' ' -f1)" \
+            '{tag:$tag,installer_sha256:$installer_sha256,signature_sha256:$signature_sha256,signature_verified:true}' \
+            > "${WORK_DIR}/state/installer.json"
+    fi
     log "${tag} install.sh signature verifies against the README-pinned key"
 }
 
@@ -254,6 +332,14 @@ fetch_and_verify_installer() {
 # ---------------------------------------------------------------------------
 
 start_container() {
+    if [[ "$HOSTED_BROWSER" == true ]]; then
+        CONTAINER_STARTED=true
+        BASELINE_FAILED_UNITS=$(cexec 'systemctl list-units --state=failed --no-legend --plain | awk "{print \$1}" | sort')
+        # Keep the same telemetry opt-out, without changing deployment identity,
+        # enabling Docker updates, mocking feeds or weakening authentication.
+        cexec 'mkdir -p /etc/systemd/system/pulse.service.d && printf "[Service]\nEnvironment=PULSE_TELEMETRY=false\n" > /etc/systemd/system/pulse.service.d/50-rehearsal-no-telemetry.conf'
+        return
+    fi
     local -a run_args=(run -d --name "$CONTAINER" --privileged
         -v "${WORK_DIR}/assets:/rehearsal:ro")
     if [[ "$ENGINE" == "docker" ]]; then
@@ -347,6 +433,15 @@ assert_runtime() {
     binary_version=$(cexec '/opt/pulse/bin/pulse --version 2>/dev/null | grep -oE "v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?" | head -1' 2>/dev/null || true)
     if [[ "${binary_version#v}" != "$expected" ]]; then
         note_failure "/opt/pulse/bin/pulse --version reported '${binary_version:-none}', expected ${expected_tag}"
+    fi
+
+    if [[ "$HOSTED_BROWSER" == true ]]; then
+        local observed_digest expected_digest
+        observed_digest=$(cexec 'sha256sum /opt/pulse/bin/pulse | cut -d" " -f1')
+        expected_digest=$(jq -er --arg tag "$expected_tag" '.releases[] | select(.tag == $tag) | .binary_sha256' "$PULSE_REHEARSAL_PACKET_MANIFEST")
+        printf '{"tag":"%s","binary_sha256":"%s","expected_binary_sha256":"%s"}\n' \
+            "$expected_tag" "$observed_digest" "$expected_digest" > "${WORK_DIR}/state/installed-${expected_tag}.json"
+        [[ "$observed_digest" == "$expected_digest" ]] || note_failure "Installed binary differs from the verified published archive"
     fi
 
     local enabled failed_now new_failed
@@ -605,12 +700,27 @@ check_settings() {
 # Phases
 # ---------------------------------------------------------------------------
 
+install_baseline() {
+    if [[ "$HOSTED_BROWSER" == true ]]; then
+        cexec 'bash /rehearsal/install.sh --version "$FROM_TAG"' "FROM_TAG=${FROM_TAG}" \
+            > "${WORK_DIR}/state/private-install.log" 2>&1
+    else
+        cexec 'bash /rehearsal/install.sh --version "$FROM_TAG"' "FROM_TAG=${FROM_TAG}" \
+            2>&1 | tee "${WORK_DIR}/state/install-${FROM_TAG}.log"
+    fi
+}
+
 phase_install() {
     reset_phase_cells
     log "Phase 1: install ${FROM_TAG} with its published install.sh --version"
     # No TTY: install.sh's prompts take their defaults, as for curl | bash.
-    if ! cexec 'bash /rehearsal/install.sh --version "$FROM_TAG"' "FROM_TAG=${FROM_TAG}" \
-            2>&1 | tee "${WORK_DIR}/state/install-${FROM_TAG}.log"; then
+    if [[ "$HOSTED_BROWSER" == true ]]; then
+        # /rehearsal is the fixed mount spelling used by the existing harness.
+        # It is absent on a fresh hosted runner; never overwrite an existing path.
+        [[ ! -e /rehearsal ]] || return 1
+        ln -s "${WORK_DIR}/assets" /rehearsal
+    fi
+    if ! install_baseline; then
         note_failure "install.sh --version ${FROM_TAG} exited non-zero"
     fi
     assert_runtime "$FROM_TAG"
@@ -635,7 +745,7 @@ phase_seed() {
     if ! setup_response=$(cexec 'curl -fsS -X POST -H "Content-Type: application/json" -H "X-Setup-Token: $SETUP_TOKEN" --data "$BODY" "$API/api/security/quick-setup"' \
             "API=${API}" "SETUP_TOKEN=${setup_token}" "BODY=${setup_body}") \
         || [[ "$(jq -r '.success // false' <<<"$setup_response" 2>/dev/null)" != "true" ]]; then
-        note_failure "first-run security setup failed: ${setup_response:-no response}"
+        note_failure "first-run security setup did not return success"
     fi
 
     local webhook_body node_body
@@ -695,28 +805,71 @@ run_updater() {
     fi
     # /bin/update downloads the latest published install.sh, verifies it with
     # its embedded signer key and runs it with the given arguments.
-    if ! cexec '/bin/update --version "$TARGET"' "TARGET=${target}" \
+    if [[ "$HOSTED_BROWSER" == true ]]; then
+        if ! cexec '/bin/update --version "$TARGET"' "TARGET=${target}" \
+                > "${WORK_DIR}/state/private-updater.log" 2>&1; then
+            note_failure "/bin/update --version ${target} exited non-zero"
+        fi
+    elif ! cexec '/bin/update --version "$TARGET"' "TARGET=${target}" \
             2>&1 | tee "${WORK_DIR}/state/${label}-${target}.log"; then
         note_failure "/bin/update --version ${target} exited non-zero"
     fi
 }
 
+run_browser_journey() {
+    local mode="$1" expected="$2"
+    if [[ "$mode" == recovery ]]; then
+        # An unreadable/missing/incomplete receipt cannot authorise another
+        # browser process either. Only an explicit non-refused terminal result
+        # permits readback after the independent documented CLI recovery.
+        local receipt="${WORK_DIR}/state/browser-upgrade.json" reason
+        if ! jq -e 'type == "object" and .access_refused == false
+                and (.status == "passed" or .status == "failed")' "$receipt" >/dev/null 2>&1; then
+            reason=upgrade-receipt-unavailable
+            if jq -e '.access_refused == true' "$receipt" >/dev/null 2>&1; then
+                reason=stopped-access-no-reauthentication
+            fi
+            printf '{"status":"not-executed","reason":"%s"}\n' "$reason" \
+                > "${WORK_DIR}/state/browser-recovery.json"
+            return 1
+        fi
+    fi
+    (umask 077; jq -cn --arg username "$SEED_ADMIN_USER" --arg password "$ADMIN_PASSWORD" \
+        '{username:$username,password:$password}' > "${WORK_DIR}/state/browser-auth.json")
+    env -i PATH=/usr/local/bin:/usr/bin:/bin HOME="${WORK_DIR}" \
+        PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-/opt/pulse-browser}" \
+        "${PULSE_REHEARSAL_NODE:?}" "${ROOT_DIR}/tests/integration/scripts/release-browser-journey.cjs" \
+        --origin "$PULSE_REHEARSAL_BROWSER_ORIGIN" --mode "$mode" \
+        --from "$FROM_TAG" --to "$TO_TAG" --expected "$expected" \
+        --auth-file "${WORK_DIR}/state/browser-auth.json" --output-dir "${WORK_DIR}/state"
+}
+
 phase_upgrade() {
     reset_phase_cells
-    log "Phase 3: upgrade with /bin/update --version ${TO_TAG}"
-    run_updater "$TO_TAG" upgrade || true
+    if [[ "$HOSTED_BROWSER" == true ]]; then
+        log "Phase 3: upgrade to ${TO_TAG} through the authenticated Tailscale Serve browser"
+        run_browser_journey upgrade "$TO_TAG" || note_failure "Tailscale browser upgrade failed; no apply replay"
+    else
+        log "Phase 3: upgrade with /bin/update --version ${TO_TAG}"
+        run_updater "$TO_TAG" upgrade || true
+    fi
     assert_runtime "$TO_TAG"
     check_auto_update_intent upgrade || true
     check_settings upgrade || true
     check_datadir upgrade || true
-    record_phase "3. upgrade (/bin/update)" "$TO_TAG" "$PHASE_VERSION" "$PHASE_HEALTH" "$PHASE_SETTINGS" "$PHASE_DATADIR" "$PHASE_UNITS"
+    record_phase "3. upgrade ($([[ "$HOSTED_BROWSER" == true ]] && printf browser || printf /bin/update))" "$TO_TAG" "$PHASE_VERSION" "$PHASE_HEALTH" "$PHASE_SETTINGS" "$PHASE_DATADIR" "$PHASE_UNITS"
 }
 
 phase_rollback() {
     reset_phase_cells
     log "Phase 4: roll back with /bin/update --version ${FROM_TAG}"
+    # The documented recovery command is exercised even after an adverse
+    # browser update. It is not a second attempt to apply the candidate.
     run_updater "$FROM_TAG" rollback || true
     assert_runtime "$FROM_TAG"
+    if [[ "$HOSTED_BROWSER" == true ]]; then
+        run_browser_journey recovery "$FROM_TAG" || note_failure "Tailscale browser recovery/readback failed"
+    fi
     check_auto_update_intent rollback || true
     check_settings rollback || true
     check_datadir rollback || true
@@ -724,13 +877,13 @@ phase_rollback() {
 }
 
 main() {
-    log "Rehearsing ${FROM_TAG} -> ${TO_TAG} -> ${FROM_TAG} from ${REPO} with ${ENGINE}"
+    log "Rehearsing ${FROM_TAG} -> ${TO_TAG} -> ${FROM_TAG} from ${REPO}; hosted browser=${HOSTED_BROWSER}"
     if ! fetch_and_verify_installer "$FROM_TAG"; then
         CURRENT_FAILURE="published install.sh for ${FROM_TAG} failed verification"
         record_phase "0. verify installer" "$FROM_TAG" "-" "-" "-" "-" "-" || abort_run
     fi
     if ! start_container; then
-        CURRENT_FAILURE="systemd container did not start"
+        CURRENT_FAILURE="disposable systemd host did not start"
         record_phase "0. systemd host" "-" "-" "-" "-" "-" "-" || abort_run
     fi
 
