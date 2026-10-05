@@ -2351,6 +2351,12 @@ truthfulness, not native thaw, containing-release or workload acceptance.
 
 ### TrueNAS physical-disk History — issue #2519
 
+The actual all-metric drawer request also reaches this reader when stored I/O
+exists but thermal coverage does not. API single/all-metric supplementation
+keeps independent stored metrics, issued-window filtering, existing aggregate
+bounds and store-error behaviour; complete local coverage makes no native
+call. The connected authenticated route includes ordinary store-backed controls.
+
 The existing disk drawer's `smart_temp` chart consumes the same tenant-scoped
 native temperature-history provider as physical-disk sparklines when local
 history is shallow. Sufficient local coverage and unrelated SMART/I/O metrics

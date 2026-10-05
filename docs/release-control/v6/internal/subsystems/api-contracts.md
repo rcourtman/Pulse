@@ -20,6 +20,26 @@
 
 ## Purpose
 
+### Existing disk History keeps native thermal fallback reachable
+
+The authenticated disk History endpoint supplements a missing or shallow
+`smart_temp` series even when independent I/O metrics already exist in the
+persistent store. Single-metric and the drawer's all-metric requests use the
+same monitor-owned native/local selection. Only a broader series (or more
+actual samples at equal span) replaces the thermal series; unrelated stored
+values and min/max bounds stay unchanged. Samples stay within the issued
+window and use the existing aggregation and fallback-source wire contract.
+Complete local coverage makes no native history call. Store errors remain
+HTTP 500 rather than being concealed by native fallback.
+
+`TestTrueNASDiskHistoryAuthenticatedRoute` traverses the real authenticated TLS
+client, provider, tenant poller, monitor and router using declared appliance
+responses and ordinary store writes. It covers nil store, I/O-only store, a
+single thermal row, complete local coverage, store errors, token scope, tenant
+binding and revocation. It preserves original Celsius samples/timestamps and
+independent I/O, not synthetic temperature padding or CPU substitution. This
+is connected source proof, not an installed appliance or containing release.
+
 ### Organisation deletion retains data after incomplete monitoring shutdown
 
 Authenticated organisation-owner deletion waits for tenant-loop exit and sealed

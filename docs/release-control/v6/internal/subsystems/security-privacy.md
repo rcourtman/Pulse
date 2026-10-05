@@ -966,6 +966,17 @@ tokens, and path-normalization variants.
 
 ## Current State
 
+### Native disk History stays inside authenticated reads
+
+Store-backed single/all-metric disk History supplementation occurs only after
+the existing monitoring-read, tenant binding, resource selection and licensed
+window checks. Native reads use the current tenant's monitored provider, not
+a caller-selected host or credential. Failed store queries stay errors; a
+revoked or wrong-scope token cannot initiate native reads. The connected
+TrueNAS History route tests assert those refusals and unchanged native read
+counts before and after revocation. No write or cross-tenant fallback is added.
+
+
 This repair preserves the existing isolation boundary and introduces no host-IPC grant. Successful partial filesystem rows retain explicit completeness and degraded health; sanitized status exposes no raw provider errors. Native PVE recovery remains unproved. No old v6/v7 receipt is reinterpreted and no v8 qualification layer is introduced.
 
 ### Container diagnostics keeps copied material credential-free (1 October 2026)

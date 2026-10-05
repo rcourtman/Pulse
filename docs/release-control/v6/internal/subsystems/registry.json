@@ -3312,6 +3312,7 @@
               "internal/api/metadata_handlers_test.go",
               "internal/api/patrol_autopilot_test.go",
               "internal/api/runtime_inventory_sources_test.go",
+              "internal/api/truenas_disk_history_integration_test.go",
               "pulse-enterprise:test/extensions_contract_test.go"
             ]
           },

@@ -7143,6 +7143,37 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	// A populated I/O series (or one recent temperature row) must not hide the
+	// native disk-temperature history. The monitor owns local/native selection;
+	// supplement only a better series, after successful store and access checks.
+	// Keep the issued window and ordinary aggregation contract, and never replace
+	// independent metrics or turn a failed store read into a successful fallback.
+	supplementDiskTemperature := func(current []metricstore.MetricPoint) []map[string]interface{} {
+		if !fallbackAllowed || runtimeResourceType != "disk" || mock.IsMockEnabled() {
+			return nil
+		}
+		candidate := monitor.GetDiskMetricsForChart(resourceID, "smart_temp", duration)
+		withinWindow := make([]monitoring.MetricPoint, 0, len(candidate))
+		for _, point := range candidate {
+			if !point.Timestamp.Before(start) && !point.Timestamp.After(end) {
+				withinWindow = append(withinWindow, point)
+			}
+		}
+		apiPoints := buildHistoryPoints(withinWindow, stepSecs)
+		if len(apiPoints) == 0 {
+			return nil
+		}
+		var currentSpan int64
+		if len(current) > 1 {
+			currentSpan = current[len(current)-1].Timestamp.UnixMilli() - current[0].Timestamp.UnixMilli()
+		}
+		candidateSpan := apiPoints[len(apiPoints)-1]["timestamp"].(int64) - apiPoints[0]["timestamp"].(int64)
+		if candidateSpan > currentSpan || (candidateSpan == currentSpan && len(apiPoints) > len(current)) {
+			return apiPoints
+		}
+		return nil
+	}
+
 	var response interface{}
 
 	if metricType != "" {
@@ -7178,6 +7209,21 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					"end":          end.UnixMilli(),
 					"points":       apiPoints,
 					"source":       source,
+				}
+			}
+		}
+
+		if response == nil && len(points) > 0 && metricType == "smart_temp" {
+			if apiPoints := supplementDiskTemperature(points); len(apiPoints) > 0 {
+				response = map[string]interface{}{
+					"resourceType": responseResourceType,
+					"resourceId":   resourceID,
+					"metric":       metricType,
+					"range":        timeRange,
+					"start":        start.UnixMilli(),
+					"end":          end.UnixMilli(),
+					"points":       apiPoints,
+					"source":       historySourceMemory,
 				}
 			}
 		}
@@ -7290,6 +7336,13 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					}
 				}
 				apiData[metric] = apiPoints
+			}
+
+			if runtimeResourceType == "disk" {
+				if points := supplementDiskTemperature(metricsMap["smart_temp"]); len(points) > 0 {
+					apiData["smart_temp"] = points
+					source = historySourceMemory
+				}
 			}
 
 			// QueryAll can return a non-empty but incomplete mock metric map. Fill
