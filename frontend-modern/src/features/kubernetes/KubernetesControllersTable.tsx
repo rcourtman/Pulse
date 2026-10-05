@@ -37,6 +37,7 @@ import {
   mapKubernetesControllerStatus,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
+import { KubernetesNameText } from './KubernetesNameText';
 
 const controllerName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
@@ -315,7 +316,7 @@ export const KubernetesControllersTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="controller"
-                  class="platform-table-mobile-w-30 md:w-[18%]"
+                  class="platform-table-mobile-w-30 md:w-[22%]"
                 >
                   Controller
                 </PlatformSortableTableHead>
@@ -424,9 +425,10 @@ export const KubernetesControllersTable: Component<{
                                 title={indicator().label}
                                 ariaHidden
                               />
-                              <span class="truncate font-semibold text-base-content" title={name()}>
-                                {name()}
-                              </span>
+                              <KubernetesNameText
+                                name={name()}
+                                class="font-semibold text-base-content"
+                              />
                             </div>
                           </TableCell>
                           <TableCell

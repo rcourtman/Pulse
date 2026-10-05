@@ -113,7 +113,7 @@ export const KubernetesEventsTable: Component<{
             header={
               <>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[16%]`}
+                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[24%]`}
                 >
                   Event
                 </TableHead>

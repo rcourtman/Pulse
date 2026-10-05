@@ -166,7 +166,7 @@ export const KubernetesServicesTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="service"
-                  class="platform-table-mobile-w-30 kubernetes-service-name-column md:w-[19%]"
+                  class="platform-table-mobile-w-30 kubernetes-service-name-column md:w-[22%]"
                 >
                   Service
                 </PlatformSortableTableHead>

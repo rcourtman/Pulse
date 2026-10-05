@@ -367,7 +367,7 @@ describe('platform overview layout guardrails', () => {
       /sortKey="status"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[8%\]"/,
     );
     expect(kubernetesNodesTableSource).toMatch(
-      /sortKey="capacity"[\s\S]{0,120}?class="platform-table-mobile-w-10 md:w-\[14%\]"/,
+      /sortKey="capacity"[\s\S]{0,120}?class="platform-table-mobile-w-10 md:w-\[16%\]"/,
     );
     expect(kubernetesDeploymentsTableSource).toMatch(
       /sortKey="namespace"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[20%\]"/,
