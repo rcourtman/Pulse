@@ -177,9 +177,16 @@ func TestBroadcastMetricsSnapshotContinuityAndLiveOverlays(t *testing.T) {
 			}
 		}
 	}
-	critical := unifiedresources.EvaluateResourceHealth(host, []unifiedresources.ResourceHealthAlert{{ResourceID: host.ID, Level: "critical", Type: "cpu"}}, now)
-	if critical.Verdict != unifiedresources.HealthCritical {
-		t.Fatal("live alert was hidden by captured data")
+	for _, r := range view.resources {
+		if r.Type != unifiedresources.ResourceTypeVM {
+			continue
+		}
+		baseline := unifiedresources.EvaluateResourceHealth(r, nil, now)
+		critical := unifiedresources.EvaluateResourceHealth(r, []unifiedresources.ResourceHealthAlert{{ResourceID: r.ID, Level: "critical", Type: "cpu"}}, now)
+		cleared := unifiedresources.EvaluateResourceHealth(r, nil, now)
+		if baseline.Verdict != unifiedresources.HealthOK || critical.Verdict != unifiedresources.HealthCritical || !reflect.DeepEqual(cleared, baseline) {
+			t.Fatal("live alert/clear was hidden by captured data")
+		}
 	}
 	if len(adapter.GetAll()) != 2 {
 		t.Fatal("continuity overlay wrote back to the live registry")
