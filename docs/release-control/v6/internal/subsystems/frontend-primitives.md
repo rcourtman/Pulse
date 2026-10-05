@@ -910,6 +910,23 @@ scrolling. Explicit caller-owned native listeners remain caller-owned.
 isolation and bound handlers; `PulseDataGrid.test.tsx` checks inheritance.
 The production PBS table/drawer browser fixture exercises first-tap disclosure
 and History in WebKit phone emulation, not installed collection or devices.
+A drag that selects text inside a clickable row is not a row activation.
+`TableRow` owns one `createRowTextSelectionGuard()` per row: it records where
+the row was pressed, and a click whose pointer moved more than a few pixels
+since that press while text inside the row is selected skips the row action.
+Copying a pod or container name for kubectl or docker therefore leaves the
+drawer, or a Proxmox node's guest selection, as it was. A press released in
+place still runs the action on the first click, even over text that is already
+selected (Chromium clears that selection only after the click), and a
+double-click stays two plain clicks. Custom row shells that run their own row
+action (`GuestRow`, `StoragePoolRow`) create the same guard and wire its
+mousedown handler and click check instead of writing a per-table selection
+test. Nested controls stop propagation and keyboard activation belongs to the
+disclosure button, so neither passes through the guard. `Table.test.tsx` and
+`PulseDataGrid.test.tsx` cover drags, in-place clicks over a selection,
+selections outside the row and bound handlers;
+`PlatformResourceDetailTableRow.test.tsx` covers the drawer toggle, chevron and
+Enter while text stays selected.
 The custom Workloads `GuestRow` shell reuses `Table`'s exported
 `nativeRowClickTarget` marker, conditional on its own action, without inheriting
 shared row styling or changing alert/highlight treatment. Its name and row body

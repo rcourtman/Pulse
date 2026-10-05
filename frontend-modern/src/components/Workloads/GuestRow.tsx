@@ -30,7 +30,7 @@ import {
   createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
-import { nativeRowClickTarget } from '@/components/shared/Table';
+import { createRowTextSelectionGuard, nativeRowClickTarget } from '@/components/shared/Table';
 import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { getWorkloadGuestDiskStatusMessage } from '@/utils/workloadGuestPresentation';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
@@ -58,6 +58,15 @@ const DISK_READ_ACTIONABLE_REASONS = new Set(['permission-denied', 'agent-error'
 
 export function GuestRow(props: GuestRowProps) {
   const [rowActionProps] = splitProps(props, ['onClick']);
+  const selectionGuard = createRowTextSelectionGuard();
+  const runRowAction = (event: MouseEvent) => {
+    if (!selectionGuard.isSelectionClick(event)) rowActionProps.onClick?.();
+  };
+  const rowAction = {
+    get onClick() {
+      return rowActionProps.onClick ? runRowAction : undefined;
+    },
+  };
   const {
     agentVersion,
     appContainerRuntimeBadge,
@@ -277,7 +286,8 @@ export function GuestRow(props: GuestRowProps) {
         }
         data-summary-row-active={props.isSummaryHighlighted && !props.isExpanded ? 'true' : 'false'}
         on:click={rowActionProps.onClick ? nativeRowClickTarget : undefined}
-        {...rowActionProps}
+        on:mousedown={rowActionProps.onClick ? selectionGuard.onMouseDown : undefined}
+        {...rowAction}
         {...interactiveRowHandlers}
       >
         {/* Name - always visible */}

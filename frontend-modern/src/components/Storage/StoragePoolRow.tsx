@@ -40,6 +40,7 @@ import {
   createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
+import { createRowTextSelectionGuard } from '@/components/shared/Table';
 
 interface StoragePoolRowProps {
   layoutMode: StoragePoolTableLayoutMode;
@@ -75,6 +76,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
   const detailControlsId = createMemo(() =>
     buildSummaryDisclosureControlsId(props.summarySeriesId),
   );
+  const selectionGuard = createRowTextSelectionGuard();
   const interactiveRowHandlers = createSummaryInteractiveRowPreviewHandlers({
     onPreview: () => props.onHoverChange?.(props.summarySeriesId),
     onPreviewClear: () => props.onHoverChange?.(null),
@@ -84,7 +86,10 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
     <>
       <tr
         class={`${STORAGE_POOL_ROW_CLASS} ${STORAGE_POOL_ROW_HEIGHT_CLASS} ${props.rowClass} ${props.expanded ? STORAGE_POOL_ROW_EXPANDED_CLASS : ''}`.trim()}
-        onClick={props.onToggleExpand}
+        on:mousedown={selectionGuard.onMouseDown}
+        onClick={(event) => {
+          if (!selectionGuard.isSelectionClick(event)) props.onToggleExpand();
+        }}
         {...interactiveRowHandlers}
         data-summary-series-id={props.summarySeriesId}
         data-summary-group-member-active={

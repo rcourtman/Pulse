@@ -2838,6 +2838,12 @@ canonical pre-handler authorization proof covering both transfer routes.
     row, so they must explicitly suppress the redundant visible mobile
     chevron. Storage group row activation performs disclosure and summary
     focus together rather than preserving a storage-only chevron exception.
+    A drag that selects pool row text, such as a pool name being copied, must
+    not expand the row: `StoragePoolRow` wires the shared
+    `createRowTextSelectionGuard()` from
+    `frontend-modern/src/components/shared/Table.tsx`, and a press released in
+    place still expands on the first click. This is presentation only; it
+    changes no storage evidence, alert state or recovery authority.
     Touch users still must not inherit
     synthetic hover branches, and storage must not keep a special trailing
     expand column once the shared leading action contract exists.
