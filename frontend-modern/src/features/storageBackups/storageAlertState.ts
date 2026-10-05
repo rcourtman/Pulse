@@ -9,6 +9,10 @@ export type StorageAlertRowState = {
   unacknowledgedCount: number;
   acknowledgedCount: number;
   hasAcknowledgedOnlyAlert: boolean;
+  // Why the row is highlighted, from its most severe open alert, so the
+  // colour on the row always comes with a reason.
+  headline?: string | null;
+  headlineCompact?: string | null;
 };
 
 export const EMPTY_STORAGE_ALERT_STATE: StorageAlertRowState = {
@@ -19,6 +23,8 @@ export const EMPTY_STORAGE_ALERT_STATE: StorageAlertRowState = {
   unacknowledgedCount: 0,
   acknowledgedCount: 0,
   hasAcknowledgedOnlyAlert: false,
+  headline: null,
+  headlineCompact: null,
 };
 
 export const asStorageAlertRecord = (value: unknown): Record<string, Alert> => {
@@ -36,6 +42,9 @@ export const asStorageAlertRecord = (value: unknown): Record<string, Alert> => {
   if (typeof value !== 'object') return {};
   return value as Record<string, Alert>;
 };
+
+export const storageAlertSeverityWeight = (value: 'critical' | 'warning' | 'info' | null): number =>
+  severityWeight(value);
 
 const severityWeight = (value: 'critical' | 'warning' | 'info' | null): number => {
   if (value === 'critical') return 3;
@@ -60,6 +69,14 @@ export const mergeStorageAlertRowState = (
       severityWeight(incoming.severity) > severityWeight(current.severity)
         ? incoming.severity
         : current.severity,
+    headline:
+      severityWeight(incoming.severity) > severityWeight(current.severity)
+        ? (incoming.headline ?? current.headline ?? null)
+        : (current.headline ?? incoming.headline ?? null),
+    headlineCompact:
+      severityWeight(incoming.severity) > severityWeight(current.severity)
+        ? (incoming.headlineCompact ?? current.headlineCompact ?? null)
+        : (current.headlineCompact ?? incoming.headlineCompact ?? null),
     hasUnacknowledgedAlert: mergedHasUnacknowledged,
     unacknowledgedCount: current.unacknowledgedCount + incoming.unacknowledgedCount,
     acknowledgedCount: current.acknowledgedCount + incoming.acknowledgedCount,
@@ -80,7 +97,7 @@ export const getStorageRecordAlertResourceIds = (record: StorageRecord): string[
 
   return Array.from(
     new Set(
-      [record.id, refs.resourceId, derivedLegacyId]
+      [record.id, refs.resourceId, derivedLegacyId, ...(record.absorbedAlertResourceIds ?? [])]
         .filter((value): value is string => typeof value === 'string')
         .map((value) => value.trim())
         .filter((value) => value.length > 0),

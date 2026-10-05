@@ -1,3 +1,4 @@
+import type { Alert } from '@/types/api';
 import type { StorageAlertRowState } from './storageAlertState';
 
 export interface StorageRowAlertPresentation {
@@ -55,4 +56,45 @@ export const getStorageRowAlertPresentation = (options: {
     dataAlertSeverity: options.alertState.severity || 'none',
     dataResourceHighlighted: options.isResourceHighlighted ? 'true' : 'false',
   };
+};
+
+const forecastDaysToFull = (alert: Alert): number | null => {
+  const value = alert.metadata?.forecastDaysToFull;
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+};
+
+// One short reason for a highlighted storage row. A fill forecast says when
+// the pool runs out; a usage threshold says which limit was crossed (the bar
+// already shows the percentage); anything else falls back to the alert text.
+// The compact form fits the phone layout's narrow State column.
+export const describeStorageAlertHeadline = (
+  alert: Alert,
+  options: { compact?: boolean } = {},
+): string => {
+  const days = forecastDaysToFull(alert);
+  if (days !== null) {
+    if (days < 1) return options.compact ? 'Full <1d' : 'Full within a day';
+    const rounded = Math.max(1, Math.round(days));
+    if (options.compact) return `Full in ~${rounded}d`;
+    return `Full in ~${rounded} ${rounded === 1 ? 'day' : 'days'}`;
+  }
+  if (alert.type === 'usage' && alert.threshold > 0 && alert.threshold < 100) {
+    return options.compact ? `Over ${alert.threshold}%` : `Over ${alert.threshold}% usage limit`;
+  }
+  return alert.message?.trim() || 'Active alert';
+};
+
+const alertSeverityRank = (level: string | undefined): number =>
+  level === 'critical' ? 3 : level === 'warning' ? 2 : level === 'info' ? 1 : 0;
+
+// The open alert that explains the row: most severe first, then the one
+// that started most recently so a fresh forecast outranks an old notice.
+export const pickStorageHeadlineAlert = (alerts: Alert[]): Alert | null => {
+  const open = alerts.filter((alert) => !alert.acknowledged);
+  if (open.length === 0) return null;
+  return [...open].sort((a, b) => {
+    const severity = alertSeverityRank(b.level) - alertSeverityRank(a.level);
+    if (severity !== 0) return severity;
+    return Date.parse(b.startTime) - Date.parse(a.startTime);
+  })[0];
 };

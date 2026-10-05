@@ -4318,6 +4318,12 @@ keeps pool-growth label/tone formatting inside the shared feature presentation
 layer. The storage page must keep reusing those shared owners instead of
 rebuilding storage-history timers or byte-delta formatting inside row
 components.
+Storage row alert reasons stay in the same feature presentation layer:
+`storageRowAlertPresentation.ts` turns the row's open alert into a short
+headline (and a compact phone form), `storagePoolsTablePresentation.ts` carries
+it on the row model with its severity tone, and `StoragePoolRow` renders it in
+the State cell through the existing issue-text classes, with no inline style
+and no new row height.
 That same shared alerts feature boundary now also owns legacy shared-storage
 override migration. `frontend-modern/src/features/alerts/alertOverridesModel.ts`
 and `frontend-modern/src/features/alerts/useAlertOverridesState.ts` must
