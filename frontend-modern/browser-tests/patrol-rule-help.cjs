@@ -32,7 +32,10 @@ const server = http.createServer((request, response) => {
       <pre style="white-space:pre-wrap;max-width:1000px">${escape(snippet)}</pre>`);
     return;
   }
-  assert.ok(request.url.startsWith('/api/ai/patrol/suppressions'));
+  if (!request.url.startsWith('/api/ai/patrol/suppressions')) {
+    response.writeHead(404).end();
+    return;
+  }
   const hasSession = (request.headers.cookie || '').includes('pulse_session=synthetic-session');
   const expectedOrg = request.headers['x-pulse-org-id'] === 'org-a';
   const validCSRF = request.headers['x-csrf-token'] === 'synthetic-csrf';

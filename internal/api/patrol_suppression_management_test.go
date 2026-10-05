@@ -31,6 +31,7 @@ func TestPatrolSuppressionManagementBrowserSession(t *testing.T) {
 		t.Helper()
 		req := httptest.NewRequest(method, path, nil)
 		req.RemoteAddr = "127.0.0.1:12345"
+		req.Header.Set("User-Agent", "test-agent")
 		req.Header.Set("X-Requested-With", "XMLHttpRequest")
 		req.Header.Set("X-Pulse-Org-ID", "default")
 		if authenticated {
