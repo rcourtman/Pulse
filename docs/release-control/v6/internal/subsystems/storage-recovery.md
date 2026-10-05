@@ -171,6 +171,16 @@ backup files, never guest-local snapshots. Guest snapshots remain listed as
 restore evidence but cannot make an old independent backup look current.
 Archive detail uses its format (or filename fallback), preserving the full
 provider volid for hover and search in both Coverage and By date.
+Coverage rows carry that one counted backup age at every width; per-source
+PBS, PVE-file and guest-snapshot age columns are not row columns, because a
+fresh snapshot beside a stale backup read as protection that posture does not
+grant. The row expansion keeps the newest point and the newest completed point
+of every source inside its bounded evidence list, so neither recent snapshots
+nor a running or failed job hide the latest usable backup. The Backup health
+strip states what its attention, unprotected and unknown counts mean from the
+server posture policy (`freshnessWindowSeconds`) using the causes
+`internal/recovery/posture.go` evaluates, and renders no rule until that policy
+has loaded rather than a guessed window.
 
 Phone pool/disk rows preserve health and identity while using weighted widths,
 consistent gutters and compact capacity/health labels. Full disk risk reasons

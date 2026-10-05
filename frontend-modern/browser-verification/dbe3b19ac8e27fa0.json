@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "aed2f6c17d897b9a69d18014f65fcf7195f21f19",
+  "verified_at": "2026-10-05T01:10:06Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableModel.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx": "97d3f7a23a959406dd8cb9e92a8921fd38118194d5f757e31b6e0e2eec74f27f",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "2cd4cfb0c470ba51efcdb0beafef0b630acac34373b92dd9b77de03f99b16743",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "2568f261531b4b601df7da9e1b8c1826bacc70e8a28420bbe909f2eb3524c6eb",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableModel.ts": "8f7f8a80bb994404c21cce7b75c621bdf844f80b38a9def79d6dc61fb42b8dd6",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "55dd4787cd47e9ccbf056ba67809fd45638b1e3f21889c6a31ce192ce87b8e67"
+  },
+  "routes": [
+    "/proxmox/backups"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Coverage workspace, mock fleet of 68 targets: Backup health strip footnote explains attention, unprotected and unknown with the 7-day window from the server policy",
+    "Coverage table at 1440: Workload / Type / Target ID / Node / Posture / Last backup / Task, no PBS snapshot, PVE file or Guest snapshot columns",
+    "Coverage table at 390: Workload / Posture / Age / Job, footnote wraps under the legend without a reserved column",
+    "Row expansion for a Needs attention guest with a failed newer job: posture explanation, Provider evidence and Restore evidence listing PVE file and Snapshot sources",
+    "No console errors on either viewport"
+  ],
+  "interactions": [
+    "Expanded and collapsed coverage rows to inspect provider and restore evidence",
+    "Compared before/after screenshots at both viewports"
+  ]
+}

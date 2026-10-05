@@ -3299,7 +3299,9 @@ metadata.
 ### Protection posture identity consumer
 
 `ProxmoxCoverageTable` remains a unified-resource identity consumer while
-storage/recovery owns protection truth. Live VM/LXC rows carry the exact
+storage/recovery owns protection truth. Dropping the per-source age columns
+from its rows changes no identity input: rows still key posture by the exact
+canonical `Resource.id`. Live VM/LXC rows carry the exact
 canonical `Resource.id` into one bounded posture batch; the table must not parse
 its presentation key, VMID, name, node, or instance to mint a replacement
 resource identity. Host and orphaned backup artifacts have no canonical live
