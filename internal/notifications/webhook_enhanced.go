@@ -124,14 +124,7 @@ func BuildEnhancedWebhookTestConfig(basicWebhook WebhookConfig, requestedService
 				continue
 			}
 			webhook.PayloadTemplate = tmpl.PayloadTemplate
-			if webhook.Headers == nil {
-				webhook.Headers = make(map[string]string)
-			}
-			for k, v := range tmpl.Headers {
-				if !strings.Contains(v, "{{") {
-					webhook.Headers[k] = v
-				}
-			}
+			webhook.WebhookConfig = withWebhookTemplateHeaders(webhook.WebhookConfig, tmpl.Headers)
 			break
 		}
 	}

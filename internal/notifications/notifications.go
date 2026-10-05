@@ -2690,7 +2690,56 @@ func (n *NotificationManager) prepareWebhookDeliveryContext(webhook WebhookConfi
 		}
 	}
 
+	// Without a custom template Pulse renders the service's built-in body, so
+	// the template's headers describe that body. The stored headers are only a
+	// copy the UI seeded at creation, and an edit can blank or replace them;
+	// Telegram then ignores the JSON and answers "message text is empty"
+	// (#2540). Test sends always applied these headers, so they passed while
+	// every real alert failed.
+	if strings.TrimSpace(webhook.Template) == "" {
+		if tmpl, ok := builtInWebhookServiceTemplate(webhook.Service); ok {
+			webhook = withWebhookTemplateHeaders(webhook, tmpl.Headers)
+		}
+	}
+
 	return webhook, data, nil
+}
+
+// builtInWebhookServiceTemplate returns the template Pulse renders for a
+// service without a custom template. Generic webhooks send the fallback
+// payload instead, so they have none.
+func builtInWebhookServiceTemplate(service string) (WebhookTemplate, bool) {
+	if service == "" || service == "generic" {
+		return WebhookTemplate{}, false
+	}
+	for _, tmpl := range GetWebhookTemplates() {
+		if tmpl.Service == service {
+			return tmpl, true
+		}
+	}
+	return WebhookTemplate{}, false
+}
+
+// withWebhookTemplateHeaders returns a copy of webhook whose headers carry the
+// template's static headers, replacing stored values under any spelling of the
+// same name. Templated values are skipped, as executeWebhookRequest skips them.
+func withWebhookTemplateHeaders(webhook WebhookConfig, templateHeaders map[string]string) WebhookConfig {
+	webhook = copyWebhookConfig(webhook)
+	for key, value := range templateHeaders {
+		if strings.Contains(value, "{{") {
+			continue
+		}
+		if webhook.Headers == nil {
+			webhook.Headers = make(map[string]string, len(templateHeaders))
+		}
+		for stored := range webhook.Headers {
+			if strings.EqualFold(stored, key) {
+				delete(webhook.Headers, stored)
+			}
+		}
+		webhook.Headers[key] = value
+	}
+	return webhook
 }
 
 func webhookServiceTemplate(webhook WebhookConfig, mode webhookRenderMode) (string, bool) {

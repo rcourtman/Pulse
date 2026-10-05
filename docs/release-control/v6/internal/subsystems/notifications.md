@@ -730,6 +730,24 @@ must therefore report `deliveryPaused: true` whenever the notification
 manager is disabled, and the destinations UI must surface that as a warning
 instead of a plain success toast.
 
+A webhook test must also send the headers a real delivery sends. When a
+built-in service has no custom template, Pulse renders that service's body,
+so the service template's static headers are part of the wire format and
+override stored copies under any spelling of the same name.
+`prepareWebhookDeliveryContext` applies them to every firing delivery and to
+every recovery except ntfy's, and `BuildEnhancedWebhookTestConfig` uses the same
+`withWebhookTemplateHeaders` rule; other stored headers stay. The stored
+headers are only a copy the UI seeded at creation, and an edit can blank or
+replace them. Before this rule, a Telegram webhook with a blank stored
+Content-Type passed Test while Telegram ignored every real alert's JSON body
+and answered "message text is empty" (#2540). A custom template means the
+user owns the body, so stored headers stand. Generic webhooks have no
+built-in body and keep their stored headers. ntfy recoveries build their own
+plain-text request and are outside this rule.
+`internal/notifications/webhook_template_headers_test.go` drives a real
+queued Telegram alert with damaged stored Content-Type values, and compares
+Test, grouped and resolved requests for every built-in service.
+
 ### Occurrence-bound delivery receipts
 
 The notification owner records successful firing delivery by exact alert ID,
