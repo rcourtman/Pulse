@@ -1463,7 +1463,7 @@ func TestRootCauseEngineUsesCanonicalRelationshipModel(t *testing.T) {
 func TestResourceDisplayNameUsedByInfrastructureConsumers(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		filepath.Join("..", "monitoring", "connected_infrastructure.go"): {
-			"unifiedresources.ResourceDisplayName(*resource)",
+			"unifiedresources.ResourceDisplayName(resource)",
 		},
 		filepath.Join(".", "monitored_systems.go"): {
 			"if name := ResourceDisplayName(*resource); name != \"\" {",
