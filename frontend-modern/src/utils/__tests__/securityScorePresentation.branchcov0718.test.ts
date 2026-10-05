@@ -271,11 +271,12 @@ describe('securityScorePresentation — branch coverage (batch 0718)', () => {
         description: 'Token + passphrase required',
         critical: true,
       });
+      // Private network (publicAccess false): HTTPS is recommended, not critical.
       expect(byKey.https).toMatchObject({
         label: 'HTTPS',
         enabled: false,
         description: 'HTTP only',
-        critical: true,
+        critical: false,
       });
       expect(byKey.audit).toMatchObject({
         label: 'Audit log',

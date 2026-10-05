@@ -859,6 +859,10 @@ tokens, and path-normalization variants.
    placeholders on the shared `SettingsLoadingSkeleton` primitive. This
    subsystem owns the security/privacy posture semantics; frontend-primitives
    owns skeleton animation, fill tokens, and placeholder shell consistency.
+   Posture severity is one rule across the Security Overview: the HTTPS tile
+   counts as critical, in its label and in the posture score, only when the
+   instance is publicly reachable, matching the hardening step that calls
+   HTTPS critical for public access and recommended on a private network.
 6a. Keep API token refresh/loading indicators on the shared `LoadingSpinner`
     primitive. Security/privacy owns the token-management trust copy and
     refresh semantics; frontend-primitives owns spinner shell, tone, and
