@@ -7868,6 +7868,17 @@ Alert feature state owns persistence and entitlement gating; the primitive
 owns presentation only. `alertDestinationsPresentation.test.ts` pins the
 shared vocabulary and the distinct mobile guidance.
 
+### Switched-off destinations collapse to one line
+
+`AlertDestinationOffSummary` is the shared off-state body for destination
+panels: one muted sentence saying what turning the destination on does and a
+"Show settings" link button that reveals the panel's form without changing
+its enabled state, then moves keyboard focus to the first revealed control
+because the button itself unmounts. Email and Apprise panels compose it
+instead of rendering a full greyed form, so the panel header and its enable
+toggle keep their place while the page stays short. Apprise keeps its header
+test action; email's test action returns with its form.
+
 ### Escalation configuration uses destination identity, not channel aliases
 
 The alerts-owned escalation section composes shared settings, toggle, and form

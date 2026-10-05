@@ -2860,11 +2860,19 @@ windows separately: completed attempts remain for seven days while
 dead-letter attempts can remain for 30 days. It requests the bounded maximum
 of 200 rows, displays an absolute semantic timestamp for timeline correlation
 with relative time as secondary hover context, and says that test sends skip
-the queue. An unreadable log renders as unavailable rather than empty. The
-card sits directly below delivery health and recovery controls on the
-Notifications route; a degraded Overview warning links to that route so the
-diagnostic evidence and safe retry/dismiss actions are reachable from the
-warning. The same card interleaves alert-owned
+the queue. An unreadable log renders as unavailable rather than empty. While
+delivery needs attention the card sits directly below delivery health and
+recovery controls on the Notifications route; a degraded Overview warning
+links to that route so the diagnostic evidence and safe retry/dismiss actions
+are reachable from the warning. Otherwise the route answers "where do my
+alerts go" first: webhooks (named by the services they reach), then email and
+Apprise, then this card. A switched-off email or Apprise destination renders
+one line saying what turning it on does plus a "Show settings" control that
+reveals the form without enabling it or marking the page changed. A new
+webhook opens on the service choice rather than the generic JSON form.
+`useNotificationDeliveryHealth` updates the health snapshot and its
+availability in one batch so the attention state never reads a half-updated
+pair and remounts the warning mid-refresh. The same card interleaves alert-owned
 `notification_suppressed` and `notification_deferred` evidence from
 `GET /api/alerts/events` with those attempts, ordered by the recorded event or
 attempt time. Held rows name the affected resource, alert type, and

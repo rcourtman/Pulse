@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "base_sha": "5b7a9df8acda2b897ae593fd2f728d70bade5f84",
+  "verified_at": "2026-10-05T02:28:06Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/WebhookConfigForm.tsx",
+    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts",
+    "frontend-modern/src/features/alerts/AlertAppriseDestinationsSection.tsx",
+    "frontend-modern/src/features/alerts/AlertDestinationOffSummary.tsx",
+    "frontend-modern/src/features/alerts/AlertEmailDestinationsSection.tsx",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts",
+    "frontend-modern/src/utils/alertWebhookPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/WebhookConfigForm.tsx": "29c99dc9b0433d3a737f113b109eab65c9ce4d21ff043ca128690b426aae9f9f",
+    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts": "6583f2032ef303fd9e46acd78d9a568cd2a2915bd58f32decac2adbcf8abc27b",
+    "frontend-modern/src/features/alerts/AlertAppriseDestinationsSection.tsx": "2bf4fa3451dda07b2734b4218fcbf46ac398d174ead6012bf3dafcdc91dd524d",
+    "frontend-modern/src/features/alerts/AlertDestinationOffSummary.tsx": "a38d98ba4d4241dec259f3bdba41f31ca646b1c8336cd581bc0a8f537dd94775",
+    "frontend-modern/src/features/alerts/AlertEmailDestinationsSection.tsx": "0bedb52a56f414331b3c6496bf268474fea65c74399aaea777ab68ac82b4720e",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "f6682910a0516f8d1bd17b0b3c339fb83311162f21907ab5450be4576819b6be",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts": "1cadc57cf7358d38ed3c8bc5395fe44879aebf5aa554d9bdfadf899212af5bbe",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "f4b1a144d7430b31ad4c6701d619652e594537f0f6ea8eb1e61f6abe035e179b",
+    "frontend-modern/src/utils/alertWebhookPresentation.ts": "ff857bcf9ffce1a14f462fc2a2f9dc2191f417c361b2041b8e9b806a6d9a82ce"
+  },
+  "routes": [
+    "/alerts/notifications"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Delivery paused, not degraded: paused banner, then Webhooks (description names Discord, Telegram, Slack, Teams, ntfy, Gotify, Pushover, PagerDuty), then Email and Apprise each collapsed to one Off line with Show settings, then Recent delivery activity, then External watchdog",
+    "Phone 390: same order, collapsed panels one line each, webhook description clamps to one line",
+    "Add Webhook opens on the service grid (Discord, Telegram, Slack, Microsoft Teams, PagerDuty, Teams Adaptive, Pushover, Gotify, ntfy, Mattermost, Generic)",
+    "Discord and Telegram presets show their numbered setup steps on separate lines, long Telegram URLs wrap inside the column on phone",
+    "No console errors"
+  ],
+  "interactions": [
+    "Show settings on Email: SMTP form revealed greyed, delivery stays disabled, no unsaved-changes banner",
+    "Keyboard Enter on Show settings: focus lands on the email provider select and the Apprise delivery-mode select",
+    "Add Webhook then pick Discord and Telegram: grid closes, preset name, URL placeholder and instructions load"
+  ]
+}

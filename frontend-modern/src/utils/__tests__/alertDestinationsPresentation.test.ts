@@ -18,10 +18,12 @@ import {
   ALERT_DESTINATIONS_APPRISE_MISSING_TARGETS_ERROR,
   ALERT_DESTINATIONS_APPRISE_MISSING_SERVER_URL_ERROR,
   ALERT_DESTINATIONS_APPRISE_MODE_HELP,
+  ALERT_DESTINATIONS_APPRISE_OFF_MESSAGE,
   ALERT_DESTINATIONS_APPRISE_PANEL_TITLE,
   ALERT_DESTINATIONS_APPRISE_TARGETS_PLACEHOLDER,
   ALERT_DESTINATIONS_APPRISE_TEST_FAILURE,
   ALERT_DESTINATIONS_APPRISE_TEST_SUCCESS,
+  ALERT_DESTINATIONS_EMAIL_OFF_MESSAGE,
   ALERT_DESTINATIONS_EMAIL_PANEL_TITLE,
   ALERT_DESTINATIONS_EMAIL_TEST_FAILURE,
   ALERT_DESTINATIONS_EMAIL_TEST_SUCCESS,
@@ -91,6 +93,13 @@ describe('alertDestinationsPresentation', () => {
   it('returns canonical destinations panel and apprise vocabulary', () => {
     expect(ALERT_DESTINATIONS_EMAIL_PANEL_TITLE).toBe('Email notifications');
     expect(ALERT_DESTINATIONS_APPRISE_PANEL_TITLE).toBe('Apprise notifications');
+    // A switched-off destination says what turning it on does, in one line.
+    expect(ALERT_DESTINATIONS_EMAIL_OFF_MESSAGE).toBe(
+      'Off. Turn it on to send alerts by email through your SMTP server.',
+    );
+    expect(ALERT_DESTINATIONS_APPRISE_OFF_MESSAGE).toBe(
+      'Off. Turn it on to relay alerts through the Apprise CLI or an Apprise API server.',
+    );
     expect(getAlertDestinationsStatusLabel(true)).toBe('Enabled');
     expect(getAlertDestinationsStatusLabel(false)).toBe('Disabled');
     expect(getAlertDestinationsAppriseTestLabel(false)).toBe('Send test');
