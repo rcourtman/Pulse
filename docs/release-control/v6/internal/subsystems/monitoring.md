@@ -178,19 +178,29 @@ source selection and wire formats are unchanged. The History cleanup tests
 cover every supported series, byte-array reclamation and connected readers;
 these controls do not attribute a reporter's native process-memory growth.
 
-### Podman zero-percentage fallback — issue #2447
+### Podman interval CPU selection — issue #2447
 
-One-shot compatibility stats with `cpu:0` do not suppress advancing cumulative
-CPU samples. The collector records every interval and uses Podman's CPU-time
-nanoseconds over elapsed wall-clock nanoseconds, independent of host core count.
-A positive finite reported percentage remains authoritative, preserving #1391.
-Counter resets or a changed container start establish a new baseline; duplicate
-and out-of-order reads cannot create subsequent spikes. No timestamp means no
-measurable counter interval. The existing report CPU field, graph/alert units,
-Docker system-counter calculation, memory and permission scopes are unchanged.
-`TestCollectContainerPodmanCPUIntervals` in `agent_internal_test.go` covers the
-actual JSON/collector boundary, including changing percentage availability.
-Native Podman shape and graph/alert acceptance remain separate evidence.
+Every Podman one-shot response uses consecutive cumulative CPU-time nanoseconds
+over elapsed wall-clock nanoseconds. The compatibility `cpu` percentage is not
+bound to that interval and cannot replace it, whether positive, zero, missing or
+invalid; measured idle remains zero. First samples, counter resets and container
+start changes establish a baseline instead of presenting lifetime CPU as current
+usage. A new lifetime also rebaselines across a backward clock; duplicate or older
+reads in the same lifetime cannot move that baseline. Missing timestamps cannot
+invent an interval. The collector keeps the 100%-per-core scale (#1391), and the
+server converts exactly once to host-capacity percent for History and alerts.
+Docker's system-counter calculation, memory, report shape and permissions stay
+unchanged. `Container CPU selected for report` logs the final selected raw value,
+not a preliminary calculation or a claim of successful delivery.
+
+`TestCollectContainerPodmanCPUIntervals` covers decoding, idle, restarts, backward
+clocks, duplicates and Docker isolation. `TestPodmanCPUCollectorHistoryAndAlerts`
+in `internal/dockeragent/cpu_roundtrip_test.go` follows deliberately conflicting
+synthetic percentages through real compressed HTTPS report delivery, scoped
+authentication, ingestion, memory and persistent HTTP History, and alert identity
+and units on 8- and 4-CPU hosts. Genuine high usage still breaches its configured
+threshold; no clipping or smoothing masks spikes. These source controls do not
+establish the reporter's native payload, installed cause or containing release.
 
 ### Guest-agent coordination around backups — issue #2439
 

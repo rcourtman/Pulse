@@ -72,18 +72,19 @@ system-information probe; no synthetic success establishes installed acceptance.
 
 ### Podman interval CPU evidence — issue #2447
 
-Every one-shot container stats response retains a cumulative CPU baseline,
-even when a positive Podman compatibility percentage takes precedence. Zero,
-absent or invalid percentages use the valid nanosecond/wall-clock interval,
-without Docker's host-core multiplier. First samples, counter resets and changes
-of container start time rebaseline rather than presenting lifetime CPU as current
-usage. Repeated or older read timestamps cannot move the baseline backwards.
-Positive native percentages keep the units established by #1391; a genuine idle
-counter interval remains zero. Report shapes, enrollment, runtime transport trust
-and command authority are unchanged. `TestCollectContainerPodmanCPUIntervals`
-in `internal/dockeragent/agent_internal_test.go` exercises decoding through the
-real collector, idle/advancing counters, start changes and Docker isolation.
-Synthetic controls do not establish a native Podman payload or reporter recovery.
+Every one-shot container stats response retains a cumulative CPU baseline.
+Podman uses only consecutive counter/read pairs, not its unbound compatibility
+`cpu` percentage, even when positive. The nanosecond/wall-clock interval keeps
+the 100%-per-core units established by #1391 without Docker's host-core multiplier;
+server ingestion alone converts to host capacity. Idle remains zero. First
+samples, resets and start changes rebaseline; start changes do so even across a
+backward clock. Duplicate or older reads in one lifetime cannot move its baseline
+backwards. Report shapes, enrollment, runtime transport trust and command authority
+are unchanged. `TestCollectContainerPodmanCPUIntervals` covers these boundaries
+through the real collector. `TestPodmanCPUCollectorHistoryAndAlerts` follows the
+final compressed report into authenticated ingestion, persistent HTTP History and
+alert units on 8- and 4-CPU hosts. Synthetic controls do not establish a native
+Podman payload, installed recovery or containing release.
 
 ### MD RAID required members and spares — issue #2369
 

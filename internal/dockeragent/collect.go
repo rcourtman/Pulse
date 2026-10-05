@@ -596,20 +596,17 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 			return agentsdocker.Container{}, fmt.Errorf("read stats: %w", err)
 		}
 
-		stats, podmanCPUPercent, err := decodeContainerStatsPayload(payload)
+		stats, err := decodeContainerStatsPayload(payload)
 		if err != nil {
 			return agentsdocker.Container{}, fmt.Errorf("decode stats: %w", err)
 		}
 
-		// Keep a baseline even when Podman supplies a percentage: one-shot
-		// compatibility responses can report cpu:0 while total_usage advances.
-		// Preserve positive native percentages (and their units, #1391), but
-		// use our interval delta for an absent, zero or invalid percentage.
+		// Podman's compatibility cpu percentage is not tied to the interval
+		// between our one-shot reads. Use consecutive counter/read pairs for
+		// every Podman sample, including idle and rebaseline samples. The result
+		// stays on the 100%-per-core scale (#1391), as for Docker; only the server
+		// converts it into a share of host capacity.
 		cpuPercent = a.calculateContainerCPUPercent(summary.ID, stats, parseTime(inspect.State.StartedAt))
-		if a.runtime == RuntimePodman && podmanCPUPercent != nil &&
-			*podmanCPUPercent > 0 && !math.IsInf(*podmanCPUPercent, 0) {
-			cpuPercent = *podmanCPUPercent
-		}
 		memUsage, memLimit, memPercent = calculateMemoryUsage(stats)
 		blockIO = summarizeBlockIO(stats)
 		networkRX, networkTX = summarizeNetworkIO(stats)
@@ -618,6 +615,11 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		delete(a.prevContainerCPU, summary.ID)
 		a.cpuMu.Unlock()
 	}
+	a.logger.Debug().
+		Str("container_id", summary.ID).
+		Str("runtime", string(a.runtime)).
+		Float64("cpu_percent", cpuPercent).
+		Msg("Container CPU selected for report")
 
 	createdAt := time.Unix(summary.Created, 0)
 
@@ -1122,24 +1124,12 @@ func extractPodmanMetadata(labels map[string]string) *agentsdocker.PodmanContain
 	return meta
 }
 
-type podmanCompatStatsProbe struct {
-	CPUStats struct {
-		CPU *float64 `json:"cpu"`
-	} `json:"cpu_stats"`
-}
-
-func decodeContainerStatsPayload(payload []byte) (containertypes.StatsResponse, *float64, error) {
+func decodeContainerStatsPayload(payload []byte) (containertypes.StatsResponse, error) {
 	var stats containertypes.StatsResponse
 	if err := json.Unmarshal(payload, &stats); err != nil {
-		return containertypes.StatsResponse{}, nil, err
+		return containertypes.StatsResponse{}, err
 	}
-
-	var probe podmanCompatStatsProbe
-	if err := json.Unmarshal(payload, &probe); err != nil {
-		return stats, nil, nil
-	}
-
-	return stats, probe.CPUStats.CPU, nil
+	return stats, nil
 }
 
 func (a *Agent) calculateContainerCPUPercent(containerID string, stats containertypes.StatsResponse, startedAt time.Time) float64 {
@@ -1160,6 +1150,12 @@ func (a *Agent) calculateContainerCPUPercent(containerID string, stats container
 	// (from container start) and producing a constant lifetime-average CPU%
 	// instead of a current value.
 	prev, ok := a.prevContainerCPU[containerID]
+	if a.runtime == RuntimePodman && ok && !prev.startedAt.IsZero() && !current.startedAt.IsZero() && !current.startedAt.Equal(prev.startedAt) {
+		// A new lifetime must establish its own baseline even if the runtime's
+		// clock has moved back. Timestamp ordering only compares one lifetime.
+		a.prevContainerCPU[containerID] = current
+		return 0
+	}
 	if a.runtime == RuntimePodman && ok && !prev.read.IsZero() && !current.read.IsZero() && !current.read.After(prev.read) {
 		// Repeated or out-of-order responses must not move the baseline back
 		// and manufacture usage in the next interval.
@@ -1182,10 +1178,8 @@ func (a *Agent) calculateContainerCPUPercent(containerID string, stats container
 
 	// We have a previous sample - update it after calculation
 	a.prevContainerCPU[containerID] = current
-	if a.runtime == RuntimePodman && (current.totalUsage < prev.totalUsage ||
-		(!prev.startedAt.IsZero() && !current.startedAt.IsZero() && !current.startedAt.Equal(prev.startedAt))) {
-		// A restart is not an interval sample, even if the new lifetime counter
-		// has already exceeded the old one. Start again from this baseline.
+	if a.runtime == RuntimePodman && current.totalUsage < prev.totalUsage {
+		// A counter reset is not an interval sample. Start again from this baseline.
 		return 0
 	}
 

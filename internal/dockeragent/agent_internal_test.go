@@ -1872,15 +1872,15 @@ func TestCollectContainerPodmanCPUIntervals(t *testing.T) {
 			{second: 0, total: 100_000_000, percent: "null"},
 			{second: 1, total: 130_000_000, percent: "null", want: 3},
 		}},
-		{"positive percentages keep units and retain the baseline", RuntimePodman, 16, []sample{
-			{second: 0, total: 100_000_000, percent: "0.32", want: 0.32},
-			{second: 1, total: 130_000_000, percent: "0.64", want: 0.64},
+		{"positive percentages cannot replace interval evidence", RuntimePodman, 16, []sample{
+			{second: 0, total: 100_000_000, percent: "0.32"},
+			{second: 1, total: 130_000_000, percent: "0.64", want: 3},
 			{second: 2, total: 160_000_000, percent: "0", want: 3},
 			{second: 3, total: 190_000_000, want: 3},
 		}},
 		{"absent then reported then zero", RuntimePodman, 16, []sample{
 			{second: 0, total: 100_000_000},
-			{second: 1, total: 130_000_000, percent: "0.32", want: 0.32},
+			{second: 1, total: 130_000_000, percent: "0.32", want: 3},
 			{second: 2, total: 160_000_000, percent: "0", want: 3},
 		}},
 		{"invalid negative percentage", RuntimePodman, 16, []sample{
@@ -1893,28 +1893,38 @@ func TestCollectContainerPodmanCPUIntervals(t *testing.T) {
 		}},
 		{"counter reset rebaselines rather than using new lifetime", RuntimePodman, 16, []sample{
 			{second: 0, total: 100_000_000, percent: "0"},
-			{second: 1, total: 10_000_000, percent: "0"},
+			{second: 1, total: 10_000_000, percent: "800"},
 			{second: 2, total: 40_000_000, percent: "0", want: 3},
 		}},
 		{"restart with an already larger counter", RuntimePodman, 16, []sample{
 			{second: 0, total: 100_000_000, percent: "0"},
-			{second: 1, total: 260_000_000, percent: "0", start: 1},
+			{second: 1, total: 260_000_000, percent: "800", start: 1},
 			{second: 2, total: 290_000_000, percent: "0", start: 1, want: 3},
 		}},
 		{"repeated and old timestamps do not move the baseline", RuntimePodman, 16, []sample{
 			{second: 0, total: 100_000_000, percent: "0"},
 			{second: 1, total: 130_000_000, percent: "0", want: 3},
-			{second: 1, total: 150_000_000, percent: "0"},
-			{second: 0, total: 170_000_000, percent: "0"},
+			{second: 1, total: 150_000_000, percent: "800"},
+			{second: 0, total: 170_000_000, percent: "800"},
 			{second: 2, total: 160_000_000, percent: "0", want: 3},
 		}},
+		{"restart establishes a baseline across a backward clock", RuntimePodman, 8, []sample{
+			{second: 3, total: 100_000_000, percent: "0"},
+			{second: 2, total: 260_000_000, percent: "800", start: 1},
+			{second: 3, total: 290_000_000, percent: "800", start: 1, want: 3},
+		}},
+		{"positive percentage cannot replace measured idle", RuntimePodman, 4, []sample{
+			{second: 0, total: 100_000_000, percent: "25"},
+			{second: 1, total: 100_000_000, percent: "800"},
+			{second: 2, total: 600_000_000, percent: "92.8", want: 50},
+		}},
 		{"missing timestamp cannot invent an interval", RuntimePodman, 16, []sample{
-			{second: -1, total: 100_000_000, percent: "0"},
-			{second: 1, total: 130_000_000, percent: "0"},
+			{second: -1, total: 100_000_000, percent: "800"},
+			{second: 1, total: 130_000_000, percent: "800"},
 			{second: 2, total: 160_000_000, percent: "0", want: 3},
 		}},
 		{"stop clears the baseline", RuntimePodman, 16, []sample{
-			{second: 0, total: 100_000_000, percent: "0.32", want: 0.32},
+			{second: 0, total: 100_000_000, percent: "0.32"},
 			{second: 1, stopped: true},
 			{second: 2, total: 260_000_000, percent: "0"},
 			{second: 3, total: 290_000_000, percent: "0", want: 3},
