@@ -237,12 +237,38 @@ Dismissed and resolved findings persist across Pulse restarts.
 
 #### Remove a rule created by mistake
 
-In v6.4.5, **Create rule** has no corresponding rule-list or delete control in
-the UI. **Reopen** undoes an individual finding's dismissal, not a separately
-created rule. The existing API can list rules and delete one by its exact ID.
-Deleting a created rule allows future matching findings to appear again; it
+**Reopen** undoes an individual finding's dismissal, not a separately created
+rule. Removing a created rule allows future matching findings to appear again; it
 does not resolve a problem or automatically reopen previously dismissed
 findings. It leaves the other rules and finding history intact.
+
+##### Use the rule controls when available
+
+1. Sign in as an authorised administrator and select the correct organisation.
+   Open **Patrol → Activity** and expand **Suppression rules**, or follow
+   **Manage suppression rules** from the finding's rule-creation control.
+2. Match the resource, category, reason and **Rule ID** before choosing
+   **Remove rule**. **All resources** or **All categories** means a broad rule,
+   not just the finding you were looking at.
+3. Review the exact scope in the confirmation and choose **Remove this rule**.
+   **Cancel** leaves the rules unchanged.
+4. Check that the selected row disappears and Pulse reports **Rule removed**.
+   If removal cannot be confirmed, choose **Reload rules** and check that exact
+   ID before trying again: a lost response does not prove deletion failed.
+
+After an organisation or access change, reload the rules in the intended
+organisation before making another change. If you cannot load or verify them,
+stop; do not bypass the failure with the console workaround. Other rules may
+still cover the same scope, so removal does not guarantee a new finding.
+To undo an individual dismissal, use **Reopen finding** in **Finding options
+and history** instead.
+
+##### Older builds without rule controls
+
+In v6.4.5, **Create rule** has no corresponding rule-list or delete control in
+the UI. If your build has no **Suppression rules** control, the existing API
+workaround below can remove one manual rule without an upgrade or restart.
+It is not a way around denied access or a failed removal in the UI.
 
 For a rule made with **Create rule**, sign in normally to Pulse in an
 authorised administrator's browser session, select the correct organisation,
