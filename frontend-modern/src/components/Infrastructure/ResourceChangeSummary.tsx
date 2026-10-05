@@ -92,7 +92,7 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
                 : null;
 
               return (
-                <li class={`rounded-md border border-border-subtle bg-base ${itemPadding()}`}>
+                <li class={`rounded-md border border-border-subtle bg-page ${itemPadding()}`}>
                   <div class={`flex flex-wrap items-start justify-between ${gapSize()}`}>
                     <div class="min-w-0">
                       <p class={headlineText()}>{headline}</p>

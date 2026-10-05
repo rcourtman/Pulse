@@ -45,7 +45,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
 
             <div class="space-y-4">
               <Show when={props.securityStatus()?.hasAuthentication}>
-                <div class="bg-base rounded-md p-4 border border-border">
+                <div class="bg-page rounded-md p-4 border border-border">
                   <div class="space-y-3">
                     <label class="flex items-start gap-3 cursor-pointer">
                       <input

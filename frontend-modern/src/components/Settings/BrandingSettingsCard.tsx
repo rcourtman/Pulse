@@ -152,7 +152,7 @@ export const BrandingSettingsCard: Component<BrandingSettingsCardProps> = (props
           </div>
         </div>
 
-        <div class="flex min-h-28 flex-col justify-between gap-4 rounded-md border border-border bg-base p-4">
+        <div class="flex min-h-28 flex-col justify-between gap-4 rounded-md border border-border bg-page p-4">
           <div>
             <p class="text-xs font-medium uppercase tracking-wide text-muted">Header preview</p>
             <div class="mt-3 flex min-h-10 items-center justify-center gap-2 overflow-hidden rounded-sm bg-surface px-3 py-2">

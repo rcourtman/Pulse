@@ -56,7 +56,7 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
     <Show when={hasContent()}>
       <div
         data-testid={props.dataTestId}
-        class={`rounded-md border border-border-subtle bg-base p-4 ${className()}`.trim()}
+        class={`rounded-md border border-border-subtle bg-surface p-4 ${className()}`.trim()}
       >
         <div class="flex flex-wrap items-start justify-between gap-2">
           <div>

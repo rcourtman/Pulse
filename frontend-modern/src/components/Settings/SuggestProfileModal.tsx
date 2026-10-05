@@ -525,8 +525,8 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                       </div>
                       <div class="space-y-3">
                         <h5 class="text-sm font-medium text-base-content">Raw JSON</h5>
-                        <div class="bg-base rounded-md p-3 overflow-x-auto">
-                          <pre class="text-xs text-slate-300 font-mono">
+                        <div class="bg-page rounded-md p-3 overflow-x-auto">
+                          <pre class="text-xs text-base-content font-mono">
                             {JSON.stringify(sugg().config, null, 2)}
                           </pre>
                         </div>

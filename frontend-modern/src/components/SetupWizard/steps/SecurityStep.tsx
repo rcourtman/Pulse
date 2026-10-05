@@ -229,7 +229,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
           </Show>
         </div>
 
-        <div class="bg-base rounded-md p-4 border border-border text-left">
+        <div class="bg-page rounded-md p-4 border border-border text-left">
           <Toggle
             checked={shareUsageStatistics()}
             onChange={() => setShareUsageStatistics(!shareUsageStatistics())}
@@ -238,7 +238,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
           />
         </div>
 
-        <div class="bg-base rounded-md p-4 border border-border text-left">
+        <div class="bg-page rounded-md p-4 border border-border text-left">
           <div class="text-[11px] font-semibold uppercase tracking-wide text-muted mb-2">
             {t('setup.security.nextScreen.title')}
           </div>
@@ -250,7 +250,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
         </div>
       </div>
       {/* Actions */}
-      <div class="p-8 bg-base flex gap-4 border-t border-border relative z-10">
+      <div class="p-8 bg-page flex gap-4 border-t border-border relative z-10">
         <button
           onClick={props.onBack}
           class="px-6 py-3.5 bg-surface border border-border hover:bg-surface-hover text-base-content font-medium rounded-md transition-colors"

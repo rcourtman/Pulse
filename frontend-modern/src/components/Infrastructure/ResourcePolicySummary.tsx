@@ -24,7 +24,7 @@ export const ResourcePolicySummary: Component<ResourcePolicySummaryProps> = (pro
   return (
     <Show when={posture()}>
       {(value) => (
-        <div class={`rounded-md border border-border-subtle bg-base p-4 ${className()}`.trim()}>
+        <div class={`rounded-md border border-border-subtle bg-surface p-4 ${className()}`.trim()}>
           <div class="flex flex-wrap items-start justify-between gap-2">
             <div>
               <h3 class="text-sm font-semibold text-base-content">

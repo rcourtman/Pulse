@@ -1494,6 +1494,40 @@ the agent config gate consumes the same decision.
 `TestVersionlessDeployPlaceholderCannotBeMovedTwice`, and
 `TestCurrentDeployTokenNeverMovesOnceBound` in
 `internal/api/security_regression_test.go` pin that boundary.
+Authenticated reports also name the agent on a token bound only to its
+hostname, so a token without `agent:exec`, or whose agent never connects the
+command channel, still carries the identity the safe-profile authority
+reduction matches. After `/api/agents/agent/report` applies a report,
+`recordReportedAgentIdentity` in `internal/api/agent_exec_token_binding.go`
+writes the server-resolved host ID as `bound_agent_id`, with `bound_at` and the
+current binding version, only when the token has a `bound_hostname` and no
+`bound_agent_id`, the report presented exactly the ID Pulse resolved for it
+(in the same run, the ID the agent's command registration presents), and
+`agentbinding.EvaluateReportedIdentity` finds that the shared `Evaluate`
+decision would first-bind, legacy-migrate, or backfill that ID for the
+reported hostname. The token must also run command sessions in the request's
+organization, be bound to at most one organization, and carry a collector,
+legacy full-trust, or no runtime role, and the host must be one the monitor
+resolved and holds under that token, so mock mode's discarded, unresolved
+acknowledgements never qualify. The path never changes scopes, runtime role,
+command policy, or `bound_hostname`, and never moves a recorded ID or repairs
+a deploy placeholder. The binding version makes the recorded ID immutable to
+every later registration, and a recorded identity grants no execution
+authority: command admission still requires `agent:exec` and the same ID.
+As with a command registration, the first identity recorded is final: an
+agent later restarted under a different configured `--agent-id`, or replaying
+a report buffered by an earlier run, meets a token already bound to its first
+reported identity and is refused under the new one. When the presented and
+resolved IDs differ (a configured agent ID, a continuity fork), nothing is
+recorded and the command channel's first registration decides as before;
+reconciling that disagreement belongs to command-channel identity
+convergence. A token bound to no hostname is left to command-channel first
+use. The write runs against the live record under the token lock command
+admission holds, and a failed save restores the previous metadata.
+`TestEvaluateReportedIdentityRecordsOnlyWhatCommandRegistrationWouldBind` in
+`internal/api/agentbinding/policy_test.go`, and the `TestReportedIdentity*`
+tests and `TestReportHandlerOffersOnlyQualifyingLiveReportsToTheRecorder` in
+`internal/api/security_regression_test.go`, pin that boundary.
 Pulse-minted install tokens now carry a server-authored command-policy intent
 in addition to first-use binding metadata. That intent grants no independent
 authority: first-report convergence requires the same shared binding decision

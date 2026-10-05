@@ -309,7 +309,7 @@ export const AgentIntegrationsPanel: Component = () => {
                     <CopyCommandBlock
                       command={mcpInstallShellCommand}
                       onCopy={handleCopySnippet}
-                      codeClass="block whitespace-pre overflow-x-auto rounded-md border border-border bg-base p-3 font-mono text-xs text-base-content"
+                      codeClass="block whitespace-pre overflow-x-auto rounded-md border border-border bg-page p-3 font-mono text-xs text-base-content"
                     />
                   </div>
                   <div class="space-y-2">
@@ -319,7 +319,7 @@ export const AgentIntegrationsPanel: Component = () => {
                     <CopyCommandBlock
                       command={mcpInstallPowerShellCommand}
                       onCopy={handleCopySnippet}
-                      codeClass="block whitespace-pre overflow-x-auto rounded-md border border-border bg-base p-3 font-mono text-xs text-base-content"
+                      codeClass="block whitespace-pre overflow-x-auto rounded-md border border-border bg-page p-3 font-mono text-xs text-base-content"
                     />
                   </div>
                 </div>
@@ -353,7 +353,7 @@ export const AgentIntegrationsPanel: Component = () => {
                     <CopyCommandBlock
                       command={openCodeMcpConfig()}
                       onCopy={handleCopySnippet}
-                      codeClass="block whitespace-pre overflow-x-auto rounded-md border border-border bg-base p-3 font-mono text-xs text-base-content"
+                      codeClass="block whitespace-pre overflow-x-auto rounded-md border border-border bg-page p-3 font-mono text-xs text-base-content"
                     />
                   </div>
                   <div class="space-y-2">
@@ -371,7 +371,7 @@ export const AgentIntegrationsPanel: Component = () => {
                     <CopyCommandBlock
                       command={claudeMcpConfig()}
                       onCopy={handleCopySnippet}
-                      codeClass="block whitespace-pre overflow-x-auto rounded-md border border-border bg-base p-3 font-mono text-xs text-base-content"
+                      codeClass="block whitespace-pre overflow-x-auto rounded-md border border-border bg-page p-3 font-mono text-xs text-base-content"
                     />
                   </div>
                 </div>
@@ -395,7 +395,7 @@ export const AgentIntegrationsPanel: Component = () => {
                     <Show when={mcpSurfaceToolPosture()}>
                       {(posture) => (
                         <div
-                          class="flex w-fit flex-wrap items-center gap-1.5 rounded-md border border-border bg-base px-2 py-1 text-[11px] font-medium text-muted"
+                          class="flex w-fit flex-wrap items-center gap-1.5 rounded-md border border-border bg-page px-2 py-1 text-[11px] font-medium text-muted"
                           title={posture().title}
                           data-testid="agent-mcp-tool-posture"
                         >
@@ -411,7 +411,7 @@ export const AgentIntegrationsPanel: Component = () => {
                       )}
                     </Show>
                     <Show when={surfaceContractEntries().length > 0}>
-                      <details class="rounded-md border border-border bg-base p-3">
+                      <details class="rounded-md border border-border bg-page p-3">
                         <summary class="cursor-pointer text-sm font-semibold text-base-content">
                           Patrol access model
                         </summary>
@@ -432,7 +432,7 @@ export const AgentIntegrationsPanel: Component = () => {
                                     </span>
                                     <For each={entry.badges}>
                                       {(badge) => (
-                                        <span class="rounded-full border border-border bg-base px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
+                                        <span class="rounded-full border border-border bg-page px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
                                           {badge}
                                         </span>
                                       )}
@@ -449,7 +449,7 @@ export const AgentIntegrationsPanel: Component = () => {
                       </details>
                     </Show>
                     <Show when={hasManifestInventory()}>
-                      <details class="rounded-md border border-border bg-base p-3">
+                      <details class="rounded-md border border-border bg-page p-3">
                         <summary class="cursor-pointer text-sm font-semibold text-base-content">
                           Live manifest details
                         </summary>
@@ -468,7 +468,7 @@ export const AgentIntegrationsPanel: Component = () => {
                                 </span>
                               </summary>
                               <div class="mt-3 space-y-2">
-                                <ul class="divide-y divide-border rounded-md border border-border bg-base">
+                                <ul class="divide-y divide-border rounded-md border border-border bg-page">
                                   <For each={workflowPrompts()}>
                                     {(prompt) => (
                                       <li class="space-y-1 p-3">
@@ -548,7 +548,7 @@ export const AgentIntegrationsPanel: Component = () => {
                                   <For each={errorCodeSummaries()}>
                                     {(summary) => (
                                       <span
-                                        class="rounded-md border border-border bg-base px-2 py-1"
+                                        class="rounded-md border border-border bg-page px-2 py-1"
                                         title={`Declared by ${summary.capabilityNames.join(', ')}`}
                                       >
                                         <code class="font-mono">{summary.code}</code>
@@ -591,7 +591,7 @@ export const AgentIntegrationsPanel: Component = () => {
                                           <p class="text-xs text-muted">{section.description}</p>
                                         </Show>
                                       </div>
-                                      <ul class="divide-y divide-border rounded-md border border-border bg-base">
+                                      <ul class="divide-y divide-border rounded-md border border-border bg-page">
                                         <For each={section.entries}>
                                           {(cap) => (
                                             <li class="space-y-1 p-3">

@@ -22,10 +22,12 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	pulsews "github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
@@ -5631,5 +5633,416 @@ func TestCurrentDeployTokenNeverMovesOnceBound(t *testing.T) {
 	}
 	if _, ok := router.admitAgentExecToken(raw, "machine-id", "c"); ok {
 		t.Fatal("a current deploy token moved after its first binding")
+	}
+}
+
+const reportIdentityMachineID = "49a2dbb3-3cc8-43b7-ad57-eb1711142454"
+
+// reportIdentityReport is a report as pulse-agent sends it: the host carries
+
+// the machine-derived ID and the agent block the ID it presents everywhere,
+
+// including on command registration.
+
+func reportIdentityReport(presentedID, machineID, hostname string) agentshost.Report {
+	return agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              presentedID,
+			Version:         "6.5.0",
+			Type:            "unified",
+			IntervalSeconds: 30,
+			Hostname:        hostname,
+		},
+		Host: agentshost.HostInfo{
+			ID:        machineID,
+			Hostname:  hostname,
+			MachineID: machineID,
+			Platform:  "linux",
+			OSName:    "debian",
+		},
+		Timestamp: time.Now().UTC(),
+	}
+}
+
+func newReportIdentityRouter(t *testing.T, cfg *config.Config) *Router {
+	t.Helper()
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	t.Cleanup(monitor.Stop)
+	return NewRouter(cfg, monitor, nil, nil, func() error { return nil }, "6.5.0")
+}
+
+func reportIdentityToken(t *testing.T, cfg *config.Config, tokenID string) config.APITokenRecord {
+	t.Helper()
+	config.Mu.Lock()
+	defer config.Mu.Unlock()
+	for index := range cfg.APITokens {
+		if cfg.APITokens[index].ID == tokenID {
+			return cfg.APITokens[index].Clone()
+		}
+	}
+	t.Fatalf("token %s not found", tokenID)
+	return config.APITokenRecord{}
+}
+
+func postReportIdentityReport(t *testing.T, router *Router, token string, report agentshost.Report) string {
+	t.Helper()
+	code, payload := issue1753PostReport(t, router, token, report)
+	if code != http.StatusOK {
+		t.Fatalf("report rejected with %d (%v)", code, payload)
+	}
+	ack, _ := payload["agentId"].(string)
+	return ack
+}
+
+func postCollectorReduction(t *testing.T, router *Router, token, agentID, hostname string) int {
+	t.Helper()
+	body, err := json.Marshal(collectorAuthorityReductionRequest{AgentID: agentID, Hostname: hostname})
+	if err != nil {
+		t.Fatalf("marshal reduction: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/collector/reduce-authority", bytes.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	return rec.Code
+}
+
+// A deployed agent enrolled without commands never registers a command
+
+// channel. Its runtime token stayed bound to the node's hostname alone, so the
+
+// safe-profile migration's authority reduction, which needs the agent's ID on
+
+// the token, was refused with "Collector credential binding mismatch" for as
+
+// long as the agent ran. The first acknowledged report now names the agent.
+
+func autoRegisteredInstallToken(t *testing.T, raw, hostname string, enableCommands bool) config.APITokenRecord {
+	t.Helper()
+	role := agenttokens.CredentialKindMonitoringCollector
+	if enableCommands {
+		role = agenttokens.CredentialKindLegacyFullTrust
+	}
+	record := newTokenRecord(t, raw, agenttokens.ProxmoxScopes(enableCommands), map[string]string{
+		"install_type":                     "pve",
+		"issued_via":                       agentbinding.IssuedViaConfig,
+		"bound_hostname":                   hostname,
+		"bound_at":                         time.Now().UTC().Format(time.RFC3339),
+		agenttokens.RuntimeRoleMetadataKey: role,
+	})
+	record.OrgID = "default"
+	return record
+}
+
+// The report path and the command channel bind the same identity, and once
+
+// either has named the agent the token never takes another identity, whatever
+
+// later reports resolve.
+
+func TestReportedIdentityMatchesCommandRegistrationAndNeverMoves(t *testing.T) {
+	const raw = "report-identity-pve1-token.12345678"
+	record := autoRegisteredInstallToken(t, raw, "pve1", true)
+	cfg := newTestConfigWithTokens(t, record)
+	router := newReportIdentityRouter(t, cfg)
+
+	postReportIdentityReport(t, router, raw, reportIdentityReport("machine-a", "machine-a", "pve1"))
+	bound := reportIdentityToken(t, cfg, record.ID)
+	if got := bound.Metadata["bound_agent_id"]; got != "machine-a" {
+		t.Fatalf("bound_agent_id = %q, want machine-a", got)
+	}
+	if got := bound.Metadata[agenttokens.RuntimeRoleMetadataKey]; got != agenttokens.CredentialKindLegacyFullTrust {
+		t.Fatalf("runtime role = %q, want it untouched", got)
+	}
+	// Without the binding version a versionless token would still accept any
+	// identity on its hostname through the legacy migration.
+	if got := bound.Metadata[agentExecBindingVersionKey]; got != agentExecBindingVersion {
+		t.Fatalf("binding version = %q, want %q so the recorded ID is immutable", got, agentExecBindingVersion)
+	}
+	if _, ok := router.admitAgentExecToken(raw, "machine-b", "pve1"); ok {
+		t.Fatal("another identity's command registration moved the identity the report recorded")
+	}
+	if _, ok := router.admitAgentExecToken(raw, "machine-a", "pve1"); !ok {
+		t.Fatal("the reporting agent's own command registration was refused")
+	}
+
+	// Another machine presenting this token under the same hostname reports
+	// under its own identity, but the token stays with the agent it named.
+	issue1753PostReport(t, router, raw, reportIdentityReport("machine-b", "machine-b", "pve1"))
+	if got := reportIdentityToken(t, cfg, record.ID).Metadata["bound_agent_id"]; got != "machine-a" {
+		t.Fatalf("bound_agent_id after another machine reported = %q, want machine-a", got)
+	}
+	if _, ok := router.admitAgentExecToken(raw, "machine-b", "pve1"); ok {
+		t.Fatal("a second identity was admitted on a token the report path had already bound")
+	}
+
+	// A token the command channel bound first keeps that identity even when the
+	// server resolves this agent's reports to another one.
+	const deployRaw = "report-identity-deploy-token.12345678"
+	deployRecord := newTokenRecord(t, deployRaw, agenttokens.HostScopes(true), map[string]string{
+		"bound_hostname":               "pve-node3",
+		"deploy_job_id":                "dep_1",
+		agentExecBindingVersionKey:     agentExecBindingVersion,
+		agentbinding.DeployIdentityKey: agentbinding.DeployIdentityAgent,
+	})
+	deployRecord.OrgID = "default"
+	config.Mu.Lock()
+	cfg.UpsertAPIToken(deployRecord)
+	config.Mu.Unlock()
+	if _, ok := router.admitAgentExecToken(deployRaw, "configured-id", "pve-node3"); !ok {
+		t.Fatal("first command registration refused")
+	}
+	ack := postReportIdentityReport(t, router, deployRaw, reportIdentityReport("configured-id", reportIdentityMachineID, "pve-node3"))
+	if ack == "configured-id" {
+		t.Fatalf("precondition: the server resolved the presented ID %q", ack)
+	}
+	if got := reportIdentityToken(t, cfg, deployRecord.ID).Metadata["bound_agent_id"]; got != "configured-id" {
+		t.Fatalf("bound_agent_id = %q, want the command channel's configured-id", got)
+	}
+}
+
+// As with a command registration, the first identity a token records is
+
+// final. An agent that reported under its machine ID with commands off, then
+
+// restarts under a configured --agent-id with commands on, meets a token
+
+// already bound to the machine ID, exactly as it would had its first run
+
+// registered a command channel.
+
+func TestReportedIdentityIsFinalForALaterReconfiguredAgent(t *testing.T) {
+	const raw = "report-identity-reconfigured-token.12345678"
+	record := autoRegisteredInstallToken(t, raw, "pve9", true)
+	cfg := newTestConfigWithTokens(t, record)
+	router := newReportIdentityRouter(t, cfg)
+
+	postReportIdentityReport(t, router, raw, reportIdentityReport(reportIdentityMachineID, reportIdentityMachineID, "pve9"))
+	ack := postReportIdentityReport(t, router, raw, reportIdentityReport("configured-id", reportIdentityMachineID, "pve9"))
+	if ack != reportIdentityMachineID {
+		t.Fatalf("precondition: acknowledged agentId = %q, want the machine ID", ack)
+	}
+	if got := reportIdentityToken(t, cfg, record.ID).Metadata["bound_agent_id"]; got != reportIdentityMachineID {
+		t.Fatalf("bound_agent_id = %q, want the first reported identity", got)
+	}
+	if _, ok := router.admitAgentExecToken(raw, "configured-id", "pve9"); ok {
+		t.Fatal("a reconfigured identity moved a token the report path had bound")
+	}
+	if _, ok := router.admitAgentExecToken(raw, reportIdentityMachineID, "pve9"); !ok {
+		t.Fatal("the recorded identity's command registration was refused")
+	}
+}
+
+// An agent started with a configured --agent-id presents that ID on its
+
+// command channel, while Pulse resolves its reports to the machine ID. The
+
+// report path cannot tell which identity the token should carry, so it records
+
+// nothing and leaves the command channel's first registration unchanged.
+
+func TestReportedIdentityRecordsNothingWhenTheResolvedIdentityIsNotThePresentedOne(t *testing.T) {
+	const raw = "report-identity-configured-token.12345678"
+	record := newTokenRecord(t, raw, agenttokens.HostScopes(true), map[string]string{
+		"bound_hostname":               "pve-node4",
+		"deploy_job_id":                "dep_1",
+		agentExecBindingVersionKey:     agentExecBindingVersion,
+		agentbinding.DeployIdentityKey: agentbinding.DeployIdentityAgent,
+	})
+	record.OrgID = "default"
+	cfg := newTestConfigWithTokens(t, record)
+	router := newReportIdentityRouter(t, cfg)
+
+	ack := postReportIdentityReport(t, router, raw, reportIdentityReport("configured-id", reportIdentityMachineID, "pve-node4"))
+	if ack != reportIdentityMachineID {
+		t.Fatalf("precondition: acknowledged agentId = %q, want the machine ID", ack)
+	}
+	if got := reportIdentityToken(t, cfg, record.ID).Metadata["bound_agent_id"]; got != "" {
+		t.Fatalf("bound_agent_id = %q, want nothing recorded while the identities disagree", got)
+	}
+	if _, ok := router.admitAgentExecToken(raw, "configured-id", "pve-node4"); !ok {
+		t.Fatal("the agent's command registration under its configured ID was refused")
+	}
+}
+
+// A report the ordering watermark rejects is answered with the stored host,
+
+// whose hostname came from another report. The binding must be judged on the
+
+// rejected report's own hostname, the one its agent's command registration
+
+// presents, never on the stored one.
+
+func TestReportedIdentityJudgesAReplayedReportByItsOwnHostname(t *testing.T) {
+	const raw = "report-identity-replay-token.12345678"
+	record := newTokenRecord(t, raw, agenttokens.HostScopes(false), map[string]string{
+		"bound_hostname":               "node.site-a",
+		"deploy_job_id":                "dep_1",
+		agentExecBindingVersionKey:     agentExecBindingVersion,
+		agentbinding.DeployIdentityKey: agentbinding.DeployIdentityAgent,
+	})
+	record.OrgID = "default"
+	cfg := newTestConfigWithTokens(t, record)
+	router := newReportIdentityRouter(t, cfg)
+
+	start := time.Now().UTC().Add(-time.Minute)
+	retired := reportIdentityReport(reportIdentityMachineID, reportIdentityMachineID, "node.site-b")
+	retired.Timestamp = start
+	postReportIdentityReport(t, router, raw, retired)
+	newer := reportIdentityReport("configured-id", reportIdentityMachineID, "node")
+	newer.Timestamp = start.Add(30 * time.Second)
+	postReportIdentityReport(t, router, raw, newer)
+	if got := reportIdentityToken(t, cfg, record.ID).Metadata["bound_agent_id"]; got != "" {
+		t.Fatalf("precondition: bound_agent_id = %q before the replay", got)
+	}
+
+	postReportIdentityReport(t, router, raw, retired)
+	if got := reportIdentityToken(t, cfg, record.ID).Metadata["bound_agent_id"]; got != "" {
+		t.Fatalf("bound_agent_id = %q from a replayed report whose own hostname the token refuses", got)
+	}
+}
+
+// A failed save leaves the token exactly as it was and the next report
+
+// records the identity.
+
+func TestReportedIdentityRestoresTheTokenWhenTheSaveFails(t *testing.T) {
+	const raw = "report-identity-save-token.12345678"
+	record := autoRegisteredInstallToken(t, raw, "pve5", false)
+	cfg := newTestConfigWithTokens(t, record)
+	router := newReportIdentityRouter(t, cfg)
+
+	blocked := filepath.Join(t.TempDir(), "blocked-state")
+	failing := config.NewConfigPersistence(blocked)
+	if err := os.RemoveAll(blocked); err != nil {
+		t.Fatalf("remove persistence directory: %v", err)
+	}
+	if err := os.WriteFile(blocked, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("create persistence blocker: %v", err)
+	}
+	working := router.persistence
+	router.persistence = failing
+
+	report := reportIdentityReport("machine-e", "machine-e", "pve5")
+	postReportIdentityReport(t, router, raw, report)
+	unchanged := reportIdentityToken(t, cfg, record.ID)
+	for _, key := range []string{"bound_agent_id", agentExecBindingVersionKey} {
+		if _, present := unchanged.Metadata[key]; present {
+			t.Fatalf("%s = %q after a failed save, want it absent", key, unchanged.Metadata[key])
+		}
+	}
+	if got := unchanged.Metadata["bound_at"]; got != record.Metadata["bound_at"] {
+		t.Fatalf("bound_at = %q after a failed save, want %q", got, record.Metadata["bound_at"])
+	}
+
+	router.persistence = working
+	postReportIdentityReport(t, router, raw, report)
+	retried := reportIdentityToken(t, cfg, record.ID)
+	if got := retried.Metadata["bound_agent_id"]; got != "machine-e" {
+		t.Fatalf("bound_agent_id after the retry = %q, want machine-e", got)
+	}
+	if got := retried.Metadata[agentExecBindingVersionKey]; got != agentExecBindingVersion {
+		t.Fatalf("binding version after the retry = %q, want %q", got, agentExecBindingVersion)
+	}
+}
+
+// The ID is resolved in the request's organization, so only a token whose
+
+// command sessions run in that organization records it.
+
+func TestReportedIdentityRequiresTheTokensOwnOrganization(t *testing.T) {
+	const raw = "report-identity-org-token.12345678"
+	record := autoRegisteredInstallToken(t, raw, "pve6", false)
+	record.OrgID = "org-a"
+	cfg := newTestConfigWithTokens(t, record)
+	router := &Router{config: cfg, persistence: config.NewConfigPersistence(cfg.DataPath)}
+
+	router.recordReportedAgentIdentity("default", record.ID, "machine-f", "machine-f", "pve6")
+	if got := reportIdentityToken(t, cfg, record.ID).Metadata["bound_agent_id"]; got != "" {
+		t.Fatalf("bound_agent_id = %q from another organization's report", got)
+	}
+	router.recordReportedAgentIdentity("org-a", record.ID, "machine-f", "machine-f", "pve6")
+	if got := reportIdentityToken(t, cfg, record.ID).Metadata["bound_agent_id"]; got != "machine-f" {
+		t.Fatalf("bound_agent_id = %q, want machine-f from the token's own organization", got)
+	}
+}
+
+// A token that expired after it authenticated the report records nothing.
+
+func TestReportedIdentityIgnoresAnExpiredToken(t *testing.T) {
+	record := autoRegisteredInstallToken(t, "report-identity-expired-token.12345678", "pve8", false)
+	expired := time.Now().Add(-time.Minute)
+	record.ExpiresAt = &expired
+	cfg := newTestConfigWithTokens(t, record)
+	router := &Router{config: cfg, persistence: config.NewConfigPersistence(cfg.DataPath)}
+
+	router.recordReportedAgentIdentity("default", record.ID, "machine-h", "machine-h", "pve8")
+	if got := reportIdentityToken(t, cfg, record.ID).Metadata["bound_agent_id"]; got != "" {
+		t.Fatalf("bound_agent_id = %q on an expired token", got)
+	}
+}
+
+// The handler offers the recorder only reports the monitor applied under the
+
+// token, and only when the token snapshot qualifies, so a token that never will
+
+// (here, an agent presenting a configured ID) does not take the exclusive token
+
+// lock on every report. Mock mode discards reports and acknowledges the
+
+// presented ID unresolved, so it must not record anything on a real token.
+
+func TestReportHandlerOffersOnlyQualifyingLiveReportsToTheRecorder(t *testing.T) {
+	const raw = "report-identity-mock-token.12345678"
+	record := autoRegisteredInstallToken(t, raw, "pve7", false)
+	cfg := newTestConfigWithTokens(t, record)
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	defer monitor.Stop()
+	handler := NewUnifiedAgentHandlers(nil, monitor, nil)
+	type recorded struct{ organizationID, tokenID, presentedID, hostID, hostname string }
+	var calls []recorded
+	handler.SetReportedIdentityRecorder(func(organizationID, tokenID, presentedID, hostID, hostname string) {
+		calls = append(calls, recorded{organizationID, tokenID, presentedID, hostID, hostname})
+	})
+	post := func(presentedID string) {
+		t.Helper()
+		body, err := json.Marshal(reportIdentityReport(presentedID, "machine-g", "pve7"))
+		if err != nil {
+			t.Fatalf("marshal report: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(body))
+		attachAPITokenRecord(req, &record)
+		rec := httptest.NewRecorder()
+		handler.HandleReport(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("report status = %d: %s", rec.Code, rec.Body.String())
+		}
+	}
+
+	post("configured-id")
+	if len(calls) != 0 {
+		t.Fatalf("recorder offered a report whose presented ID was not resolved: %+v", calls)
+	}
+	post("machine-g")
+	want := recorded{"default", record.ID, "machine-g", "machine-g", "pve7"}
+	if len(calls) != 1 || calls[0] != want {
+		t.Fatalf("recorder calls = %+v, want one call %+v", calls, want)
+	}
+
+	previous := mock.IsMockEnabled()
+	if err := mock.SetEnabled(true); err != nil {
+		t.Fatalf("enable mock mode: %v", err)
+	}
+	t.Cleanup(func() { _ = mock.SetEnabled(previous) })
+	post("machine-g")
+	if len(calls) != 1 {
+		t.Fatalf("recorder calls in mock mode = %+v, want none beyond the live report", calls[1:])
 	}
 }

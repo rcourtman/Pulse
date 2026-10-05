@@ -30,7 +30,7 @@ export const AppBootstrapStatus: Component<AppBootstrapStatusProps> = (props) =>
 
   return (
     <main
-      class="flex min-h-screen items-center justify-center bg-base px-4 py-8 text-base-content"
+      class="flex min-h-screen items-center justify-center px-4 py-8 text-base-content"
       aria-labelledby="app-bootstrap-title"
     >
       <div class="w-full max-w-md rounded-md border border-border bg-surface p-6 text-center shadow-xs sm:p-8">
