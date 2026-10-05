@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "fdcffc64114bd9d7ff7a92324391a09702c3c26a",
+  "verified_at": "2026-10-05T05:54:42Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Infrastructure/resourceHealthPresentation.ts",
+    "frontend-modern/src/utils/truenasDatasetState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "b22652a0572e3be7e67505a5fc1587160c665f96389c845c110ada73a7281bcd",
+    "frontend-modern/src/components/Infrastructure/resourceHealthPresentation.ts": "eebcae07481b8dff2be38e7bdc91c1cb20247c866ea2ebea3208b0bbadfddcd6",
+    "frontend-modern/src/utils/truenasDatasetState.ts": "335fb4c7834a2b692f6e2a892b610399cf7831c6f4a5428ce391243be4746332"
+  },
+  "routes": [
+    "/truenas/storage",
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Phone drawer for archive/cold (read-only dataset): the header badge and the Needs attention list now say Dataset is read-only, where before the drawer only said Observed state Degraded",
+    "Phone and desktop drawer for the archive pool: Needs attention lists the SMART failure, the pool DEGRADED alert with its mirror detail, and ZFS pool archive is DEGRADED. Before, the second incident was missing and a generic Resource Health Issue line stood in its place",
+    "Machines at 1700: host rows with no health issue are unchanged"
+  ],
+  "interactions": [
+    "Tapped archive and archive/cold on a 390 phone and read each drawer",
+    "Clicked the archive pool at 1440 and read the Needs attention list"
+  ]
+}
