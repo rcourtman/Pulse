@@ -8100,6 +8100,14 @@ read, confirm clear, then release the obsolete response at desktop and phone
 widths. Scripted API responses establish component behaviour, not installed
 backend deletion or destination delivery.
 
+### Platform overviews may lead with their own incident table
+
+A platform Overview that leads with its provider's health signals reuses
+that platform's existing incident table rather than a new summary card:
+the vSphere Overview renders `VsphereAlertsTable` with `showToolbar={false}`
+above its hosts table, only when signals exist, matching the TrueNAS
+Overview's health-alert table. Filtering stays on the platform's Health tab.
+
 ### Large platform notices keep the inventory in view
 
 `PlatformOutdatedAgentNotice` is maintenance guidance, not an incident, so it

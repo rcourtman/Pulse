@@ -53,6 +53,7 @@ import type { Resource } from '@/types/resource';
 import { VsphereHostsTable } from './VsphereHostsTable';
 import {
   VMWARE_TAB_SPECS,
+  buildVmwareIncidentRows,
   buildVmwarePageModel,
   getVmwarePageTabSpecs,
   type VmwarePageModel,
@@ -207,7 +208,10 @@ export function VmwarePageSurface() {
   const activeTab = createMemo<VmwarePageTabId>(() =>
     tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
   );
-  const shouldHydrateTab = (tab: VmwarePageTabId) => activeTab() === tab;
+  // The overview leads with vCenter's own health signals, so it reads the
+  // Health tab's resource set as well as its own hosts and VMs.
+  const shouldHydrateTab = (tab: VmwarePageTabId) =>
+    activeTab() === tab || (tab === 'health' && activeTab() === 'overview');
   const createTabResources = (tab: VmwarePageTabId) =>
     useUnifiedResources({
       query: VMWARE_RESOURCE_QUERY_BY_TAB[tab],
@@ -258,6 +262,9 @@ export function VmwarePageSurface() {
     },
   );
   const model = createMemo(() => buildVmwarePageModel(resources(), activityTimeline() ?? []));
+  const overviewIncidents = createMemo(() =>
+    activeTab() === 'overview' ? buildVmwareIncidentRows(healthResources.resources()) : [],
+  );
   const agentUpdateTargetVersion = createMemo(
     () => updateStore.versionInfo()?.agentUpdateTargetVersion,
   );
@@ -343,6 +350,15 @@ export function VmwarePageSurface() {
             />
             <Show when={activeTab() === 'overview'}>
               <div class="space-y-4">
+                <Show when={overviewIncidents().length > 0}>
+                  <VsphereAlertsTable
+                    incidents={overviewIncidents()}
+                    emptyIcon={vmwareIcon()}
+                    emptyTitle="No active vSphere health signals"
+                    emptyDescription="vSphere triggered alarms and overall health signals appear here when vCenter reports them."
+                    showToolbar={false}
+                  />
+                </Show>
                 <VmwareOverview
                   model={model}
                   metricDisplayMode={metricDisplayMode}
