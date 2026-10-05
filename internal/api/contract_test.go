@@ -44,6 +44,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/resourceapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/bootstrap"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/deploy"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -118,6 +119,35 @@ func TestAgentConfigFetchAuditCapacityContract(t *testing.T) {
 	}
 	if successes != 2 || failures != 1 || len(handler.configFetchAudits.last) != maxAgentConfigFetchAudits {
 		t.Fatalf("capacity audit contract: successes=%d failures=%d remembered=%d", successes, failures, len(handler.configFetchAudits.last))
+	}
+}
+
+// The deploy enrollment response hands the agent its runtime credential and
+// nothing that names its identity. An agent identity invented here once bound
+// the command channel to an ID the agent abandons after its first report.
+func TestContractDeployEnrollResponseCarriesNoAgentIdentity(t *testing.T) {
+	h, store := newEnrollTestHandlers(t)
+	jobID, targetID := seedEnrollJobAndTarget(t, store, deploy.TargetEnrolling)
+	rec := mintTestBootstrapToken(t, h.config, jobID, targetID, "pve-node2")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, "pve-node2"))
+	attachAPITokenRecord(req, rec)
+	rr := httptest.NewRecorder()
+	h.HandleEnroll(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("enroll status = %d: %s", rr.Code, rr.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	keys := make([]string, 0, len(resp))
+	for key := range resp {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	if want := []string{"reportInterval", "runtimeToken", "runtimeTokenId"}; !reflect.DeepEqual(keys, want) {
+		t.Fatalf("enroll response keys = %v, want %v", keys, want)
 	}
 }
 

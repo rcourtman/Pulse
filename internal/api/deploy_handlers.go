@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/deploy"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -915,11 +916,17 @@ func (h *DeployHandlers) HandleEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	runtimeRecord.OrgID = bootstrapToken.OrgID
-	canonicalAgentID := fmt.Sprintf("agent-%s", req.Hostname)
+	// Bind the runtime token to the deployed node's hostname only. The
+	// agent's identity is the machine-derived ID its reports carry, which
+	// Pulse acknowledges and the agent persists, so the first command-channel
+	// registration backfills that ID. Enrollment used to invent
+	// agent-<hostname> here and bind to it, which pinned the command channel
+	// to an identity the agent abandons after its first acknowledged report.
 	runtimeRecord.Metadata = map[string]string{
-		"bound_agent_id": canonicalAgentID,
-		"bound_hostname": req.Hostname,
-		"deploy_job_id":  jobID,
+		"bound_hostname":               req.Hostname,
+		"deploy_job_id":                jobID,
+		agentExecBindingVersionKey:     agentExecBindingVersion,
+		agentbinding.DeployIdentityKey: agentbinding.DeployIdentityAgent,
 	}
 	setAPITokenOwnerUserID(runtimeRecord, apiTokenOwnerUserID(*bootstrapToken))
 
@@ -969,7 +976,6 @@ func (h *DeployHandlers) HandleEnroll(w http.ResponseWriter, r *http.Request) {
 
 	// 12. Return runtime token + config to agent.
 	resp := map[string]any{
-		"agentId":        canonicalAgentID,
 		"runtimeToken":   runtimeRaw,
 		"runtimeTokenId": runtimeRecord.ID,
 		"reportInterval": "30s",

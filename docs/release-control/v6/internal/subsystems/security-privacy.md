@@ -1469,6 +1469,31 @@ binding version through the first-use path, an unrelated hostname still fails
 closed, and the registration-bound hostname is never overwritten by an
 equivalent spelling the agent reports, because the install grant compares
 against it.
+Deploy-enrolled runtime tokens follow the same immutable-identity rule.
+`POST /api/agents/agent/enroll` binds the runtime token to the enrolled node's
+hostname and the current binding version only, marks its identity as coming
+from the agent (`deploy_identity_binding=agent`), and returns no agent
+identity, so the agent's first command registration backfills its own
+machine-derived ID. Enrollment used to bind and return an invented
+`agent-<hostname>`, which the agent abandons once Pulse acknowledges its
+reports. A token still carrying that placeholder, its `deploy_job_id`, and no
+identity marker may move exactly once to the registering agent's ID on exactly
+the same hostname (case-insensitive, never the short-name equivalence),
+whatever its binding version, and the move persists
+`deploy_identity_binding=repaired` in the same save. Any other identity or
+hostname presented to such a token is refused outright rather than handed to
+the legacy hostname migration, which would rebind without the marker. A marked
+token never moves again, even after a hostname rebind recreates the
+`agent-<hostname>` shape, and a non-deploy token of that shape, a different or
+merely equivalent hostname, or a deploy token bound to a real ID fails closed;
+the agent config gate consumes the same decision.
+`TestEvaluateRepairsDeployPlaceholderBindingOnce` and
+`TestEvaluateCurrentDeployTokenBackfillsTheAgentIdentity` in
+`internal/api/agentbinding/policy_test.go`, and
+`TestDeployPlaceholderTokenMovesToTheRegisteringAgentOnce`,
+`TestVersionlessDeployPlaceholderCannotBeMovedTwice`, and
+`TestCurrentDeployTokenNeverMovesOnceBound` in
+`internal/api/security_regression_test.go` pin that boundary.
 Pulse-minted install tokens now carry a server-authored command-policy intent
 in addition to first-use binding metadata. That intent grants no independent
 authority: first-report convergence requires the same shared binding decision

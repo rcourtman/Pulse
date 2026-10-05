@@ -6485,6 +6485,18 @@ a cluster out for good. This adds no backup, restore, retention, snapshot, or
 recovery authority. `internal/api/deploy_handlers_test.go` and
 `internal/deploy/store_test.go` pin the admission and the query.
 
+### Deploy token identity repair is one persisted transition
+
+The one-time move of a deploy runtime token from the placeholder
+`agent-<hostname>` identity to the registering agent's ID is written through
+the existing API-token persistence inside the same command-channel admission
+as other binding repairs, together with the `deploy_identity_binding=repaired`
+marker that prevents a second move. When that save fails, the previous binding
+metadata and marker are restored and registration is refused, so a failed
+write never leaves a half-moved token. This adds no backup, restore, retention, snapshot, or
+recovery authority. `internal/api/security_regression_test.go` pins the
+persisted binding.
+
 ### Destination severity policy preserves notification recovery identity
 
 Email, webhook, Apprise, and Relay minimum-severity floors persist through
