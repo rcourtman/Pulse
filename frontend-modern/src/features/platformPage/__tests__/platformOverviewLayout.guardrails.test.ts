@@ -322,18 +322,24 @@ describe('platform overview layout guardrails', () => {
       expect(source).toContain('platform-table-mobile-w-30');
     }
     // The images phone row keeps image, size and the update verdict; host and
-    // consumers move to the row expansion so the verdict is not clipped.
+    // consumers move to the row expansion so the verdict is not clipped. In
+    // the tablet band and at md the Update check column keeps the ~122px its
+    // longest badge needs ("Update available", "Managed by Pulse"), taken
+    // from Size in the band and from Host, Used by and Size at md.
     expect(dockerImagesTableSource).toMatch(
-      /sortKey="size"[\s\S]{0,120}?class="platform-table-mobile-w-20 md:w-\[12%\]"/,
+      /sortKey="image"[\s\S]{0,120}?class="platform-table-mobile-w-30 md:w-\[30%\]"\s*bandWidth=\{30\}/,
     );
     expect(dockerImagesTableSource).toMatch(
-      /sortKey="host"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[18%\]"/,
+      /sortKey="size"[\s\S]{0,120}?class="platform-table-mobile-w-20 md:w-\[11%\]"\s*bandWidth=\{12\}/,
     );
     expect(dockerImagesTableSource).toMatch(
-      /sortKey="usedBy"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[24%\]"/,
+      /sortKey="host"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[17%\]"\s*bandWidth=\{17\.5\}/,
     );
     expect(dockerImagesTableSource).toMatch(
-      /sortKey="update"[\s\S]{0,120}?class="platform-table-mobile-w-25 md:w-\[16%\]"/,
+      /sortKey="usedBy"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[23%\]"\s*bandWidth=\{17\.5\}/,
+    );
+    expect(dockerImagesTableSource).toMatch(
+      /sortKey="update"[\s\S]{0,120}?class="platform-table-mobile-w-25 md:w-\[19%\]"\s*bandWidth=\{23\}/,
     );
     expect(dockerServicesTableSource).toMatch(
       /sortKey="mode"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[8%\]"/,
