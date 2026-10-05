@@ -445,4 +445,43 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(getByText('Trusted')).toBeInTheDocument();
     expect(getByText('Example CA')).toBeInTheDocument();
   });
+
+  it('keeps the other attention reasons when an open alert already states one', () => {
+    // A TrueNAS pool carries its own degraded alert and the copied disk alert.
+    // One matching open alert must not hide the pool's own reason.
+    const resource = baseResource({
+      type: 'storage',
+      status: 'degraded',
+      incidentSummary: 'Device /dev/sdc has SMART test failures.',
+      incidents: [
+        {
+          code: 'truenas_volume_status',
+          severity: 'warning',
+          summary: 'Pool archive is DEGRADED: one member of mirror-0 is faulted.',
+        },
+        {
+          code: 'truenas_smart',
+          severity: 'warning',
+          summary: 'Device /dev/sdc has SMART test failures.',
+        },
+      ],
+      alerts: [
+        {
+          id: 'smart-sdc',
+          type: 'smart',
+          level: 'warning',
+          // TrueNAS alert text can differ from the incident by its full stop.
+          message: 'Device /dev/sdc has SMART test failures',
+        },
+      ],
+    } as Partial<Resource>);
+
+    const { getAllByText, getByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+
+    expect(getByText('Needs attention')).toBeInTheDocument();
+    expect(
+      getByText('Pool archive is DEGRADED: one member of mirror-0 is faulted.'),
+    ).toBeInTheDocument();
+    expect(getAllByText(/Device \/dev\/sdc has SMART test failures/)).toHaveLength(1);
+  });
 });
