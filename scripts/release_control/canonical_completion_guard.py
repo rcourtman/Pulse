@@ -321,6 +321,13 @@ def infer_impacted_subsystems(
                     "touched_runtime_files": [],
                     "cycle_artifact_files": [],
                     "verification": dict(rule.get("verification", {})),
+                    # Ownership travels with the entry because the guards pass
+                    # this entry, not the registry rule, as the `rule` argument
+                    # of staged_verification_files_for_requirement; without it
+                    # a requirement's allow_same_subsystem_tests could never
+                    # match while subsystem_lookup reported that it did.
+                    "owned_prefixes": list(rule.get("owned_prefixes", [])),
+                    "owned_files": list(rule.get("owned_files", [])),
                 },
             )
             entry["touched_runtime_files"].append(path)
