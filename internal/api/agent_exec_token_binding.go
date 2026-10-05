@@ -60,12 +60,13 @@ func agentExecHostnamesMatch(bound, requested string) bool {
 // already-issued agent exec token accepts a registering agent identity, and
 // which metadata repair the admission path must persist when it does.
 type agentExecBindingDecision struct {
-	admit          bool
-	firstBind      bool
-	legacyMigrate  bool
-	rebindHostname bool
-	backfillID     bool
-	backfillHost   bool
+	admit                bool
+	firstBind            bool
+	legacyMigrate        bool
+	rebindHostname       bool
+	backfillID           bool
+	backfillHost         bool
+	repairDeployIdentity bool
 }
 
 // evaluateAgentExecBinding computes the admission decision for a token record
@@ -84,6 +85,8 @@ func evaluateAgentExecBinding(record *config.APITokenRecord, requestedID, reques
 		rebindHostname: decision.RebindHostname,
 		backfillID:     decision.BackfillID,
 		backfillHost:   decision.BackfillHost,
+
+		repairDeployIdentity: decision.RepairDeployIdentity,
 	}
 }
 
@@ -235,11 +238,15 @@ func (r *Router) admitAgentExecToken(token string, agentID string, hostname stri
 			"bound_at",
 			agentExecBindingVersionKey,
 			agenttokens.RuntimeRoleMetadataKey,
+			agentbinding.DeployIdentityKey,
 		)
 		record.Metadata["bound_agent_id"] = requestedID
 		record.Metadata["bound_at"] = time.Now().UTC().Format(time.RFC3339)
 		record.Metadata[agentExecBindingVersionKey] = agentExecBindingVersion
 		record.Metadata[agenttokens.RuntimeRoleMetadataKey] = agenttokens.CredentialKindLegacyFullTrust
+		if decision.repairDeployIdentity {
+			record.Metadata[agentbinding.DeployIdentityKey] = agentbinding.DeployIdentityRepaired
+		}
 		if r.persistence != nil {
 			if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
 				restoreAgentExecMetadata(record.Metadata, previousMetadata)

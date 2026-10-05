@@ -10975,6 +10975,13 @@ when persistence fails. `TestHandleEnroll_Success`,
 `internal/api/deploy_handlers_test.go` prove the persisted success state and
 both failed-commit responses.
 
+The success response carries exactly `runtimeToken`, `runtimeTokenId`, and
+`reportInterval`. It names no agent identity: the agent keeps the
+machine-derived ID its reports carry, and the runtime token binds that ID on
+the agent's first command registration.
+`TestContractDeployEnrollResponseCarriesNoAgentIdentity` in
+`internal/api/contract_test.go` pins the shape.
+
 ### Notification destination writes report committed truth
 
 `PUT /api/notifications/email`, `PUT /api/notifications/apprise`, and webhook
