@@ -286,7 +286,7 @@ export function PatrolSuppressionRules(props: { openForLink?: boolean } = {}) {
                 <h2 class="text-base font-semibold text-base-content">Remove suppression rule?</h2>
                 <p class="text-sm leading-5 text-muted">
                   Only this exact manual rule will be removed. Future matching findings can appear.
-                  existing dismissals and history stay unchanged.
+                  Existing dismissals and history stay unchanged.
                 </p>
               </div>
               <div
