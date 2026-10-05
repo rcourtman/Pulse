@@ -307,7 +307,7 @@ const buildMemberRow = (
   // still rolls up from the prioritised highlight list.
   const problem =
     (agentConnection && agentAttachmentProblem(agentConnection)) ??
-    primaryRowProblem(fleetHighlights);
+    primaryRowProblem(visibleFleetGovernanceSignals(fleetSignals, Infinity));
   return {
     id: member.id,
     nodeIdentity: member.nodeIdentity?.trim() || undefined,
@@ -423,7 +423,8 @@ const buildRow = (
     lastErrorMessage,
     fleetSignals,
     fleetHighlights,
-    problem: attachmentProblem ?? primaryRowProblem(fleetHighlights),
+    problem:
+      attachmentProblem ?? primaryRowProblem(visibleFleetGovernanceSignals(fleetSignals, Infinity)),
     enabled: primaryConnection.enabled,
     canEdit: EDITABLE_CONNECTION_TYPES.includes(primaryConnection.type),
     canPause: primaryConnection.capabilities.supportsPause,

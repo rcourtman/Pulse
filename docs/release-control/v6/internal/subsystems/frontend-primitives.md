@@ -2633,7 +2633,9 @@ Agent`), with the plain-language source phrase available through accessible
    always-on version column for Pulse Agent; exact version text belongs in the
    edit/detail surfaces, while the landing table only surfaces a compact
    warning badge when an attached or standalone agent actually has an update
-   available. That same table boundary must reuse the `System` cell for compact
+   available. That badge is the row's only version flag: the row adds no
+   `Version behind` problem line beneath it, and the source band counts those
+   rows as agent updates available rather than as needing attention. That same table boundary must reuse the `System` cell for compact
    standalone-agent identity such as `Unraid 7.1.0`; raw reported addresses
    belong in the governed Manage detail or an explicitly expanded
    cluster-member row, not an always-on diagnostics column.

@@ -6,7 +6,9 @@ import {
   agentConnectionIDsForInfrastructureRow,
 } from '../InfrastructureSourceManager';
 import {
+  fleetGovernanceSignalsForConnection,
   primaryRowProblem,
+  visibleFleetGovernanceSignals,
   type FleetGovernanceSignal,
   type InfrastructureSystemMemberRow,
   type InfrastructureSystemRow,
@@ -396,6 +398,50 @@ describe('InfrastructureSourceManager setup summary', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Agent Doctor for behind-host' }));
     expect(onOpenAgentDoctor).toHaveBeenCalledWith(['agent:behind-host']);
+  });
+
+  it('flags an outdated agent once, as an update rather than as attention', () => {
+    const outdated = connectionFixture({
+      id: 'agent:outdated-host',
+      name: 'outdated-host',
+      agentUpdateAvailable: true,
+      fleet: {
+        enrollmentState: 'enrolled',
+        livenessState: 'active',
+        versionDrift: 'behind',
+        adapterHealth: 'healthy',
+        configRollout: 'reported',
+        credentialStatus: 'verified',
+        updateStatus: 'update-available',
+        remoteControl: 'disabled',
+      },
+    });
+    const fleetSignals = fleetGovernanceSignalsForConnection(outdated);
+    const outdatedRow = row({
+      connection: outdated,
+      agentUpdateCount: 1,
+      fleetSignals,
+      fleetHighlights: visibleFleetGovernanceSignals(fleetSignals),
+      problem: primaryRowProblem(visibleFleetGovernanceSignals(fleetSignals, Infinity)),
+    });
+
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => [outdatedRow]}
+        discoveredNodes={() => []}
+        discoveryEnabled={false}
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly={false}
+        onOpenAgentDoctor={vi.fn()}
+      />
+    ));
+
+    expect(
+      screen.getByRole('button', { name: 'Open Agent Doctor for outdated-host' }),
+    ).toHaveTextContent('Agent update');
+    expect(screen.queryByText('Version behind')).toBeNull();
+    expect(screen.queryByText(/needs? attention/i)).toBeNull();
+    expect(screen.getByText('1 agent update available')).toBeInTheDocument();
   });
 
   it('still counts actionable member posture when the cluster parent is healthy', () => {
