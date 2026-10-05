@@ -1,6 +1,8 @@
 package models
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"sync"
@@ -92,7 +94,12 @@ func TestStatePointLookupsMatchWholeLists(t *testing.T) {
 			t.Fatalf("exact source lookup %q differs from the existing whole-list lookup", id)
 		}
 	}
-	before := s.GetSnapshot()
+	// Freeze the expectation independently of the clone under test. A
+	// defective clone must not mutate both the source and its reference.
+	before, err := json.Marshal(s.GetSnapshot())
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, fromList := range []bool{false, true} {
 		host, _ := s.GetHost("host")
 		docker, _ := s.GetDockerHost("docker")
@@ -111,7 +118,8 @@ func TestStatePointLookupsMatchWholeLists(t *testing.T) {
 		docker.Containers[0].Labels["app"] = "changed"
 		docker.NetworkInterfaces[0].Addresses[0] = "changed"
 		docker.AgentModules[0].State = "changed"
-		if !reflect.DeepEqual(before, s.GetSnapshot()) {
+		after, err := json.Marshal(s.GetSnapshot())
+		if err != nil || !bytes.Equal(before, after) {
 			t.Fatal("point or list result aliases mutable source fields")
 		}
 	}
