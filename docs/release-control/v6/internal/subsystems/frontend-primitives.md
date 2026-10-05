@@ -4825,7 +4825,10 @@ acknowledged severity, and reveals overflow through an in-place accessible
 disclosure rather than an inert hidden-count row. Aggregate drawers that include
 alerts from child resources must also preserve the affected resource identity
 and alert metric beside that text rather than collapsing them into generic VM
-or host labels. The remaining Overview rows are additive
+or host labels. The Mail Gateway drawer receives its row's open alerts, matched
+across the gateway's identity aliases, and its header status follows them, so
+it never shows "Healthy" beside an active warning; its inline detail row sets
+`whitespace-normal` because platform table cells do not wrap. The remaining Overview rows are additive
 operator context that the parent table row cannot carry, such as OS/runtime,
 Pulse observation or action coverage, primary reachability, protection gaps,
 pending updates, or an identified service. Routine health, placement, and

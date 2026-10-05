@@ -1146,6 +1146,16 @@ the daemon tally as width shrinks, keeps one five-value phone projection
 (cluster, health, OSDs, pools, capacity) whose values each fit whole, and
 leaves quorum membership and the FSID to the cluster disclosure, where the
 FSID stays searchable and is shown in full.
+The Mail Gateway row reflects its open alerts, not only the provider status:
+a reachable gateway with an unacknowledged alert (mail queued past its age
+threshold, a backlog) renders and filters as needing attention, names the alert
+type under the gateway name, and its expansion leads with the shared drawer
+attention section carrying the exact alert message. Alerts are matched across
+the row's identity aliases, because they are keyed by the PMG instance id while
+the row carries the unified id. Its phone projection is the five-track
+instance, uptime, mail, queue and deferred set with a 40 percent identity, so
+gateways that share a name prefix stay distinguishable; node count lives in the
+expansion.
 The Proxmox host table drops temperature from its phone projection
 (container widths under 440px) so the node name, expansion toggle, and
 status dot share the same five-column shape as the guest table beneath it,
