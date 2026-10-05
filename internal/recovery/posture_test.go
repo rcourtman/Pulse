@@ -55,7 +55,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantFresh:    ProtectionFreshnessCurrent,
 			wantVerify:   ProtectionVerificationVerified,
 			wantCoverage: ProtectionCoverageComplete,
-			wantText:     "current subject-linked backup",
+			wantText:     "A recent backup is available",
 		},
 		{
 			name: "stale success needs attention",
@@ -66,7 +66,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantFresh:    ProtectionFreshnessStale,
 			wantVerify:   ProtectionVerificationStale,
 			wantCoverage: ProtectionCoverageComplete,
-			wantText:     "older than",
+			wantText:     "newest confirmed backup is older than 7 days",
 		},
 		{
 			name: "missing expected verification needs attention",
@@ -79,7 +79,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantFresh:    ProtectionFreshnessCurrent,
 			wantVerify:   ProtectionVerificationUnverified,
 			wantCoverage: ProtectionCoverageComplete,
-			wantText:     "verification evidence",
+			wantText:     "verification is missing or overdue",
 		},
 		{
 			name: "newer provider failure invalidates protected claim",
@@ -94,7 +94,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantFresh:    ProtectionFreshnessCurrent,
 			wantVerify:   ProtectionVerificationVerified,
 			wantCoverage: ProtectionCoverageComplete,
-			wantText:     "newer provider failure",
+			wantText:     "one of its backup sources has reported a failure",
 		},
 		{
 			name: "complete snapshot-only history is unprotected",
@@ -114,7 +114,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantFresh:    ProtectionFreshnessUnknown,
 			wantVerify:   ProtectionVerificationUnknown,
 			wantCoverage: ProtectionCoverageNone,
-			wantText:     "snapshots alone",
+			wantText:     "A snapshot is not a separate backup",
 		},
 		{
 			name: "partial provider history is attention when a backup exists",
@@ -128,7 +128,21 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantFresh:    ProtectionFreshnessCurrent,
 			wantVerify:   ProtectionVerificationVerified,
 			wantCoverage: ProtectionCoveragePartial,
-			wantText:     "incomplete",
+			wantText:     "only part of the backup history",
+		},
+		{
+			name: "partial history without any backup does not claim one exists",
+			summaries: func() []ProtectionProviderSummary {
+				summary := protectionTestSummary(now, nil)
+				summary.HistoryCompleteness = ProtectionHistoryPartial
+				summary.BackupPointCount = 0
+				return []ProtectionProviderSummary{summary}
+			}(),
+			wantState:    ProtectionStateAttention,
+			wantFresh:    ProtectionFreshnessUnknown,
+			wantVerify:   ProtectionVerificationUnknown,
+			wantCoverage: ProtectionCoveragePartial,
+			wantText:     "cannot confirm a backup",
 		},
 		{
 			name: "permission denied is unknown",
@@ -142,7 +156,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantFresh:    ProtectionFreshnessCurrent,
 			wantVerify:   ProtectionVerificationVerified,
 			wantCoverage: ProtectionCoverageUnknown,
-			wantText:     "permissions are unavailable",
+			wantText:     "cannot read the backup history",
 		},
 		{
 			name: "confirmed PBS recovery is not invalidated by an unknown legacy provider",
@@ -166,7 +180,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantFresh:    ProtectionFreshnessCurrent,
 			wantVerify:   ProtectionVerificationVerified,
 			wantCoverage: ProtectionCoverageUnknown,
-			wantText:     "does not invalidate",
+			wantText:     "does not change this backup",
 		},
 		{
 			name:         "no provider evidence is unknown",
@@ -175,7 +189,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantFresh:    ProtectionFreshnessUnknown,
 			wantVerify:   ProtectionVerificationUnknown,
 			wantCoverage: ProtectionCoverageUnknown,
-			wantText:     "no complete provider history",
+			wantText:     "no readable backup history",
 		},
 	}
 
@@ -338,7 +352,7 @@ func TestBuildProtectionPostureDoesNotTreatSuccessfulTaskAsAvailableBackup(t *te
 	if got.LastSuccessfulPointAt != nil {
 		t.Fatalf("last successful point = %v, want nil for task-only evidence", got.LastSuccessfulPointAt)
 	}
-	if !strings.Contains(got.Explanation, "no qualifying subject-linked backup") {
+	if !strings.Contains(got.Explanation, "found no backup") {
 		t.Fatalf("explanation = %q, want no qualifying backup", got.Explanation)
 	}
 }
@@ -434,5 +448,25 @@ func TestDeriveProtectionPostureFailsClosedToDefaultPolicy(t *testing.T) {
 	}
 	if posture.Freshness != ProtectionFreshnessCurrent {
 		t.Fatalf("freshness = %q, want current after default-policy fallback", posture.Freshness)
+	}
+}
+
+func TestFormatPostureWindowReadsAsDaysOrHours(t *testing.T) {
+	for _, tc := range []struct {
+		window time.Duration
+		want   string
+	}{
+		{7 * 24 * time.Hour, "7 days"},
+		{24 * time.Hour, "1 day"},
+		{36 * time.Hour, "36 hours"},
+		{time.Hour, "1 hour"},
+		{30 * time.Minute, "30 minutes"},
+		{90 * time.Minute, "90 minutes"},
+		{time.Minute, "1 minute"},
+		{0, "0 minutes"},
+	} {
+		if got := formatPostureWindow(tc.window); got != tc.want {
+			t.Fatalf("formatPostureWindow(%s) = %q, want %q", tc.window, got, tc.want)
+		}
 	}
 }

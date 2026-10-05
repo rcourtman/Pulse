@@ -3808,6 +3808,16 @@ expected. Stale, failed, partial, or unverified evidence is attention;
 unprotected requires complete evidence of no qualifying backup; unavailable
 identity, history, collection, or permission evidence fails to unknown.
 Snapshots remain distinct and never prove independent recovery by themselves.
+The posture `explanation` is user-facing copy (the Coverage row tooltip and
+expansion render it verbatim), so it is written in plain words rather than the
+model's vocabulary: "recent backup", "full backup history", "one of its backup
+sources has reported a failure", "verification is missing or overdue", and
+the stale case names the policy window ("the newest confirmed backup is older
+than 7 days") through `formatPostureWindow`, which never rounds a sub-hour or
+fractional window up. Copy only claims a backup exists on branches that have
+one. Terms such as
+"subject-linked", "provider history" and "freshness window" stay in code and
+contracts, not in the explanation.
 
 The per-tenant recovery store persists provider observations and a materialized
 posture index, refreshes it after writes, reconciliation, migration, identity
