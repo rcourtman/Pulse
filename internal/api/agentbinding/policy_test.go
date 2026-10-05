@@ -160,3 +160,97 @@ func TestEvaluateCurrentDeployTokenBackfillsTheAgentIdentity(t *testing.T) {
 		t.Fatalf("current deploy token admitted another host: %+v", decision)
 	}
 }
+
+// A report may name the agent on a token bound only to its hostname, but only
+// with the identity the command channel would bind for that same agent, and
+// never by moving, repairing, or rehosting a binding.
+func TestEvaluateReportedIdentityRecordsOnlyWhatCommandRegistrationWouldBind(t *testing.T) {
+	deployToken := func() *config.APITokenRecord {
+		return &config.APITokenRecord{OrgID: "default", Metadata: map[string]string{
+			"bound_hostname":  "delly2",
+			"deploy_job_id":   "dep_1",
+			VersionKey:        Version,
+			DeployIdentityKey: DeployIdentityAgent,
+		}}
+	}
+	autoRegistered := func() *config.APITokenRecord {
+		return &config.APITokenRecord{OrgID: "default", Metadata: map[string]string{
+			"install_type":                     "pve",
+			"issued_via":                       IssuedViaConfig,
+			"bound_hostname":                   "pve1",
+			agenttokens.RuntimeRoleMetadataKey: agenttokens.CredentialKindMonitoringCollector,
+		}}
+	}
+	legacyHostnameOnly := func() *config.APITokenRecord {
+		return &config.APITokenRecord{Metadata: map[string]string{"bound_hostname": "node.example"}}
+	}
+
+	for _, test := range []struct {
+		name   string
+		record *config.APITokenRecord
+		host   string
+	}{
+		{name: "deploy runtime token", record: deployToken(), host: "delly2"},
+		{name: "deploy runtime token on an equivalent hostname", record: deployToken(), host: "delly2.lan"},
+		{name: "Proxmox auto-registered collector", record: autoRegistered(), host: "pve1"},
+		{name: "pre-v6.1.1 hostname-only token", record: legacyHostnameOnly(), host: "NODE.example"},
+	} {
+		if !EvaluateReportedIdentity(test.record, "machine-id", "machine-id", test.host) {
+			t.Fatalf("%s: report identity not recorded", test.name)
+		}
+		if EvaluateReportedIdentity(test.record, "configured-id", "machine-id", test.host) {
+			t.Fatalf("%s: recorded the resolved identity although the agent presented another", test.name)
+		}
+		if EvaluateReportedIdentity(test.record, "", "", test.host) {
+			t.Fatalf("%s: recorded an empty identity", test.name)
+		}
+	}
+
+	with := func(record *config.APITokenRecord, mutate func(*config.APITokenRecord)) *config.APITokenRecord {
+		mutate(record)
+		return record
+	}
+	for _, test := range []struct {
+		name   string
+		record *config.APITokenRecord
+		host   string
+	}{
+		{name: "another hostname", record: deployToken(), host: "other-node"},
+		{name: "an already bound ID", host: "delly2", record: with(deployToken(), func(r *config.APITokenRecord) {
+			r.Metadata["bound_agent_id"] = "other-machine"
+		})},
+		{name: "an ID already recorded", host: "delly2", record: with(deployToken(), func(r *config.APITokenRecord) {
+			r.Metadata["bound_agent_id"] = "machine-id"
+		})},
+		// Evaluate would legacy-migrate this one on command registration; the
+		// report path never moves an ID.
+		{name: "a versionless token already bound to an ID", host: "node.example", record: with(legacyHostnameOnly(), func(r *config.APITokenRecord) {
+			r.Metadata["bound_agent_id"] = "other-machine"
+		})},
+		{name: "a historical deploy placeholder", host: "delly2", record: with(deployToken(), func(r *config.APITokenRecord) {
+			r.Metadata["bound_agent_id"] = "agent-delly2"
+			delete(r.Metadata, DeployIdentityKey)
+		})},
+		{name: "a token bound to no hostname", host: "node.example", record: &config.APITokenRecord{OrgID: "default", Metadata: map[string]string{
+			"install_type": "host",
+			"issued_via":   IssuedViaConfig,
+		}}},
+		{name: "a token bound to several organizations", host: "delly2", record: with(deployToken(), func(r *config.APITokenRecord) {
+			r.OrgID = ""
+			r.OrgIDs = []string{"org-a", "org-b"}
+		})},
+		{name: "an action-runner credential", host: "delly2", record: with(deployToken(), func(r *config.APITokenRecord) {
+			r.Metadata[agenttokens.RuntimeRoleMetadataKey] = agenttokens.CredentialKindActionRunner
+		})},
+		{name: "an unsupported runtime role", host: "delly2", record: with(deployToken(), func(r *config.APITokenRecord) {
+			r.Metadata[agenttokens.RuntimeRoleMetadataKey] = "future-role"
+		})},
+	} {
+		if EvaluateReportedIdentity(test.record, "machine-id", "machine-id", test.host) {
+			t.Fatalf("%s: report identity recorded", test.name)
+		}
+	}
+	if EvaluateReportedIdentity(nil, "machine-id", "machine-id", "delly2") {
+		t.Fatal("nil token recorded an identity")
+	}
+}

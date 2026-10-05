@@ -5641,6 +5641,66 @@ func TestMockModeDiscardsRealHostReports(t *testing.T) {
 	})
 }
 
+// Report ingest records an agent's identity on its token only for a host the
+// monitor resolved and holds under that token, judged on the report's own
+// hostname. That rests on three properties of the returned host, pinned here:
+// an applied report carries the token's ID, a report the ordering watermark
+// rejects returns the stored host with the stored hostname rather than its
+// own, and mock mode's discard acknowledgement carries no token at all.
+func TestApplyHostReportStampsTheTokenOnlyOnHostsItHolds(t *testing.T) {
+	token := &config.APITokenRecord{ID: "token-a", Name: "agent token"}
+	newMonitor := func(t *testing.T) *Monitor {
+		t.Helper()
+		return &Monitor{
+			state:               models.NewState(),
+			resourceStore:       unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil)),
+			hostContinuityStore: config.NewHostContinuityStore(t.TempDir(), nil),
+			rateTracker:         NewRateTracker(),
+		}
+	}
+	report := func(hostname string, at time.Time) agentshost.Report {
+		return agentshost.Report{
+			Agent:     agentshost.AgentInfo{ID: "machine-a", Version: "6.5.0", IntervalSeconds: 30},
+			Host:      agentshost.HostInfo{ID: "machine-a", MachineID: "machine-a", Hostname: hostname, Platform: "linux"},
+			Timestamp: at,
+		}
+	}
+
+	previous := mock.IsMockEnabled()
+	mustSetMockEnabled(t, false)
+	t.Cleanup(func() { _ = mock.SetEnabled(previous) })
+
+	m := newMonitor(t)
+	start := time.Now().UTC().Add(-time.Minute)
+	first := report("node.site-b", start)
+	applied, err := m.ApplyHostReport(first, token)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	if applied.ID != "machine-a" || applied.TokenID != token.ID || applied.Hostname != "node.site-b" {
+		t.Fatalf("applied host = %q token %q hostname %q, want machine-a under %q as node.site-b", applied.ID, applied.TokenID, applied.Hostname, token.ID)
+	}
+	if _, err := m.ApplyHostReport(report("node", start.Add(30*time.Second)), token); err != nil {
+		t.Fatalf("ApplyHostReport newer: %v", err)
+	}
+	replayed, err := m.ApplyHostReport(first, token)
+	if err != nil {
+		t.Fatalf("ApplyHostReport replay: %v", err)
+	}
+	if replayed.TokenID != token.ID || replayed.Hostname != "node" {
+		t.Fatalf("replayed report returned token %q hostname %q, want the stored host under %q as node", replayed.TokenID, replayed.Hostname, token.ID)
+	}
+
+	mustSetMockEnabled(t, true)
+	discarded, err := newMonitor(t).ApplyHostReport(report("node", time.Now().UTC()), token)
+	if err != nil {
+		t.Fatalf("mock mode ApplyHostReport: %v", err)
+	}
+	if discarded.ID != "machine-a" || discarded.TokenID != "" {
+		t.Fatalf("mock acknowledgement = %q token %q, want the echoed ID with no token", discarded.ID, discarded.TokenID)
+	}
+}
+
 // The agent-authored privilege profile must survive ingest into model state
 // exactly, and a report without one must not invent a profile.
 func TestApplyHostReportCarriesAgentPrivilegeProfile(t *testing.T) {

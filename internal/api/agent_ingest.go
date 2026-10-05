@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -44,6 +45,10 @@ type UnifiedAgentHandlers struct {
 	// check. Empty (the default) omits it from acks.
 	serverVersion string
 
+	// recordReportedIdentity records a report's server-resolved identity on
+	// its hostname-bound token. Nil (the default) records nothing.
+	recordReportedIdentity func(organizationID, tokenID, presentedID, hostID, hostname string)
+
 	configFetchAudits *agentConfigFetchAuditTracker
 }
 
@@ -52,6 +57,12 @@ type UnifiedAgentHandlers struct {
 // version-free.
 func (h *UnifiedAgentHandlers) SetServerVersion(version string) {
 	h.serverVersion = strings.TrimSpace(version)
+}
+
+// SetReportedIdentityRecorder supplies the canonical token-store binding that
+// records the agent identity a report resolves to. Call once at wiring time.
+func (h *UnifiedAgentHandlers) SetReportedIdentityRecorder(record func(organizationID, tokenID, presentedID, hostID, hostname string)) {
+	h.recordReportedIdentity = record
 }
 
 func trimUnifiedAgentRoutePath(path string) string {
@@ -94,6 +105,23 @@ func (h *UnifiedAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_report", err.Error(), nil)
 		return
+	}
+
+	// Name the agent on a token bound only to its hostname, so the token
+	// carries an identity even if this agent never registers a command channel.
+	// Only a host the monitor resolved and holds under this token carries its
+	// token ID; mock mode's discard acknowledgement echoes the presented ID
+	// unresolved and carries none, whenever mock mode flips. The hostname is
+	// the report's own, which is what the agent's command registration
+	// presents: a report the ordering watermark rejects returns the stored
+	// host, whose hostname may come from a different report. The request's
+	// token snapshot screens out tokens that are already bound or do not
+	// qualify without taking the exclusive token lock on every report; the
+	// recorder decides again on the live record.
+	reportedHostname := strings.TrimSpace(report.Host.Hostname)
+	if h.recordReportedIdentity != nil && tokenRecord != nil && host.TokenID == tokenRecord.ID &&
+		agentbinding.EvaluateReportedIdentity(tokenRecord, report.Agent.ID, host.ID, reportedHostname) {
+		h.recordReportedIdentity(GetOrgID(r.Context()), tokenRecord.ID, report.Agent.ID, host.ID, reportedHostname)
 	}
 
 	// A freshly generated install token is the server's durable record of the

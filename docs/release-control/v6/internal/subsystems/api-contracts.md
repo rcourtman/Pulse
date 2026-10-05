@@ -483,6 +483,14 @@ collector baseline, removes every scope outside the exact collector allowlist
 from that token, persists before success, restores the full token inventory on
 persistence failure, and invalidates only the exact matching collector session
 after persistence.
+A token bound only to a hostname carries no agent ID for that match until
+something names the agent. `POST /api/agents/agent/report` names it: when the
+reporting agent presented the same ID the response acknowledges in `agentId`,
+that ID is recorded on a hostname-bound token that has none, so a collector
+that never connected the command channel can still reduce its authority. The
+report request and response shapes are unchanged.
+`TestContractDeployEnrolledCollectorReducesItsAuthorityAfterItsFirstReport`
+in `internal/api/contract_test.go` pins report, then reduction.
 
 ## Canonical Files
 
