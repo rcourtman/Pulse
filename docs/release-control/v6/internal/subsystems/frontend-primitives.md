@@ -1204,6 +1204,16 @@ expiry into "just now". The banner describes paused attention rather than
 promising that rejected alert observations are acknowledged. Active and
 future-window mounted regressions pin these user-visible claims.
 
+### Platform tables read staleness from one helper
+
+`features/platformPage/resourceStaleness.ts` turns the backend's `stale`
+health verdict into a short label for platform tables, so a table that stops
+presenting a silent resource's last metrics as live does it the same way:
+dimmed metric cells plus the age with a no-signal icon, the full sentence on
+hover and as the accessible name. Grouped platform tables that already name
+the group in a shared grouped-table header row drop columns that would repeat
+the group's own value on every row.
+
 ### Retained state in bounded platform windows
 
 `PlatformWindowedRows` and `PlatformWindowedList` keep one keyed renderer owner
@@ -8363,12 +8373,10 @@ drawer with synthetic APIs in Chromium/WebKit desktop and 390/320-pixel light
 and dark views. This is presentation acceptance, not native backup/QGA safety,
 provider outage attribution, installed recovery or release availability.
 
-### Platform tables read staleness from one helper
+### Threshold group headers carry a defaults line
 
-`features/platformPage/resourceStaleness.ts` turns the backend's `stale`
-health verdict into a short label for platform tables, so a table that stops
-presenting a silent resource's last metrics as live does it the same way:
-dimmed metric cells plus the age with a no-signal icon, the full sentence on
-hover and as the accessible name. Grouped platform tables that already name
-the group in a shared grouped-table header row drop columns that would repeat
-the group's own value on every row.
+`CollapsibleSection` takes an optional `defaultsSummary` rendered under the
+title as a muted line (`data-thresholds-defaults-summary`) that wraps only
+between items on phones and truncates from `sm` up, and is hidden while
+`isGloballyDisabled` is set, where it would promise alerts that cannot fire. Callers pass the shared summary helper's output rather than
+composing per-section strings.
