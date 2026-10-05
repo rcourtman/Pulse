@@ -7343,6 +7343,11 @@ agent-applied setting, `fleet.configDrift` must remain `not-applicable` and
 diagnostics, but must not count that passive state as source setup attention.
 Only a real managed desired config fingerprint can create pending rollout
 attention when an applied fingerprint is absent or mismatched.
+Likewise `fleet.versionDrift: behind` and `fleet.updateStatus:
+update-available` are maintenance, not source setup attention:
+`useConnectionsLedger.ts` keeps them out of a row's problem and the band's
+needs-attention count, which the row's agent-update count and badge carry
+instead, while `updateStatus: failed` and `disabled` remain row problems.
 The `fleet.commandPolicy` object is the canonical desired/applied convergence
 contract for remote command enablement. It must carry the desired server
 policy, the applied agent-reported truth when available, the effective

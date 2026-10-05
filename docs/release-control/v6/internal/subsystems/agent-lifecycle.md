@@ -5127,6 +5127,20 @@ API and Pulse Agent`) from the shared ledger contract. The compact landing may
 render its API / Agent / API + Agent badge beside the system name, with the full
 phrase available through accessible metadata and the detail flow, instead of
 spending a separate table column on collection method.
+An agent that is behind the Pulse Agent target or has an update waiting is
+maintenance, not a problem: the row's `Agent update` badge says so once and
+opens Agent Doctor, so `primaryRowProblem` skips signals marked `maintenance`
+(Version behind, Update available) and the row adds no `Version behind` line
+beneath itself. Those rows therefore do not count toward the band's `needs
+attention` total, which counts them separately and neutrally as agent updates
+available. A failed update and auto-update switched off remain row problems,
+because each asks for a different action, and the Manage drawer still lists
+every fleet signal. A row's problem is picked from all of its visible signals
+before the three-highlight cap, and problems rank ahead of maintenance in that
+list, so a second attached agent's failed update cannot fall behind another
+agent's version lag. The Actions column is only as wide as an install button
+beside Manage needs when a row in view shows one, so Health keeps its state,
+the update badge and the last-seen time on one line.
 Source badge class selection may use semantic gray treatment for API-only rows
 and typed non-gray tones for agent, probe, or combined sources, but the source
 identity remains the API/Agent/Probe label and subtitle from the shared ledger

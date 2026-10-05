@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "base_sha": "2218ab6c18cecde801a1a4e920071089032d46a8",
+  "verified_at": "2026-10-05T16:35:39Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx",
+    "frontend-modern/src/components/Settings/connectionsTableModel.ts",
+    "frontend-modern/src/components/Settings/useConnectionsLedger.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx": "0e631a2eaf7ba72e2a70e99ceca0639c82372b8700b831f48d5b93f9dce35ab1",
+    "frontend-modern/src/components/Settings/connectionsTableModel.ts": "1ee02ad9c25795e44f766d7d4dff615cd2323e3691c30e844a3d5dfa4973c64d",
+    "frontend-modern/src/components/Settings/useConnectionsLedger.ts": "4761b1a14a6af04225af07036ecf800334a12ab3b1aa418e400ddf4e2bb841ec"
+  },
+  "routes": [
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 1600
+    },
+    {
+      "width": 1100,
+      "height": 1000
+    },
+    {
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "width": 1440,
+      "height": 1100
+    },
+    {
+      "width": 1920,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Mock estate with 13 connected systems, 11 of them Pulse Agent hosts behind the agent target with an update available",
+    "Each outdated agent row shows Active, one Agent update badge (opens Agent Doctor) and its last-seen time on one line; main added a second italic Version behind line under every one of the 11 rows",
+    "The band reads 13 systems connected \u00b7 All active \u00b7 11 agent updates available in a neutral tone and Open Agent Doctor is a secondary button; main read 11 systems needs attention in amber with a primary button although every one was only version lag",
+    "Health column at 1280 / 1440 / 1920: 228 / 267 / 390px with no clipped cell (main 176 / 216 / 332px with 11 and 6 clipped cells, the last-seen time cut to 18s a...); no cell wraps",
+    "Phone card layout at 390: neutral band, no Version behind line on any card, 11 Agent update badges; below 1100 the page uses the card layout as before",
+    "Re-measured after rebasing onto 2218ab6c18 (shared Table row-click change from #2524): same widths, no clipped cells, phone layout unchanged"
+  ],
+  "interactions": [
+    "Measured column widths and clipped cells on main (reverse-applied patch) and on the change at 1100, 1280, 1440 and 1920",
+    "Counted Version behind lines and Agent update badges in the live phone layout"
+  ]
+}
