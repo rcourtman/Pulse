@@ -540,13 +540,18 @@ func canonicalMetricSeriesWithSampler(sampler mock.MetricSampler, resourceType, 
 	return sampler.SampleMetricSeries(resourceType, resourceID, metric, timestamps)
 }
 
-func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.FixtureGraph, now time.Time, seedDuration, interval time.Duration) {
+// seedMockMetricsHistory returns ctx.Err() when ctx is cancelled partway. A
+// large demo estate takes several seconds to seed, and a tenant monitor's loop
+// only sees its cancelled context once seeding returns, so organization
+// deletion would otherwise wait for the whole estate. Each series that was
+// sampled is recorded whole; the rest are skipped.
+func seedMockMetricsHistory(ctx context.Context, mh *MetricsHistory, ms *metrics.Store, graph mock.FixtureGraph, now time.Time, seedDuration, interval time.Duration) error {
 	if mh == nil {
-		return
+		return nil
 	}
 	state := graph.State
 	if seedDuration <= 0 || interval <= 0 {
-		return
+		return nil
 	}
 	sampler := mock.NewMetricSampler(graph)
 	now = normalizeMockMetricTimestamp(now, interval)
@@ -669,6 +674,9 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		}
 	}
 	recordStorageTimeline := func(storageID string, currentTotal float64) {
+		if ctx.Err() != nil {
+			return
+		}
 		if strings.TrimSpace(storageID) == "" || currentTotal <= 0 || numPoints == 0 {
 			return
 		}
@@ -693,6 +701,9 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	}
 
 	recordNode := func(node models.Node) {
+		if ctx.Err() != nil {
+			return
+		}
 		if node.ID == "" {
 			return
 		}
@@ -719,7 +730,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		includeDiskIO bool,
 		includeNetwork bool,
 	) {
-		if len(metricIDs) == 0 || storeID == "" {
+		if ctx.Err() != nil || len(metricIDs) == 0 || storeID == "" {
 			return
 		}
 		uniqueMetricIDs := make([]string, 0, len(metricIDs))
@@ -784,7 +795,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		seedStoreSeries(storeType, storeID, storeMetrics...)
 	}
 	recordGuestTemperature := func(metricIDs []string, storeType, storeID string) {
-		if len(metricIDs) == 0 || strings.TrimSpace(storeID) == "" {
+		if ctx.Err() != nil || len(metricIDs) == 0 || strings.TrimSpace(storeID) == "" {
 			return
 		}
 		temperatureSeries := canonicalMetricSeriesWithSampler(
@@ -802,7 +813,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		seedStoreSeries(storeType, storeID, "temperature")
 	}
 	recordGuestMemoryUsed := func(metricIDs []string, storeType, storeID string, memoryTotal float64) {
-		if len(metricIDs) == 0 || strings.TrimSpace(storeID) == "" || memoryTotal <= 0 {
+		if ctx.Err() != nil || len(metricIDs) == 0 || strings.TrimSpace(storeID) == "" || memoryTotal <= 0 {
 			return
 		}
 		percentSeries := canonicalMetricSeriesWithSampler(sampler, storeType, storeID, "memory", seedTimestamps)
@@ -915,6 +926,9 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	// series for one physical disk, shared by the native and TrueNAS fixture
 	// disk loops below.
 	seedDiskTelemetry := func(resourceID string) {
+		if ctx.Err() != nil {
+			return
+		}
 		tempSeries := canonicalMetricSeriesWithSampler(sampler, "disk", resourceID, "smart_temp", seedTimestamps)
 		busySeries := canonicalMetricSeriesWithSampler(sampler, "disk", resourceID, "disk", seedTimestamps)
 		diskReadSeries := canonicalMetricSeriesWithSampler(sampler, "disk", resourceID, "diskread", seedTimestamps)
@@ -1025,6 +1039,9 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	recordGuestTemperature(systemMetricIDs, "agent", trueNASFixtures.System.Hostname)
 
 	for _, pool := range trueNASFixtures.Pools {
+		if ctx.Err() != nil {
+			break
+		}
 		poolKey := mock.TrueNASPoolMetricID(trueNASFixtures.System.Hostname, pool.Name)
 		diskSeries := canonicalMetricSeriesWithSampler(sampler, "storage", poolKey, "usage", seedTimestamps)
 		mh.addGuestMetricSeries(poolKey, "disk", diskSeries, seedTimestamps)
@@ -1032,6 +1049,9 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	}
 
 	for _, dataset := range trueNASFixtures.Datasets {
+		if ctx.Err() != nil {
+			break
+		}
 		dsKey := mock.TrueNASDatasetMetricID(trueNASFixtures.System.Hostname, dataset.Name)
 		totalBytes := dataset.UsedBytes + dataset.AvailBytes
 		diskSeries := canonicalMetricSeriesWithSampler(sampler, "storage", dsKey, "usage", seedTimestamps)
@@ -1115,6 +1135,9 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	}
 
 	flushStoreBatch()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if ms != nil {
 		log.Info().
 			Int("rows", storeRows).
@@ -1122,9 +1145,11 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			Msg("mock seeding: metrics store backfill completed")
 	}
 	log.Debug().Msg("mock seeding: completed")
+	return nil
 }
 
 func prepareMockMetricsHistory(
+	ctx context.Context,
 	graph mock.FixtureGraph,
 	fixtureRevision uint64,
 	now time.Time,
@@ -1132,7 +1157,7 @@ func prepareMockMetricsHistory(
 	interval time.Duration,
 	maxDataPoints int,
 	storeSink *metrics.Store,
-) (*MetricsHistory, bool) {
+) (*MetricsHistory, bool, error) {
 	// Enforce the eager-history cardinality limit at the allocation/cache
 	// boundary. Callers may retain the complete fixture graph for inventory and
 	// realtime updates, but neither the active history nor the reusable seed
@@ -1141,8 +1166,10 @@ func prepareMockMetricsHistory(
 	seedAt := normalizeMockMetricTimestamp(now, interval)
 	if storeSink != nil {
 		history := NewMetricsHistory(maxDataPoints, seedDuration)
-		seedMockMetricsHistory(history, storeSink, graph, seedAt, seedDuration, interval)
-		return history, false
+		if err := seedMockMetricsHistory(ctx, history, storeSink, graph, seedAt, seedDuration, interval); err != nil {
+			return nil, false, err
+		}
+		return history, false, nil
 	}
 
 	key := mockMetricsSeedCacheKey{
@@ -1155,12 +1182,20 @@ func prepareMockMetricsHistory(
 
 	mockMetricsSeedCache.Lock()
 	defer mockMetricsSeedCache.Unlock()
+	// The lock is held for a whole seed, so a monitor may have been cancelled
+	// while it waited behind another tenant's.
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
 	if mockMetricsSeedCache.history != nil && mockMetricsSeedCache.key == key {
-		return mockMetricsSeedCache.history.clone(), true
+		return mockMetricsSeedCache.history.clone(), true, nil
 	}
 
 	template := NewMetricsHistory(maxDataPoints, seedDuration)
-	seedMockMetricsHistory(template, nil, graph, seedAt, seedDuration, interval)
+	if err := seedMockMetricsHistory(ctx, template, nil, graph, seedAt, seedDuration, interval); err != nil {
+		// A partial template must never be reused by another tenant.
+		return nil, false, err
+	}
 	mockMetricsSeedCache.key = key
 	mockMetricsSeedCache.history = template
 	mockMetricsSeedCache.generation++
@@ -1168,7 +1203,7 @@ func prepareMockMetricsHistory(
 	time.AfterFunc(mockMetricsSeedCacheTTL, func() {
 		expireMockMetricsSeedCache(generation)
 	})
-	return template.clone(), false
+	return template.clone(), false, nil
 }
 
 // recordTrueNASFixturesMetrics records live fixture ticks for TrueNAS host,
@@ -1911,7 +1946,8 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 			log.Warn().Msg("PULSE_MOCK_SEED_METRICS_STORE is set but the metrics store is unavailable; mock report history will stay empty")
 		}
 	}
-	history, cacheHit := prepareMockMetricsHistory(
+	history, cacheHit, err := prepareMockMetricsHistory(
+		samplerCtx,
 		historyGraph,
 		fixtureRevision,
 		time.Now(),
@@ -1920,6 +1956,13 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 		maxPoints,
 		storeSink,
 	)
+	if err != nil {
+		// The monitor is stopping. Return before warming chart caches or
+		// starting the sampler so its loop sees the cancellation now; the
+		// caller's stopMockMetricsSampler releases mockMetricsCancel.
+		log.Info().Err(err).Msg("Mock metrics sampler: seeding cancelled")
+		return
+	}
 	m.mu.Lock()
 	m.metricsHistory = history
 	m.mu.Unlock()
