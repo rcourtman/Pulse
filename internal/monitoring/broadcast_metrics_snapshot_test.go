@@ -99,7 +99,13 @@ func TestBroadcastMetricsSnapshotConnectedContent(t *testing.T) {
 			t.Fatal(err)
 		}
 		if string(wantJSON) != string(gotJSON) {
-			t.Fatalf("%s: complete frontend/catalogue/infrastructure JSON differs", stage)
+			first := 0
+			for first < len(wantJSON) && first < len(gotJSON) && wantJSON[first] == gotJSON[first] {
+				first++
+			}
+			start := max(0, first-80)
+			t.Fatalf("%s: complete frontend/catalogue/infrastructure JSON differs at byte %d: want %q, got %q (bytes %d/%d)",
+				stage, first, wantJSON[start:min(len(wantJSON), first+160)], gotJSON[start:min(len(gotJSON), first+160)], len(wantJSON), len(gotJSON))
 		}
 		after, _ := json.Marshal(adapter.GetAll())
 		if string(before) != string(after) {
