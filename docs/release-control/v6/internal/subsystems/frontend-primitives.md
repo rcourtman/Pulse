@@ -1204,6 +1204,16 @@ expiry into "just now". The banner describes paused attention rather than
 promising that rejected alert observations are acknowledged. Active and
 future-window mounted regressions pin these user-visible claims.
 
+### Platform tables read staleness from one helper
+
+`features/platformPage/resourceStaleness.ts` turns the backend's `stale`
+health verdict into a short label for platform tables, so a table that stops
+presenting a silent resource's last metrics as live does it the same way:
+dimmed metric cells plus the age with a no-signal icon, the full sentence on
+hover and as the accessible name. Grouped platform tables that already name
+the group in a shared grouped-table header row drop columns that would repeat
+the group's own value on every row.
+
 ### Retained state in bounded platform windows
 
 `PlatformWindowedRows` and `PlatformWindowedList` keep one keyed renderer owner
@@ -4815,7 +4825,10 @@ acknowledged severity, and reveals overflow through an in-place accessible
 disclosure rather than an inert hidden-count row. Aggregate drawers that include
 alerts from child resources must also preserve the affected resource identity
 and alert metric beside that text rather than collapsing them into generic VM
-or host labels. The remaining Overview rows are additive
+or host labels. The Mail Gateway drawer receives its row's open alerts, matched
+across the gateway's identity aliases, and its header status follows them, so
+it never shows "Healthy" beside an active warning; its inline detail row sets
+`whitespace-normal` because platform table cells do not wrap. The remaining Overview rows are additive
 operator context that the parent table row cannot carry, such as OS/runtime,
 Pulse observation or action coverage, primary reachability, protection gaps,
 pending updates, or an identified service. Routine health, placement, and
@@ -6429,7 +6442,8 @@ Feature-owned route surfaces under `frontend-modern/src/features/` must also
 keep their shell/runtime split explicit once a subsystem grows real transport
 or polling lifecycle. The Patrol feature is the current reference shape:
 `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` stays the
-feature shell, `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
+feature shell, reads its active workspace view from the route through
+`patrolWorkspaceRouting.ts` rather than holding it in component state, `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
 owns the runtime state machine, `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
 owns the pure investigation-context summary and Patrol-to-Assistant operator
 briefing derivation, including the rule that active findings, pending
@@ -8109,13 +8123,16 @@ the vSphere Overview renders `VsphereAlertsTable` with `showToolbar={false}`
 above its hosts table, only when signals exist, matching the TrueNAS
 Overview's health-alert table. Filtering stays on the platform's Health tab.
 
-### Platform drawers lead with the open problem
+### Kubernetes nodes state readiness in words
 
-`ProxmoxMailGatewayDrawer` takes the row's open alerts and renders the shared
-`DrawerAttentionSection` above its statistics, and its header status follows
-those alerts, so the drawer never shows a green "Healthy" beside an active
-warning. Inline detail rows that hold wrapping prose set `whitespace-normal` on
-the cell and content, since platform table cells do not wrap.
+`KubernetesNodesTable` renders the node state from `mapKubernetesNodeStatus`
+as a desktop Status column beside the name (a shared `StatusIndicatorBadge`
+for anything other than Ready, muted text for Ready) and sorts NotReady first.
+The status dot stays decorative; a phone-only screen-reader label beside the
+name announces the state where the column is demoted under the duplicate-state
+rule, so no width announces it twice. The overview reuses the same table,
+limited to nodes needing attention and with its own persisted sort slot,
+rather than a summary card.
 
 ### Large platform notices keep the inventory in view
 
