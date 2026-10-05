@@ -519,17 +519,18 @@ def contract_texts_have_substantive_change(base_text: str, staged_text: str) -> 
     return False
 
 
-def resolve_diff_base(ref: str) -> str:
-    """Resolve a diff-base ref to its merge base with HEAD.
+def resolve_diff_base(ref: str, revision: str = "HEAD") -> str:
+    """Resolve a diff-base ref to its merge base with the evaluated revision.
 
-    CI passes the push/PR range base, and the changed-file list is computed
-    with a three-dot diff (`base...head`), which diffs from the merge base.
+    A caller may pass a range base whose changed-file list was computed with
+    a three-dot diff (`base...revision`), which diffs from the merge base.
     Using the same anchor here keeps the contract-text comparison consistent
-    with the file list. Falls back to the raw ref when the merge base cannot
-    be resolved (e.g. a zero SHA on branch creation).
+    with the file list; for the per-commit form (`<commit>^` against
+    `<commit>`) it is simply the parent. Falls back to the raw ref when the
+    merge base cannot be resolved (e.g. a zero SHA on branch creation).
     """
     result = subprocess.run(
-        ["git", "merge-base", ref, "HEAD"],
+        ["git", "merge-base", ref, revision],
         cwd=REPO_ROOT,
         check=False,
         capture_output=True,
@@ -539,14 +540,24 @@ def resolve_diff_base(ref: str) -> str:
     return merge_base if result.returncode == 0 and merge_base else ref
 
 
-def staged_contract_has_substantive_change(path: str, diff_base: str | None = None) -> bool:
+def staged_contract_has_substantive_change(
+    path: str,
+    diff_base: str | None = None,
+    revision: str = "HEAD",
+) -> bool:
     """Return True if the contract's change includes a substantive section edit.
 
-    Without a diff base this compares HEAD against the index — the pre-commit
-    mode, where the pending change is staged. With a diff base (CI mode) it
-    compares the base commit against HEAD: in a CI checkout the index equals
-    HEAD, so the index comparison is always empty there and would misreport
-    every contract update as insubstantial.
+    Both modes compare the evaluated change against its own parent. Without a
+    diff base this compares HEAD against the index — the pre-commit mode,
+    where the pending change is staged. With a diff base (CI mode) it compares
+    the base against `revision`, the commit whose file list is being checked:
+    in a CI checkout the index equals HEAD, so the index comparison is always
+    empty there and would misreport every contract update as insubstantial.
+    HEAD is the right new side only when the evaluated commit is checked out.
+    CI and the pre-push check walk a branch's commits with HEAD at its tip,
+    where comparing against HEAD judged each commit by the whole branch: a
+    later commit reverting a contract paragraph blocked the commit that wrote
+    it, and a later contract update let an earlier bare runtime change pass.
     """
     if diff_base is None:
         return contract_texts_have_substantive_change(
@@ -555,7 +566,7 @@ def staged_contract_has_substantive_change(path: str, diff_base: str | None = No
         )
     return contract_texts_have_substantive_change(
         git_blob_text(f"{diff_base}:{path}"),
-        git_blob_text(f"HEAD:{path}"),
+        git_blob_text(f"{revision}:{path}"),
     )
 
 
@@ -655,6 +666,7 @@ def check_staged_contracts(
     staged_files: Sequence[str],
     *,
     diff_base: str | None = None,
+    revision: str = "HEAD",
     inferred_override_reason: str | None = None,
 ) -> int:
     staged_set: Set[str] = set(staged_files)
@@ -673,7 +685,7 @@ def check_staged_contracts(
         contract_path: data
         for contract_path, data in required_contracts.items()
         if contract_path in staged_set
-        if not staged_contract_has_substantive_change(contract_path, diff_base)
+        if not staged_contract_has_substantive_change(contract_path, diff_base, revision)
     }
     missing_verification: Dict[str, dict] = {}
     for subsystem_id, data in impacted.items():
@@ -749,16 +761,19 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         help=(
             "Commit-ish to compare contract texts against instead of the index. "
             "Use in CI, where nothing is staged and the changed-file list comes "
-            "from a commit range; requires --files-from-stdin."
+            "from a commit range; requires --files-from-stdin. Pass --commit "
+            "too unless HEAD is the commit being evaluated."
         ),
     )
     parser.add_argument(
         "--commit",
         default=None,
         help=(
-            "Committed revision represented by the changed-file list. In CI this "
-            "permits a fail-closed byte comparison for mechanically verified "
-            "Prettier-only frontend reformats."
+            "Committed revision represented by the changed-file list. With "
+            "--diff-base, contract texts are compared against this revision "
+            "instead of HEAD. In CI this also permits a fail-closed byte "
+            "comparison for mechanically verified Prettier-only frontend "
+            "reformats."
         ),
     )
     args = parser.parse_args(list(argv))
@@ -771,13 +786,15 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(list(argv or ()))
-    diff_base = resolve_diff_base(args.diff_base) if args.diff_base else None
+    revision = args.commit or "HEAD"
+    diff_base = resolve_diff_base(args.diff_base, revision) if args.diff_base else None
     if args.files_from_stdin:
         files = stdin_files(sys.stdin)
         inferred_reason = prettier_only_contract_neutral_reason(files, commit=args.commit)
         return check_staged_contracts(
             files,
             diff_base=diff_base,
+            revision=revision,
             inferred_override_reason=inferred_reason,
         )
     return check_staged_contracts(git_staged_files())
