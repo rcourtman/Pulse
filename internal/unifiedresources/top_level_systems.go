@@ -417,14 +417,25 @@ type topLevelSystemFallbackIndex struct {
 }
 
 func buildTopLevelSystemFallbackIndex(groups map[int]topLevelSystemResolvedGroup) topLevelSystemFallbackIndex {
-	index := topLevelSystemFallbackIndex{
-		hosts:     make(map[string][]int),
-		ips:       make(map[string][]int),
-		hostForms: make(map[string][]int),
+	maxPriority := 0
+	havePriority := false
+	for _, group := range groups {
+		if !havePriority || group.priority > maxPriority {
+			maxPriority = group.priority
+			havePriority = true
+		}
 	}
-	roots := make([]int, 0, len(groups))
-	for root := range groups {
-		roots = append(roots, root)
+	var roots []int
+	for root, group := range groups {
+		// A maximum-priority root cannot be better than any query in this
+		// snapshot. Omit it only from the temporary candidate index, never
+		// from the groups, complete inventory or output.
+		if group.priority < maxPriority {
+			roots = append(roots, root)
+		}
+	}
+	if len(roots) == 0 {
+		return topLevelSystemFallbackIndex{}
 	}
 	sort.Slice(roots, func(i, j int) bool {
 		if groups[roots[i]].priority != groups[roots[j]].priority {
@@ -432,6 +443,11 @@ func buildTopLevelSystemFallbackIndex(groups map[int]topLevelSystemResolvedGroup
 		}
 		return roots[i] < roots[j]
 	})
+	index := topLevelSystemFallbackIndex{
+		hosts:     make(map[string][]int),
+		ips:       make(map[string][]int),
+		hostForms: make(map[string][]int),
+	}
 	add := func(owners map[string][]int, key string, root int) {
 		bucket := owners[key]
 		// All aliases of one root are added together, so a last-entry check

@@ -697,7 +697,7 @@ func TestTopLevelOwnerIndexPreservesAmbiguityInMonitoredCountAndAdmission(t *tes
 		t.Run(fmt.Sprintf("%d_targets", targetCount), func(t *testing.T) {
 			resources := []Resource{
 				topLevelTestProxmoxNode("platform", "tower.lab", "pve-source", "https://tower.lab:8006"),
-				topLevelTestTrueNAS("nas", "tower.lab"),
+				topLevelTestProxmoxNode("platform-other", "tower.lab", "pve-source-other", "https://tower.lab:8006"),
 			}
 			registry := NewRegistry(nil)
 			registry.IngestResources(resources[:targetCount])

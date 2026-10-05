@@ -168,9 +168,23 @@ func TestTopLevelOwnerIndexBucketsAreOrderedAndDeduplicated(t *testing.T) {
 	}
 	index := buildTopLevelSystemFallbackIndex(groups)
 	for name, bucket := range map[string][]int{"host": index.hosts["alpha"], "ip": index.ips["192.0.2.8"], "form": index.hostForms["alpha"]} {
-		if !reflect.DeepEqual(bucket, []int{9, 3, 4, 1}) {
+		if !reflect.DeepEqual(bucket, []int{9, 3, 4}) {
 			t.Fatalf("%s owners not priority/root ordered and deduplicated: %v", name, bucket)
 		}
+	}
+}
+
+func TestTopLevelOwnerIndexEqualPriorityDoesNotBuildCandidateBuckets(t *testing.T) {
+	groups := map[int]topLevelSystemResolvedGroup{
+		0: ownerTestGroup(3, []string{"alpha", "alpha.lab"}, []string{"192.0.2.8"}),
+		7: ownerTestGroup(3, []string{"alpha"}, []string{"192.0.2.8"}),
+	}
+	index := buildTopLevelSystemFallbackIndex(groups)
+	if len(index.hosts)+len(index.ips)+len(index.hostForms) != 0 {
+		t.Fatal("equal-priority roots cannot be candidates for any query")
+	}
+	for root := range groups {
+		assertOwnerTargetMatchesOracle(t, root, groups, index)
 	}
 }
 
@@ -243,7 +257,7 @@ type topLevelOwnerIndexFixture struct {
 
 func topLevelOwnerIndexFixtures() []topLevelOwnerIndexFixture {
 	fixtures := []topLevelOwnerIndexFixture{{name: "empty"}, {name: "one", resources: []Resource{topLevelTestAgent("agent", "tower.lab", "machine", "agent")}}}
-	for _, name := range []string{"spread-1220", "shared-exact-1220", "shared-short-1220", "ambiguous-1220", "different-fqdns-200"} {
+	for _, name := range []string{"spread-1220", "shared-exact-1220", "shared-short-1220", "ambiguous-1220", "different-fqdns-200", "equal-priority-proxmox-1220"} {
 		count, nodes := 1220, 1
 		switch name {
 		case "spread-1220":
@@ -274,7 +288,11 @@ func topLevelOwnerIndexFixtures() []topLevelOwnerIndexFixture {
 			case "different-fqdns-200":
 				host = fmt.Sprintf("tower.other-%d", i)
 			}
-			resources = append(resources, topLevelTestAgent(fmt.Sprintf("agent-%d", i), host, fmt.Sprintf("machine-%d", i), fmt.Sprintf("agent-id-%d", i)))
+			if name == "equal-priority-proxmox-1220" {
+				resources = append(resources, Resource{ID: fmt.Sprintf("vm-%d", i), Type: ResourceTypeVM, Name: fmt.Sprintf("workload-%d", i), Proxmox: &ProxmoxData{NodeName: host, VMID: i + 100}})
+			} else {
+				resources = append(resources, topLevelTestAgent(fmt.Sprintf("agent-%d", i), host, fmt.Sprintf("machine-%d", i), fmt.Sprintf("agent-id-%d", i)))
+			}
 		}
 		fixtures = append(fixtures, topLevelOwnerIndexFixture{name: name, resources: resources})
 	}

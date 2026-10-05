@@ -5221,8 +5221,9 @@ short hostname and another reports the FQDN, but it must not collapse two
 distinct fully-qualified hosts that merely share the same short prefix across
 different domains.
 Fallback owner buckets are pass-local priority-ordered slices, rebuilt from
-each complete group snapshot. Queries visit only strictly better-priority
-owners; a second distinct qualifying root still rejects attachment even when
+each complete group snapshot. A maximum-priority group cannot be better than
+any query and is omitted only from the temporary candidate index. Queries visit
+only strictly better-priority owners; a second distinct qualifying root still rejects attachment even when
 its priority or evidence kind differs. The unique root keeps lexical exact-host
 evidence before full short/FQDN evidence before lexical exact-IP evidence.
 Comparable/short-form keys only prune candidates: the full hostname equivalence
