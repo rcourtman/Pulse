@@ -140,11 +140,21 @@ export const DockerImagesTable: Component<
             tableClass="min-w-full table-fixed text-xs md:min-w-[880px]"
             header={
               <>
+                {/*
+                    The Update check badge needs about 122px with its cell
+                    padding ("Update available", "Managed by Pulse"). An
+                    equal tablet-band share gave it 100px at 600px, and 16%
+                    at md gave it 111px at 768px, so the label was cut off.
+                    Size values are short, so the band takes the extra room
+                    from Size, and md takes a point each from Host, Used by
+                    and Size, which had room to spare there.
+                  */}
                 <PlatformSortableTableHead
                   kind="name"
                   sort={sort}
                   sortKey="image"
                   class="platform-table-mobile-w-30 md:w-[30%]"
+                  bandWidth={30}
                 >
                   Image
                 </PlatformSortableTableHead>
@@ -152,7 +162,8 @@ export const DockerImagesTable: Component<
                   kind="text"
                   sort={sort}
                   sortKey="host"
-                  class="platform-table-phone-hidden md:w-[18%]"
+                  class="platform-table-phone-hidden md:w-[17%]"
+                  bandWidth={17.5}
                 >
                   Host
                 </PlatformSortableTableHead>
@@ -160,7 +171,8 @@ export const DockerImagesTable: Component<
                   kind="text"
                   sort={sort}
                   sortKey="usedBy"
-                  class="platform-table-phone-hidden md:w-[24%]"
+                  class="platform-table-phone-hidden md:w-[23%]"
+                  bandWidth={17.5}
                 >
                   Used by
                 </PlatformSortableTableHead>
@@ -168,7 +180,8 @@ export const DockerImagesTable: Component<
                   kind="numeric-value"
                   sort={sort}
                   sortKey="size"
-                  class="platform-table-mobile-w-20 md:w-[12%]"
+                  class="platform-table-mobile-w-20 md:w-[11%]"
+                  bandWidth={12}
                 >
                   Size
                 </PlatformSortableTableHead>
@@ -176,7 +189,8 @@ export const DockerImagesTable: Component<
                   kind="badge"
                   sort={sort}
                   sortKey="update"
-                  class="platform-table-mobile-w-25 md:w-[16%]"
+                  class="platform-table-mobile-w-25 md:w-[19%]"
+                  bandWidth={23}
                 >
                   <PlatformResponsiveTableLabel compact="Update" full="Update check" />
                 </PlatformSortableTableHead>
