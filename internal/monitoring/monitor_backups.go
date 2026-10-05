@@ -872,33 +872,8 @@ func enrichWithPersistedMetadata(metadataStore *config.GuestMetadataStore, byVMI
 
 // persistGuestIdentity updates the metadata store with the last-known name and type for a guest
 func persistGuestIdentity(metadataStore *config.GuestMetadataStore, guestKey, name, guestType string) {
-	existing := metadataStore.Get(guestKey)
-	if existing == nil {
-		existing = &config.GuestMetadata{
-			ID:   guestKey,
-			Tags: []string{},
-		}
-	}
-
-	guestType = strings.TrimSpace(guestType)
-	if guestType == "" {
-		return
-	}
-
-	// Never "downgrade" OCI containers back to LXC. OCI classification can be transiently
-	// unavailable if Proxmox config reads fail due to permissions or transient API errors.
-	if existing.LastKnownType == "oci" && guestType != "oci" {
-		guestType = existing.LastKnownType
-	}
-
-	// Only update if the name or type has changed
-	if existing.LastKnownName != name || existing.LastKnownType != guestType {
-		existing.LastKnownName = name
-		existing.LastKnownType = guestType
-		// Save without blocking the monitor. The store owns the goroutine so
-		// Monitor.Stop can drain it; a detached goroutine here could write
-		// after shutdown, into a data directory that was already being removed.
-		metadataStore.SetAsync(guestKey, existing)
+	if err := metadataStore.RememberIdentity(guestKey, name, guestType); err != nil {
+		log.Error().Err(err).Str("guestKey", guestKey).Msg("failed to admit guest identity update")
 	}
 }
 
