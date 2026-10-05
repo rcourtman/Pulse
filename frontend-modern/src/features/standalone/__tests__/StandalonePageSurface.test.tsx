@@ -252,7 +252,7 @@ describe('StandalonePageSurface', () => {
     render(() => <StandalonePageSurface />);
 
     const notice = screen.getByTestId('platform-outdated-agent-notice');
-    expect(notice).toHaveTextContent('tower is running an older Pulse agent (v5.1.34).');
+    expect(notice).toHaveTextContent('tower runs an older Pulse agent (v5.1.34).');
     expect(notice).toHaveTextContent(
       'latest agent command support and agent-managed platform detail',
     );
