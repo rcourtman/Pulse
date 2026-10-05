@@ -391,6 +391,15 @@ touch-end. `GuestRow.test.tsx` verifies its conditional lifecycle and
 non-activation; the production row/full-drawer touch fixture verifies first
 activation and unchanged identity independently of native collector acceptance.
 
+The guest row also creates one `createRowTextSelectionGuard()` from `Table` per
+row, so a drag that selects row text (a VMID, address or tag) does not open the
+guest drawer, while a press released in place still opens it on the first
+click. The guard keeps one press coordinate in a closure, binds its native
+mousedown listener only while a row action exists, and reads the selection only
+when the row is clicked: no document listener, timer, signal, metric derivation
+or History work is added per row. `GuestRow.test.tsx` covers the drag, the
+in-place click and chevron activation over a selection.
+
 ## Canonical Files
 
 1. `pkg/metrics/store.go`
