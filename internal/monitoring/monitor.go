@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"crypto/sha256"
+	"encoding"
 	"encoding/hex"
 	"encoding/json"
 	stderrors "errors"
@@ -6654,7 +6655,9 @@ func monitorRawJSON(value interface{}) json.RawMessage {
 	case reflect.Slice, reflect.Map:
 		if v.IsNil() {
 			if _, custom := value.(json.Marshaler); !custom {
-				return nil
+				if _, customText := value.(encoding.TextMarshaler); !customText {
+					return nil
+				}
 			}
 		}
 	}

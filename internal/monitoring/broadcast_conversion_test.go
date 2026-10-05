@@ -22,6 +22,14 @@ type projectionNilMap map[string]string
 
 func (projectionNilMap) MarshalJSON() ([]byte, error) { return []byte(`{"custom":true}`), nil }
 
+type projectionNilTextSlice []string
+
+func (projectionNilTextSlice) MarshalText() ([]byte, error) { return []byte("custom-text"), nil }
+
+type projectionNilTextMap map[string]string
+
+func (projectionNilTextMap) MarshalText() ([]byte, error) { return []byte("custom-text"), nil }
+
 type projectionInvalidJSON struct{}
 
 func (projectionInvalidJSON) MarshalJSON() ([]byte, error) { return []byte(`{broken`), nil }
@@ -53,6 +61,8 @@ func TestBroadcastRawJSONPreservesAbsentEmptyAndFailureSemantics(t *testing.T) {
 		{"empty-slice", []string{}}, {"empty-map", map[string]string{}},
 		{"named-nil-slice-marshaler", projectionNilSlice(nil)},
 		{"named-nil-map-marshaler", projectionNilMap(nil)},
+		{"named-nil-slice-text-marshaler", projectionNilTextSlice(nil)},
+		{"named-nil-map-text-marshaler", projectionNilTextMap(nil)},
 		{"nil-pointer-marshaler", (*projectionNilSlice)(nil)},
 		{"invalid-json", projectionInvalidJSON{}}, {"encode-failure", projectionFailedJSON{}},
 		{"invalid-float", math.NaN()}, {"raw-null", json.RawMessage(`null`)},
