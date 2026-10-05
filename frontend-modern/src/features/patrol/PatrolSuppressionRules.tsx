@@ -137,7 +137,7 @@ export function PatrolSuppressionRules(props: { openForLink?: boolean } = {}) {
       setRules(after);
       setSelected(undefined);
       setNotice(
-        'Rule removed. Future matching findings can appear. Dismissed findings and history were not reopened or removed; other rules may still cover the same scope.',
+        'Rule removed. Future matching findings can appear. Dismissed findings and history were not reopened or removed. Other rules may still cover the same scope.',
       );
     } catch {
       if (!isCurrent(run)) return;
@@ -192,7 +192,7 @@ export function PatrolSuppressionRules(props: { openForLink?: boolean } = {}) {
         <div class="space-y-3 border-t border-border p-4 sm:p-5">
           <p class="text-sm leading-5 text-muted">
             Review permanent rules created with Create rule. Removing one allows future matching
-            Patrol findings; it does not reopen dismissed findings or erase history. Use Reopen
+            Patrol findings. It does not reopen dismissed findings or erase history. Use Reopen
             finding in Finding options and history to undo an individual dismissal.
           </p>
           <Button
@@ -285,7 +285,7 @@ export function PatrolSuppressionRules(props: { openForLink?: boolean } = {}) {
               <div class="shrink-0 space-y-3 px-5 pt-5">
                 <h2 class="text-base font-semibold text-base-content">Remove suppression rule?</h2>
                 <p class="text-sm leading-5 text-muted">
-                  Only this exact manual rule will be removed. Future matching findings can appear;
+                  Only this exact manual rule will be removed. Future matching findings can appear.
                   existing dismissals and history stay unchanged.
                 </p>
               </div>

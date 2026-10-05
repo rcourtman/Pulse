@@ -1946,7 +1946,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <p class="text-[11px] text-muted mb-1.5">
               Future findings matching this resource and category will be auto-dismissed by Patrol
               without surfacing as new findings. Remove this permanent rule under Activity →
-              Suppression rules; Reopen finding only undoes an individual dismissal.
+              Suppression rules. Reopen finding only undoes an individual dismissal.
             </p>
             <ButtonLink
               href={PATROL_SUPPRESSION_RULES_PATH}
