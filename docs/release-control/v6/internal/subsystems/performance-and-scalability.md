@@ -3757,6 +3757,18 @@ returns focus to the originating disclosure. Nested evidence activation must
 not trigger the enclosing guest row. Touch targets are at least 44px; compact
 desktop shields and the existing status colours remain.
 
+The Backup column badge does not truncate. Running (73px with its shield) and
+Unknown (79px) need about 95px with cell padding, so the compact layout weights
+give Backup 10 against Type 5.4 and CPU 9.6, and the wide column is 96px with
+the extra 24px taken from CPU (116px). Type still fits its VM/LXC badge and
+sorted header, and CPU its percentage and core count, while Name, ID, Uptime,
+Net I/O, Disk I/O and the memory and disk bars keep their widths and used/total
+sublabels; views without a Backup column (pods, Docker) give them slightly more.
+Before this, Running was cut inside its pill at every width up to 1600px, and
+None and month ages up to about 1500px.
+`WorkloadsSurface.performance.contract.test.tsx` checks the narrowest compact
+table and the wide width.
+
 The evidence content is reactive to the same guest identity: running is not
 completion, malformed/future times are unknown, and only the existing absence
 sentinels mean no backup recorded. A removed row unmounts its disclosure and
