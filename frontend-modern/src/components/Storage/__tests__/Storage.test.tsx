@@ -912,6 +912,36 @@ describe('Storage', () => {
     });
   });
 
+  it('keeps a storage pool row closed when a drag selects its text', async () => {
+    hookResources = [buildStorageResource('storage-1', 'Node-Store', 'pve1')];
+
+    render(() => <Storage />);
+
+    const name = await screen.findByText('Node-Store');
+    const range = document.createRange();
+    range.selectNodeContents(name);
+    const selection = document.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    try {
+      fireEvent.mouseDown(name, { clientX: 4, clientY: 8 });
+      fireEvent.click(name, { clientX: 80, clientY: 8 });
+      expect(screen.getByRole('button', { name: 'Expand Node-Store' })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+
+      fireEvent.mouseDown(name, { clientX: 40, clientY: 8 });
+      fireEvent.click(name, { clientX: 40, clientY: 8 });
+      expect(await screen.findByRole('button', { name: 'Collapse Node-Store' })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+    } finally {
+      selection.removeAllRanges();
+    }
+  });
+
   it('uses canonical storage metrics target ids for expanded pool history charts', async () => {
     const metricsHistorySpy = vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue({
       resourceType: 'storage',

@@ -133,6 +133,97 @@ describe('TableRow touch activation', () => {
   });
 });
 
+describe('TableRow text selection', () => {
+  afterEach(() => {
+    document.getSelection()?.removeAllRanges();
+  });
+
+  const selectText = (element: Element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const selection = document.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+
+  // A drag presses at one end of the text and releases at the other; jsdom
+  // has no drag, so select the text and send the press and the click apart.
+  const dragSelect = (element: Element) => {
+    selectText(element);
+    fireEvent.mouseDown(element, { clientX: 4, clientY: 8 });
+    fireEvent.click(element, { clientX: 96, clientY: 8 });
+  };
+
+  const plainClick = (element: Element) => {
+    fireEvent.mouseDown(element, { clientX: 40, clientY: 8 });
+    fireEvent.click(element, { clientX: 40, clientY: 8 });
+  };
+
+  it('skips the row action for a drag that selects text in the row', () => {
+    const onClick = vi.fn();
+    const onDisclosure = vi.fn();
+    render(() => (
+      <Table>
+        <TableBody>
+          <TableRow onClick={onClick}>
+            <TableCell>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDisclosure();
+                }}
+              >
+                Details
+              </button>
+              <span>web-7d9f8b6c5-x2kqp</span>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    ));
+    const name = screen.getByText('web-7d9f8b6c5-x2kqp');
+
+    dragSelect(name);
+    expect(onClick).not.toHaveBeenCalled();
+
+    // The explicit disclosure control still works while the text stays selected.
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    expect(onDisclosure).toHaveBeenCalledTimes(1);
+    expect(document.getSelection()!.isCollapsed).toBe(false);
+
+    // A press released in place is a plain click, even on the selected text.
+    plainClick(name);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs the row action when the only selection sits outside the row', () => {
+    const onClick = vi.fn();
+    render(() => (
+      <>
+        <p>Cluster heading</p>
+        <Table>
+          <TableBody>
+            <TableRow onClick={[onClick, 'bound-identity']}>
+              <TableCell>api-server</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </>
+    ));
+    const name = screen.getByText('api-server');
+
+    selectText(screen.getByText('Cluster heading'));
+    fireEvent.mouseDown(name, { clientX: 4, clientY: 8 });
+    fireEvent.click(name, { clientX: 96, clientY: 8 });
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onClick.mock.calls[0][0]).toBe('bound-identity');
+
+    dragSelect(name);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('TableBody', () => {
   it('keeps the shared table wrapper CSP-safe', () => {
     expect(tableSource).toContain('touch-scroll');

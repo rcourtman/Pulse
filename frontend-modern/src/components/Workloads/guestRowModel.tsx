@@ -241,7 +241,7 @@ export const GUEST_COLUMNS: ColumnDef[] = [
   createVisibleCanonicalTypeColumn(),
   { id: 'info', label: 'Info', width: '100px', sortKey: 'info', kind: 'numeric-value' },
   { id: 'vmid', label: 'ID', width: '45px', sortKey: 'vmid', kind: 'numeric-value' },
-  { id: 'cpu', label: 'CPU', width: '140px', sortKey: 'cpu', kind: 'metric-bar' },
+  { id: 'cpu', label: 'CPU', width: '116px', sortKey: 'cpu', kind: 'metric-bar' },
   { id: 'memory', label: 'Mem', width: '140px', sortKey: 'memory', kind: 'metric-bar' },
   {
     id: 'disk',
@@ -411,8 +411,12 @@ export const GUEST_COLUMNS: ColumnDef[] = [
         />
       </svg>
     ),
-    width: '72px',
-    minWidth: '68px',
+    // The badge does not truncate: Running is 73px and Unknown 79px with the
+    // shield, so the wide column keeps room for both with cell padding. Its
+    // extra 24px comes from CPU, whose bar shows only a percentage and core
+    // count, so the other wide columns keep their widths.
+    width: '96px',
+    minWidth: '90px',
     toggleable: true,
     kind: 'badge',
   },
@@ -519,17 +523,22 @@ const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
     memory: 17,
     disk: 17,
   },
+  // The Backup badge needs about 95px with cell padding for Unknown (79px)
+  // and Running (73px) at the narrowest compact table. Its room comes from Type, whose VM/LXC
+  // badge and sorted header need about 51px, and from CPU, whose bar shows
+  // only a percentage and core count; Name, ID, Uptime and the memory and
+  // disk bars keep their widths, so their used/total sublabels stay.
   compact: {
     name: 26,
     runtime: 10,
-    type: 7,
+    type: 5.4,
     info: 7,
     vmid: 7,
-    cpu: 13,
+    cpu: 9.6,
     memory: 14,
     disk: 14,
     uptime: 8,
-    backup: 5,
+    backup: 10,
     image: 18,
     namespace: 11,
     context: 13,

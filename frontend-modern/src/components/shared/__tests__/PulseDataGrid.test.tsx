@@ -103,6 +103,37 @@ describe('PulseDataGrid', () => {
     expect(onRowClick).toHaveBeenCalledTimes(1);
   });
 
+  it('does not run the row handler for a drag that selects row text', () => {
+    const onRowClick = vi.fn();
+
+    render(() => (
+      <PulseDataGrid<TestRow>
+        data={[{ id: '1', name: 'Copyable tower' }]}
+        columns={[{ key: 'name', label: 'Name' }]}
+        keyExtractor={(row) => row.id}
+        onRowClick={onRowClick}
+      />
+    ));
+
+    const name = screen.getByText('Copyable tower');
+    const range = document.createRange();
+    range.selectNodeContents(name);
+    const selection = document.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    try {
+      fireEvent.mouseDown(name, { clientX: 4, clientY: 8 });
+      fireEvent.click(name, { clientX: 96, clientY: 8 });
+      expect(onRowClick).not.toHaveBeenCalled();
+
+      fireEvent.mouseDown(name, { clientX: 40, clientY: 8 });
+      fireEvent.click(name, { clientX: 40, clientY: 8 });
+      expect(onRowClick).toHaveBeenCalledTimes(1);
+    } finally {
+      selection.removeAllRanges();
+    }
+  });
+
   it('inherits the native touch click target from the shared TableRow', () => {
     const nativeListener = vi.spyOn(HTMLTableRowElement.prototype, 'addEventListener');
     const onRowClick = vi.fn();

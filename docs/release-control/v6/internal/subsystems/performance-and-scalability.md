@@ -391,6 +391,15 @@ touch-end. `GuestRow.test.tsx` verifies its conditional lifecycle and
 non-activation; the production row/full-drawer touch fixture verifies first
 activation and unchanged identity independently of native collector acceptance.
 
+The guest row also creates one `createRowTextSelectionGuard()` from `Table` per
+row, so a drag that selects row text (a VMID, address or tag) does not open the
+guest drawer, while a press released in place still opens it on the first
+click. The guard keeps one press coordinate in a closure, binds its native
+mousedown listener only while a row action exists, and reads the selection only
+when the row is clicked: no document listener, timer, signal, metric derivation
+or History work is added per row. `GuestRow.test.tsx` covers the drag, the
+in-place click and chevron activation over a selection.
+
 ## Canonical Files
 
 1. `pkg/metrics/store.go`
@@ -3756,6 +3765,18 @@ Dialog owns focus, Escape/backdrop dismissal and background isolation, and
 returns focus to the originating disclosure. Nested evidence activation must
 not trigger the enclosing guest row. Touch targets are at least 44px; compact
 desktop shields and the existing status colours remain.
+
+The Backup column badge does not truncate. Running (73px with its shield) and
+Unknown (79px) need about 95px with cell padding, so the compact layout weights
+give Backup 10 against Type 5.4 and CPU 9.6, and the wide column is 96px with
+the extra 24px taken from CPU (116px). Type still fits its VM/LXC badge and
+sorted header, and CPU its percentage and core count, while Name, ID, Uptime,
+Net I/O, Disk I/O and the memory and disk bars keep their widths and used/total
+sublabels; views without a Backup column (pods, Docker) give them slightly more.
+Before this, Running was cut inside its pill at every width up to 1600px, and
+None and month ages up to about 1500px.
+`WorkloadsSurface.performance.contract.test.tsx` checks the narrowest compact
+table and the wide width.
 
 The evidence content is reactive to the same guest identity: running is not
 completion, malformed/future times are unknown, and only the existing absence

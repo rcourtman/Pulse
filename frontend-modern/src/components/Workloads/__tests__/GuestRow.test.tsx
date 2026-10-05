@@ -1087,6 +1087,33 @@ describe('GuestRow', () => {
       expect(onClick).toHaveBeenCalledOnce();
     });
 
+    it('does not open the guest for a drag that selects row text', () => {
+      const onClick = vi.fn();
+      const { container } = renderGuestRow({
+        guest: makeGuest(),
+        onClick,
+      });
+      const cell = container.querySelector('td[data-workload-col="vmid"]')!;
+      const range = document.createRange();
+      range.selectNodeContents(cell);
+      const selection = document.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+      try {
+        fireEvent.mouseDown(cell, { clientX: 4, clientY: 8 });
+        fireEvent.click(cell, { clientX: 30, clientY: 8 });
+        expect(onClick).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', { name: 'Expand test-vm' }));
+        expect(onClick).toHaveBeenCalledTimes(1);
+
+        fireEvent.mouseDown(cell, { clientX: 12, clientY: 8 });
+        fireEvent.click(cell, { clientX: 12, clientY: 8 });
+        expect(onClick).toHaveBeenCalledTimes(2);
+      } finally {
+        selection.removeAllRanges();
+      }
+    });
+
     it('marks only actionable guest rows as native touch click targets', () => {
       const addListener = vi.spyOn(HTMLTableRowElement.prototype, 'addEventListener');
       const removeListener = vi.spyOn(HTMLTableRowElement.prototype, 'removeEventListener');
@@ -1788,7 +1815,7 @@ describe('GUEST_COLUMNS', () => {
       'aiContext',
     ]);
     expect(getGuestColumnWidthStyle('name', false, 'compact', compactPodColumnIds)).toEqual({
-      width: '25%',
+      width: '25.8449%',
     });
   });
 
@@ -1807,7 +1834,7 @@ describe('GUEST_COLUMNS', () => {
     expect(
       getGuestColumnWidthStyle('update', false, 'compact', compactDockerRuntimeColumnIds),
     ).toEqual({
-      width: '8.9286%',
+      width: '9.2081%',
     });
   });
 
