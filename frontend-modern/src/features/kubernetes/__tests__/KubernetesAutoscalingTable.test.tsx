@@ -61,7 +61,10 @@ describe('KubernetesAutoscalingTable', () => {
     expect(screen.getByText('Bounds')).toBeInTheDocument();
     expect(screen.getByText('Metrics')).toBeInTheDocument();
     expect(screen.getByText('checkout-api-hpa')).toBeInTheDocument();
-    expect(screen.getByText('prod/apps')).toBeInTheDocument();
+    expect(screen.getByText('apps').closest('[data-kubernetes-scope]')).toHaveAttribute(
+      'title',
+      'prod/apps',
+    );
     expect(screen.getByText('Deployment/checkout-api')).toBeInTheDocument();
     expect(screen.getByText('2-10')).toBeInTheDocument();
     expect(screen.getByText('4')).toBeInTheDocument();

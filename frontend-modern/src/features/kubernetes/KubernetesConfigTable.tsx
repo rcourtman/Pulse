@@ -31,7 +31,9 @@ import {
   filterKubernetesResources,
   kubernetesScopeLabel,
   type KubernetesResourceStatusFilter,
+  isSingleKubernetesCluster,
 } from './kubernetesPageModel';
+import { KubernetesScopeText } from './KubernetesScopeText';
 
 // ConfigMaps and Secrets are intentionally rendered as API metadata. Pulse may
 // know that keys exist, but metadata-only collection must never imply that
@@ -198,6 +200,7 @@ export const KubernetesConfigTable: Component<{
   externalSearch?: () => string;
   externalStatus?: () => KubernetesResourceStatusFilter;
 }> = (props) => {
+  const singleCluster = createMemo(() => isSingleKubernetesCluster(props.resources));
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as KubernetesResourceStatusFilter,
@@ -264,7 +267,8 @@ export const KubernetesConfigTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="resource"
-                  class="platform-table-mobile-w-30 md:w-[22%]"
+                  class="platform-table-mobile-w-30 md:w-[27%]"
+                  bandWidth={35}
                 >
                   Resource
                 </PlatformSortableTableHead>
@@ -272,7 +276,8 @@ export const KubernetesConfigTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="kind"
-                  class="platform-table-mobile-w-15 md:w-[13%]"
+                  class="platform-table-mobile-w-15 md:w-[15%]"
+                  bandWidth={16}
                 >
                   Kind
                 </PlatformSortableTableHead>
@@ -280,7 +285,8 @@ export const KubernetesConfigTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="scope"
-                  class="platform-table-mobile-w-20 md:w-[16%]"
+                  class="platform-table-mobile-w-20 md:w-[10%]"
+                  bandWidth={14}
                 >
                   Scope
                 </PlatformSortableTableHead>
@@ -288,7 +294,8 @@ export const KubernetesConfigTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="lifecycle"
-                  class="platform-table-phone-hidden md:w-[16%]"
+                  class="platform-table-phone-hidden md:w-[17%]"
+                  bandWidth={16}
                 >
                   <PlatformResponsiveTableLabel compact="Status" full="Lifecycle / trust" />
                 </PlatformSortableTableHead>
@@ -296,6 +303,7 @@ export const KubernetesConfigTable: Component<{
                   kind="text"
                   sort={sort}
                   class="platform-table-mobile-w-15 md:w-[14%]"
+                  bandWidth={19}
                 >
                   <PlatformResponsiveTableLabel compact="Data" full="Data shape" />
                 </PlatformSortableTableHead>
@@ -322,7 +330,6 @@ export const KubernetesConfigTable: Component<{
                     const indicator = () => getSimpleStatusIndicator(resource.status);
                     const name = () => configName(resource);
                     const kind = () => configKind(resource);
-                    const scope = () => kubernetesScopeLabel(resource);
                     const state = () => lifecycleOrTrust(resource);
                     const data = () => dataShape(resource);
                     const refs = () => serviceAccountRefs(resource);
@@ -364,9 +371,11 @@ export const KubernetesConfigTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-52 truncate" title={scope()}>
-                              {scope()}
-                            </span>
+                            <KubernetesScopeText
+                              resource={resource}
+                              singleCluster={singleCluster()}
+                              class="block truncate"
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
@@ -376,21 +385,21 @@ export const KubernetesConfigTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-52 truncate" title={data().title}>
+                            <span class="block truncate" title={data().title}>
                               {data().label}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
-                            <span class="inline-block max-w-52 truncate" title={refs().title}>
+                            <span class="block truncate" title={refs().title}>
                               {refs().label}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
-                            <span class="inline-block max-w-36 truncate" title={labels().title}>
+                            <span class="block truncate" title={labels().title}>
                               {labels().label}
                             </span>
                           </TableCell>

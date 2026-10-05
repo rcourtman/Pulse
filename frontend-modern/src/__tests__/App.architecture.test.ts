@@ -274,6 +274,20 @@ describe('App architecture', () => {
     expect(appStylesSource).not.toContain('white-space: normal;\n    -webkit-box-orient');
   });
 
+  it('keeps the desired replica count on screen in the Deployments table', () => {
+    // Desired returns with the 72rem tier, so Ready's own /desired total hides
+    // only there, after its base rule so the container rule wins.
+    const base = appStylesSource.indexOf('.k8s-deployment-ready-total {\n    display: inline;');
+    const hide = appStylesSource.indexOf(
+      '@container (min-width: 72rem) {\n    .k8s-deployment-ready-total {\n      display: none;',
+    );
+    expect(base).toBeGreaterThan(-1);
+    expect(hide).toBeGreaterThan(base);
+    expect(appStylesSource.match(/\.k8s-deployment-ready-total \{\s*display: none;/g)).toHaveLength(
+      1,
+    );
+  });
+
   it('keeps the identity anchor between the phone projection and the md column widths', () => {
     // Column visibility is container-led but md:w-[...] widths are viewport
     // media queries, so a 544-767px band showed every column with no widths and
@@ -282,6 +296,11 @@ describe('App architecture', () => {
     const band = appStylesSource.slice(appStylesSource.indexOf('@media (width < 768px)'));
     expect(band).toMatch(
       /^@media \(width < 768px\) \{\s*@container \(min-width: 34rem\) \{\s*\.table-scroll-shell > \.table-fixed\.platform-table th\.platform-table-name-column \{\s*width: 30%;/,
+    );
+    // A table that needs unequal room in the band declares each header's
+    // width, and the shell applies it only there (after the name anchor).
+    expect(band).toMatch(
+      /width: 30%;\s*\}[\s\S]*?th\[style\*='--platform-table-band-width'\] \{\s*width: var\(--platform-table-band-width\);/,
     );
   });
 

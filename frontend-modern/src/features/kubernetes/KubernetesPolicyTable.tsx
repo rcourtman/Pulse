@@ -1,4 +1,4 @@
-import { Show, type Component, type JSX } from 'solid-js';
+import { createMemo, Show, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
@@ -16,6 +16,7 @@ import {
   summarizePlatformTableValues,
   PlatformTableShell,
   withPlatformStatusCounts,
+  platformTableBandWidthStyle,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -27,9 +28,10 @@ import {
 import type { Resource } from '@/types/resource';
 import {
   filterKubernetesResources,
-  kubernetesScopeLabel,
   type KubernetesResourceStatusFilter,
+  isSingleKubernetesCluster,
 } from './kubernetesPageModel';
+import { KubernetesScopeText } from './KubernetesScopeText';
 
 // Kubernetes policy resources carry very different API fields. Keep this table
 // on the documented NetworkPolicy, PDB, ResourceQuota, and LimitRange shapes
@@ -187,6 +189,7 @@ export const KubernetesPolicyTable: Component<{
   externalSearch?: () => string;
   externalStatus?: () => KubernetesResourceStatusFilter;
 }> = (props) => {
+  const singleCluster = createMemo(() => isSingleKubernetesCluster(props.resources));
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as KubernetesResourceStatusFilter,
@@ -247,26 +250,31 @@ export const KubernetesPolicyTable: Component<{
               <>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[22%]`}
+                  style={platformTableBandWidthStyle(30)}
                 >
                   Resource
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[14%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[17%]`}
+                  style={platformTableBandWidthStyle(23)}
                 >
                   Kind
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[15%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[12%]`}
+                  style={platformTableBandWidthStyle(13)}
                 >
                   Scope
                 </TableHead>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-20 md:w-[15%]`}
+                  style={platformTableBandWidthStyle(18)}
                 >
                   <PlatformResponsiveTableLabel compact="Policy" full="Policy shape" />
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-20 md:w-[16%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-20 md:w-[15%]`}
+                  style={platformTableBandWidthStyle(16)}
                 >
                   <PlatformResponsiveTableLabel compact="Limits" full="Spec / limits" />
                 </TableHead>
@@ -288,7 +296,6 @@ export const KubernetesPolicyTable: Component<{
                   {(resource) => {
                     const indicator = () => getSimpleStatusIndicator(resource.status);
                     const name = () => policyName(resource);
-                    const scope = () => kubernetesScopeLabel(resource);
                     const shape = () => policyShape(resource);
                     const spec = () => policySpec(resource);
                     const state = () => policyState(resource);
@@ -330,35 +337,37 @@ export const KubernetesPolicyTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-52 truncate" title={scope()}>
-                              {scope()}
-                            </span>
+                            <KubernetesScopeText
+                              resource={resource}
+                              singleCluster={singleCluster()}
+                              class="block truncate"
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-52 truncate" title={shape().title}>
+                            <span class="block truncate" title={shape().title}>
                               {shape().label}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-[16rem] truncate" title={spec().title}>
+                            <span class="block truncate" title={spec().title}>
                               {spec().label}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
-                            <span class="inline-block max-w-56 truncate" title={state().title}>
+                            <span class="block truncate" title={state().title}>
                               {state().label}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
-                            <span class="inline-block max-w-32 truncate" title={labels().title}>
+                            <span class="block truncate" title={labels().title}>
                               {labels().label}
                             </span>
                           </TableCell>

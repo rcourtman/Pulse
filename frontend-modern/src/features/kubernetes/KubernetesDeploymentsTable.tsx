@@ -174,13 +174,18 @@ export const KubernetesDeploymentsTable: Component<{
                     The integer-count columns (Desired / Updated / Ready /
                     Available) trim to what their headers plus 1-2 digit
                     values need. The basic tier restores namespace context
-                    without crowding the phone tier.
+                    without crowding the phone tier. Desired is the
+                    denominator Ready already shows (2/2), so it waits for a
+                    wide table. bandWidth sizes the tablet band below the
+                    md widths, where a long deployment name needs about a
+                    third of the row and the counts need little.
                   */}
                 <PlatformSortableTableHead
                   kind="name"
                   sort={sort}
                   sortKey="deployment"
                   class="platform-table-mobile-w-30 md:w-[25%]"
+                  bandWidth={36}
                 >
                   Deployment
                 </PlatformSortableTableHead>
@@ -188,7 +193,8 @@ export const KubernetesDeploymentsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="namespace"
-                  class="platform-table-mobile-w-15 md:w-[20%]"
+                  class="platform-table-mobile-w-15 md:w-[18%]"
+                  bandWidth={16}
                 >
                   Namespace
                 </PlatformSortableTableHead>
@@ -204,7 +210,7 @@ export const KubernetesDeploymentsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="desired"
-                  class="platform-table-phone-hidden md:w-[8%]"
+                  class="hidden md:table-cell md:w-[8%]"
                 >
                   <PlatformResponsiveTableLabel compact="Des" full="Desired" />
                 </PlatformSortableTableHead>
@@ -213,6 +219,7 @@ export const KubernetesDeploymentsTable: Component<{
                   sort={sort}
                   sortKey="updated"
                   class="platform-table-phone-hidden md:w-[8%]"
+                  bandWidth={12}
                 >
                   <PlatformResponsiveTableLabel compact="Upd" full="Updated" />
                 </PlatformSortableTableHead>
@@ -220,7 +227,8 @@ export const KubernetesDeploymentsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="ready"
-                  class="platform-table-mobile-w-15 md:w-[7%]"
+                  class="platform-table-mobile-w-10 md:w-[7%]"
+                  bandWidth={9.5}
                 >
                   <PlatformResponsiveTableLabel compact="Rdy" full="Ready" />
                 </PlatformSortableTableHead>
@@ -229,6 +237,7 @@ export const KubernetesDeploymentsTable: Component<{
                   sort={sort}
                   sortKey="available"
                   class="platform-table-phone-hidden md:w-[9%]"
+                  bandWidth={14}
                 >
                   <PlatformResponsiveTableLabel compact="Avail" full="Available" />
                 </PlatformSortableTableHead>
@@ -236,7 +245,8 @@ export const KubernetesDeploymentsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="age"
-                  class="platform-table-mobile-w-10 md:w-[6%] platform-table-narrow-hidden"
+                  class="platform-table-mobile-w-15 md:w-[8%] platform-table-narrow-hidden"
+                  bandWidth={12.5}
                 >
                   Age
                 </PlatformSortableTableHead>
@@ -292,7 +302,7 @@ export const KubernetesDeploymentsTable: Component<{
                             {cluster()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-phone-hidden text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                           >
                             <PlatformTableNumberValue
                               value={deployment.kubernetes?.desiredReplicas ?? 0}

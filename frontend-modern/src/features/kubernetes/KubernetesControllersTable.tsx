@@ -36,7 +36,9 @@ import {
   kubernetesScopeLabel,
   mapKubernetesControllerStatus,
   type KubernetesResourceStatusFilter,
+  isSingleKubernetesCluster,
 } from './kubernetesPageModel';
+import { KubernetesScopeText } from './KubernetesScopeText';
 import { KubernetesNameText } from './KubernetesNameText';
 
 const controllerName = (resource: Resource): string =>
@@ -243,6 +245,7 @@ export const KubernetesControllersTable: Component<{
   externalSearch?: () => string;
   externalStatus?: () => KubernetesResourceStatusFilter;
 }> = (props) => {
+  const singleCluster = createMemo(() => isSingleKubernetesCluster(props.resources));
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as KubernetesResourceStatusFilter,
@@ -397,7 +400,6 @@ export const KubernetesControllersTable: Component<{
                     const indicator = () => mapKubernetesControllerStatus(resource);
                     const name = () => controllerName(resource);
                     const kind = () => controllerKind(resource);
-                    const scope = () => kubernetesScopeLabel(resource);
                     const target = () => targetValue(resource);
                     const exceptions = () => exceptionSummary(resource);
                     const detail = () => apiDetail(resource);
@@ -439,14 +441,16 @@ export const KubernetesControllersTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
-                            <span class="inline-block max-w-48 truncate" title={scope()}>
-                              {scope()}
-                            </span>
+                            <KubernetesScopeText
+                              resource={resource}
+                              singleCluster={singleCluster()}
+                              class="block truncate"
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
-                            <span class="inline-block max-w-48 truncate" title={target()}>
+                            <span class="block truncate" title={target()}>
                               {target()}
                             </span>
                           </TableCell>
@@ -468,7 +472,7 @@ export const KubernetesControllersTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-52 truncate" title={exceptions()}>
+                            <span class="block truncate" title={exceptions()}>
                               {exceptions()}
                             </span>
                           </TableCell>

@@ -427,7 +427,7 @@ export const KubernetesNodesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
                           >
-                            <span class="truncate inline-block max-w-40" title={runtime()}>
+                            <span class="block truncate" title={runtime()}>
                               {runtime()}
                             </span>
                           </TableCell>

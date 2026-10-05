@@ -590,12 +590,23 @@ export function createPlatformTableSortState<SortKey extends string>(options: {
   return { sortKey, sortDirection, handleSort, getAriaSort, sortRows };
 }
 
+// The tablet band between the phone projection and the md column widths (a
+// 34rem container below a 768px viewport) applies no md:w-[...] width, so a
+// table whose columns need unequal room there declares each header's percent
+// width through this style, which the shared shell reads only in that band.
+export const platformTableBandWidthStyle = (
+  percent: number | undefined,
+): JSX.CSSProperties | undefined =>
+  percent === undefined ? undefined : { '--platform-table-band-width': `${percent}%` };
+
 export function PlatformSortableTableHead<SortKey extends string>(props: {
   kind: PlatformTableColumnKind;
   sort: PlatformTableSortState<SortKey>;
   // Omit to render a non-sortable header with the same canonical alignment.
   sortKey?: SortKey;
   class?: string;
+  // Percent width for the tablet band (see platformTableBandWidthStyle).
+  bandWidth?: number;
   children: JSX.Element;
 }) {
   const isSorted = () => props.sortKey !== undefined && props.sort.sortKey() === props.sortKey;
@@ -611,6 +622,7 @@ export function PlatformSortableTableHead<SortKey extends string>(props: {
         .replace(/\s+/g, ' ')
         .trim()}
       aria-sort={props.sortKey !== undefined ? props.sort.getAriaSort(props.sortKey) : undefined}
+      style={platformTableBandWidthStyle(props.bandWidth)}
       onClick={handleClick}
     >
       {props.children}

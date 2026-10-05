@@ -2309,6 +2309,11 @@ not a replacement status card, CTA band, or page-local nested card.
    keeps the 30 percent `platform-table-name-column` anchor in that band. Tables
    sized by a weighted colgroup keep their own widths there, since column widths
    win over header widths.
+   A table whose columns need unequal room in that band (a long name beside
+   short counts) declares each header's percent through
+   `platformTableBandWidthStyle` or the sortable header's `bandWidth`, which
+   sets `--platform-table-band-width`; the shell applies it only inside the band,
+   after the name anchor, so md widths and phone widths are unchanged.
    Below a 360-pixel content width, the shared narrow layout promotes identity to
    40 percent and may remove one additional lowest-priority context column via
    `platform-table-narrow-hidden` rather than shrinking names and metric values
