@@ -2304,7 +2304,6 @@
         { "path": "src/features/truenas/TrueNASAppsTable.tsx" },
         { "path": "src/features/truenas/TrueNASNetworkSharesTable.tsx" },
         { "path": "src/features/truenas/TrueNASServicesTable.tsx" },
-        { "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx" },
         { "path": "src/features/truenas/TrueNASVirtualMachinesTable.tsx" }
       ],
       "forbiddenPatterns": [
@@ -2318,10 +2317,6 @@
         },
         {
           "path": "src/features/truenas/TrueNASServicesTable.tsx",
-          "patterns": ["const titleCase"]
-        },
-        {
-          "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx",
           "patterns": ["const titleCase"]
         },
         {

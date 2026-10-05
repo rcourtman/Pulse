@@ -660,9 +660,11 @@ The TrueNAS Storage `Storage type` scope follows the same boundary with stable
 the current option through pressed-state semantics, preserves the scope in the
 URL across reload, and removes the query value for the default `all` state.
 On narrow screens the physical-disk scope may reprioritize its canonical table
-columns to endurance, temperature, and health while retaining the shared table
+columns to endurance and temperature while retaining the shared table
 overflow and touch-target behavior; it must not introduce a second mobile-only
-filter or table shell.
+filter or table shell. Its Health column stays desktop-only in every scope:
+the status dot carries a disk's condition on a phone, the row drawer carries
+the reason, and the old pill clipped past the phone container edge.
 
 Large-estate platform pages must keep one canonical inventory snapshot for the
 initial read and explicit refresh path. The Proxmox and VMware vSphere
@@ -5247,7 +5249,10 @@ Platform table title-case fallback formatting follows the same rule.
 `formatPlatformTableTitleCaseValue` owns the repeated trimmed-string plus
 `Unknown` fallback behavior for state/status labels that need simple title
 case. TrueNAS platform tables must compose that helper instead of declaring
-local `titleCase` helpers.
+local `titleCase` helpers. The apps, shares, services and VMs tables are its
+required consumers. The storage table left that list when its Health cell
+switched from a title-cased risk-level pill to TrueNAS's own reason text, and
+the scope-wide guard against a local `titleCase` helper still covers it.
 Platform table compact list summaries follow the same rule.
 `summarizePlatformTableValues` owns the repeated trimming, empty-marker label,
 visible-value count, `+N` overflow suffix, full-title text, and normalized

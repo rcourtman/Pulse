@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "base_sha": "146595b8484aa742e22e218675ea141164b55d4a",
+  "verified_at": "2026-10-05T06:53:20Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/truenas/truenasPageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/truenas/truenasPageModel.ts": "67c724aa3023666c689a06f5cc4b92f634ab632b0e8842ee6fc709f3a06ed9b6"
+  },
+  "routes": [
+    "/truenas/storage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Storage Health cells after switching the dataset state reason to the shared util: the archive pool lists its volume alert and the copied SMART alert, archive/cold reads Dataset is read-only, sdc reads its SMART failure. Same text as before the switch, now from the mapping the drawer also uses",
+    "Phone at 390: the table keeps its dot-only projection, and tapping archive/cold opens a drawer that says Dataset is read-only"
+  ],
+  "interactions": [
+    "Read every Health cell title on the storage table",
+    "Tapped archive/cold on a 390 phone"
+  ]
+}

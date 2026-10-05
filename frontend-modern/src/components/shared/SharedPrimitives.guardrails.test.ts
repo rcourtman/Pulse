@@ -5895,7 +5895,9 @@ describe('shared primitive guardrails', () => {
       ['src/features/truenas/TrueNASAppsTable.tsx', truenasAppsTableSource],
       ['src/features/truenas/TrueNASNetworkSharesTable.tsx', truenasNetworkSharesTableSource],
       ['src/features/truenas/TrueNASServicesTable.tsx', truenasServicesTableSource],
-      ['src/features/truenas/TrueNASStorageTopologyTable.tsx', truenasStorageTopologyTableSource],
+      // The storage table no longer formats a raw provider value: its Health
+      // cell carries TrueNAS's own reason text. The scope-wide local-helper
+      // guard below still keeps a private titleCase out of it.
       ['src/features/truenas/TrueNASVirtualMachinesTable.tsx', truenasVirtualMachinesTableSource],
     ];
     const truenasTitleCaseConsumerPaths = truenasTitleCaseConsumers.map(([path]) => path);
