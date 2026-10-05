@@ -2090,7 +2090,11 @@ artifact-selection behaviour.
    later authoring template.
    The rootful qualification source manifest retains the complete compiled
    install-test package, including the release-notes helper and its exact
-   authored-copy fixture. Accepting grouped notes must not silently narrow
+   authored-copy fixture, copied-API/temperature/MSP/container-CPU guidance,
+   native guidance tools and demo transaction tests. Every compiled installer
+   test must appear in the manifest's exact paths even though recursive
+   production roots exclude `_test.go`; the real manifest reader must hash
+   each of those files. Accepting new installer tests must not silently narrow
    that attested source boundary.
    Qualification counts, readiness assertions, release gates, workflow
    narration, artifact identity, and promotion metadata stay in governed

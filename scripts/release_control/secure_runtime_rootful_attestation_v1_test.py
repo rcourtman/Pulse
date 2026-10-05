@@ -486,6 +486,16 @@ if module.MAX_RECEIPT_BYTES <= 0:
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(b"artifact pulse-agent must be a regular file", result.stderr)
 
+    def test_manifest_reader_hashes_every_compiled_installer_test(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        _, source_hashes = attester.load_source_manifest(
+            repo_root, repo_root / attester.SOURCE_MANIFEST_PATH,
+        )
+        for source in (repo_root / "scripts" / "installtests").glob("*_test.go"):
+            relative = source.relative_to(repo_root).as_posix()
+            with self.subTest(source=relative):
+                self.assertEqual(source_hashes.get(relative), sha(source.read_bytes()))
+
     def test_manifest_contract_binds_transitive_harness_and_production_boundary(self) -> None:
         manifest = json.loads((Path(__file__).with_name("secure_runtime_rootful_source_manifest_v1.json")).read_text(encoding="utf-8"))
         required = {
