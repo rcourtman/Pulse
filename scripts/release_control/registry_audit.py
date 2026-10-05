@@ -26,6 +26,17 @@ from status_audit import load_status_payload
 REGISTRY_PATH = DEFAULT_CONTROL_PLANE["registry_path"]
 REGISTRY_SCHEMA_PATH = DEFAULT_CONTROL_PLANE["registry_schema_path"]
 LANE_RE = re.compile(r"^L[0-9]+$")
+# Every subsystem requires explicit path-policy coverage, so the default
+# policy is never consulted and a path policy's own proof routes are the whole
+# requirement. allow_same_subsystem_tests would widen a policy to every test
+# the subsystem owns (any internal/ai test for ai-runtime's mutation-registry
+# policy), and its reach would grow with ownership rather than with the
+# policy. The commit guards ignored the flag from the v6 import until it was
+# retired here, so false is the behaviour every commit has been held to.
+SAME_SUBSYSTEM_TESTS_RETIRED = (
+    "it would accept any test the subsystem owns as proof for this policy; "
+    "list the accepted proofs in test_prefixes or exact_files instead"
+)
 
 
 def load_registry_payload(*, staged: bool = False) -> dict[str, Any]:
@@ -342,6 +353,11 @@ def audit_registry_payload(
 
         if not isinstance(verification.get("allow_same_subsystem_tests"), bool):
             errors.append(f"{context}.verification.allow_same_subsystem_tests must be a bool")
+        elif verification.get("allow_same_subsystem_tests") is True:
+            errors.append(
+                f"{context}.verification.allow_same_subsystem_tests must be false: "
+                + SAME_SUBSYSTEM_TESTS_RETIRED
+            )
         if not isinstance(verification.get("require_explicit_path_policy_coverage"), bool):
             errors.append(f"{context}.verification.require_explicit_path_policy_coverage must be a bool")
         elif verification.get("require_explicit_path_policy_coverage") is not True:
@@ -465,6 +481,11 @@ def audit_registry_payload(
 
             if not isinstance(raw_policy.get("allow_same_subsystem_tests"), bool):
                 errors.append(f"{policy_context}.allow_same_subsystem_tests must be a bool")
+            elif raw_policy.get("allow_same_subsystem_tests") is True:
+                errors.append(
+                    f"{policy_context}.allow_same_subsystem_tests must be false: "
+                    + SAME_SUBSYSTEM_TESTS_RETIRED
+                )
 
             policy_test_prefixes = raw_policy.get("test_prefixes")
             if not isinstance(policy_test_prefixes, list):

@@ -661,7 +661,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/actionrunner/runner.go",
                         "internal/dockeragent/action_runtime.go",
                     ],
-                    "allow_same_subsystem_tests": True,
+                    "allow_same_subsystem_tests": False,
                     "test_prefixes": ["internal/actionrunner/"],
                     "exact_files": [
                         "cmd/pulse-agent-runner/main_test.go",
@@ -2556,6 +2556,57 @@ None yet.
             ["frontend-modern/src/api/__tests__/alerts.test.ts"],
         )
         self.assertEqual(matches, ["frontend-modern/src/api/__tests__/alerts.test.ts"])
+
+    def test_check_staged_contracts_reads_same_subsystem_tests_from_ownership(self):
+        # The guards hand the impacted entry, not the registry rule, to
+        # staged_verification_files_for_requirement. Before the entry carried
+        # owned_prefixes/owned_files, a same-subsystem test never satisfied a
+        # requirement that allowed one, while subsystem_lookup and the BLOCKED
+        # message both said it would. The live registry keeps the flag false
+        # (registry_audit rejects true), so a synthetic rule pins the plumbing.
+        synthetic_rule = {
+            "id": "synthetic",
+            "contract": "docs/release-control/v6/internal/subsystems/synthetic.md",
+            "owned_prefixes": ["synthetic/"],
+            "owned_files": [],
+            "verification": {
+                "allow_same_subsystem_tests": False,
+                "test_prefixes": [],
+                "exact_files": [],
+                "require_explicit_path_policy_coverage": True,
+                "path_policies": [
+                    {
+                        "id": "synthetic-runtime",
+                        "label": "synthetic runtime proof",
+                        "match_prefixes": ["synthetic/"],
+                        "match_files": [],
+                        "allow_same_subsystem_tests": True,
+                        "test_prefixes": [],
+                        "exact_files": ["synthetic/listed_test.go"],
+                    }
+                ],
+            },
+        }
+        stderr = io.StringIO()
+        with (
+            patch.dict(os.environ, {CONTRACT_NEUTRAL_OVERRIDE_ENV: ""}, clear=False),
+            patch(
+                "canonical_completion_guard.load_subsystem_rules",
+                return_value=[synthetic_rule],
+            ),
+            patch("canonical_completion_guard.required_contract_updates", return_value={}),
+            redirect_stderr(stderr),
+        ):
+            accepted = check_staged_contracts(
+                ["synthetic/runtime.go", "synthetic/nested/other_test.go"]
+            )
+            blocked = check_staged_contracts(
+                ["synthetic/runtime.go", "elsewhere/other_test.go"]
+            )
+
+        self.assertEqual(accepted, 0)
+        self.assertEqual(blocked, 1)
+        self.assertIn("same-subsystem test/spec files are also accepted", stderr.getvalue())
 
     def test_patrol_autopilot_runtime_accepts_only_dedicated_verification(self):
         rules = {rule["id"]: rule for rule in load_subsystem_rules()}

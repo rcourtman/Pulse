@@ -1433,7 +1433,7 @@
             "match_files": [
               "cmd/pulse-agent/collector_lifecycle.go"
             ],
-            "allow_same_subsystem_tests": true,
+            "allow_same_subsystem_tests": false,
             "test_prefixes": [
               "internal/collectorlifecycle/"
             ],
@@ -1456,7 +1456,7 @@
               "internal/hostagent/action_runner_health_persistence_unix.go",
               "internal/hostagent/action_runner_health_persistence_windows.go"
             ],
-            "allow_same_subsystem_tests": true,
+            "allow_same_subsystem_tests": false,
             "test_prefixes": [
               "internal/actionrunner/"
             ],
@@ -1475,7 +1475,7 @@
             "match_files": [
               "cmd/pulse-agent-helper/main.go"
             ],
-            "allow_same_subsystem_tests": true,
+            "allow_same_subsystem_tests": false,
             "test_prefixes": [
               "internal/agenthelper/"
             ],
@@ -2140,7 +2140,7 @@
             "match_files": [
               "docs/AI_PATROL_QUALIFICATION.md"
             ],
-            "allow_same_subsystem_tests": true,
+            "allow_same_subsystem_tests": false,
             "test_prefixes": [
               "internal/ai/qualification/"
             ],
@@ -2156,7 +2156,7 @@
               "internal/mutationregistry/"
             ],
             "match_files": [],
-            "allow_same_subsystem_tests": true,
+            "allow_same_subsystem_tests": false,
             "test_prefixes": [
               "internal/mutationregistry/"
             ],
@@ -2465,7 +2465,7 @@
         "tests/integration/scripts/run-alert-qualification.mjs"
       ],
       "verification": {
-        "allow_same_subsystem_tests": true,
+        "allow_same_subsystem_tests": false,
         "test_prefixes": [],
         "exact_files": [
           "internal/alerts/migration_characterization_test.go",
@@ -3650,7 +3650,7 @@
         "pulse-pro:scripts/validate_stripe_catalog.py"
       ],
       "verification": {
-        "allow_same_subsystem_tests": true,
+        "allow_same_subsystem_tests": false,
         "test_prefixes": [],
         "exact_files": [
           "internal/api/contract_test.go",
@@ -6069,7 +6069,7 @@
         "pkg/tlsutil/certificate.go"
       ],
       "verification": {
-        "allow_same_subsystem_tests": true,
+        "allow_same_subsystem_tests": false,
         "test_prefixes": [],
         "exact_files": [
           "internal/unifiedresources/code_standards_test.go"
@@ -7477,7 +7477,7 @@
         "pulse-pro:relay-server/revocation_feed.go"
       ],
       "verification": {
-        "allow_same_subsystem_tests": true,
+        "allow_same_subsystem_tests": false,
         "test_prefixes": [],
         "exact_files": [
           "internal/api/relay_mobile_capability_test.go",
@@ -7817,7 +7817,7 @@
             "match_files": [
               "pkg/extensions/audit_admin.go"
             ],
-            "allow_same_subsystem_tests": true,
+            "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "internal/api/audit_handlers_test.go",
@@ -8293,7 +8293,7 @@
         "internal/platformsupport/manifest_generated.go"
       ],
       "verification": {
-        "allow_same_subsystem_tests": true,
+        "allow_same_subsystem_tests": false,
         "test_prefixes": [],
         "exact_files": [
           "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
@@ -8564,7 +8564,7 @@
               "frontend-modern/src/routing/navigation.ts",
               "frontend-modern/src/routing/routePreload.ts"
             ],
-            "allow_same_subsystem_tests": true,
+            "allow_same_subsystem_tests": false,
             "test_prefixes": [
               "frontend-modern/src/features/actions/__tests__/"
             ],
