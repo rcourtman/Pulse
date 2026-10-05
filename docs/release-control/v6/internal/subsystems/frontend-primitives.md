@@ -6455,6 +6455,9 @@ must not hand-code raw `<a target="_blank">` anchors for documentation links.
 The `settings-external-text-link-shell` and
 `settings-external-text-link-local-anchor` registry entries enforce that split,
 and the Button registry owns the `info` variant for blue documentation CTAs.
+A documentation link inside a tinted callout sentence (the backup export and
+import warnings) uses the `inlineInherit` variant, which keeps the callout's
+text colour and underline instead of switching to link blue.
 
 Platform inline notices that sit inside platform pages but are not settings
 callouts must route through the shared `InlineNotice` primitive. Platform owners

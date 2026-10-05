@@ -5,6 +5,7 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { controlClass, formField, formHelpText, labelClass } from '@/components/shared/Form';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { getAPITokenManagementLocationMessage } from '@/utils/apiTokenPresentation';
+import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { getShippedDocUrl } from '@/utils/docsLinks';
 
 interface BackupTransferDialogsProps {
@@ -145,14 +146,12 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                     and API-token records, but not history, TrueNAS/vSphere connections or agent
                     enrolment state. Local login credentials and sessions are not included. Check
                     the{' '}
-                    <a
+                    <ExternalTextLink
                       href={getShippedDocUrl('MIGRATION.md')}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="underline"
+                      variant="inlineInherit"
                     >
                       migration guide
-                    </a>{' '}
+                    </ExternalTextLink>{' '}
                     before relying on this for recovery. Remember your{' '}
                     {props.useCustomPassphrase() || !props.securityStatus()?.hasAuthentication
                       ? 'passphrase'
@@ -296,14 +295,12 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                     <strong>Warning:</strong> Import replaces the included settings and API-token
                     records, not the whole installation. Back up the destination first. History and
                     excluded settings are not restored. Check the{' '}
-                    <a
+                    <ExternalTextLink
                       href={getShippedDocUrl('MIGRATION.md')}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="underline"
+                      variant="inlineInherit"
                     >
                       migration guide
-                    </a>{' '}
+                    </ExternalTextLink>{' '}
                     before retiring the old server.
                   </p>
                   <p>

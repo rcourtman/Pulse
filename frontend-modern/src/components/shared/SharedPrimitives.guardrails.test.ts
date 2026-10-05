@@ -1891,10 +1891,13 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/AISettingsDialogs.tsx',
       'src/components/Settings/APITokenManager.tsx',
       'src/components/Settings/AgentIntegrationsPanel.tsx',
+      'src/components/Settings/BackupTransferDialogs.tsx',
       'src/components/Settings/GeneralSettingsPanel.tsx',
       'src/components/Settings/SecurityOverviewPanel.tsx',
       'src/components/Settings/SelfHostedCommercialRecoverySection.tsx',
     ]);
+    // A link inside a tinted callout sentence keeps the callout's colour.
+    expect(externalTextLinkSource).toContain("inlineInherit: 'underline'");
     expect(registeredRule?.forbiddenPatterns).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

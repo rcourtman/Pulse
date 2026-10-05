@@ -1599,6 +1599,7 @@
         { "path": "src/components/Settings/AISettingsDialogs.tsx" },
         { "path": "src/components/Settings/APITokenManager.tsx" },
         { "path": "src/components/Settings/AgentIntegrationsPanel.tsx" },
+        { "path": "src/components/Settings/BackupTransferDialogs.tsx" },
         { "path": "src/components/Settings/GeneralSettingsPanel.tsx" },
         { "path": "src/components/Settings/SecurityOverviewPanel.tsx" },
         { "path": "src/components/Settings/SelfHostedCommercialRecoverySection.tsx" }

@@ -80,6 +80,10 @@ describe('AlertDeadManDestinationSection', () => {
 
     expect(input).toHaveValue('https://watchdog.example.test/ping/new-token');
     expect(container.textContent).not.toContain('***REDACTED***');
+    // The section's actions are the shared outline Buttons, which give a
+    // phone a 44px touch target.
+    expect(screen.getByRole('button', { name: 'Show' })).toHaveClass('min-h-11', 'sm:min-h-9');
+    expect(screen.getByRole('button', { name: /^Refresh/ })).toHaveClass('min-h-11', 'sm:min-h-0');
     fireEvent.click(screen.getByRole('button', { name: 'Show' }));
     expect(input).toHaveAttribute('type', 'text');
     fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
