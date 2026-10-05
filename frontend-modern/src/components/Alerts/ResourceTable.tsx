@@ -145,9 +145,9 @@ export function ResourceTable(props: ResourceTableProps) {
       </Show>
 
       <Show when={selectedIds().size > 0 && props.onBulkEdit}>
-        <div class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-base border border-border shadow-2xl rounded-full px-5 py-3 flex items-center gap-6 z-100 animate-in slide-in-from-bottom-5">
-          <span class="text-sm font-medium text-white">
-            {selectedIds().size} <span class="text-slate-400">selected</span>
+        <div class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-surface border border-border shadow-2xl rounded-full px-5 py-3 flex items-center gap-6 z-100 animate-in slide-in-from-bottom-5">
+          <span class="text-sm font-medium text-base-content">
+            {selectedIds().size} <span class="text-muted">selected</span>
           </span>
           <div class="flex items-center gap-2">
             <button
@@ -163,7 +163,7 @@ export function ResourceTable(props: ResourceTableProps) {
               {getAlertBulkEditOpenLabel()}
             </button>
             <ActionIconButton
-              class="rounded-full bg-surface text-slate-400 hover:bg-slate-700 hover:text-white focus-visible:ring-offset-0"
+              class="rounded-full focus-visible:ring-offset-0"
               onClick={clearSelectedIds}
               label={ALERT_BULK_EDIT_CLEAR_LABEL}
               size="sm"

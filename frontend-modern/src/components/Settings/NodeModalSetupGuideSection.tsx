@@ -165,7 +165,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                   <p class="text-blue-800 dark:text-blue-200 font-medium">
                     Run this command on your Proxmox VE node:
                   </p>
-                  <div class="relative bg-base rounded-md p-3 font-mono text-xs overflow-x-auto">
+                  <div class="relative bg-page rounded-md p-3 font-mono text-xs overflow-x-auto">
                     <button
                       type="button"
                       disabled={state.loadingAgentCommand() || setupHandoffDisabled()}
@@ -279,7 +279,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                   </p>
 
                   <div class="space-y-3">
-                    <div class="relative bg-base rounded-md p-3 font-mono text-xs overflow-x-auto">
+                    <div class="relative bg-page rounded-md p-3 font-mono text-xs overflow-x-auto">
                       <button
                         type="button"
                         onClick={async () => {
@@ -653,7 +653,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                   <p class="text-blue-800 dark:text-blue-200 text-xs mt-3">
                     Run this command on your PBS node:
                   </p>
-                  <div class="relative bg-base rounded-md p-3 font-mono text-xs overflow-x-auto">
+                  <div class="relative bg-page rounded-md p-3 font-mono text-xs overflow-x-auto">
                     <button
                       type="button"
                       onClick={() =>
@@ -750,7 +750,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                   </p>
 
                   <div class="space-y-3">
-                    <div class="relative bg-base rounded-md p-3 font-mono text-xs overflow-x-auto">
+                    <div class="relative bg-page rounded-md p-3 font-mono text-xs overflow-x-auto">
                       <Show when={state.formData().host && state.formData().host.trim() !== ''}>
                         <button
                           type="button"

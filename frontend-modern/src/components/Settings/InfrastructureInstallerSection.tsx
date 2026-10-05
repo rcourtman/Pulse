@@ -715,7 +715,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                                   title="Copy command"
                                   label={`Copy ${snippet.label} command`}
                                 />
-                                <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
                                   <code>{copyCommand()}</code>
                                 </pre>
                               </div>
