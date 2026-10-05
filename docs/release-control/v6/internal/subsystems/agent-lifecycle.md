@@ -26,7 +26,7 @@ closing an accepted run still does not cancel it. This is keyboard continuity,
 not a change to job admission, token scope or native installation acceptance.
 `frontend-modern/src/components/Settings/__tests__/ClusterAgentDeployDialog.test.tsx`
 pins delayed candidate responses, safe fallbacks and both successful and failed
-terminal projections alongside the existing installed-only-after-reporting flow.
+terminal projections alongside the live-connection confirmation flow.
 
 ### Source-record lookup preserves report admission
 
@@ -6456,8 +6456,15 @@ cluster, member, and coverage-summary install actions open
 server mints a per-node bootstrap credential for every target, so the dialog
 never renders, copies, or reuses a token and the operator never pastes one.
 The dialog folds target statuses into checking, installing, connecting,
-reporting, and failed, and it reports a node as installed only after the
-candidates projection shows that node with an agent. A finished deploy job
+connected, and failed. Its final badge says "Connected to Pulse", not "Reporting":
+the candidates projection must match the captured cluster ID and show both
+that exact node's saved agent link and a non-empty online source-agent entry
+for the same node. A saved link, a sibling's connection, or a finished job alone
+cannot trigger the installed callback. Missing/offline connection evidence
+remains connecting until the existing 90-second confirmation window expires,
+then says that Pulse has not confirmed a connected agent on the node and
+preserves the scoped installer fallback. This confirms connectivity, not fresh
+metrics, native installation or sustained reporting. A finished deploy job
 alone is not success, because targets can still be enrolling. Clusters with no
 connected agent, members Pulse has no address for, and failed targets hand off
 to the scoped manual installer (`/settings/infrastructure?add=linux-host`)

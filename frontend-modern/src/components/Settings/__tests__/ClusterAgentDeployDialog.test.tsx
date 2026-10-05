@@ -39,6 +39,17 @@ const candidates = (overrides: Partial<ClusterDeployCandidates> = {}): ClusterDe
   ...overrides,
 });
 
+const connectedCandidates = (): ClusterDeployCandidates =>
+  candidates({
+    sourceAgents: [
+      ...candidates().sourceAgents!,
+      { agentId: 'agent-delly2', nodeId: 'n-delly2', online: true },
+    ],
+    nodes: candidates().nodes!.map((node) =>
+      node.nodeId === 'n-delly2' ? { ...node, hasAgent: true, deployable: false } : node,
+    ),
+  });
+
 const job = (
   id: string,
   status: ClusterDeployJob['status'],
@@ -120,13 +131,9 @@ describe('ClusterAgentDeployDialog', () => {
     async (outcome) => {
       const check = deferred<ClusterDeployJob>();
       const completion = deferred<ClusterDeployJob>();
-      api.getCandidates.mockResolvedValueOnce(candidates()).mockResolvedValue(
-        candidates({
-          nodes: candidates().nodes!.map((node) =>
-            node.nodeId === 'n-delly2' ? { ...node, hasAgent: true, deployable: false } : node,
-          ),
-        }),
-      );
+      api.getCandidates
+        .mockResolvedValueOnce(candidates())
+        .mockResolvedValue(connectedCandidates());
       api.createPreflight.mockResolvedValue({ preflightId: 'focus-pf', status: 'running' });
       api.getPreflight.mockReturnValue(check.promise);
       api.createJob.mockResolvedValue({
@@ -168,7 +175,7 @@ describe('ClusterAgentDeployDialog', () => {
           },
         ]),
       );
-      await screen.findByText(outcome === 'succeeded' ? 'Reporting' : 'Failed');
+      await screen.findByText(outcome === 'succeeded' ? 'Connected to Pulse' : 'Failed');
       expect(screen.getByRole('button', { name: 'Close' })).toBe(dismiss);
       expect(dismiss).toHaveFocus();
       expect(api.createJob).toHaveBeenCalledTimes(1);
@@ -215,14 +222,8 @@ describe('ClusterAgentDeployDialog', () => {
     expect(screen.getByRole('button', { name: 'Install on 1 node' })).toBeEnabled();
   });
 
-  it('checks, installs, and confirms the node is reporting before calling it done', async () => {
-    api.getCandidates.mockResolvedValueOnce(candidates()).mockResolvedValue(
-      candidates({
-        nodes: candidates().nodes!.map((node) =>
-          node.nodeId === 'n-delly2' ? { ...node, hasAgent: true, deployable: false } : node,
-        ),
-      }),
-    );
+  it('checks, installs, and confirms the node has a connected agent before calling it done', async () => {
+    api.getCandidates.mockResolvedValueOnce(candidates()).mockResolvedValue(connectedCandidates());
     api.createPreflight.mockResolvedValue({ preflightId: 'pf_1', status: 'running' });
     api.getPreflight.mockResolvedValue(
       job('pf_1', 'succeeded', [
@@ -255,7 +256,7 @@ describe('ClusterAgentDeployDialog', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Install on 1 node' }));
 
-    await waitFor(() => expect(screen.getByText('Reporting')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Connected to Pulse')).toBeInTheDocument());
     expect(api.createPreflight).toHaveBeenCalledWith('homelab', 'agent-delly', ['n-delly2']);
     expect(api.createJob).toHaveBeenCalledWith('homelab', 'agent-delly', 'pf_1', ['n-delly2']);
     expect(onInstalled).toHaveBeenCalledTimes(1);
@@ -263,11 +264,7 @@ describe('ClusterAgentDeployDialog', () => {
   });
 
   it('closes out a node the job never reported on instead of leaving it busy', async () => {
-    const reported = candidates({
-      nodes: candidates().nodes!.map((node) =>
-        node.nodeId === 'n-delly2' ? { ...node, hasAgent: true, deployable: false } : node,
-      ),
-    });
+    const reported = connectedCandidates();
     api.getCandidates.mockResolvedValueOnce(candidates()).mockResolvedValue(reported);
     api.createPreflight.mockResolvedValue({ preflightId: 'pf_3', status: 'running' });
     api.getPreflight.mockResolvedValue(
@@ -311,7 +308,7 @@ describe('ClusterAgentDeployDialog', () => {
     expect(
       await screen.findByText('Pulse could not finish installing on this node.'),
     ).toBeInTheDocument();
-    expect(screen.getByText('Reporting')).toBeInTheDocument();
+    expect(screen.getByText('Connected to Pulse')).toBeInTheDocument();
     expect(screen.getByText('Failed')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Use the installer instead' })).toBeInTheDocument();
   });
@@ -373,11 +370,7 @@ describe('ClusterAgentDeployDialog edge cases', () => {
   });
 
   it('confirms a node that gained an agent during the check without installing it', async () => {
-    const covered = candidates({
-      nodes: candidates().nodes!.map((node) =>
-        node.nodeId === 'n-delly2' ? { ...node, hasAgent: true, deployable: false } : node,
-      ),
-    });
+    const covered = connectedCandidates();
     api.getCandidates.mockResolvedValueOnce(candidates()).mockResolvedValue(covered);
     api.createPreflight.mockResolvedValue({ preflightId: 'pf_4', status: 'running' });
     api.getPreflight.mockResolvedValue(
@@ -395,9 +388,137 @@ describe('ClusterAgentDeployDialog edge cases', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Install on 1 node' }));
 
-    await waitFor(() => expect(screen.getByText('Reporting')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Connected to Pulse')).toBeInTheDocument());
     expect(api.createJob).not.toHaveBeenCalled();
     expect(onInstalled).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['missing connections', { sourceAgents: null }],
+    ['empty connections', { sourceAgents: [] }],
+    ['only a connected sibling', { sourceAgents: candidates().sourceAgents }],
+    [
+      'offline target',
+      { sourceAgents: [{ agentId: 'agent-delly2', nodeId: 'n-delly2', online: false }] },
+    ],
+    [
+      'empty agent identity',
+      { sourceAgents: [{ agentId: ' ', nodeId: 'n-delly2', online: true }] },
+    ],
+    ['missing node inventory', { nodes: null }],
+    ['no saved agent link', { nodes: candidates().nodes }],
+  ] satisfies [string, Partial<ClusterDeployCandidates>][])(
+    'does not confirm success from %s',
+    async (_name, override) => {
+      api.getCandidates.mockResolvedValueOnce(candidates()).mockResolvedValue({
+        ...connectedCandidates(),
+        ...override,
+      });
+      api.createPreflight.mockResolvedValue({ preflightId: 'pf_link', status: 'running' });
+      api.getPreflight.mockResolvedValue(
+        job('pf_link', 'succeeded', [
+          {
+            id: 't_link',
+            nodeId: 'n-delly2',
+            nodeName: 'delly2',
+            nodeIP: '192.168.0.111',
+            status: 'skipped_already_agent',
+          },
+        ]),
+      );
+      const { onInstalled } = renderDialog({
+        preselectNodeName: 'delly2',
+        connectionTimeoutMs: 100,
+      });
+      fireEvent.click(await screen.findByRole('button', { name: 'Install on 1 node' }));
+
+      await screen.findByText('Pulse has not confirmed a connected agent on this node yet.');
+      expect(screen.queryByText('Connected to Pulse')).toBeNull();
+      expect(screen.getByText('Failed')).toBeInTheDocument();
+      expect(onInstalled).not.toHaveBeenCalled();
+      expect(api.createPreflight).toHaveBeenCalledTimes(1);
+      expect(api.createJob).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Use the installer instead' })).toBeInTheDocument();
+    },
+  );
+
+  it('waits for the installed node’s live connection, not just its saved link or successful job', async () => {
+    const live = deferred<ClusterDeployCandidates>();
+    api.getCandidates
+      .mockResolvedValueOnce(candidates())
+      .mockResolvedValueOnce({
+        ...connectedCandidates(),
+        sourceAgents: candidates().sourceAgents,
+      })
+      .mockReturnValue(live.promise);
+    api.createPreflight.mockResolvedValue({ preflightId: 'pf_live', status: 'running' });
+    api.getPreflight.mockResolvedValue(
+      job('pf_live', 'succeeded', [
+        {
+          id: 't_check',
+          nodeId: 'n-delly2',
+          nodeName: 'delly2',
+          nodeIP: '192.168.0.111',
+          status: 'ready',
+        },
+      ]),
+    );
+    api.createJob.mockResolvedValue({
+      jobId: 'dep_live',
+      acceptedTargets: ['n-delly2'],
+      skippedTargets: [],
+    });
+    api.getJob.mockResolvedValue(
+      job('dep_live', 'succeeded', [
+        {
+          id: 't_install',
+          nodeId: 'n-delly2',
+          nodeName: 'delly2',
+          nodeIP: '192.168.0.111',
+          status: 'succeeded',
+        },
+      ]),
+    );
+    const { onInstalled } = renderDialog({ preselectNodeName: 'delly2' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Install on 1 node' }));
+
+    await waitFor(() => expect(api.getCandidates).toHaveBeenCalledTimes(3));
+    expect(screen.getByText('Connecting to Pulse')).toBeInTheDocument();
+    expect(screen.queryByText('Connected to Pulse')).toBeNull();
+    expect(onInstalled).not.toHaveBeenCalled();
+    live.resolve(connectedCandidates());
+    await screen.findByText('Connected to Pulse');
+    expect(onInstalled).toHaveBeenCalledTimes(1);
+    expect(api.createJob).toHaveBeenCalledTimes(1);
+    expect(api.createPreflight).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses connection confirmation from a different cluster response', async () => {
+    api.getCandidates.mockResolvedValueOnce(candidates()).mockResolvedValue({
+      ...connectedCandidates(),
+      clusterId: 'other-site',
+    });
+    api.createPreflight.mockResolvedValue({ preflightId: 'pf_other', status: 'running' });
+    api.getPreflight.mockResolvedValue(
+      job('pf_other', 'succeeded', [
+        {
+          id: 't_other',
+          nodeId: 'n-delly2',
+          nodeName: 'delly2',
+          nodeIP: '192.168.0.111',
+          status: 'skipped_already_agent',
+        },
+      ]),
+    );
+    const { onInstalled } = renderDialog({ preselectNodeName: 'delly2' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Install on 1 node' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Pulse could not confirm this cluster’s agent connections.',
+    );
+    expect(screen.queryByText('Connected to Pulse')).toBeNull();
+    expect(onInstalled).not.toHaveBeenCalled();
+    expect(api.createJob).not.toHaveBeenCalled();
   });
 
   it('gives up on a stalled install with an explanation and the installer', async () => {

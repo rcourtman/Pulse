@@ -25,7 +25,7 @@ import {
  */
 
 export type ClusterAgentDeployNodeState =
-  'idle' | 'checking' | 'installing' | 'connecting' | 'reporting' | 'failed';
+  'idle' | 'checking' | 'installing' | 'connecting' | 'connected' | 'failed';
 
 export interface ClusterAgentDeployNodeProgress {
   state: ClusterAgentDeployNodeState;
@@ -74,8 +74,8 @@ const NODE_STATE_PRESENTATION: Record<
     label: 'Connecting to Pulse',
     badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900/25 dark:text-blue-200',
   },
-  reporting: {
-    label: 'Reporting',
+  connected: {
+    label: 'Connected to Pulse',
     badgeClass: 'bg-green-100 text-green-800 dark:bg-green-900/25 dark:text-green-300',
   },
   failed: {
@@ -94,7 +94,7 @@ export const clusterDeployUnavailableReason = (node: ClusterDeployCandidateNode)
 type Phase = 'loading' | 'select' | 'running' | 'done' | 'unavailable' | 'error';
 
 const POLL_INTERVAL_MS = 2000;
-const REPORTING_TIMEOUT_MS = 90_000;
+const CONNECTION_TIMEOUT_MS = 90_000;
 const JOB_TIMEOUT_MS = 20 * 60_000;
 const REQUEST_TIMEOUT_MS = 30_000;
 
@@ -107,7 +107,7 @@ interface ClusterAgentDeployDialogProps {
   onClose: () => void;
   /** Hands off to the scoped manual installer. */
   onUseInstaller: () => void;
-  /** Called once at least one node is reporting, so the caller can refresh. */
+  /** Called once at least one node has a connected agent, so the caller can refresh. */
   onInstalled?: () => void;
   /** Overridable for tests. */
   pollIntervalMs?: number;
@@ -115,6 +115,8 @@ interface ClusterAgentDeployDialogProps {
   jobTimeoutMs?: number;
   /** Overridable for tests. */
   requestTimeoutMs?: number;
+  /** Overridable for tests. */
+  connectionTimeoutMs?: number;
 }
 
 const errorMessage = (error: unknown, fallback: string): string =>
@@ -197,6 +199,7 @@ export const ClusterAgentDeployDialog: Component<ClusterAgentDeployDialogProps> 
     pollMs: number;
     jobTimeoutMs: number;
     requestTimeoutMs: number;
+    connectionTimeoutMs: number;
     onInstalled?: () => void;
   }
 
@@ -245,11 +248,12 @@ export const ClusterAgentDeployDialog: Component<ClusterAgentDeployDialogProps> 
     }
   };
 
-  // A finished job only means the agent was installed and started enrolling.
-  // The outcome the operator wants is Pulse counting the node, so confirm it.
-  const confirmReporting = async (cfg: RunConfig, nodeIds: string[]) => {
+  // A saved node/agent link survives disconnection. Require the same node's
+  // current connection as well, not just a finished job or the saved link.
+  // This confirms connectivity, not fresh monitoring data from the node.
+  const confirmConnection = async (cfg: RunConfig, nodeIds: string[]) => {
     const pending = new Set(nodeIds);
-    const deadline = Date.now() + REPORTING_TIMEOUT_MS;
+    const deadline = Date.now() + cfg.connectionTimeoutMs;
     while (pending.size > 0 && Date.now() < deadline) {
       await wait(cfg.pollMs);
       if (cfg.run !== runId) return;
@@ -258,17 +262,25 @@ export const ClusterAgentDeployDialog: Component<ClusterAgentDeployDialogProps> 
         ClusterAgentDeployAPI.getCandidates(cfg.clusterName),
       );
       if (cfg.run !== runId) return;
+      if (candidates.clusterId !== cfg.clusterName) {
+        throw new Error('Pulse could not confirm this cluster’s agent connections.');
+      }
+      const connectedNodes = new Set(
+        (candidates.sourceAgents ?? [])
+          .filter((agent) => agent.online === true && agent.agentId.trim())
+          .map((agent) => agent.nodeId),
+      );
       for (const node of candidates.nodes ?? []) {
-        if (pending.has(node.nodeId) && node.hasAgent) {
+        if (pending.has(node.nodeId) && node.hasAgent && connectedNodes.has(node.nodeId)) {
           pending.delete(node.nodeId);
-          setNodeProgress(node.nodeId, { state: 'reporting' });
+          setNodeProgress(node.nodeId, { state: 'connected' });
         }
       }
     }
     for (const nodeId of pending) {
       setNodeProgress(nodeId, {
         state: 'failed',
-        detail: 'The agent was installed but has not reported to Pulse yet.',
+        detail: 'Pulse has not confirmed a connected agent on this node yet.',
       });
     }
   };
@@ -281,6 +293,7 @@ export const ClusterAgentDeployDialog: Component<ClusterAgentDeployDialogProps> 
       pollMs: props.pollIntervalMs ?? POLL_INTERVAL_MS,
       jobTimeoutMs: props.jobTimeoutMs ?? JOB_TIMEOUT_MS,
       requestTimeoutMs: props.requestTimeoutMs ?? REQUEST_TIMEOUT_MS,
+      connectionTimeoutMs: props.connectionTimeoutMs ?? CONNECTION_TIMEOUT_MS,
       onInstalled: props.onInstalled,
     };
     const targetIds = deployableNodes()
@@ -328,12 +341,12 @@ export const ClusterAgentDeployDialog: Component<ClusterAgentDeployDialogProps> 
             .map((target) => target.nodeId),
         );
       }
-      if (toConfirm.length > 0) await confirmReporting(cfg, toConfirm);
+      if (toConfirm.length > 0) await confirmConnection(cfg, toConfirm);
     } catch (error) {
       if (cfg.run !== runId) return;
       setFailure(errorMessage(error, 'The install could not be started.'));
       for (const nodeId of targetIds) {
-        if (progress()[nodeId]?.state !== 'reporting') {
+        if (progress()[nodeId]?.state !== 'connected') {
           setNodeProgress(nodeId, { state: 'failed' });
         }
       }
@@ -352,7 +365,7 @@ export const ClusterAgentDeployDialog: Component<ClusterAgentDeployDialogProps> 
       }
     }
     setPhase('done');
-    if (Object.values(progress()).some((entry) => entry.state === 'reporting')) {
+    if (Object.values(progress()).some((entry) => entry.state === 'connected')) {
       cfg.onInstalled?.();
     }
   };
@@ -428,7 +441,7 @@ export const ClusterAgentDeployDialog: Component<ClusterAgentDeployDialogProps> 
               <For each={uncoveredNodes()}>
                 {(node) => (
                   <li class="rounded-md border border-border px-3 py-2">
-                    <div class="flex items-center justify-between gap-3">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
                       <label class="flex min-w-0 items-center gap-2 text-sm text-base-content">
                         <input
                           type="checkbox"
