@@ -10,6 +10,8 @@ import workloadsFilterSource from '../WorkloadsFilter.tsx?raw';
 import workloadsWorkloadTableSource from '../WorkloadsTable.tsx?raw';
 import metricDisplayModeSegmentedControlSource from '../MetricDisplayModeSegmentedControl.tsx?raw';
 import workloadPanelSource from '../WorkloadPanel.tsx?raw';
+import workloadWebLinksActionSource from '../WorkloadWebLinksAction.tsx?raw';
+import workloadWebLinksStateSource from '../useWorkloadWebLinksState.ts?raw';
 import workloadTableHeaderSource from '../WorkloadTableHeader.tsx?raw';
 import workloadsFilterModelSource from '../workloadsFilterModel.ts?raw';
 import workloadsControlsStateSource from '../useWorkloadsControlsState.ts?raw';
@@ -1393,7 +1395,25 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadTableSource).toContain('data-summary-clear-surface');
       expect(workloadsWorkloadTableSource).toContain('data-testid="workloads-table-surface"');
       expect(workloadsWorkloadTableSource).toContain('TableCard');
-      expect(workloadsWorkloadTableSource).toContain('<TableCardHeader title={props.title} />');
+      expect(workloadsWorkloadTableSource).toContain(
+        '<TableCardHeader title={props.title} actions={props.actions} />',
+      );
+      expect(workloadsSource).toContain('<WorkloadWebLinksAction');
+      expect(workloadsSource).toContain('guests={state.filteredGuests}');
+      expect(workloadPanelSource).toContain(
+        'getWorkloadGuestMetadataRecord(guest(), props.guestMetadata())',
+      );
+      // The bulk link panel and its row model load on first open, outside the
+      // WorkloadsSurface chunk, and only mount while the editor is open.
+      expect(workloadWebLinksActionSource).toContain(
+        "lazy(() => import('./WorkloadWebLinksDialog'))",
+      );
+      expect(workloadWebLinksActionSource).toContain('<Show when={open()}>');
+      // Type-only imports are erased, so the row model stays in the lazy chunk.
+      expect(workloadWebLinksActionSource).not.toMatch(
+        /^import (?!type )[^;]*from '\.\/(workloadWebLinksModel|useWorkloadWebLinksState)';/m,
+      );
+      expect(workloadWebLinksStateSource).toContain('keepStableWorkloadWebLinkRows(');
       expect(workloadsSource).toContain('<TableCardHeader title={props.tableTitle} />');
       expect(workloadsSource).toContain('title={props.tableTitle}');
       expect(workloadsWorkloadTableSource).toContain(

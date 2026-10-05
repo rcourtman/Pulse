@@ -153,15 +153,11 @@ export function cmpBool(a: boolean, b: boolean, direction: 'asc' | 'desc'): numb
 // sysadmin-default question on a backup page. String columns default to
 // `asc` (A→Z). Boolean columns default to `desc` so "true" sorts first.
 
-export type CoverageSortKey =
-  'posture' | 'workload' | 'latest' | 'pbs' | 'archive' | 'snapshot' | 'task';
+export type CoverageSortKey = 'posture' | 'workload' | 'latest' | 'task';
 export const COVERAGE_SORT_DEFAULT_DIRECTION: Record<CoverageSortKey, 'asc' | 'desc'> = {
   posture: 'asc',
   workload: 'asc',
   latest: 'desc',
-  pbs: 'desc',
-  archive: 'desc',
-  snapshot: 'desc',
   task: 'desc',
 };
 

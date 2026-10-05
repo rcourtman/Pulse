@@ -58,6 +58,7 @@ import {
   type RecoverableFilterValue,
   type RecoverableSortKey,
 } from './proxmoxBackupsTableModel';
+import { getBackupPostureRuleText } from './proxmoxBackupsTablePresentation';
 import {
   COVERAGE_FILTERS,
   RECOVERABLE_FILTERS,
@@ -364,20 +365,8 @@ export const ProxmoxBackupsTable: Component<{
     ];
   });
 
-  // Source columns auto-hide when no workload anywhere has that data (computed
-  // over the full set so columns don't flicker as filters change). A PBS-only
-  // fleet drops the Archive and Snapshot columns.
-  const coverageHasPbs = createMemo(() =>
-    recoveryModel().coverageRows.some((row) => Boolean(row.latestPBS) || row.pbsCount > 0),
-  );
-  const coverageHasArchive = createMemo(() =>
-    recoveryModel().coverageRows.some((row) => Boolean(row.latestArchive) || row.archiveCount > 0),
-  );
-  const coverageHasSnapshot = createMemo(() =>
-    recoveryModel().coverageRows.some(
-      (row) => Boolean(row.latestSnapshot) || row.snapshotCount > 0,
-    ),
-  );
+  // The task column auto-hides when no workload has task history (computed
+  // over the full set so it does not flicker as filters change).
   const coverageHasTask = createMemo(() =>
     recoveryModel().coverageRows.some((row) => Boolean(row.latestTask)),
   );
@@ -420,12 +409,6 @@ export const ProxmoxBackupsTable: Component<{
           return cmpString(a.workload.label, b.workload.label, direction);
         case 'latest':
           return cmpNumber(a.latestBackup?.createdMs, b.latestBackup?.createdMs, direction);
-        case 'pbs':
-          return cmpNumber(a.latestPBS?.createdMs, b.latestPBS?.createdMs, direction);
-        case 'archive':
-          return cmpNumber(a.latestArchive?.createdMs, b.latestArchive?.createdMs, direction);
-        case 'snapshot':
-          return cmpNumber(a.latestSnapshot?.createdMs, b.latestSnapshot?.createdMs, direction);
         case 'task':
           return cmpNumber(a.latestTask?.startedMs, b.latestTask?.startedMs, direction);
       }
@@ -735,6 +718,7 @@ export const ProxmoxBackupsTable: Component<{
           {/* The health strip renders identically in both route-backed views. */}
           <ProxmoxBackupsCoverageStrip
             title="Backup health"
+            footnote={getBackupPostureRuleText(protectionPostures.policy()) ?? undefined}
             tail={
               <span>
                 {liveTotalCount()} targets · {recoveryModel().coverageSummary.recoverableArtifacts}{' '}
@@ -925,9 +909,6 @@ export const ProxmoxBackupsTable: Component<{
               onSort={handleCoverageSort}
               expandedKeys={expandedCoverageRows()}
               onToggleExpand={toggleCoverageExpansion}
-              showPbsColumn={coverageHasPbs()}
-              showArchiveColumn={coverageHasArchive()}
-              showSnapshotColumn={coverageHasSnapshot()}
               showTaskColumn={coverageHasTask()}
             />
 
@@ -964,9 +945,6 @@ export const ProxmoxBackupsTable: Component<{
                       onSort={handleCoverageSort}
                       expandedKeys={expandedCoverageRows()}
                       onToggleExpand={toggleCoverageExpansion}
-                      showPbsColumn={coverageHasPbs()}
-                      showArchiveColumn={coverageHasArchive()}
-                      showSnapshotColumn={coverageHasSnapshot()}
                       showTaskColumn={coverageHasTask()}
                     />
                   </div>

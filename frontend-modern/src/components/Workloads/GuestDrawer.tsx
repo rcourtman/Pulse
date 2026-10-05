@@ -215,6 +215,11 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
                 hostname={props.guest.name}
                 canonicalResourceId={props.guest.id}
                 showManualRunAction
+                runBlockReason={
+                  guestReadPrecaution()
+                    ? 'Discovery is paused during a backup or guest-read deferral. Saved results remain available. Clearing this pause does not prove thaw.'
+                    : null
+                }
               />
             </Suspense>
           </div>

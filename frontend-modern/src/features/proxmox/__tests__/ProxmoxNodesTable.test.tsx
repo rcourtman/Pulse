@@ -194,6 +194,24 @@ describe('ProxmoxNodesTable', () => {
     expect(screen.getByText('2 more below')).toBeVisible();
   });
 
+  it('names a single cluster once instead of repeating it in a column, even while searching', () => {
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={makeNodeResources(3)}
+        guests={[]}
+        topology={{ nodes: 3, clusters: 1, standalone: 0 }}
+        search={() => 'pve-node-2'}
+        inventoryCountsVisible={() => false}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    expect(screen.getByTestId('proxmox-single-cluster-label')).toHaveTextContent('Cluster homelab');
+    expect(screen.queryByRole('columnheader', { name: /cluster/i })).not.toBeInTheDocument();
+  });
+
   it('hides node and topology totals through the page-owned inventory preference', () => {
     render(() => (
       <ProxmoxNodesTable

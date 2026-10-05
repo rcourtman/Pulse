@@ -1118,6 +1118,18 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     renders only for a saved URL and adds no fetch, polling or per-row work.
     `GuestDrawer.test.tsx` verifies its target, the unsafe-URL warning, and
     that opening it does not collapse the drawer.
+    The workloads table header owns the bulk web-link editor. The trigger in
+    `WorkloadWebLinksAction.tsx` holds only the open flag and unsaved drafts
+    and lazy-loads `WorkloadWebLinksDialog.tsx`, whose state
+    (`useWorkloadWebLinksState.ts`) and derivations
+    (`workloadWebLinksModel.ts`) stay out of the WorkloadsSurface chunk and
+    run only while the panel is mounted. It edits the guests in the current
+    filtered view through the same guest metadata API and metadata-changed
+    event as the drawer field. `workloadGuestMetadataRecord.ts` is the single
+    lookup for a row's saved link in both the table and the editor. Panel rows
+    keep unchanged row objects across inventory ticks so an open editor never
+    remounts the input being typed in.
+    `WorkloadsSurface.performance.contract.test.tsx` pins that wiring.
     Drawer history charts belong to `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`.
     A current metric may remain visible in a chart legend only when labelled
     `current`; it must never be expanded into synthetic timestamps or a flat
@@ -1678,6 +1690,15 @@ without contention or cross-delivery.
    lifecycle. Request handlers may reuse the cached manager but must not reopen
    or remigrate SQLite on each role or assignment request, and shutdown must
    close the owned manager set.
+8. Guest Overview filesystem provenance is local presentation over the already
+   supplied snapshot: no additional query, timer, poll, History fetch or guest
+   command may be added to establish it. Its existing linear filesystem mapping
+   may label retained values and omit current utilization bars; it must preserve
+   ordinary current-value builder behaviour and must not mutate the snapshot.
+   `DiskList.test.tsx` verifies the pure builder's retained/unavailable/current
+   controls; mounted drawer regressions and the full-drawer browser proof cover
+   the shipped path. No performance or native workload improvement follows from
+   the presentation proof alone.
 
 ## Current State
 
@@ -3659,3 +3680,17 @@ backend, metrics-store, performance threshold or latency claim changes here.
 including selection retention while a same-source window advances. Browser
 receipts exercise the actual PBS table/drawer renderer with synthetic APIs,
 not installed collection or a performance benchmark.
+
+### Stored drawer History segmentation stays bounded
+
+Missing-observation rendering uses the existing normalized, configured-group
+timestamps and the unchanged maximum of 240 requested points per metric. The
+segment builder indexes those timestamps once per series and walks its stored
+points without nested nearest-point searches. It adds no request, polling timer,
+collector or synthetic reading. Separate singletons/segments retain the source
+data and shared time window; live updates cannot fill absent stored evidence.
+The mounted `GuestDrawerHistory.gaps.test.tsx` controls pin one initial read and
+only explicit matching refreshes; the full `GuestDrawer.test.tsx` pins the
+unchanged cap and no live-recovery read. `guestHistorySegments.test.ts` pins
+complete point preservation at the existing request bound. Neither claims a
+timing benchmark, fleet CPU attribution or native incident relief.

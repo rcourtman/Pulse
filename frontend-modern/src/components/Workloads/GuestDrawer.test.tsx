@@ -220,6 +220,61 @@ afterEach(() => {
 // ── Tests ──────────────────────────────────────────────────────────────
 
 describe('GuestDrawer', () => {
+  it('keeps stored History gaps through live guest recovery without another read', async () => {
+    const points = makeHistoryPoints(10);
+    const payload = {
+      resourceType: 'vm',
+      resourceId: 'inst1:node1:100',
+      range: '24h',
+      start: 1,
+      end: 3,
+      source: 'store',
+      metrics: { cpu: points, memory: [points[0], points[2]] },
+    };
+    chartsApiMocks.getMetricsHistory.mockResolvedValue(payload);
+    const [guest, setGuest] = createSignal(
+      makeGuest({ lock: 'backup', diskStatusReason: 'prev-vm-locked' }),
+    );
+    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    await screen.findByRole('slider', { name: 'Inspect Utilization history' });
+    const chart = screen.getAllByTestId('guest-history-group-chart')[0];
+    expect(chart.querySelectorAll('path')).toHaveLength(1);
+    expect(chart.querySelectorAll('[data-history-observation="memory"]')).toHaveLength(2);
+    expect(chart.querySelector('[data-history-gaps]')).toHaveTextContent(
+      'Missing observations: Memory.',
+    );
+    setGuest({
+      ...guest(),
+      lock: '',
+      diskStatusReason: '',
+      memory: {
+        ...guest().memory,
+        usage: 99,
+        observation: { state: 'current', source: 'status-mem', observedAt: '2026-10-04T12:00:00Z' },
+      },
+    });
+    expect(screen.getAllByTestId('guest-history-group-chart')[0]).toBe(chart);
+    expect(chart.querySelectorAll('[data-history-observation="memory"]')).toHaveLength(2);
+    expect(chart).not.toHaveTextContent('99.0%');
+    expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1);
+    expect(chartsApiMocks.getMetricsHistory.mock.calls[0][0]).toMatchObject({
+      resourceType: 'vm',
+      resourceId: 'inst1:node1:100',
+      range: '24h',
+      maxPoints: 240,
+    });
+    chartsApiMocks.getMetricsHistory.mockResolvedValue({
+      ...payload,
+      metrics: { cpu: points, memory: points },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh history' }));
+    await waitFor(() => expect(chart.querySelector('[data-history-gaps]')).toBeNull());
+    expect(chart.querySelectorAll('path')).toHaveLength(2);
+    expect(chart.querySelector('[data-history-observation="memory"]')).toBeNull();
+    expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps the backup precaution visible across drawer tabs without starting a guest check', async () => {
     const [guest, setGuest] = createSignal(
       makeGuest({

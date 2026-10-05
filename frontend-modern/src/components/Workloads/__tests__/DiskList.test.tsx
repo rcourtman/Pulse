@@ -28,6 +28,38 @@ afterEach(() => {
   cleanup();
 });
 
+describe('filesystem presentation read admission', () => {
+  it.each(['last-known', 'unavailable'] as const)(
+    'keeps %s readings out of threshold-coloured utilization',
+    (state) => {
+      const disk = makeDisk();
+      const reading = buildWorkloadsDiskPresentation(disk, 0, undefined, state);
+      expect(reading.progressValue).toBeNull();
+      expect(reading.progressWidth).toBe('0%');
+      expect(reading.progressClass).toBe('bg-surface-hover');
+      expect(reading.label).toBe('/');
+      expect(reading.typeLabel).toBe('EXT4');
+      expect(reading.usagePercentLabel).toBe(
+        state === 'last-known' ? 'Last known 50%' : 'Usage unavailable',
+      );
+      expect(reading.usageText).toBe(state === 'last-known' ? '50.0 GB/100 GB' : '?/100 GB');
+      expect(disk.used).toBe(53687091200);
+    },
+  );
+
+  it('does not infer a retained value from capacity or free bytes', () => {
+    const reading = buildWorkloadsDiskPresentation(
+      makeDisk({ used: undefined }),
+      0,
+      undefined,
+      'last-known',
+    );
+    expect(reading.usagePercentLabel).toBe('Usage unavailable');
+    expect(reading.usageText).toBe('?/100 GB');
+    expect(reading.progressValue).toBeNull();
+  });
+});
+
 describe('DiskList', () => {
   describe('fallback when no disks', () => {
     it('renders fallback "-" when disks array is empty', () => {

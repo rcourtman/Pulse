@@ -24,6 +24,9 @@ export interface CoverageStripProps {
   segments: readonly CoverageStripSegment[];
   // Compact context shown to the right of the title (e.g. "1.2 TB on disk").
   tail?: JSX.Element;
+  // The rule behind the segments, so a count such as "17 attention" says what
+  // it is counting.
+  footnote?: JSX.Element;
 }
 
 export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props) => {
@@ -80,6 +83,11 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
           )}
         </For>
       </ul>
+      <Show when={props.footnote}>
+        <p class="mt-1.5 text-[11px] leading-4 text-muted" data-coverage-strip-footnote>
+          {props.footnote}
+        </p>
+      </Show>
     </div>
   );
 };
