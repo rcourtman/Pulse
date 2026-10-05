@@ -1989,6 +1989,14 @@ is a frontend-primitives boundary. `ResourceDetailDrawerOverviewTab.tsx`,
 `ResourceActionHistory.tsx`, and `DiscoveryTab.tsx` must compose
 `InfoCardFrame` for that shell instead of restoring local card-frame
 classes.
+The Overview tab's Needs attention list merges open alerts with the health
+presenter's reasons (`getResourceHealthIssuePresentation`), skipping only the
+reasons an open alert already states, so one matching alert never hides the
+rest. The presenter keeps every incident summary, not only the rollup, adds a
+TrueNAS dataset's state (`state:readonly`, `state:locked`, `state:unmounted`)
+because a read-only dataset raises no incident, and uses the rollup's category
+label (Resource Health Issue, Capacity Pressure) only when no reason is more
+specific.
 Machine and host overview cards that render compact system, hardware, disk,
 and temperature facts must also compose the frontend-primitives
 `InfoCardKeyValueRow`. Mobile rows retain their condensed endpoint layout;
