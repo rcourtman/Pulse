@@ -3094,6 +3094,17 @@ presentation and sort change only; it adds no backup, restore, or retention
 authority. Pinned by `proxmoxBackupRecoveryModel.test.ts` and
 `ProxmoxCoverageTable.test.tsx`.
 
+### Backup table values truncate inside their own column
+
+The coverage Node cell, the restore-evidence Location and Details cells, and
+the recoverable table's Location and Details cells render their value in a
+block span that fills the fixed-layout cell, so a long node name, datastore path
+or detail ends in an ellipsis inside its column on the row's text line, with the
+full value on the title. A capped inline-block span let a long detail run past
+its cell with no ellipsis and sat above the row. This is presentation only; it
+adds no backup, restore, or retention authority. Pinned by
+`ProxmoxCoverageTable.test.tsx` and `platformOverviewLayout.guardrails.test.ts`.
+
 ### Retained Patrol objectives do not create recovery authority
 
 The shared `internal/api` retained-objective endpoints may scope an outcome to

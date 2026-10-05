@@ -649,7 +649,7 @@ export const ProxmoxMailGatewayDrawer: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('name')} font-mono text-[11px] text-base-content`}
                           >
-                            <span class="inline-block max-w-56 truncate" title={domain.domain}>
+                            <span class="block truncate" title={domain.domain}>
                               {domain.domain || '—'}
                             </span>
                           </TableCell>

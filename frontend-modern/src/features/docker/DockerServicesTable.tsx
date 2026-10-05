@@ -331,14 +331,14 @@ export const DockerServicesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-narrow-hidden hidden text-base-content md:table-cell`}
                           >
-                            <span class="truncate inline-block max-w-32" title={stack()}>
+                            <span class="block truncate" title={stack()}>
                               {stack()}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content md:table-cell`}
                           >
-                            <span class="truncate inline-block max-w-[18rem]" title={image()}>
+                            <span class="block truncate" title={image()}>
                               {image()}
                             </span>
                           </TableCell>
@@ -361,7 +361,7 @@ export const DockerServicesTable: Component<{
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span
-                              class="inline-block max-w-full whitespace-normal wrap-break-word leading-3 md:max-w-40 md:truncate md:leading-normal"
+                              class="block whitespace-normal wrap-break-word leading-3 md:truncate md:leading-normal"
                               title={update().title}
                             >
                               {update().label}

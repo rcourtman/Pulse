@@ -569,7 +569,7 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                             >
-                              <span class="inline-block max-w-[18rem] truncate" title={subnets()}>
+                              <span class="block truncate" title={subnets()}>
                                 {subnets()}
                               </span>
                             </TableCell>
