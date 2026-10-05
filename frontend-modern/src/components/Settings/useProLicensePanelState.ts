@@ -201,7 +201,7 @@ export function useProLicensePanelState() {
       return null;
     }
     return {
-      tone: 'border-sky-200 dark:border-sky-900/25 bg-sky-50 dark:bg-sky-950/25 text-sky-900/25 dark:text-sky-100',
+      tone: 'border-sky-200 dark:border-sky-900/25 bg-sky-50 dark:bg-sky-950/25 text-sky-900 dark:text-sky-100',
       title: SELF_HOSTED_PRO_BILLING_PRESENTATION.planSelectionPromptTitle,
       body: SELF_HOSTED_PRO_BILLING_PRESENTATION.planSelectionPromptBody,
       actionLabel: SELF_HOSTED_PRO_BILLING_PRESENTATION.planSelectionPromptActionLabel,

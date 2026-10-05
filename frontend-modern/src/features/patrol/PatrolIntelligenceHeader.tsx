@@ -230,7 +230,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
       <Show when={showAutonomyAvailabilityPrompt()}>
         <div class="mt-3 flex flex-col gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-3 dark:border-blue-800 dark:bg-blue-950/40 sm:flex-row sm:items-center sm:justify-between">
           <div class="min-w-0">
-            <p class="text-sm font-semibold text-blue-950/25 dark:text-blue-100">
+            <p class="text-sm font-semibold text-blue-950 dark:text-blue-100">
               {autonomyAvailability().title}
             </p>
             <p class="mt-1 text-xs leading-5 text-blue-800 dark:text-blue-200">
@@ -258,7 +258,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
       <Show when={state.requestedAutonomyLevel() !== state.autonomyLevel()}>
         <div
           role="status"
-          class="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+          class="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
         >
           Requested {PATROL_AUTONOMY_POLICY_PRESENTATION[state.requestedAutonomyLevel()].label}.
           Effective mode is {selectedAutonomyPolicy().label}. Server status:{' '}

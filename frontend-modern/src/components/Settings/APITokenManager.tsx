@@ -384,7 +384,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               <p class="mt-1 text-xs text-muted">Limited access tokens with defined scopes</p>
             </div>
             <div
-              class={`rounded-md border p-4 text-sm shadow-xs ${hasWildcardTokens() ? 'border-amber-300 bg-amber-50 text-amber-900/25 dark:border-amber-700 dark:bg-amber-900/25 dark:text-amber-100' : 'border-border bg-surface text-base-content'}`}
+              class={`rounded-md border p-4 text-sm shadow-xs ${hasWildcardTokens() ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/25 dark:text-amber-100' : 'border-border bg-surface text-base-content'}`}
             >
               <div
                 class={`text-[0.7rem] font-semibold uppercase tracking-wide ${
@@ -440,7 +440,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               <button
                 onClick={reopenTokenDialog}
                 disabled={!canManage()}
-                class="font-medium underline decoration-green-500 underline-offset-2 hover:text-green-900/25 dark:hover:text-green-100"
+                class="font-medium underline decoration-green-500 underline-offset-2 hover:text-green-900 dark:hover:text-green-100"
               >
                 Show
               </button>
@@ -448,7 +448,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 onClick={() => {
                   dismissNewToken();
                 }}
-                class="font-medium underline decoration-green-500 underline-offset-2 hover:text-green-900/25 dark:hover:text-green-100"
+                class="font-medium underline decoration-green-500 underline-offset-2 hover:text-green-900 dark:hover:text-green-100"
               >
                 Dismiss
               </button>
@@ -461,7 +461,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               newTokenRecord()?.scopes?.[0] === MONITORING_READ_SCOPE
             }
           >
-            <div class="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900/25 shadow-xs dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-100">
+            <div class="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 shadow-xs dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-100">
               <div class="mb-2 font-semibold">Magic Kiosk Link</div>
               <p class="mb-3 text-xs text-blue-700 dark:text-blue-300">
                 Use this link to open Pulse directly in Kiosk mode without logging in. Perfect for

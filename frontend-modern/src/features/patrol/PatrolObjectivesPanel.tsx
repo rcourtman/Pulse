@@ -229,7 +229,7 @@ export const PatrolObjectivesPanel: Component = () => {
           <Show
             when={!loadError()}
             fallback={
-              <div class="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900/25 dark:border-red-900/25 dark:bg-red-950/30 dark:text-red-100">
+              <div class="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900 dark:border-red-900/25 dark:bg-red-950/30 dark:text-red-100">
                 <p>Patrol objectives could not be loaded.</p>
                 <Button class="mt-3" size="sm" onClick={() => void loadObjectives()}>
                   Try again

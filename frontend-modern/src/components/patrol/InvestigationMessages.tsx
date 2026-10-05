@@ -70,7 +70,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                   <div
                     class={`max-w-[85%] rounded-md px-3 py-2 ${
                       msg.role === 'user'
-                        ? 'bg-blue-100 dark:bg-blue-900/25 text-blue-900/25 dark:text-blue-100'
+                        ? 'bg-blue-100 dark:bg-blue-900/25 text-blue-900 dark:text-blue-100'
                         : msg.role === 'system'
                           ? 'bg-surface-alt text-muted text-xs'
                           : 'bg-surface text-base-content'

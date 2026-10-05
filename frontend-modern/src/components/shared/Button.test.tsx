@@ -151,11 +151,11 @@ describe('Button', () => {
 
     const openInventoryButton = screen.getByRole('button', { name: 'Open inventory' });
     expect(openInventoryButton).toHaveClass('border-emerald-300');
-    expect(openInventoryButton).toHaveClass('text-emerald-900/25');
+    expect(openInventoryButton).toHaveClass('text-emerald-900');
 
     const dismissButton = screen.getByRole('button', { name: 'Dismiss' });
     expect(dismissButton).toHaveClass('border-transparent');
-    expect(dismissButton).toHaveClass('text-emerald-900/25');
+    expect(dismissButton).toHaveClass('text-emerald-900');
 
     const removeMemberButton = screen.getByRole('button', { name: 'Remove member' });
     expect(removeMemberButton).toHaveClass('border-transparent');

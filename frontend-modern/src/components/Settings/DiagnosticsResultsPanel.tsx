@@ -555,9 +555,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
           >
             <div class="mb-3 flex items-center gap-3">
               <XCircle class="h-5 w-5 text-red-600 dark:text-red-400" />
-              <h4 class="text-sm font-semibold text-red-900/25 dark:text-red-100">
-                Errors Detected
-              </h4>
+              <h4 class="text-sm font-semibold text-red-900 dark:text-red-100">Errors Detected</h4>
             </div>
             <ul class="space-y-2 text-xs text-red-700 dark:text-red-300">
               <For each={props.diagnosticsData?.errors || []}>

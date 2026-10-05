@@ -226,7 +226,7 @@ export const UserAssignmentsPanel: Component = () => {
                   revokes their active Pulse sessions.
                 </p>
               </div>
-              <div class="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/25 dark:text-amber-100">
+              <div class="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/25 dark:text-amber-100">
                 This does not disable the account at the identity provider. A later authorized SSO
                 login will create the user record again.
               </div>

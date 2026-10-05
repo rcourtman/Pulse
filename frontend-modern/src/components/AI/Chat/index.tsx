@@ -2758,7 +2758,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const currentStatusKind = createMemo(() => currentStatus()?.type);
   const currentStatusRowClass = createMemo(() => {
     if (currentStatusKind() === 'retrying') {
-      return 'bg-amber-50/80 text-amber-900/25 dark:bg-amber-950/25 dark:text-amber-100';
+      return 'bg-amber-50/80 text-amber-900 dark:bg-amber-950/25 dark:text-amber-100';
     }
     return '';
   });
@@ -4787,7 +4787,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           <Show when={transcriptCopyFallback()}>
             {(fallback) => (
               <section
-                class="border-b border-amber-200 bg-amber-50 px-4 py-3 text-amber-950/25 dark:border-amber-900/25 dark:bg-amber-950/30 dark:text-amber-100"
+                class="border-b border-amber-200 bg-amber-50 px-4 py-3 text-amber-950 dark:border-amber-900/25 dark:bg-amber-950/30 dark:text-amber-100"
                 aria-label={AI_CHAT_TRANSCRIPT_FALLBACK_TITLE}
               >
                 <div class="mb-2 flex items-center justify-between gap-2">
@@ -5130,7 +5130,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     <button
                       type="button"
                       onClick={() => updateControlLevel('controlled')}
-                      class="inline-flex shrink-0 items-center rounded-md border border-red-200 bg-surface px-2 py-1 text-[10px] font-medium text-red-700 transition-colors hover:bg-red-50 hover:text-red-900/25 dark:border-red-800 dark:bg-surface dark:text-red-200 dark:hover:bg-red-950/40"
+                      class="inline-flex shrink-0 items-center rounded-md border border-red-200 bg-surface px-2 py-1 text-[10px] font-medium text-red-700 transition-colors hover:bg-red-50 hover:text-red-900 dark:border-red-800 dark:bg-surface dark:text-red-200 dark:hover:bg-red-950/40"
                       aria-label={AI_CHAT_SWITCH_TO_APPROVAL_LABEL}
                     >
                       Switch to Ask first
@@ -5194,7 +5194,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                           };
                           return (
                             <div
-                              class="flex min-h-7 items-center gap-2 rounded-md bg-white/70 px-2 py-1 text-xs text-blue-900/25 outline-hidden transition-colors focus:bg-white focus:ring-2 focus:ring-blue-500/40 dark:bg-blue-900/30 dark:text-blue-100 dark:focus:bg-blue-900/50"
+                              class="flex min-h-7 items-center gap-2 rounded-md bg-white/70 px-2 py-1 text-xs text-blue-900 outline-hidden transition-colors focus:bg-white focus:ring-2 focus:ring-blue-500/40 dark:bg-blue-900/30 dark:text-blue-100 dark:focus:bg-blue-900/50"
                               classList={{
                                 'bg-blue-50 ring-2 ring-blue-500/60 dark:bg-blue-800/50':
                                   queuedFollowUpCommandTargetId() === queued.id,

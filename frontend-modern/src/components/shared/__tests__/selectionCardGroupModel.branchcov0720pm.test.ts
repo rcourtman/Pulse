@@ -188,13 +188,13 @@ describe('selectionCardGroupModel.branchcov0720pm', () => {
 
     it("returns the green title class for variant='detail', active=true, tone='success' (tone === 'success' arm)", () => {
       expect(getSelectionCardTitleClass('detail', 'success', true)).toBe(
-        'text-sm font-semibold text-green-900/25 dark:text-green-100',
+        'text-sm font-semibold text-green-900 dark:text-green-100',
       );
     });
 
     it("returns the blue title class for variant='detail', active=true, tone='accent' (else arm)", () => {
       expect(getSelectionCardTitleClass('detail', 'accent', true)).toBe(
-        'text-sm font-semibold text-blue-900/25 dark:text-blue-100',
+        'text-sm font-semibold text-blue-900 dark:text-blue-100',
       );
     });
   });
@@ -257,8 +257,8 @@ describe('selectionCardGroupModel.branchcov0720pm', () => {
         const result = getSelectionCardTitleClass('detail', tone, true);
         const titleToken =
           tone === 'success'
-            ? 'text-green-900/25 dark:text-green-100'
-            : 'text-blue-900/25 dark:text-blue-100';
+            ? 'text-green-900 dark:text-green-100'
+            : 'text-blue-900 dark:text-blue-100';
         expect(result).toContain(titleToken);
       }
     });

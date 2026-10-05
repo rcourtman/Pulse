@@ -26,19 +26,19 @@ const statusPresentation: Record<DeadManStatus['state'], { label: string; class:
   },
   delivery_failed: {
     label: 'Delivery failing',
-    class: 'bg-amber-100 text-amber-900/25 dark:bg-amber-900/25 dark:text-amber-100',
+    class: 'bg-amber-100 text-amber-900 dark:bg-amber-900/25 dark:text-amber-100',
   },
   monitor_stalled: {
     label: 'Monitoring stalled',
-    class: 'bg-red-100 text-red-900/25 dark:bg-red-900/25 dark:text-red-100',
+    class: 'bg-red-100 text-red-900 dark:bg-red-900/25 dark:text-red-100',
   },
   misconfigured: {
     label: 'Configuration invalid',
-    class: 'bg-red-100 text-red-900/25 dark:bg-red-900/25 dark:text-red-100',
+    class: 'bg-red-100 text-red-900 dark:bg-red-900/25 dark:text-red-100',
   },
   configuration_unavailable: {
     label: 'Configuration unavailable',
-    class: 'bg-red-100 text-red-900/25 dark:bg-red-900/25 dark:text-red-100',
+    class: 'bg-red-100 text-red-900 dark:bg-red-900/25 dark:text-red-100',
   },
 };
 
@@ -187,7 +187,7 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
         </Show>
 
         <Show when={status()?.lastError}>
-          <p class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900/25 dark:border-amber-700 dark:bg-amber-950/25 dark:text-amber-100">
+          <p class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/25 dark:text-amber-100">
             {status()!.lastError}
           </p>
         </Show>

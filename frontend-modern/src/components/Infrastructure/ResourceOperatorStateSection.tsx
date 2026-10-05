@@ -1041,7 +1041,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       </div>
 
       <Show when={confirmingLock()}>
-        <div class="rounded-sm border border-red-300 bg-red-50 px-3 py-2.5 text-xs text-red-900/25 dark:border-red-800 dark:bg-red-950/25 dark:text-red-100">
+        <div class="rounded-sm border border-red-300 bg-red-50 px-3 py-2.5 text-xs text-red-900 dark:border-red-800 dark:bg-red-950/25 dark:text-red-100">
           <p class="font-semibold">Lock this resource against all automated remediation?</p>
           <p class="mt-1 leading-relaxed">
             Pulse will refuse every dispatch targeting this resource, including approved actions
@@ -1051,7 +1051,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
             <button
               type="button"
               onClick={confirmLockToggle}
-              class="rounded-sm border border-red-400 bg-white px-2 py-1 text-xs font-medium text-red-900/25 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/25 dark:text-red-100 dark:hover:bg-red-800"
+              class="rounded-sm border border-red-400 bg-white px-2 py-1 text-xs font-medium text-red-900 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/25 dark:text-red-100 dark:hover:bg-red-800"
             >
               Lock this resource
             </button>

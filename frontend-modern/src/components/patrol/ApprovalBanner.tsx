@@ -60,7 +60,7 @@ export const ApprovalBanner: Component = () => {
             <div>
               <Show when={pending().length === 1 && firstApproval()}>
                 <div class="flex items-center gap-2 flex-wrap">
-                  <span class="text-sm font-medium text-amber-900/25 dark:text-amber-100">
+                  <span class="text-sm font-medium text-amber-900 dark:text-amber-100">
                     Action awaiting approval
                   </span>
                   <MetadataBadge
@@ -81,7 +81,7 @@ export const ApprovalBanner: Component = () => {
                 </p>
               </Show>
               <Show when={pending().length > 1}>
-                <span class="text-sm font-medium text-amber-900/25 dark:text-amber-100">
+                <span class="text-sm font-medium text-amber-900 dark:text-amber-100">
                   {pending().length} actions awaiting your approval
                 </span>
               </Show>
