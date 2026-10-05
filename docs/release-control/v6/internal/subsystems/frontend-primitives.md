@@ -8090,6 +8090,14 @@ read, confirm clear, then release the obsolete response at desktop and phone
 widths. Scripted API responses establish component behaviour, not installed
 backend deletion or destination delivery.
 
+### Platform overviews may lead with their own incident table
+
+A platform Overview that leads with its provider's health signals reuses
+that platform's existing incident table rather than a new summary card:
+the vSphere Overview renders `VsphereAlertsTable` with `showToolbar={false}`
+above its hosts table, only when signals exist, matching the TrueNAS
+Overview's health-alert table. Filtering stays on the platform's Health tab.
+
 ### Large platform notices keep the inventory in view
 
 `PlatformOutdatedAgentNotice` is maintenance guidance, not an incident, so it
@@ -8363,10 +8371,10 @@ drawer with synthetic APIs in Chromium/WebKit desktop and 390/320-pixel light
 and dark views. This is presentation acceptance, not native backup/QGA safety,
 provider outage attribution, installed recovery or release availability.
 
-### Platform overviews may lead with their own incident table
+### Threshold group headers carry a defaults line
 
-A platform Overview that leads with its provider's health signals reuses
-that platform's existing incident table rather than a new summary card:
-the vSphere Overview renders `VsphereAlertsTable` with `showToolbar={false}`
-above its hosts table, only when signals exist, matching the TrueNAS
-Overview's health-alert table. Filtering stays on the platform's Health tab.
+`CollapsibleSection` takes an optional `defaultsSummary` rendered under the
+title as a muted line (`data-thresholds-defaults-summary`) that wraps only
+between items on phones and truncates from `sm` up, and is hidden while
+`isGloballyDisabled` is set, where it would promise alerts that cannot fire. Callers pass the shared summary helper's output rather than
+composing per-section strings.
