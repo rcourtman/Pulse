@@ -143,15 +143,14 @@ func ResolveTopLevelSystems(resources []Resource) TopLevelSystemResolver {
 				bestPriority = group.priority
 			}
 		}
-		hostOwners, ipOwners := buildTopLevelSystemFallbackOwners(initialGroups)
-		hostFormOwners := buildTopLevelSystemHostFormOwners(initialGroups)
+		ownerIndex := buildTopLevelSystemFallbackIndex(initialGroups)
 		attached := false
 
 		for groupRoot, group := range initialGroups {
 			if !group.attachByHost || group.priority <= bestPriority {
 				continue
 			}
-			target, ok := uniqueBetterTopLevelSystemTarget(groupRoot, group, hostOwners, ipOwners, hostFormOwners, initialGroups)
+			target, ok := uniqueBetterTopLevelSystemTarget(groupRoot, group, ownerIndex, initialGroups)
 			if !ok {
 				continue
 			}
@@ -407,167 +406,161 @@ func topLevelSystemMatcherID(index int) string {
 	return "top-level-system:" + strconv.Itoa(index)
 }
 
-func buildTopLevelSystemFallbackOwners(
-	groups map[int]topLevelSystemResolvedGroup,
-) (map[string]map[int]struct{}, map[string]map[int]struct{}) {
-	hostOwners := make(map[string]map[int]struct{})
-	ipOwners := make(map[string]map[int]struct{})
-	for groupRoot, group := range groups {
-		for host := range group.exactHosts {
-			bucket := hostOwners[host]
-			if bucket == nil {
-				bucket = make(map[int]struct{})
-				hostOwners[host] = bucket
-			}
-			bucket[groupRoot] = struct{}{}
-		}
-		for ip := range group.exactIPs {
-			bucket := ipOwners[ip]
-			if bucket == nil {
-				bucket = make(map[int]struct{})
-				ipOwners[ip] = bucket
-			}
-			bucket[groupRoot] = struct{}{}
-		}
-	}
-	return hostOwners, ipOwners
+// A fallback pass sees an immutable group snapshot, even while union updates
+// the parents for the next pass. Order each owner bucket by priority once so
+// queries visit only better owners, without filtering and sorting it again.
+// The index is local to this pass: identity/metadata changes cannot reuse it.
+type topLevelSystemFallbackIndex struct {
+	hosts     map[string][]int
+	ips       map[string][]int
+	hostForms map[string][]int
 }
 
-// buildTopLevelSystemHostFormOwners indexes group roots by every hostname
-// form HostnamesEquivalent can match on (the comparable form and, when it
-// differs, the short form). Two hosts can only be equivalent when they share
-// at least one of these keys, so the index prunes the fallback's candidate
-// scan from every group to the groups that could possibly match. The full
-// pairwise matcher still decides each surviving candidate, so semantics are
-// unchanged.
-func buildTopLevelSystemHostFormOwners(
-	groups map[int]topLevelSystemResolvedGroup,
-) map[string]map[int]struct{} {
-	owners := make(map[string]map[int]struct{})
-	add := func(key string, root int) {
-		if key == "" {
-			return
+func buildTopLevelSystemFallbackIndex(groups map[int]topLevelSystemResolvedGroup) topLevelSystemFallbackIndex {
+	maxPriority := 0
+	havePriority := false
+	for _, group := range groups {
+		if !havePriority || group.priority > maxPriority {
+			maxPriority = group.priority
+			havePriority = true
 		}
+	}
+	var roots []int
+	for root, group := range groups {
+		// A maximum-priority root cannot be better than any query in this
+		// snapshot. Omit it only from the temporary candidate index, never
+		// from the groups, complete inventory or output.
+		if group.priority < maxPriority {
+			roots = append(roots, root)
+		}
+	}
+	if len(roots) == 0 {
+		return topLevelSystemFallbackIndex{}
+	}
+	sort.Slice(roots, func(i, j int) bool {
+		if groups[roots[i]].priority != groups[roots[j]].priority {
+			return groups[roots[i]].priority < groups[roots[j]].priority
+		}
+		return roots[i] < roots[j]
+	})
+	index := topLevelSystemFallbackIndex{
+		hosts:     make(map[string][]int),
+		ips:       make(map[string][]int),
+		hostForms: make(map[string][]int),
+	}
+	add := func(owners map[string][]int, key string, root int) {
 		bucket := owners[key]
-		if bucket == nil {
-			bucket = make(map[int]struct{})
-			owners[key] = bucket
+		// All aliases of one root are added together, so a last-entry check
+		// deduplicates its comparable/short forms without a per-key set.
+		if len(bucket) == 0 || bucket[len(bucket)-1] != root {
+			owners[key] = append(bucket, root)
 		}
-		bucket[root] = struct{}{}
 	}
-	for groupRoot, group := range groups {
+	for _, root := range roots {
+		group := groups[root]
 		for host := range group.exactHosts {
+			add(index.hosts, host, root)
 			comparable := normalizeComparableHostname(host)
-			if comparable == "" {
-				continue
-			}
-			add(comparable, groupRoot)
-			if short := NormalizeHostname(comparable); short != "" && short != comparable {
-				add(short, groupRoot)
+			if comparable != "" {
+				add(index.hostForms, comparable, root)
+				if short := NormalizeHostname(comparable); short != "" {
+					add(index.hostForms, short, root)
+				}
 			}
 		}
+		for ip := range group.exactIPs {
+			add(index.ips, ip, root)
+		}
 	}
-	return owners
+	return index
 }
 
 func uniqueBetterTopLevelSystemTarget(
 	groupRoot int,
 	group topLevelSystemResolvedGroup,
-	hostOwners map[string]map[int]struct{},
-	ipOwners map[string]map[int]struct{},
-	hostFormOwners map[string]map[int]struct{},
+	index topLevelSystemFallbackIndex,
 	groups map[int]topLevelSystemResolvedGroup,
 ) (topLevelSystemFallbackTarget, bool) {
-	targets := make(map[int]topLevelSystemGroupingEvidence)
-	candidateRoots := make(map[int]struct{})
-	for host := range group.exactHosts {
+	var target topLevelSystemFallbackTarget
+	found := false
+	hosts := topLevelSystemSortedSet(group.exactHosts)
+	for _, host := range hosts {
+		for _, targetRoot := range index.hosts[host] {
+			if groups[targetRoot].priority >= group.priority {
+				break
+			}
+			if targetRoot == groupRoot {
+				continue
+			}
+			if found && target.root != targetRoot {
+				// A second distinct qualifying root is ambiguity, regardless
+				// of evidence kind or priority. Never pick the first/best one.
+				return topLevelSystemFallbackTarget{}, false
+			}
+			if !found {
+				target = topLevelSystemFallbackTarget{root: targetRoot, evidence: topLevelSystemAttachmentEvidence(
+					group, groups[targetRoot], "exact-host-attachment", "exact-host", host,
+				)}
+				found = true
+			}
+		}
+	}
+	// The form index is only a candidate filter. Distinct FQDNs sharing a
+	// short name still need the full pairwise hostname-equivalence check.
+	seen := make(map[int]struct{})
+	for _, host := range hosts {
 		comparable := normalizeComparableHostname(host)
 		if comparable == "" {
 			continue
 		}
-		for root := range hostFormOwners[comparable] {
-			if root != groupRoot && groups[root].priority < group.priority {
-				candidateRoots[root] = struct{}{}
+		forms := [2]string{comparable, NormalizeHostname(comparable)}
+		for i, form := range forms {
+			if form == "" || (i == 1 && form == comparable) {
+				continue
 			}
-		}
-		if short := NormalizeHostname(comparable); short != "" && short != comparable {
-			for root := range hostFormOwners[short] {
-				if root != groupRoot && groups[root].priority < group.priority {
-					candidateRoots[root] = struct{}{}
+			for _, targetRoot := range index.hostForms[form] {
+				if groups[targetRoot].priority >= group.priority {
+					break
+				}
+				if targetRoot == groupRoot || (found && target.root == targetRoot) {
+					continue
+				}
+				if _, ok := seen[targetRoot]; ok {
+					continue
+				}
+				seen[targetRoot] = struct{}{}
+				if value, ok := topLevelSystemShortFormHostMatchValue(group.exactHosts, groups[targetRoot].exactHosts); ok {
+					if found {
+						return topLevelSystemFallbackTarget{}, false
+					}
+					target = topLevelSystemFallbackTarget{root: targetRoot, evidence: topLevelSystemAttachmentEvidence(
+						group, groups[targetRoot], "hostname-form-attachment", "short-hostname", value,
+					)}
+					found = true
 				}
 			}
 		}
 	}
-
-	for _, host := range topLevelSystemSortedSet(group.exactHosts) {
-		for _, targetRoot := range topLevelSystemBetterRoots(hostOwners[host], groups, group.priority) {
-			if targetRoot == groupRoot {
-				continue
-			}
-			if groups[targetRoot].priority >= group.priority {
-				continue
-			}
-			if _, ok := targets[targetRoot]; !ok {
-				targets[targetRoot] = topLevelSystemAttachmentEvidence(
-					group,
-					groups[targetRoot],
-					"exact-host-attachment",
-					"exact-host",
-					host,
-				)
-			}
-		}
-	}
-	for _, targetRoot := range topLevelSystemSortedRoots(candidateRoots) {
-		if targetRoot == groupRoot {
-			continue
-		}
-		if groups[targetRoot].priority >= group.priority {
-			continue
-		}
-		if _, ok := targets[targetRoot]; ok {
-			continue
-		}
-		if value, ok := topLevelSystemShortFormHostMatchValue(group.exactHosts, groups[targetRoot].exactHosts); ok {
-			targets[targetRoot] = topLevelSystemAttachmentEvidence(
-				group,
-				groups[targetRoot],
-				"hostname-form-attachment",
-				"short-hostname",
-				value,
-			)
-		}
-	}
 	for _, ip := range topLevelSystemSortedSet(group.exactIPs) {
-		for _, targetRoot := range topLevelSystemBetterRoots(ipOwners[ip], groups, group.priority) {
+		for _, targetRoot := range index.ips[ip] {
+			if groups[targetRoot].priority >= group.priority {
+				break
+			}
 			if targetRoot == groupRoot {
 				continue
 			}
-			if groups[targetRoot].priority >= group.priority {
-				continue
+			if found && target.root != targetRoot {
+				return topLevelSystemFallbackTarget{}, false
 			}
-			if _, ok := targets[targetRoot]; !ok {
-				targets[targetRoot] = topLevelSystemAttachmentEvidence(
-					group,
-					groups[targetRoot],
-					"exact-ip-attachment",
-					"exact-ip",
-					ip,
-				)
+			if !found {
+				target = topLevelSystemFallbackTarget{root: targetRoot, evidence: topLevelSystemAttachmentEvidence(
+					group, groups[targetRoot], "exact-ip-attachment", "exact-ip", ip,
+				)}
+				found = true
 			}
 		}
 	}
-
-	if len(targets) != 1 {
-		return topLevelSystemFallbackTarget{}, false
-	}
-	for targetRoot, evidence := range targets {
-		return topLevelSystemFallbackTarget{
-			root:     targetRoot,
-			evidence: evidence,
-		}, true
-	}
-	return topLevelSystemFallbackTarget{}, false
+	return target, found
 }
 
 func monitoredSystemResourceAllowsHostAttachment(resource *Resource) bool {
@@ -961,27 +954,8 @@ func topLevelSystemHumanList(values []string) string {
 	}
 }
 
-func topLevelSystemSortedRoots(values map[int]struct{}) []int {
-	out := make([]int, 0, len(values))
-	for value := range values {
-		out = append(out, value)
-	}
-	sort.Ints(out)
-	return out
-}
-
 // Discard ineligible equal/worse-priority peers before allocating and sorting
 // candidate lists. They could never win the existing attachment rule.
-func topLevelSystemBetterRoots(values map[int]struct{}, groups map[int]topLevelSystemResolvedGroup, priority int) []int {
-	var out []int
-	for root := range values {
-		if groups[root].priority < priority {
-			out = append(out, root)
-		}
-	}
-	sort.Ints(out)
-	return out
-}
 
 func topLevelSystemMaxInt(left, right int) int {
 	if left > right {
