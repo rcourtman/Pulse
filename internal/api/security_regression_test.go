@@ -19,6 +19,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -5498,5 +5499,137 @@ func TestSystemSettingsWebhookAllowlistPropagatesToAllTenantManagers(t *testing.
 		if err := m.GetNotificationManager().ValidateWebhookURL("http://192.0.2.10:9999/hook"); err != nil {
 			t.Fatalf("%s: expected private webhook target to be allowed after allowlist update, got %v", orgID, err)
 		}
+	}
+}
+
+// Agents already deployed hold a runtime token bound to the invented
+// agent-<hostname>; once they restart under their acknowledged identity the
+// command channel refused them for good. The token moves once to the real
+// identity on exactly the same hostname, persists that it was repaired, and is
+// strict again afterwards, even if a hostname rebind recreates the
+// agent-<hostname> shape.
+func TestDeployPlaceholderTokenMovesToTheRegisteringAgentOnce(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.Config{DataPath: dir}
+	raw, err := auth.GenerateAPIToken()
+	if err != nil {
+		t.Fatalf("generate token: %v", err)
+	}
+	record, err := config.NewAPITokenRecord(raw, "deploy-runtime-a", []string{config.ScopeAgentReport, config.ScopeAgentExec})
+	if err != nil {
+		t.Fatalf("new token record: %v", err)
+	}
+	record.Metadata = map[string]string{
+		"bound_agent_id":           "agent-a",
+		"bound_hostname":           "a",
+		"deploy_job_id":            "dep_1",
+		agentExecBindingVersionKey: agentExecBindingVersion,
+	}
+	cfg.APITokens = []config.APITokenRecord{*record}
+	persistence := config.NewConfigPersistence(dir)
+	if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
+		t.Fatalf("persist token: %v", err)
+	}
+	router := &Router{config: cfg, persistence: persistence}
+
+	if _, ok := router.admitAgentExecToken(raw, "agent-b", "a.example"); ok {
+		t.Fatal("a placeholder token moved on an equivalent but different hostname")
+	}
+	if !commandConfigAllowedForToken(&cfg.APITokens[0], models.Host{ID: "agent-b", Hostname: "a"}) {
+		t.Fatal("the config gate refused the repair the command channel admits")
+	}
+	if admission, ok := router.admitAgentExecToken(raw, "agent-b", "a"); !ok || admission.AgentID != "agent-b" {
+		t.Fatalf("placeholder repair admission = %+v ok=%v, want the registering agent", admission, ok)
+	}
+	persisted, err := persistence.LoadAPITokens()
+	if err != nil {
+		t.Fatalf("reload tokens: %v", err)
+	}
+	if got := persisted[0].Metadata; got["bound_agent_id"] != "agent-b" || got[agentbinding.DeployIdentityKey] != agentbinding.DeployIdentityRepaired {
+		t.Fatalf("persisted binding after repair = %v, want agent-b marked repaired", got)
+	}
+
+	// The same identity may re-bind a renamed hostname, which recreates the
+	// agent-<hostname> shape on host b. It must not unlock a second move.
+	if _, ok := router.admitAgentExecToken(raw, "agent-b", "b"); !ok {
+		t.Fatal("the bound identity could not re-bind its renamed hostname")
+	}
+	if _, ok := router.admitAgentExecToken(raw, "another-machine", "b"); ok {
+		t.Fatal("the repaired token moved a second time")
+	}
+	if commandConfigAllowedForToken(&cfg.APITokens[0], models.Host{ID: "another-machine", Hostname: "b"}) {
+		t.Fatal("the config gate allowed an identity the command channel refuses")
+	}
+}
+
+// The exact attack on a versionless historical token: an equivalent-hostname
+// registration must not migrate it without the repair marker, or a hostname
+// rebind could recreate the placeholder shape and unlock a second move.
+func TestVersionlessDeployPlaceholderCannotBeMovedTwice(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.Config{DataPath: dir}
+	raw, err := auth.GenerateAPIToken()
+	if err != nil {
+		t.Fatalf("generate token: %v", err)
+	}
+	record, err := config.NewAPITokenRecord(raw, "deploy-runtime-a", []string{config.ScopeAgentReport, config.ScopeAgentExec})
+	if err != nil {
+		t.Fatalf("new token record: %v", err)
+	}
+	record.Metadata = map[string]string{
+		"bound_agent_id": "agent-a",
+		"bound_hostname": "a",
+		"deploy_job_id":  "dep_1",
+	}
+	cfg.APITokens = []config.APITokenRecord{*record}
+	router := &Router{config: cfg, persistence: config.NewConfigPersistence(dir)}
+
+	if _, ok := router.admitAgentExecToken(raw, "agent-b", "a.example"); ok {
+		t.Fatal("a versionless placeholder migrated on an equivalent hostname")
+	}
+	// The deployed agent first registers under the identity enrollment handed
+	// it, then under its acknowledged identity after a restart.
+	if _, ok := router.admitAgentExecToken(raw, "agent-a", "a"); !ok {
+		t.Fatal("the deployed agent's first registration was refused")
+	}
+	if admission, ok := router.admitAgentExecToken(raw, "machine-id", "a"); !ok || admission.AgentID != "machine-id" {
+		t.Fatalf("restart registration = %+v ok=%v, want the one-time repair", admission, ok)
+	}
+	if got := cfg.APITokens[0].Metadata[agentbinding.DeployIdentityKey]; got != agentbinding.DeployIdentityRepaired {
+		t.Fatalf("repair marker = %q, want %q", got, agentbinding.DeployIdentityRepaired)
+	}
+	if _, ok := router.admitAgentExecToken(raw, "another-machine", "a"); ok {
+		t.Fatal("the repaired token moved a second time")
+	}
+}
+
+// A token issued by current enrollment leaves identity to the agent. Even if
+// the agent it first binds happens to be named agent-<hostname>, the token is
+// not a historical placeholder and never moves.
+func TestCurrentDeployTokenNeverMovesOnceBound(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.Config{DataPath: dir}
+	raw, err := auth.GenerateAPIToken()
+	if err != nil {
+		t.Fatalf("generate token: %v", err)
+	}
+	record, err := config.NewAPITokenRecord(raw, "deploy-runtime-c", []string{config.ScopeAgentReport, config.ScopeAgentExec})
+	if err != nil {
+		t.Fatalf("new token record: %v", err)
+	}
+	record.Metadata = map[string]string{
+		"bound_hostname":               "c",
+		"deploy_job_id":                "dep_2",
+		agentExecBindingVersionKey:     agentExecBindingVersion,
+		agentbinding.DeployIdentityKey: agentbinding.DeployIdentityAgent,
+	}
+	cfg.APITokens = []config.APITokenRecord{*record}
+	router := &Router{config: cfg, persistence: config.NewConfigPersistence(dir)}
+
+	if _, ok := router.admitAgentExecToken(raw, "agent-c", "c"); !ok {
+		t.Fatal("first registration of a current deploy token was refused")
+	}
+	if _, ok := router.admitAgentExecToken(raw, "machine-id", "c"); ok {
+		t.Fatal("a current deploy token moved after its first binding")
 	}
 }

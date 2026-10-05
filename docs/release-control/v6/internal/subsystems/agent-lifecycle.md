@@ -8230,6 +8230,24 @@ to the hostname the agent then reports under.
 `internal/hostagent/enroll_test.go`, including
 `TestEnrollPresentsTheIdentityNewReports`, pin that order and outcome.
 
+### Deploy enrollment leaves agent identity to the agent
+
+A deployed agent reports under its machine-derived identity, Pulse
+acknowledges that identity, and the agent persists it, so its command channel
+must bind to that same identity. Enrollment therefore binds the runtime token
+to the node's hostname and the current binding version only and returns no
+agent ID; the first command-channel registration backfills the agent's own ID.
+Enrollment previously bound the token to, and returned, an invented
+`agent-<hostname>`. The agent used it until its first acknowledged report
+replaced it, after which every restart registered under the real ID and the
+command channel refused it permanently. Tokens issued that way move once to
+the registering agent's ID on the same host, under the binding rule in the
+security-privacy contract.
+`TestHandleEnroll_RuntimeTokenBindsTheAgentsOwnIdentityOnFirstCommandRegistration`
+in `internal/api/deploy_handlers_test.go` replays that sequence: the identity
+enrollment handed out, or the agent's own, then the acknowledged identity after
+a restart.
+
 ### Alert push routing does not create an agent lifecycle channel
 
 The shared API router may classify an external-probe outage for specialized

@@ -14,6 +14,15 @@ const (
 	Version         = "2"
 	IssuedViaConfig = "config_agent_install_command"
 	IssuedViaHosted = "hosted_agent_install_command"
+
+	// DeployIdentityKey records where a deploy runtime token's agent identity
+	// comes from. Enrollment that leaves identity to the agent writes
+	// DeployIdentityAgent; the one-time repair of a token enrollment bound to
+	// an invented agent-<hostname> writes DeployIdentityRepaired. A token with
+	// either value is never repaired again.
+	DeployIdentityKey      = "deploy_identity_binding"
+	DeployIdentityAgent    = "agent"
+	DeployIdentityRepaired = "repaired"
 )
 
 type Decision struct {
@@ -23,6 +32,10 @@ type Decision struct {
 	RebindHostname bool
 	BackfillID     bool
 	BackfillHost   bool
+	// RepairDeployIdentity marks a LegacyMigrate that moves a historical deploy
+	// placeholder binding; the admission path must persist
+	// DeployIdentityRepaired with the new identity so it cannot recur.
+	RepairDeployIdentity bool
 }
 
 // EvaluateActionRunner admits only a pre-bound, typed action credential whose
@@ -65,6 +78,17 @@ func Evaluate(record *config.APITokenRecord, requestedID, requestedHost string) 
 	if canBindAutoRegisteredInstallToken(record, requestedID, requestedHost) {
 		return Decision{Admit: true, FirstBind: true}
 	}
+	// A historical deploy placeholder moves to a new identity only through the
+	// marked one-time repair, whatever its binding version. It must never fall
+	// through to the legacy branch below, which accepts equivalent hostnames
+	// and leaves no marker, so a later hostname rebind could recreate the
+	// placeholder shape and unlock another move.
+	if requestedID != boundID && historicalDeployPlaceholder(record, boundID, boundHost) {
+		if requestedID != "" && strings.EqualFold(boundHost, requestedHost) {
+			return Decision{Admit: true, LegacyMigrate: true, RepairDeployIdentity: true}
+		}
+		return Decision{}
+	}
 	if strings.TrimSpace(record.Metadata[VersionKey]) != Version &&
 		boundHost != "" && hostnamesMatch(boundHost, requestedHost) {
 		return Decision{Admit: true, LegacyMigrate: true}
@@ -82,6 +106,19 @@ func Evaluate(record *config.APITokenRecord, requestedID, requestedHost string) 
 		BackfillID:     boundID == "" && boundHost != "",
 		BackfillHost:   boundHost == "" && boundID != "",
 	}
+}
+
+// historicalDeployPlaceholder reports a runtime token that deploy enrollment
+// bound to the agent-<hostname> identity it used to invent. No agent keeps
+// that identity past its first acknowledged report, so such a token may move
+// once to the registering agent's real identity on exactly the same hostname.
+// Tokens issued by current enrollment carry DeployIdentityAgent and a
+// repaired token carries DeployIdentityRepaired, so neither qualifies, even if
+// a later hostname rebind reproduces the agent-<hostname> shape.
+func historicalDeployPlaceholder(record *config.APITokenRecord, boundID, boundHost string) bool {
+	return strings.TrimSpace(record.Metadata["deploy_job_id"]) != "" &&
+		strings.TrimSpace(record.Metadata[DeployIdentityKey]) == "" &&
+		boundHost != "" && boundID == "agent-"+boundHost
 }
 
 func CanBindInstallToken(record *config.APITokenRecord, agentID, hostname string) bool {
