@@ -3568,8 +3568,12 @@ not part of `ActionRequest`, durable plan identity, or `planHash`; a resource
 rename therefore cannot change action authority. Opaque canonical resource IDs
 remain in the row's accessible name and title, while the visual row prefers the
 API-supplied name and type and falls back to the bounded ID-derived type plus
-short suffix only when the resource projection is unavailable. Read-only demo
-posture is quiet supporting context rather than a page-level callout. The
+short suffix only when the resource projection is unavailable. When the row is
+too narrow for both, the resource name keeps its width and only the type, with
+its separator, gives way: on a phone they used to shrink together, so the row
+read "analytics-ba… · Virtual ma…" and hid which resource the action touches.
+Read-only demo posture is quiet supporting context rather than a page-level
+callout. The
 empty Open queue must explain producer state rather than promising content:
 when the effective Patrol mode is Watch only (read via the canonical
 `/api/ai/patrol/autonomy` settings read, failing closed to the generic calm

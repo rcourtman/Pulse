@@ -334,13 +334,19 @@ export function Actions() {
                             class="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted"
                             title={action.request.resourceId}
                           >
-                            <span class="truncate">{resource().label}</span>
-                            <Show when={resource().detail}>
-                              <span aria-hidden="true">·</span>
-                              <span class="truncate font-mono text-[11px]">
-                                {resource().detail}
-                              </span>
-                            </Show>
+                            {/* The name says what the action touches, so it keeps its
+                                width and only the type, with its separator, gives way. */}
+                            <span class="flex min-w-0 items-center gap-1.5">
+                              <span class="max-w-full shrink-0 truncate">{resource().label}</span>
+                              <Show when={resource().detail}>
+                                <span class="min-w-0 flex-1 truncate">
+                                  <span class="mr-1.5" aria-hidden="true">
+                                    ·
+                                  </span>
+                                  <span class="font-mono text-[11px]">{resource().detail}</span>
+                                </span>
+                              </Show>
+                            </span>
                             <span aria-hidden="true">·</span>
                             <span class="shrink-0">{formatRelativeTime(action.updatedAt)}</span>
                           </div>
