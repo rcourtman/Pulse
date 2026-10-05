@@ -249,6 +249,24 @@ Fresh linked Pulse-agent disk evidence with no reason remains unmarked, and
 non-VM rows do not inherit QGA guidance. The cue adds no action or tab stop;
 touch on it continues through the existing row disclosure to the full reason.
 
+The opened guest Overview applies the same admission to every filesystem, not
+only the aggregate row or its status sentence. A valid `prev-` value is labelled
+**Last known** beside its mount identity and used/capacity bytes; retained values
+do not receive current utilization bars or threshold colours. Other VM read
+reasons and explicit disk telemetry unavailability show **Usage unavailable**,
+retaining identity and known capacity without promoting old used bytes. Missing
+or invalid retained usage is unavailable, not an empty healthy filesystem. The
+read explanation precedes the filesystem breakdown and remains visible before
+any sample. Clearing a lock alone cannot clear a still-supplied reason. A fresh
+same-guest read restores the normal accessible utilization bar; independent LXC
+and linked-agent readings with no VM reason retain their existing semantics.
+
+Verification: `GuestDrawerOverview.filesystem-provenance.test.tsx`, the existing
+filesystem regressions and builder controls in `DiskList.test.tsx`, plus
+`browser-tests/guest-filesystem-provenance.cjs` using the full production guest
+drawer on desktop/light/dark and touch WebKit. These are synthetic presentation
+and input proofs, not native backup/thaw, covered-filesystem writes or resumption.
+
 Verification: mounted `GuestRow.test.tsx` and `MetricMiniSparkline.test.tsx`
 regressions and `browser-tests/guest-disk-provenance.cjs` exercise retained and
 pre-sample states, display/lens changes, current-value semantics and same-row
@@ -3240,7 +3258,9 @@ default` instead of fusing provider and badge text such as
     existing table header; Proxmox
     derives cluster and standalone-node context through
     `platformEstateOverviewModel.ts` and supplies it to `ProxmoxNodesTable.tsx`
-    rather than creating a page-level summary. The existing
+    rather than creating a page-level summary. A single-cluster estate shows that
+    cluster's name in the same header slot in place of the count, kept
+    visible while searching, because the repeated Cluster column is dropped. The existing
     `platformEstateOverviewVisible` preference now governs these inline totals
     from the shared View menu, preserving the global browser-persisted choice
     across platform workload surfaces. A page with adjacent totals, such as
@@ -7418,6 +7438,11 @@ presentation. The compact row remains actionable: plain-language rationale and
 provider history/permission limitations live one disclosure deeper beside
 bounded restore evidence. A posture fetch failure must keep the evidence
 inspectable and show unknown, never a locally inferred healthy fallback.
+The bounded restore evidence keeps the newest point and the newest completed
+point of each source before filling with the newest overall, so a run of guest
+snapshots or a running job cannot push the latest usable backup out of the
+disclosure. A coverage strip footnote is
+plain muted text under the legend, not another counter or badge row.
 
 Protection table controls continue to compose shared filter, table, status,
 counter, loading, error, disclosure, and inline-detail primitives. The bounded
@@ -8067,12 +8092,14 @@ backend deletion or destination delivery.
 
 ### Large platform notices keep the inventory in view
 
-`PlatformOutdatedAgentNotice` previews at most three affected names and exposes
-the full list through a keyboard-operable button when more hosts are outdated.
-The count, update guidance and action link remain visible. This keeps a
-large-estate stale-agent warning from pushing the platform inventory and
-Storage search below the phone viewport while preserving every affected name
-on demand. The component test pins collapsed, expanded and collapsed-again
+`PlatformOutdatedAgentNotice` is maintenance guidance, not an incident, so it
+renders as one sentence in the info tone: the count, what the update brings,
+a keyboard-operable "Which hosts?" toggle (any count above one) that reveals
+every affected name, and the upgrade link inline in the same line rather than
+on an action row. This keeps the stale-agent notice from pushing the platform
+inventory and Storage search below the fold at desktop and phone widths, and
+from competing with real warnings for attention, while preserving every
+affected name on demand. The component test pins collapsed, expanded and collapsed-again
 states; 1440px, 768px and 390px browser checks verify placement and overflow.
 The shared `InlineNotice` action text uses opaque 800-level colors for its four
 tones. The current Tailwind configuration overrides several 900-level palette
@@ -8305,13 +8332,33 @@ chain at desktop and phone widths with keyboard/touch refresh, class-dark CSS,
 request ownership and disposal. No mutation, route, navigation entry, queue
 policy, permission or recipient-delivery contract is added by these states.
 
-### Platform tables read staleness from one helper
+### Drawer History does not interpolate across missing observations
 
-`features/platformPage/resourceStaleness.ts` turns the backend's `stale`
-health verdict into a short label for platform tables, so a table that stops
-presenting a silent resource's last metrics as live does it the same way:
-dimmed metric cells plus the age with a no-signal icon, the full sentence on
-hover and as the accessible name. Grouped platform tables that already name
-the group in a shared grouped-table header row drop columns that would repeat
-the group's own value on every row.
+The shared `GuestDrawerHistory` renderer connects a series only across
+consecutive stored times in that configured panel. If another series has a
+stored observation at an intervening time and this series does not, its line
+stops. Each isolated observation, including a measured zero, remains visible
+as a point; separate continuous segments retain all their original values,
+timestamps and common-window coordinates. Independently sampled series must
+not imply simultaneous observations or a continuous trend through absent data.
 
+A visible, SVG-described explanation names the affected configured series and
+states the limit: missing readings do not identify an outage's cause or duration.
+There is no elapsed-time/cadence heuristic, synthetic zero, invented observation,
+new API field or collector change. Times outside the configured panel cannot
+split its series. Entirely absent series retain the existing missing/fallback
+policy. Live or retained snapshot carriers cannot repair a stored gap; only a
+matching stored response can. Source/range/access isolation, transient retained
+reads and exact-time keyboard/pointer/touch inspection remain in force.
+
+`GuestDrawerHistory.gaps.test.tsx` and `guestHistorySegments.test.ts` cover
+split lines, singleton recovery, zero rates, interleaved sampling, multiple
+segments, configured-group isolation, invalid points, elapsed-time controls,
+live updates, stored refresh and denied/transient reads. `GuestDrawer.test.tsx`
+checks the full drawer's live-state recovery and unchanged request budget.
+Updated pointer/sparse
+regressions preserve their original missing-value and fallback obligations.
+`browser-tests/history-observation-gaps.cjs` exercises the production full guest
+drawer with synthetic APIs in Chromium/WebKit desktop and 390/320-pixel light
+and dark views. This is presentation acceptance, not native backup/QGA safety,
+provider outage attribution, installed recovery or release availability.
