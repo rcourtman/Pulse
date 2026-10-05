@@ -157,6 +157,9 @@ func TestTrueNASDiskHistoryAuthenticatedRoute(t *testing.T) {
 	mtm := monitoring.NewMultiTenantMonitor(cfg, nil, nil)
 	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{"org-a": monitor, "org-b": {}})
 	router.mtMonitor = mtm
+	// Bind the declared native provider after the constructor installs its
+	// runtime owners, using the same setter/tenant initializer as production.
+	router.setMonitorSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, poller)
 	maxPoints := ""
 	request := func(raw, org, metric string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=disk&resourceId=disk-serial&metric="+metric+"&range=1h&maxPoints="+maxPoints, nil)
