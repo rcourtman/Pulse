@@ -1,7 +1,8 @@
+//go:build !windows
+
 package installtests
 
 import (
-	"context"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -59,24 +60,11 @@ func pulseAPIReference(t *testing.T) (string, string, []string) {
 
 func runPulseAPIRecipe(t *testing.T, script, home, bin string, extraEnv ...string) (string, int) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "bash", "-c", script)
-	cmd.Env = append(os.Environ(), "HOME="+home, "PATH="+bin+":"+os.Getenv("PATH"),
-		"http_proxy=", "HTTP_PROXY=", "https_proxy=", "HTTPS_PROXY=", "ALL_PROXY=", "all_proxy=", "NO_PROXY=", "no_proxy=")
-	cmd.Env = append(cmd.Env, extraEnv...)
-	out, err := cmd.CombinedOutput()
-	if ctx.Err() != nil {
-		t.Fatal("API recipe exceeded the test watchdog; its own deadline did not complete")
+	result, err := observeGuidanceRecipe(t, script, home, bin, guidanceRecipeLimits(20*time.Second), extraEnv...)
+	if err != nil {
+		t.Fatalf("API recipe observation failed: %v; %s", err, result.summary())
 	}
-	if err == nil {
-		return string(out), 0
-	}
-	if failure, ok := err.(*exec.ExitError); ok {
-		return string(out), failure.ExitCode()
-	}
-	t.Fatal(err)
-	return "", -1
+	return result.output, result.exit
 }
 
 func TestPulseAPIGuidancePreparationIsPrivateAndFailClosed(t *testing.T) {
@@ -413,9 +401,16 @@ func TestPulseAPIGuidanceTimedOutPOSTIsNotRepeated(t *testing.T) {
 	// Use the actual documented twenty-second limit, not a test-only shortened
 	// deadline. An execution endpoint can have acted even when this read fails.
 	helper = strings.Replace(helper, "http://127.0.0.1:7655", server.URL, 1)
-	start := time.Now()
-	output, exit := runPulseAPIRecipe(t, helper+"\n"+calls[5], home, bin)
-	if exit != 28 || time.Since(start) > 25*time.Second || len(requests) != 1 {
+	// A deliberate preparation delay exceeds the old whole-shell comparison
+	// once added to the actual twenty-second request. It must not shorten curl's
+	// limit or be mistaken for request time.
+	result, err := observeGuidanceRecipe(t, "sleep 12\n"+helper+"\n"+calls[5], home, bin, guidanceRecipeLimits(20*time.Second))
+	if err != nil {
+		t.Fatalf("timed-out POST observation failed: %v; %s", err, result.summary())
+	}
+	t.Log(result.summary())
+	output, exit := result.output, result.exit
+	if exit != 28 || result.request > 25*time.Second || result.curlStarts != 1 || result.curlEnds != 1 || len(requests) != 1 {
 		t.Fatal("POST did not stop at its request deadline or was retried")
 	}
 	if strings.Contains(output, "private-partial-response") || strings.Contains(output, "synthetic-timeout-secret") {

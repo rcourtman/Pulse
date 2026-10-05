@@ -1,7 +1,8 @@
+//go:build !windows
+
 package installtests
 
 import (
-	"context"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -104,24 +105,15 @@ func pbsAPIGuidance(t *testing.T) [4]string {
 
 func runPBSRecipe(t *testing.T, recipe, home, bin string, extraEnv ...string) (string, int) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "bash", "-c", recipe)
-	cmd.Env = append(os.Environ(), "HOME="+home, "PATH="+bin+":"+os.Getenv("PATH"),
-		"http_proxy=", "HTTP_PROXY=", "https_proxy=", "HTTPS_PROXY=", "ALL_PROXY=", "all_proxy=", "NO_PROXY=", "no_proxy=")
-	cmd.Env = append(cmd.Env, extraEnv...)
-	output, err := cmd.CombinedOutput()
-	if ctx.Err() != nil {
-		t.Fatal("copied PBS recipe exceeded its bounded test deadline")
+	requestLimit := 15 * time.Second
+	if strings.Contains(recipe, "--max-time 60") {
+		requestLimit = 60 * time.Second
 	}
-	if err == nil {
-		return string(output), 0
+	result, err := observeGuidanceRecipe(t, recipe, home, bin, guidanceRecipeLimits(requestLimit), extraEnv...)
+	if err != nil {
+		t.Fatalf("PBS recipe observation failed: %v; %s", err, result.summary())
 	}
-	failure, ok := err.(*exec.ExitError)
-	if !ok {
-		t.Fatal(err)
-	}
-	return string(output), failure.ExitCode()
+	return result.output, result.exit
 }
 
 func TestPBSAPIGuidancePreparationIsPrivateAndFailClosed(t *testing.T) {
@@ -357,6 +349,12 @@ func TestPBSAPIGuidanceCopiedRequestsKeepSecretsPrivate(t *testing.T) {
 						t.Fatal(err)
 					}
 					recipe = strings.Replace(recipe, "curl --disable ", `curl --disable --cacert "$HOME/ca.pem" `, 1)
+				}
+				if index == 0 && scenario == "wrong success status" {
+					// The old 25-second watchdog expired during this controlled
+					// preparation, before curl. Keep the real 60-second download
+					// limit and verify that HTTP 206 still cannot become an installer.
+					recipe = "sleep 26\n" + recipe
 				}
 				output, exit := runPBSRecipe(t, recipe, home, bin, "PBS_ARGV="+capture, "PBS_CURL="+realCurl)
 				wantExit := 0
