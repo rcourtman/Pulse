@@ -2314,6 +2314,10 @@ not a replacement status card, CTA band, or page-local nested card.
    `platformTableBandWidthStyle` or the sortable header's `bandWidth`, which
    sets `--platform-table-band-width`; the shell applies it only inside the band,
    after the name anchor, so md widths and phone widths are unchanged.
+   A column whose content must read in full (a status badge) is sized for its
+   widest label at the narrowest table in each range: a 34rem container for the
+   band, and the table a 768px viewport leaves (about 695px) for md widths. The
+   Docker Images Update check column needs 23 percent and 19 percent for that.
    Below a 360-pixel content width, the shared narrow layout promotes identity to
    40 percent and may remove one additional lowest-priority context column via
    `platform-table-narrow-hidden` rather than shrinking names and metric values

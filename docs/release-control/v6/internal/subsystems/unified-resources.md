@@ -882,7 +882,12 @@ failed and server-denied observations alongside a no-invented-grant control.
 The Docker phone container projection keeps identity, state when applicable,
 CPU, memory and update; restart counts remain in the existing detail expansion
 and return at mobile width. Images retain image, size and update verdict on
-phones; host and consumers stay reachable in detail. Hidden header/body columns
+phones; host and consumers stay reachable in detail. The update verdict reads
+in full at every width: the Update check column keeps the ~122px its longest
+badge ("Update available", "Managed by Pulse") needs with cell padding, through
+a 23 percent tablet-band width taken from Size and a 19 percent md width taken
+from Host, Used by and Size. An equal band share and the old 16 percent md width cut
+the badge off between 600 and 800px. Hidden header/body columns
 are symmetric. Swarm rollout tokens render as words with raw state retained in
 the title; task starts use the shared relative-time primitive with their exact
 timestamp retained. Native table/model/guardrail tests and the production
