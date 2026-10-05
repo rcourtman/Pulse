@@ -3273,7 +3273,9 @@ default` instead of fusing provider and badge text such as
     existing table header; Proxmox
     derives cluster and standalone-node context through
     `platformEstateOverviewModel.ts` and supplies it to `ProxmoxNodesTable.tsx`
-    rather than creating a page-level summary. The existing
+    rather than creating a page-level summary. A single-cluster estate shows that
+    cluster's name in the same header slot in place of the count, kept
+    visible while searching, because the repeated Cluster column is dropped. The existing
     `platformEstateOverviewVisible` preference now governs these inline totals
     from the shared View menu, preserving the global browser-persisted choice
     across platform workload surfaces. A page with adjacent totals, such as

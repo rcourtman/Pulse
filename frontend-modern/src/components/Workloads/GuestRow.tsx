@@ -52,6 +52,10 @@ export { GUEST_COLUMNS, VIEW_MODE_COLUMNS } from './guestRowModel';
 export type { GuestRowProps, WorkloadIOEmphasis } from './guestRowModel';
 import { getGuestColumnStyle } from './guestRowModel';
 
+// Disk-read reasons that point at something broken the user can fix, as
+// opposed to a guest that simply has no agent or is not running.
+const DISK_READ_ACTIONABLE_REASONS = new Set(['permission-denied', 'agent-error']);
+
 export function GuestRow(props: GuestRowProps) {
   const [rowActionProps] = splitProps(props, ['onClick']);
   const {
@@ -234,6 +238,9 @@ export function GuestRow(props: GuestRowProps) {
           : 'Unavailable',
       message: getDiskStatusTooltip(),
       valueLabelContext: retained ? ('last known' as const) : ('current' as const),
+      // Most reasons are a setup gap (no guest agent, VM stopped) rather than a
+      // fault, so they stay muted; only a broken read the user can fix is amber.
+      needsAction: DISK_READ_ACTIONABLE_REASONS.has(reason.replace(/^prev-/, '')),
     };
   });
   const diskValueLabelContext = (): MetricMiniSparklineValueLabelContext =>
@@ -648,7 +655,10 @@ export function GuestRow(props: GuestRowProps) {
               {(status) => (
                 <p
                   data-workload-disk-read-status
-                  class="mt-0.5 text-center text-[10px] leading-none text-amber-700 dark:text-amber-300"
+                  class={`mt-0.5 text-center text-[10px] leading-none ${
+                    status().needsAction ? 'text-amber-700 dark:text-amber-300' : 'text-muted'
+                  }`}
+                  title={status().message}
                 >
                   <span aria-hidden="true">{status().label}</span>
                   <span class="sr-only">{status().message}</span>

@@ -79,6 +79,13 @@ const resolveWorkloadStatusBucket = (guest: WorkloadGuest): WorkloadStatusBucket
     return 'degraded';
   }
 
+  // A running guest with an open warning or critical alert needs attention
+  // even while its power state and resource status read healthy. Backup age
+  // is deliberately not counted here: it has its own column and tab.
+  if (bucket === 'running' && guest.hasOpenAlert) {
+    return 'degraded';
+  }
+
   return bucket;
 };
 
