@@ -11,7 +11,7 @@ const { chromium, webkit } = require('playwright');
 const guide = fs.readFileSync('docs/AI.md', 'utf8');
 const section = guide.split('#### Remove a rule created by mistake\n')[1];
 const snippet = section.match(/```javascript\n([\s\S]*?)\n```/)[1];
-const output = 'frontend-modern/browser-tests/artifacts/patrol-rule-help';
+const output = 'frontend-modern/test-results/patrol-rule-help';
 fs.mkdirSync(output, { recursive: true });
 const escape = (text) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;');
 const selected = { id: 'rule-one', created_from: 'manual', resource_name: 'Test VM',
@@ -92,6 +92,9 @@ const server = http.createServer((request, response) => {
         page.on('dialog', async (dialog) => {
           dialogs.push({ type: dialog.type(), message: dialog.message() });
           if (dialog.type() === 'prompt') {
+            if (name === 'changed-org') {
+              await context.addCookies([{ name: 'pulse_org_id', value: 'org-b', url }]);
+            }
             if (name === 'prompt-cancel') await dialog.dismiss();
             else await dialog.accept('rule-one');
           } else {
@@ -100,18 +103,6 @@ const server = http.createServer((request, response) => {
           }
         });
         await page.goto(url);
-        if (name === 'changed-org') {
-          // Change context at the documented confirmation boundary.
-          const changedSnippet = snippet.replace(
-            "const csrf = cookie('pulse_csrf');",
-            "const csrf = cookie('pulse_csrf');");
-          // The browser test changes the cookie when the prompt opens, before
-          // the exact, unchanged snippet reaches its organisation recheck.
-          page.once('dialog', async () => {
-            await context.addCookies([{ name: 'pulse_org_id', value: 'org-b', url }]);
-          });
-          assert.equal(changedSnippet, snippet);
-        }
         await page.evaluate((code) => window.eval(code), snippet);
         const deletes = scenario.requests.filter((request) => request.method === 'DELETE');
         const success = messages.some((message) => message.kind === 'info');
