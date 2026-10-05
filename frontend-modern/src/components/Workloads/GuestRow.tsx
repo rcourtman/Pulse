@@ -323,6 +323,7 @@ export function GuestRow(props: GuestRowProps) {
                 {/* Show backup indicator in name cell only if backup column is hidden */}
                 <Show when={!isColVisible('backup') && supportsBackup()}>
                   <BackupIndicator
+                    guestName={props.guest.name}
                     lastBackup={props.guest.lastBackup}
                     isTemplate={props.guest.template}
                     backupRunning={props.guest.backupInProgress}
@@ -845,6 +846,7 @@ export function GuestRow(props: GuestRowProps) {
               >
                 <Show when={!props.guest.template}>
                   <BackupStatusCell
+                    guestName={props.guest.name}
                     lastBackup={props.guest.lastBackup}
                     backupRunning={props.guest.backupInProgress}
                   />

@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "7387703d23ca855539e67855389712d780d2a868",
+  "verified_at": "2026-10-05T10:40:50.589686Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "90cc2bac8ab59556148aac49026aef6d18615a4d85ef39891f8d51ddac804681",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "6668d1f0f6aba4d79e006adc80ac2b323445e624f3e462de4373cdd4a9d5c6e3"
+  },
+  "routes": ["/browser-tests/backup-details-access.html"],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production Workloads GuestRow, both backup disclosures, shared Dialog and CSS with explicit synthetic VM/CT observations. Desktop Chromium and touch WebKit, each light/dark. Playwright 1.56.1 matches the integration lock.",
+    "Completed date/time and age remain distinct from a running task. Same-ID running, future/malformed uncertainty, absence and recovery update open evidence without inventing completion.",
+    "Sixteen final screenshots opened: named VM/CT evidence and Close controls remain readable and within desktop/phone bounds after the finite entrance animation.",
+    "Final fixture does not exercise canonical projection or native backup correctness, PBS/source agreement, guest recovery, physical devices or published availability. Earlier timeouts and superseded source/capture failures are retained in the lane outcome."
+  ],
+  "interactions": [
+    "Existing hover is preserved. Sequential Tab/Enter and native Space open the desktop badge; ordinary first touch opens a minimum-44px phone target without a hover tooltip.",
+    "Close focus, background inertness, focus containment and Escape/Close/backdrop dismissal return focus to the originating disclosure. Nested activation does not open the enclosing guest row.",
+    "Hidden-column indicator presents the same uncertainty and named guest as the Backup column. Adjacent CT has no VM observation. Recovery and actual row removal release dialog isolation; an ordinary CT row activation still works.",
+    "Four cases, 22 grouped checks, no page errors or operation requests. Only the existing anomaly fixture GET occurs. No collector/history/resource read is added. Browser/server closure completed under unchanged deadlines."
+  ]
+}
