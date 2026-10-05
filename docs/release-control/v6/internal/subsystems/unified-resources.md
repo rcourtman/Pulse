@@ -23,6 +23,29 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Broadcast bulk reads capture resources and history coordinates together
+
+`ListWithMetricsTargets` and the monitor adapter's matching optional read return
+detached resources and a detached target map from one locked registry generation.
+The existing source-mapping inversion runs once for this read when typed views
+are dirty; it does not build all typed views or add a retained generation cache.
+Clean typed views may supply their already-current inverse mapping. Legacy List,
+GetAll and individual target reads preserve their shapes and semantics.
+
+The target map stays separate from resources until presentation host coalescing
+selects the row identity. Missing coordinates remain missing in that capture;
+they never fall through to a later live registry. Mapping changes with unchanged
+LastSeen take effect on the next read. Returned resources, policy/identity blocks
+and target values remain caller-owned across mutations and adapter replacement.
+Projection cannot pair an earlier resource row with a later history identity.
+
+`registry_test.go`, `registry_projection_test.go` and
+`monitor_adapter_read_state_test.go` exercise full resource/point-target parity,
+same-time edits, concurrent mapping writes, detachments, empty/nil reads and
+tenant separation. Connected monitoring proof covers all nine demo providers,
+continuity overlays and complete served JSON. Paired cold/clean/dirty benchmarks
+measure whole materialization, not a new point-lookup envelope or native relief.
+
 Canonical resource History honours selected memory observation provenance and Proxmox VM filesystem deferrals instead of treating numeric carriers as fresh measurements.
 
 ### Canonical resource History cannot promote retained guest readings

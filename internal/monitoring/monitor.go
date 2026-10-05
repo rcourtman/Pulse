@@ -4333,6 +4333,13 @@ func buildFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateF
 }
 
 func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateFrontend {
+	return m.buildBroadcastFrontendStateFromSnapshotWithClock(snapshot, time.Now)
+}
+
+// The clock is sampled at the same post-read health-evaluation boundary as
+// ordinary broadcasts. Tests can compare complete projections at one instant
+// without mistaking a naturally advancing health-age label for lost content.
+func (m *Monitor) buildBroadcastFrontendStateFromSnapshotWithClock(snapshot models.StateSnapshot, healthClock func() time.Time) models.StateFrontend {
 	frontendState := buildFrontendStateFromSnapshot(snapshot)
 	m.updateResourceStoreForRead(snapshot)
 	if m != nil && m.alertManager != nil {
@@ -4341,20 +4348,22 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateS
 		}
 	}
 	unifiedView := m.currentUnifiedStateView()
-	metricsTargetResolver := broadcastMetricsTargetResolver(unifiedView.readState)
+	metricsTargetResolver := unifiedView.metricsTargets
+	if metricsTargetResolver == nil {
+		metricsTargetResolver = broadcastMetricsTargetResolver(unifiedView.readState)
+	}
 	broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)
 	// Coalescing owns the outer slice. Decorate that one projection in place,
 	// not three full-resource copies; nested store data is still read-only.
 	healthAlerts := resourceHealthAlerts(frontendState.ActiveAlerts)
-	now := time.Now().UTC()
+	now := healthClock().UTC()
 	for i := range broadcastResources {
 		m.applyPersistedMetadataToUnifiedResource(&broadcastResources[i])
 		health := unifiedresources.EvaluateResourceHealth(broadcastResources[i], healthAlerts, now)
 		broadcastResources[i].Health = &health
 	}
-	broadcastFrontendResources, broadcastCatalogs := convertPresentationResourcesForBroadcast(
-		attachBroadcastMetricsTargets(broadcastResources, metricsTargetResolver),
-	)
+	attachBroadcastMetricsTargetsInPlace(broadcastResources, metricsTargetResolver)
+	broadcastFrontendResources, broadcastCatalogs := convertPresentationResourcesForBroadcast(broadcastResources)
 	frontendState.Resources = broadcastFrontendResources
 	frontendState.CapabilityCatalog = broadcastCatalogs.capabilities
 	frontendState.PolicyCatalog = broadcastCatalogs.policies
@@ -4871,23 +4880,50 @@ func (m *Monitor) RecentResourceChanges(resourceID string, since time.Time, limi
 }
 
 type monitorUnifiedStateView struct {
-	resources []unifiedresources.Resource
-	readState unifiedresources.ReadState
-	freshness time.Time
+	resources      []unifiedresources.Resource
+	readState      unifiedresources.ReadState
+	freshness      time.Time
+	metricsTargets MetricsTargetResourceStore
 }
 
 type unifiedResourceReadStateLister interface {
 	GetAll() []unifiedresources.Resource
 }
 
+type unifiedResourceProjectionLister interface {
+	GetAllWithMetricsTargets() ([]unifiedresources.Resource, map[string]unifiedresources.MetricsTarget)
+}
+
+// This resolver never falls through to the live store, including for an
+// unknown ID. A missing target belongs to this captured generation too.
+type projectionMetricsTargets map[string]unifiedresources.MetricsTarget
+
+func (targets projectionMetricsTargets) MetricsTargetForResource(id string) *unifiedresources.MetricsTarget {
+	target, ok := targets[unifiedresources.CanonicalResourceID(id)]
+	if !ok {
+		return nil
+	}
+	return &target
+}
+
+func unifiedProjectionResources(lister unifiedResourceReadStateLister) ([]unifiedresources.Resource, MetricsTargetResourceStore) {
+	if projection, ok := lister.(unifiedResourceProjectionLister); ok {
+		resources, targets := projection.GetAllWithMetricsTargets()
+		return resources, projectionMetricsTargets(targets)
+	}
+	return lister.GetAll(), nil
+}
+
 func monitorUnifiedStateViewFromSnapshot(snapshot models.StateSnapshot) monitorUnifiedStateView {
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestSnapshot(snapshot)
 	adapter := unifiedresources.NewMonitorAdapter(registry)
+	resources, targets := unifiedProjectionResources(adapter)
 	return monitorUnifiedStateView{
-		resources: registry.List(),
-		readState: adapter,
-		freshness: snapshot.LastUpdate,
+		resources:      resources,
+		readState:      adapter,
+		freshness:      snapshot.LastUpdate,
+		metricsTargets: targets,
 	}
 }
 
@@ -4895,10 +4931,12 @@ func monitorUnifiedStateViewFromResources(resources []unifiedresources.Resource,
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestResources(resources)
 	adapter := unifiedresources.NewMonitorAdapter(registry)
+	resources, targets := unifiedProjectionResources(adapter)
 	return monitorUnifiedStateView{
-		resources: registry.List(),
-		readState: adapter,
-		freshness: freshness,
+		resources:      resources,
+		readState:      adapter,
+		freshness:      freshness,
+		metricsTargets: targets,
 	}
 }
 
@@ -4915,8 +4953,9 @@ func (m *Monitor) unifiedStateViewWithStandaloneHostContinuity(view monitorUnifi
 		return view
 	}
 
-	resources := lister.GetAll()
+	resources, targets := unifiedProjectionResources(lister)
 	view.resources = resources
+	view.metricsTargets = targets
 	if view.freshness.IsZero() {
 		view.freshness = latestUnifiedResourceLastSeen(resources)
 	}
@@ -6479,15 +6518,22 @@ func attachBroadcastMetricsTargets(
 	}
 
 	out := make([]unifiedresources.Resource, len(resources))
-	for i, resource := range resources {
-		if resource.MetricsTarget == nil {
-			resource.MetricsTarget = validBroadcastMetricsTarget(
-				resolver.MetricsTargetForResource(resource.ID),
-			)
-		}
-		out[i] = resource
-	}
+	copy(out, resources)
+	attachBroadcastMetricsTargetsInPlace(out, resolver)
 	return out
+}
+
+// Only call with the owned outer slice of a coalesced broadcast projection.
+// Nested resource data stays read-only, and the resolver returns owned targets.
+func attachBroadcastMetricsTargetsInPlace(resources []unifiedresources.Resource, resolver MetricsTargetResourceStore) {
+	if resolver == nil {
+		return
+	}
+	for i := range resources {
+		if resources[i].MetricsTarget == nil {
+			resources[i].MetricsTarget = validBroadcastMetricsTarget(resolver.MetricsTargetForResource(resources[i].ID))
+		}
+	}
 }
 
 func validBroadcastMetricsTarget(

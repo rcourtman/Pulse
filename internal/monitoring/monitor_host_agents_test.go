@@ -6718,6 +6718,10 @@ func (s *broadcastProjectionCountingStore) GetAll() []unifiedresources.Resource 
 	s.reads++
 	return s.MonitorAdapter.GetAll()
 }
+func (s *broadcastProjectionCountingStore) GetAllWithMetricsTargets() ([]unifiedresources.Resource, map[string]unifiedresources.MetricsTarget) {
+	s.reads++
+	return s.MonitorAdapter.GetAllWithMetricsTargets()
+}
 func (*broadcastProjectionCountingStore) TryReplaceRegistryForRead(models.StateSnapshot, time.Duration, func() map[unifiedresources.DataSource][]unifiedresources.IngestRecord) bool {
 	return false
 }
@@ -6758,6 +6762,10 @@ func TestBroadcastProjectionListsRegistryOnceAndKeepsLiveChanges(t *testing.T) {
 	}
 	if row == nil || row.CPU.Current != 77 || len(row.Tags) != 1 || row.Tags[0] != "new-tag" {
 		t.Fatalf("mutable row was stale: %#v", row)
+	}
+	var health unifiedresources.ResourceHealth
+	if err := json.Unmarshal(row.Health, &health); err != nil || health.Verdict != unifiedresources.HealthCritical {
+		t.Fatalf("live critical alert did not reach the freshly projected row: %s (%v)", row.Health, err)
 	}
 	if first.Resources[0].CPU.Current != oldCPU {
 		t.Fatal("later projection mutated an accepted baseline")

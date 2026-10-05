@@ -17,6 +17,36 @@
 
 ## Purpose
 
+### Fresh broadcast projection owns one resource/target capture
+
+Canonical live, fallback and standalone-host continuity broadcast reads prefer
+the adapter's detached bulk resource/metrics-target capture. After host
+coalescing selects presentation identity, missing history targets are attached
+from that same capture, including authoritative absence. Stores without this
+optional capability retain the previous point-resolver fallback. Only the owned
+outer coalesced slice is decorated in place; nested source payloads stay read-only.
+
+Every read still observes complete current resource data and derives live alert
+health, metadata URL edits/clears and connected/ignored infrastructure. No
+timestamp-only cache, telemetry omission, policy change or new wire field is
+introduced. All existing catalogs, discovery/history coordinates, original
+observation times, LastSeen, identity and tenant/revocation boundaries remain.
+
+`broadcast_metrics_snapshot_test.go` compares the complete served JSON with an
+independent earlier projection across the metadata-heavy nine-provider demo,
+typed-view and same-time dirty cases; it also covers captured target replacement
+and continuity/metadata/live-alert boundaries. `monitor_host_agents_test.go`
+retains its one-materialization and live-change regression. Benchmarks include
+the exact parent's complete conversion and final JSON encoding, with cold,
+list-only, typed-clean and dirty inputs; they do not establish installed CPU/RSS
+relief, native identity refresh throughput or completion of #2199.
+
+Complete-content comparisons use one health-evaluation instant through a
+private clock seam. Production still samples real UTC at the same post-read
+boundary. The minute-boundary control requires age labels to advance without
+renewing LastSeen; comparisons retain every health field instead of stripping
+the reproduced `1m`/`2m` clock difference from JSON.
+
 ### Report identity lookups do not rebuild unrelated Kubernetes metadata
 
 The producer's two temporary host/Docker-host admission registries use a

@@ -1321,6 +1321,21 @@ func seededVMwareSourceID(resource *Resource) string {
 // the read lock and copy it without repeating identity/scope/policy derivation.
 // The typed views remain lazy, so a List-only consumer pays for no extra copy.
 func (rr *ResourceRegistry) List() []Resource {
+	resources, _ := rr.listMaterialized(false)
+	return resources
+}
+
+// ListWithMetricsTargets captures detached resources and their history targets
+// from the same registry generation. Resolve all source mappings in one pass,
+// without forcing the unrelated typed views to be built. In particular a
+// freshly ingested registry must not scan every mapping once per broadcast row.
+// Targets are separate: host coalescing must select the presentation identity
+// before a missing target is attached, just as with individual target lookups.
+func (rr *ResourceRegistry) ListWithMetricsTargets() ([]Resource, map[string]MetricsTarget) {
+	return rr.listMaterialized(true)
+}
+
+func (rr *ResourceRegistry) listMaterialized(withTargets bool) ([]Resource, map[string]MetricsTarget) {
 	for {
 		rr.mu.RLock()
 		if rr.canonicalMetadataDirty {
@@ -1332,13 +1347,27 @@ func (rr *ResourceRegistry) List() []Resource {
 			// rather than copy a generation that is no longer materialized.
 			continue
 		}
+		var sourceTargets map[string][]SourceTarget
+		var targets map[string]MetricsTarget
+		if withTargets {
+			sourceTargets = rr.cachedSourceTargets
+			if rr.viewsDirty || sourceTargets == nil {
+				sourceTargets = rr.buildSourceTargetsIndexLocked()
+			}
+			targets = make(map[string]MetricsTarget, len(rr.resources))
+		}
 		out := make([]Resource, 0, len(rr.resources))
 		for _, r := range rr.resources {
 			out = append(out, cloneMaterializedResource(r))
+			if withTargets {
+				if target := rr.metricsTargetFromSourceTargets(r, sourceTargets[r.ID]); target != nil {
+					targets[r.ID] = *target
+				}
+			}
 		}
 		rr.mu.RUnlock()
 		sortResourcesByName(out)
-		return out
+		return out, targets
 	}
 }
 
