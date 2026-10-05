@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "94ac386abfe13a8eb0109ac1eea4c087390f9717",
+  "verified_at": "2026-10-05T04:55:33Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts": "3ce382df4466178015acbc4e28eb85743e66e89fac2ef75b4616107145101431",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx": "206003ff23c53f6b41f893130c5f29c17f2b91a1dfab7f7742cd3094b774f46f",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts": "b1955834430d00fca3fc4176614a83f4a8387c8c29a85f0f17c6fd1360faf514"
+  },
+  "routes": [
+    "/truenas/storage",
+    "/truenas/storage?kind=disks",
+    "/docker/containers"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 820,
+      "height": 700
+    },
+    {
+      "width": 390,
+      "height": 760
+    }
+  ],
+  "states": [
+    "Storage at 1440: 18 healthy rows leave Health empty, the three exceptions keep an Attention pill (archive pool, archive/cold dataset, sdc disk), where before every row had a pill and the pool said Warning while the dataset said Attention",
+    "Reason under the name: archive shows the TrueNAS volume alert with +1 (the copied SMART alert), archive/cold shows Dataset is read-only, sdc shows Device /dev/sdc has SMART test failures with no +1 now that derived risk summaries only stand in when TrueNAS raised no alert",
+    "Phone 390: reason wraps to two lines with the +1 outside the clamp, so the pool reads Pool archive is DEGRADED, where before the amber rows gave no reason at all",
+    "Disk scope on phone: Health column is hidden and the pill no longer clips past the right edge, endurance and temperature stay visible",
+    "Dark mode at 1440 and tablet at 820 render the reason lines and pills legibly",
+    "Docker containers at 390 (44 rows, windowed): scrolled to the end in 250px wheel steps, each probed row moved about one scroll step as the window shifted, no spacer reached the viewport, estimate stayed 32px on the uniform table"
+  ],
+  "interactions": [
+    "Switched the storage type scope to Physical disks on desktop and phone",
+    "Wheel-scrolled the windowed Docker containers table on phone and probed the rows at mid and lower viewport each step"
+  ]
+}

@@ -143,12 +143,76 @@ describe('TrueNASStorageTopologyTable', () => {
     expect(screen.getByRole('columnheader', { name: /Endurance/ })).toBeInTheDocument();
     expect(screen.getByText('68% left')).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: /Temp/ })).toHaveClass('table-cell');
-    expect(screen.getByRole('columnheader', { name: /Health/ })).toHaveClass('table-cell');
+    // The status dot and reason line carry health on phones, so the column
+    // stays desktop-only even when it is the disk view's main signal.
+    expect(screen.getByRole('columnheader', { name: /Health/ })).toHaveClass(
+      'platform-table-phone-hidden',
+    );
 
     await fireEvent.click(screen.getByRole('button', { name: 'Volumes, 2' }));
     expect(container.querySelectorAll('[data-truenas-storage-row]')).toHaveLength(2);
     expect(container.querySelector('[data-truenas-storage-kind="pool"]')).not.toBeNull();
     expect(container.querySelector('[data-truenas-storage-kind="dataset"]')).not.toBeNull();
     expect(container.querySelector('[data-truenas-storage-kind="disk"]')).toBeNull();
+  });
+
+  it('shows health only for exceptions, with the reason under the name', () => {
+    const pool = makeStorageResource({
+      id: 'pool-archive',
+      name: 'archive',
+      status: 'warning',
+      incidents: [
+        {
+          code: 'truenas_volume_status',
+          severity: 'warning',
+          summary: 'Pool archive is DEGRADED: one member of mirror-0 is faulted.',
+        },
+        {
+          code: 'truenas_smart',
+          severity: 'warning',
+          summary: 'Device /dev/sdc has SMART test failures.',
+        },
+      ],
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'DEGRADED' },
+    });
+    const healthy = makeStorageResource({
+      id: 'dataset-backups',
+      name: 'archive/backups',
+      parentId: 'pool-archive',
+      storage: { topology: 'dataset', platform: 'truenas' },
+    });
+    const resources = [pool, healthy];
+    const { container } = render(() => (
+      <TrueNASStorageTopologyTable
+        resources={resources}
+        scope={resources}
+        emptyIcon={<span />}
+        emptyTitle="No storage"
+        emptyDescription="No storage"
+        showToolbar={false}
+      />
+    ));
+
+    const poolRow = container.querySelector('[data-truenas-storage-resource="pool-archive"]');
+    const healthyRow = container.querySelector('[data-truenas-storage-resource="dataset-backups"]');
+    const reason = poolRow?.querySelector('[data-truenas-storage-reason]');
+    const visible = [...(reason?.querySelectorAll('[aria-hidden="true"]') ?? [])].map(
+      (node) => node.textContent,
+    );
+
+    expect(visible).toEqual(['Pool archive is DEGRADED: one member of mirror-0 is faulted.', '+1']);
+    expect(reason?.querySelector('.sr-only')).toHaveTextContent(
+      'Attention: Pool archive is DEGRADED: one member of mirror-0 is faulted. Device /dev/sdc has SMART test failures.',
+    );
+    expect(reason).toHaveAttribute(
+      'title',
+      'Pool archive is DEGRADED: one member of mirror-0 is faulted.\nDevice /dev/sdc has SMART test failures.',
+    );
+    expect(poolRow?.querySelector('[data-truenas-storage-health="attention"]')).toHaveTextContent(
+      'Attention',
+    );
+    expect(healthyRow?.querySelector('[data-truenas-storage-reason]')).toBeNull();
+    expect(healthyRow?.querySelector('[data-truenas-storage-health]')).toBeNull();
+    expect(healthyRow).not.toHaveTextContent('Healthy');
   });
 });

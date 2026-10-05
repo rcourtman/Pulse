@@ -23,6 +23,37 @@ const PHONE_WINDOW_SIZE = 36;
 // collapsing the estimate and desynchronising the window from the scroll
 // position, while uniform tables still measure their real row height.
 const MEASUREMENT_SAMPLE_SIZE = 3;
+
+const measureTallestSampledSibling = (anchor: HTMLElement): number => {
+  let measuredHeight = 0;
+  let sibling = anchor.nextElementSibling;
+  for (let sampled = 0; sampled < MEASUREMENT_SAMPLE_SIZE && sibling; sampled += 1) {
+    const height = sibling.getBoundingClientRect().height;
+    if (height > measuredHeight) measuredHeight = height;
+    sibling = sibling.nextElementSibling;
+  }
+  return measuredHeight;
+};
+
+// A table runway sits between a top and a bottom spacer row, so the mounted
+// rows can be measured as a whole. Averaging them per item lets a few taller
+// rows (a reason line under the name, an open detail row) count once instead
+// of setting the height of every row off screen, which made the spacers
+// overshoot and the window jump as rows scrolled out. Returns 0 when the
+// anchor is not such a runway, so other surfaces keep the sampled estimate.
+const measureRenderedRunwayItemHeight = (anchor: HTMLElement, renderedItems: number): number => {
+  if (anchor.tagName !== 'TR' || anchor.dataset.platformWindowSpacer !== 'top') return 0;
+  if (renderedItems <= 0) return 0;
+  let total = 0;
+  let sibling = anchor.nextElementSibling;
+  while (sibling && (sibling as HTMLElement).dataset.platformWindowSpacer !== 'bottom') {
+    total += sibling.getBoundingClientRect().height;
+    sibling = sibling.nextElementSibling;
+  }
+  if (!sibling || total <= 0) return 0;
+  return total / renderedItems;
+};
+
 export interface PlatformWindowedItemsOptions<Item> {
   items: Accessor<readonly Item[]>;
   estimatedItemHeight?: number;
@@ -73,13 +104,9 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
     if (!anchor || isWindowedSurfaceHidden(anchor)) return;
 
     if (measureItems) {
-      let measuredHeight = 0;
-      let sibling = anchor.nextElementSibling;
-      for (let sampled = 0; sampled < MEASUREMENT_SAMPLE_SIZE && sibling; sampled += 1) {
-        const height = sibling.getBoundingClientRect().height;
-        if (height > measuredHeight) measuredHeight = height;
-        sibling = sibling.nextElementSibling;
-      }
+      const measuredHeight =
+        measureRenderedRunwayItemHeight(anchor, visibleItems().length) ||
+        measureTallestSampledSibling(anchor);
       if (measuredHeight > 0) setEstimatedItemHeight(measuredHeight);
     }
 
