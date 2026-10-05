@@ -545,7 +545,7 @@ func (c *Client) GetPools(ctx context.Context) ([]Pool, error) {
 }
 
 func (c *Client) getPoolsRPC(ctx context.Context) ([]Pool, error) {
-	var response []map[string]any
+	var response []poolStateResponse
 	if err := c.queryRPC(ctx, "pool.query", &response); err != nil {
 		return nil, err
 	}
@@ -563,7 +563,7 @@ func (c *Client) getPoolsRPC(ctx context.Context) ([]Pool, error) {
 // GetBootPool returns the boot pool from boot.get_state. The endpoint is
 // separate from pool.query on supported CORE and SCALE releases.
 func (c *Client) GetBootPool(ctx context.Context) (*Pool, error) {
-	var response map[string]any
+	var response poolStateResponse
 	legacy, err := c.useLegacyREST(ctx)
 	if err != nil {
 		return nil, err
@@ -619,6 +619,7 @@ func parsePoolState(item map[string]any, isBoot bool) (Pool, bool) {
 	}
 	vdevs, diskMembers := poolTopologyFromTopology(topology)
 	readErrors, writeErrors, checksumErrors := poolErrorTotals(topology)
+	total, used, free := poolCapacity(item, properties)
 
 	pool := Pool{
 		ID:             id,
@@ -627,9 +628,9 @@ func parsePoolState(item map[string]any, isBoot bool) (Pool, bool) {
 		Status:         status,
 		StatusCode:     strings.TrimSpace(readStringAny(item, "status_code", "statusCode")),
 		StatusDetail:   strings.TrimSpace(readStringAny(item, "status_detail", "statusDetail")),
-		TotalBytes:     readInt64Any(item, "size", "total", "total_bytes", "totalBytes"),
-		UsedBytes:      readInt64Any(item, "allocated", "used", "used_bytes", "usedBytes"),
-		FreeBytes:      readInt64Any(item, "free", "free_bytes", "freeBytes", "available"),
+		TotalBytes:     total,
+		UsedBytes:      used,
+		FreeBytes:      free,
 		ReadErrors:     readErrors,
 		WriteErrors:    writeErrors,
 		ChecksumErrors: checksumErrors,
@@ -637,15 +638,6 @@ func parsePoolState(item map[string]any, isBoot bool) (Pool, bool) {
 		VDevs:          vdevs,
 		IsBoot:         isBoot,
 		DiskMembers:    diskMembers,
-	}
-	if pool.TotalBytes == 0 {
-		pool.TotalBytes = readInt64Any(properties, "size", "total", "total_bytes", "totalBytes")
-	}
-	if pool.UsedBytes == 0 {
-		pool.UsedBytes = readInt64Any(properties, "allocated", "used", "used_bytes", "usedBytes")
-	}
-	if pool.FreeBytes == 0 {
-		pool.FreeBytes = readInt64Any(properties, "free", "free_bytes", "freeBytes", "available")
 	}
 	return pool, true
 }
@@ -973,6 +965,7 @@ func (c *Client) getPoolsREST(ctx context.Context) ([]Pool, error) {
 		}
 		vdevs, diskMembers := poolTopologyFromTopology(topology)
 		readErrors, writeErrors, checksumErrors := poolErrorTotals(topology)
+		total, used, free := poolRESTCapacity(item)
 
 		pools = append(pools, Pool{
 			ID:             id,
@@ -981,9 +974,9 @@ func (c *Client) getPoolsREST(ctx context.Context) ([]Pool, error) {
 			Status:         strings.TrimSpace(item.Status),
 			StatusCode:     strings.TrimSpace(item.StatusCode),
 			StatusDetail:   strings.TrimSpace(item.StatusDetail),
-			TotalBytes:     item.Size,
-			UsedBytes:      item.Allocated,
-			FreeBytes:      item.Free,
+			TotalBytes:     total,
+			UsedBytes:      used,
+			FreeBytes:      free,
 			ReadErrors:     readErrors,
 			WriteErrors:    writeErrors,
 			ChecksumErrors: checksumErrors,
@@ -4885,9 +4878,9 @@ type poolResponse struct {
 	Status       string          `json:"status"`
 	StatusCode   string          `json:"status_code"`
 	StatusDetail string          `json:"status_detail"`
-	Size         int64           `json:"size"`
-	Allocated    int64           `json:"allocated"`
-	Free         int64           `json:"free"`
+	Size         json.RawMessage `json:"size"`
+	Allocated    json.RawMessage `json:"allocated"`
+	Free         json.RawMessage `json:"free"`
 	Topology     json.RawMessage `json:"topology"`
 	Scan         json.RawMessage `json:"scan"`
 }

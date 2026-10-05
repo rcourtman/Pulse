@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"sync"
@@ -616,7 +617,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 				LastSeen:  collectedAt,
 				UpdatedAt: collectedAt,
 				Metrics: &unifiedresources.ResourceMetrics{
-					Disk: diskMetric(pool.TotalBytes, pool.UsedBytes),
+					Disk: poolDiskMetric(pool),
 				},
 				Storage: &unifiedresources.StorageMeta{
 					Type:              "zfs-pool",
@@ -2089,10 +2090,27 @@ func aggregatePoolUsage(pools []Pool) (int64, int64) {
 	var total int64
 	var used int64
 	for _, pool := range pools {
+		// A known boot pool or one available data pool is not the complete
+		// host's storage usage. Keep per-pool readings, but omit the host
+		// aggregate if any pool is unknown or the byte sum would overflow.
+		if !poolUsageKnown(pool) || total > math.MaxInt64-pool.TotalBytes {
+			return 0, 0
+		}
 		total += pool.TotalBytes
 		used += pool.UsedBytes
 	}
 	return total, used
+}
+
+func poolUsageKnown(pool Pool) bool {
+	return pool.TotalBytes > 0 && pool.UsedBytes >= 0 && pool.UsedBytes <= pool.TotalBytes
+}
+
+func poolDiskMetric(pool Pool) *unifiedresources.MetricValue {
+	if !poolUsageKnown(pool) {
+		return nil
+	}
+	return diskMetric(pool.TotalBytes, pool.UsedBytes)
 }
 
 // systemSourceID keys an API-added TrueNAS system by the configured

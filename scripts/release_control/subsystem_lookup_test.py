@@ -4262,6 +4262,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/monitoring/monitor_pbs_coverage_test.go",
                 "internal/monitoring/monitor_pmg_test.go",
                 "internal/monitoring/monitor_polling_test.go",
+                "internal/monitoring/truenas_disk_history_scope_test.go",
                 "internal/monitoring/truenas_poller_test.go",
             ],
         )
