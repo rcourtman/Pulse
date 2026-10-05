@@ -440,16 +440,20 @@ func BenchmarkHandleWorkloadCharts_StoreBacked(b *testing.B) {
 		b.Fatalf("expected %d docker chart entries, got %d", len(dockerContainerIDs), len(check.DockerData))
 	}
 
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest(http.MethodGet, url, nil)
-		rec := httptest.NewRecorder()
-		router.handleWorkloadCharts(rec, req)
-		if rec.Code != http.StatusOK {
-			b.Fatalf("unexpected status %d", rec.Code)
+	// Go calls a benchmark function again for every b.N it tries, and seeding
+	// 84,000 points costs far more than the measured request. A parent with a
+	// sub-benchmark runs once, so the store is seeded once per run.
+	b.Run("range=4h", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			req := httptest.NewRequest(http.MethodGet, url, nil)
+			rec := httptest.NewRecorder()
+			router.handleWorkloadCharts(rec, req)
+			if rec.Code != http.StatusOK {
+				b.Fatalf("unexpected status %d", rec.Code)
+			}
 		}
-	}
+	})
 }
 
 // BenchmarkHandleWorkloadsSummaryCharts_StoreBacked measures the workloads
@@ -597,16 +601,18 @@ func BenchmarkHandleWorkloadsSummaryCharts_StoreBacked(b *testing.B) {
 		b.Fatalf("expected %d total guests, got %d", vmCount+containerCount+len(dockerContainerIDs), check.GuestCounts.Total)
 	}
 
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest(http.MethodGet, url, nil)
-		rec := httptest.NewRecorder()
-		router.handleWorkloadsSummaryCharts(rec, req)
-		if rec.Code != http.StatusOK {
-			b.Fatalf("unexpected status %d", rec.Code)
+	// Seed once per run, as BenchmarkHandleWorkloadCharts_StoreBacked does.
+	b.Run("range=4h", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			req := httptest.NewRequest(http.MethodGet, url, nil)
+			rec := httptest.NewRecorder()
+			router.handleWorkloadsSummaryCharts(rec, req)
+			if rec.Code != http.StatusOK {
+				b.Fatalf("unexpected status %d", rec.Code)
+			}
 		}
-	}
+	})
 }
 
 // BenchmarkHandleMetricsStoreStats measures latency of the /api/metrics-store/stats

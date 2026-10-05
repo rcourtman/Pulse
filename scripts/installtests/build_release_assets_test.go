@@ -3874,6 +3874,38 @@ func TestBenchmarkQualificationRetainsProvenance(t *testing.T) {
 	}
 }
 
+// A paired run names each package's cost only when its own budget stops it
+// before the step timeout does, and the step must end inside its job.
+func TestPairedBenchmarksStopInsideTheirBudget(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := workflowJobBlock(t, string(content), "benchmarks")
+	step := workflowStepBlock(t, job, "Paired base and candidate benchmarks (pull requests)")
+	value := func(block, pattern, what string) int {
+		t.Helper()
+		match := regexp.MustCompile(pattern).FindStringSubmatch(block)
+		if match == nil {
+			t.Fatalf("benchmark workflow missing %s", what)
+		}
+		n, err := strconv.Atoi(match[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	jobMinutes := value(job, `(?m)^    timeout-minutes: (\d+)$`, "job timeout")
+	stepMinutes := value(step, `(?m)^        timeout-minutes: (\d+)$`, "paired step timeout")
+	budget := value(step, `(?m)^          PULSE_BENCH_BUDGET_SECONDS: "(\d+)"$`, "paired budget")
+	if budget >= stepMinutes*60 {
+		t.Fatalf("paired budget %ds must stop before the %d-minute step timeout", budget, stepMinutes)
+	}
+	if stepMinutes >= jobMinutes {
+		t.Fatalf("paired step timeout %dm must end inside the %dm job", stepMinutes, jobMinutes)
+	}
+}
+
 func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 	content, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
 	if err != nil {

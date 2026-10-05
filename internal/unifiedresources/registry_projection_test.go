@@ -66,10 +66,17 @@ func BenchmarkRegistryProjectionSnapshot(b *testing.B) {
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
 						if mode == "cold" {
-							b.StopTimer()
-							rr = NewRegistry(nil)
-							rr.IngestSnapshot(state)
-							b.StartTimer()
+							// Return to the state IngestSnapshot leaves: canonical
+							// metadata, typed views and the source-target index all
+							// pending. The refresh never reads its own prior output,
+							// so this repeats a fresh ingest's first read exactly.
+							// Rebuilding the registry behind StopTimer instead let a
+							// nanosecond empty-registry read push b.N into the
+							// hundreds of thousands, each paying an untimed ingest
+							// and two stop-the-world timer reads.
+							rr.mu.Lock()
+							rr.invalidateSourceTargetsLocked()
+							rr.mu.Unlock()
 						}
 						if mode == "dirty" {
 							rr.mu.Lock()
