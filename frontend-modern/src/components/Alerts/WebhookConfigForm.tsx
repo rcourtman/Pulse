@@ -117,7 +117,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
             <h4 class="text-sm font-medium text-blue-900/25 dark:text-blue-100 mb-2">
               {getAlertWebhookSetupInstructionsTitle()}
             </h4>
-            {props.currentTemplate()!.instructions}
+            <p class="whitespace-pre-line break-words">{props.currentTemplate()!.instructions}</p>
           </div>
         </Show>
       </div>
