@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "53e2d27ab420c505f54694b0ccbb7d843ff6eded",
+  "verified_at": "2026-10-05T00:02:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx": "b13db44a0fea2de8605bb79a1d1fd011f5023e9c8cba44f465c305eeac4f00b5"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/docker/overview",
+    "/kubernetes/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 700
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Mock estate with five Proxmox hosts, three Docker hosts and three Kubernetes nodes on an older agent. Before: a three-line amber warning listing three names plus \"and 2 more\", a Show all button and an action row above every platform tab.",
+    "After at 1440: one info-tone line on Proxmox (5 hosts run an older Pulse agent. Update them to v4.26.0 for the latest agent-contributed Proxmox node detail and command support. Which hosts? Open agent upgrade commands) with the node table directly below.",
+    "Phone 390x844 Kubernetes: the missing-data sentence, Which nodes? toggle and upgrade link wrap within the notice above the clusters table."
+  ],
+  "interactions": [
+    "Loaded each route signed in and inspected screenshots; the component test exercises the Which hosts? toggle expanding and collapsing the affected names and checks the inline link href."
+  ]
+}

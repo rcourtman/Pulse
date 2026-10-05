@@ -8067,12 +8067,14 @@ backend deletion or destination delivery.
 
 ### Large platform notices keep the inventory in view
 
-`PlatformOutdatedAgentNotice` previews at most three affected names and exposes
-the full list through a keyboard-operable button when more hosts are outdated.
-The count, update guidance and action link remain visible. This keeps a
-large-estate stale-agent warning from pushing the platform inventory and
-Storage search below the phone viewport while preserving every affected name
-on demand. The component test pins collapsed, expanded and collapsed-again
+`PlatformOutdatedAgentNotice` is maintenance guidance, not an incident, so it
+renders as one sentence in the info tone: the count, what the update brings,
+a keyboard-operable "Which hosts?" toggle (any count above one) that reveals
+every affected name, and the upgrade link inline in the same line rather than
+on an action row. This keeps the stale-agent notice from pushing the platform
+inventory and Storage search below the fold at desktop and phone widths, and
+from competing with real warnings for attention, while preserving every
+affected name on demand. The component test pins collapsed, expanded and collapsed-again
 states; 1440px, 768px and 390px browser checks verify placement and overflow.
 The shared `InlineNotice` action text uses opaque 800-level colors for its four
 tones. The current Tailwind configuration overrides several 900-level palette
