@@ -257,7 +257,7 @@ describe('KubernetesPageSurface contract', () => {
     renderSurface();
 
     const notice = screen.getByTestId('platform-outdated-agent-notice');
-    expect(notice).toHaveTextContent('k8s-node-1 is running an older Pulse agent (v5.1.34).');
+    expect(notice).toHaveTextContent('k8s-node-1 runs an older Pulse agent (v5.1.34), so');
     expect(notice).toHaveTextContent('Kubernetes nodes, workloads, services, storage');
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
@@ -300,7 +300,7 @@ describe('KubernetesPageSurface contract', () => {
     renderSurface();
 
     const notice = screen.getByTestId('platform-outdated-agent-notice');
-    expect(notice).toHaveTextContent('worker-1 is running an older Pulse agent (v5.1.34).');
+    expect(notice).toHaveTextContent('worker-1 runs an older Pulse agent (v5.1.34), so');
     expect(notice).toHaveTextContent('for this node');
     expect(notice).toHaveTextContent('Kubernetes nodes, workloads, services, storage');
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(

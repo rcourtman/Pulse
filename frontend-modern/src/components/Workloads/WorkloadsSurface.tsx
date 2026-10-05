@@ -16,6 +16,7 @@ import {
   hasActiveWorkloadsFilters,
 } from './workloadsFilterModel';
 import { WorkloadsTable } from './WorkloadsTable';
+import { WorkloadWebLinksAction } from './WorkloadWebLinksAction';
 import type { WorkloadInventorySourceIssue } from './workloadInventorySourceIssues';
 import {
   useWorkloadsState,
@@ -246,6 +247,12 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
             cancelWorkloadColumnResize={state.cancelWorkloadColumnResize}
             clearWorkloadColumnWidth={state.clearWorkloadColumnWidth}
             title={props.tableTitle}
+            actions={
+              <WorkloadWebLinksAction
+                guests={state.filteredGuests}
+                guestMetadata={state.guestMetadata}
+              />
+            }
           />
         </Show>
         <Show

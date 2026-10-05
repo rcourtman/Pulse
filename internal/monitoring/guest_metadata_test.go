@@ -1035,8 +1035,8 @@ func TestFetchGuestAgentMetadataPreservesCachedValuesOnEmptyResponses(t *testing
 	if len(updated.networkInterfaces) != 1 || updated.networkInterfaces[0].Name != "eth0" {
 		t.Fatalf("expected cache interfaces to remain populated, got %#v", updated.networkInterfaces)
 	}
-	if updated.fetchedAt.Before(cachedFetchedAt) {
-		t.Fatalf("expected cache timestamp to be refreshed, old=%v new=%v", cachedFetchedAt, updated.fetchedAt)
+	if !updated.fetchedAt.Equal(cachedFetchedAt) {
+		t.Fatalf("empty responses renewed retained metadata, old=%v new=%v", cachedFetchedAt, updated.fetchedAt)
 	}
 }
 

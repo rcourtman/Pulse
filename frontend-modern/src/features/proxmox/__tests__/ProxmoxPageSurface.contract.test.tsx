@@ -246,7 +246,7 @@ describe('ProxmoxPageSurface contract', () => {
     expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'overview');
     expect(screen.getByTestId('nodes-table')).toHaveAttribute('data-rows', '1');
     const notice = screen.getByTestId('platform-outdated-agent-notice');
-    expect(notice).toHaveTextContent('delly is running an older Pulse agent (v5.1.34).');
+    expect(notice).toHaveTextContent('delly runs an older Pulse agent (v5.1.34).');
     expect(notice).toHaveTextContent(
       'latest agent-contributed Proxmox node detail and command support',
     );

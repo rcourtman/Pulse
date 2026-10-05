@@ -28,9 +28,10 @@ type guestSnapshot struct {
 
 	CPUPercent float64
 	MemUsage   float64
-	// MemoryUnavailable prevents a missing cache-aware sample from clearing a
-	// real alert or starting a false one.
+	// Unavailable observations include retained display values. They cannot
+	// supply a new breach, recovery, filter match or filesystem removal.
 	MemoryUnavailable bool
+	DiskUnavailable   bool
 	DiskUsage         float64
 	DiskRead          int64
 	DiskWrite         int64
@@ -81,18 +82,20 @@ func (g guestSnapshot) resourceType() string {
 
 func (g guestSnapshot) metrics() guestMetrics {
 	return guestMetrics{
-		CPU:            g.CPUPercent,
-		MemUsage:       g.MemUsage,
-		DiskUsage:      g.DiskUsage,
-		DiskRead:       g.DiskRead,
-		DiskWrite:      g.DiskWrite,
-		NetworkIn:      g.NetworkIn,
-		NetworkOut:     g.NetworkOut,
-		IORateValidity: g.IORateValidity,
-		Name:           g.Name,
-		Node:           g.Node,
-		ID:             g.ID,
-		Status:         g.Status,
+		CPU:               g.CPUPercent,
+		MemUsage:          g.MemUsage,
+		DiskUsage:         g.DiskUsage,
+		MemoryUnavailable: g.MemoryUnavailable,
+		DiskUnavailable:   g.DiskUnavailable,
+		DiskRead:          g.DiskRead,
+		DiskWrite:         g.DiskWrite,
+		NetworkIn:         g.NetworkIn,
+		NetworkOut:        g.NetworkOut,
+		IORateValidity:    g.IORateValidity,
+		Name:              g.Name,
+		Node:              g.Node,
+		ID:                g.ID,
+		Status:            g.Status,
 	}
 }
 
@@ -108,7 +111,8 @@ func guestSnapshotFromVM(vm models.VM) guestSnapshot {
 		Lock:              vm.Lock,
 		CPUPercent:        unifiedresources.ProxmoxGuestCPUPercent(vm.CPU),
 		MemUsage:          vm.Memory.Usage,
-		MemoryUnavailable: vm.Memory.UsageUnavailable,
+		MemoryUnavailable: guestMemoryUnavailableForAlerts(vm.Memory),
+		DiskUnavailable:   vm.DiskStatusReason != "" || vm.Disk.Usage < 0,
 		DiskUsage:         vm.Disk.Usage,
 		DiskRead:          vm.DiskRead,
 		DiskWrite:         vm.DiskWrite,
@@ -133,7 +137,8 @@ func guestSnapshotFromContainer(container models.Container) guestSnapshot {
 		Lock:              container.Lock,
 		CPUPercent:        unifiedresources.ProxmoxGuestCPUPercent(container.CPU),
 		MemUsage:          container.Memory.Usage,
-		MemoryUnavailable: container.Memory.UsageUnavailable,
+		MemoryUnavailable: guestMemoryUnavailableForAlerts(container.Memory),
+		DiskUnavailable:   container.Disk.Usage < 0,
 		DiskUsage:         container.Disk.Usage,
 		DiskRead:          container.DiskRead,
 		DiskWrite:         container.DiskWrite,
@@ -144,6 +149,13 @@ func guestSnapshotFromContainer(container models.Container) guestSnapshot {
 		Tags:              append([]string(nil), container.Tags...),
 		OnBoot:            container.OnBoot,
 	}.normalizeCollections()
+}
+
+func guestMemoryUnavailableForAlerts(memory models.Memory) bool {
+	// The producer owns freshness and source selection. Legacy values without
+	// an observation retain their existing behavior; do not infer freshness
+	// from disk/QGA state, since PVE or a linked Pulse agent can be independent.
+	return memory.UsageUnavailable || (memory.Observation.State != "" && memory.Observation.State != "current")
 }
 
 func guestKindFromType(guestType string) guestKind {

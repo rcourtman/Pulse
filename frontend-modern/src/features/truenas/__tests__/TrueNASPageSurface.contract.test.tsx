@@ -179,7 +179,7 @@ describe('TrueNASPageSurface contract', () => {
     );
     expect(screen.getByTestId('systems-table')).toHaveAttribute('data-rows', '1');
     const notice = screen.getByTestId('platform-outdated-agent-notice');
-    expect(notice).toHaveTextContent('truenas-scale is running an older Pulse agent (v5.1.34).');
+    expect(notice).toHaveTextContent('truenas-scale runs an older Pulse agent (v5.1.34).');
     expect(notice).toHaveTextContent(
       'latest agent-contributed TrueNAS system detail and command support',
     );

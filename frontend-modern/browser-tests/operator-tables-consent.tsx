@@ -319,9 +319,6 @@ function Fixture() {
                       : new Set([...current, key]),
                   )
                 }
-                showPbsColumn
-                showArchiveColumn
-                showSnapshotColumn
                 showTaskColumn={false}
               />
               <h2>By date</h2>

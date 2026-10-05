@@ -84,7 +84,7 @@ describe('GuestDrawerHistory common-time pointer inspection', () => {
     expect(
       within(utilization()).getByRole('img', { name: 'Utilization history' }),
     ).toHaveAccessibleDescription(
-      `${new Date(time).toLocaleString()}. CPU 11.0%. Memory no observation. Disk no observation.`,
+      `${new Date(time).toLocaleString()}. CPU 11.0%. Memory no observation. Disk no observation. Missing observations: CPU, Memory. Lines stop where a series has no reading at another stored time in this panel. This does not identify the cause or duration of a monitoring outage.`,
     );
     fireEvent.pointerLeave(plot);
     expect(utilization()).toHaveTextContent('CPU43.0%');
@@ -101,7 +101,8 @@ describe('GuestDrawerHistory common-time pointer inspection', () => {
     expect(utilization()).toHaveTextContent('Memory-');
     expect(utilization()).toHaveTextContent('Disk0.0%');
     expect(utilization().querySelectorAll('circle[r="3"]')).toHaveLength(1);
-    expect(utilization().querySelectorAll('path')).toHaveLength(2);
+    expect(utilization().querySelectorAll('path')).toHaveLength(1);
+    expect(utilization().querySelectorAll('[data-history-observation]')).toHaveLength(4);
   });
 
   it('renders all metrics that really share a timestamp at the same cursor position', async () => {

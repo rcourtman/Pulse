@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "664b29f930b19f91b74f673914c85e3b806b54f7",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/diskListModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "16ccfd4c8a865c02d4ab3580d7872518cb599715245fb10ebbe3dfbe375cb104",
+    "frontend-modern/src/components/Workloads/diskListModel.ts": "8b43eeb3e08dff191039ee19ea74baa89703d6b8f89d801a5ff0f8cdef09dffc"
+  },
+  "routes": [
+    "/browser-tests/guest-disk-provenance.html \u2014 production Workloads GuestRow/full GuestDrawer; synthetic APIs, not the full App route"
+  ],
+  "states": [
+    "Retained filesystem usage with each of eight prev- reasons: labelled last known, no current bars/threshold colours",
+    "Same eight non-retained read failures: unavailable used bytes, identity/capacity retained",
+    "Lock-only clearance retains the label; same-guest fresh read restores accessible 30% utilization",
+    "LXC independent reading and no-sample readable VM status"
+  ],
+  "interactions": [
+    "Trusted desktop Enter disclosure and close",
+    "Trusted WebKit phone/narrow touch on the row provenance cue and close",
+    "Synthetic same-guest poll replacements while keeping the drawer open",
+    "Inspected every retained/unavailable/fresh screenshot in all four browser/theme/width groups"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900,
+      "browser": "chromium-desktop-light",
+      "theme": "light"
+    },
+    {
+      "width": 1365,
+      "height": 900,
+      "browser": "chromium-desktop-dark",
+      "theme": "dark"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "browser": "webkit-phone-dark",
+      "theme": "dark"
+    },
+    {
+      "width": 320,
+      "height": 844,
+      "browser": "webkit-narrow-light",
+      "theme": "light"
+    }
+  ],
+  "verified_at": "2026-10-04T21:47:04Z",
+  "playwright_version": "1.56.1",
+  "checks": 28,
+  "screenshots_inspected": 12,
+  "script": "frontend-modern/browser-tests/guest-filesystem-provenance.cjs",
+  "limits": "Real GuestRow/full GuestDrawer/DetailSectionTable and CSS; synthetic guest observations and APIs. No native QGA, backup, cause, thaw, writes, installed/reporter or release acceptance."
+}

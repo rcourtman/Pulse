@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "2cb3f6a9043e0bab9c54c5b5ef57b3e1cb994781",
+  "changed_paths": [
+    "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
+    "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "d8ba9c14cbfac0756f8df461bea07c40a39ef56ba907301b71e92286e410facc",
+    "frontend-modern/src/components/Discovery/DiscoveryTab.tsx": "01e2d687067df69d4f3eb6ea74742c9ce478f278976ee87c96c3567ff1b82896",
+    "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts": "19388b7e163d5fff79416f4bcb9c47ba0718cede9a56dbdf331065ab09cc00ee"
+  },
+  "routes": [
+    "/browser-tests/guest-discovery-safety.html: production canonical resource projection, Workloads row, GuestDrawer and DiscoveryTab with synthetic APIs"
+  ],
+  "states": [
+    "Desktop light/dark and 390px/320px WebKit phone: locked guest and saved results",
+    "Every declared deferral and retained variant; same-ID/tab changes",
+    "Healthy manual action; uncertain read; in-flight scan completion while further runs are blocked"
+  ],
+  "interactions": [
+    "Keyboard expand/tab/explicit run and touch expand/run; accessible disabled reason; wrapping warning/saved service inspection",
+    "No POST on blocked/unlock/snapshot/tab changes; exactly one original-body POST per explicit enabled run",
+    "No remount, cancellation or false in-flight-stop; original completion remains visible and additional run is blocked"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-04T15:40:18.829Z",
+  "script": "frontend-modern/browser-tests/guest-discovery-safety.cjs",
+  "browsers": [
+    {
+      "group": "chromium-desktop-light",
+      "version": "141.0.7390.37"
+    },
+    {
+      "group": "chromium-desktop-dark",
+      "version": "141.0.7390.37"
+    },
+    {
+      "group": "webkit-phone-dark",
+      "version": "26.0"
+    },
+    {
+      "group": "webkit-narrow-light",
+      "version": "26.0"
+    }
+  ],
+  "limitations": [
+    "Synthetic backend responses, not a native guest/backup or all-path backend admission proof.",
+    "Vite-transformed production components; production build is separately checked in the source-proof VM.",
+    "Independent thaw/covered-filesystem writes remain necessary; an unlocked snapshot does not prove them."
+  ]
+}
