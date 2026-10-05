@@ -3596,7 +3596,10 @@ describe('frontend resource type boundaries', () => {
     expect(patrolIntelligenceBannersSource).toContain('state.licenseRequired()');
     expect(patrolIntelligenceHeaderSource).toContain('presentationPolicyHidesUpgradePrompts');
     expect(patrolIntelligenceHeaderSource).toContain('!presentationPolicyHidesUpgradePrompts()');
-    expect(patrolIntelligenceHeaderSource).toContain('commercialSurfacesHidden: true');
+    expect(patrolIntelligenceHeaderSource).toContain(
+      'commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),',
+    );
+    expect(patrolIntelligenceHeaderSource).not.toContain('commercialSurfacesHidden: true');
     expect(patrolIntelligenceHeaderSource).not.toContain('Plans & Billing');
     expect(patrolIntelligenceHeaderSource).toContain(
       "from '@/components/shared/FilterButtonGroup'",

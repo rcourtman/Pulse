@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "357b1a505e80bb1cafbfc9cb02f36f96182c7b57",
+  "verified_at": "2026-10-05T21:37:58Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
+    "frontend-modern/src/features/patrol/patrolAutonomyAvailability.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx": "89bce4990f82104e8724e4e099a3ae06a275cf1a2d5ab875670f9bc3b4cefcff",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "6b899aaebeba642fd5bb792146f27302d29542a4f4ced548f71168398101faf3",
+    "frontend-modern/src/features/patrol/patrolAutonomyAvailability.ts": "3d334beb4135c9c53027b79debd869c403db627f207bfb54ab004d5d191f99b0"
+  },
+  "routes": [
+    "/settings/pulse-intelligence/patrol",
+    "/patrol"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private community-runtime stack built from this tree (backend 7782, Vite 5282 serving this checkout), mock data, dev-signed licences switched live on the same backend. Playwright Chromium at 1280x900 dark and 390x844 light.",
+    "Enterprise licence on the community runtime (white-label: hideCommercial and hideUpgrade true; ai_alerts and ai_autofix blocked as paid_runtime_required): the Container update risk card reads 'Not available. This install does not include container update risk.' with no link, and the Patrol header shows the plain Watch only line with no Mode and automation disclosure, no paid-mode picker, no Pulse Pro runtime wording and no download link.",
+    "Same stack and licence with the previous patrolAutonomyAvailability.ts, PatrolIntelligenceHeader.tsx and PatrolIntelligenceBanners.tsx swapped back in under the running Vite: the card showed 'Pulse Pro runtime required...' and the expanded Mode and automation disclosure showed 'Install the Pulse Pro runtime to use Patrol modes' beside a disabled paid-mode picker. Restored afterwards.",
+    "Pro licence on the community runtime (commercial and upgrade prompts visible): unchanged. Card shows the runtime lock with Open Pro downloads; the Patrol page still shows the runtime prompt and the https://pulserelay.pro/download.html link with the mode picker.",
+    "Free community install (licence cleared; hideUpgrade true, hideCommercial false): unchanged. Card shows the higher-license-plan line with no link; Patrol header shows plain Watch only.",
+    "No horizontal overflow and no page errors in any state."
+  ],
+  "interactions": [
+    "Expanded the Patrol header 'Mode and automation' disclosure where present to read the runtime note and mode picker.",
+    "Activated an Enterprise licence, a Pro licence and cleared the licence on the same backend, reloading both routes for each state."
+  ]
+}
