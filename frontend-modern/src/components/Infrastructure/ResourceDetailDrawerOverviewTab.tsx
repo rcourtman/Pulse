@@ -370,16 +370,27 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
       severity: alert.level,
     }));
     const healthIssue = drawer.healthIssue();
-    if (healthIssue && !items.some((item) => item.message === healthIssue.primary)) {
+    if (healthIssue) {
+      // Skip only the reasons an open alert already states. One matching alert
+      // must not hide the other reasons (a pool's own degraded state beside a
+      // copied disk alert).
+      const messageKey = (message: string) =>
+        message
+          .trim()
+          .toLowerCase()
+          .replace(/[.\s]+$/, '');
+      const stated = new Set(items.map((item) => messageKey(item.message)));
       const severity = /critical|failed|faulted|error/i.test(resource().status)
         ? 'critical'
         : 'warning';
       items.unshift(
-        ...[healthIssue.primary, ...healthIssue.details].map((message, index) => ({
-          id: `resource-health-issue-${index}`,
-          message,
-          severity,
-        })),
+        ...[healthIssue.primary, ...healthIssue.details]
+          .filter((message) => !stated.has(messageKey(message)))
+          .map((message, index) => ({
+            id: `resource-health-issue-${index}`,
+            message,
+            severity,
+          })),
       );
     }
     return items;
