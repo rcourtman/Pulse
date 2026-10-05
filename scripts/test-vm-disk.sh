@@ -20,7 +20,7 @@ if [[ $# -ne 1 || ! $1 =~ ^[1-9][0-9]{0,8}$ ]]; then
 fi
 vmid=$1
 
-for command in qm timeout; do
+for command in qm timeout python3; do
     if ! command -v "$command" >/dev/null 2>&1; then
         printf 'Required command unavailable: %s. Run on the owning Proxmox host.\n' "$command" >&2
         exit 1
@@ -38,27 +38,71 @@ read_failure() {
     exit 1
 }
 
+read_bounded() {
+    local operation=$1 destination=$2 limit=$3 response reader_code producer_code
+    shift 3
+    # Validate bytes before Bash command substitution can discard NULs or
+    # trailing newlines. Close oversized replies after limit + 1 bytes; never
+    # parse a prefix as a complete configuration or retain raw config on disk.
+    # The final private status suffix preserves producer and reader failures
+    # independently, even when they happen to use the same exit code.
+    response=$(
+        set +e
+        timeout --signal=TERM --kill-after=2s 10s "$@" 2>/dev/null |
+            python3 -I -c '
+import sys
+limit = int(sys.argv[1])
+data = sys.stdin.buffer.read(limit + 1)
+if len(data) > limit:
+    sys.exit(80)
+try:
+    data.decode("utf-8", errors="strict")
+except UnicodeDecodeError:
+    sys.exit(81)
+if b"\0" in data:
+    sys.exit(81)
+sys.stdout.buffer.write(data)
+' "$limit" 2>/dev/null
+        codes=("${PIPESTATUS[@]}")
+        printf '\nVM_READ_STATUS %s %s' "${codes[0]}" "${codes[1]}"
+    )
+    read -r producer_code reader_code <<< "${response##*$'\nVM_READ_STATUS '}"
+    case "$reader_code" in
+        80)
+            printf 'VM %s response exceeded the %s-byte limit; preflight incomplete.\n' "$operation" "$limit" >&2
+            exit 1
+            ;;
+        81)
+            printf 'VM %s read contained non-text bytes; preflight incomplete.\n' "$operation" >&2
+            exit 1
+            ;;
+        0) ;;
+        *) read_failure "$operation" "$reader_code" ;;
+    esac
+    if [[ $producer_code -ne 0 ]]; then
+        read_failure "$operation" "$producer_code"
+    fi
+    printf -v "$destination" '%s' "${response%$'\nVM_READ_STATUS '*}"
+}
+
 printf '%s\n' 'Passive VM preflight: no guest-agent commands will be sent.'
 # Bound even host-local reads. Do not print raw config or command errors:
 # those can contain private guest names, paths and other infrastructure data.
-if status_output=$(timeout --signal=TERM --kill-after=2s 10s qm status "$vmid" 2>/dev/null); then
-    case "$status_output" in
-        'status: running') status=running ;;
-        'status: stopped') status=stopped ;;
-        *) printf '%s\n' 'VM status response was not understood; preflight incomplete.' >&2; exit 1 ;;
-    esac
-else
-    read_failure status "$?"
-fi
+read_bounded status status_output 256 qm status "$vmid"
+# qm emits a newline-terminated status. Preserve the existing acceptance of
+# trailing newlines, but only after the complete bounded byte read succeeds.
+while [[ $status_output == *$'\n' ]]; do status_output=${status_output%$'\n'}; done
+case "$status_output" in
+    'status: running') status=running ;;
+    'status: stopped') status=stopped ;;
+    *) printf '%s\n' 'VM status response was not understood; preflight incomplete.' >&2; exit 1 ;;
+esac
 printf 'VM status: %s\n' "$status"
 
-if config=$(timeout --signal=TERM --kill-after=2s 10s qm config "$vmid" --current 2>/dev/null); then
-    if [[ -z $config ]]; then
-        printf '%s\n' 'VM current configuration was empty; preflight incomplete.' >&2
-        exit 1
-    fi
-else
-    read_failure configuration "$?"
+read_bounded configuration config 65536 qm config "$vmid" --current
+if [[ -z $config ]]; then
+    printf '%s\n' 'VM current configuration was empty; preflight incomplete.' >&2
+    exit 1
 fi
 
 agent_seen=false
