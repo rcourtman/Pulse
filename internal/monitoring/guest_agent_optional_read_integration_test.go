@@ -135,7 +135,7 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 					if view.ID() != id || view.DiskUsed() != vm.Disk.Used || view.DiskStatusReason() != vm.DiskStatusReason {
 						t.Fatal("filesystem observation changed at the read boundary")
 					}
-					encoded, err := json.Marshal(registry.GetAll())
+					encoded, err := json.Marshal(m.buildBroadcastFrontendStateFromSnapshot(models.StateSnapshot{VMs: []models.VM{vm}}).Resources)
 					if err != nil || !strings.Contains(string(encoded), id) {
 						t.Fatal("guest identity missing from JSON read projection")
 					}
