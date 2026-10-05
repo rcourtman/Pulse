@@ -15,6 +15,27 @@
 
 ## Purpose
 
+### Delivery health reconciliation follows the complete send transition
+
+The queue's automatic send worker records the retry/dead-letter outcome and
+its per-attempt audit before releasing the firing alert's delivery gate and
+announcing the health change. The monitoring callback can therefore inspect
+the complete attempt or take the same alert's cancellation gate without
+blocking delivery on its own held gate. Configuration failures remain immediate
+dead letters; transient failures keep their existing budget and backoff.
+Skipped policy delivery remains a cancellation with no invented provider audit.
+Explicit operator status/retry/dismiss actions still reconcile immediately
+following their own committed transitions.
+
+`queue_delivery_callback_test.go` checks configuration, transient and exhausted
+failures through the real delivery processor, exact committed status, attempt
+counts/classes, operational links, one callback and re-entrant writer-gate
+acquisition. Existing disabled-delivery, restart/resolution/retry and queue
+health tests retain policy cancellation and operator action coverage; the
+monitor startup test retains saved-destination restoration and its audit check.
+This changes callback sequencing only: no SQLite driver, schema/SQL, provider
+policy, credential, SSRF boundary or notification payload is changed.
+
 ### Delivery verdicts survive session cleanup and interrupted diagnostics
 
 A successful final SMTP DATA reply establishes server acceptance. Plain SMTP,

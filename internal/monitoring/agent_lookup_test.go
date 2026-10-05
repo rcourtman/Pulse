@@ -1,8 +1,11 @@
 package monitoring
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
 	"reflect"
 	"testing"
 	"time"
@@ -25,7 +28,10 @@ var agentLookupMetadataCollections = []string{
 }
 
 func agentLookupFixture(metadataCount int) *Monitor {
-	now := time.Now().UTC()
+	return agentLookupFixtureAt(metadataCount, time.Now().UTC())
+}
+
+func agentLookupFixtureAt(metadataCount int, now time.Time) *Monitor {
 	state := models.NewState()
 	state.UpsertHost(models.Host{
 		ID: "host", Hostname: "worker", MachineID: "machine", Status: "online", LastSeen: now,
@@ -60,6 +66,7 @@ func agentLookupFixture(metadataCount int) *Monitor {
 		field.Set(reflect.Append(field, entry))
 	}
 	state.UpsertKubernetesCluster(cluster)
+	state.LastUpdate = now
 	return &Monitor{state: state, config: &config.Config{}}
 }
 
@@ -135,19 +142,78 @@ func TestAgentLookupMatchesWholeSnapshotHostViews(t *testing.T) {
 }
 
 func TestAgentLookupAllocationIgnoresUnrelatedKubernetesMetadata(t *testing.T) {
-	measure := func(count int) float64 {
-		m := agentLookupFixture(count)
+	// AllocsPerRun uses the process-wide Mallocs counter. Other monitoring
+	// tests can leave asynchronous work running, so use this same test binary
+	// (including -race instrumentation) with only this test selected.
+	const childEnv = "PULSE_AGENT_LOOKUP_ALLOCATION_CHILD"
+	if os.Getenv(childEnv) != "1" {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, os.Args[0],
+			"-test.run=^TestAgentLookupAllocationIgnoresUnrelatedKubernetesMetadata$",
+			"-test.count=1", "-test.v", "-test.timeout=20s")
+		cmd.Env = append(os.Environ(), childEnv+"=1")
+		output, err := cmd.CombinedOutput()
+		t.Logf("isolated lookup allocation control:\n%s", output)
+		if err != nil {
+			t.Fatalf("isolated lookup allocation control: %v", err)
+		}
+		return
+	}
+
+	smallMonitor, largeMonitor := agentLookupFixture(0), agentLookupFixture(1000)
+	measure := func(snapshot func() models.StateSnapshot) float64 {
 		return testing.AllocsPerRun(3, func() {
-			read := m.snapshotBackedAgentLookupReadState()
-			if len(read.Hosts()) == 0 || len(read.DockerHosts()) == 0 {
-				panic("missing fixture host")
-			}
+			agentLookupAllocationSnapshotSink = snapshot()
 		})
 	}
-	small, large := measure(0), measure(1000)
-	t.Logf("agent identity lookup allocations: no metadata=%.0f, 1000 metadata objects=%.0f", small, large)
+	// Measure the boundary at which unrelated metadata could be copied.
+	// The registry receives identical projected content (proved below), but
+	// its fresh maps/iteration can vary in allocations even for equal inputs.
+	// Comparing two whole registry builds cannot attribute that variation
+	// to metadata size. Keep the original sample count and +10 limit here.
+	small := measure(smallMonitor.state.GetAgentLookupSnapshot)
+	large := measure(largeMonitor.state.GetAgentLookupSnapshot)
+	t.Logf("agent lookup snapshot allocations: no metadata=%.0f, 1000 metadata objects=%.0f", small, large)
 	if large > small+10 {
 		t.Fatalf("unrelated Kubernetes metadata still adds identity lookup allocations: %.0f -> %.0f", small, large)
+	}
+	// The full-publication clone is a positive control: the same fixture must
+	// expose copying the metadata, not merely pass with an empty inventory.
+	fullSmall := measure(smallMonitor.state.GetSnapshot)
+	fullLarge := measure(largeMonitor.state.GetSnapshot)
+	t.Logf("full snapshot positive control allocations: %.0f -> %.0f", fullSmall, fullLarge)
+	if fullLarge <= fullSmall+10 {
+		t.Fatal("fixture did not expose unrelated metadata copying")
+	}
+}
+
+var agentLookupAllocationSnapshotSink models.StateSnapshot
+
+func TestAgentLookupMetadataSizeDoesNotChangeAdmissionContent(t *testing.T) {
+	now := time.Now().UTC()
+	small, large := agentLookupFixtureAt(0, now), agentLookupFixtureAt(1000, now)
+	if !reflect.DeepEqual(small.state.GetAgentLookupSnapshot(), large.state.GetAgentLookupSnapshot()) {
+		t.Fatal("unrelated metadata changed the complete lookup snapshot")
+	}
+	resources := func(m *Monitor) []unifiedresources.Resource {
+		adapter := m.snapshotBackedAgentLookupReadState().(*unifiedresources.MonitorAdapter)
+		if len(adapter.Hosts()) == 0 || len(adapter.DockerHosts()) == 0 {
+			t.Fatal("fixture must retain both host facets")
+		}
+		all := adapter.GetAll()
+		for i := range all {
+			if all[i].UpdatedAt.IsZero() {
+				t.Fatal("registry construction timestamp is missing")
+			}
+			// Only registry construction time differs. Keep every source,
+			// sample, LastSeen, identity, metric and derived metadata field.
+			all[i].UpdatedAt = time.Time{}
+		}
+		return all
+	}
+	if !reflect.DeepEqual(resources(small), resources(large)) {
+		t.Fatal("unrelated metadata changed a complete admitted resource")
 	}
 }
 
