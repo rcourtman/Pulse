@@ -490,6 +490,15 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    unexplained `95/100` telemetry.
    The Patrol workspace must default to current operator work: current findings,
    active investigations, approval decisions, and selected finding snapshots.
+   The Inbox, Protection and Activity workspace views are routes (`/patrol`,
+   `/patrol/protection`, `/patrol/activity`) owned by
+   `frontend-modern/src/features/patrol/patrolWorkspaceRouting.ts`, so a link
+   or bookmark opens the view it was copied from, any other path opens the
+   Inbox, and the finding handoff from the Inbox navigates to Activity and
+   scrolls to the findings once Activity has mounted. View switches never
+   scroll the page. The Inbox `attention` query is read from the real address
+   when leaving the Inbox and restored on return, because the attention
+   workbench writes it straight to history and the router's copy can be stale.
    The route and page title must lead with `Patrol`, because operators
    understand Patrol as the recurring checking loop. The default workspace title
    underneath it may use `Open work` so the page can explain current findings

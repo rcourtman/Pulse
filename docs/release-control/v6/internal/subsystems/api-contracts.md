@@ -426,7 +426,9 @@ machine. A correlated machine may carry the same check as an additive
 availability facet, but that projection is not availability-source ownership
 and must not suppress the endpoint from type filters, totals, REST reloads, or
 websocket snapshots. Plural machine projections use `availabilityChecks`; the
-singular `availability` field remains only a compatibility projection.
+singular `availability` field remains only a compatibility projection. Its workspace view comes from the
+`/patrol/<view>` route segment, not a query parameter or component state, so
+no API payload carries or depends on the selected view.
 
 The API-owned Relay adapter projects every canonical alert that reaches the
 fired-dispatch callback into the governed Pulse Mobile push contract, subject

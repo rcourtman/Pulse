@@ -768,6 +768,19 @@ const countKubernetesDanger = (
   mapper: (resource: Resource) => StatusIndicator,
 ): number => resources.filter((resource) => mapper(resource).variant === 'danger').length;
 
+// Nodes the overview should name before any inventory: NotReady first, then
+// cordoned or degraded ones. "2/3 nodes" on the cluster row says something is
+// wrong but not which node; this list answers that.
+export function getKubernetesNodesNeedingAttention(model: KubernetesPageModel): Resource[] {
+  const rank = (node: Resource) => {
+    const variant = mapKubernetesNodeStatus(node).variant;
+    return variant === 'danger' ? 0 : variant === 'warning' ? 1 : 2;
+  };
+  return model.nodes
+    .filter((node) => rank(node) < 2)
+    .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+}
+
 export function buildKubernetesOverviewPosture(
   model: KubernetesPageModel,
 ): KubernetesOverviewPosture {

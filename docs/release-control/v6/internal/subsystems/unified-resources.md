@@ -929,8 +929,16 @@ not fork a second projection or filter model. Routine pending or
 under-replicated workload attention stays attached to that shared workload
 toolbar as a compact count and review action; page-wide Kubernetes attention
 is reserved for node availability or critical health signals. Zero-valued
-attention facets must not occupy the summary. Node, service, storage,
-configuration, policy, and event object rows remain in their workflow tabs.
+attention facets must not occupy the summary. Both lead the Overview, above the
+cluster rows: active health signals through the shared Kubernetes alerts table
+without its toolbar, then node availability as the canonical nodes table
+limited to nodes that are not Ready, cordoned or degraded (titled "Nodes needing
+attention"), each rendered only while it has rows. The full node inventory stays
+on the Nodes tab. The nodes table names a node's state in a desktop Status
+column, as kubectl does, and on phones through a phone-only screen-reader
+label instead of a duplicate column. The remaining node inventory and the
+service, storage, configuration, policy, and event object rows remain in their
+workflow tabs.
 Any other future Overview that repeats a detailed table must retire the owning
 workflow, reduce the Overview content to aggregate signal, or establish an
 equally explicit shared-state contract.
@@ -1560,6 +1568,11 @@ typed action ids hand off to the route-backed Actions review through
 parameter is the canonical shareable review identity: opening it fetches the
 durable action directly, selects Open or History from the returned lifecycle
 state, and clearing the dialog removes the query without discarding the inbox.
+Open and History are routes (`/actions` and `/actions/history`) built and
+parsed by the same module, so either view can be bookmarked or shared and
+back/forward moves between them; a review switched to the other view by its
+lifecycle state replaces rather than pushes history and keeps the `action`
+query.
 Patrol must not create a parallel decision or execution client around that
 handoff.
 The shared review may offer decision or execution controls only when the
@@ -5746,6 +5759,23 @@ organisation URL state reset. The global no-op store reports false.
 A failed admission HTTP refresh is not an empty estate either: retain the last
 valid facet on request failure. A successful response still replaces it,
 including all-false admission; first-load failure remains unresolved.
+
+### Docker tables state silence and drop per-row host context
+
+`EvaluateResourceHealth` keeps the first reason as the one that explains the
+verdict, and when a stronger verdict (an alert, an availability failure, an
+offline host) wins while a source is stale, it appends a trailing
+`telemetry_stale` reason with the backend-formatted age, so the summary API's
+top reason is unchanged while surfaces can still tell that a resource stopped
+reporting. That reason, alone under a `stale` verdict or trailing another, is
+the only staleness signal platform tables read, through
+`features/platformPage/resourceStaleness.ts`; tables never derive staleness
+from `lastSeen` themselves. A stale Docker host dims its CPU, memory and
+disk cells and shows the age under Uptime ("No report for 1h" on hover and
+for assistive tech), and its container group header says the same. In
+grouped-by-host mode the containers table drops the Host and Engine
+columns, which repeat one value per group, and the group header names the
+engine once; flat mode keeps both columns.
 
 ### Existing Docker update and expanded identity text remain readable
 

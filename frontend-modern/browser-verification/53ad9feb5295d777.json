@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "efe6fc21ae10a6bf173cc17e6203aaf6c97dc130",
+  "verified_at": "2026-10-05T00:46:57Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts",
+    "frontend-modern/src/features/platformPage/resourceStaleness.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "fe623ced8151ed7278e3a1cbe05c898e53d6d6a5c70f313897ad314a3ee23dab",
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx": "e4eec3adf7ab2f4b0016ef88c3d02ac301cfe193fa23fd2195dca58166c5574a",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts": "b7880b014dfb457c2ab909f4bbdc1f5ee6bef0605f6308588057fedb787f6b20",
+    "frontend-modern/src/features/platformPage/resourceStaleness.ts": "f51fdd91d6ea9ee576fcb54f4aa4cc64fc52a3ad4641e0024298fdfc5c6f332e"
+  },
+  "routes": [
+    "/docker/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Mock estate with five Docker hosts and 39 containers grouped by host. Before: every container row repeated its host name and engine (docker 26.1.3) in Host and Engine columns, truncating images; Field Office Edge 01 (no report for 1h) showed CPU 26% / memory 58% bars as if live.",
+    "After at 1440: Host and Engine columns gone in grouped mode, each group header reads e.g. \"12 containers  podman 4.9.3\"; field-office-edge-01 header adds \"No report for 1h\". Hosts table dims that host's CPU/memory/disk and shows a no-signal icon with 1h under Uptime.",
+    "Phone 390x844: the stale host row keeps dimmed bars and the icon+age in the UP column without truncation; group headers show the engine.",
+    "Backend rebuilt with the trailing telemetry_stale reason; the stale host shows 2m after restart; alert-plus-stale is covered by Go and component tests because the mock does not produce it live."
+  ],
+  "interactions": [
+    "Loaded the overview signed in at both widths and inspected full-page screenshots; hovered the stale cell for its title; component tests cover the saved engine sort being ignored while grouped."
+  ]
+}

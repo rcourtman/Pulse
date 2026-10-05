@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
+import { getKubernetesNodesNeedingAttention } from '../kubernetesPageModel';
 import {
   KUBERNETES_TAB_SPECS,
   buildKubernetesClusterChildCounts,
@@ -1084,5 +1085,22 @@ describe('kubernetesPageModel', () => {
       ).toEqual(['pod-payments']);
       expect(filterKubernetesIncidents(incidents, 'prod', 'all').length).toBe(2);
     });
+  });
+});
+
+describe('getKubernetesNodesNeedingAttention', () => {
+  const node = (id: string, kubernetes: Record<string, unknown>, status = 'online') =>
+    ({ id, name: id, type: 'k8s-node', status, kubernetes }) as never;
+
+  it('names NotReady nodes first, then cordoned ones, and leaves Ready nodes out', () => {
+    const nodes = [
+      node('b-ready', { ready: true }),
+      node('c-cordoned', { ready: true, unschedulable: true }),
+      node('a-down', { ready: false }),
+    ];
+
+    const result = getKubernetesNodesNeedingAttention({ nodes } as never);
+
+    expect(result.map((entry: { id: string }) => entry.id)).toEqual(['a-down', 'c-cordoned']);
   });
 });

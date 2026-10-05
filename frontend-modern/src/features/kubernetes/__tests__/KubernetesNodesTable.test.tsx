@@ -81,6 +81,34 @@ describe('KubernetesNodesTable', () => {
     expect(headers.find((header) => header.textContent?.includes('Role'))).toHaveClass(
       'platform-table-phone-hidden',
     );
+    // The dot carries the state on phones, so the Status column is desktop-only.
+    expect(headers.find((header) => header.textContent?.includes('Status'))).toHaveClass(
+      'platform-table-phone-hidden',
+    );
+  });
+
+  it('says why a node is not Ready in its Status column and to assistive tech', () => {
+    render(() => (
+      <KubernetesNodesTable
+        resources={[
+          makeNodeResource({ kubernetes: { ...makeNodeResource().kubernetes, ready: false } }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No nodes"
+        emptyDescription="No nodes"
+        showToolbar={false}
+      />
+    ));
+
+    // Desktop: the Status column says it. Phones: the column is demoted and a
+    // phone-only screen-reader label says it, so it is never announced twice.
+    const labels = screen.getAllByText('NotReady');
+    expect(labels).toHaveLength(2);
+    expect(labels.some((label) => label.closest('.platform-table-phone-hidden'))).toBe(true);
+    expect(
+      labels.some((label) => label.classList.contains('platform-table-phone-only-inline')),
+    ).toBe(true);
+    expect(screen.queryByLabelText('NotReady')).toBeNull();
   });
 
   it('keeps node identity inert and launches its web interface without expanding the row', () => {
