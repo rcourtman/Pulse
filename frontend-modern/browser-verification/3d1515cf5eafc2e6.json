@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "1dcf9418aae87f9427dbfc6bcae67dbde114bf8a",
+  "verified_at": "2026-10-05T20:23:25Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/features/docker/dockerContainerStatePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "7a2358a79d72268504dc5bad44537f860709b24ed97f7b2c83b5a56e223ac162",
+    "frontend-modern/src/features/docker/dockerContainerStatePresentation.ts": "8e1daeb5d0210bd31ff0aafede49dac59bbd3de52ccc5582d9cf48b2e5153967"
+  },
+  "routes": [
+    "/docker/containers"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Docker containers with the API response edited so gitea's health check fails and branch-portal-2 exited with code 137 while carrying a stale unhealthy status and leftover uptime (websocket held)",
+    "gitea's row reads Unhealthy and its drawer Runtime context reads Observed state Running, Health check Failing in red with 'Its health check is failing' on hover, Uptime 2d 5h; main's drawer read Observed state Online with no health check or uptime",
+    "nginx and customer-portal (healthy) read Running, Health check Passing, with uptime",
+    "branch-portal-2 reads Exited (137) in red with no Health check or Uptime row; main read Observed state Offline",
+    "Phone at 390: the same rows after tapping a row open"
+  ],
+  "interactions": [
+    "Opened row drawers by click at 1440 and by tap at 390, on main (reverse-applied patch) and on the change"
+  ]
+}

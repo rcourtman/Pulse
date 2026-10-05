@@ -1861,6 +1861,10 @@ payload shape change when the portal presents compact client rows.
     arbitrary remote content. Contract tests must pin redaction, unchanged-
     secret preservation, bounded evaluation, and the reachable-but-incorrect
     application case.
+    The settings client edits the request body in the shared `FormTextarea`,
+    whose size note (`Up to 8 KiB`) is the field's accessible description;
+    removing a stored body stays an explicit action beside it, and leaving the
+    field blank keeps the stored body as before.
     Availability target protocol vocabulary is canonicalized at the API/config
     boundary: clients may submit `ping` as a user-facing alias for the ICMP
     check, but saved targets, API reads, probe status, connections rows, and

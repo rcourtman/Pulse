@@ -22,6 +22,8 @@ import {
 } from '@/api/discovery';
 import { ActionIconButton, Button } from '@/components/shared/Button';
 import { Dialog } from '@/components/shared/Dialog';
+import { formControl, formField, formLabel } from '@/components/shared/Form';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import type { DiscoverySummary, ResourceDiscovery, ResourceType } from '@/types/discovery';
 import {
@@ -298,47 +300,35 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
             </p>
 
             <div class="mt-4 grid gap-3 sm:grid-cols-3">
-              <label class="block sm:col-span-1">
-                <span class="text-[11px] font-medium text-base-content">
-                  Check name · you control
-                </span>
+              <label class={formField}>
+                <span class={formLabel}>Check name · you control</span>
                 <input
-                  class="mt-1 w-full rounded-md border border-border bg-surface px-2.5 py-2 text-sm text-base-content"
+                  class={formControl}
                   value={name()}
                   onInput={(event) => setName(event.currentTarget.value)}
                 />
               </label>
-              <label class="block">
-                <span class="text-[11px] font-medium text-base-content">
-                  Interval · you control
-                </span>
-                <select
-                  class="mt-1 w-full rounded-md border border-border bg-surface px-2.5 py-2 text-sm text-base-content"
-                  value={intervalSeconds()}
-                  onChange={(event) => setIntervalSeconds(Number(event.currentTarget.value))}
-                >
-                  <option value={30}>Every 30 seconds</option>
-                  <option value={60}>Every minute</option>
-                  <option value={300}>Every 5 minutes</option>
-                </select>
-              </label>
-              <label class="block">
-                <span class="text-[11px] font-medium text-base-content">
-                  Observation location · you control
-                </span>
-                <select
-                  class="mt-1 w-full rounded-md border border-border bg-surface px-2.5 py-2 text-sm text-base-content"
-                  value={probeAgentId()}
-                  onChange={(event) => setProbeAgentId(event.currentTarget.value)}
-                >
-                  <option value="">This Pulse server</option>
-                  <For each={props.connectedAgents ?? []}>
-                    {(agent) => (
-                      <option value={agent.agent_id}>{agent.hostname || agent.agent_id}</option>
-                    )}
-                  </For>
-                </select>
-              </label>
+              <FormSelect
+                label="Interval · you control"
+                value={intervalSeconds()}
+                onChange={(event) => setIntervalSeconds(Number(event.currentTarget.value))}
+              >
+                <option value={30}>Every 30 seconds</option>
+                <option value={60}>Every minute</option>
+                <option value={300}>Every 5 minutes</option>
+              </FormSelect>
+              <FormSelect
+                label="Observation location · you control"
+                value={probeAgentId()}
+                onChange={(event) => setProbeAgentId(event.currentTarget.value)}
+              >
+                <option value="">This Pulse server</option>
+                <For each={props.connectedAgents ?? []}>
+                  {(agent) => (
+                    <option value={agent.agent_id}>{agent.hostname || agent.agent_id}</option>
+                  )}
+                </For>
+              </FormSelect>
             </div>
 
             <Show when={duplicate()}>

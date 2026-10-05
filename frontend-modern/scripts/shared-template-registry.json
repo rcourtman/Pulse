@@ -1709,7 +1709,6 @@
         { "path": "src/components/shared/FilterToolbar.tsx" },
         { "path": "src/features/alerts/AlertAppriseDestinationsSection.tsx" },
         { "path": "src/features/alerts/AlertDeliveryRoutingSection.tsx" },
-        { "path": "src/features/alerts/AlertEscalationSection.tsx" },
         { "path": "src/features/alerts/AlertQuietHoursSection.tsx" },
         { "path": "src/features/patrol/PatrolAttentionWorkbench.tsx" }
       ],
@@ -6664,12 +6663,11 @@
         "src/features/vmware"
       ],
       "extensions": [".tsx"],
+      "pathExcludes": [".test.", "__tests__"],
       "triggerPatterns": ["data-inline", "TableRow"],
       "requiredPatterns": ["InlineDetailTableRow"],
       "allowedPaths": [],
-      "ignoredPaths": [
-        "src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx"
-      ],
+      "ignoredPaths": [],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"

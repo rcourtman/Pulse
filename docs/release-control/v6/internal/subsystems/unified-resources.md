@@ -2907,7 +2907,9 @@ Discovery-led availability proposals present their evidence and canonical
 attachment boundary as short, complete sentences in both the inline card and
 machine-wide review. The colocated component test pins that operator-facing
 copy so the shared copy-style audit cannot regress it back to semicolon-joined
-instructions.
+instructions. The card's editable check name, interval and observation
+location use the shared form label and control chrome (`FormSelect` for the
+two choices), so they match the availability settings form they hand off to.
 
 ### Provider workflows hydrate only their active route inventory
 
@@ -6026,6 +6028,12 @@ container that just restarted; narrower rows keep it in the drawer. The Ports
 cell drops the all-interfaces address and folds the IPv4/IPv6 pair Docker
 reports for one mapping, keeping a specific bind address; the title, drawer
 and search keep the full form.
+The resource drawer's Runtime context agrees with that row for a Docker
+container: Observed state is Docker's own state (Running, Exited (137)) rather
+than the unified online/offline status, a running container's health check
+gets its own row (Failing, Starting, Passing), and Uptime is the current run,
+so a stopped container shows neither a stale health check nor leftover
+uptime. Both surfaces read `dockerContainerStatePresentation.ts`.
 
 ResourceDetailDrawer headings wrap long display names rather than ellipsising
 them. Overview rows may still truncate identity; keyboard expansion exposes the

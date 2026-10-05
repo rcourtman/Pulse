@@ -12,6 +12,12 @@ import {
 import { TagBadges } from '@/components/shared/TagBadges';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
 import { getDockerImageRegistryLink } from '@/features/docker/dockerImageReference';
+import {
+  getDockerContainerHealthCheckPresentation,
+  getDockerContainerRunStatePresentation,
+  getDockerContainerUptimeSeconds,
+  type DockerContainerStatePresentation,
+} from '@/features/docker/dockerContainerStatePresentation';
 import { formatInteger } from './resourceDetailMappers';
 import { buildKubernetesControllerSection } from './resourceDetailDrawerKubernetesModel';
 import type { UseResourceDetailDrawerStateResult } from './useResourceDetailDrawerState';
@@ -71,6 +77,20 @@ const richRow = (
   valueContent: JSX.Element,
   options: Pick<DetailRow, 'title' | 'tone' | 'wrap' | 'valueClass'> = {},
 ): DetailRow => ({ label, value, valueContent, ...options });
+
+// A Docker container's runtime rows match its table row: Docker's own state,
+// the health check on a row of its own while it runs, and uptime only for the
+// current run (Docker keeps the last value on a stopped container).
+const dockerRuntimeRow = (
+  label: string,
+  presentation: DockerContainerStatePresentation | undefined,
+) =>
+  presentation
+    ? makeDetailRow(label, presentation.label, {
+        title: presentation.title,
+        tone: presentation.tone ?? 'default',
+      })
+    : null;
 
 const dockerSection = (docker: NonNullable<Resource['docker']>): DetailSection => {
   const labels = docker.labels ?? {};
@@ -192,6 +212,9 @@ const dockerSection = (docker: NonNullable<Resource['docker']>): DetailSection =
 export const InlineResourceSummaryTables: Component<ResourceSummaryPresentationProps> = (props) => {
   const sections = (): DetailSection[] => {
     const docker = dockerContainerMeta(props.resource);
+    const uptimeSeconds = docker
+      ? getDockerContainerUptimeSeconds(props.resource)
+      : props.resource.uptime;
     const identityRows = compactDetailRows([
       ...props.drawer.primaryIdentityRows().map((row) => makeDetailRow(row.label, row.value)),
       props.showPlatformId ? makeDetailRow('Platform ID', props.resource.platformId) : null,
@@ -271,12 +294,21 @@ export const InlineResourceSummaryTables: Component<ResourceSummaryPresentationP
             label: 'Runtime context',
             testId: 'resource-runtime-context-section',
             rows: compactDetailRows([
-              makeDetailRow('Observed state', props.resource.status || 'unknown', {
-                valueClass: 'capitalize',
-              }),
-              props.resource.uptime
-                ? makeDetailRow('Uptime', formatUptime(props.resource.uptime))
+              docker
+                ? dockerRuntimeRow(
+                    'Observed state',
+                    getDockerContainerRunStatePresentation(props.resource),
+                  )
+                : makeDetailRow('Observed state', props.resource.status || 'unknown', {
+                    valueClass: 'capitalize',
+                  }),
+              docker
+                ? dockerRuntimeRow(
+                    'Health check',
+                    getDockerContainerHealthCheckPresentation(props.resource),
+                  )
                 : null,
+              uptimeSeconds ? makeDetailRow('Uptime', formatUptime(uptimeSeconds)) : null,
               props.resource.lastSeen
                 ? makeDetailRow('Last seen', props.drawer.lastSeen() || '—', {
                     title: props.drawer.lastSeenAbsolute(),

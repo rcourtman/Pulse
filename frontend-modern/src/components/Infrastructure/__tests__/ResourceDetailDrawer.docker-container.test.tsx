@@ -294,6 +294,57 @@ describe('ResourceDetailDrawer for Docker containers', () => {
     expect(within(section).getByText(/traefik\.enable/)).toBeInTheDocument();
   });
 
+  it('names a failing health check apart from the running state', () => {
+    render(() => (
+      <ResourceDetailDrawer
+        presentation="table-row"
+        resource={resource({
+          id: 'app-container-api',
+          name: 'edge-api',
+          uptime: 3600,
+          docker: {
+            containerId: 'def456abc123',
+            containerState: 'running',
+            health: 'unhealthy',
+            uptimeSeconds: 3600,
+          },
+        })}
+      />
+    ));
+
+    const runtime = screen.getByTestId('resource-runtime-context-section');
+    expect(within(runtime).getByText('Running')).toBeInTheDocument();
+    const health = within(runtime).getByText('Failing');
+    expect(health.closest('td')).toHaveClass('text-rose-700');
+    expect(health.closest('td')).toHaveAttribute('title', 'Its health check is failing');
+    expect(within(runtime).getByText('Uptime')).toBeInTheDocument();
+  });
+
+  it('shows a stopped container its exit code without stale health or uptime', () => {
+    render(() => (
+      <ResourceDetailDrawer
+        presentation="table-row"
+        resource={resource({
+          id: 'app-container-worker',
+          name: 'edge-worker',
+          uptime: 184_082,
+          docker: {
+            containerId: 'abc999def000',
+            containerState: 'exited',
+            exitCode: 1,
+            health: 'unhealthy',
+            uptimeSeconds: 184_082,
+          },
+        })}
+      />
+    ));
+
+    const runtime = screen.getByTestId('resource-runtime-context-section');
+    expect(within(runtime).getByText('Exited (1)').closest('td')).toHaveClass('text-rose-700');
+    expect(within(runtime).queryByText('Health check')).not.toBeInTheDocument();
+    expect(within(runtime).queryByText('Uptime')).not.toBeInTheDocument();
+  });
+
   it('links update targets to a reliable public registry tags page', () => {
     render(() => (
       <ResourceDetailDrawer

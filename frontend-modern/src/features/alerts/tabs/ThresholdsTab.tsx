@@ -1,6 +1,7 @@
 import { createSignal, For, Show } from 'solid-js';
 import ChevronRight from 'lucide-solid/icons/chevron-right';
 import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
+import { FormSelect } from '@/components/shared/FormSelect';
 import {
   AlertIntentPolicyPanel,
   type AlertIntentPolicySelectionTarget,
@@ -96,31 +97,28 @@ export function ThresholdsTab(props: ThresholdsTabProps) {
   const evaluationProfileControl = (profile: (typeof evaluationProfiles)[number]) => {
     const configured = () => props.metricEvaluationWindows?.()[profile.key]?.cpu;
     return (
-      <label class="block rounded-md border border-border p-3">
-        <span class="block text-xs font-medium text-base-content">{profile.label}</span>
-        <select
-          aria-label={`${profile.label} CPU averaging`}
-          class="mt-2 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-base-content"
-          value={
-            profile.key === 'all'
-              ? String(configured() ?? 300)
-              : configured() === undefined
-                ? 'inherit'
-                : String(configured())
-          }
-          onInput={(event) => updateCPUWindow(profile.key, event.currentTarget.value)}
-        >
-          <Show when={profile.key !== 'all'}>
-            <option value="inherit">
-              Inherit ({evaluationLabel(inheritedCPUWindow(profile))})
-            </option>
-          </Show>
-          <option value="0">Current value</option>
-          <option value="60">1-minute average</option>
-          <option value="300">5-minute average</option>
-          <option value="900">15-minute average</option>
-        </select>
-      </label>
+      <FormSelect
+        label={profile.label}
+        aria-label={`${profile.label} CPU averaging`}
+        fieldClass="rounded-md border border-border p-3"
+        density="compact"
+        value={
+          profile.key === 'all'
+            ? String(configured() ?? 300)
+            : configured() === undefined
+              ? 'inherit'
+              : String(configured())
+        }
+        onInput={(event) => updateCPUWindow(profile.key, event.currentTarget.value)}
+      >
+        <Show when={profile.key !== 'all'}>
+          <option value="inherit">Inherit ({evaluationLabel(inheritedCPUWindow(profile))})</option>
+        </Show>
+        <option value="0">Current value</option>
+        <option value="60">1-minute average</option>
+        <option value="300">5-minute average</option>
+        <option value="900">15-minute average</option>
+      </FormSelect>
     );
   };
 
