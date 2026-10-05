@@ -61,7 +61,7 @@ while IFS= read -r commit; do
   if ! git diff-tree --no-commit-id --name-only -r "$commit" | \
     PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT="$reason" \
       python3 scripts/release_control/canonical_completion_guard.py \
-        --files-from-stdin --diff-base "${commit}^"; then
+        --files-from-stdin --diff-base "${commit}^" --commit "$commit"; then
     fail "canonical completion guard @ $commit"
   fi
 done < <(git rev-list --reverse --no-merges "$BASE"..HEAD)

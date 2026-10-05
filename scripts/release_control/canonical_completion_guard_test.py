@@ -18,6 +18,7 @@ from canonical_completion_guard import (
     is_ignored_runtime_file,
     is_test_or_fixture,
     load_subsystem_rules,
+    main,
     path_policy_matches,
     parse_args,
     prettier_only_contract_neutral_reason,
@@ -3730,9 +3731,9 @@ class ContractNeutralOverrideTest(unittest.TestCase):
 class DiffBaseContractComparisonTest(unittest.TestCase):
     """The guard runs in two modes. Pre-commit compares HEAD against the
     index, where the pending contract update is staged. CI has nothing
-    staged (index == HEAD), so it must compare the push-range base against
-    HEAD instead; before --diff-base existed, CI misreported every staged
-    contract as having no substantive change."""
+    staged (index == HEAD), so it must compare the diff base against the
+    evaluated commit instead; before --diff-base existed, CI misreported
+    every staged contract as having no substantive change."""
 
     CONTRACT_PATH = "docs/release-control/v6/internal/subsystems/deployment-installability.md"
     BASE_TEXT = "## Current State\n\nExisting obligation.\n"
@@ -3778,10 +3779,10 @@ class DiffBaseContractComparisonTest(unittest.TestCase):
             )
 
     def test_check_staged_contracts_threads_diff_base_into_comparison(self):
-        seen: list[tuple[str, str | None]] = []
+        seen: list[tuple[str, str | None, str]] = []
 
-        def record(path, diff_base=None):
-            seen.append((path, diff_base))
+        def record(path, diff_base=None, revision="HEAD"):
+            seen.append((path, diff_base, revision))
             return True
 
         with (
@@ -3799,10 +3800,27 @@ class DiffBaseContractComparisonTest(unittest.TestCase):
             ),
         ):
             self.assertEqual(
-                check_staged_contracts([self.CONTRACT_PATH], diff_base="0d787a4b1"),
+                check_staged_contracts(
+                    [self.CONTRACT_PATH],
+                    diff_base="0d787a4b1",
+                    revision="5e1f00d2c",
+                ),
                 0,
             )
-        self.assertEqual(seen, [(self.CONTRACT_PATH, "0d787a4b1")])
+        self.assertEqual(seen, [(self.CONTRACT_PATH, "0d787a4b1", "5e1f00d2c")])
+
+    def test_diff_base_mode_compares_base_against_evaluated_revision(self):
+        blobs = {
+            f"0d787a4b1:{self.CONTRACT_PATH}": self.BASE_TEXT,
+            f"5e1f00d2c:{self.CONTRACT_PATH}": self.HEAD_TEXT,
+            f"HEAD:{self.CONTRACT_PATH}": self.BASE_TEXT,
+        }
+        with patch("canonical_completion_guard.git_blob_text", side_effect=blobs.get):
+            self.assertTrue(
+                staged_contract_has_substantive_change(
+                    self.CONTRACT_PATH, "0d787a4b1", "5e1f00d2c"
+                )
+            )
 
     def test_resolve_diff_base_returns_merge_base_sha(self):
         head = subprocess.run(
@@ -3817,6 +3835,131 @@ class DiffBaseContractComparisonTest(unittest.TestCase):
     def test_resolve_diff_base_falls_back_to_raw_ref(self):
         zero_sha = "0" * 40
         self.assertEqual(resolve_diff_base(zero_sha), zero_sha)
+
+
+class EvaluatedCommitContractComparisonTest(unittest.TestCase):
+    """CI and dev-prepush walk a branch's commits with HEAD at the branch tip
+    and evaluate each commit against its own parent, as the pre-commit hook
+    did. The contract-text comparison must read the evaluated commit, not
+    HEAD. Pulse PR 2494 failed CI because its second commit reverted a
+    Current State paragraph its first commit wrote, so parent-vs-HEAD saw no
+    contract change for a commit the pre-commit hook had correctly passed.
+    The same comparison let a bare runtime commit pass when a later commit
+    carried the contract update."""
+
+    CONTRACT_PATH = "docs/release-control/v6/internal/subsystems/performance-and-scalability.md"
+    RUNTIME_PATH = "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts"
+    ORIGINAL = (
+        "## Contract Metadata\n\n"
+        "- Status: active\n\n"
+        "## Current State\n\n"
+        "Spacer geometry and the inverse scroll-to-index mapping must share one\n"
+        "representative item height. The controller samples leading siblings.\n"
+    )
+    REWRITTEN = ORIGINAL.replace(
+        "The controller samples leading siblings.",
+        "A table runway measures every mounted row.",
+    )
+    METADATA_ONLY = ORIGINAL.replace("- Status: active", "- Status: active (reviewed)")
+
+    def setUp(self) -> None:
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        self.repo = Path(temp_dir.name)
+        # Hook runs export GIT_DIR/GIT_INDEX_FILE for the real repository;
+        # the guard's git calls must reach the temporary repository instead.
+        env_patch = patch.dict(os.environ, strip_local_git_env(os.environ.copy()), clear=True)
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        root_patch = patch("canonical_completion_guard.REPO_ROOT", self.repo)
+        root_patch.start()
+        self.addCleanup(root_patch.stop)
+        self.git("init", "-q", "-b", "main")
+        self.git("config", "user.name", "Pulse Test")
+        self.git("config", "user.email", "pulse-test@example.invalid")
+        self.commit_contract(self.ORIGINAL, "base")
+
+    def git(self, *args: str) -> str:
+        return subprocess.run(
+            ["git", *args],
+            cwd=self.repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    def commit_contract(self, text: str, message: str) -> str:
+        contract = self.repo / self.CONTRACT_PATH
+        contract.parent.mkdir(parents=True, exist_ok=True)
+        contract.write_text(text, encoding="utf-8")
+        runtime = self.repo / self.RUNTIME_PATH
+        runtime.parent.mkdir(parents=True, exist_ok=True)
+        runtime.write_text(f"// {message}\n", encoding="utf-8")
+        self.git("add", self.CONTRACT_PATH, self.RUNTIME_PATH)
+        self.git("commit", "-q", "-m", message)
+        return self.git("rev-parse", "HEAD")
+
+    def run_guard(self, commit: str) -> tuple[int, str]:
+        stderr = io.StringIO()
+        with (
+            patch(
+                "canonical_completion_guard.infer_impacted_subsystems",
+                return_value={},
+            ),
+            patch(
+                "canonical_completion_guard.required_contract_updates",
+                return_value={
+                    self.CONTRACT_PATH: {
+                        "subsystem": "performance-and-scalability",
+                        "touched_runtime_files": [self.RUNTIME_PATH],
+                    }
+                },
+            ),
+            patch.dict(os.environ, {CONTRACT_NEUTRAL_OVERRIDE_ENV: ""}),
+            patch("sys.stdin", io.StringIO(f"{self.CONTRACT_PATH}\n{self.RUNTIME_PATH}\n")),
+            redirect_stderr(stderr),
+        ):
+            status = main(["--files-from-stdin", "--diff-base", f"{commit}^", "--commit", commit])
+        return status, stderr.getvalue()
+
+    def test_later_revert_does_not_block_the_commit_that_wrote_the_contract(self) -> None:
+        wrote = self.commit_contract(self.REWRITTEN, "rewrite the runway paragraph")
+        self.commit_contract(self.ORIGINAL, "revert the runway paragraph")
+
+        # HEAD now matches the parent of `wrote`; only the evaluated commit
+        # carries the substantive Current State change.
+        self.assertTrue(
+            staged_contract_has_substantive_change(self.CONTRACT_PATH, f"{wrote}^", wrote)
+        )
+        self.assertFalse(
+            staged_contract_has_substantive_change(self.CONTRACT_PATH, f"{wrote}^", "HEAD")
+        )
+        status, stderr = self.run_guard(wrote)
+        self.assertEqual(status, 0, stderr)
+
+    def test_later_contract_update_does_not_pass_an_earlier_bare_commit(self) -> None:
+        bare = self.commit_contract(self.METADATA_ONLY, "touch only contract metadata")
+        self.commit_contract(
+            self.METADATA_ONLY.replace(
+                "The controller samples leading siblings.",
+                "A table runway measures every mounted row.",
+            ),
+            "record the runway paragraph",
+        )
+
+        status, stderr = self.run_guard(bare)
+        self.assertEqual(status, 1)
+        self.assertIn(
+            f"contract {self.CONTRACT_PATH} is staged but does not include a "
+            "substantive section update",
+            stderr,
+        )
+
+    def test_resolve_diff_base_anchors_on_the_evaluated_commit(self) -> None:
+        first = self.commit_contract(self.REWRITTEN, "first")
+        self.commit_contract(self.ORIGINAL, "second")
+        parent = self.git("rev-parse", f"{first}^")
+        self.assertEqual(resolve_diff_base(f"{first}^", first), parent)
 
 
 class ReleaseCycleArtifactGuardTest(unittest.TestCase):
@@ -3909,7 +4052,7 @@ import sys
 files = ",".join(line.strip() for line in sys.stdin if line.strip())
 with open(os.environ["PULSE_TEST_GUARD_LOG"], "a", encoding="utf-8") as log:
     reason = os.environ.get("PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT", "").strip()
-    log.write(f"{reason}\\t{files}\\n")
+    log.write(f"{reason}\\t{files}\\t{' '.join(sys.argv[1:])}\\n")
 """,
                 encoding="utf-8",
             )
@@ -3955,9 +4098,25 @@ with open(os.environ["PULSE_TEST_GUARD_LOG"], "a", encoding="utf-8") as log:
             )
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            first, second = (
+                subprocess.run(
+                    ["git", "rev-parse", ref],
+                    cwd=repo,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                ).stdout.strip()
+                for ref in ("HEAD^", "HEAD")
+            )
+            # Each commit is judged as itself, not as the branch tip.
             self.assertEqual(
                 guard_log.read_text(encoding="utf-8").splitlines(),
-                ["dependency-only test\tfirst.txt", "\tsecond.txt"],
+                [
+                    "dependency-only test\tfirst.txt\t"
+                    f"--files-from-stdin --diff-base {first}^ --commit {first}",
+                    f"\tsecond.txt\t--files-from-stdin --diff-base {second}^ --commit {second}",
+                ],
             )
 
 
