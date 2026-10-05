@@ -359,3 +359,38 @@ func TestGuestMetadataWriterRealFilesystemTenantIsolation(t *testing.T) {
 		t.Fatal("tenants share identity")
 	}
 }
+
+// Retention after a failed close is not a permanent offboarding dead end.
+// A later explicit close may flush retained state after the filesystem recovers,
+// without accepting new mutations or overlapping the original writer.
+func TestGuestMetadataWriterExplicitCloseRetryPersistsRetainedState(t *testing.T) {
+	fs := &guestWriterFaultFS{FileSystem: defaultFileSystem{}}
+	fs.failWrite.Store(true)
+	store := NewGuestMetadataStore(t.TempDir(), fs)
+	if err := store.SetAsync("retained", &GuestMetadata{LastKnownName: "retained"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(time.Second); err == nil {
+		t.Fatal("first failed close reported success")
+	}
+	if fs.writes.Load() != 1 {
+		t.Fatalf("failed close retried without an explicit later call: %d", fs.writes.Load())
+	}
+	if err := store.SetAsync("late", &GuestMetadata{}); !errors.Is(err, ErrGuestMetadataStoreClosed) {
+		t.Fatalf("failed close reopened admission: %v", err)
+	}
+	fs.failWrite.Store(false)
+	if err := store.Close(time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if fs.writes.Load() != 2 {
+		t.Fatalf("explicit recovery or successful idempotent close wrote unexpected snapshots: %d", fs.writes.Load())
+	}
+	reloaded := NewGuestMetadataStore(store.dataPath, nil)
+	if reloaded.Get("retained") == nil || reloaded.Get("late") != nil {
+		t.Fatal("explicit close recovery lost retained state or wrote a late admission")
+	}
+}

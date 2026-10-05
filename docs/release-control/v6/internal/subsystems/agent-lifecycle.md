@@ -7534,7 +7534,9 @@ metadata close. Failure retains the monitor, cancellation/done handles and
 lifecycle guard: lazy recreation cannot start a second writer in the same
 directory. `BeginTenantDeletion` returns that failure to the organisation
 handler, which keeps persistence and offboarding callbacks untouched. Only
-successful shutdown allows directory deletion. Other tenants keep their existing
+successful shutdown allows directory deletion. A later explicit shutdown attempt
+may persist retained metadata after a completed write failure is repaired;
+admission stays sealed and no in-flight attempt is replayed. Other tenants keep their existing
 independent runtime. Store drain does not establish independent guest thaw,
 workload liveness or containment in installed software.
 

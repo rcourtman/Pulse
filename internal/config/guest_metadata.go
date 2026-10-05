@@ -42,9 +42,13 @@ type GuestMetadataStore struct {
 	lastWriteErr      error
 	writerDone        chan struct{}
 	closed            atomic.Bool
-	closeOnce         sync.Once
-	closeDone         chan struct{}
-	closeErr          error
+	closeMu           sync.Mutex
+	closeAttempt      *guestMetadataCloseAttempt
+}
+
+type guestMetadataCloseAttempt struct {
+	done chan struct{}
+	err  error
 }
 
 var ErrGuestMetadataStoreClosed = errors.New("guest metadata store is closed")
@@ -177,27 +181,49 @@ func (s *GuestMetadataStore) Close(timeout time.Duration) error {
 	}
 	// Seal before waiting for a synchronous mutation's I/O-held memory lock.
 	// One owned close observer, not one goroutine per waiter, covers both that
-	// mutation and the background writer without extending the caller's budget.
-	s.closeOnce.Do(func() {
-		s.closed.Store(true)
+	// mutation and the background writer within the caller's unchanged budget.
+	s.closed.Store(true)
+	s.closeMu.Lock()
+	attempt := s.closeAttempt
+	retry := false
+	if attempt != nil {
+		select {
+		case <-attempt.done:
+			// A later explicit shutdown/offboarding attempt may flush retained
+			// state after the filesystem is repaired. Never reopen admission,
+			// retry an in-flight write or spin-retry a failed close on its own.
+			if attempt.err != nil {
+				attempt = nil
+				retry = true
+			}
+		default:
+		}
+	}
+	if attempt == nil {
+		attempt = &guestMetadataCloseAttempt{done: make(chan struct{})}
+		s.closeAttempt = attempt
 		go func() {
-			s.mu.RLock()
+			s.mu.Lock()
+			if retry && s.lastWriteErr != nil && s.writerDone == nil {
+				s.queueSaveLocked()
+			}
 			done := s.writerDone
-			s.mu.RUnlock()
+			s.mu.Unlock()
 			if done != nil {
 				<-done
 			}
 			s.mu.RLock()
-			s.closeErr = s.lastWriteErr
+			attempt.err = s.lastWriteErr
 			s.mu.RUnlock()
-			close(s.closeDone)
+			close(attempt.done)
 		}()
-	})
+	}
+	s.closeMu.Unlock()
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
-	case <-s.closeDone:
-		return s.closeErr
+	case <-attempt.done:
+		return attempt.err
 	case <-timer.C:
 		return fmt.Errorf("guest metadata writes did not drain within %s", timeout)
 	}
@@ -223,10 +249,9 @@ func cloneGuestMetadata(meta *GuestMetadata) *GuestMetadata {
 // NewGuestMetadataStore creates a new metadata store
 func NewGuestMetadataStore(dataPath string, fs FileSystem) *GuestMetadataStore {
 	store := &GuestMetadataStore{
-		metadata:  make(map[string]*GuestMetadata),
-		dataPath:  dataPath,
-		fs:        fs,
-		closeDone: make(chan struct{}),
+		metadata: make(map[string]*GuestMetadata),
+		dataPath: dataPath,
+		fs:       fs,
 	}
 
 	if store.fs == nil {

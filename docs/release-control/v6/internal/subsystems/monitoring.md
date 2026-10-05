@@ -4605,7 +4605,10 @@ persistence failure remains an error. Monitor Stop logs that failure instead of
 claiming a clean stop; tenant removal retains the runtime owner and lifecycle
 guard, and organisation deletion refuses to remove its directory. An unfinished
 monitoring loop likewise prevents deletion. Shutdown does not cancel an admitted
-filesystem write or silently discard metadata to obtain a timely result.
+filesystem write or silently discard metadata to obtain a timely result. A later
+explicit close may retry a completed failed snapshot after filesystem repair;
+admission stays sealed, successful close is idempotent, and no close retries
+itself or overlaps a still-running attempt.
 
 `internal/config/guest_writer_control_test.go` exercises blocked snapshots at
 25/100 updates and caller-copy ownership. `guest_metadata_writer_test.go` covers
