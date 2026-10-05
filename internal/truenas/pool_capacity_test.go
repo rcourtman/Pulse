@@ -177,3 +177,32 @@ func TestTrueNASPoolCapacityAggregate(t *testing.T) {
 		})
 	}
 }
+
+func TestTrueNASPoolCapacitySourcesDoNotMix(t *testing.T) {
+	properties := map[string]any{
+		"size": map[string]any{"parsed": int64(2000)}, "allocated": map[string]any{"parsed": int64(900)}, "free": map[string]any{"parsed": int64(1100)},
+	}
+	for _, tc := range []struct {
+		name string
+		flat map[string]any
+		want [3]int64
+	}{
+		{"property-only boot shape", nil, [3]int64{2000, 900, 1100}},
+		{"flat idle does not inherit property usage", map[string]any{"size": 1000, "allocated": 0, "free": 1000}, [3]int64{1000, 0, 1000}},
+		{"flat full does not inherit property free", map[string]any{"size": 1000, "allocated": 1000, "free": 0}, [3]int64{1000, 1000, 0}},
+		{"partial flat does not join a second source", map[string]any{"size": 1000}, [3]int64{}},
+		{"invalid flat does not try a second source", map[string]any{"size": "unknown", "allocated": 400}, [3]int64{}},
+		{"null free is not absent", map[string]any{"size": 1000, "allocated": 400, "free": nil}, [3]int64{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			item := map[string]any{"name": "tank", "status": "ONLINE", "properties": properties}
+			for key, value := range tc.flat {
+				item[key] = value
+			}
+			pool, ok := parseBootPoolState(item)
+			if !ok || !pool.IsBoot || [3]int64{pool.TotalBytes, pool.UsedBytes, pool.FreeBytes} != tc.want {
+				t.Fatalf("mixed or fabricated capacity: %+v", pool)
+			}
+		})
+	}
+}

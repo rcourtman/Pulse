@@ -6195,6 +6195,7 @@
               "internal/truenas/core_reporting.go",
               "internal/truenas/disk_health.go",
               "internal/truenas/fixtures.go",
+              "internal/truenas/pool_capacity.go",
               "internal/truenas/provider.go",
               "internal/truenas/subscription.go",
               "internal/truenas/telemetry.go",
@@ -6208,6 +6209,7 @@
               "internal/api/resourceapi/resources_test.go",
               "internal/api/truenas_disk_history_integration_test.go",
               "internal/monitoring/monitor_polling_test.go",
+              "internal/monitoring/truenas_pool_capacity_test.go",
               "internal/truenas/alert_args_test.go",
               "internal/truenas/client_api_shapes_test.go",
               "internal/truenas/client_test.go",
@@ -6215,6 +6217,7 @@
               "internal/truenas/core_reporting_test.go",
               "internal/truenas/disk_history_identity_test.go",
               "internal/truenas/disk_history_netdata_test.go",
+              "internal/truenas/pool_capacity_test.go",
               "internal/truenas/provider_pool_health_contract_test.go",
               "internal/truenas/provider_test.go",
               "internal/truenas/transport_test.go"

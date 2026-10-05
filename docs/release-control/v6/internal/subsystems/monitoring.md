@@ -1665,6 +1665,7 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 46. `internal/monitoring/temperature.go`
 47. `internal/truenas/client.go`
 47a. `internal/truenas/transport.go`
+47b. `internal/truenas/pool_capacity.go`
 48. `internal/truenas/disk_health.go`
 49. `internal/truenas/provider.go`
 50. `internal/models/ceph_cluster_identity.go`
@@ -4000,6 +4001,44 @@ drift in non-identity display fields such as `buildtime`, including structured
 date/value wrappers, and still preserve the canonical hostname, version,
 machine ID, capacity, and poll-health path instead of failing connection tests
 or background refreshes during JSON decoding.
+### TrueNAS pool capacity is an observation, not a default zero
+
+`internal/truenas/pool_capacity.go` owns validation of the existing pool-specific
+byte sources. Legacy REST consumes only its flat `size`, `allocated`, and
+optional `free` fields. RPC retains its existing pool-state/property envelope;
+the property envelope is also used by the separate boot-pool reader. Neither
+that boot source nor a hypothetical nested REST shape establishes a supported
+CORE data-pool capacity fallback. Missing native capacity remains unavailable;
+datasets, quotas, physical disks, and vdevs must not be summed to invent it.
+
+A usable reading requires exact non-negative integer total and allocated bytes,
+with a positive total and allocated no greater than total. Optional free bytes
+are derived from those same two pool bytes only when absent; an explicitly
+reported free value must equal their difference. Null, malformed, fractional,
+overflowing, negative, or contradictory fields invalidate the capacity reading,
+not the pool's identity, health, topology, scan, or the rest of the snapshot.
+Numeric strings are accepted without float conversion. RPC pool results use
+number-preserving decoding, and flat/property readings never mix or use a real
+zero as a fallback trigger. Transport, permission and invalid JSON-envelope
+errors retain their existing failure behaviour; there is no extra method call.
+
+The provider emits no pool usage metric for an unavailable or out-of-bounds
+reading. A host aggregate is available only if every inventoried pool has valid
+usage and its byte sum fits int64; a known boot pool is not a whole-host reading
+when a data pool is unknown. Available per-pool and dataset readings remain
+independent. Unknown polls must not append a zero or refresh an old observation
+in either memory or persistent storage History. Existing historical readings
+remain intact, and a later valid poll resumes at that poll's observation time.
+
+`internal/truenas/pool_capacity_test.go` covers the TLS legacy snapshot through
+provider/registry ingestion, real empty/full pools, absent/malformed fields,
+exact RPC bytes, source separation and incomplete/overflowing aggregates.
+`internal/monitoring/truenas_pool_capacity_test.go` connects TLS collection,
+provider refresh, two same-named connection-scoped estates, canonical ingestion,
+memory and persistent History over known/unknown/malformed/recovered polls.
+Its deterministic polling clock and API bodies are declared fixtures, not native
+CORE acceptance, a containing release or an alternative capacity source.
+
 That same monitoring boundary now also owns live TrueNAS disk temperatures.
 `internal/truenas/client.go` and `internal/truenas/provider.go` must ingest
 legacy `disk.temperatures` from the REST API or `reporting.get_data` `disktemp`
