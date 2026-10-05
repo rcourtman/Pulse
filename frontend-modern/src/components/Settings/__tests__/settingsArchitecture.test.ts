@@ -557,6 +557,13 @@ describe('settings architecture guardrails', () => {
     expect(auditWebhookPanelSource).toContain('getAuditWebhookFeatureGateCopy({');
     expect(auditWebhookPanelSource).toContain('paidRuntimeRequired: paidRuntimeRequired()');
     expect(auditWebhookPanelSource).not.toContain('Audit Webhooks (Pro)');
+    // The only webhook page in Settings says it is not alert delivery and
+    // links to alert notifications, in both the gated and enabled states.
+    expect(auditWebhookPanelSource).toContain('getAuditWebhookNotificationsSignpost()');
+    expect(auditWebhookPanelSource).toContain("pathForTab('destinations')");
+    expect(auditWebhookPanelSource.match(/<AuditWebhookNotificationsSignpost \/>/g)).toHaveLength(
+      2,
+    );
     expect(reportingPanelSource).toContain('if (!catalog || !state || showUpgradePrompts())');
     expect(reportingPanelSource).toContain('title: `${state.title} unavailable`');
     expect(reportingPanelSource).toContain(

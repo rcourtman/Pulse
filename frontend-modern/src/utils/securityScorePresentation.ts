@@ -394,7 +394,11 @@ export function getSecurityPostureItems(status: SecurityPostureStatus): Security
       label: 'HTTPS',
       enabled: Boolean(status.hasHTTPS),
       description: status.hasHTTPS ? 'Encrypted' : 'HTTP only',
-      critical: true,
+      // Same rule as the hardening steps below the grid: plain HTTP is
+      // critical once the instance is publicly reachable, and a recommended
+      // step on a private network. Marking it critical there put a red
+      // Critical tile above a Recommended card for the same control.
+      critical: Boolean(status.publicAccess),
     },
     {
       key: 'audit',

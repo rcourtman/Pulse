@@ -859,6 +859,10 @@ tokens, and path-normalization variants.
    placeholders on the shared `SettingsLoadingSkeleton` primitive. This
    subsystem owns the security/privacy posture semantics; frontend-primitives
    owns skeleton animation, fill tokens, and placeholder shell consistency.
+   Posture severity is one rule across the Security Overview: the HTTPS tile
+   counts as critical, in its label and in the posture score, only when the
+   instance is publicly reachable, matching the hardening step that calls
+   HTTPS critical for public access and recommended on a private network.
 6a. Keep API token refresh/loading indicators on the shared `LoadingSpinner`
     primitive. Security/privacy owns the token-management trust copy and
     refresh semantics; frontend-primitives owns spinner shell, tone, and
@@ -1325,6 +1329,10 @@ failure. If `runtime-capabilities` blocks `audit_logging` with
 active Pro license needs the private Pulse Pro runtime, but they must not
 expose license keys, billing identity, or plan-upgrade copy as part of that
 security/privacy feature gate.
+The Audit Webhooks panel also states its scope before any gate or endpoint
+list: these webhooks carry security events only, and alert delivery lives in
+alert notifications (`getAuditWebhookNotificationsSignpost`), so an operator
+looking for Discord or Slack alerts is not left configuring an audit sink.
 Audit-log storage availability is also a security/privacy trust boundary.
 The `pkg/audit/` runtime package owns persistent audit-store classification:
 transient SQLite busy/locked conditions must be retried and surfaced as

@@ -19,12 +19,32 @@ import {
   getAuditWebhookEmptyStateCopy,
   getAuditWebhookFeatureGateCopy,
   getAuditWebhookLoadingState,
+  getAuditWebhookNotificationsSignpost,
 } from '@/utils/auditWebhookPresentation';
+import { pathForTab } from '@/features/alerts/types';
 import { useAuditWebhookPanelState } from '@/components/Settings/useAuditWebhookPanelState';
 
 interface AuditWebhookPanelProps {
   canManage?: boolean;
 }
+
+const AuditWebhookNotificationsSignpost: Component = () => {
+  // A plain anchor: the app Router intercepts same-origin links, and the
+  // panel also renders outside a Router in its read-only tests.
+  const copy = getAuditWebhookNotificationsSignpost();
+  return (
+    <p class="text-sm text-muted leading-relaxed" data-audit-webhook-notifications-signpost>
+      {copy.text}{' '}
+      <a
+        href={pathForTab('destinations')}
+        class="font-medium text-blue-600 hover:underline dark:text-blue-400"
+      >
+        {copy.linkLabel}
+      </a>
+      .
+    </p>
+  );
+};
 
 export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
   const [urlToRemove, setUrlToRemove] = createSignal<string | null>(null);
@@ -56,7 +76,8 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
     return (
       <SettingsPanel title="Audit Webhooks">
         <Show when={!loading()} fallback={<div class="text-sm text-muted">Loading...</div>}>
-          <Card tone="info" padding="md">
+          <AuditWebhookNotificationsSignpost />
+          <Card tone="info" padding="md" class="mt-3">
             <FeatureGateSection
               title={featureGateCopy().title}
               body={featureGateCopy().body}
@@ -85,6 +106,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
             Pulse can send a signed event payload whenever security-relevant activity occurs
             (logins, settings changes, RBAC updates, and similar audit events).
           </p>
+          <AuditWebhookNotificationsSignpost />
 
           <Show
             when={!loading()}
