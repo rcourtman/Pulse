@@ -1403,6 +1403,17 @@ reporting source of truth. `MultiTenantMonitor.ListOrganizationIDs` may expose
 persisted organization IDs to API-owned background workers, but it must not
 initialize monitors, start pollers, or reinterpret tenant IDs as monitored
 resource health.
+Organization deletion waits up to `tenantDeletionShutdownTimeout` (30 seconds)
+for the tenant monitoring loop to exit before it refuses with
+`tenant_shutdown_incomplete` and keeps the data. Process shutdown and
+`RemoveTenant` keep the two-second `tenantMonitorShutdownTimeout`. Deletion
+gates the data on that wait, so the budget must cover a loop that is still
+starting up or finishing a tick. The observed case is mock mode:
+`Monitor.Start` runs `startMockMetricsSampler` synchronously before its select
+loop, and `prepareMockMetricsHistory` seeds seven days of fixture history
+without a context, so a just-used organization's loop took 8-10 seconds under CI
+load to see its cancelled context and the two-second budget turned an ordinary
+delete into a refusal. A loop that never exits still refuses.
 Proxmox physical-disk polling is also a continuity boundary. A failed or
 permission-denied `disks/list` call must remain an error so the monitor can use
 linked host-agent inventory or retain same-instance, same-node prior evidence;

@@ -47,7 +47,19 @@ func NewMultiTenantMonitor(baseCfg *config.Config, persistence *config.MultiTena
 	}
 }
 
-const tenantMonitorShutdownTimeout = 2 * time.Second
+// Both shutdown budgets are variables so tests can shorten them.
+var (
+	// tenantMonitorShutdownTimeout bounds how long process shutdown and
+	// RemoveTenant wait for a tenant's monitoring loop to exit.
+	tenantMonitorShutdownTimeout = 2 * time.Second
+
+	// tenantDeletionShutdownTimeout bounds how long organization deletion
+	// waits for the loop. Deletion refuses, and keeps the data, while the loop
+	// still runs, so this is a correctness gate rather than a best-effort
+	// wait: a loop that is still starting up or finishing a tick can take
+	// several seconds to see its cancelled context.
+	tenantDeletionShutdownTimeout = 30 * time.Second
+)
 
 // SetRecoveryManager wires a recovery store manager into all existing and future tenant monitors.
 func (mtm *MultiTenantMonitor) SetRecoveryManager(manager *recoverymanager.Manager) {
@@ -377,7 +389,11 @@ func (mtm *MultiTenantMonitor) removeTenant(orgID string, deleting bool) error {
 	if cancel != nil {
 		cancel()
 	}
-	if !waitForTenantMonitorShutdown(orgID, done) {
+	shutdownTimeout := tenantMonitorShutdownTimeout
+	if deleting {
+		shutdownTimeout = tenantDeletionShutdownTimeout
+	}
+	if !waitForTenantMonitorShutdown(orgID, done, shutdownTimeout) {
 		return fmt.Errorf("organization %q monitoring loop has not stopped", orgID)
 	}
 	if monitor != nil {
@@ -397,19 +413,19 @@ func (mtm *MultiTenantMonitor) removeTenant(orgID string, deleting bool) error {
 	return nil
 }
 
-func waitForTenantMonitorShutdown(orgID string, done <-chan struct{}) bool {
+func waitForTenantMonitorShutdown(orgID string, done <-chan struct{}, timeout time.Duration) bool {
 	if done == nil {
 		return true
 	}
 
-	timer := time.NewTimer(tenantMonitorShutdownTimeout)
+	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 
 	select {
 	case <-done:
 		return true
 	case <-timer.C:
-		logger := log.Warn().Dur("timeout", tenantMonitorShutdownTimeout)
+		logger := log.Warn().Dur("timeout", timeout)
 		if orgID != "" {
 			logger = logger.Str("org_id", orgID)
 		}
