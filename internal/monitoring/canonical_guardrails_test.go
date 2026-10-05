@@ -607,10 +607,11 @@ func TestBroadcastResourceProjectionCoalescesSplitHostIdentities(t *testing.T) {
 	source := string(data)
 
 	for _, snippet := range []string{
-		"metricsTargetResolver := broadcastMetricsTargetResolver(unifiedView.readState)",
+		"metricsTargetResolver := unifiedView.metricsTargets",
+		"metricsTargetResolver = broadcastMetricsTargetResolver(unifiedView.readState)",
 		"broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)",
-		"broadcastFrontendResources, broadcastCatalogs := convertPresentationResourcesForBroadcast(",
-		"attachBroadcastMetricsTargets(broadcastResources, metricsTargetResolver)",
+		"broadcastFrontendResources, broadcastCatalogs := convertPresentationResourcesForBroadcast(broadcastResources)",
+		"attachBroadcastMetricsTargetsInPlace(broadcastResources, metricsTargetResolver)",
 		"frontendState.CapabilityCatalog = broadcastCatalogs.capabilities",
 		"frontendState.PolicyCatalog = broadcastCatalogs.policies",
 		"frontendState.AISafeSummaryCatalog = broadcastCatalogs.aiSafeSummaries",

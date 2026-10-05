@@ -6718,6 +6718,10 @@ func (s *broadcastProjectionCountingStore) GetAll() []unifiedresources.Resource 
 	s.reads++
 	return s.MonitorAdapter.GetAll()
 }
+func (s *broadcastProjectionCountingStore) GetAllWithMetricsTargets() ([]unifiedresources.Resource, map[string]unifiedresources.MetricsTarget) {
+	s.reads++
+	return s.MonitorAdapter.GetAllWithMetricsTargets()
+}
 func (*broadcastProjectionCountingStore) TryReplaceRegistryForRead(models.StateSnapshot, time.Duration, func() map[unifiedresources.DataSource][]unifiedresources.IngestRecord) bool {
 	return false
 }

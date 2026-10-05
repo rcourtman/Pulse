@@ -6968,3 +6968,68 @@ func TestEvaluateResourceHealthKeepsStaleTelemetryBehindAWinningAlert(t *testing
 		t.Fatalf("expected only the alert reason for a fresh source, got %+v", health.Reasons)
 	}
 }
+
+// A List-only broadcast must capture history coordinates without constructing
+// every typed view, and without trusting freshness timestamps as mutation keys.
+func TestRegistryProjectionSnapshotDetachesAndTracksMappings(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(benchmarkVMState(3))
+	resources, targets := rr.ListWithMetricsTargets()
+	if !reflect.DeepEqual(resources, rr.List()) {
+		t.Fatal("bulk read changed resource content")
+	}
+	if !rr.viewsDirty || rr.cachedVMs != nil {
+		t.Fatal("projection forced unrelated typed views to materialize")
+	}
+	if len(targets) != len(resources) {
+		t.Fatalf("targets=%d resources=%d", len(targets), len(resources))
+	}
+	for _, r := range resources {
+		if want := rr.MetricsTarget(r.ID); want == nil || *want != targets[r.ID] {
+			t.Fatalf("target for %s differs from point resolver", r.ID)
+		}
+	}
+	id := resources[0].ID
+	observedAt := resources[0].LastSeen
+	rr.mu.Lock()
+	for key, mapped := range rr.bySource[SourceProxmox] {
+		if mapped == id {
+			delete(rr.bySource[SourceProxmox], key)
+		}
+	}
+	rr.bySource[SourceProxmox]["new-history-coordinate"] = id
+	rr.resources[id].Tags = []string{"customer-data"}
+	rr.invalidateViewsLocked()
+	rr.mu.Unlock()
+	changed, updatedTargets := rr.ListWithMetricsTargets()
+	if updatedTargets[id].ResourceID != "new-history-coordinate" {
+		t.Fatal("same-time mapping change left an old target")
+	}
+	if targets[id].ResourceID == "new-history-coordinate" {
+		t.Fatal("later mapping edit mutated a prior target snapshot")
+	}
+	for _, r := range changed {
+		if r.ID == id {
+			if !r.LastSeen.Equal(observedAt) || r.Policy.Sensitivity != ResourceSensitivityRestricted {
+				t.Fatal("same-time metadata edit was stale")
+			}
+			r.Canonical.Aliases[0] = "caller-change"
+			r.Tags[0] = "caller-change"
+			r.Policy.Routing.Redact = append(r.Policy.Routing.Redact, ResourceRedactionPath)
+		}
+	}
+	again, againTargets := rr.ListWithMetricsTargets()
+	if !reflect.DeepEqual(againTargets, updatedTargets) {
+		t.Fatal("detached map mutation escaped")
+	}
+	for _, r := range again {
+		if r.ID == id && (r.Tags[0] != "customer-data" || r.Canonical.Aliases[0] == "caller-change") {
+			t.Fatal("caller changed live registry")
+		}
+	}
+	empty := NewRegistry(nil)
+	rows, emptyTargets := empty.ListWithMetricsTargets()
+	if len(rows) != 0 || len(emptyTargets) != 0 {
+		t.Fatal("empty projection invented resources or targets")
+	}
+}
