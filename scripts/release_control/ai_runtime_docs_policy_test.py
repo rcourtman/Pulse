@@ -304,7 +304,10 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertIn("## Patrol Modes", control_doc)
         self.assertIn("Patrol mode sets how far Pulse can go", control_doc)
         self.assertIn("**UI:** Patrol → Patrol mode", control_doc)
-        self.assertIn("The API keeps the autonomy_level field name for compatibility.", control_doc)
+        self.assertIn(
+            "The API retains `autonomy_level` for compatibility:",
+            " ".join(control_doc.split()),
+        )
         self.assertNotIn("Patrol Control Level", control_doc)
         self.assertNotIn("## Patrol Control Levels", control_doc)
         self.assertNotIn("Patrol control is configured on the **Patrol** page.", control_doc)
