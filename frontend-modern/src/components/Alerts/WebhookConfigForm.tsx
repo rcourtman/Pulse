@@ -114,7 +114,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
 
         <Show when={props.currentTemplate()?.instructions}>
           <div class="mb-3 border-l-2 border-blue-300 pl-3 text-xs leading-relaxed text-blue-800 dark:border-blue-700 dark:text-blue-200">
-            <h4 class="text-sm font-medium text-blue-900/25 dark:text-blue-100 mb-2">
+            <h4 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
               {getAlertWebhookSetupInstructionsTitle()}
             </h4>
             {props.currentTemplate()!.instructions}

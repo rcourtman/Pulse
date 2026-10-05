@@ -986,7 +986,7 @@ function AttentionDetail(props: {
               </p>
               <Show when={getAttentionFlappingPresentation(loaded().item.flapping)}>
                 {(flapping) => (
-                  <p class="mt-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs leading-5 text-amber-900/25 dark:border-amber-900/25 dark:bg-amber-950/30 dark:text-amber-200">
+                  <p class="mt-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs leading-5 text-amber-900 dark:border-amber-900/25 dark:bg-amber-950/30 dark:text-amber-200">
                     <RepeatIcon class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                     <span>{flapping().detail}</span>
                   </p>

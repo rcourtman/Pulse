@@ -71,11 +71,11 @@ function InstallStep(props: { step: UpdateInstallStep; index: number }) {
 function readinessTone(status: UpdateReadiness['status']) {
   switch (status) {
     case 'blocked':
-      return 'border-red-200 bg-red-50 text-red-900/25 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100';
+      return 'border-red-200 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100';
     case 'attention':
-      return 'border-amber-200 bg-amber-50 text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100';
+      return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100';
     default:
-      return 'border-green-200 bg-green-50 text-green-900/25 dark:border-green-800 dark:bg-green-950/40 dark:text-green-100';
+      return 'border-green-200 bg-green-50 text-green-900 dark:border-green-800 dark:bg-green-950/40 dark:text-green-100';
   }
 }
 
@@ -237,7 +237,7 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
                   </svg>
                 </div>
                 <div>
-                  <h4 class="text-base font-semibold text-green-900/25 dark:text-green-100">
+                  <h4 class="text-base font-semibold text-green-900 dark:text-green-100">
                     {guide()!.headerTitle}
                   </h4>
                   <p class="text-xs text-green-700 dark:text-green-300">{guide()!.headerSummary}</p>

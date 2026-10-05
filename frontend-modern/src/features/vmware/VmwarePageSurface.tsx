@@ -120,7 +120,7 @@ function VmwareInventoryCompletenessNotice(props: {
   return (
     <Show when={props.error || degradedSources().length > 0}>
       <div
-        class="rounded-xs border border-amber-300 bg-amber-50/70 px-3 py-2.5 text-sm text-amber-950/25 dark:border-amber-900/70 dark:bg-amber-950/20 dark:text-amber-100"
+        class="rounded-xs border border-amber-300 bg-amber-50/70 px-3 py-2.5 text-sm text-amber-950 dark:border-amber-900/70 dark:bg-amber-950/20 dark:text-amber-100"
         data-testid="vmware-inventory-completeness-notice"
       >
         <div class="flex items-start gap-2">

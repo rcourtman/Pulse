@@ -3526,9 +3526,9 @@ describe('shared primitive guardrails', () => {
           path: 'src/components/Settings/InfrastructureInstallerSection.tsx',
           patterns: expect.arrayContaining([
             'inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700',
-            'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 transition-colors hover:bg-emerald-100',
-            'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100',
-            'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100',
+            'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100',
+            'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
+            'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
           ]),
         }),
         expect.objectContaining({
@@ -3784,7 +3784,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(settingsSuccessOutlineActionGuard?.canonical?.export).toBe('getButtonClass');
     expect(settingsSuccessOutlineActionGuard?.allPatterns).toEqual([
-      'rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25',
+      'rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900',
     ]);
     expect(settingsSuccessOutlineActionGuard?.scopes).toEqual([
       'src/components/Settings',
@@ -3800,7 +3800,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(settingsSuccessGhostActionGuard?.canonical?.export).toBe('getButtonClass');
     expect(settingsSuccessGhostActionGuard?.allPatterns).toEqual([
-      'rounded-md px-3 py-2 text-sm font-medium text-emerald-900/25',
+      'rounded-md px-3 py-2 text-sm font-medium text-emerald-900',
     ]);
     expect(settingsSuccessGhostActionGuard?.scopes).toEqual([
       'src/components/Settings',
@@ -4088,12 +4088,12 @@ describe('shared primitive guardrails', () => {
           patterns: expect.arrayContaining([
             'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted',
             'shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors',
-            'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
+            'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
             'rounded-sm p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900/25 dark:hover:text-blue-300',
             'order-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-0',
-            'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25',
-            'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:text-amber-200 dark:hover:bg-amber-900/25',
-            'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 dark:text-blue-200 dark:hover:bg-blue-900/60',
+            'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25',
+            'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900/25',
+            'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60',
             'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-xs transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45',
             'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
           ]),
@@ -4101,7 +4101,7 @@ describe('shared primitive guardrails', () => {
         expect.objectContaining({
           path: 'src/components/AI/Chat/MessageItem.tsx',
           patterns: expect.arrayContaining([
-            'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
+            'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
           ]),
         }),
         expect.objectContaining({
@@ -4156,7 +4156,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(aiChatMessageQueuedActionGuard?.canonical?.export).toBe('ActionIconButton');
     expect(aiChatMessageQueuedActionGuard?.allPatterns).toEqual([
-      'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
+      'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
     ]);
     expect(aiChatMessageQueuedActionGuard?.scopes).toEqual([
       'src/components/AI/Chat/MessageItem.tsx',
@@ -4185,7 +4185,7 @@ describe('shared primitive guardrails', () => {
       'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content',
     ]);
     expect(aiChatActionIconAccentGuard?.allPatterns).toEqual([
-      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25',
+      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950',
     ]);
     expect(aiChatActionIconPrimarySendGuard?.allPatterns).toEqual([
       'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-xs transition-colors hover:bg-blue-700',
@@ -4373,12 +4373,12 @@ describe('shared primitive guardrails', () => {
     for (const retiredActionIconShell of [
       'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted',
       'shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors',
-      'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
+      'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
       'rounded-sm p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900/25 dark:hover:text-blue-300',
       'order-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-0',
-      'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25',
-      'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:text-amber-200 dark:hover:bg-amber-900/25',
-      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 dark:text-blue-200 dark:hover:bg-blue-900/60',
+      'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25',
+      'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900/25',
+      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60',
       'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-xs transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45',
       'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
     ]) {
@@ -4401,7 +4401,7 @@ describe('shared primitive guardrails', () => {
       'ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-xs transition-opacity hover:text-base-content',
     );
     expect(messageItemSource).not.toContain(
-      'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
+      'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
     );
     expect(toolExecutionBlockSource).toContain('@/components/shared/Button');
     expect(toolExecutionBlockSource).toContain('CopyValueButton');
@@ -4510,13 +4510,13 @@ describe('shared primitive guardrails', () => {
       'inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700',
     );
     expect(infrastructureInstallerSectionSource).not.toContain(
-      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 transition-colors hover:bg-emerald-100',
+      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100',
     );
     expect(infrastructureInstallerSectionSource).not.toContain(
-      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100',
+      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
     );
     expect(infrastructureInstallerSectionSource).not.toContain(
-      'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100',
+      'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
     );
     expect(infrastructureInstallerSectionSource).not.toContain('absolute right-2 top-2');
     expect(infrastructureInstallerSectionSource).not.toContain('bg-surface-hover p-2');
@@ -5055,7 +5055,7 @@ describe('shared primitive guardrails', () => {
     ]) {
       expect(source).toContain('InlineNotice');
       expect(source).not.toContain('rounded-lg border border-amber-300 bg-amber-50');
-      expect(source).not.toContain('text-amber-900/25 underline-offset-2');
+      expect(source).not.toContain('text-amber-900 underline-offset-2');
     }
     expect(platformOutdatedAgentNoticeSource).toContain(
       "import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';",

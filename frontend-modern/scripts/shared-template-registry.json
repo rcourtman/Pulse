@@ -549,7 +549,7 @@
           "path": "src/components/Settings/DiscoverySettingsForm.tsx",
           "patterns": [
             "rounded-md border border-amber-200 bg-amber-50/80",
-            "text-amber-900/25 dark:text-amber-100"
+            "text-amber-900 dark:text-amber-100"
           ]
         }
       ],
@@ -644,14 +644,14 @@
           "path": "src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
           "patterns": [
             "rounded-lg border border-amber-300 bg-amber-50",
-            "text-amber-900/25 underline-offset-2"
+            "text-amber-900 underline-offset-2"
           ]
         },
         {
           "path": "src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx",
           "patterns": [
             "rounded-lg border border-amber-300 bg-amber-50",
-            "text-amber-900/25 underline-offset-2"
+            "text-amber-900 underline-offset-2"
           ]
         }
       ],
@@ -1283,9 +1283,9 @@
           "path": "src/components/Settings/InfrastructureInstallerSection.tsx",
           "patterns": [
             "inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700",
-            "inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 transition-colors hover:bg-emerald-100",
-            "inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100",
-            "inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100"
+            "inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100",
+            "inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100",
+            "inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100"
           ]
         },
         {
@@ -1432,12 +1432,12 @@
           "patterns": [
             "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted",
             "shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors",
-            "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60",
+            "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60",
             "rounded-sm p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900/25 dark:hover:text-blue-300",
             "order-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-0",
-            "flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25",
-            "flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:text-amber-200 dark:hover:bg-amber-900/25",
-            "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 dark:text-blue-200 dark:hover:bg-blue-900/60",
+            "flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25",
+            "flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900/25",
+            "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60",
             "flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-xs transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45",
             "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30"
           ]
@@ -1445,7 +1445,7 @@
         {
           "path": "src/components/AI/Chat/MessageItem.tsx",
           "patterns": [
-            "inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30"
+            "inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30"
           ]
         },
         {
@@ -3408,7 +3408,7 @@
       "scopes": ["src/components/AI/Chat/MessageItem.tsx"],
       "extensions": [".tsx"],
       "allPatterns": [
-        "inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30"
+        "inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30"
       ],
       "legacyReason": "Retired migration debt. AI Chat queued message icon actions belong to ActionIconButton.",
       "allowedPaths": [],
@@ -3457,7 +3457,7 @@
       "scopes": ["src/components/AI/Chat"],
       "extensions": [".tsx"],
       "allPatterns": [
-        "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25"
+        "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950"
       ],
       "legacyReason": "Retired migration debt. AI Chat accent icon actions belong to ActionIconButton.",
       "allowedPaths": [],
@@ -6103,7 +6103,7 @@
       "scopes": ["src/components/Settings", "src/features", "src/pages"],
       "extensions": [".tsx"],
       "allPatterns": [
-        "rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25"
+        "rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900"
       ],
       "legacyReason": "Retired migration debt. Positive outlined settings actions belong to the shared Button primitive family.",
       "allowedPaths": [],
@@ -6124,7 +6124,7 @@
       },
       "scopes": ["src/components/Settings", "src/features", "src/pages"],
       "extensions": [".tsx"],
-      "allPatterns": ["rounded-md px-3 py-2 text-sm font-medium text-emerald-900/25"],
+      "allPatterns": ["rounded-md px-3 py-2 text-sm font-medium text-emerald-900"],
       "legacyReason": "Retired migration debt. Positive ghost settings actions belong to the shared Button primitive family.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/Button.test.tsx"],

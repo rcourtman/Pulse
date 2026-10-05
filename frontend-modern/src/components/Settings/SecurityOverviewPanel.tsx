@@ -225,7 +225,7 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
                 <Shield class="w-5 h-5 text-blue-600 dark:text-blue-300" strokeWidth={2} />
               </div>
               <div class="min-w-0 flex-1">
-                <p class="text-sm font-semibold text-blue-900/25 dark:text-blue-100">
+                <p class="text-sm font-semibold text-blue-900 dark:text-blue-100">
                   Proxy Authentication Active
                 </p>
                 <p class="text-sm text-blue-700 dark:text-blue-300">

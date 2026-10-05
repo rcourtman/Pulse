@@ -65,7 +65,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
     minimumSeverity: `${fieldIdPrefix}-minimum-severity`,
   };
   const instructionBoxClass =
-    'mt-2 rounded-sm border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-900/25 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-200';
+    'mt-2 rounded-sm border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-900 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-200';
 
   return (
     <div class="space-y-4 text-sm overflow-hidden">
