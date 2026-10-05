@@ -249,7 +249,23 @@ func TestSSEBroadcaster_AddClientWritesCurrentStatusBeforeReturning(t *testing.T
 	broadcaster := NewSSEBroadcaster()
 	defer broadcaster.Close()
 
+	// The stage was broadcast before this client connects, so let it reach
+	// an existing client first. While a broadcast is still in flight the
+	// broadcast loop can queue it for the new client as well, and that
+	// client's writer goroutine would then write the recorder concurrently
+	// with the unsynchronized reads below.
+	earlier := &syncFlushWriter{}
+	if client := broadcaster.AddClient(earlier, "client-earlier"); client == nil {
+		t.Fatal("AddClient returned nil")
+	}
 	broadcaster.Broadcast(UpdateStatus{Status: "extracting", Progress: 40, Message: "Extracting update..."})
+	deadline := time.Now().Add(2 * time.Second)
+	for !strings.Contains(earlier.String(), `"status":"extracting"`) {
+		if time.Now().After(deadline) {
+			t.Fatalf("broadcast never reached the earlier client: %q", earlier.String())
+		}
+		time.Sleep(time.Millisecond)
+	}
 
 	w := &mockFlushWriter{ResponseRecorder: httptest.NewRecorder()}
 	if client := broadcaster.AddClient(w, "client-now"); client == nil {
