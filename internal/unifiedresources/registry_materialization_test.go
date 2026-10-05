@@ -63,8 +63,8 @@ func metadataOracleFixture() []Resource {
 		{ID: "k8s:node", Type: ResourceTypeK8sNode, Name: "node", LastSeen: now, Sources: []DataSource{SourceK8s}, Kubernetes: &K8sData{ClusterID: "cluster-lab"}},
 		{ID: "k8s:pod", Type: ResourceTypePod, Name: "pod", LastSeen: now, Sources: []DataSource{SourceK8s}, Kubernetes: &K8sData{ClusterID: "cluster-lab"}},
 		{ID: "k8s:deploy", Type: ResourceTypeK8sDeployment, Name: "deploy", LastSeen: now, Sources: []DataSource{SourceK8s}, Kubernetes: &K8sData{ClusterID: "cluster-lab"}},
-		{ID: "k8s:secret", Type: ResourceTypeK8sSecret, Name: "synthetic-secret-metadata", LastSeen: now, Sources: []DataSource{SourceK8s}},
-		{ID: "k8s:role", Type: ResourceTypeK8sRole, Name: "role", LastSeen: now, Sources: []DataSource{SourceK8s}},
+		{ID: "k8s:secret", Type: ResourceTypeK8sSecret, Name: "synthetic-secret-metadata", LastSeen: now, Sources: []DataSource{SourceK8s}, Kubernetes: &K8sData{ClusterID: "cluster-lab", SecretUID: "secret-lab"}},
+		{ID: "k8s:role", Type: ResourceTypeK8sRole, Name: "role", LastSeen: now, Sources: []DataSource{SourceK8s}, Kubernetes: &K8sData{ClusterID: "cluster-lab", RoleUID: "role-lab"}},
 		{ID: "tn:lab", Type: ResourceTypeAgent, Name: "nas", LastSeen: now, Sources: []DataSource{SourceTrueNAS}, TrueNAS: &TrueNASData{Hostname: "nas.example.test"}},
 		{ID: "vmware:lab", Type: ResourceTypeAgent, Name: "esxi", LastSeen: now, Sources: []DataSource{SourceVMware}, VMware: &VMwareData{ConnectionID: "vsphere-lab", ManagedObjectID: "host-1"}},
 		{ID: "disk:lab", Type: ResourceTypePhysicalDisk, Name: "disk", LastSeen: now, Sources: []DataSource{SourceAgent}, PhysicalDisk: &PhysicalDiskMeta{}},
@@ -188,5 +188,59 @@ func BenchmarkRegistryMetadataBulkReads(b *testing.B) {
 				}
 			})
 		}
+	}
+}
+
+// FreshRegistryMetadataListForTest exposes the independent clone oracle only
+// to external-package connected fixture tests, never production consumers.
+func FreshRegistryMetadataListForTest(rr *ResourceRegistry) []Resource {
+	return freshRegistryListForMetadataTest(rr)
+}
+
+func TestRegistryMaterializedMetadataViewsKeepFreshness(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(benchmarkVMState(1))
+	before := rr.VMs()[0]
+	if before.Status() != StatusOnline {
+		t.Fatalf("fresh VM status=%s", before.Status())
+	}
+	rr.MarkStale(time.Now().UTC().Add(24*time.Hour), nil)
+	after := rr.VMs()[0]
+	if after.r.SourceStatus[SourceProxmox].Status != "stale" || after.Status() == StatusOnline {
+		t.Fatal("stale marking left the typed view online")
+	}
+	if before.Status() != StatusOnline {
+		t.Fatal("stale marking mutated a retained detached view")
+	}
+	// A no-change stale pass must not throw away the already fresh view.
+	rr.MarkStale(time.Now().UTC().Add(24*time.Hour), nil)
+	if rr.VMs()[0] != after {
+		t.Fatal("unchanged staleness rebuilt the typed view")
+	}
+	rr.ingestRecord(SourceProxmox, "lab:node-1:100", Resource{Type: ResourceTypeVM, Name: "renamed-vm", Status: StatusOnline, LastSeen: time.Now().UTC(), Proxmox: &ProxmoxData{VMID: 100, NodeName: "node-1"}}, ResourceIdentity{}, false)
+	// No batch epilogue has run here; source mapping and typed view must already
+	// reflect the resource visible to List and point reads.
+	current := rr.VMs()[0]
+	if current.Status() != StatusOnline || current.Name() != "renamed-vm" {
+		t.Fatal("mid-batch record retained the previous typed view")
+	}
+	assertRegistryMetadataOracle(t, rr)
+}
+
+func TestRegistryMaterializedMetadataListKeepsViewsLazy(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(benchmarkVMState(1000))
+	rr.List()
+	if rr.cachedVMs != nil || !rr.viewsDirty {
+		t.Fatal("a List-only read built unnecessary typed copies")
+	}
+	rr.VMs()
+	if rr.canonicalMetadataDirty || rr.viewsDirty {
+		t.Fatal("views were not materialized from current canonical metadata")
+	}
+	before := rr.cachedVMs[0]
+	rr.List()
+	if rr.cachedVMs[0] != before {
+		t.Fatal("clean bulk read discarded detached typed views")
 	}
 }

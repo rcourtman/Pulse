@@ -15,6 +15,25 @@
 
 ## Purpose
 
+### Bulk resource reads do not repeatedly derive canonical metadata
+
+Registry List and typed-view copies materialize identity/scopes/policy once
+per observed mutation, then detach those blocks. Separate dirtiness lets List
+avoid constructing an unused estate-sized typed view. Mutation-time invalidation
+includes incremental batch records and stale-source transitions; no timestamp,
+last-update or generation alone is used to declare a broadcast unchanged.
+`cloneResource` retains arbitrary-input refresh semantics. Full inventory,
+policy, observation time and health/alert evaluation remain unchanged.
+
+The independent pre-change List oracle checks every resource field and wire
+content, and paired one/one-thousand-resource controls expose repeated canonical
+allocation work without wall-clock thresholds. Include dirty reads and typed
+rebuilds when measuring: a cold generation must still derive metadata, and
+moving that work into the registry is not proof that total ingest or broadcast
+CPU improved. Native #2199 CPU/RSS, trailing refresh/duplicate ingest identity,
+owner-set grouping, broadcast conversion and the sawtooth remain separate.
+
+
 ### Agent identity lookup cost follows identity-relevant inventory
 
 Report admission no longer clones/ingests twenty explicitly listed Kubernetes

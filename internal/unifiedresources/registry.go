@@ -108,6 +108,10 @@ type ResourceRegistry struct {
 	// Cached typed view indexes. Invalidated on ingest, rebuilt lazily on
 	// first access. Protected by mu — callers hold RLock to read, and the
 	// rebuild path upgrades to a write lock only when needed.
+	// Canonical metadata has its own dirty flag: List must not build every
+	// typed view just to refresh it. Both are invalidated at mutation time,
+	// including the intervals between records in a batch.
+	canonicalMetadataDirty bool
 	viewsDirty             bool
 	cachedVMs              []*VMView
 	cachedLXC              []*ContainerView
@@ -148,24 +152,42 @@ type agentNodeCandidate struct {
 	resource *Resource
 }
 
-// invalidateSourceTargetsLocked drops the inverse source-target index the
-// moment any bySource mapping mutates. Batch ingests release the registry
-// lock between records and only mark viewsDirty in their epilogue, so
-// without this a reader interleaving mid-batch would be served pre-batch
-// targets from the cache; dropping it sends those readers to the legacy
-// live scan, exactly the freshness the pre-index code had.
+// invalidateSourceTargetsLocked drops the inverse source-target index and
+// derived views at each mapping mutation. Batch ingests release the lock
+// between records, so invalidating only at their epilogue would leave an
+// interleaving bulk reader with pre-batch canonical metadata or typed views.
 func (rr *ResourceRegistry) invalidateSourceTargetsLocked() {
 	rr.cachedSourceTargets = nil
+	rr.invalidateViewsLocked()
+}
+
+// Caller holds rr.mu for writing. No timestamp or caller-supplied derived
+// metadata is evidence that a resource has survived a mutation unchanged.
+func (rr *ResourceRegistry) invalidateViewsLocked() {
+	rr.viewsDirty = true
+	rr.canonicalMetadataDirty = true
+}
+
+func (rr *ResourceRegistry) ensureCanonicalMetadataLocked() {
+	if !rr.canonicalMetadataDirty {
+		return
+	}
+	for _, resource := range rr.resources {
+		RefreshCanonicalMetadata(resource)
+	}
+	rr.canonicalIdentityIndex = nil
+	rr.canonicalMetadataDirty = false
 }
 
 // NewRegistry creates a new registry using the provided store for overrides.
 func NewRegistry(store ResourceStore) *ResourceRegistry {
 	rr := &ResourceRegistry{
-		resources:  make(map[string]*Resource),
-		bySource:   make(map[DataSource]map[string]string),
-		matcher:    NewIdentityMatcher(),
-		store:      store,
-		exclusions: make(map[string]struct{}),
+		resources:              make(map[string]*Resource),
+		bySource:               make(map[DataSource]map[string]string),
+		matcher:                NewIdentityMatcher(),
+		store:                  store,
+		exclusions:             make(map[string]struct{}),
+		canonicalMetadataDirty: true,
 	}
 
 	rr.bySource[SourceProxmox] = make(map[string]string)
@@ -577,7 +599,7 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 	rr.buildChildCounts()
 	rr.refreshCanonicalIdentitiesLocked()
 	rr.markStaleLocked(time.Now().UTC(), thresholds)
-	rr.viewsDirty = true
+	rr.invalidateViewsLocked()
 	rr.mu.Unlock()
 }
 
@@ -627,7 +649,7 @@ func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRec
 	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
 	rr.refreshCanonicalIdentitiesLocked()
-	rr.viewsDirty = true
+	rr.invalidateViewsLocked()
 	rr.mu.Unlock()
 }
 
@@ -658,6 +680,7 @@ func (rr *ResourceRegistry) retainSupersededCanonicalIDs(resourceID string, supe
 		ids = append(ids, supersededID)
 	}
 	resource.SupersededCanonicalIDs = uniqueTrimmed(ids...)
+	rr.invalidateViewsLocked()
 	rr.indexSupersededCanonicalIDsLocked(resourceID, resource.SupersededCanonicalIDs)
 }
 
@@ -791,7 +814,7 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 		rr.canonicalIdentityIndex = nil
 		rr.resources[resource.ID] = resource
 		rr.matcher.Add(resource.ID, resource.Identity)
-		rr.viewsDirty = true
+		rr.invalidateViewsLocked()
 		rr.mu.Unlock()
 
 		seededIDs = append(seededIDs, resource.ID)
@@ -812,7 +835,7 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 	rr.buildChildCounts()
 	rr.refreshCanonicalIdentitiesLocked()
 	rr.markStaleLocked(time.Now().UTC(), thresholds)
-	rr.viewsDirty = true
+	rr.invalidateViewsLocked()
 	rr.mu.Unlock()
 }
 
@@ -1293,16 +1316,30 @@ func seededVMwareSourceID(resource *Resource) string {
 	return strings.Join(parts, ":")
 }
 
-// List returns all resources.
+// List returns detached resources with current canonical metadata. A dirty
+// generation derives metadata once under the write lock; clean readers share
+// the read lock and copy it without repeating identity/scope/policy derivation.
+// The typed views remain lazy, so a List-only consumer pays for no extra copy.
 func (rr *ResourceRegistry) List() []Resource {
-	rr.mu.RLock()
-	defer rr.mu.RUnlock()
-	out := make([]Resource, 0, len(rr.resources))
-	for _, r := range rr.resources {
-		out = append(out, cloneResource(r))
+	for {
+		rr.mu.RLock()
+		if rr.canonicalMetadataDirty {
+			rr.mu.RUnlock()
+			rr.mu.Lock()
+			rr.ensureCanonicalMetadataLocked()
+			rr.mu.Unlock()
+			// A mutation can occur after the lock is released. Check again
+			// rather than copy a generation that is no longer materialized.
+			continue
+		}
+		out := make([]Resource, 0, len(rr.resources))
+		for _, r := range rr.resources {
+			out = append(out, cloneMaterializedResource(r))
+		}
+		rr.mu.RUnlock()
+		sortResourcesByName(out)
+		return out
 	}
-	sortResourcesByName(out)
-	return out
 }
 
 // ListForPresentation returns resources in the canonical API/broadcast
@@ -1693,7 +1730,9 @@ func sourceSightingStatus(lastSeen time.Time) string {
 func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSource]time.Duration) {
 	thresholds = effectiveStaleThresholds(thresholds)
 
+	changed := false
 	for _, resource := range rr.resources {
+		previousStatus := resource.Status
 		staleFound := false
 		for source, status := range resource.SourceStatus {
 			threshold, ok := thresholds[source]
@@ -1709,6 +1748,7 @@ func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSo
 				continue
 			}
 			if now.Sub(status.LastSeen) > threshold {
+				changed = changed || status.Status != "stale"
 				status.Status = "stale"
 				resource.SourceStatus[source] = status
 				staleFound = true
@@ -1722,6 +1762,10 @@ func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSo
 				resource.Status = StatusWarning
 			}
 		}
+		changed = changed || resource.Status != previousStatus
+	}
+	if changed {
+		rr.invalidateViewsLocked()
 	}
 }
 
@@ -2171,6 +2215,7 @@ func (rr *ResourceRegistry) refreshDockerNetworkAttachmentRelationships(host mod
 
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
+	rr.invalidateViewsLocked()
 
 	dockerSource := rr.bySource[SourceDocker]
 	networkIDByName := make(map[string]string, len(host.Networks))
@@ -5803,6 +5848,7 @@ func readCleanViewCache[T any](rr *ResourceRegistry, fn func() T) (T, bool) {
 // rebuildViews recomputes all cached view slices from the current resource map.
 // Caller must hold rr.mu for writing.
 func (rr *ResourceRegistry) rebuildViews() {
+	rr.ensureCanonicalMetadataLocked()
 	rr.cachedVMs = nil
 	rr.cachedLXC = nil
 	rr.cachedNodes = nil
@@ -5827,7 +5873,7 @@ func (rr *ResourceRegistry) rebuildViews() {
 	rr.cachedSourceTargets = sourceTargetsIndex
 
 	for _, r := range rr.resources {
-		viewResource := cloneResourcePtr(r)
+		viewResource := cloneMaterializedResourcePtr(r)
 		viewResource.MetricsTarget = rr.metricsTargetFromSourceTargets(r, sourceTargetsIndex[r.ID])
 		switch r.Type {
 		case ResourceTypeVM:
