@@ -8119,6 +8119,15 @@ kept running on the Proxmox host). Three coupled guarantees:
    healthy even when the original waiter has gone, and reconnect/replay
    returns that exact receipt without a second mutation.
 
+The cancellation/reconnect integration fixture must not equate published
+registration with a ready runner. Each new client completes its real activated
+health write and a read-only receipt-query round trip before the fixture sends
+a mutation. A controlled failed-first activation proves this barrier across
+reconnect; the existing three-second readiness/start limits are unchanged.
+Runner and dispatch cleanup is installed before assertions and precedes test
+server shutdown, including failed starts. These are proof-fixture requirements,
+not changes to production admission, cancellation or replay authority.
+
 Proofs: `internal/agentexec/server_websocket_test.go`
 (`TestExecuteCommand_ExpiredContextNeverDispatches`,
 `TestExecuteCommand_AbandonedCommandSendsCancel`),
@@ -8127,7 +8136,8 @@ Proofs: `internal/agentexec/server_websocket_test.go`
 `TestTypedOperation_TimeoutSendsCancelAndExpiredContextNeverDispatches`,
 `TestTypedOperation_SocketDropAfterSendUnblocksDispatch`),
 `internal/hostagent/operation_receipt_websocket_integration_test.go`
-(`TestRealServerActionRunnerCancellationPersistsAndReplaysProxmoxReceiptAfterReconnect`),
+(`TestRealServerActionRunnerCancellationPersistsAndReplaysProxmoxReceiptAfterReconnect`,
+`TestReceiptRunnerReadinessWaitsForActivationReconnect`),
 `internal/hostagent/command_client_test.go`
 (`TestCommandClient_handleCancelCommand_CancelsRegisteredRequest`,
 `TestCommandClient_handleCancelCommand_UnknownRequestIsNoOp`,
