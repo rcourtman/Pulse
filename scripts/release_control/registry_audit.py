@@ -27,15 +27,23 @@ REGISTRY_PATH = DEFAULT_CONTROL_PLANE["registry_path"]
 REGISTRY_SCHEMA_PATH = DEFAULT_CONTROL_PLANE["registry_schema_path"]
 LANE_RE = re.compile(r"^L[0-9]+$")
 # Every subsystem requires explicit path-policy coverage, so the default
-# policy is never consulted and a path policy's own proof routes are the whole
-# requirement. allow_same_subsystem_tests would widen a policy to every test
-# the subsystem owns (any internal/ai test for ai-runtime's mutation-registry
-# policy), and its reach would grow with ownership rather than with the
-# policy. The commit guards ignored the flag from the v6 import until it was
-# retired here, so false is the behaviour every commit has been held to.
+# verification policy is never consulted and a path policy's own proof routes
+# are the whole requirement. Proofs listed on the default count for nothing,
+# though authors kept adding them there as if they did; nearly all were
+# already on a path policy. allow_same_subsystem_tests would widen a policy to
+# every test the subsystem owns (any internal/ai test for ai-runtime's
+# mutation-registry policy), and its reach would grow with ownership rather
+# than with the policy. The commit guards ignored the flag from the v6 import
+# until it was retired here, so false is the behaviour every commit has been
+# held to.
 SAME_SUBSYSTEM_TESTS_RETIRED = (
     "it would accept any test the subsystem owns as proof for this policy; "
     "list the accepted proofs in test_prefixes or exact_files instead"
+)
+DEFAULT_PROOFS_RETIRED = (
+    "explicit path-policy coverage never consults the subsystem default, so "
+    "proofs listed here count for nothing; list them on the path policy whose "
+    "runtime files they prove"
 )
 
 
@@ -363,47 +371,14 @@ def audit_registry_payload(
         elif verification.get("require_explicit_path_policy_coverage") is not True:
             errors.append(f"{context}.verification.require_explicit_path_policy_coverage must be true")
 
-        test_prefixes = verification.get("test_prefixes")
-        if not isinstance(test_prefixes, list):
-            errors.append(f"{context}.verification.test_prefixes must be a list")
-            test_prefixes = []
-        else:
-            if len(test_prefixes) != len(set(test_prefixes)):
-                errors.append(f"{context}.verification.test_prefixes must not contain duplicates")
-            if test_prefixes != sorted_casefold(test_prefixes):
-                errors.append(f"{context}.verification.test_prefixes must be sorted lexicographically")
-        for prefix_index, prefix in enumerate(test_prefixes):
-            if not isinstance(prefix, str) or not prefix.strip():
-                errors.append(f"{context}.verification.test_prefixes[{prefix_index}] must be a non-empty string")
-                continue
-            validate_prefix(
-                prefix,
-                context=f"{context}.verification.test_prefixes[{prefix_index}]",
-                errors=errors,
-                tracked_files=tracked_files,
-                **path_validation_scope,
-            )
-
-        exact_files = verification.get("exact_files")
-        if not isinstance(exact_files, list):
-            errors.append(f"{context}.verification.exact_files must be a list")
-            exact_files = []
-        else:
-            if len(exact_files) != len(set(exact_files)):
-                errors.append(f"{context}.verification.exact_files must not contain duplicates")
-            if exact_files != sorted_casefold(exact_files):
-                errors.append(f"{context}.verification.exact_files must be sorted lexicographically")
-        for file_index, path in enumerate(exact_files):
-            if not isinstance(path, str) or not path.strip():
-                errors.append(f"{context}.verification.exact_files[{file_index}] must be a non-empty string")
-                continue
-            validate_path_reference(
-                path,
-                context=f"{context}.verification.exact_files[{file_index}]",
-                errors=errors,
-                tracked_files=tracked_files,
-                **path_validation_scope,
-            )
+        for field in ("test_prefixes", "exact_files"):
+            default_proofs = verification.get(field)
+            if not isinstance(default_proofs, list):
+                errors.append(f"{context}.verification.{field} must be a list")
+            elif default_proofs:
+                errors.append(
+                    f"{context}.verification.{field} must be empty: " + DEFAULT_PROOFS_RETIRED
+                )
 
         path_policies = verification.get("path_policies")
         if not isinstance(path_policies, list):
