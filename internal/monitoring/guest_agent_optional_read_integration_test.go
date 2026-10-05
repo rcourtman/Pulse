@@ -117,6 +117,7 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 				m.rateTracker = NewRateTracker()
 				m.guestMetadataLimiter = make(map[string]time.Time)
 				registry := unifiedresources.NewRegistry(nil)
+				m.resourceStore = unifiedresources.NewMonitorAdapter(registry)
 				res := proxmox.ClusterResource{Type: "qemu", Node: "node", Name: "guest", VMID: 105, Status: "running", MaxMem: 8 * mib, Mem: 8 * mib, MaxDisk: 1000 * mib, CPU: .1}
 				id := makeGuestID("optional", "node", 105)
 				var previous *models.VM
