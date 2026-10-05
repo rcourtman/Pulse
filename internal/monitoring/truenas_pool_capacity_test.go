@@ -121,6 +121,7 @@ func TestTrueNASPoolCapacityCollectionHistory(t *testing.T) {
 			records = append(records, provider.Records()...)
 		}
 		adapter.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{unifiedresources.SourceTrueNAS: records})
+		hostAChecked := false
 		for _, resource := range adapter.GetAll() {
 			if resource.Storage != nil && resource.Name == "tank" {
 				if resource.ParentID == nil {
@@ -132,10 +133,14 @@ func TestTrueNASPoolCapacityCollectionHistory(t *testing.T) {
 				}
 			}
 			if resource.Type == unifiedresources.ResourceTypeAgent && resource.ID == hostA {
+				hostAChecked = true
 				if (resource.Metrics.Disk != nil) != (step == 0 || step == 3) {
 					t.Fatal("known boot pool was presented as whole-host capacity")
 				}
 			}
+		}
+		if !hostAChecked || targets[hostA] == "" || targets[hostB] == "" || targets[hostA] == targets[hostB] {
+			t.Fatal("host availability and two independent pool identities were not exercised")
 		}
 		monitor.syncUnifiedStorageMetrics(adapter)
 	}
