@@ -5,7 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { chromium, webkit } = require('playwright');
 const root = '/workspace/frontend-modern';
-const output = '/workspace/tmp/docker-composed-20261005-complete';
+const output = '/workspace/tmp/docker-composed-20261005-controls';
 const origin = 'http://127.0.0.1:5341';
 const runtimePath = 'frontend-modern/src/features/docker/DockerContainersTable.tsx';
 const expectedHash = '85753788c2e982dcedbab9aed99ff74a1f1623ec35bc7886ab25661e86de2dd9';
@@ -223,6 +223,7 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
         'Missing host context removes stale/status claims, keeps container engine fallback, fractions and scale guidance.',
       );
       await activate(page.getByRole('button', { name: 'Restore host context', exact: true }));
+      if (width < 768) await activate(page.getByRole('button', { name: 'Filters', exact: true }));
       await activate(page.getByRole('button', { name: 'View', exact: true }));
       await activate(page.getByRole('button', { name: 'List', exact: true }));
       await page.keyboard.press('Escape');
