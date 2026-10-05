@@ -151,7 +151,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
             <Shield size={22} />
           </div>
           <div>
-            <h3 class="text-base font-semibold text-amber-900/25 dark:text-amber-100 mb-1.5">
+            <h3 class="text-base font-semibold text-amber-900 dark:text-amber-100 mb-1.5">
               {AUDIT_WEBHOOK_SECURITY_NOTE_TITLE}
             </h3>
             <p class="text-sm text-amber-800 dark:text-amber-200 leading-relaxed">

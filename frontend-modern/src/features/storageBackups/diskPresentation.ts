@@ -90,7 +90,7 @@ export const PHYSICAL_DISK_EMPTY_FALLBACK_TEXT_CLASS = 'text-sm text-muted';
 export const PHYSICAL_DISK_EMPTY_REQUIREMENTS_CLASS =
   'mt-4 rounded-md border border-blue-200 bg-blue-50 p-4 text-left dark:border-blue-800 dark:bg-blue-900/25';
 export const PHYSICAL_DISK_EMPTY_REQUIREMENTS_TITLE_CLASS =
-  'mb-2 text-sm font-medium text-blue-900/25 dark:text-blue-100';
+  'mb-2 text-sm font-medium text-blue-900 dark:text-blue-100';
 export const PHYSICAL_DISK_EMPTY_REQUIREMENTS_LIST_CLASS =
   'ml-4 list-decimal space-y-1.5 text-xs text-blue-800 dark:text-blue-200';
 export const PHYSICAL_DISK_EMPTY_REQUIREMENTS_NOTE_CLASS =

@@ -176,7 +176,7 @@ export const DataHandlingPanel: Component = () => {
           <div
             role="alert"
             aria-live="polite"
-            class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900/25 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-100"
+            class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-100"
           >
             <div class="flex items-start gap-3">
               <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />

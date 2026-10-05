@@ -162,7 +162,7 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
           {(presentation) => (
             <div
               data-testid="resource-apt-action-next-step"
-              class="rounded-sm border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-900/25 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
+              class="rounded-sm border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
             >
               <span class="font-medium">Next: </span>
               {presentation().nextStep}

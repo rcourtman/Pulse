@@ -228,7 +228,7 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div class="flex flex-wrap items-center gap-2">
-                <h3 class="text-sm font-semibold text-blue-950/25 dark:text-blue-100">
+                <h3 class="text-sm font-semibold text-blue-950 dark:text-blue-100">
                   Suggested service verification
                 </h3>
                 <span class="rounded-full border border-blue-300 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-700 dark:border-blue-700 dark:text-blue-300">
@@ -344,7 +344,7 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
             <Show when={duplicate()}>
               {(match) => (
                 <div
-                  class="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
+                  class="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
                   role="status"
                 >
                   {match().kind === 'endpoint'
@@ -359,7 +359,7 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
               </div>
             </Show>
             <Show when={targets.error}>
-              <div class="mt-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-900/25 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
+              <div class="mt-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
                 <p role="alert">
                   Pulse could not check for existing active checks. Creating a check is unavailable
                   until that safety check succeeds.
@@ -380,8 +380,8 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
                 <div
                   class={`mt-3 rounded-md border px-3 py-2 text-xs ${
                     result().success
-                      ? 'border-emerald-300 bg-emerald-50 text-emerald-900/25 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200'
-                      : 'border-red-300 bg-red-50 text-red-900/25 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200'
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200'
+                      : 'border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200'
                   }`}
                   role={result().success ? 'status' : 'alert'}
                 >
@@ -392,7 +392,7 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
             <Show when={createdTarget()}>
               {(created) => (
                 <div
-                  class="mt-3 flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-900/25 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200"
+                  class="mt-3 flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200"
                   role="status"
                 >
                   <CheckCircleIcon class="h-4 w-4" aria-hidden="true" />
@@ -478,7 +478,7 @@ export const AvailabilityProposalCard: Component<AvailabilityProposalCardProps> 
                 </Show>
                 <Show when={machineDiscoveries.error}>
                   <p
-                    class="rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-900/25 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200"
+                    class="rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200"
                     role="alert"
                   >
                     Pulse could not load this machine’s assurance suggestions. Close this review and

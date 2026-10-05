@@ -566,7 +566,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
           <div
             class={`min-w-0 px-4 py-2.5 rounded-md rounded-br-sm shadow-xs ${
               isQueuedUserMessage()
-                ? 'border border-blue-200 bg-blue-50 text-blue-950/25 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100'
+                ? 'border border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100'
                 : 'bg-blue-600 text-white'
             }`}
           >
