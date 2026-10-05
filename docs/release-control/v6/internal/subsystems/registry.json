@@ -6947,7 +6947,8 @@
         "frontend-modern/src/utils/patrolRuntimeActions.ts",
         "frontend-modern/src/utils/patrolRuntimePresentation.ts",
         "frontend-modern/src/utils/patrolSummaryPresentation.ts",
-        "frontend-modern/src/utils/remediationPresentation.ts"
+        "frontend-modern/src/utils/remediationPresentation.ts",
+        "frontend-modern/src/features/patrol/PatrolSuppressionRules.tsx"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -7097,6 +7098,19 @@
               "frontend-modern/src/utils/__tests__/patrolFormat.test.ts",
               "frontend-modern/src/utils/__tests__/patrolRunPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/patrolSummaryPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "patrol-manual-rule-reversal",
+            "label": "Patrol manual-rule reversal proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/features/patrol/PatrolSuppressionRules.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/features/patrol/__tests__/PatrolSuppressionRules.test.tsx"
             ]
           }
         ],

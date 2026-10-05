@@ -143,6 +143,15 @@ describe('PatrolIntelligenceSurface finding handoff', () => {
     await vi.waitFor(() => expect(window.location.pathname).toBe('/patrol'));
   });
 
+  it('keeps manual-rule reversal reachable in Activity even with the findings panel closed', () => {
+    window.history.replaceState(null, '', '/patrol/activity');
+    renderSurface();
+    const rules = document.getElementById('patrol-suppression-rules');
+    expect(rules?.querySelector('summary')).toHaveTextContent('Suppression rules');
+    expect(rules).not.toHaveAttribute('open');
+    expect(document.getElementById('patrol-operational-records')).not.toHaveAttribute('open');
+  });
+
   it('lands the finding handoff on the findings panel without a scroll to the top', async () => {
     const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
     const scrollIntoView = vi.fn();

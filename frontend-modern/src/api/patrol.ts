@@ -523,6 +523,85 @@ export async function reopenFinding(
   });
 }
 
+export interface PatrolSuppressionRule {
+  id: string;
+  resource_id?: string;
+  resource_name?: string;
+  category?: string;
+  description: string;
+  created_at: string;
+  created_from?: string;
+  finding_id?: string;
+  dismissed_reason?: string;
+}
+
+export function isManualSuppressionRule(rule: PatrolSuppressionRule): boolean {
+  return (
+    rule.created_from === 'manual' &&
+    rule.id.startsWith('rule_') &&
+    !rule.finding_id &&
+    !rule.dismissed_reason
+  );
+}
+
+/** Read the existing collection without silently falling back to another tenant. */
+export async function getSuppressionRules(
+  orgID: string,
+  signal?: AbortSignal,
+): Promise<PatrolSuppressionRule[]> {
+  const data = await apiFetchJSON<unknown>('/api/ai/patrol/suppressions', {
+    expectedOrgID: orgID,
+    retry: false,
+    signal,
+  });
+  // The existing Go store serialises an empty nil slice as null.
+  if (data === null) return [];
+  const ids = new Set<string>();
+  if (
+    !Array.isArray(data) ||
+    data.some((row) => {
+      if (!row || typeof row !== 'object') return true;
+      if (
+        typeof row.id !== 'string' ||
+        !row.id.trim() ||
+        ids.has(row.id) ||
+        typeof row.description !== 'string' ||
+        typeof row.created_at !== 'string' ||
+        [
+          'resource_id',
+          'resource_name',
+          'category',
+          'created_from',
+          'finding_id',
+          'dismissed_reason',
+        ].some((key) => row[key] !== undefined && typeof row[key] !== 'string')
+      )
+        return true;
+      ids.add(row.id);
+      return false;
+    })
+  ) {
+    throw new Error('Patrol returned an invalid rule list. Reload before making changes.');
+  }
+  return data as PatrolSuppressionRule[];
+}
+
+/** Removing a manual rule never calls the finding-specific Reopen path. */
+export async function deleteManualSuppressionRule(
+  rule: PatrolSuppressionRule,
+  orgID: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (!isManualSuppressionRule(rule)) {
+    throw new Error('Only manually created rules can be removed here.');
+  }
+  const result = await apiFetchJSON<{ success: boolean }>(
+    `/api/ai/patrol/suppressions/${encodeURIComponent(rule.id)}`,
+    { method: 'DELETE', expectedOrgID: orgID, retry: false, signal },
+  );
+  if (result?.success !== true) throw new Error('Rule removal was not confirmed.');
+}
+
 /**
  * Create a permanent suppression rule from a finding.
  *

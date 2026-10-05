@@ -37,6 +37,7 @@ import {
   unsuppressPatrolAttention,
 } from '@/api/patrolAttention';
 import { createSuppressionRuleFromFinding } from '@/api/patrol';
+import { PATROL_SUPPRESSION_RULES_PATH } from './PatrolSuppressionRules';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import { Button, ButtonLink, CopyValueButton } from '@/components/shared/Button';
 import { FormSelect } from '@/components/shared/FormSelect';
@@ -1660,6 +1661,14 @@ function AttentionLastingDecisions(props: {
             {error()}
           </p>
         </Show>
+        <ButtonLink
+          href={PATROL_SUPPRESSION_RULES_PATH}
+          variant="ghost"
+          size="sm"
+          class="mt-3 min-h-11"
+        >
+          Manage suppression rules
+        </ButtonLink>
       </div>
     </DetailSection>
   );

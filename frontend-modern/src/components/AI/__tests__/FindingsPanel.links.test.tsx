@@ -618,6 +618,19 @@ describe('FindingsPanel resource links', () => {
     expect(screen.getByRole('button', { name: 'Dismiss: Later' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create rule from this' })).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole('button', { name: 'Create rule from this' }));
+    expect(
+      screen.getByRole('textbox', { name: 'Reason for suppression rule' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Manage suppression rules' })).toHaveAttribute(
+      'href',
+      '/patrol/activity#patrol-suppression-rules',
+    );
+    expect(
+      screen.getByText(/Reopen finding only undoes an individual dismissal/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/ }));
+
     fireEvent.click(options);
     expect(options).toHaveAttribute('aria-expanded', 'false');
     expect(

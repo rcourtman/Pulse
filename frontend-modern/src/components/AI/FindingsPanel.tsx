@@ -13,6 +13,8 @@
 import { Component, createSignal, createEffect, Show, For, createMemo } from 'solid-js';
 import { useLocation } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
+import { ButtonLink } from '@/components/shared/Button';
+import { PATROL_SUPPRESSION_RULES_PATH } from '@/features/patrol/PatrolSuppressionRules';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
@@ -1943,12 +1945,21 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </div>
             <p class="text-[11px] text-muted mb-1.5">
               Future findings matching this resource and category will be auto-dismissed by Patrol
-              without surfacing as new findings. You can list or remove rules later from the
-              suppressions management surface.
+              without surfacing as new findings. Remove this permanent rule under Activity →
+              Suppression rules; Reopen finding only undoes an individual dismissal.
             </p>
+            <ButtonLink
+              href={PATROL_SUPPRESSION_RULES_PATH}
+              variant="ghost"
+              size="sm"
+              class="min-h-11"
+            >
+              Manage suppression rules
+            </ButtonLink>
             <textarea
               class="w-full text-xs px-2 py-1.5 rounded-sm border border-border bg-surface text-base-content resize-none focus:outline-hidden focus:ring-1 focus:ring-blue-400"
               rows={2}
+              aria-label="Reason for suppression rule"
               value={createRuleDescription()}
               onInput={(e) => setCreateRuleDescription(e.currentTarget.value)}
               placeholder="Why this rule? (required — e.g. 'delly backups are intentionally off-site, ignore failures')"

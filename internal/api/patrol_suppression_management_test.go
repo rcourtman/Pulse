@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -22,6 +23,14 @@ func TestPatrolSuppressionManagementBrowserSession(t *testing.T) {
 		t.Fatal("expected Patrol service")
 	}
 	store := patrol.GetFindings()
+	store.Add(&ai.Finding{ID: "retained-history", ResourceID: "vm-1", ResourceName: "Test VM", Category: ai.FindingCategoryBackup, Title: "Historical backup finding", Severity: ai.FindingSeverityWarning})
+	if !store.Dismiss("retained-history", "expected_behavior", "Keep this operator decision") {
+		t.Fatal("expected an existing dismissed finding")
+	}
+	historyBefore, err := json.Marshal(store.Get("retained-history"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	selected := store.AddSuppressionRule("vm-1", "Test VM", ai.FindingCategoryBackup, "Test reason")
 	other := store.AddSuppressionRule("vm-2", "Other VM", ai.FindingCategoryCapacity, "Keep this rule")
 	router.mux.HandleFunc("/api/ai/patrol/suppressions", RequireAuth(router.config, RequireScope(config.ScopeAIExecute, handler.HandleGetSuppressionRules)))
@@ -57,10 +66,16 @@ func TestPatrolSuppressionManagementBrowserSession(t *testing.T) {
 	if err := json.Unmarshal(list.Body.Bytes(), &rules); err != nil {
 		t.Fatal(err)
 	}
-	if len(rules) != 2 {
-		t.Fatalf("listed %d rules, want 2", len(rules))
+	if len(rules) != 3 {
+		t.Fatalf("listed %d rules, want 2 manual rules and a finding dismissal", len(rules))
 	}
 	for _, rule := range rules {
+		if rule.ID == "finding_retained-history" {
+			if rule.CreatedFrom != "dismissed" || rule.FindingID != "retained-history" {
+				t.Fatal("finding dismissal must stay distinct from manual rules")
+			}
+			continue
+		}
 		if rule.CreatedFrom != "manual" {
 			t.Fatalf("created_from = %q, want manual", rule.CreatedFrom)
 		}
@@ -77,8 +92,8 @@ func TestPatrolSuppressionManagementBrowserSession(t *testing.T) {
 	path := "/api/ai/patrol/suppressions/" + selected.ID
 	for _, token := range []string{"", "invalid-csrf"} {
 		rec := request(http.MethodDelete, path, token, true)
-		if rec.Code != http.StatusForbidden || len(store.GetSuppressionRules()) != 2 {
-			t.Fatalf("invalid-CSRF deletion status = %d; both rules must remain", rec.Code)
+		if rec.Code != http.StatusForbidden || len(store.GetSuppressionRules()) != 3 {
+			t.Fatalf("invalid-CSRF deletion status = %d; both rules and dismissal must remain", rec.Code)
 		}
 	}
 	removed := request(http.MethodDelete, path, csrf, true)
@@ -98,11 +113,20 @@ func TestPatrolSuppressionManagementBrowserSession(t *testing.T) {
 	if err := json.Unmarshal(readback.Body.Bytes(), &rules); err != nil {
 		t.Fatal(err)
 	}
-	if len(rules) != 1 || rules[0].ID != other.ID {
-		t.Fatal("readback must retain only the unselected rule")
+	if len(rules) != 2 {
+		t.Fatal("readback must retain the unselected rule and finding dismissal")
+	}
+	for _, rule := range rules {
+		if rule.ID != other.ID && rule.ID != "finding_retained-history" {
+			t.Fatalf("unexpected remaining row %q", rule.ID)
+		}
+	}
+	historyAfter, err := json.Marshal(store.Get("retained-history"))
+	if err != nil || !bytes.Equal(historyBefore, historyAfter) {
+		t.Fatal("manual deletion must preserve the complete historical finding, note, dismissal and lifecycle")
 	}
 	notFound := request(http.MethodDelete, path, csrf, true)
-	if notFound.Code != http.StatusNotFound || len(store.GetSuppressionRules()) != 1 {
+	if notFound.Code != http.StatusNotFound || len(store.GetSuppressionRules()) != 2 {
 		t.Fatalf("already-removed deletion status = %d; remaining rule must survive", notFound.Code)
 	}
 }

@@ -21,6 +21,7 @@ import { PatrolAttentionWorkbench } from './PatrolAttentionWorkbench';
 import { PatrolObjectivesPanel } from './PatrolObjectivesPanel';
 import { PatrolRecentWorkPanel } from './PatrolRecentWorkPanel';
 import { PatrolWeeklyDigestCard } from './PatrolWeeklyDigestCard';
+import { PatrolSuppressionRules } from './PatrolSuppressionRules';
 import type { AttentionItem } from '@/api/patrolAttention';
 
 interface FindingResourceScope {
@@ -241,6 +242,8 @@ export function PatrolIntelligenceSurface() {
               </button>
             </div>
           </section>
+
+          <PatrolSuppressionRules openForLink={location.hash === '#patrol-suppression-rules'} />
 
           <details
             ref={findingsPanel}
