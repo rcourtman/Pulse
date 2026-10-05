@@ -8362,3 +8362,11 @@ regressions preserve their original missing-value and fallback obligations.
 drawer with synthetic APIs in Chromium/WebKit desktop and 390/320-pixel light
 and dark views. This is presentation acceptance, not native backup/QGA safety,
 provider outage attribution, installed recovery or release availability.
+
+### Threshold group headers carry a defaults line
+
+`CollapsibleSection` takes an optional `defaultsSummary` rendered under the
+title as a muted line (`data-thresholds-defaults-summary`) that wraps only
+between items on phones and truncates from `sm` up, and is hidden while
+`isGloballyDisabled` is set, where it would promise alerts that cannot fire. Callers pass the shared summary helper's output rather than
+composing per-section strings.

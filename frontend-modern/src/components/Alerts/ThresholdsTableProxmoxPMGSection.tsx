@@ -5,6 +5,26 @@ import { ResourceTable } from './ResourceTable';
 import { CollapsibleSection } from './Thresholds/sections/CollapsibleSection';
 import { formatMetricValue } from '@/features/alerts/thresholds/helpers';
 import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/thresholdsTableSectionProps';
+import { getAlertThresholdsDefaultsSummary } from '@/utils/alertThresholdsSectionPresentation';
+
+const PMG_THRESHOLD_TABLE_COLUMNS = [
+  'Queue Warn',
+  'Queue Crit',
+  'Deferred Warn',
+  'Deferred Crit',
+  'Hold Warn',
+  'Hold Crit',
+  'Oldest Warn (min)',
+  'Oldest Crit (min)',
+  'Spam Warn',
+  'Spam Crit',
+  'Virus Warn',
+  'Virus Crit',
+  'Growth Warn %',
+  'Growth Warn Min',
+  'Growth Crit %',
+  'Growth Crit Min',
+];
 
 export function ThresholdsTableProxmoxPMGSection(props: ThresholdsTableSectionProps) {
   const { state, tableProps } = props;
@@ -14,6 +34,10 @@ export function ThresholdsTableProxmoxPMGSection(props: ThresholdsTableSectionPr
       <CollapsibleSection
         id="pmg"
         title={state.sectionTitles.pmg}
+        defaultsSummary={getAlertThresholdsDefaultsSummary(
+          PMG_THRESHOLD_TABLE_COLUMNS,
+          state.pmgGlobalDefaults(),
+        )}
         resourceCount={state.pmgServersWithOverrides().length}
         collapsed={state.isCollapsed('pmg')}
         onToggle={() => state.toggleSection('pmg')}
@@ -26,24 +50,7 @@ export function ThresholdsTableProxmoxPMGSection(props: ThresholdsTableSectionPr
             title=""
             onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
             resources={state.pmgServersWithOverrides()}
-            columns={[
-              'Queue Warn',
-              'Queue Crit',
-              'Deferred Warn',
-              'Deferred Crit',
-              'Hold Warn',
-              'Hold Crit',
-              'Oldest Warn (min)',
-              'Oldest Crit (min)',
-              'Spam Warn',
-              'Spam Crit',
-              'Virus Warn',
-              'Virus Crit',
-              'Growth Warn %',
-              'Growth Warn Min',
-              'Growth Crit %',
-              'Growth Crit Min',
-            ]}
+            columns={PMG_THRESHOLD_TABLE_COLUMNS}
             activeAlerts={tableProps.activeAlerts}
             emptyMessage={state.PMG_THRESHOLDS_FILTER_EMPTY_STATE}
             onEdit={state.startEditing}

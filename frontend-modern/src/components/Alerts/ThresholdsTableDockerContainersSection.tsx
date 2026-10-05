@@ -5,15 +5,46 @@ import { ResourceTable } from './ResourceTable';
 import { CollapsibleSection } from './Thresholds/sections/CollapsibleSection';
 import { formatMetricValue } from '@/features/alerts/thresholds/helpers';
 import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/thresholdsTableSectionProps';
+import {
+  getAlertThresholdsDefaultsSummary,
+  getDockerContainerRuleSummaryItems,
+} from '@/utils/alertThresholdsSectionPresentation';
+
+const DOCKER_CONTAINER_THRESHOLD_COLUMNS = [
+  'CPU %',
+  'Memory %',
+  'Disk %',
+  'Restart Count',
+  'Restart Window (s)',
+  'Memory Warn %',
+  'Memory Critical %',
+];
+
+// Restart and memory-limit columns are summarized as whole rules instead.
+const DOCKER_CONTAINER_METRIC_SUMMARY_COLUMNS = ['CPU %', 'Memory %', 'Disk %'];
 
 export function ThresholdsTableDockerContainersSection(props: ThresholdsTableSectionProps) {
   const { state, tableProps } = props;
+  const containerDefaults = () => ({
+    cpu: tableProps.dockerDefaults.cpu,
+    memory: tableProps.dockerDefaults.memory,
+    disk: tableProps.dockerDefaults.disk,
+    restartCount: tableProps.dockerDefaults.restartCount,
+    restartWindow: tableProps.dockerDefaults.restartWindow,
+    memoryWarnPct: tableProps.dockerDefaults.memoryWarnPct,
+    memoryCriticalPct: tableProps.dockerDefaults.memoryCriticalPct,
+  });
 
   return (
     <Show when={state.hasSection('dockerContainers')}>
       <CollapsibleSection
         id="dockerContainers"
         title={state.sectionTitles.dockerContainers}
+        defaultsSummary={getAlertThresholdsDefaultsSummary(
+          DOCKER_CONTAINER_METRIC_SUMMARY_COLUMNS,
+          containerDefaults(),
+          { ruleItems: getDockerContainerRuleSummaryItems(containerDefaults()) },
+        )}
         resourceCount={state.dockerContainersFlat().length}
         collapsed={state.isCollapsed('dockerContainers')}
         onToggle={() => state.toggleSection('dockerContainers')}
@@ -27,15 +58,7 @@ export function ThresholdsTableDockerContainersSection(props: ThresholdsTableSec
             onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
             groupedResources={state.dockerContainersGroupedByHost()}
             groupHeaderMeta={state.dockerHostGroupMeta()}
-            columns={[
-              'CPU %',
-              'Memory %',
-              'Disk %',
-              'Restart Count',
-              'Restart Window (s)',
-              'Memory Warn %',
-              'Memory Critical %',
-            ]}
+            columns={DOCKER_CONTAINER_THRESHOLD_COLUMNS}
             activeAlerts={tableProps.activeAlerts}
             emptyMessage={state.CONTAINERS_FILTER_EMPTY_STATE}
             onEdit={state.startEditing}
@@ -54,15 +77,7 @@ export function ThresholdsTableDockerContainersSection(props: ThresholdsTableSec
             }
             formatMetricValue={formatMetricValue}
             hasActiveAlert={state.hasActiveAlert}
-            globalDefaults={{
-              cpu: tableProps.dockerDefaults.cpu,
-              memory: tableProps.dockerDefaults.memory,
-              disk: tableProps.dockerDefaults.disk,
-              restartCount: tableProps.dockerDefaults.restartCount,
-              restartWindow: tableProps.dockerDefaults.restartWindow,
-              memoryWarnPct: tableProps.dockerDefaults.memoryWarnPct,
-              memoryCriticalPct: tableProps.dockerDefaults.memoryCriticalPct,
-            }}
+            globalDefaults={containerDefaults()}
             setGlobalDefaults={(value) => {
               const current = {
                 cpu: tableProps.dockerDefaults.cpu,

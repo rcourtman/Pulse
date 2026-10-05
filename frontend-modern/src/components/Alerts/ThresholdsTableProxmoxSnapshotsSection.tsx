@@ -8,6 +8,14 @@ import {
   reconcileWarningCriticalEdit,
 } from '@/features/alerts/thresholds/helpers';
 import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/thresholdsTableSectionProps';
+import { getAlertThresholdsDefaultsSummary } from '@/utils/alertThresholdsSectionPresentation';
+
+const SNAPSHOT_THRESHOLD_COLUMNS = [
+  'Warning Days',
+  'Critical Days',
+  'Warning Size (GiB)',
+  'Critical Size (GiB)',
+];
 
 export function ThresholdsTableProxmoxSnapshotsSection(props: ThresholdsTableSectionProps) {
   const { state, tableProps } = props;
@@ -17,6 +25,10 @@ export function ThresholdsTableProxmoxSnapshotsSection(props: ThresholdsTableSec
       <CollapsibleSection
         id="snapshots"
         title={state.sectionTitles.snapshots}
+        defaultsSummary={getAlertThresholdsDefaultsSummary(
+          SNAPSHOT_THRESHOLD_COLUMNS,
+          state.snapshotDefaultsRecord(),
+        )}
         collapsed={state.isCollapsed('snapshots')}
         onToggle={() => state.toggleSection('snapshots')}
         icon={<Camera class="w-5 h-5" />}
@@ -26,7 +38,7 @@ export function ThresholdsTableProxmoxSnapshotsSection(props: ThresholdsTableSec
         <div ref={state.registerSection('snapshots')} class="scroll-mt-24">
           <ResourceTable
             title=""
-            columns={['Warning Days', 'Critical Days', 'Warning Size (GiB)', 'Critical Size (GiB)']}
+            columns={SNAPSHOT_THRESHOLD_COLUMNS}
             activeAlerts={tableProps.activeAlerts}
             onEdit={state.startEditing}
             onSaveEdit={state.saveEdit}

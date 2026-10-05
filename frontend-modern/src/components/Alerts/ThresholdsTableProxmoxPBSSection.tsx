@@ -5,6 +5,9 @@ import { ResourceTable } from './ResourceTable';
 import { CollapsibleSection } from './Thresholds/sections/CollapsibleSection';
 import { formatMetricValue } from '@/features/alerts/thresholds/helpers';
 import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/thresholdsTableSectionProps';
+import { getAlertThresholdsDefaultsSummary } from '@/utils/alertThresholdsSectionPresentation';
+
+const PBS_THRESHOLD_COLUMNS = ['CPU %', 'Memory %'];
 
 export function ThresholdsTableProxmoxPBSSection(props: ThresholdsTableSectionProps) {
   const { state, tableProps } = props;
@@ -14,6 +17,10 @@ export function ThresholdsTableProxmoxPBSSection(props: ThresholdsTableSectionPr
       <CollapsibleSection
         id="pbs"
         title={state.sectionTitles.pbs}
+        defaultsSummary={getAlertThresholdsDefaultsSummary(
+          PBS_THRESHOLD_COLUMNS,
+          tableProps.pbsDefaults ?? { cpu: 80, memory: 85 },
+        )}
         resourceCount={state.pbsServersWithOverrides().length}
         collapsed={state.isCollapsed('pbs')}
         onToggle={() => state.toggleSection('pbs')}
@@ -26,7 +33,7 @@ export function ThresholdsTableProxmoxPBSSection(props: ThresholdsTableSectionPr
             title=""
             onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
             resources={state.pbsServersWithOverrides()}
-            columns={['CPU %', 'Memory %']}
+            columns={PBS_THRESHOLD_COLUMNS}
             activeAlerts={tableProps.activeAlerts}
             emptyMessage={state.PBS_THRESHOLDS_FILTER_EMPTY_STATE}
             onEdit={state.startEditing}

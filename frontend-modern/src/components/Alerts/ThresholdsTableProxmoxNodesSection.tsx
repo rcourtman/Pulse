@@ -5,6 +5,9 @@ import { ResourceTable } from './ResourceTable';
 import { CollapsibleSection } from './Thresholds/sections/CollapsibleSection';
 import { formatMetricValue } from '@/features/alerts/thresholds/helpers';
 import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/thresholdsTableSectionProps';
+import { getAlertThresholdsDefaultsSummary } from '@/utils/alertThresholdsSectionPresentation';
+
+const NODE_THRESHOLD_COLUMNS = ['CPU %', 'Memory %', 'Disk %', 'Temp °C'];
 
 export function ThresholdsTableProxmoxNodesSection(props: ThresholdsTableSectionProps) {
   const { state, tableProps } = props;
@@ -14,6 +17,10 @@ export function ThresholdsTableProxmoxNodesSection(props: ThresholdsTableSection
       <CollapsibleSection
         id="nodes"
         title={state.sectionTitles.nodes}
+        defaultsSummary={getAlertThresholdsDefaultsSummary(
+          NODE_THRESHOLD_COLUMNS,
+          tableProps.nodeDefaults,
+        )}
         resourceCount={state.nodesWithOverrides().length}
         collapsed={state.isCollapsed('nodes')}
         onToggle={() => state.toggleSection('nodes')}
@@ -26,7 +33,7 @@ export function ThresholdsTableProxmoxNodesSection(props: ThresholdsTableSection
             title=""
             onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
             resources={state.nodesWithOverrides()}
-            columns={['CPU %', 'Memory %', 'Disk %', 'Temp °C']}
+            columns={NODE_THRESHOLD_COLUMNS}
             activeAlerts={tableProps.activeAlerts}
             emptyMessage={state.NODE_THRESHOLDS_FILTER_EMPTY_STATE}
             onEdit={state.startEditing}
