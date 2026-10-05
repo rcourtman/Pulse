@@ -44,11 +44,25 @@ type ResourceHealthAlert struct {
 
 // EvaluateResourceHealth returns one deterministic verdict. Precedence is
 // significant: live alert evidence wins over stale telemetry, while a stopped
-// workload is neutral only when no warning or critical evidence exists.
+// workload is neutral only when no warning or critical evidence exists. The
+// first reason always explains the verdict. When a stronger verdict wins over
+// a stale source, the stale reason follows it, so a surface can still say the
+// resource stopped reporting instead of presenting its last readings as live.
 func EvaluateResourceHealth(resource Resource, alerts []ResourceHealthAlert, now time.Time) ResourceHealth {
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
+	health := evaluateResourceHealthVerdict(resource, alerts, now)
+	if health.Verdict != HealthStale && health.Verdict != HealthOK && resourceHasStaleSource(resource) {
+		health.Reasons = append(health.Reasons, ResourceHealthReason{
+			Code:   "telemetry_stale",
+			Detail: formatHealthAge(now.Sub(resource.LastSeen)),
+		})
+	}
+	return health
+}
+
+func evaluateResourceHealthVerdict(resource Resource, alerts []ResourceHealthAlert, now time.Time) ResourceHealth {
 
 	matchingAlerts := matchingResourceHealthAlerts(resource, alerts)
 	for _, alert := range matchingAlerts {

@@ -1,3 +1,5 @@
+import WifiOffIcon from 'lucide-solid/icons/wifi-off';
+import { getResourceStaleness } from '@/features/platformPage/resourceStaleness';
 import { Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
@@ -375,6 +377,11 @@ export const DockerHostsTable: Component<{
                     const hostAlertStyles = createMemo(() =>
                       getAlertStyles(host.id, activeAlerts, alertsEnabled(), name()),
                     );
+                    // Metrics from a host that stopped reporting are its last
+                    // values, not live readings; say so instead of showing them
+                    // as current.
+                    const staleness = createMemo(() => getResourceStaleness(host));
+                    const staleMetricClass = () => (staleness() ? 'opacity-50' : '');
                     const hostAlertBg = () => {
                       const s = hostAlertStyles();
                       if (!s.hasUnacknowledgedAlert) return '';
@@ -437,7 +444,9 @@ export const DockerHostsTable: Component<{
                           >
                             {containerCount()}
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} ${staleMetricClass()}`}
+                          >
                             <ResponsiveMetricCell
                               class="w-full"
                               value={cpuPercent() ?? 0}
@@ -448,7 +457,9 @@ export const DockerHostsTable: Component<{
                               thresholds={cpuThresholds()}
                             />
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} ${staleMetricClass()}`}
+                          >
                             <Show
                               when={canRenderMetrics() && hasMemoryMetric()}
                               fallback={<PlatformTableMetricFallback />}
@@ -462,7 +473,9 @@ export const DockerHostsTable: Component<{
                               />
                             </Show>
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} ${staleMetricClass()}`}
+                          >
                             <Show
                               when={canRenderMetrics() && hasDiskMetric()}
                               fallback={<PlatformTableMetricFallback />}
@@ -478,7 +491,24 @@ export const DockerHostsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content sm:hidden md:table-cell`}
                           >
-                            {formatPlatformTableUptimeValue(host.uptime ?? docker()?.uptimeSeconds)}
+                            <Show
+                              when={staleness()}
+                              fallback={formatPlatformTableUptimeValue(
+                                host.uptime ?? docker()?.uptimeSeconds,
+                              )}
+                            >
+                              {(stale) => (
+                                <span
+                                  class="inline-flex items-center justify-end gap-1 font-medium text-amber-700 dark:text-amber-300"
+                                  title={`${stale().label}. CPU, memory and disk show the last values received.`}
+                                  data-docker-host-stale
+                                >
+                                  <WifiOffIcon class="h-3 w-3 shrink-0" aria-hidden="true" />
+                                  <span aria-hidden="true">{stale().age ?? '—'}</span>
+                                  <span class="sr-only">{stale().label}</span>
+                                </span>
+                              )}
+                            </Show>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-narrow-hidden hidden text-base-content min-[360px]:table-cell md:table-cell`}

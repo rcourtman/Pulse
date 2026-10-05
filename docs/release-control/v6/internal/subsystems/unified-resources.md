@@ -5742,6 +5742,23 @@ A failed admission HTTP refresh is not an empty estate either: retain the last
 valid facet on request failure. A successful response still replaces it,
 including all-false admission; first-load failure remains unresolved.
 
+### Docker tables state silence and drop per-row host context
+
+`EvaluateResourceHealth` keeps the first reason as the one that explains the
+verdict, and when a stronger verdict (an alert, an availability failure, an
+offline host) wins while a source is stale, it appends a trailing
+`telemetry_stale` reason with the backend-formatted age, so the summary API's
+top reason is unchanged while surfaces can still tell that a resource stopped
+reporting. That reason, alone under a `stale` verdict or trailing another, is
+the only staleness signal platform tables read, through
+`features/platformPage/resourceStaleness.ts`; tables never derive staleness
+from `lastSeen` themselves. A stale Docker host dims its CPU, memory and
+disk cells and shows the age under Uptime ("No report for 1h" on hover and
+for assistive tech), and its container group header says the same. In
+grouped-by-host mode the containers table drops the Host and Engine
+columns, which repeat one value per group, and the group header names the
+engine once; flat mode keeps both columns.
+
 ### Existing Docker update and expanded identity text remain readable
 
 DockerContainersTable marks its update cell as the phone reflow boundary for both

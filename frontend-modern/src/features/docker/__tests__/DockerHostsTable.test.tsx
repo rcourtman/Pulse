@@ -162,6 +162,58 @@ describe('DockerHostsTable', () => {
     expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-disks', '2');
   });
 
+  it('marks a host that stopped reporting instead of showing its last metrics as live', () => {
+    render(() => (
+      <DockerHostsTable
+        resources={[
+          makeDockerHost({
+            health: { verdict: 'stale', reasons: [{ code: 'telemetry_stale', detail: '1h' }] },
+          }),
+          makeDockerHost({ id: 'agent:docker-02', name: 'docker-02', displayName: 'docker-02' }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    const stale = document.querySelectorAll('[data-docker-host-stale]');
+    expect(stale).toHaveLength(1);
+    expect(stale[0].querySelector('.sr-only')).toHaveTextContent('No report for 1h');
+    expect(stale[0]).toHaveTextContent('1h');
+    const staleRow = document.querySelector('[data-docker-host-row="agent:docker-01"]')!;
+    const liveRow = document.querySelector('[data-docker-host-row="agent:docker-02"]')!;
+    expect(staleRow.querySelectorAll('td.opacity-50')).toHaveLength(3);
+    expect(liveRow.querySelectorAll('td.opacity-50')).toHaveLength(0);
+  });
+
+  it('still says a host is silent when an alert outranks the stale verdict', () => {
+    render(() => (
+      <DockerHostsTable
+        resources={[
+          makeDockerHost({
+            health: {
+              verdict: 'critical',
+              reasons: [
+                { code: 'critical_alert', detail: 'docker-host-offline' },
+                { code: 'telemetry_stale', detail: '1h' },
+              ],
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    expect(document.querySelector('[data-docker-host-stale] .sr-only')).toHaveTextContent(
+      'No report for 1h',
+    );
+  });
+
   it('colors row metric bars from alert-configured thresholds, not display defaults', () => {
     render(() => (
       <DockerHostsTable

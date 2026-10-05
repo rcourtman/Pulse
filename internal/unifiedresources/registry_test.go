@@ -6907,3 +6907,43 @@ func TestAgentNodeScanIndexTracksAgentsIngestedWhileLive(t *testing.T) {
 		t.Fatalf("index bucket for an agent ingested while live = %+v, want its registry entry", candidates)
 	}
 }
+
+func TestEvaluateResourceHealthKeepsStaleTelemetryBehindAWinningAlert(t *testing.T) {
+	now := time.Date(2026, 10, 5, 1, 0, 0, 0, time.UTC)
+	silent := Resource{
+		ID:       "docker-host-1",
+		Type:     ResourceTypeAgent,
+		Status:   StatusOnline,
+		LastSeen: now.Add(-70 * time.Minute),
+		SourceStatus: map[DataSource]SourceStatus{
+			SourceDocker: {Status: "stale", LastSeen: now.Add(-70 * time.Minute)},
+		},
+	}
+
+	// The alert still explains the verdict first, and the silence follows it
+	// so tables can stop presenting the host's last readings as live.
+	health := EvaluateResourceHealth(silent, []ResourceHealthAlert{{ResourceID: "docker-host-1", Level: "critical", Type: "docker-host-offline"}}, now)
+	if health.Verdict != HealthCritical || len(health.Reasons) != 2 {
+		t.Fatalf("expected critical with two reasons, got %+v", health)
+	}
+	if health.Reasons[0].Code != "critical_alert" {
+		t.Fatalf("expected the alert to stay the first reason, got %+v", health.Reasons)
+	}
+	if health.Reasons[1] != (ResourceHealthReason{Code: "telemetry_stale", Detail: "1h"}) {
+		t.Fatalf("expected a trailing telemetry_stale reason with the age, got %+v", health.Reasons[1])
+	}
+
+	// Without an alert the stale verdict carries the single reason as before.
+	health = EvaluateResourceHealth(silent, nil, now)
+	if health.Verdict != HealthStale || len(health.Reasons) != 1 || health.Reasons[0].Code != "telemetry_stale" {
+		t.Fatalf("expected a lone stale reason, got %+v", health)
+	}
+
+	// A fresh source adds nothing behind an alert.
+	fresh := silent
+	fresh.SourceStatus = map[DataSource]SourceStatus{SourceDocker: {Status: "online", LastSeen: now}}
+	health = EvaluateResourceHealth(fresh, []ResourceHealthAlert{{ResourceID: "docker-host-1", Level: "warning", Type: "cpu"}}, now)
+	if len(health.Reasons) != 1 {
+		t.Fatalf("expected only the alert reason for a fresh source, got %+v", health.Reasons)
+	}
+}
