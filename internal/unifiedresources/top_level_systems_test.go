@@ -435,3 +435,29 @@ func topLevelTestK8sCluster(id, clusterID, agentID, server string) Resource {
 		},
 	}
 }
+
+func TestResolveTopLevelSystemsRebuildsOwnerIndexAtEveryPassAndCall(t *testing.T) {
+	bridge := topLevelTestAgent("bridge", "alpha.lab", "bridge-machine", "bridge-agent")
+	bridge.Identity.IPAddresses = []string{"192.0.2.8"}
+	leaf := topLevelTestDockerHost("leaf", "beta.lab", "leaf-runtime", "")
+	leaf.Identity.IPAddresses = []string{"192.0.2.8"}
+	resources := []Resource{
+		topLevelTestProxmoxNode("platform", "alpha.lab", "pve-source", "https://alpha.lab:8006"),
+		bridge, leaf,
+		topLevelTestK8sCluster("cluster", "cluster-id", "", "https://alpha.lab:6443"),
+	}
+	// Docker has better priority than the unmerged agent, so it cannot attach
+	// by their shared IP in the first pass. Once the agent joins the platform,
+	// a fresh pass must admit the IP attachment while keeping the cluster apart.
+	resolver := ResolveTopLevelSystems(resources)
+	if resolver.Count() != 2 {
+		t.Fatalf("stale pass index or excluded cluster attachment: %d groups", resolver.Count())
+	}
+	assertTopLevelSystemGroupPairs(t, resolver, [][2]string{{"platform", "bridge"}, {"platform", "leaf"}}, [][2]string{{"platform", "cluster"}})
+	resources[2].Identity.IPAddresses = []string{"192.0.2.9"}
+	next := ResolveTopLevelSystems(resources)
+	if next.Count() != 3 {
+		t.Fatalf("index reused across identity changes: %d groups", next.Count())
+	}
+	assertTopLevelSystemGroupPairs(t, next, [][2]string{{"platform", "bridge"}}, [][2]string{{"platform", "leaf"}, {"platform", "cluster"}})
+}
