@@ -330,13 +330,8 @@ func New(cfg Config) (*Agent, error) {
 		return nil, fmt.Errorf("fetch host info: %w", err)
 	}
 
-	hostname := strings.TrimSpace(cfg.HostnameOverride)
-	if hostname == "" {
-		hostname = strings.TrimSpace(info.Hostname)
-	}
-	if hostname == "" {
-		hostname = "unknown-host"
-	}
+	identity := resolveHostIdentity(collector, info, cfg.HostnameOverride)
+	hostname := identity.hostname
 
 	displayName := hostname
 
@@ -351,22 +346,12 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	platform := normaliseRuntimePlatform(collector.GOOS(), info.Platform)
-	// Use Platform (specific distro like "ubuntu") over PlatformFamily (distro family like "debian")
-	// This ensures Ubuntu shows as "ubuntu 24.04" not "debian 24.04" (refs #927)
-	osName := strings.TrimSpace(info.Platform)
-	if osName == "" {
-		osName = strings.TrimSpace(info.PlatformFamily)
-	}
-	osVersion := strings.TrimSpace(info.PlatformVersion)
-	osName, osVersion = resolveHostOSIdentity(collector, osName, osVersion)
+	osName, osVersion := identity.osName, identity.osVersion
 	if profile, ok := platformsupport.AgentHostProfileForIdentity(osName, platform); ok {
 		platform = platformsupport.NormalizeRuntimePlatformForAgentHostProfile(profile.ID, platform)
 	}
 	kernelVersion := strings.TrimSpace(info.KernelVersion)
-	arch := strings.TrimSpace(info.KernelArch)
-	if arch == "" {
-		arch = runtime.GOARCH
-	}
+	arch := identity.arch
 	client, err := newAgentHTTPClient(cfg.CACertPath, cfg.InsecureSkipVerify, cfg.ServerFingerprint)
 	if err != nil {
 		return nil, fmt.Errorf("invalid TLS configuration: %w", err)
@@ -501,6 +486,40 @@ func (a *Agent) nextReportSequenceID() string {
 		return ""
 	}
 	return agentshost.FormatReportSequenceID(a.reportStreamID, a.reportSequence.Add(1))
+}
+
+// hostIdentity is how the agent names its host to Pulse. Enrollment and
+// reporting both derive it here, so the server binds the runtime token to the
+// same hostname the agent then reports under.
+type hostIdentity struct {
+	hostname  string
+	osName    string
+	osVersion string
+	arch      string
+}
+
+func resolveHostIdentity(collector SystemCollector, info *gohost.InfoStat, hostnameOverride string) hostIdentity {
+	hostname := strings.TrimSpace(hostnameOverride)
+	if hostname == "" {
+		hostname = strings.TrimSpace(info.Hostname)
+	}
+	if hostname == "" {
+		hostname = "unknown-host"
+	}
+
+	// Use Platform (specific distro like "ubuntu") over PlatformFamily (distro family like "debian")
+	// This ensures Ubuntu shows as "ubuntu 24.04" not "debian 24.04" (refs #927)
+	osName := strings.TrimSpace(info.Platform)
+	if osName == "" {
+		osName = strings.TrimSpace(info.PlatformFamily)
+	}
+	osName, osVersion := resolveHostOSIdentity(collector, osName, strings.TrimSpace(info.PlatformVersion))
+
+	arch := strings.TrimSpace(info.KernelArch)
+	if arch == "" {
+		arch = runtime.GOARCH
+	}
+	return hostIdentity{hostname: hostname, osName: osName, osVersion: osVersion, arch: arch}
 }
 
 func agentControlPlaneProxy(request *http.Request) (*url.URL, error) {

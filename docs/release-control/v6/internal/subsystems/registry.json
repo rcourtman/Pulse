@@ -1746,6 +1746,7 @@
               "internal/hostagent/commands_host_update_test.go",
               "internal/hostagent/commands_storage_cleanup_test.go",
               "internal/hostagent/docker_lifecycle_test.go",
+              "internal/hostagent/enroll_test.go",
               "internal/hostagent/issue1595_sas_collection_test.go",
               "internal/hostagent/observer_delivery_test.go",
               "internal/hostagent/package_updates_test.go",

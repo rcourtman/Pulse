@@ -106,6 +106,12 @@ var (
 	newUpdater                  func(agentupdate.Config) *agentupdate.Updater = agentupdate.New
 	lookPath                                                                  = exec.LookPath
 	runAsWindowsServiceFunc                                                   = runAsWindowsService
+	enrollAgent                                                               = hostagent.Enroll
+
+	// enrollBeforeModuleStartup is false on Windows, where startup runs before
+	// the service control dispatcher and an enrollment retry could outlast its
+	// 30-second deadline. Windows keeps its previous enrollment behaviour.
+	enrollBeforeModuleStartup = runtime.GOOS != "windows"
 
 	// For testing
 	retryInitialDelay           = 5 * time.Second
@@ -379,10 +385,50 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		}
 	}
 
+	// 2c. Exchange the bootstrap token before anything authenticates with it.
+	// A bootstrap token carries only the enrollment scope and the server
+	// revokes it on exchange, so the remote config client, the updater, and
+	// the host, Docker / Podman, and Kubernetes modules built below must all
+	// start with the runtime token and the server-assigned agent ID. A restart
+	// already loads both from the state directory; the first run must too.
+	if cfg.Enroll && enrollBeforeModuleStartup {
+		enrollment, err := enrollAgent(ctx, hostagent.EnrollmentConfig{
+			PulseURL:                cfg.PulseURL,
+			APIToken:                cfg.APIToken,
+			StateDir:                cfg.StateDir,
+			HostnameOverride:        cfg.HostnameOverride,
+			AgentVersion:            Version,
+			EnableCommands:          cfg.EnableCommands,
+			CommandAuthorityProfile: cfg.CommandAuthorityProfile,
+			InsecureSkipVerify:      cfg.InsecureSkipVerify,
+			CACertPath:              cfg.CACertPath,
+			ServerFingerprint:       cfg.ServerFingerprint,
+			Logger:                  &logger,
+		})
+		if err != nil {
+			return fmt.Errorf("enrollment failed: %w", err)
+		}
+		cfg.APIToken = enrollment.APIToken
+		if enrollment.AgentID != "" && enrollment.AgentID != cfg.AgentID {
+			cfg.AgentID = enrollment.AgentID
+			if cfg.AgentIDFile != "" {
+				if err := writeAgentIDFile(cfg.AgentIDFile, cfg.AgentID); err != nil {
+					logger.Warn().
+						Err(err).
+						Str("path", cfg.AgentIDFile).
+						Msg("Failed to persist enrolled agent ID; ID will be re-derived on next start")
+				}
+			}
+		}
+		// Enrollment is settled for this process; the host module must not
+		// attempt a second exchange.
+		cfg.Enroll = false
+	}
+
 	var remoteConfigClient *remoteconfig.Client
 	var remoteConfigAppliers []RemoteConfigApplier
 
-	// 2c. Fetch Remote Config
+	// 2d. Fetch Remote Config
 	// Only if we have enough info to contact server
 	if cfg.PulseURL != "" && cfg.APIToken != "" && cfg.AgentID != "" {
 		logger.Debug().Msg("Fetching remote configuration...")

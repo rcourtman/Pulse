@@ -8157,6 +8157,35 @@ prior live inventory. `TestHandleEnroll_Success`,
 `internal/api/deploy_handlers_test.go` pin the durable replacement and rollback
 paths.
 
+### The agent enrolls before it builds any authenticated client
+
+The agent half of that swap must finish before anything authenticates. A
+deploy bootstrap token carries only the enrollment scope and Pulse removes it
+on exchange, so a client built from it fails until the process restarts.
+`cmd/pulse-agent/main.go` therefore runs `hostagent.Enroll` from
+`internal/hostagent/enroll.go` immediately after agent-ID preparation and
+before the first remote config fetch. It then builds the remote config client,
+the updater, and the host, Docker / Podman, and Kubernetes modules and their
+primary report targets from the runtime token and the server-assigned agent
+ID, persists that ID to the configured agent-ID file, and turns off the host
+module's own enrollment so no second exchange is attempted. Enrolling inside
+the host module alone left every other client on the spent bootstrap token for
+the whole first process lifetime of a deployed agent. A persisted runtime
+token is reused without a request or host discovery, a `403` keeps the
+configured token as a non-bootstrap credential, and a permanent rejection
+stops startup before any module is built. Windows startup runs before the
+service control dispatcher, whose deadline an enrollment retry could outlast,
+so the step is gated off there and Windows keeps its previous enrollment
+behaviour. Enrollment and reporting derive hostname, OS, and
+architecture through one `resolveHostIdentity`, so the runtime token is bound
+to the hostname the agent then reports under.
+`TestRunEnrollsBeforeBuildingAuthenticatedModules`,
+`TestRunStopsBeforeModulesWhenEnrollmentIsRejected`, and
+`TestRunLeavesEnrollmentToTheHostModuleWhenGatedOff` in
+`cmd/pulse-agent/main_test.go`, and the `TestEnroll*` cases for `Enroll` in
+`internal/hostagent/enroll_test.go`, including
+`TestEnrollPresentsTheIdentityNewReports`, pin that order and outcome.
+
 ### Alert push routing does not create an agent lifecycle channel
 
 The shared API router may classify an external-probe outage for specialized
