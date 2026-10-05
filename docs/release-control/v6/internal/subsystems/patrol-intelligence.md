@@ -15,6 +15,29 @@
 
 ## Purpose
 
+### Manual suppression reversal — issue #2528
+
+Patrol Activity exposes the existing suppression collection independently of
+active findings. It lists only explicitly manual rules with resource and
+category scope, exact ID and reason; wildcard scopes are labelled both in the
+list and confirmation. Create-rule controls link to this existing Activity
+section. Finding dismissals, automatic/legacy rules and history are not removed
+or reopened by manual deletion. Reopen finding remains a separate action.
+
+A confirmation is bound to its organisation, invalidates on organisation or
+membership change/disposal, verifies the unchanged manual row with a fresh
+authorised read, sends one exact-ID DELETE and requires readback absence before
+claiming removal. Any failed or uncertain step hides stale controls and requires
+explicit reload, not an automatic mutation retry. Other rules can still cover
+the same scope. Component/API tests cover cancellation, stale scope/origin,
+authorisation loss, malformed data, concurrent removal, late results and
+readback failure. Browser evidence must cover creation through removal and the
+actual existing links on desktop and narrow viewports. Synthetic proof is not
+publication or the reporter's own removal.
+
+Long rule reasons remain scrollable without hiding the confirmation heading or Cancel/Remove controls. Resource/category and exact rule ID precede the reason, so confirmation can be reviewed on narrow displays without clipping safety information.
+
+
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
 Canonical action state and legacy approval state remain distinct in Assistant

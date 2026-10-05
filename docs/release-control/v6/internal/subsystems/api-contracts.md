@@ -40,6 +40,25 @@ binding and revocation. It preserves original Celsius samples/timestamps and
 independent I/O, not synthetic temperature padding or CPU substitution. This
 is connected source proof, not an installed appliance or containing release.
 
+### Confirmed Patrol rule operations preserve tenant context — issue #2528
+
+The manual-rule confirmation presents the returned exact ID and scope before a
+keyboard-scrollable reason; the readable header and Cancel/Remove footer remain
+separate from long data. This does not truncate the stored reason or change
+authorised pre-read, one DELETE, readback or uncertainty handling.
+
+The frontend consumes the existing GET/DELETE suppression endpoints without a
+wire or permission change. The optional client expectedOrgID pins the request
+header and checks context before and after CSRF preparation; retry:false
+disables auth, invalid-organisation, CSRF and rate-limit retries for this flow.
+Other callers retain their defaults. Current auth, scope and CSRF checks remain
+authoritative; an abort or mismatched context stops dispatch. The suppression
+client rejects malformed or duplicate rows, accepts the existing empty nil
+slice, and only deletes a rule_ identity with explicit manual origin and no
+finding/dismissal attribution. Transport success alone is not removal: the UI
+must read the same collection back and establish exact-ID absence.
+
+
 ### Organisation deletion retains data after incomplete monitoring shutdown
 
 Authenticated organisation-owner deletion waits for tenant-loop exit and sealed

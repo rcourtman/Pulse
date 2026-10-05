@@ -76,6 +76,10 @@ interface FetchOptions extends Omit<RequestInit, 'headers'> {
   preferSessionAuth?: boolean;
   skipAuth?: boolean;
   skipOrgContext?: boolean;
+  // Reviewed destructive operations can opt out of auth/CSRF/rate-limit
+  // retries and bind dispatch to the organisation whose data was confirmed.
+  retry?: boolean;
+  expectedOrgID?: string;
 }
 
 type APIErrorDetails = Record<string, string>;
@@ -593,12 +597,23 @@ class ApiClient {
       preferSessionAuth = false,
       skipAuth = false,
       skipOrgContext = false,
+      retry = true,
+      expectedOrgID,
       headers = {},
       ...fetchOptions
     } = options;
 
     // Build headers object
     const finalHeaders: Record<string, string> = { ...headers };
+    const checkExpectedOrg = () => {
+      if (expectedOrgID !== undefined && (this.getOrgID() || 'default') !== expectedOrgID) {
+        throw new Error('Organisation changed. Reload before making changes.');
+      }
+    };
+    checkExpectedOrg();
+    if (expectedOrgID !== undefined) {
+      finalHeaders[ORG_HEADER_NAME] = expectedOrgID;
+    }
 
     // Always add headers to prevent browser auth popup for API calls
     if (url.startsWith('/api/')) {
@@ -647,6 +662,12 @@ class ApiClient {
       credentials: 'include', // Important for session cookies
     };
 
+    // CSRF preparation may have awaited a request while the operator switched
+    // organisations or left the view. Do not dispatch a stale confirmation.
+    checkExpectedOrg();
+    // Only strict confirmations opt into the extra pre-dispatch abort check;
+    // ordinary callers retain native fetch's established abort behaviour.
+    if (expectedOrgID !== undefined || !retry) fetchOptions.signal?.throwIfAborted();
     let response = await fetch(url, finalOptions);
 
     // Session-preferred reads intentionally omit the API token on their first
@@ -655,6 +676,7 @@ class ApiClient {
     // retrying an unauthenticated idempotent response once with their token.
     if (
       response.status === 401 &&
+      retry &&
       preferSessionAuth &&
       !skipAuth &&
       this.apiToken &&
@@ -672,6 +694,8 @@ class ApiClient {
     // Handle stale/invalid org context by clearing it and retrying once against default org.
     if (
       response.status === 400 &&
+      retry &&
+      expectedOrgID === undefined &&
       !skipOrgContext &&
       url.startsWith('/api/') &&
       finalHeaders[ORG_HEADER_NAME] &&
@@ -720,7 +744,7 @@ class ApiClient {
     }
 
     // Handle CSRF token failures - the 403 response should have set a new CSRF cookie
-    if (response.status === 403) {
+    if (response.status === 403 && retry) {
       // First try the response header (backend sends new token in X-CSRF-Token header)
       let refreshedToken = response.headers.get('X-CSRF-Token');
 
@@ -745,7 +769,7 @@ class ApiClient {
     }
 
     // Handle rate limiting with automatic retry for idempotent requests only.
-    if (response.status === 429) {
+    if (response.status === 429 && retry) {
       if (!IDEMPOTENT_METHODS.has(method)) {
         return response;
       }

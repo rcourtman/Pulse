@@ -25,6 +25,20 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Permanent suppression rules remain reversible — issue #2528
+
+The existing manual suppression API/store semantics remain unchanged. Patrol
+Activity now exposes scoped list/confirm/remove/readback for explicitly manual
+rules. Deleting a rule permits future matches but does not reopen historical
+dismissals, erase findings, broaden creation scope or modify other rules.
+Finding-specific Reopen and remembered decisions remain distinct. Frontend
+API/component controls plus authenticated handler/store controls verify these
+boundaries; source/browser proof does not establish installed or reporter
+acceptance.
+
+Manual-rule confirmation retains a readable scope and exact ID with a scrollable long reason and separate action footer. This is an existing-flow accessibility repair, not a change to deletion, finding history or server authority.
+
+
 ### Fully cached Patrol usage — issues #2118 / #2350
 
 Zero ordinary input tokens do not mean a run was free or skipped. Any positive

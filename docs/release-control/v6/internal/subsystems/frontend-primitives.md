@@ -20,6 +20,17 @@
 
 ## Purpose
 
+### Confirmed operations opt out of silent transport fallback
+
+The shared API client accepts expectedOrgID and retry:false for confirmed
+Patrol manual-rule removal. It pins and rechecks the selected organisation at
+dispatch, respects cancellation after asynchronous CSRF preparation and makes
+no automatic auth/tenant/CSRF/rate-limit replay. Existing caller defaults are
+unchanged. Tests exercise these safeguards with real request options.
+
+Patrol manual-rule confirmation keeps its title and safe Cancel/Remove controls outside a keyboard-focusable scrolling scope/reason region. Long multiline reasons cannot clip identifiers or the action footer on a narrow viewport. The region permits both keyboard and pointer review without changing confirmation state or sending a mutation.
+
+
 All drawer History fallbacks must distinguish current observations from retained, unavailable or freshness-unknown guest readings, using original memory evidence and filesystem read reasons.
 
 ### Canonical drawer History preserves guest read provenance

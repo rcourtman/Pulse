@@ -15,6 +15,18 @@
 
 ## Purpose
 
+### Opt-in confirmed-operation transport keeps paid contexts unchanged
+
+The shared frontend client adds expectedOrgID and retry:false for the existing
+Patrol manual-rule reversal flow. It binds confirmed reads/deletion to the
+selected organisation and stops automatic auth, invalid-org, CSRF and
+rate-limit replay only when requested. Paid APIs retain their existing default
+request behaviour, tenant enforcement and entitlement boundaries. The strict
+consumer rechecks context after CSRF preparation and discards stale responses;
+this adds no paid endpoint, cross-tenant fallback or scope expansion. Shared
+client tests cover unchanged defaults and explicit one-attempt context binding.
+
+
 Own cloud plan/version semantics, entitlement limits, hosted billing/runtime
 agreement, the Pulse Cloud control plane, provider-hosted MSP account
 bootstrap/licensing, hosted tenant lifecycle, and cloud-specific enforcement

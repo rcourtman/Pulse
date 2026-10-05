@@ -865,6 +865,10 @@ describe('PatrolAttentionWorkbench', () => {
     );
     expect(apiMocks.loadPatrolFindings).toHaveBeenCalled();
     expect(await screen.findByRole('status')).toHaveTextContent(/Rule created/i);
+    expect(screen.getByRole('link', { name: 'Manage suppression rules' })).toHaveAttribute(
+      'href',
+      '/patrol/activity#patrol-suppression-rules',
+    );
   });
 
   it('shows the remembered decision and a reopen path instead of re-offering it', async () => {
