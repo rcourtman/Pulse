@@ -337,6 +337,7 @@ export const ResourceAccessDisclosure: Component<{
                       hostname={config().hostname}
                       canonicalResourceId={props.resource.id}
                       commandsEnabled={props.drawer.agentMeta()?.commandsEnabled}
+                      runBlockReason={props.drawer.guestReadPrecaution()}
                     />
                   </Suspense>
                 </Show>

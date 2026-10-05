@@ -439,6 +439,18 @@ export interface GuestDrawerGuestReadPresentation {
   precaution: boolean;
 }
 
+// Both drawer shapes use the same provider-owned signals. A canonical resource
+// need not fabricate a complete workload (or infer liveness from metrics).
+export interface GuestDrawerGuestReadEvidence extends Pick<
+  Guest,
+  'type' | 'workloadType' | 'agentKind' | 'platformType' | 'platformScopes'
+> {
+  diskStatusReason?: VM['diskStatusReason'];
+  guestAgentStatus?: VM['guestAgentStatus'];
+  lock?: VM['lock'];
+  backupInProgress?: VM['backupInProgress'];
+}
+
 export const GUEST_DRAWER_BACKUP_PRECAUTION =
   'Do not run live diagnostics or restart the guest agent during a backup, freeze/thaw or an unresponsive-guest incident. An OK backup or a running VM does not prove thaw. Confirm thaw and writes to the filesystems covered by the backup independently.';
 
@@ -457,9 +469,9 @@ const guestReadDeferrals = new Set([
 // parent-agent action target establishes QGA liveness. Use only the current
 // provider state and fixed read reasons; never print an unknown raw value.
 export const getGuestDrawerGuestReadPresentation = (
-  guest: Guest,
+  guest: GuestDrawerGuestReadEvidence,
 ): GuestDrawerGuestReadPresentation | null => {
-  if (!isGuestDrawerVM(guest)) return null;
+  if (resolveWorkloadType(guest) !== 'vm') return null;
   const hasProxmoxEvidence =
     guest.type === 'qemu' ||
     guest.agentKind === 'qemu-guest' ||
@@ -545,8 +557,9 @@ export const getGuestDrawerGuestReadPresentation = (
 
 // A read-specific precaution is independent of the reported availability flag.
 // For example Proxmox can report QGA enabled while its last request timed out.
-export const getGuestDrawerGuestReadPrecaution = (guest: Guest): string | null => {
-  if (!isGuestDrawerVM(guest)) return null;
+export const getGuestDrawerGuestReadPrecaution = (
+  guest: GuestDrawerGuestReadEvidence,
+): string | null => {
   const presentation = getGuestDrawerGuestReadPresentation(guest);
   if (!presentation?.precaution) return null;
   const reason = (guest.diskStatusReason || '').replace(/^prev-/, '');

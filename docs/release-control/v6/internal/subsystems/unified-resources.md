@@ -23,6 +23,30 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Canonical Discovery honours VM guest-read deferrals
+
+The canonical resource drawer uses the same fixed PVE VM lock, backup and
+read-deferral signals as the Workloads drawer. Typed and legacy PVE facets are
+checked independently: an available flag in one cannot cancel a pause in the
+other. Only the VM's own provider evidence is used; parent-node locks, an agent
+version and a Discovery target are not guest-liveness evidence. Containers,
+ordinary agents and unrelated provider facets retain their existing behaviour.
+
+Both embedded Analysis and the dedicated Discovery entry pass this pause to the
+existing manual-run guard. Saved results remain readable; same-ID updates block
+or release the existing control without an automatic scan, invented timestamp
+or cancellation claim for already-dispatched work. The wrapping precaution and
+existing safety-guide link remain visible across drawer tabs. Clearance is not
+independent thaw, covered-filesystem writes or safe monitoring resumption.
+
+`ResourceDetailDrawer.discovery.test.ts` covers both facets, every fixed reason,
+precedence and platform isolation. `ResourceDetailDrawer.guest-safety.test.tsx`
+mounts the real Discovery client/control, checks same-ID updates and no dispatch
+while paused, and preserves normal agent actions. The production browser fixture
+`browser-tests/resource-guest-safety.cjs` checks desktop keyboard and narrow touch
+with synthetic local responses. No backend, permission, collector or native
+recovery guarantee is added.
+
 ### Broadcast bulk reads capture resources and history coordinates together
 
 `ListWithMetricsTargets` and the monitor adapter's matching optional read return
