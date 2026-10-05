@@ -5,9 +5,10 @@ import { useLocation } from '@solidjs/router';
 import type { Alert } from '@/types/api';
 
 import { AlertDeliveryHealthCard } from './AlertDeliveryHealthCard';
+import { AlertDeliveryPausedCard } from './AlertDeliveryPausedCard';
 import { AlertOverviewActiveAlertsSection } from './AlertOverviewActiveAlertsSection';
-import { AlertOverviewStatsCards } from './AlertOverviewStatsCards';
 import type { Override } from './types';
+import { useAlertDeliveryPausedReason } from './useAlertDeliveryPausedReason';
 import { useAlertIncidentTimelineState } from './useAlertIncidentTimelineState';
 import { useAlertOverviewState } from './useAlertOverviewState';
 import { useNotificationDeliveryHealth } from './useNotificationDeliveryHealth';
@@ -36,6 +37,9 @@ export function OverviewTab(props: {
   // is the channel that would have reported it. Surface it on the tab people
   // actually open, not only on the destinations config tab.
   const deliveryHealthState = useNotificationDeliveryHealth();
+  // Delivery being off applies to every alert at once, so it is said once here
+  // rather than on each card.
+  const deliveryPaused = useAlertDeliveryPausedReason();
   onMount(() => {
     void deliveryHealthState.loadDeliveryHealth();
   });
@@ -98,7 +102,17 @@ export function OverviewTab(props: {
           showRefresh={deliveryHealthState.deliveryHealthUnavailable()}
         />
       </Show>
-      <AlertOverviewStatsCards state={overviewState} />
+      <Show when={deliveryPaused.pausedReason()}>
+        {(reason) => (
+          <AlertDeliveryPausedCard
+            reason={reason()}
+            surface="overview"
+            setupHref="/alerts/notifications"
+            activating={deliveryPaused.activating()}
+            onActivate={() => void deliveryPaused.activate()}
+          />
+        )}
+      </Show>
       <AlertOverviewActiveAlertsSection
         state={overviewState}
         timelineState={timelineState}
@@ -106,6 +120,7 @@ export function OverviewTab(props: {
         alertsDisabled={props.alertsDisabled()}
         showAcknowledged={props.showAcknowledged()}
         setShowAcknowledged={props.setShowAcknowledged}
+        deliveryPausedGlobally={deliveryPaused.pausedReason() !== null}
       />
     </div>
   );

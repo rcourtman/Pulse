@@ -62,6 +62,8 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.overview.action.cancel': 'Cancelar',
   'alerts.overview.action.hideAcknowledged': 'Ocultar reconocidas',
   'alerts.overview.action.hideTimeline': 'Ocultar linea de tiempo',
+  'alerts.overview.action.moreActions': 'Más',
+  'alerts.overview.action.lessActions': 'Menos',
   'alerts.overview.action.processing': 'Procesando...',
   'alerts.overview.action.resume': 'Reanudar',
   'alerts.overview.action.showAcknowledged': 'Mostrar reconocidas',
@@ -119,6 +121,24 @@ export const ES_MESSAGE_OVERRIDES = {
     'Activa las alertas para reanudar la monitorizacion y desbloquear las pestañas de configuracion',
   'alerts.overview.paused.title': 'Las alertas estan pausadas',
   'alerts.overview.section.activeAlerts': 'Alertas activas',
+  'alerts.overview.summary.warning': '{count} de aviso',
+  'alerts.overview.summary.critical': '{count} críticas',
+  'alerts.delivery.paused.title': 'Las notificaciones están en pausa',
+  'alerts.delivery.paused.action': 'Activar el envío',
+  'alerts.delivery.paused.setupLink': 'Configurar adónde van las alertas',
+  'alerts.delivery.paused.reason.detectionOff':
+    'Las alertas están desactivadas en la configuración de alertas.',
+  'alerts.delivery.paused.reason.snoozed': 'El envío de notificaciones está pospuesto.',
+  'alerts.delivery.paused.reason.notActivated':
+    'El envío de notificaciones aún no se ha activado en esta instalación.',
+  'alerts.delivery.paused.consequence.destinations':
+    'Pulse sigue detectando alertas, pero ninguna se enviará a los destinos de abajo. Los mensajes de prueba omiten la pausa, así que una prueba correcta no significa que las alertas reales lleguen.',
+  'alerts.delivery.paused.consequence.destinationsDetectionOff':
+    'Mientras las alertas estén desactivadas, Pulse no genera alertas nuevas y ninguna se enviará a los destinos de abajo. Los mensajes de prueba omiten la pausa, así que una prueba correcta no significa que las alertas reales lleguen.',
+  'alerts.delivery.paused.consequence.overview':
+    'Pulse sigue detectando las alertas de abajo, pero nadie recibe avisos sobre ellas.',
+  'alerts.delivery.paused.consequence.overviewDetectionOff':
+    'Mientras las alertas estén desactivadas, Pulse no genera alertas nuevas y nadie recibe avisos.',
   'alerts.overview.snooze.description':
     'Pausa las notificaciones y el escalado de este incidente. La monitorizacion continua y la resolucion se sigue detectando.',
   'alerts.overview.snooze.option.eightHours': 'Durante 8 horas',

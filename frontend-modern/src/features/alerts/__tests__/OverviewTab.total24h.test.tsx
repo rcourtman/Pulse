@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import type { Alert, AlertDeliveryDiagnosis } from '@/types/api';
 
@@ -101,7 +101,7 @@ describe('OverviewTab Last 24 Hours stat', () => {
     expect(
       screen
         .getByText('Triggered (24h)')
-        .closest('tr')
+        .closest('[data-alert-overview-stat]')
         ?.querySelector('[data-testid="alert-overview-stat-value"]')?.textContent,
     ).toBe('0');
   });
@@ -120,10 +120,10 @@ describe('OverviewTab Last 24 Hours stat', () => {
 
     const label = screen.getByText('Triggered (24h)');
     const statValue = label
-      .closest('tr')
+      .closest('[data-alert-overview-stat]')
       ?.querySelector('[data-testid="alert-overview-stat-value"]');
     expect(statValue?.textContent).toBe('1');
-    expect(screen.getAllByText('Monitoring')).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'More' })).toHaveLength(2);
   });
 
   it('shows 0 when all alerts are older than 24 hours', () => {
@@ -139,7 +139,7 @@ describe('OverviewTab Last 24 Hours stat', () => {
 
     const label = screen.getByText('Triggered (24h)');
     const statValue = label
-      .closest('tr')
+      .closest('[data-alert-overview-stat]')
       ?.querySelector('[data-testid="alert-overview-stat-value"]');
     expect(statValue?.textContent).toBe('0');
   });
@@ -158,28 +158,36 @@ describe('OverviewTab Last 24 Hours stat', () => {
 
     const label = screen.getByText('Triggered (24h)');
     const statValue = label
-      .closest('tr')
+      .closest('[data-alert-overview-stat]')
       ?.querySelector('[data-testid="alert-overview-stat-value"]');
     expect(statValue?.textContent).toBe('3');
   });
 
-  it('keeps the critical annotation in its own cell so counts stay right-aligned', () => {
+  it('states open alerts by severity separately from the triggered count', () => {
     const recentTime = new Date(Date.now() - 1_800_000).toISOString();
 
     const activeAlerts: Record<string, Alert> = {
       critical: { ...makeAlert('critical', recentTime), level: 'critical' },
+      warning: { ...makeAlert('warning', recentTime), level: 'warning' },
+      acked: { ...makeAlert('acked', recentTime), level: 'critical', acknowledged: true },
     };
 
     render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
 
-    const label = screen.getByText('Triggered (24h)');
-    const cells = Array.from(label.closest('tr')!.querySelectorAll('td'));
-    const valueIndex = cells.findIndex(
-      (cell) => cell.getAttribute('data-testid') === 'alert-overview-stat-value',
+    // Severity counts cover open alerts only; the triggered count keeps every
+    // alert that fired in the window, acknowledged or not.
+    expect(screen.getByText('1 critical')).toBeTruthy();
+    expect(screen.getByText('1 warning')).toBeTruthy();
+    const triggered = screen
+      .getByText('Triggered (24h)')
+      .closest('[data-alert-overview-stat]')
+      ?.querySelector('[data-testid="alert-overview-stat-value"]');
+    expect(triggered?.textContent).toBe('3');
+    const acknowledged = document.querySelector(
+      '[data-alert-overview-stat="acknowledged"] [data-testid="alert-overview-stat-value"]',
     );
-    expect(valueIndex).toBeGreaterThanOrEqual(0);
-    expect(cells[valueIndex].textContent).toBe('1');
-    expect(cells[valueIndex + 1]?.textContent).toContain('1 critical');
+    expect(acknowledged?.textContent).toBe('1');
+    expect(screen.queryByText('Workload Overrides')).toBeNull();
   });
 
   it('excludes future-dated alerts (clock skew)', () => {
@@ -193,7 +201,7 @@ describe('OverviewTab Last 24 Hours stat', () => {
 
     const label = screen.getByText('Triggered (24h)');
     const statValue = label
-      .closest('tr')
+      .closest('[data-alert-overview-stat]')
       ?.querySelector('[data-testid="alert-overview-stat-value"]');
     expect(statValue?.textContent).toBe('0');
   });
@@ -210,7 +218,7 @@ describe('OverviewTab Last 24 Hours stat', () => {
 
     const label = screen.getByText('Triggered (24h)');
     const statValue = label
-      .closest('tr')
+      .closest('[data-alert-overview-stat]')
       ?.querySelector('[data-testid="alert-overview-stat-value"]');
     expect(statValue?.textContent).toBe('1');
 
@@ -273,6 +281,7 @@ describe('OverviewTab Last 24 Hours stat', () => {
 
     const activeAlerts: Record<string, Alert> = {
       recent: makeAlert('recent', recentTime),
+      acked: { ...makeAlert('acked', recentTime), acknowledged: true },
     };
 
     render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
@@ -280,9 +289,10 @@ describe('OverviewTab Last 24 Hours stat', () => {
     expect(screen.getByText('Activadas (24h)')).toBeInTheDocument();
     expect(screen.getByText('Reconocidas')).toBeInTheDocument();
     expect(screen.getByText('Alertas activas')).toBeInTheDocument();
-    expect(screen.getByText('Reconocer')).toBeInTheDocument();
+    expect(screen.getAllByText('Reconocer').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByText('Más')[0]);
     expect(screen.getByText('Linea de tiempo')).toBeInTheDocument();
-    expect(screen.getByText('en node1')).toBeInTheDocument();
+    expect(screen.getAllByText('en node1').length).toBeGreaterThan(0);
     expect(screen.getByText('VM recent')).toBeInTheDocument();
     expect(screen.getByText('High CPU on VM recent')).toBeInTheDocument();
   });

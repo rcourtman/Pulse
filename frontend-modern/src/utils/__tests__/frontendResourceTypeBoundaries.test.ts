@@ -2815,7 +2815,7 @@ describe('frontend resource type boundaries', () => {
       "import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';",
     );
     expect(alertsPageSource).not.toContain('function HistoryTab(');
-    expect(alertOverviewTabSource).toContain('AlertOverviewStatsCards');
+    expect(alertOverviewActiveAlertsSectionSource).toContain('AlertOverviewStatsCards');
     expect(alertOverviewTabSource).toContain('AlertOverviewActiveAlertsSection');
     expect(alertOverviewTabSource).toContain('useAlertIncidentTimelineState');
     expect(alertHistoryTabSource).toContain('useAlertHistoryState');
@@ -3961,7 +3961,8 @@ describe('frontend resource type boundaries', () => {
     expect(alertOverviewStateSource).not.toContain('AlertsAPI.unacknowledge');
     expect(alertOverviewStatsCardsSource).toContain('props.state.alertStats().acknowledged');
     expect(alertOverviewStatsCardsSource).toContain('props.state.alertStats().total24h');
-    expect(alertOverviewStatsCardsSource).toContain('props.state.alertStats().overrides');
+    // Override count is configuration, not alert status; it left the overview.
+    expect(alertOverviewStatsCardsSource).not.toContain('alertStats().overrides');
     expect(alertOverviewActiveAlertsSectionSource).toContain('AlertOverviewAlertCard');
     expect(alertOverviewActiveAlertsSectionSource).toContain('getAlertListEmptyState');
     expect(alertOverviewAlertCardSource).toContain('IncidentTimelinePanel');

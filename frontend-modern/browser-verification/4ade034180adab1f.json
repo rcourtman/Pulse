@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "base_sha": "e6167ef616dd326effc21114a549316e78fd3a9e",
+  "verified_at": "2026-10-04T23:22:09Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertDeliveryPausedCard.tsx",
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx",
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx",
+    "frontend-modern/src/features/alerts/AlertOverviewStatsCards.tsx",
+    "frontend-modern/src/features/alerts/OverviewTab.tsx",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
+    "frontend-modern/src/features/alerts/useAlertDeliveryPausedReason.ts",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts",
+    "frontend-modern/src/i18n/messages.de.ts",
+    "frontend-modern/src/i18n/messages.es.ts",
+    "frontend-modern/src/i18n/messages.ts",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertDeliveryPausedCard.tsx": "3c96dbb9842fdee2b6533b99babedbfd91264a672d4053bddc7f1350fd863e22",
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx": "45c58d51fa0268f84938584ebb7de04c632ed9c980bbb56b1e22d6948bdd7fe2",
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "d383b427daf124b0afcf8da168946bc7b47b4a9c0a912f659479396c26b2dfc1",
+    "frontend-modern/src/features/alerts/AlertOverviewStatsCards.tsx": "57bb45e79b43df83abefce5e63972a66528b3c42c3702a3192e610f547a7bcea",
+    "frontend-modern/src/features/alerts/OverviewTab.tsx": "d8b94a9debcc5c0ea77d5dbcc39bc73aa93da0dc91824555d7aac0c91735638f",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "7a8d339342ced3965bdc9b05ba647b400dbc3b61ddc8f9e6e63f3baa08e497dd",
+    "frontend-modern/src/features/alerts/useAlertDeliveryPausedReason.ts": "4acfef78146f4d4e583361e402f2a1afa522cffc0870b5ff3cc2c489caa20330",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "1290fc4d8a187dce20cd5dc3cb4ccf269f4fb086f797aa3c61eb5f1cde1cdbd7",
+    "frontend-modern/src/i18n/messages.de.ts": "159c093e34592dbe66a31116e9369fea833dd3fda48eb0df1e33896e1a738a3d",
+    "frontend-modern/src/i18n/messages.es.ts": "d6c2141132dc9fad5de7f3946e424b0e41e731690706ea0a0fc545f3a0446fdc",
+    "frontend-modern/src/i18n/messages.ts": "72e7c4e2918ca7f89af200a8ae2347be9b27b73b05eb69ea0d09842adf456912",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "ab0d54042c83529c8ccdcf88ec6490e27de610ba57821ba2196de07124edc3be",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts": "c13780cb9212541e402012de29ee181354ba25fd85d307da58d79bc6f8dea538"
+  },
+  "routes": [
+    "/alerts/overview",
+    "/alerts/notifications"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Mock estate with 19 active alerts (2 critical, 17 warning) and notification delivery not activated. Before: each alert was a tinted card with five buttons and a repeated \"Notification delivery not turned on\" line, a three-row stats table sat above, 3 alerts fit at 1440x900. After: one paused-delivery banner with overview wording, a Set up where alerts go link and Turn on delivery; no per-row global delivery line; a summary line (2 critical, 17 warning, Triggered (24h) 19); 5 alerts above the fold.",
+    "Rows keep resource name, (type), severity badge, node and a relative start age with the full localized start time on hover; meta line (limit, alert-specific delivery holds, snooze expiry) only when present.",
+    "German locale: banner, summary, buttons (Bestaetigen, Zurueckstellen, Mehr) and relative age (vor 20 Min.) all localized.",
+    "Notifications tab still shows the paused banner through the shared hook with its destinations wording; the banner title colour is now readable (was text-amber-900/25).",
+    "Phone 390x844 dark: banner stacks, summary wraps under the heading, row actions wrap to two lines, More reveals Timeline and Monitoring."
+  ],
+  "interactions": [
+    "Clicked More on the first alert: Timeline and Monitoring appeared and the control read Less with aria-expanded true.",
+    "Clicked Timeline: the incident timeline loaded with filters and note box; Hide Timeline closed it while the disclosure stayed open; unit test covers Less closing an open timeline.",
+    "Repeated the More and Timeline interactions at phone width in dark mode; no page errors."
+  ]
+}

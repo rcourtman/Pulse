@@ -23,6 +23,7 @@ import { AlertOverviewAlertCard } from '../AlertOverviewAlertCard';
 const acknowledge = vi.fn();
 const toggleTimeline = vi.fn();
 const state = {
+  tick: () => Date.now(),
   processingAlerts: () => new Set(),
   snoozeProcessingAlerts: () => new Set(),
   deliveryDiagnoses: () => ({}),
@@ -45,6 +46,7 @@ describe('Pulse system-alert overview scope', () => {
     ));
     expect(screen.getByText('Pulse').closest('a')).toBeNull();
     expect(screen.getByText(alert.message)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
     expect(screen.queryByText('Resource monitoring policy')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Acknowledge' }));
     expect(acknowledge).toHaveBeenCalledWith(alert);
@@ -64,6 +66,7 @@ describe('Pulse system-alert overview scope', () => {
     ));
     expect(screen.getByText('Pulse').closest('a')).toBeNull();
     expect(screen.queryByText(/limit:/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
     expect(screen.queryByText('Resource monitoring policy')).toBeNull();
   });
 
@@ -83,6 +86,33 @@ describe('Pulse system-alert overview scope', () => {
       '/proxmox/overview',
     );
     expect(screen.getByText('limit: 80%')).toBeInTheDocument();
+    // Monitoring policy is a secondary action behind the More disclosure.
+    expect(screen.queryByText('Resource monitoring policy')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
     expect(screen.getByText('Resource monitoring policy')).toBeInTheDocument();
+  });
+
+  it('closes the open timeline when the disclosure is collapsed', () => {
+    const alert = makeSystemAlert('cpu', { id: 'open-timeline', resourceId: 'vm-pulse' });
+    const openTimeline = {
+      expandedIncidents: () => new Set(['open-timeline']),
+      toggleIncidentTimeline: toggleTimeline,
+      incidentLoading: () => ({}),
+      incidentErrors: () => ({}),
+      incidentTimelines: () => ({}),
+      eventFilters: () => new Set(),
+      setEventFilters: vi.fn(),
+      incidentNoteDrafts: () => ({}),
+      incidentNoteSaving: () => new Set(),
+    } as unknown as AlertIncidentTimelineState;
+    render(() => (
+      <AlertOverviewAlertCard alert={alert} state={state} timelineState={openTimeline} />
+    ));
+    // An open timeline keeps the disclosure open, so the control reads Less
+    // and must close the timeline rather than do nothing.
+    const less = screen.getByRole('button', { name: 'Less' });
+    expect(less).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(less);
+    expect(toggleTimeline).toHaveBeenCalledWith('open-timeline', 'open-timeline', alert.startTime);
   });
 });
