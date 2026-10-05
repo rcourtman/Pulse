@@ -225,4 +225,37 @@ describe('ProxmoxCoverageTable column visibility', () => {
       expect(empty(title)).toHaveTextContent(/^None$/);
     }
   });
+
+  it('explains snapshot-only and unrated rows in plain words', () => {
+    render(() => (
+      <ProxmoxCoverageTable
+        rows={[
+          { ...row, key: 'snapshot-only', snapshotCount: 2 },
+          { ...row, key: 'unrated', posture: 'not-evaluated', protectionPosture: undefined },
+        ]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKeys={new Set<string>()}
+        onToggleExpand={() => {}}
+        showTaskColumn={true}
+        layoutWidth={() => 1_200}
+      />
+    ));
+
+    const titles = [...document.querySelectorAll('td span[title]')].map((span) =>
+      span.getAttribute('title'),
+    );
+    expect(titles).toContain(
+      'No PBS snapshot or PVE backup file. A snapshot is not a separate backup, so it does not count.',
+    );
+    expect(titles).toContain(
+      'This backup does not match a guest Pulse currently monitors, so it is not rated.',
+    );
+    expect(titles.join(' ')).not.toMatch(/canonical|provider evidence|independent recovery/);
+  });
 });

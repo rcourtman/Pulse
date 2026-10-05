@@ -3312,7 +3312,10 @@ metadata.
 ### Protection posture identity consumer
 
 `ProxmoxCoverageTable` remains a unified-resource identity consumer while
-storage/recovery owns protection truth. Dropping the per-source age columns
+storage/recovery owns protection truth. Its explanation copy for rows without a
+canonical workload identity says so in user terms ("does not match a guest
+Pulse currently monitors, so it is not rated"); the identity rule itself is
+unchanged. Dropping the per-source age columns
 from its rows changes no identity input: rows still key posture by the exact
 canonical `Resource.id`. Live VM/LXC rows carry the exact
 canonical `Resource.id` into one bounded posture batch; the table must not parse

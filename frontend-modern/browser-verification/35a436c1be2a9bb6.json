@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "a82a8e04747263f5c49083f4c537e03040ba3c62",
+  "verified_at": "2026-10-05T04:01:52Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "ffdd41704d33d02194119521d60f2cfcfa1b2a10f069e95e80eaacee7f63d40f",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "9073910e7ccb6806424e3a324424942afef939d102fc40e94db8323100dd78a6"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Coverage rows on a rebuilt backend: protected, attention (failed source, stale beyond 7 days), unprotected (no backup, snapshots only), unknown and not-evaluated explanations all read in plain words",
+    "Failed-source guest expansion: Needs attention: A backup exists, but one of its backup sources has reported a failure.",
+    "Snapshot-only age tooltip: No PBS snapshot or PVE backup file. A snapshot is not a separate backup, so it does not count."
+  ],
+  "interactions": [
+    "Read every posture tooltip on the coverage table",
+    "Expanded the failed-source guest row"
+  ]
+}

@@ -53,7 +53,7 @@ const COVERAGE_EMPTY_LABEL = 'None';
 const COVERAGE_NO_BACKUP_TITLE = 'No PBS snapshot or PVE backup file';
 // Matches the posture engine's own wording for a snapshot-only subject.
 const COVERAGE_SNAPSHOT_ONLY_TITLE =
-  'No PBS snapshot or PVE backup file. Guest snapshots alone do not prove independent recovery.';
+  'No PBS snapshot or PVE backup file. A snapshot is not a separate backup, so it does not count.';
 
 function CoverageAgeFallback(props: { unknown?: boolean; emptyTitle: string; compact?: boolean }) {
   const title = () =>
@@ -129,11 +129,11 @@ const evidenceQualityLabel = (value: string): string => {
 
 const postureExplanation = (row: WorkloadCoverageRow): string => {
   if (row.protectionPosture?.explanation) return row.protectionPosture.explanation;
-  if (row.posture === 'checking') return 'Pulse is checking provider protection evidence.';
+  if (row.posture === 'checking') return "Pulse is checking this guest's backups.";
   if (row.posture === 'not-evaluated') {
-    return 'This backup target has no current canonical workload identity, so Pulse does not evaluate workload protection for it.';
+    return 'This backup does not match a guest Pulse currently monitors, so it is not rated.';
   }
-  return 'Pulse does not have enough provider evidence to determine protection.';
+  return 'Pulse cannot tell yet whether this guest is backed up.';
 };
 
 // "Workload coverage" table: one row per workload answering "does this have a
