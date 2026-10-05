@@ -5,6 +5,9 @@ import { ResourceTable } from './ResourceTable';
 import { CollapsibleSection } from './Thresholds/sections/CollapsibleSection';
 import { formatMetricValue } from '@/features/alerts/thresholds/helpers';
 import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/thresholdsTableSectionProps';
+import { getAlertThresholdsDefaultsSummary } from '@/utils/alertThresholdsSectionPresentation';
+
+const GUEST_DISK_THRESHOLD_COLUMNS = ['Disk %'];
 
 export function ThresholdsTableProxmoxGuestDisksSection(props: ThresholdsTableSectionProps) {
   const { state, tableProps } = props;
@@ -14,6 +17,9 @@ export function ThresholdsTableProxmoxGuestDisksSection(props: ThresholdsTableSe
       <CollapsibleSection
         id="guestDisks"
         title={state.sectionTitles.guestDisks}
+        defaultsSummary={getAlertThresholdsDefaultsSummary(GUEST_DISK_THRESHOLD_COLUMNS, {
+          disk: tableProps.guestDefaults.disk,
+        })}
         resourceCount={state.guestDisksWithOverrides().length}
         collapsed={state.isCollapsed('guestDisks')}
         onToggle={() => state.toggleSection('guestDisks')}
@@ -26,7 +32,7 @@ export function ThresholdsTableProxmoxGuestDisksSection(props: ThresholdsTableSe
             title=""
             onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
             groupedResources={state.guestDisksGroupedByGuest()}
-            columns={['Disk %']}
+            columns={GUEST_DISK_THRESHOLD_COLUMNS}
             activeAlerts={tableProps.activeAlerts}
             emptyMessage={state.GUEST_DISKS_FILTER_EMPTY_STATE}
             onEdit={state.startEditing}

@@ -15,6 +15,11 @@ import {
   reconcileWarningCriticalEdit,
 } from '@/features/alerts/thresholds/helpers';
 import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/thresholdsTableSectionProps';
+import { getAlertThresholdsDefaultsSummary } from '@/utils/alertThresholdsSectionPresentation';
+
+const BACKUP_THRESHOLD_COLUMNS = ['Fresh Hours', 'Stale Hours', 'Warning Days', 'Critical Days'];
+// Fresh and stale hours only colour the dashboard; the alert fires on days.
+const BACKUP_ALERT_SUMMARY_COLUMNS = ['Warning Days', 'Critical Days'];
 
 export function ThresholdsTableProxmoxBackupsSection(props: ThresholdsTableSectionProps) {
   const { state, tableProps } = props;
@@ -24,6 +29,10 @@ export function ThresholdsTableProxmoxBackupsSection(props: ThresholdsTableSecti
       <CollapsibleSection
         id="backups"
         title={state.sectionTitles.backups}
+        defaultsSummary={getAlertThresholdsDefaultsSummary(
+          BACKUP_ALERT_SUMMARY_COLUMNS,
+          state.backupDefaultsRecord(),
+        )}
         collapsed={state.isCollapsed('backups')}
         onToggle={() => state.toggleSection('backups')}
         icon={<Archive class="w-5 h-5" />}
@@ -33,7 +42,7 @@ export function ThresholdsTableProxmoxBackupsSection(props: ThresholdsTableSecti
         <div ref={state.registerSection('backups')} class="scroll-mt-24">
           <ResourceTable
             title=""
-            columns={['Fresh Hours', 'Stale Hours', 'Warning Days', 'Critical Days']}
+            columns={BACKUP_THRESHOLD_COLUMNS}
             activeAlerts={tableProps.activeAlerts}
             onEdit={state.startEditing}
             onSaveEdit={state.saveEdit}

@@ -5,6 +5,9 @@ import { ResourceTable } from './ResourceTable';
 import { CollapsibleSection } from './Thresholds/sections/CollapsibleSection';
 import { formatMetricValue } from '@/features/alerts/thresholds/helpers';
 import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/thresholdsTableSectionProps';
+import { getAlertThresholdsDefaultsSummary } from '@/utils/alertThresholdsSectionPresentation';
+
+const STORAGE_THRESHOLD_COLUMNS = ['Usage %'];
 
 export function ThresholdsTableProxmoxStorageSection(props: ThresholdsTableSectionProps) {
   const { state, tableProps } = props;
@@ -14,6 +17,9 @@ export function ThresholdsTableProxmoxStorageSection(props: ThresholdsTableSecti
       <CollapsibleSection
         id="storage"
         title={state.sectionTitles.storage}
+        defaultsSummary={getAlertThresholdsDefaultsSummary(STORAGE_THRESHOLD_COLUMNS, {
+          usage: tableProps.storageDefault(),
+        })}
         resourceCount={tableProps.storage.length}
         collapsed={state.isCollapsed('storage')}
         onToggle={() => state.toggleSection('storage')}
@@ -27,7 +33,7 @@ export function ThresholdsTableProxmoxStorageSection(props: ThresholdsTableSecti
             onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
             groupedResources={state.storageGroupedByNode()}
             groupHeaderMeta={state.guestGroupHeaderMeta()}
-            columns={['Usage %']}
+            columns={STORAGE_THRESHOLD_COLUMNS}
             activeAlerts={tableProps.activeAlerts}
             emptyMessage={state.STORAGE_THRESHOLDS_FILTER_EMPTY_STATE}
             onEdit={state.startEditing}
