@@ -6648,3 +6648,20 @@ unbound to filesystem-observation code that it actually executes. The closure
 test enumerates all repository-local dependencies of the install-test binary,
 collector and helper and reports every missing package together. No qualification
 gate, source exclusion or production permission is relaxed by this correction.
+
+
+### Aligned Go patch graph (5 October 2026)
+
+`go.mod` and `go.sum` move only `github.com/klauspost/compress` to 1.20.1
+and Kubernetes `api`, `apimachinery` and `client-go` together to 0.37.1.
+Other dependencies, compiler pin, installer inputs and managed runtime
+orchestration stay unchanged; retained older checksums are not pruned.
+The dev-runtime proof rejects missing checksum pairs, a downgrade below these
+reviewed floors and a split Kubernetes trio. These structural controls do not
+establish compatibility or package availability. Exact committed-graph
+acquisition must verify the new Go module/checksum content before a fresh
+worker selects it. Acceptance additionally requires the existing actual
+metrics wire/decompression and Kubernetes agent controls, managed-runtime
+smoke tests, read-only graph tests/vet and real server/agent builds at the same
+source. No install, release or native Kubernetes acceptance is implied by a
+manifest edit or acquisition receipt.
