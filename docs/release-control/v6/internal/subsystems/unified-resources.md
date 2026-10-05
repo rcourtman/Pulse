@@ -23,6 +23,26 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+Canonical resource History honours selected memory observation provenance and Proxmox VM filesystem deferrals instead of treating numeric carriers as fresh measurements.
+
+### Canonical resource History cannot promote retained guest readings
+
+`ResourceMetric.current` is a selected numeric carrier, not a freshness
+assertion. Canonical drawer History consumes its existing memory observation
+and Proxmox VM filesystem read reason as independent evidence, just as the
+dedicated guest drawer does. Current memory requires a usable original time
+when annotated; last-known/unknown/unavailable evidence has explicit labels.
+A VM read deferral withdraws current disk fallback, retaining a number only
+for the existing `prev-` reason vocabulary. LXC disk usage is not a QEMU
+filesystem read. Other platform/catalog metrics and capacity aliases stay
+unchanged. Same-ID replacement updates this presentation without remounting
+History or requesting another read. Clearing deferral is not native recovery.
+
+The full drawer regression in `ResourceDetailDrawer.history.test.tsx` covers
+retention, unavailable carriers, original timestamps, measured zero and recovery
+without invented chart points; model and browser controls retain source/access
+isolation. No wire schema, collector, alert, request identity or authority changes.
+
 ### Bulk registry copies reuse mutation-bound canonical metadata
 
 `ResourceRegistry.List` and typed-view rebuilding share canonical identity,
@@ -48,7 +68,6 @@ including mid-batch changes, policy edits, supersession, staleness, ownership,
 lazy views, races and allocation cost. The external connected demo test includes
 all nine providers and its metadata-heavy estate. These are source invariants,
 not native fleet CPU/RSS relief, backup recovery or release availability.
-
 
 ### Container CPU presentation explains its existing scale
 
@@ -199,7 +218,6 @@ measured zero, partial omissions and full/delta/fast recovery. The connected
 and History presentation in desktop Chromium and phone WebKit. Synthetic
 source proof does not establish native backup safety or shipped availability.
 
-
 ### Backup server counts retain their inventory availability
 
 The existing PBS server/datastore row takes backup-inventory read availability
@@ -231,7 +249,6 @@ The shared presentation and mounted regressions plus the production-component
 `browser-tests/guest-disk-deferral.cjs` fixture verify this client behaviour;
 they do not prove native QGA coordination, History freshness or delivery.
 
-
 ### Narrow controller and backup summaries retain their source facts
 
 Kubernetes controller row expansions expose supplied kind-specific targets,
@@ -247,7 +264,6 @@ archive format is presentation only, with the provider identifier retained in
 hover and search. The recovery-model, table and guest regressions plus desktop/
 phone browser rendering verify attribution, visible facts and source composition.
 These frontend improvements change no collector, API authority or native status.
-
 
 ### Resource evidence fallback access boundaries
 
@@ -436,7 +452,6 @@ metadata cannot establish an alert identity.
 read-only incident memory association. It does not rewrite event resource IDs,
 resource operator state, approvals, action request identity or execution
 capabilities. An unavailable canonical read remains an error.
-
 
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
@@ -662,7 +677,6 @@ distinction afterwards. The unified risk projection gates wearout on
 `storagehealth.WearoutReported` so its verdict and the server-side alert verdict
 about the same disk cannot diverge.
 
-
 ### Coverage rows preserve unknown backup chronology
 
 The existing Proxmox backup Coverage projection carries unknown-date flags
@@ -874,7 +888,6 @@ the title; task starts use the shared relative-time primitive with their exact
 timestamp retained. Native table/model/guardrail tests and the production
 `browser-tests/proxmox-docker-rows.cjs` exercise these surfaces without executing
 a container action or claiming native appliance or release acceptance.
-
 
 ### PBS host history correlation
 

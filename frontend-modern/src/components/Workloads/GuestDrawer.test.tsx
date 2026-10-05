@@ -220,6 +220,57 @@ afterEach(() => {
 // ── Tests ──────────────────────────────────────────────────────────────
 
 describe('GuestDrawer', () => {
+  it('keeps the shared memory provenance policy in the full guest drawer after live replacement', async () => {
+    chartsApiMocks.getMetricsHistory.mockResolvedValue({
+      resourceType: 'vm',
+      resourceId: 'inst1:node1:100',
+      range: '24h',
+      start: 1,
+      end: 3,
+      source: 'store',
+      metrics: {},
+    });
+    const [guest, setGuest] = createSignal(
+      makeGuest({
+        memory: {
+          total: 100,
+          used: 0,
+          free: 100,
+          usage: 0,
+          observation: {
+            state: 'last-known',
+            source: 'guest-agent-meminfo',
+            observedAt: '2026-10-04T12:00:00Z',
+          },
+        },
+      }),
+    );
+    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1));
+    const chart = screen.getAllByTestId('guest-history-group-chart')[0];
+    expect(chart.querySelector('[data-history-last-known="memory"]')).toHaveTextContent(
+      '0.0%last known',
+    );
+    expect(chart.querySelector('[data-history-current="memory"]')).toBeNull();
+    setGuest({ ...guest(), lastSeen: '2026-10-05T00:00:00Z' });
+    expect(chart.querySelector('[data-history-deferred="memory"]')).toHaveTextContent(
+      '2026-10-04 12:00:00 UTC',
+    );
+    setGuest({
+      ...guest(),
+      memory: {
+        ...guest().memory,
+        observation: { state: 'current', source: 'status-mem', observedAt: '2026-10-04T13:00:00Z' },
+      },
+    });
+    expect(screen.getAllByTestId('guest-history-group-chart')[0]).toBe(chart);
+    expect(chart.querySelector('[data-history-current="memory"]')).toHaveTextContent('0.0%current');
+    expect(chart.querySelector('[data-history-deferred="memory"]')).toBeNull();
+    expect(chart.querySelector('path')).toBeNull();
+    expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps stored History gaps through live guest recovery without another read', async () => {
     const points = makeHistoryPoints(10);
     const payload = {

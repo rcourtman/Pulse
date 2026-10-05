@@ -17,6 +17,11 @@ import { getWorkloadMetricHistoryTarget } from '@/utils/workloadMetricHistoryTar
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
 import type { WorkloadsMemoryDisplayBasis } from './workloadsFilterModel';
 
+import {
+  getMemoryObservationPresentation,
+  type MemoryObservationPresentation,
+} from '@/utils/memoryObservation';
+
 type Guest = WorkloadGuest;
 
 export interface GuestDrawerProps {
@@ -107,24 +112,7 @@ const getGuestDrawerDiskUsage = (guest: Guest): number | undefined => {
   return typeof usage === 'number' && Number.isFinite(usage) && usage >= 0 ? usage : undefined;
 };
 
-export interface GuestDrawerMemoryReading {
-  state: 'current' | 'last-known' | 'unavailable' | 'unknown';
-  summary: string;
-  message: string;
-}
-
-const memorySourceLabels: Record<string, string> = {
-  'guest-agent-meminfo': 'QEMU guest agent',
-  'guest-agent-meminfo-derived': 'QEMU guest agent',
-  agent: 'Pulse Agent',
-  'available-field': 'Proxmox',
-  'derived-free-buffers-cached': 'Proxmox',
-  'derived-total-minus-used': 'Proxmox',
-  'status-mem': 'Proxmox',
-  'status-freemem': 'Proxmox',
-  'cluster-resources': 'Proxmox',
-  'previous-snapshot': 'Previous snapshot',
-};
+export type GuestDrawerMemoryReading = MemoryObservationPresentation;
 
 const getGuestDrawerMemoryUsage = (guest: Guest): number | undefined => {
   const usage = guest.memory?.usage;
@@ -149,41 +137,11 @@ export const getGuestDrawerMemoryReading = (guest: Guest): GuestDrawerMemoryRead
       guest.type === 'lxc' ||
       guest.platformScopes?.includes('proxmox-pve') ||
       (guest.vmid > 0 && Boolean(guest.node && guest.instance)));
-  // Unannotated unrelated platforms retain their existing behaviour. Legacy
-  // Proxmox readings lack authority to assert current freshness.
-  if (!proxmoxGuest && !observation) return null;
-  const timestamp =
-    typeof observation?.observedAt === 'string' ? Date.parse(observation.observedAt) : NaN;
-  const validTime = Number.isFinite(timestamp) && timestamp > 0 && timestamp <= Date.now();
-  const observed = validTime
-    ? new Date(timestamp).toISOString().replace('T', ' ').replace('.000Z', 'Z').replace('Z', ' UTC')
-    : null;
-  const state =
-    getGuestDrawerMemoryUsage(guest) === undefined || observation?.state === 'unavailable'
-      ? 'unavailable'
-      : observation?.state === 'last-known'
-        ? 'last-known'
-        : observation?.state === 'current' && validTime
-          ? 'current'
-          : 'unknown';
-  const label =
-    state === 'current'
-      ? 'Current'
-      : state === 'last-known'
-        ? 'Last known'
-        : state === 'unavailable'
-          ? 'Unavailable'
-          : 'Freshness unknown';
-  const source =
-    observation && Object.hasOwn(memorySourceLabels, observation.source)
-      ? memorySourceLabels[observation.source]
-      : 'Unknown source';
-  const time = observed ? `Observed: ${observed}.` : 'Observation time unknown.';
-  return {
-    state,
-    summary: `${label} · ${source}${observed ? ` · ${observed}` : ' · time unknown'}`,
-    message: `${label}. Source: ${source}. ${time}${state === 'last-known' || state === 'unknown' ? ' Not a current measurement.' : ''}`,
-  };
+  return getMemoryObservationPresentation(
+    getGuestDrawerMemoryUsage(guest),
+    observation,
+    proxmoxGuest,
+  );
 };
 
 export const getGuestDrawerDeferredMetrics = (
