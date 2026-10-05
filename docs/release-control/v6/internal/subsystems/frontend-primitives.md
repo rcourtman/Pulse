@@ -2341,7 +2341,9 @@ not a replacement status card, CTA band, or page-local nested card.
    for a note that explains a row's status dot: a TrueNAS service stopped while
    set to start at boot says `should be running` beside its state in the State
    cell, with the full sentence in the title and the drawer, not on a second
-   line under the name. Text-only
+   line under the name. The Docker containers State cell likewise names what
+   the dot means (Unhealthy, Starting, Exited (139)) in one word or two with the
+   tone of the dot, instead of the raw `running`. Text-only
    operational rows may use `getPlatformTableRowClass` to declare that same
    shared rhythm explicitly; providers must not introduce local row-height
    exceptions. Mobile truncation may rely on a full-value row

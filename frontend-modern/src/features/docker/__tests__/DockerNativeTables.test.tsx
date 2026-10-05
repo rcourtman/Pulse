@@ -307,7 +307,8 @@ describe('Docker native tables', () => {
     expect(screen.getByText('podman 5.2.1')).toBeInTheDocument();
     expect(screen.getByText('nginx:latest')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
-    expect(screen.getByText('0.0.0.0:8080->80/tcp')).toBeInTheDocument();
+    // The cell drops the all-interfaces address; the title keeps the full form.
+    expect(screen.getByText('8080->80/tcp')).toHaveAttribute('title', '0.0.0.0:8080->80/tcp');
     expect(screen.getByText('frontend 172.18.0.2')).toBeInTheDocument();
     expect(screen.getByText('volume:/usr/share/nginx/html (rw)')).toBeInTheDocument();
     expect(screen.getByText('Available')).toBeInTheDocument();
@@ -885,7 +886,107 @@ describe('Docker native tables', () => {
     ));
 
     expect(screen.getByText('State')).toBeInTheDocument();
-    expect(screen.getByText('exited')).toBeInTheDocument();
+    expect(screen.getByText('Exited')).toBeInTheDocument();
+  });
+
+  it('shows the State column for a running container whose health check fails', () => {
+    setViewportWidth(WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH);
+
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: { hostname: 'edge-01', containerState: 'running', health: 'healthy' },
+          }),
+          makeResource({
+            id: 'container-2',
+            type: 'app-container',
+            name: 'edge-api',
+            status: 'running',
+            docker: { hostname: 'edge-01', containerState: 'running', health: 'unhealthy' },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByText('State')).toBeInTheDocument();
+    const unhealthy = screen.getByText('Unhealthy');
+    expect(unhealthy).toHaveAttribute('data-docker-container-state', 'danger');
+    expect(unhealthy).toHaveAttribute('title', 'Running, but its health check is failing');
+    expect(screen.getByText('Healthy')).toHaveAttribute('data-docker-container-state', 'ok');
+  });
+
+  it("shows each running container's uptime and none for a stopped one", () => {
+    setViewportWidth(WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH);
+
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: { hostname: 'edge-01', containerState: 'running', uptimeSeconds: 90_000 },
+          }),
+          makeResource({
+            id: 'container-2',
+            type: 'app-container',
+            name: 'edge-cache',
+            status: 'offline',
+            docker: {
+              hostname: 'edge-01',
+              containerState: 'exited',
+              exitCode: 1,
+              uptimeSeconds: 184_082,
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByText('Uptime')).toBeInTheDocument();
+    const runningRow = document.querySelector('[data-docker-container-row="container-1"]');
+    const stoppedRow = document.querySelector('[data-docker-container-row="container-2"]');
+    expect(runningRow?.textContent).toContain('1d');
+    expect(stoppedRow?.textContent).not.toContain('2d');
+    expect(screen.getByText('Exited (1)')).toHaveAttribute('data-docker-container-state', 'danger');
+  });
+
+  it('leaves out the Uptime column when no container reports one', () => {
+    setViewportWidth(WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH);
+
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: { hostname: 'edge-01', containerState: 'running' },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.queryByText('Uptime')).not.toBeInTheDocument();
   });
 
   it('renders actionable Docker container updates with native agent and container IDs', async () => {

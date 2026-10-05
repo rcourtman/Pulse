@@ -768,6 +768,7 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
     34a. `frontend-modern/src/features/docker/DockerContainerLifecycleControls.tsx`
     34b. `frontend-modern/src/features/docker/dockerContainerLifecycleActions.ts`
     34c. `frontend-modern/src/features/docker/dockerContainerTableModel.ts`
+    34d. `frontend-modern/src/features/docker/dockerContainerStatePresentation.ts`
 35. `frontend-modern/src/features/docker/DockerImagesTable.tsx`
 36. `frontend-modern/src/features/docker/DockerNativeTableShared.tsx`
 37. `frontend-modern/src/features/docker/DockerNetworksTable.tsx`
@@ -5983,6 +5984,20 @@ memory bars yield the difference. Swarm services show the rollout state as
 words ("Rollback started") with the raw token, message and completion time in
 the title, and Swarm tasks show Started as an age with the RFC3339 stamp in
 the title, matching every other platform table's time cells.
+The containers table's State cell says what `docker ps` would flag, through
+`dockerContainerStatePresentation.ts` over `mapDockerContainerStatus`, so the
+row dot and the words agree: Unhealthy and Starting for a running container's
+health check, Exited (139) for a crash, Restarting, and muted Exited or Paused
+for a container stopped on purpose, with the full sentence on hover. A health
+status only counts for a running container, because Docker keeps the last one
+on a stopped container (#1724). The State column appears when any row in view
+has one of those states, including an unhealthy running container. From the
+compact layout up an Uptime column shows the current run (none for a stopped
+container, whose leftover uptime is not time spent running), which marks a
+container that just restarted; narrower rows keep it in the drawer. The Ports
+cell drops the all-interfaces address and folds the IPv4/IPv6 pair Docker
+reports for one mapping, keeping a specific bind address; the title, drawer
+and search keep the full form.
 
 ResourceDetailDrawer headings wrap long display names rather than ellipsising
 them. Overview rows may still truncate identity; keyboard expansion exposes the

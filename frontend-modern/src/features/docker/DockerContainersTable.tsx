@@ -45,6 +45,7 @@ import {
   PlatformTableToolbar,
   createPlatformTableFilterState,
   createPlatformTableSortState,
+  formatPlatformTableUptimeValue,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
   PlatformTableShell,
@@ -69,6 +70,7 @@ import {
 } from './DockerNativeTableShared';
 import {
   compareDockerContainers,
+  dockerContainerPortsCompactSummary,
   dockerContainerPortsSummary,
   filterDockerResources,
   mapDockerContainerStatus,
@@ -88,6 +90,11 @@ import type { Resource } from '@/types/resource';
 import { DockerContainerLifecycleControls } from './DockerContainerLifecycleControls';
 import { CONTAINER_CPU_CAPACITY_DESCRIPTION } from './dockerCpuPresentation';
 import { DockerImageReferenceText } from './DockerImageReferenceText';
+import {
+  getDockerContainerStatePresentation,
+  getDockerContainerUptimeSeconds,
+  type DockerContainerStateTone,
+} from './dockerContainerStatePresentation';
 
 type DockerNetwork = NonNullable<NonNullable<Resource['docker']>['networks']>[number];
 type DockerMount = NonNullable<NonNullable<Resource['docker']>['mounts']>[number];
@@ -168,12 +175,18 @@ const toContainerWebLinkRows = (resource: Resource): WorkloadWebLinkRow[] => {
   ];
 };
 
-const containerState = (resource: Resource): string =>
-  dockerTextValue(resource.docker?.containerState || resource.status);
-
 const isContainerRunning = (resource: Resource): boolean =>
   (asTrimmedString(resource.docker?.containerState || resource.status) ?? '').toLowerCase() ===
   'running';
+
+// Problems take the row's danger or warning tone, as the TrueNAS State cells
+// do; a stopped container reads muted and a running one plainly.
+const DOCKER_CONTAINER_STATE_TONE_CLASS: Record<DockerContainerStateTone | 'none', string> = {
+  danger: 'font-medium text-red-600 dark:text-red-300',
+  warning: 'font-medium text-amber-700 dark:text-amber-300',
+  muted: 'text-muted',
+  none: '',
+};
 
 // v5 flagged crash-loopers in the restarts column; a container that restarted
 // more than this many times needs an operator's eye even while "running".
@@ -271,10 +284,10 @@ const getDockerContainerSortValue = (
     }
     case 'image':
       return asTrimmedString(resource.docker?.image) || null;
-    case 'state': {
-      const state = containerState(resource);
-      return state === '—' ? null : state;
-    }
+    case 'state':
+      return getDockerContainerStatePresentation(resource).label;
+    case 'uptime':
+      return getDockerContainerUptimeSeconds(resource) ?? null;
     case 'cpu':
       return getPlatformTableFiniteMetric(resource.cpu?.current) ?? null;
     case 'memory': {
@@ -416,7 +429,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   const sort = createPlatformTableSortState({
     storageKey: 'dockerContainers',
     sortKeys: DOCKER_CONTAINER_SORTABLE_COLUMN_IDS,
-    descendingFirst: ['cpu', 'memory', 'restarts'],
+    descendingFirst: ['cpu', 'memory', 'restarts', 'uptime'],
   });
   const sortedRows = createMemo(() =>
     sort.sortRows([...scopedRows()].sort(compareDockerContainers), getDockerContainerSortValue),
@@ -494,11 +507,13 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
         typeof resource.docker?.restartCount === 'number' && resource.docker.restartCount > 0,
     ),
   );
+  // A running container with a failing or starting health check needs the
+  // State column as much as a stopped one does.
   const showStateColumn = createMemo(() =>
-    scopedRows().some((resource) => {
-      const state = asTrimmedString(resource.docker?.containerState || resource.status);
-      return !!state && state.toLowerCase() !== 'running';
-    }),
+    scopedRows().some((resource) => getDockerContainerStatePresentation(resource).tone !== null),
+  );
+  const showUptimeColumn = createMemo(() =>
+    scopedRows().some((resource) => getDockerContainerUptimeSeconds(resource) !== undefined),
   );
   const visibleColumns = createMemo(() =>
     getDockerContainerVisibleColumnsForLayout(
@@ -506,7 +521,11 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
       showRuntimeColumn(),
       showRestartColumn(),
       showStateColumn(),
-      { groupedByHost: isGroupable() && groupingMode() === 'grouped' },
+      {
+        groupedByHost: isGroupable() && groupingMode() === 'grouped',
+        singleHost: hostOptions().length <= 1,
+        includeUptime: showUptimeColumn(),
+      },
     ),
   );
   const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
@@ -517,7 +536,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   const renderContainerRow = (resource: Resource): JSX.Element => {
     const indicator = mapDockerContainerStatus(resource);
     const image = () => dockerTextValue(resource.docker?.image);
-    const state = () => containerState(resource);
+    const state = () => getDockerContainerStatePresentation(resource);
     const runtime = () => runtimeSummary(resource);
     const host = () => dockerHostName(resource);
     const running = () => isContainerRunning(resource);
@@ -542,6 +561,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     const hasMemoryMetric = () => memoryTotal() > 0 || memoryPercentOnly() !== undefined;
     const restartCount = () => resource.docker?.restartCount ?? 0;
     const ports = () => dockerContainerPortsSummary(resource);
+    const portsCompact = () => dockerContainerPortsCompactSummary(resource);
     const networks = () => networksSummary(resource);
     const mounts = () => mountsSummary(resource);
     const updates = () => updateStatusLabel(resource);
@@ -591,8 +611,12 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
         case 'state':
           return (
             <TableCell class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}>
-              <span class="block max-w-full truncate" title={state()}>
-                {state()}
+              <span
+                class={`block max-w-full truncate ${DOCKER_CONTAINER_STATE_TONE_CLASS[state().tone ?? 'none']}`}
+                title={state().title}
+                data-docker-container-state={state().tone ?? 'ok'}
+              >
+                {state().label}
               </span>
             </TableCell>
           );
@@ -645,11 +669,19 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
               </Show>
             </TableCell>
           );
+        case 'uptime':
+          return (
+            <TableCell
+              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content tabular-nums`}
+            >
+              {formatPlatformTableUptimeValue(getDockerContainerUptimeSeconds(resource))}
+            </TableCell>
+          );
         case 'ports':
           return (
             <TableCell class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}>
               <span class="block max-w-full truncate font-mono text-[11px]" title={ports()}>
-                {ports()}
+                {portsCompact()}
               </span>
             </TableCell>
           );

@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "base_sha": "6fbebfd5231cb689ebf3b9eaf048f4fb59e92534",
+  "verified_at": "2026-10-05T15:48:27Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/features/docker/dockerContainerStatePresentation.ts",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts",
+    "frontend-modern/src/features/docker/dockerPageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "d7dcaf71cafe99d9d225ac2fbf3437f887d343c6dd5e134cf7df1b67ad53f0b5",
+    "frontend-modern/src/features/docker/dockerContainerStatePresentation.ts": "78867db71596d204a8beed458fdfa3e10aa44e92e1c5f038a8bea9bd55e5dc6e",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts": "942a73eda0316d484ee550bd555befe356cd47fa0aadf5e497d417fea53aa985",
+    "frontend-modern/src/features/docker/dockerPageModel.ts": "23102b7c8cf30606e449770dd5d6d6eab957b23da433022f73a694a8dddb1a8c"
+  },
+  "routes": [
+    "/docker/containers"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 1400
+    },
+    {
+      "width": 430,
+      "height": 1000
+    },
+    {
+      "width": 600,
+      "height": 1000
+    },
+    {
+      "width": 800,
+      "height": 1000
+    },
+    {
+      "width": 1000,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "width": 1440,
+      "height": 1100
+    },
+    {
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "width": 1920,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Containers on a mock estate with the API response edited so one running container fails its health check, one is still starting it (uptime 40s, 6 restarts) and one stopped container carries a stale unhealthy status; built on main after the image-name change (#2521)",
+    "State reads Unhealthy in red and Starting in amber where main showed running, Exited (139) and Exited (1) in red for crashes, muted Exited and Paused for stopped containers, Healthy or Running otherwise; the stopped container with a stale unhealthy status reads Exited, where main's dot called it unhealthy",
+    "One host in view (edge-apps-01) at 1000: main had no State column for the starting container and a Host column repeating the one host on every row; the change shows Starting, drops the Host column, and adds Uptime",
+    "Uptime appears from a 900px table: 9d, 10d, and 0m or 5m for containers that just restarted; stopped containers show a dash; the phone drawer keeps uptime (10d 15h)",
+    "Ports read 23210->8080/... instead of 0.0.0.0:23210->8080/..., the full form on hover; per-cell overflow at 1440 falls from 175px to 123px",
+    "Column sweep 390-1920 against main: State, Uptime and every header fit with no new clipping except one more truncated container name at 1000px; State fits Exited (139) on a phone (78px)",
+    "Dark mode at 1440: red and amber state text readable"
+  ],
+  "interactions": [
+    "Ran the column sweep on main (reverse-applied patch) and on the change across nine widths",
+    "Served edited /api/resources responses with the websocket held, in grouped and one-host views",
+    "Opened a container's row drawer on a 390px phone"
+  ]
+}

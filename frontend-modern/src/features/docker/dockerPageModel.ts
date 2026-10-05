@@ -94,15 +94,27 @@ const dockerDisplayName = (resource: Resource): string =>
   asTrimmedString(resource.docker?.nodeName) ||
   resource.id;
 
-export function mapDockerContainerStatus(resource: Resource): StatusIndicator {
+// Docker's own container state, or the unified resource status when an agent
+// did not report one; "online" there means the container is running.
+export const dockerContainerRunState = (resource: Resource): string => {
   const state = normalizeDockerToken(resource.docker?.containerState || resource.status);
+  return state === 'online' ? 'running' : state;
+};
+
+export function mapDockerContainerStatus(resource: Resource): StatusIndicator {
+  const state = dockerContainerRunState(resource);
   const health = normalizeDockerToken(resource.docker?.health);
   const exitCode = resource.docker?.exitCode;
 
   if (FATAL_CONTAINER_STATES.has(state)) {
     return { variant: 'danger', label: state === 'oomkilled' ? 'OOMKilled' : titleCase(state) };
   }
-  if (health === 'unhealthy') return { variant: 'danger', label: 'Unhealthy' };
+  // Docker keeps the last health status on a stopped or paused container
+  // (#1724), so a health check only speaks for a running one, or for one whose
+  // state was never reported.
+  if ((state === 'running' || !state) && health === 'unhealthy') {
+    return { variant: 'danger', label: 'Unhealthy' };
+  }
   if (state === 'exited' && typeof exitCode === 'number' && exitCode !== 0) {
     return { variant: 'danger', label: `Exited (${exitCode})` };
   }
@@ -270,6 +282,29 @@ export const dockerContainerPortsSummary = (resource: Resource): string =>
     .map((port) => dockerContainerPortLabel(port))
     .filter((value) => value.trim().length > 0)
     .join(', ') || '—';
+
+// Docker prints a port published on every interface with the 0.0.0.0 (and
+// again the ::) address in front, which fills a narrow Ports cell before the
+// mapping is reached. The table cell keeps only the mapping for those, folds
+// the IPv4/IPv6 pair into one entry, and keeps a specific address such as
+// 127.0.0.1, which says who can connect. The title, drawer and search keep the
+// full form.
+const ALL_INTERFACE_PORT_ADDRESSES = new Set(['0.0.0.0', '::', '[::]']);
+
+export const dockerContainerPortsCompactSummary = (resource: Resource): string =>
+  [
+    ...new Set(
+      (resource.docker?.ports ?? [])
+        .map((port) =>
+          dockerPortToken(
+            ALL_INTERFACE_PORT_ADDRESSES.has(asTrimmedString(port.ip) ?? '')
+              ? { ...port, ip: undefined }
+              : port,
+          ),
+        )
+        .filter((value) => value.trim().length > 0),
+    ),
+  ].join(', ') || '—';
 
 const dockerContainerNetworkAddress = (
   network: DockerContainerNetwork | undefined,
