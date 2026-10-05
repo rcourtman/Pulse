@@ -58,7 +58,7 @@ def prettier_only_contract_neutral_reason(
     if not commit:
         return None
 
-    impacted = infer_impacted_subsystems(staged_files)
+    impacted = infer_impacted_subsystems(staged_files, revision=commit)
     runtime_paths = {
         path
         for data in impacted.values()
@@ -121,8 +121,8 @@ def validate_verification_policy(
             raise ValueError(f"subsystem {subsystem_id} {context} missing {field}")
 
 
-def load_subsystem_rules(*, staged: bool = False) -> List[dict]:
-    payload = load_repo_json(SUBSYSTEM_REGISTRY, staged=staged)
+def load_subsystem_rules(*, staged: bool = False, revision: str | None = None) -> List[dict]:
+    payload = load_repo_json(SUBSYSTEM_REGISTRY, staged=staged, revision=revision)
     rules = list(payload.get("subsystems", []))
     for rule in rules:
         subsystem_id = str(rule.get("id"))
@@ -300,9 +300,10 @@ def infer_impacted_subsystems(
     staged_files: Sequence[str],
     *,
     use_staged_registry: bool = False,
+    revision: str | None = None,
 ) -> Dict[str, dict]:
     impacted: Dict[str, dict] = {}
-    rules = load_subsystem_rules(staged=use_staged_registry)
+    rules = load_subsystem_rules(staged=use_staged_registry, revision=revision)
     rules_by_id = {str(rule["id"]): rule for rule in rules}
 
     for path in staged_files:
@@ -352,10 +353,15 @@ def required_contract_updates(
     impacted: Dict[str, dict] | None = None,
     *,
     use_staged_contract_index: bool = False,
+    revision: str | None = None,
 ) -> Dict[str, dict]:
-    impacted_subsystems = impacted if impacted is not None else infer_impacted_subsystems(staged_files)
+    impacted_subsystems = (
+        impacted
+        if impacted is not None
+        else infer_impacted_subsystems(staged_files, revision=revision)
+    )
     required: Dict[str, dict] = {}
-    contract_index = load_contract_index(staged=use_staged_contract_index)
+    contract_index = load_contract_index(staged=use_staged_contract_index, revision=revision)
 
     for subsystem_id, data in impacted_subsystems.items():
         # Contract update requirement triggers on non-cycle-artifact touches
@@ -670,11 +676,22 @@ def check_staged_contracts(
     inferred_override_reason: str | None = None,
 ) -> int:
     staged_set: Set[str] = set(staged_files)
-    impacted = infer_impacted_subsystems(staged_files, use_staged_registry=True)
+    # Judge the change by the rules it was written under: the staged registry
+    # and contracts before a commit exists, the evaluated commit's own after.
+    # Reading HEAD's in CI let a later commit on the branch (or main merged
+    # under it) add or drop ownership and contract references for an
+    # earlier commit, so its verdict depended on what came after it.
+    governance_revision = revision if diff_base is not None else None
+    impacted = infer_impacted_subsystems(
+        staged_files,
+        use_staged_registry=True,
+        revision=governance_revision,
+    )
     required_contracts = required_contract_updates(
         staged_files,
         impacted,
         use_staged_contract_index=True,
+        revision=governance_revision,
     )
     missing_contracts = {
         contract_path: data

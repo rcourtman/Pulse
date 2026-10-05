@@ -251,5 +251,49 @@ Stable.
                 )
 
 
+    def test_tracked_contract_files_can_read_a_commits_contracts(self) -> None:
+        # A CI check of an earlier commit on a branch must see that commit's
+        # contracts, not the ones a later commit, the index or the working
+        # tree hold.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            contracts_dir = repo_root / "docs" / "release-control" / "v6" / "internal" / "subsystems"
+            contracts_dir.mkdir(parents=True, exist_ok=True)
+            first_rel = "docs/release-control/v6/internal/subsystems/first.md"
+            later_rel = "docs/release-control/v6/internal/subsystems/later.md"
+            identity = ("-c", "user.name=Pulse Test", "-c", "user.email=pulse-test@example.invalid")
+
+            self.git(repo_root, "init")
+            (repo_root / first_rel).write_text("# committed first\n", encoding="utf-8")
+            self.git(repo_root, "add", first_rel)
+            self.git(repo_root, *identity, "commit", "-q", "-m", "first")
+            evaluated = self.git(repo_root, "rev-parse", "HEAD").stdout.strip()
+            (repo_root / first_rel).write_text("# committed later\n", encoding="utf-8")
+            (repo_root / later_rel).write_text("# later\n", encoding="utf-8")
+            self.git(repo_root, "add", first_rel, later_rel)
+            self.git(repo_root, *identity, "commit", "-q", "-m", "later")
+            (repo_root / first_rel).write_text("# staged\n", encoding="utf-8")
+            self.git(repo_root, "add", first_rel)
+            (repo_root / first_rel).write_text("# working tree\n", encoding="utf-8")
+
+            with (
+                patch("subsystem_contracts.REPO_ROOT", repo_root),
+                patch("subsystem_contracts.CONTRACTS_DIR", contracts_dir),
+            ):
+                self.assertEqual(tracked_contract_paths(revision=evaluated), [first_rel])
+                self.assertEqual(
+                    tracked_contract_files(revision=evaluated),
+                    {first_rel: "# committed first\n"},
+                )
+                self.assertEqual(
+                    tracked_contract_files(staged=True, revision="HEAD"),
+                    {first_rel: "# committed later\n", later_rel: "# later\n"},
+                )
+                # Unlike the index read, a commit without contracts does not
+                # borrow the working tree's.
+                empty_tree = self.git(repo_root, "hash-object", "-t", "tree", "/dev/null").stdout.strip()
+                self.assertEqual(tracked_contract_files(revision=empty_tree), {})
+
+
 if __name__ == "__main__":
     unittest.main()
