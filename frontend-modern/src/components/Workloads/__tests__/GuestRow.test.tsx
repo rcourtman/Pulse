@@ -1815,7 +1815,7 @@ describe('GUEST_COLUMNS', () => {
       'aiContext',
     ]);
     expect(getGuestColumnWidthStyle('name', false, 'compact', compactPodColumnIds)).toEqual({
-      width: '25%',
+      width: '25.8449%',
     });
   });
 
@@ -1834,7 +1834,7 @@ describe('GUEST_COLUMNS', () => {
     expect(
       getGuestColumnWidthStyle('update', false, 'compact', compactDockerRuntimeColumnIds),
     ).toEqual({
-      width: '8.9286%',
+      width: '9.2081%',
     });
   });
 

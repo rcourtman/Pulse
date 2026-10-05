@@ -5,6 +5,7 @@ import { Route, Router } from '@solidjs/router';
 import type { Resource } from '@/types/resource';
 import { syncSessionSettingsCapabilities } from '@/stores/sessionSettingsCapabilities';
 import { WorkloadsSurface } from '../WorkloadsSurface';
+import { WORKLOAD_TABLE_CONTAINER_TABLET_WIDTH, getGuestColumnStyle } from '../guestRowModel';
 import workloadsSource from '../WorkloadsSurface.tsx?raw';
 import workloadsFilterSource from '../WorkloadsFilter.tsx?raw';
 import workloadsWorkloadTableSource from '../WorkloadsTable.tsx?raw';
@@ -1868,5 +1869,28 @@ describe('Workloads performance contract', () => {
       expect(stats.vms + stats.containers + stats.appContainers + stats.pods).toBe(PROFILES.S);
       expect(stats.running + stats.degraded + stats.stopped).toBe(PROFILES.S);
     });
+  });
+});
+
+describe('Workloads Backup column fit', () => {
+  // The backup badge does not truncate: Running is 73px and Unknown 79px with
+  // the shield, plus 8px of cell padding a side. The compact layout starts at a
+  // 900px table, where the Proxmox guest columns all show.
+  const badgeWidth = 79 + 16;
+
+  it('keeps the widest backup badge whole at the narrowest compact table', () => {
+    const proxmoxColumns = ['name', 'type', 'vmid', 'cpu', 'memory', 'disk', 'uptime', 'backup'];
+    const percent = Number.parseFloat(
+      String(getGuestColumnStyle('backup', false, 'compact', proxmoxColumns)?.width),
+    );
+    expect((percent / 100) * WORKLOAD_TABLE_CONTAINER_TABLET_WIDTH).toBeGreaterThanOrEqual(
+      badgeWidth,
+    );
+  });
+
+  it('keeps the widest backup badge whole in the wide layout', () => {
+    expect(
+      Number.parseFloat(String(getGuestColumnStyle('backup', false, 'wide')?.width)),
+    ).toBeGreaterThanOrEqual(badgeWidth);
   });
 });
