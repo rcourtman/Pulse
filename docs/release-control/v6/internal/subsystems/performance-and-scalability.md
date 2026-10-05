@@ -1118,6 +1118,18 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     renders only for a saved URL and adds no fetch, polling or per-row work.
     `GuestDrawer.test.tsx` verifies its target, the unsafe-URL warning, and
     that opening it does not collapse the drawer.
+    The workloads table header owns the bulk web-link editor. The trigger in
+    `WorkloadWebLinksAction.tsx` holds only the open flag and unsaved drafts
+    and lazy-loads `WorkloadWebLinksDialog.tsx`, whose state
+    (`useWorkloadWebLinksState.ts`) and derivations
+    (`workloadWebLinksModel.ts`) stay out of the WorkloadsSurface chunk and
+    run only while the panel is mounted. It edits the guests in the current
+    filtered view through the same guest metadata API and metadata-changed
+    event as the drawer field. `workloadGuestMetadataRecord.ts` is the single
+    lookup for a row's saved link in both the table and the editor. Panel rows
+    keep unchanged row objects across inventory ticks so an open editor never
+    remounts the input being typed in.
+    `WorkloadsSurface.performance.contract.test.tsx` pins that wiring.
     Drawer history charts belong to `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`.
     A current metric may remain visible in a chart legend only when labelled
     `current`; it must never be expanded into synthetic timestamps or a flat

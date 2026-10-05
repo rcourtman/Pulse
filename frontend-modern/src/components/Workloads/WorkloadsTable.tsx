@@ -73,6 +73,7 @@ type WorkloadsTableProps = Pick<
   | 'clearWorkloadColumnWidth'
 > & {
   title?: JSX.Element;
+  actions?: JSX.Element;
 };
 
 export function WorkloadsTable(props: WorkloadsTableProps) {
@@ -84,7 +85,7 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
         data-summary-clear-surface
         data-testid="workloads-table-surface"
       >
-        <TableCardHeader title={props.title} />
+        <TableCardHeader title={props.title} actions={props.actions} />
         <Table
           wrapperRef={props.setTableWrapperRef}
           class={`platform-table workload-table table-fixed ${props.isMobile() ? `workload-table--mobile ${WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS}` : 'workload-table--desktop min-w-full'}${props.workloadManualColumnSizing() ? ' workload-table--manual-widths' : ''}`}
