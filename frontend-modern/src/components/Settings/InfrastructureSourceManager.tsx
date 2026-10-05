@@ -502,6 +502,15 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     !props.readOnly && Boolean(props.onOpenConnection) && (row.canEdit || row.isAgent);
 
   const actionColumnVisible = () => !props.readOnly;
+  // Actions holds Manage (about 96px with padding) and, on a row missing agent
+  // coverage, an install button beside it. Reserving the wide column only when
+  // a row shows that button leaves Health room for its state, the Agent update
+  // badge and the last-seen time on one line.
+  const actionColumnShowsInstall = createMemo(
+    () =>
+      Boolean(props.onAddSourceStep || props.onAddSource) &&
+      infrastructureRows().some((row) => rowNeedsAgentCoverage(row)),
+  );
   const lastDiscoveryResultText = createMemo(() =>
     formatRelativeTimestamp(props.discoveryScanStatus().lastResultAt),
   );
@@ -542,6 +551,11 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       infrastructureRows().filter(
         (row) => Boolean(row.problem) || row.members.some((member) => member.problem),
       ).length,
+  );
+  // Outdated agents are maintenance rather than attention (see
+  // FleetGovernanceSignal.maintenance); the band still counts them once.
+  const agentUpdateTotal = createMemo(() =>
+    infrastructureRows().reduce((total, row) => total + row.agentUpdateCount, 0),
   );
   const discoveryMonitorTitle = createMemo(() => {
     const status = props.discoveryScanStatus();
@@ -815,7 +829,16 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
               ·
             </span>
             <span class="font-medium text-amber-700 dark:text-amber-300">
-              {formatCount(fleetAttentionSystemCount(), 'system')} needs attention
+              {formatCount(fleetAttentionSystemCount(), 'system')}{' '}
+              {fleetAttentionSystemCount() === 1 ? 'needs' : 'need'} attention
+            </span>
+          </Show>
+          <Show when={agentUpdateTotal() > 0}>
+            <span aria-hidden="true" class="text-muted">
+              ·
+            </span>
+            <span class="text-muted" data-infrastructure-agent-updates>
+              {formatCount(agentUpdateTotal(), 'agent update')} available
             </span>
           </Show>
           <Show when={uncoveredAgentTargetCount() > 0}>
@@ -823,7 +846,8 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
               ·
             </span>
             <span class="font-medium text-amber-700 dark:text-amber-300">
-              {formatCount(uncoveredAgentTargetCount(), 'host')} has limited coverage
+              {formatCount(uncoveredAgentTargetCount(), 'host')}{' '}
+              {uncoveredAgentTargetCount() === 1 ? 'has' : 'have'} limited coverage
             </span>
           </Show>
         </div>
@@ -897,17 +921,19 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
           <Table class="w-full min-w-[820px] table-fixed text-sm">
             <TableHeader class="">
               <TableRow>
-                <TableHead class="w-[30%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                <TableHead class="w-[29%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap">
                   System
                 </TableHead>
-                <TableHead class="w-[32%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                <TableHead class="w-[29%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
                   Coverage
                 </TableHead>
-                <TableHead class="w-[23%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                <TableHead class="w-[27%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
                   Health
                 </TableHead>
                 <Show when={actionColumnVisible()}>
-                  <TableHead class="w-48 px-3 py-1.5 text-right text-[11px] font-medium text-muted whitespace-nowrap">
+                  <TableHead
+                    class={`${actionColumnShowsInstall() ? 'w-48' : 'w-28'} px-3 py-1.5 text-right text-[11px] font-medium text-muted whitespace-nowrap`}
+                  >
                     Actions
                   </TableHead>
                 </Show>

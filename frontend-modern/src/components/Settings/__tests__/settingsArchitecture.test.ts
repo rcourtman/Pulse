@@ -1665,8 +1665,12 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('Connection posture');
     expect(infrastructureSourceManagerSource).toContain("'system')} connected");
     expect(infrastructureSourceManagerSource).toContain('All active');
-    expect(infrastructureSourceManagerSource).toContain('needs attention');
-    expect(infrastructureSourceManagerSource).toContain('has limited coverage');
+    expect(infrastructureSourceManagerSource).toContain(
+      "{fleetAttentionSystemCount() === 1 ? 'needs' : 'need'} attention",
+    );
+    expect(infrastructureSourceManagerSource).toContain(
+      "{uncoveredAgentTargetCount() === 1 ? 'has' : 'have'} limited coverage",
+    );
     expect(infrastructureSourceManagerSource).toContain('setupConfidenceAction');
     expect(infrastructureSourceManagerSource).not.toContain('Infrastructure coverage');
     expect(infrastructureSourceManagerSource).not.toContain('Fleet governance');

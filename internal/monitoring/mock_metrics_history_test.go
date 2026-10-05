@@ -176,7 +176,7 @@ func TestSeedMockMetricsHistory_PopulatesSeries(t *testing.T) {
 	}
 
 	mh := NewMetricsHistory(1000, 24*time.Hour)
-	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(state), now, time.Hour, interval)
+	seedMockMetricsHistory(context.Background(), mh, nil, fixtureGraphWithState(state), now, time.Hour, interval)
 
 	nodeCPU := mh.GetNodeMetrics("node-1", "cpu", time.Hour)
 	if len(nodeCPU) < 10 {
@@ -285,7 +285,7 @@ func TestSeedMockMetricsHistory_AppendsSingleTerminalNowPoint(t *testing.T) {
 	}
 
 	mh := NewMetricsHistory(1000, 24*time.Hour)
-	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(state), now, time.Hour, interval)
+	seedMockMetricsHistory(context.Background(), mh, nil, fixtureGraphWithState(state), now, time.Hour, interval)
 
 	memorySeries := mh.GetGuestMetrics("docker:cont-1", "memory", time.Hour)
 	if len(memorySeries) < 2 {
@@ -334,7 +334,7 @@ func TestSeedMockMetricsHistory_PopulatesKubernetesPodSeries(t *testing.T) {
 	}
 
 	mh := NewMetricsHistory(1000, 24*time.Hour)
-	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(state), now, time.Hour, interval)
+	seedMockMetricsHistory(context.Background(), mh, nil, fixtureGraphWithState(state), now, time.Hour, interval)
 
 	metricID := kubernetesPodMetricID(state.KubernetesClusters[0], state.KubernetesClusters[0].Pods[0])
 	if metricID == "" {
@@ -387,7 +387,7 @@ func TestSeedMockMetricsHistory_PopulatesKubernetesClusterNodeAndDeploymentSerie
 	}
 
 	mh := NewMetricsHistory(1000, 24*time.Hour)
-	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(state), now, time.Hour, interval)
+	seedMockMetricsHistory(context.Background(), mh, nil, fixtureGraphWithState(state), now, time.Hour, interval)
 
 	clusterMetricID := kubernetesClusterMetricID(state.KubernetesClusters[0])
 	nodeMetricID := kubernetesNodeMetricID(state.KubernetesClusters[0], state.KubernetesClusters[0].Nodes[0])
@@ -468,7 +468,7 @@ func TestSeedMockMetricsHistory_SeedsMetricsStore(t *testing.T) {
 	defer store.Close()
 
 	mh := NewMetricsHistory(1000, seedDuration)
-	seedMockMetricsHistory(mh, store, fixtureGraphWithState(state), now, seedDuration, time.Minute)
+	seedMockMetricsHistory(context.Background(), mh, store, fixtureGraphWithState(state), now, seedDuration, time.Minute)
 
 	points, err := store.Query("vm", "vm-100", "cpu", now.Add(-seedDuration), now, 3600)
 	if err != nil {
@@ -531,7 +531,7 @@ func TestSeedMockMetricsHistory_StoreSeedGapFillsWithoutDuplicates(t *testing.T)
 		return len(points)
 	}
 
-	seedMockMetricsHistory(NewMetricsHistory(1000, seedDuration), store, fixtureGraphWithState(state), now, seedDuration, time.Minute)
+	seedMockMetricsHistory(context.Background(), NewMetricsHistory(1000, seedDuration), store, fixtureGraphWithState(state), now, seedDuration, time.Minute)
 	first := countPoints(now)
 	if first == 0 {
 		t.Fatal("expected initial store seed to write minute-tier points")
@@ -539,7 +539,7 @@ func TestSeedMockMetricsHistory_StoreSeedGapFillsWithoutDuplicates(t *testing.T)
 
 	// Re-seeding at the same instant must not add rows: timestamps sit on the
 	// tier spacing grids and existing coverage short-circuits the backfill.
-	seedMockMetricsHistory(NewMetricsHistory(1000, seedDuration), store, fixtureGraphWithState(state), now, seedDuration, time.Minute)
+	seedMockMetricsHistory(context.Background(), NewMetricsHistory(1000, seedDuration), store, fixtureGraphWithState(state), now, seedDuration, time.Minute)
 	if got := countPoints(now); got != first {
 		t.Fatalf("expected idempotent reseed to keep %d points, got %d", first, got)
 	}
@@ -560,7 +560,7 @@ func TestSeedMockMetricsHistory_StoreSeedGapFillsWithoutDuplicates(t *testing.T)
 	if gapPoints == 0 {
 		t.Fatal("expected the advanced clock to expose new minute-tier grid points")
 	}
-	seedMockMetricsHistory(NewMetricsHistory(1000, seedDuration), store, fixtureGraphWithState(state), later, seedDuration, time.Minute)
+	seedMockMetricsHistory(context.Background(), NewMetricsHistory(1000, seedDuration), store, fixtureGraphWithState(state), later, seedDuration, time.Minute)
 	if got, want := countPoints(later), first+gapPoints; got != want {
 		t.Fatalf("expected gap fill to append exactly the missing grid points (%d), got %d", want, got)
 	}
@@ -597,7 +597,7 @@ func TestSeedMockMetricsHistory_SeedsDiskTemperatureMetricsStore(t *testing.T) {
 	defer store.Close()
 
 	mh := NewMetricsHistory(1000, seedDuration)
-	seedMockMetricsHistory(mh, store, fixtureGraphWithState(state), now, seedDuration, time.Minute)
+	seedMockMetricsHistory(context.Background(), mh, store, fixtureGraphWithState(state), now, seedDuration, time.Minute)
 
 	points, err := store.Query("disk", "SERIAL-001", "smart_temp", now.Add(-seedDuration), now, 3600)
 	if err != nil {
@@ -634,7 +634,7 @@ func TestSeedMockMetricsHistory_SeedsVMwareMetricsStore(t *testing.T) {
 		},
 	}
 	sampler := mock.NewMetricSampler(graph)
-	seedMockMetricsHistory(mh, store, graph, now, seedDuration, time.Minute)
+	seedMockMetricsHistory(context.Background(), mh, store, graph, now, seedDuration, time.Minute)
 
 	hostPoints, err := store.Query("agent", "vc-mock-1:host:host-101", "cpu", now.Add(-seedDuration), now, 3600)
 	if err != nil {
@@ -707,7 +707,7 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 		},
 	}
 	sampler := mock.NewMetricSampler(graph)
-	seedMockMetricsHistory(mh, store, graph, now, seedDuration, time.Minute)
+	seedMockMetricsHistory(context.Background(), mh, store, graph, now, seedDuration, time.Minute)
 
 	systemPoints, err := store.Query("agent", fixtures.System.Hostname, "disk", now.Add(-seedDuration), now, 3600)
 	if err != nil {
@@ -814,7 +814,7 @@ func TestSeedMockMetricsHistory_UsesCanonicalMockFixtureGraphForLegacyAndProvide
 	defer store.Close()
 
 	mh := NewMetricsHistory(1000, historyRetention)
-	seedMockMetricsHistory(mh, store, graph, now, seedDuration, sampleInterval)
+	seedMockMetricsHistory(context.Background(), mh, store, graph, now, seedDuration, sampleInterval)
 
 	nodePoints, err := store.Query("node", graph.State.Nodes[0].ID, "cpu", now.Add(-seedDuration), now, 3600)
 	if err != nil {
@@ -1455,7 +1455,7 @@ func TestSeedMockMetricsHistory_StaysContinuousWithSubsequentLiveMockTicks(t *te
 	}
 
 	mh := NewMetricsHistory(5000, seedDuration)
-	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(seedState), now, seedDuration, time.Minute)
+	seedMockMetricsHistory(context.Background(), mh, nil, fixtureGraphWithState(seedState), now, seedDuration, time.Minute)
 
 	vmCPUSeeded := mh.GetGuestMetrics("vm-tail", "cpu", seedDuration)
 	if len(vmCPUSeeded) == 0 {
@@ -1626,7 +1626,7 @@ func TestRecordMockStateToMetricsHistory_ContinuesCanonicalKubernetesClusterNode
 	deploymentMetricID := kubernetesDeploymentMetricID(seedState.KubernetesClusters[0], seedState.KubernetesClusters[0].Deployments[0])
 
 	mh := NewMetricsHistory(5000, seedDuration)
-	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(seedState), now, seedDuration, time.Minute)
+	seedMockMetricsHistory(context.Background(), mh, nil, fixtureGraphWithState(seedState), now, seedDuration, time.Minute)
 	recordMockStateToMetricsHistory(mh, nil, fixtureGraphWithState(seedState), next)
 
 	for name, metricID := range map[string]string{
@@ -1664,7 +1664,7 @@ func TestMockMetricsHistoryKeepsGraphPersonaAcrossSeedAndLiveBoundary(t *testing
 	sampler := mock.NewMetricSampler(graph)
 
 	mh := NewMetricsHistory(5000, boundedMockHistoryProofWindow)
-	seedMockMetricsHistory(mh, nil, graph, now, boundedMockHistoryProofWindow, time.Minute)
+	seedMockMetricsHistory(context.Background(), mh, nil, graph, now, boundedMockHistoryProofWindow, time.Minute)
 	recordMockStateToMetricsHistory(mh, nil, graph, next)
 
 	series := mh.GetGuestMetrics(resourceID, "memory", boundedMockHistoryProofWindow)
@@ -1699,7 +1699,7 @@ func TestSeedMockMetricsHistory_UsesCanonicalMetricModelForPlatformFixtures(t *t
 	}
 
 	mh := NewMetricsHistory(20_000, 4*time.Hour)
-	seedMockMetricsHistory(mh, nil, graph, ts, 4*time.Hour, time.Minute)
+	seedMockMetricsHistory(context.Background(), mh, nil, graph, ts, 4*time.Hour, time.Minute)
 
 	assertCanonicalSeries := func(series []MetricPoint, resourceType, resourceID, metric string) {
 		t.Helper()
@@ -1765,7 +1765,7 @@ func TestSeedMockMetricsHistory_NormalizesTerminalTimestampToCanonicalGrid(t *te
 	})
 
 	mh := NewMetricsHistory(4_000, 2*time.Hour)
-	seedMockMetricsHistory(mh, nil, graph, now, 2*time.Hour, time.Minute)
+	seedMockMetricsHistory(context.Background(), mh, nil, graph, now, 2*time.Hour, time.Minute)
 
 	points := mh.GetGuestMetrics("vm-grid", "cpu", 2*time.Hour)
 	if len(points) == 0 {
@@ -2030,7 +2030,7 @@ func TestSeedMockMetricsHistory_DiskTelemetryParityAcrossNativeAndTrueNAS(t *tes
 	}
 
 	mh := NewMetricsHistory(1000, seedDuration)
-	seedMockMetricsHistory(mh, nil, mock.FixtureGraph{
+	seedMockMetricsHistory(context.Background(), mh, nil, mock.FixtureGraph{
 		State: state,
 		PlatformFixtures: mock.PlatformFixtures{
 			TrueNAS: fixtures,
@@ -2064,7 +2064,7 @@ func TestMockDockerHostSeedCoversTheSameSeriesAsTheSyntheticGenerator(t *testing
 	}
 
 	now := time.Now().UTC()
-	seedMockMetricsHistory(history, nil, graph, now, 2*time.Hour, time.Minute)
+	seedMockMetricsHistory(context.Background(), history, nil, graph, now, 2*time.Hour, time.Minute)
 
 	hostID := graph.State.DockerHosts[0].ID
 	for _, metricType := range mockHostChartMetricTypes {
@@ -2087,7 +2087,7 @@ func TestMockDockerContainerSeedCoversDrawerHistorySeries(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	seedMockMetricsHistory(history, nil, graph, now, 2*time.Hour, time.Minute)
+	seedMockMetricsHistory(context.Background(), history, nil, graph, now, 2*time.Hour, time.Minute)
 
 	containerID := graph.State.DockerHosts[0].Containers[0].ID
 	for _, metricType := range mockGuestChartMetricTypes {
@@ -2110,7 +2110,7 @@ func TestMockNodeSeedCoversDrawerHistorySeries(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	seedMockMetricsHistory(history, nil, graph, now, 2*time.Hour, time.Minute)
+	seedMockMetricsHistory(context.Background(), history, nil, graph, now, 2*time.Hour, time.Minute)
 
 	nodeID := graph.State.Nodes[0].ID
 	for _, metricType := range mockNodeChartMetricTypes {
