@@ -326,7 +326,10 @@ async function journey(root, engine, width, parent = false, resume = false, visu
       return route.fulfill({ json });
     });
     const capture = async (name) => {
-      const file = path.join(output, `${parent ? 'parent' : engine}-${width}-${name}.png`);
+      const file = path.join(
+        output,
+        `${parent ? 'parent' : engine}-${width}-${visualOnly === 'long' ? 'long-' : ''}${name}.png`,
+      );
       await page.screenshot({
         path: file,
         fullPage: !visualOnly,
@@ -403,6 +406,65 @@ async function journey(root, engine, width, parent = false, resume = false, visu
             actions.y + actions.height <= 901,
           'Confirmation action must not be clipped: ' + JSON.stringify({ box, actions }),
         );
+        if (visualOnly === 'long') {
+          const region = dialog.getByRole('region', { name: 'Rule scope and reason' });
+          const initial = await region.evaluate((e) => ({
+            top: e.scrollTop,
+            height: e.clientHeight,
+            scrollHeight: e.scrollHeight,
+          }));
+          assert.equal(initial.top, 0, 'Safe autofocus must not scroll past the rule scope');
+          assert(
+            initial.scrollHeight > initial.height,
+            'Long reason needs a real scrolling region',
+          );
+          for (const text of ['Keep VM', 'fixture-keep', 'capacity', expected]) {
+            const scopeBox = await region.getByText(text, { exact: true }).boundingBox();
+            const regionBox = await region.boundingBox();
+            assert(
+              scopeBox &&
+                regionBox &&
+                scopeBox.y >= regionBox.y &&
+                scopeBox.y + scopeBox.height <= regionBox.y + regionBox.height + 1,
+              'The scope and exact ID are initially in view: ' + text,
+            );
+          }
+          const input =
+            engine === 'webkit' && width === 320 ? 'keyboard PageDown' : 'pointer wheel';
+          if (input === 'keyboard PageDown') {
+            // Playwright mobile WebKit does not implement mouse wheel. Use
+            // its supported native keyboard scroll on the focusable region.
+            await region.focus();
+            await page.keyboard.press('PageDown');
+          } else {
+            await region.hover();
+            await page.mouse.wheel(0, 3000);
+          }
+          await page.waitForFunction(
+            () => document.querySelector('[aria-label="Rule scope and reason"]').scrollTop > 0,
+          );
+          const scrolled = await region.evaluate((e) => e.scrollTop);
+          await capture('long-reason-scrolled');
+          const footerAfter = await dialog
+            .getByRole('button', { name: 'Remove this rule' })
+            .boundingBox();
+          assert.deepEqual(footerAfter, actions, 'The action footer must not move with the reason');
+          await region.focus();
+          await page.keyboard.press('Home');
+          await page.waitForFunction(
+            () => document.querySelector('[aria-label="Rule scope and reason"]').scrollTop === 0,
+          );
+          result.longReason = {
+            initial,
+            scrollInput: input,
+            scrollPosition: scrolled,
+            keyboardHomeReturned: true,
+            stableFooter: true,
+          };
+          result.checks.push(
+            'Long reason supports the recorded scroll input and keyboard Home, with initial scope/ID visible and a stable safe footer.',
+          );
+        }
         result.dialogs.push({ name, ruleId: expected, box, viewport: { width, height: 900 } });
         await page.keyboard.press('Escape');
         await dialog.waitFor({ state: 'detached' });
