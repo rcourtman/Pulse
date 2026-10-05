@@ -2331,6 +2331,10 @@ not a replacement status card, CTA band, or page-local nested card.
    `platformTableBandWidthStyle` or the sortable header's `bandWidth`, which
    sets `--platform-table-band-width`; the shell applies it only inside the band,
    after the name anchor, so md widths and phone widths are unchanged.
+   A header whose full label outgrows its band column (Kubernetes
+   Configuration's `Lifecycle / trust`) passes `compactInBand` to
+   `PlatformResponsiveTableLabel`, which keeps the compact label it already
+   shows on phones through the band; other headers switch at 34rem as before.
    A column whose content must read in full (a status badge) is sized for its
    widest label at the narrowest table in each range: a 34rem container for the
    band, and the table a 768px viewport leaves (about 695px) for md widths. The

@@ -57,7 +57,8 @@ describe('dockerContainerTableModel', () => {
     const columns = getDockerContainerVisibleColumnsForLayout('mobile', true, true, true);
     const ids = columns.map((column) => column.id);
 
-    expect(ids).toEqual(['container', 'state', 'cpu', 'memory', 'restarts', 'updates', 'actions']);
+    // Restarts waits for the tablet layout (its header clips below 720px).
+    expect(ids).toEqual(['container', 'state', 'cpu', 'memory', 'updates', 'actions']);
     expect(getDockerContainerTableMinWidthClass()).toBe('min-w-full');
     expect(getDockerContainerColumnWidthStyle('container', 'mobile', ids)).toEqual({
       width: '30%',
@@ -65,10 +66,10 @@ describe('dockerContainerTableModel', () => {
     // State spells out a problem ("Exited (139)", about 77px with padding), so
     // it takes the room the memory bar did not need.
     expect(getDockerContainerColumnWidthStyle('state', 'mobile', ids)).toEqual({
-      width: '14.5%',
+      width: '16.371%',
     });
     expect(getDockerContainerColumnWidthStyle('memory', 'mobile', ids)).toEqual({
-      width: '13.5%',
+      width: '15.2419%',
     });
   });
 
@@ -117,6 +118,23 @@ describe('dockerContainerTableModel', () => {
           expect(pixels('uptime')).toBeGreaterThanOrEqual(57);
         }
       }
+    }
+  });
+
+  it('gives the Restarts header room on tablets when one host or groups hide Host', () => {
+    // "Restarts" is about 61px at 11px uppercase with 6px of padding a side.
+    for (const hostOption of [{ groupedByHost: true }, { singleHost: true }]) {
+      const ids = getDockerContainerVisibleColumnsForLayout(
+        'tablet',
+        false,
+        true,
+        true,
+        hostOption,
+      ).map((column) => column.id);
+      const width = Number.parseFloat(
+        String(getDockerContainerColumnWidthStyle('restarts', 'tablet', ids).width),
+      );
+      expect((width / 100) * 720).toBeGreaterThanOrEqual(73);
     }
   });
 

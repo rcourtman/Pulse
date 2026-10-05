@@ -21,6 +21,7 @@ import kubernetesAlertsTableSource from '@/features/kubernetes/KubernetesAlertsT
 import kubernetesAutoscalingTableSource from '@/features/kubernetes/KubernetesAutoscalingTable.tsx?raw';
 import kubernetesClustersTableSource from '@/features/kubernetes/KubernetesClustersTable.tsx?raw';
 import kubernetesConfigTableSource from '@/features/kubernetes/KubernetesConfigTable.tsx?raw';
+import dockerContainerTableModelSource from '@/features/docker/dockerContainerTableModel.ts?raw';
 import kubernetesControllersTableSource from '@/features/kubernetes/KubernetesControllersTable.tsx?raw';
 import kubernetesDeploymentsTableSource from '@/features/kubernetes/KubernetesDeploymentsTable.tsx?raw';
 import kubernetesEventsTableSource from '@/features/kubernetes/KubernetesEventsTable.tsx?raw';
@@ -451,6 +452,17 @@ describe('platform overview layout guardrails', () => {
       expect(source).not.toMatch(/class="[^"]*\btruncate\b[^"]*\binline-block\b/);
       expect(source).toContain('class="block truncate"');
     }
+  });
+
+  it('keeps long tablet headers from clipping', () => {
+    // "Lifecycle / trust" outgrows its tablet-band column, so it keeps the
+    // compact label it shows on phones through that band.
+    expect(kubernetesConfigTableSource).toMatch(
+      /compact="Status"\s+full="Lifecycle \/ trust"\s+compactInBand/,
+    );
+    // The Docker Restarts header cannot fit below a 720px table; the count
+    // waits in the drawer there and a crash-looper says so in State.
+    expect(dockerContainerTableModelSource).toMatch(/restarts: 'tablet',/);
   });
 
   it('keeps phone-priority visibility container-led and symmetric across table rows', () => {

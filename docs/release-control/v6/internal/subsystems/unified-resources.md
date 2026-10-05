@@ -6034,6 +6034,10 @@ than the unified online/offline status, a running container's health check
 gets its own row (Failing, Starting, Passing), and Uptime is the current run,
 so a stopped container shows neither a stale health check nor leftover
 uptime. Both surfaces read `dockerContainerStatePresentation.ts`.
+Below a 720px table the containers table has no Restarts column (its header
+cannot fit beside State, the metric bars and the Update control), so a running
+container that restarted more than five times says `N restarts` in its State
+cell there instead; wider tables keep the count in its own column.
 
 ResourceDetailDrawer headings wrap long display names rather than ellipsising
 them. Overview rows may still truncate identity; keyboard expansion exposes the
