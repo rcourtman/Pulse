@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -37,6 +38,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/alerting"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/chartapi"
@@ -25465,4 +25467,81 @@ func TestRouterPlatformConnectionAlertsFollowRuntime(t *testing.T) {
 		t.Fatal("recovery omitted actual observation time")
 	}
 	t.Log("real TrueNAS inventory recovery reaches the ledger and clears only after monitor confirmations")
+}
+
+func TestContractDeployEnrolledCollectorReducesItsAuthorityAfterItsFirstReport(t *testing.T) {
+	h, store := newEnrollTestHandlers(t)
+	jobID, targetID := seedEnrollJobAndTarget(t, store, deploy.TargetEnrolling)
+	bootstrap := mintTestBootstrapToken(t, h.config, jobID, targetID, "pve-node2")
+	h.persistence = config.NewConfigPersistence(h.config.DataPath)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/enroll", enrollJSON(t, "pve-node2"))
+	attachAPITokenRecord(req, bootstrap)
+	rr := httptest.NewRecorder()
+	h.HandleEnroll(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("enroll status = %d: %s", rr.Code, rr.Body.String())
+	}
+	var enrolledResp map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &enrolledResp); err != nil {
+		t.Fatalf("decode enroll: %v", err)
+	}
+	runtimeToken, _ := enrolledResp["runtimeToken"].(string)
+	runtimeTokenID, _ := enrolledResp["runtimeTokenId"].(string)
+	if runtimeToken == "" || runtimeTokenID == "" {
+		t.Fatalf("enrollment returned no runtime token: %v", enrolledResp)
+	}
+	enrolled := reportIdentityToken(t, h.config, runtimeTokenID)
+	if enrolled.HasScope(config.ScopeAgentExec) || enrolled.Metadata["bound_agent_id"] != "" {
+		t.Fatalf("precondition: enrolled token = %+v, want hostname-bound without agent:exec", enrolled)
+	}
+
+	router := newReportIdentityRouter(t, h.config)
+	if code := postCollectorReduction(t, router, runtimeToken, reportIdentityMachineID, "pve-node2"); code != http.StatusForbidden {
+		t.Fatalf("reduction before any report = %d, want 403: the token names no agent yet", code)
+	}
+
+	ack := postReportIdentityReport(t, router, runtimeToken,
+		reportIdentityReport(reportIdentityMachineID, reportIdentityMachineID, "pve-node2"))
+	if ack != reportIdentityMachineID {
+		t.Fatalf("acknowledged agentId = %q, want %q", ack, reportIdentityMachineID)
+	}
+
+	bound := reportIdentityToken(t, h.config, runtimeTokenID)
+	if got := bound.Metadata["bound_agent_id"]; got != ack {
+		t.Fatalf("bound_agent_id after the first report = %q, want the acknowledged %q", got, ack)
+	}
+	if got := bound.Metadata["bound_hostname"]; got != "pve-node2" {
+		t.Fatalf("bound_hostname = %q, want it untouched", got)
+	}
+	if got := bound.Metadata[agentExecBindingVersionKey]; got != agentExecBindingVersion {
+		t.Fatalf("binding version = %q, want %q", got, agentExecBindingVersion)
+	}
+	if got := bound.Metadata[agentbinding.DeployIdentityKey]; got != agentbinding.DeployIdentityAgent {
+		t.Fatalf("deploy identity marker = %q, want it untouched", got)
+	}
+	if !slices.Equal(bound.Scopes, enrolled.Scopes) {
+		t.Fatalf("scopes after the report = %v, want unchanged %v", bound.Scopes, enrolled.Scopes)
+	}
+	if got := bound.Metadata[agenttokens.RuntimeRoleMetadataKey]; got != enrolled.Metadata[agenttokens.RuntimeRoleMetadataKey] {
+		t.Fatalf("runtime role after the report = %q, want unchanged %q", got, enrolled.Metadata[agenttokens.RuntimeRoleMetadataKey])
+	}
+	persisted, err := config.NewConfigPersistence(h.config.DataPath).LoadAPITokens()
+	if err != nil {
+		t.Fatalf("load persisted tokens: %v", err)
+	}
+	if len(persisted) != 1 || persisted[0].Metadata["bound_agent_id"] != ack {
+		t.Fatalf("persisted tokens = %+v, want the runtime token bound to %s", persisted, ack)
+	}
+	if _, ok := router.admitAgentExecToken(runtimeToken, ack, "pve-node2"); ok {
+		t.Fatal("recording the agent identity granted command execution to a token without agent:exec")
+	}
+
+	if code := postCollectorReduction(t, router, runtimeToken, ack, "pve-node2"); code != http.StatusNoContent {
+		t.Fatalf("reduction with the acknowledged identity = %d, want 204", code)
+	}
+	reduced := reportIdentityToken(t, h.config, runtimeTokenID)
+	if got := reduced.Metadata[agenttokens.RuntimeRoleMetadataKey]; got != agenttokens.CredentialKindMonitoringCollector {
+		t.Fatalf("runtime role after reduction = %q, want %q", got, agenttokens.CredentialKindMonitoringCollector)
+	}
 }

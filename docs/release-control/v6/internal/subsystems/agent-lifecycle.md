@@ -8251,6 +8251,33 @@ in `internal/api/deploy_handlers_test.go` replays that sequence: the identity
 enrollment handed out, or the agent's own, then the acknowledged identity after
 a restart.
 
+### Reports name the agent on a hostname-bound token
+
+Deploy enrollment, Proxmox auto-registration, and pre-v6.1.1 installs leave a
+token bound to the node's hostname and to no agent ID until a command
+registration names the agent. An agent whose token lacks `agent:exec`, or that
+never connects the command channel, never names itself that way, and the
+safe-profile authority reduction refuses it, because it matches the agent ID
+on the token. Every applied report therefore offers its identity: when the
+agent presented the same ID Pulse resolved and acknowledges in `agentId`
+(which the agent persists and the installer sends to the reduction), that ID
+is recorded on a token that has none, under the reporting-side rule in the
+security-privacy contract. The report grants no command authority, and when
+the presented and resolved IDs differ the token is left to the command
+channel's first registration. The first identity recorded is final, as it is
+for a command registration, so an agent later restarted under a different
+configured `--agent-id` is refused under that ID on the same token.
+`TestContractDeployEnrolledCollectorReducesItsAuthorityAfterItsFirstReport`
+in `internal/api/contract_test.go` replays enrollment without commands, the
+first report, and the reduction, which was refused before it;
+`TestReportedIdentityIsFinalForALaterReconfiguredAgent` in
+`internal/api/security_regression_test.go` pins the final-identity trade-off;
+and `TestApplyHostReportStampsTheTokenOnlyOnHostsItHolds` in
+`internal/monitoring/monitor_host_agents_test.go` pins the host properties the
+report path relies on: an applied report carries its token's ID, a report the
+ordering watermark rejects returns the stored host and hostname, and mock
+mode's discard acknowledgement carries no token.
+
 ### Alert push routing does not create an agent lifecycle channel
 
 The shared API router may classify an external-probe outage for specialized

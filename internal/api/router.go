@@ -503,6 +503,7 @@ func (r *Router) setupRoutes() {
 	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.unifiedAgentHandlers = NewUnifiedAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.unifiedAgentHandlers.SetServerVersion(r.serverVersion)
+	r.unifiedAgentHandlers.SetReportedIdentityRecorder(r.recordReportedAgentIdentity)
 	r.kubernetesAgentHandlers.SetRecoveryIngestor(r.recoveryHandlers)
 	r.resourceHandlers = NewResourceHandlers(r.config)
 	r.resourceHandlers.SetOperatorStateChanged(func(_ string, resourceID string) {
