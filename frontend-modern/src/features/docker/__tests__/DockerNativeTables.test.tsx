@@ -275,6 +275,12 @@ describe('Docker native tables', () => {
 
     // Both rows get a CPU cell; only the row with memory data gets a bar.
     expect(screen.getAllByTestId('responsive-cpu-metric').length).toBe(2);
+    expect(screen.getByTestId('container-table-cpu-scale')).toHaveTextContent(
+      'CPU is a percentage of total host capacity: 100% means all host CPUs.',
+    );
+    expect(screen.getByTestId('container-table-cpu-scale')).toHaveTextContent(
+      'Docker and Podman stats may use a per-core scale.',
+    );
     expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute(
       'data-used',
       String(512 * 1024 * 1024),
