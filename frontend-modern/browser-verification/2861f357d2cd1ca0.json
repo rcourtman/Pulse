@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "1ec45d9743cac56656077cec11bd630acc70bd38",
+  "verified_at": "2026-10-05T20:40:35.536Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ClusterAgentDeployDialog.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ClusterAgentDeployDialog.tsx": "579a9709b9ca5bfc1c1decbc140bb990e411e8bd52268a11d5fa402069f31318"
+  },
+  "routes": [
+    "/settings/infrastructure \u2192 existing cluster member Install agent dialog (isolated component fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Delayed candidate loading \u2192 selection preserves the same focused Close/Cancel button. Exact parent loses focus to BODY in both Chromium and WebKit.",
+    "Checking \u2192 installation \u2192 Reporting/Failed preserve dismissal focus. Job completion alone emits no installed callback; candidate coverage still confirms Reporting.",
+    "Settled offline source and ambiguous cluster fallbacks remain readable and keyboard-operable. Ten final light/dark captures inspected.",
+    "Playwright 1.56.1; Chromium 141.0.7390.37 and WebKit 26.0. Synthetic component/API proof only, not installed cluster or guest recovery."
+  ],
+  "interactions": [
+    "Keyboard Enter on Install moves focus to the stable dismissal control before the trigger unmounts. Tab remains contained, Escape returns to the launching button.",
+    "Use the installer instead calls the existing scoped handoff and starts no deployment. Dismissal starts no second install.",
+    "One exact source/preflight/target createJob call per accepted scenario; failed runs never claim Reporting. No off-origin request or page error. Browser contexts and preview server close normally."
+  ]
+}
