@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -214,6 +215,13 @@ PY
             env.update(EXPECTED_TOKEN=TOKEN, INSTALL_RECEIPT=str(home / "installer-argv.json"))
             for command in profiles:
                 with self.subTest(command=command):
+                    # The NAS retry uses an explicitly chosen mounted volume.
+                    # Exercise that placeholder in the fixture, never /share.
+                    if "data_volume=/share/CACHEDEV1_DATA" in command:
+                        volume = home / "data volume"
+                        volume.mkdir(exist_ok=True)
+                        command = command.replace("data_volume=/share/CACHEDEV1_DATA",
+                                                  "data_volume=" + shlex.quote(str(volume)))
                     result, args = run_recorded_recipe(command, env)
                     self.assertEqual(result.returncode, 0, result.stderr.decode())
                     self.assertIsNotNone(args, "copied profile did not invoke its installer")
