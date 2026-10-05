@@ -70,6 +70,41 @@ func fullAgentLookupReference(m *Monitor) unifiedresources.ReadState {
 	return unifiedresources.NewMonitorAdapterWithStaleThresholds(registry, thresholds)
 }
 
+// Adapters timestamp a newly built registry with the wall clock. Compare
+// every canonical host field except that construction timestamp, retaining
+// source LastSeen, metric/source observation times and all identity payloads.
+func agentLookupViewResources(t *testing.T, read unifiedresources.ReadState) [][]unifiedresources.Resource {
+	t.Helper()
+	adapter, ok := read.(*unifiedresources.MonitorAdapter)
+	if !ok {
+		t.Fatal("lookup must return the real monitor adapter")
+	}
+	byID := make(map[string]unifiedresources.Resource)
+	for _, resource := range adapter.GetAll() {
+		if resource.UpdatedAt.IsZero() {
+			t.Fatal("registry construction timestamp is missing")
+		}
+		resource.UpdatedAt = time.Time{}
+		byID[resource.ID] = resource
+	}
+	result := make([][]unifiedresources.Resource, 2)
+	for _, host := range read.Hosts() {
+		resource, found := byID[host.ID()]
+		if !found {
+			t.Fatalf("host view %q is absent from the registry", host.ID())
+		}
+		result[0] = append(result[0], resource)
+	}
+	for _, host := range read.DockerHosts() {
+		resource, found := byID[host.ID()]
+		if !found {
+			t.Fatalf("Docker host view %q is absent from the registry", host.ID())
+		}
+		result[1] = append(result[1], resource)
+	}
+	return result
+}
+
 func TestAgentLookupMatchesWholeSnapshotHostViews(t *testing.T) {
 	for _, count := range []int{0, 20, 1000} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
@@ -80,7 +115,7 @@ func TestAgentLookupMatchesWholeSnapshotHostViews(t *testing.T) {
 			if len(want.Hosts()) == 0 || len(want.DockerHosts()) == 0 {
 				t.Fatal("fixture must exercise both host facets")
 			}
-			if !reflect.DeepEqual(got.Hosts(), want.Hosts()) || !reflect.DeepEqual(got.DockerHosts(), want.DockerHosts()) {
+			if !reflect.DeepEqual(agentLookupViewResources(t, got), agentLookupViewResources(t, want)) {
 				t.Fatal("agent admission changed a canonical host or Docker host view")
 			}
 			if !reflect.DeepEqual(before, m.state.GetSnapshot()) {
@@ -92,7 +127,7 @@ func TestAgentLookupMatchesWholeSnapshotHostViews(t *testing.T) {
 			m.state.RemoveDockerHost("docker-host")
 			want = fullAgentLookupReference(m)
 			got = m.snapshotBackedAgentLookupReadState()
-			if !reflect.DeepEqual(got.Hosts(), want.Hosts()) || !reflect.DeepEqual(got.DockerHosts(), want.DockerHosts()) {
+			if !reflect.DeepEqual(agentLookupViewResources(t, got), agentLookupViewResources(t, want)) {
 				t.Fatal("agent lookup retained a removed host or old metadata")
 			}
 		})
@@ -175,7 +210,14 @@ func TestAgentLookupReportsKeepCompleteKubernetesInventory(t *testing.T) {
 	// Compare all canonical resources as well as the native source snapshot.
 	want := unifiedresources.NewRegistry(nil)
 	want.IngestSnapshotWithStaleThresholds(m.GetState(), m.resourceStaleThresholds())
-	if got, expected := registry.GetAll(), want.List(); !reflect.DeepEqual(got, expected) {
+	got, expected := registry.GetAll(), want.List()
+	for i := range got {
+		got[i].UpdatedAt = time.Time{}
+	}
+	for i := range expected {
+		expected[i].UpdatedAt = time.Time{}
+	}
+	if !reflect.DeepEqual(got, expected) {
 		t.Fatal("report publication no longer contains the full canonical inventory")
 	}
 	for _, host := range m.GetUnifiedReadState().DockerHosts() {
