@@ -40,8 +40,8 @@ export const WorkloadWebLinksDialog: Component<WorkloadWebLinksDialogProps> = (p
               Web links
             </h2>
             <p class="text-xs text-muted">
-              Add the address you open in your browser for each guest. Pulse shows it as a link
-              beside the guest.
+              Add the address you open in your browser for each {state.noun.one}. Pulse shows it as
+              a link beside the {state.noun.one}.
             </p>
           </div>
           <ActionIconButton
@@ -61,7 +61,7 @@ export const WorkloadWebLinksDialog: Component<WorkloadWebLinksDialogProps> = (p
             {state.linkedCount()} of {state.rows().length} in this view have a link
           </p>
           <FilterSegmentedControl
-            aria-label="Show guests"
+            aria-label={`Show ${state.noun.many}`}
             value={state.filter()}
             onChange={(value) => state.setFilter(value as WorkloadWebLinkFilter)}
             options={[
@@ -85,8 +85,8 @@ export const WorkloadWebLinksDialog: Component<WorkloadWebLinksDialogProps> = (p
             fallback={
               <p class="py-6 text-center text-sm text-muted">
                 {state.rows().length === 0
-                  ? 'No guests in this view.'
-                  : 'Every guest in this view has a link.'}
+                  ? `No ${state.noun.many} in this view.`
+                  : `Every ${state.noun.one} in this view has a link.`}
               </p>
             }
           >

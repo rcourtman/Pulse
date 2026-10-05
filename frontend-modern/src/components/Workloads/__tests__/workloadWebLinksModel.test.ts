@@ -3,6 +3,8 @@ import type { WorkloadGuest } from '@/types/workloads';
 import { getWorkloadMetadataId } from '@/utils/workloads';
 import {
   buildWorkloadWebLinkRows,
+  buildWorkloadWebLinkSourceRows,
+  getWorkloadWebLinksNoun,
   filterWorkloadWebLinkRows,
   getWorkloadWebLinkChanges,
   getWorkloadWebLinkPlaceholder,
@@ -142,5 +144,31 @@ describe('workloadWebLinksModel', () => {
     expect(getWorkloadWebLinkPlaceholder({ ...row, addressHint: 'fd00::5' })).toBe(
       'http://[fd00::5]',
     );
+  });
+  it('normalises, de-duplicates and sorts ready-made rows from other tables', () => {
+    const row = {
+      detail: '',
+      status: 'running',
+      addressHint: '',
+    };
+    const source = {
+      kind: 'rows' as const,
+      noun: { one: 'container', many: 'containers' },
+      rows: () => [
+        { ...row, metadataId: 'b', name: 'web-10', savedUrl: ' https://web.example ' },
+        { ...row, metadataId: 'a', name: 'web-9', savedUrl: '' },
+        { ...row, metadataId: 'b', name: 'duplicate', savedUrl: '' },
+        { ...row, metadataId: '', name: 'no-identity', savedUrl: '' },
+      ],
+    };
+
+    expect(buildWorkloadWebLinkSourceRows(source)).toEqual([
+      { ...row, metadataId: 'a', name: 'web-9', savedUrl: '' },
+      { ...row, metadataId: 'b', name: 'web-10', savedUrl: 'https://web.example' },
+    ]);
+    expect(getWorkloadWebLinksNoun(source)).toEqual({ one: 'container', many: 'containers' });
+    expect(
+      getWorkloadWebLinksNoun({ kind: 'workloads', guests: () => [], guestMetadata: () => ({}) }),
+    ).toEqual({ one: 'guest', many: 'guests' });
   });
 });

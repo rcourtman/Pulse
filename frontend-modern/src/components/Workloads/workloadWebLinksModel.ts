@@ -37,27 +37,68 @@ const getWorkloadWebLinkDetail = (guest: WorkloadGuest): string =>
     .filter(Boolean)
     .join(' · ');
 
+/** One row per saved-link identity, name-sorted the way people scan a list. */
+const finalizeWorkloadWebLinkRows = (rows: readonly WorkloadWebLinkRow[]): WorkloadWebLinkRow[] => {
+  const seen = new Set<string>();
+  return rows
+    .filter((row) => {
+      if (!row.metadataId || seen.has(row.metadataId)) return false;
+      seen.add(row.metadataId);
+      return true;
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+};
+
 export const buildWorkloadWebLinkRows = (
   guests: readonly WorkloadGuest[],
   byId: WorkloadGuestMetadataMap,
-): WorkloadWebLinkRow[] => {
-  const rows: WorkloadWebLinkRow[] = [];
-  const seen = new Set<string>();
-  for (const guest of guests) {
-    const metadataId = getWorkloadMetadataId(guest);
-    if (!metadataId || seen.has(metadataId)) continue;
-    seen.add(metadataId);
-    rows.push({
-      metadataId,
+): WorkloadWebLinkRow[] =>
+  finalizeWorkloadWebLinkRows(
+    guests.map((guest) => ({
+      metadataId: getWorkloadMetadataId(guest),
       name: guest.name,
       detail: getWorkloadWebLinkDetail(guest),
       status: guest.status,
       addressHint: guest.ipAddresses?.find((address) => address.trim())?.trim() ?? '',
       savedUrl: normalizeWebInterfaceUrl(getWorkloadGuestMetadataRecord(guest, byId)?.customUrl),
-    });
-  }
-  return rows.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-};
+    })),
+  );
+
+export interface WorkloadWebLinksNoun {
+  one: string;
+  many: string;
+}
+
+/**
+ * What the editor lists. Workload tables hand over their live guests so the
+ * row model only loads with the panel; other tables hand over ready rows keyed
+ * by the same guest-metadata identity their drawers save under.
+ */
+export type WorkloadWebLinksSource =
+  | {
+      kind: 'workloads';
+      guests: () => WorkloadGuest[];
+      guestMetadata: () => WorkloadGuestMetadataMap;
+    }
+  | {
+      kind: 'rows';
+      noun: WorkloadWebLinksNoun;
+      rows: () => WorkloadWebLinkRow[];
+    };
+
+const GUEST_NOUN: WorkloadWebLinksNoun = { one: 'guest', many: 'guests' };
+
+export const getWorkloadWebLinksNoun = (source: WorkloadWebLinksSource): WorkloadWebLinksNoun =>
+  source.kind === 'rows' ? source.noun : GUEST_NOUN;
+
+export const buildWorkloadWebLinkSourceRows = (
+  source: WorkloadWebLinksSource,
+): WorkloadWebLinkRow[] =>
+  source.kind === 'workloads'
+    ? buildWorkloadWebLinkRows(source.guests(), source.guestMetadata())
+    : finalizeWorkloadWebLinkRows(
+        source.rows().map((row) => ({ ...row, savedUrl: normalizeWebInterfaceUrl(row.savedUrl) })),
+      );
 
 const sameWorkloadWebLinkRow = (a: WorkloadWebLinkRow, b: WorkloadWebLinkRow): boolean =>
   a.metadataId === b.metadataId &&

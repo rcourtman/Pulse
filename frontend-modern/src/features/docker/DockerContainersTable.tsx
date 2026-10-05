@@ -1,5 +1,5 @@
 import { getResourceStaleness } from '@/features/platformPage/resourceStaleness';
-import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { For, Show, Suspense, createMemo, lazy, type Component, type JSX } from 'solid-js';
 import { useSearchParams } from '@solidjs/router';
 import { type FilterDef } from '@/components/shared/FilterBar';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
@@ -19,6 +19,11 @@ import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfa
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
+import type {
+  WorkloadWebLinkRow,
+  WorkloadWebLinksNoun,
+} from '@/components/Workloads/workloadWebLinksModel';
+import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
 import {
   getWorkloadTableLayoutMode,
   getWorkloadTableLayoutModeForContainer,
@@ -135,6 +140,31 @@ const runtimeSummary = (resource: Resource): string => {
   );
   if (runtime && version) return `${runtime} ${version}`;
   return runtime || version || '—';
+};
+
+// Lazy so the trigger keeps its own chunk instead of joining (and renaming)
+// the chunk the Docker and workloads pages already share.
+const WorkloadWebLinksAction = lazy(() => import('@/components/Workloads/WorkloadWebLinksAction'));
+
+const CONTAINER_WEB_LINKS_NOUN: WorkloadWebLinksNoun = { one: 'container', many: 'containers' };
+
+// Keyed by the identity the container drawer saves its web link under, so the
+// bulk editor and the drawer field read and write the same record.
+const toContainerWebLinkRows = (resource: Resource): WorkloadWebLinkRow[] => {
+  const target = toDiscoveryConfig(resource);
+  if (target?.metadataKind !== 'guest' || !target.metadataId) return [];
+  return [
+    {
+      metadataId: target.metadataId,
+      name: dockerResourceName(resource),
+      detail: [dockerHostName(resource), dockerTextValue(resource.docker?.image)]
+        .filter((part) => part && part !== '—')
+        .join(' · '),
+      status: asTrimmedString(resource.docker?.containerState || resource.status) ?? '',
+      addressHint: '',
+      savedUrl: resource.customUrl ?? '',
+    },
+  ];
 };
 
 const containerState = (resource: Resource): string =>
@@ -821,6 +851,17 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
         >
           <PlatformTableShell
             title={props.title ?? 'Containers'}
+            actions={
+              <Suspense fallback={null}>
+                <WorkloadWebLinksAction
+                  source={{
+                    kind: 'rows',
+                    noun: CONTAINER_WEB_LINKS_NOUN,
+                    rows: () => scopedRows().flatMap(toContainerWebLinkRows),
+                  }}
+                />
+              </Suspense>
+            }
             footer={
               <p
                 class="px-3 py-2 text-xs leading-relaxed text-muted"

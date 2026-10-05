@@ -1,24 +1,24 @@
 import { createMemo, createSignal, createUniqueId, type Setter } from 'solid-js';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import { notificationStore } from '@/stores/notifications';
-import type { WorkloadGuest } from '@/types/workloads';
 import { dispatchResourceMetadataChanged } from '@/utils/resourceMetadataEvents';
-import type { WorkloadGuestMetadataMap } from './workloadGuestMetadataRecord';
 import {
-  buildWorkloadWebLinkRows,
+  buildWorkloadWebLinkSourceRows,
   filterWorkloadWebLinkRows,
   formatWorkloadWebLinkCount,
   getWorkloadWebLinkChanges,
+  getWorkloadWebLinksNoun,
   keepStableWorkloadWebLinkRows,
   validateWorkloadWebLinkChanges,
+  type WorkloadWebLinkChange,
   type WorkloadWebLinkDrafts,
   type WorkloadWebLinkFilter,
   type WorkloadWebLinkRow,
+  type WorkloadWebLinksSource,
 } from './workloadWebLinksModel';
 
 export interface WorkloadWebLinksStateProps {
-  guests: () => WorkloadGuest[];
-  guestMetadata: () => WorkloadGuestMetadataMap;
+  source: WorkloadWebLinksSource;
   /** Owned by the table-header trigger so closing the panel keeps typed links. */
   drafts: () => WorkloadWebLinkDrafts;
   setDrafts: Setter<WorkloadWebLinkDrafts>;
@@ -31,18 +31,21 @@ export interface WorkloadWebLinksStateProps {
  */
 export function useWorkloadWebLinksState(props: WorkloadWebLinksStateProps) {
   const formId = `workload-web-links-${createUniqueId()}`;
+  const noun = getWorkloadWebLinksNoun(props.source);
   const [filter, setFilter] = createSignal<WorkloadWebLinkFilter>('all');
   const [errors, setErrors] = createSignal<Record<string, string>>({});
   const [saving, setSaving] = createSignal(false);
+  // Resource-backed tables only learn a saved link on their next refetch, so
+  // hold what this panel just saved rather than flash the stale value back.
+  const [justSaved, setJustSaved] = createSignal<Record<string, string>>({});
 
-  const rows = createMemo<WorkloadWebLinkRow[]>(
-    (previous) =>
-      keepStableWorkloadWebLinkRows(
-        previous,
-        buildWorkloadWebLinkRows(props.guests(), props.guestMetadata()),
-      ),
-    [],
-  );
+  const rows = createMemo<WorkloadWebLinkRow[]>((previous) => {
+    const saved = justSaved();
+    const next = buildWorkloadWebLinkSourceRows(props.source).map((row) =>
+      row.metadataId in saved ? { ...row, savedUrl: saved[row.metadataId] } : row,
+    );
+    return keepStableWorkloadWebLinkRows(previous, next);
+  }, []);
   const visibleRows = createMemo(() => filterWorkloadWebLinkRows(rows(), filter()));
   const linkedCount = createMemo(() => rows().filter((row) => row.savedUrl).length);
   const changes = createMemo(() => getWorkloadWebLinkChanges(rows(), props.drafts()));
@@ -87,27 +90,40 @@ export function useWorkloadWebLinksState(props: WorkloadWebLinksStateProps) {
 
     setSaving(true);
     const failed: Record<string, string> = {};
-    let savedCount = 0;
+    const saved: WorkloadWebLinkChange[] = [];
     for (const change of pending) {
       try {
         await GuestMetadataAPI.updateMetadata(change.metadataId, { customUrl: change.url });
-        dispatchResourceMetadataChanged({
-          metadataKind: 'guest',
-          metadataId: change.metadataId,
-          customUrl: change.url,
-        });
-        props.setDrafts(({ [change.metadataId]: _saved, ...rest }) => rest);
-        savedCount += 1;
+        saved.push(change);
       } catch (error) {
         failed[change.metadataId] =
           error instanceof Error && error.message ? error.message : 'Could not save this link.';
       }
     }
+
+    setJustSaved((current) => ({
+      ...current,
+      ...Object.fromEntries(saved.map((change) => [change.metadataId, change.url])),
+    }));
+    props.setDrafts((current) => {
+      const next = { ...current };
+      for (const change of saved) delete next[change.metadataId];
+      return next;
+    });
+    // One burst after the writes: listeners that refetch whole snapshots
+    // coalesce onto the same in-flight request instead of one per link.
+    for (const change of saved) {
+      dispatchResourceMetadataChanged({
+        metadataKind: 'guest',
+        metadataId: change.metadataId,
+        customUrl: change.url,
+      });
+    }
     setSaving(false);
     setErrors(failed);
 
     if (Object.keys(failed).length === 0) {
-      notificationStore.success(`Saved ${formatWorkloadWebLinkCount(savedCount)}.`);
+      notificationStore.success(`Saved ${formatWorkloadWebLinkCount(saved.length)}.`);
       props.onClose();
       return;
     }
@@ -116,6 +132,7 @@ export function useWorkloadWebLinksState(props: WorkloadWebLinksStateProps) {
 
   return {
     formId,
+    noun,
     filter,
     setFilter,
     drafts: props.drafts,

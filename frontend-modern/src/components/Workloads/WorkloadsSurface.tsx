@@ -249,8 +249,11 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
             title={props.tableTitle}
             actions={
               <WorkloadWebLinksAction
-                guests={state.filteredGuests}
-                guestMetadata={state.guestMetadata}
+                source={{
+                  kind: 'workloads',
+                  guests: state.filteredGuests,
+                  guestMetadata: state.guestMetadata,
+                }}
               />
             }
           />
