@@ -4749,6 +4749,16 @@ stable accessible label and route unconfigured installs into the canonical
 provider setup modal instead of falling back to generic "first pressed toggle"
 selectors, provider-model-load heuristics, legacy hosted-model enablement, or
 in-app trial acquisition.
+A settings toggle disabled by a plan or runtime lock must explain the lock in
+the card that owns it, not through the shared `Toggle` `locked` and
+`lockedMessage` props, which the primitive does not render. `AISettings.tsx`
+renders the Container update risk lock from the canonical Patrol availability
+presentation and links that explanation to the switch with `ariaDescribedBy`.
+The shared Patrol feature shells (`PatrolIntelligenceHeader.tsx` and
+`PatrolIntelligenceBanners.tsx`) and that card pass the session's real
+commercial and upgrade presentation policy into the presentation, never a
+constant, so a session that hides commercial surfaces gets the neutral lock
+line and never Pulse Pro runtime wording or a download link.
 That same route-owned presentation rule also governs Patrol findings empty
 states: shared section shells under `frontend-modern/src/features/patrol/`
 must not render a green healthy empty state from `0 active findings` alone

@@ -3226,6 +3226,14 @@ a new API state machine, queue contract, or verification-accounting field.
    proof. The default API-backed presentation must stay on the selected control
    level and its plain summary; it must not render a separate Limits disclosure,
    hard-limit matrix, or always-on explanatory matrix beside the mode picker.
+   and the Patrol container update risk lock, so `/api/settings/ai`
+   `alert_triggered_analysis` stays the licence-masked API value while the
+   runtime-capabilities `ai_alerts` grant or `paid_runtime_required` block
+   decides which lock explanation the Patrol settings card renders, without a
+   new API field. A `paid_runtime_required` block is presentation input only:
+   when the security-status presentation policy hides commercial surfaces,
+   Patrol mode and container update risk both render their neutral lock and
+   the browser must not surface the block's Pro download URL
    and the Patrol run-record copy, so `finding_ids` remains the API-owned
    fail-closed scoping input while the frontend presents selected history as a
    Patrol run record instead of a generic findings filter or snapshot workflow

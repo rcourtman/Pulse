@@ -8,6 +8,7 @@ import {
   getPatrolConfigurationFailureInlineDetails,
 } from '../PatrolIntelligenceHeader';
 import {
+  getPatrolAlertAnalysisAvailabilityPresentation,
   getPatrolAutonomyAvailabilityPresentation,
   PATROL_AUTONOMY_RUNTIME_REQUIRED_REASON,
 } from '../patrolAutonomyAvailability';
@@ -250,7 +251,10 @@ describe('PatrolIntelligenceHeader', () => {
         external: false,
       },
     });
-    expect(headerSource).toContain('commercialSurfacesHidden: true');
+    expect(headerSource).toContain(
+      'commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),',
+    );
+    expect(headerSource).not.toContain('commercialSurfacesHidden: true');
     expect(headerSource).not.toContain('showAutonomyPlanBillingAction');
     expect(headerSource).not.toContain('CreditCardIcon');
     expect(headerSource).not.toContain('Plans & Billing');
@@ -309,6 +313,43 @@ describe('PatrolIntelligenceHeader', () => {
       title: 'Pulse Pro runtime required',
       actionLabel: 'Open Pro downloads',
       destination: { href: 'https://pulserelay.pro/download.html', external: true },
+    });
+  });
+
+  it('explains the container update risk lock through the same presentation policy', () => {
+    const planUpgradeDestination = {
+      href: '/settings/pulse-intelligence/billing/plan',
+      external: false,
+    };
+    expect(
+      getPatrolAlertAnalysisAvailabilityPresentation({
+        alertAnalysisLocked: true,
+        planUpgradeDestination,
+      }),
+    ).toMatchObject({
+      kind: 'plan_locked',
+      title: 'Higher license plan required',
+      actionLabel: 'Plans & Billing',
+      destination: planUpgradeDestination,
+    });
+    expect(
+      getPatrolAlertAnalysisAvailabilityPresentation({
+        alertAnalysisLocked: true,
+        upgradePromptsHidden: true,
+        planUpgradeDestination,
+      }),
+    ).not.toHaveProperty('actionLabel');
+    expect(
+      getPatrolAlertAnalysisAvailabilityPresentation({
+        alertAnalysisLocked: true,
+        commercialSurfacesHidden: true,
+        planUpgradeDestination,
+      }),
+    ).toEqual({
+      kind: 'plan_locked',
+      locked: true,
+      title: 'Not available',
+      body: 'This install does not include container update risk.',
     });
   });
 

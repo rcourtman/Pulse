@@ -13,7 +13,10 @@ import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
 import type { PatrolAutonomyLevel } from '@/api/patrol';
 import { settingsTabPath } from '@/components/Settings/settingsNavigationModel';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
-import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  presentationPolicyHidesUpgradePrompts,
+} from '@/stores/sessionPresentationPolicy';
 import { formatRelativeTime } from '@/utils/format';
 import { getPatrolPageHeaderMeta } from '@/utils/patrolPagePresentation';
 import { getPatrolTriggerStatusSummary } from '@/utils/patrolRunPresentation';
@@ -146,7 +149,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
     getPatrolAutonomyAvailabilityPresentation({
       autoFixLocked: state.autoFixLocked(),
       upgradePromptsHidden: upgradePromptsHidden(),
-      commercialSurfacesHidden: true,
+      commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),
       runtimeCapabilityBlock: state.autoFixCapabilityBlock(),
       runtime: state.licenseRuntimeIdentity(),
       planUpgradeDestination: getUpgradeActionDestination('ai_autofix'),

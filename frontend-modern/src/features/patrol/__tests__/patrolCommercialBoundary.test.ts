@@ -16,7 +16,13 @@ describe('patrol commercial boundary', () => {
     expect(patrolIntelligenceHeaderSource).toContain(
       "autonomyAvailability().kind === 'runtime_locked'",
     );
-    expect(patrolIntelligenceHeaderSource).toContain('commercialSurfacesHidden: true');
+    expect(patrolIntelligenceHeaderSource).toContain(
+      'commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),',
+    );
+    expect(patrolIntelligenceHeaderSource).not.toContain('commercialSurfacesHidden: true');
+    expect(patrolIntelligenceBannersSource).toContain(
+      'commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),',
+    );
     expect(patrolIntelligenceHeaderSource).not.toContain('showAutonomyPlanBillingAction');
     expect(patrolAutonomyAvailabilitySource).toContain('Plans & Billing');
     expect(patrolAutonomyAvailabilitySource).toContain('input.upgradePromptsHidden');

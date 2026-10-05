@@ -1259,6 +1259,64 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByRole('button', { name: /start free trial/i })).not.toBeInTheDocument();
   });
 
+  describe('Patrol mode runtime lock', () => {
+    const useLicensedCommunityRuntime = () => {
+      getRuntimeCapabilityBlockMock.mockImplementation((feature: string) =>
+        feature === 'ai_autofix'
+          ? {
+              key: 'ai_autofix',
+              reason: 'paid_runtime_required',
+              action_url: 'https://pulserelay.pro/download.html',
+            }
+          : undefined,
+      );
+      runtimeCapabilitiesMock.mockReturnValue({
+        runtime: { build: 'community', label: 'Pulse Community runtime' },
+        capabilities: ['ai_intelligence'],
+        blocked_capabilities: [
+          { key: 'ai_autofix', reason: 'paid_runtime_required' },
+          { key: 'ai_alerts', reason: 'paid_runtime_required' },
+        ],
+      });
+      getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: true }));
+    };
+
+    it('points a licensed community runtime at the Pro runtime download', async () => {
+      useLicensedCommunityRuntime();
+
+      render(() => <AIIntelligence />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText(/Pulse Pro runtime required/).length).toBeGreaterThan(0);
+      });
+      const downloads = screen.getAllByRole('link', { name: 'Open Pro downloads' });
+      expect(downloads.length).toBeGreaterThan(0);
+      for (const link of downloads) {
+        expect(link).toHaveAttribute('href', 'https://pulserelay.pro/download.html');
+      }
+    });
+
+    it('keeps Pro runtime wording off the page when commercial surfaces are hidden', async () => {
+      useLicensedCommunityRuntime();
+      presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(true);
+      presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+
+      render(() => <AIIntelligence />);
+
+      await waitFor(() => {
+        expect(getPatrolStatusMock).toHaveBeenCalled();
+      });
+      const patrolControlAnchor = document.getElementById(PATROL_CONTROL_ANCHOR);
+      expect(patrolControlAnchor).not.toBeNull();
+      const patrolControl = within(patrolControlAnchor!);
+      expect(patrolControl.getAllByText('Watch only').length).toBeGreaterThan(0);
+      expect(patrolControl.queryByRole('group', { name: 'Patrol mode' })).not.toBeInTheDocument();
+      expect(screen.queryByText(/Pulse Pro runtime/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Install the Pulse Pro runtime/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Open Pro downloads' })).not.toBeInTheDocument();
+    });
+  });
+
   it('keeps the Patrol model catalog out of the operator page', async () => {
     apiFetchJSONMock.mockImplementation(async (path: string) => {
       if (path === '/api/ai/models') {

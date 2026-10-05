@@ -1459,6 +1459,35 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('explains the container update risk lock through the canonical Patrol availability policy', () => {
+    expect(aiSettingsSource).toContain('getPatrolAlertAnalysisAvailabilityPresentation({');
+    expect(aiSettingsSource).toContain(
+      'commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),',
+    );
+    expect(aiSettingsSource).toContain(
+      'upgradePromptsHidden: presentationPolicyHidesUpgradePrompts(),',
+    );
+    expect(aiSettingsSource).toContain(
+      'runtimeCapabilityBlock: getRuntimeCapabilityBlock(PATROL_ALERT_ANALYSIS_FEATURE_KEY),',
+    );
+    expect(aiSettingsSource).toContain(
+      'planUpgradeDestination: getUpgradeActionDestination(PATROL_ALERT_ANALYSIS_FEATURE_KEY),',
+    );
+    expect(aiSettingsSource).toContain(
+      'disabled={props.state.saving() || alertAnalysisAvailability().locked}',
+    );
+    expect(aiSettingsSource).toContain(
+      '<p id={alertAnalysisLockId} class="mt-1 text-xs text-muted">',
+    );
+    expect(aiSettingsSource).toContain(
+      'alertAnalysisAvailability().locked ? alertAnalysisLockId : undefined',
+    );
+    // The shared Toggle declares locked/lockedMessage but never renders them,
+    // so the card must carry the explanation itself.
+    expect(aiSettingsSource).not.toContain('lockedMessage=');
+    expect(aiSettingsSource).not.toContain('Requires Pulse Pro');
+  });
+
   it('keeps system AI save feedback tied to provider and Patrol readiness context', () => {
     expect(aiSettingsSource).toContain('Choose a Patrol mode on the Patrol page.');
     expect(aiSettingsSource).toContain('Open Patrol');
