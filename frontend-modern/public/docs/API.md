@@ -17,7 +17,8 @@ secret does not appear in shell history or process arguments.
 
 On a trusted machine, as the account running curl, prepare the file and open
 it in an editor. This preserves an existing file, restricts its directory and
-stops before editing if preparation fails or a credential path is a symlink:
+stops before editing if preparation fails or a credential path is symlinked or
+not a regular file:
 
 ```bash
 (
@@ -27,6 +28,10 @@ stops before editing if preparation fails or a credential path is a symlink:
   auth_file="$auth_dir/api-header"
   if [ -L "$HOME/.config" ] || [ -L "$auth_dir" ] || [ -L "$auth_file" ]; then
     printf 'Refusing a symlinked credential path.\n' >&2
+    exit 1
+  fi
+  if [ -e "$auth_file" ] && [ ! -f "$auth_file" ]; then
+    printf 'Credential file must be a regular file.\n' >&2
     exit 1
   fi
   mkdir -p "$auth_dir"
@@ -43,20 +48,82 @@ In the editor, save just this line, replacing `<token>` with the API token:
 X-API-Token: <token>
 ```
 
-Then make a read-only request (curl 7.76 or later):
+Define this helper in the same Bash session (curl 7.76 or later). The examples
+on this page use it to make **one request**, print only the HTTP status and save
+each response to a new owner-only file. This keeps resource names, audit details
+and credential-bearing error bodies out of terminal output and recordings.
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  http://127.0.0.1:7655/api/state/summary
+pulse_api() (
+  set -eu
+  umask 077
+  if [ "$#" -ne 2 ]; then
+    printf 'Usage: pulse_api GET|POST /api/path\n' >&2
+    exit 2
+  fi
+  method=$1
+  api_path=$2
+  case "$api_path" in
+    /api/*) ;;
+    *) printf 'Use an API path on this Pulse instance, not a full URL.\n' >&2; exit 2 ;;
+  esac
+  case "$method" in
+    GET) set -- ;;
+    POST) set -- --header 'Content-Type: application/json' --request POST --data-binary @- ;;
+    *) printf 'This example helper accepts only GET and POST.\n' >&2; exit 2 ;;
+  esac
+  auth_dir="$HOME/.config/pulse"
+  auth_file="$auth_dir/api-header"
+  if [ -L "$HOME/.config" ] || [ -L "$auth_dir" ] || [ -L "$auth_file" ] || [ ! -f "$auth_file" ]; then
+    printf 'Prepare a regular, private header file first.\n' >&2
+    exit 1
+  fi
+  chmod 700 "$auth_dir" || exit "$?"
+  chmod 600 "$auth_file" || exit "$?"
+  result_file=$(mktemp "$auth_dir/api-response.XXXXXX") || exit "$?"
+  curl_exit=0
+  status=$(curl --disable --fail-with-body --silent --show-error \
+    --proto '=http' --noproxy 127.0.0.1 --connect-timeout 5 --max-time 20 \
+    --header "@$auth_file" --output "$result_file" --write-out '%{http_code}' \
+    "$@" "http://127.0.0.1:7655$api_path") || curl_exit=$?
+  printf 'HTTP %s\nPrivate response: %s\n' "$status" "$result_file"
+  [ "$curl_exit" -eq 0 ] || exit "$curl_exit"
+  case "$status" in
+    2??) ;;
+    *) exit 1 ;;
+  esac
+)
 ```
 
-This loopback URL applies only when curl runs on the Pulse host. For remote
-access, use your Pulse HTTPS URL and keep certificate verification enabled;
-do not use `--insecure`. On an authentication-enabled instance, the protected
-summary checks token access; `/api/health` is public and does not verify authentication.
-`--fail-with-body` returns a non-zero exit on HTTP errors, including 401 and
-403, while retaining the error response. Keep `--disable` first: it ignores
-local curl configuration that could otherwise enable credential-bearing trace output.
+Then make a read-only request with a `monitoring:read` token:
+
+```bash
+pulse_api GET /api/state/summary
+```
+
+The default loopback origin applies only when curl runs on the Pulse host and
+explicitly bypasses proxy environment settings. For remote access, replace
+`http://127.0.0.1:7655` **in the helper** with your Pulse HTTPS origin, and replace
+`--proto '=http' --noproxy 127.0.0.1` with `--proto '=https'`. Keep certificate
+verification enabled; for a private CA, add `--cacert` with a CA file you
+verified separately, never `--insecure`. Do not put credentials in the URL.
+
+Open the reported response file privately to inspect it, including on failure;
+share only the relevant redacted error, not the whole response or file. Each
+call preserves earlier responses. HTTP 401 and 403 return curl's non-zero exit
+and retain the error body; redirects are not followed and are not success.
+The connection limit is five seconds and the whole request limit is twenty
+seconds. A partial file after a transport error is not a complete result.
+No request is retried automatically, especially a POST whose outcome is
+uncertain: inspect the existing action and target before deciding what to do.
+A 2xx response is only HTTP success, not proof that an action completed.
+
+Keep `--disable` first: it ignores local curl configuration that could enable
+trace output, bypass TLS or follow redirects. On an authentication-enabled
+instance, the protected summary checks token access; `/api/health` is public
+and does not verify authentication. The helper is local example code, not an
+installed Pulse command; define it again in a new shell before using these
+examples. Dispose of response files under your normal private-data policy.
 
 Do not paste tokens into command lines, URLs or issue reports. Keep the header
 file private and outside shared repositories and diagnostics; do not use curl
@@ -67,7 +134,7 @@ needed in Pulse's API Access settings.
 ### Bearer Token
 
 The same API token can use a Bearer header instead. Replace the header file's
-line in the editor with the following, then use the same curl command above;
+line in the editor with the following, then use the same helper above;
 do not send both authentication headers:
 
 ```text
@@ -326,12 +393,11 @@ Returns the canonical fleet connections ledger with per-row fleet-governance sta
 
 The payload is the source of truth for enrollment, liveness, version drift, adapter health, config rollout, credential posture, update posture, and remote-control posture. Consumers must not rebuild those states from provider-specific config stores or display labels.
 
-Use the private header file prepared in [Authentication](#-authentication),
+Define the private-response helper in [Authentication](#-authentication),
 with `settings:read` on the token:
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  http://127.0.0.1:7655/api/connections
+pulse_api GET /api/connections
 ```
 
 ### Unified Action Planning
@@ -339,9 +405,10 @@ curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
 The existing action API separates planning, approval and execution. Run these
 steps separately, inspecting each response before moving on; do not paste the
 whole sequence as an unattended recovery script. Use the private header file
-from [Authentication](#-authentication), not a token in a command or environment
-assignment. For remote access, replace the loopback origin with your Pulse HTTPS
-URL and keep certificate verification enabled.
+and `pulse_api` helper from [Authentication](#-authentication), not a token in a
+command or environment assignment. Inspect each reported private response file
+before proceeding. For remote access, change the helper as described there,
+using your Pulse HTTPS origin with certificate verification enabled.
 
 | Endpoint | Token scope and access |
 | --- | --- |
@@ -365,8 +432,7 @@ not an action-control or audit token.
    An empty capabilities list means there is nothing to plan for that resource.
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  http://127.0.0.1:7655/api/agent/resource-capabilities/vm%3A42
+pulse_api GET /api/agent/resource-capabilities/vm%3A42
 ```
 
 2. **Plan only.** Use an advertised capability and its actual parameter schema;
@@ -375,9 +441,7 @@ curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
    authenticated credential, not a caller-supplied `requestedBy` value.
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --header 'Content-Type: application/json' --request POST --data-binary @- \
-  http://127.0.0.1:7655/api/actions/plan <<'JSON'
+pulse_api POST /api/actions/plan <<'JSON'
 {
   "requestId": "manual-recovery-123",
   "resourceId": "vm:42",
@@ -398,9 +462,7 @@ or currently available.
    response rather than weakening the policy or creating another recovery action.
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --header 'Content-Type: application/json' --request POST --data-binary @- \
-  http://127.0.0.1:7655/api/actions/act_.../decision <<'JSON'
+pulse_api POST /api/actions/act_.../decision <<'JSON'
 {
   "outcome": "approved",
   "reason": "Inside maintenance window",
@@ -413,9 +475,7 @@ JSON
    approval-free executable plan, use the executor's authorised header file:
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  --header 'Content-Type: application/json' --request POST --data-binary @- \
-  http://127.0.0.1:7655/api/actions/act_.../execute <<'JSON'
+pulse_api POST /api/actions/act_.../execute <<'JSON'
 {
   "reason": "Execute approved recovery",
   "planHash": "sha256:..."
@@ -431,13 +491,11 @@ resource's observed state.
 5. **Read the audit and events**, using a private header file with audit access:
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  'http://127.0.0.1:7655/api/audit/actions?resourceId=vm%3A42&limit=10'
+pulse_api GET '/api/audit/actions?resourceId=vm%3A42&limit=10'
 ```
 
 ```bash
-curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
-  http://127.0.0.1:7655/api/audit/actions/act_.../events
+pulse_api GET /api/audit/actions/act_.../events
 ```
 
 When audit logging is unavailable, use Pulse's action detail in the signed-in
@@ -1490,14 +1548,19 @@ Returns stats for the persistent metrics store (SQLite-backed).
 Returns historical metric series for a resource and time range.
 
 Query params:
-- `resourceType` (required): `node`, `vm`, `container`, `storage`, `dockerHost`, `dockerContainer`
+- `resourceType` (required): `node`, `storage`, `agent`, `disk`, `k8s`, `vm`, `system-container`, `oci-container`, `app-container`, `docker-host`
 - `resourceId` (required)
 - `metric` (optional): `cpu`, `memory`, `disk`, etc. Omit for all metrics
 - `range` (optional): `1h`, `6h`, `12h`, `24h`, `1d`, `7d`, `30d`, `90d` (default `24h`; duration strings also accepted)
 - `maxPoints` (optional): Downsample to a target number of points
 
 > **License**: Requests beyond Community's `7d` floor require the paid `long_term_metrics` entitlement. Relay unlocks `14d`, Pro and legacy Pro+ unlock `90d`, and requests beyond the active tier's limit return `402 Payment Required`.
-> **Aliases**: `guest` (VM/LXC) and `docker` (Docker container) are accepted, but persistent store data uses the canonical types above.
+An explicit `metric` returns a `points` array; omitting it returns a `metrics`
+object keyed by metric name. Use the source ID and type from the affected
+chart's request, not its display name or an internal store type. Older
+`container`, `dockerHost`, `dockerContainer`, `guest` and `docker` query values
+are unsupported. See [Metrics History](METRICS_HISTORY.md#api-access) for
+private one-shot reads, response sources and empty-history troubleshooting.
 
 ---
 

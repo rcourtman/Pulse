@@ -981,3 +981,28 @@ func TestCloneResource_PreservesActionReadinessDetail(t *testing.T) {
 		t.Fatalf("clone dropped action readiness diagnostics: %#v", cloned.ActionReadiness)
 	}
 }
+
+func TestCloneMaterializedResourceDetachesCanonicalPolicy(t *testing.T) {
+	original := &Resource{ID: "agent:synthetic", Type: ResourceTypeAgent, Name: "synthetic", Sources: []DataSource{SourceAgent}, Tags: []string{"customer-data"}, Agent: &AgentData{AgentID: "synthetic", Hostname: "synthetic.example.test"}, Identity: ResourceIdentity{IPAddresses: []string{"192.0.2.1"}}, SupersededCanonicalIDs: []string{"agent:old-synthetic"}}
+	RefreshCanonicalMetadata(original)
+	copied := cloneMaterializedResource(original)
+	if !reflect.DeepEqual(copied, cloneResource(original)) {
+		t.Fatal("materialized copy differs from arbitrary-input refreshed clone")
+	}
+	copied.Canonical.Aliases[0] = "changed"
+	copied.Canonical.SupersededIDs[0] = "changed"
+	copied.Policy.Routing.Redact[0] = "changed"
+	copied.Policy.Sensitivity = ResourceSensitivityPublic
+	copied.PlatformScopes[0] = "changed"
+	if original.Canonical.Aliases[0] == "changed" || original.Canonical.SupersededIDs[0] == "changed" || original.Policy.Routing.Redact[0] == "changed" || original.Policy.Sensitivity != ResourceSensitivityRestricted || original.PlatformScopes[0] == "changed" {
+		t.Fatal("bulk resource copy aliases canonical identity or policy")
+	}
+	original.Tags = []string{"public"}
+	refreshed := cloneResource(original)
+	if refreshed.Policy.Sensitivity != ResourceSensitivityPublic {
+		t.Fatal("arbitrary clone trusted stale materialized policy")
+	}
+	if cloneMaterializedResource(nil).ID != "" || cloneMaterializedResourcePtr(nil) != nil {
+		t.Fatal("nil materialized clone changed absence")
+	}
+}

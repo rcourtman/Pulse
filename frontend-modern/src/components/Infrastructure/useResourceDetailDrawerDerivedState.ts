@@ -63,6 +63,7 @@ import {
 } from './resourceDetailDrawerOperationalModel';
 import {
   getResourceMetricsHistoryCurrentMetrics,
+  getResourceMetricsHistoryDeferredMetrics,
   getResourceMetricsHistoryGroups,
   getResourceMetricsHistoryTarget,
   resourceSupportsMetricsHistory,
@@ -371,6 +372,9 @@ export const useResourceDetailDrawerDerivedState = (
   const metricsHistoryCurrentMetrics = createMemo(() =>
     getResourceMetricsHistoryCurrentMetrics(resource()),
   );
+  const metricsHistoryDeferredMetrics = createMemo(() =>
+    getResourceMetricsHistoryDeferredMetrics(resource()),
+  );
   const metricsHistoryGroups = createMemo(() => getResourceMetricsHistoryGroups(resource()));
   const hasMetricsHistory = createMemo(() => resourceSupportsMetricsHistory(resource()));
   const hasDiscoveryTab = createMemo(
@@ -509,6 +513,7 @@ export const useResourceDetailDrawerDerivedState = (
     serviceDetailsSummary,
     metricsHistoryTarget,
     metricsHistoryCurrentMetrics,
+    metricsHistoryDeferredMetrics,
     metricsHistoryGroups,
     hasMetricsHistory,
     hasDiscoveryTab,

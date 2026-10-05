@@ -66,6 +66,7 @@ export interface HistoryChartAccessibleDescriptionInput {
 }
 
 export function formatHistoryChartTooltipValue(value: number, unit?: string): string {
+  if (unit === '%' && value > 0 && value < 0.1) return '<0.1%';
   if (unit === '%') return `${value.toFixed(1)}%`;
   if (unit === 'B/s') return `${formatBytes(value)}/s`;
   if (unit === 'C') return `${Math.round(value)}°C`;

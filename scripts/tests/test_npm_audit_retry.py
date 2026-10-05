@@ -206,7 +206,7 @@ class NpmAuditRetryTest(unittest.TestCase):
             with self.subTest(require=require):
                 result, calls = self.run_check("vulnerability", "all", require=require)
                 self.assertEqual(result.returncode, 1, result.stdout)
-                self.assertEqual(calls, ["audit --json"])
+                self.assertEqual(calls, ["audit --json"], result.stdout + result.stderr)
                 self.assertIn("::error::", result.stdout)
                 self.assertNotIn("::warning::", result.stdout)
 

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "5e967c49f55d0fc2423e9d7ba63c7ed250069a87",
+  "verified_at": "2026-10-05T04:08:20.487Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/WebhookConfigForm.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/WebhookConfigForm.tsx": "0286a39d8405d214df78d8806f1792991a46e0583ab20d1b1fafb276b3c9160d"
+  },
+  "routes": [
+    "/browser-tests/webhook-composed.html (production Notifications WebhookConfig/form/state/CSS; standalone offline fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Chromium 141.0.7390.37 desktop light and dark; WebKit 26.0 emulated phone light and dark, Playwright 1.56.1 matching integration lock",
+    "Discord four numbered instructions and Telegram five numbered instructions exactly match the committed server catalogue in each theme/layout",
+    "Setup Instructions heading is solid blue-900 in light mode and blue-100 in dark mode, alpha 255 and no ancestor opacity; both improvements are composed in the verified hash",
+    "Each numbered prefix has a distinct painted text rectangle and left edge; pre-line whitespace and break-word wrapping preserve long Telegram URLs without panel/document horizontal overflow",
+    "All eight full-page captures inspected: headings, step separation, long URLs and phone form layout readable; no page/console errors or unexpected API/provider requests"
+  ],
+  "interactions": [
+    "Open Add Webhook and select Discord using keyboard on desktop or tap on emulated phone",
+    "Open the service selector using keyboard Enter and switch to Telegram; source-exact instructions and URL placeholder update, existing typed/default name is preserved",
+    "Cancel returns to Add Webhook and removes instructions; zero add/update/delete/Test callbacks or non-GET API requests throughout"
+  ],
+  "proof": {
+    "script": "frontend-modern/browser-tests/webhook-composed.cjs",
+    "script_sha256": "99f74d9ef98188510a68d47cd9508ab7001673523c83d9f3ea54c542fc94313e",
+    "template_source_sha256": "07b04d7ccf37e15dac8fa333c487122d013f6a364cd8dc5ce5a7ecbbb20b5243",
+    "limits": "Production WebhookConfig/form/state/CSS in a standalone offline fixture. Source-exact public template fields, synthetic API. No full app navigation, real credentials, receiver, Test/save/delivery, native phone or installed acceptance."
+  }
+}

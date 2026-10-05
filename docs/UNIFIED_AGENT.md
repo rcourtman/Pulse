@@ -897,30 +897,60 @@ agent identity state when it is still present.
 
 ### Installer Fails With "Not enough free disk space"
 
-The installer stages the agent binary (~34 MiB) in a temporary directory before
-moving it to the install directory, and checks free space in both before
-downloading. On appliances whose root filesystem is a small RAM disk (QNAP QTS,
-Unraid), `/tmp` and `/usr/local/bin` share that filesystem, so both the staged
-and installed copy must fit at once.
+The installer checks space for both the staged download and installed binary
+before downloading. If both paths share a filesystem, it requires room for
+both copies there; moving staging cannot fix a full installation filesystem.
+Keep the paths and available/required sizes from the error, rather than assuming
+that every NAS installs to `/usr/local/bin`.
 
-If the check fails because `/tmp` is on a constrained root, point `TMPDIR` at a
-directory on a data volume and re-run the already downloaded and inspected
-agent installer from the private-file preparation above:
+On **QNAP QTS/QuTS hero**, the current installer selects a writable data volume
+and installs under `<data-volume>/.pulse-agent`. When `TMPDIR` is unset, it also
+tries to stage under that directory, avoiding the small RAM-backed root. An
+existing `TMPDIR` overrides this staging default. If no writable data volume is
+available, stop and check the volume's mount, health and access locally; do not
+force installation onto the root filesystem or change shared-folder permissions.
+
+Only when the error identifies staging as the constrained path, choose an
+existing writable data volume with enough space. This example uses
+`/share/CACHEDEV1_DATA`; replace it with the actual mounted volume. It creates
+a new private staging directory and runs the already downloaded and inspected
+installer from the private-file preparation above, keeping the same token file
+and collector options:
 
 ```bash
-TMPDIR=/share/CACHEDEV1_DATA/tmp bash "$HOME/.config/pulse/agent-install.sh" \
+(
+set -eu
+umask 077
+data_volume=/share/CACHEDEV1_DATA
+if [ ! -d "$data_volume" ] || [ ! -w "$data_volume" ]; then
+  printf 'Selected data volume is unavailable or not writable; stop.\n' >&2
+  exit 1
+fi
+staging_dir="$(mktemp -d "$data_volume/pulse-agent-stage.XXXXXX")"
+# Remove only this new directory, and only if the installer left it empty.
+trap 'rmdir "$staging_dir" 2>/dev/null || true' EXIT
+TMPDIR="$staging_dir" bash "$HOME/.config/pulse/agent-install.sh" \
   --url https://pulse.example.com \
   --token-file "$HOME/.config/pulse/agent-token"
+)
 ```
 
-(`mktemp` honours `TMPDIR`, so this moves the staging copy off the RAM root.
-Create the directory first if it does not exist.)
+Add the same collector options used for this agent, if any. `TMPDIR` affects
+this invocation only; it does not move the installed binary, saved identity or
+logs. If preparation or the installer fails, stop rather than loop, uninstall
+or delete state. Unexpected files left in the staging directory are preserved
+for local inspection, not recursively removed.
 
 On QNAP the agent's rotating log is written to the data volume
 (`<data-volume>/.pulse-agent/logs/pulse-agent.log`); on Unraid it is written to
 `/var/log/pulse-agent/pulse-agent.log` with size-capped rotation. If an older
-install filled `/var/log/pulse-agent.log` on the root filesystem, delete that
-file and re-run the installer to pick up the rotating configuration.
+`/var/log/pulse-agent.log` is large, check whether it is still growing and which
+installed agent writes it. Preserve a bounded redacted excerpt and, when needed,
+a private copy on a healthy data volume before planned log maintenance. Do not
+delete or truncate a live log, remove `.pulse-agent` or re-enrol an agent as a
+diagnostic fix. A newer installer does not establish that high CPU or an existing
+space problem is resolved; verify fresh reporting, free space and log growth
+after any planned repair. Keep log contents, connection files and tokens private.
 
 ### Agent Not Updating
 - Check logs: `journalctl -u pulse-agent -f`

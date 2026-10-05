@@ -645,7 +645,7 @@ func TestSnapshotBackedUnifiedReadStateUsesConfiguredStaleThreshold(t *testing.T
 		state: state,
 	}
 
-	readState := monitor.snapshotBackedUnifiedReadState()
+	readState := monitor.snapshotBackedAgentLookupReadState()
 	if readState == nil {
 		t.Fatal("expected snapshot-backed read state")
 	}
@@ -1731,7 +1731,7 @@ func TestApplyHostReportUsesReceiptTimeForSkewedAgentClockLiveness(t *testing.T)
 		t.Fatalf("host LastSeen followed skewed agent timestamp %s: got %s", agentClock, host.LastSeen)
 	}
 
-	readState := monitor.snapshotBackedUnifiedReadState()
+	readState := monitor.snapshotBackedAgentLookupReadState()
 	if readState == nil {
 		t.Fatal("expected snapshot-backed read state")
 	}

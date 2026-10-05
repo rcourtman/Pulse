@@ -20,6 +20,42 @@ func cloneResource(in *Resource) Resource {
 	if in == nil {
 		return Resource{}
 	}
+	out := cloneResourceData(in)
+	RefreshCanonicalMetadata(&out)
+	return out
+}
+
+// cloneMaterializedResource is only for registry bulk reads after canonical
+// metadata has been refreshed under the registry write lock. Arbitrary callers
+// must use cloneResource, which still derives metadata from the current input.
+// Copy the derived blocks too: a List consumer must not mutate registry policy,
+// identity aliases or the detached typed view through its returned resource.
+func cloneMaterializedResource(in *Resource) Resource {
+	if in == nil {
+		return Resource{}
+	}
+	out := cloneResourceData(in)
+	if in.Canonical != nil {
+		canonical := *in.Canonical
+		canonical.Aliases = cloneStringSlice(in.Canonical.Aliases)
+		canonical.SupersededIDs = cloneStringSlice(in.Canonical.SupersededIDs)
+		out.Canonical = &canonical
+	}
+	out.Policy = CloneResourcePolicy(in.Policy)
+	return out
+}
+
+func cloneMaterializedResourcePtr(in *Resource) *Resource {
+	if in == nil {
+		return nil
+	}
+	out := cloneMaterializedResource(in)
+	return &out
+}
+
+// cloneResourceData owns the same native payload detachments for refreshed and
+// already-materialized clones. It does not decide whether metadata is current.
+func cloneResourceData(in *Resource) Resource {
 
 	out := *in
 	out.DiscoveryTarget = cloneDiscoveryTarget(in.DiscoveryTarget)
@@ -54,7 +90,6 @@ func cloneResource(in *Resource) Resource {
 	out.Availability = cloneAvailabilityData(in.Availability)
 	out.AvailabilityChecks = cloneAvailabilityDataSlice(in.AvailabilityChecks)
 	out.FacetCounts = resourceFacetCounts(out)
-	RefreshCanonicalMetadata(&out)
 	return out
 }
 

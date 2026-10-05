@@ -24,8 +24,11 @@ SCRIPT = ROOT / "scripts/test-vm-disk.sh"
 DOC = ROOT / "docs/VM_DISK_MONITORING.md"
 BASH = shutil.which("bash")
 REAL_TIMEOUT = shutil.which("timeout")
+REAL_PYTHON = os.sys.executable
 PRIVATE = "synthetic-private-infrastructure-marker"
 READS = [["status", "100"], ["config", "100", "--current"]]
+STATUS_LIMIT = 256
+CONFIG_LIMIT = 64 * 1024
 
 
 def guide_section(guide, heading):
@@ -83,9 +86,27 @@ elif name == 'qm':
         sys.exit(90)
     if settings.get('sleep_operation') == operation:
         time.sleep(20)
-    sys.stdout.write(settings.get(operation + '_output', default))
+    # Write bytes so corrupt transport controls are not silently repaired by
+    # the fixture's text encoding before they reach the actual helper.
+    output = settings.get(operation + '_output', default).encode('utf-8')
+    if settings.get(operation + '_invalid_utf8'):
+        output += b'\\xff'
+    try:
+        sys.stdout.buffer.write(output)
+        sys.stdout.buffer.flush()
+    except BrokenPipeError:
+        # A bounded reader is entitled to close the pipe before the producer
+        # finishes. Do not turn this fixture's expected stop into raw output.
+        os._exit(1)
     sys.stderr.write('synthetic-private-infrastructure-marker\\n')
     sys.exit(settings.get(operation + '_exit', 0))
+elif name == 'python3':
+    # The non-isolated form exists only for the startup-code negative control.
+    assert (len(args) == 4 and args[:2] == ['-I', '-c'] or
+            len(args) == 3 and args[0] == '-c') and args[-1] in ('256', '65536')
+    if settings.get('reader_exit') is not None:
+        sys.exit(settings['reader_exit'])
+    os.execv(os.environ['REAL_PYTHON'], [os.environ['REAL_PYTHON'], *args])
 elif name == 'sudo':
     assert args == ['bash', './scripts/test-vm-disk.sh', '100']
     os.execv(os.environ['REAL_BASH'], [os.environ['REAL_BASH'], *args[1:]])
@@ -100,22 +121,32 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / "settings.json").write_text(json.dumps(settings or {}))
-            for name in ("qm", "timeout", "sudo", "pveum", "pveversion", "curl", "systemctl"):
+            for name in ("qm", "timeout", "python3", "sudo", "pveum", "pveversion", "curl", "systemctl"):
                 if name == missing:
                     continue
                 tool = root / name
-                tool.write_text(TOOL)
+                # The collector adapter is itself named python3. Pin the
+                # fixture interpreter so /usr/bin/env cannot recurse through
+                # that adapter instead of ever executing the fake qm.
+                tool.write_text(TOOL.replace("/usr/bin/env python3", f"{REAL_PYTHON} -I"))
                 tool.chmod(0o700)
             env = dict(os.environ, VM_FIXTURE=str(root), REAL_BASH=BASH,
-                       REAL_TIMEOUT=REAL_TIMEOUT, PATH=f"{root}:{os.environ['PATH']}")
+                       REAL_TIMEOUT=REAL_TIMEOUT, REAL_PYTHON=REAL_PYTHON,
+                       PATH=f"{root}:{os.environ['PATH']}")
             if missing:
                 # The adapters use an absolute interpreter, so an empty
                 # fallback PATH can genuinely model unavailable dependencies.
                 env["PATH"] = str(root)
-                for tool in root.iterdir():
-                    if tool.name in ("settings.json",):
-                        continue
-                    tool.write_text(TOOL.replace("/usr/bin/env python3", os.sys.executable))
+            startup_marker = root / "startup-executed"
+            if (settings or {}).get("poison_pythonpath"):
+                startup = root / "python-startup"
+                startup.mkdir()
+                (startup / "sitecustomize.py").write_text(
+                    "from pathlib import Path\n"
+                    f"Path({str(startup_marker)!r}).write_text('synthetic startup')\n"
+                    "raise SystemExit(29)\n"
+                )
+                env["PYTHONPATH"] = str(startup)
             script = SCRIPT
             if source is not None:
                 script = root / "candidate.sh"
@@ -127,15 +158,121 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
                                     capture_output=True, text=True, timeout=16)
             calls_file = root / "calls.jsonl"
             calls = [json.loads(line) for line in calls_file.read_text().splitlines()] if calls_file.exists() else []
+            self.assertFalse(startup_marker.exists(), "untrusted Python startup code executed")
             self.assertNotIn(PRIVATE, result.stdout + result.stderr)
             return result, calls
 
     def assert_passive(self, calls, *, operations=READS):
         self.assertEqual([c["args"] for c in calls if c["name"] == "qm"], operations)
-        self.assertTrue(all(c["name"] in ("timeout", "qm", "sudo") for c in calls))
+        self.assertTrue(all(c["name"] in ("timeout", "qm", "python3", "sudo") for c in calls))
+        self.assertEqual([c["args"][-1] for c in calls if c["name"] == "python3"],
+                         [str(STATUS_LIMIT if operation[0] == "status" else CONFIG_LIMIT)
+                          for operation in operations])
         for call in calls:
             if call["name"] == "timeout":
                 self.assertEqual(call["args"][:4], ["--signal=TERM", "--kill-after=2s", "10s", "qm"])
+            if call["name"] == "python3":
+                self.assertEqual(call["args"][:2], ["-I", "-c"])
+                self.assertIn(call["args"][3], (str(STATUS_LIMIT), str(CONFIG_LIMIT)))
+
+    def test_oversized_reads_fail_before_interpreting_partial_configuration(self):
+        cases = [
+            {"status_output": "status: running\n" + PRIVATE + "x" * (1024 * 1024)},
+            {"config_output": "agent: 1\nname: " + PRIVATE + "\ndescription: "
+                              + "x" * (1024 * 1024) + "\nlock: backup\n"},
+        ]
+        for settings in cases:
+            with self.subTest(operation=next(iter(settings))):
+                result, calls = self.exercise(settings=settings)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("exceeded the", result.stderr)
+                self.assertIn("byte limit; preflight incomplete", result.stderr)
+                self.assertNotIn("Guest agent configured:", result.stdout)
+                self.assertNotIn("VM lock:", result.stdout)
+                self.assertNotIn("preflight completed", result.stdout)
+                self.assertLess(len(result.stdout + result.stderr), 600)
+                self.assert_passive(calls, operations=READS[:1] if "status_output" in settings else READS)
+
+    def test_config_limit_is_measured_in_bytes_and_includes_trailing_newlines(self):
+        prefix = "agent: 1\nname: " + PRIVATE + "\ndescription: "
+        padding = CONFIG_LIMIT - len(prefix.encode()) - 1
+        exact = prefix + "x" * padding + "\n"
+        self.assertEqual(len(exact.encode()), CONFIG_LIMIT)
+        result, calls = self.exercise(settings={"config_output": exact})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_passive(calls)
+        # Shell command substitution removes trailing newlines. Neither that
+        # nor a multi-byte name may make an oversized response look complete.
+        for oversized in (exact + "\n", prefix + "é" * padding + "\n"):
+            with self.subTest(bytes=len(oversized.encode())):
+                result, calls = self.exercise(settings={"config_output": oversized})
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("byte limit; preflight incomplete", result.stderr)
+                self.assertNotIn("VM lock:", result.stdout)
+                self.assertNotIn("preflight completed", result.stdout)
+                self.assert_passive(calls)
+
+    def test_status_limit_includes_trailing_newlines_before_interpretation(self):
+        exact = "status: running" + "\n" * (STATUS_LIMIT - len("status: running"))
+        result, calls = self.exercise(settings={"status_output": exact})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("VM status: running", result.stdout)
+        self.assert_passive(calls)
+        result, calls = self.exercise(settings={"status_output": exact + "\n"})
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("256-byte limit; preflight incomplete", result.stderr)
+        self.assertNotIn("VM status:", result.stdout)
+        self.assert_passive(calls, operations=READS[:1])
+
+    def test_corrupt_reads_cannot_be_silently_normalised_into_a_success(self):
+        for settings in (
+            {"status_output": "status: run\u0000ning\n"},
+            {"config_output": "agent: \u00001\nname: " + PRIVATE + "\n"},
+            {"config_output": "agent: 1\nname: " + PRIVATE + "\n", "config_invalid_utf8": True},
+        ):
+            with self.subTest(settings=settings):
+                result, calls = self.exercise(settings=settings)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("non-text bytes; preflight incomplete", result.stderr)
+                self.assertNotIn("Guest agent configured:", result.stdout)
+                self.assertNotIn("VM lock:", result.stdout)
+                self.assertNotIn("preflight completed", result.stdout)
+                self.assert_passive(calls, operations=READS[:1] if "status_output" in settings else READS)
+
+    def test_valid_unicode_configuration_remains_passive(self):
+        result, calls = self.exercise(settings={"config_output": "agent: 1\nname: café\nlock: backup\n"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Guest agent configured: enabled", result.stdout)
+        self.assertIn("VM lock: backup", result.stdout)
+        self.assertNotIn("café", result.stdout + result.stderr)
+        self.assert_passive(calls)
+
+    def test_producer_failures_are_independent_of_reader_result_codes(self):
+        # Producer exit codes are independent of bounded-reader result codes.
+        for code in (80, 81):
+            with self.subTest(code=code):
+                result, calls = self.exercise(settings={"config_exit": code})
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(f"configuration read failed (exit {code})", result.stderr)
+                self.assertNotIn("preflight completed", result.stdout)
+                self.assert_passive(calls)
+
+    def test_reader_failure_is_incomplete_not_an_empty_or_successful_response(self):
+        result, calls = self.exercise(settings={"reader_exit": 23})
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("status read failed (exit 23)", result.stderr)
+        self.assertNotIn("VM status:", result.stdout)
+        self.assertNotIn("preflight completed", result.stdout)
+        self.assert_passive(calls, operations=READS[:1])
+
+    def test_reader_does_not_execute_python_environment_startup_code(self):
+        result, calls = self.exercise(settings={"poison_pythonpath": True})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_passive(calls)
+        unsafe = SCRIPT.read_text().replace("python3 -I -c", "python3 -c")
+        self.assertNotEqual(unsafe, SCRIPT.read_text())
+        with self.assertRaisesRegex(AssertionError, "untrusted Python startup"):
+            self.exercise(settings={"poison_pythonpath": True}, source=unsafe)
 
     def test_running_vm_preflight_is_passive_even_without_a_lock(self):
         result, calls = self.exercise()
@@ -259,7 +396,7 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
                 self.assertEqual(calls, [])
 
     def test_missing_dependencies_do_not_run_a_partial_preflight(self):
-        for missing in ("qm", "timeout"):
+        for missing in ("qm", "timeout", "python3"):
             with self.subTest(missing=missing):
                 result, calls = self.exercise(missing=missing)
                 self.assertEqual(result.returncode, 1)
@@ -299,6 +436,14 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
 
 
 class VMDiskHelpTest(unittest.TestCase):
+    def test_documented_read_limits_and_failure_meaning_match_the_helper(self):
+        section = guide_section(DOC.read_text(), "Passive host preflight")
+        for phrase in ("256 bytes", "64 KiB", "Python 3", "truncated prefix",
+                       "printing raw", "saving it to disk", "Inspect the configuration privately"):
+            self.assertIn(phrase, section)
+        self.assertIn(f"read_bounded status status_output {STATUS_LIMIT}", SCRIPT.read_text())
+        self.assertIn(f"read_bounded configuration config {CONFIG_LIMIT}", SCRIPT.read_text())
+
     def test_section_selection_preserves_shell_comments_and_rejects_missing_or_duplicate_headings(self):
         content = "```bash\n# From the reviewed checkout\n### Shell comment, not a heading\ntrue\n```\n"
         guide = "### Passive host preflight\n" + content + "## Next\nOther text\n"

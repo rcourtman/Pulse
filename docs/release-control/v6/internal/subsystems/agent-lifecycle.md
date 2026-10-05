@@ -15,6 +15,25 @@
 
 ## Purpose
 
+### Source-record lookup preserves report admission
+
+Host and Docker report admission still performs canonical host-view matching
+before and after taking its per-source lock, with the same identity, source
+freshness, token binding, removal/re-enrolment and stream ordering policy.
+Only its private temporary snapshot omits twenty enumerated non-host Kubernetes
+metadata collections; normal inventory and accepted-report publication stay
+complete. Exact native host reads deep-copy the selected record under State's
+read lock, rather than copying every peer. Returned agent modules, update
+status/timestamps and applied config are detached for both single and list
+reads. No cached identity, new alias, heartbeat or timeout rule is introduced.
+
+`internal/models/agent_lookup_test.go` pins exact-ID/missing/ownership semantics
+and concurrent source replacement. `internal/monitoring/agent_lookup_test.go`
+pins whole-registry host-view equality, live replacement/removal, both serialized
+report/publication paths and canonical Docker-ID resolution. Existing identity,
+removal, credential and report-order suites remain applicable.
+
+
 ### Memory annotation is not agent admission
 
 The shared Memory model's optional guest `observation` records selected metric

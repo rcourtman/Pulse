@@ -15,6 +15,53 @@
 
 ## Purpose
 
+Drawer observation labels derive locally from the selected snapshot without renewing timestamps, adding reads, remounting charts or changing stored metric coordinates.
+
+### Drawer provenance stays local to snapshot presentation
+
+Guest and canonical resource drawer memory presentation share the same pure
+original-observation policy. Same-ID state replacement updates current versus
+retained/unknown fallback labels without remounting a chart, changing coordinates,
+adding reads or plotting live numbers as stored observations. The full
+`GuestDrawer.test.tsx` and `ResourceDetailDrawer.history.test.tsx` controls assert
+unchanged single-read budgets through retained-to-current replacement and zero
+preservation. This changes no estate collection, timing target or cache policy.
+
+### Bulk resource reads do not repeatedly derive canonical metadata
+
+Registry List and typed-view copies materialize identity/scopes/policy once
+per observed mutation, then detach those blocks. Separate dirtiness lets List
+avoid constructing an unused estate-sized typed view. Mutation-time invalidation
+includes incremental batch records and stale-source transitions; no timestamp,
+last-update or generation alone is used to declare a broadcast unchanged.
+`cloneResource` retains arbitrary-input refresh semantics. Full inventory,
+policy, observation time and health/alert evaluation remain unchanged.
+
+The independent pre-change List oracle checks every resource field and wire
+content, and paired one/one-thousand-resource controls expose repeated canonical
+allocation work without wall-clock thresholds. Include dirty reads and typed
+rebuilds when measuring: a cold generation must still derive metadata, and
+moving that work into the registry is not proof that total ingest or broadcast
+CPU improved. Native #2199 CPU/RSS, trailing refresh/duplicate ingest identity,
+owner-set grouping, broadcast conversion and the sawtooth remain separate.
+
+### Agent identity lookup cost follows identity-relevant inventory
+
+Report admission no longer clones/ingests twenty explicitly listed Kubernetes
+metadata collections that cannot supply a host facet. Clusters, nodes and
+workloads, every other source, canonical matching and fresh post-lock reads
+remain. No complete inventory, graph, alert or publication is pruned. Native
+point lookups retain an ID scan but clone just one selected record; peer sensor
+and container payloads no longer multiply the allocation cost of that read.
+
+The allocation controls compare zero/one-thousand metadata objects and one/
+seventeen hosts without wall-clock thresholds. The paired benchmark retains
+an executable copy of the old full-snapshot lookup in the same process, with
+identical fixtures and host-view reads, so lookup time/bytes/allocations can be
+compared without selecting a favourable rerun. This is a bounded source cost
+improvement, not attribution of the reporter's native CPU, RSS, sawtooth or
+remaining refresh/grouping/broadcast mechanisms.
+
 ### Memory presentation does not collect or renew observations
 
 Guest-memory provenance is projected from the already-owned snapshot in the
@@ -112,7 +159,6 @@ clearing, false/zero values, unchanged peer-site rows and full/fast equivalence.
 merges, row, Overview and History with synthetic inputs. This is no native
 QGA/thaw, installed recovery, fleet-performance or release-availability claim.
 
-
 ### Unavailable filesystem values share the existing disk model
 
 The filesystem list and guest Overview use the same nullable measured-byte ratio
@@ -180,7 +226,6 @@ remaining visible metric weight. Narrow/mobile/desktop modes and windowing
 ownership remain unchanged. Guest column regressions verify the sums and the
 production composed-table browser fixture checks identity and all configured
 metric tracks at narrow width; this is readability, not a throughput claim.
-
 
 ### Bounded confidence/priority work in broadcast grouping — issue #2199
 
@@ -1716,7 +1761,6 @@ This correctness proof does not close the large-estate performance gap. The
 final measurements and host-load limitation remain recorded in
 `records/resource-payload-static-metadata-2026-08-24.md`. They do not establish
 a controlled performance improvement or satisfy the open SLO qualification.
-
 
 ### Large API responses negotiate gzip without corrupting edge cases
 
@@ -3513,7 +3557,6 @@ The signal survives transport loss and resets on organisation URL changes.
 
 On admission-request failure retain the existing facet without extra retries,
 polling or full-estate reads. A later successful refresh replaces that facet.
-
 
 ### ASCII route-label classification
 

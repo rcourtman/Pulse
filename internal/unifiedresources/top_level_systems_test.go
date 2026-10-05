@@ -435,3 +435,28 @@ func topLevelTestK8sCluster(id, clusterID, agentID, server string) Resource {
 		},
 	}
 }
+
+func TestResolveTopLevelSystemsRebuildsOwnerIndexAtEveryPassAndCall(t *testing.T) {
+	platform := topLevelTestProxmoxNode("platform", "alpha.lab", "pve-source", "https://beta.lab:8006")
+	platform.Identity.IPAddresses = []string{"192.0.2.8"}
+	bridge := topLevelTestDockerHost("bridge", "beta.lab", "bridge-runtime", "")
+	bridge.Identity.IPAddresses = []string{"192.0.2.8"}
+	leaf := topLevelTestAgent("leaf", "gamma.lab", "leaf-machine", "leaf-agent")
+	leaf.Identity.IPAddresses = []string{"192.0.2.8"}
+	resources := []Resource{platform, bridge, leaf, topLevelTestK8sCluster("cluster", "cluster-id", "", "https://alpha.lab:6443")}
+	// The agent's IP initially matches two distinct better-priority groups.
+	// Docker can attach to the platform, but that does not change the first
+	// pass's candidate snapshot. A fresh pass must then admit the agent's now
+	// unique IP attachment while keeping the Kubernetes cluster apart.
+	resolver := ResolveTopLevelSystems(resources)
+	if resolver.Count() != 2 {
+		t.Fatalf("stale pass index or excluded cluster attachment: %d groups", resolver.Count())
+	}
+	assertTopLevelSystemGroupPairs(t, resolver, [][2]string{{"platform", "bridge"}, {"platform", "leaf"}}, [][2]string{{"platform", "cluster"}})
+	resources[2].Identity.IPAddresses = []string{"192.0.2.9"}
+	next := ResolveTopLevelSystems(resources)
+	if next.Count() != 3 {
+		t.Fatalf("index reused across identity changes: %d groups", next.Count())
+	}
+	assertTopLevelSystemGroupPairs(t, next, [][2]string{{"platform", "bridge"}}, [][2]string{{"platform", "leaf"}, {"platform", "cluster"}})
+}

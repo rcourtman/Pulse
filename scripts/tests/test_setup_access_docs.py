@@ -17,9 +17,11 @@ import stat
 import subprocess
 import tempfile
 import unittest
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 
-from test_api_auth_docs import ROOT, TEST_TOKEN, exercise_curl, recording_server
+from test_api_auth_docs import (
+    ROOT, TEST_TOKEN, exercise_curl, private_recording_server, request_helper,
+)
 
 
 GUIDES = ("KUBERNETES", "METRICS_HISTORY", "CLOUD")
@@ -186,14 +188,20 @@ class SetupAccessDocsTest(unittest.TestCase):
 
 
 class MetricsAccessDocsHTTPTest(unittest.TestCase):
+    def history_request(self) -> str:
+        # Use the same helper readers are told to define, not a fixture-only
+        # implementation that could conceal a direct-curl response leak.
+        return request_helper() + "\n" + recipe("METRICS_HISTORY", "pulse_api GET ")
+
     def test_history_query_with_both_headers_and_hostile_curl_defaults(self):
-        request = recipe("METRICS_HISTORY", "curl ")
+        request = self.history_request()
         expected_id = "pve 1:node/1:100&other=1"
-        request = request.replace("pve1:node1:100", expected_id)
-        with recording_server() as (port, records):
+        request = request.replace("pve1%3Anode1%3A100", quote(expected_id, safe=""))
+        with private_recording_server() as (port, records):
             for key, value in (("X-API-Token", TEST_TOKEN), ("Authorization", "Bearer " + TEST_TOKEN)):
                 with self.subTest(header=key), tempfile.TemporaryDirectory() as temporary:
-                    result = exercise_curl(self, Path(temporary), f"{key}: {value}", port, request)
+                    result = exercise_curl(self, Path(temporary), f"{key}: {value}", port,
+                                           request, private_response=True)
                     self.assertEqual(result.returncode, 0, result.stderr.decode())
                     path, headers, method, body = records[-1]
                     self.assertEqual(urlsplit(path).path, "/api/metrics-store/history")
@@ -205,12 +213,57 @@ class MetricsAccessDocsHTTPTest(unittest.TestCase):
 
     def test_http_auth_license_and_server_errors_fail(self):
         for status in (401, 402, 403, 500):
-            with self.subTest(status=status), recording_server(status) as (port, records), tempfile.TemporaryDirectory() as temporary:
+            with self.subTest(status=status), private_recording_server(status) as (port, records), tempfile.TemporaryDirectory() as temporary:
                 result = exercise_curl(self, Path(temporary), f"X-API-Token: {TEST_TOKEN}", port,
-                                       recipe("METRICS_HISTORY", "curl "))
+                                       self.history_request(), private_response=True)
                 self.assertEqual(result.returncode, 22, result.stderr.decode())
                 self.assertEqual(len(records), 1)
-                self.assertIn(b'{"fixture":true}', result.stdout)
+                self.assertIn(f"HTTP {status}".encode(), result.stdout)
+
+    def test_redirect_and_incomplete_transport_are_not_empty_success(self):
+        for status, partial, expected_exit in ((302, False, 1), (200, True, 18)):
+            with self.subTest(status=status, partial=partial), private_recording_server(status, partial) as (port, records), tempfile.TemporaryDirectory() as temporary:
+                result = exercise_curl(self, Path(temporary), f"X-API-Token: {TEST_TOKEN}", port,
+                                       self.history_request(), private_response=True)
+                self.assertEqual(result.returncode, expected_exit, result.stderr.decode())
+                self.assertEqual(len(records), 1)
+
+    def test_repeated_reads_preserve_earlier_private_responses(self):
+        with private_recording_server() as (port, records), tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            for _ in range(2):
+                result = exercise_curl(self, home, f"X-API-Token: {TEST_TOKEN}", port,
+                                       self.history_request(), private_response=True)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+            self.assertEqual(len(records), 2)
+            self.assertEqual(len(list((home / ".config/pulse").glob("api-response.*"))), 3)
+
+    def test_query_types_match_current_handler_and_both_references(self):
+        expected = {"node", "storage", "agent", "disk", "k8s", "vm", "system-container",
+                    "oci-container", "app-container", "docker-host"}
+        handler = (ROOT / "internal/api/router.go").read_text().split(
+            "func normalizeMetricsHistoryResourceType(", 1)[1].split("\n}\n", 1)[0]
+        self.assertEqual(set(re.findall(r'case "([^"]+)":', handler)), expected)
+        for name in ("API", "METRICS_HISTORY"):
+            with self.subTest(guide=name):
+                parameters = guide(name).split("### History" if name == "API" else
+                                               "### History Query Parameters", 1)[1]
+                types = parameters.split("- `resourceType` (required):", 1)[1].split(
+                    "- `resourceId`", 1)[0]
+                self.assertEqual(set(re.findall(r"`([^`]+)`", types)), expected)
+
+    def test_guidance_distinguishes_coverage_access_and_safe_collection(self):
+        content = " ".join(guide("METRICS_HISTORY").split())
+        for boundary in ("same Bash session", "not an installed Pulse command", "owner-only file",
+                         "not print or post it", "URL-encoding each query value", "no automatic retry",
+                         "a `points` array", "a `metrics` object", "timestamps and `source`",
+                         "does not establish durable historical coverage", "no points proves neither zero",
+                         "existence of `metrics.db` does not establish", "selected organisation",
+                         "not a repair for missing history", "does not migrate the existing history",
+                         "Do not delete history", "backup freeze/thaw", "manually redacted error"):
+            self.assertIn(boundary, content)
+        self.assertFalse(any("curl " in block for block in blocks("METRICS_HISTORY")),
+                         "history examples must use the existing private-response helper")
 
 
 if __name__ == "__main__":

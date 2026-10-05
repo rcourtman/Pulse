@@ -12,9 +12,20 @@ import historyChartStateSource from '@/components/shared/useHistoryChartState.ts
 import historyChartTooltipSource from '@/components/shared/HistoryChartTooltip.tsx?raw';
 import { HistoryChart, HistoryChartHoverGroup } from '@/components/shared/HistoryChart';
 import {
+  formatHistoryChartTooltipValue,
   getHistoryChartTooltipLayout,
   HISTORY_CHART_RANGES,
 } from '@/components/shared/historyChartModel';
+
+it('distinguishes tiny positive percentage observations from zero in History labels', () => {
+  expect(formatHistoryChartTooltipValue(0, '%')).toBe('0.0%');
+  expect(formatHistoryChartTooltipValue(Number.MIN_VALUE, '%')).toBe('<0.1%');
+  expect(formatHistoryChartTooltipValue(0.026, '%')).toBe('<0.1%');
+  expect(formatHistoryChartTooltipValue(0.09999, '%')).toBe('<0.1%');
+  expect(formatHistoryChartTooltipValue(0.1, '%')).toBe('0.1%');
+  expect(formatHistoryChartTooltipValue(9.4, '%')).toBe('9.4%');
+  expect(formatHistoryChartTooltipValue(0.026, 'C')).toBe('0°C');
+});
 
 function touchPointer(canvas: Element, type: string, fields: Partial<PointerEvent> = {}) {
   const event = Object.assign(new Event(type, { bubbles: true, cancelable: true }), {

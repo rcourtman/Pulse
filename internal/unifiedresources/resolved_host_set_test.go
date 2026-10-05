@@ -691,3 +691,27 @@ func TestBroadcastGroupingMatchesPreviousAlgorithm(t *testing.T) {
 		}
 	}
 }
+
+func TestTopLevelOwnerIndexPreservesAmbiguityInMonitoredCountAndAdmission(t *testing.T) {
+	for _, targetCount := range []int{1, 2} {
+		t.Run(fmt.Sprintf("%d_targets", targetCount), func(t *testing.T) {
+			resources := []Resource{
+				topLevelTestProxmoxNode("platform", "tower.lab", "pve-source", "https://tower.lab:8006"),
+				topLevelTestProxmoxNode("platform-other", "tower.lab", "pve-source-other", "https://tower.lab:8006"),
+			}
+			registry := NewRegistry(nil)
+			registry.IngestResources(resources[:targetCount])
+			if got := MonitoredSystemCount(registry); got != targetCount {
+				t.Fatalf("counted inventory changed: %d/%d", got, targetCount)
+			}
+			projection := ProjectMonitoredSystemCandidate(registry, MonitoredSystemCandidate{Source: SourceAgent, Type: ResourceTypeAgent, Hostname: "tower", AgentID: "new-agent"})
+			additional := targetCount - 1
+			if projection.CurrentCount != targetCount || projection.AdditionalCount != additional || projection.ProjectedCount != targetCount+additional {
+				t.Fatalf("unique attachment/ambiguous admission changed: %+v", projection)
+			}
+			if got := len(registry.List()); got != targetCount {
+				t.Fatalf("read-only projection changed stored inventory: %d/%d", got, targetCount)
+			}
+		})
+	}
+}

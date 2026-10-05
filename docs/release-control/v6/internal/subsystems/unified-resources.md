@@ -23,6 +23,66 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+Canonical resource History honours selected memory observation provenance and Proxmox VM filesystem deferrals instead of treating numeric carriers as fresh measurements.
+
+### Canonical resource History cannot promote retained guest readings
+
+`ResourceMetric.current` is a selected numeric carrier, not a freshness
+assertion. Canonical drawer History consumes its existing memory observation
+and Proxmox VM filesystem read reason as independent evidence, just as the
+dedicated guest drawer does. Current memory requires a usable original time
+when annotated; last-known/unknown/unavailable evidence has explicit labels.
+A VM read deferral withdraws current disk fallback, retaining a number only
+for the existing `prev-` reason vocabulary. LXC disk usage is not a QEMU
+filesystem read. Other platform/catalog metrics and capacity aliases stay
+unchanged. Same-ID replacement updates this presentation without remounting
+History or requesting another read. Clearing deferral is not native recovery.
+
+The full drawer regression in `ResourceDetailDrawer.history.test.tsx` covers
+retention, unavailable carriers, original timestamps, measured zero and recovery
+without invented chart points; model and browser controls retain source/access
+isolation. No wire schema, collector, alert, request identity or authority changes.
+
+### Bulk registry copies reuse mutation-bound canonical metadata
+
+`ResourceRegistry.List` and typed-view rebuilding share canonical identity,
+platform-scope and policy materialization under the registry write lock. Clean
+bulk readers take the shared lock and detach the derived blocks rather than
+re-derive them for every copied resource. A List-only consumer does not build
+all typed views. Arbitrary `cloneResource` callers and point reads still refresh
+metadata from their own current input; no caller-supplied metadata is trusted.
+
+Record/mapping changes invalidate at the locked mutation, not just the batch
+epilogue. Resource seeding, superseded-ID retention, Docker network relationship
+refresh, PBS host association and final parent/rollup assembly invalidate too.
+A real stale-source/status transition invalidates metadata and typed views; an
+unchanged stale pass does not. A reader rechecks dirtiness after lock upgrade,
+so an intervening mutation cannot leak a previous generation. Returned canonical
+aliases, superseded IDs, policy redaction hints and platform scopes are detached
+from the stored entries and retained views. This does not cache health, alerts,
+broadcast conversion, observation times or telemetry, and prunes no inventory.
+
+Verification: `registry_materialization_test.go` compares complete resources
+and wire content against the original always-refresh List implementation,
+including mid-batch changes, policy edits, supersession, staleness, ownership,
+lazy views, races and allocation cost. The external connected demo test includes
+all nine providers and its metadata-heavy estate. These are source invariants,
+not native fleet CPU/RSS relief, backup recovery or release availability.
+
+### Container CPU presentation explains its existing scale
+
+The existing Docker/Podman container table and drawer visibly explain that CPU
+is a percentage of total host capacity: 100% means all host CPUs. Runtime stats
+may use a per-core scale; the client never guesses core count or renormalises
+readings to match a screenshot. The explanation remains visible in Overview and
+History, including narrow screens, without relying on hover-only help.
+
+Small positive CPU labels stay distinct from true zero in the real responsive
+row and stored History inspection. Numeric sorting, metric identity, requests,
+collector/ingest units, stored values and alert thresholds remain unchanged.
+Connected container row/drawer controls establish presentation, not accurate
+native collection, every-container continuity, alert delivery or reporter relief.
+
 ### Guest drawers consume selected memory provenance
 
 Existing guest drawers consume optional server-owned `memory.observation` and
@@ -158,7 +218,6 @@ measured zero, partial omissions and full/delta/fast recovery. The connected
 and History presentation in desktop Chromium and phone WebKit. Synthetic
 source proof does not establish native backup safety or shipped availability.
 
-
 ### Backup server counts retain their inventory availability
 
 The existing PBS server/datastore row takes backup-inventory read availability
@@ -190,7 +249,6 @@ The shared presentation and mounted regressions plus the production-component
 `browser-tests/guest-disk-deferral.cjs` fixture verify this client behaviour;
 they do not prove native QGA coordination, History freshness or delivery.
 
-
 ### Narrow controller and backup summaries retain their source facts
 
 Kubernetes controller row expansions expose supplied kind-specific targets,
@@ -206,7 +264,6 @@ archive format is presentation only, with the provider identifier retained in
 hover and search. The recovery-model, table and guest regressions plus desktop/
 phone browser rendering verify attribution, visible facts and source composition.
 These frontend improvements change no collector, API authority or native status.
-
 
 ### Resource evidence fallback access boundaries
 
@@ -395,7 +452,6 @@ metadata cannot establish an alert identity.
 read-only incident memory association. It does not rewrite event resource IDs,
 resource operator state, approvals, action request identity or execution
 capabilities. An unavailable canonical read remains an error.
-
 
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
@@ -621,7 +677,6 @@ distinction afterwards. The unified risk projection gates wearout on
 `storagehealth.WearoutReported` so its verdict and the server-side alert verdict
 about the same disk cannot diverge.
 
-
 ### Coverage rows preserve unknown backup chronology
 
 The existing Proxmox backup Coverage projection carries unknown-date flags
@@ -833,7 +888,6 @@ the title; task starts use the shared relative-time primitive with their exact
 timestamp retained. Native table/model/guardrail tests and the production
 `browser-tests/proxmox-docker-rows.cjs` exercise these surfaces without executing
 a container action or claiming native appliance or release acceptance.
-
 
 ### PBS host history correlation
 
@@ -5239,6 +5293,18 @@ Shared grouping may attach `qnap` to `qnap.local` when one surface reports the
 short hostname and another reports the FQDN, but it must not collapse two
 distinct fully-qualified hosts that merely share the same short prefix across
 different domains.
+Fallback owner buckets are pass-local priority-ordered slices, rebuilt from
+each complete group snapshot. A maximum-priority group cannot be better than
+any query and is omitted only from the temporary candidate index. Queries visit
+only strictly better-priority owners; a second distinct qualifying root still rejects attachment even when
+its priority or evidence kind differs. The unique root keeps lexical exact-host
+evidence before full short/FQDN evidence before lexical exact-IP evidence.
+Comparable/short-form keys only prune candidates: the full hostname equivalence
+check remains authoritative. No index survives a grouping pass or caller, and
+no resource, reporting surface or ambiguous identity is discarded. Exhaustive
+all-group target/evidence enumeration, immediate-parent content comparisons,
+multi-pass identity changes and connected provider/Infrastructure controls
+verify this unchanged grouping contract.
 That same projection contract now also owns structured replacement selectors
 and detailed previews. Shared callers may serialize source-native selector
 fields such as hostname, host URL, machine or agent identity, and source-owned
@@ -5958,4 +6024,3 @@ above the hosts table without its filter toolbar. Nothing renders when
 vCenter reports no signals. The Overview's own model, workload snapshot and
 navigation facets still come from the Overview query; the Health tab keeps
 the filterable table.
-

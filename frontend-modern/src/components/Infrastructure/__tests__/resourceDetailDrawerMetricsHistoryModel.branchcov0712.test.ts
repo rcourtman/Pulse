@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getResourceMetricsHistoryCurrentMetrics,
+  getResourceMetricsHistoryDeferredMetrics,
   getResourceMetricsHistoryGroups,
   getResourceMetricsHistoryTarget,
 } from '@/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel';
 import type { MetricsHistoryTargetResourceType, Resource } from '@/types/resource';
+import { guestDiskDeferrals } from '@/components/Workloads/__fixtures__/guestDiskDeferrals';
 
 // Minimal valid Resource fixture; mirrors the baseResource() convention used by
 // sibling branchcov tests in this directory.
@@ -20,6 +22,149 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
   status: 'online',
   lastSeen: 1_700_000_000_000,
   ...overrides,
+});
+
+describe('canonical drawer History honours selected guest observation provenance', () => {
+  const resource = (
+    state: string,
+    value = 25,
+    observedAt: string | undefined = '2026-10-04T12:00:00Z',
+  ) =>
+    baseResource({
+      type: 'vm',
+      platformType: 'proxmox-pve',
+      memory: { current: value, observation: { state, source: 'guest-agent-meminfo', observedAt } },
+      disk: { current: 50 },
+      cpu: { current: 10 },
+      network: { rxBytes: 0, txBytes: 200 },
+      proxmox: { diskStatusReason: 'prev-vm-locked' },
+    });
+
+  it.each(['vm', 'system-container'] as const)(
+    'retains %s memory with its original time, not Last seen',
+    (type) => {
+      const value = {
+        ...resource('last-known'),
+        type,
+        lastSeen: Date.parse('2026-10-05T00:00:00Z'),
+      };
+      expect(getResourceMetricsHistoryCurrentMetrics(value)).toMatchObject({
+        memory: undefined,
+        cpu: 10,
+        netin: 0,
+      });
+      expect(getResourceMetricsHistoryDeferredMetrics(value).memory).toMatchObject({
+        lastKnownValue: 25,
+        message: expect.stringContaining('2026-10-04 12:00:00 UTC'),
+      });
+      expect(getResourceMetricsHistoryDeferredMetrics(value).memory.message).not.toContain(
+        '2026-10-05',
+      );
+      // Container disk usage is not a QEMU guest-agent filesystem read.
+      expect(getResourceMetricsHistoryCurrentMetrics(value).disk).toBe(
+        type === 'vm' ? undefined : 50,
+      );
+    },
+  );
+
+  it.each([-1, 101, NaN, Infinity])('withdraws invalid retained memory %s', (value) => {
+    expect(
+      getResourceMetricsHistoryDeferredMetrics(resource('last-known', value)).memory.lastKnownValue,
+    ).toBeUndefined();
+    expect(
+      getResourceMetricsHistoryCurrentMetrics(resource('last-known', value)).memory,
+    ).toBeUndefined();
+  });
+
+  it.each([undefined, 'invalid', '0001-01-01T00:00:00Z', '2999-01-01T00:00:00Z'])(
+    'does not promote unusable current timestamps %s',
+    (observedAt) => {
+      const value = resource('current');
+      value.memory!.observation!.observedAt = observedAt;
+      expect(getResourceMetricsHistoryCurrentMetrics(value).memory).toBeUndefined();
+      expect(getResourceMetricsHistoryDeferredMetrics(value).memory).toMatchObject({
+        lastKnownValue: 25,
+        valueLabel: 'freshness unknown',
+      });
+      expect(getResourceMetricsHistoryDeferredMetrics(value).memory.message).toContain(
+        'Observation time unknown.',
+      );
+      expect(getResourceMetricsHistoryDeferredMetrics(value).memory.message).not.toMatch(
+        /invalid|2999|0001/,
+      );
+    },
+  );
+
+  it('keeps unavailable, true zero and independent current memory distinct from disk deferral', () => {
+    expect(
+      getResourceMetricsHistoryDeferredMetrics(resource('unavailable', 0)).memory.lastKnownValue,
+    ).toBeUndefined();
+    expect(
+      getResourceMetricsHistoryDeferredMetrics(resource('last-known', 0)).memory.lastKnownValue,
+    ).toBe(0);
+    expect(getResourceMetricsHistoryCurrentMetrics(resource('current', 0)).memory).toBe(0);
+    expect(getResourceMetricsHistoryDeferredMetrics(resource('current', 0)).memory).toBeUndefined();
+    expect(
+      getResourceMetricsHistoryDeferredMetrics(resource('current', 0)).disk.lastKnownValue,
+    ).toBe(50);
+  });
+
+  it('qualifies unannotated Proxmox memory but leaves unrelated platforms unchanged', () => {
+    const value = resource('current');
+    delete value.memory!.observation;
+    expect(getResourceMetricsHistoryCurrentMetrics(value).memory).toBeUndefined();
+    expect(getResourceMetricsHistoryDeferredMetrics(value).memory.valueLabel).toBe(
+      'freshness unknown',
+    );
+    const vsphere = { ...value, platformType: 'vmware-vsphere' as const };
+    expect(getResourceMetricsHistoryCurrentMetrics(vsphere)).toMatchObject({
+      memory: 25,
+      disk: 50,
+    });
+    expect(getResourceMetricsHistoryDeferredMetrics(vsphere)).toEqual({});
+    const scoped = { ...vsphere, platformScopes: ['proxmox-pve'] };
+    expect(getResourceMetricsHistoryCurrentMetrics(scoped).memory).toBeUndefined();
+    const agent = {
+      ...resource('last-known'),
+      type: 'agent' as const,
+      platformType: 'agent' as const,
+    };
+    expect(getResourceMetricsHistoryDeferredMetrics(agent).memory.lastKnownValue).toBe(25);
+    expect(getResourceMetricsHistoryDeferredMetrics(agent).disk).toBeUndefined();
+  });
+
+  it('does not echo unrecognised source or state text', () => {
+    const value = resource('private raw state');
+    value.memory!.observation!.source = 'private raw source';
+    expect(getResourceMetricsHistoryDeferredMetrics(value).memory).toMatchObject({
+      valueLabel: 'freshness unknown',
+      message: expect.stringContaining('Unknown source'),
+    });
+    expect(getResourceMetricsHistoryDeferredMetrics(value).memory.message).not.toContain(
+      'private raw',
+    );
+  });
+
+  it.each(guestDiskDeferrals)(
+    'qualifies both retained and unavailable filesystem %s readings',
+    (reason, message) => {
+      const value = resource('current');
+      value.proxmox!.diskStatusReason = `prev-${reason}`;
+      expect(getResourceMetricsHistoryCurrentMetrics(value).disk).toBeUndefined();
+      expect(getResourceMetricsHistoryDeferredMetrics(value).disk).toEqual({
+        lastKnownValue: 50,
+        message: `Using last known disk stats. ${message}`,
+      });
+      value.proxmox!.diskStatusReason = reason;
+      expect(getResourceMetricsHistoryDeferredMetrics(value).disk).toEqual({
+        lastKnownValue: undefined,
+        message,
+      });
+      value.proxmox!.diskStatusReason = '';
+      expect(getResourceMetricsHistoryDeferredMetrics(value).disk).toBeUndefined();
+      expect(getResourceMetricsHistoryCurrentMetrics(value).disk).toBe(50);
+    },
+  );
 });
 
 describe('getResourceMetricsHistoryTarget branch coverage', () => {

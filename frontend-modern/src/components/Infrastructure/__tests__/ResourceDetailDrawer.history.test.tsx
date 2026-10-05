@@ -6,7 +6,9 @@ import {
   within,
   waitFor,
 } from '@solidjs/testing-library';
-import { Suspense } from 'solid-js';
+import { createSignal, Suspense } from 'solid-js';
+import { ChartsAPI } from '@/api/charts';
+import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 
 import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
 import discoveryTabStateSource from '@/components/Discovery/useDiscoveryTabState.ts?raw';
@@ -165,6 +167,93 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 });
 
 describe('ResourceDetailDrawer change history section', () => {
+  it('keeps retained guest memory and paused filesystems out of current History fallbacks', async () => {
+    resetCreateNonSuspendingQueryCacheForTest();
+    const source = baseResource({
+      id: 'provenance-vm',
+      type: 'vm',
+      platformType: 'proxmox-pve',
+      metricsTarget: { resourceType: 'vm', resourceId: 'fixture:pve:101' },
+      memory: {
+        current: 25,
+        observation: {
+          state: 'last-known',
+          source: 'guest-agent-meminfo',
+          observedAt: '2026-10-04T12:00:00Z',
+        },
+      },
+      disk: { current: 50 },
+      proxmox: { diskStatusReason: 'prev-vm-locked', backupInProgress: true },
+    });
+    const read = vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue({
+      resourceType: 'vm',
+      resourceId: 'fixture:pve:101',
+      range: '24h',
+      start: Date.parse('2026-10-04T12:00:00Z'),
+      end: Date.parse('2026-10-05T00:00:00Z'),
+      source: 'store',
+      metrics: {},
+    });
+    const [resource, setResource] = createSignal(source);
+    const view = render(() => (
+      <ResourceDetailDrawer resource={resource()} presentation="table-row" />
+    ));
+    try {
+      fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+      await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+      const chart = view.container.querySelector('[data-history-group="utilization"]')!;
+      expect(chart.querySelector('[data-history-current="memory"]')).toBeNull();
+      expect(chart.querySelector('[data-history-last-known="memory"]')).toHaveTextContent(
+        '25.0%last known',
+      );
+      expect(chart.querySelector('[data-history-deferred="memory"]')).toHaveTextContent(
+        '2026-10-04 12:00:00 UTC',
+      );
+      expect(chart.querySelector('[data-history-current="disk"]')).toBeNull();
+      expect(chart.querySelector('[data-history-last-known="disk"]')).toHaveTextContent(
+        '50.0%last known',
+      );
+      setResource({ ...source, lastSeen: Date.parse('2026-10-05T00:00:00Z') });
+      expect(chart.querySelector('[data-history-deferred="memory"]')).not.toHaveTextContent(
+        '2026-10-05',
+      );
+      setResource({
+        ...source,
+        memory: { current: 0, observation: { state: 'unavailable', source: 'status-mem' } },
+        proxmox: { diskStatusReason: 'agent-busy' },
+      });
+      expect(chart.querySelector('[data-history-last-known]')).toBeNull();
+      expect(chart).toHaveTextContent('Memory-');
+      expect(chart).toHaveTextContent('Disk-');
+      setResource({
+        ...source,
+        memory: {
+          current: 0,
+          observation: {
+            state: 'current',
+            source: 'status-mem',
+            observedAt: '2026-10-04T13:00:00Z',
+          },
+        },
+        proxmox: { diskStatusReason: '' },
+      });
+      expect(view.container.querySelector('[data-history-group="utilization"]')).toBe(chart);
+      expect(chart.querySelector('[data-history-current="memory"]')).toHaveTextContent(
+        '0.0%current',
+      );
+      expect(chart.querySelector('[data-history-current="disk"]')).toHaveTextContent(
+        '50.0%current',
+      );
+      expect(chart.querySelector('[data-history-deferred]')).toBeNull();
+      expect(chart.querySelector('path')).toBeNull();
+      expect(read).toHaveBeenCalledTimes(1);
+    } finally {
+      view.unmount();
+      read.mockRestore();
+      resetCreateNonSuspendingQueryCacheForTest();
+    }
+  });
+
   it('keeps current readings separate from stored history samples', () => {
     expect(guestDrawerHistorySource).toContain('currentMetrics');
     expect(guestDrawerHistorySource).toContain('No stored history in this range');

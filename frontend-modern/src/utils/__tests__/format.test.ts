@@ -7,6 +7,7 @@ import {
   formatSpeed,
   formatObservedSpeed,
   formatPercent,
+  formatCpuPercent,
   formatNumber,
   formatUptime,
   formatAbsoluteTime,
@@ -65,6 +66,28 @@ describe('formatSpeed', () => {
   it('handles explicit decimal places', () => {
     expect(formatSpeed(1024, 0)).toBe('1 KB/s');
     expect(formatSpeed(1024 * 1024, 1)).toBe('1.0 MB/s');
+  });
+});
+
+describe('formatCpuPercent', () => {
+  it.each([
+    [0, '0%'],
+    [Number.MIN_VALUE, '<0.1%'],
+    [0.026, '<0.1%'],
+    [0.09999, '<0.1%'],
+    [0.1, '0.1%'],
+    [0.17, '0.2%'],
+    [0.49, '0.5%'],
+    [1.04, '1%'],
+    [3.04, '3%'],
+    [9.4, '9.4%'],
+    [10, '10%'],
+    [50.5, '51%'],
+    [100, '100%'],
+    [NaN, '—'],
+    [Infinity, '—'],
+  ])('formats %s as %s without inventing a zero', (value, label) => {
+    expect(formatCpuPercent(value)).toBe(label);
   });
 });
 
