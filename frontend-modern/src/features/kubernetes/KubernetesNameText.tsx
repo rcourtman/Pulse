@@ -11,8 +11,23 @@ import { splitKubernetesNameTail } from './kubernetesPageModel';
  */
 export const KubernetesNameText: Component<{ name: string; class?: string }> = (props) => {
   const parts = () => splitKubernetesNameTail(props.name);
+  // The head and tail are flex items, so a plain copy inserts a line break
+  // between them and a pasted `kubectl logs` breaks. A selection inside one
+  // name copies without it; wider selections copy as the browser builds them.
+  const copyWithoutBreak = (event: ClipboardEvent & { currentTarget: HTMLSpanElement }) => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !event.clipboardData) return;
+    if (!event.currentTarget.contains(selection.getRangeAt(0).commonAncestorContainer)) return;
+    event.clipboardData.setData('text/plain', selection.toString().replace(/\r?\n/g, ''));
+    event.preventDefault();
+  };
   return (
-    <span class={`flex min-w-0 ${props.class ?? ''}`} title={props.name} data-kubernetes-name>
+    <span
+      class={`flex min-w-0 ${props.class ?? ''}`}
+      title={props.name}
+      data-kubernetes-name
+      onCopy={copyWithoutBreak}
+    >
       <span class="truncate">{parts().head}</span>
       <span class="max-w-full shrink-0 truncate" data-kubernetes-name-tail>
         {parts().tail}

@@ -1,5 +1,5 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 import { KubernetesPodsTable } from '../KubernetesPodsTable';
@@ -150,6 +150,52 @@ describe('KubernetesPodsTable', () => {
     expect(
       screen.getByText(kubernetesName('checkout-api-6c746d5bcf-c7z2p')).closest('a'),
     ).toBeNull();
+  });
+
+  it('copies a generated name without a break between its head and tail', () => {
+    const { container } = render(() => (
+      <KubernetesPodsTable
+        resources={[
+          makeResource({
+            id: 'cron-nightly-backfill-28918234',
+            kubernetes: {
+              clusterId: 'prod-euw1',
+              namespace: 'batch',
+              nodeName: 'prod-euw1-k8s-02',
+              podName: 'cron-nightly-backfill-28918234',
+              podPhase: 'Running',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No pods"
+        emptyDescription="No pods"
+        showToolbar={false}
+      />
+    ));
+
+    // Head and tail are flex items, so a browser copy would put a line break
+    // between them; a selection inside one name copies as the name.
+    const podName = screen.getByText(kubernetesName('cron-nightly-backfill-28918234'));
+    expect(podName.querySelector('[data-kubernetes-name-tail]')).toHaveTextContent('-28918234');
+    const copy = (selected: Node) => {
+      const range = document.createRange();
+      range.selectNodeContents(selected);
+      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.addRange(range);
+      const setData = vi.fn();
+      const event = new Event('copy', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', { value: { setData } });
+      podName.dispatchEvent(event);
+      return { setData, prevented: event.defaultPrevented };
+    };
+    const inside = copy(podName);
+    expect(inside.setData).toHaveBeenCalledWith('text/plain', 'cron-nightly-backfill-28918234');
+    expect(inside.prevented).toBe(true);
+    // A selection wider than the name (a whole row) is left to the browser.
+    const wider = copy(container);
+    expect(wider.setData).not.toHaveBeenCalled();
+    expect(wider.prevented).toBe(false);
   });
 
   it('renders pod rows with status mapped from podPhase + container readiness, attention rows first', () => {
