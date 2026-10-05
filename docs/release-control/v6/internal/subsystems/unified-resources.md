@@ -887,7 +887,14 @@ in full at every width: the Update check column keeps the ~122px its longest
 badge ("Update available", "Managed by Pulse") needs with cell padding, through
 a 23 percent tablet-band width taken from Size and a 19 percent md width taken
 from Host, Used by and Size. An equal band share and the old 16 percent md width cut
-the badge off between 600 and 800px. Hidden header/body columns
+the badge off between 600 and 800px. The container Updates column likewise keeps
+the 74px update states (Update, Current, Pinned, Failed) whole in every layout
+mode and optional-column set at the mode's narrowest table; the 100px states
+(Check failed, Updating..., Completed) fit in most layouts but can still clip at
+a layout's narrow end when several optional columns show. Its room comes only
+from the CPU bar, which never shows a sublabel, and the collapsed actions menu,
+so every other column, including the memory bar's used/total sublabel, keeps
+its width. Hidden header/body columns
 are symmetric. Swarm rollout tokens render as words with raw state retained in
 the title; task starts use the shared relative-time primitive with their exact
 timestamp retained. Native table/model/guardrail tests and the production
@@ -1183,7 +1190,11 @@ keeps controller, kind, ready, and issues and demotes Target with
 Kubernetes name columns hold the chevron, status dot and name inside one
 track, so their md widths leave the name room for a typical node or service
 name at a 768px viewport: Nodes 20 percent (with Capacity at 16 so its
-cores, memory and pods label fits at 1100px and wider), Events 24, and
+cores, memory and pods label fits at 1100px and wider, and Status at 10.5,
+taken from CPU at 7.5 so the Degraded, NotReady and Unknown badges fit from
+768px and Unschedulable from about 900px while the memory sublabel keeps its
+room; the tablet band sizes each Nodes header and Degraded at a 34rem table),
+Events 24, and
 Services, Configuration, Storage, Controllers and Policy 22. Generated names
 render through `KubernetesNameText`, which splits off the trailing segment
 (`splitKubernetesNameTail`) so a narrow cell truncates the head and keeps the

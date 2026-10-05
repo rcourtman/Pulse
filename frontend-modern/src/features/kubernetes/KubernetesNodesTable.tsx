@@ -208,17 +208,26 @@ export const KubernetesNodesTable: Component<{
                     Desktop widths: Node gets headroom for cluster-style
                     names, Runtime gets room for "containerd://1.7.20"
                     -style values, Capacity gets room for "6 cores /
-                    51.0 GB / 110 pods" strings, CPU and Memory bars share
-                    an equal slice, and the short-text columns (Cluster,
-                    Roles, Kubelet, Uptime) trim accordingly. Wide
+                    51.0 GB / 110 pods" strings, and the short-text columns
+                    (Cluster, Roles, Kubelet, Uptime) trim accordingly. Wide
                     desktop gets extra room without forcing normal desktop
                     viewports to hide Capacity behind horizontal scroll.
+                    The Status badge must not clip: Degraded and NotReady
+                    need about 64px and Unschedulable about 89px. Status
+                    takes its md room from CPU, whose bar never shows a
+                    sublabel, so every other column keeps its width and
+                    Memory keeps room for its used/total sublabel.
+                    Unschedulable fits from a ~800px table and from 1280px,
+                    where Kubelet, Runtime and Uptime appear. bandWidth sizes
+                    the tablet band for each header and for Degraded at a
+                    34rem table.
                   */}
                 <PlatformSortableTableHead
                   kind="name"
                   sort={sort}
                   sortKey="node"
                   class="platform-table-mobile-w-30 md:w-[20%]"
+                  bandWidth={30}
                 >
                   Node
                 </PlatformSortableTableHead>
@@ -232,7 +241,8 @@ export const KubernetesNodesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="status"
-                  class="platform-table-phone-hidden md:w-[8%]"
+                  class="platform-table-phone-hidden md:w-[10.5%]"
+                  bandWidth={14.6}
                 >
                   Status
                 </PlatformSortableTableHead>
@@ -241,6 +251,7 @@ export const KubernetesNodesTable: Component<{
                   sort={sort}
                   sortKey="cluster"
                   class="platform-table-mobile-w-15 md:w-[8%]"
+                  bandWidth={12.1}
                 >
                   <PlatformResponsiveTableLabel compact="Clus" full="Cluster" />
                 </PlatformSortableTableHead>
@@ -249,6 +260,7 @@ export const KubernetesNodesTable: Component<{
                   sort={sort}
                   sortKey="roles"
                   class="platform-table-phone-hidden md:w-[8%]"
+                  bandWidth={9.2}
                 >
                   <PlatformResponsiveTableLabel compact="Role" full="Roles" />
                 </PlatformSortableTableHead>
@@ -272,7 +284,8 @@ export const KubernetesNodesTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="cpu"
-                  class="platform-table-mobile-w-15 md:w-[10%]"
+                  class="platform-table-mobile-w-15 md:w-[7.5%]"
+                  bandWidth={9.2}
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -281,6 +294,7 @@ export const KubernetesNodesTable: Component<{
                   sort={sort}
                   sortKey="memory"
                   class="platform-table-mobile-w-15 md:w-[10%]"
+                  bandWidth={11.8}
                 >
                   <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
                 </PlatformSortableTableHead>
@@ -297,6 +311,7 @@ export const KubernetesNodesTable: Component<{
                   sort={sort}
                   sortKey="capacity"
                   class="platform-table-mobile-w-10 md:w-[16%]"
+                  bandWidth={13.1}
                 >
                   <PlatformResponsiveTableLabel compact="Cap" full="Capacity" />
                 </PlatformSortableTableHead>

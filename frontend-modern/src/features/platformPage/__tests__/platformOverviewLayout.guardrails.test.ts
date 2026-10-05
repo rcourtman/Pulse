@@ -369,11 +369,20 @@ describe('platform overview layout guardrails', () => {
       /sortKey="roles"[\s\S]{0,160}?class="platform-table-phone-hidden md:w-\[8%\]"/,
     );
     // Status names the node state on desktop; the dot carries it on phones.
+    // Its badge must not clip (Degraded ~64px, Unschedulable ~89px), so Status
+    // takes md room from CPU, whose bar has no sublabel, and the tablet band
+    // sizes every header and Degraded at a 34rem table.
     expect(kubernetesNodesTableSource).toMatch(
-      /sortKey="status"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[8%\]"/,
+      /sortKey="status"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[10\.5%\]"\s*bandWidth=\{14\.6\}/,
     );
     expect(kubernetesNodesTableSource).toMatch(
-      /sortKey="capacity"[\s\S]{0,120}?class="platform-table-mobile-w-10 md:w-\[16%\]"/,
+      /sortKey="cpu"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[7\.5%\]"\s*bandWidth=\{9\.2\}/,
+    );
+    expect(kubernetesNodesTableSource).toMatch(
+      /sortKey="memory"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[10%\]"\s*bandWidth=\{11\.8\}/,
+    );
+    expect(kubernetesNodesTableSource).toMatch(
+      /sortKey="capacity"[\s\S]{0,120}?class="platform-table-mobile-w-10 md:w-\[16%\]"\s*bandWidth=\{13\.1\}/,
     );
     expect(kubernetesDeploymentsTableSource).toMatch(
       /sortKey="namespace"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[18%\]"/,

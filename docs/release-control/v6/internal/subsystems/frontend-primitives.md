@@ -2318,6 +2318,11 @@ not a replacement status card, CTA band, or page-local nested card.
    widest label at the narrowest table in each range: a 34rem container for the
    band, and the table a 768px viewport leaves (about 695px) for md widths. The
    Docker Images Update check column needs 23 percent and 19 percent for that.
+   The room comes from columns that lose nothing when narrower: a metric bar
+   that never shows a sublabel or a collapsed actions menu, never a bar whose
+   used/total sublabel would disappear. A weighted colgroup whose optional
+   columns come and go is checked in every visible-column set, as the Docker
+   container Updates column is in `dockerContainerTableModel.test.ts`.
    Below a 360-pixel content width, the shared narrow layout promotes identity to
    40 percent and may remove one additional lowest-priority context column via
    `platform-table-narrow-hidden` rather than shrinking names and metric values
