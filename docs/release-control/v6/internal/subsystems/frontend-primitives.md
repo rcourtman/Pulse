@@ -8304,3 +8304,14 @@ chain at desktop and phone widths with keyboard/touch refresh, class-dark CSS,
 403/503 controls and pending recovery. Unit controls separately cover current
 request ownership and disposal. No mutation, route, navigation entry, queue
 policy, permission or recipient-delivery contract is added by these states.
+
+### Platform tables read staleness from one helper
+
+`features/platformPage/resourceStaleness.ts` turns the backend's `stale`
+health verdict into a short label for platform tables, so a table that stops
+presenting a silent resource's last metrics as live does it the same way:
+dimmed metric cells plus the age with a no-signal icon, the full sentence on
+hover and as the accessible name. Grouped platform tables that already name
+the group in a shared grouped-table header row drop columns that would repeat
+the group's own value on every row.
+

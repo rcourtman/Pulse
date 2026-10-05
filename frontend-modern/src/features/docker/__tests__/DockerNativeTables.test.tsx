@@ -248,7 +248,8 @@ describe('Docker native tables', () => {
     ));
 
     expect(screen.getByText('Container')).toBeInTheDocument();
-    expect(screen.getByText('Engine')).toBeInTheDocument();
+    // Grouped by host, the engine and host move to the group header.
+    expect(screen.queryByText('Engine')).not.toBeInTheDocument();
     expect(screen.getByText('CPU')).toBeInTheDocument();
     expect(screen.getByText('Memory')).toBeInTheDocument();
     expect(screen.getByText('Restarts')).toBeInTheDocument();
@@ -258,8 +259,8 @@ describe('Docker native tables', () => {
     expect(screen.queryByText('State')).not.toBeInTheDocument();
     expect(screen.getByText('edge-web')).toBeInTheDocument();
     // Multi-host fleets group by host by default, so the host name renders
-    // twice: once in the group header row and once in the host column.
-    expect(screen.getAllByText('edge-01')).toHaveLength(2);
+    // once, in the group header row, instead of again on every container.
+    expect(screen.getAllByText('edge-01')).toHaveLength(1);
     expect(screen.getByText('docker 27.5.1')).toBeInTheDocument();
     expect(screen.getByText('podman 5.2.1')).toBeInTheDocument();
     expect(screen.getByText('nginx:latest')).toBeInTheDocument();
@@ -320,7 +321,8 @@ describe('Docker native tables', () => {
     ));
 
     expect(screen.queryByText('Engine')).not.toBeInTheDocument();
-    expect(screen.queryByText('docker 27.5.1')).not.toBeInTheDocument();
+    // Each host group header still names its engine once.
+    expect(screen.getAllByText('docker 27.5.1')).toHaveLength(2);
   });
 
   it('applies the URL host scope to container rows', () => {
@@ -362,8 +364,8 @@ describe('Docker native tables', () => {
     ));
 
     expect(screen.getByText('edge-cache')).toBeInTheDocument();
-    // Scoped to edge-02: group header + host column both show the host name.
-    expect(screen.getAllByText('edge-02')).toHaveLength(2);
+    // Scoped to edge-02: the group header names the host once.
+    expect(screen.getAllByText('edge-02')).toHaveLength(1);
     expect(screen.queryByText('edge-web')).not.toBeInTheDocument();
     expect(screen.queryByText('edge-01')).not.toBeInTheDocument();
   });
