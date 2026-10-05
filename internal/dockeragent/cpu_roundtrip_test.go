@@ -67,6 +67,9 @@ func TestPodmanCPUCollectorHistoryAndAlerts(t *testing.T) {
 			alertConfig.Schedule.QuietHours.Enabled = false
 			alertConfig.DockerDefaults.CPU = alerts.HysteresisThreshold{Trigger: 80, Clear: 70}
 			alertConfig.MetricTimeThresholds = map[string]map[string]int{"all": {"cpu": 0}}
+			// Exercise the supported explicit instantaneous policy. The default
+			// five-minute window cannot have coverage in this short source fixture.
+			alertConfig.MetricEvaluationWindows = map[string]map[string]int{"all": {"cpu": 0}}
 			monitor.GetAlertManager().UpdateConfig(alertConfig)
 
 			epoch := time.Now().UTC().Add(-time.Minute)
