@@ -16608,6 +16608,82 @@ func TestContract_PBSHostAgentComposesIntoOwningSystem(t *testing.T) {
 	}
 }
 
+// An agent on a Proxmox cluster node reports SMART data for the node's disks,
+// and the registry stamps each disk with the owning node's identity so it
+// stays discoverable in the Proxmox workspace. A disk is not a cluster member:
+// projecting it as one folded its health into the node row, so a warm NVMe
+// drive rendered an actively reporting node as Stale whenever the agent's
+// report was newer than the last Proxmox poll.
+func TestContract_ConnectionSystemMembersIgnoreOwnedPhysicalDisks(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("monitoring.New: %v", err)
+	}
+	t.Cleanup(func() { monitor.Stop() })
+
+	polledAt := time.Now().UTC().Add(-10 * time.Second)
+	reportedAt := polledAt.Add(6 * time.Second)
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:               "nexus-aurora",
+			NodeIdentity:     "nexus-aurora",
+			Name:             "aurora",
+			Instance:         "nexus",
+			ClusterName:      "Nexus",
+			IsClusterMember:  true,
+			Host:             "https://192.0.2.5:8006",
+			Type:             "node",
+			Status:           "online",
+			ConnectionHealth: "healthy",
+			LastSeen:         polledAt,
+			LinkedAgentID:    "host-aurora",
+		}},
+		Hosts: []models.Host{{
+			ID:           "host-aurora",
+			Hostname:     "aurora",
+			Status:       "online",
+			LastSeen:     reportedAt,
+			LinkedNodeID: "nexus-aurora",
+			Sensors: models.HostSensorSummary{
+				SMART: []models.HostDiskSMART{{
+					Device:      "/dev/nvme0n1",
+					Model:       "WD_BLACK SN7100 4TB",
+					Serial:      "SN7100-AURORA",
+					Type:        "nvme",
+					Temperature: 63,
+					Health:      "PASSED",
+				}},
+			},
+		}},
+	})
+	setTestUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(adapter))
+
+	disks := adapter.GetByType(unifiedresources.ResourceTypePhysicalDisk)
+	if len(disks) != 1 || disks[0].Status != unifiedresources.StatusWarning ||
+		disks[0].Proxmox == nil || !disks[0].Proxmox.IsClusterMember {
+		t.Fatalf("precondition: want one warning disk owned by a cluster node, got %+v", disks)
+	}
+
+	systems := buildConnectionSystems([]Connection{
+		{ID: "pve:nexus", Type: ConnectionTypePVE, Name: "nexus", Address: "https://192.0.2.5:8006", State: ConnectionStateActive, Enabled: true},
+		{ID: "agent:host-aurora", Type: ConnectionTypeAgent, Name: "aurora", Address: "aurora", State: ConnectionStateActive, Enabled: true, LastSeen: &reportedAt},
+	}, monitor)
+	if len(systems) != 1 || len(systems[0].Members) != 1 {
+		t.Fatalf("want one cluster system with one member, got %+v", systems)
+	}
+	member := systems[0].Members[0]
+	if member.State != ConnectionStateActive {
+		t.Fatalf("member state = %q, want %q: disk health leaked into node liveness (%+v)", member.State, ConnectionStateActive, member)
+	}
+	for _, alias := range member.HostAliases {
+		if alias == "wd_black sn7100 4tb" {
+			t.Fatalf("member host aliases include the disk model: %+v", member.HostAliases)
+		}
+	}
+}
+
 func TestContract_AgentConnectionPayloadIncludesVersionFields(t *testing.T) {
 	conn := Connection{
 		ID:          "agent:host-1",

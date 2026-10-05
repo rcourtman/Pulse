@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "base_sha": "1dcf9418aae87f9427dbfc6bcae67dbde114bf8a",
+  "verified_at": "2026-10-05T21:08:04Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/pages/Actions.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/pages/Actions.tsx": "17ded57aa6d0476a01c4d0cfec5dee8c9fed2be0fbf50c3d3f5cd2e40c278de6"
+  },
+  "routes": [
+    "/actions",
+    "/actions/history"
+  ],
+  "viewports": [
+    {
+      "width": 360,
+      "height": 844
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 430,
+      "height": 844
+    },
+    {
+      "width": 480,
+      "height": 844
+    },
+    {
+      "width": 640,
+      "height": 844
+    },
+    {
+      "width": 768,
+      "height": 844
+    },
+    {
+      "width": 1024,
+      "height": 844
+    },
+    {
+      "width": 1440,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (PULSE_MOCK_MODE) serving this tree on main 1dcf9418aa; before = main, after = main plus this change, measured in the same session on the three open demo actions",
+    "Main: the target name and its type shrank together, so from 360 to 430 every name was cut (analytics-batch-01 61-98 of 107px, backup-coordinator 67-107 of 112px) beside a cut type (Virtual ma\u2026, App conta\u2026); from 480 everything fit",
+    "Patched: the name keeps its full width at every width (box equals text width, 106.61px for analytics-batch-01, at 1x, 2x and 3x device pixel ratio), and the type with its separator takes the rest (Virtual machine 21px at 360, 51px at 390, 91px at 430, whole from 480); nothing changes from 480 up",
+    "A name longer than the line (very-long-resource-name-on-a-production-cluster-node-07, injected) truncates inside the line at 360 and 390 with the relative time still fully visible, and fits whole at 768",
+    "Before and after element screenshots of the three cards at 360, 390 and 1024 at 3x density"
+  ],
+  "interactions": [
+    "Loaded /actions fresh at 390 (mobile emulation) and resized through each viewport before measuring",
+    "Opened the second card's review at 390 and 1024 (Governed action review, analytics-batch-01 \u00b7 Virtual machine) and closed it with Escape",
+    "Switched to the History tab (/actions/history, 3 rows); no console errors"
+  ]
+}
