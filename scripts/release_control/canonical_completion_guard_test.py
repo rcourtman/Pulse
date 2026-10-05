@@ -254,10 +254,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         self.assertTrue(
             monitoring["verification"]["require_explicit_path_policy_coverage"]
         )
-        self.assertEqual(
-            monitoring["verification"]["exact_files"],
-            ["internal/unifiedresources/code_standards_test.go"],
-        )
+        self.assertEqual(monitoring["verification"]["exact_files"], [])
         policy_ids = [policy["id"] for policy in monitoring["verification"]["path_policies"]]
         self.assertEqual(
             policy_ids,

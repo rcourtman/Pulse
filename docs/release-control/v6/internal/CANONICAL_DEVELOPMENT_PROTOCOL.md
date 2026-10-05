@@ -630,8 +630,10 @@ edits are not sufficient completion proof for runtime changes.
 Verification artifacts are subsystem-specific. The allowed proof classes are
 defined in `docs/release-control/v6/internal/subsystems/registry.json` and may include
 explicit guardrail files, contract tests, benchmark/SLO/query-plan artifacts,
-approved test-prefix matches, non-test contract/type files, or same-subsystem
-tests only when the registry explicitly allows them.
+approved test-prefix matches, or non-test contract/type files. An arbitrary
+test elsewhere in the same subsystem is never proof on its own: the registry
+audit keeps `allow_same_subsystem_tests` false, because it would accept any
+test the subsystem owns rather than the ones a path policy names.
 
 Cross-subsystem contract dependencies are not advisory. If a touched runtime
 path is named in another subsystem contract's `Canonical Files`,
@@ -646,7 +648,10 @@ satisfy the first matching proof policy for that file. The v6 registry requires
 explicit path-policy coverage for every governed subsystem, and default
 subsystem verification is no longer a supported governed path. New owned
 runtime files must therefore be added to a concrete proof route instead of
-inheriting subsystem-default verification.
+inheriting subsystem-default verification. For the same reason the registry
+audit requires each subsystem's default `test_prefixes` and `exact_files` to
+stay empty: a proof listed there is never consulted, so it belongs on the path
+policy whose runtime files it proves.
 
 ## Guardrails
 

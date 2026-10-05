@@ -573,7 +573,7 @@ class RegistryAuditTest(unittest.TestCase):
                     "verification": {
                         "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["internal/monitoring/canonical_guardrails_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -617,9 +617,7 @@ class RegistryAuditTest(unittest.TestCase):
                     "verification": {
                         "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": [
-                            "pulse-mobile:src/relay/__tests__/client.test.ts",
-                        ],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -663,7 +661,7 @@ class RegistryAuditTest(unittest.TestCase):
                     "verification": {
                         "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["pulse-mobile:src/relay/__tests__/client.test.ts"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -745,7 +743,7 @@ class RegistryAuditTest(unittest.TestCase):
                     "verification": {
                         "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["pkg/licensing/cloud_paid_guardrails_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -788,7 +786,7 @@ class RegistryAuditTest(unittest.TestCase):
                     "verification": {
                         "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["internal/api/contract_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": False,
                         "path_policies": [
                             {
@@ -835,7 +833,7 @@ class RegistryAuditTest(unittest.TestCase):
                     "verification": {
                         "allow_same_subsystem_tests": True,
                         "test_prefixes": [],
-                        "exact_files": ["internal/monitoring/canonical_guardrails_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -872,6 +870,57 @@ class RegistryAuditTest(unittest.TestCase):
         )
         self.assertIn("test_prefixes or exact_files", same_subsystem_errors[0])
 
+    def test_audit_registry_payload_rejects_default_verification_proofs(self) -> None:
+        # The default policy is never consulted under explicit path-policy
+        # coverage, so a proof listed there would look accepted and count for
+        # nothing.
+        payload = {
+            "version": 13,
+            "shared_ownerships": [],
+            "subsystems": [
+                {
+                    "id": "monitoring",
+                    "lane": "L6",
+                    "contract": "docs/release-control/v6/internal/subsystems/monitoring.md",
+                    "owned_prefixes": ["internal/monitoring/"],
+                    "owned_files": [],
+                    "verification": {
+                        "allow_same_subsystem_tests": False,
+                        "test_prefixes": ["internal/monitoring/"],
+                        "exact_files": ["internal/monitoring/canonical_guardrails_test.go"],
+                        "require_explicit_path_policy_coverage": True,
+                        "path_policies": [
+                            {
+                                "id": "monitoring-runtime",
+                                "label": "monitoring runtime proof",
+                                "match_prefixes": ["internal/monitoring/"],
+                                "match_files": [],
+                                "allow_same_subsystem_tests": False,
+                                "test_prefixes": [],
+                                "exact_files": ["internal/monitoring/canonical_guardrails_test.go"],
+                            }
+                        ],
+                    },
+                }
+            ],
+        }
+        tracked_files = {
+            "docs/release-control/v6/internal/subsystems/monitoring.md",
+            "internal/monitoring/monitor.go",
+            "internal/monitoring/canonical_guardrails_test.go",
+        }
+
+        report = audit_registry_payload(payload, tracked_files=tracked_files, status_lane_ids={"L6"})
+
+        self.assertEqual(
+            [error.split(":", 1)[0] for error in report["errors"]],
+            [
+                "subsystems[0].verification.test_prefixes must be empty",
+                "subsystems[0].verification.exact_files must be empty",
+            ],
+        )
+        self.assertIn("list them on the path policy", report["errors"][0])
+
     def test_audit_registry_payload_rejects_uncanonical_ordering(self) -> None:
         payload = {
             "version": 13,
@@ -885,11 +934,8 @@ class RegistryAuditTest(unittest.TestCase):
                     "owned_files": ["internal/monitoring/b.go", "internal/monitoring/a.go"],
                     "verification": {
                         "allow_same_subsystem_tests": False,
-                        "test_prefixes": ["internal/monitoring/tests/", "frontend/tests/"],
-                        "exact_files": [
-                            "internal/monitoring/z_test.go",
-                            "internal/monitoring/a_test.go",
-                        ],
+                        "test_prefixes": [],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -916,7 +962,7 @@ class RegistryAuditTest(unittest.TestCase):
                     "verification": {
                         "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["internal/alerts/guardrails_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -953,8 +999,6 @@ class RegistryAuditTest(unittest.TestCase):
         self.assertIn("registry.json subsystems must be sorted by subsystem id", joined)
         self.assertIn("subsystems[0].owned_prefixes must be sorted lexicographically", joined)
         self.assertIn("subsystems[0].owned_files must be sorted lexicographically", joined)
-        self.assertIn("subsystems[0].verification.test_prefixes must be sorted lexicographically", joined)
-        self.assertIn("subsystems[0].verification.exact_files must be sorted lexicographically", joined)
         self.assertIn(
             "subsystems[0].verification.path_policies[0].match_prefixes must be sorted lexicographically",
             joined,
@@ -986,7 +1030,7 @@ class RegistryAuditTest(unittest.TestCase):
                     "verification": {
                         "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["internal/monitoring/guardrails_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -1039,7 +1083,7 @@ class RegistryAuditTest(unittest.TestCase):
                     "verification": {
                         "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["internal/api/contract_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -1063,7 +1107,7 @@ class RegistryAuditTest(unittest.TestCase):
                     "verification": {
                         "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["internal/unifiedresources/code_standards_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -1120,7 +1164,7 @@ class RegistryAuditTest(unittest.TestCase):
                     "verification": {
                         "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["internal/api/contract_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
@@ -1144,7 +1188,7 @@ class RegistryAuditTest(unittest.TestCase):
                     "verification": {
                         "allow_same_subsystem_tests": False,
                         "test_prefixes": [],
-                        "exact_files": ["internal/unifiedresources/code_standards_test.go"],
+                        "exact_files": [],
                         "require_explicit_path_policy_coverage": True,
                         "path_policies": [
                             {
