@@ -15,6 +15,18 @@
 
 ## Purpose
 
+Drawer observation labels derive locally from the selected snapshot without renewing timestamps, adding reads, remounting charts or changing stored metric coordinates.
+
+### Drawer provenance stays local to snapshot presentation
+
+Guest and canonical resource drawer memory presentation share the same pure
+original-observation policy. Same-ID state replacement updates current versus
+retained/unknown fallback labels without remounting a chart, changing coordinates,
+adding reads or plotting live numbers as stored observations. The full
+`GuestDrawer.test.tsx` and `ResourceDetailDrawer.history.test.tsx` controls assert
+unchanged single-read budgets through retained-to-current replacement and zero
+preservation. This changes no estate collection, timing target or cache policy.
+
 ### Bulk resource reads do not repeatedly derive canonical metadata
 
 Registry List and typed-view copies materialize identity/scopes/policy once
@@ -33,7 +45,6 @@ moving that work into the registry is not proof that total ingest or broadcast
 CPU improved. Native #2199 CPU/RSS, trailing refresh/duplicate ingest identity,
 owner-set grouping, broadcast conversion and the sawtooth remain separate.
 
-
 ### Agent identity lookup cost follows identity-relevant inventory
 
 Report admission no longer clones/ingests twenty explicitly listed Kubernetes
@@ -50,7 +61,6 @@ identical fixtures and host-view reads, so lookup time/bytes/allocations can be
 compared without selecting a favourable rerun. This is a bounded source cost
 improvement, not attribution of the reporter's native CPU, RSS, sawtooth or
 remaining refresh/grouping/broadcast mechanisms.
-
 
 ### Memory presentation does not collect or renew observations
 
@@ -149,7 +159,6 @@ clearing, false/zero values, unchanged peer-site rows and full/fast equivalence.
 merges, row, Overview and History with synthetic inputs. This is no native
 QGA/thaw, installed recovery, fleet-performance or release-availability claim.
 
-
 ### Unavailable filesystem values share the existing disk model
 
 The filesystem list and guest Overview use the same nullable measured-byte ratio
@@ -217,7 +226,6 @@ remaining visible metric weight. Narrow/mobile/desktop modes and windowing
 ownership remain unchanged. Guest column regressions verify the sums and the
 production composed-table browser fixture checks identity and all configured
 metric tracks at narrow width; this is readability, not a throughput claim.
-
 
 ### Bounded confidence/priority work in broadcast grouping — issue #2199
 
@@ -1753,7 +1761,6 @@ This correctness proof does not close the large-estate performance gap. The
 final measurements and host-load limitation remain recorded in
 `records/resource-payload-static-metadata-2026-08-24.md`. They do not establish
 a controlled performance improvement or satisfy the open SLO qualification.
-
 
 ### Large API responses negotiate gzip without corrupting edge cases
 
@@ -3550,7 +3557,6 @@ The signal survives transport loss and resets on organisation URL changes.
 
 On admission-request failure retain the existing facet without extra retries,
 polling or full-estate reads. A later successful refresh replaces that facet.
-
 
 ### ASCII route-label classification
 

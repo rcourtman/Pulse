@@ -202,6 +202,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   target={target()}
                   range={drawer.metricsHistoryRange()}
                   currentMetrics={drawer.metricsHistoryCurrentMetrics()}
+                  deferredMetrics={drawer.metricsHistoryDeferredMetrics()}
                   groups={drawer.metricsHistoryGroups()}
                 />
               </div>

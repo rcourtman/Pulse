@@ -3,7 +3,10 @@ import {
   GPU_METRICS_HISTORY_GROUPS,
   HOST_METRICS_HISTORY_GROUPS,
 } from '@/components/shared/hostMetricsHistoryModel';
-import type { GuestDrawerHistoryTarget } from '@/components/Workloads/guestDrawerModel';
+import type {
+  GuestDrawerHistoryDeferredMetric,
+  GuestDrawerHistoryTarget,
+} from '@/components/Workloads/guestDrawerModel';
 import {
   GUEST_DRAWER_HISTORY_GROUPS,
   type GuestDrawerHistoryGroupConfig,
@@ -12,6 +15,8 @@ import type { HostGPUSensor } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { getDiskPercent, getMemoryPercent } from '@/types/resource';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { getMemoryObservationPresentation } from '@/utils/memoryObservation';
+import { getWorkloadGuestDiskStatusMessage } from '@/utils/workloadGuestPresentation';
 
 const finiteMetric = (value: number | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
@@ -152,15 +157,62 @@ export const getResourceMetricsHistoryTarget = (
 export const resourceSupportsMetricsHistory = (resource: Resource): boolean =>
   getResourceMetricsHistoryTarget(resource) !== null;
 
+const isProxmoxGuest = (resource: Resource): boolean =>
+  (resource.type === 'vm' || resource.type === 'system-container') &&
+  (resource.platformType === 'proxmox-pve' ||
+    resource.platformScopes?.includes('proxmox-pve') === true);
+
+const memoryReading = (resource: Resource) =>
+  getMemoryObservationPresentation(
+    resource.memory ? finiteMetric(getMemoryPercent(resource)) : undefined,
+    resource.memory?.observation,
+    isProxmoxGuest(resource),
+  );
+
+const diskReadReason = (resource: Resource): string | undefined =>
+  resource.type === 'vm' && isProxmoxGuest(resource)
+    ? resource.proxmox?.diskStatusReason || undefined
+    : undefined;
+
+export const getResourceMetricsHistoryDeferredMetrics = (
+  resource: Resource,
+): Record<string, GuestDrawerHistoryDeferredMetric> => {
+  const metrics: Record<string, GuestDrawerHistoryDeferredMetric> = {};
+  const memory = memoryReading(resource);
+  if (memory && memory.state !== 'current') {
+    metrics.memory = {
+      lastKnownValue:
+        memory.state === 'unavailable' ? undefined : finiteMetric(getMemoryPercent(resource)),
+      ...(memory.state === 'unknown' ? { valueLabel: 'freshness unknown' as const } : {}),
+      message: memory.message,
+    };
+  }
+  const reason = diskReadReason(resource);
+  if (reason) {
+    metrics.disk = {
+      lastKnownValue:
+        reason.startsWith('prev-') && resource.disk
+          ? finiteMetric(getDiskPercent(resource))
+          : undefined,
+      message: getWorkloadGuestDiskStatusMessage(reason),
+    };
+  }
+  return metrics;
+};
+
 export const getResourceMetricsHistoryCurrentMetrics = (
   resource: Resource,
 ): Record<string, number | undefined> => {
   const diskPercent = resource.disk ? finiteMetric(getDiskPercent(resource)) : undefined;
   const temperature = finiteMetric(resource.temperature);
+  const memory = memoryReading(resource);
   return {
     cpu: finiteMetric(resource.cpu?.current),
-    memory: resource.memory ? finiteMetric(getMemoryPercent(resource)) : undefined,
-    disk: diskPercent,
+    memory:
+      resource.memory && (!memory || memory.state === 'current')
+        ? finiteMetric(getMemoryPercent(resource))
+        : undefined,
+    disk: diskReadReason(resource) ? undefined : diskPercent,
     usage: diskPercent,
     netin: finiteMetric(resource.network?.rxBytes),
     netout: finiteMetric(resource.network?.txBytes),

@@ -20,6 +20,29 @@
 
 ## Purpose
 
+All drawer History fallbacks must distinguish current observations from retained, unavailable or freshness-unknown guest readings, using original memory evidence and filesystem read reasons.
+
+### Canonical drawer History preserves guest read provenance
+
+The shared resource drawer passes selected memory observation state/source/time
+and Proxmox VM disk-status reasons into the existing History deferred-reading
+path. Last-known values remain labelled evidence; unavailable numeric carriers
+never become current values. Unannotated Proxmox VM/LXC memory and unusable
+current timestamps are freshness-unknown. Non-Proxmox unannotated snapshots,
+independently current CPU/network/memory and stored observations stay unchanged.
+The memory presentation policy is shared with the dedicated guest drawer in
+`memoryObservation.ts`; it never borrows Last seen, a disk deferral or a snapshot
+refresh time. Unknown source/state text is not echoed.
+
+`resourceDetailDrawerMetricsHistoryModel.branchcov0712.test.ts` pins both memory
+and filesystem paths, including invalid numbers/dates, zero, every deferral and
+unrelated platforms. `ResourceDetailDrawer.history.test.tsx` exercises the full
+reactive drawer with the real History renderer; `GuestDrawer.test.tsx` preserves
+the dedicated path. `browser-tests/resource-history-provenance.cjs` verifies
+these production components and clients with synthetic observations on desktop
+and touch WebKit. These are presentation checks, not independent thaw, native
+filesystem writes, safe service resumption or release/installed acceptance.
+
 ### Observed CPU labels preserve small positives
 
 Shared responsive CPU cells distinguish actual zero from small positive readings:
@@ -139,7 +162,6 @@ and touch WebKit at 390px/320px, including keyboard/touch disclosure, ambiguity,
 readable unmatched explanation and same-resource recovery. No native backup
 identity, restore, guest thaw or containing-release acceptance follows from
 these source/render observations.
-
 
 ### Diagnostics are live checks; downloads require a privacy review
 
@@ -373,7 +395,6 @@ or touch retry, source isolation and actual new organisation headers. Synthetic
 HTTP results establish frontend truthfulness/lifecycle, not native PBS/PVE
 permission, archive restorability, guest thaw or released availability.
 
-
 ### Composed operator tables and conservative rollback consent
 
 Phone storage tables use the canonical weighted-width helper and matching
@@ -402,7 +423,6 @@ controller/storage/backup/workload tests and production-CSS browser fixture
 `frontend-modern/browser-tests/operator-tables-consent.cjs` exercise the composed
 source at desktop, intermediate and phone widths. Synthetic HTTP/snapshots do
 not establish native collectors, tenancy, installation recovery or release delivery.
-
 
 ### Organisation-scoped single-metric History
 
@@ -996,7 +1016,6 @@ display label or permission to describe every preview as release-ready.
 Automatic stable updates remain unavailable while Preview is selected, and
 that manual-channel consequence must stay visible at desktop and narrow widths.
 
-
 ### Backup date uncertainty uses existing age cells
 
 Proxmox Coverage and By date age cells label unorderable restore-point dates
@@ -1210,7 +1229,6 @@ Docker table tests and the desktop/touch-phone production-component browser
 fixture check these priorities, rather than treating an old percentage as an
 immutable primitive contract. No new public route or navigation entry is added.
 
-
 ### Maintenance schedule copy
 
 Operator maintenance banners show local absolute start and end timestamps,
@@ -1240,7 +1258,6 @@ The mounted scroll regression in `PlatformWindowedRows.test.tsx` exercises both
 renderers with an edited input retained across overlapping windows. The browser
 journey is a narrow Proxmox node Manage form, scrolling to lifecycle Save while
 the synthetic estate continues updating, plus the alert timeline and note form.
-
 
 ### PBS host history correlation
 
@@ -4065,7 +4082,6 @@ shared presentation helper, which omits absent, invalid and legacy zero timestam
 Cached update responses remain valid without a release date. Browser qualification
 covers the current settings route, pending/retry states, keyboard checks and date
 presentation at desktop, intermediate and narrow widths.
-
 
 ### Provider tabs use compact canonical evidence during route hydration
 
