@@ -1115,9 +1115,11 @@ func shortenTenantShutdownBudgets(t *testing.T, plain, deletion time.Duration) {
 }
 
 // A tenant monitor that is still starting up or finishing a tick can take
-// longer than the plain shutdown budget to see its cancelled context. In CI a
-// just-used organization's loop took 8-10s, so deletion refused with
-// tenant_shutdown_incomplete. Deletion waits on its own, longer budget instead.
+// longer than the plain shutdown budget to see its cancelled context. In CI's
+// mock mode, Start seeds mock metrics history synchronously before its select
+// loop, so a just-used organization's loop took 8-10s to stop and deletion
+// refused with tenant_shutdown_incomplete. Deletion waits on its own, longer
+// budget instead.
 func TestTenantDeletionWaitsForSlowMonitoringLoop(t *testing.T) {
 	shortenTenantShutdownBudgets(t, 50*time.Millisecond, 2*time.Second)
 
