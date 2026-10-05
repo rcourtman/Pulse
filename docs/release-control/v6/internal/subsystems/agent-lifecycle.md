@@ -3011,7 +3011,10 @@ agent inventory, registration state, or command-channel readiness.
     agent `Host.LastSeen`-backed rows on that ledger, but must not
     reinterpret derived `state` (active/paused/unauthorized/unreachable/
     stale/pending) as install authority or treat the probe response as
-    enrollment state. Metadata, link-local, multicast, and unspecified
+    enrollment state. A cluster member's derived state on that ledger is node
+    liveness only: physical disks an agent reports on the node never compose
+    into the member, so a disk health warning cannot read as the agent having
+    stopped reporting. Metadata, link-local, multicast, and unspecified
     probe destinations must fail closed before any outbound dial, and
     lifecycle surfaces must surface that canonical rejection instead of
     retrying through lane-local probe helpers. Ledger writes still flow
