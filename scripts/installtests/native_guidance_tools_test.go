@@ -65,8 +65,8 @@ func TestNativeGuidanceToolsSupplyAndVerifyRealGNUTimeout(t *testing.T) {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
 			bin, prefix := filepath.Join(root, "bin"), filepath.Join(root, "coreutils with spaces")
-			gnuBin := filepath.Join(prefix, "libexec", "gnubin")
-			for _, dir := range []string{bin, gnuBin} {
+			coreutilsBin, runnerTemp := filepath.Join(prefix, "bin"), filepath.Join(root, "runner temp")
+			for _, dir := range []string{bin, coreutilsBin, runnerTemp} {
 				if err := os.MkdirAll(dir, 0700); err != nil {
 					t.Fatal(err)
 				}
@@ -84,7 +84,7 @@ esac
 			if err := os.WriteFile(filepath.Join(bin, "brew"), []byte(brew), 0700); err != nil {
 				t.Fatal(err)
 			}
-			tool := filepath.Join(gnuBin, "timeout")
+			tool := filepath.Join(coreutilsBin, "gtimeout")
 			switch scenario {
 			case "real GNU tool", "install failure":
 				if err := os.Symlink(realTimeout, tool); err != nil {
@@ -101,7 +101,7 @@ esac
 				installExit = "23"
 			}
 			env := append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "GITHUB_PATH="+pathFile,
-				"COREUTILS_PREFIX="+prefix, "BREW_CALLS="+callsFile, "BREW_EXIT="+installExit)
+				"COREUTILS_PREFIX="+prefix, "BREW_CALLS="+callsFile, "BREW_EXIT="+installExit, "RUNNER_TEMP="+runnerTemp)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			cmd := exec.CommandContext(ctx, "bash", "-c", bootstrap.Run)
@@ -128,15 +128,26 @@ esac
 				t.Fatalf("GNU prerequisite failed: %v: %s", runErr, output)
 			}
 			path, err := os.ReadFile(pathFile)
-			if err != nil || string(path) != gnuBin+"\n" {
-				t.Fatal("bootstrap did not export the exact installed gnubin path")
+			if err != nil {
+				t.Fatal(err)
+			}
+			timeoutBin := strings.TrimSuffix(string(path), "\n")
+			if filepath.Dir(timeoutBin) != runnerTemp || !strings.HasPrefix(filepath.Base(timeoutBin), "pulse-guidance-tools.") {
+				t.Fatal("bootstrap did not export its newly owned timeout directory")
+			}
+			entries, err := os.ReadDir(timeoutBin)
+			if err != nil || len(entries) != 1 || entries[0].Name() != "timeout" {
+				t.Fatal("bootstrap must not replace native macOS utilities other than timeout")
+			}
+			if target, err := os.Readlink(filepath.Join(timeoutBin, "timeout")); err != nil || target != tool {
+				t.Fatal("timeout must resolve to the exact installed GNU executable")
 			}
 			calls, err := os.ReadFile(callsFile)
 			if err != nil || string(calls) != "install coreutils\n--prefix coreutils\n" {
 				t.Fatal("bootstrap changed its fixed Homebrew dependency")
 			}
 			cmd = exec.CommandContext(ctx, "bash", "-c", verify.Run)
-			cmd.Env = append(env, "PATH="+strings.TrimSpace(string(path))+":"+os.Getenv("PATH"))
+			cmd.Env = append(env, "PATH="+timeoutBin+":"+os.Getenv("PATH"))
 			if output, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("next workflow step cannot use supplied GNU timeout: %v: %s", err, output)
 			}

@@ -90,10 +90,12 @@ jobs:
         run: |
           set -euo pipefail
           brew install coreutils
-          coreutils_bin="$(brew --prefix coreutils)/libexec/gnubin"
-          test -x "$coreutils_bin/timeout"
-          "$coreutils_bin/timeout" --version | grep -q 'GNU coreutils'
-          printf '%s\n' "$coreutils_bin" >> "$GITHUB_PATH"
+          gnu_timeout="$(brew --prefix coreutils)/bin/gtimeout"
+          test -x "$gnu_timeout"
+          "$gnu_timeout" --version | grep -q 'GNU coreutils'
+          timeout_bin="$(mktemp -d "$RUNNER_TEMP/pulse-guidance-tools.XXXXXX")"
+          ln -s "$gnu_timeout" "$timeout_bin/timeout"
+          printf '%s\n' "$timeout_bin" >> "$GITHUB_PATH"
 
       - name: Verify native Unix timeout prerequisite
         if: matrix.unix
