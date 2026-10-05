@@ -23,6 +23,33 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Bulk registry copies reuse mutation-bound canonical metadata
+
+`ResourceRegistry.List` and typed-view rebuilding share canonical identity,
+platform-scope and policy materialization under the registry write lock. Clean
+bulk readers take the shared lock and detach the derived blocks rather than
+re-derive them for every copied resource. A List-only consumer does not build
+all typed views. Arbitrary `cloneResource` callers and point reads still refresh
+metadata from their own current input; no caller-supplied metadata is trusted.
+
+Record/mapping changes invalidate at the locked mutation, not just the batch
+epilogue. Resource seeding, superseded-ID retention, Docker network relationship
+refresh, PBS host association and final parent/rollup assembly invalidate too.
+A real stale-source/status transition invalidates metadata and typed views; an
+unchanged stale pass does not. A reader rechecks dirtiness after lock upgrade,
+so an intervening mutation cannot leak a previous generation. Returned canonical
+aliases, superseded IDs, policy redaction hints and platform scopes are detached
+from the stored entries and retained views. This does not cache health, alerts,
+broadcast conversion, observation times or telemetry, and prunes no inventory.
+
+Verification: `registry_materialization_test.go` compares complete resources
+and wire content against the original always-refresh List implementation,
+including mid-batch changes, policy edits, supersession, staleness, ownership,
+lazy views, races and allocation cost. The external connected demo test includes
+all nine providers and its metadata-heavy estate. These are source invariants,
+not native fleet CPU/RSS relief, backup recovery or release availability.
+
+
 ### Container CPU presentation explains its existing scale
 
 The existing Docker/Podman container table and drawer visibly explain that CPU
