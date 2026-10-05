@@ -630,23 +630,43 @@ remove credentials, cookies, secret URLs and private host, network or personal
 information. See [Getting Help](#-getting-help) for safe evidence collection.
 
 ### Check Permissions (Proxmox)
-If Pulse can't see VMs or storage, check the user permissions on Proxmox:
-```bash
-pveum user permissions <user>@pam
-```
-At minimum, ensure the user/token has read access for inventory and metrics:
 
-- `Sys.Audit`
-- `Datastore.Audit`
+If Pulse cannot see VMs, storage or guest readings, start with the **user,
+realm and token ID configured for the affected Pulse connection**, not a
+guessed account or your administrator login. Use the existing connection
+settings; do not dump the server configuration or expose the token secret.
 
-For VM guest agent features on PVE 9+, prefer:
+With privilege separation enabled, the token's effective access is the
+**intersection of the user and token permissions**: both must allow the
+required privilege on the affected resource path. Ask the Proxmox
+administrator to inspect both sides, including inherited ACLs and their
+propagation, for that VM, storage or node. An administrator session or
+user-only permission listing does not prove the token has access.
 
-- `VM.GuestAgent.Audit` — required for disk usage and guest info
-- `VM.GuestAgent.FileRead` — required for accurate memory monitoring (excludes buff/cache)
+Inspect the existing denial and compare it with the relevant read privileges:
 
-For PVE 8 only, use `VM.Monitor` instead of the `VM.GuestAgent.*` privileges.
+- Inventory and metrics: `Sys.Audit` and `Datastore.Audit`, on the relevant
+  node/storage scope.
+- VM filesystem usage and guest information on PVE 9+: `VM.GuestAgent.Audit`.
+- Guest memory through `/proc/meminfo` on PVE 9+: also
+  `VM.GuestAgent.FileRead`.
+- On PVE 8, `VM.Monitor` is the legacy guest-agent fallback, not an extra
+  requirement for PVE 9+.
 
-Note: The built-in `PVEAuditor` role cannot be modified. Create a custom role (e.g. `PulseMonitor`) with the above privileges added, and assign it to your Pulse API token. After upgrading to PVE 9, add the `VM.GuestAgent.*` privileges and remove legacy `VM.Monitor` from the custom role.
+The built-in `PVEAuditor` role cannot be modified. Where a read privilege is
+actually missing, use the existing narrow custom role and matching scoped
+user/token ACLs. **Do not disable privilege separation, grant Administrator or
+add guest execution/write privileges** to diagnose missing data. Do not rerun
+setup or replace a token as a permissions test: setup can rotate an existing
+credential. Make any necessary access repair in your normal maintenance
+window, outside backups, then observe normal polling without manual
+guest-agent probes. `Sys.Modify` is not a read-only monitoring privilege; see
+[pending-update access](#proxmox-pending-update-access) before considering it.
+
+Keep token secrets and full permission listings private. A report needs only
+the relevant missing privilege and a redacted denial, not private identities,
+resource paths or the complete ACL tree. Successful inventory does not prove
+that guest readings are fresh, or that a guest has thawed.
 
 **Rocky Linux / RHEL VMs**: File-read restrictions in `/etc/sysconfig/qemu-ga`
 can explain missing guest memory; they do not by themselves establish why disk

@@ -128,6 +128,12 @@ procedure; a reboot interrupts its workloads.
 Use the dedicated account and token actually configured for that Pulse
 connection, not a guessed account name. Review their effective privileges for
 the affected VM; a host-root diagnostic does not test the API token's access.
+With privilege separation enabled, access is the intersection of user and token
+permissions: both must allow the required read on the affected VM. Do not disable
+privilege separation or recreate the token to diagnose a missing reading. See
+[Check permissions](TROUBLESHOOTING.md#check-permissions-proxmox) for the scoped
+inspection and repair boundary. A permitted read does not prove disk freshness,
+responsiveness or thaw.
 
 | Collection | Proxmox VE 9+ | Proxmox VE 8 |
 | --- | --- | --- |
