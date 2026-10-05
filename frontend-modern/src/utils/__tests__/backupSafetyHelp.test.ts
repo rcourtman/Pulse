@@ -19,6 +19,42 @@ function render(markdown: string, name: string): HTMLElement {
 }
 
 describe('manual backup safety help', () => {
+  it('makes missing-reading guidance observational, OS-specific and safe before setup', () => {
+    const rendered = render(guide, 'VM_DISK_MONITORING');
+    const troubleshooting = rendered.querySelector(
+      '#a-missing-reading-is-not-an-installation-diagnosis',
+    );
+    expect(troubleshooting?.textContent).toBe('A missing reading is not an installation diagnosis');
+    const explanation = guide
+      .split('### A missing reading is not an installation diagnosis')[1]
+      .split('| Observation |')[0];
+    const text = render(explanation, 'VM_DISK_MONITORING').textContent?.replace(/\s+/g, ' ');
+    expect(text).toContain('does not establish whether an agent is absent or stopped');
+    expect(text).toContain(
+      'Do not install, enable or restart an agent solely to clear a disk dash',
+    );
+    expect(text).toContain('defer setup and live probes');
+    expect(text).toContain('every filesystem covered by the backup');
+    expect(text).toContain('workload liveness');
+    expect(text).toContain('Restore only services and timers that were previously active');
+    expect(text).toContain('not a Windows or Android installation instruction');
+    expect(text).toContain('missing Pulse usage is unknown, not zero');
+    expect(render(explanation, 'VM_DISK_MONITORING').querySelector('pre')).toBeNull();
+    for (const fragment of ['backup-safety', '-setup']) {
+      const link = render(explanation, 'VM_DISK_MONITORING').querySelector(
+        `a[href="#${fragment}"]`,
+      );
+      expect(link).not.toBeNull();
+      expect(rendered.querySelector(`#${fragment}`)).not.toBeNull();
+    }
+    // This broad status comes from the current collector, not a reproduced
+    // native failure or a new diagnosis of the guest's service state.
+    const classifier = read('internal/monitoring/guest_disk_stability.go');
+    expect(classifier).toMatch(
+      /case strings.Contains\(errStr, "500"\):\s+return "agent-not-running"/,
+    );
+  });
+
   it('ships the complete precaution and makes it reachable from troubleshooting', () => {
     expect(read('frontend-modern/public/docs/VM_DISK_MONITORING.md')).toBe(guide);
     const troubleshooting = read('docs/TROUBLESHOOTING.md');
