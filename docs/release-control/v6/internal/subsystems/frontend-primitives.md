@@ -8109,6 +8109,14 @@ the vSphere Overview renders `VsphereAlertsTable` with `showToolbar={false}`
 above its hosts table, only when signals exist, matching the TrueNAS
 Overview's health-alert table. Filtering stays on the platform's Health tab.
 
+### Platform drawers lead with the open problem
+
+`ProxmoxMailGatewayDrawer` takes the row's open alerts and renders the shared
+`DrawerAttentionSection` above its statistics, and its header status follows
+those alerts, so the drawer never shows a green "Healthy" beside an active
+warning. Inline detail rows that hold wrapping prose set `whitespace-normal` on
+the cell and content, since platform table cells do not wrap.
+
 ### Large platform notices keep the inventory in view
 
 `PlatformOutdatedAgentNotice` is maintenance guidance, not an incident, so it

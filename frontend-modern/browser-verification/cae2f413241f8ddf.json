@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "27f020f033119d589150ae90f4570a7d8a579132",
+  "verified_at": "2026-10-05T03:34:23Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx": "0b57910805f48b86ab1823e61e7fee52e5e514632cf53fcdb1490f39c17eed83",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx": "8032d6deec8859124834cf66bec7e12dbbeb430b9f25710ba64f5ca71811feb9"
+  },
+  "routes": [
+    "/proxmox/mail"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "mail-gateway-eu online with an open warning alert (messages queued 41 minutes, threshold 30): amber dot, row tint, Message Age under its name, filter counts Healthy 0 / Degraded 2",
+    "Before: the same gateway rendered green and counted Healthy",
+    "Phone 390 and 340: Instance, Age, In, Q, Def with whole, distinguishable gateway names; before both read mail-gatew...",
+    "Expanded drawer at 1440 and 390: amber header dot, Needs attention section first with the full alert message wrapping, statistics and cluster nodes below",
+    "No console errors"
+  ],
+  "interactions": [
+    "Expanded mail-gateway-eu at desktop and phone widths",
+    "Compared rendered state against the active alert list from /api/alerts/active"
+  ]
+}

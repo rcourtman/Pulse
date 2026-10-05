@@ -10,6 +10,7 @@ import {
   MAIL_GATEWAY_PHONE_COLUMN_WIDTHS,
 } from '../ProxmoxMailGatewayTable';
 import mailGatewayDrawerSource from '../ProxmoxMailGatewayDrawer.tsx?raw';
+import mailGatewayTableSource from '../ProxmoxMailGatewayTable.tsx?raw';
 
 describe('ProxmoxMailGatewayTable phone presentation', () => {
   it('keeps compact drawer statistics on the shared responsive row contract', () => {
@@ -22,23 +23,17 @@ describe('ProxmoxMailGatewayTable phone presentation', () => {
     ).toHaveLength(3);
   });
 
-  it('keeps fleet context and mail-flow counters visible without scrolling', () => {
-    expect(MAIL_GATEWAY_PHONE_COLUMNS).toEqual([
-      'instance',
-      'nodes',
-      'uptime',
-      'mail',
-      'queue',
-      'deferred',
-    ]);
-    expect(MAIL_GATEWAY_PHONE_COLUMN_WIDTHS).toEqual({
-      instance: 30,
-      nodes: 12,
-      uptime: 16,
-      mail: 14,
-      queue: 14,
-      deferred: 14,
-    });
+  it('keeps gateway names distinguishable with five phone tracks', () => {
+    // A sixth track (node count) truncated "mail-gateway-eu" and
+    // "mail-gateway-us" to the same text; the count lives in the expansion.
+    expect(MAIL_GATEWAY_PHONE_COLUMNS).toEqual(['instance', 'uptime', 'mail', 'queue', 'deferred']);
+    expect(MAIL_GATEWAY_PHONE_COLUMN_WIDTHS.instance).toBe(40);
+    expect(
+      MAIL_GATEWAY_PHONE_COLUMNS.reduce(
+        (total, column) => total + MAIL_GATEWAY_PHONE_COLUMN_WIDTHS[column],
+        0,
+      ),
+    ).toBe(100);
   });
 
   it('demotes node count below 360px while keeping five mail-flow fields', () => {
@@ -72,5 +67,14 @@ describe('ProxmoxMailGatewayTable phone presentation', () => {
     // which clipped a three-digit spam count to "3…" on a 1440px screen.
     expect(Math.min(...widths)).toBeGreaterThan(7);
     expect(widths.reduce((total, width) => total + width, 0)).toBeCloseTo(100, 1);
+  });
+
+  it('matches gateway alerts across identity aliases and shows the problem in the drawer', () => {
+    // Alerts are keyed by the PMG instance id, rows by the unified id.
+    expect(mailGatewayTableSource).toContain('getResourceIdentityAliases(resource)');
+    expect(mailGatewayTableSource).toContain(
+      'filterPlatformResources(resources, search, status, effectiveStatus)',
+    );
+    expect(mailGatewayDrawerSource).toContain('<DrawerAttentionSection');
   });
 });
