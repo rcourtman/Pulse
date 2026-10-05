@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "base_sha": "800329cbd83c48fdb7402a18633189f2c8a2d6ff",
+  "verified_at": "2026-10-05T14:57:23Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/features/docker/DockerImageReferenceText.tsx",
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx",
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx",
+    "frontend-modern/src/features/docker/dockerImageReference.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "07345ed1b0efb0f22d9c4d47648505d0564745cd088f9a6c095eabbf8d5f005e",
+    "frontend-modern/src/features/docker/DockerImageReferenceText.tsx": "0ae194ed57a9e9397e9091323fdb10de0b96ede1db52fb4b4a080c2b9fbce794",
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx": "c336bed9851f8b9e4ca52b365bc6000926f4c98baf580234dcd46edf26978222",
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx": "ae9b54af27933bff2859e2ed5e6b31f82e396007b971861bf4638dbf463f2f06",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx": "9f89bd4555185b5b30f3df9618835b83f2cae3525ec766f62744fa93cabae59a",
+    "frontend-modern/src/features/docker/dockerImageReference.ts": "d9e940885e1bd69b6586dbb5c9e250a0b441440002615151874bd92aea9e3bce"
+  },
+  "routes": [
+    "/docker/images",
+    "/docker/containers",
+    "/docker/swarm"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 900
+    },
+    {
+      "width": 430,
+      "height": 900
+    },
+    {
+      "width": 480,
+      "height": 900
+    },
+    {
+      "width": 540,
+      "height": 900
+    },
+    {
+      "width": 573,
+      "height": 900
+    },
+    {
+      "width": 600,
+      "height": 900
+    },
+    {
+      "width": 640,
+      "height": 900
+    },
+    {
+      "width": 700,
+      "height": 900
+    },
+    {
+      "width": 740,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 900
+    },
+    {
+      "width": 800,
+      "height": 900
+    },
+    {
+      "width": 900,
+      "height": 900
+    },
+    {
+      "width": 960,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 900
+    },
+    {
+      "width": 1100,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1600,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Private mock stack (PULSE_MOCK_MODE, random metrics off) serving this tree on main 800329cbd8; before = main, after = main plus this change, measured in the same session",
+    "Visible-text probe per image cell (each character checked against its clipping box): Images name rows that read identically fell from 3 to 0 at 390 and 700, rows whose repository name was hidden fell from 3-4 to 0-1 between 390 and 900 and to 0 from 900; Swarm services read registry.\u2026 for two of three rows from 390 to 700 on main and \u2026backen\u2026 / \u2026fronten\u2026 patched; the Containers Image column (grouped and ungrouped, Host and Engine shown) hid the repository name in up to 7 of 12 rows at 1024 and 3 at 1440 on main, and in at most 1 patched",
+    "Clip sweep over every cell and its overflow-hidden or ellipsis descendants on all four tables: no column other than Image changes at any width and no metric sublabel is lost; Image cells with any clipped text are never more than on main at any width (fewer at most widths); element counts rise only because a truncated reference now has two clipping spans, the head by design",
+    "References without a path (postgres:16.4, traefik:v3.1) render as before; the full reference stays on the title of every reference element (8/8 images, 3/3 services, 12/12 containers)",
+    "Clipboard: a keyboard copy of one reference reads ghcr.io/pulse-demo/backup-coordinator:2026.04 from navigator.clipboard; a whole-row selection keeps the browser's own text",
+    "Before and after element screenshots: Images at 390, 700 and 1100, Swarm services at 600 and 1024, ungrouped Containers at 1024"
+  ],
+  "interactions": [
+    "Loaded each route fresh, waited for the row count to settle, resized through every viewport before measuring",
+    "Sorted by Image on all three tables (aria-sort ascending, same order as main) and reset",
+    "Expanded and collapsed the first row on all three tables at 390, 700 and 1100 (containers at 1100 and 1440); no console errors",
+    "Selected one image reference and a whole row, pressed the copy shortcut, and read the clipboard",
+    "Switched the Docker containers table to the ungrouped view so the Host and Engine columns render"
+  ]
+}

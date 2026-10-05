@@ -3,17 +3,20 @@ package hostagent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rs/zerolog"
+	gohost "github.com/shirou/gopsutil/v4/host"
 )
 
 // realFSCollector returns a mockCollector wired to real filesystem operations.
@@ -407,5 +410,249 @@ func TestEnroll_MissingRuntimeToken(t *testing.T) {
 	_, err := agent.enroll(context.Background())
 	if err == nil {
 		t.Fatal("expected error for missing runtimeToken")
+	}
+}
+
+func enrollmentTestCollector(hostname string) *mockCollector {
+	collector := realFSCollector()
+	collector.goos = "darwin" // keep OS identity on HostInfo, not the test machine's files
+	collector.hostInfoFn = func(context.Context) (*gohost.InfoStat, error) {
+		return &gohost.InfoStat{Hostname: hostname, Platform: "debian", KernelArch: "x86_64"}, nil
+	}
+	return collector
+}
+
+// A process that enrolls before building its modules must get back the
+// runtime token and canonical agent ID, persisted where a restart finds them,
+// and must present the same host identity New would report under.
+func TestEnrollExchangesBootstrapTokenBeforeModulesStart(t *testing.T) {
+	var gotPayload enrollPayload
+	var gotAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != enrollEndpoint || r.Method != http.MethodPost {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		gotAuth = r.Header.Get("Authorization")
+		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(enrollResponse{AgentID: "canonical-delly2", RuntimeToken: "runtime-tok"})
+	}))
+	defer server.Close()
+
+	stateDir := t.TempDir()
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+	result, err := Enroll(context.Background(), EnrollmentConfig{
+		PulseURL:                server.URL,
+		APIToken:                "bootstrap-tok",
+		StateDir:                stateDir,
+		HostnameOverride:        "delly2",
+		AgentVersion:            "6.5.0",
+		EnableCommands:          true,
+		CommandAuthorityProfile: CommandAuthorityCommandCapable,
+		Logger:                  &logger,
+		Collector:               enrollmentTestCollector("ignored-by-override"),
+	})
+	if err != nil {
+		t.Fatalf("Enroll() error = %v", err)
+	}
+	if result.APIToken != "runtime-tok" || result.AgentID != "canonical-delly2" {
+		t.Fatalf("Enroll() = %+v, want runtime token and canonical agent ID", result)
+	}
+	if gotAuth != "Bearer bootstrap-tok" {
+		t.Fatalf("enrollment authenticated with %q, want the bootstrap token", gotAuth)
+	}
+	want := enrollPayload{Hostname: "delly2", OS: "debian", Arch: "x86_64", AgentVersion: "6.5.0", CommandsEnabled: true}
+	if gotPayload != want {
+		t.Fatalf("enrollment payload = %+v, want %+v", gotPayload, want)
+	}
+	for file, want := range map[string]string{runtimeTokenFile: "runtime-tok", "agent-id": "canonical-delly2"} {
+		data, err := os.ReadFile(filepath.Join(stateDir, file))
+		if err != nil || string(data) != want {
+			t.Fatalf("%s = %q (err %v), want %q", file, data, err, want)
+		}
+	}
+}
+
+// A monitoring-only install must not ask the server for command authority
+// during enrollment, matching the ceiling New applies.
+func TestEnrollHonoursMonitoringOnlyCommandCeiling(t *testing.T) {
+	var gotPayload enrollPayload
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&gotPayload)
+		json.NewEncoder(w).Encode(enrollResponse{RuntimeToken: "runtime-tok"})
+	}))
+	defer server.Close()
+
+	if _, err := Enroll(context.Background(), EnrollmentConfig{
+		PulseURL:                server.URL,
+		APIToken:                "bootstrap-tok",
+		StateDir:                t.TempDir(),
+		EnableCommands:          true,
+		CommandAuthorityProfile: CommandAuthorityMonitoringOnly,
+		Collector:               enrollmentTestCollector("pve-3"),
+	}); err != nil {
+		t.Fatalf("Enroll() error = %v", err)
+	}
+	if gotPayload.CommandsEnabled {
+		t.Fatal("monitoring-only enrollment requested command authority")
+	}
+	if gotPayload.Hostname != "pve-3" {
+		t.Fatalf("enrollment hostname = %q, want the discovered hostname", gotPayload.Hostname)
+	}
+}
+
+// A restart with a persisted runtime token must not contact the server again.
+func TestEnrollReusesPersistedRuntimeToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("persisted runtime token must not trigger an enrollment request")
+	}))
+	defer server.Close()
+
+	stateDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(stateDir, runtimeTokenFile), []byte("persisted-runtime-tok\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Enroll(context.Background(), EnrollmentConfig{
+		PulseURL:  server.URL,
+		APIToken:  "bootstrap-tok",
+		StateDir:  stateDir,
+		Collector: enrollmentTestCollector("pve-3"),
+	})
+	if err != nil {
+		t.Fatalf("Enroll() error = %v", err)
+	}
+	if result.APIToken != "persisted-runtime-tok" || result.AgentID != "" {
+		t.Fatalf("Enroll() = %+v, want the persisted token and no new agent ID", result)
+	}
+}
+
+func TestEnrollKeepsTokenTheServerSaysIsNotABootstrapToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+	}))
+	defer server.Close()
+
+	result, err := Enroll(context.Background(), EnrollmentConfig{
+		PulseURL:  server.URL,
+		APIToken:  "manual-install-tok",
+		StateDir:  t.TempDir(),
+		Collector: enrollmentTestCollector("pve-3"),
+	})
+	if err != nil {
+		t.Fatalf("Enroll() error = %v", err)
+	}
+	if result.APIToken != "manual-install-tok" || result.AgentID != "" {
+		t.Fatalf("Enroll() = %+v, want the original token unchanged", result)
+	}
+}
+
+func TestEnrollReturnsPermanentRejection(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "token already consumed", http.StatusConflict)
+	}))
+	defer server.Close()
+
+	_, err := Enroll(context.Background(), EnrollmentConfig{
+		PulseURL:  server.URL,
+		APIToken:  "spent-bootstrap-tok",
+		StateDir:  t.TempDir(),
+		Collector: enrollmentTestCollector("pve-3"),
+	})
+	if err == nil || !strings.Contains(err.Error(), "409") {
+		t.Fatalf("Enroll() error = %v, want the permanent 409 rejection", err)
+	}
+}
+
+func TestEnrollRequiresToken(t *testing.T) {
+	if _, err := Enroll(context.Background(), EnrollmentConfig{PulseURL: "http://127.0.0.1:7655"}); err == nil {
+		t.Fatal("Enroll() without a token succeeded")
+	}
+}
+
+// A restart that already holds a runtime token must not depend on host
+// discovery: Docker- or Kubernetes-only agents never needed it to start.
+func TestEnrollReusesPersistedRuntimeTokenWithoutHostDiscovery(t *testing.T) {
+	stateDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(stateDir, runtimeTokenFile), []byte("persisted-runtime-tok"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	collector := realFSCollector()
+	collector.hostInfoFn = func(context.Context) (*gohost.InfoStat, error) {
+		return nil, errors.New("host information unavailable")
+	}
+
+	result, err := Enroll(context.Background(), EnrollmentConfig{
+		PulseURL:  "http://127.0.0.1:1",
+		APIToken:  "bootstrap-tok",
+		StateDir:  stateDir,
+		Collector: collector,
+	})
+	if err != nil {
+		t.Fatalf("Enroll() error = %v, want the persisted token without host discovery", err)
+	}
+	if result.APIToken != "persisted-runtime-tok" {
+		t.Fatalf("Enroll() token = %q, want the persisted runtime token", result.APIToken)
+	}
+}
+
+// The server binds the runtime token to the hostname presented at
+// enrollment, so Enroll must present exactly the identity New reports under,
+// including Linux distribution detection and the architecture fallback.
+func TestEnrollPresentsTheIdentityNewReports(t *testing.T) {
+	collector := &mockCollector{
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{
+				Hostname:        " pve-host ",
+				HostID:          "hid",
+				Platform:        "debian",
+				PlatformFamily:  "debian",
+				PlatformVersion: "13.4",
+			}, nil
+		},
+		statFn: func(name string) (os.FileInfo, error) {
+			if name == "/etc/pve" {
+				return nil, nil
+			}
+			return nil, os.ErrNotExist
+		},
+		lookPathFn: func(file string) (string, error) {
+			if file == "pveversion" {
+				return "/usr/bin/pveversion", nil
+			}
+			return "", os.ErrNotExist
+		},
+		commandCombinedOutputFn: func(context.Context, string, ...string) (string, error) {
+			return "pve-manager/9.1.9/ee7bad0a3d1546c9 (running kernel: 7.0.0-3-pve)", nil
+		},
+	}
+	agent, err := New(Config{APIToken: "token", HostnameOverride: "  ", LogLevel: zerolog.InfoLevel, Collector: collector})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	var gotPayload enrollPayload
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&gotPayload)
+		json.NewEncoder(w).Encode(enrollResponse{RuntimeToken: "runtime-tok"})
+	}))
+	defer server.Close()
+	if _, err := Enroll(context.Background(), EnrollmentConfig{
+		PulseURL:         server.URL,
+		APIToken:         "bootstrap-tok",
+		StateDir:         t.TempDir(),
+		HostnameOverride: "  ",
+		Collector:        collector,
+	}); err != nil {
+		t.Fatalf("Enroll() error = %v", err)
+	}
+
+	if gotPayload.Hostname != agent.hostname || gotPayload.OS != agent.osName || gotPayload.Arch != agent.architecture {
+		t.Fatalf("enrollment identity = %q/%q/%q, New reports %q/%q/%q",
+			gotPayload.Hostname, gotPayload.OS, gotPayload.Arch, agent.hostname, agent.osName, agent.architecture)
+	}
+	if agent.hostname != "pve-host" || agent.osName != proxmoxPVEOSName || agent.architecture != runtime.GOARCH {
+		t.Fatalf("New identity = %q/%q/%q, want the trimmed hostname, Proxmox VE, and the runtime architecture", agent.hostname, agent.osName, agent.architecture)
 	}
 }

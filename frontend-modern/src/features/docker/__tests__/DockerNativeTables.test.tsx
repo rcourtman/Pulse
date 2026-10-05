@@ -1114,6 +1114,64 @@ describe('Docker native tables', () => {
     expect(screen.getByTitle('Healthy')).toHaveClass('bg-emerald-500');
   });
 
+  it('keeps the repository and tag of a registry-prefixed image name visible', () => {
+    const { container } = render(() => (
+      <DockerImagesTable
+        resources={[
+          makeResource({
+            id: 'image-ghcr',
+            type: 'docker-image',
+            name: 'ghcr.io/pulse-demo/backup-coordinator:2026.04',
+          }),
+          makeResource({ id: 'image-hub', type: 'docker-image', name: 'postgres:16.4' }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No images"
+        emptyDescription="No images"
+        showToolbar={false}
+      />
+    ));
+
+    // Images that share a registry and namespace differ only at the end, so a
+    // narrow name cell truncates the shared head and keeps the tail visible.
+    const references = [
+      ...container.querySelectorAll<HTMLElement>('[data-docker-image-reference]'),
+    ];
+    const prefixed = references.find(
+      (element) => element.title === 'ghcr.io/pulse-demo/backup-coordinator:2026.04',
+    );
+    expect(prefixed).toHaveTextContent('ghcr.io/pulse-demo/backup-coordinator:2026.04');
+    expect(prefixed?.querySelector('[data-docker-image-reference-tail]')).toHaveTextContent(
+      'backup-coordinator:2026.04',
+    );
+    const bare = references.find((element) => element.title === 'postgres:16.4');
+    expect(bare).toHaveTextContent('postgres:16.4');
+    expect(bare?.querySelector('[data-docker-image-reference-tail]')?.textContent).toBe('');
+
+    // Head and tail are flex items, so a browser copy would put a line break
+    // between them; a selection inside one reference copies as the reference.
+    const copy = (selected: Node) => {
+      const range = document.createRange();
+      range.selectNodeContents(selected);
+      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.addRange(range);
+      const setData = vi.fn();
+      const event = new Event('copy', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', { value: { setData } });
+      prefixed!.dispatchEvent(event);
+      return { setData, prevented: event.defaultPrevented };
+    };
+    const inside = copy(prefixed!);
+    expect(inside.setData).toHaveBeenCalledWith(
+      'text/plain',
+      'ghcr.io/pulse-demo/backup-coordinator:2026.04',
+    );
+    expect(inside.prevented).toBe(true);
+    const wider = copy(container);
+    expect(wider.setData).not.toHaveBeenCalled();
+    expect(wider.prevented).toBe(false);
+  });
+
   it('renders Docker image API fields', () => {
     render(() => (
       <DockerImagesTable
@@ -1560,7 +1618,13 @@ describe('Docker native tables', () => {
     expect(screen.getByText('Stack')).toBeInTheDocument();
     expect(screen.getByText('shop')).toBeInTheDocument();
     expect(screen.getByText('checkout-api')).toBeInTheDocument();
-    expect(screen.getByText('registry.example.com/checkout-api:2026.05')).toBeInTheDocument();
+    // The image keeps its repository and tag visible when the cell truncates;
+    // the full reference stays on the title.
+    const serviceImage = screen.getByTitle('registry.example.com/checkout-api:2026.05');
+    expect(serviceImage).toHaveTextContent('registry.example.com/checkout-api:2026.05');
+    expect(serviceImage.querySelector('[data-docker-image-reference-tail]')).toHaveTextContent(
+      'checkout-api:2026.05',
+    );
     expect(screen.getByText('replicated')).toBeInTheDocument();
     expect(screen.getByText('4')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();

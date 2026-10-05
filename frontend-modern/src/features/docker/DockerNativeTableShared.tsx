@@ -11,6 +11,7 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 import type { DockerResourceStatusFilter } from './dockerPageModel';
+import { DockerImageReferenceText } from './DockerImageReferenceText';
 
 export type DockerNativeTableProps = {
   resources: Resource[];
@@ -69,6 +70,9 @@ export const DockerResourceNameCell: Component<{
   // etc.) rather than from the generic resource.status triad.
   indicator?: StatusIndicator;
   detailToggle?: JSX.Element;
+  // Image rows name the resource by its reference, so a narrow cell keeps the
+  // repository and tag visible instead of the shared registry prefix.
+  imageReference?: boolean;
 }> = (props) => {
   const resolvedIndicator = (): StatusIndicator =>
     props.indicator ?? getSimpleStatusIndicator(props.resource.status);
@@ -88,8 +92,10 @@ export const DockerResourceNameCell: Component<{
           name={name()}
           url={props.resource.customUrl}
           class="min-w-0 max-[359px]:[&>a]:hidden"
-          nameClass="truncate font-semibold text-base-content"
-        />
+          nameClass={`${props.imageReference ? 'flex min-w-0' : 'truncate'} font-semibold text-base-content`}
+        >
+          {props.imageReference ? <DockerImageReferenceText reference={name()} /> : undefined}
+        </ResourceNameWithWebInterfaceLink>
       </div>
     </TableCell>
   );

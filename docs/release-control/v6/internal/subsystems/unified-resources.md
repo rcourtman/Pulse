@@ -923,6 +923,15 @@ the title; task starts use the shared relative-time primitive with their exact
 timestamp retained. Native table/model/guardrail tests and the production
 `browser-tests/proxmox-docker-rows.cjs` exercise these surfaces without executing
 a container action or claiming native appliance or release acceptance.
+Image references (the Images name, the Containers Image column and the Services
+Image column) render through `DockerImageReferenceText`, which splits before
+the repository name (`splitDockerImageReference`), because references that
+share a registry and namespace differ only at the end: a narrow cell truncates
+the head and keeps `name:tag` (`ghcr.io/pul…backup-coordinator:2026.04`), with
+the full reference on the title. End truncation left rows that all read
+`ghcr.io/pulse-demo…`. A selection inside one reference copies without the
+line break the two flex items would add. Sorting and the stored value are
+unchanged.
 
 ### PBS host history correlation
 

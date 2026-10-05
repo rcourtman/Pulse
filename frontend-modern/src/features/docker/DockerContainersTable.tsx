@@ -87,6 +87,7 @@ import type { DockerContainerUpdateStatus } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { DockerContainerLifecycleControls } from './DockerContainerLifecycleControls';
 import { CONTAINER_CPU_CAPACITY_DESCRIPTION } from './dockerCpuPresentation';
+import { DockerImageReferenceText } from './DockerImageReferenceText';
 
 type DockerNetwork = NonNullable<NonNullable<Resource['docker']>['networks']>[number];
 type DockerMount = NonNullable<NonNullable<Resource['docker']>['mounts']>[number];
@@ -584,9 +585,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
         case 'image':
           return (
             <TableCell class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}>
-              <span class="block max-w-full truncate" title={image()}>
-                {image()}
-              </span>
+              <DockerImageReferenceText reference={image()} class="max-w-full" />
             </TableCell>
           );
         case 'state':
