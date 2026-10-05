@@ -92,6 +92,18 @@ describe('apiClient org context', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
+  it.each([{ retry: false }, { expectedOrgID: 'default' }])(
+    'rejects aborted dispatch before fetch for either strict opt-in %j',
+    async (options) => {
+      const controller = new AbortController();
+      controller.abort();
+      await expect(
+        apiFetch('/api/state', { ...options, signal: controller.signal }),
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      expect(mockFetch).not.toHaveBeenCalled();
+    },
+  );
+
   it('does not fall back to another authentication method after a strict-session refusal', async () => {
     setApiToken('synthetic-token');
     setOrgID('tenant-a');

@@ -665,7 +665,9 @@ class ApiClient {
     // CSRF preparation may have awaited a request while the operator switched
     // organisations or left the view. Do not dispatch a stale confirmation.
     checkExpectedOrg();
-    fetchOptions.signal?.throwIfAborted();
+    // Only strict confirmations opt into the extra pre-dispatch abort check;
+    // ordinary callers retain native fetch's established abort behaviour.
+    if (expectedOrgID !== undefined || !retry) fetchOptions.signal?.throwIfAborted();
     let response = await fetch(url, finalOptions);
 
     // Session-preferred reads intentionally omit the API token on their first
