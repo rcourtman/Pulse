@@ -5954,6 +5954,12 @@ provision_typed_privileged_helper() {
         fail "Failed to enable the typed privileged helper socket" "$EXIT_GENERAL"
     fi
     verify_privileged_helper_socket
+    # Reloading a unit does not replace an already running helper's code.
+    # Activate the verified binary only after the isolated unit and socket
+    # identity have passed the installer-owned boundary checks.
+    if ! systemctl restart "${PRIVILEGED_HELPER_NAME}.service"; then
+        fail "Failed to restart the typed privileged helper with its installer-owned configuration" "$EXIT_GENERAL"
+    fi
     log_info "Typed privileged helper socket active at ${PRIVILEGED_HELPER_SOCKET_PATH} (root:${LEAST_PRIVILEGE_USER} 0660)"
 }
 

@@ -92,6 +92,9 @@ func classifiedPrivilegeHelperStatusError(err error) string {
 	if errors.Is(err, errPrivilegeHelperProxmoxInventoryUnavailable) {
 		return "helper returned no Proxmox LXC filesystem inventory"
 	}
+	if errors.Is(err, errPrivilegeHelperProxmoxInventoryPartial) {
+		return "helper Proxmox LXC filesystem inventory is incomplete"
+	}
 	var remote *agenthelper.RemoteError
 	if errors.As(err, &remote) {
 		switch remote.Code {

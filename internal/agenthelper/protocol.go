@@ -43,6 +43,7 @@ const (
 	OperationAgentUpdateCommit     = "agent_update.commit"
 	OperationAgentUpdateRollback   = "agent_update.rollback"
 	OperationVersion1              = 1
+	OperationVersion2              = 2
 )
 
 // Request is the common envelope for one local helper operation. Payload is

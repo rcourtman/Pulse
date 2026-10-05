@@ -74,6 +74,9 @@ mp0    tank:subvol-100-disk-0        1.0T 512.0G 512.0G 50.0 /srv/data
 	if !result.Applicable || !result.Degraded || result.FailedContainers != 1 {
 		t.Fatalf("collection result = %+v, want applicable partial failure", result)
 	}
+	if got.Status != "partial" || len(got.OmittedVMIDs) != 1 || got.OmittedVMIDs[0] != 102 {
+		t.Fatalf("partial wire completeness = %+v", got)
+	}
 	if len(commands) != 3 {
 		t.Fatalf("commands = %v, want list plus two running df queries", commands)
 	}
@@ -125,6 +128,9 @@ func TestCollectProxmoxLXCFilesystemsReportsTotalContainerFailure(t *testing.T) 
 	}
 	if result.Inventory == nil || len(result.Inventory.Containers) != 0 {
 		t.Fatalf("partial inventory = %+v, want empty retained inventory", result.Inventory)
+	}
+	if result.Inventory.Status != "partial" || len(result.Inventory.OmittedVMIDs) != 2 || result.Inventory.ValidateCollection() != nil {
+		t.Fatalf("all-failed inventory was not explicitly incomplete: %+v", result.Inventory)
 	}
 }
 
@@ -437,11 +443,8 @@ func TestParseProxmoxLXCFilesystemsValidatesAndBoundsInput(t *testing.T) {
 		100, "running", "", "valid",
 	)
 	containers, err := parseProxmoxLXCRunningContainers(list)
-	if err != nil {
-		t.Fatalf("parse list: %v", err)
-	}
-	if len(containers) != 1 || containers[0].VMID != 100 || containers[0].Name != "valid" {
-		t.Fatalf("running containers = %+v", containers)
+	if err == nil || containers != nil {
+		t.Fatalf("invalid identity cannot be silently omitted from a complete list: containers=%+v err=%v", containers, err)
 	}
 	if _, err := parseProxmoxLXCRunningContainers(
 		strings.Repeat("x", proxmoxLXCMaxListOutputBytes+1),
