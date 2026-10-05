@@ -5,6 +5,19 @@ import { ResourceTable } from './ResourceTable';
 import { CollapsibleSection } from './Thresholds/sections/CollapsibleSection';
 import { formatMetricValue } from '@/features/alerts/thresholds/helpers';
 import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/thresholdsTableSectionProps';
+import { getAlertThresholdsDefaultsSummary } from '@/utils/alertThresholdsSectionPresentation';
+
+const GUEST_THRESHOLD_COLUMNS = [
+  'CPU %',
+  'Memory %',
+  'Disk %',
+  'Backup',
+  'Snapshot',
+  'Disk R MB/s',
+  'Disk W MB/s',
+  'Net In MB/s',
+  'Net Out MB/s',
+];
 
 export function ThresholdsTableProxmoxGuestsSection(props: ThresholdsTableSectionProps) {
   const { state, tableProps } = props;
@@ -14,6 +27,10 @@ export function ThresholdsTableProxmoxGuestsSection(props: ThresholdsTableSectio
       <CollapsibleSection
         id="guests"
         title={state.sectionTitles.guests}
+        defaultsSummary={getAlertThresholdsDefaultsSummary(
+          GUEST_THRESHOLD_COLUMNS,
+          tableProps.guestDefaults,
+        )}
         resourceCount={tableProps.allGuests().length}
         collapsed={state.isCollapsed('guests')}
         onToggle={() => state.toggleSection('guests')}
@@ -27,17 +44,7 @@ export function ThresholdsTableProxmoxGuestsSection(props: ThresholdsTableSectio
             onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
             groupedResources={state.guestsGroupedByNode()}
             groupHeaderMeta={state.guestGroupHeaderMeta()}
-            columns={[
-              'CPU %',
-              'Memory %',
-              'Disk %',
-              'Backup',
-              'Snapshot',
-              'Disk R MB/s',
-              'Disk W MB/s',
-              'Net In MB/s',
-              'Net Out MB/s',
-            ]}
+            columns={GUEST_THRESHOLD_COLUMNS}
             activeAlerts={tableProps.activeAlerts}
             emptyMessage={state.GUEST_THRESHOLDS_FILTER_EMPTY_STATE}
             onEdit={state.startEditing}
