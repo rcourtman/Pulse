@@ -1065,3 +1065,63 @@ describe('Docker phone update reflow boundary', () => {
     );
   });
 });
+
+describe('Alert History column widths', () => {
+  // Fixed layout sizes all nine tracks against the table width before the
+  // collapsed ones are removed, so at each density the visible tracks must sum
+  // to 100% and the table width must be the sum of all nine; otherwise the
+  // visible columns stop filling the card or overflow it.
+  const columns = [
+    'timestamp',
+    'resource',
+    'type',
+    'severity',
+    'message',
+    'duration',
+    'status',
+    'node',
+    'actions',
+  ] as const;
+  const densities: Array<{ name: string; visible: readonly (typeof columns)[number][] }> = [
+    {
+      name: 'base',
+      visible: ['timestamp', 'resource', 'severity', 'message', 'status', 'actions'],
+    },
+    {
+      name: '50rem',
+      visible: ['timestamp', 'resource', 'severity', 'message', 'duration', 'status', 'actions'],
+    },
+    { name: '64rem', visible: columns },
+    { name: '80rem', visible: columns },
+  ];
+  const blocks = [
+    ...appStylesSource.matchAll(
+      /table\.alert-history-responsive-table \{\s*((?:--alert-history-[a-z]+-width: [\d.]+%;\s*)+)width: ([\d.]+)%;/g,
+    ),
+  ];
+
+  it('declares every track width at each density', () => {
+    expect(blocks).toHaveLength(densities.length);
+    for (const column of columns) {
+      expect(appStylesSource).toContain(
+        `col.alert-history-${column}-track {\n    width: var(--alert-history-${column}-width);`,
+      );
+    }
+  });
+
+  it('fills the card exactly with the visible tracks', () => {
+    blocks.forEach((block, index) => {
+      const widths = Object.fromEntries(
+        [...block[1].matchAll(/--alert-history-([a-z]+)-width: ([\d.]+)%;/g)].map((match) => [
+          match[1],
+          Number(match[2]),
+        ]),
+      );
+      expect(Object.keys(widths).sort()).toEqual([...columns].sort());
+      const visibleSum = densities[index].visible.reduce((sum, column) => sum + widths[column], 0);
+      const allSum = columns.reduce((sum, column) => sum + widths[column], 0);
+      expect(visibleSum).toBeCloseTo(100, 6);
+      expect(Number(block[2])).toBeCloseTo(allSum, 6);
+    });
+  });
+});

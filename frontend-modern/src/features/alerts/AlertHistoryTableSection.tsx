@@ -54,16 +54,17 @@ export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
             <AlertHistoryMobileList state={props.state} />
             <TableCard class="mb-2 hidden md:block">
               <Table class="alert-history-responsive-table table-fixed min-w-0 text-[11px] sm:text-sm">
+                {/* Each track pairs its density visibility with its own width (index.css). */}
                 <colgroup>
-                  <col class="alert-history-core-track" />
-                  <col class="alert-history-core-track" />
-                  <col class="alert-history-full-detail-track" />
-                  <col class="alert-history-core-track" />
-                  <col class="alert-history-core-track" />
-                  <col class="alert-history-context-track" />
-                  <col class="alert-history-core-track" />
-                  <col class="alert-history-full-detail-track" />
-                  <col class="alert-history-core-track" />
+                  <col class="alert-history-core-track alert-history-timestamp-track" />
+                  <col class="alert-history-core-track alert-history-resource-track" />
+                  <col class="alert-history-full-detail-track alert-history-type-track" />
+                  <col class="alert-history-core-track alert-history-severity-track" />
+                  <col class="alert-history-core-track alert-history-message-track" />
+                  <col class="alert-history-context-track alert-history-duration-track" />
+                  <col class="alert-history-core-track alert-history-status-track" />
+                  <col class="alert-history-full-detail-track alert-history-node-track" />
+                  <col class="alert-history-core-track alert-history-actions-track" />
                 </colgroup>
                 <TableHeader>
                   <TableRow class="border-b border-border bg-surface-hover text-muted">

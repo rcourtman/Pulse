@@ -5837,6 +5837,11 @@ not overlap or create horizontal overflow. The 390px operator qualification
 must assert three visible labels, non-overlapping client rectangles, keyboard
 reachability, and a contained document before its actual-pixels receipt is
 recorded.
+The Alert History table's density tracks in `index.css` carry per-column widths
+through `--alert-history-<column>-width` custom properties set on the table at
+each density. Fixed layout sizes all nine tracks before collapsed ones are
+removed, so the visible widths sum to 100% and the table width is the sum of
+all nine; `App.architecture.test.ts` checks both at every density.
 Alert History investigation detail is also responsive by interaction model,
 not only by CSS. Desktop may keep Timeline and Resource incident detail inline
 with its table row, while the virtualized phone card list must open the shared

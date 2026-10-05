@@ -467,7 +467,13 @@
     at 800px, while type and node remain reserved for a 1024px table shell.
     Fixed-layout tables calculate all nine tracks before collapsed columns are
     removed, so the table width compensates at each density to let the six,
-    seven, or nine visible tracks fill the card without creating a scrollbar.
+    seven, or nine visible tracks fill the card without creating a scrollbar:
+    it is the sum of all nine track widths over the sum of the visible ones.
+    Visible tracks sum to 100% and are sized for the narrowest card at each
+    density. Timestamp, severity, duration, status, type and node get what
+    their content needs (status fits "acknowledged"), actions keep their two
+    buttons in at most two lines, and message, the column that says what
+    happened, takes most of what is left. At 80rem actions fit on one line.
   */
   .table-scroll-shell col.alert-history-context-track,
   .table-scroll-shell col.alert-history-full-detail-track {
@@ -479,14 +485,53 @@
     visibility: collapse;
   }
 
-  .table-scroll-shell col.alert-history-core-track,
-  .table-scroll-shell col.alert-history-context-track,
-  .table-scroll-shell col.alert-history-full-detail-track {
-    width: 16.6667%;
+  .table-scroll-shell table.alert-history-responsive-table {
+    --alert-history-timestamp-width: 15.6%;
+    --alert-history-resource-width: 16.7%;
+    --alert-history-type-width: 11.8%;
+    --alert-history-severity-width: 13.6%;
+    --alert-history-message-width: 18.2%;
+    --alert-history-duration-width: 11.5%;
+    --alert-history-status-width: 19.2%;
+    --alert-history-node-width: 11.2%;
+    --alert-history-actions-width: 16.7%;
+    width: 134.5%;
   }
 
-  .table-scroll-shell table.alert-history-responsive-table {
-    width: 150%;
+  .table-scroll-shell col.alert-history-timestamp-track {
+    width: var(--alert-history-timestamp-width);
+  }
+
+  .table-scroll-shell col.alert-history-resource-track {
+    width: var(--alert-history-resource-width);
+  }
+
+  .table-scroll-shell col.alert-history-type-track {
+    width: var(--alert-history-type-width);
+  }
+
+  .table-scroll-shell col.alert-history-severity-track {
+    width: var(--alert-history-severity-width);
+  }
+
+  .table-scroll-shell col.alert-history-message-track {
+    width: var(--alert-history-message-width);
+  }
+
+  .table-scroll-shell col.alert-history-duration-track {
+    width: var(--alert-history-duration-width);
+  }
+
+  .table-scroll-shell col.alert-history-status-track {
+    width: var(--alert-history-status-width);
+  }
+
+  .table-scroll-shell col.alert-history-node-track {
+    width: var(--alert-history-node-width);
+  }
+
+  .table-scroll-shell col.alert-history-actions-track {
+    width: var(--alert-history-actions-width);
   }
 
   /*
@@ -547,14 +592,17 @@
       visibility: visible;
     }
 
-    .table-scroll-shell col.alert-history-core-track,
-    .table-scroll-shell col.alert-history-context-track,
-    .table-scroll-shell col.alert-history-full-detail-track {
-      width: 14.2857%;
-    }
-
     .table-scroll-shell table.alert-history-responsive-table {
-      width: 128.5714%;
+      --alert-history-timestamp-width: 11.8%;
+      --alert-history-resource-width: 14.3%;
+      --alert-history-type-width: 11.8%;
+      --alert-history-severity-width: 10.2%;
+      --alert-history-message-width: 23.4%;
+      --alert-history-duration-width: 11.5%;
+      --alert-history-status-width: 14.5%;
+      --alert-history-node-width: 11.2%;
+      --alert-history-actions-width: 14.3%;
+      width: 123%;
     }
 
     .table-scroll-shell :is(th, td).agent-doctor-target-column {
@@ -588,18 +636,34 @@
       visibility: visible;
     }
 
-    .table-scroll-shell col.alert-history-core-track,
-    .table-scroll-shell col.alert-history-context-track,
-    .table-scroll-shell col.alert-history-full-detail-track {
-      width: 11.1111%;
-    }
-
     .table-scroll-shell table.alert-history-responsive-table {
+      --alert-history-timestamp-width: 9.3%;
+      --alert-history-resource-width: 11.2%;
+      --alert-history-type-width: 11.8%;
+      --alert-history-severity-width: 8%;
+      --alert-history-message-width: 17%;
+      --alert-history-duration-width: 9%;
+      --alert-history-status-width: 11.3%;
+      --alert-history-node-width: 11.2%;
+      --alert-history-actions-width: 11.2%;
       width: 100%;
     }
   }
 
   @container (min-width: 80rem) {
+    .table-scroll-shell table.alert-history-responsive-table {
+      --alert-history-timestamp-width: 7.6%;
+      --alert-history-resource-width: 11.2%;
+      --alert-history-type-width: 9.5%;
+      --alert-history-severity-width: 6.5%;
+      --alert-history-message-width: 23.3%;
+      --alert-history-duration-width: 7.3%;
+      --alert-history-status-width: 9.2%;
+      --alert-history-node-width: 11.2%;
+      --alert-history-actions-width: 14.2%;
+      width: 100%;
+    }
+
     .table-scroll-shell :is(th, td).hidden.xl\:table-cell.agent-machine-address-column {
       display: table-cell;
     }

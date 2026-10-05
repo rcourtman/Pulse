@@ -1081,6 +1081,15 @@ presentation and sort below warnings, while the history facet exposes a real
 Info option whose count and filtered rows use the same predicate as every
 other severity.
 
+The desktop alert history table sizes each column for its content instead of
+giving all visible columns an equal share. Timestamp, severity, duration,
+status, type and node get what their content needs (status fits
+"acknowledged"), Resource and Node keep at least their old share, the two row
+actions stay within two lines (one line from an 80rem card), and Message, the
+column that says what happened, takes the rest. Equal shares held Message to
+the same 100-160px as the timestamp, so at most a fifth of messages read in
+full at any width; from a 960px viewport a third to four fifths now do.
+
 Alert history row timestamps render clock time in the viewer's own locale and
 must carry the absolute date and time as a title. The date otherwise lives
 only in the day group header, which scrolls out of sight, and a hardcoded
