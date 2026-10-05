@@ -29,6 +29,20 @@ describe('ExternalTextLink', () => {
     expect(link.className).toContain('sm:min-h-9');
   });
 
+  it("keeps a callout's text colour for links inside a tinted sentence", () => {
+    render(() => (
+      <ExternalTextLink href="https://docs.example.test/migration" variant="inlineInherit">
+        migration guide
+      </ExternalTextLink>
+    ));
+
+    const link = screen.getByRole('link', { name: 'migration guide' });
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link.className).toContain('underline');
+    expect(link.className).not.toContain('text-blue');
+    expect(link.className).not.toContain('min-h-');
+  });
+
   it('centralizes the preserve-opener exception', () => {
     expect(getExternalTextLinkRel()).toBe('noopener noreferrer');
     expect(getExternalTextLinkRel(true)).toBeUndefined();

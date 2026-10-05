@@ -1,6 +1,7 @@
 import { createSignal, createUniqueId, onMount, Show, type Accessor } from 'solid-js';
 
 import { AlertsAPI } from '@/api/alerts';
+import { Button } from '@/components/shared/Button';
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import type { DeadManStatus } from '@/types/alerts';
 import { formatRelativeTime } from '@/utils/format';
@@ -86,14 +87,14 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
           <span class={`rounded-full px-2.5 py-1 text-xs font-semibold ${presentation().class}`}>
             {unavailable() ? 'Status unavailable' : presentation().label}
           </span>
-          <button
-            type="button"
-            class="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content hover:bg-surface-hover disabled:opacity-50"
+          <Button
+            variant="outline"
+            size="xs"
             disabled={loading()}
             onClick={() => void loadStatus()}
           >
             {loading() ? 'Refreshing…' : 'Refresh'}
-          </button>
+          </Button>
         </div>
       }
       class="min-w-0"
@@ -136,14 +137,14 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
                 </button>
               }
             >
-              <button
-                type="button"
-                class="rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content hover:bg-surface-hover"
+              <Button
+                variant="outline"
+                size="settingsAction"
                 aria-pressed={showUrl()}
                 onClick={() => setShowUrl((value) => !value)}
               >
                 {showUrl() ? 'Hide' : 'Show'}
-              </button>
+              </Button>
             </Show>
           </div>
           <p id={`${inputId}-help`} class="mt-2 text-xs leading-5 text-muted">

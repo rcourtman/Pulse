@@ -2944,6 +2944,9 @@ ping URL must never return to the browser after save; the configured state uses
 an explicit replacement placeholder and removal action. The watchdog remains
 active independently of alert activation, snooze, quiet hours, and notification
 delivery pause because those policies must not disable observation of Pulse.
+Its Refresh and Show/Hide actions are the shared outline `Button` (xs and
+`settingsAction` sizes), not a copied border shell, so they match the other
+destination controls and keep a 44px touch target on phones.
 
 Watchdog transport and monitoring progress remain notifications- and
 monitoring-owned respectively. Alerts owns the system-alert projection:
