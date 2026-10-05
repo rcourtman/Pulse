@@ -281,45 +281,54 @@ export function PatrolSuppressionRules(props: { openForLink?: boolean } = {}) {
       >
         <Show when={selected()}>
           {(rule) => (
-            <div class="space-y-4 p-5">
-              <h2 class="text-base font-semibold text-base-content">Remove suppression rule?</h2>
-              <p class="text-sm leading-5 text-muted">
-                Only this exact manual rule will be removed. Future matching findings can appear;
-                existing dismissals and history stay unchanged.
-              </p>
-              <dl class="space-y-2 text-sm text-base-content">
-                <div>
-                  <dt class="font-medium">Resource</dt>
-                  <dd class="break-words">{ruleScope(rule()).resource}</dd>
-                </div>
-                <Show when={rule().resource_id}>
-                  <div>
-                    <dt class="font-medium">Resource ID</dt>
-                    <dd class="break-all">{rule().resource_id}</dd>
-                  </div>
-                </Show>
-                <div>
-                  <dt class="font-medium">Category</dt>
-                  <dd>{ruleScope(rule()).category}</dd>
-                </div>
-                <div>
-                  <dt class="font-medium">Reason</dt>
-                  <dd class="whitespace-pre-wrap break-words">
-                    {rule().description || 'No reason recorded.'}
-                  </dd>
-                </div>
-                <div>
-                  <dt class="font-medium">Rule ID</dt>
-                  <dd class="break-all">{rule().id}</dd>
-                </div>
-              </dl>
-              <Show when={!rule().resource_id || !rule().category}>
-                <p class="text-sm font-medium text-amber-800 dark:text-amber-200">
-                  This broad rule covers {!rule().resource_id ? 'all resources' : 'this resource'}{' '}
-                  in {!rule().category ? 'all categories' : rule().category}.
+            <div class="flex min-h-0 flex-col">
+              <div class="shrink-0 space-y-3 px-5 pt-5">
+                <h2 class="text-base font-semibold text-base-content">Remove suppression rule?</h2>
+                <p class="text-sm leading-5 text-muted">
+                  Only this exact manual rule will be removed. Future matching findings can appear;
+                  existing dismissals and history stay unchanged.
                 </p>
-              </Show>
-              <div class="flex flex-wrap gap-2">
+              </div>
+              <div
+                role="region"
+                aria-label="Rule scope and reason"
+                tabindex="0"
+                class="min-h-0 space-y-4 overflow-y-auto px-5 py-4 focus-visible:outline-2 focus-visible:outline-blue-500"
+              >
+                <dl class="space-y-2 text-sm text-base-content">
+                  <div>
+                    <dt class="font-medium">Resource</dt>
+                    <dd class="break-words">{ruleScope(rule()).resource}</dd>
+                  </div>
+                  <Show when={rule().resource_id}>
+                    <div>
+                      <dt class="font-medium">Resource ID</dt>
+                      <dd class="break-all">{rule().resource_id}</dd>
+                    </div>
+                  </Show>
+                  <div>
+                    <dt class="font-medium">Category</dt>
+                    <dd>{ruleScope(rule()).category}</dd>
+                  </div>
+                  <div>
+                    <dt class="font-medium">Rule ID</dt>
+                    <dd class="break-all">{rule().id}</dd>
+                  </div>
+                  <div>
+                    <dt class="font-medium">Reason</dt>
+                    <dd class="whitespace-pre-wrap break-words">
+                      {rule().description || 'No reason recorded.'}
+                    </dd>
+                  </div>
+                </dl>
+                <Show when={!rule().resource_id || !rule().category}>
+                  <p class="text-sm font-medium text-amber-800 dark:text-amber-200">
+                    This broad rule covers {!rule().resource_id ? 'all resources' : 'this resource'}{' '}
+                    in {!rule().category ? 'all categories' : rule().category}.
+                  </p>
+                </Show>
+              </div>
+              <div class="flex shrink-0 flex-wrap gap-2 border-t border-border px-5 py-4">
                 <Button
                   variant="secondary"
                   class="min-h-11"

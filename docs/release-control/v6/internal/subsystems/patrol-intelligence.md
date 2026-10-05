@@ -35,6 +35,8 @@ readback failure. Browser evidence must cover creation through removal and the
 actual existing links on desktop and narrow viewports. Synthetic proof is not
 publication or the reporter's own removal.
 
+Long rule reasons remain scrollable without hiding the confirmation heading or Cancel/Remove controls. Resource/category and exact rule ID precede the reason, so confirmation can be reviewed on narrow displays without clipping safety information.
+
 
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 

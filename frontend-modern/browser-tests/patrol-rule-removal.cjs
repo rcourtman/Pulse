@@ -13,7 +13,10 @@ const files = [
   'src/features/patrol/PatrolAttentionWorkbench.tsx',
   'src/features/patrol/PatrolSuppressionRules.tsx',
 ];
-const output = '/workspace/tmp/patrol-rule-proof/browser';
+const output =
+  require.main === module
+    ? '/workspace/tmp/patrol-rule-proof/browser'
+    : '/workspace/tmp/patrol-rule-proof/visual';
 const report = {
   playwright: require('playwright/package.json').version,
   content_sha256: {},
@@ -31,7 +34,7 @@ assert.equal(
   ].version,
 );
 
-async function journey(root, engine, width, parent = false) {
+async function journey(root, engine, width, parent = false, resume = false, visualOnly = false) {
   process.chdir(root);
   const { createServer } = await import(path.join(root, 'node_modules/vite/dist/node/index.js'));
   const server = await createServer({
@@ -41,6 +44,7 @@ async function journey(root, engine, width, parent = false) {
     server: { host: '127.0.0.1', port: 5297, strictPort: true, watch: null },
   });
   let browser;
+  let page;
   const result = {
     parent,
     engine,
@@ -66,7 +70,10 @@ async function journey(root, engine, width, parent = false) {
     resource_id: 'fixture-keep',
     resource_name: 'Keep VM',
     category: 'capacity',
-    description: 'Keep this unrelated rule',
+    description:
+      visualOnly === 'long'
+        ? 'Intentional maintenance on this resource; keep the documented scope.\n'.repeat(30)
+        : 'Keep this unrelated rule',
     created_from: 'manual',
     created_at: now,
   };
@@ -142,7 +149,7 @@ async function journey(root, engine, width, parent = false) {
         ? await webkit.launch({ headless: true })
         : await chromium.launch({ headless: true, channel: 'chromium', args: ['--no-sandbox'] });
     result.browser = browser.version();
-    const page = await browser.newPage({
+    page = await browser.newPage({
       viewport: { width, height: 900 },
       colorScheme: width === 320 ? 'dark' : 'light',
       isMobile: width === 320,
@@ -251,7 +258,58 @@ async function journey(root, engine, width, parent = false) {
         };
       else if (p === '/api/ai/patrol/autonomy')
         json = { autonomy_level: 'monitor', full_mode_unlocked: false };
-      else if (p === '/api/ai/patrol/findings') json = [finding];
+      else if (p === '/api/ai/patrol/findings')
+        json = [
+          finding,
+          {
+            ...finding,
+            id: 'fixture-independent',
+            title: 'Independent backup check',
+            mirrors_alert_id: '',
+            mirrors_alert_type: '',
+          },
+        ];
+      else if (p === '/api/ai/patrol/digest')
+        json = {
+          generated_at: now,
+          window: { start: now, end: now, days: 7, history_complete: true },
+          mode: 'monitor',
+          runs: {
+            total: 0,
+            scheduled: 0,
+            event_triggered: 0,
+            manual: 0,
+            failed: 0,
+            checks: 0,
+            resources_covered: 0,
+          },
+          findings: {
+            new: 0,
+            open_by_severity: { critical: 0, warning: 0, watch: 0, info: 0 },
+            resolved: 0,
+            auto_resolved: 0,
+            dismissed: 0,
+            suppressed: 0,
+          },
+          investigations: { total: 0, by_outcome: {} },
+          actions: {
+            proposed: 0,
+            approved: 0,
+            rejected: 0,
+            executed: 0,
+            verified: 0,
+            failed: 0,
+            pending: 0,
+          },
+          alerts: { reviewed: 0 },
+          spend: {
+            estimated_usd: 0,
+            pricing_known: true,
+            input_tokens: 0,
+            output_tokens: 0,
+            calls: 0,
+          },
+        };
       else if (p === '/api/ai/patrol/runs') json = [];
       else if (p === '/api/ai/unified/findings') json = { findings: [] };
       else if (p === '/api/ai/approvals') json = { approvals: [] };
@@ -269,7 +327,11 @@ async function journey(root, engine, width, parent = false) {
     });
     const capture = async (name) => {
       const file = path.join(output, `${parent ? 'parent' : engine}-${width}-${name}.png`);
-      await page.screenshot({ path: file, fullPage: true });
+      await page.screenshot({
+        path: file,
+        fullPage: !visualOnly,
+        animations: visualOnly ? 'disabled' : 'allow',
+      });
       report.captures.push({ path: file.replace('/workspace/', ''), sha256: hash(file) });
       const dimensions = await page.evaluate(() => ({
         inner: innerWidth,
@@ -281,62 +343,145 @@ async function journey(root, engine, width, parent = false) {
       waitUntil: 'domcontentloaded',
       timeout: 60000,
     });
-    await page.getByRole('button', { name: 'Open Database VM · Backup age' }).click();
-    await page
-      .getByRole('list', { name: 'Lasting decisions' })
-      .getByRole('button', { name: 'Create rule', exact: true })
-      .click();
-    const form = page.getByRole('form', { name: 'Confirm Create rule' });
-    assert(await form.getByRole('button', { name: 'Confirm: Create rule' }).isDisabled());
-    await form.getByLabel(/Why this rule/).fill('Backups are deliberately held off-site');
-    await form.getByRole('button', { name: 'Confirm: Create rule' }).click();
-    await page.getByRole('status').filter({ hasText: 'Rule created.' }).waitFor();
-    assert(created);
-    result.checks.push(
-      'Production Inbox Create rule sends one narrow scoped POST with a written reason.',
-    );
-    if (parent) {
-      assert.equal(await page.getByRole('link', { name: 'Manage suppression rules' }).count(), 0);
+    let dialog;
+    if (visualOnly) {
       await page.getByRole('tab', { name: 'Activity' }).click();
-      assert.equal(await page.locator('#patrol-suppression-rules').count(), 0);
-      assert.equal(result.requests.filter((r) => r.method === 'DELETE').length, 0);
-      await capture('no-reversal');
+      await page.locator('#patrol-suppression-rules > summary').click();
+      await page.getByRole('button', { name: 'Remove rule for Keep VM, capacity' }).waitFor();
+      // App theme initialisation can override an early init script. Verify the
+      // actual rendered theme after it has mounted, not just colour preference.
+      if (width === 320) await page.evaluate(() => document.documentElement.classList.add('dark'));
+      result.renderedTheme = await page.evaluate(() => ({
+        dark: document.documentElement.classList.contains('dark'),
+        panelBackground: getComputedStyle(document.querySelector('#patrol-suppression-rules'))
+          .backgroundColor,
+      }));
+      assert.equal(result.renderedTheme.dark, width === 320);
+      result.dialogs = [];
+      const visualCases = [
+        ['Remove rule for Keep VM, capacity', 'rule_keep_capacity_3', 'specific-viewport'],
+        ['Remove rule for All resources, All categories', 'rule_any_any_2', 'wildcard-viewport'],
+      ];
+      for (const [label, expected, name] of visualOnly === 'long'
+        ? visualCases.slice(0, 1)
+        : visualCases) {
+        await page.getByRole('button', { name: label }).click();
+        dialog = page.getByRole('dialog', { name: 'Remove suppression rule?' });
+        await dialog.getByText(expected, { exact: true }).waitFor();
+        // Complete the finite entrance animation before measuring and capture
+        // only the user's viewport; full-page capture reflows fixed overlays.
+        await dialog.evaluate((e) =>
+          e.getAnimations({ subtree: true }).forEach((a) => {
+            try {
+              a.finish();
+            } catch {}
+          }),
+        );
+        await page.screenshot({
+          path: path.join(output, `intermediate-${engine}.png`),
+          animations: 'disabled',
+        });
+        const box = await dialog.boundingBox();
+        assert(box, 'Dialog has a rendered box');
+        assert(
+          box.x >= -1 && box.y >= -1 && box.x + box.width <= width + 1 && box.y + box.height <= 901,
+          JSON.stringify(box),
+        );
+        assert(
+          await dialog
+            .getByRole('button', { name: 'Cancel' })
+            .evaluate((e) => e === document.activeElement),
+        );
+        await capture(name);
+        const actions = await dialog
+          .getByRole('button', { name: 'Remove this rule' })
+          .boundingBox();
+        assert(
+          actions &&
+            actions.y >= box.y &&
+            actions.y + actions.height <= box.y + box.height + 1 &&
+            actions.y + actions.height <= 901,
+          'Confirmation action must not be clipped: ' + JSON.stringify({ box, actions }),
+        );
+        result.dialogs.push({ name, ruleId: expected, box, viewport: { width, height: 900 } });
+        await page.keyboard.press('Escape');
+        await dialog.waitFor({ state: 'detached' });
+      }
+      assert.equal(result.requests.filter((r) => r.method !== 'GET').length, 0);
+      assert.deepEqual(result.errors, []);
+      assert.deepEqual(result.offOrigin, []);
       result.checks.push(
-        'Exact assigned parent creates a permanent rule but has no manual-rule reversal control.',
+        'Exact-ID and wildcard confirmation panels and their cancel/remove controls are inside the actual viewport; no POST or DELETE was replayed.',
       );
       return;
     }
-    await page.getByRole('link', { name: 'Manage suppression rules' }).click();
-    await page.getByRole('button', { name: 'Remove rule for Database VM, backup' }).waitFor();
-    assert.equal(await page.locator('#patrol-suppression-rules').getAttribute('open'), '');
-    await capture('manual-list');
-    const select = () => page.getByRole('button', { name: 'Remove rule for Database VM, backup' });
-    await select().click();
-    let dialog = page.getByRole('dialog', { name: 'Remove suppression rule?' });
-    await dialog.getByText(created.id, { exact: true }).waitFor();
-    assert(
-      await dialog
-        .getByRole('button', { name: 'Cancel' })
-        .evaluate((e) => e === document.activeElement),
-    );
-    await capture('exact-confirmation');
-    await page.keyboard.press('Escape');
-    await dialog.waitFor({ state: 'detached' });
-    assert.equal(result.requests.filter((r) => r.method === 'DELETE').length, 0);
-    await select().click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Remove this rule' }).click();
-    await page.getByRole('status').filter({ hasText: 'Rule removed.' }).waitFor();
-    assert.equal(JSON.stringify(rules), initialUntouched);
-    assert.equal(result.requests.filter((r) => r.method === 'DELETE').length, 1);
-    assert.equal(await select().count(), 0);
-    await capture('removed-readback');
-    result.checks.push(
-      'Cancellation is non-mutating; exact manual deletion requires pre-read and post-read and preserves unrelated rules and finding-backed history.',
-    );
-
+    if (!resume) {
+      await page.getByRole('button', { name: 'Open Database VM · Backup age' }).click();
+      await page
+        .getByRole('list', { name: 'Lasting decisions' })
+        .getByRole('button', { name: 'Create rule', exact: true })
+        .click();
+      const form = page.getByRole('form', { name: 'Confirm Create rule' });
+      assert(await form.getByRole('button', { name: 'Confirm: Create rule' }).isDisabled());
+      await form.getByLabel(/Why this rule/).fill('Backups are deliberately held off-site');
+      await form.getByRole('button', { name: 'Confirm: Create rule' }).click();
+      await page.getByRole('status').filter({ hasText: 'Rule created.' }).waitFor();
+      assert(created);
+      result.checks.push(
+        'Production Inbox Create rule sends one narrow scoped POST with a written reason.',
+      );
+      if (parent) {
+        assert.equal(await page.getByRole('link', { name: 'Manage suppression rules' }).count(), 0);
+        await page.getByRole('tab', { name: 'Activity' }).click();
+        assert.equal(await page.locator('#patrol-suppression-rules').count(), 0);
+        assert.equal(result.requests.filter((r) => r.method === 'DELETE').length, 0);
+        await capture('no-reversal');
+        result.checks.push(
+          'Exact assigned parent creates a permanent rule but has no manual-rule reversal control.',
+        );
+        return;
+      }
+      await page.getByRole('link', { name: 'Manage suppression rules' }).click();
+      await page.getByRole('button', { name: 'Remove rule for Database VM, backup' }).waitFor();
+      assert.equal(await page.locator('#patrol-suppression-rules').getAttribute('open'), '');
+      await capture('manual-list');
+      const select = () =>
+        page.getByRole('button', { name: 'Remove rule for Database VM, backup' });
+      await select().click();
+      dialog = page.getByRole('dialog', { name: 'Remove suppression rule?' });
+      await dialog.getByText(created.id, { exact: true }).waitFor();
+      assert(
+        await dialog
+          .getByRole('button', { name: 'Cancel' })
+          .evaluate((e) => e === document.activeElement),
+      );
+      await capture('exact-confirmation');
+      await page.keyboard.press('Escape');
+      await dialog.waitFor({ state: 'detached' });
+      assert.equal(result.requests.filter((r) => r.method === 'DELETE').length, 0);
+      await select().click();
+      await page.getByRole('dialog').getByRole('button', { name: 'Remove this rule' }).click();
+      await page.getByRole('status').filter({ hasText: 'Rule removed.' }).waitFor();
+      assert.equal(JSON.stringify(rules), initialUntouched);
+      assert.equal(result.requests.filter((r) => r.method === 'DELETE').length, 1);
+      assert.equal(await select().count(), 0);
+      await capture('removed-readback');
+      result.checks.push(
+        'Cancellation is non-mutating; exact manual deletion requires pre-read and post-read and preserves unrelated rules and finding-backed history.',
+      );
+    } else {
+      await page.getByRole('tab', { name: 'Activity' }).click();
+      await page.locator('#patrol-suppression-rules > summary').click();
+      await page.getByRole('button', { name: 'Remove rule for Keep VM, capacity' }).waitFor();
+      result.checks.push(
+        'Continue completed desktop creation/removal proof at the remaining controls; no replay of its POST or exact-ID removal.',
+      );
+    }
     // The second existing creation control points at the same reversal flow.
     await page.getByRole('button', { name: 'Finding options and history' }).click();
-    await page.getByRole('button', { name: 'Finding options for Off-site backup age' }).click();
+    await page
+      .getByRole('button', { name: 'Finding options for Independent backup check' })
+      .click();
     await page.getByRole('button', { name: 'Create rule from this' }).click();
     await page.getByRole('textbox', { name: 'Reason for suppression rule' }).waitFor();
     assert.equal(
@@ -359,7 +504,7 @@ async function journey(root, engine, width, parent = false) {
     loseResponse = true;
     await dialog.getByRole('button', { name: 'Remove this rule' }).click();
     await page.getByRole('alert').filter({ hasText: 'Removal could not be confirmed.' }).waitFor();
-    assert.equal(result.requests.filter((r) => r.method === 'DELETE').length, 2);
+    assert.equal(result.requests.filter((r) => r.method === 'DELETE').length, resume ? 1 : 2);
     await capture('uncertain-not-success');
     await page.getByRole('button', { name: 'Reload rules' }).click();
     await page.getByRole('button', { name: 'Remove rule for Keep VM, capacity' }).waitFor();
@@ -369,7 +514,7 @@ async function journey(root, engine, width, parent = false) {
         .count(),
       0,
     );
-    assert.equal(result.requests.filter((r) => r.method === 'DELETE').length, 2);
+    assert.equal(result.requests.filter((r) => r.method === 'DELETE').length, resume ? 1 : 2);
     result.checks.push(
       'A lost DELETE response never retries or claims removal; explicit reload reconciles absence and keeps other decisions.',
     );
@@ -378,7 +523,7 @@ async function journey(root, engine, width, parent = false) {
     denied = true;
     await page.getByRole('dialog').getByRole('button', { name: 'Remove this rule' }).click();
     await page.getByRole('alert').filter({ hasText: 'Removal could not be confirmed.' }).waitFor();
-    assert.equal(result.requests.filter((r) => r.method === 'DELETE').length, 2);
+    assert.equal(result.requests.filter((r) => r.method === 'DELETE').length, resume ? 1 : 2);
     denied = false;
     await page.getByRole('button', { name: 'Reload rules' }).click();
     await page.getByRole('button', { name: 'Remove rule for Keep VM, capacity' }).click();
@@ -386,7 +531,7 @@ async function journey(root, engine, width, parent = false) {
     await page.getByRole('alert').filter({ hasText: 'Organisation or access changed.' }).waitFor();
     assert.equal(await page.getByRole('dialog').count(), 0);
     assert.equal(await page.getByRole('button', { name: /^Remove rule for/ }).count(), 0);
-    assert.equal(result.requests.filter((r) => r.method === 'DELETE').length, 2);
+    assert.equal(result.requests.filter((r) => r.method === 'DELETE').length, resume ? 1 : 2);
     await capture('scope-invalidated');
     result.checks.push(
       'Revoked access blocks before DELETE, then organisation switch discards pending confirmation and old rule data. No cross-tenant action or automatic retry.',
@@ -395,6 +540,15 @@ async function journey(root, engine, width, parent = false) {
     assert.deepEqual(result.offOrigin, []);
   } catch (error) {
     result.failure = error.message;
+    if (page) {
+      result.pageState = await page
+        .evaluate(() => ({ url: location.href, text: document.body.innerText.slice(0, 12000) }))
+        .catch(() => null);
+      const file = path.join(output, `${engine}-${width}-failure.png`);
+      await page.screenshot({ path: file, fullPage: true }).catch(() => {});
+      if (fs.existsSync(file))
+        report.captures.push({ path: file.replace('/workspace/', ''), sha256: hash(file) });
+    }
     throw error;
   } finally {
     if (browser) await browser.close();
@@ -402,38 +556,35 @@ async function journey(root, engine, width, parent = false) {
     result.cleanup = { browser_closed: Boolean(browser), server_closed: true };
   }
 }
-(async () => {
-  try {
-    await journey(
-      '/workspace/tmp/patrol-rule-proof/parent/frontend-modern',
-      'chromium',
-      1365,
-      true,
+module.exports = { journey, report, output, hash };
+if (require.main === module)
+  (async () => {
+    try {
+      // Completed parent and desktop creation/removal proof are retained; do not replay them.
+      await journey('/workspace/frontend-modern', 'chromium', 1365, false, true);
+      await journey('/workspace/frontend-modern', 'webkit', 320);
+      report.result = 'passed';
+    } catch (error) {
+      report.result = 'failed';
+      report.failure = error.message;
+      throw error;
+    } finally {
+      report.cleanup = {
+        all_cases_closed: report.cases.every(
+          (c) => c.cleanup.browser_closed && c.cleanup.server_closed,
+        ),
+      };
+      fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify(report, null, 2));
+    }
+    console.log(
+      JSON.stringify({
+        result: report.result,
+        cases: report.cases.length,
+        captures: report.captures.length,
+        cleanup: report.cleanup,
+      }),
     );
-    await journey('/workspace/frontend-modern', 'chromium', 1365);
-    await journey('/workspace/frontend-modern', 'webkit', 320);
-    report.result = 'passed';
-  } catch (error) {
-    report.result = 'failed';
-    report.failure = error.message;
-    throw error;
-  } finally {
-    report.cleanup = {
-      all_cases_closed: report.cases.every(
-        (c) => c.cleanup.browser_closed && c.cleanup.server_closed,
-      ),
-    };
-    fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify(report, null, 2));
-  }
-  console.log(
-    JSON.stringify({
-      result: report.result,
-      cases: report.cases.length,
-      captures: report.captures.length,
-      cleanup: report.cleanup,
-    }),
-  );
-})().catch((error) => {
-  console.error(error.stack);
-  process.exitCode = 1;
-});
+  })().catch((error) => {
+    console.error(error.stack);
+    process.exitCode = 1;
+  });

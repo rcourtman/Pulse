@@ -107,6 +107,25 @@ describe('Patrol manual-rule reversal', () => {
     await waitFor(() => expect(trigger).toHaveFocus());
   });
 
+  it('keeps long reasons in a keyboard-scrollable region separate from the confirmation controls', async () => {
+    const longReason = 'Keep the documented scope.\n'.repeat(30);
+    read.mockResolvedValueOnce([{ ...manual, description: longReason }]);
+    await openRules();
+    const dialog = await chooseManual();
+    const region = within(dialog).getByRole('region', { name: 'Rule scope and reason' });
+    expect(region).toHaveAttribute('tabindex', '0');
+    expect(within(region).getByText(manual.id)).toBeInTheDocument();
+    expect(within(region).getByText(/Keep the documented scope/)).toBeInTheDocument();
+    expect(region).not.toContainElement(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(region).not.toContainElement(
+      within(dialog).getByRole('button', { name: 'Remove this rule' }),
+    );
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus(),
+    );
+    expect(remove).not.toHaveBeenCalled();
+  });
+
   it('revalidates, deletes one exact manual ID and confirms absence while keeping unrelated decisions', async () => {
     await openRules();
     read.mockResolvedValueOnce(initial).mockResolvedValueOnce([broad, dismissed, legacy]);

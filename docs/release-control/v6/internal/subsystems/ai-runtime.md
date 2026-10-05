@@ -36,6 +36,8 @@ API/component controls plus authenticated handler/store controls verify these
 boundaries; source/browser proof does not establish installed or reporter
 acceptance.
 
+Manual-rule confirmation retains a readable scope and exact ID with a scrollable long reason and separate action footer. This is an existing-flow accessibility repair, not a change to deletion, finding history or server authority.
+
 
 ### Fully cached Patrol usage — issues #2118 / #2350
 

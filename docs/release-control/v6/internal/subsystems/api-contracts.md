@@ -22,6 +22,11 @@
 
 ### Confirmed Patrol rule operations preserve tenant context — issue #2528
 
+The manual-rule confirmation presents the returned exact ID and scope before a
+keyboard-scrollable reason; the readable header and Cancel/Remove footer remain
+separate from long data. This does not truncate the stored reason or change
+authorised pre-read, one DELETE, readback or uncertainty handling.
+
 The frontend consumes the existing GET/DELETE suppression endpoints without a
 wire or permission change. The optional client expectedOrgID pins the request
 header and checks context before and after CSRF preparation; retry:false
