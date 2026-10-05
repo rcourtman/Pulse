@@ -54,10 +54,17 @@ func TestPatrolRunAPIRejectsClientAuthoredContext(t *testing.T) {
 	}
 }
 
+func initPatrolAutopilotSessionStore(t *testing.T, dataPath string) {
+	t.Helper()
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+	InitSessionStore(dataPath)
+}
+
 func newPatrolAutopilotTestHandler(t *testing.T, orgID string, now *time.Time) (*AISettingsHandler, *config.ConfigPersistence) {
 	t.Helper()
 	dir := t.TempDir()
-	InitSessionStore(dir)
+	initPatrolAutopilotSessionStore(t, dir)
 	persistence := config.NewConfigPersistence(dir)
 	cfg := config.NewDefaultAIConfig()
 	cfg.PatrolAutonomyLevel = config.PatrolAutonomyApproval
@@ -429,6 +436,7 @@ func TestPatrolAutopilotVersionRotationAndRevocationRaceFailClosed(t *testing.T)
 
 func TestPatrolAutopilotStoreUnavailableDoesNotChangeModeOrFabricateEvidence(t *testing.T) {
 	now := time.Date(2026, 7, 11, 20, 0, 0, 0, time.UTC)
+	initPatrolAutopilotSessionStore(t, t.TempDir())
 	handler := newTestAISettingsHandler(&config.Config{}, nil, nil)
 	handler.SetPatrolAutopilotServerPolicyProvider(func() unifiedresources.PatrolAutopilotServerPolicy {
 		return unifiedresources.CurrentPatrolAutopilotServerPolicy(now)
