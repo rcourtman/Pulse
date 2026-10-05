@@ -1177,6 +1177,19 @@ part that tells siblings apart (`checkout-api-6d…-x7k2p`, `prod…-03`), with 
 full name on the title. Pod names, the Pods table's Node column and controller
 names use it. Deployment names are chosen by people, so they keep plain end
 truncation.
+With one cluster in view, every Kubernetes scope cell repeated the cluster
+name and crowded out the namespace that differs between rows, so the tables
+show the namespace alone (`Cluster` for cluster-scoped objects) through
+`kubernetesScopeDisplayLabel` and keep the full cluster/namespace scope on the
+title; several clusters keep the combined label. The Deployments table keeps
+Desired for wide tables only, because Ready already shows ready over desired,
+and sizes the tablet band for a long name beside short counts. The
+Configuration tables size their band and md widths for ConfigMap, Secret and
+RBAC names first, then the namespace scope, then the short Lifecycle and Data
+shape values, then Kind. Kubernetes summary cells truncate through a block span
+that fills the cell, so a long value ends in an ellipsis inside its own column
+on the row's text line; a fixed-width inline-block cap spilled past narrow
+cells without an ellipsis and sat above the row baseline.
 Duration and interval cells keep the same split: unified-resource or
 source-specific consumers own which elapsed duration, human fallback, or poll
 interval field is meaningful, while dense platform table rendering must use

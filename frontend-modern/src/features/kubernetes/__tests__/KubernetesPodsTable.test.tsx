@@ -112,7 +112,13 @@ describe('KubernetesPodsTable', () => {
     expect(screen.getByText('Age')).toBeInTheDocument();
 
     expect(screen.getByText(kubernetesName('checkout-api-6c746d5bcf-c7z2p'))).toBeInTheDocument();
-    expect(screen.getByText('prod-euw1/services')).toBeInTheDocument();
+    // One cluster in view: the scope cell shows the namespace and keeps the
+    // full cluster/namespace scope on hover.
+    const scopeCell = screen.getByText('services').closest('[data-kubernetes-scope]');
+    expect(scopeCell).toHaveAttribute('title', 'prod-euw1/services');
+    // Assistive technology gets the full scope in place of the shortened text.
+    expect(screen.getByText('services')).toHaveAttribute('aria-hidden', 'true');
+    expect(scopeCell?.querySelector('.sr-only')).toHaveTextContent('prod-euw1/services');
     expect(screen.getByText(kubernetesName('prod-euw1-k8s-02'))).toBeInTheDocument();
     // Narrow columns truncate the head and keep the generated tail, so
     // replicas and nodes stay distinguishable. The title keeps the full name.
@@ -198,5 +204,29 @@ describe('KubernetesPodsTable', () => {
     expect(
       screen.getAllByTitle('Running').some((el) => el.classList.contains('bg-emerald-500')),
     ).toBe(true);
+  });
+
+  it('keeps the cluster in the scope cell when several clusters are in view', () => {
+    render(() => (
+      <KubernetesPodsTable
+        resources={[
+          makeResource({
+            id: 'eu-pod',
+            kubernetes: { clusterName: 'prod-eu', namespace: 'services', podName: 'eu-pod' },
+          }),
+          makeResource({
+            id: 'us-pod',
+            kubernetes: { clusterName: 'prod-us', namespace: 'services', podName: 'us-pod' },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No pods"
+        emptyDescription="No pods"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByText('prod-eu/services')).toBeInTheDocument();
+    expect(screen.getByText('prod-us/services')).toBeInTheDocument();
   });
 });

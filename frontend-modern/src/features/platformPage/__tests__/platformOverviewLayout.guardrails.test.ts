@@ -370,7 +370,7 @@ describe('platform overview layout guardrails', () => {
       /sortKey="capacity"[\s\S]{0,120}?class="platform-table-mobile-w-10 md:w-\[16%\]"/,
     );
     expect(kubernetesDeploymentsTableSource).toMatch(
-      /sortKey="namespace"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[20%\]"/,
+      /sortKey="namespace"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[18%\]"/,
     );
     expect(kubernetesPodsTableSource).toMatch(
       /sortKey="scope"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[13%\]"/,
@@ -388,11 +388,32 @@ describe('platform overview layout guardrails', () => {
       /sortKey="class"[\s\S]{0,120}?class="platform-table-mobile-w-20 md:w-\[10%\]"/,
     );
     expect(kubernetesConfigTableSource).toMatch(
-      /sortKey="scope"[\s\S]{0,120}?class="platform-table-mobile-w-20 md:w-\[16%\]"/,
+      /sortKey="scope"[\s\S]{0,120}?class="platform-table-mobile-w-20 md:w-\[10%\]"/,
     );
     expect(kubernetesPolicyTableSource).toContain(
-      "getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[15%]",
+      "getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[12%]",
     );
+  });
+
+  it('keeps Kubernetes summary cells truncating inside their own column', () => {
+    // A capped inline-block (max-w-52 truncate) ignored the column width, so a
+    // long value spilled past a narrow cell without an ellipsis and sat above
+    // the row's text line; a block span fills the cell and ellipsizes there.
+    for (const source of [
+      kubernetesAutoscalingTableSource,
+      kubernetesConfigTableSource,
+      kubernetesControllersTableSource,
+      kubernetesEventsTableSource,
+      kubernetesNetworkingTableSource,
+      kubernetesNodesTableSource,
+      kubernetesPolicyTableSource,
+      kubernetesServicesTableSource,
+      kubernetesStorageTableSource,
+    ]) {
+      expect(source).not.toMatch(/class="[^"]*\binline-block\b[^"]*\btruncate\b/);
+      expect(source).not.toMatch(/class="[^"]*\btruncate\b[^"]*\binline-block\b/);
+      expect(source).toContain('class="block truncate"');
+    }
   });
 
   it('keeps phone-priority visibility container-led and symmetric across table rows', () => {
@@ -417,8 +438,17 @@ describe('platform overview layout guardrails', () => {
     expect(dockerVolumesTableSource).toMatch(
       /getPlatformTableCellClassForKind\('text'\)[\s\S]{0,100}?platform-table-phone-hidden[\s\S]{0,140}?dockerTextValue\(resource\.docker\?\.scope\)/,
     );
+    // Desired is the denominator Ready already shows (2/2), so it waits for a
+    // wide table rather than returning with the tablet tier.
     expect(kubernetesDeploymentsTableSource).toMatch(
-      /sortKey="desired"[\s\S]{0,120}?platform-table-phone-hidden/,
+      /sortKey="desired"[\s\S]{0,120}?class="hidden md:table-cell md:w-\[8%\]"/,
+    );
+    // On a phone Ready only shows 2/2 while Age needs room for "18h ago".
+    expect(kubernetesDeploymentsTableSource).toMatch(
+      /sortKey="ready"[\s\S]{0,120}?class="platform-table-mobile-w-10 md:w-\[7%\]"/,
+    );
+    expect(kubernetesDeploymentsTableSource).toMatch(
+      /sortKey="age"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[8%\] platform-table-narrow-hidden"/,
     );
     expect(truenasVirtualMachinesTableSource).toMatch(
       /sortKey="state"[\s\S]{0,120}?platform-table-phone-hidden/,

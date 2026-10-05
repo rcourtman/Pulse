@@ -32,7 +32,9 @@ import {
   kubernetesScopeLabel,
   mapKubernetesPodStatus,
   type KubernetesResourceStatusFilter,
+  isSingleKubernetesCluster,
 } from './kubernetesPageModel';
+import { KubernetesScopeText } from './KubernetesScopeText';
 import { KubernetesNameText } from './KubernetesNameText';
 
 const podName = (resource: Resource): string =>
@@ -143,6 +145,7 @@ export const KubernetesPodsTable: Component<{
   externalSearch?: () => string;
   externalStatus?: () => KubernetesResourceStatusFilter;
 }> = (props) => {
+  const singleCluster = createMemo(() => isSingleKubernetesCluster(props.resources));
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as KubernetesResourceStatusFilter,
@@ -292,7 +295,6 @@ export const KubernetesPodsTable: Component<{
                   {(resource) => {
                     const indicator = () => mapKubernetesPodStatus(resource);
                     const name = () => podName(resource);
-                    const scope = () => kubernetesScopeLabel(resource);
                     const node = () => formatPlatformTableTextValue(resource.kubernetes?.nodeName);
                     const owner = () => ownerValue(resource);
                     const image = () => imageValue(resource);
@@ -334,9 +336,11 @@ export const KubernetesPodsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="block max-w-full truncate" title={scope()}>
-                              {scope()}
-                            </span>
+                            <KubernetesScopeText
+                              resource={resource}
+                              singleCluster={singleCluster()}
+                              class="block max-w-full truncate"
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}

@@ -137,6 +137,25 @@ const podHasFatalContainer = (containers: ResourceKubernetesPodContainerStatus[]
 const podAllContainersReady = (containers: ResourceKubernetesPodContainerStatus[]): boolean =>
   containers.length > 0 && containers.every((container) => container.ready === true);
 
+// With one cluster in view, every row's scope repeats the cluster name and
+// crowds out the namespace, the part that differs between rows. Tables then
+// show the namespace alone (Cluster-wide for cluster-scoped objects) and keep
+// the full cluster/namespace scope on hover. Several clusters keep both.
+// Clusters are told apart by ID (two can share a display name), and a row with
+// no cluster at all counts as its own, so a mix keeps the full scope.
+const kubernetesClusterKey = (resource: Resource): string =>
+  asTrimmedString(resource.kubernetes?.clusterId) ||
+  asTrimmedString(resource.kubernetes?.clusterName) ||
+  '';
+
+export const isSingleKubernetesCluster = (resources: readonly Resource[]): boolean =>
+  new Set(resources.map(kubernetesClusterKey)).size <= 1;
+
+export const kubernetesScopeDisplayLabel = (resource: Resource, singleCluster: boolean): string =>
+  singleCluster
+    ? asTrimmedString(resource.kubernetes?.namespace) || 'Cluster'
+    : kubernetesScopeLabel(resource);
+
 export function mapKubernetesPodStatus(resource: Resource): StatusIndicator {
   const phase = normalizeKubernetesToken(
     resource.kubernetes?.podPhase || resource.kubernetes?.phase,

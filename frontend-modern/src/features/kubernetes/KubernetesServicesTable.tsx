@@ -32,7 +32,9 @@ import {
   filterKubernetesResources,
   kubernetesScopeLabel,
   type KubernetesResourceStatusFilter,
+  isSingleKubernetesCluster,
 } from './kubernetesPageModel';
+import { KubernetesScopeText } from './KubernetesScopeText';
 
 // Services have a distinct API contract from Ingress and EndpointSlice:
 // operators need the Service type, virtual IP, exposed ports, node ports, and
@@ -100,6 +102,7 @@ export const KubernetesServicesTable: Component<{
   externalSearch?: () => string;
   externalStatus?: () => KubernetesResourceStatusFilter;
 }> = (props) => {
+  const singleCluster = createMemo(() => isSingleKubernetesCluster(props.resources));
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as KubernetesResourceStatusFilter,
@@ -223,7 +226,6 @@ export const KubernetesServicesTable: Component<{
                   {(resource) => {
                     const indicator = () => getSimpleStatusIndicator(resource.status);
                     const name = () => serviceName(resource);
-                    const scope = () => kubernetesScopeLabel(resource);
                     const serviceType = () =>
                       formatPlatformTableTextValue(resource.kubernetes?.serviceType);
                     const clusterIp = () =>
@@ -266,9 +268,11 @@ export const KubernetesServicesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-48 truncate" title={scope()}>
-                              {scope()}
-                            </span>
+                            <KubernetesScopeText
+                              resource={resource}
+                              singleCluster={singleCluster()}
+                              class="block truncate"
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
@@ -283,24 +287,21 @@ export const KubernetesServicesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
-                            <span
-                              class="inline-block max-w-48 truncate"
-                              title={externalIps().title}
-                            >
+                            <span class="block truncate" title={externalIps().title}>
                               {externalIps().label}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-60 truncate" title={ports().title}>
+                            <span class="block truncate" title={ports().title}>
                               {ports().label}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
-                            <span class="inline-block max-w-52 truncate" title={selector().title}>
+                            <span class="block truncate" title={selector().title}>
                               {selector().label}
                             </span>
                           </TableCell>

@@ -31,7 +31,9 @@ import {
   filterKubernetesResources,
   kubernetesScopeLabel,
   type KubernetesResourceStatusFilter,
+  isSingleKubernetesCluster,
 } from './kubernetesPageModel';
+import { KubernetesScopeText } from './KubernetesScopeText';
 
 // Kubernetes storage is intentionally not rendered by the generic
 // inventory table. StorageClass, PersistentVolume, and
@@ -213,6 +215,7 @@ export const KubernetesStorageTable: Component<{
   title?: string;
   showToolbar?: boolean;
 }> = (props) => {
+  const singleCluster = createMemo(() => isSingleKubernetesCluster(props.resources));
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as KubernetesResourceStatusFilter,
@@ -346,7 +349,6 @@ export const KubernetesStorageTable: Component<{
                     const indicator = () => getSimpleStatusIndicator(resource.status);
                     const name = () => storageName(resource);
                     const kind = () => storageKind(resource);
-                    const scope = () => kubernetesScopeLabel(resource);
                     const policy = () => policyLabel(resource);
                     const target = () => bindingTarget(resource);
                     const detailRowId = () => drawer.detailRowId(resource);
@@ -386,9 +388,11 @@ export const KubernetesStorageTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
-                            <span class="inline-block max-w-48 truncate" title={scope()}>
-                              {scope()}
-                            </span>
+                            <KubernetesScopeText
+                              resource={resource}
+                              singleCluster={singleCluster()}
+                              class="block truncate"
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
@@ -408,17 +412,14 @@ export const KubernetesStorageTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
-                            <span class="inline-block max-w-48 truncate" title={policy().title}>
+                            <span class="block truncate" title={policy().title}>
                               {policy().label}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
-                            <span
-                              class="inline-block max-w-[18rem] truncate"
-                              title={target().title}
-                            >
+                            <span class="block truncate" title={target().title}>
                               {target().label}
                             </span>
                           </TableCell>

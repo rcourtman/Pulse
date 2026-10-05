@@ -28,10 +28,11 @@ import type { Resource } from '@/types/resource';
 import {
   compareKubernetesEvents,
   filterKubernetesResources,
-  kubernetesScopeLabel,
   mapKubernetesEventSeverity,
   type KubernetesResourceStatusFilter,
+  isSingleKubernetesCluster,
 } from './kubernetesPageModel';
+import { KubernetesScopeText } from './KubernetesScopeText';
 
 const eventName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
@@ -59,6 +60,7 @@ export const KubernetesEventsTable: Component<{
   showToolbar?: boolean;
 }> = (props) => {
   const sortedEvents = createMemo(() => [...props.resources].sort(compareKubernetesEvents));
+  const singleCluster = createMemo(() => isSingleKubernetesCluster(props.resources));
   const tableState = createPlatformTableFilterState({
     resources: sortedEvents,
     initialStatus: 'all' as KubernetesResourceStatusFilter,
@@ -161,7 +163,6 @@ export const KubernetesEventsTable: Component<{
                     const indicator = () =>
                       mapKubernetesEventSeverity(resource.kubernetes?.eventType);
                     const name = () => eventName(resource);
-                    const scope = () => kubernetesScopeLabel(resource);
                     const observed = () => observedTimestamp(resource);
                     const message = () =>
                       formatPlatformTableTextValue(resource.kubernetes?.message);
@@ -197,9 +198,11 @@ export const KubernetesEventsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
-                            <span class="inline-block max-w-48 truncate" title={scope()}>
-                              {scope()}
-                            </span>
+                            <KubernetesScopeText
+                              resource={resource}
+                              singleCluster={singleCluster()}
+                              class="block truncate"
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
@@ -210,7 +213,7 @@ export const KubernetesEventsTable: Component<{
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span
-                              class="inline-block max-w-48 truncate"
+                              class="block truncate"
                               title={formatPlatformTableTextValue(resource.kubernetes?.reason)}
                             >
                               {formatPlatformTableTextValue(resource.kubernetes?.reason)}
@@ -219,10 +222,7 @@ export const KubernetesEventsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span
-                              class="inline-block max-w-52 truncate"
-                              title={involvedObject(resource)}
-                            >
+                            <span class="block truncate" title={involvedObject(resource)}>
                               {involvedObject(resource)}
                             </span>
                           </TableCell>
@@ -234,14 +234,14 @@ export const KubernetesEventsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            <span class="inline-block max-w-48 truncate" title={observed() || '—'}>
+                            <span class="block truncate" title={observed() || '—'}>
                               <PlatformTableRelativeTimeValue value={observed()} />
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
-                            <span class="inline-block max-w-[16rem] truncate" title={message()}>
+                            <span class="block truncate" title={message()}>
                               {message()}
                             </span>
                           </TableCell>

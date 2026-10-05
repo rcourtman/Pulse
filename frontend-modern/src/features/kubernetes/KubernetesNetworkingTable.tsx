@@ -32,7 +32,9 @@ import {
   filterKubernetesResources,
   kubernetesScopeLabel,
   type KubernetesResourceStatusFilter,
+  isSingleKubernetesCluster,
 } from './kubernetesPageModel';
+import { KubernetesScopeText } from './KubernetesScopeText';
 
 const resourceName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
@@ -142,6 +144,7 @@ export const KubernetesNetworkingTable: Component<{
   externalSearch?: () => string;
   externalStatus?: () => KubernetesResourceStatusFilter;
 }> = (props) => {
+  const singleCluster = createMemo(() => isSingleKubernetesCluster(props.resources));
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as KubernetesResourceStatusFilter,
@@ -265,7 +268,6 @@ export const KubernetesNetworkingTable: Component<{
                   {(resource) => {
                     const indicator = () => getSimpleStatusIndicator(resource.status);
                     const name = () => resourceName(resource);
-                    const scope = () => kubernetesScopeLabel(resource);
                     const address = () => addressOrHosts(resource);
                     const ports = () => portLabel(resource);
                     const targets = () => targetSummary(resource);
@@ -309,9 +311,11 @@ export const KubernetesNetworkingTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-48 truncate" title={scope()}>
-                              {scope()}
-                            </span>
+                            <KubernetesScopeText
+                              resource={resource}
+                              singleCluster={singleCluster()}
+                              class="block truncate"
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
@@ -321,24 +325,21 @@ export const KubernetesNetworkingTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
-                            <span
-                              class="inline-block max-w-[16rem] truncate"
-                              title={address().title}
-                            >
+                            <span class="block truncate" title={address().title}>
                               {address().label}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-48 truncate" title={ports().title}>
+                            <span class="block truncate" title={ports().title}>
                               {ports().label}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
-                            <span class="inline-block max-w-52 truncate" title={targets().title}>
+                            <span class="block truncate" title={targets().title}>
                               {targets().label}
                             </span>
                           </TableCell>
