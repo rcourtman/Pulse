@@ -32,6 +32,23 @@ describe('Toggle', () => {
     expect(toggleModelSource).toContain('ToggleChangeEvent');
   });
 
+  it('keeps a disabled toggle on its on or off colour, dimmed', () => {
+    render(() => (
+      <>
+        <Toggle checked disabled ariaLabel="Locked on" />
+        <Toggle checked={false} disabled ariaLabel="Locked off" />
+      </>
+    ));
+
+    const lockedOn = screen.getByRole('button', { name: 'Locked on' });
+    const lockedOff = screen.getByRole('button', { name: 'Locked off' });
+    expect(lockedOn).toHaveClass('bg-blue-500', 'opacity-50', 'cursor-not-allowed');
+    expect(lockedOff).toHaveClass('bg-border', 'opacity-50', 'cursor-not-allowed');
+    // bg-base names no theme colour, so it rendered no track at all.
+    expect(lockedOn.className).not.toContain('bg-base');
+    expect(lockedOff.className).not.toContain('bg-base');
+  });
+
   it('emits the synthetic next checked state and respects preventDefault', () => {
     const onToggle = vi.fn();
     const onChange = vi.fn((event) => event.preventDefault());
