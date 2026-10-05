@@ -11221,3 +11221,20 @@ Pinning the Patrol attention detail header on phones
 layout-only change. It reads no new attention fields, sends no new request,
 and leaves the attention projection, lifecycle, and queue ordering contracts
 above unchanged.
+
+### Router-owned worker shutdown
+
+Each Router owns its five route-specific limiters, eight endpoint-category
+limiters and, in hosted mode, its tenant limiter. `ShutdownBackgroundWorkers`
+seals lifecycle-worker admission, cancels and joins the constructor-owned
+workers exactly once; the server's existing `ShutdownAIIntelligence` calls
+that same lifecycle. HTTP admission must stop before shutdown. Resource and
+RBAC stores retain their separate shutdown owners. Integration fixtures use
+this lifecycle before stopping the monitor and removing temporary data.
+
+`RateLimiter.Stop` is concurrent-safe and joins its cleanup worker. Stopping
+cleanup does not clear request history, bypass rate enforcement or stop another
+Router's or the package-global limiters. Limits, windows, tenant selection,
+revocation and response payloads are unchanged. The connected lifetime and
+ownership controls are in `router_limiter_lifecycle_test.go`; the integration
+fixture's cleanup also runs on a failed listener/request assertion.

@@ -57,6 +57,21 @@ func newEndpointRateLimitConfig() *EndpointRateLimitConfig {
 	}
 }
 
+// Stop joins only the workers owned by this endpoint configuration. A Router
+// must not stop the package-global configuration or another Router's budgets.
+func (cfg *EndpointRateLimitConfig) Stop() {
+	if cfg == nil {
+		return
+	}
+	for _, limiter := range []*RateLimiter{
+		cfg.AuthEndpoints, cfg.ConfigEndpoints, cfg.ExportEndpoints,
+		cfg.RecoveryEndpoints, cfg.UpdateEndpoints, cfg.WebSocketEndpoints,
+		cfg.GeneralAPI, cfg.PublicEndpoints,
+	} {
+		limiter.Stop()
+	}
+}
+
 func generalAPIRateLimit() int {
 	if os.Getenv("PULSE_DEV") != "true" {
 		return defaultGeneralAPIRateLimit

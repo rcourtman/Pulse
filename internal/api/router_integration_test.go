@@ -201,9 +201,17 @@ func newIntegrationServerWithRuntimeMode(
 		return nil
 	}, version)
 
+	// Register constructor cleanup before a listener or request assertion can
+	// fail. The fixture owns the same lifecycle used by the running server.
+	t.Cleanup(func() {
+		router.ShutdownBackgroundWorkers()
+		router.ShutdownResourceStores()
+		router.ShutdownRBAC()
+	})
 	srv := newIPv4HTTPServer(t, router.Handler())
 	t.Cleanup(func() {
 		srv.Close()
+		router.ShutdownBackgroundWorkers()
 		if monitor != nil {
 			monitor.StopDiscoveryService()
 			monitor.Stop()
