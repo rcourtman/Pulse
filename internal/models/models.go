@@ -5087,6 +5087,20 @@ func (s *State) RemoveStaleDockerHosts(cutoff time.Time) []DockerHost {
 	return cloneDockerHosts(removed)
 }
 
+// GetDockerHost returns one detached source record. Identity resolution belongs
+// to the caller; an exact source ID lookup must not clone every peer inventory.
+func (s *State) GetDockerHost(hostID string) (DockerHost, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, host := range s.DockerHosts {
+		if host.ID == hostID {
+			return cloneDockerHost(host), true
+		}
+	}
+	return DockerHost{}, false
+}
+
 // GetDockerHosts returns a copy of docker hosts.
 func (s *State) GetDockerHosts() []DockerHost {
 	s.mu.RLock()
@@ -5398,6 +5412,20 @@ func (s *State) UpsertHost(host Host) {
 	})
 
 	s.LastUpdate = time.Now()
+}
+
+// GetHost returns one detached source record under the same lock and clone
+// policy as GetHosts, without copying unrelated sensors or workload inventory.
+func (s *State) GetHost(hostID string) (Host, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, host := range s.Hosts {
+		if host.ID == hostID {
+			return cloneHost(host), true
+		}
+	}
+	return Host{}, false
 }
 
 // GetHosts returns a copy of all generic hosts.

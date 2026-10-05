@@ -17,6 +17,31 @@
 
 ## Purpose
 
+### Report identity lookups do not rebuild unrelated Kubernetes metadata
+
+The producer's two temporary host/Docker-host admission registries use a
+source-locked detached lookup snapshot. It omits only twenty explicitly named
+Kubernetes metadata collections before cloning; clusters, nodes, pods and
+controller workloads, every non-Kubernetes source and all other snapshot
+fields remain. The ordinary registry resolves identity and freshness on each
+lookup, including the post-per-host-lock read; there is no generation/time
+cache, ID-hint shortcut or changed report watermark/credential policy.
+
+These temporary registries are never publication or alert inventories.
+Accepted-report refresh, normal GetSnapshot/GetState, canonical reads and
+broadcasts still ingest every collection. Exact source-record point reads
+clone only the selected native host, after the existing canonical Docker ID
+resolution. Missing native records allocate nothing. Host clone ownership also
+includes mutable agent modules, update status/times and config fingerprints.
+
+`agent_lookup_test.go` compares every field of both canonical host views with
+the previous whole-snapshot registry, exercises current replacement/removal,
+and carries serialized host/Docker reports through complete native and
+canonical publication. Allocation controls pin independence from unrelated
+metadata/peer-host payloads; paired unchanged-reference benchmarks measure
+this lookup, not fleet CPU/RSS relief or all of #2199's remaining mechanisms.
+
+
 ### Guest memory observations are source-owned
 
 QEMU and LXC memory carry an optional `observation` with `state` (`current`,

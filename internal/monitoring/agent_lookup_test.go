@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"testing"
@@ -9,6 +10,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
 // These collections cannot contribute a host facet. Workloads, Kubernetes
@@ -73,7 +76,7 @@ func TestAgentLookupMatchesWholeSnapshotHostViews(t *testing.T) {
 			m := agentLookupFixture(count)
 			before := m.state.GetSnapshot()
 			want := fullAgentLookupReference(m)
-			got := m.snapshotBackedUnifiedReadState()
+			got := m.snapshotBackedAgentLookupReadState()
 			if len(want.Hosts()) == 0 || len(want.DockerHosts()) == 0 {
 				t.Fatal("fixture must exercise both host facets")
 			}
@@ -88,7 +91,7 @@ func TestAgentLookupMatchesWholeSnapshotHostViews(t *testing.T) {
 			m.state.UpsertHost(models.Host{ID: "host", Hostname: "renamed", MachineID: "machine", Status: "online", LastSeen: time.Now().UTC()})
 			m.state.RemoveDockerHost("docker-host")
 			want = fullAgentLookupReference(m)
-			got = m.snapshotBackedUnifiedReadState()
+			got = m.snapshotBackedAgentLookupReadState()
 			if !reflect.DeepEqual(got.Hosts(), want.Hosts()) || !reflect.DeepEqual(got.DockerHosts(), want.DockerHosts()) {
 				t.Fatal("agent lookup retained a removed host or old metadata")
 			}
@@ -100,7 +103,7 @@ func TestAgentLookupAllocationIgnoresUnrelatedKubernetesMetadata(t *testing.T) {
 	measure := func(count int) float64 {
 		m := agentLookupFixture(count)
 		return testing.AllocsPerRun(3, func() {
-			read := m.snapshotBackedUnifiedReadState()
+			read := m.snapshotBackedAgentLookupReadState()
 			if len(read.Hosts()) == 0 || len(read.DockerHosts()) == 0 {
 				panic("missing fixture host")
 			}
@@ -132,6 +135,59 @@ func TestAgentPointLookupAllocationIgnoresOtherHosts(t *testing.T) {
 	}
 }
 
+func TestAgentLookupReportsKeepCompleteKubernetesInventory(t *testing.T) {
+	m := newTestMonitor(t)
+	m.state = agentLookupFixture(1000).state
+	before := m.state.GetSnapshot().KubernetesClusters
+	registry := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	m.SetResourceStore(registry)
+
+	// Both serialized report paths use the new admission lookup, but their
+	// normal accepted-report publication must retain the complete inventory.
+	hostReport := agentshost.Report{
+		Agent:     agentshost.AgentInfo{ID: "host", Version: "test", IntervalSeconds: 30},
+		Host:      agentshost.HostInfo{ID: "host", MachineID: "machine", Hostname: "worker", Platform: "linux"},
+		Timestamp: time.Now().UTC(),
+	}
+	payload, err := json.Marshal(hostReport)
+	if err != nil || json.Unmarshal(payload, &hostReport) != nil {
+		t.Fatal("host report round trip failed")
+	}
+	if host, err := m.ApplyHostReport(hostReport, nil); err != nil || host.ID != "host" {
+		t.Fatalf("host report identity changed: %q, %v", host.ID, err)
+	}
+	dockerReport := agentsdocker.Report{
+		Agent:      agentsdocker.AgentInfo{ID: "host", Version: "test", IntervalSeconds: 30},
+		Host:       agentsdocker.HostInfo{MachineID: "machine", Hostname: "worker", Runtime: "podman", TotalCPU: 4},
+		Containers: []agentsdocker.Container{{ID: "app", Name: "app", State: "running", CPUPercent: 9.4}},
+		Timestamp:  time.Now().UTC(),
+	}
+	payload, err = json.Marshal(dockerReport)
+	if err != nil || json.Unmarshal(payload, &dockerReport) != nil {
+		t.Fatal("Docker report round trip failed")
+	}
+	if host, err := m.ApplyDockerReport(dockerReport, nil); err != nil || host.ID != "docker-host" {
+		t.Fatalf("Docker report identity changed: %q, %v", host.ID, err)
+	}
+	if !reflect.DeepEqual(before, m.GetState().KubernetesClusters) {
+		t.Fatal("report lookup discarded or mutated published Kubernetes metadata")
+	}
+	// Compare all canonical resources as well as the native source snapshot.
+	want := unifiedresources.NewRegistry(nil)
+	want.IngestSnapshotWithStaleThresholds(m.GetState(), m.resourceStaleThresholds())
+	if got, expected := registry.GetAll(), want.List(); !reflect.DeepEqual(got, expected) {
+		t.Fatal("report publication no longer contains the full canonical inventory")
+	}
+	for _, host := range m.GetUnifiedReadState().DockerHosts() {
+		if host == nil {
+			continue
+		}
+		if got, found := m.GetDockerHost(host.ID()); !found || got.ID != "docker-host" {
+			t.Fatal("point lookup bypassed canonical Docker host identity resolution")
+		}
+	}
+}
+
 func BenchmarkAgentIdentityLookup(b *testing.B) {
 	for _, count := range []int{0, 1000} {
 		m := agentLookupFixture(count)
@@ -147,7 +203,7 @@ func BenchmarkAgentIdentityLookup(b *testing.B) {
 					if reference {
 						read = fullAgentLookupReference(m)
 					} else {
-						read = m.snapshotBackedUnifiedReadState()
+						read = m.snapshotBackedAgentLookupReadState()
 					}
 					if len(read.Hosts()) == 0 || len(read.DockerHosts()) == 0 {
 						b.Fatal("missing fixture host")

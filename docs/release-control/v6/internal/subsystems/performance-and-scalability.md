@@ -15,6 +15,24 @@
 
 ## Purpose
 
+### Agent identity lookup cost follows identity-relevant inventory
+
+Report admission no longer clones/ingests twenty explicitly listed Kubernetes
+metadata collections that cannot supply a host facet. Clusters, nodes and
+workloads, every other source, canonical matching and fresh post-lock reads
+remain. No complete inventory, graph, alert or publication is pruned. Native
+point lookups retain an ID scan but clone just one selected record; peer sensor
+and container payloads no longer multiply the allocation cost of that read.
+
+The allocation controls compare zero/one-thousand metadata objects and one/
+seventeen hosts without wall-clock thresholds. The paired benchmark retains
+an executable copy of the old full-snapshot lookup in the same process, with
+identical fixtures and host-view reads, so lookup time/bytes/allocations can be
+compared without selecting a favourable rerun. This is a bounded source cost
+improvement, not attribution of the reporter's native CPU, RSS, sawtooth or
+remaining refresh/grouping/broadcast mechanisms.
+
+
 ### Memory presentation does not collect or renew observations
 
 Guest-memory provenance is projected from the already-owned snapshot in the
