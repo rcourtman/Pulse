@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 export const ALERT_DESTINATIONS_CONFIG_LOAD_ERROR =
   'Unable to load notification settings. Your existing configuration could not be retrieved.';
 export const ALERT_DESTINATIONS_WEBHOOK_LOAD_ERROR = 'Unable to load webhook settings.';
@@ -346,33 +347,47 @@ export function getAlertDeliveryLogFailureClassLabel(failureClass: string) {
   return labels[failureClass] ?? labels.unknown;
 }
 
-const ALERT_DESTINATIONS_DELIVERY_PAUSED_TITLE = 'Notifications are paused';
-const ALERT_DESTINATIONS_DELIVERY_PAUSED_ACTION = 'Turn on delivery';
-
 export type AlertDestinationsDeliveryPausedReason = 'detection_off' | 'not_activated' | 'snoozed';
 
 export function getAlertDestinationsDeliveryPausedTitle() {
-  return ALERT_DESTINATIONS_DELIVERY_PAUSED_TITLE;
+  return t('alerts.delivery.paused.title');
 }
 
 export function getAlertDestinationsDeliveryPausedActionLabel() {
-  return ALERT_DESTINATIONS_DELIVERY_PAUSED_ACTION;
+  return t('alerts.delivery.paused.action');
 }
 
-// Describes why nothing configured on this page will actually reach anyone.
-// The test-send caveat is deliberate: test messages bypass the delivery pause,
-// so a successful test is not evidence that live alerts are getting through.
+export function getAlertDestinationsDeliverySetupLinkLabel() {
+  return t('alerts.delivery.paused.setupLink');
+}
+
+// Describes why nothing will reach anyone. On the destinations tab the
+// test-send caveat is deliberate: test messages bypass the delivery pause, so
+// a successful test is not evidence that live alerts are getting through. The
+// overview has no destinations below it; there the consequence is that nobody
+// is told about the alerts listed on the page. With alerts switched off Pulse
+// is not detecting anything new, so neither surface may claim it still is.
 export function getAlertDestinationsDeliveryPausedDescription(
   reason: AlertDestinationsDeliveryPausedReason,
+  surface: 'destinations' | 'overview' = 'destinations',
 ) {
+  const detectionOff = reason === 'detection_off';
   const consequence =
-    'Pulse is still detecting alerts, but none of them will be sent to the destinations below. Test messages bypass the pause, so a successful test does not mean live alerts are getting through.';
-
-  if (reason === 'detection_off') {
-    return `Alerts are switched off in the alert configuration. ${consequence}`;
-  }
-  if (reason === 'snoozed') {
-    return `Notification delivery is snoozed. ${consequence}`;
-  }
-  return `Notification delivery has not been turned on for this install yet. ${consequence}`;
+    surface === 'overview'
+      ? t(
+          detectionOff
+            ? 'alerts.delivery.paused.consequence.overviewDetectionOff'
+            : 'alerts.delivery.paused.consequence.overview',
+        )
+      : t(
+          detectionOff
+            ? 'alerts.delivery.paused.consequence.destinationsDetectionOff'
+            : 'alerts.delivery.paused.consequence.destinations',
+        );
+  const cause = detectionOff
+    ? t('alerts.delivery.paused.reason.detectionOff')
+    : reason === 'snoozed'
+      ? t('alerts.delivery.paused.reason.snoozed')
+      : t('alerts.delivery.paused.reason.notActivated');
+  return `${cause} ${consequence}`;
 }

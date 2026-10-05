@@ -1,10 +1,10 @@
 import { Show } from 'solid-js';
 
-import { Card } from '@/components/shared/Card';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { Table, TableBody, TableCell, TableRow } from '@/components/shared/Table';
-import { getAlertOverviewStatsLabels } from '@/utils/alertOverviewPresentation';
-import type { StatusIndicatorVariant } from '@/utils/status';
+import {
+  getAlertOverviewSeverityCountLabel,
+  getAlertOverviewStatsLabels,
+} from '@/utils/alertOverviewPresentation';
 
 import type { AlertOverviewState } from './useAlertOverviewState';
 
@@ -12,78 +12,47 @@ interface AlertOverviewStatsCardsProps {
   state: AlertOverviewState;
 }
 
-const dotCellClass = 'w-6 pl-3 pr-0';
-const labelCellClass = 'text-base-content';
-const valueCellClass = 'pr-1.5 text-right font-semibold tabular-nums text-base-content';
-const criticalCellClass = 'pr-3 text-right';
-
-const VARIANT_ACTIVE: Record<'triggered' | 'acknowledged', StatusIndicatorVariant> = {
-  triggered: 'warning',
-  acknowledged: 'success',
-};
-
-const variantForCount = (count: number, active: StatusIndicatorVariant): StatusIndicatorVariant =>
-  count > 0 ? active : 'muted';
-
+// One line beside the active-alerts heading: what is open now by severity,
+// then how much fired in the last day. It replaces a three-row table whose
+// override count was configuration, not status.
 export function AlertOverviewStatsCards(props: AlertOverviewStatsCardsProps) {
   const labels = () => getAlertOverviewStatsLabels();
+  const stats = () => props.state.alertStats();
 
   return (
-    <Card padding="none" tone="card" class="overflow-hidden">
-      <Table class="min-w-full text-xs">
-        <TableBody>
-          <TableRow>
-            <TableCell class={dotCellClass}>
-              <StatusDot
-                variant={variantForCount(
-                  props.state.alertStats().total24h,
-                  VARIANT_ACTIVE.triggered,
-                )}
-                size="sm"
-                ariaHidden
-              />
-            </TableCell>
-            <TableCell class={labelCellClass}>{labels().last24Hours}</TableCell>
-            <TableCell class={valueCellClass} data-testid="alert-overview-stat-value">
-              {props.state.alertStats().total24h}
-            </TableCell>
-            <TableCell class={criticalCellClass}>
-              <Show when={props.state.alertStats().critical24h > 0}>
-                <span class="text-[10px] font-normal text-red-600 dark:text-red-400">
-                  {props.state.alertStats().critical24h} critical
-                </span>
-              </Show>
-            </TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell class={dotCellClass}>
-              <StatusDot
-                variant={variantForCount(
-                  props.state.alertStats().acknowledged,
-                  VARIANT_ACTIVE.acknowledged,
-                )}
-                size="sm"
-                ariaHidden
-              />
-            </TableCell>
-            <TableCell class={labelCellClass}>{labels().acknowledged}</TableCell>
-            <TableCell class={valueCellClass} data-testid="alert-overview-stat-value">
-              {props.state.alertStats().acknowledged}
-            </TableCell>
-            <TableCell class={criticalCellClass} />
-          </TableRow>
-          <TableRow>
-            <TableCell class={dotCellClass}>
-              <StatusDot variant="muted" size="sm" ariaHidden />
-            </TableCell>
-            <TableCell class={labelCellClass}>{labels().workloadOverrides}</TableCell>
-            <TableCell class={valueCellClass} data-testid="alert-overview-stat-value">
-              {props.state.alertStats().overrides}
-            </TableCell>
-            <TableCell class={criticalCellClass} />
-          </TableRow>
-        </TableBody>
-      </Table>
-    </Card>
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+      <Show when={stats().activeCritical > 0}>
+        <span class="inline-flex items-center gap-1.5 font-medium text-red-700 dark:text-red-300">
+          <StatusDot variant="danger" size="sm" ariaHidden />
+          {getAlertOverviewSeverityCountLabel('critical', stats().activeCritical)}
+        </span>
+      </Show>
+      <Show when={stats().activeWarning > 0}>
+        <span class="inline-flex items-center gap-1.5 font-medium text-yellow-700 dark:text-yellow-300">
+          <StatusDot variant="warning" size="sm" ariaHidden />
+          {getAlertOverviewSeverityCountLabel('warning', stats().activeWarning)}
+        </span>
+      </Show>
+      <span class="inline-flex items-center gap-1" data-alert-overview-stat="triggered24h">
+        <span>{labels().last24Hours}</span>
+        <span
+          class="font-semibold tabular-nums text-base-content"
+          data-testid="alert-overview-stat-value"
+        >
+          {props.state.alertStats().total24h}
+        </span>
+      </span>
+      <Show when={props.state.alertStats().acknowledged > 0}>
+        <span class="inline-flex items-center gap-1" data-alert-overview-stat="acknowledged">
+          <span>{labels().acknowledged}</span>
+          <span
+            class="font-semibold tabular-nums text-base-content"
+            data-testid="alert-overview-stat-value"
+          >
+            {props.state.alertStats().acknowledged}
+          </span>
+        </span>
+      </Show>
+    </div>
   );
 }

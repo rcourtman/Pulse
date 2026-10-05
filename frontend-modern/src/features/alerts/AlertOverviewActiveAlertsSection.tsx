@@ -15,6 +15,7 @@ import {
 } from '@/utils/alertOverviewPresentation';
 
 import { AlertOverviewAlertCard } from './AlertOverviewAlertCard';
+import { AlertOverviewStatsCards } from './AlertOverviewStatsCards';
 import { useAlertGroupExpansion } from './useAlertGroupExpansion';
 import { AlertIncidentSynthesisSummary } from './AlertIncidentSynthesisSummary';
 import type { AlertIncidentTimelineState } from './useAlertIncidentTimelineState';
@@ -27,13 +28,17 @@ interface AlertOverviewActiveAlertsSectionProps {
   alertsDisabled: boolean;
   showAcknowledged: boolean;
   setShowAcknowledged: (value: boolean) => void;
+  deliveryPausedGlobally?: boolean;
 }
 
 export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlertsSectionProps) {
   const { isGroupExpanded, toggleGroup } = useAlertGroupExpansion();
   return (
     <div>
-      <SectionHeader title={getAlertOverviewActiveSectionTitle()} size="md" class="mb-3" />
+      <div class="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <SectionHeader title={getAlertOverviewActiveSectionTitle()} size="md" />
+        <AlertOverviewStatsCards state={props.state} />
+      </div>
       <Show
         when={Object.keys(props.activeAlerts).length > 0}
         fallback={
@@ -124,7 +129,7 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
           </Show>
           <PlatformWindowedList
             items={props.state.groupedAlerts}
-            estimatedItemHeight={180}
+            estimatedItemHeight={104}
             enableThreshold={24}
             windowSize={32}
           >
@@ -135,6 +140,7 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
                   alert={group.primary}
                   state={props.state}
                   timelineState={props.timelineState}
+                  deliveryPausedGlobally={props.deliveryPausedGlobally}
                 />
                 <Show when={group.related.length > 0}>
                   <div class="ml-4 border-l-2 border-border pl-3 mt-1">
@@ -173,6 +179,7 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
                               alert={alert}
                               state={props.state}
                               timelineState={props.timelineState}
+                              deliveryPausedGlobally={props.deliveryPausedGlobally}
                             />
                           )}
                         </For>

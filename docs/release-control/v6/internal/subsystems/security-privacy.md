@@ -2963,3 +2963,11 @@ delivers push notifications, and that it does not provide remote access to the
 web UI. The earlier "secure remote web access" wording described a capability
 that never existed. No data flow changed, and the published docs mirror stays
 identical.
+
+### Alert overview locale additions
+
+The shared locale catalogs gain alert overview summary, row-disclosure and
+paused-delivery banner strings in English, German and Spanish. This is alert
+presentation copy only: no API token name, scope preset, privacy disclosure,
+telemetry statement or security term changes, and no request, storage or
+authorization path moves.

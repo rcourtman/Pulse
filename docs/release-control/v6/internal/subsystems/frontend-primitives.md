@@ -7859,6 +7859,18 @@ layouts must retain associated labels and avoid horizontal overflow. Escalation
 level delays and repeat intervals share the rendered 5–180 minute bounds; the
 feature state clamps typed values before they can leave the control surface.
 
+### Alert overview rows and paused-delivery copy localize through the catalogs
+
+The alert overview summary (`alerts.overview.summary.*`), the row disclosure
+(`alerts.overview.action.moreActions` / `lessActions`) and every string of the
+shared paused-delivery banner (`alerts.delivery.paused.*`, used by both the
+overview and the destinations tab) route through `alertOverviewPresentation`
+or `alertDestinationsPresentation` and the English, German and Spanish
+catalogs. Relative alert ages format with `Intl.RelativeTimeFormat` in the
+active locale rather than the English-only `formatRelativeTime`. Proofs live
+in `frontend-modern/src/i18n/__tests__/i18n.test.ts` and
+`frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts`.
+
 ### Alert groups use the shared localization boundary
 
 Alert group disclosure and group acknowledgement copy routes through

@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { A } from '@solidjs/router';
 
 import { InvestigateAlertButton } from '@/components/Alerts/InvestigateAlertButton';
@@ -19,6 +19,8 @@ import {
   getAlertOverviewStartedAtLabel,
   getAlertOverviewStartedAtClass,
   getAlertOverviewTimelineActionLabel,
+  getAlertOverviewMoreActionsLabel,
+  formatAlertOverviewStartedAgo,
   getAlertOverviewSnoozedUntilLabel,
   getAlertOverviewSnoozeLabel,
 } from '@/utils/alertOverviewPresentation';
@@ -37,7 +39,14 @@ interface AlertOverviewAlertCardProps {
   alert: Alert;
   state: AlertOverviewState;
   timelineState: AlertIncidentTimelineState;
+  // True while the page states that delivery is off for every alert; the
+  // per-alert line would only repeat that banner.
+  deliveryPausedGlobally?: boolean;
 }
+
+// Delivery holds that apply to every alert at once. The overview states them
+// in one banner instead of on each card.
+const GLOBAL_DELIVERY_HOLD_REASONS = new Set(['notifications_inactive', 'notifications_disabled']);
 
 export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
   const alertKey = () => getCanonicalAlertId(props.alert);
@@ -54,8 +63,22 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
     );
 
   const deliveryDiagnosis = () => props.state.deliveryDiagnoses()[alertKey()];
-  const deliveryStatusLine = () =>
-    describeAlertDeliveryStatus(deliveryDiagnosis(), props.alert.acknowledged);
+  const deliveryStatusLine = () => {
+    const diagnosis = deliveryDiagnosis();
+    if (
+      props.deliveryPausedGlobally &&
+      GLOBAL_DELIVERY_HOLD_REASONS.has((diagnosis?.reason || '').split(':')[0])
+    ) {
+      return null;
+    }
+    return describeAlertDeliveryStatus(diagnosis, props.alert.acknowledged);
+  };
+  const [moreOpen, setMoreOpen] = createSignal(false);
+  const hasMetaLine = () =>
+    (!isPulseSystemAlert(props.alert) && props.alert.threshold > 0) ||
+    Boolean(deliveryStatusLine()) ||
+    (isAlertSnoozed(props.alert) && Boolean(props.alert.operationalRecord?.suppression?.expiresAt));
+  const timelineOpen = () => props.timelineState.expandedIncidents().has(alertKey());
 
   const resourceLink = (): string => {
     const rid = props.alert.resourceId ?? '';
@@ -102,11 +125,11 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
 
   return (
     <div id={`alert-${alertKey()}`} class={alertCardPresentation().cardClassName}>
-      <div class="flex flex-col sm:flex-row sm:items-start">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-start">
         <div class="flex items-start flex-1">
           <div class={alertCardPresentation().iconClassName}>
             {props.alert.acknowledged ? (
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -115,7 +138,7 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
                 />
               </svg>
             ) : (
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -126,7 +149,7 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
             )}
           </div>
           <div class="flex-1 min-w-0">
-            <div class="flex flex-wrap items-center gap-2">
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <Show
                 when={hasResource()}
                 fallback={
@@ -164,50 +187,57 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
                   {getAlertOverviewSnoozeLabel()}
                 </span>
               </Show>
-            </div>
-            <p class="text-sm text-base-content mt-1 wrap-break-word">{props.alert.message}</p>
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
-              <p class={getAlertOverviewStartedAtClass()}>
-                {getAlertOverviewStartedAtLabel(new Date(props.alert.startTime).toLocaleString())}
-              </p>
-              <Show when={!isPulseSystemAlert(props.alert) && props.alert.threshold > 0}>
-                <span class="text-xs text-muted">
-                  limit: {props.alert.threshold}
-                  {props.alert.type === 'temperature' || props.alert.type === 'diskTemperature'
-                    ? '°C'
-                    : '%'}
-                </span>
-              </Show>
-              <Show when={deliveryStatusLine()}>
-                <span
-                  class={
-                    deliveryStatusLine()?.tone === 'attention'
-                      ? 'text-xs text-amber-600 dark:text-amber-400'
-                      : 'text-xs text-muted'
-                  }
-                  title={deliveryDiagnosis()?.message}
-                >
-                  {deliveryStatusLine()?.label}
-                </span>
-              </Show>
-              <Show
-                when={
-                  isAlertSnoozed(props.alert) &&
-                  props.alert.operationalRecord?.suppression?.expiresAt
-                }
+              <span
+                class={getAlertOverviewStartedAtClass()}
+                title={getAlertOverviewStartedAtLabel(
+                  new Date(props.alert.startTime).toLocaleString(),
+                )}
               >
-                <span class="text-xs text-blue-600 dark:text-blue-400">
-                  {getAlertOverviewSnoozedUntilLabel(
-                    new Date(
-                      props.alert.operationalRecord!.suppression!.expiresAt!,
-                    ).toLocaleString(),
-                  )}
-                </span>
-              </Show>
+                {formatAlertOverviewStartedAgo(props.alert.startTime, props.state.tick())}
+              </span>
             </div>
+            <p class="text-sm text-base-content mt-0.5 wrap-break-word">{props.alert.message}</p>
+            <Show when={hasMetaLine()}>
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
+                <Show when={!isPulseSystemAlert(props.alert) && props.alert.threshold > 0}>
+                  <span class="text-xs text-muted">
+                    limit: {props.alert.threshold}
+                    {props.alert.type === 'temperature' || props.alert.type === 'diskTemperature'
+                      ? '°C'
+                      : '%'}
+                  </span>
+                </Show>
+                <Show when={deliveryStatusLine()}>
+                  <span
+                    class={
+                      deliveryStatusLine()?.tone === 'attention'
+                        ? 'text-xs text-amber-600 dark:text-amber-400'
+                        : 'text-xs text-muted'
+                    }
+                    title={deliveryDiagnosis()?.message}
+                  >
+                    {deliveryStatusLine()?.label}
+                  </span>
+                </Show>
+                <Show
+                  when={
+                    isAlertSnoozed(props.alert) &&
+                    props.alert.operationalRecord?.suppression?.expiresAt
+                  }
+                >
+                  <span class="text-xs text-blue-600 dark:text-blue-400">
+                    {getAlertOverviewSnoozedUntilLabel(
+                      new Date(
+                        props.alert.operationalRecord!.suppression!.expiresAt!,
+                      ).toLocaleString(),
+                    )}
+                  </span>
+                </Show>
+              </div>
+            </Show>
           </div>
         </div>
-        <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start justify-end">
+        <div class="flex flex-wrap items-center gap-1.5 sm:ml-4 self-end sm:self-start justify-end">
           <button
             class={getAlertOverviewPrimaryActionClass(props.alert.acknowledged)}
             disabled={processing()}
@@ -229,28 +259,6 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
               timelineState={props.timelineState}
             />
           </Show>
-          <button
-            class={getAlertOverviewSecondaryActionClass()}
-            onClick={() => {
-              void props.timelineState.toggleIncidentTimeline(
-                alertKey(),
-                alertKey(),
-                props.alert.startTime,
-              );
-            }}
-          >
-            {getAlertOverviewTimelineActionLabel(
-              props.timelineState.expandedIncidents().has(alertKey()),
-            )}
-          </button>
-          <Show when={hasResource()}>
-            <ResourceMonitoringPolicyAction
-              resourceId={props.alert.resourceId}
-              resourceName={props.alert.resourceName || props.alert.resourceId}
-              resourceType={resourceTypeForPolicy()}
-              platformType={platformTypeForPolicy()}
-            />
-          </Show>
           <InvestigateAlertButton
             alert={props.alert}
             resourceType={
@@ -262,10 +270,56 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
             size="sm"
             patrolOption
           />
+          <button
+            type="button"
+            class={getAlertOverviewSecondaryActionClass()}
+            aria-expanded={moreOpen() || timelineOpen()}
+            onClick={() => {
+              if (moreOpen() || timelineOpen()) {
+                // Less closes everything the disclosure opened, timeline included.
+                setMoreOpen(false);
+                if (timelineOpen()) {
+                  void props.timelineState.toggleIncidentTimeline(
+                    alertKey(),
+                    alertKey(),
+                    props.alert.startTime,
+                  );
+                }
+                return;
+              }
+              setMoreOpen(true);
+            }}
+          >
+            {getAlertOverviewMoreActionsLabel(moreOpen() || timelineOpen())}
+          </button>
         </div>
       </div>
-      <Show when={props.timelineState.expandedIncidents().has(alertKey())}>
-        <div class="mt-3 border-t border-border pt-3">
+      <Show when={moreOpen() || timelineOpen()}>
+        <div class="mt-2 flex flex-wrap items-center justify-end gap-1.5 border-t border-border pt-2">
+          <button
+            class={getAlertOverviewSecondaryActionClass()}
+            onClick={() => {
+              void props.timelineState.toggleIncidentTimeline(
+                alertKey(),
+                alertKey(),
+                props.alert.startTime,
+              );
+            }}
+          >
+            {getAlertOverviewTimelineActionLabel(timelineOpen())}
+          </button>
+          <Show when={hasResource()}>
+            <ResourceMonitoringPolicyAction
+              resourceId={props.alert.resourceId}
+              resourceName={props.alert.resourceName || props.alert.resourceId}
+              resourceType={resourceTypeForPolicy()}
+              platformType={platformTypeForPolicy()}
+            />
+          </Show>
+        </div>
+      </Show>
+      <Show when={timelineOpen()}>
+        <div class="mt-2 border-t border-border pt-3">
           <IncidentTimelinePanel
             loading={() => props.timelineState.incidentLoading()[alertKey()]}
             error={() => props.timelineState.incidentErrors()[alertKey()]}

@@ -316,6 +316,16 @@ describe('alert destinations delivery paused copy', () => {
     expect(getAlertDestinationsDeliveryPausedDescription('detection_off')).toContain(
       'Alerts are switched off',
     );
+    // With alerts off nothing new is detected, so no surface may claim it is.
+    expect(getAlertDestinationsDeliveryPausedDescription('detection_off')).not.toContain(
+      'still detecting',
+    );
+    expect(getAlertDestinationsDeliveryPausedDescription('detection_off', 'overview')).toBe(
+      'Alerts are switched off in the alert configuration. Pulse is not raising new alerts while they are switched off, so nobody is being notified.',
+    );
+    expect(getAlertDestinationsDeliveryPausedDescription('not_activated', 'overview')).toBe(
+      'Notification delivery has not been turned on for this install yet. Pulse is still detecting the alerts below, but nobody is being notified about them.',
+    );
     expect(getAlertDestinationsDeliveryPausedDescription('snoozed')).toContain('snoozed');
     expect(getAlertDestinationsDeliveryPausedDescription('not_activated')).toContain(
       'has not been turned on for this install yet',

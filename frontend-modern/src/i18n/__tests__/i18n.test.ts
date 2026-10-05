@@ -158,6 +158,36 @@ describe('i18n foundation', () => {
     }
   });
 
+  it('localizes the alert overview summary, row disclosure and paused-delivery banner', () => {
+    expect(t('alerts.overview.summary.critical', { count: 2 }, 'en')).toBe('2 critical');
+    expect(t('alerts.overview.summary.warning', { count: 3 }, 'de')).toBe('3 Warnung');
+    expect(t('alerts.overview.action.moreActions', undefined, 'es')).toBe('Más');
+    expect(t('alerts.delivery.paused.title', undefined, 'de')).toBe(
+      'Benachrichtigungen sind pausiert',
+    );
+    const pausedKeys = [
+      'alerts.delivery.paused.title',
+      'alerts.delivery.paused.action',
+      'alerts.delivery.paused.setupLink',
+      'alerts.delivery.paused.reason.detectionOff',
+      'alerts.delivery.paused.reason.snoozed',
+      'alerts.delivery.paused.reason.notActivated',
+      'alerts.delivery.paused.consequence.destinations',
+      'alerts.delivery.paused.consequence.destinationsDetectionOff',
+      'alerts.delivery.paused.consequence.overview',
+      'alerts.delivery.paused.consequence.overviewDetectionOff',
+      'alerts.overview.action.moreActions',
+      'alerts.overview.action.lessActions',
+    ] as const;
+    for (const key of pausedKeys) {
+      const english = t(key, undefined, 'en');
+      for (const locale of SUPPORTED_LOCALES) {
+        expect(t(key, undefined, locale)).toBeTruthy();
+        if (locale !== 'en') expect(t(key, undefined, locale)).not.toBe(english);
+      }
+    }
+  });
+
   it('localizes alert group correlation labels across every supported locale', () => {
     expect(t('alerts.overview.group.linkedSignal', { count: 1 }, 'en')).toBe('+1 linked signal');
     expect(t('alerts.overview.group.linkedSignal', { count: 1 }, 'de')).toBe(
