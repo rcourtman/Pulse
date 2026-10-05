@@ -8362,3 +8362,11 @@ regressions preserve their original missing-value and fallback obligations.
 drawer with synthetic APIs in Chromium/WebKit desktop and 390/320-pixel light
 and dark views. This is presentation acceptance, not native backup/QGA safety,
 provider outage attribution, installed recovery or release availability.
+
+### Platform overviews may lead with their own incident table
+
+A platform Overview that leads with its provider's health signals reuses
+that platform's existing incident table rather than a new summary card:
+the vSphere Overview renders `VsphereAlertsTable` with `showToolbar={false}`
+above its hosts table, only when signals exist, matching the TrueNAS
+Overview's health-alert table. Filtering stays on the platform's Health tab.
