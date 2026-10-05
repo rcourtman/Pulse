@@ -8362,3 +8362,13 @@ regressions preserve their original missing-value and fallback obligations.
 drawer with synthetic APIs in Chromium/WebKit desktop and 390/320-pixel light
 and dark views. This is presentation acceptance, not native backup/QGA safety,
 provider outage attribution, installed recovery or release availability.
+
+### Platform tables read staleness from one helper
+
+`features/platformPage/resourceStaleness.ts` turns the backend's `stale`
+health verdict into a short label for platform tables, so a table that stops
+presenting a silent resource's last metrics as live does it the same way:
+dimmed metric cells plus the age with a no-signal icon, the full sentence on
+hover and as the accessible name. Grouped platform tables that already name
+the group in a shared grouped-table header row drop columns that would repeat
+the group's own value on every row.
