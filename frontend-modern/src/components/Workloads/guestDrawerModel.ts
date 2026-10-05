@@ -441,18 +441,15 @@ export interface GuestDrawerGuestReadPresentation {
 
 // Both drawer shapes use the same provider-owned signals. A canonical resource
 // need not fabricate a complete workload (or infer liveness from metrics).
-export type GuestDrawerGuestReadEvidence = Pick<
+export interface GuestDrawerGuestReadEvidence extends Pick<
   Guest,
-  | 'type'
-  | 'workloadType'
-  | 'agentKind'
-  | 'platformType'
-  | 'platformScopes'
-  | 'guestAgentStatus'
-  | 'diskStatusReason'
-  | 'lock'
-  | 'backupInProgress'
->;
+  'type' | 'workloadType' | 'agentKind' | 'platformType' | 'platformScopes'
+> {
+  diskStatusReason?: VM['diskStatusReason'];
+  guestAgentStatus?: VM['guestAgentStatus'];
+  lock?: VM['lock'];
+  backupInProgress?: VM['backupInProgress'];
+}
 
 export const GUEST_DRAWER_BACKUP_PRECAUTION =
   'Do not run live diagnostics or restart the guest agent during a backup, freeze/thaw or an unresponsive-guest incident. An OK backup or a running VM does not prove thaw. Confirm thaw and writes to the filesystems covered by the backup independently.';

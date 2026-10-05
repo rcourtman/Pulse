@@ -24,6 +24,7 @@ const resource = (
   type,
   name: 'Backup guest',
   displayName: 'Backup guest',
+  platformId: 'fixture',
   platformType: type === 'agent' ? 'agent' : 'proxmox-pve',
   platformScopes: type === 'agent' ? ['agent'] : ['proxmox-pve'],
   sources: type === 'agent' ? ['agent'] : ['proxmox'],

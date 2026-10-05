@@ -42,6 +42,8 @@ const vm = (patch: Partial<Resource> = {}): Resource => ({
   id: 'fixture:pve1:101',
   type: 'vm',
   name: 'Backup guest',
+  displayName: 'Backup guest',
+  platformId: 'fixture',
   status: 'online',
   sourceType: 'api',
   platformType: 'proxmox-pve',
@@ -66,7 +68,7 @@ const openAnalysis = async () => {
 
 beforeEach(() => {
   resetAIRuntimeState();
-  syncAIRuntimeSettings({ discovery_enabled: true });
+  syncAIRuntimeSettings({ discovery_enabled: true } as Parameters<typeof syncAIRuntimeSettings>[0]);
   resetCreateNonSuspendingQueryCacheForTest();
 });
 afterEach(() => {
