@@ -1,4 +1,4 @@
-import { Component, For, createMemo, Show } from 'solid-js';
+import { Component, For, createMemo, createUniqueId, Show } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { AIChatMaintenanceSection } from '@/components/Settings/AIChatMaintenanceSection';
 import { AISettingsDialogs } from '@/components/Settings/AISettingsDialogs';
@@ -18,8 +18,13 @@ import { FormSelect } from '@/components/shared/FormSelect';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
+import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { PATROL_PATH } from '@/routing/resourceLinks';
-import { getPatrolAutonomyAvailabilityPresentation } from '@/features/patrol/patrolAutonomyAvailability';
+import {
+  PATROL_ALERT_ANALYSIS_FEATURE_KEY,
+  getPatrolAlertAnalysisAvailabilityPresentation,
+  getPatrolAutonomyAvailabilityPresentation,
+} from '@/features/patrol/patrolAutonomyAvailability';
 import { getRuntimeCapabilityBlock, hasFeature, runtimeCapabilities } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import {
@@ -115,6 +120,17 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
     }),
   );
   const isPlanLockedPatrol = createMemo(() => patrolModeAvailability().kind === 'plan_locked');
+  const alertAnalysisAvailability = createMemo(() =>
+    getPatrolAlertAnalysisAvailabilityPresentation({
+      alertAnalysisLocked: props.state.alertAnalysisLocked(),
+      commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),
+      upgradePromptsHidden: presentationPolicyHidesUpgradePrompts(),
+      runtimeCapabilityBlock: getRuntimeCapabilityBlock(PATROL_ALERT_ANALYSIS_FEATURE_KEY),
+      runtime: runtimeCapabilities()?.runtime,
+      planUpgradeDestination: getUpgradeActionDestination(PATROL_ALERT_ANALYSIS_FEATURE_KEY),
+    }),
+  );
+  const alertAnalysisLockId = createUniqueId();
   const intervalOptions = [
     { value: 0, label: 'Manual only' },
     { value: 60, label: 'Every hour' },
@@ -270,14 +286,38 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
                 <p class="mt-1 text-xs text-muted">
                   Assess risk when container-update alerts fire.
                 </p>
+                <Show when={alertAnalysisAvailability().locked}>
+                  <p id={alertAnalysisLockId} class="mt-1 text-xs text-muted">
+                    <span class="font-medium text-base-content">
+                      {alertAnalysisAvailability().title}.
+                    </span>{' '}
+                    {alertAnalysisAvailability().body}
+                    <Show when={alertAnalysisAvailability().destination}>
+                      {(destination) => (
+                        <>
+                          {' '}
+                          <UpgradeLink
+                            class="font-medium text-blue-600 hover:underline dark:text-blue-400"
+                            destination={destination()}
+                          >
+                            {alertAnalysisAvailability().actionLabel}
+                          </UpgradeLink>
+                        </>
+                      )}
+                    </Show>
+                  </p>
+                </Show>
               </div>
               <Toggle
                 checked={props.state.form.alertTriggeredAnalysis}
                 onChange={(event) =>
                   props.state.setForm('alertTriggeredAnalysis', event.currentTarget.checked)
                 }
-                disabled={props.state.saving() || props.state.alertAnalysisLocked()}
+                disabled={props.state.saving() || alertAnalysisAvailability().locked}
                 ariaLabel="Enable container update risk analysis"
+                ariaDescribedBy={
+                  alertAnalysisAvailability().locked ? alertAnalysisLockId : undefined
+                }
               />
             </div>
           </div>

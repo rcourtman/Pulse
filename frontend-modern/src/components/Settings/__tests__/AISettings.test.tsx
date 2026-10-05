@@ -37,6 +37,8 @@ const loadCommercialPostureMock = vi.fn();
 const commercialPostureMock = vi.fn();
 const entitlementsMock = vi.fn();
 const presentationPolicyHidesUpgradePromptsMock = vi.fn();
+const presentationPolicyHidesCommercialSurfacesMock = vi.fn();
+const getRuntimeCapabilityBlockMock = vi.fn();
 
 vi.mock('@/api/ai', () => ({
   AIAPI: {
@@ -95,7 +97,7 @@ vi.mock('@/utils/logger', () => ({
 
 vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
-  getRuntimeCapabilityBlock: () => undefined,
+  getRuntimeCapabilityBlock: (...args: unknown[]) => getRuntimeCapabilityBlockMock(...args),
   loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
   runtimeCapabilities: () => ({ capabilities: [], runtime: undefined }),
 }));
@@ -110,7 +112,7 @@ vi.mock('@/stores/licenseCommercial', () => ({
 }));
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
-  presentationPolicyHidesCommercialSurfaces: () => false,
+  presentationPolicyHidesCommercialSurfaces: () => presentationPolicyHidesCommercialSurfacesMock(),
   presentationPolicyHidesUpgradePrompts: () => presentationPolicyHidesUpgradePromptsMock(),
 }));
 
@@ -181,6 +183,8 @@ const resetAllMocks = () => {
   commercialPostureMock.mockReset();
   entitlementsMock.mockReset();
   presentationPolicyHidesUpgradePromptsMock.mockReset();
+  presentationPolicyHidesCommercialSurfacesMock.mockReset();
+  getRuntimeCapabilityBlockMock.mockReset();
 };
 
 const setupDefaultMocks = () => {
@@ -212,6 +216,8 @@ const setupDefaultMocks = () => {
   listSessionsMock.mockResolvedValue([]);
   summarizeSessionMock.mockResolvedValue(undefined);
   presentationPolicyHidesUpgradePromptsMock.mockReturnValue(false);
+  presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(false);
+  getRuntimeCapabilityBlockMock.mockReturnValue(undefined);
 };
 
 describe('AISettings model loading error states', () => {
@@ -348,6 +354,106 @@ describe('AISettings model loading error states', () => {
     expect(screen.getByText(/This install runs Watch only/i)).toBeInTheDocument();
     expect(screen.queryByText(/Choose a Patrol mode on the Patrol page/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Open Patrol/i })).toBeInTheDocument();
+  });
+
+  describe('container update risk lock', () => {
+    const lockedPatrolSettings = () => ({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      // The backend masks this to false when the install lacks ai_alerts.
+      alert_triggered_analysis: false,
+    });
+    const containerRiskToggle = () =>
+      screen.getByLabelText('Enable container update risk analysis');
+    const lockExplanation = () => {
+      const describedBy = containerRiskToggle().getAttribute('aria-describedby');
+      expect(describedBy).toBeTruthy();
+      return document.getElementById(describedBy!)!;
+    };
+
+    it('explains a plan lock without an upgrade link on a free install', async () => {
+      hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_alerts');
+      presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+      getSettingsMock.mockResolvedValue(lockedPatrolSettings());
+
+      renderComponent('patrol');
+
+      await screen.findByLabelText('Enable container update risk analysis');
+      expect(containerRiskToggle()).toBeDisabled();
+      expect(lockExplanation()).toHaveTextContent(
+        "Higher license plan required. This install's plan does not include container update risk.",
+      );
+      expect(within(lockExplanation()).queryByRole('link')).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Plans & Billing' })).toBeNull();
+    });
+
+    it('links Plans & Billing when upgrade prompts are allowed', async () => {
+      hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_alerts');
+      getSettingsMock.mockResolvedValue(lockedPatrolSettings());
+
+      renderComponent('patrol');
+
+      await screen.findByLabelText('Enable container update risk analysis');
+      expect(containerRiskToggle()).toBeDisabled();
+      const link = within(lockExplanation()).getByRole('link', { name: 'Plans & Billing' });
+      expect(link).toHaveAttribute('href', 'https://example.com/upgrade');
+    });
+
+    it('drops plan and Pro wording when commercial surfaces are hidden', async () => {
+      hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_alerts');
+      presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(true);
+      presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+      getSettingsMock.mockResolvedValue(lockedPatrolSettings());
+
+      renderComponent('patrol');
+
+      await screen.findByLabelText('Enable container update risk analysis');
+      expect(containerRiskToggle()).toBeDisabled();
+      expect(lockExplanation()).toHaveTextContent(
+        'Not available. This install does not include container update risk.',
+      );
+      expect(lockExplanation().textContent).not.toMatch(/plan|Pro\b/i);
+      expect(within(lockExplanation()).queryByRole('link')).toBeNull();
+    });
+
+    it('points a licensed community runtime at the Pro runtime download', async () => {
+      hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_alerts');
+      getRuntimeCapabilityBlockMock.mockImplementation((feature: string) =>
+        feature === 'ai_alerts'
+          ? {
+              key: 'ai_alerts',
+              reason: 'paid_runtime_required',
+              action_url: 'https://pulserelay.pro/download.html',
+            }
+          : undefined,
+      );
+      getSettingsMock.mockResolvedValue(lockedPatrolSettings());
+
+      renderComponent('patrol');
+
+      await screen.findByLabelText('Enable container update risk analysis');
+      expect(lockExplanation()).toHaveTextContent(
+        'Pulse Pro runtime required. This install is running this runtime. Install the Pulse Pro runtime to use container update risk.',
+      );
+      expect(
+        within(lockExplanation()).getByRole('link', { name: 'Open Pro downloads' }),
+      ).toHaveAttribute('href', 'https://pulserelay.pro/download.html');
+    });
+
+    it('shows no lock explanation when the install includes the feature', async () => {
+      getSettingsMock.mockResolvedValue({
+        ...lockedPatrolSettings(),
+        alert_triggered_analysis: true,
+      });
+
+      renderComponent('patrol');
+
+      await screen.findByLabelText('Enable container update risk analysis');
+      expect(containerRiskToggle()).toBeEnabled();
+      expect(containerRiskToggle()).not.toHaveAttribute('aria-describedby');
+      expect(screen.queryByText(/Higher license plan required/)).toBeNull();
+    });
   });
 
   it('saves Patrol trigger settings from Pulse Intelligence Patrol settings', async () => {

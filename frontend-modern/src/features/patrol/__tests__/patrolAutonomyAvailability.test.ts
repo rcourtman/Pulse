@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import type { LicenseRuntimeCapabilityBlock, LicenseRuntimeIdentity } from '@/api/license';
 
 import {
+  PATROL_ALERT_ANALYSIS_FEATURE_KEY,
   PATROL_AUTONOMY_FEATURE_KEY,
   PATROL_AUTONOMY_RUNTIME_REQUIRED_REASON,
+  getPatrolAlertAnalysisAvailabilityPresentation,
   getPatrolAutonomyAvailabilityPresentation,
 } from '../patrolAutonomyAvailability';
 import type { UpgradeDestination } from '@/utils/upgradeNavigation';
@@ -51,6 +53,10 @@ describe('patrolAutonomyAvailability', () => {
   describe('exported constants', () => {
     it('exposes the ai_autofix feature key', () => {
       expect(PATROL_AUTONOMY_FEATURE_KEY).toBe('ai_autofix');
+    });
+
+    it('exposes the ai_alerts feature key', () => {
+      expect(PATROL_ALERT_ANALYSIS_FEATURE_KEY).toBe('ai_alerts');
     });
 
     it('exposes the paid_runtime_required reason', () => {
@@ -317,6 +323,120 @@ describe('patrolAutonomyAvailability', () => {
         expect(withPromptsVisible).not.toHaveProperty('actionLabel');
         expect(withPromptsVisible).not.toHaveProperty('destination');
       });
+    });
+  });
+
+  describe('getPatrolAlertAnalysisAvailabilityPresentation', () => {
+    const alertRuntimeBlock = runtimeBlock({ key: PATROL_ALERT_ANALYSIS_FEATURE_KEY });
+
+    it('is available when alert analysis is not locked, ignoring every other field', () => {
+      expect(
+        getPatrolAlertAnalysisAvailabilityPresentation({
+          alertAnalysisLocked: false,
+          runtimeCapabilityBlock: alertRuntimeBlock,
+          commercialSurfacesHidden: true,
+          planUpgradeDestination: planDestination,
+        }),
+      ).toEqual({
+        kind: 'available',
+        locked: false,
+        title: 'Container update risk available',
+        body: 'Assess risk when container-update alerts fire.',
+      });
+    });
+
+    it('explains a plan lock and offers Plans & Billing when surfaces are visible', () => {
+      expect(
+        getPatrolAlertAnalysisAvailabilityPresentation({
+          alertAnalysisLocked: true,
+          planUpgradeDestination: planDestination,
+        }),
+      ).toEqual({
+        kind: 'plan_locked',
+        locked: true,
+        title: 'Higher license plan required',
+        body: "This install's plan does not include container update risk.",
+        actionLabel: 'Plans & Billing',
+        destination: planDestination,
+      });
+    });
+
+    it('keeps the plan explanation but drops the action when upgrade prompts are hidden', () => {
+      const result = getPatrolAlertAnalysisAvailabilityPresentation({
+        alertAnalysisLocked: true,
+        upgradePromptsHidden: true,
+        planUpgradeDestination: planDestination,
+      });
+
+      expect(result).toEqual({
+        kind: 'plan_locked',
+        locked: true,
+        title: 'Higher license plan required',
+        body: "This install's plan does not include container update risk.",
+      });
+      expect(result).not.toHaveProperty('actionLabel');
+      expect(result).not.toHaveProperty('destination');
+    });
+
+    it('uses neutral copy with no action when commercial surfaces are hidden', () => {
+      const result = getPatrolAlertAnalysisAvailabilityPresentation({
+        alertAnalysisLocked: true,
+        commercialSurfacesHidden: true,
+        planUpgradeDestination: planDestination,
+      });
+
+      expect(result).toEqual({
+        kind: 'plan_locked',
+        locked: true,
+        title: 'Not available',
+        body: 'This install does not include container update risk.',
+      });
+      expect(`${result.title} ${result.body}`).not.toMatch(/plan|Pro\b/i);
+    });
+
+    it('shares the canonical runtime lock with Patrol mode', () => {
+      const input = {
+        runtimeCapabilityBlock: runtimeBlock({
+          key: PATROL_ALERT_ANALYSIS_FEATURE_KEY,
+          action_url: 'https://pro.example/downloads',
+        }),
+        runtime: runtime({ label: 'Pulse Community runtime' }),
+        planUpgradeDestination: planDestination,
+      };
+      const alertAnalysis = getPatrolAlertAnalysisAvailabilityPresentation({
+        ...input,
+        alertAnalysisLocked: true,
+      });
+      const patrolMode = getPatrolAutonomyAvailabilityPresentation({
+        ...input,
+        autoFixLocked: true,
+      });
+
+      expect(alertAnalysis).toEqual({
+        kind: 'runtime_locked',
+        locked: true,
+        title: 'Pulse Pro runtime required',
+        body: 'This install is running Pulse Community runtime. Install the Pulse Pro runtime to use container update risk.',
+        actionLabel: 'Open Pro downloads',
+        destination: externalDestination('https://pro.example/downloads'),
+      });
+      expect(alertAnalysis.title).toBe(patrolMode.title);
+      expect(alertAnalysis.actionLabel).toBe(patrolMode.actionLabel);
+      expect(alertAnalysis.destination).toEqual(patrolMode.destination);
+    });
+
+    it('omits the runtime download action when upgrade prompts are hidden', () => {
+      const result = getPatrolAlertAnalysisAvailabilityPresentation({
+        alertAnalysisLocked: true,
+        upgradePromptsHidden: true,
+        runtimeCapabilityBlock: alertRuntimeBlock,
+        runtime: runtime(),
+        planUpgradeDestination: planDestination,
+      });
+
+      expect(result.kind).toBe('runtime_locked');
+      expect(result).not.toHaveProperty('actionLabel');
+      expect(result).not.toHaveProperty('destination');
     });
   });
 });

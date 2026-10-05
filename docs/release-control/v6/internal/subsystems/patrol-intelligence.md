@@ -725,6 +725,16 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    sentence across the header and mode control, repeatedly restate
    infrastructure-unchanged caveats in the default view, or imply Patrol's main
    value is a manual review chore.
+   Plan-gated Patrol capabilities share that one availability presentation:
+   `patrolAutonomyAvailability.ts` owns the precedence (runtime lock, then
+   hidden commercial surfaces, then plan lock) and the only action labels
+   (`Open Pro downloads`, `Plans & Billing`), while each capability supplies
+   its lock state and copy. The Patrol settings Container update risk trigger
+   (`ai_alerts`) uses `getPatrolAlertAnalysisAvailabilityPresentation`, so a
+   locked install sees why the trigger is unavailable beside the disabled
+   switch: a higher license plan, a missing Pulse Pro runtime, or, when
+   commercial surfaces are hidden, a neutral not-available line with no plan
+   or Pro wording. Actions appear only when upgrade prompts are allowed.
 5. Add or change Patrol header schedule and runtime presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/utils/aiPatrolSchedulePresentation.ts`, and `frontend-modern/src/utils/patrolRuntimePresentation.ts`.
    Patrol must not surface retired hosted-model credit badges or trial-like activation prompts in the normal self-hosted GA app, even when legacy transport fields are still present.
 6. Keep Patrol and chat identifier-label presentation aligned through the shared `frontend-modern/src/utils/textPresentation.ts`
