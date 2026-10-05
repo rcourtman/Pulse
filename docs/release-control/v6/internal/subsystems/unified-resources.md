@@ -1215,7 +1215,10 @@ render through `KubernetesNameText`, which splits off the trailing segment
 part that tells siblings apart (`checkout-api-6d…-x7k2p`, `prod…-03`), with the
 full name on the title. Pod names, the Pods table's Node column and controller
 names use it. Deployment names are chosen by people, so they keep plain end
-truncation.
+truncation. Head and tail are flex items, so a browser copy put a line break
+between them and a pasted `kubectl logs` argument broke; a copy whose selection
+sits inside one name now writes the name without the break, and wider
+selections such as a whole row copy as the browser builds them.
 With one cluster in view, every Kubernetes scope cell repeated the cluster
 name and crowded out the namespace that differs between rows, so the tables
 show the namespace alone (`Cluster` for cluster-scoped objects) through
