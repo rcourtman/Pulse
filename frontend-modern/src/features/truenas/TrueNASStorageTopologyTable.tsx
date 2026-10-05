@@ -18,7 +18,6 @@ import {
   createPlatformTableFilterState,
   createPlatformTableSortState,
   formatPlatformTableBytesValue,
-  formatPlatformTableTitleCaseValue,
   getPlatformTableCellClassForKind,
   type PlatformTableFilterOption,
   type PlatformTableSortState,
@@ -39,7 +38,8 @@ import {
   filterTrueNASStorageTopologyRows,
   filterTrueNASStorageTopologyRowsByKind,
   getTrueNASResourceDisplayStatus,
-  mapTrueNASStorageStatus,
+  getTrueNASStorageIssue,
+  type TrueNASStorageIssue,
   type TrueNASStorageStatusFilter,
   type TrueNASStorageKindFilter,
   type TrueNASStorageTopologyKind,
@@ -193,43 +193,51 @@ const DiskEnduranceCell: Component<{ row: TrueNASStorageTopologyRow }> = (props)
   );
 };
 
-const riskLabel = (row: TrueNASStorageTopologyRow): string => {
-  const risk =
-    asTrimmedString(row.resource.storage?.risk?.level) ||
-    asTrimmedString(row.resource.physicalDisk?.risk?.level);
-  if (risk) return formatPlatformTableTitleCaseValue(risk);
-  const incidentCount = row.resource.incidentCount ?? row.resource.incidents?.length ?? 0;
-  if (incidentCount > 0) return `${incidentCount} alert${incidentCount === 1 ? '' : 's'}`;
-  const mapped = mapTrueNASStorageStatus(row.resource);
-  if (mapped === 'attention') return 'Attention';
-  if (mapped === 'offline') return 'Offline';
-  if (mapped === 'healthy') return 'Healthy';
-  return 'Unknown';
+const issueReasonClass = (issue: TrueNASStorageIssue): string => {
+  if (issue.status === 'attention') return 'text-amber-700 dark:text-amber-300';
+  if (issue.status === 'offline') return 'text-red-600 dark:text-red-300';
+  return 'text-muted';
 };
 
-const riskPillClass = (row: TrueNASStorageTopologyRow): string => {
-  const mapped = mapTrueNASStorageStatus(row.resource);
-  if (mapped === 'attention') {
-    return 'border-amber-300/50 bg-amber-500/10 text-amber-700 dark:text-amber-300';
-  }
-  if (mapped === 'offline') {
-    return 'border-red-300/50 bg-red-500/10 text-red-700 dark:text-red-300';
-  }
-  if (mapped === 'healthy') {
-    return 'border-emerald-300/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
-  }
-  return 'border-border bg-surface-alt text-muted';
-};
+// The visible reason is truncated and abbreviates the rest to a count, so
+// assistive technology gets the bucket and every reason instead.
+const issueScreenReaderText = (issue: TrueNASStorageIssue): string =>
+  `${issue.label}: ${issue.reasons.map((reason) => reason.replace(/[.\s]+$/, '')).join('. ')}.`;
 
-const RiskPill: Component<{ row: TrueNASStorageTopologyRow }> = (props) => (
-  <span
-    class={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${riskPillClass(
-      props.row,
-    )}`}
-  >
-    {riskLabel(props.row)}
-  </span>
+// Healthy rows leave the Health column empty: the status dot already says
+// healthy, and a column of green pills buried the few rows that are not. An
+// exception shows why, on the row's single line (the shared platform-table
+// rhythm), with every reason on hover and in the row drawer. The colour
+// carries the bucket, so a pill repeating Attention would only take room
+// from the reason.
+const IssueSummary: Component<{ issue: TrueNASStorageIssue | null }> = (props) => (
+  <Show when={props.issue}>
+    {(issue) => (
+      <div
+        class={`flex min-w-0 items-center gap-1 text-[11px] font-medium ${issueReasonClass(issue())}`}
+        title={issue().reasons.join('\n')}
+        data-truenas-storage-health={issue().status}
+      >
+        <span aria-hidden="true" class="min-w-0 truncate">
+          {issue().reasons[0] ?? issue().label}
+        </span>
+        <Show when={issue().reasons.length > 1}>
+          <span aria-hidden="true" class="shrink-0 tabular-nums">
+            +{issue().reasons.length - 1}
+          </span>
+        </Show>
+        <span class="sr-only">{issueScreenReaderText(issue())}</span>
+      </div>
+    )}
+  </Show>
 );
+
+const HEALTH_SORT_RANK: Record<TrueNASStorageIssue['status'] | 'healthy', number> = {
+  attention: 0,
+  offline: 1,
+  unknown: 2,
+  healthy: 3,
+};
 
 // Columns a user can sort by. Usage / Size orders pools and datasets on their
 // used percentage and disks on their raw size, so same-kind siblings compare
@@ -272,7 +280,7 @@ const getTrueNASStorageSortValue = (
       return typeof temperature === 'number' && Number.isFinite(temperature) ? temperature : null;
     }
     case 'health':
-      return riskLabel(row);
+      return HEALTH_SORT_RANK[getTrueNASStorageIssue(row.resource)?.status ?? 'healthy'];
     default:
       key satisfies never;
       return null;
@@ -481,7 +489,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="usage"
-                  class="platform-table-mobile-w-25 md:w-[28%]"
+                  class="platform-table-mobile-w-25 md:w-[20%]"
                 >
                   <PlatformResponsiveTableLabel compact="Usage" full="Usage / Size" />
                 </PlatformSortableTableHead>
@@ -489,7 +497,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey={kindFilter() === 'disks' ? 'endurance' : 'disks'}
-                  class="platform-table-mobile-w-15 md:w-[8%]"
+                  class="platform-table-mobile-w-15 md:w-[7%]"
                 >
                   {kindFilter() === 'disks' ? 'Endurance' : 'Disks'}
                 </PlatformSortableTableHead>
@@ -497,15 +505,15 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="temp"
-                  class={`${kindFilter() === 'disks' ? 'table-cell' : 'hidden lg:table-cell'} md:w-[8%]`}
+                  class={`${kindFilter() === 'disks' ? 'table-cell' : 'hidden lg:table-cell'} md:w-[7%]`}
                 >
                   Temp
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
-                  kind="badge"
+                  kind="text"
                   sort={sort}
                   sortKey="health"
-                  class={`${kindFilter() === 'disks' ? 'table-cell' : 'platform-table-phone-hidden'} md:w-[14%]`}
+                  class="platform-table-phone-hidden md:w-[24%]"
                 >
                   <PlatformResponsiveTableLabel compact="H" full="Health" />
                 </PlatformSortableTableHead>
@@ -516,6 +524,7 @@ export const TrueNASStorageTopologyTable: Component<{
                 <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(row) => {
                     const resource = () => row.resource;
+                    const issue = createMemo(() => getTrueNASStorageIssue(resource()));
                     const detailRowId = () => drawer.detailRowId(resource());
                     const isExpanded = () => drawer.isExpanded(resource());
                     return (
@@ -581,13 +590,9 @@ export const TrueNASStorageTopologyTable: Component<{
                             />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('badge')} ${
-                              kindFilter() === 'disks'
-                                ? 'table-cell'
-                                : 'platform-table-phone-hidden'
-                            }`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
                           >
-                            <RiskPill row={row} />
+                            <IssueSummary issue={issue()} />
                           </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow

@@ -1014,7 +1014,18 @@ before text and status filters so metadata from an excluded disk cannot retain
 its pool or dataset ancestor. Physical-disk presentation may prioritize the
 canonical SMART health, temperature, and endurance evidence; absent wearout or
 percentage-used telemetry remains unknown rather than being rendered as zero
-remaining life.
+remaining life. Storage health is exception-first: `getTrueNASStorageIssue`
+returns nothing for healthy pools, datasets, and disks, so their Health cell
+stays empty and the status dot alone says healthy. A non-healthy row carries
+the reasons TrueNAS gave, in order: native TrueNAS alert text on that
+resource, storage and physical-disk risk summaries, then the dataset state tag
+(`state:locked`, `state:unmounted`, `state:readonly`, which is the only place
+the provider says why a dataset is impaired). Without any of those it falls
+back to the pool state, the disk health value, or an impaired TrueNAS source.
+The first reason renders in the desktop Health column on the row's single line,
+coloured by bucket, with a count for the rest and the full list in the title
+and screen-reader text. Phones keep the status dot and reach the reason through
+the row drawer. Health sorts by severity rank, not label text.
 That shell also owns responsive width composition. Source tables may declare
 desktop breakpoint floors, but the phone branch must fit its selected columns
 inside the available container without a horizontal rail. Each unified-resource

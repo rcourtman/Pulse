@@ -119,7 +119,12 @@ test.describe("TrueNAS storage disk history", () => {
     await expect(search).toBeVisible({ timeout: 60_000 });
     await search.fill("sdc");
 
-    const diskRow = page.locator("tr").filter({ hasText: "sdc" }).first();
+    // The archive pool row also mentions /dev/sdc, because its Health cell
+    // carries the copied SMART alert, so pick the disk row by its kind.
+    const diskRow = page
+      .locator('tr[data-truenas-storage-kind="disk"]')
+      .filter({ hasText: "sdc" })
+      .first();
     await expect(diskRow).toBeVisible();
     await diskRow.getByRole("button").first().click();
 
