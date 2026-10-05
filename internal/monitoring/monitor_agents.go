@@ -517,14 +517,7 @@ func (m *Monitor) removeHostAgentLocked(hostID, requiredTokenID string, requireD
 		continuity, hasContinuity = m.hostContinuityStore.Get(hostID)
 	}
 
-	host, present := models.Host{}, false
-	for _, candidate := range m.state.GetHosts() {
-		if candidate.ID == hostID {
-			host = candidate
-			present = true
-			break
-		}
-	}
+	host, present := m.hostByID(hostID)
 	if !present {
 		if logging.IsLevelEnabled(zerolog.DebugLevel) {
 			log.Debug().Str("hostID", hostID).Msg("host not present in state during removal")
@@ -1380,13 +1373,7 @@ func (m *Monitor) GetDockerHost(hostID string) (models.DockerHost, bool) {
 	}
 	hostID = m.canonicalDockerHostID(hostID)
 
-	hosts := m.state.GetDockerHosts()
-	for _, host := range hosts {
-		if host.ID == hostID {
-			return host, true
-		}
-	}
-	return models.DockerHost{}, false
+	return m.state.GetDockerHost(hostID)
 }
 
 // GetDockerHosts returns a point-in-time snapshot of all Docker hosts Pulse knows about.
@@ -1442,14 +1429,16 @@ func (m *Monitor) resolveDockerHostView(hostID string) (*unifiedresources.Docker
 	return nil, "", false
 }
 
-func (m *Monitor) snapshotBackedUnifiedReadState() unifiedresources.ReadState {
+// Only report admission uses this temporary registry. Full publication and
+// consumer read paths keep the complete snapshot and canonical inventory.
+func (m *Monitor) snapshotBackedAgentLookupReadState() unifiedresources.ReadState {
 	if m == nil || m.state == nil {
 		return nil
 	}
 
 	registry := unifiedresources.NewRegistry(nil)
 	thresholds := m.resourceStaleThresholds()
-	registry.IngestSnapshotWithStaleThresholds(m.state.GetSnapshot(), thresholds)
+	registry.IngestSnapshotWithStaleThresholds(m.state.GetAgentLookupSnapshot(), thresholds)
 	return unifiedresources.NewMonitorAdapterWithStaleThresholds(registry, thresholds)
 }
 
@@ -1697,12 +1686,7 @@ func (m *Monitor) persistHostContinuity(host models.Host, report agentshost.Repo
 }
 
 func (m *Monitor) hostByID(hostID string) (models.Host, bool) {
-	for _, host := range m.state.GetHosts() {
-		if host.ID == hostID {
-			return host, true
-		}
-	}
-	return models.Host{}, false
+	return m.state.GetHost(hostID)
 }
 
 func (m *Monitor) applyRejectedHostReportLiveness(
@@ -2052,7 +2036,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		}, nil
 	}
 
-	readState := m.snapshotBackedUnifiedReadState()
+	readState := m.snapshotBackedAgentLookupReadState()
 	var dockerHosts []*unifiedresources.DockerHostView
 	if readState != nil {
 		dockerHosts = readState.DockerHosts()
@@ -2107,7 +2091,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	defer unlockDockerReport()
 	receivedAt := time.Now()
 	previousState, _ := m.GetDockerHost(identifier)
-	readState = m.snapshotBackedUnifiedReadState()
+	readState = m.snapshotBackedAgentLookupReadState()
 	dockerHosts = nil
 	previous = nil
 	hasPrevious = false
@@ -3074,7 +3058,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		baseIdentifier = strings.TrimSpace(persisted.HostID)
 	}
 
-	readState := m.snapshotBackedUnifiedReadState()
+	readState := m.snapshotBackedAgentLookupReadState()
 	var existingHosts []*unifiedresources.HostView
 	if readState != nil {
 		existingHosts = readState.Hosts()
@@ -3263,7 +3247,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	// Identity resolution happens before taking the per-host lock. Refresh the
 	// shared read model after waiting so token inheritance and previous-state
 	// comparisons use the latest accepted report, not the pre-wait snapshot.
-	readState = m.snapshotBackedUnifiedReadState()
+	readState = m.snapshotBackedAgentLookupReadState()
 	existingHosts = nil
 	if readState != nil {
 		existingHosts = readState.Hosts()
@@ -3464,8 +3448,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	)
 	xcpngData := normalizeAgentXCPNGInventory(report.XCPNG, previousHostModel, observedAt)
 
+	previousHost, _ := m.hostByID(identifier)
 	agentUpdate := mergeAgentUpdateStatus(
-		previousHostAgentUpdate(m.state.GetHosts(), identifier),
+		cloneModelAgentUpdateStatus(previousHost.AgentUpdate),
 		convertAgentUpdateStatus(report.Agent.Update),
 		strings.TrimSpace(report.Agent.UpdatedFrom),
 		observedAt,
@@ -3954,15 +3939,6 @@ func convertAgentPrivilegeStatus(value *agentshost.PrivilegeStatus) *models.Agen
 		SmartctlHelper:   value.SmartctlHelper,
 		PctHelper:        value.PctHelper,
 	}
-}
-
-func previousHostAgentUpdate(hosts []models.Host, identifier string) *models.AgentUpdateStatus {
-	for i := range hosts {
-		if hosts[i].ID == identifier {
-			return cloneModelAgentUpdateStatus(hosts[i].AgentUpdate)
-		}
-	}
-	return nil
 }
 
 func mergeAgentUpdateStatus(previous, reported *models.AgentUpdateStatus, updatedFrom string, observedAt time.Time) *models.AgentUpdateStatus {
