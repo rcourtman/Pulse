@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import subprocess
 import tempfile
@@ -3960,6 +3961,148 @@ class EvaluatedCommitContractComparisonTest(unittest.TestCase):
         self.commit_contract(self.ORIGINAL, "second")
         parent = self.git("rev-parse", f"{first}^")
         self.assertEqual(resolve_diff_base(f"{first}^", first), parent)
+
+
+class EvaluatedCommitGovernanceSourceTest(unittest.TestCase):
+    """The registry and contract index decide which contracts a commit owes.
+    In CI they must come from the evaluated commit, as the pre-commit hook
+    read them from that commit's index, not from the branch tip: a later
+    commit (or main merged under the branch) that adds a contract reference
+    blocked an earlier commit that was complete when written, and one that
+    drops ownership let an earlier incomplete commit pass."""
+
+    SUBSYSTEMS = "docs/release-control/v6/internal/subsystems"
+    REGISTRY = f"{SUBSYSTEMS}/registry.json"
+    ALPHA = f"{SUBSYSTEMS}/alpha.md"
+    BETA = f"{SUBSYSTEMS}/beta.md"
+    RUNTIME = "app/alpha/widget.go"
+    PROOF = "app/alpha/widget_test.go"
+
+    def setUp(self) -> None:
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        self.repo = Path(temp_dir.name)
+        for target in (
+            patch.dict(os.environ, strip_local_git_env(os.environ.copy()), clear=True),
+            patch("canonical_completion_guard.REPO_ROOT", self.repo),
+            patch("canonical_completion_guard.SUBSYSTEM_REGISTRY", self.repo / self.REGISTRY),
+            patch("repo_file_io.REPO_ROOT", self.repo),
+            patch("subsystem_contracts.REPO_ROOT", self.repo),
+            patch("subsystem_contracts.CONTRACTS_DIR", self.repo / self.SUBSYSTEMS),
+        ):
+            target.start()
+            self.addCleanup(target.stop)
+        self.git("init", "-q", "-b", "main")
+        self.git("config", "user.name", "Pulse Test")
+        self.git("config", "user.email", "pulse-test@example.invalid")
+        self.commit(
+            "base",
+            {
+                self.REGISTRY: self.registry(["app/alpha/"]),
+                self.ALPHA: self.contract("alpha", "Alpha owns the widget."),
+                self.BETA: self.contract("beta", "Beta renders summaries."),
+                self.RUNTIME: "package alpha\n",
+            },
+        )
+
+    @staticmethod
+    def registry(alpha_prefixes: list[str]) -> str:
+        def rule(subsystem_id: str, prefixes: list[str]) -> dict:
+            return {
+                "id": subsystem_id,
+                "contract": f"docs/release-control/v6/internal/subsystems/{subsystem_id}.md",
+                "owned_prefixes": prefixes,
+                "owned_files": [],
+                "verification": {
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [f"app/{subsystem_id}/"],
+                    "exact_files": [],
+                    "require_explicit_path_policy_coverage": False,
+                    "path_policies": [],
+                },
+            }
+
+        rules = [rule("alpha", alpha_prefixes), rule("beta", ["app/beta/"])]
+        return json.dumps({"subsystems": rules}, indent=2) + "\n"
+
+    @staticmethod
+    def contract(subsystem_id: str, current_state: str, shared_boundary: str = "") -> str:
+        boundary = f"1. `{shared_boundary}` feeds this subsystem.\n" if shared_boundary else ""
+        return (
+            f"# {subsystem_id} contract\n\n"
+            "## Contract Metadata\n\n"
+            "```json\n"
+            f'{{"subsystem_id": "{subsystem_id}"}}\n'
+            "```\n\n"
+            "## Shared Boundaries\n\n"
+            f"{boundary}\n"
+            "## Current State\n\n"
+            f"{current_state}\n"
+        )
+
+    def git(self, *args: str) -> str:
+        return subprocess.run(
+            ["git", *args],
+            cwd=self.repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    def commit(self, message: str, files: dict[str, str]) -> str:
+        for rel, text in files.items():
+            path = self.repo / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        self.git("add", *files)
+        self.git("commit", "-q", "-m", message)
+        return self.git("rev-parse", "HEAD")
+
+    def run_guard(self, commit: str) -> tuple[int, str]:
+        files = self.git("diff-tree", "--no-commit-id", "--name-only", "-r", commit)
+        stderr = io.StringIO()
+        with (
+            patch.dict(os.environ, {CONTRACT_NEUTRAL_OVERRIDE_ENV: ""}),
+            patch("sys.stdin", io.StringIO(files + "\n")),
+            redirect_stderr(stderr),
+        ):
+            status = main(["--files-from-stdin", "--diff-base", f"{commit}^", "--commit", commit])
+        return status, stderr.getvalue()
+
+    def test_later_contract_reference_does_not_block_an_earlier_complete_commit(self) -> None:
+        complete = self.commit(
+            "change the widget with its contract",
+            {
+                self.RUNTIME: "package alpha\n\nconst Size = 2\n",
+                self.PROOF: "package alpha\n",
+                self.ALPHA: self.contract("alpha", "Alpha owns the widget and its size."),
+            },
+        )
+        self.commit(
+            "beta starts depending on the widget",
+            {
+                self.BETA: self.contract(
+                    "beta", "Beta renders widget summaries.", shared_boundary=self.RUNTIME
+                ),
+            },
+        )
+
+        status, stderr = self.run_guard(complete)
+        self.assertEqual(status, 0, stderr)
+
+    def test_later_ownership_change_does_not_pass_an_earlier_incomplete_commit(self) -> None:
+        incomplete = self.commit(
+            "change the widget without its contract",
+            {
+                self.RUNTIME: "package alpha\n\nconst Size = 3\n",
+                self.PROOF: "package alpha\n",
+            },
+        )
+        self.commit("retire alpha's ownership of app/alpha", {self.REGISTRY: self.registry([])})
+
+        status, stderr = self.run_guard(incomplete)
+        self.assertEqual(status, 1)
+        self.assertIn(f"- subsystem alpha: missing contract {self.ALPHA}", stderr)
 
 
 class ReleaseCycleArtifactGuardTest(unittest.TestCase):
