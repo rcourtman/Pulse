@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "979466013876ce54a67494b0c4cda9b404ea45e8",
+  "verified_at": "2026-10-05T22:01:46Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
+    "frontend-modern/src/components/shared/Form.ts",
+    "frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx",
+    "frontend-modern/src/index.css"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Discovery/AvailabilityProposalCard.tsx": "bfa50b13f521b9a91b57495eec3a827a71a413a0eed0832be0d58444e8ca3ee7",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx": "af7a1d322045c33747600466a580ae6148f752c8d847404a6f5b04fa49fd53e7",
+    "frontend-modern/src/components/shared/Form.ts": "e47d06ebbbba68ac0d19769acac83a0ca930b1e2d5a7258c7c1fcf43e82ce44a",
+    "frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx": "8142c12c2e6930a505e1f063aa8a396bfa45c6c55a8ea7c7d1085198a9f3915f",
+    "frontend-modern/src/index.css": "b8ae1a40f0915ff034e51a16a94e0c2159ac726ef0afdfdd8fb321f5d5f7dc5e"
+  },
+  "routes": [
+    "/alerts/thresholds",
+    "/settings/monitoring/availability",
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1100
+    },
+    {
+      "width": 390,
+      "height": 1100
+    }
+  ],
+  "states": [
+    "Alerts > Thresholds > CPU averaging opened: all 10 per-platform selects render through FormSelect with their visible label tied by for/id, values intact (5-minute average, Inherit), 32px desktop / 44px phone, and a dropdown caret; main showed native selects",
+    "Settings > Availability checks > Add service/device check with an HTTP POST probe: Request body (optional) is a FormTextarea with its label tied and the 8 KiB help linked by aria-describedby, 96px tall on desktop and phone (main: 54px on desktop because formControl's sm:min-h-9 overrode min-h-24; no help link)",
+    "Existing default FormSelects in that dialog (Preset, Target type, Probe) now show a caret; on main they had appearance-none and no arrow, reading as text fields",
+    "Proxmox guest drawer Discovery tab with discovery_enabled and an availability proposal served by route interception: Check name input and the Interval / Observation location FormSelects share the shared form label and control chrome at matched heights, with carets",
+    "Dark mode at 1440: caret drawn in the muted text colour and readable; forced-colors emulation: select falls back to appearance auto with no background image",
+    "Shared template audit: only the three findings in BackupTransferDialogs.tsx and AlertDeadManDestinationSection.tsx remain (held by another session's open bg-base change)",
+    "Re-checked after rebasing onto 9794660138 (#2535, shared toggle): CPU averaging selects unchanged, labelled, with the caret"
+  ],
+  "interactions": [
+    "Opened the CPU averaging disclosure, the availability check dialog (HTTP, POST) and a guest Discovery tab, on main (reverse-applied patch) and on the change",
+    "Emulated forced-colors: active"
+  ]
+}

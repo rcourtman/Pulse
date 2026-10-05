@@ -719,7 +719,6 @@ describe('shared primitive guardrails', () => {
       'src/components/shared/FilterToolbar.tsx',
       'src/features/alerts/AlertAppriseDestinationsSection.tsx',
       'src/features/alerts/AlertDeliveryRoutingSection.tsx',
-      'src/features/alerts/AlertEscalationSection.tsx',
       'src/features/alerts/AlertQuietHoursSection.tsx',
       'src/features/patrol/PatrolAttentionWorkbench.tsx',
     ]);
@@ -7730,6 +7729,7 @@ describe('shared primitive guardrails', () => {
         requiredPatterns?: string[];
         allowedPaths?: string[];
         ignoredPaths?: string[];
+        pathExcludes?: string[];
       }>;
     };
     const registeredRule = registry.rules?.find(
@@ -7774,9 +7774,9 @@ describe('shared primitive guardrails', () => {
       expect(guard?.allowedPaths ?? []).toHaveLength(0);
     }
     expect(inlineGuard?.triggerPatterns).toEqual(['data-inline', 'TableRow']);
-    expect(inlineGuard?.ignoredPaths).toEqual([
-      'src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx',
-    ]);
+    // Test files assert on rendered rows; they are not row surfaces.
+    expect(inlineGuard?.pathExcludes).toEqual(['.test.', '__tests__']);
+    expect(inlineGuard?.ignoredPaths).toEqual([]);
     expect(namedGuard?.triggerPatterns).toEqual(['detail-row', 'TableRow']);
     expect(namedGuard?.ignoredPaths ?? []).toHaveLength(0);
 

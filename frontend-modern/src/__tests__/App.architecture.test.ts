@@ -304,6 +304,18 @@ describe('App architecture', () => {
     );
   });
 
+  it('draws the shared select arrow that appearance-none removes', () => {
+    // FormSelect's default chrome sets appearance-none to match text inputs;
+    // without this utility every default select read as a text field.
+    expect(appStylesSource).toMatch(
+      /@utility form-select-arrow \{\s*background-image:\s*linear-gradient\(45deg, transparent 50%, var\(--color-text-muted\) 50%\)/,
+    );
+    // Forced-colors mode drops background images, so the native arrow returns.
+    expect(appStylesSource).toMatch(
+      /@media \(forced-colors: active\) \{\s*appearance: auto !important;\s*background-image: none;/,
+    );
+  });
+
   it('keeps compact phone settings spacing scoped to the settings content shell', () => {
     expect(appStylesSource).toContain('@media (max-width: 39.999rem)');
     expect(appStylesSource).toContain(

@@ -10,6 +10,7 @@ import {
   formLabel,
 } from '@/components/shared/Form';
 import { FormSelect } from '@/components/shared/FormSelect';
+import { FormTextarea } from '@/components/shared/FormTextarea';
 import {
   AvailabilityTargetsAPI,
   type AvailabilityProbeProtocol,
@@ -776,10 +777,11 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             </div>
 
             <Show when={form().httpMethod === 'POST'}>
-              <label class={formField}>
-                <span class={formLabel}>Request body (optional)</span>
-                <textarea
-                  class={`${formControl} min-h-24 font-mono text-xs`}
+              <div class={formField}>
+                <FormTextarea
+                  label="Request body (optional)"
+                  textareaBaseClass={`${formControl} min-h-24 sm:min-h-24 font-mono text-xs`}
+                  help="Up to 8 KiB. Kept out of history and test output."
                   value={form().httpBody}
                   onInput={(event) =>
                     updateForm({
@@ -794,11 +796,8 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
                       : '{"operation":"health"}'
                   }
                 />
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                  <span class={formHelpText}>
-                    Up to 8 KiB. Kept out of history and test output.
-                  </span>
-                  <Show when={form().httpBodyConfigured && !form().httpBodyTouched}>
+                <Show when={form().httpBodyConfigured && !form().httpBodyTouched}>
+                  <div>
                     <button
                       type="button"
                       class="text-xs font-medium text-error hover:underline"
@@ -812,9 +811,9 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
                     >
                       Remove stored body
                     </button>
-                  </Show>
-                </div>
-              </label>
+                  </div>
+                </Show>
+              </div>
             </Show>
 
             <div class="grid gap-4 sm:grid-cols-2">

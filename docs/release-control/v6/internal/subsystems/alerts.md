@@ -2928,7 +2928,8 @@ hours colour the dashboard and never alert. A group switched off as a whole
 shows its Disabled badge and no defaults line. The CPU averaging line counts
 every configured profile override, including ones only the API sets. CPU averaging is tuning, not the page's
 answer. It is one collapsed disclosure stating the effective window and the
-number of platform overrides, with the same per-profile selects inside. Docker
+number of platform overrides, with the same per-profile selects inside, each
+a compact shared `FormSelect` with its profile name as a visible label. Docker
 and Machines list their resource groups before Docker-only rules and the
 SMART card. Threshold values, inheritance, metric evaluation windows and
 persistence are unchanged.
