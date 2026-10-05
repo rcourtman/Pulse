@@ -182,6 +182,48 @@ afterEach(() => {
 });
 
 describe('Docker native tables', () => {
+  it('offers bulk web-link editing keyed by the container drawer identity', async () => {
+    // The trigger and panel are lazy-loaded; transform them up front so they resolve promptly.
+    await import('@/components/Workloads/WorkloadWebLinksAction');
+    await import('@/components/Workloads/WorkloadWebLinksDialog');
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            customUrl: 'https://edge-web.example',
+            docker: {
+              hostSourceId: 'docker-host-edge',
+              containerId: 'native-container-1',
+              hostname: 'edge-01',
+              image: 'nginx:latest',
+              containerState: 'running',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit links' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Web links' }));
+    const input = dialog.getByLabelText(/edge-web/);
+
+    expect(dialog.getByText(/for each container/)).toBeInTheDocument();
+    expect(input).toHaveValue('https://edge-web.example');
+    expect(input).toHaveAttribute(
+      'data-metadata-id',
+      'app-container:docker-host-edge:name:edge-web',
+    );
+    expect(dialog.getByText('edge-01 · nginx:latest')).toBeInTheDocument();
+  }, 30_000);
+
   it('renders Docker container API fields', () => {
     setViewportWidth(WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH);
 

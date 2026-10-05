@@ -1399,7 +1399,8 @@ describe('Workloads performance contract', () => {
         '<TableCardHeader title={props.title} actions={props.actions} />',
       );
       expect(workloadsSource).toContain('<WorkloadWebLinksAction');
-      expect(workloadsSource).toContain('guests={state.filteredGuests}');
+      expect(workloadsSource).toContain('guests: state.filteredGuests,');
+      expect(workloadsSource).toContain("kind: 'workloads',");
       expect(workloadPanelSource).toContain(
         'getWorkloadGuestMetadataRecord(guest(), props.guestMetadata())',
       );
