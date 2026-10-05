@@ -5883,3 +5883,16 @@ The Actions page now hides its Patrol Watch only guidance while the
 presentation only: the action audit list, approval counts, review dialog,
 routing and every recorded action outcome are read and rendered exactly as
 before, and no resource or action identity changes.
+
+### vSphere Overview leads with vCenter health signals
+
+The vSphere Overview answers "is anything in trouble?" before inventory, as
+the TrueNAS Overview does. While the Overview is active the page also
+hydrates the Health tab's resource query (hosts, VMs, datastores and
+networks) and, when `buildVmwareIncidentRows` returns any rows from those
+resources' canonical `incidents`, renders the shared `VsphereAlertsTable`
+above the hosts table without its filter toolbar. Nothing renders when
+vCenter reports no signals. The Overview's own model, workload snapshot and
+navigation facets still come from the Overview query; the Health tab keeps
+the filterable table.
+
