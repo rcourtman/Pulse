@@ -1017,6 +1017,8 @@ export interface InfrastructureSystemRow {
   canRemove: boolean;
   isAgent: boolean;
   isCluster: boolean;
+  /** Proxmox cluster name for cluster rows; the cluster agent deploy API is keyed on it. */
+  clusterName?: string;
   attachedConnections: Connection[];
   members: InfrastructureSystemMemberRow[];
   connection: Connection;

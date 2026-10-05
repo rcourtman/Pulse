@@ -1650,6 +1650,13 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('Manage');
     expect(infrastructureSourceManagerSource).not.toContain('Detect address');
     expect(infrastructureSourceManagerSource).toContain("'Install agent'");
+    // Cluster members install in one step through the server-side deploy, so
+    // the install actions route through the canonical dialog and keep the
+    // scoped installer as the fallback instead of a hand-copied token.
+    expect(infrastructureSourceManagerSource).toContain("from './ClusterAgentDeployDialog'");
+    expect(infrastructureSourceManagerSource).toContain('<ClusterAgentDeployDialog');
+    expect(infrastructureSourceManagerSource).toContain('onUseInstaller={handleInstallAgentShortcut}');
+    expect(infrastructureSourceManagerSource).toContain('<Show when={clusterDeploy()} keyed>');
     expect(infrastructureSourceManagerSource).toContain('Add infrastructure');
     expect(infrastructureSourceManagerSource).not.toContain('Monitor endpoint');
     expect(infrastructureSourceManagerSource).toContain('getInfrastructureEmptyStateSummary');
