@@ -62,8 +62,13 @@ describe('dockerContainerTableModel', () => {
     expect(getDockerContainerColumnWidthStyle('container', 'mobile', ids)).toEqual({
       width: '30%',
     });
+    // State spells out a problem ("Exited (139)", about 77px with padding), so
+    // it takes the room the memory bar did not need.
+    expect(getDockerContainerColumnWidthStyle('state', 'mobile', ids)).toEqual({
+      width: '14.5%',
+    });
     expect(getDockerContainerColumnWidthStyle('memory', 'mobile', ids)).toEqual({
-      width: '16%',
+      width: '13.5%',
     });
   });
 
@@ -73,6 +78,58 @@ describe('dockerContainerTableModel', () => {
         (column) => column.id,
       ),
     ).toEqual(['container', 'host', 'cpu', 'memory', 'updates', 'actions']);
+  });
+
+  it('drops the Host column when every container runs on one host', () => {
+    const ids = getDockerContainerVisibleColumnsForLayout('compact', false, true, true, {
+      singleHost: true,
+    }).map((column) => column.id);
+    expect(ids).not.toContain('host');
+    expect(ids).toContain('image');
+  });
+
+  it('gives the State words and the Uptime header room where the table shows them', () => {
+    // "Exited (139)" is about 70px at 12px and the cell pads 8px a side; the
+    // Uptime header is about 45px with 6px of padding a side. Checked at each
+    // layout's narrowest table, for grouped and single-host tables (a host per
+    // row only appears in a flat multi-host view the user chose).
+    const narrowest: [WorkloadTableLayoutMode, number][] = [
+      ['compact', 900],
+      ['wide', 1440],
+    ];
+    for (const [layoutMode, tableWidth] of narrowest) {
+      for (const includeRestarts of [false, true]) {
+        for (const hostOption of [{ groupedByHost: true }, { singleHost: true }]) {
+          const ids = getDockerContainerVisibleColumnsForLayout(
+            layoutMode,
+            false,
+            includeRestarts,
+            true,
+            hostOption,
+          ).map((column) => column.id);
+          const pixels = (columnId: 'state' | 'uptime') =>
+            (Number.parseFloat(
+              String(getDockerContainerColumnWidthStyle(columnId, layoutMode, ids).width),
+            ) /
+              100) *
+            tableWidth;
+          expect(pixels('state')).toBeGreaterThanOrEqual(86);
+          expect(pixels('uptime')).toBeGreaterThanOrEqual(57);
+        }
+      }
+    }
+  });
+
+  it('drops uptime when no container in view reports one', () => {
+    const ids = getDockerContainerVisibleColumnsForLayout('compact', true, true, true, {
+      includeUptime: false,
+    }).map((column) => column.id);
+    expect(ids).not.toContain('uptime');
+    expect(
+      getDockerContainerVisibleColumnsForLayout('tablet', true, true, true).map(
+        (column) => column.id,
+      ),
+    ).not.toContain('uptime');
   });
 
   it('adds restarts only when the current row set has restart signal to scan', () => {
@@ -118,6 +175,7 @@ describe('dockerContainerTableModel', () => {
       'cpu',
       'memory',
       'restarts',
+      'uptime',
       'ports',
       'updates',
       'actions',

@@ -17,6 +17,7 @@ export type DockerContainerTableColumnId =
   | 'cpu'
   | 'memory'
   | 'restarts'
+  | 'uptime'
   | 'ports'
   | 'networks'
   | 'mounts'
@@ -41,6 +42,7 @@ export const DOCKER_CONTAINER_SORTABLE_COLUMN_IDS = [
   'cpu',
   'memory',
   'restarts',
+  'uptime',
   'updates',
 ] as const satisfies readonly DockerContainerTableColumnId[];
 
@@ -73,6 +75,10 @@ const DOCKER_CONTAINER_COLUMN_MIN_LAYOUT: Record<
   // A phone row cannot fit the Restarts header beside the Update control;
   // the count stays in the row expansion there and returns at mobile width.
   restarts: 'mobile',
+  // Uptime is the current run, so a short one shows a container that just
+  // restarted. Its header needs about 57px, which a tablet row cannot spare
+  // beside State, Restarts and the Update control; the drawer keeps it there.
+  uptime: 'compact',
   updates: 'narrow',
   actions: 'mobile',
   host: 'tablet',
@@ -92,6 +98,7 @@ const DOCKER_CONTAINER_COLUMNS: DockerContainerTableColumn[] = [
   { id: 'cpu', label: 'CPU', kind: 'metric-bar' },
   { id: 'memory', label: 'Memory', kind: 'metric-bar' },
   { id: 'restarts', label: 'Restarts', kind: 'numeric-value' },
+  { id: 'uptime', label: 'Uptime', kind: 'numeric-value' },
   { id: 'ports', label: 'Ports', kind: 'text' },
   { id: 'networks', label: 'Networks', kind: 'text' },
   { id: 'mounts', label: 'Mounts', kind: 'text' },
@@ -110,18 +117,22 @@ const DOCKER_CONTAINER_COLUMNS: DockerContainerTableColumn[] = [
 // menu, so every other column keeps its width. Below the 34rem phone
 // container the badge wraps instead (index.css). Wide rows expand the
 // lifecycle controls to about 92px, so actions gains a little there.
+// State names a problem in words ("Exited (139)", "Restarting", "Unhealthy"),
+// about 77px on a phone and 86px on desktop with padding; it takes that room
+// from the CPU and memory bars, ports and networks, which truncate anyway.
 const DOCKER_CONTAINER_DESKTOP_WIDTHS: Record<DockerContainerTableColumnId, number> = {
   container: 16,
   host: 8,
   runtime: 7,
   image: 16,
-  state: 6,
+  state: 7.5,
   cpu: 6,
-  memory: 10,
+  memory: 7,
   restarts: 6,
+  uptime: 5,
   ports: 10,
   networks: 8,
-  mounts: 9,
+  mounts: 5.5,
   updates: 9,
   actions: 9,
 };
@@ -139,16 +150,16 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
   },
   phone: {
     container: 32,
-    state: 14,
-    cpu: 14,
-    memory: 14,
+    state: 18,
+    cpu: 13,
+    memory: 13,
     updates: 16,
   },
   mobile: {
     container: 30,
-    state: 12,
+    state: 14.5,
     cpu: 10,
-    memory: 16,
+    memory: 13.5,
     restarts: 8,
     updates: 16.25,
     actions: 7.75,
@@ -156,9 +167,9 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
   tablet: {
     container: 27,
     host: 15,
-    state: 10,
+    state: 14,
     cpu: 9.5,
-    memory: 19,
+    memory: 13,
     restarts: 9,
     updates: 14.5,
     actions: 6,
@@ -171,12 +182,13 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
     host: 12,
     runtime: 9.5,
     image: 16.5,
-    state: 7,
-    cpu: 8,
-    memory: 10,
+    state: 10,
+    cpu: 6.5,
+    memory: 8,
     restarts: 8.5,
-    ports: 12,
-    updates: 13.5,
+    uptime: 7,
+    ports: 8,
+    updates: 12.5,
     actions: 6,
   },
 };
@@ -186,15 +198,18 @@ export const getDockerContainerVisibleColumnsForLayout = (
   includeRuntime: boolean,
   includeRestarts: boolean,
   includeState: boolean,
-  options: { groupedByHost?: boolean } = {},
+  options: { groupedByHost?: boolean; singleHost?: boolean; includeUptime?: boolean } = {},
 ): DockerContainerTableColumn[] => {
   const layoutRank = DOCKER_CONTAINER_TABLE_LAYOUT_ORDER[layoutMode];
   return DOCKER_CONTAINER_COLUMNS.filter((column) => {
     // Grouped by host, every row in a group shares its host and engine; the
     // group header carries both instead of repeating them on each row.
     if (options.groupedByHost && (column.id === 'host' || column.id === 'runtime')) return false;
+    // With one host in view the Host column would repeat its name on every row.
+    if (options.singleHost && column.id === 'host') return false;
     if (column.id === 'runtime' && !includeRuntime) return false;
     if (column.id === 'restarts' && !includeRestarts) return false;
+    if (column.id === 'uptime' && options.includeUptime === false) return false;
     // Ultra-narrow rows still need five stable scan fields. Keep the explicit
     // state label there even when every current row is running; wider layouts
     // may continue to remove the otherwise repetitive column.

@@ -10,6 +10,7 @@ import {
   compareDockerServices,
   compareDockerSwarmNodes,
   compareDockerTasks,
+  dockerContainerPortsCompactSummary,
   dockerServiceStack,
   filterDockerIncidents,
   filterDockerResources,
@@ -429,6 +430,54 @@ describe('dockerPageModel', () => {
           }),
         ),
       ).toEqual({ variant: 'danger', label: 'Unhealthy' });
+    });
+
+    it('reads an online container without a reported Docker state as running', () => {
+      expect(
+        mapDockerContainerStatus(
+          makeResource({
+            id: 'c-online-unhealthy',
+            type: 'app-container',
+            status: 'online',
+            docker: { health: 'unhealthy' },
+          }),
+        ),
+      ).toEqual({ variant: 'danger', label: 'Unhealthy' });
+      expect(
+        mapDockerContainerStatus(
+          makeResource({ id: 'c-online', type: 'app-container', status: 'online', docker: {} }),
+        ),
+      ).toEqual({ variant: 'success', label: 'Running' });
+    });
+
+    it('ignores the health status Docker leaves on a stopped container', () => {
+      expect(
+        mapDockerContainerStatus(
+          makeResource({
+            id: 'c-exited-stale',
+            type: 'app-container',
+            docker: { containerState: 'exited', exitCode: 0, health: 'unhealthy' },
+          }),
+        ),
+      ).toEqual({ variant: 'muted', label: 'Exited' });
+      expect(
+        mapDockerContainerStatus(
+          makeResource({
+            id: 'c-exited-crash',
+            type: 'app-container',
+            docker: { containerState: 'exited', exitCode: 1, health: 'unhealthy' },
+          }),
+        ),
+      ).toEqual({ variant: 'danger', label: 'Exited (1)' });
+      expect(
+        mapDockerContainerStatus(
+          makeResource({
+            id: 'c-paused-stale',
+            type: 'app-container',
+            docker: { containerState: 'paused', health: 'unhealthy' },
+          }),
+        ),
+      ).toEqual({ variant: 'muted', label: 'Paused' });
     });
 
     it('flags exited containers with non-zero exit codes as danger', () => {
@@ -1059,5 +1108,33 @@ describe('dockerPageModel', () => {
       ).toEqual(['host-edge']);
       expect(filterDockerIncidents(incidents, 'edge-01', 'all').length).toBe(2);
     });
+  });
+});
+
+describe('dockerContainerPortsCompactSummary', () => {
+  it('drops the all-interfaces address and folds the IPv4 and IPv6 pair', () => {
+    const resource = makeResource({
+      id: 'c-ports',
+      type: 'app-container',
+      docker: {
+        ports: [
+          { ip: '0.0.0.0', publicPort: 23210, privatePort: 8080, protocol: 'tcp' },
+          { ip: '::', publicPort: 23210, privatePort: 8080, protocol: 'tcp' },
+          { ip: '127.0.0.1', publicPort: 5432, privatePort: 5432, protocol: 'tcp' },
+          { privatePort: 9000, protocol: 'udp' },
+        ],
+      },
+    });
+    expect(dockerContainerPortsCompactSummary(resource)).toBe(
+      '23210->8080/tcp, 127.0.0.1:5432->5432/tcp, 9000/udp',
+    );
+  });
+
+  it('reads a dash when nothing is published or exposed', () => {
+    expect(
+      dockerContainerPortsCompactSummary(
+        makeResource({ id: 'c-none', type: 'app-container', docker: {} }),
+      ),
+    ).toBe('—');
   });
 });
