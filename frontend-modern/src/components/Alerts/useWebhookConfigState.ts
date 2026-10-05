@@ -160,7 +160,9 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
     setAdding(true);
     setEditingId(null);
     setFormData(createDefaultFormData());
-    setShowServiceDropdown(false);
+    // A new webhook starts by choosing the service: most installs want
+    // Discord, Telegram, ntfy and the like, not the generic JSON form.
+    setShowServiceDropdown(true);
     setHeaderInputs([createHeaderInput(0, 'Content-Type', 'application/json')]);
     setCustomFieldInputs([]);
   };

@@ -1,4 +1,4 @@
-import { Show, createUniqueId } from 'solid-js';
+import { Show, createSignal, createUniqueId } from 'solid-js';
 
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { TlsVerificationWarningBanner } from '@/components/shared/TlsVerificationWarningBanner';
@@ -8,6 +8,7 @@ import { FormSelect } from '@/components/shared/FormSelect';
 import { FormTextarea } from '@/components/shared/FormTextarea';
 import { DestinationSeveritySelect } from '@/components/Alerts/DestinationSeveritySelect';
 import type { UIAppriseConfig } from './types';
+import { AlertDestinationOffSummary } from './AlertDestinationOffSummary';
 import {
   ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_HELP,
   ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_LABEL,
@@ -26,6 +27,7 @@ import {
   ALERT_DESTINATIONS_APPRISE_MODE_HELP,
   ALERT_DESTINATIONS_APPRISE_MODE_HTTP_LABEL,
   ALERT_DESTINATIONS_APPRISE_MODE_LABEL,
+  ALERT_DESTINATIONS_APPRISE_OFF_MESSAGE,
   ALERT_DESTINATIONS_APPRISE_PANEL_DESCRIPTION,
   ALERT_DESTINATIONS_APPRISE_PANEL_TITLE,
   ALERT_DESTINATIONS_APPRISE_SERVER_URL_HELP,
@@ -65,6 +67,14 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
     timeout: `${fieldIdPrefix}-timeout`,
     minimumSeverity: `${fieldIdPrefix}-minimum-severity`,
   };
+  const [showSettings, setShowSettings] = createSignal(false);
+  let settingsRegion: HTMLDivElement | undefined;
+  // The summary's button unmounts as the form renders, so hand keyboard focus
+  // to the first revealed control instead of dropping it on the document.
+  const revealSettings = () => {
+    setShowSettings(true);
+    settingsRegion?.querySelector<HTMLElement>('input, select, textarea, button')?.focus();
+  };
 
   return (
     <SettingsPanel
@@ -98,206 +108,219 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
       class="min-w-0"
       bodyClass="space-y-4"
     >
-      <div class="space-y-4">
-        <FormSelect
-          id="alert-apprise-delivery-mode"
-          label={ALERT_DESTINATIONS_APPRISE_MODE_LABEL}
-          labelClass="text-xs uppercase tracking-[0.08em]"
-          value={props.config.mode}
-          onInput={(event) => {
-            props.updateApprise({ mode: event.currentTarget.value as 'cli' | 'http' });
-            props.setHasUnsavedChanges(true);
-          }}
-          selectBaseClass={formControl}
-          help={ALERT_DESTINATIONS_APPRISE_MODE_HELP}
-        >
-          <option value="cli">{ALERT_DESTINATIONS_APPRISE_MODE_CLI_LABEL}</option>
-          <option value="http">{ALERT_DESTINATIONS_APPRISE_MODE_HTTP_LABEL}</option>
-        </FormSelect>
-
-        <FormTextarea
-          id={fieldIds.targets}
-          label={ALERT_DESTINATIONS_APPRISE_TARGETS_LABEL}
-          labelClass="text-xs uppercase tracking-[0.08em]"
-          rows={4}
-          textareaBaseClass={`${formControl} min-h-[120px] font-mono`}
-          value={props.config.targetsText}
-          placeholder={ALERT_DESTINATIONS_APPRISE_TARGETS_PLACEHOLDER}
-          onInput={(event) => {
-            props.updateApprise({ targetsText: event.currentTarget.value });
-            props.setHasUnsavedChanges(true);
-          }}
-          help={getAlertDestinationsAppriseTargetsHelp(props.config.mode)}
-        />
-
-        <DestinationSeveritySelect
-          id={fieldIds.minimumSeverity}
-          value={props.config.minimumSeverity ?? 'all'}
-          onChange={(minimumSeverity) => {
-            props.updateApprise({ minimumSeverity });
-            props.setHasUnsavedChanges(true);
-          }}
-        />
-
-        <Show when={props.config.mode === 'cli'}>
-          <div class={formField}>
-            <label for={fieldIds.cliPath} class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-              {ALERT_DESTINATIONS_APPRISE_CLI_PATH_LABEL}
-            </label>
-            <input
-              id={fieldIds.cliPath}
-              type="text"
-              value={props.config.cliPath}
-              class={formControl}
-              placeholder={ALERT_DESTINATIONS_APPRISE_CLI_PATH_PLACEHOLDER}
-              onInput={(event) => {
-                props.updateApprise({ cliPath: event.currentTarget.value });
-                props.setHasUnsavedChanges(true);
-              }}
-            />
-            <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_CLI_PATH_HELP}</p>
-          </div>
-        </Show>
-
-        <Show when={props.config.mode === 'http'}>
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div class={`${formField} sm:col-span-2`}>
-              <label
-                for={fieldIds.serverUrl}
-                class={labelClass('text-xs uppercase tracking-[0.08em]')}
-              >
-                {ALERT_DESTINATIONS_APPRISE_SERVER_URL_LABEL}
-              </label>
-              <input
-                id={fieldIds.serverUrl}
-                type="text"
-                value={props.config.serverUrl}
-                class={formControl}
-                placeholder={ALERT_DESTINATIONS_APPRISE_SERVER_URL_PLACEHOLDER}
-                onInput={(event) => {
-                  props.updateApprise({ serverUrl: event.currentTarget.value });
-                  props.setHasUnsavedChanges(true);
-                }}
-              />
-              <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_SERVER_URL_HELP}</p>
-            </div>
-            <div class={formField}>
-              <label
-                for={fieldIds.configKey}
-                class={labelClass('text-xs uppercase tracking-[0.08em]')}
-              >
-                {ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_LABEL}
-              </label>
-              <input
-                id={fieldIds.configKey}
-                type="text"
-                value={props.config.configKey}
-                class={formControl}
-                placeholder={ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_PLACEHOLDER}
-                onInput={(event) => {
-                  props.updateApprise({ configKey: event.currentTarget.value });
-                  props.setHasUnsavedChanges(true);
-                }}
-              />
-              <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_HELP}</p>
-            </div>
-            <div class={formField}>
-              <label
-                for={fieldIds.apiKey}
-                class={labelClass('text-xs uppercase tracking-[0.08em]')}
-              >
-                {ALERT_DESTINATIONS_APPRISE_API_KEY_LABEL}
-              </label>
-              <input
-                id={fieldIds.apiKey}
-                type="password"
-                value={props.config.apiKey}
-                class={formControl}
-                placeholder={
-                  props.config.hasApiKey
-                    ? ALERT_DESTINATIONS_APPRISE_API_KEY_SAVED_PLACEHOLDER
-                    : ALERT_DESTINATIONS_APPRISE_API_KEY_PLACEHOLDER
-                }
-                autocomplete="new-password"
-                onInput={(event) => {
-                  props.updateApprise({ apiKey: event.currentTarget.value });
-                  props.setHasUnsavedChanges(true);
-                }}
-              />
-              <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_API_KEY_HELP}</p>
-            </div>
-            <div class={formField}>
-              <label
-                for={fieldIds.apiKeyHeader}
-                class={labelClass('text-xs uppercase tracking-[0.08em]')}
-              >
-                {ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_LABEL}
-              </label>
-              <input
-                id={fieldIds.apiKeyHeader}
-                type="text"
-                value={props.config.apiKeyHeader}
-                class={formControl}
-                placeholder={ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_PLACEHOLDER}
-                onInput={(event) => {
-                  props.updateApprise({ apiKeyHeader: event.currentTarget.value });
-                  props.setHasUnsavedChanges(true);
-                }}
-              />
-              <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_HELP}</p>
-            </div>
-            <div class={`${formField} sm:col-span-2`}>
-              <span class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-                {ALERT_DESTINATIONS_APPRISE_TLS_LABEL}
-              </span>
-              <Show when={props.config.skipTlsVerify}>
-                <TlsVerificationWarningBanner
-                  class="mb-3"
-                  subject="this Apprise API endpoint"
-                  remediation="Install a trusted certificate on the Apprise server before using this in production."
-                />
-              </Show>
-              <label class="inline-flex items-center gap-2">
-                <input
-                  id={fieldIds.skipTlsVerify}
-                  type="checkbox"
-                  class="h-4 w-4 rounded-sm border border-border"
-                  checked={props.config.skipTlsVerify}
-                  onChange={(event) => {
-                    props.updateApprise({ skipTlsVerify: event.currentTarget.checked });
-                    props.setHasUnsavedChanges(true);
-                  }}
-                />
-                <span class="text-sm text-muted">
-                  {ALERT_DESTINATIONS_APPRISE_TLS_CHECKBOX_LABEL}
-                </span>
-              </label>
-              <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_TLS_HELP}</p>
-            </div>
-          </div>
-        </Show>
-
-        <div class={formField}>
-          <label for={fieldIds.timeout} class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-            {ALERT_DESTINATIONS_APPRISE_TIMEOUT_LABEL}
-          </label>
-          <input
-            id={fieldIds.timeout}
-            type="number"
-            min="5"
-            max="120"
-            value={props.config.timeoutSeconds}
-            class={formControl}
+      <Show
+        when={props.config.enabled || showSettings()}
+        fallback={
+          <AlertDestinationOffSummary
+            message={ALERT_DESTINATIONS_APPRISE_OFF_MESSAGE}
+            onShowSettings={revealSettings}
+          />
+        }
+      >
+        <div ref={settingsRegion} class="space-y-4">
+          <FormSelect
+            id="alert-apprise-delivery-mode"
+            label={ALERT_DESTINATIONS_APPRISE_MODE_LABEL}
+            labelClass="text-xs uppercase tracking-[0.08em]"
+            value={props.config.mode}
             onInput={(event) => {
-              const raw = event.currentTarget.valueAsNumber;
-              const safe = Number.isNaN(raw) ? 15 : Math.min(120, Math.max(5, Math.trunc(raw)));
-              props.updateApprise({ timeoutSeconds: safe });
+              props.updateApprise({ mode: event.currentTarget.value as 'cli' | 'http' });
+              props.setHasUnsavedChanges(true);
+            }}
+            selectBaseClass={formControl}
+            help={ALERT_DESTINATIONS_APPRISE_MODE_HELP}
+          >
+            <option value="cli">{ALERT_DESTINATIONS_APPRISE_MODE_CLI_LABEL}</option>
+            <option value="http">{ALERT_DESTINATIONS_APPRISE_MODE_HTTP_LABEL}</option>
+          </FormSelect>
+
+          <FormTextarea
+            id={fieldIds.targets}
+            label={ALERT_DESTINATIONS_APPRISE_TARGETS_LABEL}
+            labelClass="text-xs uppercase tracking-[0.08em]"
+            rows={4}
+            textareaBaseClass={`${formControl} min-h-[120px] font-mono`}
+            value={props.config.targetsText}
+            placeholder={ALERT_DESTINATIONS_APPRISE_TARGETS_PLACEHOLDER}
+            onInput={(event) => {
+              props.updateApprise({ targetsText: event.currentTarget.value });
+              props.setHasUnsavedChanges(true);
+            }}
+            help={getAlertDestinationsAppriseTargetsHelp(props.config.mode)}
+          />
+
+          <DestinationSeveritySelect
+            id={fieldIds.minimumSeverity}
+            value={props.config.minimumSeverity ?? 'all'}
+            onChange={(minimumSeverity) => {
+              props.updateApprise({ minimumSeverity });
               props.setHasUnsavedChanges(true);
             }}
           />
-          <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_TIMEOUT_HELP}</p>
+
+          <Show when={props.config.mode === 'cli'}>
+            <div class={formField}>
+              <label
+                for={fieldIds.cliPath}
+                class={labelClass('text-xs uppercase tracking-[0.08em]')}
+              >
+                {ALERT_DESTINATIONS_APPRISE_CLI_PATH_LABEL}
+              </label>
+              <input
+                id={fieldIds.cliPath}
+                type="text"
+                value={props.config.cliPath}
+                class={formControl}
+                placeholder={ALERT_DESTINATIONS_APPRISE_CLI_PATH_PLACEHOLDER}
+                onInput={(event) => {
+                  props.updateApprise({ cliPath: event.currentTarget.value });
+                  props.setHasUnsavedChanges(true);
+                }}
+              />
+              <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_CLI_PATH_HELP}</p>
+            </div>
+          </Show>
+
+          <Show when={props.config.mode === 'http'}>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div class={`${formField} sm:col-span-2`}>
+                <label
+                  for={fieldIds.serverUrl}
+                  class={labelClass('text-xs uppercase tracking-[0.08em]')}
+                >
+                  {ALERT_DESTINATIONS_APPRISE_SERVER_URL_LABEL}
+                </label>
+                <input
+                  id={fieldIds.serverUrl}
+                  type="text"
+                  value={props.config.serverUrl}
+                  class={formControl}
+                  placeholder={ALERT_DESTINATIONS_APPRISE_SERVER_URL_PLACEHOLDER}
+                  onInput={(event) => {
+                    props.updateApprise({ serverUrl: event.currentTarget.value });
+                    props.setHasUnsavedChanges(true);
+                  }}
+                />
+                <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_SERVER_URL_HELP}</p>
+              </div>
+              <div class={formField}>
+                <label
+                  for={fieldIds.configKey}
+                  class={labelClass('text-xs uppercase tracking-[0.08em]')}
+                >
+                  {ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_LABEL}
+                </label>
+                <input
+                  id={fieldIds.configKey}
+                  type="text"
+                  value={props.config.configKey}
+                  class={formControl}
+                  placeholder={ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_PLACEHOLDER}
+                  onInput={(event) => {
+                    props.updateApprise({ configKey: event.currentTarget.value });
+                    props.setHasUnsavedChanges(true);
+                  }}
+                />
+                <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_CONFIG_KEY_HELP}</p>
+              </div>
+              <div class={formField}>
+                <label
+                  for={fieldIds.apiKey}
+                  class={labelClass('text-xs uppercase tracking-[0.08em]')}
+                >
+                  {ALERT_DESTINATIONS_APPRISE_API_KEY_LABEL}
+                </label>
+                <input
+                  id={fieldIds.apiKey}
+                  type="password"
+                  value={props.config.apiKey}
+                  class={formControl}
+                  placeholder={
+                    props.config.hasApiKey
+                      ? ALERT_DESTINATIONS_APPRISE_API_KEY_SAVED_PLACEHOLDER
+                      : ALERT_DESTINATIONS_APPRISE_API_KEY_PLACEHOLDER
+                  }
+                  autocomplete="new-password"
+                  onInput={(event) => {
+                    props.updateApprise({ apiKey: event.currentTarget.value });
+                    props.setHasUnsavedChanges(true);
+                  }}
+                />
+                <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_API_KEY_HELP}</p>
+              </div>
+              <div class={formField}>
+                <label
+                  for={fieldIds.apiKeyHeader}
+                  class={labelClass('text-xs uppercase tracking-[0.08em]')}
+                >
+                  {ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_LABEL}
+                </label>
+                <input
+                  id={fieldIds.apiKeyHeader}
+                  type="text"
+                  value={props.config.apiKeyHeader}
+                  class={formControl}
+                  placeholder={ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_PLACEHOLDER}
+                  onInput={(event) => {
+                    props.updateApprise({ apiKeyHeader: event.currentTarget.value });
+                    props.setHasUnsavedChanges(true);
+                  }}
+                />
+                <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_HELP}</p>
+              </div>
+              <div class={`${formField} sm:col-span-2`}>
+                <span class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+                  {ALERT_DESTINATIONS_APPRISE_TLS_LABEL}
+                </span>
+                <Show when={props.config.skipTlsVerify}>
+                  <TlsVerificationWarningBanner
+                    class="mb-3"
+                    subject="this Apprise API endpoint"
+                    remediation="Install a trusted certificate on the Apprise server before using this in production."
+                  />
+                </Show>
+                <label class="inline-flex items-center gap-2">
+                  <input
+                    id={fieldIds.skipTlsVerify}
+                    type="checkbox"
+                    class="h-4 w-4 rounded-sm border border-border"
+                    checked={props.config.skipTlsVerify}
+                    onChange={(event) => {
+                      props.updateApprise({ skipTlsVerify: event.currentTarget.checked });
+                      props.setHasUnsavedChanges(true);
+                    }}
+                  />
+                  <span class="text-sm text-muted">
+                    {ALERT_DESTINATIONS_APPRISE_TLS_CHECKBOX_LABEL}
+                  </span>
+                </label>
+                <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_TLS_HELP}</p>
+              </div>
+            </div>
+          </Show>
+
+          <div class={formField}>
+            <label for={fieldIds.timeout} class={labelClass('text-xs uppercase tracking-[0.08em]')}>
+              {ALERT_DESTINATIONS_APPRISE_TIMEOUT_LABEL}
+            </label>
+            <input
+              id={fieldIds.timeout}
+              type="number"
+              min="5"
+              max="120"
+              value={props.config.timeoutSeconds}
+              class={formControl}
+              onInput={(event) => {
+                const raw = event.currentTarget.valueAsNumber;
+                const safe = Number.isNaN(raw) ? 15 : Math.min(120, Math.max(5, Math.trunc(raw)));
+                props.updateApprise({ timeoutSeconds: safe });
+                props.setHasUnsavedChanges(true);
+              }}
+            />
+            <p class={formHelpText}>{ALERT_DESTINATIONS_APPRISE_TIMEOUT_HELP}</p>
+          </div>
         </div>
-      </div>
+      </Show>
     </SettingsPanel>
   );
 }

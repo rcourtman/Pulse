@@ -1,4 +1,4 @@
-import { createMemo, createSignal } from 'solid-js';
+import { batch, createMemo, createSignal } from 'solid-js';
 
 import { NotificationsAPI, type NotificationHealth } from '@/api/notifications';
 import { notificationStore } from '@/stores/notifications';
@@ -31,13 +31,20 @@ export function useNotificationDeliveryHealth(options?: {
     try {
       const health = await NotificationsAPI.getHealth();
       if (request !== latestHealthRequest) return;
-      setDeliveryHealth(health);
-      setDeliveryHealthUnavailable(health.queue.status === 'unavailable');
+      // Snapshot and availability change together. Set one at a time and
+      // deliveryNeedsAttention reads a half-updated pair (no health, not yet
+      // unavailable), briefly unmounting the warning and everything it holds.
+      batch(() => {
+        setDeliveryHealth(health);
+        setDeliveryHealthUnavailable(health.queue.status === 'unavailable');
+      });
     } catch (error) {
       if (request !== latestHealthRequest) return;
       logger.error('Failed to load notification delivery health', error);
-      setDeliveryHealth(null);
-      setDeliveryHealthUnavailable(true);
+      batch(() => {
+        setDeliveryHealth(null);
+        setDeliveryHealthUnavailable(true);
+      });
     } finally {
       if (request === latestHealthRequest) {
         setLoadedOnce(true);

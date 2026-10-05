@@ -137,6 +137,89 @@ describe('DestinationsTab recovery while editing SMTP', () => {
     vi.restoreAllMocks();
   });
 
+  it('collapses switched-off email to one line and reveals settings without enabling it', async () => {
+    const [emailConfig, setEmailConfig] = createSignal({ ...buildEmailConfig(), enabled: false });
+    const [appriseConfig, setAppriseConfig] = createSignal(buildAppriseConfig());
+    const dirty = vi.fn();
+    render(() => (
+      <DestinationsTab
+        emailConfig={emailConfig}
+        setEmailConfig={setEmailConfig}
+        appriseConfig={appriseConfig}
+        setAppriseConfig={setAppriseConfig}
+        setHasUnsavedChanges={dirty}
+        configLoadError={() => null}
+        isRetrying={() => false}
+        isLoadingDestinations={() => false}
+        onRetryLoad={vi.fn()}
+        webhooks={() => []}
+        deadManPingUrl={() => ''}
+        setDeadManPingUrl={vi.fn()}
+        pushMinimumSeverity={() => 'all'}
+        setPushMinimumSeverity={vi.fn()}
+      />
+    ));
+
+    await screen.findByText('Off. Turn it on to send alerts by email through your SMTP server.');
+    expect(screen.queryByRole('textbox', { name: 'SMTP server' })).toBeNull();
+
+    const reveal = screen.getByRole('button', { name: 'Show settings' });
+    reveal.focus();
+    fireEvent.click(reveal);
+
+    expect(screen.getByRole('textbox', { name: 'SMTP server' })).toBeInTheDocument();
+    // The button unmounts, so focus lands on the first revealed control.
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.closest('[data-settings-panel]')).not.toBeNull();
+    expect(emailConfig().enabled).toBe(false);
+    expect(dirty).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { health: 'healthy', logFirst: false },
+    { health: 'degraded', logFirst: true },
+  ] as const)(
+    'places delivery activity $health: before destinations only when delivery is degraded',
+    async ({ health, logFirst }) => {
+      if (health === 'healthy') {
+        const healthy = degradedHealth();
+        healthy.overallHealthy = true;
+        healthy.queue.status = 'healthy';
+        healthy.queue.healthy = true;
+        vi.mocked(NotificationsAPI.getHealth).mockResolvedValue(healthy);
+      }
+      const [emailConfig, setEmailConfig] = createSignal(buildEmailConfig());
+      const [appriseConfig, setAppriseConfig] = createSignal(buildAppriseConfig());
+      render(() => (
+        <DestinationsTab
+          emailConfig={emailConfig}
+          setEmailConfig={setEmailConfig}
+          appriseConfig={appriseConfig}
+          setAppriseConfig={setAppriseConfig}
+          setHasUnsavedChanges={vi.fn()}
+          configLoadError={() => null}
+          isRetrying={() => false}
+          isLoadingDestinations={() => false}
+          onRetryLoad={vi.fn()}
+          webhooks={() => []}
+          deadManPingUrl={() => ''}
+          setDeadManPingUrl={vi.fn()}
+          pushMinimumSeverity={() => 'all'}
+          setPushMinimumSeverity={vi.fn()}
+        />
+      ));
+
+      const smtp = await screen.findByRole('textbox', { name: 'SMTP server' });
+      if (logFirst) await screen.findByRole('button', { name: 'Retry retained deliveries' });
+      const activity = await screen.findByText('SMTP fixture rejected');
+      const activityFollowsSmtp = Boolean(
+        smtp.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+      expect(activityFollowsSmtp).toBe(!logFirst);
+      expect(screen.getAllByText('SMTP fixture rejected')).toHaveLength(1);
+    },
+  );
+
   it.each(
     (
       [
