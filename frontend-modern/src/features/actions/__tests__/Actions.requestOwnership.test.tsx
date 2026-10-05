@@ -171,4 +171,19 @@ describe('Actions request ownership', () => {
       screen.queryByRole('button', { name: /docker:container:edge-a/ }),
     ).not.toBeInTheDocument();
   });
+
+  it('opens History from its route and returns to Open through the tab', async () => {
+    window.history.replaceState(null, '', '/actions/history');
+    renderActions();
+
+    expect(await screen.findByRole('tab', { name: 'History' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await waitFor(() => expect(ResourceActionsAPI.listActions).toHaveBeenLastCalledWith('settled'));
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Open' }));
+    await waitFor(() => expect(window.location.pathname).toBe('/actions'));
+    await waitFor(() => expect(ResourceActionsAPI.listActions).toHaveBeenLastCalledWith('pending'));
+  });
 });

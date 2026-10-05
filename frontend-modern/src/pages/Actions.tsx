@@ -1,5 +1,5 @@
 import { Show, createEffect, createMemo, createSignal, onMount } from 'solid-js';
-import { useLocation, useSearchParams } from '@solidjs/router';
+import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import EyeIcon from 'lucide-solid/icons/eye';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
@@ -22,7 +22,12 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { Subtabs } from '@/components/shared/Subtabs';
 import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
 import { PlatformWindowedList } from '@/features/platformPage/PlatformWindowedList';
-import { ACTION_REVIEW_QUERY_PARAM, parseActionReviewId } from '@/features/actions/actionRouting';
+import {
+  ACTION_REVIEW_QUERY_PARAM,
+  buildActionsViewPath,
+  parseActionReviewId,
+  parseActionsView,
+} from '@/features/actions/actionRouting';
 import {
   formatActionName,
   getActionOriginLabel,
@@ -47,7 +52,13 @@ const getInboxViewForState = (state: ActionAuditState): ActionInboxView =>
 export function Actions() {
   const location = useLocation();
   const [, setSearchParams] = useSearchParams();
-  const [view, setView] = createSignal<ActionInboxView>('pending');
+  const navigate = useNavigate();
+  const view = createMemo<ActionInboxView>(() => parseActionsView(location.pathname));
+  const setView = (next: ActionInboxView, options: { replace?: boolean } = {}) => {
+    if (view() === next) return;
+    // The views switch in place, so navigation must not scroll to the top.
+    navigate(`${buildActionsViewPath(next)}${location.search}`, { ...options, scroll: false });
+  };
   const [selected, setSelected] = createSignal<ActionDetailResponse | null>(null);
   const [detailError, setDetailError] = createSignal('');
   const [actions, setActions] = createSignal<ActionAuditRecord[]>([]);
@@ -127,7 +138,7 @@ export function Actions() {
         return;
       }
       setSelected(detail);
-      setView(getInboxViewForState(detail.audit.state));
+      setView(getInboxViewForState(detail.audit.state), { replace: true });
     } catch (cause) {
       if (
         generation !== detailRequestGeneration ||
@@ -362,7 +373,7 @@ export function Actions() {
           setSelected(detail);
           const nextView = getInboxViewForState(detail.audit.state);
           if (view() === nextView) await loadActions();
-          else setView(nextView); // the view effect loads the new list once
+          else setView(nextView, { replace: true }); // the view effect loads the new list once
         }}
       />
     </div>
