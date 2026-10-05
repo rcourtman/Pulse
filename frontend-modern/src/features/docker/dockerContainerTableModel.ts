@@ -175,9 +175,13 @@ export const getDockerContainerVisibleColumnsForLayout = (
   includeRuntime: boolean,
   includeRestarts: boolean,
   includeState: boolean,
+  options: { groupedByHost?: boolean } = {},
 ): DockerContainerTableColumn[] => {
   const layoutRank = DOCKER_CONTAINER_TABLE_LAYOUT_ORDER[layoutMode];
   return DOCKER_CONTAINER_COLUMNS.filter((column) => {
+    // Grouped by host, every row in a group shares its host and engine; the
+    // group header carries both instead of repeating them on each row.
+    if (options.groupedByHost && (column.id === 'host' || column.id === 'runtime')) return false;
     if (column.id === 'runtime' && !includeRuntime) return false;
     if (column.id === 'restarts' && !includeRestarts) return false;
     // Ultra-narrow rows still need five stable scan fields. Keep the explicit

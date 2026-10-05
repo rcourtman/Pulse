@@ -1,3 +1,4 @@
+import { getResourceStaleness } from '@/features/platformPage/resourceStaleness';
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { useSearchParams } from '@solidjs/router';
 import { type FilterDef } from '@/components/shared/FilterBar';
@@ -419,7 +420,14 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   });
   const groupedRows = createMemo<DockerContainerHostGroup[]>(() => {
     const groups = new Map<string, Resource[]>();
-    for (const resource of sortedRows()) {
+    // Host and engine columns are hidden while grouped, so a sort saved on
+    // either would reorder rows with no visible indicator; grouped mode falls
+    // back to the attention-first order instead and flat mode keeps the sort.
+    const hiddenSortKey = sort.sortKey() === 'host' || sort.sortKey() === 'runtime';
+    const sourceRows = hiddenSortKey
+      ? [...scopedRows()].sort(compareDockerContainers)
+      : sortedRows();
+    for (const resource of sourceRows) {
       const host = dockerHostName(resource);
       const rows = groups.get(host);
       if (rows) rows.push(resource);
@@ -467,6 +475,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
       showRuntimeColumn(),
       showRestartColumn(),
       showStateColumn(),
+      { groupedByHost: isGroupable() && groupingMode() === 'grouped' },
     ),
   );
   const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
@@ -699,6 +708,20 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     const indicator = group.hostResource
       ? getSimpleStatusIndicator(group.hostResource.status)
       : undefined;
+    // The host's own engine metadata is authoritative; without it, name every
+    // distinct engine its containers report rather than just the first row's.
+    const engine = () => {
+      const host = group.hostResource;
+      if (host) {
+        const hostSummary = runtimeSummary(host);
+        if (hostSummary !== '—') return hostSummary;
+      }
+      const summaries = [...new Set(group.rows.map((row) => runtimeSummary(row)))]
+        .filter((summary) => summary !== '—')
+        .sort((a, b) => a.localeCompare(b));
+      return summaries.length > 0 ? summaries.join(', ') : null;
+    };
+    const staleness = () => getResourceStaleness(group.hostResource);
     return (
       <TableRow class={getGroupedTableRowClass()} data-docker-host-group={group.host}>
         <TableCell class={getGroupedTableRowCellClass()} colspan={visibleColumns().length}>
@@ -722,6 +745,20 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
             <span class={GROUPED_TABLE_ROW_BADGE_CLASS}>
               {group.rows.length} {group.rows.length === 1 ? 'container' : 'containers'}
             </span>
+            <Show when={engine()}>
+              {(label) => <span class="shrink-0 text-[10px] text-muted">{label()}</span>}
+            </Show>
+            <Show when={staleness()}>
+              {(stale) => (
+                <span
+                  class="shrink-0 text-[10px] font-medium text-amber-700 dark:text-amber-300"
+                  title={`${stale().label}. Container states and metrics are the last values received.`}
+                  data-docker-host-group-stale
+                >
+                  {stale().label}
+                </span>
+              )}
+            </Show>
           </div>
         </TableCell>
       </TableRow>

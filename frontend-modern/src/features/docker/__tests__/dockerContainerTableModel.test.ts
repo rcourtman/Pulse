@@ -7,6 +7,20 @@ import {
 } from '../dockerContainerTableModel';
 
 describe('dockerContainerTableModel', () => {
+  it('drops host and engine columns when rows are grouped under their host', () => {
+    const flat = getDockerContainerVisibleColumnsForLayout('wide', true, true, true).map(
+      (column) => column.id,
+    );
+    const grouped = getDockerContainerVisibleColumnsForLayout('wide', true, true, true, {
+      groupedByHost: true,
+    }).map((column) => column.id);
+    expect(flat).toEqual(expect.arrayContaining(['host', 'runtime']));
+    // The group header names the host and its engine once for every row.
+    expect(grouped).not.toContain('host');
+    expect(grouped).not.toContain('runtime');
+    expect(grouped).toEqual(flat.filter((id) => id !== 'host' && id !== 'runtime'));
+  });
+
   it('keeps five readable container signals in ultra-narrow containers', () => {
     const columns = getDockerContainerVisibleColumnsForLayout('narrow', true, true, true);
     const ids = columns.map((column) => column.id);

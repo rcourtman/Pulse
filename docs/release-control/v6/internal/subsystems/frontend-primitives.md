@@ -1219,6 +1219,16 @@ expiry into "just now". The banner describes paused attention rather than
 promising that rejected alert observations are acknowledged. Active and
 future-window mounted regressions pin these user-visible claims.
 
+### Platform tables read staleness from one helper
+
+`features/platformPage/resourceStaleness.ts` turns the backend's `stale`
+health verdict into a short label for platform tables, so a table that stops
+presenting a silent resource's last metrics as live does it the same way:
+dimmed metric cells plus the age with a no-signal icon, the full sentence on
+hover and as the accessible name. Grouped platform tables that already name
+the group in a shared grouped-table header row drop columns that would repeat
+the group's own value on every row.
+
 ### Retained state in bounded platform windows
 
 `PlatformWindowedRows` and `PlatformWindowedList` keep one keyed renderer owner
@@ -6444,7 +6454,8 @@ Feature-owned route surfaces under `frontend-modern/src/features/` must also
 keep their shell/runtime split explicit once a subsystem grows real transport
 or polling lifecycle. The Patrol feature is the current reference shape:
 `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` stays the
-feature shell, `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
+feature shell, reads its active workspace view from the route through
+`patrolWorkspaceRouting.ts` rather than holding it in component state, `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
 owns the runtime state machine, `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
 owns the pure investigation-context summary and Patrol-to-Assistant operator
 briefing derivation, including the rule that active findings, pending
@@ -7868,6 +7879,17 @@ Alert feature state owns persistence and entitlement gating; the primitive
 owns presentation only. `alertDestinationsPresentation.test.ts` pins the
 shared vocabulary and the distinct mobile guidance.
 
+### Switched-off destinations collapse to one line
+
+`AlertDestinationOffSummary` is the shared off-state body for destination
+panels: one muted sentence saying what turning the destination on does and a
+"Show settings" link button that reveals the panel's form without changing
+its enabled state, then moves keyboard focus to the first revealed control
+because the button itself unmounts. Email and Apprise panels compose it
+instead of rendering a full greyed form, so the panel header and its enable
+toggle keep their place while the page stays short. Apprise keeps its header
+test action; email's test action returns with its form.
+
 ### Escalation configuration uses destination identity, not channel aliases
 
 The alerts-owned escalation section composes shared settings, toggle, and form
@@ -8112,6 +8134,17 @@ that platform's existing incident table rather than a new summary card:
 the vSphere Overview renders `VsphereAlertsTable` with `showToolbar={false}`
 above its hosts table, only when signals exist, matching the TrueNAS
 Overview's health-alert table. Filtering stays on the platform's Health tab.
+
+### Kubernetes nodes state readiness in words
+
+`KubernetesNodesTable` renders the node state from `mapKubernetesNodeStatus`
+as a desktop Status column beside the name (a shared `StatusIndicatorBadge`
+for anything other than Ready, muted text for Ready) and sorts NotReady first.
+The status dot stays decorative; a phone-only screen-reader label beside the
+name announces the state where the column is demoted under the duplicate-state
+rule, so no width announces it twice. The overview reuses the same table,
+limited to nodes needing attention and with its own persisted sort slot,
+rather than a summary card.
 
 ### Large platform notices keep the inventory in view
 

@@ -32,6 +32,18 @@ export function DestinationsTab(props: DestinationsTabProps) {
   // Destinations configured here are inert while delivery is gated off, so the
   // pause has to be visible on this surface rather than only on the overview.
   const deliveryPaused = useAlertDeliveryPausedReason();
+  const deliveryLog = () => (
+    <AlertDeliveryLogCard
+      log={state.deliveryLog()}
+      unavailable={state.deliveryLogUnavailable()}
+      refreshing={state.refreshingDeliveryLog()}
+      onRefresh={() => void state.loadDeliveryLog()}
+      webhooks={state.webhooks()}
+      heldEvents={state.heldEvents()}
+      heldEventsUnavailable={state.heldEventsUnavailable()}
+      refreshingHeldEvents={state.refreshingHeldEvents()}
+    />
+  );
 
   return (
     <div class="flex w-full max-w-full flex-col gap-6 md:gap-8">
@@ -61,18 +73,9 @@ export function DestinationsTab(props: DestinationsTabProps) {
             onRetryFailures={() => void state.retryTerminalFailures()}
             onDismissFailures={() => void state.dismissTerminalFailures()}
           />
+          {/* Degraded delivery keeps its evidence beside the recovery controls. */}
+          {deliveryLog()}
         </Show>
-
-        <AlertDeliveryLogCard
-          log={state.deliveryLog()}
-          unavailable={state.deliveryLogUnavailable()}
-          refreshing={state.refreshingDeliveryLog()}
-          onRefresh={() => void state.loadDeliveryLog()}
-          webhooks={state.webhooks()}
-          heldEvents={state.heldEvents()}
-          heldEventsUnavailable={state.heldEventsUnavailable()}
-          refreshingHeldEvents={state.refreshingHeldEvents()}
-        />
 
         <Show when={state.hasLoadError()}>
           <AlertDestinationsLoadErrorCard
@@ -81,6 +84,21 @@ export function DestinationsTab(props: DestinationsTabProps) {
             onRetry={state.handleRetry}
           />
         </Show>
+
+        {/*
+          Unless delivery is degraded, destinations lead: "where do my alerts
+          go" is the page's job. Webhooks (Discord, Telegram, ntfy, Gotify,
+          Teams, Slack) come first because they are what most installs use, and
+          delivery activity follows the destinations.
+        */}
+        <AlertWebhookDestinationsSection
+          webhooks={state.webhooks()}
+          addWebhook={state.addWebhook}
+          updateWebhook={state.updateWebhook}
+          deleteWebhook={state.deleteWebhook}
+          testWebhook={state.testWebhook}
+          testingWebhook={state.testingWebhook()}
+        />
 
         <AlertEmailDestinationsSection
           config={props.emailConfig()}
@@ -98,14 +116,7 @@ export function DestinationsTab(props: DestinationsTabProps) {
           testing={state.testingApprise()}
         />
 
-        <AlertWebhookDestinationsSection
-          webhooks={state.webhooks()}
-          addWebhook={state.addWebhook}
-          updateWebhook={state.updateWebhook}
-          deleteWebhook={state.deleteWebhook}
-          testWebhook={state.testWebhook}
-          testingWebhook={state.testingWebhook()}
-        />
+        <Show when={!state.deliveryNeedsAttention()}>{deliveryLog()}</Show>
 
         <AlertDeadManDestinationSection
           pingUrl={props.deadManPingUrl}

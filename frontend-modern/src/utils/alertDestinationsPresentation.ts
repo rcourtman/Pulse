@@ -20,6 +20,10 @@ export const ALERT_DESTINATIONS_EMAIL_PANEL_DESCRIPTION =
 export const ALERT_DESTINATIONS_APPRISE_PANEL_TITLE = 'Apprise notifications';
 export const ALERT_DESTINATIONS_APPRISE_PANEL_DESCRIPTION =
   'Relay grouped alerts through Apprise by using the CLI or a remote API.';
+export const ALERT_DESTINATIONS_EMAIL_OFF_MESSAGE =
+  'Off. Turn it on to send alerts by email through your SMTP server.';
+export const ALERT_DESTINATIONS_APPRISE_OFF_MESSAGE =
+  'Off. Turn it on to relay alerts through the Apprise CLI or an Apprise API server.';
 export const ALERT_DESTINATIONS_APPRISE_TEST_LABEL = 'Send test';
 export const ALERT_DESTINATIONS_APPRISE_TESTING_LABEL = 'Testing…';
 export const ALERT_DESTINATIONS_APPRISE_MODE_LABEL = 'Delivery mode';
