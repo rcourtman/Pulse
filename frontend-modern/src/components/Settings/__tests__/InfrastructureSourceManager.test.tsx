@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import infrastructureSourceManagerSource from '../InfrastructureSourceManager.tsx?raw';
 import {
@@ -12,6 +12,19 @@ import {
   type InfrastructureSystemRow,
 } from '../connectionsTableModel';
 import type { Connection } from '@/api/connections';
+
+const clusterDeployApi = vi.hoisted(() => ({
+  getCandidates: vi.fn(),
+  createPreflight: vi.fn(),
+  getPreflight: vi.fn(),
+  createJob: vi.fn(),
+  getJob: vi.fn(),
+}));
+
+vi.mock('@/api/agentDeploy', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/agentDeploy')>();
+  return { ...actual, ClusterAgentDeployAPI: clusterDeployApi };
+});
 
 const connectionFixture = (overrides: Partial<Connection> = {}): Connection => ({
   id: 'agent:host-1',
@@ -567,6 +580,182 @@ describe('InfrastructureSourceManager setup summary', () => {
     fireEvent.click(installOnPveB);
 
     expect(onAddSourceStep).toHaveBeenCalledWith('linux-host');
+  });
+
+  it('installs uncovered cluster members in one step when a sibling already runs the agent', async () => {
+    clusterDeployApi.getCandidates.mockResolvedValue({
+      clusterId: 'remote',
+      clusterName: 'remote',
+      sourceAgents: [{ agentId: 'agent-pve-a', nodeId: 'n-a', online: true }],
+      nodes: [
+        { nodeId: 'n-a', name: 'pve-a', ip: '10.15.5.11', hasAgent: true, deployable: false },
+        { nodeId: 'n-b', name: 'pve-b', ip: '10.15.5.12', hasAgent: false, deployable: true },
+      ],
+    });
+    const onAddSourceStep = vi.fn();
+    const attachedAgent = connectionFixture({ id: 'agent:pve-a', name: 'pve-a', address: 'pve-a' });
+
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => [
+          row({
+            id: 'pve:remote-cluster',
+            ownerType: 'pve',
+            name: 'remote',
+            clusterName: 'remote',
+            subtitle: 'Cluster · 2 nodes',
+            source: 'both',
+            isCluster: true,
+            canEdit: true,
+            connection: connectionFixture({
+              id: 'pve:remote-cluster',
+              type: 'pve',
+              name: 'remote',
+              source: 'manual',
+              capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+            }),
+            attachedConnections: [attachedAgent],
+            members: [
+              member({
+                id: 'pve-a',
+                name: 'pve-a',
+                source: 'both',
+                agentConnection: attachedAgent,
+              }),
+              member({
+                id: 'pve-b',
+                name: 'pve-b',
+                source: 'api',
+                coverageLabels: [],
+                agentConnection: undefined,
+              }),
+            ],
+          }),
+        ]}
+        discoveredNodes={() => []}
+        discoveryEnabled={false}
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly={false}
+        onAddSourceStep={onAddSourceStep}
+        onOpenConnection={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 nodes for remote' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Install agent on pve-b' }));
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Install Pulse Agent on remote nodes',
+    });
+    expect(await within(dialog).findByRole('checkbox', { name: /pve-b/ })).toBeChecked();
+    expect(clusterDeployApi.getCandidates).toHaveBeenCalledWith('remote');
+    expect(onAddSourceStep).not.toHaveBeenCalled();
+  });
+
+  it('keeps a started cluster install going after the dialog is closed', async () => {
+    clusterDeployApi.getCandidates.mockResolvedValue({
+      clusterId: 'remote',
+      clusterName: 'remote',
+      sourceAgents: [{ agentId: 'agent-pve-a', nodeId: 'n-a', online: true }],
+      nodes: [
+        { nodeId: 'n-a', name: 'pve-a', ip: '10.15.5.11', hasAgent: true, deployable: false },
+        { nodeId: 'n-b', name: 'pve-b', ip: '10.15.5.12', hasAgent: false, deployable: true },
+      ],
+    });
+    clusterDeployApi.createPreflight.mockResolvedValue({ preflightId: 'pf_r', status: 'running' });
+    clusterDeployApi.getPreflight.mockResolvedValue({
+      id: 'pf_r',
+      clusterId: 'remote',
+      status: 'succeeded',
+      targets: [
+        { id: 't1', nodeId: 'n-b', nodeName: 'pve-b', nodeIP: '10.15.5.12', status: 'ready' },
+      ],
+    });
+    clusterDeployApi.createJob.mockResolvedValue({
+      jobId: 'dep_r',
+      acceptedTargets: ['n-b'],
+      skippedTargets: [],
+    });
+    clusterDeployApi.getJob.mockResolvedValue({
+      id: 'dep_r',
+      clusterId: 'remote',
+      status: 'failed',
+      targets: [
+        {
+          id: 't2',
+          nodeId: 'n-b',
+          nodeName: 'pve-b',
+          nodeIP: '10.15.5.12',
+          status: 'failed_permanent',
+        },
+      ],
+    });
+    const attachedAgent = connectionFixture({ id: 'agent:pve-a', name: 'pve-a', address: 'pve-a' });
+
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => [
+          row({
+            id: 'pve:remote-cluster',
+            ownerType: 'pve',
+            name: 'remote',
+            clusterName: 'remote',
+            subtitle: 'Cluster · 2 nodes',
+            source: 'both',
+            isCluster: true,
+            canEdit: true,
+            connection: connectionFixture({
+              id: 'pve:remote-cluster',
+              type: 'pve',
+              name: 'remote',
+              source: 'manual',
+              capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+            }),
+            attachedConnections: [attachedAgent],
+            members: [
+              member({
+                id: 'pve-a',
+                name: 'pve-a',
+                source: 'both',
+                agentConnection: attachedAgent,
+              }),
+              member({
+                id: 'pve-b',
+                name: 'pve-b',
+                source: 'api',
+                coverageLabels: [],
+                agentConnection: undefined,
+              }),
+            ],
+          }),
+        ]}
+        discoveredNodes={() => []}
+        discoveryEnabled={false}
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly={false}
+        onAddSourceStep={vi.fn()}
+        onOpenConnection={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 nodes for remote' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Install agent on pve-b' }));
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Install Pulse Agent on remote nodes',
+    });
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Install on 1 node' }));
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Close' }));
+
+    // The parent has unmounted the dialog; the run must still start the install
+    // with the cluster it captured, rather than reading a stale accessor.
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(
+      () =>
+        expect(clusterDeployApi.createJob).toHaveBeenCalledWith('remote', 'agent-pve-a', 'pf_r', [
+          'n-b',
+        ]),
+      { timeout: 6000 },
+    );
   });
 
   it('offers the same uncovered-node onboarding in the narrow card layout', () => {

@@ -26,6 +26,14 @@
       ]
     },
     {
+      "path": "frontend-modern/src/api/agentDeploy.ts",
+      "rationale": "the cluster agent deploy client is both the agent lifecycle one-step cluster member install surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
       "path": "frontend-modern/src/api/agentProfiles.ts",
       "rationale": "the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary",
       "subsystems": [
@@ -1334,10 +1342,12 @@
         "cmd/pulse-agent/collector_lifecycle.go",
         "cmd/pulse-agent/main.go",
         "cmd/pulse-agent/service_windows.go",
+        "frontend-modern/src/api/agentDeploy.ts",
         "frontend-modern/src/api/agentProfiles.ts",
         "frontend-modern/src/api/nodes.ts",
         "frontend-modern/src/components/Settings/agentProfileSettings.ts",
         "frontend-modern/src/components/Settings/AgentProfilesPanel.tsx",
+        "frontend-modern/src/components/Settings/ClusterAgentDeployDialog.tsx",
         "frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx",
         "frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx",
         "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx",
@@ -1817,6 +1827,22 @@
               "frontend-modern/src/components/Settings/__tests__/AgentProfilesPanel.test.tsx",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
               "frontend-modern/src/utils/__tests__/agentProfilesPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "cluster-agent-deploy-surface",
+            "label": "one-step cluster member agent install proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/agentDeploy.ts",
+              "frontend-modern/src/components/Settings/ClusterAgentDeployDialog.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/agentDeploy.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/ClusterAgentDeployDialog.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/InfrastructureSourceManager.test.tsx"
             ]
           },
           {

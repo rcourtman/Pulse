@@ -211,6 +211,31 @@ func (s *Store) ListJobs(ctx context.Context, orgID string, limit int) ([]Job, e
 	return jobs, rows.Err()
 }
 
+// UnfinishedJobsForCluster returns the organization's jobs on one cluster that
+// are still queued, waiting for their source, running, or canceling, newest
+// first. Unlike ListJobs it has no row limit, so a busy organization's newer
+// preflights cannot push an unfinished install out of view.
+func (s *Store) UnfinishedJobsForCluster(ctx context.Context, orgID, clusterID string) ([]Job, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, cluster_id, cluster_name, source_agent_id, source_node_id, org_id, status, max_parallel, retry_max, created_at, updated_at, completed_at
+		 FROM deploy_jobs WHERE org_id = ? AND cluster_id = ? AND status IN (?, ?, ?, ?) ORDER BY created_at DESC`,
+		orgID, clusterID, string(JobQueued), string(JobWaitingSource), string(JobRunning), string(JobCanceling))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var jobs []Job
+	for rows.Next() {
+		j, err := scanJobRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, j)
+	}
+	return jobs, rows.Err()
+}
+
 // --- Targets ---
 
 // GetTarget retrieves a single deployment target by ID.

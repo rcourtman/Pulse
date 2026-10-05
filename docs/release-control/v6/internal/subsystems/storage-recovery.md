@@ -6455,6 +6455,19 @@ successful enrollment response from describing credential state that a restart
 would undo. Their success and forced-write-failure proofs live in
 `internal/api/deploy_handlers_test.go`.
 
+### Deploy job admission reads persisted state, bounded in time
+
+Install-job admission on a cluster reads the persisted deploy store, not
+in-memory state. `HandleCreateJob` refuses a new install while
+`Store.UnfinishedJobsForCluster` returns an install job for the same
+organization and cluster created within the last 30 minutes, and it checks and
+inserts under one admission lock. A job left unfinished by a crash or a
+vanished source agent therefore keeps blocking overlapping installs across a
+restart, but only until it ages out of that window, so a stale row never locks
+a cluster out for good. This adds no backup, restore, retention, snapshot, or
+recovery authority. `internal/api/deploy_handlers_test.go` and
+`internal/deploy/store_test.go` pin the admission and the query.
+
 ### Destination severity policy preserves notification recovery identity
 
 Email, webhook, Apprise, and Relay minimum-severity floors persist through

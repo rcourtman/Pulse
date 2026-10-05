@@ -430,6 +430,7 @@ const buildRow = (
     canRemove: primaryConnection.type !== 'docker' && primaryConnection.type !== 'kubernetes',
     isAgent: primaryConnection.type === 'agent',
     isCluster,
+    ...(isCluster ? { clusterName } : {}),
     attachedConnections,
     members,
     connection: primaryConnection,

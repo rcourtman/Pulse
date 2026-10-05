@@ -2629,6 +2629,15 @@ Agent`), with the plain-language source phrase available through accessible
    first-run/readiness actions, or the discovery band's explicit review action,
    and the direct address-probe utility may appear as first-run setup guidance
    instead of a second saved-network-scan command.
+   That same shared shell boundary owns the cluster-member install action.
+   `InfrastructureSourceManager.tsx` routes the cluster, member, and
+   coverage-summary `Install agent` actions for a PVE cluster with a connected
+   sibling agent into `ClusterAgentDeployDialog.tsx`, mounted once under a
+   keyed `<Show>` so an install that outlives the dialog never reads a stale
+   accessor, while every other row keeps the scoped installer hand-off.
+   `useConnectionsLedger.ts` carries the Proxmox cluster name on cluster rows
+   as `clusterName`, so the dialog keys the deploy API on the real cluster name
+   rather than on a display label.
    Discovered API-backed candidates stay visible in the same platform-group
    table as configured sources, using the existing tree/table hierarchy
    instead of spawning a second discovery-only page or card stack.
