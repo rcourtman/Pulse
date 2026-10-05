@@ -1550,6 +1550,11 @@ typed action ids hand off to the route-backed Actions review through
 parameter is the canonical shareable review identity: opening it fetches the
 durable action directly, selects Open or History from the returned lifecycle
 state, and clearing the dialog removes the query without discarding the inbox.
+Open and History are routes (`/actions` and `/actions/history`) built and
+parsed by the same module, so either view can be bookmarked or shared and
+back/forward moves between them; a review switched to the other view by its
+lifecycle state replaces rather than pushes history and keeps the `action`
+query.
 Patrol must not create a parallel decision or execution client around that
 handoff.
 The shared review may offer decision or execution controls only when the

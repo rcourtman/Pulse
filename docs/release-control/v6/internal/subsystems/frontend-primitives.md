@@ -6429,7 +6429,8 @@ Feature-owned route surfaces under `frontend-modern/src/features/` must also
 keep their shell/runtime split explicit once a subsystem grows real transport
 or polling lifecycle. The Patrol feature is the current reference shape:
 `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` stays the
-feature shell, `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
+feature shell, reads its active workspace view from the route through
+`patrolWorkspaceRouting.ts` rather than holding it in component state, `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
 owns the runtime state machine, `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
 owns the pure investigation-context summary and Patrol-to-Assistant operator
 briefing derivation, including the rule that active findings, pending

@@ -1,4 +1,11 @@
-import { createSignal, Show } from 'solid-js';
+import { useLocation, useNavigate } from '@solidjs/router';
+import { createEffect, createMemo, createSignal, Show } from 'solid-js';
+import {
+  buildPatrolWorkspacePath,
+  parsePatrolWorkspaceView,
+  PATROL_WORKSPACE_VIEWS,
+  type PatrolWorkspaceView,
+} from './patrolWorkspaceRouting';
 import ArrowRightIcon from 'lucide-solid/icons/arrow-right';
 import ClipboardCheckIcon from 'lucide-solid/icons/clipboard-check';
 import HistoryIcon from 'lucide-solid/icons/history';
@@ -16,9 +23,6 @@ import { PatrolRecentWorkPanel } from './PatrolRecentWorkPanel';
 import { PatrolWeeklyDigestCard } from './PatrolWeeklyDigestCard';
 import type { AttentionItem } from '@/api/patrolAttention';
 
-type PatrolWorkspaceView = 'inbox' | 'protection' | 'activity';
-const PATROL_WORKSPACE_VIEWS: readonly PatrolWorkspaceView[] = ['inbox', 'protection', 'activity'];
-
 interface FindingResourceScope {
   id: string;
   name: string;
@@ -26,15 +30,39 @@ interface FindingResourceScope {
 
 export function PatrolIntelligenceSurface() {
   const state = usePatrolIntelligenceState();
-  const [activeView, setActiveView] = createSignal<PatrolWorkspaceView>('inbox');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const activeView = createMemo(() => parsePatrolWorkspaceView(location.pathname));
   const [findingsOpen, setFindingsOpen] = createSignal(false);
   const [findingResourceScope, setFindingResourceScope] = createSignal<FindingResourceScope>();
   const workspaceTabs: Partial<Record<PatrolWorkspaceView, HTMLButtonElement>> = {};
   let findingsPanel: HTMLDetailsElement | undefined;
+  // Views switch in place, so navigation must not scroll to the top.
+  // `?attention=` is Inbox-only state that the attention workbench writes
+  // straight to history, so the router's copy of the query can be stale. The
+  // Inbox query is taken from the real address when leaving the Inbox and
+  // restored on return: a selection survives a look at Activity, and a closed
+  // one cannot come back.
+  let inboxSearch = '';
   const activateView = (view: PatrolWorkspaceView, focus = false) => {
-    setActiveView(view);
+    if (activeView() !== view) {
+      if (activeView() === 'inbox') inboxSearch = window.location.search;
+      const search = view === 'inbox' ? inboxSearch : '';
+      navigate(`${buildPatrolWorkspacePath(view)}${search}`, { scroll: false });
+    }
     if (focus) queueMicrotask(() => workspaceTabs[view]?.focus());
   };
+  // The finding handoff scrolls to the findings panel only once Activity has
+  // mounted, so neither the route change nor the mount can undo it.
+  const [pendingFindingsFocus, setPendingFindingsFocus] = createSignal(false);
+  createEffect(() => {
+    if (activeView() !== 'activity' || !pendingFindingsFocus()) return;
+    setPendingFindingsFocus(false);
+    queueMicrotask(() => {
+      findingsPanel?.scrollIntoView?.({ block: 'start' });
+      findingsPanel?.focus?.({ preventScroll: true });
+    });
+  });
   const handleWorkspaceKeyDown = (event: KeyboardEvent, currentView: PatrolWorkspaceView) => {
     const currentIndex = PATROL_WORKSPACE_VIEWS.indexOf(currentView);
     const requestedIndex =
@@ -59,12 +87,9 @@ export function PatrolIntelligenceSurface() {
       id: item.subjectResourceId,
       name: item.subjectResourceName || item.subjectResourceId,
     });
-    activateView('activity');
     setFindingsOpen(true);
-    queueMicrotask(() => {
-      findingsPanel?.scrollIntoView?.({ block: 'start' });
-      findingsPanel?.focus?.({ preventScroll: true });
-    });
+    setPendingFindingsFocus(true);
+    activateView('activity');
   };
 
   return (

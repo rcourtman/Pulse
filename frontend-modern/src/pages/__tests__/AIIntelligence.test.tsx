@@ -126,20 +126,34 @@ const getUpgradeActionUrlOrFallbackMock = vi.fn();
 const presentationPolicyHidesUpgradePromptsMock = vi.fn();
 const presentationPolicyHidesCommercialSurfacesMock = vi.fn();
 
-vi.mock('@solidjs/router', () => ({
-  A: (props: {
-    href: string;
-    class?: string;
-    children?: JSX.Element;
-    'aria-label'?: string;
-    title?: string;
-  }) => (
-    <a href={props.href} class={props.class} aria-label={props['aria-label']} title={props.title}>
-      {props.children}
-    </a>
-  ),
-  useLocation: () => ({ hash: '', pathname: '/patrol', search: '' }),
-}));
+// Workspace views are routes, so the mocked location follows navigate().
+const routerLocation = vi.hoisted(() => ({ setPath: (_path: string) => {} }));
+vi.mock('@solidjs/router', async () => {
+  const { createSignal } = await import('solid-js');
+  const [pathname, setPathname] = createSignal('/patrol');
+  routerLocation.setPath = setPathname;
+  return {
+    A: (props: {
+      href: string;
+      class?: string;
+      children?: JSX.Element;
+      'aria-label'?: string;
+      title?: string;
+    }) => (
+      <a href={props.href} class={props.class} aria-label={props['aria-label']} title={props.title}>
+        {props.children}
+      </a>
+    ),
+    useLocation: () => ({
+      hash: '',
+      get pathname() {
+        return pathname();
+      },
+      search: '',
+    }),
+    useNavigate: () => (to: string) => setPathname(to.split('?')[0]),
+  };
+});
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const recordWorkflowPromptActivityMock = vi.fn();
@@ -621,6 +635,7 @@ describe('AIIntelligence entitlement gating', () => {
   });
 
   beforeEach(() => {
+    routerLocation.setPath('/patrol');
     resetCreateNonSuspendingQueryCacheForTest();
     resetAIRuntimeState();
     getPatrolStatusMock.mockReset();

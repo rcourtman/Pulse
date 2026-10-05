@@ -1,6 +1,7 @@
+import { Route, Router } from '@solidjs/router';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PatrolIntelligenceSurface } from '../PatrolIntelligenceSurface';
 
@@ -74,7 +75,18 @@ vi.mock('@/components/shared/MetadataBadge', () => ({
   MetadataBadge: (props: { children?: JSX.Element }) => <span>{props.children}</span>,
 }));
 
+const renderSurface = () =>
+  render(() => (
+    <Router>
+      <Route path="*" component={PatrolIntelligenceSurface} />
+    </Router>
+  ));
+
 describe('PatrolIntelligenceSurface finding handoff', () => {
+  beforeEach(() => {
+    window.history.replaceState(null, '', '/patrol');
+  });
+
   afterEach(() => {
     cleanup();
     patrolState.setupOnly = false;
@@ -85,7 +97,7 @@ describe('PatrolIntelligenceSurface finding handoff', () => {
     patrolState.setupOnly = true;
     patrolState.enabled = false;
 
-    render(() => <PatrolIntelligenceSurface />);
+    renderSurface();
 
     expect(screen.getByRole('tab', { name: 'Inbox' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('button', { name: 'Open scoped finding options' })).toBeInTheDocument();
@@ -93,12 +105,18 @@ describe('PatrolIntelligenceSurface finding handoff', () => {
     expect(screen.getByTestId('patrol-workspace').parentElement).toHaveClass('pointer-events-none');
   });
 
-  it('keeps the selected decision resource in context and lets the operator broaden the list', () => {
-    render(() => <PatrolIntelligenceSurface />);
+  it('keeps the selected decision resource in context and lets the operator broaden the list', async () => {
+    renderSurface();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open scoped finding options' }));
 
-    expect(screen.getByRole('tab', { name: 'Activity' })).toHaveAttribute('aria-selected', 'true');
+    await vi.waitFor(() =>
+      expect(screen.getByRole('tab', { name: 'Activity' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      ),
+    );
+    expect(window.location.pathname).toBe('/patrol/activity');
     expect(screen.getByText(/Showing Patrol findings for Database VM/i)).toBeInTheDocument();
     expect(screen.getByTestId('patrol-workspace')).toHaveAttribute('data-resource-id', 'vm-101');
 
@@ -106,5 +124,57 @@ describe('PatrolIntelligenceSurface finding handoff', () => {
 
     expect(screen.getByTestId('patrol-workspace')).toHaveAttribute('data-resource-id', '');
     expect(screen.queryByText(/Showing Patrol findings for Database VM/i)).not.toBeInTheDocument();
+  });
+
+  it('opens the workspace view named by the route and routes each tab change', async () => {
+    window.history.replaceState(null, '', '/patrol/activity');
+    renderSurface();
+
+    expect(screen.getByRole('tab', { name: 'Activity' })).toHaveAttribute('aria-selected', 'true');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Protection' }));
+    await vi.waitFor(() => expect(window.location.pathname).toBe('/patrol/protection'));
+    expect(screen.getByRole('tab', { name: 'Protection' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Inbox' }));
+    await vi.waitFor(() => expect(window.location.pathname).toBe('/patrol'));
+  });
+
+  it('lands the finding handoff on the findings panel without a scroll to the top', async () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    const scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    renderSurface();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open scoped finding options' }));
+
+    await vi.waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+    expect(scrollTo).not.toHaveBeenCalled();
+    scrollTo.mockRestore();
+  });
+
+  it('restores the live Inbox selection on return and never a closed one', async () => {
+    window.history.replaceState(null, '', '/patrol?attention=chosen');
+    renderSurface();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Activity' }));
+    await vi.waitFor(() => expect(window.location.pathname).toBe('/patrol/activity'));
+    expect(window.location.search).toBe('');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Inbox' }));
+    await vi.waitFor(() => expect(window.location.pathname).toBe('/patrol'));
+    expect(window.location.search).toBe('?attention=chosen');
+
+    // The workbench closes a selection by writing history directly, which the
+    // router does not see. The next round trip must follow the real address.
+    window.history.replaceState(null, '', '/patrol');
+    fireEvent.click(screen.getByRole('tab', { name: 'Activity' }));
+    await vi.waitFor(() => expect(window.location.pathname).toBe('/patrol/activity'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Inbox' }));
+    await vi.waitFor(() => expect(window.location.pathname).toBe('/patrol'));
+    expect(window.location.search).toBe('');
   });
 });
