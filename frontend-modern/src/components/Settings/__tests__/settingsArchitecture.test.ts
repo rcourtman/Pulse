@@ -1655,7 +1655,9 @@ describe('settings architecture guardrails', () => {
     // scoped installer as the fallback instead of a hand-copied token.
     expect(infrastructureSourceManagerSource).toContain("from './ClusterAgentDeployDialog'");
     expect(infrastructureSourceManagerSource).toContain('<ClusterAgentDeployDialog');
-    expect(infrastructureSourceManagerSource).toContain('onUseInstaller={handleInstallAgentShortcut}');
+    expect(infrastructureSourceManagerSource).toContain(
+      'onUseInstaller={handleInstallAgentShortcut}',
+    );
     expect(infrastructureSourceManagerSource).toContain('<Show when={clusterDeploy()} keyed>');
     expect(infrastructureSourceManagerSource).toContain('Add infrastructure');
     expect(infrastructureSourceManagerSource).not.toContain('Monitor endpoint');
