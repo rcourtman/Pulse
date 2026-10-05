@@ -157,8 +157,9 @@ func TestTrueNASDiskHistoryAuthenticatedRoute(t *testing.T) {
 	mtm := monitoring.NewMultiTenantMonitor(cfg, nil, nil)
 	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{"org-a": monitor, "org-b": {}})
 	router.mtMonitor = mtm
+	maxPoints := ""
 	request := func(raw, org, metric string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=disk&resourceId=disk-serial&metric="+metric+"&range=1h", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=disk&resourceId=disk-serial&metric="+metric+"&range=1h&maxPoints="+maxPoints, nil)
 		req.Header.Set("X-Pulse-Org-ID", org)
 		if raw != "" {
 			req.Header.Set("X-API-Token", raw)
@@ -210,6 +211,9 @@ func TestTrueNASDiskHistoryAuthenticatedRoute(t *testing.T) {
 		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &all) != nil || all.ResourceType != "disk" || all.ResourceID != "disk-serial" {
 			t.Fatalf("all-metric drawer contract lost: status %d body %s", rec.Code, rec.Body.String())
 		}
+		if maxPoints == "240" {
+			t.Logf("BOUND_DRAWER_HISTORY_RESPONSE %s", rec.Body.String())
+		}
 		return all.Metrics
 	}
 	assertNative := func(points []point, wantReads int32) {
@@ -252,6 +256,22 @@ func TestTrueNASDiskHistoryAuthenticatedRoute(t *testing.T) {
 			t.Fatalf("sparse stored/native samples were spliced: %+v", got.Points)
 		}
 	}
+	// The actual browser query requests 240 points. Preserve the existing
+	// 15-second bucket centres and per-observation values/bounds, not a fake
+	// aggregate temperature. Retain the real fixture API response for rendering.
+	maxPoints = "240"
+	all = readAll()
+	if len(all["smart_temp"]) != 3 || reads.Load() != 12 {
+		t.Fatalf("browser query hid native history: %+v, reads %d", all, reads.Load())
+	}
+	for i, value := range []float64{31.25, 33.5, 32.75} {
+		ts := nativeEnd.Load() - 3540 + int64(i)*1740
+		wantTime := ((ts/15)*15 + 7) * 1000
+		if all["smart_temp"][i].Value != value || all["smart_temp"][i].Min != value || all["smart_temp"][i].Max != value || all["smart_temp"][i].Timestamp != wantTime {
+			t.Fatalf("issued browser aggregation changed native sample: %+v", all["smart_temp"][i])
+		}
+	}
+	maxPoints = ""
 	// Adequate local coverage keeps the native session quiet and its original
 	// independent values intact. Ordinary store errors still fail closed.
 	now := time.Now().UTC()
@@ -259,14 +279,14 @@ func TestTrueNASDiskHistoryAuthenticatedRoute(t *testing.T) {
 		store.WriteBatchSync([]metrics.WriteMetric{{ResourceType: "disk", ResourceID: "disk-serial", MetricType: "smart_temp", Value: 35, Timestamp: now.Add(offset)}})
 	}
 	all = readAll()
-	if len(all["smart_temp"]) != 4 || all["smart_temp"][0].Value != 35 || reads.Load() != 10 {
+	if len(all["smart_temp"]) != 4 || all["smart_temp"][0].Value != 35 || reads.Load() != 12 {
 		t.Fatalf("complete store needlessly invoked/replaced native history: %+v, reads %d", all["smart_temp"], reads.Load())
 	}
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
 	rec = request(token, "org-a", "")
-	if rec.Code != http.StatusInternalServerError || reads.Load() != 10 {
+	if rec.Code != http.StatusInternalServerError || reads.Load() != 12 {
 		t.Fatalf("failed store read silently became native success: status %d reads %d", rec.Code, reads.Load())
 	}
 	if removed := cfg.RemoveAPIToken(readToken.ID); removed == nil {
@@ -274,7 +294,7 @@ func TestTrueNASDiskHistoryAuthenticatedRoute(t *testing.T) {
 	}
 	cfg.SortAPITokens()
 	rec = request(token, "org-a", "smart_temp")
-	if rec.Code != http.StatusUnauthorized || reads.Load() != 10 {
+	if rec.Code != http.StatusUnauthorized || reads.Load() != 12 {
 		t.Fatalf("revoked token still reached History: status %d reads %d", rec.Code, reads.Load())
 	}
 }
