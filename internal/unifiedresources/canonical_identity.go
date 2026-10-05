@@ -387,18 +387,47 @@ func firstTrimmed(values ...string) string {
 }
 
 func uniqueTrimmed(values ...string) []string {
-	seen := make(map[string]struct{}, len(values))
-	aliases := make([]string, 0, len(values))
+	// Canonical aliases usually contain only a handful of non-empty unique
+	// identities among many optional inputs. Do not allocate a map sized for
+	// every placeholder, or retain that capacity in each row's alias slice.
+	// A bounded stack scan handles the common case; larger vocabularies use
+	// the same lowercased-key map semantics without quadratic growth.
+	var smallKeys [8]string
+	var seen map[string]struct{}
+	aliases := make([]string, 0, min(len(values), len(smallKeys)))
 	for _, value := range values {
 		trimmed := strings.TrimSpace(value)
 		if trimmed == "" {
 			continue
 		}
 		key := strings.ToLower(trimmed)
-		if _, ok := seen[key]; ok {
-			continue
+		if seen != nil {
+			if _, ok := seen[key]; ok {
+				continue
+			}
+		} else {
+			duplicate := false
+			for _, previous := range smallKeys[:len(aliases)] {
+				if previous == key {
+					duplicate = true
+					break
+				}
+			}
+			if duplicate {
+				continue
+			}
+			if len(aliases) < len(smallKeys) {
+				smallKeys[len(aliases)] = key
+			} else {
+				seen = make(map[string]struct{}, min(len(values), 64))
+				for _, previous := range smallKeys {
+					seen[previous] = struct{}{}
+				}
+			}
 		}
-		seen[key] = struct{}{}
+		if seen != nil {
+			seen[key] = struct{}{}
+		}
 		aliases = append(aliases, trimmed)
 	}
 	return aliases
