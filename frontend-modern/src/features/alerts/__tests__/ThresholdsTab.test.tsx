@@ -379,6 +379,12 @@ describe('ThresholdsTab', () => {
       '5-minute average, 1 platform override',
     );
     expect(virtualMachineWindow.options[0].textContent).toBe('Inherit (15 minutes)');
+    // The window controls compose the shared FormSelect: a visible label tied
+    // to the select and the shared dropdown arrow.
+    expect(document.querySelector(`label[for="${workloadWindow.id}"]`)?.textContent).toBe(
+      'All workloads',
+    );
+    expect(workloadWindow).toHaveClass('appearance-none', 'form-select-arrow');
 
     fireEvent.input(workloadWindow, { target: { value: '60' } });
 

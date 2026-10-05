@@ -2464,6 +2464,12 @@ not a replacement status card, CTA band, or page-local nested card.
    apply controlled `value` props after options are mounted so settings panels
    such as Discovery show the persisted option instead of falling back
    to the first option while the collapsed summary shows a different value.
+   Its default select chrome (`formSelect` / `formSelectCompact` in
+   `Form.ts`) sets `appearance-none` to match the text inputs, so it also
+   carries the `form-select-arrow` utility, which draws the dropdown caret in
+   the reserved right padding (and hands the native arrow back in forced-colors
+   mode); without it every default `FormSelect` read as a text field. Callers
+   that pass their own `selectBaseClass` keep their own arrow.
    The Assistant runtime controls in
    `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx` — e.g. the
    service context scan `Toggle` — are settings-shell chrome bound to the canonical

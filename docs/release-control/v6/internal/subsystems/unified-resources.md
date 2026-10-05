@@ -2907,7 +2907,9 @@ Discovery-led availability proposals present their evidence and canonical
 attachment boundary as short, complete sentences in both the inline card and
 machine-wide review. The colocated component test pins that operator-facing
 copy so the shared copy-style audit cannot regress it back to semicolon-joined
-instructions.
+instructions. The card's editable check name, interval and observation
+location use the shared form label and control chrome (`FormSelect` for the
+two choices), so they match the availability settings form they hand off to.
 
 ### Provider workflows hydrate only their active route inventory
 
