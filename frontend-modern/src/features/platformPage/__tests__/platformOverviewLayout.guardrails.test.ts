@@ -401,6 +401,17 @@ describe('platform overview layout guardrails', () => {
     );
   });
 
+  it('keeps Docker image references readable by their repository and tag', () => {
+    // References that share a registry and namespace differ only at the end, so
+    // every image cell truncates the shared head and keeps name:tag visible.
+    expect(dockerImagesTableSource).toMatch(/<DockerResourceNameCell[\s\S]{0,80}?imageReference/);
+    for (const source of [dockerContainersTableSource, dockerServicesTableSource]) {
+      expect(source).toContain(
+        '<DockerImageReferenceText reference={image()} class="max-w-full" />',
+      );
+    }
+  });
+
   it('keeps platform summary cells truncating inside their own column', () => {
     // A capped inline-block (max-w-52 truncate) ignored the column width, so a
     // long value spilled past a narrow cell without an ellipsis and sat above

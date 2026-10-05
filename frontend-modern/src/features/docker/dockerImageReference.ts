@@ -78,3 +78,18 @@ export function getDockerImageRegistryLink(
 
   return null;
 }
+
+/**
+ * Splits an image reference before its repository name, so a narrow cell can
+ * truncate the shared registry and namespace and keep the part that tells
+ * images apart: `ghcr.io/pulse-demo/` + `backup-coordinator:2026.04`. A digest
+ * never moves the split. A reference without a path keeps everything in the
+ * head, like a Kubernetes name without a tail.
+ */
+export function splitDockerImageReference(reference: string): { head: string; tail: string } {
+  const digestStart = reference.indexOf('@');
+  const path = digestStart >= 0 ? reference.slice(0, digestStart) : reference;
+  const cut = path.lastIndexOf('/');
+  if (cut <= 0 || cut === path.length - 1) return { head: reference, tail: '' };
+  return { head: reference.slice(0, cut + 1), tail: reference.slice(cut + 1) };
+}

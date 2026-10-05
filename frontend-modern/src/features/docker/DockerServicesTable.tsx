@@ -32,6 +32,7 @@ import {
   mapDockerServiceStatus,
   type DockerResourceStatusFilter,
 } from './dockerPageModel';
+import { DockerImageReferenceText } from './DockerImageReferenceText';
 
 // Docker Swarm services are cluster-scoped declarations, not running
 // processes — they have no CPU / Memory / Disk / Disk I/O / Uptime /
@@ -338,9 +339,7 @@ export const DockerServicesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content md:table-cell`}
                           >
-                            <span class="block truncate" title={image()}>
-                              {image()}
-                            </span>
+                            <DockerImageReferenceText reference={image()} class="max-w-full" />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
