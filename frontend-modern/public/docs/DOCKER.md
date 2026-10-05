@@ -123,6 +123,57 @@ services:
 
 ---
 
+## Container CPU readings
+
+Pulse shows container CPU as a share of the **Docker/Podman host's total CPU
+capacity**: 100% means all its logical CPUs. `docker stats` and `podman stats`
+normally use **100% for one logical CPU**, so their readings can exceed 100%.
+For that scale, divide the stats percentage by the CPU count reported for the
+runtime host to compare it with Pulse.
+
+If the engine runs inside a VM, use that VM's logical CPUs, not the physical
+Proxmox host's CPUs. Pulse's percentage is not utilisation of the container's
+own CPU quota or cpuset. If the reported CPU count differs from your configured
+VM size, retain both in the comparison rather than guessing a divisor.
+
+| Example host logical CPUs | Stats CPU | Pulse CPU before display rounding |
+| --- | --- | --- |
+| 4 | 240% | 60% |
+| 6 | 16.52% | About 2.75% |
+| 6 | 1.04% | About 0.17% |
+
+These are examples, not an assumption about your host. A smaller Pulse value
+alone does not establish a collection fault. Whole-percent table labels,
+including those in **v6.5.0-rc.1**, can display a fractional reading below 0.5%
+as 0%. Use **CPU History** rather than the rounded label; display rounding does
+not change stored readings or the values used by CPU alert evaluation. A dash
+or missing History is unavailable data, not a measured zero.
+
+For a useful comparison:
+
+1. Match the same container on the same runtime host. Compare a similar time
+   interval in CPU History with `docker stats` or `podman stats`; separate
+   sampling intervals can legitimately differ.
+2. Apply the reported host CPU count only to a stats reading on the per-CPU
+   scale. Do not divide Pulse History again, or compare with an average since
+   container start as though it were a recent interval.
+3. Check that observation times and History points advance during ordinary
+   monitoring. A connection marked Active does not prove fresh CPU samples.
+4. If the normalised readings still disagree, or History stops advancing,
+   report the server and agent versions, reported CPU count, sample times and
+   bounded readings. Do not restart workloads, create CPU load, lower alert
+   thresholds or export diagnostics just to make this comparison.
+
+CPU alerts use the same host-capacity scale, with the configured thresholds,
+duration and suppression rules. Non-zero History proves a collected reading,
+not that an alert should fire or that its notification was delivered. If a
+normal workload already demonstrates an alert problem, retain the reading,
+threshold, duration and observed result; no forced alert test is needed. See
+[safe performance measurements](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth)
+when measuring the Pulse server itself rather than a monitored container.
+
+---
+
 ## 🔄 Updates
 
 These steps update the Pulse server, not the containers it monitors. Record the
