@@ -4,11 +4,12 @@ import { Route, Router } from '@solidjs/router';
 import { render } from 'solid-js/web';
 import { PatrolIntelligenceSurface } from '../src/features/patrol/PatrolIntelligenceSurface';
 import { eventBus } from '../src/stores/events';
-import { setOrgID } from '../src/utils/apiClient';
+import { apiFetch, setOrgID } from '../src/utils/apiClient';
 import '../src/index.css';
 
 setOrgID('fixture-tenant-a');
 (window as any).__patrolRuleRemoval = {
+  apiFetch,
   switchOrg: () => {
     setOrgID('fixture-tenant-b');
     eventBus.emit('org_switched', 'fixture-tenant-b');

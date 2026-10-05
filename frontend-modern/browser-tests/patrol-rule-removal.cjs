@@ -34,7 +34,9 @@ assert.equal(
   ].version,
 );
 
-async function journey(root, engine, width, parent = false, resume = false, visualOnly = false) {
+async function journey(
+  root, engine, width, parent = false, resume = false, visualOnly = false, compatibility = false,
+) {
   process.chdir(root);
   const { createServer } = await import(path.join(root, 'node_modules/vite/dist/node/index.js'));
   const server = await createServer({
@@ -346,6 +348,45 @@ async function journey(root, engine, width, parent = false, resume = false, visu
       waitUntil: 'domcontentloaded',
       timeout: 60000,
     });
+    if (compatibility) {
+      await page.waitForFunction(() => Boolean(window.__patrolRuleRemoval?.apiFetch));
+      result.abortCompatibility = await page.evaluate(async () => {
+        const originalFetch = window.fetch;
+        const observed = [];
+        try {
+          for (const options of [{}, { retry: false }, { expectedOrgID: 'fixture-tenant-a' }]) {
+            let calls = 0;
+            window.fetch = (...args) => {
+              calls += 1;
+              return originalFetch(...args);
+            };
+            const controller = new AbortController();
+            controller.abort();
+            let errorName;
+            try {
+              await window.__patrolRuleRemoval.apiFetch('/api/aborted-confirmation', {
+                ...options,
+                signal: controller.signal,
+              });
+            } catch (error) {
+              errorName = error.name;
+            }
+            observed.push({ options, calls, errorName });
+          }
+        } finally {
+          window.fetch = originalFetch;
+        }
+        return observed;
+      });
+      assert.deepEqual(result.abortCompatibility.map((x) => x.calls), [1, 0, 0]);
+      assert.deepEqual(result.abortCompatibility.map((x) => x.errorName), [
+        'AbortError', 'AbortError', 'AbortError',
+      ]);
+      assert.equal(result.requests.filter((r) => r.path === '/api/aborted-confirmation').length, 0);
+      result.checks.push(
+        'Default pre-aborted API calls delegate once to native fetch; strict retry:false and expectedOrgID opt-ins stop before dispatch. All reject AbortError without a network request.',
+      );
+    }
     let dialog;
     if (visualOnly) {
       await page.getByRole('tab', { name: 'Activity' }).click();

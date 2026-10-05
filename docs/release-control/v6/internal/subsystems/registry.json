@@ -6929,6 +6929,7 @@
         "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
         "frontend-modern/src/features/patrol/PatrolObjectivesPanel.tsx",
         "frontend-modern/src/features/patrol/PatrolRecentWorkPanel.tsx",
+        "frontend-modern/src/features/patrol/PatrolSuppressionRules.tsx",
         "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts",
         "frontend-modern/src/pages/AIIntelligence.tsx",
         "frontend-modern/src/stores/aiIntelligence.ts",
@@ -6947,8 +6948,7 @@
         "frontend-modern/src/utils/patrolRuntimeActions.ts",
         "frontend-modern/src/utils/patrolRuntimePresentation.ts",
         "frontend-modern/src/utils/patrolSummaryPresentation.ts",
-        "frontend-modern/src/utils/remediationPresentation.ts",
-        "frontend-modern/src/features/patrol/PatrolSuppressionRules.tsx"
+        "frontend-modern/src/utils/remediationPresentation.ts"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
