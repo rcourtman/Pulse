@@ -297,7 +297,7 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                         </p>
                         <CopyCommandBlock
                           command={`ollama pull ${suggestedModel()}`}
-                          codeClass="block whitespace-pre overflow-x-auto rounded-md border border-border bg-base p-3 pr-10 font-mono text-xs text-base-content"
+                          codeClass="block whitespace-pre overflow-x-auto rounded-md border border-border bg-page p-3 pr-10 font-mono text-xs text-base-content"
                         />
                         <Show when={suggestedModelNote()}>
                           <p class="text-xs text-muted">{suggestedModelNote()}</p>

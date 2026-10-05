@@ -322,7 +322,7 @@ export const ResourceAccessDisclosure: Component<{
                   <button
                     type="button"
                     onClick={() => props.drawer.setShowDiscoveryContext((value) => !value)}
-                    class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
+                    class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-surface-hover"
                   >
                     {props.drawer.showDiscoveryContext() ? 'Hide analysis' : 'Open analysis'}
                   </button>
@@ -473,7 +473,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   label="Change kind"
                   fieldBaseClass="space-y-1 text-[10px]"
                   labelClass="text-muted"
-                  selectBaseClass="w-full rounded-sm border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                  selectBaseClass="w-full rounded-sm border border-border bg-surface px-2 py-1 text-[11px] text-base-content"
                   value={drawer.timelineKindFilter()}
                   onChange={(event) =>
                     drawer.setTimelineKindFilter(
@@ -489,7 +489,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   label="Source type"
                   fieldBaseClass="space-y-1 text-[10px]"
                   labelClass="text-muted"
-                  selectBaseClass="w-full rounded-sm border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                  selectBaseClass="w-full rounded-sm border border-border bg-surface px-2 py-1 text-[11px] text-base-content"
                   value={drawer.timelineSourceTypeFilter()}
                   onChange={(event) =>
                     drawer.setTimelineSourceTypeFilter(
@@ -505,7 +505,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   label="Source adapter"
                   fieldBaseClass="space-y-1 text-[10px]"
                   labelClass="text-muted"
-                  selectBaseClass="w-full rounded-sm border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                  selectBaseClass="w-full rounded-sm border border-border bg-surface px-2 py-1 text-[11px] text-base-content"
                   value={drawer.timelineSourceAdapterFilter()}
                   onChange={(event) =>
                     drawer.setTimelineSourceAdapterFilter(
@@ -618,12 +618,12 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                           </Show>
                         </div>
                         <Show when={change.reason}>
-                          <div class="mt-1 rounded-sm border border-border bg-base px-2 py-1 text-[10px] text-base-content">
+                          <div class="mt-1 rounded-sm border border-border bg-page px-2 py-1 text-[10px] text-base-content">
                             {change.reason}
                           </div>
                         </Show>
                         <Show when={hasMetadataEntries(change.metadata)}>
-                          <details class="mt-1 rounded-sm border border-border bg-base px-2 py-1">
+                          <details class="mt-1 rounded-sm border border-border bg-page px-2 py-1">
                             <summary class="cursor-pointer list-none text-[10px] font-medium text-muted">
                               Metadata
                             </summary>
@@ -867,7 +867,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                         <button
                           type="button"
                           onClick={drawer.toggleDockerUpdateControls}
-                          class="inline-flex items-center rounded-md border border-sky-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-sky-700 transition-colors hover:bg-base dark:border-sky-700 dark:text-sky-300"
+                          class="inline-flex items-center rounded-md border border-sky-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-sky-700 transition-colors hover:bg-surface-hover dark:border-sky-700 dark:text-sky-300"
                         >
                           {drawer.showDockerUpdateControls() ? 'Hide actions' : 'Show actions'}
                         </button>
@@ -1114,7 +1114,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                             <button
                               type="button"
                               onClick={() => drawer.setShowPbsJobDetail((value) => !value)}
-                              class="inline-flex items-center rounded-md border border-indigo-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-indigo-700 transition-colors hover:bg-base dark:border-indigo-700 dark:text-indigo-300"
+                              class="inline-flex items-center rounded-md border border-indigo-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-indigo-700 transition-colors hover:bg-surface-hover dark:border-indigo-700 dark:text-indigo-300"
                             >
                               {drawer.showPbsJobDetail() ? 'Hide jobs' : 'Show jobs'}
                             </button>
@@ -1242,7 +1242,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                             <button
                               type="button"
                               onClick={() => drawer.setShowPmgMailFlowDetail((value) => !value)}
-                              class="inline-flex items-center rounded-md border border-rose-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-rose-700 transition-colors hover:bg-base dark:border-rose-700 dark:text-rose-300"
+                              class="inline-flex items-center rounded-md border border-rose-200 bg-surface px-2.5 py-1 text-[10px] font-medium text-rose-700 transition-colors hover:bg-surface-hover dark:border-rose-700 dark:text-rose-300"
                             >
                               {drawer.showPmgMailFlowDetail() ? 'Hide mail flow' : 'Show mail flow'}
                             </button>

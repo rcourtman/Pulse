@@ -37,7 +37,7 @@ export const ResourceDetailDrawerDebugTab: Component<ResourceDetailDrawerDebugTa
           <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
             Unified Resource
           </div>
-          <pre class="max-h-[280px] overflow-auto rounded-md bg-base p-3 text-[11px] text-base-content">
+          <pre class="max-h-[280px] overflow-auto rounded-md bg-surface p-3 text-[11px] text-base-content">
             {JSON.stringify(props.resource, null, 2)}
           </pre>
         </div>
@@ -46,7 +46,7 @@ export const ResourceDetailDrawerDebugTab: Component<ResourceDetailDrawerDebugTa
           <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
             Identity Matching
           </div>
-          <pre class="max-h-[220px] overflow-auto rounded-md bg-base p-3 text-[11px] text-base-content">
+          <pre class="max-h-[220px] overflow-auto rounded-md bg-surface p-3 text-[11px] text-base-content">
             {JSON.stringify(
               {
                 identity: props.resource.identity,
@@ -81,7 +81,7 @@ export const ResourceDetailDrawerDebugTab: Component<ResourceDetailDrawerDebugTa
                         {status?.error}
                       </div>
                     </Show>
-                    <pre class="mt-3 max-h-[220px] overflow-auto rounded-md bg-base p-3 text-[11px] text-base-content">
+                    <pre class="mt-3 max-h-[220px] overflow-auto rounded-md bg-surface p-3 text-[11px] text-base-content">
                       {JSON.stringify(section.payload ?? {}, null, 2)}
                     </pre>
                   </details>

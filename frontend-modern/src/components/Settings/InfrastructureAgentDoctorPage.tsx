@@ -654,7 +654,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                         }
                                         label="Copy safe-profile inspection command"
                                       />
-                                      <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                      <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
                                         <code>
                                           {buildSafeCollectorInspectCommand({
                                             pulseUrl: operations.selectedAgentUrl(),
@@ -682,7 +682,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                         }
                                         label="Copy safe-profile apply command"
                                       />
-                                      <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                      <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
                                         <code>
                                           {buildSafeCollectorApplyCommand({
                                             pulseUrl: operations.selectedAgentUrl(),
@@ -767,7 +767,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                           onClick={() => void copyCommand(tokenFileCommand())}
                                           label="Copy private token-file command"
                                         />
-                                        <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                        <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
                                           <code>{tokenFileCommand()}</code>
                                         </pre>
                                       </div>
@@ -782,7 +782,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                           title="Copy one-time action-runner credential"
                                           label={`Copy action-runner credential for ${target.displayName}`}
                                         />
-                                        <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                        <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
                                           <code>{reveal().token}</code>
                                         </pre>
                                       </div>
@@ -796,7 +796,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                           onClick={() => void copyCommand(installCommand())}
                                           label="Copy action-runner installer command"
                                         />
-                                        <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                        <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
                                           <code>{installCommand()}</code>
                                         </pre>
                                       </div>
@@ -914,7 +914,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                       title="Copy host-local agent repair command"
                                       label={`Copy ${target.needsCredentialRepair ? 'authentication repair' : 'update'} command for ${target.displayName}`}
                                     />
-                                    <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                    <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
                                       <code>{command()}</code>
                                     </pre>
                                     <Show
@@ -964,7 +964,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                             title="Copy host-local agent uninstall command"
                                             label={`Copy ${entry.label} uninstall command for ${target.displayName}`}
                                           />
-                                          <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                          <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
                                             <code>
                                               {operations.getPlatformUninstallCommand(
                                                 entry.platform,

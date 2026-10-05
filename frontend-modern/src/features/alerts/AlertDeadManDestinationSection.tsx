@@ -15,7 +15,10 @@ interface AlertDeadManDestinationSectionProps {
 const REDACTED_PING_URL = '***REDACTED***';
 
 const statusPresentation: Record<DeadManStatus['state'], { label: string; class: string }> = {
-  disabled: { label: 'Not configured', class: 'bg-base text-muted' },
+  disabled: {
+    label: 'Not configured',
+    class: 'bg-surface text-muted ring-1 ring-inset ring-border',
+  },
   starting: {
     label: 'Starting',
     class: 'bg-blue-100 text-blue-800 dark:bg-blue-900/25 dark:text-blue-100',
@@ -153,7 +156,7 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
 
         <Show when={status()}>
           {(current) => (
-            <div class="grid gap-3 rounded-md border border-border bg-base p-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+            <div class="grid gap-3 rounded-md border border-border bg-page p-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <div class="font-medium text-muted">Last success</div>
                 <div class="mt-1 text-base-content">

@@ -119,6 +119,15 @@
   }
 }
 
+/* The page backdrop as a background, for wells inside a surface card (code
+   blocks, previews, segmented-control tracks) that should read as the page
+   behind the card. It is a utility rather than a theme colour on purpose: a
+   colour named `base` also gave `text-base` a colour and painted text in the
+   page colour, and without that colour the old class rendered nothing. */
+@utility bg-page {
+  background-color: var(--color-bg-base);
+}
+
 @utility animate-slideDown {
   animation: slideDown 0.3s ease-out;
 }
