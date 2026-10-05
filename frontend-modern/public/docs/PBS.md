@@ -86,27 +86,67 @@ for monitoring.
 
 On the PBS host, enter an administrator root shell before preparing the private
 file below. In the editor, save only the Pulse agent token, with no header or
-quotes; never put the secret in a command argument:
+quotes; never put the secret in a command argument. The preparation preserves
+an existing file and refuses symlinked or non-regular credential paths. Stop
+if it fails; do not continue to the installer:
 
 ```bash
-umask 077
-mkdir -p "$HOME/.config/pulse"
-chmod 700 "$HOME/.config/pulse"
-touch "$HOME/.config/pulse/pbs-agent-token"
-chmod 600 "$HOME/.config/pulse/pbs-agent-token"
-vi "$HOME/.config/pulse/pbs-agent-token"
+(
+  set -eu
+  umask 077
+  config_dir="$HOME/.config/pulse"
+  credential_file="$config_dir/pbs-agent-token"
+  if [ -L "$HOME/.config" ] || [ -L "$config_dir" ] || [ -L "$credential_file" ]; then
+    printf 'Refusing a symlinked credential path.\n' >&2
+    exit 1
+  fi
+  if [ -e "$credential_file" ] && [ ! -f "$credential_file" ]; then
+    printf 'Credential file must be a regular file.\n' >&2
+    exit 1
+  fi
+  mkdir -p "$config_dir"
+  chmod 700 "$config_dir"
+  touch "$credential_file"
+  chmod 600 "$credential_file"
+  vi "$credential_file"
+)
 ```
 
 Download the agent installer from **your Pulse server's HTTPS address**, then
 inspect the saved script before running it. Replace the example Pulse URL in
 both commands. Stop if the download fails; run the next command only after a
-successful download and inspection. Do not substitute GitHub's top-level `install.sh`: that installs
-the Pulse server, not the agent.
+successful HTTP **200** download and inspection. This ignores curl configuration
+and saves only a successful download to the installer path. It refuses an
+existing installer rather than overwriting it; review that file locally before
+deciding whether a new download is needed. Do not substitute GitHub's top-level
+`install.sh`: that installs the Pulse server, not the agent.
 
 ```bash
-curl --fail --silent --show-error \
-  --output "$HOME/.config/pulse/pbs-agent-install.sh" \
-  https://pulse.example.com/install.sh
+(
+  set -eu
+  umask 077
+  config_dir="$HOME/.config/pulse"
+  installer_file="$config_dir/pbs-agent-install.sh"
+  if [ -L "$HOME/.config" ] || [ -L "$config_dir" ] || [ ! -d "$config_dir" ]; then
+    printf 'Prepare the private token directory first.\n' >&2
+    exit 1
+  fi
+  if [ -e "$installer_file" ] || [ -L "$installer_file" ]; then
+    printf 'Refusing to replace an existing installer path.\n' >&2
+    exit 1
+  fi
+  chmod 700 "$config_dir"
+  download_file=$(mktemp "$config_dir/pbs-agent-download.XXXXXX")
+  curl_exit=0
+  status=$(curl --disable --fail --silent --show-error --proto '=https' \
+    --connect-timeout 5 --max-time 60 --output "$download_file" \
+    --write-out '%{http_code}' https://pulse.example.com/install.sh) || curl_exit=$?
+  printf 'HTTP %s\n' "$status"
+  [ "$curl_exit" -eq 0 ] || exit "$curl_exit"
+  [ "$status" = 200 ]
+  mv -n "$download_file" "$installer_file"
+  [ ! -e "$download_file" ]
+)
 ```
 
 ```bash
@@ -117,7 +157,10 @@ bash "$HOME/.config/pulse/pbs-agent-install.sh" \
 ```
 
 Do not bypass certificate checks to fetch or run the installer. Use a trusted
-Pulse certificate or a CA file you verified separately. See
+Pulse certificate or add `--cacert` with a CA file you verified separately.
+A failed or redirected download is not an installer: do not run its temporary
+file. Keep `--disable` first in both curl examples on this page; it ignores
+local settings that could enable tracing, bypass TLS or follow redirects. See
 [Unified Agent Setup](UNIFIED_AGENT.md) for installer trust and other profiles.
 After installation, check a fresh agent report and the host's
 `pulse-agent --version`; installation or hardware capacity alone does not prove
@@ -177,15 +220,30 @@ another machine does not prove that Pulse can reach PBS.
   ```
 
 - **Authentication/permissions:** test a datastore request, not just `/version`.
-  Prepare a private header file on the machine running curl:
+  Prepare a private header file on the machine running curl. Stop if preparation
+  fails; an existing file is preserved, and symlinked or non-regular credential
+  paths are refused before opening the editor:
 
   ```bash
-  umask 077
-  mkdir -p "$HOME/.config/pulse"
-  chmod 700 "$HOME/.config/pulse"
-  touch "$HOME/.config/pulse/pbs-header"
-  chmod 600 "$HOME/.config/pulse/pbs-header"
-  vi "$HOME/.config/pulse/pbs-header"
+  (
+    set -eu
+    umask 077
+    config_dir="$HOME/.config/pulse"
+    credential_file="$config_dir/pbs-header"
+    if [ -L "$HOME/.config" ] || [ -L "$config_dir" ] || [ -L "$credential_file" ]; then
+      printf 'Refusing a symlinked credential path.\n' >&2
+      exit 1
+    fi
+    if [ -e "$credential_file" ] && [ ! -f "$credential_file" ]; then
+      printf 'Credential file must be a regular file.\n' >&2
+      exit 1
+    fi
+    mkdir -p "$config_dir"
+    chmod 700 "$config_dir"
+    touch "$credential_file"
+    chmod 600 "$credential_file"
+    vi "$credential_file"
+  )
   ```
 
   In the editor, save this line, replacing `<pbs-token-secret>` with the secret
@@ -195,12 +253,33 @@ another machine does not prove that Pulse can reach PBS.
   Authorization: PBSAPIToken=pulse-monitor@pbs!pulse-token:<pbs-token-secret>
   ```
 
-  Then use curl 7.76 or later, with your PBS hostname:
+  Then use curl 7.76 or later, with your PBS hostname. The request prints only
+  the HTTP status and a new private response-file path; inspect that file locally,
+  not in a public terminal recording or thread:
 
   ```bash
-  curl --fail-with-body --silent --show-error --connect-timeout 5 --max-time 15 \
-    --header "@$HOME/.config/pulse/pbs-header" \
-    https://pbs.example.com:8007/api2/json/admin/datastore
+  (
+    set -eu
+    umask 077
+    config_dir="$HOME/.config/pulse"
+    credential_file="$config_dir/pbs-header"
+    if [ -L "$HOME/.config" ] || [ -L "$config_dir" ] || [ -L "$credential_file" ] || [ ! -f "$credential_file" ]; then
+      printf 'Prepare the private header file first.\n' >&2
+      exit 1
+    fi
+    chmod 700 "$config_dir"
+    chmod 600 "$credential_file"
+    result_file=$(mktemp "$config_dir/pbs-response.XXXXXX")
+    printf 'Private response file: %s\n' "$result_file"
+    curl_exit=0
+    status=$(curl --disable --fail-with-body --silent --show-error --proto '=https' \
+      --connect-timeout 5 --max-time 15 --header "@$credential_file" \
+      --output "$result_file" --write-out '%{http_code}' \
+      https://pbs.example.com:8007/api2/json/admin/datastore) || curl_exit=$?
+    printf 'HTTP %s\n' "$status"
+    [ "$curl_exit" -eq 0 ] || exit "$curl_exit"
+    [ "$status" = 200 ]
+  )
   ```
 
   For curl with a private CA or self-signed certificate, add
@@ -209,7 +288,9 @@ another machine does not prove that Pulse can reach PBS.
   use `--insecure` or `-k`.
 
   `401` means authentication was rejected; `403` means the requested access was
-  refused. Both return a non-zero curl exit while retaining the error body.
+  refused. Both return a non-zero curl exit while retaining the error body
+  privately. A redirect or `000` is not successful access; this command neither
+  follows redirects nor retries.
   Inspect the existing token and both `Audit` grants before replacing anything.
   A `200` response listing the expected datastore establishes access to that
   list, not successful collection of every backup, job or History graph. An
