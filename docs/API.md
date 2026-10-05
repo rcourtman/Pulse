@@ -1548,14 +1548,19 @@ Returns stats for the persistent metrics store (SQLite-backed).
 Returns historical metric series for a resource and time range.
 
 Query params:
-- `resourceType` (required): `node`, `vm`, `container`, `storage`, `dockerHost`, `dockerContainer`
+- `resourceType` (required): `node`, `storage`, `agent`, `disk`, `k8s`, `vm`, `system-container`, `oci-container`, `app-container`, `docker-host`
 - `resourceId` (required)
 - `metric` (optional): `cpu`, `memory`, `disk`, etc. Omit for all metrics
 - `range` (optional): `1h`, `6h`, `12h`, `24h`, `1d`, `7d`, `30d`, `90d` (default `24h`; duration strings also accepted)
 - `maxPoints` (optional): Downsample to a target number of points
 
 > **License**: Requests beyond Community's `7d` floor require the paid `long_term_metrics` entitlement. Relay unlocks `14d`, Pro and legacy Pro+ unlock `90d`, and requests beyond the active tier's limit return `402 Payment Required`.
-> **Aliases**: `guest` (VM/LXC) and `docker` (Docker container) are accepted, but persistent store data uses the canonical types above.
+An explicit `metric` returns a `points` array; omitting it returns a `metrics`
+object keyed by metric name. Use the source ID and type from the affected
+chart's request, not its display name or an internal store type. Older
+`container`, `dockerHost`, `dockerContainer`, `guest` and `docker` query values
+are unsupported. See [Metrics History](METRICS_HISTORY.md#api-access) for
+private one-shot reads, response sources and empty-history troubleshooting.
 
 ---
 
