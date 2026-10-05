@@ -2986,6 +2986,31 @@ Firefox 110) the platform tables already required.
 any locked `braces` copy, so the advisory cannot return through a later
 dependency, and drops the `autoprefixer` floor because the package is gone.
 
+### Reviewed npm-minor-patch refresh (5 Oct 2026)
+
+The `frontend-modern` refresh of the existing six-package group (#2352) raises
+`lucide-solid` 0.545.0 -> 0.577.0, `@types/node` 26.6.2 -> 26.6.3,
+`typescript-eslint` and its parser/plugin 8.70.0 -> 8.71.0, and the exact
+`prettier` pin 3.9.8 -> 3.9.9. Every locked typescript-eslint helper follows
+8.71.0. Official metadata and whole-tarball SHA512 observations establish the
+selected package identities, not their installed behaviour or an audit verdict.
+The formatter patch preserves spaces between copied code and prose when shell
+variables contain dollar signs. `dependencyTooling.test.ts` exercises that real
+formatter case and rejects a stale installed formatter.
+
+`dependencySecurity.test.ts` raises the reviewed locked floors, checks every
+nested typescript-eslint copy against its wrapper, and permits only an exact
+stable Prettier 3.x pin at or above 3.9.9 whose lock matches the declaration.
+Its positive/negative controls distinguish a reviewed patch from a downgrade,
+range, prerelease or unreviewed major. Existing DOMPurify, Vitest, YAML,
+brace-expansion and nanoid floors remain; `braces` remains absent. Tailwind 4,
+jscpd 5, the ES2022 library declaration, Playwright 1.56.1 and every unrelated
+module/override are unchanged. The icon library still ships in the UI; the
+other five declarations are development-only. No new UI, installer, signing,
+release-selection, promotion or rollback boundary is introduced. Full exact-graph
+checks, the strict full-graph audit and fresh representative browser rendering
+remain necessary before acceptance; a prepared lock or acquisition is not proof.
+
 ### Reviewed @types/node 26.6.2 refresh
 
 The 2026-09-23 `npm-minor-patch` group (Dependabot #2189) advances the
