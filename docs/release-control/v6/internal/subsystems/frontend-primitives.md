@@ -2340,6 +2340,13 @@ not a replacement status card, CTA band, or page-local nested card.
    disclosure; a non-expandable identity cell must otherwise expose its
    complete value without requiring hover. Default data rows stay single-line
    so scan density and row rhythm are not traded for automatic text wrapping.
+   A summary value that must truncate sits in a `block truncate` span as the
+   cell's only child, so it fills the fixed-layout column and ends in an
+   ellipsis inside it on the row's text line. A capped `inline-block max-w-*
+   truncate` span ignores the column width: it spills past a narrower cell
+   with no ellipsis, wastes room in a wider one, and sits about 2 pixels above
+   the row baseline. `platformOverviewLayout.guardrails.test.ts` holds the
+   Docker, Kubernetes, Proxmox and vSphere table sources to that rule.
    When a platform table row itself owns that keyboard- and touch-operable
    disclosure, `SummaryRowActionButton` removes the redundant visible chevron
    below the shared mobile breakpoint while preserving the button for screen
@@ -5184,6 +5191,13 @@ owned title so feature drawers can place web-interface controls inside a larger
 access surface without forking the save/remove/runtime behavior. Future
 web-interface URL work should extend those owners instead of pushing metadata
 transport or validation back into the shared shell.
+`WebInterfaceUrlField.tsx` renders read-only when
+`sessionCanWriteMonitoringMetadata()` is false. That mirrors the backend
+metadata write gate: browser sessions always pass, while API-token sessions
+such as kiosk links need `monitoring:write` or the wildcard scope. Read-only
+sessions keep the saved URL with its open and copy controls and a one-line
+explanation, but get no input, Save, Remove, or suggested-URL adoption that the
+server would refuse.
 Missing-suggested-URL diagnostics remain useful only when the operator has no
 saved or entered URL; once a custom web-interface URL is present, the shared
 field must suppress "no suggested URL" warnings so Discovery does not make a

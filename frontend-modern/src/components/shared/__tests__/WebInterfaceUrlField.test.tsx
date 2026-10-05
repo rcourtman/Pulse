@@ -46,11 +46,13 @@ import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { copyToClipboard } from '@/utils/clipboard';
 import { getDiscoveryProvenanceTitle } from '@/utils/discoveryPresentation';
 import { RESOURCE_METADATA_CHANGED_EVENT } from '@/utils/resourceMetadataEvents';
+import { syncSessionCapabilities } from '@/stores/sessionCapabilities';
 
 describe('WebInterfaceUrlField', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    syncSessionCapabilities(null);
   });
 
   it('keeps the URL field on shell, runtime, and model owners', () => {
@@ -81,6 +83,35 @@ describe('WebInterfaceUrlField', () => {
 
     expect(await screen.findByText('Web Interface URL')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+  });
+
+  it('shows the saved URL without edit controls to sessions that cannot write metadata', async () => {
+    syncSessionCapabilities({ tokenScopes: ['monitoring:read'] });
+    render(() => (
+      <WebInterfaceUrlField
+        metadataKind="guest"
+        metadataId="guest-1"
+        targetLabel="workload"
+        customUrl="https://grafana.example"
+        suggestedUrl="http://10.0.0.5:3000"
+      />
+    ));
+
+    expect(await screen.findByText('https://grafana.example')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open saved web interface URL' })).toHaveAttribute(
+      'href',
+      'https://grafana.example',
+    );
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Use (this|instead)/ })).not.toBeInTheDocument();
+    expect(
+      screen.getByText('This session can open saved web interface URLs but not change them.'),
+    ).toBeInTheDocument();
+
+    syncSessionCapabilities({ tokenScopes: ['monitoring:read', 'monitoring:write'] });
+    expect(await screen.findByRole('button', { name: 'Save' })).toBeInTheDocument();
   });
 
   it('supports embedded rendering with a custom title', async () => {

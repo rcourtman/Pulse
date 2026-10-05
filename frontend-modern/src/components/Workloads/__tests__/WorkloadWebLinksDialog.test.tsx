@@ -10,10 +10,11 @@ import {
 import { WorkloadWebLinksAction } from '../WorkloadWebLinksAction';
 import type { WorkloadGuestMetadataMap } from '../workloadGuestMetadataRecord';
 
-const { updateMetadataMock, successMock, readOnlyMock } = vi.hoisted(() => ({
+const { updateMetadataMock, successMock, readOnlyMock, canWriteMock } = vi.hoisted(() => ({
   updateMetadataMock: vi.fn(),
   successMock: vi.fn(),
   readOnlyMock: vi.fn(() => false),
+  canWriteMock: vi.fn(() => true),
 }));
 
 vi.mock('@/api/guestMetadata', () => ({
@@ -26,6 +27,10 @@ vi.mock('@/stores/notifications', () => ({
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
   presentationPolicyIsReadOnly: readOnlyMock,
+}));
+
+vi.mock('@/stores/sessionCapabilities', () => ({
+  sessionCanWriteMonitoringMetadata: canWriteMock,
 }));
 
 const makeGuest = (overrides: Partial<WorkloadGuest>): WorkloadGuest =>
@@ -57,7 +62,7 @@ const renderAction = (metadata: WorkloadGuestMetadataMap = {}) => {
     }));
   };
   window.addEventListener(RESOURCE_METADATA_CHANGED_EVENT, onChanged);
-  render(() => <WorkloadWebLinksAction guests={guests} guestMetadata={guestMetadata} />);
+  render(() => <WorkloadWebLinksAction source={{ kind: 'workloads', guests, guestMetadata }} />);
   return {
     events,
     dispose: () => window.removeEventListener(RESOURCE_METADATA_CHANGED_EVENT, onChanged),
@@ -82,6 +87,7 @@ describe('WorkloadWebLinksAction', () => {
     updateMetadataMock.mockResolvedValue({});
     successMock.mockReset();
     readOnlyMock.mockReturnValue(false);
+    canWriteMock.mockReturnValue(true);
   });
 
   afterEach(() => {
@@ -95,6 +101,85 @@ describe('WorkloadWebLinksAction', () => {
     harness = renderAction();
 
     expect(screen.queryByRole('button', { name: /Edit links/ })).not.toBeInTheDocument();
+  });
+
+  it('is absent for API-token sessions that cannot write monitoring metadata', () => {
+    canWriteMock.mockReturnValue(false);
+    harness = renderAction();
+
+    expect(screen.queryByRole('button', { name: /Edit links/ })).not.toBeInTheDocument();
+  });
+
+  it('edits ready-made rows, such as Docker containers, in their own words', async () => {
+    const [containerUrl, setContainerUrl] = createSignal('');
+    const rows = () => [
+      {
+        metadataId: 'app-container:docker-main:name:grafana',
+        name: 'grafana',
+        detail: 'docker-main · grafana/grafana:11',
+        status: 'running',
+        addressHint: '',
+        savedUrl: containerUrl(),
+      },
+    ];
+    render(() => (
+      <WorkloadWebLinksAction
+        source={{ kind: 'rows', noun: { one: 'container', many: 'containers' }, rows }}
+      />
+    ));
+    const dialog = await openEditor();
+
+    expect(dialog.getByText(/for each container/)).toBeInTheDocument();
+    fireEvent.input(dialog.getByLabelText(/grafana/), {
+      target: { value: 'https://grafana.example' },
+    });
+    fireEvent.click(dialog.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(successMock).toHaveBeenCalledWith('Saved 1 link.'));
+    expect(updateMetadataMock).toHaveBeenCalledWith('app-container:docker-main:name:grafana', {
+      customUrl: 'https://grafana.example',
+    });
+    // The resource-backed table catches up on its next refetch.
+    setContainerUrl('https://grafana.example');
+  });
+
+  it('holds just-saved links while a resource-backed table has not refetched yet', async () => {
+    updateMetadataMock.mockImplementation(async (id: string) => {
+      if (id === 'b') throw new Error('Permission denied');
+      return {};
+    });
+    const rows = () =>
+      ['a', 'b'].map((id) => ({
+        metadataId: id,
+        name: `container-${id}`,
+        detail: '',
+        status: 'running',
+        addressHint: '',
+        savedUrl: '',
+      }));
+    render(() => (
+      <WorkloadWebLinksAction
+        source={{ kind: 'rows', noun: { one: 'container', many: 'containers' }, rows }}
+      />
+    ));
+    const dialog = await openEditor();
+
+    fireEvent.input(dialog.getByLabelText(/container-a/), {
+      target: { value: 'https://a.example' },
+    });
+    fireEvent.input(dialog.getByLabelText(/container-b/), {
+      target: { value: 'https://b.example' },
+    });
+    fireEvent.click(dialog.getByRole('button', { name: 'Save 2 links' }));
+
+    await waitFor(() =>
+      expect(dialog.getByLabelText(/container-b/)).toHaveAccessibleDescription('Permission denied'),
+    );
+    expect(dialog.getByLabelText(/container-a/)).toHaveValue('https://a.example');
+    expect(dialog.getByTestId('workload-web-links-summary')).toHaveTextContent(
+      '1 of 2 in this view have a link',
+    );
+    expect(dialog.getByRole('status')).toHaveTextContent('1 unsaved change');
   });
 
   it('lists every guest in the view with its saved link and a labelled input', async () => {

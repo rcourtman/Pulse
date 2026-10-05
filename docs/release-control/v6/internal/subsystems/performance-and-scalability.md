@@ -1175,6 +1175,13 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     keep unchanged row objects across inventory ticks so an open editor never
     remounts the input being typed in.
     `WorkloadsSurface.performance.contract.test.tsx` pins that wiring.
+    The editor takes a source rather than guests: workload tables pass live
+    guests and metadata so the row model loads only with the panel, while the
+    Docker containers table passes ready rows and lazy-loads the trigger so
+    it does not merge into the chunk the Docker and workloads pages share.
+    Saves run one metadata write per changed link, then dispatch the
+    metadata-changed events together so whole-snapshot listeners coalesce
+    onto one in-flight refetch instead of refetching per link.
     Drawer history charts belong to `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`.
     A current metric may remain visible in a chart legend only when labelled
     `current`; it must never be expanded into synthetic timestamps or a flat

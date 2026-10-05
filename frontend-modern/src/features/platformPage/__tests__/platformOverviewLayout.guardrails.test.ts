@@ -395,11 +395,22 @@ describe('platform overview layout guardrails', () => {
     );
   });
 
-  it('keeps Kubernetes summary cells truncating inside their own column', () => {
+  it('keeps platform summary cells truncating inside their own column', () => {
     // A capped inline-block (max-w-52 truncate) ignored the column width, so a
     // long value spilled past a narrow cell without an ellipsis and sat above
     // the row's text line; a block span fills the cell and ellipsizes there.
     for (const source of [
+      dockerConfigsTableSource,
+      dockerImagesTableSource,
+      dockerNetworksTableSource,
+      dockerSecretsTableSource,
+      dockerServicesTableSource,
+      dockerTasksTableSource,
+      dockerVolumesTableSource,
+      proxmoxCoverageTableSource,
+      proxmoxMailGatewayDrawerSource,
+      proxmoxRecoverableTableSource,
+      vsphereHostsTableSource,
       kubernetesAutoscalingTableSource,
       kubernetesConfigTableSource,
       kubernetesControllersTableSource,

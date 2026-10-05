@@ -1212,7 +1212,12 @@ RBAC names first, then the namespace scope, then the short Lifecycle and Data
 shape values, then Kind. Kubernetes summary cells truncate through a block span
 that fills the cell, so a long value ends in an ellipsis inside its own column
 on the row's text line; a fixed-width inline-block cap spilled past narrow
-cells without an ellipsis and sat above the row baseline.
+cells without an ellipsis and sat above the row baseline. Docker image, network,
+volume, service, task, secret and config cells, Proxmox backup coverage,
+restore-evidence and recoverable cells, the Mail Gateway drawer's top domains,
+and vSphere host vCenter cells follow the same rule. The Docker service Update
+cell still wraps on phones and from md truncates inside its column instead of
+at a 10rem cap.
 Duration and interval cells keep the same split: unified-resource or
 source-specific consumers own which elapsed duration, human fallback, or poll
 interval field is meaningful, while dense platform table rendering must use
@@ -1453,6 +1458,12 @@ pod UIDs, and generated registry IDs remain fallback migration, action,
 discovery, or metrics coordinates and must not be the primary metadata write
 key. Missing cluster/host, namespace, kind, or name scope must fail closed to
 the legacy resource key rather than constructing a broadened stable key.
+The Docker containers table's bulk web-link editor is a third writer of these
+records. It keys every row through `toDiscoveryConfig`, the container drawer's
+own metadata target, and lists only rows whose target is guest metadata, so
+bulk and drawer saves for a container read and write the same
+`app-container:<host>:name:<normalized-name>` record and the editor never
+falls back to a runtime-ID key.
 Product-originated resource references may arrive as registered unified
 resource IDs, source-specific IDs, or canonical identity aliases. The
 unified-resource registry owns resolving those references through

@@ -221,10 +221,7 @@ export const DockerImagesTable: Component<
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content platform-table-phone-hidden`}
                           >
-                            <span
-                              class="inline-block max-w-[20rem] truncate"
-                              title={operational().consumerSummary}
-                            >
+                            <span class="block truncate" title={operational().consumerSummary}>
                               {operational().consumerSummary}
                             </span>
                           </TableCell>

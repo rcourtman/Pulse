@@ -503,7 +503,7 @@ export const VsphereHostsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
                           >
-                            <span class="inline-block max-w-48 truncate" title={vcenter()}>
+                            <span class="block truncate" title={vcenter()}>
                               {vcenter()}
                             </span>
                           </TableCell>

@@ -350,7 +350,7 @@ export function ProxmoxCoverageTable(props: {
                               fallback={<span class="text-muted">—</span>}
                             >
                               {(node) => (
-                                <span class="inline-block max-w-full truncate" title={node()}>
+                                <span class="block truncate" title={node()}>
                                   {node()}
                                 </span>
                               )}
@@ -586,10 +586,7 @@ export function ProxmoxCoverageTable(props: {
                                           <TableCell
                                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                                           >
-                                            <span
-                                              class="inline-block max-w-[18rem] truncate"
-                                              title={artifact.location}
-                                            >
+                                            <span class="block truncate" title={artifact.location}>
                                               {artifact.location}
                                             </span>
                                           </TableCell>
@@ -634,7 +631,7 @@ export function ProxmoxCoverageTable(props: {
                                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                                           >
                                             <span
-                                              class="inline-block max-w-[24rem] truncate"
+                                              class="block truncate"
                                               title={artifact.detailTitle ?? artifact.detail}
                                             >
                                               {artifact.detail || '—'}
