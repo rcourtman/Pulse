@@ -1325,6 +1325,10 @@ failure. If `runtime-capabilities` blocks `audit_logging` with
 active Pro license needs the private Pulse Pro runtime, but they must not
 expose license keys, billing identity, or plan-upgrade copy as part of that
 security/privacy feature gate.
+The Audit Webhooks panel also states its scope before any gate or endpoint
+list: these webhooks carry security events only, and alert delivery lives in
+alert notifications (`getAuditWebhookNotificationsSignpost`), so an operator
+looking for Discord or Slack alerts is not left configuring an audit sink.
 Audit-log storage availability is also a security/privacy trust boundary.
 The `pkg/audit/` runtime package owns persistent audit-store classification:
 transient SQLite busy/locked conditions must be retried and surfaced as

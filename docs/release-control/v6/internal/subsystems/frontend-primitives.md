@@ -5948,6 +5948,11 @@ canonical `SettingsPanel` shell, while
 license/paywall lifecycle, webhook fetch/save flow, validation, paywall
 tracking, and hidden-upgrade copy posture. The shell must not re-accumulate API
 calls or paywall tracking inline.
+Because it is the only webhook page in Settings, the shell opens with a
+signpost, in both the gated and enabled states, saying audit webhooks carry
+security events only and linking to the Alerts notifications tab for Discord,
+Slack, ntfy or email delivery (issue #1344 tried to add a Discord webhook
+here). The link is a plain anchor the app Router intercepts.
 The same paid-runtime-required route applies to Audit Webhooks: missing
 `audit_logging` caused by a community runtime must keep the panel reachable,
 hide normal upgrade-plan prompts, and present the private Pulse Pro runtime
