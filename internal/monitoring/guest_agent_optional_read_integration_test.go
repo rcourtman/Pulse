@@ -132,11 +132,12 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 					m.recordGuestMetrics([]models.VM{vm}, nil, time.Now().Add(-time.Second))
 					registry.IngestSnapshot(models.StateSnapshot{VMs: []models.VM{vm}})
 					view := registry.VMs()[0]
-					if view.ID() != id || view.DiskUsed() != vm.Disk.Used || view.DiskStatusReason() != vm.DiskStatusReason {
-						t.Fatal("filesystem observation changed at the read boundary")
+					canonicalID, resolved := registry.ResolveReferenceID(id)
+					if !resolved || view.ID() != canonicalID || view.DiskUsed() != vm.Disk.Used || view.DiskStatusReason() != vm.DiskStatusReason {
+						t.Fatalf("filesystem observation changed at the read boundary: id=%q resolved=%q ok=%v used=%d/%d reason=%q/%q", view.ID(), canonicalID, resolved, view.DiskUsed(), vm.Disk.Used, view.DiskStatusReason(), vm.DiskStatusReason)
 					}
 					encoded, err := json.Marshal(m.buildBroadcastFrontendStateFromSnapshot(models.StateSnapshot{VMs: []models.VM{vm}}).Resources)
-					if err != nil || !strings.Contains(string(encoded), id) {
+					if err != nil || !strings.Contains(string(encoded), canonicalID) {
 						t.Fatal("guest identity missing from JSON read projection")
 					}
 					next := previousVMFromView(view)
