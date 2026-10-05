@@ -15,6 +15,13 @@ import { formatPlatformTableDateTimeValue } from '@/features/platformPage/shared
 import type { Resource } from '@/types/resource';
 import { KubernetesControllersTable } from '../KubernetesControllersTable';
 
+// Generated Kubernetes names render as a truncating head and a kept tail, so
+// the full name is the text of the name wrapper rather than of one text node.
+const kubernetesName =
+  (name: string) =>
+  (_content: string, element: Element | null): boolean =>
+    element?.hasAttribute('data-kubernetes-name') === true && element.textContent === name;
+
 const makeResource = ({
   id,
   type,
@@ -250,7 +257,7 @@ describe('KubernetesControllersTable', () => {
     // Tapping the row opens the expansion; the Detail column is hidden below a
     // large container, so this is where a phone or half-width pane reads the
     // completion time.
-    fireEvent.click(screen.getByText('nightly-import'));
+    fireEvent.click(screen.getByText(kubernetesName('nightly-import')));
     const job = screen.getByTestId('resource-kubernetes-controller-section');
     expect(within(job).getByText('Started')).toBeInTheDocument();
     expect(
@@ -266,7 +273,7 @@ describe('KubernetesControllersTable', () => {
     expect(within(job).getByText('10 completions')).toBeInTheDocument();
     expect(within(job).getByText('Failed').closest('tr')).toHaveTextContent('2');
 
-    fireEvent.click(screen.getByText('billing-rollup'));
+    fireEvent.click(screen.getByText(kubernetesName('billing-rollup')));
     const cron = screen.getByTestId('resource-kubernetes-controller-section');
     expect(within(cron).getByText('Schedule')).toBeInTheDocument();
     expect(within(cron).getByText('*/5 * * * *')).toBeInTheDocument();

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
-import { getKubernetesNodesNeedingAttention } from '../kubernetesPageModel';
+import {
+  getKubernetesNodesNeedingAttention,
+  splitKubernetesNameTail,
+} from '../kubernetesPageModel';
 import {
   KUBERNETES_TAB_SPECS,
   buildKubernetesClusterChildCounts,
@@ -44,6 +47,30 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
 });
 
 describe('kubernetesPageModel', () => {
+  it('splits off the generated tail that tells sibling names apart', () => {
+    expect(splitKubernetesNameTail('checkout-api-6d8f9c7b5-x7k2p')).toEqual({
+      head: 'checkout-api-6d8f9c7b5',
+      tail: '-x7k2p',
+    });
+    expect(splitKubernetesNameTail('prod-euw1-k8s-03')).toEqual({
+      head: 'prod-euw1-k8s',
+      tail: '-03',
+    });
+    expect(splitKubernetesNameTail('nightly-backfill-28918234')).toEqual({
+      head: 'nightly-backfill',
+      tail: '-28918234',
+    });
+    // No dash, a trailing dash, or a tail too long to be a generated suffix
+    // (a cloud node's domain) leaves the name whole for plain truncation.
+    expect(splitKubernetesNameTail('postgres')).toEqual({ head: 'postgres', tail: '' });
+    expect(splitKubernetesNameTail('web-')).toEqual({ head: 'web-', tail: '' });
+    expect(splitKubernetesNameTail('ip-10-0-1-23.eu-west-1.compute.internal')).toEqual({
+      head: 'ip-10-0-1-23.eu-west-1.compute.internal',
+      tail: '',
+    });
+    expect(splitKubernetesNameTail('-')).toEqual({ head: '-', tail: '' });
+  });
+
   it('declares operator workflow tabs for Kubernetes inventory', () => {
     expect(KUBERNETES_TAB_SPECS.map((tab) => tab.id)).toEqual([
       'overview',

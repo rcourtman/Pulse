@@ -1166,6 +1166,17 @@ platform-details disclosure. The `KubernetesControllersTable` phone projection
 keeps controller, kind, ready, and issues and demotes Target with
 `platform-table-phone-hidden`, so kind labels such as `DaemonSet` and
 `StatefulSet` fit whole instead of clipping in a 15 percent track.
+Kubernetes name columns hold the chevron, status dot and name inside one
+track, so their md widths leave the name room for a typical node or service
+name at a 768px viewport: Nodes 20 percent (with Capacity at 16 so its
+cores, memory and pods label fits at 1100px and wider), Events 24, and
+Services, Configuration, Storage, Controllers and Policy 22. Generated names
+render through `KubernetesNameText`, which splits off the trailing segment
+(`splitKubernetesNameTail`) so a narrow cell truncates the head and keeps the
+part that tells siblings apart (`checkout-api-6d…-x7k2p`, `prod…-03`), with the
+full name on the title. Pod names, the Pods table's Node column and controller
+names use it. Deployment names are chosen by people, so they keep plain end
+truncation.
 Duration and interval cells keep the same split: unified-resource or
 source-specific consumers own which elapsed duration, human fallback, or poll
 interval field is meaningful, while dense platform table rendering must use

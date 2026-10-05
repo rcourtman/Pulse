@@ -99,6 +99,20 @@ const displayName = (resource: Resource): string =>
 // is only a fallback for rows whose adapter carries no name. Every Kubernetes
 // page table shares this so the same cluster never reads as "Production EU"
 // in one column and "k8s-production-1" in another.
+// Pod names end in the generated segment that tells replicas apart
+// (checkout-api-6d8f9c7b5-x7k2p, web-0), which is exactly what end truncation
+// cuts off in a narrow column. Splitting it out lets the table truncate the
+// head and keep the tail, so a long name reads checkout-api-6d…-x7k2p.
+const KUBERNETES_NAME_TAIL_MAX = 10;
+
+export function splitKubernetesNameTail(name: string): { head: string; tail: string } {
+  const cut = name.lastIndexOf('-');
+  if (cut <= 0 || name.length - cut - 1 > KUBERNETES_NAME_TAIL_MAX || cut === name.length - 1) {
+    return { head: name, tail: '' };
+  }
+  return { head: name.slice(0, cut), tail: name.slice(cut) };
+}
+
 export const kubernetesClusterLabel = (resource: Resource): string =>
   asTrimmedString(resource.kubernetes?.clusterName) ||
   asTrimmedString(resource.kubernetes?.clusterId);

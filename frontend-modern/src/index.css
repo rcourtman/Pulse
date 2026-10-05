@@ -1434,6 +1434,21 @@
     }
   }
 
+  /* Between the phone projection and the md viewport breakpoint, tables that
+     size their columns with md:w-[...] classes have no widths at all, while the
+     phone-hidden columns are already back. Every visible column then took an
+     equal share, so a seven-column Kubernetes table left its name column 83px
+     with the chevron and status dot inside it. Keep the phone identity anchor
+     until the md widths apply. Tables sized by a weighted colgroup keep their
+     own widths, because column widths win over header widths. */
+  @media (width < 768px) {
+    @container (min-width: 34rem) {
+      .table-scroll-shell > .table-fixed.platform-table th.platform-table-name-column {
+        width: 30%;
+      }
+    }
+  }
+
   /* At the narrowest supported phone width, spend the extra identity space once
      at the shared boundary. Source tables still choose which lower-priority
      field disappears; the shell only guarantees that the surviving identity

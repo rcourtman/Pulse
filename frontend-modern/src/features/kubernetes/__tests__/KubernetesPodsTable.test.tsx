@@ -4,6 +4,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { KubernetesPodsTable } from '../KubernetesPodsTable';
 
+// Generated Kubernetes names render as a truncating head and a kept tail, so
+// the full name is the text of the name wrapper rather than of one text node.
+const kubernetesName =
+  (name: string) =>
+  (_content: string, element: Element | null): boolean =>
+    element?.hasAttribute('data-kubernetes-name') === true && element.textContent === name;
+
 const makeResource = ({
   id,
   type = 'pod',
@@ -104,9 +111,20 @@ describe('KubernetesPodsTable', () => {
     expect(screen.getByText('Image')).toBeInTheDocument();
     expect(screen.getByText('Age')).toBeInTheDocument();
 
-    expect(screen.getByText('checkout-api-6c746d5bcf-c7z2p')).toBeInTheDocument();
+    expect(screen.getByText(kubernetesName('checkout-api-6c746d5bcf-c7z2p'))).toBeInTheDocument();
     expect(screen.getByText('prod-euw1/services')).toBeInTheDocument();
-    expect(screen.getByText('prod-euw1-k8s-02')).toBeInTheDocument();
+    expect(screen.getByText(kubernetesName('prod-euw1-k8s-02'))).toBeInTheDocument();
+    // Narrow columns truncate the head and keep the generated tail, so
+    // replicas and nodes stay distinguishable. The title keeps the full name.
+    const podName = screen.getByText(kubernetesName('checkout-api-6c746d5bcf-c7z2p'));
+    expect(podName).toHaveAttribute('title', 'checkout-api-6c746d5bcf-c7z2p');
+    expect(podName.querySelector('[data-kubernetes-name-tail]')).toHaveTextContent('-c7z2p');
+    expect(podName.querySelector('.truncate')).toHaveTextContent('checkout-api-6c746d5bcf');
+    expect(
+      screen
+        .getByText(kubernetesName('prod-euw1-k8s-02'))
+        .querySelector('[data-kubernetes-name-tail]'),
+    ).toHaveTextContent('-02');
     // Raw phase is Running, but the metrics-sidecar container is not ready;
     // the status column shows the mapped label, not the phase.
     expect(screen.getByText('Not ready')).toBeInTheDocument();
@@ -123,7 +141,9 @@ describe('KubernetesPodsTable', () => {
         name: 'Open web interface for checkout-api-6c746d5bcf-c7z2p',
       }),
     ).toHaveAttribute('href', 'https://checkout-pod.internal');
-    expect(screen.getByText('checkout-api-6c746d5bcf-c7z2p').closest('a')).toBeNull();
+    expect(
+      screen.getByText(kubernetesName('checkout-api-6c746d5bcf-c7z2p')).closest('a'),
+    ).toBeNull();
   });
 
   it('renders pod rows with status mapped from podPhase + container readiness, attention rows first', () => {

@@ -33,6 +33,7 @@ import {
   mapKubernetesPodStatus,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
+import { KubernetesNameText } from './KubernetesNameText';
 
 const podName = (resource: Resource): string =>
   asTrimmedString(resource.kubernetes?.podName) ||
@@ -324,8 +325,10 @@ export const KubernetesPodsTable: Component<{
                                 name={name()}
                                 url={resource.customUrl}
                                 class="min-w-0"
-                                nameClass="truncate font-semibold text-base-content"
-                              />
+                                nameClass="flex min-w-0 font-semibold text-base-content"
+                              >
+                                <KubernetesNameText name={name()} />
+                              </ResourceNameWithWebInterfaceLink>
                             </div>
                           </TableCell>
                           <TableCell
@@ -338,9 +341,7 @@ export const KubernetesPodsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
-                            <span class="block max-w-full truncate" title={node()}>
-                              {node()}
-                            </span>
+                            <KubernetesNameText name={node()} class="max-w-full" />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}

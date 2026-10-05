@@ -4,6 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { KubernetesPageSurface } from '../KubernetesPageSurface';
 
+// Generated Kubernetes names render as a truncating head and a kept tail, so
+// the full name is the text of the name wrapper rather than of one text node.
+const kubernetesName =
+  (name: string) =>
+  (_content: string, element: Element | null): boolean =>
+    element?.hasAttribute('data-kubernetes-name') === true && element.textContent === name;
+
 // URL-backed shared-toolbar filters: the workloads / services / configuration
 // tabs read search (q) and status from the URL so bookmarks capture -term
 // exclusions, mirroring the Docker containers table. These tests render the
@@ -199,9 +206,9 @@ describe('Kubernetes URL-backed shared toolbar filters', () => {
     renderSurfaceAt('/kubernetes/workloads?cluster=cluster-west');
 
     expect(screen.getByText('west-api')).toBeInTheDocument();
-    expect(screen.getByText('west-pod')).toBeInTheDocument();
+    expect(screen.getByText(kubernetesName('west-pod'))).toBeInTheDocument();
     expect(screen.queryByText('east-api')).not.toBeInTheDocument();
-    expect(screen.queryByText('east-pod')).not.toBeInTheDocument();
+    expect(screen.queryByText(kubernetesName('east-pod'))).not.toBeInTheDocument();
   });
 
   it('scopes the Overview workload inventory when a cluster name is selected', async () => {
