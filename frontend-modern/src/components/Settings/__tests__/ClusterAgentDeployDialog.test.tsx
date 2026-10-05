@@ -45,6 +45,16 @@ const job = (
   targets: ClusterDeployJob['targets'],
 ): ClusterDeployJob => ({ id, clusterId: 'homelab', status, targets });
 
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((accept, fail) => {
+    resolve = accept;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
+};
+
 const renderDialog = (props: Partial<Parameters<typeof ClusterAgentDeployDialog>[0]> = {}) => {
   const onClose = vi.fn();
   const onUseInstaller = vi.fn();
@@ -68,6 +78,116 @@ describe('ClusterAgentDeployDialog', () => {
     Object.values(api).forEach((fn) => fn.mockReset());
   });
   afterEach(() => cleanup());
+
+  it('keeps the focused Close control when loaded candidates change its label to Cancel', async () => {
+    const load = deferred<ClusterDeployCandidates>();
+    api.getCandidates.mockReturnValue(load.promise);
+    const { onClose } = renderDialog();
+    const dismiss = screen.getByRole('button', { name: 'Close' });
+    dismiss.focus();
+    load.resolve(candidates());
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toBe(dismiss));
+    expect(dismiss).toHaveFocus();
+    fireEvent.click(dismiss);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(api.createPreflight).not.toHaveBeenCalled();
+  });
+
+  it.each(['offline', 'ambiguous'] as const)(
+    'keeps dismissal focus when loading ends in the %s installer fallback',
+    async (result) => {
+      const load = deferred<ClusterDeployCandidates>();
+      api.getCandidates.mockReturnValue(load.promise);
+      const { onClose, onUseInstaller } = renderDialog();
+      const dismiss = screen.getByRole('button', { name: 'Close' });
+      dismiss.focus();
+      if (result === 'offline') load.resolve(candidates({ sourceAgents: [] }));
+      else load.reject(new Error('More than one Proxmox connection reports this cluster.'));
+
+      const manual = await screen.findByRole('button', { name: 'Use the installer instead' });
+      expect(screen.getByRole('button', { name: 'Close' })).toBe(dismiss);
+      expect(dismiss).toHaveFocus();
+      fireEvent.click(manual);
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(onUseInstaller).toHaveBeenCalledTimes(1);
+      expect(api.createPreflight).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['succeeded', 'failed'] as const)(
+    'hands focused Install to stable dismissal through checking, installation and %s',
+    async (outcome) => {
+      const check = deferred<ClusterDeployJob>();
+      const completion = deferred<ClusterDeployJob>();
+      api.getCandidates.mockResolvedValueOnce(candidates()).mockResolvedValue(
+        candidates({
+          nodes: candidates().nodes!.map((node) =>
+            node.nodeId === 'n-delly2' ? { ...node, hasAgent: true, deployable: false } : node,
+          ),
+        }),
+      );
+      api.createPreflight.mockResolvedValue({ preflightId: 'focus-pf', status: 'running' });
+      api.getPreflight.mockReturnValue(check.promise);
+      api.createJob.mockResolvedValue({
+        jobId: 'focus-job',
+        acceptedTargets: ['n-delly2'],
+        skippedTargets: [],
+      });
+      api.getJob.mockReturnValue(completion.promise);
+      const { onInstalled } = renderDialog({ preselectNodeName: 'delly2' });
+      const install = await screen.findByRole('button', { name: 'Install on 1 node' });
+      const dismiss = screen.getByRole('button', { name: 'Cancel' });
+      install.focus();
+      fireEvent.click(install);
+      expect(screen.getByRole('button', { name: 'Close' })).toBe(dismiss);
+      expect(dismiss).toHaveFocus();
+
+      await waitFor(() => expect(api.getPreflight).toHaveBeenCalledTimes(1));
+      check.resolve(
+        job('focus-pf', 'succeeded', [
+          {
+            id: 'focus-check',
+            nodeId: 'n-delly2',
+            nodeName: 'delly2',
+            nodeIP: '192.168.0.111',
+            status: 'ready',
+          },
+        ]),
+      );
+      await waitFor(() => expect(api.getJob).toHaveBeenCalledTimes(1));
+      expect(dismiss).toHaveFocus();
+      completion.resolve(
+        job('focus-job', outcome, [
+          {
+            id: 'focus-target',
+            nodeId: 'n-delly2',
+            nodeName: 'delly2',
+            nodeIP: '192.168.0.111',
+            status: outcome === 'succeeded' ? 'succeeded' : 'failed_permanent',
+          },
+        ]),
+      );
+      await screen.findByText(outcome === 'succeeded' ? 'Reporting' : 'Failed');
+      expect(screen.getByRole('button', { name: 'Close' })).toBe(dismiss);
+      expect(dismiss).toHaveFocus();
+      expect(api.createJob).toHaveBeenCalledTimes(1);
+      expect(onInstalled).toHaveBeenCalledTimes(outcome === 'succeeded' ? 1 : 0);
+    },
+  );
+
+  it('does not steal focus for an install action that was not focused', async () => {
+    api.getCandidates.mockResolvedValue(candidates());
+    api.createPreflight.mockRejectedValue(new Error('Source agent is not connected'));
+    renderDialog({ preselectNodeName: 'delly2' });
+    const install = await screen.findByRole('button', { name: 'Install on 1 node' });
+    const dismiss = screen.getByRole('button', { name: 'Cancel' });
+    dismiss.focus();
+    fireEvent.click(install);
+    await screen.findByRole('alert');
+    expect(dismiss).toHaveFocus();
+    expect(api.createJob).not.toHaveBeenCalled();
+  });
 
   it('lists uncovered nodes, preselects the installable ones, and explains the rest', async () => {
     api.getCandidates.mockResolvedValue(candidates());

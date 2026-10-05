@@ -15,6 +15,19 @@
 
 ## Purpose
 
+### Cluster installation keyboard continuity
+
+`ClusterAgentDeployDialog` keeps one mounted dismissal button while loading,
+selection, checking, installation and final results change its label. A focused
+Install action hands focus to that button before it disappears, without moving
+scroll; asynchronous completion never steals focus. Close/Cancel and the scoped
+installer hand-off remain available without starting another install, and
+closing an accepted run still does not cancel it. This is keyboard continuity,
+not a change to job admission, token scope or native installation acceptance.
+`frontend-modern/src/components/Settings/__tests__/ClusterAgentDeployDialog.test.tsx`
+pins delayed candidate responses, safe fallbacks and both successful and failed
+terminal projections alongside the existing installed-only-after-reporting flow.
+
 ### Source-record lookup preserves report admission
 
 Host and Docker report admission still performs canonical host-view matching
