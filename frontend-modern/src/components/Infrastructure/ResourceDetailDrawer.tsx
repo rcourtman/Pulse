@@ -31,6 +31,9 @@ import { ResourceOperatorStateSection } from './ResourceOperatorStateSection';
 import { MaintenanceVerificationSection } from './MaintenanceVerificationSection';
 import { ResourceActionHistory } from './ResourceActionHistory';
 import { CONTAINER_CPU_CAPACITY_DESCRIPTION } from '@/features/docker/dockerCpuPresentation';
+import { InlineNotice } from '@/components/shared/InlineNotice';
+import { GUEST_DRAWER_BACKUP_PRECAUTION } from '@/components/Workloads/guestDrawerModel';
+import { getShippedDocUrl } from '@/utils/docsLinks';
 
 interface ResourceDetailDrawerProps {
   resource: Resource;
@@ -159,6 +162,21 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         </p>
       </Show>
 
+      <Show when={drawer.guestReadPrecaution()}>
+        {(message) => (
+          <InlineNotice
+            tone="warning"
+            role="status"
+            data-testid="resource-guest-read-precaution"
+            actionHref={getShippedDocUrl('VM_DISK_MONITORING.md')}
+            actionLabel="Backup safety guidance"
+          >
+            <p>{message()}</p>
+            <p>{GUEST_DRAWER_BACKUP_PRECAUTION}</p>
+          </InlineNotice>
+        )}
+      </Show>
+
       <Subtabs
         class="mb-1"
         ariaLabel="Resource detail sections"
@@ -262,6 +280,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   canonicalResourceId={props.resource.id}
                   commandsEnabled={drawer.agentMeta()?.commandsEnabled}
                   showManualRunAction
+                  runBlockReason={drawer.guestReadPrecaution()}
                 />
               </Suspense>
             )}

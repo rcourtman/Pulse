@@ -41,7 +41,10 @@ import {
   type KubernetesPlatformData,
   type PlatformData,
 } from '@/components/Infrastructure/resourceDetailMappers';
-import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
+import {
+  getResourceGuestReadPrecaution,
+  toDiscoveryConfig,
+} from '@/components/Infrastructure/resourceDetailDiscoveryModel';
 import { getDiscoveryIdentifiedSummary } from '@/utils/discoveryPresentation';
 import {
   buildPbsActiveTasks,
@@ -298,6 +301,7 @@ export const useResourceDetailDrawerDerivedState = (
   const hasAliasOverflow = createMemo(() => identityView().hasAliasOverflow);
   const hasMergedSources = createMemo(() => mergedSources().length > 1);
   const discoveryConfig = createMemo(() => toDiscoveryConfig(resource()));
+  const guestReadPrecaution = createMemo(() => getResourceGuestReadPrecaution(resource()));
   const discoveryContextSummary = createMemo(() => buildDiscoveryContextSummary(discoveryConfig()));
   const discoverySourceKey = createMemo(() => {
     if (!discoveryFeatureEnabled()) return null;
@@ -517,6 +521,7 @@ export const useResourceDetailDrawerDerivedState = (
     metricsHistoryGroups,
     hasMetricsHistory,
     hasDiscoveryTab,
+    guestReadPrecaution,
     hasVMwareDetails,
     vmwareDetailsSummary,
     vmwareDetailSections,

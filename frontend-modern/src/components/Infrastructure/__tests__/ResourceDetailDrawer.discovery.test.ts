@@ -5,7 +5,11 @@ import type { ResourceDiscovery } from '@/types/discovery';
 import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
 import discoveryReadinessSource from '@/components/Discovery/discoveryReadiness.ts?raw';
 import discoveryTabStateSource from '@/components/Discovery/useDiscoveryTabState.ts?raw';
-import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
+import {
+  getResourceGuestReadPrecaution,
+  toDiscoveryConfig,
+} from '@/components/Infrastructure/resourceDetailDiscoveryModel';
+import { guestDiskDeferrals } from '@/components/Workloads/__fixtures__/guestDiskDeferrals';
 import { hasMeaningfulDiscoveryContext } from '@/utils/discoveryPresentation';
 
 const baseResource = (): Resource => ({
@@ -26,6 +30,75 @@ const baseResource = (): Resource => ({
   identity: {
     hostname: 'stale-hostname',
   },
+});
+
+describe('canonical VM guest-read safety', () => {
+  const vm = (): Resource => ({ ...baseResource(), type: 'vm' });
+
+  it.each(guestDiskDeferrals.flatMap(([reason]) => [reason, `prev-${reason}`]))(
+    'honours %s from typed and legacy PVE evidence independently',
+    (diskStatusReason) => {
+      for (const facet of ['typed', 'legacy']) {
+        const evidence = { diskStatusReason, guestAgentStatus: 'available' };
+        const value = vm();
+        if (facet === 'typed') value.proxmox = evidence;
+        else value.platformData = { proxmox: evidence };
+        expect(getResourceGuestReadPrecaution(value)).toBeTruthy();
+        expect(getResourceGuestReadPrecaution(value)).not.toContain(diskStatusReason);
+      }
+    },
+  );
+
+  it.each([{ lock: 'backup' }, { backupInProgress: true }, { guestAgentStatus: 'deferred' }])(
+    'does not let a healthy alternate facet cancel %j',
+    (paused) => {
+      const healthy = { guestAgentStatus: 'available', diskStatusReason: '', lock: '' };
+      expect(
+        getResourceGuestReadPrecaution({
+          ...vm(),
+          proxmox: healthy,
+          platformData: { proxmox: paused },
+        }),
+      ).toBeTruthy();
+      expect(
+        getResourceGuestReadPrecaution({
+          ...vm(),
+          proxmox: paused,
+          platformData: { proxmox: healthy },
+        }),
+      ).toBeTruthy();
+    },
+  );
+
+  it.each(['agent', 'system-container', 'app-container'] as const)(
+    'does not turn parent or container PVE evidence into a %s QGA pause',
+    (type) => {
+      expect(
+        getResourceGuestReadPrecaution({ ...vm(), type, proxmox: { lock: 'backup' } }),
+      ).toBeNull();
+    },
+  );
+
+  it('leaves healthy/unrelated VMs alone and withholds unknown raw provider text', () => {
+    expect(getResourceGuestReadPrecaution(vm())).toBeNull();
+    expect(
+      getResourceGuestReadPrecaution({ ...vm(), proxmox: { guestAgentStatus: 'available' } }),
+    ).toBeNull();
+    expect(
+      getResourceGuestReadPrecaution({
+        ...vm(),
+        platformType: 'vmware-vsphere',
+        platformData: { vmware: { lock: 'backup' } },
+      }),
+    ).toBeNull();
+    expect(
+      getResourceGuestReadPrecaution({
+        ...vm(),
+        proxmox: { lock: 'private provider text', diskStatusReason: 'private read reason' },
+      }),
+    ).not.toMatch(/private provider text|private read reason/);
+    expect(getResourceGuestReadPrecaution({ ...vm(), platformData: { proxmox: [] } })).toBeNull();
+  });
 });
 
 describe('toDiscoveryConfig', () => {
