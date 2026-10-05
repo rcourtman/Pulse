@@ -52,6 +52,7 @@ import {
   type InfrastructureSourcePickerRouteStep,
 } from '@/utils/infrastructureOnboardingPresentation';
 import { getAgentHostProfileFamily } from '@/utils/platformSupportManifest';
+import { ClusterAgentDeployDialog } from './ClusterAgentDeployDialog';
 
 interface InfrastructureSourceManagerProps {
   rows: Accessor<readonly InfrastructureSystemRow[]>;
@@ -467,6 +468,33 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     props.onAddSource?.('agent');
   };
 
+  // Cluster members are installed in one step when a sibling already runs
+  // the agent: Pulse asks that agent to install on its peers, so there is no
+  // per-host token to copy. Clusters without a reporting agent, and standalone
+  // hosts, keep the scoped manual installer.
+  const [clusterDeploy, setClusterDeploy] = createSignal<{
+    clusterName: string;
+    nodeName?: string;
+  } | null>(null);
+  const canInstallFromCluster = (row: InfrastructureSystemRow): boolean =>
+    !props.readOnly &&
+    row.isCluster &&
+    Boolean(row.clusterName) &&
+    row.members.some((member) => Boolean(member.agentConnection));
+  const handleInstallAgent = (
+    row: InfrastructureSystemRow,
+    member?: InfrastructureSystemMemberRow,
+  ) => {
+    if (canInstallFromCluster(row)) {
+      setClusterDeploy({
+        clusterName: row.clusterName!,
+        nodeName: member?.nativeName || member?.name,
+      });
+      return;
+    }
+    handleInstallAgentShortcut();
+  };
+
   const hasAnyConfigured = createMemo(() => infrastructureRows().length > 0);
   const hasAnyDiscovered = createMemo(() => props.discoveredNodes().length > 0);
 
@@ -571,11 +599,18 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     if (uncoveredAgentTargetCount() > 0 && (props.onAddSourceStep || props.onAddSource)) {
       const namesText = uncoveredAgentTargetNamesText();
       const target = namesText ?? formatCount(uncoveredAgentTargetCount(), 'Proxmox host');
+      // When every uncovered host sits in one cluster that can install from a
+      // sibling, the summary action opens that one-step install directly.
+      const uncoveredRows = infrastructureRows().filter((row) => rowNeedsAgentCoverage(row));
+      const soleCluster =
+        uncoveredRows.length === 1 && canInstallFromCluster(uncoveredRows[0])
+          ? uncoveredRows[0]
+          : undefined;
       return {
         kind: 'agent',
         label: uncoveredAgentTargetCount() === 1 ? 'Install agent' : 'Install agents',
         detail: `Install one Pulse Agent on each uncovered Proxmox host (${target}) to add node-local telemetry such as temperatures, SMART data, and host identity.`,
-        onClick: handleInstallAgentShortcut,
+        onClick: soleCluster ? () => handleInstallAgent(soleCluster) : handleInstallAgentShortcut,
       };
     }
 
@@ -1090,11 +1125,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                   variant="outline"
                                                   size="xs"
                                                   class="gap-1.5"
-                                                  onClick={handleInstallAgentShortcut}
+                                                  onClick={() => handleInstallAgent(row)}
                                                   aria-label={installAgentActionLabel(row)}
                                                   title={
                                                     row.isCluster
-                                                      ? 'Generate an installer command to run once on each uncovered Proxmox node.'
+                                                      ? canInstallFromCluster(row)
+                                                        ? 'Install Pulse Agent on the uncovered nodes from a node that already runs it.'
+                                                        : 'Generate an installer command to run once on each uncovered Proxmox node.'
                                                       : 'Install Pulse Agent on this system to add node-local telemetry (temperatures, SMART, host identity).'
                                                   }
                                                 >
@@ -1255,9 +1292,15 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                         variant="outline"
                                                         size="xs"
                                                         class="gap-1.5"
-                                                        onClick={handleInstallAgentShortcut}
+                                                        onClick={() =>
+                                                          handleInstallAgent(row, member)
+                                                        }
                                                         aria-label={`Install agent on ${member.name}`}
-                                                        title={`Generate an installer command to run on ${member.name}.`}
+                                                        title={
+                                                          canInstallFromCluster(row)
+                                                            ? `Install Pulse Agent on ${member.name} from a node that already runs it.`
+                                                            : `Generate an installer command to run on ${member.name}.`
+                                                        }
                                                       >
                                                         <Cpu class="h-3.5 w-3.5" />
                                                         Install agent
@@ -1580,9 +1623,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                   variant="outline"
                                                   size="xs"
                                                   class="mt-2 min-h-11 gap-1.5 lg:min-h-0"
-                                                  onClick={handleInstallAgentShortcut}
+                                                  onClick={() => handleInstallAgent(row, member)}
                                                   aria-label={`Install agent on ${member.name}`}
-                                                  title={`Generate an installer command to run on ${member.name}.`}
+                                                  title={
+                                                    canInstallFromCluster(row)
+                                                      ? `Install Pulse Agent on ${member.name} from a node that already runs it.`
+                                                      : `Generate an installer command to run on ${member.name}.`
+                                                  }
                                                 >
                                                   <Cpu class="h-3.5 w-3.5" />
                                                   Install agent
@@ -1669,11 +1716,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             variant="outline"
                                             size="xs"
                                             class="min-h-11 gap-1.5 lg:min-h-0"
-                                            onClick={handleInstallAgentShortcut}
+                                            onClick={() => handleInstallAgent(row)}
                                             aria-label={installAgentActionLabel(row)}
                                             title={
                                               row.isCluster
-                                                ? 'Generate an installer command to run once on each uncovered Proxmox node.'
+                                                ? canInstallFromCluster(row)
+                                                  ? 'Install Pulse Agent on the uncovered nodes from a node that already runs it.'
+                                                  : 'Generate an installer command to run once on each uncovered Proxmox node.'
                                                 : 'Install Pulse Agent on this system to add node-local telemetry (temperatures, SMART, host identity).'
                                             }
                                           >
@@ -1795,6 +1844,19 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
           </div>
         </Show>
         {discoveryMonitorBand()}
+        {/* Keyed so the dialog gets plain values: an install it started keeps
+            running after close, and must not read a stale <Show> accessor. */}
+        <Show when={clusterDeploy()} keyed>
+          {(target) => (
+            <ClusterAgentDeployDialog
+              isOpen={true}
+              clusterName={target.clusterName}
+              preselectNodeName={target.nodeName}
+              onClose={() => setClusterDeploy(null)}
+              onUseInstaller={handleInstallAgentShortcut}
+            />
+          )}
+        </Show>
       </SettingsPanel>
     </div>
   );

@@ -1558,6 +1558,7 @@ payload shape change when the portal presents compact client rows.
    client rules that Assistant tool execution and reference clients also
    consume.
 3. `frontend-modern/src/api/agentCapabilities.ts` shared with `ai-runtime`: the agent capabilities frontend client is both the Pulse Intelligence external-agent manifest consumer and a canonical API payload contract boundary.
+4. `frontend-modern/src/api/agentDeploy.ts` shared with `agent-lifecycle`: the cluster agent deploy client is both the agent lifecycle one-step cluster member install surface and a canonical API payload contract boundary.
 4. `frontend-modern/src/api/agentProfiles.ts` shared with `agent-lifecycle`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
 5. `frontend-modern/src/api/ai.ts` shared with `ai-runtime`: the AI frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
    `/api/settings/ai` is the provider-registry projection for Assistant and
@@ -3541,6 +3542,21 @@ a new API state machine, queue contract, or verification-accounting field.
     as compatibility input into that same canonical `agent-<hostname>`
     binding, and unbound agent-exec tokens must fail closed instead of being
     treated as global command authority.
+    The cluster agent deploy payloads in `internal/api/deploy_handlers.go`
+    are a typed client contract consumed through
+    `frontend-modern/src/api/agentDeploy.ts`. Candidate and preflight target
+    addresses must be literal IPs resolved by
+    `DeployHandlers.deployTargetIP` (a literal IP in the member's API URL,
+    else the cluster endpoint's `EffectiveIP()`), never a hostname parsed out
+    of the API URL, and a member with no known address must come back
+    `deployable: false` with reason `no_address` rather than failing later in
+    the source agent's preflight. Candidates and preflights must answer
+    `409 ambiguous_cluster` when more than one Proxmox connection reports the
+    cluster name, and job creation must answer `409 deploy_in_progress` while
+    a recent install job on the cluster is unfinished, admitting atomically so
+    concurrent requests start at most one install.
+    `internal/api/deploy_handlers_test.go` and
+    `frontend-modern/src/api/__tests__/agentDeploy.test.ts` pin that shape.
     Proxmox-side LXC Docker detection and inventory wiring in
     `internal/api/router.go` shares that agent-exec transport boundary:
     router startup may configure the monitoring checker or collector only when

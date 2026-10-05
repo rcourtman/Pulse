@@ -1159,6 +1159,7 @@ The scheduler may enumerate tenant organization IDs so each workspace can run
 its own reports, but that enumeration is not agent enrollment, install,
 update, profile rollout, command reachability, or fleet-control authority.
 
+1. `frontend-modern/src/api/agentDeploy.ts` shared with `api-contracts`: the cluster agent deploy client is both the agent lifecycle one-step cluster member install surface and a canonical API payload contract boundary.
 1. `frontend-modern/src/api/agentProfiles.ts` shared with `api-contracts`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/api/nodes.ts` shared with `api-contracts`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.
 3. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx` shared with `api-contracts`: the inline node credential slot is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
@@ -6400,25 +6401,41 @@ frontend-local merge of raw unified-resource facets and removed runtime arrays,
 and v6 clients no longer treat those removed runtime arrays as a parallel
 settings contract, so lifecycle scope and reconnect behavior stay canonical
 across host, Docker, and Kubernetes reporting.
-deploy results surface: `ResultsStep` must request the canonical backend
-install command from `/api/agent-install-command` for failed deploy targets
+Cluster members install in one step. On a PVE cluster where at least one
+member already runs a connected Pulse Agent, the Settings → Infrastructure
+cluster, member, and coverage-summary install actions open
+`ClusterAgentDeployDialog`, which drives the server-side cluster deploy API
+(`/api/clusters/{cluster}/agent-deploy` candidates, preflights, and jobs). The
+server mints a per-node bootstrap credential for every target, so the dialog
+never renders, copies, or reuses a token and the operator never pastes one.
+The dialog folds target statuses into checking, installing, connecting,
+reporting, and failed, and it reports a node as installed only after the
+candidates projection shows that node with an agent. A finished deploy job
+alone is not success, because targets can still be enrolling. Clusters with no
+connected agent, members Pulse has no address for, and failed targets hand off
+to the scoped manual installer (`/settings/infrastructure?add=linux-host`)
 instead of rebuilding a local shell snippet that can drift from the governed
-installer contract. That fallback surface must consume the shared validated
-`NodesAPI.getAgentInstallCommand` response, so malformed backend payloads fail
-closed and the raw backend install token stays inside the shared client
-boundary rather than leaking into deploy UI state.
-Deploy wizard target tables are lifecycle-owned presentation surfaces:
-`CandidatesStep`, `ConfirmStep`, `PreflightStep`, `DeployingStep`, and
-`ResultsStep` must use the shared frontend `Table` primitive for scroll and
-table semantics instead of raw table markup or step-local scroll frames.
-Deploy selection and retry UI must not consume retired monitored-system
-capacity boundaries. Lifecycle UI must avoid workspace-capacity, legacy
-license-slot, and plan-upgrade language in deploy confirmation, preflight, or
-retry surfaces.
-That same deploy wizard boundary must also stay on the direct
-`deploy-fallback-install-surface` proof path, rather than relying only on the
-shared install helper or downstream deploy tests to catch lifecycle drift in
-the infrastructure fallback surface.
+installer contract. Deploy targets must resolve to a literal IP through
+`DeployHandlers.deployTargetIP`: a literal IP in the member's API URL first,
+then the cluster endpoint's `EffectiveIP()` (the operator's connection-address
+override, else the address Proxmox reports for the member). Members that Pulse
+discovered by hostname must never reach the agent's `validateNodeIP` injection
+guard as hostnames, and the candidates response marks a member with no known
+address `deployable: false` with reason `no_address` so the UI can explain it
+before any install starts. The deploy routes are keyed on the cluster name, so
+they must refuse with `ambiguous_cluster` when more than one Proxmox connection
+reports that name instead of merging two sites' members, and the address
+resolver must match the member's own connection by exact instance name with no
+cluster-name fallback. The jobs route must refuse with `deploy_in_progress`
+while a recent install job on the same cluster is unfinished, checking and
+inserting under one admission lock so concurrent requests cannot both pass, which is what
+lets the dialog keep an install running after it is closed without a reopened
+dialog or second tab starting an overlapping one. Deploy selection UI must not consume retired
+monitored-system capacity boundaries, and lifecycle UI must avoid
+workspace-capacity, legacy license-slot, and plan-upgrade language in deploy
+surfaces. `frontend-modern/src/components/Settings/__tests__/ClusterAgentDeployDialog.test.tsx`
+and `InfrastructureSourceManager.test.tsx` pin the dialog flow and its routing,
+and `internal/api/deploy_handlers_test.go` pins the address resolution.
 The same Windows install, upgrade, and uninstall copies must also preserve
 operator-selected transport and capability toggles: if the settings surface
 enables insecure TLS mode or Pulse command execution, the PowerShell path must

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -34,6 +35,8 @@ type DeployHandlers struct {
 	config      *config.Config
 	persistence *config.ConfigPersistence
 
+	// jobAdmissionMu serializes install-job admission (see HandleCreateJob).
+	jobAdmissionMu sync.Mutex
 	// Active preflight SSE subscriptions keyed by preflightID.
 	sseMu   sync.Mutex
 	sseSubs map[string]*deploySSESub
@@ -122,6 +125,7 @@ func (h *DeployHandlers) HandleCandidates(w http.ResponseWriter, r *http.Request
 		nodes        []candidateNode
 		sourceAgents []sourceAgentInfo
 	)
+	connections := make(map[string]bool)
 
 	for _, node := range readState.Nodes() {
 		if node == nil {
@@ -134,6 +138,7 @@ func (h *DeployHandlers) HandleCandidates(w http.ResponseWriter, r *http.Request
 		if node.ClusterName() != clusterID {
 			continue
 		}
+		connections[node.Instance()] = true
 		if clusterName == "" {
 			clusterName = node.ClusterName()
 		}
@@ -142,7 +147,7 @@ func (h *DeployHandlers) HandleCandidates(w http.ResponseWriter, r *http.Request
 		cn := candidateNode{
 			NodeID:   node.ID(),
 			Name:     nodeName(node),
-			IP:       nodeIP(node.HostURL()),
+			IP:       h.deployTargetIP(node),
 			HasAgent: hasAgent,
 		}
 
@@ -159,11 +164,22 @@ func (h *DeployHandlers) HandleCandidates(w http.ResponseWriter, r *http.Request
 					Online:  true,
 				})
 			}
+		} else if cn.IP == "" {
+			// Preflight would reject the target anyway; say why up front so
+			// the UI can point the operator at the member's connection
+			// address instead of offering an install that cannot start.
+			cn.Deployable = false
+			cn.Reason = "no_address"
 		} else {
 			cn.Deployable = true
 		}
 
 		nodes = append(nodes, cn)
+	}
+
+	if len(connections) > 1 {
+		writeAmbiguousClusterError(w, clusterID)
+		return
 	}
 
 	resp := candidatesResponse{
@@ -241,12 +257,14 @@ func (h *DeployHandlers) HandleCreatePreflight(w http.ResponseWriter, r *http.Re
 	clusterName := ""
 	sourceNodeID := ""
 	nodesByID := make(map[string]*unifiedresources.NodeView)
+	connections := make(map[string]bool)
 	for _, node := range readState.Nodes() {
 		if node == nil {
 			continue
 		}
 		if node.ClusterName() == clusterID && node.IsClusterMember() {
 			nodesByID[node.ID()] = node
+			connections[node.Instance()] = true
 			if clusterName == "" {
 				clusterName = node.ClusterName()
 			}
@@ -254,6 +272,11 @@ func (h *DeployHandlers) HandleCreatePreflight(w http.ResponseWriter, r *http.Re
 				sourceNodeID = node.ID()
 			}
 		}
+	}
+
+	if len(connections) > 1 {
+		writeAmbiguousClusterError(w, clusterID)
+		return
 	}
 
 	if sourceNodeID == "" {
@@ -295,9 +318,9 @@ func (h *DeployHandlers) HandleCreatePreflight(w http.ResponseWriter, r *http.Re
 		if !ok {
 			continue // skip nodes not in cluster
 		}
-		ip := nodeIP(node.HostURL())
+		ip := h.deployTargetIP(node)
 		if ip == "" {
-			continue // skip nodes without IP
+			continue // skip nodes without a literal IP the agent can reach
 		}
 
 		targetID := generateID("tgt")
@@ -1058,6 +1081,24 @@ func (h *DeployHandlers) HandleCreateJob(w http.ResponseWriter, r *http.Request)
 			"Preflight source agent does not match request source agent", nil)
 		return
 	}
+	// Hold admission from the active-job check through the new job's insert,
+	// so two concurrent requests cannot both pass and start overlapping
+	// installs. The deploy store is this server's own SQLite file, so an
+	// in-process lock serializes every admission against it.
+	h.jobAdmissionMu.Lock()
+	defer h.jobAdmissionMu.Unlock()
+	activeJobID, err := h.activeDeployJobForCluster(ctx, orgID, clusterID)
+	if err != nil {
+		log.Error().Err(err).Str("cluster_id", clusterID).Msg("Failed to check for an active deploy job")
+		writeErrorResponse(w, http.StatusInternalServerError, "store_error", "Failed to check for an active deploy job", nil)
+		return
+	}
+	if activeJobID != "" {
+		writeErrorResponse(w, http.StatusConflict, "deploy_in_progress",
+			"An agent install is already running on this cluster. Wait for it to finish, then try again.",
+			map[string]string{"jobId": activeJobID})
+		return
+	}
 
 	// Get preflight targets — filter requested nodeIDs against Ready targets.
 	pfTargets, err := h.store.GetTargetsForJob(ctx, req.PreflightID)
@@ -1746,6 +1787,93 @@ func extractPathSuffix(path, prefix string) string {
 		s = s[:idx]
 	}
 	return strings.TrimSpace(s)
+}
+
+// deployTargetIP returns the literal IP the source agent should SSH to for a
+// cluster member, or "" when Pulse knows of none. The agent only accepts
+// literal IPs (validateNodeIP guards the SSH command against injection), but
+// Pulse often discovers members by name, so the API URL can carry a hostname
+// such as "pve-b" that would fail preflight. Mirror the monitor's endpoint
+// precedence: a literal IP in the API URL first, then the cluster endpoint's
+// effective IP (the operator override, else the address Proxmox reports).
+func (h *DeployHandlers) deployTargetIP(node *unifiedresources.NodeView) string {
+	if node == nil {
+		return ""
+	}
+	if host := nodeIP(node.HostURL()); net.ParseIP(host) != nil {
+		return host
+	}
+	if endpoint, ok := h.clusterEndpointForNode(node); ok {
+		if ip := strings.TrimSpace(endpoint.EffectiveIP()); net.ParseIP(ip) != nil {
+			return ip
+		}
+	}
+	return ""
+}
+
+// clusterEndpointForNode finds the configured cluster endpoint for a member,
+// matching the PVE connection by exact instance name and the endpoint by
+// Proxmox node name. There is deliberately no cluster-name fallback: two
+// sites can share a cluster name, and a wrong match would send a source agent
+// privileged SSH work against another site's address.
+func (h *DeployHandlers) clusterEndpointForNode(node *unifiedresources.NodeView) (config.ClusterEndpoint, bool) {
+	if h == nil || h.config == nil || node == nil {
+		return config.ClusterEndpoint{}, false
+	}
+	memberName := strings.TrimSpace(node.NodeName())
+	if memberName == "" {
+		memberName = strings.TrimSpace(node.Name())
+	}
+	instance := node.Instance()
+	if memberName == "" || instance == "" {
+		return config.ClusterEndpoint{}, false
+	}
+	for _, inst := range h.config.PVEInstances {
+		if !inst.IsCluster || inst.Name != instance {
+			continue
+		}
+		for _, endpoint := range inst.ClusterEndpoints {
+			if strings.EqualFold(strings.TrimSpace(endpoint.NodeName), memberName) {
+				return endpoint, true
+			}
+		}
+	}
+	return config.ClusterEndpoint{}, false
+}
+
+// writeAmbiguousClusterError refuses a deploy request whose cluster name is
+// reported by more than one Proxmox connection. The deploy routes are keyed
+// on the cluster name, so serving such a request would merge two sites'
+// members and could send a source agent to the other site's addresses.
+func writeAmbiguousClusterError(w http.ResponseWriter, clusterID string) {
+	writeErrorResponse(w, http.StatusConflict, "ambiguous_cluster",
+		fmt.Sprintf("More than one Proxmox connection reports a cluster named %q, so Pulse cannot tell which nodes to install on. Use the installer for these nodes instead.", clusterID),
+		nil)
+}
+
+// deployActiveWindow bounds how long an unfinished install job blocks the next
+// one on the same cluster. A job whose source agent vanished mid-run can stay
+// "running" in the store and must not lock the cluster out indefinitely.
+const deployActiveWindow = 30 * time.Minute
+
+// activeDeployJobForCluster returns the ID of a recent install job on the
+// cluster that has not finished, so overlapping installs (a reopened dialog,
+// a second tab) are refused instead of racing over the same targets.
+// Callers must hold jobAdmissionMu so the check and the new job's insert are
+// atomic with respect to a concurrent request for the same cluster.
+func (h *DeployHandlers) activeDeployJobForCluster(ctx context.Context, orgID, clusterID string) (string, error) {
+	jobs, err := h.store.UnfinishedJobsForCluster(ctx, orgID, clusterID)
+	if err != nil {
+		return "", err
+	}
+	cutoff := time.Now().Add(-deployActiveWindow)
+	for _, job := range jobs {
+		// Preflights share the jobs table; only install jobs conflict.
+		if strings.HasPrefix(job.ID, "dep_") && !job.CreatedAt.Before(cutoff) {
+			return job.ID, nil
+		}
+	}
+	return "", nil
 }
 
 // nodeIP extracts the hostname/IP from a node host URL (e.g. "https://198.51.100.2:8006" -> "198.51.100.2").

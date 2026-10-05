@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1806,5 +1807,334 @@ func TestGetTarget(t *testing.T) {
 	}
 	if target.Arch != "amd64" {
 		t.Fatalf("got Arch=%q, want amd64", target.Arch)
+	}
+}
+
+// clusterDeployAddressFixture models a cluster whose members Pulse discovered by
+// name: the API URLs carry hostnames, while the cluster endpoints record the
+// addresses Proxmox reports (and, for pve-c, an operator override).
+func clusterDeployAddressFixture(t *testing.T) *DeployHandlers {
+	t.Helper()
+	nodes := []models.Node{
+		{
+			ID: "node_pve-a", Name: "pve-a", Host: "https://10.0.0.1:8006", Instance: "lab-conn",
+			IsClusterMember: true, ClusterName: "lab", LinkedAgentID: "host-a",
+		},
+		{
+			ID: "node_pve-b", Name: "pve-b", Host: "https://pve-b:8006", Instance: "lab-conn",
+			IsClusterMember: true, ClusterName: "lab",
+		},
+		{
+			ID: "node_pve-c", Name: "pve-c", Host: "https://pve-c:8006", Instance: "lab-conn",
+			IsClusterMember: true, ClusterName: "lab",
+		},
+		{
+			ID: "node_pve-d", Name: "pve-d", Host: "https://pve-d:8006", Instance: "lab-conn",
+			IsClusterMember: true, ClusterName: "lab",
+		},
+		{
+			ID: "node_pve-e", Name: "pve-e", Host: "https://10.0.0.5:8006", Instance: "lab-conn",
+			IsClusterMember: true, ClusterName: "lab",
+		},
+	}
+	h := newTestDeployHandlers(t, nodes, nil)
+	h.config.PVEInstances = []config.PVEInstance{{
+		Name:        "lab-conn",
+		IsCluster:   true,
+		ClusterName: "lab",
+		ClusterEndpoints: []config.ClusterEndpoint{
+			{NodeName: "pve-a", Host: "https://10.0.0.1:8006", IP: "10.0.0.1"},
+			{NodeName: "pve-b", Host: "https://pve-b:8006", IP: "10.0.0.2"},
+			{NodeName: "pve-c", Host: "https://pve-c:8006", IP: "10.0.0.3", IPOverride: "10.0.9.3"},
+			// pve-d has no recorded address at all.
+			{NodeName: "pve-d", Host: "https://pve-d:8006"},
+			// pve-e's API URL already holds a literal IP; that wins.
+			{NodeName: "pve-e", Host: "https://10.0.0.5:8006", IP: "10.0.0.55"},
+		},
+	}}
+	return h
+}
+
+func TestHandleCandidatesResolvesHostnameMembersToClusterAddress(t *testing.T) {
+	h := clusterDeployAddressFixture(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/clusters/lab/agent-deploy/candidates", nil)
+	rec := httptest.NewRecorder()
+
+	h.HandleCandidates(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+	var resp candidatesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	want := map[string]struct {
+		ip         string
+		deployable bool
+		reason     string
+	}{
+		"pve-a": {ip: "10.0.0.1", deployable: false, reason: "already_agent"},
+		"pve-b": {ip: "10.0.0.2", deployable: true},
+		"pve-c": {ip: "10.0.9.3", deployable: true},
+		"pve-d": {ip: "", deployable: false, reason: "no_address"},
+		"pve-e": {ip: "10.0.0.5", deployable: true},
+	}
+	if len(resp.Nodes) != len(want) {
+		t.Fatalf("expected %d nodes, got %d: %+v", len(want), len(resp.Nodes), resp.Nodes)
+	}
+	for _, n := range resp.Nodes {
+		w, ok := want[n.Name]
+		if !ok {
+			t.Errorf("unexpected node %q", n.Name)
+			continue
+		}
+		if n.IP != w.ip || n.Deployable != w.deployable || n.Reason != w.reason {
+			t.Errorf("%s: got ip=%q deployable=%v reason=%q, want ip=%q deployable=%v reason=%q",
+				n.Name, n.IP, n.Deployable, n.Reason, w.ip, w.deployable, w.reason)
+		}
+	}
+}
+
+// candidateNodeID returns the unified node ID the candidates endpoint reports
+// for a member name, which is what the UI sends back as a preflight target.
+func candidateNodeID(t *testing.T, h *DeployHandlers, name string) string {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	h.HandleCandidates(rec, httptest.NewRequest(http.MethodGet, "/api/clusters/lab/agent-deploy/candidates", nil))
+	var resp candidatesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode candidates: %v", err)
+	}
+	for _, n := range resp.Nodes {
+		if n.Name == name {
+			return n.NodeID
+		}
+	}
+	t.Fatalf("candidate %q not found in %+v", name, resp.Nodes)
+	return ""
+}
+
+func TestHandleCreatePreflightSendsClusterAddressForHostnameMember(t *testing.T) {
+	h := clusterDeployAddressFixture(t)
+	t.Cleanup(h.execServer.TestRegisterAgent("host-a", "host-a"))
+
+	body := `{"sourceAgentId":"host-a","targetNodeIds":["` + candidateNodeID(t, h, "pve-b") + `"],"maxParallel":1}`
+	req := httptest.NewRequest(http.MethodPost, "/api/clusters/lab/agent-deploy/preflights", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	h.HandleCreatePreflight(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp createPreflightResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	targets, err := h.store.GetTargetsForJob(context.Background(), resp.PreflightID)
+	if err != nil {
+		t.Fatalf("get targets: %v", err)
+	}
+	if len(targets) != 1 {
+		t.Fatalf("expected 1 target, got %d", len(targets))
+	}
+	if targets[0].NodeIP != "10.0.0.2" {
+		t.Fatalf("target NodeIP = %q, want the cluster-reported 10.0.0.2 rather than the hostname", targets[0].NodeIP)
+	}
+}
+
+func TestHandleCreatePreflightRejectsMemberWithoutAddress(t *testing.T) {
+	h := clusterDeployAddressFixture(t)
+	t.Cleanup(h.execServer.TestRegisterAgent("host-a", "host-a"))
+
+	body := `{"sourceAgentId":"host-a","targetNodeIds":["` + candidateNodeID(t, h, "pve-d") + `"],"maxParallel":1}`
+	req := httptest.NewRequest(http.MethodPost, "/api/clusters/lab/agent-deploy/preflights", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	h.HandleCreatePreflight(rec, req)
+
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "no_valid_targets") {
+		t.Fatalf("expected 400 no_valid_targets, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDeployRefusesClusterNameSharedByTwoConnections(t *testing.T) {
+	// Two sites whose clusters happen to share a name must not be merged: the
+	// deploy routes are keyed on the name, so serving them would let a source
+	// agent at one site be pointed at the other site's member addresses.
+	nodes := []models.Node{
+		{
+			ID: "node_a1", Name: "pve-a", Host: "https://10.0.0.1:8006", Instance: "site-a",
+			IsClusterMember: true, ClusterName: "lab", LinkedAgentID: "host-a",
+		},
+		{
+			ID: "node_b1", Name: "pve-b", Host: "https://10.9.0.1:8006", Instance: "site-b",
+			IsClusterMember: true, ClusterName: "lab",
+		},
+	}
+	h := newTestDeployHandlers(t, nodes, nil)
+	t.Cleanup(h.execServer.TestRegisterAgent("host-a", "host-a"))
+
+	rec := httptest.NewRecorder()
+	h.HandleCandidates(rec, httptest.NewRequest(http.MethodGet, "/api/clusters/lab/agent-deploy/candidates", nil))
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "ambiguous_cluster") {
+		t.Fatalf("candidates: expected 409 ambiguous_cluster, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	body := `{"sourceAgentId":"host-a","targetNodeIds":["anything"],"maxParallel":1}`
+	rec = httptest.NewRecorder()
+	h.HandleCreatePreflight(rec, httptest.NewRequest(http.MethodPost, "/api/clusters/lab/agent-deploy/preflights", strings.NewReader(body)))
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "ambiguous_cluster") {
+		t.Fatalf("preflight: expected 409 ambiguous_cluster, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDeployTargetIPNeverBorrowsAnotherConnectionsEndpoint(t *testing.T) {
+	nodes := []models.Node{
+		{
+			ID: "node_pve-a", Name: "pve-a", Host: "https://10.0.0.1:8006", Instance: "site-a",
+			IsClusterMember: true, ClusterName: "lab", LinkedAgentID: "host-a",
+		},
+		{
+			ID: "node_pve-b", Name: "pve-b", Host: "https://pve-b:8006", Instance: "site-a",
+			IsClusterMember: true, ClusterName: "lab",
+		},
+	}
+	h := newTestDeployHandlers(t, nodes, nil)
+	// site-b is listed first and has a same-named cluster and member; its
+	// address must never be used for site-a's pve-b.
+	h.config.PVEInstances = []config.PVEInstance{
+		{
+			Name: "site-b", IsCluster: true, ClusterName: "lab",
+			ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "pve-b", IP: "10.9.0.2"}},
+		},
+		{
+			Name: "site-a", IsCluster: true, ClusterName: "lab",
+			ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "pve-b", IP: "10.0.0.2"}},
+		},
+	}
+
+	rec := httptest.NewRecorder()
+	h.HandleCandidates(rec, httptest.NewRequest(http.MethodGet, "/api/clusters/lab/agent-deploy/candidates", nil))
+	var resp candidatesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v (body %s)", err, rec.Body.String())
+	}
+	for _, n := range resp.Nodes {
+		if n.Name == "pve-b" && n.IP != "10.0.0.2" {
+			t.Fatalf("pve-b resolved to %q, want its own connection's 10.0.0.2", n.IP)
+		}
+	}
+}
+
+func TestHandleCreateJob_RefusesWhileAnotherInstallIsRunning(t *testing.T) {
+	nodes := []models.Node{
+		{
+			ID: "node_pve-a", Name: "pve-a", Host: "https://10.0.0.1:8006",
+			IsClusterMember: true, ClusterName: "lab", LinkedAgentID: "host-a",
+		},
+		{
+			ID: "node_pve-b", Name: "pve-b", Host: "https://10.0.0.2:8006",
+			IsClusterMember: true, ClusterName: "lab",
+		},
+	}
+	h := newTestDeployHandlers(t, nodes, nil)
+	ctx := context.Background()
+	t.Cleanup(h.execServer.TestRegisterAgent("host-a", "host-a"))
+
+	now := time.Now().UTC()
+	for _, j := range []*deploy.Job{
+		{ID: "pf_ok", ClusterID: "lab", ClusterName: "lab", SourceAgentID: "host-a", SourceNodeID: "node_pve-a",
+			OrgID: "default", Status: deploy.JobSucceeded, MaxParallel: 1, CreatedAt: now, UpdatedAt: now},
+		// A stale install that never finished must not block anything.
+		{ID: "dep_stale", ClusterID: "lab", ClusterName: "lab", SourceAgentID: "host-a", SourceNodeID: "node_pve-a",
+			OrgID: "default", Status: deploy.JobRunning, MaxParallel: 1,
+			CreatedAt: now.Add(-2 * deployActiveWindow), UpdatedAt: now.Add(-2 * deployActiveWindow)},
+	} {
+		if err := h.store.CreateJob(ctx, j); err != nil {
+			t.Fatalf("create job %s: %v", j.ID, err)
+		}
+	}
+	if err := h.store.CreateTarget(ctx, &deploy.Target{
+		ID: "tgt_b", JobID: "pf_ok", NodeID: "node_pve-b", NodeName: "pve-b", NodeIP: "10.0.0.2",
+		Arch: "amd64", Status: deploy.TargetReady, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+	body := `{"sourceAgentId":"host-a","preflightId":"pf_ok","targetNodeIds":["node_pve-b"]}`
+
+	rec := httptest.NewRecorder()
+	h.HandleCreateJob(rec, httptest.NewRequest(http.MethodPost, "/api/clusters/lab/agent-deploy/jobs", strings.NewReader(body)))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("first install: expected 202 despite the stale job, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.HandleCreateJob(rec, httptest.NewRequest(http.MethodPost, "/api/clusters/lab/agent-deploy/jobs", strings.NewReader(body)))
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "deploy_in_progress") {
+		t.Fatalf("overlapping install: expected 409 deploy_in_progress, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleCreateJob_ConcurrentRequestsAdmitOneInstall(t *testing.T) {
+	nodes := []models.Node{
+		{
+			ID: "node_pve-a", Name: "pve-a", Host: "https://10.0.0.1:8006",
+			IsClusterMember: true, ClusterName: "lab", LinkedAgentID: "host-a",
+		},
+		{
+			ID: "node_pve-b", Name: "pve-b", Host: "https://10.0.0.2:8006",
+			IsClusterMember: true, ClusterName: "lab",
+		},
+	}
+	h := newTestDeployHandlers(t, nodes, nil)
+	ctx := context.Background()
+	t.Cleanup(h.execServer.TestRegisterAgent("host-a", "host-a"))
+
+	now := time.Now().UTC()
+	if err := h.store.CreateJob(ctx, &deploy.Job{
+		ID: "pf_ok", ClusterID: "lab", ClusterName: "lab", SourceAgentID: "host-a", SourceNodeID: "node_pve-a",
+		OrgID: "default", Status: deploy.JobSucceeded, MaxParallel: 1, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create preflight: %v", err)
+	}
+	if err := h.store.CreateTarget(ctx, &deploy.Target{
+		ID: "tgt_b", JobID: "pf_ok", NodeID: "node_pve-b", NodeName: "pve-b", NodeIP: "10.0.0.2",
+		Arch: "amd64", Status: deploy.TargetReady, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+	body := `{"sourceAgentId":"host-a","preflightId":"pf_ok","targetNodeIds":["node_pve-b"]}`
+
+	const requests = 8
+	codes := make(chan int, requests)
+	var wg sync.WaitGroup
+	for i := 0; i < requests; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			rec := httptest.NewRecorder()
+			h.HandleCreateJob(rec, httptest.NewRequest(http.MethodPost, "/api/clusters/lab/agent-deploy/jobs", strings.NewReader(body)))
+			codes <- rec.Code
+		}()
+	}
+	wg.Wait()
+	close(codes)
+
+	accepted, refused := 0, 0
+	for code := range codes {
+		switch code {
+		case http.StatusAccepted:
+			accepted++
+		case http.StatusConflict:
+			refused++
+		default:
+			t.Errorf("unexpected status %d", code)
+		}
+	}
+	if accepted != 1 || refused != requests-1 {
+		t.Fatalf("accepted=%d refused=%d, want exactly one install admitted", accepted, refused)
 	}
 }

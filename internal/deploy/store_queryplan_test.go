@@ -37,6 +37,15 @@ func TestDeployStoreQueryPlansUseIndexes(t *testing.T) {
 			wantIndex: "idx_deploy_jobs_org_created",
 		},
 		{
+			name: "unfinished jobs for cluster uses org created index",
+			query: `
+				SELECT id, cluster_id, cluster_name, source_agent_id, source_node_id, org_id, status, max_parallel, retry_max, created_at, updated_at, completed_at
+				FROM deploy_jobs WHERE org_id = ? AND cluster_id = ? AND status IN (?, ?, ?, ?) ORDER BY created_at DESC
+			`,
+			args:      []any{"org-03", "cluster-01", "queued", "waiting_source", "running", "canceling"},
+			wantIndex: "idx_deploy_jobs_org_created",
+		},
+		{
 			name: "get targets for job uses job created index",
 			query: `
 				SELECT id, job_id, node_id, node_name, node_ip, arch, status, error_message, attempts, created_at, updated_at
