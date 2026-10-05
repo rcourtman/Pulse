@@ -177,6 +177,54 @@ describe('AvailabilitySettingsPanel', () => {
     expect(screen.getByText('No recent probe report')).toBeInTheDocument();
   });
 
+  it('counts a check as offline only after its failure threshold, like Machines', async () => {
+    vi.mocked(AvailabilityTargetsAPI.list).mockResolvedValue([
+      {
+        ...targets[0],
+        id: 'solar',
+        name: 'Solar inverter',
+        failureThreshold: 2,
+        status: {
+          ...targets[0].status!,
+          targetId: 'solar',
+          available: false,
+          lastChecked: '2026-10-05T00:00:00Z',
+          consecutiveFailures: 1,
+          failureThreshold: 2,
+          lastError: 'http probe returned 503 Service Unavailable',
+        },
+      },
+      {
+        ...targets[0],
+        id: 'door',
+        name: 'Door controller',
+        failureThreshold: 2,
+        status: {
+          ...targets[0].status!,
+          targetId: 'door',
+          available: false,
+          lastChecked: '2026-10-05T00:00:00Z',
+          consecutiveFailures: 3,
+          failureThreshold: 2,
+          lastError: 'icmp probe timed out',
+        },
+      },
+    ]);
+
+    render(() => <AvailabilitySettingsPanel />);
+
+    await waitFor(() =>
+      expect(screen.getByText('2 need attention · 1 offline · 2 enabled')).toBeInTheDocument(),
+    );
+    const failing = screen.getByText('http probe returned 503 Service Unavailable');
+    expect(failing.className).toContain('bg-amber-100');
+    expect(failing).toHaveAttribute(
+      'title',
+      '1 failed check in a row. It counts as offline after 2.',
+    );
+    expect(screen.getByText('icmp probe timed out').className).toContain('bg-rose-100');
+  });
+
   it('opens add and edit dialogs from the canonical availability route', async () => {
     render(() => <AvailabilitySettingsPanel />);
 

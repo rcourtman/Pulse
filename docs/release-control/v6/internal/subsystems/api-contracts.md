@@ -1761,6 +1761,17 @@ payload shape change when the portal presents compact client rows.
     `frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx`,
     `frontend-modern/src/components/Settings/availabilitySettingsModel.ts`,
     and `AvailabilityTargetSlot.tsx` own the browser transport shape.
+    The settings summary and status pills classify each target through
+    `getAvailabilityTargetHealth`. When the target's unified
+    `network-endpoint` resource is loaded, the Machines tab's
+    `getStandaloneResourceStatusIndicator` decides, so stale evidence and
+    unresolved identity count the same on both pages. Otherwise the target's
+    own status is read the way `availability_poller.go` derives the resource
+    status: aggregate and single-location failures are offline only once
+    consecutive failures reach the failure threshold (default 2), a missing
+    count is zero, and a never-checked target is pending. Settings and the
+    Machines availability tab therefore report the same counts in the same
+    words.
     Availability target probe-result and error notices may compose
     frontend-primitives' `CalloutCard` for shared settings callout chrome;
     API contracts own the target CRUD/test payload semantics and endpoint

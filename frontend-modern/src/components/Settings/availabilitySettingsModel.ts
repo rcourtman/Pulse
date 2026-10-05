@@ -1,4 +1,6 @@
 import type { AvailabilityTarget, AvailabilityTargetKind } from '@/api/availabilityTargets';
+import type { Resource } from '@/types/resource';
+import { getStandaloneResourceStatusIndicator } from '@/features/standalone/standalonePageModel';
 import {
   PROBE_AGENT_STALE_LABEL,
   getProbeSourceChipLabel,
@@ -129,22 +131,83 @@ export function getAvailabilityTargetStatusLabel(target: AvailabilityTarget): st
   return status.lastError?.trim() || 'Offline';
 }
 
-export function getAvailabilityTargetStatusClass(target: AvailabilityTarget): string {
-  if (!target.enabled) return 'bg-surface-alt text-muted';
-  if (!target.status) return 'bg-sky-100 text-sky-700 dark:bg-sky-900/25 dark:text-sky-300';
-  if (target.status.aggregateState === 'degraded' || target.status.aggregateState === 'unknown') {
-    return 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300';
+// One classification for a check, shared with the Machines availability tab.
+// When the check's unified resource is loaded, its Machines status indicator
+// decides (so stale evidence and unresolved identity count the same way on
+// both pages). Without it, the target's own status is read the way
+// availability_poller.go derives the resource status: a failing probe is
+// offline only once its consecutive failures reach the failure threshold
+// (default 2) and needs attention before that.
+export type AvailabilityTargetHealth = 'paused' | 'pending' | 'healthy' | 'attention' | 'offline';
+
+const DEFAULT_AVAILABILITY_FAILURE_THRESHOLD = 2;
+
+const availabilityFailureThreshold = (target: AvailabilityTarget): number => {
+  const configured = target.status?.failureThreshold ?? target.failureThreshold;
+  return typeof configured === 'number' && configured > 0
+    ? configured
+    : DEFAULT_AVAILABILITY_FAILURE_THRESHOLD;
+};
+
+export function getAvailabilityTargetHealth(
+  target: AvailabilityTarget,
+  resource?: Resource,
+): AvailabilityTargetHealth {
+  if (!target.enabled) return 'paused';
+  if (resource) {
+    const variant = getStandaloneResourceStatusIndicator(resource).variant;
+    if (variant === 'success') return 'healthy';
+    if (variant === 'warning') return 'attention';
+    if (variant === 'danger') return 'offline';
+    return 'pending';
   }
-  if (target.status.aggregateState === 'unavailable') {
-    return 'bg-rose-100 text-rose-700 dark:bg-rose-900/25 dark:text-rose-300';
+  const status = target.status;
+  if (!status) return 'pending';
+  if (isProbeAgentStaleStatus(status)) return 'attention';
+  const failures = status.consecutiveFailures ?? 0;
+  const thresholdReached = failures >= availabilityFailureThreshold(target);
+  switch (status.aggregateState) {
+    case 'healthy':
+      return 'healthy';
+    case 'degraded':
+    case 'unknown':
+      return 'attention';
+    case 'unavailable':
+      return thresholdReached ? 'offline' : 'attention';
   }
-  if (target.status.outcome === 'indeterminate') {
-    return 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300';
+  if (!status.lastChecked) return 'pending';
+  if (status.available) return 'healthy';
+  return thresholdReached ? 'offline' : 'attention';
+}
+
+/** Hover text for a check that is failing but not yet offline. */
+export function getAvailabilityTargetStatusTitle(
+  target: AvailabilityTarget,
+  resource?: Resource,
+): string | undefined {
+  if (getAvailabilityTargetHealth(target, resource) !== 'attention') return undefined;
+  const status = target.status;
+  const failures = status?.consecutiveFailures;
+  if (status?.available !== false || typeof failures !== 'number' || failures <= 0) {
+    return undefined;
   }
-  if (target.status.available) {
-    return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300';
-  }
-  return 'bg-rose-100 text-rose-700 dark:bg-rose-900/25 dark:text-rose-300';
+  const threshold = availabilityFailureThreshold(target);
+  return `${failures} failed ${failures === 1 ? 'check' : 'checks'} in a row. It counts as offline after ${threshold}.`;
+}
+
+const AVAILABILITY_HEALTH_CLASS: Record<AvailabilityTargetHealth, string> = {
+  paused: 'bg-surface-alt text-muted',
+  pending: 'bg-sky-100 text-sky-700 dark:bg-sky-900/25 dark:text-sky-300',
+  healthy: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300',
+  attention: 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
+  offline: 'bg-rose-100 text-rose-700 dark:bg-rose-900/25 dark:text-rose-300',
+};
+
+export function getAvailabilityTargetStatusClass(
+  target: AvailabilityTarget,
+  resource?: Resource,
+): string {
+  return AVAILABILITY_HEALTH_CLASS[getAvailabilityTargetHealth(target, resource)];
 }
 
 /**
@@ -161,22 +224,20 @@ export function getAvailabilityTargetProbeSourceLabel(
   return getProbeSourceChipLabel(probeAgentOptions, target.status?.probeAgentId);
 }
 
-export function getAvailabilityTargetsSummary(targets: readonly AvailabilityTarget[]): string {
-  const enabled = targets.filter((target) => target.enabled).length;
-  const indeterminate = targets.filter(
-    (target) => target.enabled && target.status?.outcome === 'indeterminate',
-  ).length;
-  const down = targets.filter(
-    (target) =>
-      target.enabled &&
-      target.status?.available === false &&
-      target.status.outcome !== 'indeterminate',
-  ).length;
+// The same words and buckets as the Machines availability summary: every
+// unhealthy check needs attention, and offline ones are also named, so the two
+// pages never report different counts for the same checks.
+export function getAvailabilityTargetsSummary(
+  targets: readonly AvailabilityTarget[],
+  resourceFor: (target: AvailabilityTarget) => Resource | undefined = () => undefined,
+): string {
   if (targets.length === 0) return 'No availability checks configured';
-  if (down > 0 && indeterminate > 0) {
-    return `${down} down · ${indeterminate} open or filtered · ${enabled} enabled`;
-  }
-  if (down > 0) return `${down} down · ${enabled} enabled`;
-  if (indeterminate > 0) return `${indeterminate} open or filtered · ${enabled} enabled`;
-  return `${enabled} enabled · ${targets.length} total`;
+  const enabled = targets.filter((target) => target.enabled).length;
+  const health = targets.map((target) => getAvailabilityTargetHealth(target, resourceFor(target)));
+  const offline = health.filter((state) => state === 'offline').length;
+  const attention = health.filter((state) => state === 'attention' || state === 'offline').length;
+  if (attention === 0) return `${enabled} enabled · ${targets.length} total`;
+  const parts = [`${attention} ${attention === 1 ? 'needs' : 'need'} attention`];
+  if (offline > 0) parts.push(`${offline} offline`);
+  return `${parts.join(' · ')} · ${enabled} enabled`;
 }

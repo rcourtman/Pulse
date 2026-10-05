@@ -1,7 +1,14 @@
 import { A } from '@solidjs/router';
-import { Show, createMemo, createResource, type Component, type JSX } from 'solid-js';
+import {
+  Show,
+  createMemo,
+  createResource,
+  onCleanup,
+  onMount,
+  type Component,
+  type JSX,
+} from 'solid-js';
 import PlusIcon from 'lucide-solid/icons/plus';
-import SettingsIcon from 'lucide-solid/icons/settings';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -36,15 +43,12 @@ import {
   getAvailabilityProbePresentation,
 } from '@/utils/availabilityProbePresentation';
 import { getProbeSourceChipLabel, type ProbeAgentOption } from '@/utils/availabilityProbeAgents';
-import {
-  buildAvailabilitySettingsPath,
-  buildAvailabilityTargetAddPath,
-} from '@/components/Settings/availabilitySettingsModel';
+import { buildAvailabilityTargetAddPath } from '@/components/Settings/availabilitySettingsModel';
 import {
   getStandaloneResourceStatusIndicator,
   sortStandaloneResourcesByAttention,
 } from './standalonePageModel';
-import { AvailabilityFleetView } from './AvailabilityFleetView';
+import { AvailabilityFleetView, getAvailabilityUptimeCell } from './AvailabilityFleetView';
 
 export type AvailabilityChecksView = 'table' | 'fleet';
 
@@ -77,15 +81,31 @@ const formatTarget = (resource: Resource): string => {
   return getAvailabilityProbeEndpointLabel(availability) || resource.name;
 };
 
-const formatFailures = (availability: ResourceAvailabilityMeta | undefined): string => {
+// "3/2" read as a fraction. Say what it counts and, on hover, when it turns
+// into offline.
+const formatFailures = (
+  availability: ResourceAvailabilityMeta | undefined,
+): { label: string; title?: string } => {
   const failures = availability?.consecutiveFailures;
-  if (typeof failures !== 'number' || !Number.isFinite(failures) || failures <= 0) return '—';
-  const threshold = availability?.failureThreshold;
-  if (typeof threshold === 'number' && Number.isFinite(threshold) && threshold > 0) {
-    return `${failures}/${threshold}`;
+  if (typeof failures !== 'number' || !Number.isFinite(failures) || failures <= 0) {
+    return { label: '—' };
   }
-  return String(failures);
+  const threshold = availability?.failureThreshold;
+  const title =
+    typeof threshold === 'number' && Number.isFinite(threshold) && threshold > 0
+      ? `${failures} failed ${failures === 1 ? 'check' : 'checks'} in a row. It counts as offline after ${threshold}.`
+      : undefined;
+  return { label: `${failures} in a row`, title };
 };
+
+const AVAILABILITY_HISTORY_REFRESH_MS = 5 * 60 * 1000;
+
+const UPTIME_TONE_CLASS = {
+  default: 'text-base-content',
+  warning: 'text-amber-700 dark:text-amber-300',
+  danger: 'text-red-600 dark:text-red-300',
+  muted: 'text-muted',
+} as const;
 
 export const AvailabilityChecksTable: Component<{
   resources: Resource[];
@@ -130,10 +150,9 @@ export const AvailabilityChecksTable: Component<{
       .map((resource) => availabilityFor(resource)?.targetId)
       .filter((targetID): targetID is string => Boolean(targetID)),
   );
+  // The table's Uptime 24h column and the fleet view read the same history.
   const historySource = createMemo(() =>
-    (props.view ?? 'table') === 'fleet' && historyTargetIDs().length > 0
-      ? historyTargetIDs().join('\u0000')
-      : undefined,
+    historyTargetIDs().length > 0 ? historyTargetIDs().join('\u0000') : undefined,
   );
   const [history, historyActions] = createResource(historySource, async () => {
     try {
@@ -147,6 +166,14 @@ export const AvailabilityChecksTable: Component<{
         error: error instanceof Error ? error.message : 'Availability history is unavailable',
       };
     }
+  });
+  // Uptime moves as probes run, and a failed read should not stick: refresh
+  // the shared history on a slow cadence while the table is mounted.
+  onMount(() => {
+    const timer = window.setInterval(() => {
+      if (historySource()) void historyActions.refetch();
+    }, AVAILABILITY_HISTORY_REFRESH_MS);
+    onCleanup(() => window.clearInterval(timer));
   });
   const historyByTarget = createMemo(
     () => new Map((history()?.response?.targets ?? []).map((target) => [target.targetId, target])),
@@ -237,10 +264,6 @@ export const AvailabilityChecksTable: Component<{
                     <PlusIcon class="h-3.5 w-3.5" />
                     Add service/device check
                   </A>
-                  <A href={buildAvailabilitySettingsPath()} class={settingsLinkClass}>
-                    <SettingsIcon class="h-3.5 w-3.5" />
-                    Manage
-                  </A>
                 </div>
               }
               tableClass="min-w-full table-fixed text-xs md:min-w-[900px]"
@@ -267,6 +290,12 @@ export const AvailabilityChecksTable: Component<{
                     Result
                   </TableHead>
                   <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[9%]`}
+                    title="Share of the last 24 hours the check was reachable"
+                  >
+                    Uptime 24h
+                  </TableHead>
+                  <TableHead
                     class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[10%]`}
                   >
                     <PlatformResponsiveTableLabel compact="Seen" full="Checked" />
@@ -282,7 +311,7 @@ export const AvailabilityChecksTable: Component<{
                     Failures
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[8%]`}
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden 2xl:table-cell 2xl:w-[7%]`}
                   >
                     Interval
                   </TableHead>
@@ -370,6 +399,24 @@ export const AvailabilityChecksTable: Component<{
                             </Show>
                           </TableCell>
                           <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden tabular-nums lg:table-cell`}
+                          >
+                            {(() => {
+                              const uptime = getAvailabilityUptimeCell(
+                                historyByTarget().get(availability()?.targetId ?? ''),
+                              );
+                              return (
+                                <span
+                                  class={UPTIME_TONE_CLASS[uptime.tone]}
+                                  title={uptime.title}
+                                  data-availability-uptime
+                                >
+                                  {uptime.label}
+                                </span>
+                              );
+                            })()}
+                          </TableCell>
+                          <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             <PlatformTableRelativeTimeValue
@@ -388,10 +435,12 @@ export const AvailabilityChecksTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
                           >
-                            {formatFailures(availability())}
+                            <span title={formatFailures(availability()).title}>
+                              {formatFailures(availability()).label}
+                            </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content 2xl:table-cell`}
                           >
                             <PlatformTableDurationValue
                               seconds={availability()?.pollIntervalSeconds}
@@ -402,7 +451,7 @@ export const AvailabilityChecksTable: Component<{
                           resource={check}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
-                          colSpan={8}
+                          colSpan={9}
                           resolveResourceLabel={resolveResourceLabel}
                           onClose={() => drawer.close(check)}
                         />
