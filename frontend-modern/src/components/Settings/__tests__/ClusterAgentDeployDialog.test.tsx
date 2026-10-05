@@ -181,11 +181,11 @@ describe('ClusterAgentDeployDialog', () => {
     api.createPreflight.mockRejectedValue(new Error('Source agent is not connected'));
     renderDialog({ preselectNodeName: 'delly2' });
     const install = await screen.findByRole('button', { name: 'Install on 1 node' });
-    const dismiss = screen.getByRole('button', { name: 'Cancel' });
-    dismiss.focus();
+    const dialog = screen.getByRole('dialog');
+    dialog.focus();
     fireEvent.click(install);
     await screen.findByRole('alert');
-    expect(dismiss).toHaveFocus();
+    expect(dialog).toHaveFocus();
     expect(api.createJob).not.toHaveBeenCalled();
   });
 
