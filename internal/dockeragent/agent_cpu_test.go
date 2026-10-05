@@ -356,7 +356,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 	})
 }
 
-func TestDecodeContainerStatsPayloadExtractsPodmanCPU(t *testing.T) {
+func TestDecodeContainerStatsPayloadKeepsPodmanIntervalCounters(t *testing.T) {
 	payload := []byte(`{
 		"read":"2026-04-09T12:00:00Z",
 		"cpu_stats":{
@@ -371,17 +371,14 @@ func TestDecodeContainerStatsPayloadExtractsPodmanCPU(t *testing.T) {
 		"blkio_stats":{"io_service_bytes_recursive":[]}
 	}`)
 
-	stats, podmanCPU, err := decodeContainerStatsPayload(payload)
+	stats, err := decodeContainerStatsPayload(payload)
 	if err != nil {
 		t.Fatalf("unexpected decode error: %v", err)
 	}
 	if stats.CPUStats.CPUUsage.TotalUsage != 123456789 {
 		t.Fatalf("expected total usage 123456789, got %d", stats.CPUStats.CPUUsage.TotalUsage)
 	}
-	if podmanCPU == nil {
-		t.Fatal("expected podman cpu percent to be extracted")
-	}
-	if math.Abs(*podmanCPU-0.32) > 0.000001 {
-		t.Fatalf("expected podman cpu percent 0.32, got %f", *podmanCPU)
+	if !stats.Read.Equal(time.Date(2026, 4, 9, 12, 0, 0, 0, time.UTC)) || stats.CPUStats.OnlineCPUs != 16 || stats.MemoryStats.Usage != 1000 {
+		t.Fatalf("compat percentage changed counter timestamp, host capacity or memory: %+v", stats)
 	}
 }
