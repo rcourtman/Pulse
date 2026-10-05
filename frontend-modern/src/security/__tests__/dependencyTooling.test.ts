@@ -1,8 +1,12 @@
 // @vitest-environment node
 
 import { readFileSync } from 'node:fs';
-import * as prettier from 'prettier';
+import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
+
+// Vite's browser resolution picks Prettier's parser-free standalone bundle.
+// Exercise the Node formatter used by repository tooling, not that UI bundle.
+const prettier = createRequire(import.meta.url)('prettier') as typeof import('prettier');
 
 const manifest = JSON.parse(
   readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),

@@ -3004,6 +3004,12 @@ The formatter patch preserves spaces between copied code and prose when shell
 variables contain dollar signs. `dependencyTooling.test.ts` exercises that real
 formatter case and rejects a stale installed formatter.
 
+The formatter control loads the Node package through native `createRequire`,
+so it exercises the same parser-bearing implementation as repository tooling.
+Vite's unchanged browser conditions otherwise select the parser-free standalone
+bundle even in a Node test environment; no production resolver or assertion is
+weakened to accommodate that distinction.
+
 `dependencySecurity.test.ts` raises the reviewed locked floors, checks every
 nested typescript-eslint copy against its wrapper, and permits only an exact
 stable Prettier 3.x pin at or above 3.9.9 whose lock matches the declaration.
