@@ -16,7 +16,7 @@ import {
   hasActiveWorkloadsFilters,
 } from './workloadsFilterModel';
 import { WorkloadsTable } from './WorkloadsTable';
-import { WorkloadWebLinksAction } from './WorkloadWebLinksDialog';
+import { WorkloadWebLinksAction } from './WorkloadWebLinksAction';
 import type { WorkloadInventorySourceIssue } from './workloadInventorySourceIssues';
 import {
   useWorkloadsState,

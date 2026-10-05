@@ -4,12 +4,12 @@ import { getWorkloadMetadataId } from '@/utils/workloads';
 import {
   buildWorkloadWebLinkRows,
   filterWorkloadWebLinkRows,
-  getWorkloadGuestMetadataRecord,
   getWorkloadWebLinkChanges,
   getWorkloadWebLinkPlaceholder,
   keepStableWorkloadWebLinkRows,
   validateWorkloadWebLinkChanges,
 } from '../workloadWebLinksModel';
+import { getWorkloadGuestMetadataRecord } from '../workloadGuestMetadataRecord';
 
 const makeGuest = (overrides: Partial<WorkloadGuest> = {}): WorkloadGuest =>
   ({

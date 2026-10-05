@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
@@ -7,8 +7,8 @@ import {
   RESOURCE_METADATA_CHANGED_EVENT,
   type ResourceMetadataChangedDetail,
 } from '@/utils/resourceMetadataEvents';
-import { WorkloadWebLinksAction } from '../WorkloadWebLinksDialog';
-import type { WorkloadGuestMetadataMap } from '../workloadWebLinksModel';
+import { WorkloadWebLinksAction } from '../WorkloadWebLinksAction';
+import type { WorkloadGuestMetadataMap } from '../workloadGuestMetadataRecord';
 
 const { updateMetadataMock, successMock, readOnlyMock } = vi.hoisted(() => ({
   updateMetadataMock: vi.fn(),
@@ -64,13 +64,18 @@ const renderAction = (metadata: WorkloadGuestMetadataMap = {}) => {
   };
 };
 
-const openEditor = () => {
+const openEditor = async () => {
   fireEvent.click(screen.getByRole('button', { name: /Edit links/ }));
-  return within(screen.getByRole('dialog', { name: 'Web links' }));
+  return within(await screen.findByRole('dialog', { name: 'Web links' }));
 };
 
 describe('WorkloadWebLinksAction', () => {
   let harness: ReturnType<typeof renderAction> | undefined;
+
+  // The panel is lazy-loaded; transform it once so each open resolves promptly.
+  beforeAll(async () => {
+    await import('../WorkloadWebLinksDialog');
+  }, 30_000);
 
   beforeEach(() => {
     updateMetadataMock.mockReset();
@@ -92,9 +97,9 @@ describe('WorkloadWebLinksAction', () => {
     expect(screen.queryByRole('button', { name: /Edit links/ })).not.toBeInTheDocument();
   });
 
-  it('lists every guest in the view with its saved link and a labelled input', () => {
+  it('lists every guest in the view with its saved link and a labelled input', async () => {
     harness = renderAction({ [authId]: { id: authId, customUrl: 'https://auth.example' } });
-    const dialog = openEditor();
+    const dialog = await openEditor();
 
     expect(dialog.getByTestId('workload-web-links-summary')).toHaveTextContent(
       '1 of 3 in this view have a link',
@@ -109,7 +114,7 @@ describe('WorkloadWebLinksAction', () => {
 
   it('blocks the whole save on an invalid link and explains it on that row', async () => {
     harness = renderAction();
-    const dialog = openEditor();
+    const dialog = await openEditor();
 
     fireEvent.input(dialog.getByLabelText(/artifact-cache-01/), {
       target: { value: 'https://cache.example' },
@@ -127,7 +132,7 @@ describe('WorkloadWebLinksAction', () => {
 
   it('saves additions and removals, notifies the table, and closes', async () => {
     harness = renderAction({ [authId]: { id: authId, customUrl: 'https://auth.example' } });
-    const dialog = openEditor();
+    const dialog = await openEditor();
 
     fireEvent.input(dialog.getByLabelText(/auth-service-01/), { target: { value: '' } });
     fireEvent.input(dialog.getByLabelText(/artifact-cache-01/), {
@@ -155,7 +160,7 @@ describe('WorkloadWebLinksAction', () => {
       return {};
     });
     harness = renderAction();
-    const dialog = openEditor();
+    const dialog = await openEditor();
 
     fireEvent.input(dialog.getByLabelText(/artifact-cache-01/), {
       target: { value: 'https://cache.example' },
@@ -176,9 +181,9 @@ describe('WorkloadWebLinksAction', () => {
     expect(dialog.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
-  it('keeps unsaved drafts when the editor is closed and flags them on the trigger', () => {
+  it('keeps unsaved drafts when the editor is closed and flags them on the trigger', async () => {
     harness = renderAction();
-    const dialog = openEditor();
+    const dialog = await openEditor();
 
     fireEvent.input(dialog.getByLabelText(/artifact-cache-01/), {
       target: { value: 'https://cache.example' },
@@ -188,7 +193,7 @@ describe('WorkloadWebLinksAction', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Edit links/ })).toHaveTextContent('(unsaved)');
 
-    const reopened = openEditor();
+    const reopened = await openEditor();
     expect(reopened.getByLabelText(/artifact-cache-01/)).toHaveValue('https://cache.example');
     fireEvent.click(reopened.getByRole('button', { name: 'Discard' }));
     expect(reopened.getByLabelText(/artifact-cache-01/)).toHaveValue('');

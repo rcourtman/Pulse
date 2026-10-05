@@ -32,7 +32,7 @@ import { GuestDrawer } from './GuestDrawer';
 import { GuestRow } from './GuestRow';
 import { NodeDrawer } from './NodeDrawer';
 import { buildWorkloadSummaryGroupScope } from './workloadSelectors';
-import { getWorkloadGuestMetadataRecord } from './workloadWebLinksModel';
+import { getWorkloadGuestMetadataRecord } from './workloadGuestMetadataRecord';
 import type { WorkloadsState } from './useWorkloadsState';
 import type { WorkloadTableMetric } from './workloadMetricHistoryModel';
 

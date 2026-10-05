@@ -1,34 +1,15 @@
-import type { GuestMetadata } from '@/api/guestMetadata';
 import {
   normalizeWebInterfaceUrl,
   validateWebInterfaceCustomUrl,
 } from '@/components/shared/webInterfaceUrlFieldModel';
 import type { WorkloadGuest } from '@/types/workloads';
 import { getWorkloadTypeLabel } from '@/utils/workloadTypePresentation';
-import {
-  getWorkloadMetadataId,
-  getWorkloadMetadataIdCandidates,
-  resolveWorkloadType,
-} from '@/utils/workloads';
+import { getWorkloadMetadataId, resolveWorkloadType } from '@/utils/workloads';
 import { getWorkloadDisplayId } from './guestRowModel';
-
-export type WorkloadGuestMetadataMap = Record<string, GuestMetadata>;
-
-/**
- * Saved metadata for a workload row. Stable identities win over the legacy
- * instance:node:vmid key that v5 data volumes still carry.
- */
-export const getWorkloadGuestMetadataRecord = (
-  guest: WorkloadGuest,
-  byId: WorkloadGuestMetadataMap,
-): GuestMetadata | undefined => {
-  for (const metadataId of getWorkloadMetadataIdCandidates(guest)) {
-    if (metadataId && byId[metadataId]) {
-      return byId[metadataId];
-    }
-  }
-  return byId[`${guest.instance}:${guest.node}:${guest.vmid}`];
-};
+import {
+  getWorkloadGuestMetadataRecord,
+  type WorkloadGuestMetadataMap,
+} from './workloadGuestMetadataRecord';
 
 export type WorkloadWebLinkFilter = 'all' | 'missing';
 
