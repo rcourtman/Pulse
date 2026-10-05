@@ -28,7 +28,7 @@ func TestRegistryMaterializedMetadataConnectedDemo(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := mock.DefaultConfig
-	cfg.UpdateInterval = 24 * time.Hour
+	cfg.UpdateInterval = 5 * time.Minute
 	mock.SetMockConfig(cfg)
 	if err := mock.SetEnabled(true); err != nil {
 		t.Fatal(err)

@@ -217,12 +217,15 @@ func TestRegistryMaterializedMetadataViewsKeepFreshness(t *testing.T) {
 	if rr.VMs()[0] != after {
 		t.Fatal("unchanged staleness rebuilt the typed view")
 	}
-	rr.ingestRecord(SourceProxmox, "lab:node-1:100", Resource{Type: ResourceTypeVM, Name: "renamed-vm", Status: StatusOnline, LastSeen: time.Now().UTC(), Proxmox: &ProxmoxData{VMID: 100, NodeName: "node-1"}}, ResourceIdentity{}, false)
+	rr.ingestRecord(SourceProxmox, "lab:node-1:100", Resource{Type: ResourceTypeVM, Name: "renamed-vm", Status: StatusOnline, LastSeen: time.Now().UTC(), Proxmox: &ProxmoxData{VMID: 100, NodeName: "node-1"}, Metrics: &ResourceMetrics{CPU: &MetricValue{Percent: 73.25, Value: 73.25, Unit: "percent", Source: SourceProxmox}}}, ResourceIdentity{}, false)
 	// No batch epilogue has run here; source mapping and typed view must already
 	// reflect the resource visible to List and point reads.
 	current := rr.VMs()[0]
-	if current.Status() != StatusOnline || current.Name() != "renamed-vm" {
-		t.Fatal("mid-batch record retained the previous typed view")
+	// Proxmox naming does not displace an existing non-empty name under the
+	// established source-priority rule. Pin the actual fresh status and CPU,
+	// not an invented rename guarantee.
+	if current.ID() != before.ID() || current.Status() != StatusOnline || current.CPUPercent() != 73.25 || current.Name() != before.Name() {
+		t.Fatalf("mid-batch view: id=%q status=%s cpu=%v name=%q", current.ID(), current.Status(), current.CPUPercent(), current.Name())
 	}
 	assertRegistryMetadataOracle(t, rr)
 }
