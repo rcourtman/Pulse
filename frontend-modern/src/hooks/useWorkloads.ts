@@ -73,6 +73,7 @@ type APIResource = {
   type?: string;
   name?: string;
   status?: string;
+  health?: { verdict?: string; reasons?: Array<{ code?: string; detail?: string }> };
   uptime?: number;
   lastSeen?: string;
   sources?: string[];
@@ -558,6 +559,9 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
         (platformType === 'vmware-vsphere' ? resource.vmware?.powerState : null),
     ),
     resourceStatus: (resource.status || '').trim().toLowerCase() || undefined,
+    hasOpenAlert: (resource.health?.reasons ?? []).some(
+      (reason) => reason.code === 'warning_alert' || reason.code === 'critical_alert',
+    ),
     type:
       workloadType === 'vm'
         ? 'vm'
@@ -719,6 +723,7 @@ const mapCanonicalResourceToWorkload = (resource: Resource): WorkloadGuest | nul
     type: resource.type,
     name: resource.name,
     status: resource.status,
+    health: resource.health,
     uptime: resource.uptime,
     lastSeen: resource.lastSeen ? new Date(resource.lastSeen).toISOString() : undefined,
     sources: resource.sources,

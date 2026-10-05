@@ -772,8 +772,27 @@ describe('GuestRow', () => {
           expect(notice).toHaveTextContent('Unavailable');
           expect(notice).toHaveTextContent(message);
           expect(notice).not.toHaveTextContent('Last known');
+          // The reason is on hover too, not only for screen readers.
+          expect(notice).toHaveAttribute('title', message);
         },
       );
+
+      it(`keeps a setup gap muted and a broken ${mode} read amber`, () => {
+        const render = (diskStatusReason: string) =>
+          renderGuestRow({
+            guest: makeGuest({
+              diskStatusReason,
+              disk: makeDisk({ total: 0, used: 0, usage: -1 }),
+              disks: [],
+            }),
+            visibleColumnIds: ['name', 'disk'],
+            metricDisplayMode: mode,
+          }).container.querySelector('[data-workload-disk-read-status]');
+        expect(render('vm-stopped')?.className).toContain('text-muted');
+        expect(render('agent-disabled')?.className).toContain('text-muted');
+        expect(render('permission-denied')?.className).toContain('text-amber-700');
+        expect(render('prev-agent-error')?.className).toContain('text-amber-700');
+      });
 
       it(`withdraws the ${mode} notice only on a fresh same-VM observation`, () => {
         const [guest, setGuest] = createSignal(makeGuest({ diskStatusReason: 'prev-vm-locked' }));
