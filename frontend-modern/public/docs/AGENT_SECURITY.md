@@ -5,7 +5,7 @@ Pulse agents incorporate several security mechanisms to ensure that the code run
 **Start with the least privilege that answers your monitoring question.** For
 Proxmox VE, PBS, and PMG, that is usually no agent at all: API-only monitoring
 with a read-only token covers inventory, status, and metrics, and the
-generated setup script creates a privilege-separated monitoring user for it
+generated setup script creates a privilege-separated monitoring token for it
 (see [Proxmox Deployment Choices](#proxmox-deployment-choices)). Install a
 host agent only where you want data the platform API cannot provide, and on
 Linux consider the supported
@@ -88,6 +88,14 @@ agent. Generic unbound `agent:exec` tokens still fail closed.
 You do not need a Pulse agent on every Proxmox-related host just to see basic
 cluster inventory and utilization. Start with the least-privilege path that
 answers your monitoring question:
+
+**API-only does not mean guest-agent-free.** VM guest filesystem and memory
+collection can still send active requests on the channel used by freeze-enabled
+backups. Read permissions and the absence of a host agent do not prove backup
+safety. For an affected installation, follow the
+[backup safety precaution](VM_DISK_MONITORING.md#backup-safety), including the
+monitoring/alert outage while Pulse is stopped; do not add permissions or send
+manual probes during a freeze or thaw.
 
 | Goal | Recommended path | Host privilege needed? |
 |---|---|---|
