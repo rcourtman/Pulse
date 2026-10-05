@@ -20,6 +20,7 @@ import {
   type DetailSection,
   type DetailValueTone,
 } from '@/components/shared/detailSectionModel';
+import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
 
 export type ResourceDetailDrawerTrueNASRowTone = DetailValueTone;
 
@@ -580,7 +581,25 @@ const formatVMTopology = (vm: ResourceTrueNASVMMeta): string | null => {
   return null;
 };
 
+// Matches the stopped states in mapTrueNASVMStatus (features/truenas). A VM set
+// to autostart that is stopped is the one stopped VM nobody chose, and the
+// VMs table hides its State note on phones, so the drawer says it too.
+const TRUENAS_VM_STOPPED_STATES = new Set(['stopped', 'shutoff', 'shutdown', 'poweroff']);
+
+// Stale TrueNAS data may hold an old state, so the note waits for a current one.
+const vmConditionLabel = (resource: Resource, vm: ResourceTrueNASVMMeta): string | null => {
+  if (hasImpairedResourceSource(resource, 'truenas')) return null;
+  if (!vm.autostart) return null;
+  const state = (asString(vm.state) ?? asString(vm.domainState))?.toLowerCase();
+  // Without a native state, the table falls back to the resource status.
+  const stopped = state
+    ? TRUENAS_VM_STOPPED_STATES.has(state)
+    : resource.status === 'offline' || resource.status === 'stopped';
+  return stopped ? 'Should be running' : null;
+};
+
 const buildTrueNASVMSections = (
+  resource: Resource,
   vm: ResourceTrueNASVMMeta,
 ): ResourceDetailDrawerTrueNASSection[] => {
   const state = normalizeDelimitedLabel(vm.state);
@@ -592,6 +611,7 @@ const buildTrueNASVMSections = (
       tone: (vm.state ?? vm.domainState)?.toLowerCase() === 'running' ? 'success' : 'warning',
     }),
     row('Domain state', sameState ? null : domainState),
+    row('Condition', vmConditionLabel(resource, vm), { tone: 'warning' }),
     row('vCPU', formatVMCpu(vm)),
     row('Topology', formatVMTopology(vm)),
     row('Memory', formatDetailBytesValue(vm.memoryBytes)),
@@ -705,7 +725,7 @@ export const buildTrueNASDetailSections = (
   resource: Resource,
 ): ResourceDetailDrawerTrueNASSection[] => {
   if (resource.truenas?.share) return buildTrueNASShareSections(resource.truenas.share);
-  if (resource.truenas?.vm) return buildTrueNASVMSections(resource.truenas.vm);
+  if (resource.truenas?.vm) return buildTrueNASVMSections(resource, resource.truenas.vm);
   if (resource.truenas?.app) return buildTrueNASAppSections(resource.truenas.app);
   if (isTrueNASScopedResource(resource) && resource.storage) {
     return buildTrueNASStorageSections(resource, resource.storage);
@@ -734,8 +754,10 @@ export const buildTrueNASDetailsSummary = (resource: Resource): string | null =>
   const vm = resource.truenas?.vm;
   if (vm) {
     const deviceCount = asPositiveNumber(vm.deviceCount);
+    const condition = vmConditionLabel(resource, vm);
     const summary = [
       normalizeDelimitedLabel(vm.state ?? vm.domainState),
+      condition?.toLowerCase(),
       formatVMCpu(vm),
       formatDetailBytesValue(vm.memoryBytes),
       deviceCount ? formatDetailCountValue(deviceCount, 'device') : null,

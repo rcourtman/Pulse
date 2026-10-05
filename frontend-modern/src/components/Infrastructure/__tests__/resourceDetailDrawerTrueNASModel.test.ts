@@ -86,6 +86,52 @@ describe('resourceDetailDrawerTrueNASModel', () => {
     ]);
   });
 
+  it('says a stopped VM set to autostart should be running', () => {
+    const stoppedOnPurpose = baseResource({
+      type: 'vm',
+      truenas: { vm: { name: 'ubuntu-build', state: 'STOPPED', vcpus: 2, autostart: false } },
+    });
+    const shouldRun = baseResource({
+      type: 'vm',
+      truenas: { vm: { name: 'router', state: 'STOPPED', vcpus: 2, autostart: true } },
+    });
+
+    expect(buildTrueNASDetailsSummary(stoppedOnPurpose)).toBe('Stopped, 2 vCPU');
+    expect(buildTrueNASDetailsSummary(shouldRun)).toBe('Stopped, should be running, 2 vCPU');
+    const compute = buildTrueNASDetailSections(shouldRun).find(
+      (section) => section.label === 'Compute',
+    );
+    expect(compute?.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'Condition', value: 'Should be running' }),
+      ]),
+    );
+    const onPurposeCompute = buildTrueNASDetailSections(stoppedOnPurpose).find(
+      (section) => section.label === 'Compute',
+    );
+    expect(onPurposeCompute?.rows.map((row) => row.label)).not.toContain('Condition');
+
+    // The same rule as the VMs table: libvirt aliases, the resource status
+    // when TrueNAS sent no state, and no claim while TrueNAS data is stale.
+    const shutOff = baseResource({
+      type: 'vm',
+      truenas: { vm: { name: 'router', domainState: 'SHUTOFF', autostart: true } },
+    });
+    const statusOnly = baseResource({
+      type: 'vm',
+      status: 'offline',
+      truenas: { vm: { name: 'router', autostart: true } },
+    });
+    const stale = baseResource({
+      type: 'vm',
+      truenas: { vm: { name: 'router', state: 'STOPPED', autostart: true } },
+      platformData: { sourceStatus: { truenas: { status: 'stale' } } },
+    });
+    expect(buildTrueNASDetailsSummary(shutOff)).toContain('should be running');
+    expect(buildTrueNASDetailsSummary(statusOnly)).toContain('should be running');
+    expect(buildTrueNASDetailsSummary(stale)).not.toContain('should be running');
+  });
+
   it('summarizes native app.query metadata for the detail drawer', () => {
     const resource = baseResource({
       type: 'app-container',
