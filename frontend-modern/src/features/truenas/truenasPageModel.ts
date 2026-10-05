@@ -1,6 +1,7 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
+import { getTrueNASDatasetStateSummary } from '@/utils/truenasDatasetState';
 import type {
   Resource,
   ResourceIncident,
@@ -734,16 +735,6 @@ const TRUENAS_STORAGE_ISSUE_LABELS: Record<TrueNASStorageIssue['status'], string
   unknown: 'Unknown',
 };
 
-// A read-only dataset raises no incident, so its state tag
-// (datasetStateTag in internal/truenas/provider.go) is the only place the
-// provider says why it is impaired. Locked and unmounted datasets also raise
-// incidents, which win when present.
-const TRUENAS_DATASET_STATE_REASONS: Record<string, string> = {
-  'state:locked': 'Dataset is locked',
-  'state:unmounted': 'Dataset is not mounted',
-  'state:readonly': 'Dataset is read-only',
-};
-
 const TRUENAS_STORAGE_SILENT_REASONS: Record<TrueNASStorageIssue['status'], string> = {
   attention: 'TrueNAS flagged this without a reason',
   offline: 'Offline, and TrueNAS gave no reason',
@@ -785,8 +776,10 @@ export function getTrueNASStorageIssue(resource: Resource): TrueNASStorageIssue 
     for (const reason of resource.storage?.risk?.reasons ?? []) push(reason.summary);
     for (const reason of resource.physicalDisk?.risk?.reasons ?? []) push(reason.summary);
   }
-  if (reasons.length === leading) {
-    for (const tag of resource.tags ?? []) push(TRUENAS_DATASET_STATE_REASONS[normalize(tag)]);
+  // A read-only dataset raises no incident, so its state tag is the only
+  // reason the provider gives. The drawer reads the same shared mapping.
+  if (reasons.length === leading && resource.storage?.topology === 'dataset') {
+    push(getTrueNASDatasetStateSummary(resource.tags));
   }
   if (reasons.length === leading) {
     const zfsState = asTrimmedString(resource.storage?.zfsPoolState);
