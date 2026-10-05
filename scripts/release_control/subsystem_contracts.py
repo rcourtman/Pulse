@@ -72,21 +72,20 @@ def git(*args: str, text: bool) -> subprocess.CompletedProcess:
     )
 
 
-def tracked_contract_paths(*, staged: bool = False) -> list[str]:
-    if staged:
-        result = git(
-            "ls-files",
-            "-z",
-            "--",
-            CONTRACTS_DIR.relative_to(REPO_ROOT).as_posix(),
-            text=False,
-        )
+def tracked_contract_paths(*, staged: bool = False, revision: str | None = None) -> list[str]:
+    if staged or revision is not None:
+        contracts_rel = CONTRACTS_DIR.relative_to(REPO_ROOT).as_posix()
+        if revision is not None:
+            result = git("ls-tree", "-r", "-z", "--name-only", revision, "--", contracts_rel, text=False)
+        else:
+            result = git("ls-files", "-z", "--", contracts_rel, text=False)
         git_paths = sorted(
             entry.decode("utf-8")
             for entry in result.stdout.split(b"\x00")
             if entry and entry.decode("utf-8").endswith(".md")
         )
-        if git_paths:
+        if git_paths or revision is not None:
+            # A commit's contracts are what its tree holds, never the disk's.
             return git_paths
         # Governance contract files are filesystem-only (gitignored) — fall back to disk
     return sorted(
@@ -95,20 +94,27 @@ def tracked_contract_paths(*, staged: bool = False) -> list[str]:
     )
 
 
-def staged_contract_text(rel: str) -> str:
-    result = git("show", f":{rel}", text=True)
+def git_contract_text(rel: str, revision: str | None = None) -> str:
+    """Read a contract from `revision`, or from the index when it is None."""
+    result = git("show", f"{revision or ''}:{rel}", text=True)
     return result.stdout
 
 
-def tracked_contract_files(*, staged: bool = False) -> dict[str, str]:
+def tracked_contract_files(*, staged: bool = False, revision: str | None = None) -> dict[str, str]:
+    """Read contracts from the working tree, the index, or a commit.
+
+    `revision` wins over `staged`; a contract the commit tracks is read only
+    from that commit, so a caller judging it never sees another tree's text.
+    """
     payload: dict[str, str] = {}
-    for rel in tracked_contract_paths(staged=staged):
-        if staged:
+    for rel in tracked_contract_paths(staged=staged, revision=revision):
+        if staged or revision is not None:
             try:
-                payload[rel] = staged_contract_text(rel)
+                payload[rel] = git_contract_text(rel, revision)
                 continue
             except subprocess.CalledProcessError:
-                pass
+                if revision is not None:
+                    raise
         payload[rel] = (REPO_ROOT / rel).read_text(encoding="utf-8")
     return payload
 
@@ -219,9 +225,11 @@ def load_contract_index(
     contract_texts: dict[str, str] | None = None,
     *,
     staged: bool = False,
+    revision: str | None = None,
 ) -> dict[str, dict[str, Any]]:
     contract_index: dict[str, dict[str, Any]] = {}
-    for rel, content in (contract_texts or tracked_contract_files(staged=staged)).items():
+    texts = contract_texts or tracked_contract_files(staged=staged, revision=revision)
+    for rel, content in texts.items():
         if rel == TEMPLATE_REL or not rel.endswith(".md"):
             continue
         parsed, _ = parse_contract_text(rel, content)

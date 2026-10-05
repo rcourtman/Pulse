@@ -234,8 +234,31 @@ def repo_relative_path(path: str | Path) -> str:
     return candidate.as_posix()
 
 
-def read_repo_text(path: str | Path, *, staged: bool = False, strict_staged: bool = False) -> str:
+def read_repo_text(
+    path: str | Path,
+    *,
+    staged: bool = False,
+    strict_staged: bool = False,
+    revision: str | None = None,
+) -> str:
+    """Read a repo file from the working tree, the index, or a commit.
+
+    `revision` wins over `staged` and never falls back to the working tree:
+    a caller judging a specific commit must not silently read another tree.
+    """
     rel = repo_relative_path(path)
+    if revision is not None:
+        result = subprocess.run(
+            ["git", "show", f"{revision}:{rel}"],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=git_env(),
+        )
+        if result.returncode != 0:
+            raise FileNotFoundError(f"missing {rel} at revision {revision}")
+        return result.stdout
     if staged:
         try:
             result = subprocess.run(
@@ -275,5 +298,13 @@ def missing_staged_repo_paths(paths: Iterable[str | Path]) -> list[str]:
     return missing
 
 
-def load_repo_json(path: str | Path, *, staged: bool = False, strict_staged: bool = False) -> dict[str, Any]:
-    return json.loads(read_repo_text(path, staged=staged, strict_staged=strict_staged))
+def load_repo_json(
+    path: str | Path,
+    *,
+    staged: bool = False,
+    strict_staged: bool = False,
+    revision: str | None = None,
+) -> dict[str, Any]:
+    return json.loads(
+        read_repo_text(path, staged=staged, strict_staged=strict_staged, revision=revision)
+    )
