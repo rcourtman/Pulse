@@ -1159,9 +1159,12 @@ leaves quorum membership and the FSID to the cluster disclosure, where the
 FSID stays searchable and is shown in full.
 The Mail Gateway row reflects its open alerts, not only the provider status:
 a reachable gateway with an unacknowledged alert (mail queued past its age
-threshold, a backlog) renders and filters as needing attention, names the alert
-type under the gateway name, and its expansion leads with the shared drawer
-attention section carrying the exact alert message. Alerts are matched across
+threshold, a backlog) renders and filters as needing attention, colours the
+number the alert is about (queue, deferred, quarantine, spam or virus) with
+the alert message on hover and for screen readers, and its expansion leads
+with the shared drawer attention section carrying the exact alert message. The
+row stays single-line: an alert with no column of its own, such as offline,
+rides on the status dot, a screen-reader summary, and the drawer. Alerts are matched across
 the row's identity aliases, because they are keyed by the PMG instance id while
 the row carries the unified id. Its phone projection is the five-track
 instance, uptime, mail, queue and deferred set with a 40 percent identity, so
@@ -2000,6 +2003,14 @@ is a frontend-primitives boundary. `ResourceDetailDrawerOverviewTab.tsx`,
 `ResourceActionHistory.tsx`, and `DiscoveryTab.tsx` must compose
 `InfoCardFrame` for that shell instead of restoring local card-frame
 classes.
+The Overview tab's Needs attention list merges open alerts with the health
+presenter's reasons (`getResourceHealthIssuePresentation`), skipping only the
+reasons an open alert already states, so one matching alert never hides the
+rest. The presenter keeps every incident summary, not only the rollup, adds a
+TrueNAS dataset's state (`state:readonly`, `state:locked`, `state:unmounted`)
+because a read-only dataset raises no incident, and uses the rollup's category
+label (Resource Health Issue, Capacity Pressure) only when no reason is more
+specific.
 Machine and host overview cards that render compact system, hardware, disk,
 and temperature facts must also compose the frontend-primitives
 `InfoCardKeyValueRow`. Mobile rows retain their condensed endpoint layout;

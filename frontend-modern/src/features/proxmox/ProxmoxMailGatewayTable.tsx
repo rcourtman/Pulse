@@ -1,4 +1,4 @@
-import { For, Show, createMemo, type Component } from 'solid-js';
+import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
@@ -37,6 +37,56 @@ import {
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
 import { ProxmoxMailGatewayDrawer } from './ProxmoxMailGatewayDrawer';
+
+type MailGatewayAlertColumn = 'queue' | 'deferred' | 'quarantine' | 'spam' | 'virus';
+
+// Each mail gateway alert is about one number in the row, so that number
+// carries it: coloured, with the alert on hover and for screen readers. The
+// row keeps its single line (the shared platform-table rhythm), and an alert
+// with no column of its own (offline) rides on the status dot and drawer.
+export const mailGatewayAlertColumn = (type: string | undefined): MailGatewayAlertColumn | null => {
+  const normalized = (type ?? '').toLowerCase();
+  if (normalized === 'queue-deferred') return 'deferred';
+  if (
+    normalized === 'queue-total' ||
+    normalized === 'queue-depth' ||
+    normalized === 'queue' ||
+    normalized === 'queue-hold' ||
+    normalized === 'message-age'
+  ) {
+    return 'queue';
+  }
+  if (normalized.startsWith('quarantine-')) return 'quarantine';
+  // The Spam and Virus columns count inbound mail, so only the inbound
+  // anomalies (anomaly-spamIn, anomaly-virusIn in internal/alerts/pmg.go) mark
+  // them. Outbound anomalies have no column and stay on the dot and drawer.
+  if (normalized === 'anomaly-spamin') return 'spam';
+  if (normalized === 'anomaly-virusin') return 'virus';
+  return null;
+};
+
+const AlertedMetric: Component<{
+  alerts: Alert[];
+  column: MailGatewayAlertColumn;
+  children: JSX.Element;
+}> = (props) => (
+  <Show when={props.alerts.length > 0} fallback={props.children}>
+    <span
+      class={`font-semibold ${
+        props.alerts.some((alert) => alert.level === 'critical')
+          ? 'text-red-600 dark:text-red-300'
+          : 'text-amber-700 dark:text-amber-300'
+      }`}
+      title={props.alerts.map((alert) => alert.message).join('\n')}
+      data-mail-gateway-alert-column={props.column}
+    >
+      {props.children}
+      <span class="sr-only">
+        {`. ${props.alerts.map((alert) => `${alertTypeDisplayLabel(alert.type)}: ${alert.message}`).join('. ')}`}
+      </span>
+    </span>
+  </Show>
+);
 
 export type MailGatewayPhoneColumn =
   'instance' | 'nodes' | 'uptime' | 'mail' | 'queue' | 'deferred';
@@ -320,6 +370,8 @@ export const ProxmoxMailGatewayTable: Component<{
                     const name = () => asTrimmedString(instance.name) || instance.id;
                     const version = () => asTrimmedString(pmg()?.version) || '—';
                     const rowAlerts = createMemo(() => openAlertsFor(instance));
+                    const columnAlerts = (column: MailGatewayAlertColumn) =>
+                      rowAlerts().filter((alert) => mailGatewayAlertColumn(alert.type) === column);
                     const indicator = () => indicatorFor(instance);
                     // Same tint as the other platform tables, from the cached alerts.
                     const rowAlertBg = () => {
@@ -354,32 +406,19 @@ export const ProxmoxMailGatewayTable: Component<{
                                 title={rowAlerts()[0]?.message || instance.status || 'unknown'}
                                 ariaHidden
                               />
-                              <div class="min-w-0">
-                                <span
-                                  class="block font-semibold text-base-content truncate"
-                                  title={name()}
-                                >
-                                  {name()}
+                              <span
+                                class="min-w-0 truncate font-semibold text-base-content"
+                                title={name()}
+                              >
+                                {name()}
+                              </span>
+                              <Show when={rowAlerts().length > 0}>
+                                <span class="sr-only" data-mail-gateway-alert-summary>
+                                  {`Needs attention: ${rowAlerts()
+                                    .map((alert) => alert.message)
+                                    .join('. ')}`}
                                 </span>
-                                <Show when={rowAlerts()[0]}>
-                                  {(alert) => (
-                                    <span
-                                      class={`block truncate text-[11px] font-medium ${
-                                        alert().level === 'critical'
-                                          ? 'text-red-600 dark:text-red-300'
-                                          : 'text-amber-700 dark:text-amber-300'
-                                      }`}
-                                      title={rowAlerts()
-                                        .map((open) => open.message)
-                                        .join('\n')}
-                                      data-mail-gateway-alert-reason
-                                    >
-                                      {alertTypeDisplayLabel(alert().type)}
-                                      {rowAlerts().length > 1 ? ` +${rowAlerts().length - 1}` : ''}
-                                    </span>
-                                  )}
-                                </Show>
-                              </div>
+                              </Show>
                             </div>
                           </TableCell>
                           <Show when={showVersion()}>
@@ -420,47 +459,60 @@ export const ProxmoxMailGatewayTable: Component<{
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                             >
-                              <PlatformTableNumberValue
-                                value={pmg()?.spamIn}
-                                format={formatPlatformTableIntegerValue}
-                              />
+                              <AlertedMetric alerts={columnAlerts('spam')} column="spam">
+                                <PlatformTableNumberValue
+                                  value={pmg()?.spamIn}
+                                  format={formatPlatformTableIntegerValue}
+                                />
+                              </AlertedMetric>
                             </TableCell>
                           </Show>
                           <Show when={showVirus()}>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                             >
-                              <PlatformTableNumberValue
-                                value={pmg()?.virusIn}
-                                format={formatPlatformTableIntegerValue}
-                              />
+                              <AlertedMetric alerts={columnAlerts('virus')} column="virus">
+                                <PlatformTableNumberValue
+                                  value={pmg()?.virusIn}
+                                  format={formatPlatformTableIntegerValue}
+                                />
+                              </AlertedMetric>
                             </TableCell>
                           </Show>
                           <Show when={showOperational()}>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                             >
-                              <PlatformTableNumberValue
-                                value={pmg()?.quarantine}
-                                format={formatPlatformTableIntegerValue}
-                              />
+                              <AlertedMetric
+                                alerts={columnAlerts('quarantine')}
+                                column="quarantine"
+                              >
+                                <PlatformTableNumberValue
+                                  value={pmg()?.quarantine}
+                                  format={formatPlatformTableIntegerValue}
+                                />
+                              </AlertedMetric>
                             </TableCell>
                           </Show>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            <PlatformTableNumberValue
-                              value={pmg()?.queueTotal ?? pmg()?.queueActive}
-                              format={formatPlatformTableIntegerValue}
-                            />
+                            <AlertedMetric alerts={columnAlerts('queue')} column="queue">
+                              <PlatformTableNumberValue
+                                value={pmg()?.queueTotal ?? pmg()?.queueActive}
+                                format={formatPlatformTableIntegerValue}
+                              />
+                            </AlertedMetric>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            <PlatformTableNumberValue
-                              value={pmg()?.queueDeferred}
-                              format={formatPlatformTableIntegerValue}
-                            />
+                            <AlertedMetric alerts={columnAlerts('deferred')} column="deferred">
+                              <PlatformTableNumberValue
+                                value={pmg()?.queueDeferred}
+                                format={formatPlatformTableIntegerValue}
+                              />
+                            </AlertedMetric>
                           </TableCell>
                         </TableRow>
                         <Show when={isOpen()}>
