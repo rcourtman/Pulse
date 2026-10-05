@@ -355,6 +355,29 @@ export const getGuestDrawerHistoryScale = (
   return { minValue: 0, maxValue: Math.max(1, maxValue * 1.15) };
 };
 
+// Both inputs are normalized stored observations, ordered by timestamp. A
+// series cannot span a time where another series in its panel has a reading
+// and this one does not. Do not infer failed polls or cadence from elapsed
+// time: the API supplies neither. Keep singleton segments as real evidence.
+export const getGuestDrawerHistorySegments = (
+  points: readonly AggregatedMetricPoint[],
+  observationTimes: readonly number[],
+): AggregatedMetricPoint[][] => {
+  const timeIndices = new Map(observationTimes.map((timestamp, index) => [timestamp, index]));
+  const segments: AggregatedMetricPoint[][] = [];
+  let previousIndex: number | undefined;
+  for (const point of points) {
+    const index = timeIndices.get(point.timestamp);
+    if (index === undefined) continue;
+    if (previousIndex === undefined || (index !== previousIndex && index !== previousIndex + 1)) {
+      segments.push([]);
+    }
+    segments[segments.length - 1].push(point);
+    previousIndex = index;
+  }
+  return segments;
+};
+
 export const buildGuestDrawerHistoryPath = (
   points: readonly AggregatedMetricPoint[],
   scale: GuestDrawerHistoryScale,

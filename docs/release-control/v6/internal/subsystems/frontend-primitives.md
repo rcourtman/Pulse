@@ -249,6 +249,24 @@ Fresh linked Pulse-agent disk evidence with no reason remains unmarked, and
 non-VM rows do not inherit QGA guidance. The cue adds no action or tab stop;
 touch on it continues through the existing row disclosure to the full reason.
 
+The opened guest Overview applies the same admission to every filesystem, not
+only the aggregate row or its status sentence. A valid `prev-` value is labelled
+**Last known** beside its mount identity and used/capacity bytes; retained values
+do not receive current utilization bars or threshold colours. Other VM read
+reasons and explicit disk telemetry unavailability show **Usage unavailable**,
+retaining identity and known capacity without promoting old used bytes. Missing
+or invalid retained usage is unavailable, not an empty healthy filesystem. The
+read explanation precedes the filesystem breakdown and remains visible before
+any sample. Clearing a lock alone cannot clear a still-supplied reason. A fresh
+same-guest read restores the normal accessible utilization bar; independent LXC
+and linked-agent readings with no VM reason retain their existing semantics.
+
+Verification: `GuestDrawerOverview.filesystem-provenance.test.tsx`, the existing
+filesystem regressions and builder controls in `DiskList.test.tsx`, plus
+`browser-tests/guest-filesystem-provenance.cjs` using the full production guest
+drawer on desktop/light/dark and touch WebKit. These are synthetic presentation
+and input proofs, not native backup/thaw, covered-filesystem writes or resumption.
+
 Verification: mounted `GuestRow.test.tsx` and `MetricMiniSparkline.test.tsx`
 regressions and `browser-tests/guest-disk-provenance.cjs` exercise retained and
 pre-sample states, display/lens changes, current-value semantics and same-row
@@ -8308,3 +8326,34 @@ chain at desktop and phone widths with keyboard/touch refresh, class-dark CSS,
 403/503 controls and pending recovery. Unit controls separately cover current
 request ownership and disposal. No mutation, route, navigation entry, queue
 policy, permission or recipient-delivery contract is added by these states.
+
+### Drawer History does not interpolate across missing observations
+
+The shared `GuestDrawerHistory` renderer connects a series only across
+consecutive stored times in that configured panel. If another series has a
+stored observation at an intervening time and this series does not, its line
+stops. Each isolated observation, including a measured zero, remains visible
+as a point; separate continuous segments retain all their original values,
+timestamps and common-window coordinates. Independently sampled series must
+not imply simultaneous observations or a continuous trend through absent data.
+
+A visible, SVG-described explanation names the affected configured series and
+states the limit: missing readings do not identify an outage's cause or duration.
+There is no elapsed-time/cadence heuristic, synthetic zero, invented observation,
+new API field or collector change. Times outside the configured panel cannot
+split its series. Entirely absent series retain the existing missing/fallback
+policy. Live or retained snapshot carriers cannot repair a stored gap; only a
+matching stored response can. Source/range/access isolation, transient retained
+reads and exact-time keyboard/pointer/touch inspection remain in force.
+
+`GuestDrawerHistory.gaps.test.tsx` and `guestHistorySegments.test.ts` cover
+split lines, singleton recovery, zero rates, interleaved sampling, multiple
+segments, configured-group isolation, invalid points, elapsed-time controls,
+live updates, stored refresh and denied/transient reads. `GuestDrawer.test.tsx`
+checks the full drawer's live-state recovery and unchanged request budget.
+Updated pointer/sparse
+regressions preserve their original missing-value and fallback obligations.
+`browser-tests/history-observation-gaps.cjs` exercises the production full guest
+drawer with synthetic APIs in Chromium/WebKit desktop and 390/320-pixel light
+and dark views. This is presentation acceptance, not native backup/QGA safety,
+provider outage attribution, installed recovery or release availability.

@@ -165,7 +165,7 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
     },
   );
 
-  it('draws a lone series alongside a trend and labels only the live fallback', async () => {
+  it('preserves interleaved lone observations and labels only the live fallback', async () => {
     vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(
       response({
         cpu: [point(start, 10), point(end, 20)],
@@ -173,12 +173,10 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
       }),
     );
     mount({ cpu: 99, memory: 98, disk: 88 });
-    await waitFor(() => expect(dots()).toHaveLength(1));
-    expect(group().querySelectorAll('path')).toHaveLength(1);
-    expect(group().querySelector('[data-history-observation]')).toHaveAttribute(
-      'data-history-observation',
-      'memory',
-    );
+    await waitFor(() => expect(dots()).toHaveLength(3));
+    expect(group().querySelectorAll('path')).toHaveLength(0);
+    expect(group().querySelectorAll('[data-history-observation="memory"]')).toHaveLength(1);
+    expect(group().querySelectorAll('[data-history-observation="cpu"]')).toHaveLength(2);
     expect(group().querySelectorAll('[data-history-current]')).toHaveLength(1);
     expect(group().querySelector('[data-history-current="disk"]')).toHaveTextContent(
       'Disk88.0%current',
@@ -191,7 +189,7 @@ describe('GuestDrawerHistory sparse observations and current provenance', () => 
     expect(group()).toHaveTextContent('Memory0.0%');
     expect(group()).toHaveTextContent('Disk-');
     expect(group().querySelector('[data-history-current]')).toBeNull();
-    expect(dots()).toHaveLength(1);
+    expect(dots()).toHaveLength(3);
   });
 
   it('does not connect single observations from different series or borrow their times', async () => {

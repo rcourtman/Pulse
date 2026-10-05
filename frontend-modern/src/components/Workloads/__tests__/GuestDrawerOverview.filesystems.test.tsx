@@ -85,6 +85,9 @@ describe('GuestDrawerOverview filesystem labels', () => {
     ).toHaveAttribute('colspan', '2');
     expect(screen.queryByText('prev-vm-locked')).not.toBeInTheDocument();
     for (const path of paths) expect(screen.getByText(path)).toBeInTheDocument();
+    expect(screen.getByText('Last known 50% · 5.00 GB/10.0 GB · MP0')).toBeVisible();
+    expect(screen.getByText('Usage unavailable · ?/10.0 GB · MP1')).toBeVisible();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
     setGuest({
       ...guest(),
       diskStatusReason: '',

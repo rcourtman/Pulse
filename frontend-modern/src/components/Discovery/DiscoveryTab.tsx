@@ -1,4 +1,4 @@
-import { Component, For, Show, createMemo } from 'solid-js';
+import { Component, For, Show, createMemo, createUniqueId } from 'solid-js';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import TriangleAlertIcon from 'lucide-solid/icons/triangle-alert';
 import type { ResourceType } from '../../types/discovery';
@@ -33,6 +33,7 @@ import {
 import { ButtonLink, CopyValueButton } from '@/components/shared/Button';
 import { CopyableCodeRow } from '@/components/shared/CopyableCodeRow';
 import { InfoCardFrame, InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { useDiscoveryTabState } from './useDiscoveryTabState';
 import { orderFactsByActionability } from './factOrdering';
 import { deriveCliCommand } from './cliCommand';
@@ -54,6 +55,8 @@ interface DiscoveryTabProps {
   commandsEnabled?: boolean;
   /** Show the primary run action at the top of embedded drawer contexts. */
   showManualRunAction?: boolean;
+  /** Safety pause for live manual scans, independent of command permissions. */
+  runBlockReason?: string | null;
 }
 
 export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
@@ -75,6 +78,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     liveElapsedSeconds,
     notesText,
     mutateDiscovery,
+    runBlockReason,
     saveError,
     scanError,
     scanProgress,
@@ -90,6 +94,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     startEditingNotes,
     validDiscovery,
   } = useDiscoveryTabState(props);
+  const runBlockReasonId = `discovery-run-block-${createUniqueId()}`;
 
   const suggestedURLReasonText = createMemo(() => {
     const current = discovery();
@@ -225,6 +230,19 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
           </div>
         </Show>
 
+        <Show when={runBlockReason()}>
+          {(reason) => (
+            <InlineNotice
+              id={runBlockReasonId}
+              tone="warning"
+              role="status"
+              data-testid="discovery-run-block"
+            >
+              {reason()}
+            </InlineNotice>
+          )}
+        </Show>
+
         <Show when={showManualRunAction()}>
           <InfoCardFrame>
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -236,6 +254,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 type="button"
                 onClick={() => handleTriggerDiscovery(true)}
                 disabled={isScanning() || !canTriggerDiscovery()}
+                aria-describedby={runBlockReason() ? runBlockReasonId : undefined}
                 class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-sm border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Show
@@ -455,7 +474,10 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
         {/* Scan Error */}
         <Show when={scanError()}>
-          <div class="mb-4 rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/25">
+          <div
+            role="alert"
+            class="mb-4 rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/25"
+          >
             <div class="flex items-start gap-3">
               <svg
                 class="w-5 h-5 text-red-500 dark:text-red-400 shrink-0 mt-0.5"
@@ -471,10 +493,14 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 />
               </svg>
               <div>
-                <p class="text-sm font-medium text-red-800 dark:text-red-200">Discovery Failed</p>
+                <p class="text-sm font-medium text-red-800 dark:text-red-200">
+                  Discovery did not complete
+                </p>
                 <p class="text-sm text-red-700 dark:text-red-300 mt-1">{scanError()}</p>
               </div>
               <button
+                type="button"
+                aria-label="Dismiss Discovery error"
                 onClick={() => setScanError(null)}
                 class="ml-auto text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
               >
@@ -633,6 +659,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
               <button
                 onClick={() => handleTriggerDiscovery(true)}
                 disabled={isScanning() || !canTriggerDiscovery()}
+                aria-describedby={runBlockReason() ? runBlockReasonId : undefined}
                 class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isScanning() ? (
@@ -708,6 +735,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
               <button
                 onClick={() => handleTriggerDiscovery(true)}
                 disabled={isScanning() || !canTriggerDiscovery()}
+                aria-describedby={runBlockReason() ? runBlockReasonId : undefined}
                 class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isScanning() ? (
@@ -1192,6 +1220,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                   <button
                     onClick={() => handleTriggerDiscovery(true)}
                     disabled={isScanning() || !canTriggerDiscovery()}
+                    aria-describedby={runBlockReason() ? runBlockReasonId : undefined}
                     class="px-3 py-1.5 bg-surface-hover text-base-content text-xs rounded-sm hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
                   >
                     <Show

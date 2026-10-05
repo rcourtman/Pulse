@@ -101,48 +101,114 @@ All endpoints require admin authentication.
 
 ### Testing and adding a connection (API)
 
-The **Settings → Infrastructure → Platform connections** flow is the simplest option. For an API client,
-prepare the private Pulse header file as described in the
-[API authentication guide](API.md). The Pulse API token authenticates to
-Pulse; the separate TrueNAS API key belongs in the connection's JSON file.
-Do not put either credential in shell arguments, URLs or a public thread.
+Prefer **Settings → Infrastructure → Platform connections** for setup. These
+API examples are for an authorised administrator using curl 7.76 or later,
+not a way to diagnose stale polling. Testing makes a live system-information
+request to TrueNAS; saving creates a connection and starts ordinary polling.
+Do not use either during a backup, freeze/thaw or an unresponsive-host incident.
 
-Create or protect the connection file before opening it in a trusted editor:
+First prepare a private Pulse header file using the
+[API token file procedure](API.md#api-token-recommended), with the admin access
+needed for connection management. The Pulse token authenticates to Pulse;
+the separate TrueNAS API key belongs in the connection's JSON file. Enter
+credentials only in your local editor, never in arguments, URLs or a thread.
 
-```bash
-umask 077
-mkdir -p "$HOME/.config/pulse"
-touch "$HOME/.config/pulse/truenas-connection.json"
-chmod 600 "$HOME/.config/pulse/truenas-connection.json"
-vi "$HOME/.config/pulse/truenas-connection.json"
-```
-
-In that file, enter a JSON object with `name`, `host` (the TrueNAS HTTPS URL),
-`username` (the key owner) and `apiKey`. Keep both credential files private;
-do not paste their contents into a terminal command or upload them.
-
-Test the connection before saving it:
+On a trusted machine, as the account running curl, prepare the connection
+file below. Stop if either file-preparation step fails. This preserves an
+existing file, restricts the directory and refuses symlinked credential paths
+or a non-regular connection file before opening the editor:
 
 ```bash
-curl --fail-with-body --silent --show-error \
-  --header "@$HOME/.config/pulse/api-header" \
-  --header 'Content-Type: application/json' \
-  --data-binary "@$HOME/.config/pulse/truenas-connection.json" \
-  http://127.0.0.1:7655/api/truenas/connections/test
+(
+  set -eu
+  umask 077
+  config_dir="$HOME/.config/pulse"
+  connection_file="$config_dir/truenas-connection.json"
+  if [ -L "$HOME/.config" ] || [ -L "$config_dir" ] || [ -L "$connection_file" ]; then
+    printf 'Refusing a symlinked credential path.\n' >&2
+    exit 1
+  fi
+  if [ -e "$connection_file" ] && [ ! -f "$connection_file" ]; then
+    printf 'Connection file must be a regular file.\n' >&2
+    exit 1
+  fi
+  mkdir -p "$config_dir"
+  chmod 700 "$config_dir"
+  touch "$connection_file"
+  chmod 600 "$connection_file"
+  vi "$connection_file"
+)
 ```
 
-After checking the test response, save the connection with:
+In the editor, save a JSON object with `name`, `host` (the TrueNAS HTTPS URL),
+`username` (the key owner) and `apiKey`. Keep both credential files private and
+outside repositories and diagnostics. Do not upload them.
+
+The following examples run **on the Pulse host**, using its direct loopback
+address. They ignore curl configuration, do not follow redirects or retry,
+and retain each response in a new private local file. Responses and errors can
+contain identifying details or echoed credentials; review them locally, not in
+a public terminal recording or thread. Keep `--disable` first so local curl
+configuration cannot enable tracing or change the request.
+
+Test once without saving:
 
 ```bash
-curl --fail-with-body --silent --show-error \
-  --header "@$HOME/.config/pulse/api-header" \
-  --header 'Content-Type: application/json' \
-  --data-binary "@$HOME/.config/pulse/truenas-connection.json" \
-  http://127.0.0.1:7655/api/truenas/connections
+(
+  set -eu
+  umask 077
+  result_file=$(mktemp "$HOME/.config/pulse/truenas-test.XXXXXX")
+  printf 'Private response file: %s\n' "$result_file"
+  status=$(curl --disable --fail-with-body --silent --show-error \
+    --connect-timeout 5 --max-time 20 --proto '=http' --noproxy 127.0.0.1 \
+    --header "@$HOME/.config/pulse/api-header" \
+    --header 'Content-Type: application/json' \
+    --data-binary "@$HOME/.config/pulse/truenas-connection.json" \
+    --output "$result_file" --write-out '%{http_code}' \
+    http://127.0.0.1:7655/api/truenas/connections/test)
+  printf 'HTTP %s\n' "$status"
+  [ "$status" = 200 ]
+)
 ```
 
-These Pulse URLs are loopback-only examples. For a remote Pulse server, use
-its trusted HTTPS origin without disabling certificate verification.
+Require exit 0, HTTP **200** and `success: true` in that private test response.
+A redirect, HTTP error or `000` is not a successful test. Test success is not
+inventory, metric or guest-thaw acceptance.
+
+Only after reviewing the test response, create the connection once:
+
+```bash
+(
+  set -eu
+  umask 077
+  result_file=$(mktemp "$HOME/.config/pulse/truenas-save.XXXXXX")
+  printf 'Private response file: %s\n' "$result_file"
+  status=$(curl --disable --fail-with-body --silent --show-error \
+    --connect-timeout 5 --max-time 20 --proto '=http' --noproxy 127.0.0.1 \
+    --header "@$HOME/.config/pulse/api-header" \
+    --header 'Content-Type: application/json' \
+    --data-binary "@$HOME/.config/pulse/truenas-connection.json" \
+    --output "$result_file" --write-out '%{http_code}' \
+    http://127.0.0.1:7655/api/truenas/connections)
+  printf 'HTTP %s\n' "$status"
+  [ "$status" = 201 ]
+)
+```
+
+A successful save returns HTTP **201** and the new connection's `id`, not
+proof of a complete poll. If saving times out or loses its response, it may
+already have created the connection. Check **Platform connections** or
+`/api/truenas/connections` in your existing signed-in Pulse browser before
+trying again; do not blindly repeat POST and create duplicates. Continue with
+the [ordinary polling checks](#stale-truenas-data) for collection acceptance.
+
+For remote Pulse access, replace the loopback origin in the relevant command
+with your trusted **HTTPS** origin and change `--proto '=http'` to
+`--proto '=https'`. Keep certificate verification enabled. For a private CA,
+add `--cacert /path/to/trusted-ca.pem` using a CA obtained independently from
+your administrator, not from the failing connection. Do not add `--insecure`,
+`--location`, verbose/trace flags or automatic retries. Share only the relevant
+HTTP status and a manually redacted error, never the full response or headers.
 
 ## Troubleshooting
 
