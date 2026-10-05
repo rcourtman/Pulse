@@ -663,8 +663,8 @@ On narrow screens the physical-disk scope may reprioritize its canonical table
 columns to endurance and temperature while retaining the shared table
 overflow and touch-target behavior; it must not introduce a second mobile-only
 filter or table shell. Its Health column stays desktop-only in every scope:
-the status dot plus the reason line under the name already carry a disk's
-condition, and the pill clipped past the phone container edge.
+the status dot carries a disk's condition on a phone, the row drawer carries
+the reason, and the old pill clipped past the phone container edge.
 
 Large-estate platform pages must keep one canonical inventory snapshot for the
 initial read and explicit refresh path. The Proxmox and VMware vSphere
@@ -713,10 +713,7 @@ scrolling exposes it. Touch scrolling must remain compositor-native: windowed
 renderers must not attach touch listeners or replace keyed rows before the
 browser moves the page, and must update their runway only from the passive
 native scroll event. Spacer geometry is structural only: no feature may present
-it as loading, pagination, or an intentionally blank data region. Table rows
-may differ in height (an exception row with a reason line under its name),
-because a table runway sizes its spacers from the average mounted row rather
-than its tallest leading row. Settings
+it as loading, pagination, or an intentionally blank data region. Settings
 resource pickers, Availability target lists, Actions, alerts, and every
 provider-native platform table share this contract. For table rows with unique
 logical ids, or an explicit unique key extractor, `PlatformWindowedRows` owns a

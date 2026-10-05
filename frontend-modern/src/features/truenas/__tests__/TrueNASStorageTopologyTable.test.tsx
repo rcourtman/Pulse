@@ -156,7 +156,7 @@ describe('TrueNASStorageTopologyTable', () => {
     expect(container.querySelector('[data-truenas-storage-kind="disk"]')).toBeNull();
   });
 
-  it('shows health only for exceptions, with the reason under the name', () => {
+  it('shows health only for exceptions, with the reason in the Health cell', () => {
     const pool = makeStorageResource({
       id: 'pool-archive',
       name: 'archive',
@@ -195,23 +195,23 @@ describe('TrueNASStorageTopologyTable', () => {
 
     const poolRow = container.querySelector('[data-truenas-storage-resource="pool-archive"]');
     const healthyRow = container.querySelector('[data-truenas-storage-resource="dataset-backups"]');
-    const reason = poolRow?.querySelector('[data-truenas-storage-reason]');
-    const visible = [...(reason?.querySelectorAll('[aria-hidden="true"]') ?? [])].map(
+    const health = poolRow?.querySelector('[data-truenas-storage-health="attention"]');
+    const visible = [...(health?.querySelectorAll('[aria-hidden="true"]') ?? [])].map(
       (node) => node.textContent,
     );
 
+    // The reason sits in the Health cell on the row's single line. The name
+    // cell carries only the name, per the shared platform-table rhythm.
+    expect(health?.closest('td')).toHaveClass('platform-table-phone-hidden');
     expect(visible).toEqual(['Pool archive is DEGRADED: one member of mirror-0 is faulted.', '+1']);
-    expect(reason?.querySelector('.sr-only')).toHaveTextContent(
+    expect(health?.querySelector('.sr-only')).toHaveTextContent(
       'Attention: Pool archive is DEGRADED: one member of mirror-0 is faulted. Device /dev/sdc has SMART test failures.',
     );
-    expect(reason).toHaveAttribute(
+    expect(health).toHaveAttribute(
       'title',
       'Pool archive is DEGRADED: one member of mirror-0 is faulted.\nDevice /dev/sdc has SMART test failures.',
     );
-    expect(poolRow?.querySelector('[data-truenas-storage-health="attention"]')).toHaveTextContent(
-      'Attention',
-    );
-    expect(healthyRow?.querySelector('[data-truenas-storage-reason]')).toBeNull();
+    expect(poolRow?.querySelector('td')).not.toHaveTextContent('DEGRADED');
     expect(healthyRow?.querySelector('[data-truenas-storage-health]')).toBeNull();
     expect(healthyRow).not.toHaveTextContent('Healthy');
   });

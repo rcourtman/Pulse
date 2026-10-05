@@ -193,40 +193,41 @@ const DiskEnduranceCell: Component<{ row: TrueNASStorageTopologyRow }> = (props)
   );
 };
 
-const issuePillClass = (issue: TrueNASStorageIssue): string => {
-  if (issue.status === 'attention') {
-    return 'border-amber-300/50 bg-amber-500/10 text-amber-700 dark:text-amber-300';
-  }
-  if (issue.status === 'offline') {
-    return 'border-red-300/50 bg-red-500/10 text-red-700 dark:text-red-300';
-  }
-  return 'border-border bg-surface-alt text-muted';
-};
-
 const issueReasonClass = (issue: TrueNASStorageIssue): string => {
   if (issue.status === 'attention') return 'text-amber-700 dark:text-amber-300';
   if (issue.status === 'offline') return 'text-red-600 dark:text-red-300';
   return 'text-muted';
 };
 
-// The visible reason is clamped and abbreviates the rest to a count, so
+// The visible reason is truncated and abbreviates the rest to a count, so
 // assistive technology gets the bucket and every reason instead.
 const issueScreenReaderText = (issue: TrueNASStorageIssue): string =>
   `${issue.label}: ${issue.reasons.map((reason) => reason.replace(/[.\s]+$/, '')).join('. ')}.`;
 
 // Healthy rows leave the Health column empty: the status dot already says
-// healthy, and a column of green pills buries the few rows that are not.
-const IssuePill: Component<{ issue: TrueNASStorageIssue | null }> = (props) => (
+// healthy, and a column of green pills buried the few rows that are not. An
+// exception shows why, on the row's single line (the shared platform-table
+// rhythm), with every reason on hover and in the row drawer. The colour
+// carries the bucket, so a pill repeating Attention would only take room
+// from the reason.
+const IssueSummary: Component<{ issue: TrueNASStorageIssue | null }> = (props) => (
   <Show when={props.issue}>
     {(issue) => (
-      <span
-        class={`inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[10px] font-medium ${issuePillClass(
-          issue(),
-        )}`}
+      <div
+        class={`flex min-w-0 items-center gap-1 text-[11px] font-medium ${issueReasonClass(issue())}`}
+        title={issue().reasons.join('\n')}
         data-truenas-storage-health={issue().status}
       >
-        {issue().label}
-      </span>
+        <span aria-hidden="true" class="min-w-0 truncate">
+          {issue().reasons[0] ?? issue().label}
+        </span>
+        <Show when={issue().reasons.length > 1}>
+          <span aria-hidden="true" class="shrink-0 tabular-nums">
+            +{issue().reasons.length - 1}
+          </span>
+        </Show>
+        <span class="sr-only">{issueScreenReaderText(issue())}</span>
+      </div>
     )}
   </Show>
 );
@@ -329,11 +330,9 @@ export const getTrueNASStorageTopologyIndentClass = (depth: number): string => {
   return 'pl-8 sm:pl-16';
 };
 
-const ResourceCell: Component<{
-  row: TrueNASStorageTopologyRow;
-  issue: TrueNASStorageIssue | null;
-  detailToggle?: JSX.Element;
-}> = (props) => {
+const ResourceCell: Component<{ row: TrueNASStorageTopologyRow; detailToggle?: JSX.Element }> = (
+  props,
+) => {
   const displayStatus = () => getTrueNASResourceDisplayStatus(props.row.resource);
   const indicator = () => getSimpleStatusIndicator(displayStatus());
   const name = () => resourceName(props.row.resource);
@@ -353,28 +352,6 @@ const ResourceCell: Component<{
         >
           {name()}
         </div>
-        <Show when={props.issue?.reasons.length ? props.issue : undefined}>
-          {(issue) => (
-            <div
-              class={`flex min-w-0 items-start gap-1 text-[11px] leading-snug font-medium ${issueReasonClass(issue())}`}
-              title={issue().reasons.join('\n')}
-              data-truenas-storage-reason
-            >
-              <span
-                aria-hidden="true"
-                class="line-clamp-2 min-w-0 whitespace-normal [overflow-wrap:anywhere]"
-              >
-                {issue().reasons[0]}
-              </span>
-              <Show when={issue().reasons.length > 1}>
-                <span aria-hidden="true" class="shrink-0 tabular-nums">
-                  +{issue().reasons.length - 1}
-                </span>
-              </Show>
-              <span class="sr-only">{issueScreenReaderText(issue())}</span>
-            </div>
-          )}
-        </Show>
       </div>
     </div>
   );
@@ -512,7 +489,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="usage"
-                  class="platform-table-mobile-w-25 md:w-[28%]"
+                  class="platform-table-mobile-w-25 md:w-[20%]"
                 >
                   <PlatformResponsiveTableLabel compact="Usage" full="Usage / Size" />
                 </PlatformSortableTableHead>
@@ -520,7 +497,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey={kindFilter() === 'disks' ? 'endurance' : 'disks'}
-                  class="platform-table-mobile-w-15 md:w-[8%]"
+                  class="platform-table-mobile-w-15 md:w-[7%]"
                 >
                   {kindFilter() === 'disks' ? 'Endurance' : 'Disks'}
                 </PlatformSortableTableHead>
@@ -528,15 +505,15 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="temp"
-                  class={`${kindFilter() === 'disks' ? 'table-cell' : 'hidden lg:table-cell'} md:w-[8%]`}
+                  class={`${kindFilter() === 'disks' ? 'table-cell' : 'hidden lg:table-cell'} md:w-[7%]`}
                 >
                   Temp
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
-                  kind="badge"
+                  kind="text"
                   sort={sort}
                   sortKey="health"
-                  class="platform-table-phone-hidden md:w-[14%]"
+                  class="platform-table-phone-hidden md:w-[24%]"
                 >
                   <PlatformResponsiveTableLabel compact="H" full="Health" />
                 </PlatformSortableTableHead>
@@ -563,7 +540,6 @@ export const TrueNASStorageTopologyTable: Component<{
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <ResourceCell
                               row={row}
-                              issue={issue()}
                               detailToggle={
                                 <PlatformResourceDetailToggleButton
                                   expanded={isExpanded()}
@@ -614,9 +590,9 @@ export const TrueNASStorageTopologyTable: Component<{
                             />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
                           >
-                            <IssuePill issue={issue()} />
+                            <IssueSummary issue={issue()} />
                           </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow

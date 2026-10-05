@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "a99f3804a756acc293b3962fb9eaba2cbec04655",
+  "verified_at": "2026-10-05T05:22:24Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts": "e1cc0cb0f4087c5c66014d254421aeea6b02842795c41978e1b9847dcfcb5c77",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx": "19e1e5b705285464607804f8a8d7b5174e39c856290bd8c6ce5dc5e1212ff2af"
+  },
+  "routes": [
+    "/truenas/storage",
+    "/truenas/storage?kind=disks"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 820,
+      "height": 700
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Storage at 1440: every row is single-line again. Healthy rows leave Health empty, the archive pool reads Pool archive is DEGRADED: one member of archive mirror-0 is reporting checksum and SMART faults (truncated, +1, full list on hover), archive/cold reads Dataset is read-only, sdc reads Device /dev/sdc has SMART test failures, all in the Health column and coloured amber",
+    "Name cells hold only the name, so the reason no longer stacks under it",
+    "Disk scope at 1440: Endurance and Temp visible, sdc reason in Health",
+    "Tablet at 820 and dark mode at 1440: reasons truncate cleanly with the +1 kept",
+    "Phone at 390: the table is the contract phone projection (Resource, Kind, Usage, Disks) with status dots, Health hidden",
+    "Phone drawer: tapping archive shows DEGRADED and tapping sdc shows the SMART failure. The read-only dataset drawer only says Degraded, a pre-existing drawer gap left for a follow-up because the drawer model is also changed by the open services and VMs pull request",
+    "usePlatformWindowedItems is back to its main content, with rows uniform again"
+  ],
+  "interactions": [
+    "Switched to the Physical disks scope",
+    "Tapped archive, archive/cold and sdc on a 390 phone and read each drawer"
+  ]
+}
