@@ -1102,3 +1102,57 @@ func TestAutomaticGuestMemoryLinkNextPoll(t *testing.T) {
 		t.Fatalf("ambiguous hostname selected %q/%q/%q", node, linkedVM, ct)
 	}
 }
+
+// shortenTenantShutdownBudgets makes the shutdown waits fast enough for tests
+// while keeping deletion's budget longer than the plain one, as in production.
+func shortenTenantShutdownBudgets(t *testing.T, plain, deletion time.Duration) {
+	t.Helper()
+	previousPlain, previousDeletion := tenantMonitorShutdownTimeout, tenantDeletionShutdownTimeout
+	tenantMonitorShutdownTimeout, tenantDeletionShutdownTimeout = plain, deletion
+	t.Cleanup(func() {
+		tenantMonitorShutdownTimeout, tenantDeletionShutdownTimeout = previousPlain, previousDeletion
+	})
+}
+
+// A tenant monitor that is still starting up or finishing a tick can take
+// longer than the plain shutdown budget to see its cancelled context. In CI a
+// just-used organization's loop took 8-10s, so deletion refused with
+// tenant_shutdown_incomplete. Deletion waits on its own, longer budget instead.
+func TestTenantDeletionWaitsForSlowMonitoringLoop(t *testing.T) {
+	shortenTenantShutdownBudgets(t, 50*time.Millisecond, 2*time.Second)
+
+	slowLoop := func(mtm *MultiTenantMonitor, orgID string) *Monitor {
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() {
+			<-ctx.Done()
+			// Exits well after the plain budget but inside deletion's.
+			time.Sleep(300 * time.Millisecond)
+			close(done)
+		}()
+		monitor := &Monitor{}
+		mtm.monitors[orgID] = monitor
+		mtm.tenantCancel[orgID] = cancel
+		mtm.tenantDone[orgID] = done
+		return monitor
+	}
+
+	mtm := NewMultiTenantMonitor(&config.Config{}, nil, nil)
+	t.Cleanup(mtm.Stop)
+
+	// RemoveTenant keeps the plain budget, gives up and retains the owner.
+	retained := slowLoop(mtm, "removal")
+	mtm.RemoveTenant("removal")
+	if got, ok := mtm.PeekMonitor("removal"); !ok || got != retained {
+		t.Fatal("plain removal discarded a monitor whose loop had not stopped")
+	}
+
+	slowLoop(mtm, "deletion")
+	if err := mtm.BeginTenantDeletion("deletion"); err != nil {
+		t.Fatalf("deletion refused a loop that stopped inside its budget: %v", err)
+	}
+	if _, ok := mtm.PeekMonitor("deletion"); ok {
+		t.Fatal("completed deletion left the monitor registered")
+	}
+	mtm.FinishTenantDeletion("deletion")
+}

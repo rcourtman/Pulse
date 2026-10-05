@@ -79,6 +79,7 @@ func TestTenantDeletionRetainsBlockedGuestWriterOwnership(t *testing.T) {
 	}
 }
 func TestTenantDeletionRetainsUnfinishedMonitorLoop(t *testing.T) {
+	shortenTenantShutdownBudgets(t, 50*time.Millisecond, 100*time.Millisecond)
 	mtm := NewMultiTenantMonitor(&config.Config{}, nil, nil)
 	_, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
