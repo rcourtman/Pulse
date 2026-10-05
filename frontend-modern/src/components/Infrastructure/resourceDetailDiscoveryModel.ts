@@ -1,4 +1,5 @@
 import type { Resource } from '@/types/resource';
+import { getGuestDrawerGuestReadPrecaution } from '@/components/Workloads/guestDrawerModel';
 import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
 import {
   canonicalDiscoveryResourceType,
@@ -63,6 +64,33 @@ type PlatformData = {
 
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+
+// The canonical drawer has both typed and legacy provider facets. A healthy
+// facet cannot cancel a deferral still reported by the other one. Inspect only
+// this VM's own PVE evidence, not its parent, Discovery target or cached version.
+export const getResourceGuestReadPrecaution = (resource: Resource): string | null => {
+  if (resource.type !== 'vm') return null;
+  const legacy = resource.platformData?.proxmox;
+  const facets = [
+    resource.proxmox,
+    legacy && typeof legacy === 'object' && !Array.isArray(legacy)
+      ? (legacy as Record<string, unknown>)
+      : undefined,
+  ];
+  for (const facet of facets) {
+    if (!facet) continue;
+    const precaution = getGuestDrawerGuestReadPrecaution({
+      type: 'vm',
+      platformScopes: ['proxmox-pve'],
+      guestAgentStatus: asString(facet.guestAgentStatus),
+      diskStatusReason: asString(facet.diskStatusReason),
+      lock: asString(facet.lock),
+      backupInProgress: facet.backupInProgress === true,
+    });
+    if (precaution) return precaution;
+  }
+  return null;
+};
 
 const asNumber = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;

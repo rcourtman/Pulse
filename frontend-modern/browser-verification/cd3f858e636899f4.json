@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "90a7d2e0ad08109132bed4747690868861f67e23",
+  "verified_at": "2026-10-05T16:15:22.197327Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "3d89b12c95fc35bb93fa703a7d10beb06296fb4ed9b9f0c313f22afc0ff0b6e5",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "969e4051af443b50e45443241a8b4e0f9e66a8f7b51c43d64ab4fd9e5c3f9a84",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts": "7958a719302571e07dde329231554c59f2fa2d3d49852486b54e929df2856af8",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "8abfb347ac32bdd4cb88676999b523f69d8c8f1ea5febd7736a64ba7b57159b5",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "53dc922a8cc70d3e39f51554c581707cd496fa1086290c8ebd6f20fc226933ba"
+  },
+  "routes": [
+    "/browser-tests/resource-guest-safety.html"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Real canonical resource drawer/state/Discovery client and CSS, synthetic local snapshots and HTTP only. Parent at the receipt base exposes enabled Update Discovery under backup lock; no parent POST was sent.",
+    "Desktop Chromium and dark 320px touch WebKit cover every eight fixed reasons, retained variants and typed/legacy facets (32 each), plus backup/lock/deferred signals. A healthy alternate facet never cancels the pause. Same-ID updates retain the mounted control and saved service evidence.",
+    "First browser attempt exited one on an early dispatch-count assertion after desktop pause/clearance checks; it did not establish dispatch or phone acceptance. Remaining dispatch checks synchronise on the actual POST response; the complete phone matrix and both explicit synthetic actions pass with zero page errors/off-origin requests and closed browser/server.",
+    "All five captures inspected: parent gap, desktop paused/cleared and phone paused/cleared. Wrapping precaution/guide and saved results fit without horizontal overflow; the disabled rescan has a visible description. Agent Discovery remains usable outside the VM safety condition.",
+    "This is not native QGA, diagnostics, backup, thaw, covered-filesystem writes, liveness, safe resumption, physical-phone, installation, publication or release acceptance."
+  ],
+  "interactions": [
+    "Desktop keyboard activation and phone taps use the actual Manage -> Access -> Analysis controls. All paused variants send zero POST; same-ID clearance neither remounts the control nor sends an automatic scan.",
+    "An explicit healthy VM action sends exactly one synthetic local POST per engine to the existing VM/agent/101 identity. Pause remains visible when leaving Analysis for Overview; ordinary agent Discovery is not paused by host-side PVE evidence.",
+    "Original desktop matrix/parent observations are retained rather than repeated in the remaining-proof run. Exact executed scripts, results, client exits and screenshot hashes are retained in the lane dossier; production content matches this receipt."
+  ]
+}

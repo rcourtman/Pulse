@@ -230,9 +230,92 @@ Findings can be managed via the UI or API:
 
 - **Get help**: Chat with AI to troubleshoot the issue
 - **Resolve**: Mark as fixed (finding will reappear if the issue resurfaces)
-- **Dismiss**: Mark as expected behavior (creates suppression rule)
+- **Dismiss**: Record feedback about this finding; use **Reopen** to undo its dismissal
+- **Create rule**: Permanently auto-dismiss future findings for the selected resource and category
 
 Dismissed and resolved findings persist across Pulse restarts.
+
+#### Remove a rule created by mistake
+
+In v6.4.5, **Create rule** has no corresponding rule-list or delete control in
+the UI. **Reopen** undoes an individual finding's dismissal, not a separately
+created rule. The existing API can list rules and delete one by its exact ID.
+Deleting a created rule allows future matching findings to appear again; it
+does not resolve a problem or automatically reopen previously dismissed
+findings. It leaves the other rules and finding history intact.
+
+For a rule made with **Create rule**, sign in normally to Pulse in an
+authorised administrator's browser session, select the correct organisation,
+and open that Pulse tab's developer console. Review the following snippet
+before running it. It lists only manually created rules, asks for one exact
+ID, and confirms its resource, category and reason before deleting it. Cancel
+either prompt to leave the rules unchanged. Keep the list private: resource
+names and reasons can describe your infrastructure.
+
+No password, API token or session cookie needs to be copied or pasted. The
+browser supplies its existing session; the snippet reads only the normal
+CSRF and organisation cookies locally. Do not switch organisation while it
+runs, use it on another website, disable authentication/CSRF protection, or
+edit Pulse's data files. A token-only login or an expired session may not
+support this workaround: stop on an authentication or missing-CSRF error
+instead of inserting credentials into the snippet.
+
+```javascript
+(async () => {
+  const cookie = (name) => {
+    const row = document.cookie.split(';').find((part) => part.trim().startsWith(`${name}=`));
+    return row ? decodeURIComponent(row.trim().slice(name.length + 1)) : '';
+  };
+  const org = cookie('pulse_org_id') || 'default';
+  const headers = {
+    Accept: 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+    'X-Pulse-Org-ID': org,
+  };
+  const readRules = async () => {
+    if ((cookie('pulse_org_id') || 'default') !== org) throw new Error('Organisation changed; stop.');
+    const response = await fetch('/api/ai/patrol/suppressions', {
+      credentials: 'same-origin', redirect: 'error', cache: 'no-store', headers,
+    });
+    if (!response.ok) throw new Error(`Rule list failed (HTTP ${response.status}); stop.`);
+    const rules = await response.json();
+    if (!Array.isArray(rules)) throw new Error('Unexpected rule list; stop.');
+    return rules.filter((rule) => rule && rule.created_from === 'manual');
+  };
+  const rules = await readRules();
+  console.table(rules.map((rule) => ({
+    id: rule.id, resource: rule.resource_name || rule.resource_id || 'Any resource',
+    category: rule.category || 'Any category', reason: rule.description,
+  })));
+  const id = prompt('Enter one exact rule ID from this list, or Cancel to keep all rules.');
+  if (id === null || !id.trim()) return;
+  const matches = rules.filter((rule) => typeof rule.id === 'string' && rule.id === id.trim());
+  if (matches.length !== 1) throw new Error('ID must match exactly one listed manual rule; stop.');
+  const rule = matches[0];
+  if (!confirm(`Delete only ${rule.id}?\nResource: ${rule.resource_name || rule.resource_id || 'Any resource'}\nCategory: ${rule.category || 'Any category'}\nReason: ${rule.description}\nFuture matching findings may appear again.`)) return;
+  if ((cookie('pulse_org_id') || 'default') !== org) throw new Error('Organisation changed; stop.');
+  const csrf = cookie('pulse_csrf');
+  if (!csrf) throw new Error('No browser CSRF token; stop and sign in normally, without pasting tokens.');
+  const response = await fetch(`/api/ai/patrol/suppressions/${encodeURIComponent(rule.id)}`, {
+    method: 'DELETE', credentials: 'same-origin', redirect: 'error',
+    headers: { ...headers, 'X-CSRF-Token': csrf },
+  });
+  if (!response.ok) throw new Error(`Deletion not confirmed (HTTP ${response.status}); stop.`);
+  if ((await readRules()).some((remaining) => remaining.id === rule.id)) {
+    throw new Error('Rule is still listed; removal was not verified.');
+  }
+  console.info('Selected rule is no longer listed. Other rules were not deleted.');
+})().catch((error) => console.error(error.message));
+```
+
+A failed or lost response is not confirmation of removal. Do not blindly run
+the deletion again: refresh the rule list first (open
+`/api/ai/patrol/suppressions` in the same signed-in Pulse browser) and check the
+selected ID. If the rule is absent, it was already removed. If you cannot
+verify the result, stop and report only the HTTP status or error, not cookies,
+tokens or the full rule list. Entries whose `created_from` is `finding` or
+`dismissed` are individual finding decisions and are deliberately excluded
+from this snippet.
 
 Every active finding shown or returned to a Patrol run must receive an
 explicit `present`, `resolved`, or `uncertain` assessment. Silence is not an
