@@ -3732,7 +3732,12 @@ a new API state machine, queue contract, or verification-accounting field.
     payload must also carry the backend-authored cluster member collection
     with node identity, endpoint, node-local status, and any linked agent
     connection id so the frontend can render child node composition without
-    reverse-engineering it from standalone agent rows. Those member records,
+    reverse-engineering it from standalone agent rows. Only node records
+    compose that member collection: a physical disk an agent reports on a
+    member carries the node's Proxmox identity so it stays discoverable in the
+    Proxmox workspace, but it never becomes a member and never lends its
+    health, timestamp, or model name to the node's state or aliases, so a disk
+    warning cannot render an actively reporting node as Stale. Those member records,
     plus any primary or attached connection row that represents the same host,
     must also carry canonical host aliases when the backend knows them, so
     discovery and settings surfaces can reconcile hostname-only and IP-only

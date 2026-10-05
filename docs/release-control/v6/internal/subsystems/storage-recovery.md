@@ -6609,6 +6609,14 @@ The change is navigation presentation only. It adds no storage, backup,
 snapshot or recovery surface, and it changes no route, authority or recovery
 state. The Recovery settings item and its capability gate are untouched.
 
+### Connection member composition ignores physical disks
+
+`internal/api/connections_grouping.go` now composes Proxmox cluster members on
+the `/api/connections` systems payload from node records only, so an
+agent-reported physical disk that carries its node's identity no longer turns
+the node row Stale. The disk's own risk, storage evidence and recovery state
+are unchanged, and this adds no backup, restore, retention or recovery surface.
+
 ### Pulse Mobile pairing copy only
 
 `internal/api/onboarding_handlers.go` changed only the human-readable pairing
