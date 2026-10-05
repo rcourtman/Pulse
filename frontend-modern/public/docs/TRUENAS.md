@@ -231,16 +231,51 @@ HTTP status and a manually redacted error, never the full response or headers.
   the test succeeds. A successful test also does not establish live CPU, memory
   or History readings. The legacy REST diagnostic is expected for recognized
   CORE 13 systems; it is not itself a connection error.
-- Inspect a bounded local log excerpt for TrueNAS-related errors:
-  ```bash
-  journalctl -u pulse -n 100 --no-pager | grep -i truenas
-  # or
-  docker logs --tail 100 pulse 2>&1 | grep -i truenas
-  ```
-- If collection is safe, **Settings → Diagnostics → Export for GitHub
-  (sanitized)** can provide connection evidence. Review the export or log
-  excerpt before sharing: remove credentials, cookies, private hostnames,
-  addresses and webhook URLs. Do not upload configuration or credential files.
+- Preserve the existing error before testing or restarting. Follow the
+  [polling checks](#stale-truenas-data) to distinguish a completed failure from
+  missing or stale observations; a connection test is not a substitute.
+
+If a local log excerpt is needed, run only the reader for your deployment on
+the machine running **Pulse**, using an account authorised to read its logs.
+For Proxmox LXC, run it **inside the Pulse container**, not on the Proxmox host
+or the TrueNAS appliance. Substitute the actual service or container name
+(`pulse-backend` on some older systemd installs), and adjust the time window to
+the original incident. These commands read at most 100 records from the last
+15 minutes; they do not follow logs, make API requests or change logging:
+
+```bash
+# systemd / Proxmox LXC
+journalctl -u pulse --since '15 minutes ago' --lines 100 --no-pager
+```
+
+```bash
+# Docker
+docker logs --since 15m --tail 100 pulse
+```
+
+Inspect both output streams; Docker can write application logs to stderr.
+Do not pipe the reader into `grep truenas`: it can hide a failed read behind a
+matching partial line and omit relevant startup or storage errors. A nonzero
+reader exit, denied read or missing service/container is a failed read, not
+"no TrueNAS errors". Even a successful empty read is inconclusive: check the
+window and selected instance, not the API key. Do not enable Debug or repeat
+the failing action just to collect more logs.
+
+Local logs are **not sanitised**. Share only the relevant timestamp, method,
+HTTP status or error category and a manually redacted error, not the whole
+excerpt. Remove credentials, cookies, secret URLs, private hostnames,
+addresses and personal information, including anything echoed in an error.
+Do not upload configuration or credential files.
+
+In **Settings → Diagnostics**, an existing result's download buttons reuse it
+without running the checks again; nothing is uploaded. Use **GitHub (review first)**
+for an export intended for sharing, but sanitisation does not guarantee that
+every error is safe to share. Open the downloaded file locally and review it
+before sharing; keep **Full (private)** private. **Run Diagnostics** makes live
+API and guest-agent requests:
+do not run it during a backup, freeze/thaw or an unresponsive-host incident
+merely to obtain an export. Keep the existing observations instead. See
+[safe diagnostics collection](TROUBLESHOOTING.md#collect-diagnostics-safely).
 
 ### Inventory works but CPU, memory or History is missing
 

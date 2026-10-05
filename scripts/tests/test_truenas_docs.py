@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Exercise TrueNAS connection recipes without putting credentials in argv.
+"""Exercise TrueNAS connection and diagnostic recipes safely.
 
 All credentials are synthetic. HTTP checks require the offline source-proof VM.
+Log-reader controls establish bounds and exit handling, not native NAS recovery
+or automatic redaction.
 """
 
 from contextlib import contextmanager
@@ -67,10 +69,109 @@ class TrueNASDocsTest(unittest.TestCase):
         text = DOC.read_text()
         bash = "\n".join(re.findall(r"```bash\n(.*?)```", text, re.DOTALL))
         self.assertNotRegex(bash, r"Authorization:|Bearer\s|\$TOKEN|apiKey|--insecure")
-        self.assertIn("journalctl -u pulse -n 100 --no-pager", bash)
-        self.assertIn("docker logs --tail 100 pulse 2>&1", bash)
+        self.assertIn("journalctl -u pulse --since '15 minutes ago' --lines 100 --no-pager", bash)
+        self.assertIn("docker logs --since 15m --tail 100 pulse", bash)
         self.assertIn("does not establish a live reading", text)
         self.assertIn("Do not upload a full browser network capture", text)
+
+    def log_section(self):
+        return DOC.read_text().split("### No data appearing after adding connection\n", 1)[1].split(
+            "### Inventory works but CPU, memory or History is missing", 1)[0]
+
+    def log_recipes(self):
+        blocks = re.findall(r"```bash\n(.*?)```", self.log_section(), re.DOTALL)
+        self.assertEqual(len(blocks), 2, "one bounded reader per deployment")
+        return {"docker" if "# Docker" in block else "journalctl": block for block in blocks}
+
+    def exercise_log(self, reader, recipe, *, stdout="", stderr="", exitcode=0):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            command = directory / reader
+            command.write_text(
+                "#!/usr/bin/env python3\nimport json, os, pathlib, sys\n"
+                "pathlib.Path(os.environ['LOG_ARGV']).write_text(json.dumps(sys.argv[1:]))\n"
+                "sys.stdout.write(os.environ['LOG_STDOUT'])\n"
+                "sys.stderr.write(os.environ['LOG_STDERR'])\n"
+                "sys.exit(int(os.environ['LOG_EXIT']))\n"
+            )
+            command.chmod(0o700)
+            argv_path = directory / "argv.json"
+            env = dict(os.environ, PATH=f"{directory}:{os.environ['PATH']}",
+                       LOG_ARGV=str(argv_path), LOG_STDOUT=stdout, LOG_STDERR=stderr,
+                       LOG_EXIT=str(exitcode))
+            result = subprocess.run(["bash", "-c", recipe], env=env, capture_output=True,
+                                    text=True, timeout=5)
+            self.assertTrue(argv_path.exists(), "copied recipe must invoke the log reader")
+            return result, json.loads(argv_path.read_text())
+
+    def test_log_recipes_bound_the_read_and_keep_unfiltered_output(self):
+        expected = {
+            "journalctl": ["-u", "pulse", "--since", "15 minutes ago", "--lines", "100", "--no-pager"],
+            "docker": ["logs", "--since", "15m", "--tail", "100", "pulse"],
+        }
+        self.assertEqual(set(self.log_recipes()), set(expected))
+        for reader, recipe in self.log_recipes().items():
+            with self.subTest(reader=reader):
+                result, argv = self.exercise_log(reader, recipe, stdout="startup failed\n",
+                                                stderr="TrueNAS collection failed\n")
+                self.assertEqual(argv, expected[reader])
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, "startup failed\n")
+                self.assertEqual(result.stderr, "TrueNAS collection failed\n")
+                self.assertNotRegex(recipe, r"[|<>]|\b(?:grep|curl|inspect|restart|printenv)\b|--follow")
+
+    def test_log_reader_failure_is_preserved_even_with_a_matching_partial_line(self):
+        for reader, recipe in self.log_recipes().items():
+            for output in ("", "TrueNAS polling\n"):
+                with self.subTest(reader=reader, output=output):
+                    result, _ = self.exercise_log(reader, recipe, stdout=output,
+                                                  stderr="synthetic access failure\n", exitcode=2)
+                    self.assertEqual(result.returncode, 2)
+                    self.assertEqual(result.stdout, output)
+                    self.assertEqual(result.stderr, "synthetic access failure\n")
+
+    def test_legacy_pipelines_demonstrate_the_masked_reader_failure(self):
+        legacy = {
+            "journalctl": "journalctl -u pulse -n 100 --no-pager | grep -i truenas",
+            "docker": "docker logs --tail 100 pulse 2>&1 | grep -i truenas",
+        }
+        for reader, recipe in legacy.items():
+            with self.subTest(reader=reader):
+                result, _ = self.exercise_log(reader, recipe, stdout="TrueNAS polling\n",
+                                              stderr="synthetic access failure\n", exitcode=2)
+                self.assertEqual(result.returncode, 0, "old recipe must expose the masked failure")
+                self.assertIn("TrueNAS polling", result.stdout)
+        result, _ = self.exercise_log("docker", legacy["docker"], stdout="storage init failed\n")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "", "old filter discards related non-TrueNAS errors")
+
+    def test_empty_or_sensitive_logs_are_not_claimed_to_be_safe_or_healthy(self):
+        for reader, recipe in self.log_recipes().items():
+            result, _ = self.exercise_log(reader, recipe)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout + result.stderr, "")
+            result, _ = self.exercise_log(reader, recipe, stderr="synthetic-secret-echo\n")
+            self.assertIn("synthetic-secret-echo", result.stderr)
+        prose = " ".join(self.log_section().split())
+        for boundary in ("inside the Pulse container", "actual service or container name",
+                         "failed read, not", "successful empty read is inconclusive",
+                         "not sanitised", "not the whole excerpt", "manually redacted",
+                         "anything echoed in an error", "Do not enable Debug"):
+            self.assertIn(boundary, prose)
+
+    def test_diagnostics_export_guidance_uses_current_copy_and_preserves_live_check_boundary(self):
+        text = " ".join(self.log_section().split())
+        copy = (ROOT / "frontend-modern/src/utils/diagnosticsPresentation.ts").read_text()
+        for field in ("exportFullLabel", "exportGithubLabel", "runActionLabel"):
+            label = re.search(rf"{field}: '([^']+)'", copy).group(1)
+            self.assertIn(label, text)
+        for boundary in ("without running the checks again", "nothing is uploaded",
+                         "review it before sharing", "keep **Full (private)** private",
+                         "makes live API and guest-agent requests", "during a backup, freeze/thaw",
+                         "unresponsive-host incident", "Keep the existing observations",
+                         "TROUBLESHOOTING.md#collect-diagnostics-safely"):
+            self.assertIn(boundary, text)
+        self.assertNotIn("Export for GitHub (sanitized)", text)
 
     def test_core_graph_guidance_distinguishes_request_from_reply(self):
         text = DOC.read_text().split("### Inventory works but CPU, memory or History is missing", 1)[1]
