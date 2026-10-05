@@ -6907,3 +6907,24 @@ func TestAgentNodeScanIndexTracksAgentsIngestedWhileLive(t *testing.T) {
 		t.Fatalf("index bucket for an agent ingested while live = %+v, want its registry entry", candidates)
 	}
 }
+
+func TestRegistryBulkMetadataInvalidatesAtRecordBoundary(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestRecords(SourceAgent, []IngestRecord{{SourceID: "host", Resource: Resource{Type: ResourceTypeAgent, Name: "before", Status: StatusOnline, LastSeen: time.Now().UTC(), Agent: &AgentData{AgentID: "host", Hostname: "before.example.test"}}}})
+	rr.List()
+	previous := rr.Hosts()[0]
+	id := rr.ingestRecord(SourceAgent, "host", Resource{Type: ResourceTypeAgent, Name: "after", Status: StatusOnline, LastSeen: time.Now().UTC(), Agent: &AgentData{AgentID: "host", Hostname: "after.example.test"}}, ResourceIdentity{}, false)
+	// This is the real record boundary, before parent/rollup batch finalization.
+	actual := assertRegistryMetadataOracle(t, rr)
+	if actual[0].Canonical.Hostname != "after.example.test" || rr.Hosts()[0].Name() != "after" {
+		t.Fatal("record mutation reused pre-batch metadata or views")
+	}
+	if previous.Name() != "before" {
+		t.Fatal("record mutation rewrote an already returned view")
+	}
+	rr.retainSupersededCanonicalIDs(id, []string{"agent:prior-era"})
+	actual = assertRegistryMetadataOracle(t, rr)
+	if len(actual[0].Canonical.SupersededIDs) != 1 || actual[0].Canonical.SupersededIDs[0] != "agent:prior-era" {
+		t.Fatal("superseded identity retention failed to invalidate bulk metadata")
+	}
+}

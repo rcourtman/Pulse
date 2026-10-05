@@ -244,3 +244,166 @@ func TestRegistryMaterializedMetadataListKeepsViewsLazy(t *testing.T) {
 		t.Fatal("clean bulk read discarded detached typed views")
 	}
 }
+
+// Exact assigned-base typed-view builder, retained as an independent paired
+// cost reference. It deliberately refreshes each resource copy.
+func (rr *ResourceRegistry) rebuildFreshMetadataViewsForTest() {
+	rr.cachedVMs = nil
+	rr.cachedLXC = nil
+	rr.cachedNodes = nil
+	rr.cachedHosts = nil
+	rr.cachedDocker = nil
+	rr.cachedDockerContainers = nil
+	rr.cachedStorage = nil
+	rr.cachedPhysicalDisks = nil
+	rr.cachedPBS = nil
+	rr.cachedPMG = nil
+	rr.cachedK8s = nil
+	rr.cachedK8sNodes = nil
+	rr.cachedPods = nil
+	rr.cachedK8sDeployments = nil
+	rr.cachedWorkload = nil
+	rr.cachedInfra = nil
+
+	// One O(mappings) pass instead of a per-resource scan over every
+	// mapping: at thousands of resources the difference is seconds of
+	// write-lock hold time per rebuild.
+	sourceTargetsIndex := rr.buildSourceTargetsIndexLocked()
+	rr.cachedSourceTargets = sourceTargetsIndex
+
+	for _, r := range rr.resources {
+		viewResource := cloneResourcePtr(r)
+		viewResource.MetricsTarget = rr.metricsTargetFromSourceTargets(r, sourceTargetsIndex[r.ID])
+		switch r.Type {
+		case ResourceTypeVM:
+			v := NewVMView(viewResource)
+			rr.cachedVMs = append(rr.cachedVMs, &v)
+			w := NewWorkloadView(viewResource)
+			rr.cachedWorkload = append(rr.cachedWorkload, &w)
+		case ResourceTypeSystemContainer:
+			v := NewContainerView(viewResource)
+			rr.cachedLXC = append(rr.cachedLXC, &v)
+			w := NewWorkloadView(viewResource)
+			rr.cachedWorkload = append(rr.cachedWorkload, &w)
+		case ResourceTypeAppContainer:
+			v := NewDockerContainerView(viewResource)
+			rr.cachedDockerContainers = append(rr.cachedDockerContainers, &v)
+			w := NewWorkloadView(viewResource)
+			rr.cachedWorkload = append(rr.cachedWorkload, &w)
+		case ResourceTypeAgent:
+			inf := NewInfrastructureView(viewResource)
+			rr.cachedInfra = append(rr.cachedInfra, &inf)
+			if r.Proxmox != nil {
+				v := NewNodeView(viewResource)
+				rr.cachedNodes = append(rr.cachedNodes, &v)
+			}
+			if r.Agent != nil || r.VMware != nil {
+				v := NewHostView(viewResource)
+				rr.cachedHosts = append(rr.cachedHosts, &v)
+			}
+			if r.Docker != nil {
+				v := NewDockerHostView(viewResource)
+				rr.cachedDocker = append(rr.cachedDocker, &v)
+			}
+		case ResourceTypeStorage:
+			v := NewStoragePoolView(viewResource)
+			rr.cachedStorage = append(rr.cachedStorage, &v)
+		case ResourceTypePhysicalDisk:
+			v := NewPhysicalDiskView(viewResource)
+			rr.cachedPhysicalDisks = append(rr.cachedPhysicalDisks, &v)
+		case ResourceTypePBS:
+			v := NewPBSInstanceView(viewResource)
+			rr.cachedPBS = append(rr.cachedPBS, &v)
+		case ResourceTypePMG:
+			v := NewPMGInstanceView(viewResource)
+			rr.cachedPMG = append(rr.cachedPMG, &v)
+		case ResourceTypeK8sCluster:
+			v := NewK8sClusterView(viewResource)
+			rr.cachedK8s = append(rr.cachedK8s, &v)
+		case ResourceTypeK8sNode:
+			v := NewK8sNodeView(viewResource)
+			rr.cachedK8sNodes = append(rr.cachedK8sNodes, &v)
+		case ResourceTypePod:
+			v := NewPodView(viewResource)
+			rr.cachedPods = append(rr.cachedPods, &v)
+		case ResourceTypeK8sDeployment:
+			v := NewK8sDeploymentView(viewResource)
+			rr.cachedK8sDeployments = append(rr.cachedK8sDeployments, &v)
+		}
+	}
+
+	sortNamedResourceViewsByName(rr.cachedVMs)
+	sortNamedResourceViewsByName(rr.cachedLXC)
+	sortNamedResourceViewsByName(rr.cachedNodes)
+	sortNamedResourceViewsByName(rr.cachedHosts)
+	sortNamedResourceViewsByName(rr.cachedDocker)
+	sortNamedResourceViewsByName(rr.cachedDockerContainers)
+	sortNamedResourceViewsByName(rr.cachedStorage)
+	sortNamedResourceViewsByName(rr.cachedPhysicalDisks)
+	sortNamedResourceViewsByName(rr.cachedPBS)
+	sortNamedResourceViewsByName(rr.cachedPMG)
+	sortNamedResourceViewsByName(rr.cachedK8s)
+	sortNamedResourceViewsByName(rr.cachedK8sNodes)
+	sortNamedResourceViewsByName(rr.cachedPods)
+	sortNamedResourceViewsByName(rr.cachedK8sDeployments)
+	sortNamedResourceViewsByName(rr.cachedWorkload)
+	sortNamedResourceViewsByName(rr.cachedInfra)
+
+	rr.viewsDirty = false
+}
+
+func BenchmarkRegistryMetadataDirtyReads(b *testing.B) {
+	for _, count := range []int{1, 1000} {
+		for _, withViews := range []bool{false, true} {
+			mode := "list-only"
+			if withViews {
+				mode = "list-and-views"
+			}
+			for _, fresh := range []bool{true, false} {
+				name := "materialized"
+				if fresh {
+					name = "fresh-clone"
+				}
+				b.Run(fmt.Sprintf("resources-%d/%s/%s", count, mode, name), func(b *testing.B) {
+					rr := NewRegistry(nil)
+					rr.IngestSnapshot(benchmarkVMState(count))
+					rr.List()
+					rr.VMs()
+					rr.mu.RLock()
+					var updated *Resource
+					for _, r := range rr.resources {
+						updated = r
+						break
+					}
+					rr.mu.RUnlock()
+					b.ReportAllocs()
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						rr.mu.Lock()
+						if i%2 == 0 {
+							updated.Status = StatusOnline
+						} else {
+							updated.Status = StatusOffline
+						}
+						rr.invalidateViewsLocked()
+						rr.mu.Unlock()
+						if fresh {
+							materializedMetadataAllocationSink = freshRegistryListForMetadataTest(rr)
+						} else {
+							materializedMetadataAllocationSink = rr.List()
+						}
+						if withViews {
+							if fresh {
+								rr.mu.Lock()
+								rr.rebuildFreshMetadataViewsForTest()
+								rr.mu.Unlock()
+							} else {
+								rr.VMs()
+							}
+						}
+					}
+				})
+			}
+		}
+	}
+}
