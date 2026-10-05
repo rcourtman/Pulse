@@ -66,7 +66,9 @@ class AgentDocsTest(unittest.TestCase):
                 shell = "\n".join(blocks(name))
                 self.assertNotRegex(shell, r"--token(?:\s|=)|PULSE_TOKEN=|curl[^\n]*http://")
                 self.assertNotRegex(shell, r"curl[^`]*\|\s*(?:sudo\s+)?bash")
-                self.assertIn("Stop if the download fails", doc.decode())
+                boundary = ("Stop if the download fails" if name == "UNIFIED_AGENT.md"
+                            else "Stop if preparation or download fails")
+                self.assertIn(boundary, doc.decode())
         windows = "\n".join(blocks(NAMES[0], "powershell"))
         self.assertNotRegex(windows, r"(?i)\biex\b|\birm\b|Invoke-Expression|http://|\$env:PULSE_TOKEN\s*=")
 
@@ -134,7 +136,10 @@ class AgentDocsTest(unittest.TestCase):
         command = command.replace("https://pulse.example.com", f"https://{hostname}:{port}")
         command = command.replace("https://raw.githubusercontent.com", f"https://{hostname}:{port}")
         if ca is not None:
-            command = command.replace("curl ", f'curl --cacert "{ca}" ', 1)
+            if "curl --disable " in command:
+                command = command.replace("curl --disable ", f'curl --disable --cacert "{ca}" ', 1)
+            else:
+                command = command.replace("curl ", f'curl --cacert "{ca}" ', 1)
         result = subprocess.run(["bash", "-eu", "-c", command], env=env, capture_output=True, timeout=20)
         argv = json.loads((home / "curl-argv.json").read_text())
         self.assertNotIn(TOKEN, " ".join(argv))
@@ -143,12 +148,14 @@ class AgentDocsTest(unittest.TestCase):
             self.assertIn(argument, argv)
         self.assertNotIn("--insecure", argv)
         self.assertNotIn("-k", argv)
+        if "sensor-cleanup-download.XXXXXX" in command:
+            self.assertEqual(argv[0], "--disable")
         return result
 
     def test_downloads_require_verified_tls_and_success(self):
         for name, path, needle, output in (
             (NAMES[0], "/install.sh", '--output "$HOME/.config/pulse/agent-install.sh"', "agent-install.sh"),
-            (NAMES[1], CLEANUP_PATH, '--output "$HOME/.config/pulse/sensor-proxy-uninstall.sh"', "sensor-proxy-uninstall.sh"),
+            (NAMES[1], CLEANUP_PATH, 'helper_file="$config_dir/sensor-proxy-uninstall.sh"', "sensor-proxy-uninstall.sh"),
         ):
             for status, ca, hostname, expected in (
                 (200, self.cert, "localhost", 0),
