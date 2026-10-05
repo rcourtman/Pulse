@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  sessionCanWriteMonitoringMetadata,
   sessionCapabilities,
   sessionCapabilitiesResolved,
   syncSessionCapabilities,
@@ -131,5 +132,26 @@ describe('session capabilities store', () => {
     expect(next).toEqual({ demoMode: true });
     expect(next).not.toHaveProperty('assistantEnabled');
     expect(sessionCapabilities()).not.toHaveProperty('assistantEnabled');
+  });
+  it('lets browser sessions write monitoring metadata, since they carry no token scopes', () => {
+    syncSessionCapabilities({ sessionCapabilities: { demoMode: false } });
+    expect(sessionCanWriteMonitoringMetadata()).toBe(true);
+
+    syncSessionCapabilities({ sessionCapabilities: { demoMode: false }, tokenScopes: [] });
+    expect(sessionCanWriteMonitoringMetadata()).toBe(true);
+  });
+
+  it('mirrors the backend scope gate for API-token sessions', () => {
+    syncSessionCapabilities({ tokenScopes: ['monitoring:read'] });
+    expect(sessionCanWriteMonitoringMetadata()).toBe(false);
+
+    syncSessionCapabilities({ tokenScopes: ['monitoring:read', 'monitoring:write'] });
+    expect(sessionCanWriteMonitoringMetadata()).toBe(true);
+
+    syncSessionCapabilities({ tokenScopes: ['*'] });
+    expect(sessionCanWriteMonitoringMetadata()).toBe(true);
+
+    syncSessionCapabilities(null);
+    expect(sessionCanWriteMonitoringMetadata()).toBe(true);
   });
 });

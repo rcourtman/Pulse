@@ -1440,6 +1440,12 @@ pod UIDs, and generated registry IDs remain fallback migration, action,
 discovery, or metrics coordinates and must not be the primary metadata write
 key. Missing cluster/host, namespace, kind, or name scope must fail closed to
 the legacy resource key rather than constructing a broadened stable key.
+The Docker containers table's bulk web-link editor is a third writer of these
+records. It keys every row through `toDiscoveryConfig`, the container drawer's
+own metadata target, and lists only rows whose target is guest metadata, so
+bulk and drawer saves for a container read and write the same
+`app-container:<host>:name:<normalized-name>` record and the editor never
+falls back to a runtime-ID key.
 Product-originated resource references may arrive as registered unified
 resource IDs, source-specific IDs, or canonical identity aliases. The
 unified-resource registry owns resolving those references through

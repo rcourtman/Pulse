@@ -1,21 +1,23 @@
 import { Show, Suspense, createSignal, lazy, type Component } from 'solid-js';
 import Link2Icon from 'lucide-solid/icons/link-2';
 import { TABLE_CARD_HEADER_CLEAR_BUTTON_CLASS } from '@/components/shared/TableCardHeader';
+import { sessionCanWriteMonitoringMetadata } from '@/stores/sessionCapabilities';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
-import type { WorkloadGuest } from '@/types/workloads';
-import type { WorkloadGuestMetadataMap } from './workloadGuestMetadataRecord';
-import type { WorkloadWebLinkDrafts } from './workloadWebLinksModel';
+import type { WorkloadWebLinkDrafts, WorkloadWebLinksSource } from './workloadWebLinksModel';
 
 // The panel and its row model load on first open, so they stay out of the
 // WorkloadsSurface chunk and do no work while the editor is closed.
 const WorkloadWebLinksDialog = lazy(() => import('./WorkloadWebLinksDialog'));
 
 export interface WorkloadWebLinksActionProps {
-  guests: () => WorkloadGuest[];
-  guestMetadata: () => WorkloadGuestMetadataMap;
+  source: WorkloadWebLinksSource;
 }
 
-/** Table-header entry point for setting many guest web links at once. */
+/**
+ * Table-header entry point for setting many web links at once. Hidden where a
+ * save would be refused: read-only presentations and API-token sessions
+ * without `monitoring:write`.
+ */
 export const WorkloadWebLinksAction: Component<WorkloadWebLinksActionProps> = (props) => {
   const [open, setOpen] = createSignal(false);
   // Drafts outlive the panel so closing it by accident keeps typed links.
@@ -24,7 +26,7 @@ export const WorkloadWebLinksAction: Component<WorkloadWebLinksActionProps> = (p
   const preload = () => void WorkloadWebLinksDialog.preload();
 
   return (
-    <Show when={!presentationPolicyIsReadOnly()}>
+    <Show when={!presentationPolicyIsReadOnly() && sessionCanWriteMonitoringMetadata()}>
       <button
         ref={triggerRef}
         type="button"
@@ -43,8 +45,7 @@ export const WorkloadWebLinksAction: Component<WorkloadWebLinksActionProps> = (p
       <Show when={open()}>
         <Suspense fallback={null}>
           <WorkloadWebLinksDialog
-            guests={props.guests}
-            guestMetadata={props.guestMetadata}
+            source={props.source}
             drafts={drafts}
             setDrafts={setDrafts}
             onClose={() => setOpen(false)}

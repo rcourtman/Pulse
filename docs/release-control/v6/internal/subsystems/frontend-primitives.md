@@ -5195,6 +5195,13 @@ owned title so feature drawers can place web-interface controls inside a larger
 access surface without forking the save/remove/runtime behavior. Future
 web-interface URL work should extend those owners instead of pushing metadata
 transport or validation back into the shared shell.
+`WebInterfaceUrlField.tsx` renders read-only when
+`sessionCanWriteMonitoringMetadata()` is false. That mirrors the backend
+metadata write gate: browser sessions always pass, while API-token sessions
+such as kiosk links need `monitoring:write` or the wildcard scope. Read-only
+sessions keep the saved URL with its open and copy controls and a one-line
+explanation, but get no input, Save, Remove, or suggested-URL adoption that the
+server would refuse.
 Missing-suggested-URL diagnostics remain useful only when the operator has no
 saved or entered URL; once a custom web-interface URL is present, the shared
 field must suppress "no suggested URL" warnings so Discovery does not make a
