@@ -1363,6 +1363,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/api/metadata_handlers_test.go",
                         "internal/api/patrol_autopilot_test.go",
                         "internal/api/runtime_inventory_sources_test.go",
+                        "internal/api/truenas_disk_history_integration_test.go",
                         "pulse-enterprise:test/extensions_contract_test.go",
                     ],
                 }
@@ -2812,6 +2813,8 @@ None yet.
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "internal/api/truenas_disk_history_integration_test.go",
+                        "internal/monitoring/disk_drawer_native_history_test.go",
                         "internal/monitoring/monitor_metrics_chart_batch_bench_test.go",
                         "internal/monitoring/monitor_metrics_slo_test.go",
                     ],

@@ -190,7 +190,7 @@ func (m *Monitor) GetDiskMetrics(resourceID string, metricType string, duration 
 
 // GetDiskMetricsForChart returns physical-disk metrics optimized for chart
 // display, preferring in-memory data for freshness and falling back to the
-// persistent store when coverage is shallow.
+// persistent store and source-native temperature history when coverage is shallow.
 func (m *Monitor) GetDiskMetricsForChart(resourceID string, metricType string, duration time.Duration) []MetricPoint {
 	inMemoryPoints := m.GetDiskMetrics(resourceID, metricType, duration)
 	if mock.IsMockEnabled() {
@@ -205,6 +205,14 @@ func (m *Monitor) GetDiskMetricsForChart(resourceID string, metricType string, d
 	if converted, ok := m.queryStoreMetricMapWithGapFill("disk", resourceID, duration); ok {
 		if candidate := converted[metricType]; shouldPreferMetricSeries(best, candidate, duration) {
 			best = cloneMetricSeries(candidate)
+		}
+	}
+	if metricType == "smart_temp" && !hasSufficientChartSeriesCoverage(best, duration) {
+		if nativePoints := m.nativePhysicalDiskTemperatureHistory(duration)[resourceID]; len(nativePoints) > 0 {
+			nativePoints = lttb(nativePoints, chartDownsampleTarget)
+			if shouldPreferMetricSeries(best, nativePoints, duration) {
+				best = cloneMetricSeries(nativePoints)
+			}
 		}
 	}
 
@@ -267,11 +275,10 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 
 	// Phase 1: Collect disk metadata and resource IDs.
 	type diskMeta struct {
-		resourceID  string
-		name        string
-		node        string
-		instance    string
-		temperature int
+		resourceID string
+		name       string
+		node       string
+		instance   string
 	}
 	var disks []diskMeta
 	for _, disk := range readState.PhysicalDisks() {
@@ -295,11 +302,10 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 			name = strings.TrimSpace(disk.DevPath())
 		}
 		disks = append(disks, diskMeta{
-			resourceID:  resourceID,
-			name:        name,
-			node:        strings.TrimSpace(disk.Node()),
-			instance:    strings.TrimSpace(disk.Instance()),
-			temperature: disk.Temperature(),
+			resourceID: resourceID,
+			name:       name,
+			node:       strings.TrimSpace(disk.Node()),
+			instance:   strings.TrimSpace(disk.Instance()),
 		})
 	}
 
@@ -347,16 +353,8 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 			}
 		}
 
-		// Sparklines require >= 2 points. If the store returned 0 or 1 points
-		// but the disk has a live temperature reading, pad to 2 points so the
-		// chart can render (flat line at current temperature).
-		if len(tempPoints) < 2 {
-			now := time.Now()
-			tempPoints = []MetricPoint{
-				{Timestamp: now.Add(-60 * time.Second), Value: float64(d.temperature)},
-				{Timestamp: now, Value: float64(d.temperature)},
-			}
-		}
+		// A live temperature is not two historical observations. Leave empty
+		// or single-point histories intact instead of inventing a flat line.
 
 		result[d.resourceID] = DiskChartEntry{
 			Name:        d.name,

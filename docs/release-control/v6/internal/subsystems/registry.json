@@ -3312,6 +3312,7 @@
               "internal/api/metadata_handlers_test.go",
               "internal/api/patrol_autopilot_test.go",
               "internal/api/runtime_inventory_sources_test.go",
+              "internal/api/truenas_disk_history_integration_test.go",
               "pulse-enterprise:test/extensions_contract_test.go"
             ]
           },
@@ -6156,6 +6157,7 @@
               "internal/monitoring/monitor_pbs_coverage_test.go",
               "internal/monitoring/monitor_pmg_test.go",
               "internal/monitoring/monitor_polling_test.go",
+              "internal/monitoring/truenas_disk_history_scope_test.go",
               "internal/monitoring/truenas_poller_test.go"
             ]
           },
@@ -6204,12 +6206,15 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/api/resourceapi/resources_test.go",
+              "internal/api/truenas_disk_history_integration_test.go",
               "internal/monitoring/monitor_polling_test.go",
               "internal/truenas/alert_args_test.go",
               "internal/truenas/client_api_shapes_test.go",
               "internal/truenas/client_test.go",
               "internal/truenas/contract_test.go",
               "internal/truenas/core_reporting_test.go",
+              "internal/truenas/disk_history_identity_test.go",
+              "internal/truenas/disk_history_netdata_test.go",
               "internal/truenas/provider_pool_health_contract_test.go",
               "internal/truenas/provider_test.go",
               "internal/truenas/transport_test.go"
@@ -6225,6 +6230,8 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/api/truenas_disk_history_integration_test.go",
+              "internal/monitoring/disk_drawer_native_history_test.go",
               "internal/monitoring/monitor_metrics_chart_batch_bench_test.go",
               "internal/monitoring/monitor_metrics_slo_test.go"
             ]

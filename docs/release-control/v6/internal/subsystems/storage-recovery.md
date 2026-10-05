@@ -2954,6 +2954,17 @@ vdev layout is reported` in
 
 ## Current State
 
+### Stored disk I/O cannot suppress native thermal History
+
+The existing disk History response can supplement only its absent/shallow
+thermal series after a successful persistent-store read. Independent stored
+I/O values, timestamps and aggregate bounds stay intact; a closed/failed
+store returns its existing error rather than native success. No retention,
+pruning, schema, writer, recovery or database-internal change is involved.
+The connected native History route covers ordinary store writes, shallow
+readback, sufficient coverage and the error boundary.
+
+
 The agent config-fetch audit suppression cache is bounded to 4,096
 organisation/agent pairs, independently of persisted security audit history.
 Expiry-index pruning forgets only suppression state, never audit rows or

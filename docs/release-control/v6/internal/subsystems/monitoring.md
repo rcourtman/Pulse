@@ -1682,6 +1682,8 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 
 ## Shared Boundaries
 
+Helper-backed Proxmox inventories carry explicit complete/partial status and omitted VMIDs. Before cache mutation the monitor validates this shared contract. A complete inventory replaces only the exact linked-node/agent cache; a partial inventory removes that agent's explicitly omitted guests without renewing their data. Legacy reports retain legacy row admission and expiry.
+
 PBS polling owns the internal `PBSInstance.NodeMetricsUnavailable` discriminator:
 each poll starts unavailable and only a successful non-nil node-status result
 clears it. A denied or failed node-status endpoint does not invalidate successful
@@ -2193,6 +2195,8 @@ service-history reads plus denial/recovery without fabricated samples.
 
 ## Completion Obligations
 
+`internal/monitoring/monitor_host_agents_test.go` and `pkg/agents/host/proxmox_lxc_test.go` must prove JSON wire-report ingestion through `ApplyHostReport`, partial/complete-empty recovery, contradictory IDs, unchanged node/agent/name/TTL protection, and no invalid-list-to-healthy-empty conversion. Omitted telemetry is never zero. Source proofs are distinct from native PVE and released availability.
+
 ### Discovery accepts successful command evidence only
 
 Only stdout from a successful result with zero exit status and no error enters
@@ -2344,6 +2348,48 @@ truthfulness, not native thaw, containing-release or workload acceptance.
 
 
 ## Current State
+
+### TrueNAS physical-disk History — issue #2519
+
+The actual all-metric drawer request also reaches this reader when stored I/O
+exists but thermal coverage does not. API single/all-metric supplementation
+keeps independent stored metrics, issued-window filtering, existing aggregate
+bounds and store-error behaviour; complete local coverage makes no native
+call. The connected authenticated route includes ordinary store-backed controls.
+
+The existing disk drawer's `smart_temp` chart consumes the same tenant-scoped
+native temperature-history provider as physical-disk sparklines when local
+history is shallow. Sufficient local coverage and unrelated SMART/I/O metrics
+make no new native call. Native Celsius values retain their original sample
+times; downsampling and existing canonical metrics-target resolution remain.
+Neither chart pads a missing or single sample into a fabricated flat history.
+
+A successful `reporting.get_data` response with missing disk series permits
+one `reporting.netdata_get_data` query for those identifiers alone. Both reads
+share the original start/end window, `aggregate:true`, authenticated session
+and operation deadline. Failure of the first method does not select another
+method, transport or credential. Failure of the second is retained alongside
+independently successful series; missing disks do not become observed zero.
+Only requested, valid timestamped samples inside the requested window are
+admitted, never aggregation summaries, future values or unrequested identities.
+
+Providers map native disk names through the current inventory to canonical
+metric IDs, detach returned series and reject ambiguous aliases. In-flight
+inventory replacement cannot attach an old disk's series to a new disk at its
+former device name. Pollers isolate tenants, reject cross-connection ambiguous
+metric IDs and recheck provider ownership after reads so removed/replaced
+connections cannot serve stale in-flight output. No host-temperature summary,
+CPU substitution, permission widening, store schema or retention change is
+introduced. Native appliance and containing-release acceptance remain separate
+from synthetic client/provider/authenticated-route controls.
+
+`disk_history_netdata_test.go`, `disk_history_identity_test.go`,
+`truenas_disk_history_scope_test.go`, `disk_drawer_native_history_test.go` and
+`truenas_disk_history_integration_test.go` cover method distinction, partial
+failure, empty/invalid/windowed samples, canonical identity, revocation,
+existing reader behaviour and the real authenticated/scoped Pulse route.
+
+V2 partial inventories preserve usable filesystem readings while leaving typed-helper health degraded. Global inventory failure still yields no inventory. No host-network exception, guest mutation, database/retention change or temperature substitution accompanies this repair.
 
 ### Discovery observes VM guest execution pauses
 

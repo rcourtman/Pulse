@@ -3090,7 +3090,53 @@ func (c *trueNASRPCClient) getDiskTemperatureHistory(ctx context.Context, identi
 	if err != nil {
 		return nil, err
 	}
-	return parseReportingDiskTemperatureHistory(response), nil
+	history := boundedDiskTemperatureHistory(response, identifiers, start, end)
+
+	// SCALE can have disk samples in Netdata while reporting.get_data
+	// successfully returns no series for those disks (#2519). Fill only those
+	// missing series, once, in the same operation budget and time window. An
+	// RPC/permission/transport failure above is not an empty-series result and
+	// must never cause another method or transport to be tried.
+	missingGraphs := make([]map[string]any, 0, len(identifiers))
+	missingIdentifiers := make([]string, 0, len(identifiers))
+	for _, identifier := range identifiers {
+		if len(history[identifier]) == 0 {
+			missingGraphs = append(missingGraphs, map[string]any{"name": "disktemp", "identifier": identifier})
+			missingIdentifiers = append(missingIdentifiers, identifier)
+		}
+	}
+	if len(missingGraphs) == 0 {
+		return history, nil
+	}
+	response, err = c.getReportingDataForMethod(ctx, "reporting.netdata_get_data", missingGraphs, reportingRangeQuery(start, end))
+	if err != nil {
+		// Preserve independently successful series with the failure. Consumers
+		// may show them, but cannot turn an omitted disk into a healthy zero.
+		return history, err
+	}
+	for identifier, points := range boundedDiskTemperatureHistory(response, missingIdentifiers, start, end) {
+		if history == nil {
+			history = make(map[string][]TimeSeriesPoint)
+		}
+		history[identifier] = points
+	}
+	return history, nil
+}
+
+func boundedDiskTemperatureHistory(responses []trueNASReportingGetDataResponse, identifiers []string, start, end int64) map[string][]TimeSeriesPoint {
+	parsed := parseReportingDiskTemperatureHistory(responses)
+	history := make(map[string][]TimeSeriesPoint)
+	for _, identifier := range identifiers {
+		for _, point := range parsed[identifier] {
+			if timestamp := point.Timestamp.Unix(); timestamp >= start && timestamp <= end {
+				history[identifier] = append(history[identifier], point)
+			}
+		}
+	}
+	if len(history) == 0 {
+		return nil
+	}
+	return history
 }
 
 func (c *trueNASRPCClient) getReportingData(ctx context.Context, graphs []map[string]any) ([]trueNASReportingGetDataResponse, error) {
@@ -3111,6 +3157,10 @@ func (c *trueNASRPCClient) getReportingData(ctx context.Context, graphs []map[st
 }
 
 func (c *trueNASRPCClient) getReportingDataWithQuery(ctx context.Context, graphs []map[string]any, query map[string]any) ([]trueNASReportingGetDataResponse, error) {
+	return c.getReportingDataForMethod(ctx, "reporting.get_data", graphs, query)
+}
+
+func (c *trueNASRPCClient) getReportingDataForMethod(ctx context.Context, method string, graphs []map[string]any, query map[string]any) ([]trueNASReportingGetDataResponse, error) {
 	if c == nil || c.conn == nil {
 		return nil, fmt.Errorf("truenas rpc connection is nil")
 	}
@@ -3126,7 +3176,7 @@ func (c *trueNASRPCClient) getReportingDataWithQuery(ctx context.Context, graphs
 		query,
 	}
 	var response []trueNASReportingGetDataResponse
-	if err := c.call(ctx, "reporting.get_data", params, &response); err != nil {
+	if err := c.call(ctx, method, params, &response); err != nil {
 		return nil, err
 	}
 	return response, nil

@@ -857,6 +857,8 @@ installer download and the agent's subsequent Pulse TLS connection.
 
 ## Shared Boundaries
 
+Proxmox helper operation v2 carries the shared `ProxmoxLXCInventory` completeness and bounded omitted-VMID contract. V1 stays strict complete-only. The collector tries v1 only after an explicit unsupported-v2 response, under one unchanged operation deadline; transport, authorization and provider failures never select a broader fallback.
+
 The shared monitor constructor also composes notification bootstrap: it loads
 saved alert policy and destinations, binds the alert owner's immutable
 quiet-hours policy provider, then activates persistent queue delivery.
@@ -3163,6 +3165,8 @@ traverse an agent.
 
 ## Completion Obligations
 
+`cmd/pulse-agent-helper/main_test.go`, `internal/agenthelper/server_test.go`, `internal/hostagent/privilege_helper_client_test.go` and `pkg/agents/host/proxmox_lxc_test.go` must cover version negotiation, successful partial rows, all-failed/global-unavailable distinction, contradictory/overbound identities, degraded health and independent operation recovery. `scripts/installtests/safe_profile_migration_test.go` covers installer-managed helper replacement after effective-unit/socket validation and fatal restart failure. These source controls do not prove an installed upgrade or PVE recovery.
+
 ### VM command results describe the guest, not transport success
 
 A verified terminal `qm guest exec` dictionary must project its guest exit or
@@ -3570,6 +3574,18 @@ Agent` secondary handoff against the live setup wizard instead of relying
     `internal/hostagent/smartctl_discovery_test.go`.
 
 ## Current State
+
+### Disk History supplementation does not change agent lifecycle
+
+The disk History handler can replace a shallow API-backed thermal series with
+monitor-selected native history even when stored I/O exists. This read does
+not enrol, refresh, remove or grant an agent; it changes no agent identity,
+helper profile, report completeness or missing-series handling. Ordinary
+agent-backed stored metrics remain preferred when coverage is sufficient.
+The authenticated native-route control covers the store/native boundary.
+
+
+The partial-result path no longer discards every successful row when another guest fails. The helper remains in its private network on every platform; pmxcfs abstract IPC is still unavailable there on the reported PVE estate (#2511). That defect is not fixed by the partial protocol (#2513), and API monitoring remains the safe existing alternative. The earlier host-network proposal is not part of this implementation.
 
 ### VM guest execution admission (backup precaution)
 

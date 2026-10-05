@@ -340,3 +340,45 @@ func TestRunFailsClosedOutsideLinux(t *testing.T) {
 		t.Fatalf("run error = %v", err)
 	}
 }
+
+func TestLocalProxmoxProviderV2KeepsPartialRowsAndV1FailsClosed(t *testing.T) {
+	inventory := &agentshost.ProxmoxLXCInventory{
+		Status:       agentshost.ProxmoxLXCCollectionPartial,
+		Containers:   []agentshost.ProxmoxLXCContainer{{VMID: 100, Name: "web", Disks: []agentshost.Disk{{Mountpoint: "/", TotalBytes: 4096}}}},
+		OmittedVMIDs: []int{102},
+	}
+	provider := localProxmoxProvider{collect: func(context.Context) hostagent.ProxmoxLXCFilesystemCollectionResult {
+		return hostagent.ProxmoxLXCFilesystemCollectionResult{Applicable: true, Inventory: inventory, Degraded: true, FailedContainers: 1}
+	}}
+	if data, err := provider.LXCFilesystems(t.Context()); err == nil || data != nil {
+		t.Fatal("v1 returned incomplete inventory")
+	}
+	data, err := provider.LXCFilesystemsV2(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Inventory *agentshost.ProxmoxLXCInventory `json:"inventory"`
+	}
+	if err := json.Unmarshal(data, &got); err != nil || got.Inventory.Status != agentshost.ProxmoxLXCCollectionPartial || len(got.Inventory.Containers) != 1 || got.Inventory.OmittedVMIDs[0] != 102 {
+		t.Fatalf("v2=%s, error=%v", data, err)
+	}
+	inventory.Status = agentshost.ProxmoxLXCCollectionComplete
+	if data, err := provider.LXCFilesystemsV2(t.Context()); err == nil || data != nil {
+		t.Fatal("contradictory partial inventory accepted")
+	}
+}
+
+func TestLocalProxmoxProviderV1RetainsStrictLegacyShape(t *testing.T) {
+	inventory := &agentshost.ProxmoxLXCInventory{Status: agentshost.ProxmoxLXCCollectionComplete}
+	provider := localProxmoxProvider{collect: func(context.Context) hostagent.ProxmoxLXCFilesystemCollectionResult {
+		return hostagent.ProxmoxLXCFilesystemCollectionResult{Applicable: true, Inventory: inventory}
+	}}
+	data, err := provider.LXCFilesystems(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), `"status"`) || strings.Contains(string(data), `"omittedVmids"`) {
+		t.Fatalf("v1 shape changed: %s", data)
+	}
+}
