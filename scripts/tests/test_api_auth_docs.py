@@ -24,6 +24,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 DOC = ROOT / "docs/API.md"
 TEST_TOKEN = "synthetic-doc-test-token"
+PRIVATE_BODY = json.dumps({"fixture": True, "private": TEST_TOKEN}).encode() + b"\n"
 
 
 def auth_section() -> str:
@@ -33,8 +34,8 @@ def auth_section() -> str:
 def commands() -> tuple[str, str]:
     blocks = re.findall(r"```bash\n(.*?)```", auth_section(), re.DOTALL)
     preparation = next(block for block in blocks if "umask 077" in block)
-    request = next(block for block in blocks if block.startswith("curl "))
-    return preparation, request
+    helper = next(block for block in blocks if block.startswith("pulse_api() ("))
+    return preparation, helper
 
 
 def recipe(path: str) -> str:
@@ -76,7 +77,7 @@ def recording_server(status: int = 200):
             requests.append((self.path, dict(self.headers), self.command, body))
             self.send_response(status)
             self.end_headers()
-            self.wfile.write(b'{"fixture":true}\n')
+            self.wfile.write(PRIVATE_BODY)
 
         do_GET = record_request
         do_POST = record_request
@@ -129,14 +130,31 @@ def exercise_curl(case: unittest.TestCase, home: Path, header_text: str, port: i
     for key in list(env):
         if key.lower().endswith("_proxy"):
             del env[key]
-    request = request.replace("http://127.0.0.1:7655", f"http://127.0.0.1:{port}")
+    # Readers define the documented helper before copying one call. Do not
+    # invent a replacement client or expect response bodies on stdout.
+    helper = commands()[1].replace("http://127.0.0.1:7655", f"http://127.0.0.1:{port}")
+    request = helper + "\n" + request
+    previous_responses = {path: path.read_bytes() for path in header.parent.glob("api-response.*")}
     result = subprocess.run(["bash", "-eu", "-c", request], env=env, capture_output=True, timeout=10)
+    case.assertTrue(receipt.exists(), "documented helper did not reach the curl fixture")
     argv = json.loads(receipt.read_text())
     case.assertEqual(argv[0], "--disable", "curl defaults must be disabled by the first option")
     case.assertNotIn(TEST_TOKEN, " ".join(argv))
     case.assertIn("@" + str(header), argv)
     case.assertNotIn(b"synthetic-doc-test-token", result.stdout + result.stderr)
     case.assertFalse(trace.exists(), "local curl configuration must not create a credential trace")
+    observation = re.fullmatch(rb"HTTP ([0-9]{3})\nPrivate response: ([^\n]+)\n", result.stdout)
+    case.assertIsNotNone(observation, "only status and the private response location should be printed")
+    response = Path(os.fsdecode(observation[2]))
+    case.assertEqual(response.parent, header.parent)
+    case.assertTrue(response.name.startswith("api-response."))
+    case.assertNotIn(response, previous_responses, "each call must retain a new response file")
+    case.assertEqual(response.read_bytes(), PRIVATE_BODY)
+    case.assertEqual(stat.S_IMODE(response.stat().st_mode), 0o600)
+    case.assertEqual(stat.S_IMODE(header.parent.stat().st_mode), 0o700)
+    for path, body in previous_responses.items():
+        case.assertEqual(path.read_bytes(), body, "later calls must not replace earlier evidence")
+    case.assertEqual(len(list(header.parent.glob("api-response.*"))), len(previous_responses) + 1)
     return result
 
 
@@ -145,7 +163,8 @@ class APIAuthDocsTest(unittest.TestCase):
         section = auth_section()
         bash = "\n".join(re.findall(r"```bash\n(.*?)```", section, re.DOTALL))
         self.assertNotRegex(bash, r"(?:X-API-Token:|Authorization:|Bearer\s)")
-        self.assertIn('--header "@$HOME/.config/pulse/api-header"', bash)
+        self.assertIn('auth_file="$auth_dir/api-header"', bash)
+        self.assertIn('--header "@$auth_file"', bash)
         self.assertIn("HTTPS", section)
         self.assertIn("does not verify authentication", section)
         self.assertIn("monitoring:read", section)
@@ -156,13 +175,18 @@ class APIAuthDocsTest(unittest.TestCase):
         self.assertNotRegex(bash, r"(?:\b\w*TOKEN=|X-API-Token:|Authorization:|Bearer\s)")
         self.assertNotRegex(bash, r"(?:--insecure|--verbose|--trace\S*|--location|\s-k\b)")
         requests = [block for block in re.findall(r"```bash\n(.*?)```", DOC.read_text(), re.DOTALL)
-                    if block.startswith("curl ")]
+                    if block.startswith("pulse_api ")]
         self.assertEqual(len(requests), 8)
+        helper = commands()[1]
+        for control in ("curl --disable --fail-with-body ", '--header "@$auth_file"',
+                        '--output "$result_file"', '--connect-timeout 5 --max-time 20',
+                        'result_file=$(mktemp "$auth_dir/api-response.XXXXXX")',
+                        '[ "$curl_exit" -eq 0 ] || exit "$curl_exit"'):
+            self.assertIn(control, helper)
         for request in requests:
-            self.assertTrue(request.startswith("curl --disable --fail-with-body "))
-            self.assertIn('--header "@$HOME/.config/pulse/api-header"', request)
-            if "--request POST" in request:
-                self.assertIn("--data-binary @-", request)
+            self.assertRegex(request, r"^pulse_api (?:GET|POST) ")
+            if request.startswith("pulse_api POST "):
+                self.assertIn("--data-binary @-", helper)
                 self.assertIn("<<'JSON'", request)
 
     def test_action_guidance_preserves_scope_and_review_boundaries(self):
@@ -251,7 +275,8 @@ class APIAuthDocsTest(unittest.TestCase):
                 self.assertFalse((home / "editor-called").exists())
 
     def run_documented_request(self, home: Path, header_text: str, port: int, request=None):
-        return exercise_curl(self, home, header_text, port, request if request is not None else commands()[1])
+        return exercise_curl(self, home, header_text, port,
+                             request if request is not None else recipe("/api/state/summary"))
 
     def test_header_file_sends_each_supported_header_without_exposing_argv(self):
         with tempfile.TemporaryDirectory() as temporary, recording_server() as (port, requests):
@@ -294,7 +319,8 @@ class APIAuthDocsTest(unittest.TestCase):
                         result = self.run_documented_request(Path(temporary), "X-API-Token: " + TEST_TOKEN,
                                                              port, recipe(path))
                         self.assertEqual(result.returncode, 22, result.stderr.decode())
-                        self.assertIn(b'{"fixture":true}', result.stdout)
+                        self.assertIn(f"HTTP {status}\n".encode(), result.stdout)
+                        self.assertNotIn(PRIVATE_BODY, result.stdout + result.stderr)
                         self.assertEqual(len(requests), before + 1)
 
     def test_http_auth_errors_fail_instead_of_looking_successful(self):
@@ -303,7 +329,8 @@ class APIAuthDocsTest(unittest.TestCase):
                 with recording_server(status) as (port, _):
                     result = self.run_documented_request(Path(temporary), "X-API-Token: " + TEST_TOKEN, port)
                     self.assertEqual(result.returncode, 22, result.stderr.decode())
-                    self.assertIn(b'{"fixture":true}', result.stdout)
+                    self.assertIn(f"HTTP {status}\n".encode(), result.stdout)
+                    self.assertNotIn(PRIVATE_BODY, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

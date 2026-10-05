@@ -48,27 +48,50 @@ func TestSetupBootstrapDocsStayOnCanonicalArtifactContract(t *testing.T) {
 		"Stop if the download fails",
 		"Create a separate Pulse token in **API Access**",
 		"enter an administrator root shell",
-		`chmod 700 "$HOME/.config/pulse"`,
-		`chmod 600 "$HOME/.config/pulse/pbs-agent-token"`,
-		`vi "$HOME/.config/pulse/pbs-agent-token"`,
-		`curl --fail --silent --show-error`,
-		`--output "$HOME/.config/pulse/pbs-agent-install.sh"`,
-		`https://pulse.example.com/install.sh`,
-		"successful download and inspection",
-		`bash "$HOME/.config/pulse/pbs-agent-install.sh"`,
-		`--token-file "$HOME/.config/pulse/pbs-agent-token"`,
-		`--enable-proxmox --proxmox-type pbs --enable-docker=false`,
+		"successful HTTP **200** download and inspection",
 		"Do not bypass certificate checks",
 	})
 	shellExamples := pbsShellExamples(pbsDoc)
 	if shellExamples == "" {
 		t.Fatal("PBS guide must retain executable shell examples")
 	}
+	// Bind the guard to the private, non-clobbering recipes, not their old
+	// literal-path spelling. installtests also executes these copied commands
+	// against independent permission, transport and failure controls.
+	assertContainsAll(t, pbsRel, shellExamples, []string{
+		`set -eu`,
+		`umask 077`,
+		`config_dir="$HOME/.config/pulse"`,
+		`credential_file="$config_dir/pbs-agent-token"`,
+		`[ -L "$HOME/.config" ]`,
+		`[ -L "$config_dir" ]`,
+		`[ -L "$credential_file" ]`,
+		`[ ! -f "$credential_file" ]`,
+		`chmod 700 "$config_dir"`,
+		`chmod 600 "$credential_file"`,
+		`vi "$credential_file"`,
+		`installer_file="$config_dir/pbs-agent-install.sh"`,
+		`[ -e "$installer_file" ] || [ -L "$installer_file" ]`,
+		`download_file=$(mktemp "$config_dir/pbs-agent-download.XXXXXX")`,
+		`curl --disable --fail --silent --show-error --proto '=https'`,
+		`--connect-timeout 5 --max-time 60 --output "$download_file"`,
+		`--write-out '%{http_code}' https://pulse.example.com/install.sh`,
+		`[ "$curl_exit" -eq 0 ] || exit "$curl_exit"`,
+		`[ "$status" = 200 ]`,
+		`mv -n "$download_file" "$installer_file"`,
+		`[ ! -e "$download_file" ]`,
+		`bash "$HOME/.config/pulse/pbs-agent-install.sh"`,
+		`--token-file "$HOME/.config/pulse/pbs-agent-token"`,
+		`--enable-proxmox --proxmox-type pbs --enable-docker=false`,
+	})
 	assertContainsNone(t, pbsRel, shellExamples, []string{
 		`curl -sSL "http://<pulse-ip>:7655/api/setup-script?type=pbs&host=https://<pbs-ip>:8007&pulse_url=http://<pulse-ip>:7655" | bash`,
 		`PULSE_SETUP_TOKEN=`,
 		`sudo env PULSE_SETUP_TOKEN=`,
 		`--insecure`,
+		`--location`,
+		`--trace`,
+		`--verbose`,
 		` -k`,
 		`curl -k`,
 		`--token "`,

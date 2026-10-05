@@ -25,6 +25,7 @@ DOC = ROOT / "docs/PBS.md"
 PBS_TOKEN = "synthetic-pbs-secret"
 AGENT_TOKEN = "synthetic-agent-secret"
 AUTH_HEADER = f"PBSAPIToken=pulse-monitor@pbs!pulse-token:{PBS_TOKEN}"
+PRIVATE_BODY = json.dumps({"data": [], "private": PBS_TOKEN}).encode() + b"\n"
 
 
 def blocks():
@@ -34,8 +35,8 @@ def blocks():
     return re.findall(r"```bash\n(.*?)```", text, re.DOTALL)
 
 
-def recipe(needle):
-    matches = [block for block in blocks() if needle in block]
+def recipe(needle, also=""):
+    matches = [block for block in blocks() if needle in block and also in block]
     if len(matches) != 1:
         raise AssertionError(f"expected one recipe containing {needle!r}")
     return matches[0]
@@ -78,7 +79,7 @@ def server(cert, key, status=200, installer=None, installer_path="/install.sh"):
             requests.append((self.path, dict(self.headers)))
             self.send_response(status)
             self.end_headers()
-            body = installer if self.path == installer_path else b'{"data":[]}\n'
+            body = installer if self.path == installer_path else PRIVATE_BODY
             self.wfile.write(body or b"fixture error\n")
 
         def log_message(self, *_args):
@@ -169,7 +170,7 @@ class PBSDocsTest(unittest.TestCase):
 
     def test_private_preparation_preserves_existing_content(self):
         for name in ("pbs-agent-token", "pbs-header"):
-            command = recipe(f'vi "$HOME/.config/pulse/{name}"')
+            command = recipe(f'credential_file="$config_dir/{name}"', 'vi "$credential_file"')
             with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
                 home = Path(temporary)
                 tools = home / "tools"
@@ -208,22 +209,49 @@ class PBSDocsTest(unittest.TestCase):
         )
         recorder.chmod(0o700)
         receipt = home / "argv.json"
+        trace = home / "curl-trace.txt"
+        (home / ".curlrc").write_text(
+            f'header = "X-Curlrc-Injected: yes"\nverbose\ntrace-ascii = "{trace}"\n'
+        )
         env = fixture_environment(home)
-        env.update(PATH=f"{tools}:{os.environ['PATH']}", REAL_CURL=real_curl, ARGV_RECEIPT=str(receipt))
+        env.update(PATH=f"{tools}:{os.environ['PATH']}", REAL_CURL=real_curl, ARGV_RECEIPT=str(receipt),
+                   CURL_HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"))
         command = command.replace("https://pbs.example.com:8007", f"https://{hostname}:{port}")
         command = command.replace("https://pulse.example.com", f"https://{hostname}:{port}")
         if ca is not None:
             shutil.copyfile(ca, private / "pbs-ca.pem")
             # This is the guide's optional, independently verified CA-file form.
-            command = command.replace("curl ", 'curl --cacert "$HOME/.config/pulse/pbs-ca.pem" ', 1)
+            command = command.replace("curl --disable ",
+                                      'curl --disable --cacert "$HOME/.config/pulse/pbs-ca.pem" ', 1)
+        previous_responses = {path: path.read_bytes() for path in private.glob("pbs-response.*")}
         result = subprocess.run(["bash", "-eu", "-c", command], env=env, capture_output=True, timeout=20)
+        self.assertTrue(receipt.exists(), "documented recipe did not reach the curl fixture")
         argv = json.loads(receipt.read_text())
+        self.assertEqual(argv[0], "--disable", "even the optional CA form must ignore curl defaults first")
         for secret in (PBS_TOKEN, AGENT_TOKEN):
             self.assertNotIn(secret, " ".join(argv))
             self.assertNotIn(secret.encode(), result.stdout + result.stderr)
         self.assertNotIn("--insecure", argv)
         self.assertNotIn("-k", argv)
+        self.assertFalse(trace.exists(), "local curl configuration must not create a credential trace")
+        if "pbs-response.XXXXXX" in command:
+            observation = re.fullmatch(rb"Private response file: ([^\n]+)\nHTTP ([0-9]{3})\n", result.stdout)
+            self.assertIsNotNone(observation, "only the private response location and status should be printed")
+            response = Path(os.fsdecode(observation[1]))
+            self.assertEqual(response.parent, private)
+            self.assertTrue(response.name.startswith("pbs-response."))
+            self.assertNotIn(response, previous_responses)
+            self.assertEqual(stat.S_IMODE(response.stat().st_mode), 0o600)
+            self.assertEqual(stat.S_IMODE(private.stat().st_mode), 0o700)
+            for path, body in previous_responses.items():
+                self.assertEqual(path.read_bytes(), body, "later requests must preserve earlier evidence")
+            self.assertEqual(len(list(private.glob("pbs-response.*"))), len(previous_responses) + 1)
         return result, argv
+
+    def private_response(self, result):
+        location = re.fullmatch(rb"Private response file: ([^\n]+)\nHTTP ([0-9]{3})\n", result.stdout)
+        self.assertIsNotNone(location)
+        return Path(os.fsdecode(location[1])).read_bytes()
 
     def test_datastore_request_transmits_auth_only_in_header(self):
         with tempfile.TemporaryDirectory() as temporary, server(self.cert, self.key) as (port, requests):
@@ -235,7 +263,9 @@ class PBSDocsTest(unittest.TestCase):
             self.assertEqual(requests, [("/api2/json/admin/datastore", {
                 **requests[0][1], "Authorization": AUTH_HEADER,
             })])
-            self.assertEqual(result.stdout, b'{"data":[]}\n')
+            self.assertNotIn("X-Curlrc-Injected", requests[0][1])
+            self.assertEqual(self.private_response(result), PRIVATE_BODY)
+            self.assertTrue(result.stdout.endswith(b"HTTP 200\n"))
 
     def test_auth_errors_retain_body_and_fail(self):
         for status in (401, 403):
@@ -244,7 +274,8 @@ class PBSDocsTest(unittest.TestCase):
                     result, _ = self.run_curl(Path(temporary), recipe("--fail-with-body"), port, self.cert)
                     self.assertEqual(result.returncode, 22, result.stderr.decode())
                     self.assertEqual(len(requests), 1)
-                    self.assertEqual(result.stdout, b'{"data":[]}\n')
+                    self.assertEqual(self.private_response(result), PRIVATE_BODY)
+                    self.assertTrue(result.stdout.endswith(f"HTTP {status}\n".encode()))
 
     def test_tls_rejects_untrusted_wrong_certificate_and_wrong_hostname(self):
         for ca, hostname in ((None, "localhost"), (self.other_cert, "localhost"), (self.cert, "127.0.0.1")):
@@ -272,7 +303,8 @@ PY
 '''
         with tempfile.TemporaryDirectory() as temporary, server(self.cert, self.key, installer=installer) as (port, requests):
             home = Path(temporary)
-            result, _ = self.run_curl(home, recipe('--output "$HOME/.config/pulse/pbs-agent-install.sh"'), port, self.cert)
+            result, _ = self.run_curl(home, recipe('download_file=$(mktemp "$config_dir/pbs-agent-download.XXXXXX")'),
+                                      port, self.cert)
             self.assertEqual(result.returncode, 0, result.stderr.decode())
             self.assertEqual(requests[0][0], "/install.sh")
             self.assertNotIn("Authorization", requests[0][1])
@@ -296,7 +328,8 @@ PY
     def test_failed_installer_download_is_nonzero(self):
         with tempfile.TemporaryDirectory() as temporary, server(self.cert, self.key, 403) as (port, _requests):
             home = Path(temporary)
-            result, _ = self.run_curl(home, recipe('--output "$HOME/.config/pulse/pbs-agent-install.sh"'), port, self.cert)
+            result, _ = self.run_curl(home, recipe('download_file=$(mktemp "$config_dir/pbs-agent-download.XXXXXX")'),
+                                      port, self.cert)
             self.assertEqual(result.returncode, 22, result.stderr.decode())
             self.assertFalse((home / ".config/pulse/pbs-agent-install.sh").exists())
 
