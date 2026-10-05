@@ -241,7 +241,10 @@ func TestTrueNASDiskHistoryAuthenticatedRoute(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	setUnexportedField(t, monitor, "metricsStore", store)
-	ioTime := time.Now().UTC().Add(-20 * time.Second)
+	// Match the existing persistent-history timestamp precision, as the other
+	// store-backed route fixtures do. Native sample/bucket assertions below
+	// still require the exact independently supplied timestamps.
+	ioTime := time.Now().UTC().Truncate(time.Second).Add(-20 * time.Second)
 	store.WriteBatchSync([]metrics.WriteMetric{{ResourceType: "disk", ResourceID: "disk-serial", MetricType: "diskread", Tier: metrics.TierRaw, Value: 1024, Timestamp: ioTime}})
 	all := readAll()
 	assertNative(all["smart_temp"], 6)
