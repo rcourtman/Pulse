@@ -2592,7 +2592,7 @@ func TestPollersHonorDisabledInstanceFlag(t *testing.T) {
 func TestMonitorUptimeFallsBackToCanonicalResourceUptime(t *testing.T) {
 	t.Run("falls through to Resource.Uptime when no source carve-out is set", func(t *testing.T) {
 		resource := unifiedresources.Resource{Uptime: 123456}
-		got := monitorUptime(resource)
+		got := monitorUptime(&resource)
 		if got == nil || *got != 123456 {
 			t.Fatalf("monitorUptime() = %v, want 123456 from canonical Resource.Uptime", got)
 		}
@@ -2603,21 +2603,21 @@ func TestMonitorUptimeFallsBackToCanonicalResourceUptime(t *testing.T) {
 			Uptime: 999999,
 			Agent:  &unifiedresources.AgentData{UptimeSeconds: 100},
 		}
-		got := monitorUptime(resource)
+		got := monitorUptime(&resource)
 		if got == nil || *got != 100 {
 			t.Fatalf("monitorUptime() = %v, want 100 from agent (precedence over canonical Uptime)", got)
 		}
 
 		resource.Agent = nil
 		resource.Proxmox = &unifiedresources.ProxmoxData{Uptime: 200}
-		got = monitorUptime(resource)
+		got = monitorUptime(&resource)
 		if got == nil || *got != 200 {
 			t.Fatalf("monitorUptime() = %v, want 200 from proxmox (precedence over canonical Uptime)", got)
 		}
 	})
 
 	t.Run("returns nil when nothing populates", func(t *testing.T) {
-		if got := monitorUptime(unifiedresources.Resource{}); got != nil {
+		if got := monitorUptime(&unifiedresources.Resource{}); got != nil {
 			t.Fatalf("monitorUptime() = %v, want nil when all sources empty", got)
 		}
 	})

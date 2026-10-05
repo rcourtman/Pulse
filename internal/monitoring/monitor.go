@@ -6554,17 +6554,17 @@ func validBroadcastMetricsTarget(
 }
 
 func monitorResourceToConvertInput(resource unifiedresources.Resource) models.ResourceConvertInput {
-	resourceType := monitorFrontendResourceType(resource)
+	resourceType := monitorFrontendResourceType(&resource)
 	if resource.DiscoveryTarget == nil {
-		resource.DiscoveryTarget = monitorDiscoveryTarget(resource, resourceType)
+		resource.DiscoveryTarget = monitorDiscoveryTarget(&resource, resourceType)
 	}
 	if resource.MetricsTarget == nil {
-		resource.MetricsTarget = monitorMetricsTarget(resource, resourceType)
+		resource.MetricsTarget = monitorMetricsTarget(&resource, resourceType)
 	}
 	unifiedresources.RefreshCanonicalMetadata(&resource)
 	slimResourceForBroadcast(&resource)
-	name, displayName := monitorFrontendNames(resource, resourceType)
-	platformID := monitorPlatformID(resource, resourceType)
+	name, displayName := monitorFrontendNames(&resource, resourceType)
+	platformID := monitorPlatformID(&resource, resourceType)
 
 	input := models.ResourceConvertInput{
 		ID:                    resource.ID,
@@ -6573,21 +6573,21 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 		Name:                  name,
 		DisplayName:           displayName,
 		PlatformID:            platformID,
-		PlatformType:          monitorPlatformType(resource, resourceType),
+		PlatformType:          monitorPlatformType(&resource, resourceType),
 		SourceType:            monitorSourceType(resource.Sources),
 		Sources:               monitorSourceKeys(resource.Sources),
 		ParentID:              monitorStringValue(resource.ParentID),
 		ParentName:            resource.ParentName,
 		ChildCount:            resource.ChildCount,
-		ClusterID:             monitorClusterID(resource),
-		Status:                monitorFrontendStatus(resource, resourceType),
+		ClusterID:             monitorClusterID(&resource),
+		Status:                monitorFrontendStatus(&resource, resourceType),
 		CPU:                   monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.CPU })),
 		Memory:                monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Memory })),
 		Disk:                  monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.Disk })),
-		Temperature:           monitorTemperature(resource),
-		Uptime:                monitorUptime(resource),
+		Temperature:           monitorTemperature(&resource),
+		Uptime:                monitorUptime(&resource),
 		Tags:                  append([]string(nil), resource.Tags...),
-		Labels:                monitorLabels(resource),
+		Labels:                monitorLabels(&resource),
 		CustomURL:             strings.TrimSpace(resource.CustomURL),
 		LastSeenUnix:          monitorLastSeenUnix(resource.LastSeen),
 		Health:                monitorRawJSON(resource.Health),
@@ -6601,7 +6601,7 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 		IncidentImpactSummary: resource.IncidentImpactSummary,
 		IncidentUrgency:       resource.IncidentUrgency,
 		IncidentAction:        resource.IncidentAction,
-		Identity:              monitorIdentity(resource, name),
+		Identity:              monitorIdentity(&resource, name),
 		DiscoveryTarget:       monitorRawJSON(resource.DiscoveryTarget),
 		MetricsTarget:         monitorRawJSON(resource.MetricsTarget),
 		Canonical:             monitorRawJSON(resource.Canonical),
@@ -6625,7 +6625,7 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 		VMware:                monitorRawJSON(resource.VMware),
 		Availability:          monitorRawJSON(resource.Availability),
 		AvailabilityChecks:    monitorRawJSON(resource.AvailabilityChecks),
-		PlatformData:          monitorPlatformData(resource, resourceType, platformID),
+		PlatformData:          monitorPlatformData(&resource, resourceType, platformID),
 	}
 
 	hasNetwork, rx, tx := monitorNetworkMetricInput(resource.Metrics)
@@ -6640,6 +6640,23 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 func monitorRawJSON(value interface{}) json.RawMessage {
 	if value == nil {
 		return nil
+	}
+	// Optional facets arrive as typed nil pointers/slices in an interface.
+	// Marshaling "null" only to discard it costs one encode and allocation
+	// per absent facet, on every row and frame. Named slice/map marshalers
+	// still get their normal chance to emit a non-null representation.
+	v := reflect.ValueOf(value)
+	switch v.Kind() {
+	case reflect.Ptr:
+		if v.IsNil() {
+			return nil
+		}
+	case reflect.Slice, reflect.Map:
+		if v.IsNil() {
+			if _, custom := value.(json.Marshaler); !custom {
+				return nil
+			}
+		}
 	}
 	encoded, err := json.Marshal(value)
 	if err != nil || string(encoded) == "null" {
@@ -6708,7 +6725,7 @@ func capabilityCatalogID(encoded json.RawMessage) string {
 	return hex.EncodeToString(digest[:6])
 }
 
-func monitorDiscoveryTarget(resource unifiedresources.Resource, resourceType string) *unifiedresources.DiscoveryTarget {
+func monitorDiscoveryTarget(resource *unifiedresources.Resource, resourceType string) *unifiedresources.DiscoveryTarget {
 	switch resourceType {
 	case "agent", "docker-host":
 		agentID := monitorAgentTargetID(resource)
@@ -6726,7 +6743,7 @@ func monitorDiscoveryTarget(resource unifiedresources.Resource, resourceType str
 	}
 }
 
-func monitorMetricsTarget(resource unifiedresources.Resource, resourceType string) *unifiedresources.MetricsTarget {
+func monitorMetricsTarget(resource *unifiedresources.Resource, resourceType string) *unifiedresources.MetricsTarget {
 	switch resourceType {
 	case "agent", "docker-host":
 		agentID := monitorAgentTargetID(resource)
@@ -6742,7 +6759,7 @@ func monitorMetricsTarget(resource unifiedresources.Resource, resourceType strin
 	}
 }
 
-func monitorAgentTargetID(resource unifiedresources.Resource) string {
+func monitorAgentTargetID(resource *unifiedresources.Resource) string {
 	if resource.Agent != nil {
 		if id := strings.TrimSpace(resource.Agent.AgentID); id != "" {
 			return id
@@ -6764,7 +6781,7 @@ func monitorAgentTargetID(resource unifiedresources.Resource) string {
 	return ""
 }
 
-func monitorTargetHostname(resource unifiedresources.Resource) string {
+func monitorTargetHostname(resource *unifiedresources.Resource) string {
 	if resource.Agent != nil {
 		if hostname := strings.TrimSpace(resource.Agent.Hostname); hostname != "" {
 			return hostname
@@ -6788,19 +6805,19 @@ func monitorTargetHostname(resource unifiedresources.Resource) string {
 	return strings.TrimSpace(resource.Name)
 }
 
-func monitorFrontendResourceType(resource unifiedresources.Resource) string {
-	return string(unifiedresources.ContractResourceType(resource))
+func monitorFrontendResourceType(resource *unifiedresources.Resource) string {
+	return string(unifiedresources.ContractResourceType(*resource))
 }
 
-func monitorFrontendNames(resource unifiedresources.Resource, resourceType string) (string, string) {
-	name := strings.TrimSpace(unifiedresources.ResourceDisplayName(resource))
+func monitorFrontendNames(resource *unifiedresources.Resource, resourceType string) (string, string) {
+	name := strings.TrimSpace(unifiedresources.ResourceDisplayName(*resource))
 	if name == "" {
 		name = resource.ID
 	}
 	return name, name
 }
 
-func monitorPlatformType(resource unifiedresources.Resource, resourceType string) string {
+func monitorPlatformType(resource *unifiedresources.Resource, resourceType string) string {
 	if resource.Proxmox != nil {
 		return "proxmox-pve"
 	}
@@ -6901,7 +6918,7 @@ func monitorStoragePlatformType(storage *unifiedresources.StorageMeta, sources [
 	}
 }
 
-func monitorPlatformID(resource unifiedresources.Resource, resourceType string) string {
+func monitorPlatformID(resource *unifiedresources.Resource, resourceType string) string {
 	switch resourceType {
 	case "node", "vm", "system-container":
 		if resource.Proxmox != nil && strings.TrimSpace(resource.Proxmox.Instance) != "" {
@@ -6947,7 +6964,7 @@ func monitorPlatformID(resource unifiedresources.Resource, resourceType string) 
 	return resource.ID
 }
 
-func monitorFrontendStatus(resource unifiedresources.Resource, resourceType string) string {
+func monitorFrontendStatus(resource *unifiedresources.Resource, resourceType string) string {
 	switch resourceType {
 	case "app-container":
 		switch resource.Status {
@@ -7001,8 +7018,8 @@ func monitorIsWorkloadType(resourceType string) bool {
 	}
 }
 
-func monitorClusterID(resource unifiedresources.Resource) string {
-	if clusterID := strings.TrimSpace(unifiedresources.ResourceClusterName(resource)); clusterID != "" {
+func monitorClusterID(resource *unifiedresources.Resource) string {
+	if clusterID := strings.TrimSpace(unifiedresources.ResourceClusterName(*resource)); clusterID != "" {
 		return clusterID
 	}
 
@@ -7079,7 +7096,7 @@ func monitorDiskIOMetricInput(metrics *unifiedresources.ResourceMetrics) (*int64
 	return read, write
 }
 
-func monitorTemperature(resource unifiedresources.Resource) *float64 {
+func monitorTemperature(resource *unifiedresources.Resource) *float64 {
 	if resource.Agent != nil && resource.Agent.Temperature != nil {
 		value := *resource.Agent.Temperature
 		return &value
@@ -7099,7 +7116,7 @@ func monitorTemperature(resource unifiedresources.Resource) *float64 {
 	return nil
 }
 
-func monitorUptime(resource unifiedresources.Resource) *int64 {
+func monitorUptime(resource *unifiedresources.Resource) *int64 {
 	if resource.Agent != nil && resource.Agent.UptimeSeconds > 0 {
 		value := resource.Agent.UptimeSeconds
 		return &value
@@ -7141,7 +7158,7 @@ func monitorUptime(resource unifiedresources.Resource) *int64 {
 	return nil
 }
 
-func monitorLabels(resource unifiedresources.Resource) map[string]string {
+func monitorLabels(resource *unifiedresources.Resource) map[string]string {
 	if resource.Kubernetes == nil || len(resource.Kubernetes.Labels) == 0 {
 		return nil
 	}
@@ -7152,7 +7169,7 @@ func monitorLabels(resource unifiedresources.Resource) map[string]string {
 	return labels
 }
 
-func monitorIdentity(resource unifiedresources.Resource, fallbackName string) *models.ResourceIdentityInput {
+func monitorIdentity(resource *unifiedresources.Resource, fallbackName string) *models.ResourceIdentityInput {
 	hostname := ""
 	if resource.Agent != nil {
 		hostname = strings.TrimSpace(resource.Agent.Hostname)
@@ -7199,7 +7216,7 @@ func monitorIdentity(resource unifiedresources.Resource, fallbackName string) *m
 	}
 }
 
-func monitorPlatformData(resource unifiedresources.Resource, resourceType string, platformID string) json.RawMessage {
+func monitorPlatformData(resource *unifiedresources.Resource, resourceType string, platformID string) json.RawMessage {
 	var payload interface{}
 
 	switch resourceType {
@@ -7416,7 +7433,7 @@ func monitorAttachSourceKeys(payload interface{}, sources []unifiedresources.Dat
 	return payload
 }
 
-func monitorStoragePlatformData(resource unifiedresources.Resource, platformID string) map[string]interface{} {
+func monitorStoragePlatformData(resource *unifiedresources.Resource, platformID string) map[string]interface{} {
 	nodeLabel := resource.ParentName
 	if nodeLabel == "" {
 		nodeLabel = monitorStringValue(resource.ParentID)
@@ -7507,7 +7524,7 @@ func convertProxmoxDisks(disks []unifiedresources.DiskInfo) []map[string]interfa
 	return out
 }
 
-func buildProxmoxVMPayload(resource unifiedresources.Resource) map[string]interface{} {
+func buildProxmoxVMPayload(resource *unifiedresources.Resource) map[string]interface{} {
 	if resource.Proxmox == nil {
 		return nil
 	}
