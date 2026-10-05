@@ -1463,7 +1463,7 @@ func TestRootCauseEngineUsesCanonicalRelationshipModel(t *testing.T) {
 func TestResourceDisplayNameUsedByInfrastructureConsumers(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		filepath.Join("..", "monitoring", "connected_infrastructure.go"): {
-			"unifiedresources.ResourceDisplayName(resource)",
+			"unifiedresources.ResourceDisplayName(*resource)",
 		},
 		filepath.Join(".", "monitored_systems.go"): {
 			"if name := ResourceDisplayName(*resource); name != \"\" {",
@@ -2695,9 +2695,9 @@ func TestBroadcastStateUsesSharedCanonicalResourceContract(t *testing.T) {
 
 	requiredMonitorSnippets := []string{
 		"unifiedView := m.currentUnifiedStateView()",
-		"return string(unifiedresources.ContractResourceType(resource))",
-		"unifiedresources.ResourceDisplayName(resource)",
-		"unifiedresources.ResourceClusterName(resource)",
+		"return string(unifiedresources.ContractResourceType(*resource))",
+		"unifiedresources.ResourceDisplayName(*resource)",
+		"unifiedresources.ResourceClusterName(*resource)",
 	}
 	for _, snippet := range requiredMonitorSnippets {
 		if !strings.Contains(string(monitorSource), snippet) {
