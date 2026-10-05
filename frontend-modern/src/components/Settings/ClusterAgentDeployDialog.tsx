@@ -128,6 +128,7 @@ export const ClusterAgentDeployDialog: Component<ClusterAgentDeployDialogProps> 
   const [selected, setSelected] = createSignal<ReadonlySet<string>>(new Set());
   const [progress, setProgress] = createSignal<Record<string, ClusterAgentDeployNodeProgress>>({});
   const [failure, setFailure] = createSignal('');
+  let dismissButton: HTMLButtonElement | undefined;
 
   // A run keeps going after the dialog closes. The install continues on the
   // server, and abandoning the browser side mid-run would skip starting the
@@ -493,22 +494,33 @@ export const ClusterAgentDeployDialog: Component<ClusterAgentDeployDialogProps> 
               Use the installer instead
             </Button>
           </Show>
+          {/* Keep the focused dismissal control mounted through async phase changes. */}
+          <Button
+            ref={(element) => {
+              dismissButton = element;
+            }}
+            type="button"
+            variant="outline"
+            onClick={props.onClose}
+          >
+            {phase() === 'select' ? 'Cancel' : 'Close'}
+          </Button>
           <Show when={phase() === 'select'}>
-            <Button type="button" variant="outline" onClick={props.onClose}>
-              Cancel
-            </Button>
             <Button
               type="button"
               variant="primary"
               disabled={selectedCount() === 0}
-              onClick={() => void install()}
+              onClick={(event) => {
+                // The install action disappears while its run continues. Hand
+                // keyboard focus to the stable control, without moving scroll
+                // or stealing focus when this action was not focused.
+                if (document.activeElement === event.currentTarget) {
+                  dismissButton?.focus({ preventScroll: true });
+                }
+                void install();
+              }}
             >
               {selectedCount() === 1 ? 'Install on 1 node' : `Install on ${selectedCount()} nodes`}
-            </Button>
-          </Show>
-          <Show when={phase() !== 'select'}>
-            <Button type="button" variant="outline" onClick={props.onClose}>
-              Close
             </Button>
           </Show>
         </div>
