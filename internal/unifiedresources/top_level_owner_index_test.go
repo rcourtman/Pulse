@@ -310,7 +310,7 @@ func CheckTopLevelOwnerIndexResourcesForTest(t testing.TB, resources []Resource)
 	t.Logf("connected grouping retains %d resources in %d groups with byte-equal records", members, got.Count())
 }
 
-func BenchmarkTopLevelOwnerIndexResourcesForTest(b *testing.B, resources []Resource) {
+func RunTopLevelOwnerIndexBenchmarkForTest(b *testing.B, resources []Resource) {
 	for _, method := range []struct {
 		name    string
 		resolve func([]Resource) TopLevelSystemResolver

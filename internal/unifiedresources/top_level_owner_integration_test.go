@@ -58,5 +58,5 @@ func TestTopLevelOwnerIndexConnectedDemo(t *testing.T) {
 
 func BenchmarkTopLevelOwnerIndexConnectedDemo(b *testing.B) {
 	resources := connectedOwnerIndexResources(b)
-	unified.BenchmarkTopLevelOwnerIndexResourcesForTest(b, resources)
+	unified.RunTopLevelOwnerIndexBenchmarkForTest(b, resources)
 }

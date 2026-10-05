@@ -433,9 +433,6 @@ func buildTopLevelSystemFallbackIndex(groups map[int]topLevelSystemResolvedGroup
 		return roots[i] < roots[j]
 	})
 	add := func(owners map[string][]int, key string, root int) {
-		if key == "" {
-			return
-		}
 		bucket := owners[key]
 		// All aliases of one root are added together, so a last-entry check
 		// deduplicates its comparable/short forms without a per-key set.
@@ -448,9 +445,11 @@ func buildTopLevelSystemFallbackIndex(groups map[int]topLevelSystemResolvedGroup
 		for host := range group.exactHosts {
 			add(index.hosts, host, root)
 			comparable := normalizeComparableHostname(host)
-			add(index.hostForms, comparable, root)
 			if comparable != "" {
-				add(index.hostForms, NormalizeHostname(comparable), root)
+				add(index.hostForms, comparable, root)
+				if short := NormalizeHostname(comparable); short != "" {
+					add(index.hostForms, short, root)
+				}
 			}
 		}
 		for ip := range group.exactIPs {
