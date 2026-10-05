@@ -84,6 +84,26 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Supply GNU timeout for macOS guidance checks
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install coreutils
+          gnu_timeout="$(brew --prefix coreutils)/bin/gtimeout"
+          test -x "$gnu_timeout"
+          "$gnu_timeout" --version | grep -q 'GNU coreutils'
+          timeout_bin="$(mktemp -d "$RUNNER_TEMP/pulse-guidance-tools.XXXXXX")"
+          ln -s "$gnu_timeout" "$timeout_bin/timeout"
+          printf '%s\n' "$timeout_bin" >> "$GITHUB_PATH"
+
+      - name: Verify native Unix timeout prerequisite
+        if: matrix.unix
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --version | grep -q 'GNU coreutils'
+
       - name: Test native agent runtime
         run: >-
           go test
