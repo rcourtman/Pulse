@@ -84,6 +84,11 @@ func TestBroadcastMetricsSnapshotConnectedContent(t *testing.T) {
 			t.Fatal(err)
 		}
 		want := legacyFrontendProjectionForTest(m, graph.State, adapter.GetAll(), adapter, time.Now().UTC())
+		// The parent's unified view fills a missing store watermark from the
+		// listed resources. Preserve that full-state header in the oracle too.
+		if freshness := latestUnifiedResourceLastSeen(adapter.GetAll()); !freshness.IsZero() {
+			want.LastUpdate = freshness.UnixMilli()
+		}
 		got := m.buildBroadcastFrontendStateFromSnapshot(graph.State)
 		wantJSON, err := json.Marshal(want)
 		if err != nil {
@@ -189,9 +194,10 @@ var completeProjectionJSONSink []byte
 // metadata/health decoration and snapshot projection are part of both costs.
 func parentFrontendProjectionForTest(m *Monitor, snapshot models.StateSnapshot, resources []unifiedresources.Resource, resolver MetricsTargetResourceStore, now time.Time) models.StateFrontend {
 	rows := unifiedresources.CoalescePresentationHostResources(resources)
+	healthAlerts := resourceHealthAlerts(snapshot.ActiveAlerts)
 	for i := range rows {
 		m.applyPersistedMetadataToUnifiedResource(&rows[i])
-		health := unifiedresources.EvaluateResourceHealth(rows[i], resourceHealthAlerts(snapshot.ActiveAlerts), now)
+		health := unifiedresources.EvaluateResourceHealth(rows[i], healthAlerts, now)
 		rows[i].Health = &health
 	}
 	projected, catalogs := convertPresentationResourcesForBroadcast(attachBroadcastMetricsTargets(rows, resolver))
@@ -201,6 +207,9 @@ func parentFrontendProjectionForTest(m *Monitor, snapshot models.StateSnapshot, 
 	out.PolicyCatalog = catalogs.policies
 	out.AISafeSummaryCatalog = catalogs.aiSafeSummaries
 	out.ConnectedInfrastructure = buildConnectedInfrastructure(rows, snapshot)
+	if freshness := latestUnifiedResourceLastSeen(resources); !freshness.IsZero() {
+		out.LastUpdate = freshness.UnixMilli()
+	}
 	return out
 }
 
