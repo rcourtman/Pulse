@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "6369b1907a2a28d0cfbef42eac6920b83225af54",
+  "verified_at": "2026-10-05T20:08:38.093126Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/features/patrol/PatrolSuppressionRules.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "dfd5fb26317010413a1c7e7a9250443a18ac0b2ba0aaf9990b7dc709dd180bc3",
+    "frontend-modern/src/features/patrol/PatrolSuppressionRules.tsx": "bf8b709f907d05c1e475493a548abd667dc3099f2c790caca21c3227faaa939e"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol/activity#patrol-suppression-rules"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Production Patrol surface, Router, CSS and clients with synthetic API/session/CSRF/tenant values. Not installed/customer deletion proof.",
+    "Final FindingsPanel copy verified in the complete WebKit320 creation/cancel/exact-ID deletion/readback flow after sentence punctuation was corrected; that file is unchanged by the later confirmation sentence casing correction.",
+    "Final PatrolSuppressionRules copy: latest Chromium1365 light and WebKit320 actual-dark viewport passes after the confirmation sentence casing correction. Exact resource/category/rule IDs and explicit wildcard scope remain readable, with Cancel focused and both controls in view.",
+    "Changed success notice and creator explanation inspected in full-page flow captures. Final confirmation copy inspected in actual viewport images; full-page fixed-dialog omissions remain distinct.",
+    "Unrelated manual, legacy and finding-backed decisions/history remain after the full narrow-rule deletion. Lost response never retries or reports success; explicit reload reconciles absence, denied fresh read blocks DELETE and org change invalidates prior controls.",
+    "No horizontal overflow, page errors or off-origin requests. All five browser/server case pairs close. The final casing-only visual cases do not replay mutations."
+  ],
+  "interactions": [
+    "Real Inbox Create rule requires a written reason, sends one narrow POST and links to the manual collection. Escape is non-mutating; one exact DELETE requires fresh pre-read and absence readback.",
+    "Finding options Create rule from this exposes the final sentence copy, labelled reason and management link without a second POST.",
+    "Actual light/dark desktop/narrow confirmation viewport measurements and screenshots verify the final capitalised sentence with readable scope/ID/wildcard text and safe initial Cancel focus. Cancel/escape performs no POST/DELETE in visual cases.",
+    "Playwright1.56.1 matches integration lock; Chromium141.0.7390.37 and WebKit26.0. Three punctuation-copy cases (full flow plus two viewport cases), then two final sentence-casing viewport cases, passed with complete closures.",
+    "Prior long-reason pointer/keyboard proof remains separate for unchanged layout. Current copy passes the focused local copy audit; full-source lint result is not inferred from browser proof."
+  ]
+}
