@@ -387,7 +387,11 @@ func (h *OrgHandlers) HandleDeleteOrg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.mtMonitor != nil {
-		h.mtMonitor.BeginTenantDeletion(orgID)
+		if err := h.mtMonitor.BeginTenantDeletion(orgID); err != nil {
+			log.Error().Err(err).Str("org_id", orgID).Msg("Organization shutdown incomplete; retaining data")
+			writeErrorResponse(w, http.StatusServiceUnavailable, "tenant_shutdown_incomplete", "Organization monitoring has not shut down cleanly; its data has been retained", nil)
+			return
+		}
 		defer h.mtMonitor.FinishTenantDeletion(orgID)
 	}
 

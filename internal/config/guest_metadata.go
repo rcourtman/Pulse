@@ -2,11 +2,13 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -31,46 +33,173 @@ type GuestMetadataStore struct {
 	dataPath string
 	fs       FileSystem
 
-	// inflight tracks background Set calls started by SetAsync so shutdown can
-	// wait for them. Callers used to spawn their own detached goroutines, which
-	// meant a write could land after the monitor stopped and after the data
-	// directory was being torn down, leaving a stray guest_metadata.json.tmp.
-	inflight sync.WaitGroup
+	// writeMu serializes disk snapshots with synchronous mutations. Background
+	// I/O never holds mu, so a burst can accumulate in one follow-up snapshot.
+	// Always acquire writeMu before mu when both locks are needed.
+	writeMu           sync.Mutex
+	revision          uint64
+	attemptedRevision uint64
+	lastWriteErr      error
+	writerDone        chan struct{}
+	closed            atomic.Bool
+	closeOnce         sync.Once
+	closeDone         chan struct{}
+	closeErr          error
 }
 
-// SetAsync persists metadata without blocking the caller, while keeping the
-// write owned by the store so WaitForPendingWrites can drain it on shutdown.
-func (s *GuestMetadataStore) SetAsync(guestID string, meta *GuestMetadata) {
+var ErrGuestMetadataStoreClosed = errors.New("guest metadata store is closed")
+
+// SetAsync admits a detached replacement before returning. One store-owned
+// writer persists the newest complete snapshot, coalescing changes that arrive
+// during I/O. It does not start a goroutine or rewrite the file per guest.
+func (s *GuestMetadataStore) SetAsync(guestID string, meta *GuestMetadata) error {
 	if s == nil {
+		return nil
+	}
+	if meta == nil {
+		return fmt.Errorf("metadata cannot be nil")
+	}
+	clone := cloneGuestMetadata(meta)
+	clone.ID = guestID
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed.Load() {
+		return ErrGuestMetadataStoreClosed
+	}
+	s.metadata[guestID] = clone
+	s.queueSaveLocked()
+	return nil
+}
+
+// RememberIdentity merges only monitor-owned identity fields at admission.
+// A background name/type update must never restore an old URL, tag or note
+// over a concurrent operator edit. OCI classification cannot be downgraded by
+// a later poll lacking the classification evidence.
+func (s *GuestMetadataStore) RememberIdentity(guestID, name, guestType string) error {
+	if s == nil {
+		return nil
+	}
+	guestType = strings.TrimSpace(guestType)
+	if guestType == "" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed.Load() {
+		return ErrGuestMetadataStoreClosed
+	}
+	meta := cloneGuestMetadata(s.metadata[guestID])
+	if meta == nil {
+		meta = &GuestMetadata{ID: guestID, Tags: []string{}}
+	}
+	if meta.LastKnownType == "oci" {
+		guestType = "oci"
+	}
+	if meta.LastKnownName == name && meta.LastKnownType == guestType && s.lastWriteErr == nil {
+		return nil
+	}
+	meta.LastKnownName = name
+	meta.LastKnownType = guestType
+	s.metadata[guestID] = meta
+	s.queueSaveLocked()
+	return nil
+}
+
+func (s *GuestMetadataStore) queueSaveLocked() {
+	s.revision++
+	if s.writerDone != nil {
 		return
 	}
-	s.inflight.Add(1)
-	go func() {
-		defer s.inflight.Done()
-		if err := s.Set(guestID, meta); err != nil {
-			log.Error().Err(err).Str("guestID", guestID).Msg("failed to persist guest metadata")
-		}
-	}()
+	s.writerDone = make(chan struct{})
+	go s.writePendingSnapshots()
 }
 
-// WaitForPendingWrites blocks until background writes finish or the timeout
-// elapses. It reports whether the store drained; a false result means a write
-// may still be in flight and the data directory is not safe to remove.
+func (s *GuestMetadataStore) writePendingSnapshots() {
+	for {
+		s.writeMu.Lock()
+		s.mu.Lock()
+		if s.attemptedRevision == s.revision {
+			close(s.writerDone)
+			s.writerDone = nil
+			s.mu.Unlock()
+			s.writeMu.Unlock()
+			return
+		}
+		revision := s.revision
+		data, err := json.Marshal(s.metadata)
+		s.mu.Unlock()
+		if err == nil {
+			err = persistMetadata(s.fs, s.dataPath, "guest_metadata.json", data)
+		}
+		s.mu.Lock()
+		s.attemptedRevision = revision
+		s.lastWriteErr = err
+		s.mu.Unlock()
+		s.writeMu.Unlock()
+		if err != nil {
+			// No unbounded automatic retry on a failing filesystem. A later
+			// admitted mutation (or ordinary identity poll) can try again.
+			log.Error().Err(err).Msg("failed to persist guest metadata snapshot")
+		}
+	}
+}
+
+// WaitForPendingWrites reports quiescence, not persistence success. Producers
+// must already be stopped if the caller plans to remove the data directory;
+// Close seals admission as well. A timeout never makes teardown safe.
 func (s *GuestMetadataStore) WaitForPendingWrites(timeout time.Duration) bool {
 	if s == nil {
 		return true
 	}
-	done := make(chan struct{})
-	go func() {
-		s.inflight.Wait()
-		close(done)
-	}()
+	s.mu.RLock()
+	done := s.writerDone
+	s.mu.RUnlock()
+	if done == nil {
+		return true
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
 	select {
 	case <-done:
 		return true
-	case <-time.After(timeout):
+	case <-timer.C:
 		log.Warn().Dur("timeout", timeout).Msg("timed out waiting for guest metadata writes to drain")
 		return false
+	}
+}
+
+// Close rejects further mutations, drains the owned writer within the supplied
+// budget, and reports any final persistence error. Failure keeps the writer
+// owned and must stop tenant-directory removal; it is not a successful stop.
+func (s *GuestMetadataStore) Close(timeout time.Duration) error {
+	if s == nil {
+		return nil
+	}
+	// Seal before waiting for a synchronous mutation's I/O-held memory lock.
+	// One owned close observer, not one goroutine per waiter, covers both that
+	// mutation and the background writer without extending the caller's budget.
+	s.closeOnce.Do(func() {
+		s.closed.Store(true)
+		go func() {
+			s.mu.RLock()
+			done := s.writerDone
+			s.mu.RUnlock()
+			if done != nil {
+				<-done
+			}
+			s.mu.RLock()
+			s.closeErr = s.lastWriteErr
+			s.mu.RUnlock()
+			close(s.closeDone)
+		}()
+	})
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-s.closeDone:
+		return s.closeErr
+	case <-timer.C:
+		return fmt.Errorf("guest metadata writes did not drain within %s", timeout)
 	}
 }
 
@@ -94,9 +223,10 @@ func cloneGuestMetadata(meta *GuestMetadata) *GuestMetadata {
 // NewGuestMetadataStore creates a new metadata store
 func NewGuestMetadataStore(dataPath string, fs FileSystem) *GuestMetadataStore {
 	store := &GuestMetadataStore{
-		metadata: make(map[string]*GuestMetadata),
-		dataPath: dataPath,
-		fs:       fs,
+		metadata:  make(map[string]*GuestMetadata),
+		dataPath:  dataPath,
+		fs:        fs,
+		closeDone: make(chan struct{}),
 	}
 
 	if store.fs == nil {
@@ -113,6 +243,16 @@ func NewGuestMetadataStore(dataPath string, fs FileSystem) *GuestMetadataStore {
 
 // Load reads metadata from disk
 func (s *GuestMetadataStore) Load() error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed.Load() {
+		return ErrGuestMetadataStoreClosed
+	}
+	if s.revision != s.attemptedRevision || s.lastWriteErr != nil {
+		return fmt.Errorf("cannot reload guest metadata with unpersisted changes")
+	}
 	filePath := filepath.Join(s.dataPath, "guest_metadata.json")
 
 	log.Debug().Str("path", filePath).Msg("Loading guest metadata from disk")
@@ -127,9 +267,6 @@ func (s *GuestMetadataStore) Load() error {
 		return fmt.Errorf("failed to read metadata file: %w", err)
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if err := json.Unmarshal(data, &s.metadata); err != nil {
 		return fmt.Errorf("failed to unmarshal metadata: %w", err)
 	}
@@ -138,24 +275,16 @@ func (s *GuestMetadataStore) Load() error {
 	return nil
 }
 
-// save writes metadata to disk (must be called with lock held)
+// save writes a synchronous mutation (writeMu and mu must both be held).
 func (s *GuestMetadataStore) save() error {
-	filePath := filepath.Join(s.dataPath, "guest_metadata.json")
-
-	log.Debug().Str("path", filePath).Msg("Saving guest metadata to disk")
-
+	s.revision++
 	data, err := json.Marshal(s.metadata)
-	if err != nil {
-		return fmt.Errorf("failed to marshal metadata: %w", err)
+	if err == nil {
+		err = persistMetadata(s.fs, s.dataPath, "guest_metadata.json", data)
 	}
-
-	if err := persistMetadata(s.fs, s.dataPath, "guest_metadata.json", data); err != nil {
-		return err
-	}
-
-	log.Debug().Str("path", filePath).Int("entries", len(s.metadata)).Msg("Guest metadata saved successfully")
-
-	return nil
+	s.attemptedRevision = s.revision
+	s.lastWriteErr = err
+	return err
 }
 
 // Get retrieves metadata for a guest
@@ -188,8 +317,13 @@ func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node stri
 
 	// Helper to migrate a legacy ID to the new format
 	migrate := func(legacyID string) *GuestMetadata {
+		s.writeMu.Lock()
+		defer s.writeMu.Unlock()
 		s.mu.Lock()
 		defer s.mu.Unlock()
+		if s.closed.Load() {
+			return nil
+		}
 
 		if current := s.metadata[guestID]; current != nil {
 			return cloneGuestMetadata(current)
@@ -293,8 +427,13 @@ func (s *GuestMetadataStore) GetAll() map[string]*GuestMetadata {
 
 // Set updates or creates metadata for a guest
 func (s *GuestMetadataStore) Set(guestID string, meta *GuestMetadata) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.closed.Load() {
+		return ErrGuestMetadataStoreClosed
+	}
 
 	if meta == nil {
 		return fmt.Errorf("metadata cannot be nil")
@@ -310,8 +449,13 @@ func (s *GuestMetadataStore) Set(guestID string, meta *GuestMetadata) error {
 
 // Delete removes metadata for a guest
 func (s *GuestMetadataStore) Delete(guestID string) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.closed.Load() {
+		return ErrGuestMetadataStoreClosed
+	}
 
 	delete(s.metadata, guestID)
 
@@ -321,8 +465,13 @@ func (s *GuestMetadataStore) Delete(guestID string) error {
 
 // ReplaceAll replaces all metadata entries and persists them to disk.
 func (s *GuestMetadataStore) ReplaceAll(metadata map[string]*GuestMetadata) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.closed.Load() {
+		return ErrGuestMetadataStoreClosed
+	}
 
 	s.metadata = make(map[string]*GuestMetadata)
 
@@ -354,8 +503,13 @@ func (s *GuestMetadataStore) UpdateAll(
 		return nil
 	}
 
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.closed.Load() {
+		return ErrGuestMetadataStoreClosed
+	}
 
 	working := make(map[string]*GuestMetadata, len(s.metadata))
 	for id, meta := range s.metadata {

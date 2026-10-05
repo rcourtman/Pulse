@@ -20,6 +20,20 @@
 
 ## Purpose
 
+### Organisation deletion retains data after incomplete monitoring shutdown
+
+Authenticated organisation-owner deletion waits for tenant-loop exit and sealed
+guest metadata persistence before removing the directory or calling offboarding.
+An incomplete drain or final write failure returns HTTP 503 with the existing
+error envelope and `tenant_shutdown_incomplete`; the message says the data was
+retained and exposes no filesystem path or underlying error. The runtime owner
+and recreation guard stay retained. Default-organisation immutability, session
+and membership checks, successful HTTP 204 and other tenants' access are
+unchanged. `TestOrgDeleteRetainsDataWhenGuestMetadataPersistenceFails` exercises
+a real confined rename failure through the ordinary handler and metadata store;
+existing successful deletion and authorization controls remain required.
+
+
 ### Optional guest-memory observation reaches existing frontend consumers
 
 Frontend Memory and ResourceMetric model the existing optional server-owned

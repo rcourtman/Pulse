@@ -7598,6 +7598,12 @@ func monitorLastSeenUnix(value time.Time) int64 {
 const guestMetadataDrainTimeout = 2 * time.Second
 
 func (m *Monitor) Stop() {
+	if err := m.stop(); err != nil {
+		log.Error().Err(err).Msg("monitor stopped with incomplete guest metadata persistence; data directory must be retained")
+	}
+}
+
+func (m *Monitor) stop() error {
 	log.Info().Msg("stopping monitor")
 
 	// A trailing agent-report refresh must not run against stores closed below.
@@ -7620,9 +7626,7 @@ func (m *Monitor) Stop() {
 	// Drain background guest-metadata writes before the data directory can be
 	// torn down. Without this a queued write lands after shutdown and leaves a
 	// stray guest_metadata.json.tmp behind.
-	if m.guestMetadataStore != nil {
-		m.guestMetadataStore.WaitForPendingWrites(guestMetadataDrainTimeout)
-	}
+	drainErr := m.guestMetadataStore.Close(guestMetadataDrainTimeout)
 
 	// Close persistent metrics store (flushes buffered data)
 	if m.metricsStore != nil {
@@ -7633,7 +7637,11 @@ func (m *Monitor) Stop() {
 		}
 	}
 
+	if drainErr != nil {
+		return drainErr
+	}
 	log.Info().Msg("monitor stopped")
+	return nil
 }
 
 // recordAuthFailure records an authentication failure for a node
