@@ -4840,7 +4840,10 @@ acknowledged severity, and reveals overflow through an in-place accessible
 disclosure rather than an inert hidden-count row. Aggregate drawers that include
 alerts from child resources must also preserve the affected resource identity
 and alert metric beside that text rather than collapsing them into generic VM
-or host labels. The remaining Overview rows are additive
+or host labels. The Mail Gateway drawer receives its row's open alerts, matched
+across the gateway's identity aliases, and its header status follows them, so
+it never shows "Healthy" beside an active warning; its inline detail row sets
+`whitespace-normal` because platform table cells do not wrap. The remaining Overview rows are additive
 operator context that the parent table row cannot carry, such as OS/runtime,
 Pulse observation or action coverage, primary reachability, protection gaps,
 pending updates, or an identified service. Routine health, placement, and
@@ -7464,6 +7467,10 @@ presentation. The compact row remains actionable: plain-language rationale and
 provider history/permission limitations live one disclosure deeper beside
 bounded restore evidence. A posture fetch failure must keep the evidence
 inspectable and show unknown, never a locally inferred healthy fallback.
+The table renders the server explanation verbatim and keeps its own fallbacks
+(checking, not rated, unknown) and the snapshot-only age tooltip in the same
+plain voice, without model terms such as canonical identity or provider
+evidence.
 The bounded restore evidence keeps the newest point and the newest completed
 point of each source before filling with the newest overall, so a run of guest
 snapshots or a running job cannot push the latest usable backup out of the

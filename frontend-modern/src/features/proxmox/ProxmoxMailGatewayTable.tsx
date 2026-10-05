@@ -3,6 +3,12 @@ import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
+import { getAlertsForResource } from '@/utils/alerts';
+import { getResourceIdentityAliases } from '@/utils/resourceIdentity';
+import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
+import { useWebSocket } from '@/contexts/appRuntime';
+import { useAlertsActivation } from '@/stores/alertsActivation';
+import type { Alert } from '@/types/api';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
@@ -38,9 +44,11 @@ export type MailGatewayPhoneColumn =
 export type MailGatewayColumn =
   MailGatewayPhoneColumn | 'version' | 'spam' | 'virus' | 'quarantine';
 
+// Phones carry five tracks. With node count as a sixth, gateway names that
+// share a prefix ("mail-gateway-eu", "mail-gateway-us") truncated to the same
+// text; the count stays in the row expansion.
 export const MAIL_GATEWAY_PHONE_COLUMNS: readonly MailGatewayPhoneColumn[] = [
   'instance',
-  'nodes',
   'uptime',
   'mail',
   'queue',
@@ -56,12 +64,12 @@ export const MAIL_GATEWAY_NARROW_PHONE_COLUMNS: readonly MailGatewayPhoneColumn[
 ];
 
 export const MAIL_GATEWAY_PHONE_COLUMN_WIDTHS: Readonly<Record<MailGatewayPhoneColumn, number>> = {
-  instance: 30,
-  nodes: 12,
-  uptime: 16,
-  mail: 14,
-  queue: 14,
-  deferred: 14,
+  instance: 40,
+  nodes: 0,
+  uptime: 15,
+  mail: 15,
+  queue: 15,
+  deferred: 15,
 };
 
 export const MAIL_GATEWAY_NARROW_PHONE_COLUMN_WIDTHS: Readonly<
@@ -104,10 +112,59 @@ export const ProxmoxMailGatewayTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
 }> = (props) => {
+  // A gateway the provider reports online can still be failing its job (mail
+  // held in the queue past the configured age, a backlog). Its open alerts
+  // decide the row's state, the status filter counts and the reason shown
+  // under its name, so "is mail flowing" is answered here, not only on Alerts.
+  const { activeAlerts } = useWebSocket();
+  const alertsActivation = useAlertsActivation();
+  // Alerts are keyed by the PMG instance id while the row carries the unified
+  // id, so match across the resource's identity aliases (alerts contract).
+  // There is deliberately no node-name fallback: PMG node alerts carry node
+  // names, and matching on them could pin one gateway's alert on another.
+  const alertIdsFor = (resource: Resource): string[] => [
+    resource.id,
+    ...getResourceIdentityAliases(resource),
+  ];
+  // One scan of the active-alert map per gateway, shared by the filter, the
+  // status counts, the row and its drawer.
+  const openAlertsById = createMemo(() => {
+    const byId = new Map<string, Alert[]>();
+    for (const resource of props.resources) {
+      byId.set(
+        resource.id,
+        getAlertsForResource(
+          alertIdsFor(resource),
+          activeAlerts,
+          alertsActivation.detectionEnabled(),
+        )
+          .filter((alert) => !alert.acknowledged)
+          .sort((a, b) => Number(b.level === 'critical') - Number(a.level === 'critical')),
+      );
+    }
+    return byId;
+  });
+  const openAlertsFor = (resource: Resource): Alert[] => openAlertsById().get(resource.id) ?? [];
+  // Filtering keeps the provider's buckets: an alerted, reachable gateway
+  // counts under attention (degraded), an unreachable one stays offline.
+  const effectiveStatus = (resource: Resource): string | undefined => {
+    if (openAlertsFor(resource).length === 0) return resource.status;
+    return getSimpleStatusIndicator(resource.status).variant === 'danger'
+      ? resource.status
+      : 'warning';
+  };
+  // The dot follows the most severe open alert, so a critical one reads red.
+  const indicatorFor = (resource: Resource) => {
+    const base = getSimpleStatusIndicator(effectiveStatus(resource));
+    return openAlertsFor(resource)[0]?.level === 'critical'
+      ? { ...base, variant: 'danger' as const }
+      : base;
+  };
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
+    filter: (resources, search, status) =>
+      filterPlatformResources(resources, search, status, effectiveStatus),
   });
   const detail = createPlatformResourceDetailState({ idPrefix: 'proxmox-mail-gateway-detail' });
   const observedWidth = useObservedElementWidth();
@@ -118,9 +175,9 @@ export const ProxmoxMailGatewayTable: Component<{
     const width = observedWidth.width();
     return typeof width === 'number' && width > 0 && width < 360;
   });
-  // Uptime and mail-flow counters remain in the narrow projection; node count
-  // moves into the existing instance detail expansion below 360px.
-  const showNodes = createMemo(() => !isNarrowPhone());
+  // Uptime and mail-flow counters remain in the phone projection; node count
+  // moves into the existing instance detail expansion on phones.
+  const showNodes = createMemo(() => layout() !== 'compact');
   const showUptime = createMemo(() => true);
   const showOperational = createMemo(() => ['operational', 'expanded', 'full'].includes(layout()));
   const showVirus = createMemo(() => ['expanded', 'full'].includes(layout()));
@@ -262,7 +319,16 @@ export const ProxmoxMailGatewayTable: Component<{
                     const pmg = () => instance.pmg;
                     const name = () => asTrimmedString(instance.name) || instance.id;
                     const version = () => asTrimmedString(pmg()?.version) || '—';
-                    const indicator = () => getSimpleStatusIndicator(instance.status);
+                    const rowAlerts = createMemo(() => openAlertsFor(instance));
+                    const indicator = () => indicatorFor(instance);
+                    // Same tint as the other platform tables, from the cached alerts.
+                    const rowAlertBg = () => {
+                      const top = rowAlerts()[0];
+                      if (!top) return '';
+                      return top.level === 'critical'
+                        ? 'bg-red-50 dark:bg-red-950/25'
+                        : 'bg-yellow-50 dark:bg-yellow-950/25';
+                    };
                     const isOpen = () => detail.isExpanded(instance);
                     const detailRowId = () => detail.detailRowId(instance);
                     return (
@@ -271,6 +337,7 @@ export const ProxmoxMailGatewayTable: Component<{
                           {...getPlatformResourceDetailRowInteractionProps({
                             expanded: isOpen(),
                             onToggle: () => detail.toggle(instance),
+                            class: rowAlertBg(),
                           })}
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
@@ -284,12 +351,35 @@ export const ProxmoxMailGatewayTable: Component<{
                               <StatusDot
                                 size="sm"
                                 variant={indicator().variant}
-                                title={instance.status || 'unknown'}
+                                title={rowAlerts()[0]?.message || instance.status || 'unknown'}
                                 ariaHidden
                               />
-                              <span class="font-semibold text-base-content truncate" title={name()}>
-                                {name()}
-                              </span>
+                              <div class="min-w-0">
+                                <span
+                                  class="block font-semibold text-base-content truncate"
+                                  title={name()}
+                                >
+                                  {name()}
+                                </span>
+                                <Show when={rowAlerts()[0]}>
+                                  {(alert) => (
+                                    <span
+                                      class={`block truncate text-[11px] font-medium ${
+                                        alert().level === 'critical'
+                                          ? 'text-red-600 dark:text-red-300'
+                                          : 'text-amber-700 dark:text-amber-300'
+                                      }`}
+                                      title={rowAlerts()
+                                        .map((open) => open.message)
+                                        .join('\n')}
+                                      data-mail-gateway-alert-reason
+                                    >
+                                      {alertTypeDisplayLabel(alert().type)}
+                                      {rowAlerts().length > 1 ? ` +${rowAlerts().length - 1}` : ''}
+                                    </span>
+                                  )}
+                                </Show>
+                              </div>
                             </div>
                           </TableCell>
                           <Show when={showVersion()}>
@@ -377,12 +467,14 @@ export const ProxmoxMailGatewayTable: Component<{
                           <InlineDetailTableRow
                             cellId={detailRowId()}
                             colspan={visibleColumnCount()}
-                            contentClass="px-4 py-4"
+                            cellClass="whitespace-normal"
+                            contentClass="min-w-0 whitespace-normal px-4 py-4"
                             data-inline-detail-for={instance.id}
                           >
                             <ProxmoxMailGatewayDrawer
                               instanceRow={instance}
                               onClose={() => detail.close(instance)}
+                              alerts={rowAlerts()}
                             />
                           </InlineDetailTableRow>
                         </Show>

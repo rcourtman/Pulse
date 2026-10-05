@@ -149,7 +149,7 @@ export function getRecoveryAgeBand(
 
 // A guest snapshot shares the guest's storage, so it is listed as restore
 // evidence but never counted as a backup. Mirrors the server posture rule that
-// "snapshots alone do not prove independent recovery".
+// "a snapshot is not a separate backup, so it does not count".
 export function isBackupArtifact(artifact: RecoverableArtifact): boolean {
   return artifact.sourceKind !== 'snapshot';
 }
