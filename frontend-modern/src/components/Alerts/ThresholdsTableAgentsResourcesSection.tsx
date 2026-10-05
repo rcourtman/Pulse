@@ -6,6 +6,9 @@ import { ResourceTable } from './ResourceTable';
 import { CollapsibleSection } from './Thresholds/sections/CollapsibleSection';
 import { formatMetricValue } from '@/features/alerts/thresholds/helpers';
 import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/thresholdsTableSectionProps';
+import { getAlertThresholdsDefaultsSummary } from '@/utils/alertThresholdsSectionPresentation';
+
+const AGENT_THRESHOLD_COLUMNS = ['CPU %', 'Memory %', 'Disk %', 'Disk Temp °C'];
 
 const DISK_TEMP_TYPE_FIELDS: readonly { key: string; label: string }[] = [
   { key: 'nvme', label: 'NVMe' },
@@ -21,6 +24,10 @@ export function ThresholdsTableAgentsResourcesSection(props: ThresholdsTableSect
       <CollapsibleSection
         id="agents"
         title={state.sectionTitles.agents}
+        defaultsSummary={getAlertThresholdsDefaultsSummary(
+          AGENT_THRESHOLD_COLUMNS,
+          tableProps.agentDefaults,
+        )}
         resourceCount={state.agentsWithOverrides().length}
         collapsed={state.isCollapsed('agents')}
         onToggle={() => state.toggleSection('agents')}
@@ -33,7 +40,7 @@ export function ThresholdsTableAgentsResourcesSection(props: ThresholdsTableSect
             title=""
             onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
             resources={state.agentsWithOverrides()}
-            columns={['CPU %', 'Memory %', 'Disk %', 'Disk Temp °C']}
+            columns={AGENT_THRESHOLD_COLUMNS}
             activeAlerts={tableProps.activeAlerts}
             emptyMessage={state.AGENT_THRESHOLDS_FILTER_EMPTY_STATE}
             onEdit={state.startEditing}

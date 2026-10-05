@@ -7453,6 +7453,11 @@ presentation. The compact row remains actionable: plain-language rationale and
 provider history/permission limitations live one disclosure deeper beside
 bounded restore evidence. A posture fetch failure must keep the evidence
 inspectable and show unknown, never a locally inferred healthy fallback.
+The bounded restore evidence keeps the newest point and the newest completed
+point of each source before filling with the newest overall, so a run of guest
+snapshots or a running job cannot push the latest usable backup out of the
+disclosure. A coverage strip footnote is
+plain muted text under the legend, not another counter or badge row.
 
 Protection table controls continue to compose shared filter, table, status,
 counter, loading, error, disclosure, and inline-detail primitives. The bounded
@@ -8372,3 +8377,11 @@ regressions preserve their original missing-value and fallback obligations.
 drawer with synthetic APIs in Chromium/WebKit desktop and 390/320-pixel light
 and dark views. This is presentation acceptance, not native backup/QGA safety,
 provider outage attribution, installed recovery or release availability.
+
+### Threshold group headers carry a defaults line
+
+`CollapsibleSection` takes an optional `defaultsSummary` rendered under the
+title as a muted line (`data-thresholds-defaults-summary`) that wraps only
+between items on phones and truncates from `sm` up, and is hidden while
+`isGloballyDisabled` is set, where it would promise alerts that cannot fire. Callers pass the shared summary helper's output rather than
+composing per-section strings.

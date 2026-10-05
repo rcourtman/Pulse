@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "base_sha": "1d4c3aeb6e529af3b63992ef22152e6b8b8a33d8",
+  "verified_at": "2026-10-05T01:34:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/Thresholds/sections/CollapsibleSection.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableAgentDisksSection.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableAgentsResourcesSection.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableAgentsTab.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableDockerContainersSection.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableKubernetesTab.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxGuestDisksSection.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxGuestsSection.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxNodesSection.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxPBSSection.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxPMGSection.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxSnapshotsSection.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxStorageSection.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableTrueNASTab.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableVMwareTab.tsx",
+    "frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx",
+    "frontend-modern/src/utils/alertThresholdsSectionPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/Thresholds/sections/CollapsibleSection.tsx": "0a993dded673dbd2eb0b3919af2586a0fe4579ce10465e495710f526cf7ca1bd",
+    "frontend-modern/src/components/Alerts/ThresholdsTableAgentDisksSection.tsx": "d54ba2278c35ca5748cc0a310bb738dd9128454b1283d547bed7938568f92221",
+    "frontend-modern/src/components/Alerts/ThresholdsTableAgentsResourcesSection.tsx": "3b5cb92fb9b684d5655c6453b7e2738fb776d4c91bd566c319cc6d135301e095",
+    "frontend-modern/src/components/Alerts/ThresholdsTableAgentsTab.tsx": "463bba443bc9dfc52e9cfcb83505640d5f8e91f5c731a8ec8cab1542f43e81a4",
+    "frontend-modern/src/components/Alerts/ThresholdsTableDockerContainersSection.tsx": "3ee73f2b61ed5da9532dce15637e9803c4465f7a70241edf16e1692439c55fa5",
+    "frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx": "6226defd1e8adba0d28bae0998abd832993fc1e6b5b63f80024798c92684ecbd",
+    "frontend-modern/src/components/Alerts/ThresholdsTableKubernetesTab.tsx": "7e793356d6488169f8307ada64db35d9c15c9eacf1bddd30144e193f53345051",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx": "8b89d2d4e3ffcbfe1dceb6d4a5d309c1d424d1d58059110e51b9e73a93fcd670",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxGuestDisksSection.tsx": "7849b5ed2d8c2674915aa98bcbd4bf348881efc155f00dbcbe9febeabcc38458",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxGuestsSection.tsx": "6f1694090e0022d1fff0653b06d1cf136f5fcebd59c88c41a4f703125d555ec2",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxNodesSection.tsx": "c48d40917928e0ca8564d4eb90cb0e6987c8c9313494a444fa98209a3eee5dc1",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxPBSSection.tsx": "d6801951e3d0ec6eaa7b267ff68e0f13ba3838be9c697b58822b94c57d719f06",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxPMGSection.tsx": "2606881fdc7a68b747c34793330756b41513c89f07cbebcc5a3f69c6039d6610",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxSnapshotsSection.tsx": "3a1bfafe2b44c724a5b351d37d721bf5992db31d66e761a0b782ad6f0a57cc7c",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxStorageSection.tsx": "c4da879c91150d4c8d32c2068a4a0988ac3934f9d7297bff45d63b2ee1f4f6e2",
+    "frontend-modern/src/components/Alerts/ThresholdsTableTrueNASTab.tsx": "2d78009148e366e1546d52127ea1b0d0ee372037ca9b627a0ff3605854a1ca53",
+    "frontend-modern/src/components/Alerts/ThresholdsTableVMwareTab.tsx": "a628c3a17f16cb3ba74ca15bf53c0f8afa6d10390386b5b42f932c60105e167e",
+    "frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx": "ea46c8920f008f1904fe6e51dbfc4c5fa755e5af92341fe223fe75428efdf077",
+    "frontend-modern/src/utils/alertThresholdsSectionPresentation.ts": "75c2c8d6e0728b0ecec30b02c92185af63a32f03c43cede6a7068cba29943112"
+  },
+  "routes": [
+    "/alerts/thresholds/proxmox",
+    "/alerts/thresholds/docker",
+    "/alerts/thresholds/kubernetes",
+    "/alerts/thresholds/truenas",
+    "/alerts/thresholds/vmware",
+    "/alerts/thresholds/systems"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Proxmox tab: every collapsed group states its default limits (Virtualization Hosts CPU 80% \u00b7 Memory 85% \u00b7 Disk 90% \u00b7 Temp 80\u00b0C, VMs & Containers, Guest Filesystems, Storage Devices, PBS Servers, Mail Gateway with +12 more)",
+    "Recovery and Snapshot Age groups disabled: Disabled badge and no defaults line",
+    "CPU averaging collapsed to one line: 5-minute average for every resource",
+    "Docker tab: Container Runtimes and Containers lead (Restart loop 3 in 5 min \u00b7 Memory limit 90% warn, 95% critical), Docker-only rules follow",
+    "Kubernetes, TrueNAS, vSphere tabs: every group with defaults states them",
+    "Machines tab: Machines and Machine Disks lead with defaults, SMART alert rules card follows",
+    "Phone 390: defaults lines and CPU averaging summary wrap between items without breaking a value",
+    "No console errors"
+  ],
+  "interactions": [
+    "Opened CPU averaging disclosure: ten profile selects shown",
+    "Changed Virtual machines CPU averaging to 15-minute: summary updated to 1 platform override and the unsaved-changes banner appeared (not saved)",
+    "Expanded VMs & Containers to compare header defaults with the Global Defaults row"
+  ]
+}

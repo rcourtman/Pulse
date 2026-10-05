@@ -2901,6 +2901,30 @@ severity and the triggered-in-24h total; threshold override counts are
 configuration and do not appear on the overview. None of this changes alert
 lifecycle, acknowledgement, snooze, or delivery evaluation.
 
+### Thresholds lead with each group's default limits
+
+The Thresholds page answers "what will alert me, and at what limits" before
+any group is opened. Every collapsed threshold group whose table edits global
+defaults states them in its header through
+`getAlertThresholdsDefaultsSummary` in
+`frontend-modern/src/utils/alertThresholdsSectionPresentation.ts`. The helper
+reads the same column list and defaults object the group's resource table
+edits (each section hoists its columns into one module constant), and drops
+every metric `isAlertResourceMetricOff` reports, so the header can never show
+a limit the engine is not evaluating. Rules whose zero means a fallback rather
+than Off are stated as whole rules with their effective values: Docker's
+restart loop (count within its window) and memory-limit warn/critical, which
+`NormalizeDockerDefaults` always resolves to positive values. Backup age is
+summarized by its warning and critical days only, because fresh and stale
+hours colour the dashboard and never alert. A group switched off as a whole
+shows its Disabled badge and no defaults line. The CPU averaging line counts
+every configured profile override, including ones only the API sets. CPU averaging is tuning, not the page's
+answer. It is one collapsed disclosure stating the effective window and the
+number of platform overrides, with the same per-profile selects inside. Docker
+and Machines list their resource groups before Docker-only rules and the
+SMART card. Threshold values, inheritance, metric evaluation windows and
+persistence are unchanged.
+
 ### External watchdog is Pulse-availability evidence, not notification delivery
 
 The Alerts destinations surface owns the operator contract for an external
