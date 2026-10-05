@@ -124,8 +124,8 @@ func TestPodmanCPUCollectorHistoryAndAlerts(t *testing.T) {
 					},
 				},
 			}
-			requestHistory := func(token, id string) *httptest.ResponseRecorder {
-				req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=app-container&resourceId="+id+"&metric=cpu&range=5m", nil)
+			requestHistory := func(token, id, metric string) *httptest.ResponseRecorder {
+				req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=app-container&resourceId="+id+"&metric="+metric+"&range=5m&maxPoints=240", nil)
 				if token != "" {
 					req.Header.Set("X-API-Token", token)
 				}
@@ -137,7 +137,7 @@ func TestPodmanCPUCollectorHistoryAndAlerts(t *testing.T) {
 				token  string
 				status int
 			}{{"", http.StatusUnauthorized}, {reportToken, http.StatusForbidden}} {
-				if rec := requestHistory(test.token, fullID); rec.Code != test.status {
+				if rec := requestHistory(test.token, fullID, "cpu"); rec.Code != test.status {
 					t.Fatalf("History auth/scope status %d, want %d", rec.Code, test.status)
 				}
 			}
@@ -178,7 +178,7 @@ func TestPodmanCPUCollectorHistoryAndAlerts(t *testing.T) {
 					if len(memory) != i+1 || math.Abs(memory[len(memory)-1].Value-capacity) > 1e-8 || memory[len(memory)-1].Timestamp.Before(before) || memory[len(memory)-1].Timestamp.After(after) {
 						t.Errorf("sample %d memory History for %s = %+v, want capacity %g at receipt time", i, c.ID, memory, capacity)
 					}
-					rec := requestHistory(readToken, c.ID)
+					rec := requestHistory(readToken, c.ID, "cpu")
 					var history struct {
 						ResourceType string `json:"resourceType"`
 						ResourceID   string `json:"resourceId"`
@@ -195,6 +195,27 @@ func TestPodmanCPUCollectorHistoryAndAlerts(t *testing.T) {
 					point := history.Points[len(history.Points)-1]
 					if math.Abs(point.Value-capacity) > 1e-8 || point.Timestamp < before.Truncate(time.Second).UnixMilli() || point.Timestamp > after.Truncate(time.Second).UnixMilli() {
 						t.Errorf("sample %d stored HTTP History %s: %+v, want capacity %g at receipt time", i, c.ID, point, capacity)
+					}
+					// The existing drawer asks for all metrics, not just CPU. Require
+					// that response to preserve the same stored identity/value/time.
+					allRec := requestHistory(readToken, c.ID, "")
+					var all struct {
+						ResourceType string `json:"resourceType"`
+						ResourceID   string `json:"resourceId"`
+						Metrics      map[string][]struct {
+							Timestamp int64   `json:"timestamp"`
+							Value     float64 `json:"value"`
+							Min       float64 `json:"min"`
+							Max       float64 `json:"max"`
+						} `json:"metrics"`
+					}
+					if allRec.Code != http.StatusOK || json.Unmarshal(allRec.Body.Bytes(), &all) != nil || all.ResourceType != "app-container" || all.ResourceID != c.ID || len(all.Metrics["cpu"]) != i+1 || len(all.Metrics["memory"]) != i+1 {
+						t.Fatalf("sample %d all-metric drawer identity/coverage: %d %s", i, allRec.Code, allRec.Body.String())
+					}
+					cpuPoint := all.Metrics["cpu"][i]
+					memoryPoint := all.Metrics["memory"][i]
+					if cpuPoint.Timestamp != point.Timestamp || math.Abs(cpuPoint.Value-capacity) > 1e-8 || math.Abs(cpuPoint.Min-capacity) > 1e-8 || math.Abs(cpuPoint.Max-capacity) > 1e-8 || memoryPoint.Value != 25 {
+						t.Errorf("sample %d all-metric drawer changed CPU/memory: cpu %+v, memory %+v", i, cpuPoint, memoryPoint)
 					}
 				}
 				active := monitor.GetAlertManager().GetActiveAlerts()
