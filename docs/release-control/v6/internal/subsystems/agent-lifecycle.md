@@ -7520,13 +7520,26 @@ coarse activity class (`list`, `export`, `verify`, `summary`); the handler runs
 unchanged whether or not recording succeeds, and a router without persistence
 serves the request rather than failing it
 (`TestWithAuditReadActivity_NilPersistenceIsSafe`).
-### Monitor shutdown drains queued guest metadata writes
+### Monitor shutdown seals guest metadata admission and retains incomplete teardown
 
-`Monitor.Stop` waits for in-flight `GuestMetadataStore` writes before closing
-the metrics store, so a tenant monitor that has been stopped is guaranteed not
-to write into its data directory afterwards. Tenant offboarding and any caller
-that removes a tenant directory can rely on `Stop` having quiesced disk writes,
-rather than racing a detached goroutine.
+`Monitor.Stop` seals guest identity/metadata mutations and waits under its
+unchanged two-second metadata budget. One store-owned snapshot writer coalesces
+changes admitted during filesystem I/O; an older queued identity cannot overwrite
+an operator edit or reverse a newer accepted identity. `Close` reports both an
+incomplete drain and a final persistence error, while the public void Stop logs
+failure rather than claiming a successful stop.
+
+Tenant removal must first observe its monitoring loop exit and then a successful
+metadata close. Failure retains the monitor, cancellation/done handles and
+lifecycle guard: lazy recreation cannot start a second writer in the same
+directory. `BeginTenantDeletion` returns that failure to the organisation
+handler, which keeps persistence and offboarding callbacks untouched. Only
+successful shutdown allows directory deletion. A later explicit shutdown attempt
+may persist retained metadata after a completed write failure is repaired;
+admission stays sealed and no in-flight attempt is replayed. Other tenants keep their existing
+independent runtime. Store drain does not establish independent guest thaw,
+workload liveness or containment in installed software.
+
 ### Per-tenant resource stores are released on offboarding and shutdown
 
 `ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the

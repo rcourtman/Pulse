@@ -251,6 +251,20 @@ repair an older generated unit rather than adding a JSON-parsing wrapper.
   follow the [platform-specific guide](TEMPERATURE_MONITORING.md) for any needed
   setup change during a maintenance window.
 
+#### Container CPU differs from Docker or Podman stats
+
+Pulse uses the runtime host's total CPU capacity; `docker stats` and
+`podman stats` normally use 100% per logical CPU. Divide a per-CPU stats reading
+by the **reported runtime host CPU count**, not the physical Proxmox host's
+count when the engine runs inside a VM. Compare the same container and time
+interval in **CPU History**, not just a rounded table label. A dash or missing
+History is unavailable, not zero; an Active connection alone is not fresh CPU
+evidence.
+
+See [container CPU readings](DOCKER.md#container-cpu-readings) for worked
+examples, rounding and alert limits, and a passive comparison. Do not restart
+workloads, create CPU load or lower alert thresholds to test this.
+
 #### Docker hosts appearing/disappearing
 
 Cloned hosts can share a **saved Pulse agent ID**, not just an OS machine ID.

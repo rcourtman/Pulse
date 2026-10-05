@@ -17,6 +17,36 @@
 
 ## Purpose
 
+### Fresh broadcast projection owns one resource/target capture
+
+Canonical live, fallback and standalone-host continuity broadcast reads prefer
+the adapter's detached bulk resource/metrics-target capture. After host
+coalescing selects presentation identity, missing history targets are attached
+from that same capture, including authoritative absence. Stores without this
+optional capability retain the previous point-resolver fallback. Only the owned
+outer coalesced slice is decorated in place; nested source payloads stay read-only.
+
+Every read still observes complete current resource data and derives live alert
+health, metadata URL edits/clears and connected/ignored infrastructure. No
+timestamp-only cache, telemetry omission, policy change or new wire field is
+introduced. All existing catalogs, discovery/history coordinates, original
+observation times, LastSeen, identity and tenant/revocation boundaries remain.
+
+`broadcast_metrics_snapshot_test.go` compares the complete served JSON with an
+independent earlier projection across the metadata-heavy nine-provider demo,
+typed-view and same-time dirty cases; it also covers captured target replacement
+and continuity/metadata/live-alert boundaries. `monitor_host_agents_test.go`
+retains its one-materialization and live-change regression. Benchmarks include
+the exact parent's complete conversion and final JSON encoding, with cold,
+list-only, typed-clean and dirty inputs; they do not establish installed CPU/RSS
+relief, native identity refresh throughput or completion of #2199.
+
+Complete-content comparisons use one health-evaluation instant through a
+private clock seam. Production still samples real UTC at the same post-read
+boundary. The minute-boundary control requires age labels to advance without
+renewing LastSeen; comparisons retain every health field instead of stripping
+the reproduced `1m`/`2m` clock difference from JSON.
+
 ### Report identity lookups do not rebuild unrelated Kubernetes metadata
 
 The producer's two temporary host/Docker-host admission registries use a
@@ -4581,27 +4611,45 @@ host dataset evidence is copied onto the matching provider-owned ZFS pool;
 provider health, scan, device, and error fields remain authoritative. When the
 provider cannot return pool detail, monitoring may synthesize only a minimal
 `UNKNOWN` pool so valid dataset evidence is still inspectable.
-### Guest metadata writes are owned by the store and drained on shutdown
+### Guest identity admission coalesces owned JSON snapshots
 
-`persistGuestIdentity` no longer detaches its own goroutine per changed guest.
-It calls `GuestMetadataStore.SetAsync`, which tracks the write on a WaitGroup
-so `GuestMetadataStore.WaitForPendingWrites` can drain it. `Monitor.Stop` drains
-before closing the metrics store, under a bounded timeout matching
-`tenantMonitorShutdownTimeout` so a wedged store cannot hold up tenant teardown.
+`persistGuestIdentity` calls `GuestMetadataStore.RememberIdentity`, which merges
+only the last-known name/type under the store lock, preserves operator URLs,
+descriptions, tags and notes, and never downgrades OCI. Admission is visible
+before return. `SetAsync` deep-copies its full replacement at admission as well;
+caller mutation and goroutine scheduling cannot reverse accepted update order.
 
-Untracked writes were observable, not theoretical: a queued write could land
-after the monitor stopped and after a tenant directory was being removed,
-leaving a stray `guest_metadata.json.tmp` from the interrupted atomic write.
-That is what made `TestHostedTenantAgentInstallTokenCannotReportToOtherTenant`
-fail its `t.TempDir` cleanup with "directory not empty".
-`TestGuestMetadataStore_WaitForPendingWritesDrainsQueuedWrites` and
-`TestGuestMetadataStore_DataDirIsRemovableAfterDrain` pin the drain and fail if
-`SetAsync` stops tracking its goroutine.
+One lazy store-owned writer snapshots the complete metadata map. Filesystem I/O
+does not hold the memory lock, so changes admitted during that I/O are coalesced
+into the next complete snapshot. A separate write mutex serializes it with
+synchronous Set/Delete/ReplaceAll/UpdateAll and legacy migration; an older
+snapshot cannot resurrect a deleted or migrated entry or overwrite an operator
+edit. The existing tenant-local JSON shape, private file permissions and atomic
+temporary-file/rename path stay unchanged. A failed write is reported and not
+spin-retried; a later ordinary identity poll can retry the unpersisted state.
 
-Known and deliberately unchanged: each changed guest still triggers a full-file
-save, so one poll cycle over N changed guests performs N marshals and N atomic
-writes that serialize on the store mutex. Coalescing them is a behavioural
-change beyond the shutdown defect.
+`WaitForPendingWrites` reports quiescence, not durable success. `Close` seals
+mutation admission and observes the background writer and any admitted
+synchronous write within the unchanged caller budget. Timeout or final
+persistence failure remains an error. Monitor Stop logs that failure instead of
+claiming a clean stop; tenant removal retains the runtime owner and lifecycle
+guard, and organisation deletion refuses to remove its directory. An unfinished
+monitoring loop likewise prevents deletion. Shutdown does not cancel an admitted
+filesystem write or silently discard metadata to obtain a timely result. A later
+explicit close may retry a completed failed snapshot after filesystem repair;
+admission stays sealed, successful close is idempotent, and no close retries
+itself or overlaps a still-running attempt.
+
+`internal/config/guest_writer_control_test.go` exercises blocked snapshots at
+25/100 updates and caller-copy ownership. `guest_metadata_writer_test.go` covers
+ordered replacement, synchronous mutations, field-scoped identity, failure and
+explicit recovery, bounded close with blocked synchronous/asynchronous I/O,
+closed admission, real filesystem permissions and tenant separation. Existing
+ten-second drain and cleanup controls remain unchanged. Monitoring shutdown
+controls retain blocked writer/loop ownership; the real organisation-delete
+handler returns its safe failure before offboarding or directory removal.
+These are source controls, not an attribution of an earlier drain timeout,
+native CPU/RSS relief or all-path guest-agent recovery.
 
 ### Monitoring projects canonical resource policy into alert evaluation
 

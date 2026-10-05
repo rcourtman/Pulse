@@ -480,6 +480,40 @@ describe('docsLinks', () => {
     );
   });
 
+  it('explains container CPU scales without inventing a zero or forcing an alert', () => {
+    const docker = readFileSync(path.join(repoRoot, 'docs', 'DOCKER.md'), 'utf8');
+    const cpu = docker
+      .split('## Container CPU readings\n')[1]
+      .split('\n---')[0]
+      .replace(/\s+/g, ' ');
+    expect(cpu).toContain("Docker/Podman host's total CPU capacity");
+    expect(cpu).toContain('100% for one logical CPU');
+    expect(cpu).toContain('CPU count reported for the runtime host');
+    expect(cpu).toContain("not the physical Proxmox host's CPUs");
+    expect(cpu).toContain("not utilisation of the container's own CPU quota or cpuset");
+    expect(cpu).toContain('not an assumption about your host');
+    expect(cpu).toContain('v6.5.0-rc.1');
+    expect(cpu).toContain('not change stored readings or the values used by CPU alert evaluation');
+    expect(cpu).toContain('unavailable data, not a measured zero');
+    expect(cpu).toContain('Do not divide Pulse History again');
+    expect(cpu).toContain('separate sampling intervals can legitimately differ');
+    expect(cpu).toContain('Active does not prove fresh CPU samples');
+    expect(cpu).toContain('not that an alert should fire or that its notification was delivered');
+    expect(cpu).toContain('Do not restart workloads, create CPU load, lower alert thresholds');
+    expect(cpu).toContain('no forced alert test is needed');
+
+    const troubleshooting = readFileSync(path.join(repoRoot, 'docs', 'TROUBLESHOOTING.md'), 'utf8');
+    const entry = troubleshooting
+      .split('#### Container CPU differs from Docker or Podman stats\n')[1]
+      .split('\n#### ')[0]
+      .replace(/\s+/g, ' ');
+    expect(entry).toContain('DOCKER.md#container-cpu-readings');
+    expect(entry).toContain('reported runtime host CPU count');
+    expect(entry).toContain('same container and time interval');
+    expect(entry).toContain('unavailable, not zero');
+    expect(entry).toContain('Do not restart workloads, create CPU load or lower alert thresholds');
+  });
+
   it('keeps clone identity recovery separate from destructive OS or credential resets', () => {
     const troubleshooting = readFileSync(path.join(repoRoot, 'docs', 'TROUBLESHOOTING.md'), 'utf8');
     const agentGuide = readFileSync(path.join(repoRoot, 'docs', 'UNIFIED_AGENT.md'), 'utf8');

@@ -971,3 +971,40 @@ func TestHostContinuityOverlayReusedWithinRegistryGeneration(t *testing.T) {
 		t.Fatal("overlay was reused past its maximum age")
 	}
 }
+
+func TestMonitorAdapterProjectionSnapshotKeepsReplacedGeneration(t *testing.T) {
+	var absent *MonitorAdapter
+	rows, targets := absent.GetAllWithMetricsTargets()
+	if rows != nil || targets != nil {
+		t.Fatal("nil adapter invented a projection")
+	}
+	adapter := NewMonitorAdapter(NewRegistry(nil))
+	snapshot := readRefreshSnapshot("before")
+	adapter.PopulateFromSnapshot(snapshot)
+	first, firstTargets := adapter.GetAllWithMetricsTargets()
+	snapshot.VMs[0].Name = "after"
+	snapshot.VMs[0].ID = "new-node:201"
+	snapshot.VMs[0].VMID = 201
+	// Observation time is deliberately unchanged.
+	adapter.PopulateFromSnapshot(snapshot)
+	second, secondTargets := adapter.GetAllWithMetricsTargets()
+	if len(first) != 1 || len(second) != 1 || first[0].Name != "before" || second[0].Name != "after" {
+		t.Fatal("replacement lost complete fresh resource content")
+	}
+	if firstTargets[first[0].ID].ResourceID == secondTargets[second[0].ID].ResourceID {
+		t.Fatal("replacement retained old history coordinates")
+	}
+	for _, r := range second {
+		if want := adapter.MetricsTargetForResource(r.ID); want == nil || *want != secondTargets[r.ID] {
+			t.Fatal("target differs from the generation's point resolver")
+		}
+	}
+	other := NewMonitorAdapter(NewRegistry(nil))
+	snapshot.VMs[0].ID = "other-tenant:501"
+	snapshot.VMs[0].Name = "other-tenant"
+	other.PopulateFromSnapshot(snapshot)
+	otherRows, otherTargets := other.GetAllWithMetricsTargets()
+	if reflect.DeepEqual(otherRows, second) || reflect.DeepEqual(otherTargets, secondTargets) {
+		t.Fatal("separate adapters shared a tenant projection")
+	}
+}

@@ -496,6 +496,18 @@ func (a *MonitorAdapter) GetAll() []Resource {
 	return registry.List()
 }
 
+// GetAllWithMetricsTargets materializes one complete broadcast read, binding
+// its detached target map to the same registry as its detached resource list.
+// The adapter may publish a replacement immediately after this capture; neither
+// half of the returned read then consults that newer generation.
+func (a *MonitorAdapter) GetAllWithMetricsTargets() ([]Resource, map[string]MetricsTarget) {
+	registry := a.currentRegistry()
+	if registry == nil {
+		return nil, nil
+	}
+	return registry.ListWithMetricsTargets()
+}
+
 func (a *MonitorAdapter) unifiedAIAdapter() *UnifiedAIAdapter {
 	registry := a.currentRegistry()
 	if registry == nil {

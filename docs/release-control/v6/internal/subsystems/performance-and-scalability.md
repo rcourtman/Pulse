@@ -3744,3 +3744,26 @@ only explicit matching refreshes; the full `GuestDrawer.test.tsx` pins the
 unchanged cap and no live-recovery read. `guestHistorySegments.test.ts` pins
 complete point preservation at the existing request bound. Neither claims a
 timing benchmark, fleet CPU attribution or native incident relief.
+
+
+### Accessible Workloads backup evidence
+
+Both the Backup column badge and its hidden-column name indicator are native
+read-only disclosure buttons. Keyboard activation and an ordinary first touch
+open the same named-guest completion evidence that fine-pointer hover shows.
+Exact time and age use readable theme text rather than colour alone. The shared
+Dialog owns focus, Escape/backdrop dismissal and background isolation, and
+returns focus to the originating disclosure. Nested evidence activation must
+not trigger the enclosing guest row. Touch targets are at least 44px; compact
+desktop shields and the existing status colours remain.
+
+The evidence content is reactive to the same guest identity: running is not
+completion, malformed/future times are unknown, and only the existing absence
+sentinels mean no backup recorded. A removed row unmounts its disclosure and
+restores dialog isolation. Opening details adds no API/history read, collector,
+permission, backup/guest operation or polling timer. Dialog machinery and
+content are mounted only when opened; existing freshness thresholds and source
+projection are unchanged. `GuestRow.test.tsx` covers both nested row paths and
+`BackupStatusAccess.test.tsx` covers semantics, focus and observation changes.
+Browser proof exercises production rows with synthetic data, not native backup
+or guest-recovery acceptance.

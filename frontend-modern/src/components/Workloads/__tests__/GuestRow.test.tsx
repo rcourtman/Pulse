@@ -2314,3 +2314,28 @@ describe('app-container update button visibility', () => {
     expect(screen.queryByTestId('update-button')).toBeNull();
   });
 });
+
+describe('GuestRow backup evidence disclosure', () => {
+  it.each([{ columns: ['name', 'backup'] }, { columns: ['name'] }])(
+    'opens read-only evidence without triggering the enclosing row for columns %j',
+    ({ columns }) => {
+      const onClick = vi.fn();
+      renderGuestRow({
+        guest: makeGuest({ lastBackup: Date.now() - 3600000 }),
+        visibleColumnIds: columns,
+        onClick,
+      });
+      const trigger = screen.getByRole('button', {
+        name: columns.includes('backup') ? /^Backup status:/ : /^Last backup:/,
+      });
+      fireEvent.click(trigger);
+      expect(
+        screen.getByRole('dialog', { name: 'Backup status details for test-vm' }),
+      ).toHaveTextContent('Last completed backup');
+      expect(onClick).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Close backup details' }));
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(onClick).not.toHaveBeenCalled();
+    },
+  );
+});

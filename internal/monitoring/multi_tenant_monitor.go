@@ -20,6 +20,7 @@ type MultiTenantMonitor struct {
 	tenantCancel   map[string]context.CancelFunc
 	tenantDone     map[string]chan struct{}
 	tenantDeleting map[string]struct{}
+	tenantStopping map[string]struct{}
 	persistence    *config.MultiTenantPersistence
 	baseConfig     *config.Config
 	wsHub          *websocket.Hub
@@ -37,6 +38,7 @@ func NewMultiTenantMonitor(baseCfg *config.Config, persistence *config.MultiTena
 		tenantCancel:   make(map[string]context.CancelFunc),
 		tenantDone:     make(map[string]chan struct{}),
 		tenantDeleting: make(map[string]struct{}),
+		tenantStopping: make(map[string]struct{}),
 		persistence:    persistence,
 		baseConfig:     baseCfg, // Used as a template or for global settings
 		wsHub:          wsHub,
@@ -294,47 +296,34 @@ func (mtm *MultiTenantMonitor) Stop() {
 	log.Info().Msg("stopping MultiTenantMonitor and all tenant instances")
 
 	mtm.mu.Lock()
-	mtm.globalCancel()
-
-	monitors := make([]*Monitor, 0, len(mtm.monitors))
-	cancels := make([]context.CancelFunc, 0, len(mtm.tenantCancel))
-	doneSignals := make([]chan struct{}, 0, len(mtm.tenantDone))
-	for orgID, monitor := range mtm.monitors {
-		if cancel := mtm.tenantCancel[orgID]; cancel != nil {
-			cancels = append(cancels, cancel)
-		}
-		if done := mtm.tenantDone[orgID]; done != nil {
-			doneSignals = append(doneSignals, done)
-		}
-		monitors = append(monitors, monitor)
+	if mtm.globalCancel != nil {
+		mtm.globalCancel()
 	}
-	mtm.tenantCancel = make(map[string]context.CancelFunc)
-	mtm.tenantDone = make(map[string]chan struct{})
-	mtm.monitors = make(map[string]*Monitor)
+	orgIDs := make([]string, 0, len(mtm.monitors))
+	for orgID := range mtm.monitors {
+		orgIDs = append(orgIDs, orgID)
+	}
 	mtm.mu.Unlock()
-
-	for _, cancel := range cancels {
-		cancel()
-	}
-	for _, done := range doneSignals {
-		waitForTenantMonitorShutdown("", done)
-	}
-	for _, monitor := range monitors {
-		monitor.Stop()
+	for _, orgID := range orgIDs {
+		if err := mtm.removeTenant(orgID, false); err != nil {
+			log.Error().Err(err).Str("org_id", orgID).Msg("tenant shutdown incomplete; retaining runtime ownership and data")
+		}
 	}
 }
 
 // RemoveTenant stops and removes a specific tenant's monitor.
 // Useful for offboarding or manual reloading.
 func (mtm *MultiTenantMonitor) RemoveTenant(orgID string) {
-	mtm.removeTenant(orgID, false)
+	if err := mtm.removeTenant(orgID, false); err != nil {
+		log.Error().Err(err).Str("org_id", orgID).Msg("tenant removal incomplete; retaining runtime ownership and data")
+	}
 }
 
 // BeginTenantDeletion prevents lazy monitor initialization while a tenant's
 // persistence is being removed. Call FinishTenantDeletion after the
-// persistence operation completes, whether it succeeds or fails.
-func (mtm *MultiTenantMonitor) BeginTenantDeletion(orgID string) {
-	mtm.removeTenant(orgID, true)
+// persistence operation completes. An incomplete shutdown retains its guard.
+func (mtm *MultiTenantMonitor) BeginTenantDeletion(orgID string) error {
+	return mtm.removeTenant(orgID, true)
 }
 
 // FinishTenantDeletion releases the temporary lifecycle guard installed by
@@ -347,46 +336,70 @@ func (mtm *MultiTenantMonitor) FinishTenantDeletion(orgID string) {
 	}
 
 	mtm.mu.Lock()
-	delete(mtm.tenantDeleting, orgID)
+	// An incomplete removal still owns a runtime or writer. Do not release
+	// its guard merely because an offboarding caller ran deferred cleanup.
+	if _, retained := mtm.monitors[orgID]; !retained {
+		delete(mtm.tenantDeleting, orgID)
+	}
 	mtm.mu.Unlock()
 }
 
-func (mtm *MultiTenantMonitor) removeTenant(orgID string, deleting bool) {
+func (mtm *MultiTenantMonitor) removeTenant(orgID string, deleting bool) error {
 	orgID = strings.TrimSpace(orgID)
 	if orgID == "" {
-		return
+		return nil
 	}
 
 	mtm.mu.Lock()
-	if deleting {
-		if mtm.tenantDeleting == nil {
-			mtm.tenantDeleting = make(map[string]struct{})
-		}
-		mtm.tenantDeleting[orgID] = struct{}{}
+	if mtm.tenantDeleting == nil {
+		mtm.tenantDeleting = make(map[string]struct{})
 	}
-	monitor, exists := mtm.monitors[orgID]
+	if mtm.tenantStopping == nil {
+		mtm.tenantStopping = make(map[string]struct{})
+	}
+	if _, stopping := mtm.tenantStopping[orgID]; stopping {
+		mtm.mu.Unlock()
+		return fmt.Errorf("organization %q shutdown is already in progress", orgID)
+	}
+	mtm.tenantDeleting[orgID] = struct{}{}
+	mtm.tenantStopping[orgID] = struct{}{}
+	monitor := mtm.monitors[orgID]
 	cancel := mtm.tenantCancel[orgID]
 	done := mtm.tenantDone[orgID]
-	delete(mtm.monitors, orgID)
-	delete(mtm.tenantCancel, orgID)
-	delete(mtm.tenantDone, orgID)
 	mtm.mu.Unlock()
-
-	if !exists {
-		return
-	}
+	defer func() {
+		mtm.mu.Lock()
+		delete(mtm.tenantStopping, orgID)
+		mtm.mu.Unlock()
+	}()
 
 	log.Info().Str("org_id", orgID).Msg("stopping and removing tenant monitor")
 	if cancel != nil {
 		cancel()
 	}
-	waitForTenantMonitorShutdown(orgID, done)
-	monitor.Stop()
+	if !waitForTenantMonitorShutdown(orgID, done) {
+		return fmt.Errorf("organization %q monitoring loop has not stopped", orgID)
+	}
+	if monitor != nil {
+		if err := monitor.stop(); err != nil {
+			return fmt.Errorf("organization %q guest metadata shutdown incomplete: %w", orgID, err)
+		}
+	}
+
+	mtm.mu.Lock()
+	delete(mtm.monitors, orgID)
+	delete(mtm.tenantCancel, orgID)
+	delete(mtm.tenantDone, orgID)
+	if !deleting {
+		delete(mtm.tenantDeleting, orgID)
+	}
+	mtm.mu.Unlock()
+	return nil
 }
 
-func waitForTenantMonitorShutdown(orgID string, done <-chan struct{}) {
+func waitForTenantMonitorShutdown(orgID string, done <-chan struct{}) bool {
 	if done == nil {
-		return
+		return true
 	}
 
 	timer := time.NewTimer(tenantMonitorShutdownTimeout)
@@ -394,12 +407,14 @@ func waitForTenantMonitorShutdown(orgID string, done <-chan struct{}) {
 
 	select {
 	case <-done:
+		return true
 	case <-timer.C:
 		logger := log.Warn().Dur("timeout", tenantMonitorShutdownTimeout)
 		if orgID != "" {
 			logger = logger.Str("org_id", orgID)
 		}
 		logger.Msg("timed out waiting for tenant monitor loop to exit")
+		return false
 	}
 }
 

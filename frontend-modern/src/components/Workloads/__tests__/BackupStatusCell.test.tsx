@@ -9,7 +9,7 @@ const renderCell = (lastBackup: string | number | null, backupRunning?: boolean)
   const { container } = render(() => (
     <BackupStatusCell lastBackup={lastBackup} backupRunning={backupRunning} />
   ));
-  const badge = container.querySelector('span[aria-label^="Backup status"]');
+  const badge = container.querySelector('button[aria-label^="Backup status"]');
   if (!badge) throw new Error('backup badge not rendered');
   return badge as HTMLElement;
 };

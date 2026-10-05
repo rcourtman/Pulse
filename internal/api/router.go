@@ -132,6 +132,7 @@ type Router struct {
 	handoffExchangeRateLimiter      *RateLimiter
 	bootstrapTokenValidationLimiter *RateLimiter
 	tenantRateLimiter               *TenantRateLimiter
+	endpointRateLimitConfig         *EndpointRateLimitConfig
 	persistence                     *config.ConfigPersistence
 	multiTenant                     *config.MultiTenantPersistence
 	oidcMu                          sync.Mutex
@@ -166,6 +167,9 @@ type Router struct {
 	lifecycleCancel           context.CancelFunc
 	lifecycleWG               sync.WaitGroup
 	backgroundWorkersOnce     sync.Once
+	backgroundShutdownOnce    sync.Once
+	lifecycleMu               sync.Mutex
+	lifecycleStopped          bool
 	hostedMode                bool
 	stripeWebhookHandlers     *StripeWebhookHandlers
 	patrolLifecycleMu         sync.Mutex
@@ -234,6 +238,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		wsHub:                           wsHub,
 		reloadFunc:                      reloadFunc,
 		updateManager:                   updateManager,
+		endpointRateLimitConfig:         newEndpointRateLimitConfig(),
 		updateHistory:                   updateHistory,
 		exportLimiter:                   NewRateLimiter(5, 1*time.Minute),  // 5 attempts per minute
 		downloadLimiter:                 NewRateLimiter(60, 1*time.Minute), // downloads/installers per minute per IP
@@ -350,7 +355,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	// Auth context middleware extracts user/token info BEFORE tenant middleware
 	handler = AuthContextMiddleware(cfg, r.mtMonitor, handler)
 
-	handler = UniversalRateLimitMiddlewareWithConfig(newEndpointRateLimitConfig(), handler)
+	handler = UniversalRateLimitMiddlewareWithConfig(r.endpointRateLimitConfig, handler)
 	r.wrapped = handler
 	return r
 }
@@ -1560,6 +1565,11 @@ func (r *Router) recoverExecutingActions(actor string) {
 
 func (r *Router) startLifecycleWorker(worker func()) {
 	if r == nil || worker == nil {
+		return
+	}
+	r.lifecycleMu.Lock()
+	defer r.lifecycleMu.Unlock()
+	if r.lifecycleStopped {
 		return
 	}
 	r.lifecycleWG.Add(1)
@@ -2978,40 +2988,64 @@ func (r *Router) ShutdownRBAC() {
 	}
 }
 
+// ShutdownBackgroundWorkers seals worker admission and joins the workers
+// created by this Router. Call it after HTTP admission is stopped, before
+// closing the monitor and removing its data directory. It does not close
+// resource or RBAC stores; their existing owner shutdown methods still apply.
+func (r *Router) ShutdownBackgroundWorkers() {
+	r.shutdownBackgroundWorkers()
+}
+
 func (r *Router) shutdownBackgroundWorkers() {
-	if r.lifecycleCancel != nil {
-		r.lifecycleCancel()
+	if r == nil {
+		return
 	}
-	if r.updateManager != nil {
-		r.updateManager.Close()
-	}
-	if r.sessionStore != nil {
-		r.sessionStore.Shutdown()
-	}
-	if r.csrfStore != nil {
-		r.csrfStore.Shutdown()
-	}
-	if r.recoveryTokenStore != nil {
-		r.recoveryTokenStore.Shutdown()
-	}
-	if r.aiSettingsHandler != nil {
-		r.aiSettingsHandler.StopServices()
-	}
-	if r.aiHandler != nil {
-		r.aiHandler.clearApprovalStore()
-	}
-	if r.trueNASPoller != nil {
-		r.trueNASPoller.Stop()
-	}
-	if r.vmwarePoller != nil {
-		r.vmwarePoller.Stop()
-	}
-	if r.deployStore != nil {
-		if err := r.deployStore.Close(); err != nil {
-			log.Error().Err(err).Msg("Failed to close deploy store")
+	r.backgroundShutdownOnce.Do(func() {
+		r.lifecycleMu.Lock()
+		r.lifecycleStopped = true
+		if r.lifecycleCancel != nil {
+			r.lifecycleCancel()
 		}
-	}
-	r.lifecycleWG.Wait()
+		r.lifecycleMu.Unlock()
+		for _, limiter := range []*RateLimiter{
+			r.exportLimiter, r.downloadLimiter, r.signupRateLimiter,
+			r.handoffExchangeRateLimiter, r.bootstrapTokenValidationLimiter,
+		} {
+			limiter.Stop()
+		}
+		r.endpointRateLimitConfig.Stop()
+		r.tenantRateLimiter.Stop()
+		if r.updateManager != nil {
+			r.updateManager.Close()
+		}
+		if r.sessionStore != nil {
+			r.sessionStore.Shutdown()
+		}
+		if r.csrfStore != nil {
+			r.csrfStore.Shutdown()
+		}
+		if r.recoveryTokenStore != nil {
+			r.recoveryTokenStore.Shutdown()
+		}
+		if r.aiSettingsHandler != nil {
+			r.aiSettingsHandler.StopServices()
+		}
+		if r.aiHandler != nil {
+			r.aiHandler.clearApprovalStore()
+		}
+		if r.trueNASPoller != nil {
+			r.trueNASPoller.Stop()
+		}
+		if r.vmwarePoller != nil {
+			r.vmwarePoller.Stop()
+		}
+		if r.deployStore != nil {
+			if err := r.deployStore.Close(); err != nil {
+				log.Error().Err(err).Msg("Failed to close deploy store")
+			}
+		}
+		r.lifecycleWG.Wait()
+	})
 }
 
 // StartAIChat starts the AI chat service
