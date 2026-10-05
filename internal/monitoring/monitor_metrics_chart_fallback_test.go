@@ -370,13 +370,8 @@ func TestGetPhysicalDiskTemperatureCharts_UsesUnifiedReadStateDiskViews(t *testi
 	if entry.Instance != "lab-a" {
 		t.Fatalf("chart instance = %q, want lab-a", entry.Instance)
 	}
-	if len(entry.Temperature) != 2 {
-		t.Fatalf("expected padded 2-point sparkline series, got %d", len(entry.Temperature))
-	}
-	for _, point := range entry.Temperature {
-		if point.Value != 42 {
-			t.Fatalf("expected canonical disk temperature 42 in padded series, got %.2f", point.Value)
-		}
+	if len(entry.Temperature) != 0 {
+		t.Fatalf("a current temperature must not fabricate historical samples: %+v", entry.Temperature)
 	}
 }
 

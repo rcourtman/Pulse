@@ -394,39 +394,27 @@ func (p *Provider) PhysicalDiskTemperatureHistory(ctx context.Context, duration 
 		return nil, fmt.Errorf("truenas provider has no cached snapshot")
 	}
 
-	identifiers := make([]string, 0, len(snapshot.Disks))
-	metricIDsByIdentifier := make(map[string]string, len(snapshot.Disks)*3)
-	for _, disk := range snapshot.Disks {
-		metricID := trueNASDiskMetricResourceID(disk)
-		if metricID == "" {
-			continue
-		}
-		if name := strings.TrimSpace(disk.Name); name != "" {
-			identifiers = append(identifiers, name)
-		}
-		for _, key := range trueNASDiskHistoryLookupKeys(disk) {
-			if _, exists := metricIDsByIdentifier[key]; !exists {
-				metricIDsByIdentifier[key] = metricID
-			}
-		}
-	}
-	identifiers = dedupeStrings(identifiers)
+	identifiers, metricIDsByIdentifier := trueNASDiskHistoryIdentities(snapshot.Disks)
 	if len(identifiers) == 0 {
 		return nil, nil
 	}
 
 	nativeHistory, err := historyFetcher.DiskTemperatureHistory(ctx, identifiers, duration)
-	if err != nil {
+	if len(nativeHistory) == 0 {
 		return nil, err
 	}
-	if len(nativeHistory) == 0 {
-		return nil, nil
+	// Inventory may change while the RPC is in flight. Never attach an old
+	// disk's series to a replacement occupying the same native device name.
+	currentSnapshot := p.Snapshot()
+	if currentSnapshot == nil {
+		return nil, err
 	}
+	_, currentMetricIDs := trueNASDiskHistoryIdentities(currentSnapshot.Disks)
 
 	historyByMetricID := make(map[string][]TimeSeriesPoint, len(nativeHistory))
 	for identifier, points := range nativeHistory {
 		metricID := metricIDsByIdentifier[strings.TrimSpace(identifier)]
-		if metricID == "" || len(points) == 0 {
+		if metricID == "" || currentMetricIDs[strings.TrimSpace(identifier)] != metricID || len(points) == 0 {
 			continue
 		}
 		copied := make([]TimeSeriesPoint, len(points))
@@ -434,9 +422,35 @@ func (p *Provider) PhysicalDiskTemperatureHistory(ctx context.Context, duration 
 		historyByMetricID[metricID] = copied
 	}
 	if len(historyByMetricID) == 0 {
-		return nil, nil
+		return nil, err
 	}
-	return historyByMetricID, nil
+	return historyByMetricID, err
+}
+
+func trueNASDiskHistoryIdentities(disks []Disk) ([]string, map[string]string) {
+	identifiers := make([]string, 0, len(disks))
+	metricIDs := make(map[string]string, len(disks)*3)
+	counts := make(map[string]int, len(disks))
+	for _, disk := range disks {
+		counts[trueNASDiskMetricResourceID(disk)]++
+	}
+	for _, disk := range disks {
+		metricID := trueNASDiskMetricResourceID(disk)
+		if metricID == "" || counts[metricID] != 1 {
+			continue
+		}
+		if name := strings.TrimSpace(disk.Name); name != "" {
+			identifiers = append(identifiers, name)
+		}
+		for _, key := range trueNASDiskHistoryLookupKeys(disk) {
+			if existing, exists := metricIDs[key]; exists && existing != metricID {
+				metricIDs[key] = "" // ambiguous aliases stay unusable
+			} else if !exists {
+				metricIDs[key] = metricID
+			}
+		}
+	}
+	return dedupeStrings(identifiers), metricIDs
 }
 
 // Close releases resources held by the active fetcher, if supported.

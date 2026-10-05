@@ -2349,6 +2349,40 @@ truthfulness, not native thaw, containing-release or workload acceptance.
 
 ## Current State
 
+### TrueNAS physical-disk History — issue #2519
+
+The existing disk drawer's `smart_temp` chart consumes the same tenant-scoped
+native temperature-history provider as physical-disk sparklines when local
+history is shallow. Sufficient local coverage and unrelated SMART/I/O metrics
+make no new native call. Native Celsius values retain their original sample
+times; downsampling and existing canonical metrics-target resolution remain.
+Neither chart pads a missing or single sample into a fabricated flat history.
+
+A successful `reporting.get_data` response with missing disk series permits
+one `reporting.netdata_get_data` query for those identifiers alone. Both reads
+share the original start/end window, `aggregate:true`, authenticated session
+and operation deadline. Failure of the first method does not select another
+method, transport or credential. Failure of the second is retained alongside
+independently successful series; missing disks do not become observed zero.
+Only requested, valid timestamped samples inside the requested window are
+admitted, never aggregation summaries, future values or unrequested identities.
+
+Providers map native disk names through the current inventory to canonical
+metric IDs, detach returned series and reject ambiguous aliases. In-flight
+inventory replacement cannot attach an old disk's series to a new disk at its
+former device name. Pollers isolate tenants, reject cross-connection ambiguous
+metric IDs and recheck provider ownership after reads so removed/replaced
+connections cannot serve stale in-flight output. No host-temperature summary,
+CPU substitution, permission widening, store schema or retention change is
+introduced. Native appliance and containing-release acceptance remain separate
+from synthetic client/provider/authenticated-route controls.
+
+`disk_history_netdata_test.go`, `disk_history_identity_test.go`,
+`truenas_disk_history_scope_test.go`, `disk_drawer_native_history_test.go` and
+`truenas_disk_history_integration_test.go` cover method distinction, partial
+failure, empty/invalid/windowed samples, canonical identity, revocation,
+existing reader behaviour and the real authenticated/scoped Pulse route.
+
 V2 partial inventories preserve usable filesystem readings while leaving typed-helper health degraded. Global inventory failure still yields no inventory. No host-network exception, guest mutation, database/retention change or temperature substitution accompanies this repair.
 
 ### Discovery observes VM guest execution pauses
