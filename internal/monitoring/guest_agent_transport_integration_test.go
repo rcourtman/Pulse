@@ -111,7 +111,18 @@ func testGuestAgentTransportDeferralKeepsLastKnownHistory(t *testing.T) {
 			res.CPU = 0.2
 			for i := 0; i < 2; i++ {
 				deferred, source := build()
-				if deferred.ID != initial.ID || deferred.GuestAgentStatus != "deferred" || deferred.DiskStatusReason != "prev-agent-cooldown" || deferred.Memory.Used != initial.Memory.Used || source != "previous-snapshot" || deferred.Disk.Used != initial.Disk.Used || !reflect.DeepEqual(deferred.NetworkInterfaces, initial.NetworkInterfaces) {
+				wantReason := "prev-agent-cooldown"
+				if i == 0 {
+					// Filesystem now receives the original error, before optional
+					// reads observe the resulting shared cooldown.
+					wantReason = "prev-agent-completion-unverified"
+					if kind == "lost reply" {
+						wantReason = "prev-agent-timeout"
+					} else if kind == "redirect" {
+						wantReason = "prev-agent-redirect"
+					}
+				}
+				if deferred.ID != initial.ID || deferred.GuestAgentStatus != "deferred" || deferred.DiskStatusReason != wantReason || deferred.Memory.Used != initial.Memory.Used || source != "previous-snapshot" || deferred.Disk.Used != initial.Disk.Used || !reflect.DeepEqual(deferred.NetworkInterfaces, initial.NetworkInterfaces) {
 					t.Fatalf("uncertain command lost truthful continuity: source=%s vm=%+v", source, deferred)
 				}
 				if !reflect.DeepEqual(m.vmAgentMemCache[memKey], memory) || !reflect.DeepEqual(m.guestMetadataCache[metadataKey], metadata) {

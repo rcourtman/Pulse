@@ -66,60 +66,11 @@ func (m *Monitor) applyVMStatusDetails(
 	res.Lock = status.Lock
 	state.detailedStatus = status
 	state.guestAgentStatus, state.guestAgentExpected = vmGuestAgentRuntimeState(status, recentGuestAgentEvidence)
-	state.memTotal, state.memUsed, state.memorySource = m.resolveGuestStatusMemory(
-		ctx,
-		client,
-		instanceName,
-		res.Name,
-		res.Node,
-		res.VMID,
-		guestID,
-		status,
-		vmIDToHostAgent,
-		state.memTotal,
-		state.memorySource,
-		&state.guestRaw,
-	)
-
-	mergeVMRuntimeCounters(state, status)
-
-	// Gather guest metadata from the agent when available
-	guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion := m.fetchGuestAgentMetadata(ctx, client, instanceName, res.Node, res.Name, res.VMID, status, false)
-	if len(guestIPs) > 0 {
-		state.ipAddresses = guestIPs
-	}
-	if len(guestIfaces) > 0 {
-		state.networkInterfaces = guestIfaces
-	}
-	if guestOSName != "" {
-		state.osName = guestOSName
-	}
-	if guestOSVersion != "" {
-		state.osVersion = guestOSVersion
-	}
-	if guestAgentVersion != "" {
-		state.agentVersion = guestAgentVersion
-	}
-
-	// Always try to get filesystem info if agent is enabled
-	// Prefer guest agent data over cluster/resources data for accuracy
+	// Filesystem usage is cross-platform. Read it before optional Linux memory
+	// and metadata commands can start a shared uncertainty pause. Every command
+	// still verifies the same operation lock and is admitted only once.
 	if status.Agent.IsAvailable() {
-		var fsDisks []models.Disk
-		state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, fsDisks, state.diskFromAgent, state.diskStatusReason = m.updateVMDisksFromGuestAgentFSInfo(
-			ctx,
-			instanceName,
-			res,
-			client,
-			state.diskTotal,
-			state.diskUsed,
-			state.diskUsage,
-		)
-		if len(fsDisks) > 0 {
-			state.individualDisks = fsDisks
-		}
-		if guestAgentDiskDeferred(state.diskStatusReason) {
-			state.guestAgentStatus = "deferred"
-		}
+		m.applyVMGuestAgentFSInfo(ctx, instanceName, res, client, state)
 	} else {
 		// Agent disabled - show allocated disk size
 		if state.diskTotal > 0 {
@@ -139,6 +90,61 @@ func (m *Monitor) applyVMStatusDetails(
 			Msg("VM guest agent is not currently queryable")
 	}
 
+	var memoryDeferred bool
+	state.memTotal, state.memUsed, state.memorySource, memoryDeferred = m.resolveGuestStatusMemory(
+		ctx,
+		client,
+		instanceName,
+		res.Name,
+		res.Node,
+		res.VMID,
+		guestID,
+		status,
+		vmIDToHostAgent,
+		state.memTotal,
+		state.memorySource,
+		&state.guestRaw,
+	)
+
+	if memoryDeferred {
+		state.guestAgentStatus = "deferred"
+	}
+
+	mergeVMRuntimeCounters(state, status)
+
+	// Gather guest metadata from the agent when available
+	guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion, metadataDeferred := m.fetchGuestAgentMetadata(ctx, client, instanceName, res.Node, res.Name, res.VMID, status, false)
+	if metadataDeferred {
+		state.guestAgentStatus = "deferred"
+	}
+	if len(guestIPs) > 0 {
+		state.ipAddresses = guestIPs
+	}
+	if len(guestIfaces) > 0 {
+		state.networkInterfaces = guestIfaces
+	}
+	if guestOSName != "" {
+		state.osName = guestOSName
+	}
+	if guestOSVersion != "" {
+		state.osVersion = guestOSVersion
+	}
+	if guestAgentVersion != "" {
+		state.agentVersion = guestAgentVersion
+	}
+}
+
+func (m *Monitor) applyVMGuestAgentFSInfo(ctx context.Context, instanceName string, res proxmox.ClusterResource, client PVEClientInterface, state *vmBuildState) {
+	var fsDisks []models.Disk
+	state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, fsDisks, state.diskFromAgent, state.diskStatusReason = m.updateVMDisksFromGuestAgentFSInfo(
+		ctx, instanceName, res, client, state.diskTotal, state.diskUsed, state.diskUsage,
+	)
+	if len(fsDisks) > 0 {
+		state.individualDisks = fsDisks
+	}
+	if guestAgentDiskDeferred(state.diskStatusReason) {
+		state.guestAgentStatus = "deferred"
+	}
 }
 
 func mergeVMRuntimeCounters(state *vmBuildState, status *proxmox.VMStatus) {
@@ -284,7 +290,8 @@ func (m *Monitor) buildVMFromClusterResource(
 		guestAgentAvailable := shouldQueryGuestAgent(state.detailedStatus, prevVM, now) ||
 			m.hasRecentGuestMetadataEvidence(instanceName, res.Node, res.VMID, now)
 		if guestAgentAvailable && res.Lock == "" && state.detailedStatus == nil {
-			guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion := m.fetchGuestAgentMetadata(
+			m.applyVMGuestAgentFSInfo(ctx, instanceName, res, client, &state)
+			guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion, metadataDeferred := m.fetchGuestAgentMetadata(
 				ctx,
 				client,
 				instanceName,
@@ -294,6 +301,9 @@ func (m *Monitor) buildVMFromClusterResource(
 				nil,
 				true,
 			)
+			if metadataDeferred {
+				state.guestAgentStatus = "deferred"
+			}
 			if len(guestIPs) > 0 {
 				state.ipAddresses = guestIPs
 			}
@@ -310,22 +320,6 @@ func (m *Monitor) buildVMFromClusterResource(
 				state.agentVersion = guestAgentVersion
 			}
 
-			var fsDisks []models.Disk
-			state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, fsDisks, state.diskFromAgent, state.diskStatusReason = m.updateVMDisksFromGuestAgentFSInfo(
-				ctx,
-				instanceName,
-				res,
-				client,
-				state.diskTotal,
-				state.diskUsed,
-				state.diskUsage,
-			)
-			if len(fsDisks) > 0 {
-				state.individualDisks = fsDisks
-			}
-			if guestAgentDiskDeferred(state.diskStatusReason) {
-				state.guestAgentStatus = "deferred"
-			}
 			state.guestAgentExpected = true
 			if state.guestAgentStatus != "deferred" && (len(guestIPs) > 0 || len(guestIfaces) > 0 || guestOSName != "" || guestOSVersion != "" || guestAgentVersion != "" || state.diskFromAgent) {
 				state.guestAgentStatus = "available"
