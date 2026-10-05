@@ -172,6 +172,11 @@ class AgentDocsTest(unittest.TestCase):
                             self.assertEqual(result.returncode, expected, result.stderr.decode())
                             if expected == 0:
                                 self.assertEqual((home / ".config/pulse" / output).read_bytes(), b"# harmless installer fixture\n")
+                                if name == NAMES[1]:
+                                    self.assertEqual(stat.S_IMODE((home / ".config/pulse" / output).stat().st_mode), 0o600)
+                            elif name == NAMES[1]:
+                                self.assertFalse((home / ".config/pulse" / output).exists(),
+                                                 "a failed temporary download must not become the cleanup helper")
                             if expected == 60:
                                 self.assertEqual(requests, [])
                             for requested_path, headers in requests:
