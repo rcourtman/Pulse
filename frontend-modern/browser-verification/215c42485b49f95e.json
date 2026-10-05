@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "94ac386abfe13a8eb0109ac1eea4c087390f9717",
+  "verified_at": "2026-10-05T05:31:34Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx": "137179821488ebf769125cc3eb76b58a48c28a8a5769efd12ac6b8487d873aca"
+  },
+  "routes": [
+    "/proxmox/mail"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Mail Gateway at 1440: both rows are single-line again. mail-gateway-eu has an open message-age alert, so its Queue number (17) reads amber and bold with the alert message on hover, where before the row grew a second line reading Message Age under the name",
+    "The alerting row keeps its tint and amber dot, mail-gateway-us is unmarked",
+    "Phone at 390: the five-track projection stays single-line, the Q value carries the amber mark",
+    "Tapping mail-gateway-eu on the phone opens the drawer with Needs attention and the queued-messages alert text",
+    "Dark mode at 1440: the amber Queue number stays legible"
+  ],
+  "interactions": [
+    "Tapped the alerting gateway on a 390 phone and read the drawer"
+  ]
+}

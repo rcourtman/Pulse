@@ -77,4 +77,11 @@ describe('ProxmoxMailGatewayTable phone presentation', () => {
     );
     expect(mailGatewayDrawerSource).toContain('<DrawerAttentionSection');
   });
+
+  it('keeps alerting rows single-line by marking the metric the alert is about', () => {
+    // Platform table rows stay on one line, so an alert colours its own number
+    // rather than stacking a reason under the gateway name.
+    expect(mailGatewayTableSource).toContain('<AlertedMetric alerts={columnAlerts(');
+    expect(mailGatewayTableSource).not.toContain('data-mail-gateway-alert-reason');
+  });
 });
