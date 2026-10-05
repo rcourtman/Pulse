@@ -66,7 +66,9 @@ class AgentDocsTest(unittest.TestCase):
                 shell = "\n".join(blocks(name))
                 self.assertNotRegex(shell, r"--token(?:\s|=)|PULSE_TOKEN=|curl[^\n]*http://")
                 self.assertNotRegex(shell, r"curl[^`]*\|\s*(?:sudo\s+)?bash")
-                self.assertIn("Stop if the download fails", doc.decode())
+                warning = ("Stop if preparation or download fails" if name == "TEMPERATURE_MONITORING.md"
+                           else "Stop if the download fails")
+                self.assertIn(warning, doc.decode())
         windows = "\n".join(blocks(NAMES[0], "powershell"))
         self.assertNotRegex(windows, r"(?i)\biex\b|\birm\b|Invoke-Expression|http://|\$env:PULSE_TOKEN\s*=")
 
@@ -133,10 +135,16 @@ class AgentDocsTest(unittest.TestCase):
                    CURL_RECEIPT=str(home / "curl-argv.json"))
         command = command.replace("https://pulse.example.com", f"https://{hostname}:{port}")
         command = command.replace("https://raw.githubusercontent.com", f"https://{hostname}:{port}")
+        ignores_defaults = "curl --disable " in command
         if ca is not None:
-            command = command.replace("curl ", f'curl --cacert "{ca}" ', 1)
+            if ignores_defaults:
+                command = command.replace("curl --disable ", f'curl --disable --cacert "{ca}" ', 1)
+            else:
+                command = command.replace("curl ", f'curl --cacert "{ca}" ', 1)
         result = subprocess.run(["bash", "-eu", "-c", command], env=env, capture_output=True, timeout=20)
         argv = json.loads((home / "curl-argv.json").read_text())
+        if ignores_defaults:
+            self.assertEqual(argv[0], "--disable", "adding the CA must preserve first-option default isolation")
         self.assertNotIn(TOKEN, " ".join(argv))
         self.assertNotIn(TOKEN.encode(), result.stdout + result.stderr)
         for argument in ("--connect-timeout", "--max-time", "--fail", "--output"):
@@ -148,7 +156,7 @@ class AgentDocsTest(unittest.TestCase):
     def test_downloads_require_verified_tls_and_success(self):
         for name, path, needle, output in (
             (NAMES[0], "/install.sh", '--output "$HOME/.config/pulse/agent-install.sh"', "agent-install.sh"),
-            (NAMES[1], CLEANUP_PATH, '--output "$HOME/.config/pulse/sensor-proxy-uninstall.sh"', "sensor-proxy-uninstall.sh"),
+            (NAMES[1], CLEANUP_PATH, 'download_file=$(mktemp "$config_dir/sensor-cleanup-download.XXXXXX")', "sensor-proxy-uninstall.sh"),
         ):
             for status, ca, hostname, expected in (
                 (200, self.cert, "localhost", 0),
@@ -165,6 +173,10 @@ class AgentDocsTest(unittest.TestCase):
                             self.assertEqual(result.returncode, expected, result.stderr.decode())
                             if expected == 0:
                                 self.assertEqual((home / ".config/pulse" / output).read_bytes(), b"# harmless installer fixture\n")
+                                self.assertEqual(stat.S_IMODE((home / ".config/pulse" / output).stat().st_mode), 0o600)
+                            elif name == NAMES[1]:
+                                self.assertFalse((home / ".config/pulse" / output).exists(),
+                                                 "a failed temporary download must not become the cleanup helper")
                             if expected == 60:
                                 self.assertEqual(requests, [])
                             for requested_path, headers in requests:

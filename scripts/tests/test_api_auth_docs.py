@@ -68,7 +68,7 @@ FLEET_ACTION_REQUESTS = (
 
 
 @contextmanager
-def recording_server(status: int = 200):
+def recording_server(status: int = 200, response_body: bytes = b'{"fixture":true}\n'):
     requests = []
 
     class Handler(BaseHTTPRequestHandler):
@@ -77,7 +77,7 @@ def recording_server(status: int = 200):
             requests.append((self.path, dict(self.headers), self.command, body))
             self.send_response(status)
             self.end_headers()
-            self.wfile.write(PRIVATE_BODY)
+            self.wfile.write(response_body)
 
         do_GET = record_request
         do_POST = record_request
@@ -99,7 +99,8 @@ def recording_server(status: int = 200):
         thread.join(timeout=5)
 
 
-def exercise_curl(case: unittest.TestCase, home: Path, header_text: str, port: int, request: str):
+def exercise_curl(case: unittest.TestCase, home: Path, header_text: str, port: int, request: str,
+                  *, use_api_helper: bool = False):
     """Execute the exact copied recipe; capture argv and hostile curl defaults."""
     header = home / ".config/pulse/api-header"
     header.parent.mkdir(parents=True, exist_ok=True)
@@ -132,8 +133,14 @@ def exercise_curl(case: unittest.TestCase, home: Path, header_text: str, port: i
             del env[key]
     # Readers define the documented helper before copying one call. Do not
     # invent a replacement client or expect response bodies on stdout.
-    helper = commands()[1].replace("http://127.0.0.1:7655", f"http://127.0.0.1:{port}")
-    request = helper + "\n" + request
+    if use_api_helper:
+        helper = commands()[1].replace("http://127.0.0.1:7655", f"http://127.0.0.1:{port}")
+        request = helper + "\n" + request
+    else:
+        # Other guides import this recorder to test their own direct curl
+        # examples. Their command/response contract must not be silently
+        # replaced with the API guide's helper.
+        request = request.replace("http://127.0.0.1:7655", f"http://127.0.0.1:{port}")
     previous_responses = {path: path.read_bytes() for path in header.parent.glob("api-response.*")}
     result = subprocess.run(["bash", "-eu", "-c", request], env=env, capture_output=True, timeout=10)
     case.assertTrue(receipt.exists(), "documented helper did not reach the curl fixture")
@@ -143,18 +150,19 @@ def exercise_curl(case: unittest.TestCase, home: Path, header_text: str, port: i
     case.assertIn("@" + str(header), argv)
     case.assertNotIn(b"synthetic-doc-test-token", result.stdout + result.stderr)
     case.assertFalse(trace.exists(), "local curl configuration must not create a credential trace")
-    observation = re.fullmatch(rb"HTTP ([0-9]{3})\nPrivate response: ([^\n]+)\n", result.stdout)
-    case.assertIsNotNone(observation, "only status and the private response location should be printed")
-    response = Path(os.fsdecode(observation[2]))
-    case.assertEqual(response.parent, header.parent)
-    case.assertTrue(response.name.startswith("api-response."))
-    case.assertNotIn(response, previous_responses, "each call must retain a new response file")
-    case.assertEqual(response.read_bytes(), PRIVATE_BODY)
-    case.assertEqual(stat.S_IMODE(response.stat().st_mode), 0o600)
-    case.assertEqual(stat.S_IMODE(header.parent.stat().st_mode), 0o700)
-    for path, body in previous_responses.items():
-        case.assertEqual(path.read_bytes(), body, "later calls must not replace earlier evidence")
-    case.assertEqual(len(list(header.parent.glob("api-response.*"))), len(previous_responses) + 1)
+    if use_api_helper:
+        observation = re.fullmatch(rb"HTTP ([0-9]{3})\nPrivate response: ([^\n]+)\n", result.stdout)
+        case.assertIsNotNone(observation, "only status and the private response location should be printed")
+        response = Path(os.fsdecode(observation[2]))
+        case.assertEqual(response.parent, header.parent)
+        case.assertTrue(response.name.startswith("api-response."))
+        case.assertNotIn(response, previous_responses, "each call must retain a new response file")
+        case.assertEqual(response.read_bytes(), PRIVATE_BODY)
+        case.assertEqual(stat.S_IMODE(response.stat().st_mode), 0o600)
+        case.assertEqual(stat.S_IMODE(header.parent.stat().st_mode), 0o700)
+        for path, body in previous_responses.items():
+            case.assertEqual(path.read_bytes(), body, "later calls must not replace earlier evidence")
+        case.assertEqual(len(list(header.parent.glob("api-response.*"))), len(previous_responses) + 1)
     return result
 
 
@@ -276,10 +284,11 @@ class APIAuthDocsTest(unittest.TestCase):
 
     def run_documented_request(self, home: Path, header_text: str, port: int, request=None):
         return exercise_curl(self, home, header_text, port,
-                             request if request is not None else recipe("/api/state/summary"))
+                             request if request is not None else recipe("/api/state/summary"),
+                             use_api_helper=True)
 
     def test_header_file_sends_each_supported_header_without_exposing_argv(self):
-        with tempfile.TemporaryDirectory() as temporary, recording_server() as (port, requests):
+        with tempfile.TemporaryDirectory() as temporary, recording_server(response_body=PRIVATE_BODY) as (port, requests):
             for key, value in (("X-API-Token", TEST_TOKEN), ("Authorization", "Bearer " + TEST_TOKEN)):
                 with self.subTest(header=key):
                     result = self.run_documented_request(Path(temporary), f"{key}: {value}", port)
@@ -289,7 +298,7 @@ class APIAuthDocsTest(unittest.TestCase):
                     self.assertNotIn("X-Curlrc-Injected", requests[-1][1])
 
     def test_fleet_action_recipes_send_expected_methods_paths_and_json(self):
-        with tempfile.TemporaryDirectory() as temporary, recording_server() as (port, requests):
+        with tempfile.TemporaryDirectory() as temporary, recording_server(response_body=PRIVATE_BODY) as (port, requests):
             for key, value in (("X-API-Token", TEST_TOKEN), ("Authorization", "Bearer " + TEST_TOKEN)):
                 for method, path, body in FLEET_ACTION_REQUESTS:
                     with self.subTest(header=key, method=method, path=path):
@@ -312,7 +321,7 @@ class APIAuthDocsTest(unittest.TestCase):
 
     def test_each_fleet_action_recipe_surfaces_auth_errors_without_following_steps(self):
         for status in (401, 403):
-            with tempfile.TemporaryDirectory() as temporary, recording_server(status) as (port, requests):
+            with tempfile.TemporaryDirectory() as temporary, recording_server(status, PRIVATE_BODY) as (port, requests):
                 for _method, path, _body in FLEET_ACTION_REQUESTS:
                     with self.subTest(status=status, path=path):
                         before = len(requests)
@@ -326,7 +335,7 @@ class APIAuthDocsTest(unittest.TestCase):
     def test_http_auth_errors_fail_instead_of_looking_successful(self):
         for status in (401, 403):
             with self.subTest(status=status), tempfile.TemporaryDirectory() as temporary:
-                with recording_server(status) as (port, _):
+                with recording_server(status, PRIVATE_BODY) as (port, _):
                     result = self.run_documented_request(Path(temporary), "X-API-Token: " + TEST_TOKEN, port)
                     self.assertEqual(result.returncode, 22, result.stderr.decode())
                     self.assertIn(f"HTTP {status}\n".encode(), result.stdout)
