@@ -330,6 +330,16 @@ wiring is checked by `TestBenchmarkQualificationRetainsProvenance` in
 `scripts/installtests/build_release_assets_test.go`; executed collection cases
 remain in `scripts/tests/test-ci-benchmarks.sh`.
 
+Paired pull-request runs sample only the packages whose in-module dependency
+closure the change reaches, recorded as `selection=` and `packages=` in the
+metadata. Module files, unclean or non-Git trees and an unreadable package
+graph select every package; unpaired branch runs always sample every package.
+An empty selection leaves nothing to compare and is not a passed comparison of
+skipped packages. The paired step's wall-clock budget sits below its timeout so
+an outgrown suite stops with each package's mean cost per sample, not a bare
+timeout; `TestPairedBenchmarksStopInsideTheirBudget` checks that ordering and
+the selection and budget cases run in `scripts/tests/test-ci-benchmarks.sh`.
+
 ### Public Helm exact-package receipt
 
 The post-activation public Pages verification in `.github/workflows/helm-pages.yml`

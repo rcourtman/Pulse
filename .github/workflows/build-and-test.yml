@@ -546,12 +546,18 @@ jobs:
           PULSE_BENCH_SAMPLE_COUNT: "10"
         run: bash scripts/run-ci-benchmarks.sh
 
+      # Only packages whose dependency closure the pull request changes are
+      # sampled. A module or shared-model change still samples nearly every
+      # package: about 24 minutes, warm-up included, as of October 2026. The
+      # script's budget stops the run with per-package costs before the step
+      # timeout can kill it without them.
       - name: Paired base and candidate benchmarks (pull requests)
         if: github.event_name == 'pull_request'
-        timeout-minutes: 25
+        timeout-minutes: 30
         env:
           PULSE_BENCH_BASELINE_DIR: ${{ github.workspace }}/benchmark-base
           PULSE_BENCH_SAMPLE_COUNT: "10"
+          PULSE_BENCH_BUDGET_SECONDS: "1680"
         run: bash scripts/run-ci-benchmarks.sh
 
       - name: Install benchstat
