@@ -660,9 +660,11 @@ The TrueNAS Storage `Storage type` scope follows the same boundary with stable
 the current option through pressed-state semantics, preserves the scope in the
 URL across reload, and removes the query value for the default `all` state.
 On narrow screens the physical-disk scope may reprioritize its canonical table
-columns to endurance, temperature, and health while retaining the shared table
+columns to endurance and temperature while retaining the shared table
 overflow and touch-target behavior; it must not introduce a second mobile-only
-filter or table shell.
+filter or table shell. Its Health column stays desktop-only in every scope:
+the status dot carries a disk's condition on a phone, the row drawer carries
+the reason, and the old pill clipped past the phone container edge.
 
 Large-estate platform pages must keep one canonical inventory snapshot for the
 initial read and explicit refresh path. The Proxmox and VMware vSphere

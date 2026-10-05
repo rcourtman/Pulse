@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "fdcffc64114bd9d7ff7a92324391a09702c3c26a",
+  "verified_at": "2026-10-05T05:37:16Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx": "19e1e5b705285464607804f8a8d7b5174e39c856290bd8c6ce5dc5e1212ff2af",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts": "b1955834430d00fca3fc4176614a83f4a8387c8c29a85f0f17c6fd1360faf514"
+  },
+  "routes": [
+    "/truenas/storage",
+    "/truenas/storage?kind=disks"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 820,
+      "height": 700
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Storage at 1440: every row is single-line. 18 healthy rows leave Health empty, where before each carried a green Healthy pill. The archive pool reads Pool archive is DEGRADED: one member of archive mirror-0 is reporting checksum and SMART faults (truncated, +1 for the copied SMART alert, full list on hover), archive/cold reads Dataset is read-only, sdc reads Device /dev/sdc has SMART test failures, coloured amber in the Health column",
+    "Health sorts by severity rank (Attention, Offline, Unknown, Healthy), not by label text",
+    "Disk scope at 1440: Endurance and Temp visible, sdc reason in Health",
+    "Tablet at 820 and dark mode at 1440: reasons truncate cleanly with the +1 kept",
+    "Phone at 390: Resource, Kind, Usage, Disks with status dots, Health hidden, so the old pill no longer clips past the edge in the disk scope",
+    "Phone drawer: tapping archive shows DEGRADED and tapping sdc shows the SMART failure. The read-only dataset drawer still only says Degraded, a pre-existing drawer gap tracked for a follow-up",
+    "Rebuilt as one commit on current main after the services and VMs change landed. The two frontend files are byte-identical to the version verified above, and the page was reshot on this tree"
+  ],
+  "interactions": [
+    "Switched to the Physical disks scope",
+    "Tapped archive, archive/cold and sdc on a 390 phone and read each drawer"
+  ]
+}

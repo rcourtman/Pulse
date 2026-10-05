@@ -19,6 +19,7 @@ import {
   filterTrueNASVMs,
   getTrueNASPageTabSpecs,
   getTrueNASResourceDisplayStatus,
+  getTrueNASStorageIssue,
   mapTrueNASAppStatus,
   mapTrueNASIncidentSeverity,
   mapTrueNASProtectionKind,
@@ -643,6 +644,200 @@ describe('truenasPageModel', () => {
     const row = buildTrueNASStorageTopologyRows([replicatedDataset])[0];
     expect(row?.kind).toBe('dataset');
     expect(row && mapTrueNASStorageStatus(row.resource)).toBe('healthy');
+  });
+
+  it('explains non-healthy storage with TrueNAS alert text first and stays silent when healthy', () => {
+    const healthyPool = makeResource({
+      id: 'pool-tank',
+      type: 'storage',
+      name: 'tank',
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'ONLINE' },
+    });
+    expect(getTrueNASStorageIssue(healthyPool)).toBeNull();
+
+    const poolRisk = {
+      level: 'warning',
+      reasons: [
+        { code: 'zfs_pool_state', severity: 'warning', summary: 'ZFS pool archive is DEGRADED' },
+      ],
+    };
+    // A pool carries its own alert plus the disk alerts the provider copies onto it.
+    const degradedPool = makeResource({
+      id: 'pool-archive',
+      type: 'storage',
+      name: 'archive',
+      status: 'warning',
+      incidents: [
+        {
+          code: 'truenas_volume_status',
+          severity: 'warning',
+          summary: 'Pool archive is DEGRADED: one member of mirror-0 is faulted.',
+        },
+        {
+          code: 'truenas_smart',
+          severity: 'warning',
+          summary: 'Device /dev/sdc has SMART test failures.',
+        },
+      ],
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'DEGRADED', risk: poolRisk },
+    });
+    expect(getTrueNASStorageIssue(degradedPool)).toEqual({
+      status: 'attention',
+      label: 'Attention',
+      reasons: [
+        'Pool archive is DEGRADED: one member of mirror-0 is faulted.',
+        'Device /dev/sdc has SMART test failures.',
+      ],
+    });
+
+    // Without a TrueNAS alert, Pulse's own risk summary explains the row.
+    const riskOnlyPool = makeResource({
+      id: 'pool-risk',
+      type: 'storage',
+      name: 'archive',
+      status: 'warning',
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'DEGRADED', risk: poolRisk },
+    });
+    expect(getTrueNASStorageIssue(riskOnlyPool)?.reasons).toEqual(['ZFS pool archive is DEGRADED']);
+
+    const failingDisk = makeResource({
+      id: 'disk-sdc',
+      type: 'physical_disk',
+      name: 'sdc',
+      status: 'warning',
+      incidents: [
+        {
+          code: 'truenas_smart',
+          severity: 'warning',
+          summary: 'Device /dev/sdc has SMART test failures.',
+        },
+        {
+          code: 'truenas_smart',
+          severity: 'warning',
+          summary: 'Device  /dev/sdc has SMART test failures',
+        },
+      ],
+      physicalDisk: {
+        devPath: '/dev/sdc',
+        health: 'DEGRADED',
+        risk: {
+          level: 'warning',
+          reasons: [
+            {
+              code: 'truenas_disk_state',
+              severity: 'warning',
+              summary: 'TrueNAS disk sdc is DEGRADED',
+            },
+          ],
+        },
+      },
+    });
+    // The repeat differs only in spacing and its full stop, so it folds in, and
+    // the derived disk-state summary waits behind the native alert.
+    expect(getTrueNASStorageIssue(failingDisk)?.reasons).toEqual([
+      'Device /dev/sdc has SMART test failures.',
+    ]);
+
+    const readOnlyDataset = makeResource({
+      id: 'dataset-cold',
+      type: 'storage',
+      name: 'archive/cold',
+      status: 'warning',
+      tags: ['truenas', 'dataset', 'zfs', 'state:readonly'],
+      storage: { topology: 'dataset', platform: 'truenas' },
+    });
+    expect(getTrueNASStorageIssue(readOnlyDataset)?.reasons).toEqual(['Dataset is read-only']);
+
+    // The provider raises its own incident for a locked dataset, which wins
+    // over the state tag instead of being repeated by it.
+    const lockedDataset = makeResource({
+      id: 'dataset-vault',
+      type: 'storage',
+      name: 'vault/secrets',
+      status: 'offline',
+      tags: ['truenas', 'dataset', 'zfs', 'state:locked'],
+      incidents: [
+        {
+          code: 'zfs_dataset_locked',
+          severity: 'warning',
+          summary: 'ZFS dataset vault/secrets is locked and unavailable',
+        },
+      ],
+      storage: { topology: 'dataset', platform: 'truenas' },
+    });
+    expect(getTrueNASStorageIssue(lockedDataset)).toEqual({
+      status: 'offline',
+      label: 'Offline',
+      reasons: ['ZFS dataset vault/secrets is locked and unavailable'],
+    });
+    const lockedWithoutIncident = makeResource({
+      id: 'dataset-vault-tag',
+      type: 'storage',
+      name: 'vault/keys',
+      status: 'offline',
+      tags: ['truenas', 'dataset', 'zfs', 'state:locked'],
+      storage: { topology: 'dataset', platform: 'truenas' },
+    });
+    expect(getTrueNASStorageIssue(lockedWithoutIncident)?.reasons).toEqual(['Dataset is locked']);
+
+    const bareDegradedPool = makeResource({
+      id: 'pool-bare',
+      type: 'storage',
+      name: 'bare',
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'degraded' },
+    });
+    expect(getTrueNASStorageIssue(bareDegradedPool)?.reasons).toEqual(['Pool state DEGRADED']);
+
+    // Stale TrueNAS data is the cause even when the pool also has other news.
+    const staleConnectionPool = makeResource({
+      id: 'pool-stale',
+      type: 'storage',
+      name: 'stale',
+      storage: {
+        topology: 'pool',
+        platform: 'truenas',
+        zfsPoolState: 'ONLINE',
+        risk: {
+          level: 'info',
+          reasons: [
+            {
+              code: 'zfs_scan_running',
+              severity: 'info',
+              summary: 'ZFS pool stale scrub is running',
+            },
+          ],
+        },
+      },
+      platformData: { sourceStatus: { truenas: { status: 'stale' } } },
+    });
+    expect(getTrueNASStorageIssue(staleConnectionPool)?.reasons).toEqual([
+      'TrueNAS has not updated this recently',
+      'ZFS pool stale scrub is running',
+    ]);
+
+    const unknownDisk = makeResource({
+      id: 'disk-unknown',
+      type: 'physical_disk',
+      name: 'ada0',
+      status: 'unknown',
+      physicalDisk: { devPath: '/dev/ada0', health: 'UNKNOWN' },
+    });
+    expect(getTrueNASStorageIssue(unknownDisk)).toEqual({
+      status: 'unknown',
+      label: 'Unknown',
+      reasons: ['TrueNAS has not reported a state for this'],
+    });
+
+    const silentOfflinePool = makeResource({
+      id: 'pool-gone',
+      type: 'storage',
+      name: 'gone',
+      status: 'offline',
+      storage: { topology: 'pool', platform: 'truenas' },
+    });
+    expect(getTrueNASStorageIssue(silentOfflinePool)?.reasons).toEqual([
+      'Offline, and TrueNAS gave no reason',
+    ]);
   });
 
   it('filters apps using native TrueNAS app.query metadata', () => {

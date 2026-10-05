@@ -722,6 +722,89 @@ export function mapTrueNASStorageStatus(
   return 'unknown';
 }
 
+export type TrueNASStorageIssue = {
+  status: Exclude<TrueNASStorageStatusFilter, 'all' | 'healthy'> | 'unknown';
+  label: string;
+  reasons: string[];
+};
+
+const TRUENAS_STORAGE_ISSUE_LABELS: Record<TrueNASStorageIssue['status'], string> = {
+  attention: 'Attention',
+  offline: 'Offline',
+  unknown: 'Unknown',
+};
+
+// A read-only dataset raises no incident, so its state tag
+// (datasetStateTag in internal/truenas/provider.go) is the only place the
+// provider says why it is impaired. Locked and unmounted datasets also raise
+// incidents, which win when present.
+const TRUENAS_DATASET_STATE_REASONS: Record<string, string> = {
+  'state:locked': 'Dataset is locked',
+  'state:unmounted': 'Dataset is not mounted',
+  'state:readonly': 'Dataset is read-only',
+};
+
+const TRUENAS_STORAGE_SILENT_REASONS: Record<TrueNASStorageIssue['status'], string> = {
+  attention: 'TrueNAS flagged this without a reason',
+  offline: 'Offline, and TrueNAS gave no reason',
+  unknown: 'TrueNAS has not reported a state for this',
+};
+
+const reasonKey = (text: string): string =>
+  text
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[.\s]+$/, '');
+
+// Healthy storage needs no explanation, so this returns null for it. Anything
+// else carries the reasons TrueNAS gave, most specific first, so a row can say
+// why it is amber instead of only that it is. TrueNAS's own alert text names
+// the failing member or test, so it leads. Pulse's derived risk summaries
+// restate the same pool and disk state, so they only stand in when TrueNAS
+// raised no alert; the row drawer still lists every one of them.
+export function getTrueNASStorageIssue(resource: Resource): TrueNASStorageIssue | null {
+  const status = mapTrueNASStorageStatus(resource);
+  if (status === 'healthy') return null;
+
+  const reasons: string[] = [];
+  const push = (value: unknown) => {
+    const text = asTrimmedString(value);
+    if (!text) return;
+    const key = reasonKey(text);
+    if (reasons.some((existing) => reasonKey(existing) === key)) return;
+    reasons.push(text);
+  };
+
+  // Stale TrueNAS data is why the row left Healthy, whatever else it says.
+  if (hasImpairedResourceSource(resource, 'truenas')) {
+    push('TrueNAS has not updated this recently');
+  }
+  const leading = reasons.length;
+  for (const incident of resource.incidents ?? []) push(incident.summary);
+  if (reasons.length === leading) {
+    for (const reason of resource.storage?.risk?.reasons ?? []) push(reason.summary);
+    for (const reason of resource.physicalDisk?.risk?.reasons ?? []) push(reason.summary);
+  }
+  if (reasons.length === leading) {
+    for (const tag of resource.tags ?? []) push(TRUENAS_DATASET_STATE_REASONS[normalize(tag)]);
+  }
+  if (reasons.length === leading) {
+    const zfsState = asTrimmedString(resource.storage?.zfsPoolState);
+    const diskHealth = asTrimmedString(resource.physicalDisk?.health);
+    if (zfsState && !['online', 'healthy'].includes(zfsState.toLowerCase())) {
+      push(`Pool state ${zfsState.toUpperCase()}`);
+    } else if (
+      diskHealth &&
+      !['passed', 'healthy', 'ok', 'unknown', 'unavailable'].includes(diskHealth.toLowerCase())
+    ) {
+      push(`Disk health ${diskHealth.toUpperCase()}`);
+    }
+  }
+  if (reasons.length === 0) push(TRUENAS_STORAGE_SILENT_REASONS[status]);
+
+  return { status, label: TRUENAS_STORAGE_ISSUE_LABELS[status], reasons };
+}
+
 export function mapTrueNASProtectionStatus(point: RecoveryPoint): TrueNASProtectionStatusBucket {
   return normalizeProtectionOutcome(point.outcome);
 }
