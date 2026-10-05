@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 import {
+  getDockerContainerHealthCheckPresentation,
+  getDockerContainerRunStatePresentation,
   getDockerContainerStatePresentation,
   getDockerContainerUptimeSeconds,
 } from '../dockerContainerStatePresentation';
@@ -120,5 +122,39 @@ describe('getDockerContainerUptimeSeconds', () => {
     expect(
       getDockerContainerUptimeSeconds(container({ containerState: 'running', uptimeSeconds: 0 })),
     ).toBeUndefined();
+  });
+});
+
+describe('drawer runtime rows', () => {
+  it('splits a running container into its Docker state and its health check', () => {
+    const unhealthy = container({ containerState: 'running', health: 'unhealthy' });
+    expect(getDockerContainerRunStatePresentation(unhealthy)).toEqual({
+      label: 'Running',
+      title: 'Running',
+      tone: null,
+    });
+    expect(getDockerContainerHealthCheckPresentation(unhealthy)).toEqual({
+      label: 'Failing',
+      title: 'Its health check is failing',
+      tone: 'danger',
+    });
+    expect(
+      getDockerContainerHealthCheckPresentation(
+        container({ containerState: 'running', health: 'healthy' }),
+      ),
+    ).toMatchObject({ label: 'Passing', tone: null });
+    expect(
+      getDockerContainerHealthCheckPresentation(container({ containerState: 'running' })),
+    ).toBeUndefined();
+  });
+
+  it('shows no health check for a stopped container and keeps its exit code', () => {
+    const crashed = container({ containerState: 'exited', exitCode: 1, health: 'unhealthy' });
+    expect(getDockerContainerRunStatePresentation(crashed)).toEqual({
+      label: 'Exited (1)',
+      title: 'Exited with code 1',
+      tone: 'danger',
+    });
+    expect(getDockerContainerHealthCheckPresentation(crashed)).toBeUndefined();
   });
 });
