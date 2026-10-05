@@ -7,8 +7,10 @@ import {
   getAvailabilityTargetKindLabel,
   getAvailabilityTargetMethodLabel,
   getAvailabilityTargetProbeSourceLabel,
+  getAvailabilityTargetHealth,
   getAvailabilityTargetStatusClass,
   getAvailabilityTargetStatusLabel,
+  getAvailabilityTargetStatusTitle,
   getAvailabilityTargetsSummary,
   normalizeAvailabilityTargetKind,
   shouldOpenAvailabilityTargetAddDialog,
@@ -90,7 +92,13 @@ describe('availabilitySettingsModel', () => {
     expect(
       getAvailabilityTargetStatusLabel(
         target({
-          status: { ...target(), targetId: 'mqtt-broker', available: true, latencyMillis: 12 },
+          status: {
+            ...target(),
+            targetId: 'mqtt-broker',
+            available: true,
+            lastChecked: '2026-10-05T00:00:00Z',
+            latencyMillis: 12,
+          },
         }),
       ),
     ).toBe('Online · 12 ms');
@@ -102,10 +110,15 @@ describe('availabilitySettingsModel', () => {
           name: 'HTTP health',
           protocol: 'http',
           address: 'http://service.local',
-          status: { ...target(), targetId: 'http-health', available: false },
+          status: {
+            ...target(),
+            targetId: 'http-health',
+            available: false,
+            lastChecked: '2026-10-05T00:00:00Z',
+          },
         }),
       ]),
-    ).toBe('1 down · 2 enabled');
+    ).toBe('1 needs attention · 2 enabled');
     expect(
       getAvailabilityTargetsSummary([
         target({
@@ -116,16 +129,22 @@ describe('availabilitySettingsModel', () => {
             targetId: 'steam-server',
             protocol: 'udp',
             available: false,
+            lastChecked: '2026-10-05T00:00:00Z',
             outcome: 'indeterminate',
           },
         }),
       ]),
-    ).toBe('1 open or filtered · 1 enabled');
+    ).toBe('1 needs attention · 1 enabled');
     expect(
       getAvailabilityTargetsSummary([
         target({
           id: 'closed-port',
-          status: { ...target(), targetId: 'closed-port', available: false },
+          status: {
+            ...target(),
+            targetId: 'closed-port',
+            available: false,
+            lastChecked: '2026-10-05T00:00:00Z',
+          },
         }),
         target({
           id: 'silent-port',
@@ -136,11 +155,12 @@ describe('availabilitySettingsModel', () => {
             targetId: 'silent-port',
             protocol: 'udp',
             available: false,
+            lastChecked: '2026-10-05T00:00:00Z',
             outcome: 'indeterminate',
           },
         }),
       ]),
-    ).toBe('1 down · 1 open or filtered · 2 enabled');
+    ).toBe('2 need attention · 2 enabled');
     expect(getAvailabilityTargetStatusClass(target({ enabled: false }))).toBe(
       'bg-surface-alt text-muted',
     );
@@ -150,13 +170,27 @@ describe('availabilitySettingsModel', () => {
     expect(
       getAvailabilityTargetStatusClass(
         target({
-          status: { ...target(), targetId: 'mqtt-broker', available: true, latencyMillis: 12 },
+          status: {
+            ...target(),
+            targetId: 'mqtt-broker',
+            available: true,
+            lastChecked: '2026-10-05T00:00:00Z',
+            latencyMillis: 12,
+          },
         }),
       ),
     ).toBe('bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300');
     expect(
       getAvailabilityTargetStatusClass(
-        target({ status: { ...target(), targetId: 'mqtt-broker', available: false } }),
+        target({
+          status: {
+            ...target(),
+            targetId: 'mqtt-broker',
+            available: false,
+            lastChecked: '2026-10-05T00:00:00Z',
+            consecutiveFailures: 2,
+          },
+        }),
       ),
     ).toBe('bg-rose-100 text-rose-700 dark:bg-rose-900/25 dark:text-rose-300');
   });
@@ -169,6 +203,7 @@ describe('availabilitySettingsModel', () => {
         ...target(),
         targetId: 'mqtt-broker',
         available: true,
+        lastChecked: '2026-10-05T00:00:00Z',
         latencyMillis: 12,
         probeAgentId: 'host-edge-01',
       },
@@ -190,6 +225,7 @@ describe('availabilitySettingsModel', () => {
             ...target(),
             targetId: 'mqtt-broker',
             available: true,
+            lastChecked: '2026-10-05T00:00:00Z',
             probeAgentId: 'host-gone',
           },
         }),
@@ -205,6 +241,7 @@ describe('availabilitySettingsModel', () => {
         ...target(),
         targetId: 'mqtt-broker',
         available: false,
+        lastChecked: '2026-10-05T00:00:00Z',
         outcome: 'indeterminate',
         lastError: 'no recent report from probe agent',
         probeAgentId: 'host-edge-01',
@@ -224,10 +261,81 @@ describe('availabilitySettingsModel', () => {
             ...target(),
             targetId: 'mqtt-broker',
             available: true,
+            lastChecked: '2026-10-05T00:00:00Z',
             outcome: 'indeterminate',
           },
         }),
       ),
     ).toBe('Open or filtered');
+  });
+
+  it('counts a failing check as offline only after its failure threshold, like Machines', () => {
+    const failing = (consecutiveFailures: number) =>
+      target({
+        failureThreshold: 2,
+        status: {
+          ...target(),
+          targetId: 'solar',
+          available: false,
+          lastChecked: '2026-10-05T00:00:00Z',
+          consecutiveFailures,
+          failureThreshold: 2,
+          lastError: 'http probe returned 503 Service Unavailable',
+        },
+      });
+
+    expect(getAvailabilityTargetHealth(failing(1))).toBe('attention');
+    expect(getAvailabilityTargetHealth(failing(2))).toBe('offline');
+    expect(getAvailabilityTargetsSummary([failing(1), failing(3), target()])).toBe(
+      '2 need attention · 1 offline · 3 enabled',
+    );
+    expect(getAvailabilityTargetStatusClass(failing(1))).toContain('bg-amber-100');
+    expect(getAvailabilityTargetStatusTitle(failing(1))).toBe(
+      '1 failed check in a row. It counts as offline after 2.',
+    );
+    expect(getAvailabilityTargetStatusTitle(failing(2))).toBeUndefined();
+  });
+
+  it('keeps the threshold for a single-location check the backend marks unavailable', () => {
+    const unavailable = (consecutiveFailures: number) =>
+      target({
+        status: {
+          ...target(),
+          targetId: 'mqtt-broker',
+          available: false,
+          lastChecked: '2026-10-05T00:00:00Z',
+          aggregateState: 'unavailable',
+          consecutiveFailures,
+        },
+      });
+
+    // Default threshold is 2, as in internal/config/availability.go.
+    expect(getAvailabilityTargetHealth(unavailable(1))).toBe('attention');
+    expect(getAvailabilityTargetHealth(unavailable(2))).toBe('offline');
+  });
+
+  it('defers to the Machines status of the loaded resource', () => {
+    const healthyTarget = target({
+      status: {
+        ...target(),
+        targetId: 'mqtt-broker',
+        available: true,
+        lastChecked: '2026-10-05T00:00:00Z',
+      },
+    });
+    const unresolvedResource = {
+      id: 'availability:mqtt-broker',
+      type: 'network-endpoint',
+      name: 'MQTT broker',
+      status: 'online',
+      lastSeen: Date.now(),
+      availability: { targetId: 'mqtt-broker', correlationState: 'unresolved' },
+    } as never;
+
+    expect(getAvailabilityTargetHealth(healthyTarget)).toBe('healthy');
+    expect(getAvailabilityTargetHealth(healthyTarget, unresolvedResource)).toBe('attention');
+    expect(getAvailabilityTargetsSummary([healthyTarget], () => unresolvedResource)).toBe(
+      '1 needs attention · 1 enabled',
+    );
   });
 });

@@ -1,4 +1,6 @@
 import { Show, createEffect, createMemo, createSignal, onMount, type Component } from 'solid-js';
+import type { Resource } from '@/types/resource';
+import { isAgentlessAvailabilityResource } from '@/features/standalone/standalonePageModel';
 import { useLocation, useNavigate } from '@solidjs/router';
 import Plus from 'lucide-solid/icons/plus';
 import RotateCw from 'lucide-solid/icons/rotate-cw';
@@ -28,6 +30,7 @@ import {
   getAvailabilityTargetProbeSourceLabel,
   getAvailabilityTargetStatusClass,
   getAvailabilityTargetStatusLabel,
+  getAvailabilityTargetStatusTitle,
   getAvailabilityTargetsSummary,
   shouldOpenAvailabilityTargetAddDialog,
 } from './availabilitySettingsModel';
@@ -45,6 +48,19 @@ export const AvailabilitySettingsPanel: Component = () => {
   const navigate = useNavigate();
   const { resources } = useResources();
   const probeAgentOptions = createMemo(() => buildProbeAgentOptions(resources()));
+  // The Machines availability tab reads these same resources, so the counts and
+  // colours here come from the same status logic when they are loaded.
+  const availabilityResourceByTargetId = createMemo(() => {
+    const byId = new Map<string, Resource>();
+    for (const resource of resources()) {
+      if (!isAgentlessAvailabilityResource(resource)) continue;
+      const targetId = resource.availability?.targetId;
+      if (targetId) byId.set(targetId, resource);
+    }
+    return byId;
+  });
+  const resourceForTarget = (target: AvailabilityTarget) =>
+    availabilityResourceByTargetId().get(target.id);
   const [targets, setTargets] = createSignal<AvailabilityTarget[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
@@ -185,7 +201,7 @@ export const AvailabilitySettingsPanel: Component = () => {
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="min-w-0">
               <div class="text-sm font-semibold text-base-content">
-                {getAvailabilityTargetsSummary(targets())}
+                {getAvailabilityTargetsSummary(targets(), resourceForTarget)}
               </div>
               <p class="mt-1 text-xs leading-5 text-muted">
                 Monitor endpoint-only devices and services with ICMP, TCP, and HTTP probes.
@@ -272,7 +288,11 @@ export const AvailabilitySettingsPanel: Component = () => {
                           {target.name}
                         </div>
                         <span
-                          class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${getAvailabilityTargetStatusClass(target)}`}
+                          class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${getAvailabilityTargetStatusClass(target, resourceForTarget(target))}`}
+                          title={getAvailabilityTargetStatusTitle(
+                            target,
+                            resourceForTarget(target),
+                          )}
                         >
                           {getAvailabilityTargetStatusLabel(target)}
                         </span>
