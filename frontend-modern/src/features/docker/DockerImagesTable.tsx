@@ -216,6 +216,7 @@ export const DockerImagesTable: Component<
                         >
                           <DockerResourceNameCell
                             resource={resource}
+                            imageReference
                             detailToggle={
                               <PlatformResourceDetailToggleButton
                                 expanded={isExpanded()}

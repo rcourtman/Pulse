@@ -2355,7 +2355,12 @@ not a replacement status card, CTA band, or page-local nested card.
    truncate` span ignores the column width: it spills past a narrower cell
    with no ellipsis, wastes room in a wider one, and sits about 2 pixels above
    the row baseline. `platformOverviewLayout.guardrails.test.ts` holds the
-   Docker, Kubernetes, Proxmox and vSphere table sources to that rule.
+   Docker, Kubernetes, Proxmox and vSphere table sources to that rule. An
+   identity value whose distinguishing part sits at its end (a generated
+   Kubernetes name, a registry-prefixed Docker image reference) instead splits
+   into a truncating head and a kept tail (`KubernetesNameText`,
+   `DockerImageReferenceText`), with the full value on the title, so rows that
+   share a prefix stay distinguishable in a narrow cell.
    When a platform table row itself owns that keyboard- and touch-operable
    disclosure, `SummaryRowActionButton` removes the redundant visible chevron
    below the shared mobile breakpoint while preserving the button for screen
