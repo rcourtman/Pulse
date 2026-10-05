@@ -186,6 +186,50 @@ describe('VmwarePageSurface contract', () => {
     );
   });
 
+  it('leads the overview with vCenter health signals only when vCenter reports any', () => {
+    const host = makeResource({
+      id: 'esxi-host-1',
+      type: 'agent',
+      vmware: { entityType: 'host', managedObjectId: 'host-1' },
+    });
+    const alarmedDatastore = makeResource({
+      id: 'datastore-1',
+      type: 'storage',
+      vmware: { entityType: 'datastore', managedObjectId: 'datastore-1' },
+      incidents: [{ code: 'vmware_alarm', severity: 'warning', summary: 'Datastore latency' }],
+    } as Partial<Resource> & Pick<Resource, 'id' | 'type'>);
+    // Each query gets its own fixture so the test proves the signals come
+    // from the Health query while the overview model keeps its own resources.
+    const byCacheKey = (healthResources: Resource[]) =>
+      mockUseUnifiedResources.mockImplementation((options: { cacheKey?: string }) => {
+        const resources = options.cacheKey === 'vmware-health' ? healthResources : [host];
+        return {
+          resources: () => resources,
+          loading: () => false,
+          error: () => null,
+          refetch: vi.fn().mockResolvedValue(resources),
+        };
+      });
+
+    byCacheKey([host]);
+    const { unmount } = render(() => <VmwarePageSurface />);
+    expect(screen.queryByTestId('alerts-table')).not.toBeInTheDocument();
+    unmount();
+
+    byCacheKey([host, alarmedDatastore]);
+    render(() => <VmwarePageSurface />);
+    expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'overview');
+    expect(screen.getByTestId('alerts-table')).toBeInTheDocument();
+    expect(screen.getByTestId('hosts-table')).toHaveAttribute('data-rows', '1');
+    expect(
+      mockUseUnifiedResources.mock.calls.some(
+        ([options]) =>
+          (options as { cacheKey?: string }).cacheKey === 'vmware-health' &&
+          (options as { enabled: () => boolean }).enabled(),
+      ),
+    ).toBe(true);
+  });
+
   it('reuses the source-scoped page snapshot for the vSphere workload surface', async () => {
     const refetch = vi.fn().mockResolvedValue([]);
     const resources = [

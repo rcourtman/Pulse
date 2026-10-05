@@ -8304,3 +8304,12 @@ chain at desktop and phone widths with keyboard/touch refresh, class-dark CSS,
 403/503 controls and pending recovery. Unit controls separately cover current
 request ownership and disposal. No mutation, route, navigation entry, queue
 policy, permission or recipient-delivery contract is added by these states.
+
+### Platform overviews may lead with their own incident table
+
+A platform Overview that leads with its provider's health signals reuses
+that platform's existing incident table rather than a new summary card:
+the vSphere Overview renders `VsphereAlertsTable` with `showToolbar={false}`
+above its hosts table, only when signals exist, matching the TrueNAS
+Overview's health-alert table. Filtering stays on the platform's Health tab.
+

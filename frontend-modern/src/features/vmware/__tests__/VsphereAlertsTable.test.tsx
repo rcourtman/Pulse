@@ -42,6 +42,24 @@ afterEach(() => {
 });
 
 describe('VsphereAlertsTable', () => {
+  it('renders every signal without the filter toolbar for the overview lead-in', () => {
+    render(() => (
+      <VsphereAlertsTable
+        incidents={buildVmwareIncidentRows([makeHost()])}
+        emptyIcon={<span />}
+        emptyTitle="No signals"
+        emptyDescription="No signals"
+        showToolbar={false}
+      />
+    ));
+
+    // The overview shows the signals as they are; filtering stays on Health.
+    expect(screen.queryByRole('button', { name: /Attention/ })).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Search vSphere health')).not.toBeInTheDocument();
+    expect(document.querySelectorAll('[data-vsphere-alert-row]')).toHaveLength(1);
+    expect(screen.getByText('Health Signals')).toBeInTheDocument();
+  });
+
   it('renders native vSphere health signal rows with inline details', async () => {
     const host = makeHost();
     const informational = makeHost({
