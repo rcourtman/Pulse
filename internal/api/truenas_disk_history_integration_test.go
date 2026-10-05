@@ -242,13 +242,13 @@ func TestTrueNASDiskHistoryAuthenticatedRoute(t *testing.T) {
 	t.Cleanup(func() { _ = store.Close() })
 	setUnexportedField(t, monitor, "metricsStore", store)
 	ioTime := time.Now().UTC().Add(-20 * time.Second)
-	store.WriteBatchSync([]metrics.WriteMetric{{ResourceType: "disk", ResourceID: "disk-serial", MetricType: "diskread", Value: 1024, Timestamp: ioTime}})
+	store.WriteBatchSync([]metrics.WriteMetric{{ResourceType: "disk", ResourceID: "disk-serial", MetricType: "diskread", Tier: metrics.TierRaw, Value: 1024, Timestamp: ioTime}})
 	all := readAll()
 	assertNative(all["smart_temp"], 6)
 	if len(all["diskread"]) != 1 || all["diskread"][0].Value != 1024 || all["diskread"][0].Min != 1024 || all["diskread"][0].Max != 1024 || all["diskread"][0].Timestamp != ioTime.UnixMilli() {
 		t.Fatalf("native supplement changed independent stored I/O: %+v", all["diskread"])
 	}
-	store.WriteBatchSync([]metrics.WriteMetric{{ResourceType: "disk", ResourceID: "disk-serial", MetricType: "smart_temp", Value: 44, Timestamp: ioTime}})
+	store.WriteBatchSync([]metrics.WriteMetric{{ResourceType: "disk", ResourceID: "disk-serial", MetricType: "smart_temp", Tier: metrics.TierRaw, Value: 44, Timestamp: ioTime}})
 	assertNative(readAll()["smart_temp"], 8)
 	rec = request(token, "org-a", "smart_temp")
 	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &got) != nil || len(got.Points) != 3 || reads.Load() != 10 {
@@ -279,7 +279,7 @@ func TestTrueNASDiskHistoryAuthenticatedRoute(t *testing.T) {
 	// independent values intact. Ordinary store errors still fail closed.
 	now := time.Now().UTC()
 	for _, offset := range []time.Duration{-55 * time.Minute, -30 * time.Minute, -time.Minute} {
-		store.WriteBatchSync([]metrics.WriteMetric{{ResourceType: "disk", ResourceID: "disk-serial", MetricType: "smart_temp", Value: 35, Timestamp: now.Add(offset)}})
+		store.WriteBatchSync([]metrics.WriteMetric{{ResourceType: "disk", ResourceID: "disk-serial", MetricType: "smart_temp", Tier: metrics.TierRaw, Value: 35, Timestamp: now.Add(offset)}})
 	}
 	all = readAll()
 	if len(all["smart_temp"]) != 4 || all["smart_temp"][0].Value != 35 || reads.Load() != 12 {
