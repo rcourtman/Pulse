@@ -3,6 +3,8 @@ import type { Resource } from '@/types/resource';
 import {
   getKubernetesNodesNeedingAttention,
   splitKubernetesNameTail,
+  isSingleKubernetesCluster,
+  kubernetesScopeDisplayLabel,
 } from '../kubernetesPageModel';
 import {
   KUBERNETES_TAB_SPECS,
@@ -47,6 +49,52 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
 });
 
 describe('kubernetesPageModel', () => {
+  it('shows the namespace alone when one cluster is in view', () => {
+    const inCluster = (id: string, clusterName: string, namespace?: string) =>
+      ({
+        id,
+        type: 'pod',
+        name: id,
+        kubernetes: { clusterName, ...(namespace ? { namespace } : {}) },
+      }) as unknown as Resource;
+    const services = inCluster('a', 'Production EU', 'services');
+    const clusterRole = inCluster('b', 'Production EU');
+    const otherCluster = inCluster('c', 'Staging', 'services');
+
+    expect(isSingleKubernetesCluster([services, clusterRole])).toBe(true);
+    expect(isSingleKubernetesCluster([services, otherCluster])).toBe(false);
+    expect(isSingleKubernetesCluster([])).toBe(true);
+    // Two clusters can share a display name, and a row with no cluster at all
+    // counts as its own, so neither case loses the cluster from the cell.
+    const sameNameOtherId = {
+      id: 'd',
+      type: 'pod',
+      name: 'd',
+      kubernetes: { clusterId: 'eu-2', clusterName: 'Production EU', namespace: 'services' },
+    } as unknown as Resource;
+    const euOne = {
+      id: 'e',
+      type: 'pod',
+      name: 'e',
+      kubernetes: { clusterId: 'eu-1', clusterName: 'Production EU', namespace: 'apps' },
+    } as unknown as Resource;
+    const noCluster = {
+      id: 'f',
+      type: 'pod',
+      name: 'f',
+      kubernetes: { namespace: 'apps' },
+    } as unknown as Resource;
+    expect(isSingleKubernetesCluster([euOne, sameNameOtherId])).toBe(false);
+    expect(isSingleKubernetesCluster([euOne, noCluster])).toBe(false);
+    expect(isSingleKubernetesCluster([noCluster])).toBe(true);
+
+    expect(kubernetesScopeDisplayLabel(services, true)).toBe('services');
+    expect(kubernetesScopeDisplayLabel(clusterRole, true)).toBe('Cluster');
+    // Several clusters keep the cluster in the cell so rows stay unambiguous.
+    expect(kubernetesScopeDisplayLabel(services, false)).toBe('Production EU/services');
+    expect(kubernetesScopeDisplayLabel(clusterRole, false)).toBe('Production EU');
+  });
+
   it('splits off the generated tail that tells sibling names apart', () => {
     expect(splitKubernetesNameTail('checkout-api-6d8f9c7b5-x7k2p')).toEqual({
       head: 'checkout-api-6d8f9c7b5',

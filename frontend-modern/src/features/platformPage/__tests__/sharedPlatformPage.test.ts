@@ -37,6 +37,7 @@ import {
   summarizePlatformTableValues,
   withPlatformStatusCounts,
   type PlatformResourceStatusFilter,
+  platformTableBandWidthStyle,
 } from '../sharedPlatformPage';
 
 afterEach(() => {
@@ -916,5 +917,11 @@ describe('PlatformTableMetricFallback', () => {
     expect(marker.textContent).toBe('old agent');
     expect(marker.getAttribute('title')).toBe('Update this agent for full machine telemetry.');
     expect(marker.getAttribute('aria-hidden')).toBeNull();
+  });
+
+  it('declares tablet band widths as a custom property the shell reads', () => {
+    expect(platformTableBandWidthStyle(36)).toEqual({ '--platform-table-band-width': '36%' });
+    expect(platformTableBandWidthStyle(9.5)).toEqual({ '--platform-table-band-width': '9.5%' });
+    expect(platformTableBandWidthStyle(undefined)).toBeUndefined();
   });
 });

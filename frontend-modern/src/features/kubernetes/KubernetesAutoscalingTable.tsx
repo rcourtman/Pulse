@@ -32,7 +32,9 @@ import {
   filterKubernetesResources,
   kubernetesScopeLabel,
   type KubernetesResourceStatusFilter,
+  isSingleKubernetesCluster,
 } from './kubernetesPageModel';
+import { KubernetesScopeText } from './KubernetesScopeText';
 
 const autoscalerName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
@@ -105,6 +107,7 @@ export const KubernetesAutoscalingTable: Component<{
   externalSearch?: () => string;
   externalStatus?: () => KubernetesResourceStatusFilter;
 }> = (props) => {
+  const singleCluster = createMemo(() => isSingleKubernetesCluster(props.resources));
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as KubernetesResourceStatusFilter,
@@ -237,7 +240,6 @@ export const KubernetesAutoscalingTable: Component<{
                   {(resource) => {
                     const indicator = () => getSimpleStatusIndicator(resource.status);
                     const name = () => autoscalerName(resource);
-                    const scope = () => kubernetesScopeLabel(resource);
                     const target = () => targetRef(resource);
                     const metrics = () => metricSources(resource);
                     const labels = () => labelSummary(resource);
@@ -273,14 +275,16 @@ export const KubernetesAutoscalingTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
-                            <span class="inline-block max-w-48 truncate" title={scope()}>
-                              {scope()}
-                            </span>
+                            <KubernetesScopeText
+                              resource={resource}
+                              singleCluster={singleCluster()}
+                              class="block truncate"
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-56 truncate" title={target()}>
+                            <span class="block truncate" title={target()}>
                               {target()}
                             </span>
                           </TableCell>
@@ -306,14 +310,14 @@ export const KubernetesAutoscalingTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
-                            <span class="inline-block max-w-40 truncate" title={metrics().title}>
+                            <span class="block truncate" title={metrics().title}>
                               {metrics().label}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
-                            <span class="inline-block max-w-32 truncate" title={labels().title}>
+                            <span class="block truncate" title={labels().title}>
                               {labels().label}
                             </span>
                           </TableCell>

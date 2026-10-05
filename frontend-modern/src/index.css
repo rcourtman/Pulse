@@ -529,6 +529,15 @@
     display: inline;
   }
 
+  /* The Deployments Desired column returns with the 72rem tier (hidden
+     md:table-cell), so Ready drops its own /desired total there and never
+     before: one of the two always carries the desired count. */
+  @container (min-width: 72rem) {
+    .k8s-deployment-ready-total {
+      display: none;
+    }
+  }
+
   @container (min-width: 50rem) {
     .table-scroll-shell col.alert-history-context-track {
       visibility: visible;
@@ -567,10 +576,6 @@
     .table-scroll-shell :is(th, td).report-schedule-detail-column,
     .table-scroll-shell :is(th, td).storage-dataset-referenced-column {
       display: table-cell;
-    }
-
-    .k8s-deployment-ready-total {
-      display: none;
     }
   }
 
@@ -1445,6 +1450,13 @@
     @container (min-width: 34rem) {
       .table-scroll-shell > .table-fixed.platform-table th.platform-table-name-column {
         width: 30%;
+      }
+
+      /* A table whose columns need unequal room in this band (short counts
+         beside a long name) declares each width through the header's
+         bandWidth, which the shell applies only here. */
+      .table-scroll-shell > .table-fixed.platform-table th[style*='--platform-table-band-width'] {
+        width: var(--platform-table-band-width);
       }
     }
   }
