@@ -240,10 +240,16 @@ repair an older generated unit rather than adding a JSON-parsing wrapper.
   independent guest thaw confirmation before starting Pulse again.
 
 #### Temperature data missing
-- Install `lm-sensors` on the host.
-- Run `sensors-detect`.
-- Install the unified agent on the Proxmox host with `--enable-proxmox`.
-- See [Temperature Monitoring](TEMPERATURE_MONITORING.md).
+- Compare the affected host's active agent version, last report, sensor and
+  observation time. A current server or another sensor's value is not evidence
+  that this reading is available.
+- Use the [bounded local reading check](TEMPERATURE_MONITORING.md#check-existing-linux-readings-safely)
+  on the monitored host, not the Pulse container. Linux agents can use existing
+  recognised CPU/SoC sysfs readings without `lm-sensors`; unavailable is not zero.
+- Do not run automatic hardware detection, load drivers, reboot or loosen SSH
+  restrictions merely to fill a temperature row. Retain output privately and
+  follow the [platform-specific guide](TEMPERATURE_MONITORING.md) for any needed
+  setup change during a maintenance window.
 
 #### Docker hosts appearing/disappearing
 
