@@ -8120,6 +8120,17 @@ the vSphere Overview renders `VsphereAlertsTable` with `showToolbar={false}`
 above its hosts table, only when signals exist, matching the TrueNAS
 Overview's health-alert table. Filtering stays on the platform's Health tab.
 
+### Kubernetes nodes state readiness in words
+
+`KubernetesNodesTable` renders the node state from `mapKubernetesNodeStatus`
+as a desktop Status column beside the name (a shared `StatusIndicatorBadge`
+for anything other than Ready, muted text for Ready) and sorts NotReady first.
+The status dot stays decorative; a phone-only screen-reader label beside the
+name announces the state where the column is demoted under the duplicate-state
+rule, so no width announces it twice. The overview reuses the same table,
+limited to nodes needing attention and with its own persisted sort slot,
+rather than a summary card.
+
 ### Large platform notices keep the inventory in view
 
 `PlatformOutdatedAgentNotice` is maintenance guidance, not an incident, so it

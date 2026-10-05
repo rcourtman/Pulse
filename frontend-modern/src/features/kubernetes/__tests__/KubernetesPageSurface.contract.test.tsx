@@ -121,8 +121,17 @@ vi.mock('../KubernetesNetworkingTable', () => ({
 }));
 
 vi.mock('../KubernetesNodesTable', () => ({
-  KubernetesNodesTable: (props: { resources: Resource[] }) => (
-    <div data-testid="nodes-table" data-rows={props.resources.length} />
+  KubernetesNodesTable: (props: {
+    resources: Resource[];
+    title?: string;
+    sortStorageKey?: string;
+  }) => (
+    <div
+      data-testid="nodes-table"
+      data-rows={props.resources.length}
+      data-title={props.title}
+      data-sort-key={props.sortStorageKey}
+    />
   ),
 }));
 
@@ -159,6 +168,59 @@ describe('KubernetesPageSurface contract', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  it('leads the overview with health signals and not-ready nodes before inventory', () => {
+    setResources([
+      makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
+      makeResource({
+        id: 'node-down',
+        type: 'k8s-node',
+        kubernetes: { ready: false } as Resource['kubernetes'],
+      }),
+      makeResource({
+        id: 'node-ok',
+        type: 'k8s-node',
+        kubernetes: { ready: true } as Resource['kubernetes'],
+      }),
+      makeResource({
+        id: 'pod-1',
+        type: 'pod',
+        incidents: [{ code: 'pod_crashloop', severity: 'warning', summary: 'CrashLoopBackOff' }],
+      }),
+    ]);
+
+    renderSurface();
+
+    const signals = screen.getByTestId('alerts-table');
+    const attention = screen.getByTestId('nodes-table');
+    const clusters = screen.getByTestId('clusters-table');
+    expect(attention).toHaveAttribute('data-title', 'Nodes needing attention');
+    expect(attention).toHaveAttribute('data-rows', '1');
+    // Its own persisted sort, so sorting the Nodes tab cannot reorder this list.
+    expect(attention).toHaveAttribute('data-sort-key', 'kubernetesNodesNeedingAttention');
+    expect(
+      signals.compareDocumentPosition(attention) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      attention.compareDocumentPosition(clusters) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('shows no attention table when every node is Ready', () => {
+    setResources([
+      makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
+      makeResource({
+        id: 'node-ok',
+        type: 'k8s-node',
+        kubernetes: { ready: true } as Resource['kubernetes'],
+      }),
+    ]);
+
+    renderSurface();
+
+    expect(screen.queryByTestId('nodes-table')).toBeNull();
+    expect(screen.queryByTestId('alerts-table')).toBeNull();
   });
 
   it('declares inventory-backed workflow tabs while querying API-native Kubernetes resources', () => {

@@ -929,8 +929,16 @@ not fork a second projection or filter model. Routine pending or
 under-replicated workload attention stays attached to that shared workload
 toolbar as a compact count and review action; page-wide Kubernetes attention
 is reserved for node availability or critical health signals. Zero-valued
-attention facets must not occupy the summary. Node, service, storage,
-configuration, policy, and event object rows remain in their workflow tabs.
+attention facets must not occupy the summary. Both lead the Overview, above the
+cluster rows: active health signals through the shared Kubernetes alerts table
+without its toolbar, then node availability as the canonical nodes table
+limited to nodes that are not Ready, cordoned or degraded (titled "Nodes needing
+attention"), each rendered only while it has rows. The full node inventory stays
+on the Nodes tab. The nodes table names a node's state in a desktop Status
+column, as kubectl does, and on phones through a phone-only screen-reader
+label instead of a duplicate column. The remaining node inventory and the
+service, storage, configuration, policy, and event object rows remain in their
+workflow tabs.
 Any other future Overview that repeats a detailed table must retire the owning
 workflow, reduce the Overview content to aggregate signal, or establish an
 equally explicit shared-state contract.

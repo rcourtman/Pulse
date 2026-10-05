@@ -360,7 +360,11 @@ describe('platform overview layout guardrails', () => {
       '-my-3 inline-flex min-h-11 items-center truncate',
     );
     expect(kubernetesNodesTableSource).toMatch(
-      /sortKey="roles"[\s\S]{0,160}?class="platform-table-phone-hidden md:w-\[10%\]"/,
+      /sortKey="roles"[\s\S]{0,160}?class="platform-table-phone-hidden md:w-\[8%\]"/,
+    );
+    // Status names the node state on desktop; the dot carries it on phones.
+    expect(kubernetesNodesTableSource).toMatch(
+      /sortKey="status"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[8%\]"/,
     );
     expect(kubernetesNodesTableSource).toMatch(
       /sortKey="capacity"[\s\S]{0,120}?class="platform-table-mobile-w-10 md:w-\[14%\]"/,
