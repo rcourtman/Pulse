@@ -99,20 +99,31 @@ const DOCKER_CONTAINER_COLUMNS: DockerContainerTableColumn[] = [
   { id: 'actions', label: 'Actions', kind: 'badge' },
 ];
 
+// The Updates column holds the update control or its status badge, which
+// must not clip: Update and Current are about 74px, and Check failed,
+// Updating... and Completed up to 100px. Every layout gives the column room
+// for the 74px states at its narrowest table width, whichever optional
+// columns are showing. The 100px states fit in most layouts too, but can
+// still clip at a layout's narrow end when several optional columns show.
+// The room comes only from
+// the CPU bar, which never shows a sublabel, and from the collapsed actions
+// menu, so every other column keeps its width. Below the 34rem phone
+// container the badge wraps instead (index.css). Wide rows expand the
+// lifecycle controls to about 92px, so actions gains a little there.
 const DOCKER_CONTAINER_DESKTOP_WIDTHS: Record<DockerContainerTableColumnId, number> = {
   container: 16,
   host: 8,
   runtime: 7,
   image: 16,
   state: 6,
-  cpu: 9,
+  cpu: 6,
   memory: 10,
   restarts: 6,
   ports: 10,
   networks: 8,
   mounts: 9,
-  updates: 7,
-  actions: 8,
+  updates: 9,
+  actions: 9,
 };
 
 const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
@@ -136,20 +147,20 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
   mobile: {
     container: 30,
     state: 12,
-    cpu: 14,
+    cpu: 10,
     memory: 16,
     restarts: 8,
-    updates: 10,
-    actions: 10,
+    updates: 16.25,
+    actions: 7.75,
   },
   tablet: {
     container: 27,
     host: 15,
     state: 10,
-    cpu: 15,
+    cpu: 9.5,
     memory: 19,
     restarts: 9,
-    updates: 9,
+    updates: 14.5,
     actions: 6,
   },
   // Compact is what a 1280-1536px laptop window gets. Host, Engine and the
@@ -161,12 +172,12 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
     runtime: 9.5,
     image: 16.5,
     state: 7,
-    cpu: 9.5,
+    cpu: 8,
     memory: 10,
     restarts: 8.5,
     ports: 12,
-    updates: 10,
-    actions: 8,
+    updates: 13.5,
+    actions: 6,
   },
 };
 

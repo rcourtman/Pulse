@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "base_sha": "800329cbd83c48fdb7402a18633189f2c8a2d6ff",
+  "verified_at": "2026-10-05T14:26:34Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts",
+    "frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts": "ff3c0d6fd2339cb7d522cbc6ccc5611b3ffed425877e09388dcc5367e1613320",
+    "frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx": "8e1b0ba7668b31acdf62599f538f38714828919a82e430adf5fcd772efa8ae67"
+  },
+  "routes": [
+    "/docker/containers",
+    "/kubernetes/nodes"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 900
+    },
+    {
+      "width": 430,
+      "height": 900
+    },
+    {
+      "width": 480,
+      "height": 900
+    },
+    {
+      "width": 540,
+      "height": 900
+    },
+    {
+      "width": 573,
+      "height": 900
+    },
+    {
+      "width": 600,
+      "height": 900
+    },
+    {
+      "width": 640,
+      "height": 900
+    },
+    {
+      "width": 700,
+      "height": 900
+    },
+    {
+      "width": 740,
+      "height": 900
+    },
+    {
+      "width": 767,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 900
+    },
+    {
+      "width": 800,
+      "height": 900
+    },
+    {
+      "width": 860,
+      "height": 900
+    },
+    {
+      "width": 900,
+      "height": 900
+    },
+    {
+      "width": 960,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 900
+    },
+    {
+      "width": 1100,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1600,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Private mock stack (PULSE_MOCK_MODE, random metrics off) serving this tree on main 800329cbd8; before = main, after = main plus this change, measured in the same session",
+    "Docker containers, grouped by host (default) and ungrouped (Host and Engine columns shown, seeded through localStorage dockerContainersGroupingMode=flat), 18 widths 390 to 1600: the Updates control clipped 5 cells at every width from 573 to 800 grouped (1 at 900) and from 573 to 1024 ungrouped (1 at 1100) on main, none patched",
+    "Clip sweep over every cell and its overflow-hidden or ellipsis descendants, plus elements spilling past their cell, .sr-only excluded: totals 89 to 53 grouped, 195 to 132 ungrouped, 85 to 78 on Kubernetes Nodes; no column clips more at any width and no header newly clips",
+    "Metric sublabels: the count of cells showing a used/total sublabel is unchanged per column and width (Docker memory at 800 to 960 and 1440 to 1600, Kubernetes memory from 1024); CPU bars never show one",
+    "Update state probe (each label cloned into the narrowest Updates cell): Update 74px, Current 69px, Pinned and Failed fit on one line at every width in both views (main cut them from 573 to 900 grouped and to 1100 ungrouped, and wrapped them onto two lines at 480); Check failed (100px) fits from 600 grouped; Review action (112px, shown only while an update awaits review) still clips grouped at 573 to 700 and 800, and ungrouped at most widths below 1280 and at 1600",
+    "Kubernetes Nodes Status probe: Degraded 64px, NotReady and Unknown fit at every width from 573 (main cut them from 573 to 860 except at 767); Unschedulable 89px fits from 900 and at 1280 and 1440 (main cut it at every width)",
+    "Model check of every Docker layout mode and optional-column set (State, Restarts, Engine, grouped): every column other than CPU, actions and Updates keeps exactly its main width",
+    "Before and after element screenshots: Docker containers at 600, 700, 900 and 1440 (Current and Update cut on main, whole patched), Kubernetes Nodes at 600, 768 and 1280 (Degraded cut on main, whole patched)"
+  ],
+  "interactions": [
+    "Loaded each route fresh, waited for the row count to settle, resized through every viewport before measuring",
+    "Sorted by Updates (Docker) and Status (Kubernetes) at 600, 768 and 1280: aria-sort ascending, header unclipped, third click restores the built-in order",
+    "Expanded and collapsed the first row's detail on both tables at 600, 768 and 1280 (aria-expanded true then false, detail visible); no console errors",
+    "Switched the Docker table to the ungrouped view so the Host and Engine columns render"
+  ]
+}

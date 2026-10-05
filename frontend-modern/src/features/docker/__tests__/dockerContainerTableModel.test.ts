@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { WorkloadTableLayoutMode } from '@/components/Workloads/guestRowModel';
 import {
   getDockerContainerColumnWidthStyle,
   getDockerContainerTableMinWidthClass,
@@ -138,6 +139,62 @@ describe('dockerContainerTableModel', () => {
     expect(wideIds).not.toContain('runtime');
     expect(wideIds).toContain('networks');
     expect(wideIds).toContain('mounts');
+  });
+
+  it('keeps the update control unclipped in every layout and optional column set', () => {
+    // Update and Current render about 74px wide, and the cell pads 6px a side
+    // below a 640px viewport and 8px above. Each layout is checked at its
+    // narrowest table: the 34rem phone container for mobile (below it the
+    // badge wraps instead), then 720, 900 and 1440px. Wide rows expand the
+    // lifecycle controls to about 92px.
+    const narrowest: [WorkloadTableLayoutMode, number, number][] = [
+      ['mobile', 544, 12],
+      ['tablet', 720, 16],
+      ['compact', 900, 16],
+      ['wide', 1440, 16],
+    ];
+    const pixels = (
+      columnId: 'updates' | 'actions',
+      layoutMode: WorkloadTableLayoutMode,
+      ids: ReturnType<typeof getDockerContainerVisibleColumnsForLayout>,
+      tableWidth: number,
+    ) =>
+      (Number.parseFloat(
+        String(
+          getDockerContainerColumnWidthStyle(
+            columnId,
+            layoutMode,
+            ids.map((column) => column.id),
+          ).width,
+        ),
+      ) /
+        100) *
+      tableWidth;
+    for (const [layoutMode, tableWidth, cellPadding] of narrowest) {
+      for (const includeRuntime of [false, true]) {
+        for (const includeRestarts of [false, true]) {
+          for (const includeState of [false, true]) {
+            for (const groupedByHost of [false, true]) {
+              const columns = getDockerContainerVisibleColumnsForLayout(
+                layoutMode,
+                includeRuntime,
+                includeRestarts,
+                includeState,
+                { groupedByHost },
+              );
+              expect(pixels('updates', layoutMode, columns, tableWidth)).toBeGreaterThanOrEqual(
+                74 + cellPadding,
+              );
+              if (layoutMode === 'wide') {
+                expect(pixels('actions', layoutMode, columns, tableWidth)).toBeGreaterThanOrEqual(
+                  92 + cellPadding,
+                );
+              }
+            }
+          }
+        }
+      }
+    }
   });
 });
 
