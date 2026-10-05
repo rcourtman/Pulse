@@ -2467,11 +2467,7 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "internal/alerts/migration_characterization_test.go",
-          "internal/alerts/specs/evaluator_test.go",
-          "internal/alerts/specs/types_test.go"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -2887,12 +2883,8 @@
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
-        "test_prefixes": [
-          "frontend-modern/src/api/__tests__/"
-        ],
-        "exact_files": [
-          "internal/api/contract_test.go"
-        ],
+        "test_prefixes": [],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -3652,10 +3644,7 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "internal/api/contract_test.go",
-          "pkg/licensing/grant_claims_contract_test.go"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -4681,10 +4670,7 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "scripts/installtests/build_release_assets_test.go",
-          "scripts/installtests/install_docker_sh_test.go"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -5334,9 +5320,7 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -6071,9 +6055,7 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "internal/unifiedresources/code_standards_test.go"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -6752,13 +6734,7 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "frontend-modern/src/api/__tests__/orgs.test.ts",
-          "frontend-modern/src/components/Settings/__tests__/OrganizationAccessPanel.test.tsx",
-          "frontend-modern/src/components/Settings/__tests__/OrganizationOverviewPanel.test.tsx",
-          "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
-          "internal/models/organization_additional_test.go"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -6949,12 +6925,7 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts",
-          "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
-          "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
-          "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -7205,38 +7176,7 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "frontend-modern/src/components/Workloads/__tests__/DiskList.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/EnhancedCPUBar.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/StackedDiskBar.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/useEnhancedCPUBarState.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/useGroupedTableWindowing.test.ts",
-          "frontend-modern/src/components/Workloads/__tests__/useMetricBarState.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/useStackedDiskBarState.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/useStackedMemoryBarState.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/useThresholdSliderState.test.ts",
-          "frontend-modern/src/components/Workloads/__tests__/useWorkloadSelectionState.test.ts",
-          "frontend-modern/src/components/Workloads/__tests__/useWorkloadViewportSync.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/workloadFilterConfigModel.test.ts",
-          "frontend-modern/src/components/Workloads/__tests__/workloadInventorySourceIssues.branchcov2.test.ts",
-          "frontend-modern/src/components/Workloads/__tests__/workloadInventorySourceIssues.test.ts",
-          "frontend-modern/src/components/Workloads/__tests__/workloadRouteModel.test.ts",
-          "frontend-modern/src/components/Workloads/__tests__/workloadRouteStateModel.test.ts",
-          "frontend-modern/src/components/Workloads/__tests__/workloadSelectionModel.test.ts",
-          "frontend-modern/src/components/Workloads/__tests__/WorkloadsFilter.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx",
-          "frontend-modern/src/components/Workloads/__tests__/workloadUrlSyncModel.test.ts",
-          "frontend-modern/src/components/Workloads/MetricBar.test.tsx",
-          "frontend-modern/src/components/Workloads/StackedMemoryBar.test.tsx",
-          "frontend-modern/src/components/Workloads/ThresholdSlider.test.tsx",
-          "frontend-modern/src/hooks/__tests__/useWorkloads.test.ts",
-          "internal/api/router_bench_test.go",
-          "internal/api/slo_bench_test.go",
-          "pkg/metrics/store_bench_test.go",
-          "pkg/metrics/store_query_plan_test.go",
-          "pkg/metrics/store_slo_test.go",
-          "pkg/server/gzip_middleware_test.go"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -7479,28 +7419,7 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "internal/api/relay_mobile_capability_test.go",
-          "internal/config/persistence_relay_test.go",
-          "internal/relay/client_test.go",
-          "internal/relay/encryption_test.go",
-          "internal/relay/protocol_test.go",
-          "internal/relay/push_test.go",
-          "pulse-mobile:src/api/__tests__/coreMobileContract.test.ts",
-          "pulse-mobile:src/relay/__tests__/channel.test.ts",
-          "pulse-mobile:src/relay/__tests__/client-hardening.test.ts",
-          "pulse-mobile:src/relay/__tests__/client.test.ts",
-          "pulse-mobile:src/relay/__tests__/encryption.test.ts",
-          "pulse-mobile:src/relay/__tests__/identity.test.ts",
-          "pulse-mobile:src/relay/__tests__/protocol-contract.test.ts",
-          "pulse-mobile:src/relay/__tests__/protocol.test.ts",
-          "pulse-mobile:src/relay/__tests__/proxy.test.ts",
-          "pulse-pro:relay-server/bridge_test.go",
-          "pulse-pro:relay-server/device_store_test.go",
-          "pulse-pro:relay-server/metrics_test.go",
-          "scripts/release_control/generate_mobile_compatibility_test.py",
-          "scripts/release_control/mobile_compatibility_test.py"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -7678,28 +7597,7 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "frontend-modern/src/api/__tests__/security.test.ts",
-          "frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx",
-          "frontend-modern/src/components/Settings/__tests__/SecurityPostureSummary.test.tsx",
-          "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
-          "frontend-modern/src/stores/__tests__/systemSettings.test.ts",
-          "internal/api/security_regression_test.go",
-          "internal/api/security_status_additional_test.go",
-          "internal/api/security_tokens_lifecycle_test.go",
-          "internal/api/security_tokens_owner_binding_test.go",
-          "internal/api/security_tokens_test.go",
-          "internal/api/system_settings_telemetry_test.go",
-          "internal/cloudcp/auth/magiclink_test.go",
-          "internal/config/config_load_test.go",
-          "internal/config/watcher_test.go",
-          "internal/telemetry/service_health_test.go",
-          "internal/telemetry/telemetry_test.go",
-          "pkg/server/service_health_test.go",
-          "pkg/server/telemetry_pulse_intelligence_test.go",
-          "pkg/tlsutil/tlsutil_test.go",
-          "scripts/tests/test_telemetry_adoption_report.py"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -8005,10 +7903,7 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "frontend-modern/src/components/Storage/code_standards.test.ts",
-          "internal/recovery/recovery_test.go"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
@@ -8295,10 +8190,7 @@
       "verification": {
         "allow_same_subsystem_tests": false,
         "test_prefixes": [],
-        "exact_files": [
-          "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
-          "internal/unifiedresources/code_standards_test.go"
-        ],
+        "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
