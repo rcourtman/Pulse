@@ -79,17 +79,18 @@ func TestBroadcastMetricsSnapshotConnectedContent(t *testing.T) {
 	}
 	assertEqual := func(stage string) {
 		t.Helper()
+		evaluationTime := time.Now().UTC()
 		before, err := json.Marshal(adapter.GetAll())
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := legacyFrontendProjectionForTest(m, graph.State, adapter.GetAll(), adapter, time.Now().UTC())
+		want := legacyFrontendProjectionForTest(m, graph.State, adapter.GetAll(), adapter, evaluationTime)
 		// The parent's unified view fills a missing store watermark from the
 		// listed resources. Preserve that full-state header in the oracle too.
 		if freshness := latestUnifiedResourceLastSeen(adapter.GetAll()); !freshness.IsZero() {
 			want.LastUpdate = freshness.UnixMilli()
 		}
-		got := m.buildBroadcastFrontendStateFromSnapshot(graph.State)
+		got := m.buildBroadcastFrontendStateFromSnapshotWithClock(graph.State, func() time.Time { return evaluationTime })
 		wantJSON, err := json.Marshal(want)
 		if err != nil {
 			t.Fatal(err)
@@ -123,6 +124,39 @@ func TestBroadcastMetricsSnapshotConnectedContent(t *testing.T) {
 	resources[0].CustomURL = "https://example.invalid/changed"
 	rr.IngestResources(resources)
 	assertEqual("dirty-same-time")
+}
+
+func TestBroadcastMetricsSnapshotHealthClockBoundary(t *testing.T) {
+	m, adapter, id := newReadStateCloneTestMonitor(t, 1)
+	rows := adapter.GetAll()
+	original := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	rows[0].LastSeen = original
+	rows[0].SourceStatus = map[unifiedresources.DataSource]unifiedresources.SourceStatus{
+		unifiedresources.SourceProxmox: {Status: "stale", LastSeen: original},
+	}
+	rr := unifiedresources.NewRegistry(nil)
+	rr.IngestResources(rows)
+	m.resourceStore = &broadcastProjectionCountingStore{MonitorAdapter: unifiedresources.NewMonitorAdapter(rr)}
+	for _, tc := range []struct {
+		age    time.Duration
+		detail string
+	}{{59 * time.Second, "0m"}, {61 * time.Second, "1m"}} {
+		calls := 0
+		got := m.buildBroadcastFrontendStateFromSnapshotWithClock(models.EmptyStateSnapshot(), func() time.Time {
+			calls++
+			return original.Add(tc.age)
+		})
+		if calls != 1 || len(got.Resources) != 1 || got.Resources[0].ID != id || got.Resources[0].LastSeen != original.UnixMilli() {
+			t.Fatal("health clock changed capture identity/original time or was not sampled once")
+		}
+		var health unifiedresources.ResourceHealth
+		if err := json.Unmarshal(got.Resources[0].Health, &health); err != nil {
+			t.Fatal(err)
+		}
+		if health.Verdict != unifiedresources.HealthStale || len(health.Reasons) != 1 || health.Reasons[0].Code != "telemetry_stale" || health.Reasons[0].Detail != tc.detail {
+			t.Fatalf("health age must advance across the minute boundary: %+v", health)
+		}
+	}
 }
 
 func TestBroadcastMetricsSnapshotOwnsTargetsBeforeLiveReplacement(t *testing.T) {

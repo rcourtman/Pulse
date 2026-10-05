@@ -4333,6 +4333,13 @@ func buildFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateF
 }
 
 func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateFrontend {
+	return m.buildBroadcastFrontendStateFromSnapshotWithClock(snapshot, time.Now)
+}
+
+// The clock is sampled at the same post-read health-evaluation boundary as
+// ordinary broadcasts. Tests can compare complete projections at one instant
+// without mistaking a naturally advancing health-age label for lost content.
+func (m *Monitor) buildBroadcastFrontendStateFromSnapshotWithClock(snapshot models.StateSnapshot, healthClock func() time.Time) models.StateFrontend {
 	frontendState := buildFrontendStateFromSnapshot(snapshot)
 	m.updateResourceStoreForRead(snapshot)
 	if m != nil && m.alertManager != nil {
@@ -4349,7 +4356,7 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateS
 	// Coalescing owns the outer slice. Decorate that one projection in place,
 	// not three full-resource copies; nested store data is still read-only.
 	healthAlerts := resourceHealthAlerts(frontendState.ActiveAlerts)
-	now := time.Now().UTC()
+	now := healthClock().UTC()
 	for i := range broadcastResources {
 		m.applyPersistedMetadataToUnifiedResource(&broadcastResources[i])
 		health := unifiedresources.EvaluateResourceHealth(broadcastResources[i], healthAlerts, now)

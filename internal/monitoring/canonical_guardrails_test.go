@@ -2958,7 +2958,7 @@ func TestBroadcastProjectionMatchesPreviousPipeline(t *testing.T) {
 	if !view.freshness.IsZero() {
 		want.LastUpdate = view.freshness.UnixMilli()
 	}
-	got := m.buildBroadcastFrontendStateFromSnapshot(snapshot)
+	got := m.buildBroadcastFrontendStateFromSnapshotWithClock(snapshot, func() time.Time { return now })
 	wantJSON, err := json.Marshal(want)
 	if err != nil {
 		t.Fatal(err)

@@ -41,6 +41,12 @@ the exact parent's complete conversion and final JSON encoding, with cold,
 list-only, typed-clean and dirty inputs; they do not establish installed CPU/RSS
 relief, native identity refresh throughput or completion of #2199.
 
+Complete-content comparisons use one health-evaluation instant through a
+private clock seam. Production still samples real UTC at the same post-read
+boundary. The minute-boundary control requires age labels to advance without
+renewing LastSeen; comparisons retain every health field instead of stripping
+the reproduced `1m`/`2m` clock difference from JSON.
+
 ### Report identity lookups do not rebuild unrelated Kubernetes metadata
 
 The producer's two temporary host/Docker-host admission registries use a
