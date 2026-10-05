@@ -238,7 +238,7 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span
-                              class="inline-block max-w-56 truncate"
+                              class="block truncate"
                               title={dockerTextValue(
                                 resource.docker?.error ||
                                   resource.docker?.message ||

@@ -2340,6 +2340,13 @@ not a replacement status card, CTA band, or page-local nested card.
    disclosure; a non-expandable identity cell must otherwise expose its
    complete value without requiring hover. Default data rows stay single-line
    so scan density and row rhythm are not traded for automatic text wrapping.
+   A summary value that must truncate sits in a `block truncate` span as the
+   cell's only child, so it fills the fixed-layout column and ends in an
+   ellipsis inside it on the row's text line. A capped `inline-block max-w-*
+   truncate` span ignores the column width: it spills past a narrower cell
+   with no ellipsis, wastes room in a wider one, and sits about 2 pixels above
+   the row baseline. `platformOverviewLayout.guardrails.test.ts` holds the
+   Docker, Kubernetes, Proxmox and vSphere table sources to that rule.
    When a platform table row itself owns that keyboard- and touch-operable
    disclosure, `SummaryRowActionButton` removes the redundant visible chevron
    below the shared mobile breakpoint while preserving the button for screen

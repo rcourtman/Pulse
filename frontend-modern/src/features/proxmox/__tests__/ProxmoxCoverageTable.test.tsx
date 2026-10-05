@@ -258,4 +258,32 @@ describe('ProxmoxCoverageTable column visibility', () => {
     );
     expect(titles.join(' ')).not.toMatch(/canonical|provider evidence|independent recovery/);
   });
+
+  it('keeps a long node name truncating inside its own column', () => {
+    // A capped inline-block sat above the row's text line; a block span fills
+    // the fixed-layout cell and ends in an ellipsis there.
+    const node = 'pve-production-rack-04-node-17.example.internal';
+    render(() => (
+      <ProxmoxCoverageTable
+        rows={[{ ...row, workload: { ...row.workload, node } }] as WorkloadCoverageRow[]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKeys={new Set<string>()}
+        onToggleExpand={() => {}}
+        showTaskColumn={false}
+        layoutWidth={() => 1_200}
+      />
+    ));
+
+    const span = document.querySelector(`td span[title="${node}"]`);
+    expect(span).toHaveTextContent(node);
+    expect(span?.parentElement?.children).toHaveLength(1);
+    expect(span?.getAttribute('class')).toBe('block truncate');
+    expect(span?.closest('table')).toHaveClass('table-fixed');
+  });
 });

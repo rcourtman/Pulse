@@ -1189,7 +1189,12 @@ RBAC names first, then the namespace scope, then the short Lifecycle and Data
 shape values, then Kind. Kubernetes summary cells truncate through a block span
 that fills the cell, so a long value ends in an ellipsis inside its own column
 on the row's text line; a fixed-width inline-block cap spilled past narrow
-cells without an ellipsis and sat above the row baseline.
+cells without an ellipsis and sat above the row baseline. Docker image, network,
+volume, service, task, secret and config cells, Proxmox backup coverage,
+restore-evidence and recoverable cells, the Mail Gateway drawer's top domains,
+and vSphere host vCenter cells follow the same rule. The Docker service Update
+cell still wraps on phones and from md truncates inside its column instead of
+at a 10rem cap.
 Duration and interval cells keep the same split: unified-resource or
 source-specific consumers own which elapsed duration, human fallback, or poll
 interval field is meaningful, while dense platform table rendering must use
