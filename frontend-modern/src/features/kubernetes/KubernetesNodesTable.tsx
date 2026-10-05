@@ -1,5 +1,6 @@
 import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { TableCell, TableRow } from '@/components/shared/Table';
@@ -64,6 +65,7 @@ const formatRoles = (roles: string[] | undefined): string => {
 
 const KUBERNETES_NODE_SORT_KEYS = [
   'node',
+  'status',
   'cluster',
   'roles',
   'kubelet',
@@ -86,6 +88,11 @@ const getKubernetesNodeSortValue = (
   switch (key) {
     case 'node':
       return asTrimmedString(node.name) || node.id;
+    case 'status': {
+      // Ascending puts NotReady first, then cordoned or degraded, then Ready.
+      const variant = mapKubernetesNodeStatus(node).variant;
+      return variant === 'danger' ? 0 : variant === 'warning' ? 1 : variant === 'success' ? 3 : 2;
+    }
     case 'cluster':
       return kubernetesClusterLabel(node) || null;
     case 'roles': {
@@ -124,6 +131,8 @@ export const KubernetesNodesTable: Component<{
   emptyDescription: string;
   title?: string;
   showToolbar?: boolean;
+  /** Persisted sort slot; a second instance (the Overview attention list) needs its own. */
+  sortStorageKey?: string;
 }> = (props) => {
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
@@ -139,7 +148,7 @@ export const KubernetesNodesTable: Component<{
   // are pre-sorted by the status compare, so a user sort keeps that order
   // for ties and the table falls straight back to it when the sort clears.
   const sort = createPlatformTableSortState({
-    storageKey: 'kubernetesNodes',
+    storageKey: props.sortStorageKey ?? 'kubernetesNodes',
     sortKeys: KUBERNETES_NODE_SORT_KEYS,
     descendingFirst: ['cpu', 'memory', 'uptime', 'capacity'],
   });
@@ -209,15 +218,29 @@ export const KubernetesNodesTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="node"
-                  class="platform-table-mobile-w-30 md:w-[15%]"
+                  class="platform-table-mobile-w-30 md:w-[14%]"
                 >
                   Node
+                </PlatformSortableTableHead>
+                {/*
+                  Status sits beside the name, as in kubectl get nodes: the
+                  dot alone made "why is this node amber" a hover. On phones
+                  the dot carries the state (and names it to assistive tech),
+                  so the column is desktop-only.
+                */}
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="status"
+                  class="platform-table-phone-hidden md:w-[8%]"
+                >
+                  Status
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
                   sortKey="cluster"
-                  class="platform-table-mobile-w-15 md:w-[10%]"
+                  class="platform-table-mobile-w-15 md:w-[8%]"
                 >
                   <PlatformResponsiveTableLabel compact="Clus" full="Cluster" />
                 </PlatformSortableTableHead>
@@ -225,7 +248,7 @@ export const KubernetesNodesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="roles"
-                  class="platform-table-phone-hidden md:w-[10%]"
+                  class="platform-table-phone-hidden md:w-[8%]"
                 >
                   <PlatformResponsiveTableLabel compact="Role" full="Roles" />
                 </PlatformSortableTableHead>
@@ -241,7 +264,7 @@ export const KubernetesNodesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="runtime"
-                  class="hidden md:table-cell md:w-[15%]"
+                  class="hidden md:table-cell md:w-[12%]"
                 >
                   Runtime
                 </PlatformSortableTableHead>
@@ -366,7 +389,25 @@ export const KubernetesNodesTable: Component<{
                                 class="min-w-0"
                                 nameClass="truncate font-semibold text-base-content"
                               />
+                              {/* Phones demote the Status column; announce the state there only. */}
+                              <span class="sr-only platform-table-phone-only-inline">
+                                {indicator().label}
+                              </span>
                             </div>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
+                          >
+                            <Show
+                              when={indicator().variant !== 'success'}
+                              fallback={<span class="text-muted">{indicator().label}</span>}
+                            >
+                              <StatusIndicatorBadge
+                                variant={indicator().variant}
+                                label={indicator().label}
+                                size="xs"
+                              />
+                            </Show>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
@@ -434,7 +475,7 @@ export const KubernetesNodesTable: Component<{
                           resource={node}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
-                          colSpan={9}
+                          colSpan={10}
                           resolveResourceLabel={resolveResourceLabel}
                           onClose={() => drawer.close(node)}
                         />
