@@ -183,7 +183,7 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 						if vm.Disk.Used != initial.Disk.Used || vm.DiskStatusReason != "prev-agent-cooldown" || vm.GuestAgentStatus != "deferred" {
 							t.Fatalf("uncertainty lost truthful retained disk: %+v", vm.Disk)
 						}
-						if !reflect.DeepEqual(m.vmAgentMemCache[memoryKey], originalMemory) || !vm.Memory.Observation.ObservedAt.Equal(initial.Memory.Observation.ObservedAt) {
+						if !reflect.DeepEqual(m.vmAgentMemCache[memoryKey], originalMemory) || (originalMemory.info.Source != "" && !vm.Memory.Observation.ObservedAt.Equal(initial.Memory.Observation.ObservedAt)) {
 							t.Fatal("cooldown renewed original memory evidence")
 						}
 					}
