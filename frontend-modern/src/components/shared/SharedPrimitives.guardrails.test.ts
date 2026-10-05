@@ -2117,6 +2117,10 @@ describe('shared primitive guardrails', () => {
     expect(toggleModelSource).toContain('getToggleTrackClass');
     expect(toggleModelSource).toContain('getToggleKnobClass');
     expect(toggleModelSource).toContain('ToggleChangeEvent');
+    // A disabled toggle keeps its on/off track and dims; bg-base names no
+    // theme colour, so a disabled track built on it rendered transparent.
+    expect(toggleModelSource).not.toMatch(/TOGGLE_DISABLED_CLASS = '[^']*bg-base/);
+    expect(toggleModelSource).toContain('checked ? TOGGLE_CHECKED_CLASS : TOGGLE_UNCHECKED_CLASS');
 
     expect(dockerRuntimeSettingsCardSource).toContain('TogglePrimitive');
     expect(dockerRuntimeSettingsCardSource).toContain('ariaLabelledBy');

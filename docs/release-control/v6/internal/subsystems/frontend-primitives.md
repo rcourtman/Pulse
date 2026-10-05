@@ -5081,6 +5081,10 @@ plus the synthetic toggle change-event runtime, and
 track/knob/container class policy, and the canonical toggle event type.
 Future toggle work should extend those owners instead of pushing synthetic
 event behavior or size/class policy back into the shell.
+A disabled toggle (a read-only session, a plan lock, a save in flight) keeps
+its on or off track colour and dims, so it still shows whether the setting is
+on; it must not swap to a separate disabled background, which hid the track
+and made a locked-on setting read as off.
 Binary on/off controls are registry-backed too. Product surfaces must compose
 `Toggle` or `TogglePrimitive` for shared track/knob styling, disabled behavior,
 label/description wiring, and synthetic checked events instead of recreating

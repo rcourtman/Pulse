@@ -11,7 +11,11 @@ export interface ToggleChangeEvent {
 
 const TOGGLE_CHECKED_CLASS = 'bg-blue-500';
 const TOGGLE_UNCHECKED_CLASS = 'bg-border';
-const TOGGLE_DISABLED_CLASS = 'bg-base cursor-not-allowed opacity-50';
+// A disabled switch (read-only session, plan lock, save in flight) keeps the
+// track colour of its state and dims, so it still says whether the setting is
+// on. The old bg-base track named no theme colour and rendered transparent:
+// a disabled switch lost its track and an enabled-but-locked one read as off.
+const TOGGLE_DISABLED_CLASS = 'cursor-not-allowed opacity-50';
 const TOGGLE_KNOB_BASE_CLASS = 'bg-surface border border-border-subtle';
 const TOGGLE_CONTAINER_CLASS = 'flex items-center gap-3';
 const TOGGLE_LABEL_CLASS = 'flex flex-col text-sm text-base-content';
@@ -50,15 +54,16 @@ export function getToggleTrackClass(
 ): string {
   const config = toggleSizeConfig[size];
   return `relative inline-flex ${config.track} shrink-0 items-center rounded-full p-0.5 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] after:absolute after:-inset-y-2.5 after:inset-x-0 after:content-[''] focus:outline-hidden focus:ring-0 ${
-    disabled ? TOGGLE_DISABLED_CLASS : checked ? TOGGLE_CHECKED_CLASS : TOGGLE_UNCHECKED_CLASS
-  } ${className ?? ''}`.trim();
+    checked ? TOGGLE_CHECKED_CLASS : TOGGLE_UNCHECKED_CLASS
+  } ${disabled ? TOGGLE_DISABLED_CLASS : ''} ${className ?? ''}`.trim();
 }
 
-export function getToggleKnobClass(size: ToggleSize, checked: boolean, disabled: boolean): string {
+// The knob sits inside the track, so a disabled track's opacity already dims it.
+export function getToggleKnobClass(size: ToggleSize, checked: boolean, _disabled: boolean): string {
   const config = toggleSizeConfig[size];
   return `inline-block ${config.knob} rounded-full transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${TOGGLE_KNOB_BASE_CLASS} ${
     checked ? config.translateOn : 'translate-x-0'
-  } ${disabled ? 'opacity-60' : ''}`.trim();
+  }`.trim();
 }
 
 export function getToggleContainerClass(containerClass?: string): string {
