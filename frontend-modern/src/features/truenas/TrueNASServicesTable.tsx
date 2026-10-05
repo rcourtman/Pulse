@@ -3,6 +3,7 @@ import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
 import {
   PlatformWindowedRows,
   PlatformSortableTableHead,
@@ -63,12 +64,50 @@ const formatServiceName = (value: string | undefined): string => {
   return SERVICE_NAME_LABELS[normalized.toLowerCase()] ?? normalized;
 };
 
-const formatPIDs = (pids: number[] | undefined): { label: string; title: string } => {
-  const values = (pids ?? []).filter((pid) => Number.isFinite(pid) && pid > 0);
-  if (values.length === 0) return { label: '-', title: '' };
-  const visible = values.slice(0, 3).map(String);
-  const suffix = values.length > visible.length ? ` +${values.length - visible.length}` : '';
-  return { label: `${visible.join(', ')}${suffix}`, title: values.join(', ') };
+// A service set to start at boot that is not running is the one state a red
+// dot alone cannot explain, so the State cell says so beside the raw state.
+// Rows stay single-line (the shared platform-table rhythm), so the full
+// sentence rides on the title and in the drawer. PIDs are process detail
+// nobody acts on from the list, so they live in the drawer too.
+type ServiceStateNote = { short: string | null; full: string; tone: 'danger' | 'warning' };
+
+const serviceStateNote = (
+  row: TrueNASServiceRow,
+  status: Exclude<TrueNASServiceStatusFilter, 'all'>,
+): ServiceStateNote | null => {
+  if (status === 'stopped') {
+    return {
+      short: 'should be running',
+      full: 'Set to start at boot but not running',
+      tone: 'danger',
+    };
+  }
+  if (status !== 'attention') return null;
+  if (hasImpairedResourceSource(row.system, 'truenas')) {
+    return { short: 'not updated', full: 'TrueNAS has not updated this recently', tone: 'warning' };
+  }
+  const state = asTrimmedString(row.service.state);
+  return {
+    short: state ? null : 'not reported',
+    full: state
+      ? `TrueNAS reports ${formatPlatformTableTitleCaseValue(state)}`
+      : 'TrueNAS has not reported a state',
+    tone: 'warning',
+  };
+};
+
+// The drawer value cell is one line on a phone, so it carries the short form
+// with a capital, and the Boot row beside it says why it should be running.
+const serviceConditionLabel = (row: TrueNASServiceRow): string | null => {
+  const note = serviceStateNote(row, mapTrueNASServiceStatus(row));
+  if (!note) return null;
+  if (!note.short) return note.full;
+  return note.short.charAt(0).toUpperCase() + note.short.slice(1);
+};
+
+const SERVICE_STATE_NOTE_CLASS: Record<ServiceStateNote['tone'], string> = {
+  danger: 'text-red-600 dark:text-red-300',
+  warning: 'text-amber-700 dark:text-amber-300',
 };
 
 const serviceStatusVariant = (
@@ -124,6 +163,9 @@ const buildServiceDetailSections = (row: TrueNASServiceRow): ServiceDetailSectio
         detailRow('State', formatPlatformTableTitleCaseValue(row.service.state), {
           tone: serviceTone(row),
         }),
+        detailRow('Condition', serviceConditionLabel(row), {
+          tone: serviceTone(row),
+        }),
         detailRow('Boot', detailBool(row.service.enabled), {
           tone: row.service.enabled ? 'success' : 'muted',
         }),
@@ -155,9 +197,8 @@ const ServiceDetailTable: Component<{ row: TrueNASServiceRow; onClose: () => voi
   />
 );
 
-// Columns a user can sort by. PIDs orders on the process count so the busiest
-// services surface first.
-const TRUENAS_SERVICE_SORT_KEYS = ['service', 'state', 'boot', 'pids', 'system'] as const;
+// Columns a user can sort by.
+const TRUENAS_SERVICE_SORT_KEYS = ['service', 'state', 'boot', 'system'] as const;
 
 type TrueNASServiceSortKey = (typeof TRUENAS_SERVICE_SORT_KEYS)[number];
 
@@ -172,12 +213,6 @@ const getTrueNASServiceSortValue = (
       return asTrimmedString(row.service.state) || null;
     case 'boot':
       return row.service.enabled ? 'Enabled' : 'Disabled';
-    case 'pids': {
-      const count = (row.service.pids ?? []).filter(
-        (pid) => Number.isFinite(pid) && pid > 0,
-      ).length;
-      return count > 0 ? count : null;
-    }
     case 'system':
       return asTrimmedString(row.systemName) || null;
     default:
@@ -202,7 +237,6 @@ export const TrueNASServicesTable: Component<{
   const sort = createPlatformTableSortState({
     storageKey: 'truenasServices',
     sortKeys: TRUENAS_SERVICE_SORT_KEYS,
-    descendingFirst: ['pids'],
   });
   const sortedRows = createMemo(() =>
     sort.sortRows(tableState.filtered(), getTrueNASServiceSortValue),
@@ -257,7 +291,7 @@ export const TrueNASServicesTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="service"
-                  class="platform-table-mobile-w-30 md:w-[24%]"
+                  class="platform-table-mobile-w-30 md:w-[34%]"
                 >
                   Service
                 </PlatformSortableTableHead>
@@ -265,7 +299,7 @@ export const TrueNASServicesTable: Component<{
                   kind="badge"
                   sort={sort}
                   sortKey="state"
-                  class="platform-table-phone-hidden md:w-[14%]"
+                  class="platform-table-phone-hidden md:w-[16%]"
                 >
                   State
                 </PlatformSortableTableHead>
@@ -273,23 +307,15 @@ export const TrueNASServicesTable: Component<{
                   kind="badge"
                   sort={sort}
                   sortKey="boot"
-                  class="platform-table-mobile-w-15 md:w-[14%]"
+                  class="platform-table-mobile-w-15 md:w-[16%]"
                 >
                   Boot
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  sortKey="pids"
-                  class="platform-table-mobile-w-15 md:w-[20%]"
-                >
-                  PIDs
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
                   sortKey="system"
-                  class="platform-table-phone-hidden md:w-[28%]"
+                  class="platform-table-phone-hidden md:w-[34%]"
                 >
                   System
                 </PlatformSortableTableHead>
@@ -300,7 +326,7 @@ export const TrueNASServicesTable: Component<{
                 <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(row) => {
                     const status = () => mapTrueNASServiceStatus(row);
-                    const pids = createMemo(() => formatPIDs(row.service.pids));
+                    const note = () => serviceStateNote(row, status());
                     const rawState = () => asTrimmedString(row.service.state) || '-';
                     const detailRowId = () => detail.detailRowId(row);
                     const isExpanded = () => detail.isExpanded(row);
@@ -332,9 +358,27 @@ export const TrueNASServicesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
                           >
-                            <span class="inline-flex rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-base-content">
-                              {formatPlatformTableTitleCaseValue(rawState())}
-                            </span>
+                            <div
+                              class="inline-flex max-w-full min-w-0 items-center gap-1.5"
+                              title={note()?.full}
+                              data-truenas-service-state-note={note() ? note()!.tone : undefined}
+                            >
+                              <span class="inline-flex shrink-0 rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-base-content">
+                                {formatPlatformTableTitleCaseValue(rawState())}
+                              </span>
+                              <Show when={note()?.short}>
+                                {(short) => (
+                                  <span
+                                    class={`min-w-0 truncate text-[11px] font-medium ${SERVICE_STATE_NOTE_CLASS[note()!.tone]}`}
+                                  >
+                                    {short()}
+                                  </span>
+                                )}
+                              </Show>
+                              <Show when={note()}>
+                                {(current) => <span class="sr-only">{current().full}</span>}
+                              </Show>
+                            </div>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('badge')}>
                             <span
@@ -348,12 +392,6 @@ export const TrueNASServicesTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={getPlatformTableCellClassForKind('text')}
-                            title={pids().title || undefined}
-                          >
-                            <span class="tabular-nums text-base-content">{pids().label}</span>
-                          </TableCell>
-                          <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
                           >
                             <div class="truncate text-base-content">{row.systemName}</div>
@@ -362,7 +400,7 @@ export const TrueNASServicesTable: Component<{
                         <Show when={isExpanded()}>
                           <InlineDetailTableRow
                             cellId={detailRowId()}
-                            colspan={5}
+                            colspan={4}
                             data-inline-detail-for={row.id}
                             data-truenas-service-detail-row={row.id}
                           >
