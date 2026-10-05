@@ -35,6 +35,11 @@ func TestSecureRuntimePlatformMatrixRemainsExplicitAndShipped(t *testing.T) {
 		"collectionMode: typed-helper-summary",
 		"currently explicit rather than the installer default.",
 		"Residual owner and removal condition",
+		"systemd does not enforce `RestrictAddressFamilies` on native 32-bit x86",
+		"Do not\nremove `PrivateNetwork` to work around a telemetry failure.",
+		"helper's private network namespace",
+		"operation v2 preserves the collected",
+		"Unavailable on hosts where pmxcfs abstract IPC is hidden",
 	}
 	for _, marker := range required {
 		if !strings.Contains(content, marker) {

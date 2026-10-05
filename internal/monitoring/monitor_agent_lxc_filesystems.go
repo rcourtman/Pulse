@@ -29,9 +29,12 @@ type agentLXCFilesystemCacheEntry struct {
 }
 
 func agentLXCFilesystemCacheKey(instance, node string, vmid int) string {
+	return agentLXCFilesystemNodePrefix(instance, node) + strconv.Itoa(vmid)
+}
+
+func agentLXCFilesystemNodePrefix(instance, node string) string {
 	return strings.ToLower(strings.TrimSpace(instance)) + "\x00" +
-		strings.ToLower(strings.TrimSpace(node)) + "\x00" +
-		strconv.Itoa(vmid)
+		strings.ToLower(strings.TrimSpace(node)) + "\x00"
 }
 
 func agentLXCFilesystemTTL(intervalSeconds int) time.Duration {
@@ -58,6 +61,9 @@ func (m *Monitor) applyAgentLXCFilesystems(
 	agentID = strings.TrimSpace(agentID)
 	if m == nil || m.state == nil || inventory == nil ||
 		strings.TrimSpace(linkedNodeID) == "" || agentID == "" {
+		return
+	}
+	if inventory.ValidateCollection() != nil {
 		return
 	}
 
@@ -109,7 +115,15 @@ func (m *Monitor) applyAgentLXCFilesystems(
 		m.proxmoxLXCFilesystemsCache = make(map[string]agentLXCFilesystemCacheEntry)
 	}
 	for key, entry := range m.proxmoxLXCFilesystemsCache {
-		if !receivedAt.Before(entry.expiresAt) {
+		if !receivedAt.Before(entry.expiresAt) ||
+			(inventory.Status == agentshost.ProxmoxLXCCollectionComplete && entry.agentID == agentID &&
+				strings.HasPrefix(key, agentLXCFilesystemNodePrefix(node.Instance, node.Name))) {
+			delete(m.proxmoxLXCFilesystemsCache, key)
+		}
+	}
+	for _, vmid := range inventory.OmittedVMIDs {
+		key := agentLXCFilesystemCacheKey(node.Instance, node.Name, vmid)
+		if entry, exists := m.proxmoxLXCFilesystemsCache[key]; exists && entry.agentID == agentID {
 			delete(m.proxmoxLXCFilesystemsCache, key)
 		}
 	}

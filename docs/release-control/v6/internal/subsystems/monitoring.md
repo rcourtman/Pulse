@@ -1682,6 +1682,8 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 
 ## Shared Boundaries
 
+Helper-backed Proxmox inventories carry explicit complete/partial status and omitted VMIDs. Before cache mutation the monitor validates this shared contract. A complete inventory replaces only the exact linked-node/agent cache; a partial inventory removes that agent's explicitly omitted guests without renewing their data. Legacy reports retain legacy row admission and expiry.
+
 PBS polling owns the internal `PBSInstance.NodeMetricsUnavailable` discriminator:
 each poll starts unavailable and only a successful non-nil node-status result
 clears it. A denied or failed node-status endpoint does not invalidate successful
@@ -2193,6 +2195,8 @@ service-history reads plus denial/recovery without fabricated samples.
 
 ## Completion Obligations
 
+`internal/monitoring/monitor_host_agents_test.go` and `pkg/agents/host/proxmox_lxc_test.go` must prove JSON wire-report ingestion through `ApplyHostReport`, partial/complete-empty recovery, contradictory IDs, unchanged node/agent/name/TTL protection, and no invalid-list-to-healthy-empty conversion. Omitted telemetry is never zero. Source proofs are distinct from native PVE and released availability.
+
 ### Discovery accepts successful command evidence only
 
 Only stdout from a successful result with zero exit status and no error enters
@@ -2344,6 +2348,8 @@ truthfulness, not native thaw, containing-release or workload acceptance.
 
 
 ## Current State
+
+V2 partial inventories preserve usable filesystem readings while leaving typed-helper health degraded. Global inventory failure still yields no inventory. No host-network exception, guest mutation, database/retention change or temperature substitution accompanies this repair.
 
 ### Discovery observes VM guest execution pauses
 

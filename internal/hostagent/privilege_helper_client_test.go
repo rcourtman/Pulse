@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os/exec"
@@ -411,4 +412,159 @@ func requirePrivilegeHelperModuleStatus(t *testing.T, statuses []agentshost.Modu
 	}
 	t.Fatalf("typed privilege helper module missing from %+v", statuses)
 	return agentshost.ModuleStatus{}
+}
+
+func TestCollectProxmoxPartialInventoryKeepsRowsAndDegradedHealth(t *testing.T) {
+	helper := &fakePrivilegedTelemetry{proxmox: &agentshost.ProxmoxLXCInventory{
+		Status: agentshost.ProxmoxLXCCollectionPartial, Containers: []agentshost.ProxmoxLXCContainer{{VMID: 100, Name: "web"}}, OmittedVMIDs: []int{102},
+	}}
+	status := NewPrivilegeHelperStatus()
+	status.Record(privilegeHelperOperationSMART, errors.New("unrelated failure"))
+	agent := &Agent{privilegedTelemetry: helper, privilegeHelperHealth: status, logger: zerolog.Nop()}
+	got := agent.collectProxmoxLXCFilesystemsForReport(t.Context())
+	if got == nil || len(got.Containers) != 1 || len(got.OmittedVMIDs) != 1 {
+		t.Fatal("partial inventory was discarded")
+	}
+	module := status.ModuleStatus()
+	if module.State != "degraded" || !strings.Contains(module.LastError, "inventory is incomplete") {
+		t.Fatalf("module = %+v", module)
+	}
+	helper.proxmox = &agentshost.ProxmoxLXCInventory{Status: agentshost.ProxmoxLXCCollectionComplete}
+	if agent.collectProxmoxLXCFilesystemsForReport(t.Context()) == nil {
+		t.Fatal("complete recovery omitted")
+	}
+	module = status.ModuleStatus()
+	if module.State != "degraded" || strings.Contains(module.LastError, "proxmox.lxc_filesystems") || !strings.Contains(module.LastError, privilegeHelperOperationSMART) {
+		t.Fatalf("recovery cleared wrong health: %+v", module)
+	}
+}
+
+func TestProxmoxHelperVersionCompatibilityIsNarrow(t *testing.T) {
+	tests := []struct {
+		name      string
+		code      string
+		status    string
+		omitted   []int
+		wantErr   bool
+		wantCalls int
+	}{
+		{"v2 partial", "", "partial", []int{102}, false, 1},
+		{"older helper", agenthelper.ErrorUnsupportedOperation, "", nil, false, 2},
+		{"provider failure", agenthelper.ErrorProviderUnavailable, "", nil, true, 1},
+		{"peer denial", agenthelper.ErrorUnauthorizedPeer, "", nil, true, 1},
+		{"missing v2 completeness", "", "", nil, true, 1},
+		{"invalid v2 completeness", "", "complete", []int{102}, true, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			calls := make(chan int, 3)
+			client, err := agenthelper.NewClient(agenthelper.ClientConfig{
+				SocketPath: filepath.Join(t.TempDir(), "helper.sock"), MaxDeadline: privilegeHelperOperationDeadline,
+				DialContext: func(context.Context, string, string) (net.Conn, error) {
+					clientConn, serverConn := net.Pipe()
+					go func() {
+						defer serverConn.Close()
+						var header [4]byte
+						if _, err := io.ReadFull(serverConn, header[:]); err != nil {
+							return
+						}
+						b := make([]byte, binary.BigEndian.Uint32(header[:]))
+						if _, err := io.ReadFull(serverConn, b); err != nil {
+							return
+						}
+						var req agenthelper.Request
+						if json.Unmarshal(b, &req) != nil {
+							return
+						}
+						calls <- req.OperationVersion
+						inventory := &agentshost.ProxmoxLXCInventory{Status: tt.status, Containers: []agentshost.ProxmoxLXCContainer{{VMID: 100, Name: "web"}}, OmittedVMIDs: tt.omitted}
+						raw, _ := json.Marshal(struct {
+							Inventory *agentshost.ProxmoxLXCInventory `json:"inventory"`
+						}{inventory})
+						response := agenthelper.Response{ProtocolVersion: 1, RequestID: req.RequestID, Operation: req.Operation, OperationVersion: req.OperationVersion, Success: true, Result: raw}
+						if tt.code != "" && req.OperationVersion == 2 {
+							response.Success = false
+							response.Result = nil
+							response.Error = &agenthelper.ResponseError{Code: tt.code}
+						}
+						b, _ = json.Marshal(response)
+						frame := make([]byte, 4+len(b))
+						binary.BigEndian.PutUint32(frame[:4], uint32(len(b)))
+						copy(frame[4:], b)
+						serverConn.Write(frame)
+					}()
+					return clientConn, nil
+				},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			inventory, err := (&privilegeHelperTelemetry{client: client}).ProxmoxLXCFilesystems(t.Context())
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("inventory=%+v, error=%v", inventory, err)
+			}
+			if len(calls) != tt.wantCalls {
+				t.Fatalf("calls=%d, want %d", len(calls), tt.wantCalls)
+			}
+			for n := 0; n < tt.wantCalls; n++ {
+				version := <-calls
+				if version != 2-n {
+					t.Fatalf("call %d version=%d", n, version)
+				}
+			}
+		})
+	}
+}
+
+func TestCollectProxmoxInvalidListCannotBecomeCompleteEmpty(t *testing.T) {
+	header := "VMID Status Lock Name\n"
+	boundary := header
+	for n := 0; n < proxmoxLXCMaxContainers; n++ {
+		boundary += fmt.Sprintf("%d running - web\n", 100+n)
+	}
+	if rows, err := parseProxmoxLXCRunningContainers(boundary); err != nil || len(rows) != proxmoxLXCMaxContainers {
+		t.Fatalf("exact running-container boundary rejected: rows=%d err=%v", len(rows), err)
+	}
+	tests := []struct {
+		name, output string
+		valid        bool
+	}{
+		{"header only", header, true},
+		{"all stopped", header + "100 stopped - web\n", true},
+		{"empty output", "", false},
+		{"unrecognised output", "pmxcfs unavailable\n", false},
+		{"headerless rows", "100 running - web\n", false},
+		{"malformed header", "VMID Status\n", false},
+		{"invalid running identity", header + "99 running - web\n", false},
+		{"invalid state", header + "100 unknown - web\n", false},
+		{"duplicate identity", header + "100 running - web\n100 stopped - web\n", false},
+		{"over running limit", boundary + "228 running - web\n", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			queries := 0
+			collector := &mockCollector{
+				goos:       "linux",
+				lookPathFn: func(string) (string, error) { return "/usr/sbin/pct", nil },
+				commandCombinedOutputLimitedFn: func(_ context.Context, _ int, _ string, args ...string) (string, error) {
+					queries++
+					if strings.Join(args, " ") != "list" {
+						t.Fatal("invalid or empty list must not start per-container queries")
+					}
+					return tt.output, nil
+				},
+			}
+			result := (&Agent{logger: zerolog.Nop(), collector: collector}).collectProxmoxLXCFilesystemsResult(t.Context())
+			if queries != 1 || !result.Applicable {
+				t.Fatalf("collection did not use the one bounded list operation: %+v queries=%d", result, queries)
+			}
+			if tt.valid {
+				if result.Degraded || result.Inventory == nil || result.Inventory.Status != "complete" || len(result.Inventory.Containers) != 0 {
+					t.Fatalf("valid empty list=%+v", result)
+				}
+			} else if !result.Degraded || result.Inventory != nil {
+				t.Fatalf("invalid list appeared complete: %+v", result)
+			}
+		})
+	}
 }

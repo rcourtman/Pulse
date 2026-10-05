@@ -57,10 +57,8 @@ type proxmoxLXCRunningContainer struct {
 }
 
 // ProxmoxLXCFilesystemCollectionResult describes applicability separately from
-// collection health without changing the helper protocol-v1 response shape.
-// A degraded result may retain a partial inventory for local diagnostics, but
-// the privileged helper fails the typed operation so the collector cannot
-// mistake a partial snapshot for a complete one.
+// collection health. Helper operation v1 fails incomplete collections; v2
+// carries successful rows with explicit completeness and omitted identities.
 type ProxmoxLXCFilesystemCollectionResult struct {
 	Applicable       bool
 	Inventory        *agentshost.ProxmoxLXCInventory
@@ -177,10 +175,12 @@ func (a *Agent) collectProxmoxLXCFilesystemsResult(ctx context.Context) ProxmoxL
 	result.Inventory = &agentshost.ProxmoxLXCInventory{
 		Containers:  []agentshost.ProxmoxLXCContainer{},
 		CollectedAt: a.collector.Now().UTC(),
+		Status:      agentshost.ProxmoxLXCCollectionComplete,
 	}
 	for _, container := range containers {
 		if collectionCtx.Err() != nil {
 			result.FailedContainers++
+			result.Inventory.OmittedVMIDs = append(result.Inventory.OmittedVMIDs, container.VMID)
 			continue
 		}
 		containerCtx, cancelContainer := context.WithTimeout(collectionCtx, proxmoxLXCContainerQueryTimeout)
@@ -188,6 +188,7 @@ func (a *Agent) collectProxmoxLXCFilesystemsResult(ctx context.Context) ProxmoxL
 		cancelContainer()
 		if collectionErr != nil {
 			result.FailedContainers++
+			result.Inventory.OmittedVMIDs = append(result.Inventory.OmittedVMIDs, container.VMID)
 			continue
 		}
 		result.Inventory.Containers = append(result.Inventory.Containers, agentshost.ProxmoxLXCContainer{
@@ -198,6 +199,7 @@ func (a *Agent) collectProxmoxLXCFilesystemsResult(ctx context.Context) ProxmoxL
 	}
 	if result.FailedContainers > 0 {
 		result.Degraded = true
+		result.Inventory.Status = agentshost.ProxmoxLXCCollectionPartial
 		a.logger.Warn().
 			Int("collected", len(result.Inventory.Containers)).
 			Int("failed", result.FailedContainers).
@@ -448,22 +450,37 @@ func parseProxmoxLXCRunningContainers(output string) ([]proxmoxLXCRunningContain
 
 	result := make([]proxmoxLXCRunningContainer, 0)
 	seen := make(map[int]struct{})
+	sawHeader := false
 	for _, rawLine := range strings.Split(output, "\n") {
 		line := strings.TrimSuffix(rawLine, "\r")
-		if strings.TrimSpace(line) == "" || strings.HasPrefix(strings.TrimSpace(line), "VMID") {
+		if strings.TrimSpace(line) == "" {
 			continue
 		}
 
 		fields := strings.Fields(line)
-		if len(fields) < 2 || !strings.EqualFold(fields[1], "running") {
+		if fields[0] == "VMID" {
+			if sawHeader || len(fields) != 4 || fields[1] != "Status" || fields[2] != "Lock" || fields[3] != "Name" {
+				return nil, errors.New("pct list has an invalid header")
+			}
+			sawHeader = true
 			continue
+		}
+		if !sawHeader || len(fields) < 3 {
+			return nil, errors.New("pct list has an invalid row")
 		}
 		vmid, err := strconv.Atoi(fields[0])
 		if err != nil || vmid < 100 || vmid > 999999999 {
-			continue
+			return nil, errors.New("pct list has an invalid container identity")
 		}
 		if _, exists := seen[vmid]; exists {
+			return nil, errors.New("pct list has a duplicate container identity")
+		}
+		seen[vmid] = struct{}{}
+		if strings.EqualFold(fields[1], "stopped") {
 			continue
+		}
+		if !strings.EqualFold(fields[1], "running") {
+			return nil, errors.New("pct list has an unknown container state")
 		}
 
 		name := ""
@@ -473,14 +490,16 @@ func parseProxmoxLXCRunningContainers(output string) ([]proxmoxLXCRunningContain
 			name = fields[len(fields)-1]
 		}
 		if !safeProxmoxLXCText(name, proxmoxLXCMaxNameBytes) {
-			continue
+			return nil, errors.New("pct list has an invalid container name")
 		}
 
-		seen[vmid] = struct{}{}
-		result = append(result, proxmoxLXCRunningContainer{VMID: vmid, Name: name})
 		if len(result) == proxmoxLXCMaxContainers {
-			break
+			return nil, errors.New("pct list exceeds the running container limit")
 		}
+		result = append(result, proxmoxLXCRunningContainer{VMID: vmid, Name: name})
+	}
+	if !sawHeader {
+		return nil, errors.New("pct list has no inventory header")
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].VMID < result[j].VMID })
 	return result, nil

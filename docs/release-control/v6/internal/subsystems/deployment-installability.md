@@ -980,6 +980,8 @@ release-latency optimization.
 
 ## Shared Boundaries
 
+Installer-managed helper upgrades restart the verified executable after effective isolated-unit and fixed socket-identity validation. Daemon reload or enabling an already-active socket alone does not replace an old process. Failure to restart aborts the installer and uses the existing safe-profile recovery transaction; collector-only updates still cannot replace the helper or unit.
+
 `frontend-modern/src/utils/localStorage.ts` is a shared browser-preference key
 registry, not deployment state. Workload presentation preferences added there,
 including the Proxmox guest-memory comparison basis and per-surface workload
@@ -2591,6 +2593,8 @@ artifact-selection behaviour.
 
 ## Completion Obligations
 
+`scripts/installtests/safe_profile_migration_test.go` covers activation ordering, old-helper replacement, effective-unit failure, restart failure and fixed-target refusal in a disposable shell harness, alongside isolation rendering/admission for 386 and unknown platforms. Actual active-helper forward/reverse migration, protected state/identity and prior-active restoration still require authorized native execution; shell stubs are not that proof.
+
 1. Update this contract when canonical deployment or installer entry points move
 2. Keep deployment runtime and shared API proof routing aligned in `registry.json`
 3. Preserve explicit coverage for installer parity, update planning, and deployment bootstrap behavior when these surfaces change. Shell installer update recovery changes must keep `scripts/installtests/install_sh_test.go` covering both persisted `connection.env` recovery and legacy running-process/service recovery across Linux and FreeBSD/rc.d, including single-dash v5 agent flags, non-procfs process inspection, and the rule that upgraded service args use `--token-file` instead of raw `--token`.
@@ -2715,6 +2719,8 @@ artifact-selection behaviour.
    `ES2022` lib declaration stay in step.
 
 ## Current State
+
+The helper remains network-isolated on all targets, and restart activates the installer-owned replacement rather than retaining old code after reload. Published security guidance discloses the PVE IPC limitation and partial-result semantics. This is not a published release or installed PVE acceptance.
 
 ### Demo runtime footprint qualification
 
