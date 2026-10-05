@@ -251,7 +251,10 @@ describe('PatrolIntelligenceHeader', () => {
         external: false,
       },
     });
-    expect(headerSource).toContain('commercialSurfacesHidden: true');
+    expect(headerSource).toContain(
+      'commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),',
+    );
+    expect(headerSource).not.toContain('commercialSurfacesHidden: true');
     expect(headerSource).not.toContain('showAutonomyPlanBillingAction');
     expect(headerSource).not.toContain('CreditCardIcon');
     expect(headerSource).not.toContain('Plans & Billing');

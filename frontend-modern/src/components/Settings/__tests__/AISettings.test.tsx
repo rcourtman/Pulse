@@ -441,6 +441,32 @@ describe('AISettings model loading error states', () => {
       ).toHaveAttribute('href', 'https://pulserelay.pro/download.html');
     });
 
+    it('keeps Pro runtime wording out when commercial surfaces are hidden', async () => {
+      hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_alerts');
+      presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(true);
+      presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+      getRuntimeCapabilityBlockMock.mockImplementation((feature: string) =>
+        feature === 'ai_alerts'
+          ? {
+              key: 'ai_alerts',
+              reason: 'paid_runtime_required',
+              action_url: 'https://pulserelay.pro/download.html',
+            }
+          : undefined,
+      );
+      getSettingsMock.mockResolvedValue(lockedPatrolSettings());
+
+      renderComponent('patrol');
+
+      await screen.findByLabelText('Enable container update risk analysis');
+      expect(containerRiskToggle()).toBeDisabled();
+      expect(lockExplanation()).toHaveTextContent(
+        'Not available. This install does not include container update risk.',
+      );
+      expect(lockExplanation().textContent).not.toMatch(/\bPro\b|runtime|plan/i);
+      expect(within(lockExplanation()).queryByRole('link')).toBeNull();
+    });
+
     it('shows no lock explanation when the install includes the feature', async () => {
       getSettingsMock.mockResolvedValue({
         ...lockedPatrolSettings(),

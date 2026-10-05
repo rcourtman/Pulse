@@ -6,7 +6,10 @@ import SettingsIcon from 'lucide-solid/icons/settings';
 import { AnimatedNumber } from '@/components/shared/AnimatedNumber';
 import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
-import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  presentationPolicyHidesUpgradePrompts,
+} from '@/stores/sessionPresentationPolicy';
 import { formatRelativeTime } from '@/utils/format';
 import { getAIProviderDisplayName } from '@/utils/aiProviderPresentation';
 import { getPatrolSetupAction } from '@/utils/patrolRuntimeActions';
@@ -35,6 +38,8 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
   const autonomyAvailability = createMemo(() =>
     getPatrolAutonomyAvailabilityPresentation({
       autoFixLocked: state.autoFixLocked(),
+      commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),
+      upgradePromptsHidden: presentationPolicyHidesUpgradePrompts(),
       runtimeCapabilityBlock: state.autoFixCapabilityBlock(),
       runtime: state.licenseRuntimeIdentity(),
       planUpgradeDestination: getUpgradeActionDestination('ai_autofix'),

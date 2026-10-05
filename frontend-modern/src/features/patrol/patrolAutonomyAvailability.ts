@@ -10,8 +10,9 @@ export type PatrolFeatureAvailabilityKind = 'available' | 'plan_locked' | 'runti
 
 // Presentation policy shared by every plan-gated Patrol capability. Each
 // capability supplies only its lock state and its own copy; the precedence
-// (runtime lock, then hidden commercial surfaces, then plan lock) and the
-// action labels stay canonical here.
+// (hidden commercial surfaces, then runtime lock, then plan lock) and the
+// action labels stay canonical here. Hidden commercial surfaces win over the
+// runtime lock so demo and white-label sessions never see Pro wording.
 interface PatrolFeatureAvailabilityPolicy {
   upgradePromptsHidden?: boolean;
   commercialSurfacesHidden?: boolean;
@@ -100,6 +101,14 @@ function getPatrolFeatureAvailabilityPresentation(
     };
   }
 
+  if (input.commercialSurfacesHidden) {
+    return {
+      kind: 'plan_locked',
+      locked: true,
+      ...(copy.planLockedCommercialHidden ?? copy.planLocked),
+    };
+  }
+
   if (input.runtimeCapabilityBlock?.reason === PATROL_AUTONOMY_RUNTIME_REQUIRED_REASON) {
     return {
       kind: 'runtime_locked',
@@ -114,14 +123,6 @@ function getPatrolFeatureAvailabilityPresentation(
               getRuntimeDownloadDestination(input.runtimeCapabilityBlock, input.runtime) ??
               input.planUpgradeDestination,
           }),
-    };
-  }
-
-  if (input.commercialSurfacesHidden) {
-    return {
-      kind: 'plan_locked',
-      locked: true,
-      ...(copy.planLockedCommercialHidden ?? copy.planLocked),
     };
   }
 

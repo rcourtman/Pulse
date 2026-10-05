@@ -93,12 +93,23 @@ describe('patrolAutonomyAvailability', () => {
 
     it.each([
       [
-        'runtime_locked beats commercialSurfacesHidden',
+        'commercialSurfacesHidden beats runtime_locked',
         {
           autoFixLocked: true,
           runtimeCapabilityBlock: runtimeBlock(),
           runtime: runtime(),
           commercialSurfacesHidden: true,
+          upgradePromptsHidden: true,
+          planUpgradeDestination: planDestination,
+        },
+        'plan_locked',
+      ],
+      [
+        'runtime_locked when commercial surfaces are visible',
+        {
+          autoFixLocked: true,
+          runtimeCapabilityBlock: runtimeBlock(),
+          runtime: runtime(),
           upgradePromptsHidden: true,
           planUpgradeDestination: planDestination,
         },
@@ -423,6 +434,40 @@ describe('patrolAutonomyAvailability', () => {
       expect(alertAnalysis.title).toBe(patrolMode.title);
       expect(alertAnalysis.actionLabel).toBe(patrolMode.actionLabel);
       expect(alertAnalysis.destination).toEqual(patrolMode.destination);
+    });
+
+    it('keeps Pro runtime wording out of hidden-commercial sessions for both capabilities', () => {
+      const input = {
+        commercialSurfacesHidden: true,
+        upgradePromptsHidden: true,
+        runtimeCapabilityBlock: runtimeBlock({ action_url: 'https://pro.example/downloads' }),
+        runtime: runtime({ label: 'Pulse Community runtime' }),
+        planUpgradeDestination: planDestination,
+      };
+      const alertAnalysis = getPatrolAlertAnalysisAvailabilityPresentation({
+        ...input,
+        alertAnalysisLocked: true,
+      });
+      const patrolMode = getPatrolAutonomyAvailabilityPresentation({
+        ...input,
+        autoFixLocked: true,
+      });
+
+      expect(alertAnalysis).toEqual({
+        kind: 'plan_locked',
+        locked: true,
+        title: 'Not available',
+        body: 'This install does not include container update risk.',
+      });
+      expect(patrolMode).toEqual({
+        kind: 'plan_locked',
+        locked: true,
+        title: 'Watch only',
+        body: 'This install watches infrastructure and shows issues.',
+      });
+      for (const result of [alertAnalysis, patrolMode]) {
+        expect(`${result.title} ${result.body}`).not.toMatch(/\bPro\b|runtime|plan/i);
+      }
     });
 
     it('omits the runtime download action when upgrade prompts are hidden', () => {
