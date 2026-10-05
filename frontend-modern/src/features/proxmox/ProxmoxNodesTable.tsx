@@ -223,7 +223,17 @@ export const ProxmoxNodesTable: Component<{
       ? getProxmoxHostTableLayoutModeForContainer(measuredWidth)
       : getWorkloadTableLayoutMode(breakpoint.width());
   });
-  const visibleColumns = createMemo(() => getProxmoxHostVisibleColumnsForLayout(layoutMode()));
+  const singleClusterName = createMemo(() => {
+    const labels = new Set(props.nodes.map((node) => getResourceClusterLabel(node)));
+    if (labels.size !== 1) return null;
+    const [label] = [...labels];
+    return label && label !== '—' && props.topology?.standalone === 0 ? label : null;
+  });
+  const visibleColumns = createMemo(() =>
+    getProxmoxHostVisibleColumnsForLayout(layoutMode(), {
+      singleCluster: singleClusterName() !== null,
+    }),
+  );
   const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
   const displayMode = () => props.metricDisplayMode?.() ?? 'bars';
   const isSparklineMode = () => displayMode() === 'sparklines';
@@ -295,25 +305,41 @@ export const ProxmoxNodesTable: Component<{
           actions={
             <span class="inline-flex items-center gap-2">
               <Show
-                when={
-                  inventoryCountsVisible() &&
-                  props.topology &&
-                  !props.search?.()?.trim() &&
-                  (props.topology.clusters > 0 || props.topology.standalone > 0)
+                when={singleClusterName()}
+                fallback={
+                  <Show
+                    when={
+                      inventoryCountsVisible() &&
+                      props.topology &&
+                      !props.search?.()?.trim() &&
+                      (props.topology.clusters > 0 || props.topology.standalone > 0)
+                    }
+                  >
+                    <span class="text-[10px] font-medium text-muted">
+                      <Show when={props.topology!.clusters > 0}>
+                        {formatPlatformTableIntegerValue(props.topology!.clusters)}{' '}
+                        {props.topology!.clusters === 1 ? 'cluster' : 'clusters'}
+                      </Show>
+                      <Show when={props.topology!.clusters > 0 && props.topology!.standalone > 0}>
+                        {' / '}
+                      </Show>
+                      <Show when={props.topology!.standalone > 0}>
+                        {formatPlatformTableIntegerValue(props.topology!.standalone)} standalone
+                      </Show>
+                    </span>
+                  </Show>
                 }
               >
-                <span class="text-[10px] font-medium text-muted">
-                  <Show when={props.topology!.clusters > 0}>
-                    {formatPlatformTableIntegerValue(props.topology!.clusters)}{' '}
-                    {props.topology!.clusters === 1 ? 'cluster' : 'clusters'}
-                  </Show>
-                  <Show when={props.topology!.clusters > 0 && props.topology!.standalone > 0}>
-                    {' / '}
-                  </Show>
-                  <Show when={props.topology!.standalone > 0}>
-                    {formatPlatformTableIntegerValue(props.topology!.standalone)} standalone
-                  </Show>
-                </span>
+                {/* The hidden Cluster column's value lives here, so it stays
+                    visible while searching and when inventory counts are off. */}
+                {(name) => (
+                  <span
+                    class="text-[10px] font-medium text-muted"
+                    data-testid="proxmox-single-cluster-label"
+                  >
+                    Cluster {name()}
+                  </span>
+                )}
               </Show>
             </span>
           }

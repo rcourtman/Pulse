@@ -1288,6 +1288,46 @@ describe('useWorkloads', () => {
     dispose();
   });
 
+  it('flags a workload whose canonical health names an open alert, not backup age', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [
+        {
+          ...sampleResource,
+          id: 'alerting',
+          name: 'alerting',
+          health: { verdict: 'attention', reasons: [{ code: 'warning_alert', detail: 'memory' }] },
+        },
+        {
+          ...sampleResource,
+          id: 'stale-backup',
+          name: 'stale-backup',
+          vmid: 102,
+          health: { verdict: 'attention', reasons: [{ code: 'backup_stale' }] },
+        },
+        { ...sampleResource, id: 'quiet', name: 'quiet', vmid: 103 },
+      ],
+      meta: { totalPages: 1 },
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled);
+    });
+
+    await flushAsync();
+    await waitForWorkloadCount(() => result!.workloads().length, 3);
+
+    const byName = new Map(result!.workloads().map((workload) => [workload.name, workload]));
+    expect(byName.get('alerting')?.hasOpenAlert).toBe(true);
+    expect(byName.get('stale-backup')?.hasOpenAlert).toBe(false);
+    expect(byName.get('quiet')?.hasOpenAlert).toBe(false);
+
+    dispose();
+  });
+
   it('uses the canonical Kubernetes cluster name for pod context labels', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       data: [

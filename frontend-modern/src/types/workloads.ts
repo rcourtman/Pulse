@@ -30,6 +30,8 @@ export type WorkloadGuest = (VM | Container) & {
   metricsTarget?: ResourceMetricsTarget;
   /** Canonical unified-resource health, kept separate from runtime power state in `status`. */
   resourceStatus?: string;
+  /** The unified-resource health names an open warning or critical alert. */
+  hasOpenAlert?: boolean;
   displayId?: string;
   image?: string;
   // Provider/runtime-native identifier for app-container actions such as Docker image updates.

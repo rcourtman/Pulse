@@ -141,10 +141,15 @@ export const PROXMOX_HOST_TABLE_COLUMNS: ProxmoxHostTableColumn[] = [
 
 export const getProxmoxHostVisibleColumnsForLayout = (
   layoutMode: WorkloadTableLayoutMode,
+  options: { singleCluster?: boolean } = {},
 ): ProxmoxHostTableColumn[] => {
   const layoutRank = HOST_TABLE_LAYOUT_ORDER[layoutMode];
   return PROXMOX_HOST_TABLE_COLUMNS.filter(
-    (column) => HOST_TABLE_LAYOUT_ORDER[HOST_COLUMN_MIN_LAYOUT[column.id]] <= layoutRank,
+    (column) =>
+      HOST_TABLE_LAYOUT_ORDER[HOST_COLUMN_MIN_LAYOUT[column.id]] <= layoutRank &&
+      // When every node shares one cluster the column repeats one value on
+      // every row; the table header names that cluster instead.
+      !(options.singleCluster && column.id === 'cluster'),
   );
 };
 

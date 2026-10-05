@@ -191,6 +191,32 @@ describe('workloadSelectors', () => {
       expect(computeWorkloadStats(guests).degraded).toBe(1);
     });
 
+    it('counts a running guest with an open alert as needing attention, not a stopped one', () => {
+      const guests = [
+        makeGuest(1, { status: 'running', hasOpenAlert: true }),
+        makeGuest(2, { status: 'running' }),
+        makeGuest(3, { status: 'stopped', hasOpenAlert: true }),
+      ];
+
+      const filterByStatus = (statusMode: 'running' | 'degraded' | 'stopped') =>
+        filterWorkloads({
+          guests,
+          viewMode: 'all',
+          statusMode,
+          searchTerm: '',
+          selectedNode: null,
+          selectedHostHint: null,
+          selectedKubernetesContext: null,
+        }).map((guest) => guest.id);
+
+      // A powered-off alert on a stopped guest keeps it under Stopped; the
+      // Attention chip is for running guests that need a look.
+      expect(filterByStatus('degraded')).toEqual([guests[0].id]);
+      expect(filterByStatus('running')).toEqual([guests[1].id]);
+      expect(filterByStatus('stopped')).toEqual([guests[2].id]);
+      expect(computeWorkloadStats(guests)).toMatchObject({ running: 1, degraded: 1, stopped: 1 });
+    });
+
     it('ignores availability probes that are not proven to describe the guest', () => {
       const failing = {
         enabled: true,

@@ -1293,6 +1293,14 @@ names remain inert identity text, while the separate accessible launch target
 owns new-tab behavior and event containment. Proxmox host table columns are
 governed by `proxmoxHostTableModel.ts`; that model must not reintroduce a
 separate `Web` column, a linked row name, or a page-local launch implementation.
+When every node shares one cluster and none is standalone, the model drops
+the `cluster` column (it would repeat one value on every row) and
+`ProxmoxNodesTable` names that cluster in the table header instead, visible
+during search and independent of the inventory-count preference, so the
+cluster identity is never lost. Workload status buckets read the canonical
+health too: a running workload whose unified health names an open
+`warning_alert` or `critical_alert` reason counts under Attention, while
+`backup_stale` and other non-alert reasons do not.
 The same presentation contract applies to Docker/Podman hosts and containers,
 standalone agents, PBS/PMG instances, Kubernetes clusters/nodes/workloads, and
 card or mobile variants. An absent URL is honestly absent, while an invalid or
