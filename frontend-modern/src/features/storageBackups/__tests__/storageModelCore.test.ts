@@ -86,6 +86,29 @@ describe('storageModelCore', () => {
     expect(matchesStorageRecordSearch(makeRecord(), 'missing')).toBe(false);
   });
 
+  it('orders the default priority view as a risk list: alerts, incidents, fullest, then A to Z', () => {
+    const usage = (usagePercent: number) => ({
+      totalBytes: 100,
+      usedBytes: usagePercent,
+      freeBytes: 100 - usagePercent,
+      usagePercent,
+    });
+    const records = [
+      makeRecord({ id: 'quiet-b', name: 'bravo', capacity: usage(40) }),
+      makeRecord({ id: 'quiet-a', name: 'alpha', capacity: usage(40) }),
+      makeRecord({ id: 'full', name: 'zulu', capacity: usage(80) }),
+      makeRecord({ id: 'warning', name: 'yankee', capacity: usage(20) }),
+      makeRecord({ id: 'critical', name: 'xray', capacity: usage(10) }),
+      makeRecord({ id: 'incident', name: 'whiskey', capacity: usage(5), incidentPriority: 4 }),
+    ];
+    const alertWeights: Record<string, number> = { critical: 3, warning: 2 };
+    expect(
+      sortStorageRecords(records, 'priority', 'desc', {
+        alertWeightByRecordId: (id) => alertWeights[id] ?? 0,
+      }).map((record) => record.id),
+    ).toEqual(['critical', 'warning', 'incident', 'full', 'quiet-a', 'quiet-b']);
+  });
+
   it('filters, sorts, groups, and summarizes storage records canonically', () => {
     const node = makeNode();
     const warning = makeRecord({

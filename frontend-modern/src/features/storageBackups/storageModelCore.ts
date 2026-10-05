@@ -32,6 +32,9 @@ export type StorageGroupKey = 'node' | 'type' | 'status' | 'none';
 
 export type StorageSortContext = {
   growthBySeriesId?: ReadonlyMap<string, StorageCapacityDeltaPresentation>;
+  // Weight of the record's most severe open alert (0 when none), so the
+  // default priority order puts storage that needs attention first.
+  alertWeightByRecordId?: (recordId: string) => number;
 };
 
 export type StorageNodeOption = {
@@ -186,7 +189,14 @@ export const sortStorageRecords = (
       if (left !== null && right === null) return -1;
       comparison = left === null || right === null ? 0 : numericCompare(left, right);
     } else if (sortKey === 'priority') {
-      comparison = numericCompare(a.incidentPriority || 0, b.incidentPriority || 0);
+      // Open alerts first, then the record's own incident priority, then the
+      // fullest storage, so the default view reads as a risk list rather than
+      // reverse alphabetical order when nothing is in an incident.
+      const alertWeight = context.alertWeightByRecordId;
+      comparison =
+        numericCompare(alertWeight?.(a.id) ?? 0, alertWeight?.(b.id) ?? 0) ||
+        numericCompare(a.incidentPriority || 0, b.incidentPriority || 0) ||
+        numericCompare(getStorageRecordUsagePercent(a), getStorageRecordUsagePercent(b));
     } else if (sortKey === 'state') {
       comparison = textCompare(getStoragePoolStateLabel(a), getStoragePoolStateLabel(b));
     } else if (sortKey === 'source') {
@@ -204,11 +214,11 @@ export const sortStorageRecords = (
       comparison = textCompare(a.name, b.name);
     }
 
-    if (comparison === 0) {
-      comparison = textCompare(a.name, b.name);
+    if (comparison !== 0) {
+      return sortDirection === 'asc' ? comparison : -comparison;
     }
-
-    return sortDirection === 'asc' ? comparison : -comparison;
+    // Ties always read A to Z, whichever way the sorted column runs.
+    return textCompare(a.name, b.name);
   });
 };
 

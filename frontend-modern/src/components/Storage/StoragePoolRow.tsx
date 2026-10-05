@@ -52,6 +52,9 @@ interface StoragePoolRowProps {
   onToggleExpand: () => void;
   onHoverChange?: (recordId: string | null) => void;
   rowClass: string;
+  alertHeadline?: string | null;
+  alertHeadlineCompact?: string | null;
+  alertHeadlineClass?: string;
   physicalDisks: Resource[];
   alertDataAttrs: {
     'data-row-id': string;
@@ -123,15 +126,32 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
           data-storage-column="state"
         >
           <Show
-            when={row().stateLabel !== '—'}
-            fallback={<span class={STORAGE_POOL_ROW_PLACEHOLDER_CLASS}>—</span>}
+            when={props.alertHeadline}
+            fallback={
+              <Show
+                when={row().stateLabel !== '—'}
+                fallback={<span class={STORAGE_POOL_ROW_PLACEHOLDER_CLASS}>—</span>}
+              >
+                <span
+                  class={`${STORAGE_POOL_ROW_ISSUE_TEXT_CLASS} ${row().stateToneClass}`}
+                  title={row().stateTitle || row().stateLabel}
+                >
+                  {row().stateLabel}
+                </span>
+              </Show>
+            }
           >
-            <span
-              class={`${STORAGE_POOL_ROW_ISSUE_TEXT_CLASS} ${row().stateToneClass}`}
-              title={row().stateTitle || row().stateLabel}
-            >
-              {row().stateLabel}
-            </span>
+            {(headline) => (
+              <span
+                class={`${STORAGE_POOL_ROW_ISSUE_TEXT_CLASS} ${props.alertHeadlineClass ?? ''}`}
+                title={`${headline()} · ${row().stateTitle || row().stateLabel}`}
+                data-storage-alert-headline
+              >
+                {props.layoutMode === 'narrow' || props.layoutMode === 'compact'
+                  ? (props.alertHeadlineCompact ?? headline())
+                  : headline()}
+              </span>
+            )}
           </Show>
         </td>
 

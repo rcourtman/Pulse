@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "4488a42bcc0d2589e3b77caf5266de38d4e4613a",
+  "verified_at": "2026-10-04T23:45:17Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx",
+    "frontend-modern/src/components/Storage/useStorageAlertState.ts",
+    "frontend-modern/src/components/Storage/useStorageModel.ts",
+    "frontend-modern/src/components/Storage/useStoragePageData.ts",
+    "frontend-modern/src/features/storageBackups/cephRecordPresentation.ts",
+    "frontend-modern/src/features/storageBackups/models.ts",
+    "frontend-modern/src/features/storageBackups/storageAlertState.ts",
+    "frontend-modern/src/features/storageBackups/storageModelCore.ts",
+    "frontend-modern/src/features/storageBackups/storagePoolsTablePresentation.ts",
+    "frontend-modern/src/features/storageBackups/storageRowAlertPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx": "2613d99c4ca87d41483ffb3e2bdc36917178e07db1a8bdf4705497c214cfb630",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx": "6581184b6f644f1309deb693f0fff7759ea31948d5f0cf8b19ba7d979616ca94",
+    "frontend-modern/src/components/Storage/useStorageAlertState.ts": "431d224df0362889d7186511d3d2fc348f44cecb32fea9ea379905ea70a76dd7",
+    "frontend-modern/src/components/Storage/useStorageModel.ts": "7a246994ca8a17c4bf099f7e21713bf3c4ddf6b11b1f56d0a6408d4ef6038f59",
+    "frontend-modern/src/components/Storage/useStoragePageData.ts": "8f057b905b182e0758397819a46ad5fc4743768ad9f4d36c11176f4f6afb6437",
+    "frontend-modern/src/features/storageBackups/cephRecordPresentation.ts": "0ce7fd55346e2eb780d0f3cab205dc56be95415b741d9796656a4a54b9f4142d",
+    "frontend-modern/src/features/storageBackups/models.ts": "711795fd932e867f2d86d9a8e4fb536534b24418faff5a39db045002c2431911",
+    "frontend-modern/src/features/storageBackups/storageAlertState.ts": "83d7af491b001189d2cf3ebe70f9150aaae90f3ba157e7f5f1ee2eb4e16519dc",
+    "frontend-modern/src/features/storageBackups/storageModelCore.ts": "e6f9b0829360d6e2e6b8b277b4f913460aacb9ef7cdfe35ce62b85acd2da22ec",
+    "frontend-modern/src/features/storageBackups/storagePoolsTablePresentation.ts": "9db7bbcfe6fe87de689163e73d714dabd48c822c391df1186b7995ab13c54740",
+    "frontend-modern/src/features/storageBackups/storageRowAlertPresentation.ts": "fc11c7badc62ef3b6038bfd4bbe4cd667c721480dcc3c823fdc02205b9b1de42"
+  },
+  "routes": [
+    "/proxmox/storage",
+    "/truenas/storage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Mock estate, 19 Proxmox storage rows, three with open alerts (usage over 85%, two fill forecasts). Before: default priority order was reverse alphabetical (89%-full pool second, 85% twelfth), alerted rows tinted with no reason, State read Online.",
+    "After: the three alerted rows lead (Over 85% usage limit, Full in ~3 days, Full in ~6 days), then storage from fullest down, ties A to Z; the State cell carries the reason in the severity colour, hover shows reason plus state.",
+    "Phone 390x844: State column uses the compact reason (Over 85%, Full in ~3d, Full in ~6d) without truncation; Online/Stale rows unchanged.",
+    "TrueNAS storage tree (separate component) renders unchanged."
+  ],
+  "interactions": [
+    "Loaded the storage route signed in at desktop and phone widths and inspected full-page screenshots before and after; hovered the reason to confirm the full title; reloaded after the Ceph consolidation fix and confirmed identical ordering."
+  ]
+}

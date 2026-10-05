@@ -93,6 +93,10 @@ export interface StorageRecord {
   observedAt: number;
   freshness?: 'fresh' | 'stale' | 'unknown';
   freshnessError?: string;
+  // Alert resource ids of rows folded into this one (a Ceph pool collapsed
+  // into the PVE storage that mounts it), so their alerts still explain and
+  // rank the surviving row.
+  absorbedAlertResourceIds?: string[];
   metricsTarget?: StorageMetricsTarget;
   refs?: {
     resourceId?: string;

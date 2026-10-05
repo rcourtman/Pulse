@@ -3629,6 +3629,19 @@ That same owned summary path now also runs through
 range and one shared storage-summary history fetch, and both the sticky
 summary cards and per-pool growth column reuse that payload instead of
 forking separate row-local history reads or duplicate polling loops.
+The storage table's default `priority` order is a risk list: records with an
+open, unacknowledged alert sort first by severity (fed into
+`sortStorageRecords` through `StorageSortContext.alertWeightByRecordId` from
+the page's existing per-record alert state), then by the record's own
+`incidentPriority`, then by usage percent; ties read A to Z under every sort
+key and direction. A highlighted row always states its reason: the per-record
+alert state carries a headline from the most severe, most recent open alert
+(`describeStorageAlertHeadline` in `storageRowAlertPresentation.ts`), using the
+alert engine's `forecastDaysToFull` metadata ("Full in ~N days"), the crossed
+usage limit, or the alert message, with a compact form for the phone layouts,
+and the State cell shows it in place of the plain online label. This reads
+existing alert truth only: it adds no storage polling, forecast computation,
+or alert lifecycle.
 Storage physical-disk requirements copy now consumes the shared
 `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` Settings
 Infrastructure target label. Disk-health guidance may refer to Proxmox node
