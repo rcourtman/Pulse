@@ -17,6 +17,7 @@ vi.mock('@/stores/license', async (importOriginal) => ({
 const containerResource = (id: string, cpu: number | undefined, running = true): Resource => ({
   id,
   name: id,
+  displayName: id,
   platformId: 'docker',
   platformType: 'docker',
   sourceType: 'agent',
