@@ -274,6 +274,17 @@ describe('App architecture', () => {
     expect(appStylesSource).not.toContain('white-space: normal;\n    -webkit-box-orient');
   });
 
+  it('keeps the identity anchor between the phone projection and the md column widths', () => {
+    // Column visibility is container-led but md:w-[...] widths are viewport
+    // media queries, so a 544-767px band showed every column with no widths and
+    // split them equally (a Kubernetes node name got 83px). The shared shell
+    // keeps the 30% name anchor there.
+    const band = appStylesSource.slice(appStylesSource.indexOf('@media (width < 768px)'));
+    expect(band).toMatch(
+      /^@media \(width < 768px\) \{\s*@container \(min-width: 34rem\) \{\s*\.table-scroll-shell > \.table-fixed\.platform-table th\.platform-table-name-column \{\s*width: 30%;/,
+    );
+  });
+
   it('keeps compact phone settings spacing scoped to the settings content shell', () => {
     expect(appStylesSource).toContain('@media (max-width: 39.999rem)');
     expect(appStylesSource).toContain(

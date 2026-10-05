@@ -218,7 +218,7 @@ export const KubernetesNodesTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="node"
-                  class="platform-table-mobile-w-30 md:w-[14%]"
+                  class="platform-table-mobile-w-30 md:w-[20%]"
                 >
                   Node
                 </PlatformSortableTableHead>
@@ -256,7 +256,7 @@ export const KubernetesNodesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="kubelet"
-                  class="hidden md:table-cell md:w-[8%]"
+                  class="hidden md:table-cell md:w-[7%]"
                 >
                   Kubelet
                 </PlatformSortableTableHead>
@@ -272,7 +272,7 @@ export const KubernetesNodesTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="cpu"
-                  class="platform-table-mobile-w-15 md:w-[11%]"
+                  class="platform-table-mobile-w-15 md:w-[10%]"
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -280,7 +280,7 @@ export const KubernetesNodesTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="memory"
-                  class="platform-table-mobile-w-15 md:w-[11%]"
+                  class="platform-table-mobile-w-15 md:w-[10%]"
                 >
                   <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
                 </PlatformSortableTableHead>
@@ -296,7 +296,7 @@ export const KubernetesNodesTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="capacity"
-                  class="platform-table-mobile-w-10 md:w-[14%]"
+                  class="platform-table-mobile-w-10 md:w-[16%]"
                 >
                   <PlatformResponsiveTableLabel compact="Cap" full="Capacity" />
                 </PlatformSortableTableHead>

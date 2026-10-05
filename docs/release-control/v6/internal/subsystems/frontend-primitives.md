@@ -2302,6 +2302,13 @@ not a replacement status card, CTA band, or page-local nested card.
    desktop table and inline detail. Consumers mark a normal-phone demotion with
    `platform-table-phone-hidden` on both its header and its body cell. The shared
    container rule owns the matching `th`/`td` visibility so the two cannot drift.
+   Column visibility is container-led but `md:w-[...]` widths are viewport media
+   queries, so between a 34rem container and a 768px viewport the phone-hidden
+   columns return while no width applies, and every visible column took an equal
+   share (a seven-column Kubernetes table left its name 83px). The shared shell
+   keeps the 30 percent `platform-table-name-column` anchor in that band. Tables
+   sized by a weighted colgroup keep their own widths there, since column widths
+   win over header widths.
    Below a 360-pixel content width, the shared narrow layout promotes identity to
    40 percent and may remove one additional lowest-priority context column via
    `platform-table-narrow-hidden` rather than shrinking names and metric values

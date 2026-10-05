@@ -246,7 +246,7 @@ export const KubernetesPolicyTable: Component<{
             header={
               <>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[17%]`}
+                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[22%]`}
                 >
                   Resource
                 </TableHead>

@@ -264,7 +264,7 @@ export const KubernetesConfigTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="resource"
-                  class="platform-table-mobile-w-30 md:w-[18%]"
+                  class="platform-table-mobile-w-30 md:w-[22%]"
                 >
                   Resource
                 </PlatformSortableTableHead>
