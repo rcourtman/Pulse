@@ -41,6 +41,16 @@ canonical publication. Allocation controls pin independence from unrelated
 metadata/peer-host payloads; paired unchanged-reference benchmarks measure
 this lookup, not fleet CPU/RSS relief or all of #2199's remaining mechanisms.
 
+The metadata allocation control measures the detached lookup-snapshot clone
+in an isolated invocation of the same test binary, retaining the three samples
+and baseline-plus-ten limit. The full-snapshot clone is a positive control for
+copying the same metadata. Complete lookup snapshots and every admitted
+resource field must match between zero and 1,000 unrelated metadata objects;
+only the independent registry construction timestamp is excluded. This keeps
+fresh-registry allocation variation and other tests' asynchronous allocations
+from masquerading as a metadata-scaling regression. Whole host-view,
+replacement/removal and complete accepted-report publication oracles remain.
+
 
 ### Guest memory observations are source-owned
 
