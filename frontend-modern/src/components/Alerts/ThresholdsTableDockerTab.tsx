@@ -10,13 +10,14 @@ import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/t
 export function ThresholdsTableDockerTab(props: ThresholdsTableSectionProps) {
   return (
     <>
+      {/* The groups and their default limits lead; Docker-only rules follow. */}
+      <ThresholdsTableDockerHostsSection {...props} />
+      <ThresholdsTableDockerContainersSection {...props} />
       <Show when={props.state.hasDockerSpecificControls()}>
         <ThresholdsTableDockerIgnoredPrefixesSection {...props} />
         <ThresholdsTableDockerUpdateAlertsSection {...props} />
         <ThresholdsTableDockerServiceGapSection {...props} />
       </Show>
-      <ThresholdsTableDockerHostsSection {...props} />
-      <ThresholdsTableDockerContainersSection {...props} />
     </>
   );
 }

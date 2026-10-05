@@ -342,6 +342,18 @@ describe('ThresholdsTab', () => {
     });
   });
 
+  it('counts API-only CPU averaging overrides in the collapsed summary', () => {
+    const props = buildProps();
+    props.metricEvaluationWindows = () => ({ all: { cpu: 300 }, pod: { cpu: 60 } });
+    props.setMetricEvaluationWindows = vi.fn();
+
+    render(() => <ThresholdsTab {...props} />);
+
+    expect(document.querySelector('[data-cpu-averaging-summary]')?.textContent).toBe(
+      '5-minute average, 1 platform override',
+    );
+  });
+
   it('configures the canonical workload fallback and shows effective inheritance', () => {
     const props = buildProps();
     const setMetricEvaluationWindows = vi.fn();
@@ -356,12 +368,16 @@ describe('ThresholdsTab', () => {
     render(() => <ThresholdsTab {...props} />);
 
     const workloadWindow = screen.getAllByLabelText(
-      'All workloads CPU evaluation window',
+      'All workloads CPU averaging',
     )[0] as HTMLSelectElement;
     const virtualMachineWindow = screen.getAllByLabelText(
-      'Virtual machines CPU evaluation window',
+      'Virtual machines CPU averaging',
     )[0] as HTMLSelectElement;
     expect(workloadWindow.value).toBe('900');
+    expect(document.querySelector('[data-cpu-averaging]')?.hasAttribute('open')).toBe(false);
+    expect(document.querySelector('[data-cpu-averaging-summary]')?.textContent).toBe(
+      '5-minute average, 1 platform override',
+    );
     expect(virtualMachineWindow.options[0].textContent).toBe('Inherit (15 minutes)');
 
     fireEvent.input(workloadWindow, { target: { value: '60' } });

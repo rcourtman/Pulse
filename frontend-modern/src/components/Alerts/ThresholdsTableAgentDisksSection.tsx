@@ -5,6 +5,9 @@ import { ResourceTable } from './ResourceTable';
 import { CollapsibleSection } from './Thresholds/sections/CollapsibleSection';
 import { formatMetricValue } from '@/features/alerts/thresholds/helpers';
 import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/thresholdsTableSectionProps';
+import { getAlertThresholdsDefaultsSummary } from '@/utils/alertThresholdsSectionPresentation';
+
+const AGENT_DISK_THRESHOLD_COLUMNS = ['Disk %'];
 
 export function ThresholdsTableAgentDisksSection(props: ThresholdsTableSectionProps) {
   const { state, tableProps } = props;
@@ -14,6 +17,9 @@ export function ThresholdsTableAgentDisksSection(props: ThresholdsTableSectionPr
       <CollapsibleSection
         id="agentDisks"
         title={state.sectionTitles.agentDisks}
+        defaultsSummary={getAlertThresholdsDefaultsSummary(AGENT_DISK_THRESHOLD_COLUMNS, {
+          disk: tableProps.agentDefaults.disk,
+        })}
         resourceCount={state.agentDisksWithOverrides().length}
         collapsed={state.isCollapsed('agentDisks')}
         onToggle={() => state.toggleSection('agentDisks')}
@@ -27,7 +33,7 @@ export function ThresholdsTableAgentDisksSection(props: ThresholdsTableSectionPr
             onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
             groupedResources={state.agentDisksGroupedByAgent()}
             groupHeaderMeta={state.agentGroupHeaderMeta()}
-            columns={['Disk %']}
+            columns={AGENT_DISK_THRESHOLD_COLUMNS}
             activeAlerts={tableProps.activeAlerts}
             emptyMessage={state.AGENT_DISKS_FILTER_EMPTY_STATE}
             onEdit={state.startEditing}

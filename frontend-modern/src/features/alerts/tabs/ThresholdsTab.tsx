@@ -1,5 +1,5 @@
 import { createSignal, For, Show } from 'solid-js';
-import { Card } from '@/components/shared/Card';
+import ChevronRight from 'lucide-solid/icons/chevron-right';
 import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
 import {
   AlertIntentPolicyPanel,
@@ -76,16 +76,31 @@ export function ThresholdsTab(props: ThresholdsTabProps) {
     });
     props.setHasUnsavedChanges(true);
   };
+  const averageLabel = (seconds: number) => {
+    if (seconds === 0) return 'Current value, no averaging';
+    if (seconds < 60) return `${seconds}-second average`;
+    return `${seconds / 60}-minute average`;
+  };
+  const cpuWindowSummary = () => {
+    const windows = props.metricEvaluationWindows?.() ?? {};
+    const lead = averageLabel(windows.all?.cpu ?? 300);
+    // Count every configured profile, including ones only the API sets (such
+    // as pod), so the line never claims one window for every resource.
+    const overrides = Object.entries(windows).filter(
+      ([key, profile]) => key !== 'all' && profile?.cpu !== undefined,
+    ).length;
+    return overrides === 0
+      ? `${lead} for every resource`
+      : `${lead}, ${overrides} platform override${overrides === 1 ? '' : 's'}`;
+  };
   const evaluationProfileControl = (profile: (typeof evaluationProfiles)[number]) => {
     const configured = () => props.metricEvaluationWindows?.()[profile.key]?.cpu;
     return (
-      <label class="block rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-        <span class="block text-xs font-medium text-gray-700 dark:text-gray-300">
-          {profile.label}
-        </span>
+      <label class="block rounded-md border border-border p-3">
+        <span class="block text-xs font-medium text-base-content">{profile.label}</span>
         <select
-          aria-label={`${profile.label} CPU evaluation window`}
-          class="mt-2 w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+          aria-label={`${profile.label} CPU averaging`}
+          class="mt-2 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-base-content"
           value={
             profile.key === 'all'
               ? String(configured() ?? 300)
@@ -101,9 +116,9 @@ export function ThresholdsTab(props: ThresholdsTabProps) {
             </option>
           </Show>
           <option value="0">Current value</option>
-          <option value="60">1 minute average</option>
-          <option value="300">5 minute average</option>
-          <option value="900">15 minute average</option>
+          <option value="60">1-minute average</option>
+          <option value="300">5-minute average</option>
+          <option value="900">15-minute average</option>
         </select>
       </label>
     );
@@ -115,44 +130,38 @@ export function ThresholdsTab(props: ThresholdsTabProps) {
         resources={props.allResources}
         selectionTarget={intentSelectionTarget()}
       />
+      {/*
+        CPU averaging is tuning, not the page's answer. It stays one line that
+        states the effective setting, so the default limits below lead and the
+        ten per-platform selects open only for someone changing them.
+      */}
       <Show when={props.metricEvaluationWindows && props.setMetricEvaluationWindows}>
-        <Card padding="md">
-          <div class="space-y-4">
-            <div>
-              <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                CPU evaluation window
-              </h3>
-              <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                Pulse averages CPU over time before applying trigger and recovery thresholds. This
-                filters harmless bursts without delaying a sustained incident or splitting its
-                timeline.
-              </p>
-            </div>
+        <details class="group rounded-md border border-border bg-surface" data-cpu-averaging>
+          <summary class="flex min-h-11 cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-sm focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 [&::-webkit-details-marker]:hidden">
+            <ChevronRight
+              class="h-4 w-4 shrink-0 text-muted transition-transform group-open:rotate-90"
+              aria-hidden="true"
+            />
+            <span class="shrink-0 font-semibold text-base-content">CPU averaging</span>
+            <span class="min-w-0 text-muted sm:truncate" data-cpu-averaging-summary>
+              {cpuWindowSummary()}
+            </span>
+          </summary>
+          <div class="space-y-3 border-t border-border px-4 py-3">
+            <p class="text-sm text-muted">
+              Pulse averages CPU over time before applying trigger and recovery thresholds. This
+              filters harmless bursts without delaying a sustained incident or splitting its
+              timeline.
+            </p>
             <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <For each={evaluationProfiles}>
-                {(profile) => (
-                  <div class={profile.key === 'all' ? 'block' : 'hidden sm:block'}>
-                    {evaluationProfileControl(profile)}
-                  </div>
-                )}
-              </For>
+              <For each={evaluationProfiles}>{(profile) => evaluationProfileControl(profile)}</For>
             </div>
-            <details class="rounded-lg border border-gray-200 p-3 sm:hidden dark:border-gray-700">
-              <summary class="cursor-pointer text-sm font-medium text-gray-800 dark:text-gray-200">
-                Platform overrides
-              </summary>
-              <div class="mt-3 space-y-3">
-                <For each={evaluationProfiles.slice(1)}>
-                  {(profile) => evaluationProfileControl(profile)}
-                </For>
-              </div>
-            </details>
-            <p class="text-xs text-gray-500 dark:text-gray-400">
+            <p class="text-xs text-muted">
               A rolling rule waits for enough recent, gap-free samples. If history is incomplete,
               Pulse holds the existing incident state instead of firing or resolving on weak data.
             </p>
           </div>
-        </Card>
+        </details>
       </Show>
       <ThresholdsTable
         onConfigureResourceIntent={configureResourceIntent}

@@ -8,6 +8,7 @@ import { CollapsibleSection } from './Thresholds/sections/CollapsibleSection';
 import { formatMetricValue } from '@/features/alerts/thresholds/helpers';
 import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/thresholdsTableSectionProps';
 import type { Resource } from '@/features/alerts/thresholds/tableTypes';
+import { getAlertThresholdsDefaultsSummary } from '@/utils/alertThresholdsSectionPresentation';
 
 const TRUENAS_SYSTEM_COLUMNS = [
   'CPU %',
@@ -47,6 +48,7 @@ function TrueNASResourceSection(
       <CollapsibleSection
         id={props.id}
         title={props.title}
+        defaultsSummary={getAlertThresholdsDefaultsSummary(props.columns, props.defaults)}
         resourceCount={props.resources().length}
         collapsed={state.isCollapsed(props.id)}
         onToggle={() => state.toggleSection(props.id)}
