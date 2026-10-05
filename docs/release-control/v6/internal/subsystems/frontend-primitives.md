@@ -2297,7 +2297,11 @@ not a replacement status card, CTA band, or page-local nested card.
    inline detail rows, which remain content-sized. Summary cells must render
    one line only: secondary identity, raw provider labels, and descriptive
    context belong in an existing operational column, a supplemental tooltip,
-   or its inline detail drawer rather than a stacked subtitle. Text-only
+   or its inline detail drawer rather than a stacked subtitle. The same holds
+   for a note that explains a row's status dot: a TrueNAS service stopped while
+   set to start at boot says `should be running` beside its state in the State
+   cell, with the full sentence in the title and the drawer, not on a second
+   line under the name. Text-only
    operational rows may use `getPlatformTableRowClass` to declare that same
    shared rhythm explicitly; providers must not introduce local row-height
    exceptions. Mobile truncation may rely on a full-value row

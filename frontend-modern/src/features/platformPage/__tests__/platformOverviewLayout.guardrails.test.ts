@@ -548,7 +548,7 @@ describe('platform overview layout guardrails', () => {
     expect(truenasStorageTopologyTableSource).toContain('md:min-w-[960px]');
     expect(truenasVirtualMachinesTableSource).toContain('md:min-w-[960px]');
     expect(truenasVirtualMachinesTableSource).toMatch(
-      /class="hidden sm:table-cell md:w-\[19%\]"[\s\S]{0,120}?Flags/,
+      /class="hidden sm:table-cell md:w-\[26%\]"[\s\S]{0,120}?Flags/,
     );
     expect(vmwarePageSurfaceSource).toContain('<VsphereHostsTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereAlertsTable');

@@ -1726,6 +1726,14 @@ cannot create a browser mutation.
    `TrueNASData.Services` on the canonical top-level `agent` resource,
    preserving service name, boot enablement, runtime state, and process IDs
    through clone, merge, transport, and frontend decode paths.
+   The TrueNAS Services and VMs tables lead with condition rather than
+   configuration. Process IDs, bootloader, and device counts stay in the row
+   drawer instead of taking table columns. A service stopped while set to
+   start at boot, and a stopped VM set to autostart, say `should be running`
+   in the State cell beside the raw state, with the full sentence in the
+   title and a drawer Condition row (the VM drawer summary says it too) because
+   State is hidden on phones. A stopped VM without autostart carries no note: it was stopped on
+   purpose. Rows stay single-line, per the shared platform-table rhythm.
    Docker / Podman inventory extends that same canonical type contract beyond
    generic workload rows and Swarm services. Runtime containers must preserve
    Docker Engine container identity, owning host/runtime context, image,
