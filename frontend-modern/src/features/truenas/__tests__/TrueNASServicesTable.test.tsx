@@ -72,4 +72,55 @@ describe('TrueNASServicesTable', () => {
       'false',
     );
   });
+
+  it('says why a service is red and keeps process IDs in the drawer', async () => {
+    const rows = buildTrueNASServiceRows([
+      makeSystem({
+        truenas: {
+          hostname: 'nas-primary',
+          services: [
+            { id: '1', service: 'smb', enabled: true, state: 'RUNNING', pids: [2418] },
+            { id: '2', service: 'smartd', enabled: true, state: 'STOPPED' },
+            { id: '3', service: 'ssh', enabled: false, state: 'STOPPED' },
+            { id: '4', service: 'nfs', enabled: true, state: 'CRASHED' },
+          ],
+        },
+      } as Partial<Resource>),
+    ]);
+    const { container } = render(() => (
+      <TrueNASServicesTable
+        services={rows}
+        emptyIcon={<span />}
+        emptyTitle="No services"
+        emptyDescription="No services"
+        showToolbar={false}
+      />
+    ));
+
+    const noteFor = (name: string) =>
+      screen.getByText(name).closest('tr')?.querySelector('[data-truenas-service-state-note]');
+
+    // Stopped while set to start at boot is the state the red dot alone cannot
+    // explain. The note sits in the State cell so the row stays single-line.
+    expect(noteFor('SMART')).toHaveTextContent('Stoppedshould be running');
+    expect(noteFor('SMART')).toHaveAttribute('title', 'Set to start at boot but not running');
+    expect(noteFor('SMART')).toHaveAttribute('data-truenas-service-state-note', 'danger');
+    // Stopped because boot start is off is a choice, not a fault.
+    expect(noteFor('SSH')).toBeNull();
+    expect(noteFor('SMB')).toBeNull();
+    expect(noteFor('NFS')).toHaveAttribute('title', 'TrueNAS reports Crashed');
+    expect(noteFor('NFS')).toHaveAttribute('data-truenas-service-state-note', 'warning');
+    const smartNameCell = screen.getByText('SMART').closest('td');
+    expect(smartNameCell).not.toHaveTextContent('should be running');
+
+    const headers = [...container.querySelectorAll('thead th')].map((th) => th.textContent?.trim());
+    expect(headers).toEqual(['Service', 'State', 'Boot', 'System']);
+    expect(container).not.toHaveTextContent('2418');
+
+    // Phones hide the State column, so the drawer carries the condition.
+    await fireEvent.click(screen.getByText('SMART').closest('tr')!);
+    const detail = within(screen.getByTestId('truenas-service-detail'));
+    expect(detail.getByText('Condition')).toBeInTheDocument();
+    expect(detail.getByText('Should be running')).toBeInTheDocument();
+  });
 });

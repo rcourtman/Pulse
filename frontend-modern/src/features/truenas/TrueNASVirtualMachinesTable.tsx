@@ -3,6 +3,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
 import {
   PlatformWindowedRows,
   PlatformResponsiveTableLabel,
@@ -30,6 +31,7 @@ import type { Resource, ResourceTrueNASVMMeta } from '@/types/resource';
 import {
   filterTrueNASVMs,
   getTrueNASResourceDisplayStatus,
+  mapTrueNASVMStatus,
   type TrueNASVMStatusFilter,
 } from './truenasPageModel';
 
@@ -60,29 +62,6 @@ const formatCPU = (vm: ResourceTrueNASVMMeta | undefined): string => {
   return '-';
 };
 
-const formatDevices = (vm: ResourceTrueNASVMMeta | undefined): { label: string; title: string } => {
-  const counts = [
-    ['disk', vm?.diskCount],
-    ['nic', vm?.nicCount],
-    ['display', vm?.displayCount],
-    ['cdrom', vm?.cdromCount],
-    ['usb', vm?.usbCount],
-    ['pci', vm?.pciCount],
-  ] as const;
-  const parts = counts
-    .filter(([, count]) => typeof count === 'number' && Number.isFinite(count) && count > 0)
-    .map(([kind, count]) => `${count} ${kind}`);
-  const total = vm?.deviceCount;
-  if (parts.length === 0) {
-    return typeof total === 'number' && total > 0
-      ? { label: `${total} devices`, title: `${total} devices` }
-      : { label: '-', title: '' };
-  }
-  const visible = parts.slice(0, 2);
-  const suffix = parts.length > visible.length ? ` +${parts.length - visible.length}` : '';
-  return { label: `${visible.join(', ')}${suffix}`, title: parts.join(', ') };
-};
-
 const flagLabels = (vm: ResourceTrueNASVMMeta | undefined): string[] => {
   const labels: string[] = [];
   if (vm?.autostart) labels.push('Autostart');
@@ -92,11 +71,44 @@ const flagLabels = (vm: ResourceTrueNASVMMeta | undefined): string[] => {
   return labels;
 };
 
-// Columns a user can sort by. Devices and Flags summarize several values at
-// once, so they carry no single scalar to order on. CPU orders on the
-// provisioned vCPU count (cores × threads when vCPUs are not reported) and
-// Memory on the provisioned bytes.
-const TRUENAS_VM_SORT_KEYS = ['vm', 'state', 'cpu', 'memory', 'boot'] as const;
+// A VM set to autostart that is not running is the one stopped VM the user
+// did not choose, so the State cell says so beside the raw state, as it does
+// for a state TrueNAS flags. Rows stay single-line (the shared platform-table
+// rhythm), so the full sentence rides on the title. Bootloader and device
+// counts are configuration, not condition, so they live in the drawer.
+type VMStateNote = { short: string | null; full: string; tone: 'danger' | 'warning' };
+
+const vmStateNote = (resource: Resource): VMStateNote | null => {
+  const status = mapTrueNASVMStatus(resource);
+  if (status === 'stopped') {
+    return vmMeta(resource)?.autostart
+      ? { short: 'should be running', full: 'Set to start at boot but stopped', tone: 'danger' }
+      : null;
+  }
+  if (status !== 'attention') return null;
+  if (hasImpairedResourceSource(resource, 'truenas')) {
+    return { short: 'not updated', full: 'TrueNAS has not updated this recently', tone: 'warning' };
+  }
+  const state = asTrimmedString(vmMeta(resource)?.state || vmMeta(resource)?.domainState);
+  return {
+    short: state ? null : 'not reported',
+    full: state
+      ? `TrueNAS reports ${formatPlatformTableTitleCaseValue(state)}`
+      : 'TrueNAS has not reported a state',
+    tone: 'warning',
+  };
+};
+
+const VM_STATE_NOTE_CLASS: Record<VMStateNote['tone'], string> = {
+  danger: 'text-red-600 dark:text-red-300',
+  warning: 'text-amber-700 dark:text-amber-300',
+};
+
+// Columns a user can sort by. Flags summarize several values at once, so they
+// carry no single scalar to order on. CPU orders on the provisioned vCPU count
+// (cores × threads when vCPUs are not reported) and Memory on the provisioned
+// bytes.
+const TRUENAS_VM_SORT_KEYS = ['vm', 'state', 'cpu', 'memory'] as const;
 
 type TrueNASVMSortKey = (typeof TRUENAS_VM_SORT_KEYS)[number];
 
@@ -136,8 +148,6 @@ const getTrueNASVMSortValue = (
       return typeof vm?.memoryBytes === 'number' && Number.isFinite(vm.memoryBytes)
         ? vm.memoryBytes
         : null;
-    case 'boot':
-      return asTrimmedString(vm?.bootloader) || null;
     default:
       key satisfies never;
       return null;
@@ -215,7 +225,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="vm"
-                  class="platform-table-mobile-w-30 md:w-[22%]"
+                  class="platform-table-mobile-w-30 md:w-[34%]"
                 >
                   VM
                 </PlatformSortableTableHead>
@@ -223,7 +233,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                   kind="badge"
                   sort={sort}
                   sortKey="state"
-                  class="platform-table-phone-hidden md:w-[10%]"
+                  class="platform-table-phone-hidden md:w-[14%]"
                 >
                   State
                 </PlatformSortableTableHead>
@@ -231,7 +241,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="cpu"
-                  class="platform-table-mobile-w-15 md:w-[10%]"
+                  class="platform-table-mobile-w-15 md:w-[12%]"
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -239,29 +249,14 @@ export const TrueNASVirtualMachinesTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="memory"
-                  class="platform-table-mobile-w-15 md:w-[10%]"
+                  class="platform-table-mobile-w-15 md:w-[14%]"
                 >
                   <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  sortKey="boot"
-                  class="platform-table-phone-hidden md:w-[11%]"
-                >
-                  Boot
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  class="hidden md:table-cell md:w-[18%]"
-                >
-                  Devices
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  class="hidden sm:table-cell md:w-[19%]"
+                  class="hidden sm:table-cell md:w-[26%]"
                 >
                   Flags
                 </PlatformSortableTableHead>
@@ -281,7 +276,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                     const indicator = () => getSimpleStatusIndicator(displayStatus());
                     const stateLabel = () =>
                       formatPlatformTableTitleCaseValue(vm()?.state || vm()?.domainState);
-                    const devices = createMemo(() => formatDevices(vm()));
+                    const note = () => vmStateNote(resource);
                     const flags = createMemo(() => flagLabels(vm()));
                     const detailRowId = () => drawer.detailRowId(resource);
                     const isExpanded = () => drawer.isExpanded(resource);
@@ -326,9 +321,27 @@ export const TrueNASVirtualMachinesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
                           >
-                            <span class="text-[11px] font-medium text-base-content">
-                              {stateLabel()}
-                            </span>
+                            <div
+                              class="inline-flex max-w-full min-w-0 items-center gap-1.5"
+                              title={note()?.full}
+                              data-truenas-vm-state-note={note() ? note()!.tone : undefined}
+                            >
+                              <span class="shrink-0 text-[11px] font-medium text-base-content">
+                                {stateLabel()}
+                              </span>
+                              <Show when={note()?.short}>
+                                {(short) => (
+                                  <span
+                                    class={`min-w-0 truncate text-[11px] font-medium ${VM_STATE_NOTE_CLASS[note()!.tone]}`}
+                                  >
+                                    {short()}
+                                  </span>
+                                )}
+                              </Show>
+                              <Show when={note()}>
+                                {(current) => <span class="sr-only">{current().full}</span>}
+                              </Show>
+                            </div>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
@@ -339,17 +352,6 @@ export const TrueNASVirtualMachinesTable: Component<{
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             {formatPlatformTableBytesValue(vm()?.memoryBytes, '-')}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
-                          >
-                            {vm()?.bootloader || '-'}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                            title={devices().title}
-                          >
-                            <span class="truncate">{devices().label}</span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
@@ -367,7 +369,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                           resource={resource}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
-                          colSpan={7}
+                          colSpan={5}
                           resolveResourceLabel={resolveResourceLabel}
                           onClose={() => drawer.close(resource)}
                         />

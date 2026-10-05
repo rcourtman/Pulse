@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "94ac386abfe13a8eb0109ac1eea4c087390f9717",
+  "verified_at": "2026-10-05T05:13:41Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts",
+    "frontend-modern/src/features/truenas/TrueNASServicesTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts": "27d50ea6c727d0d91ae34e2427e353abfa39a9306c665fc11d0be41a5fa2eabc",
+    "frontend-modern/src/features/truenas/TrueNASServicesTable.tsx": "cbe56cad46b968c9238c70beb5e77f98cbaec9625935ad6ccda735b2ba5c6f43",
+    "frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx": "b9e91b16bb7aeba6f2a02c544258babfd0b675171eac107a2f88622b2dadd5a7"
+  },
+  "routes": [
+    "/truenas/services",
+    "/truenas/vms"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Services at 1440: columns are Service, State, Boot, System. SMART reads Stopped plus red should be running in the State cell with the full sentence on hover, SSH (stopped, boot disabled) has no note, NFS and SMB unchanged. Before, SMART and SSH showed the same Stopped pill and a PIDs column took 20 percent",
+    "Services at 390: rows stay single-line with Service and Boot, and tapping SMART opens the drawer with Condition Should be running between State and Boot, where before the red dot had no reason anywhere on a phone",
+    "Service drawer still lists PIDs and PID count for SMB",
+    "VMs at 1440: columns are VM, State, CPU, Memory, Flags. ubuntu-build (stopped, no autostart) carries no note. Bootloader and device counts remain in the drawer under Platform details, Show TrueNAS",
+    "VMs at 390: VM, CPU and memory, single-line rows",
+    "The mock estate has no stopped VM set to autostart, so that note and its drawer Condition row are covered by TrueNASVirtualMachinesTable.test.tsx and resourceDetailDrawerTrueNASModel.test.ts rather than seen live"
+  ],
+  "interactions": [
+    "Tapped the SMART row on a 390 phone and read the drawer",
+    "Expanded ubuntu-build and the Platform details TrueNAS section to confirm bootloader and devices remain",
+    "Expanded the SMB service drawer to confirm PIDs remain"
+  ]
+}
