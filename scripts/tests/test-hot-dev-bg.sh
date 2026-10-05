@@ -747,6 +747,39 @@ PY
   assert_contains "go.mod drops legacy docker module" "${output}" "go.mod:uses_legacy_docker=False"
 }
 
+test_managed_go_patch_graph_has_reviewed_floors_and_checksums() {
+  # These are graph admission controls, not a compatibility verdict. Actual
+  # metrics wire/Kubernetes/runtime builds must use this committed graph.
+  GO_MOD_PATH="${GO_MOD}" GO_SUM_PATH="${GO_SUM}" python3 - <<'PY_GRAPH'
+import os
+import re
+from pathlib import Path
+
+mod = Path(os.environ["GO_MOD_PATH"]).read_text(encoding="utf-8")
+sums = Path(os.environ["GO_SUM_PATH"]).read_text(encoding="ascii").splitlines()
+floors = {
+    "github.com/klauspost/compress": (1, 20, 1),
+    "k8s.io/api": (0, 37, 1),
+    "k8s.io/apimachinery": (0, 37, 1),
+    "k8s.io/client-go": (0, 37, 1),
+}
+kubernetes = set()
+for name, floor in floors.items():
+    matches = re.findall(r"(?m)^\s*" + re.escape(name) + r" (v\d+\.\d+\.\d+)\s*$", mod)
+    assert len(matches) == 1, f"missing/ambiguous stable direct module: {name}"
+    version = matches[0]
+    assert tuple(map(int, version[1:].split("."))) >= floor, f"module below reviewed patch floor: {name}"
+    for suffix in ("", "/go.mod"):
+        prefix = f"{name} {version}{suffix} h1:"
+        records = [line for line in sums if line.startswith(prefix)]
+        assert len(records) == 1 and re.fullmatch(re.escape(prefix) + r"[A-Za-z0-9+/]{43}=", records[0]), f"missing/ambiguous module checksum: {name}{suffix}"
+    if name.startswith("k8s.io/"):
+        kubernetes.add(version)
+assert len(kubernetes) == 1, "Kubernetes API/apimachinery/client-go must move together"
+print("managed Go patch floors, aligned Kubernetes graph and checksum records pass")
+PY_GRAPH
+}
+
 test_frontend_vite_dependency_optimizer_matches_build_target() {
   local output
   output="$(
@@ -1676,6 +1709,7 @@ main() {
   test_root_package_exposes_managed_runtime_entrypoints
   test_frontend_package_exposes_managed_runtime_entrypoints
   test_dev_runtime_dependency_manifests_are_governed
+  test_managed_go_patch_graph_has_reviewed_floors_and_checksums
   test_frontend_vite_dependency_optimizer_matches_build_target
   test_makefile_routes_managed_runtime_through_npm
   test_hot_dev_script_advertises_foreground_escape_hatch
