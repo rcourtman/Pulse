@@ -3195,7 +3195,11 @@ as separate buckets in `standalonePageModel.ts`, include every source-owned
 `network-endpoint` regardless of correlation state, exclude matched machine or
 service projections from the check inventory by resource type, and let
 `AvailabilityChecksTable.tsx` render saved probe method, target, latest result,
-check age, failure count, and cadence from the canonical availability payload.
+24h uptime, check age, last healthy time and failure count from the canonical
+availability payload, with cadence restored only on the widest tables. Uptime
+comes from the shared availability history summary the fleet view reads and
+stays blank below 90 percent observed. The failure count reads "N in a row",
+with the offline threshold on hover, not an "N/M" fraction.
 Recent check timing and fuller failure context may stay in tooltip or drawer
 detail, but the table row must not duplicate the same probe protocol and
 result text across both identity and metric cells.

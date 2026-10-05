@@ -7320,7 +7320,9 @@ successful evidence must render an amber `Stale` state with no green
 must not appear as a primary row in the Machines `Availability checks` tab;
 the distinct source-owned `network-endpoint` for that configured check must
 appear there regardless of whether its correlation state is `attached`,
-`standalone`, `ambiguous`, or `unresolved`.
+`standalone`, `ambiguous`, or `unresolved`. The tab's summary card owns the one
+"Manage checks" link; the checks table toolbar keeps only "Add service/device
+check".
 Operational navigation for those agentless endpoints belongs to the
 frontend-primitives-owned Machines surface as a focused Availability checks tab
 rather than a new primary nav item. The page may show availability checks beside

@@ -93,7 +93,11 @@ describe('getAvailabilityTargetStatusClass (indeterminate arm)', () => {
     expect(
       getAvailabilityTargetStatusClass(
         target({
-          status: status({ available: false, outcome: 'indeterminate' }),
+          status: status({
+            available: false,
+            outcome: 'indeterminate',
+            lastChecked: '2026-10-05T00:00:00Z',
+          }),
         }),
       ),
     ).toBe('bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300');

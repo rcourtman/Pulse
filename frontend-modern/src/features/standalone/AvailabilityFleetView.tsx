@@ -47,16 +47,75 @@ const historyState = (bucket: AvailabilityHistoryBucket): AvailabilityFleetHisto
 const formatPercent = (value: number): string =>
   `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
 
+// An uptime percentage is only honest when most of the window had a
+// determinate answer. availabilityPercent leaves out indeterminate time, so a
+// window of mostly inconclusive UDP results could otherwise read 100 percent.
+const MIN_UPTIME_COVERAGE_PERCENT = 90;
+const MIN_DETERMINATE_SHARE = 0.9;
+
+type UptimeVerdict =
+  | { kind: 'ok'; percent: number }
+  | { kind: 'thin'; observedMinutes: number }
+  | { kind: 'inconclusive' };
+
+const getUptimeVerdict = (summary: AvailabilityHistoryTarget['summary']): UptimeVerdict => {
+  const observed =
+    (summary?.reachableSeconds ?? 0) +
+    (summary?.unreachableSeconds ?? 0) +
+    (summary?.indeterminateSeconds ?? 0);
+  if (
+    !summary ||
+    summary.coveragePercent < MIN_UPTIME_COVERAGE_PERCENT ||
+    summary.availabilityPercent === undefined
+  ) {
+    return { kind: 'thin', observedMinutes: Math.round(observed / 60) };
+  }
+  const determinate = summary.reachableSeconds + summary.unreachableSeconds;
+  if (observed <= 0 || determinate / observed < MIN_DETERMINATE_SHARE) {
+    return { kind: 'inconclusive' };
+  }
+  return { kind: 'ok', percent: summary.availabilityPercent };
+};
+
+// Compact 24h uptime for the checks table, on the same coverage rule as the
+// fleet view: below 90 percent observed there is no honest percentage yet.
+export const getAvailabilityUptimeCell = (
+  history: AvailabilityHistoryTarget | undefined,
+): { label: string; title: string; tone: 'default' | 'warning' | 'danger' | 'muted' } => {
+  if (!history?.summary) {
+    return { label: '—', title: 'History unavailable', tone: 'muted' };
+  }
+  const verdict = getUptimeVerdict(history.summary);
+  if (verdict.kind === 'thin') {
+    return {
+      label: '—',
+      title: `Not enough history yet: ${verdict.observedMinutes.toLocaleString()}m observed in the last 24h`,
+      tone: 'muted',
+    };
+  }
+  if (verdict.kind === 'inconclusive') {
+    return {
+      label: '—',
+      title: 'Most results in the last 24h were inconclusive, so there is no uptime figure',
+      tone: 'muted',
+    };
+  }
+  const percent = verdict.percent;
+  return {
+    label: formatPercent(percent),
+    title: `Available ${formatPercent(percent)} of the last 24h (${formatPercent(history.summary.coveragePercent)} observed)`,
+    tone: percent < 95 ? 'danger' : percent < 99 ? 'warning' : 'default',
+  };
+};
+
 const availabilityText = (history: AvailabilityHistoryTarget | undefined): string => {
   if (!history?.summary) return 'History unavailable';
-  const { summary } = history;
-  if (summary.coveragePercent < 90 || summary.availabilityPercent === undefined) {
-    const observed =
-      summary.reachableSeconds + summary.unreachableSeconds + summary.indeterminateSeconds;
-    const observedMinutes = Math.round(observed / 60);
-    return `Insufficient coverage · ${observedMinutes.toLocaleString()}m observed`;
+  const verdict = getUptimeVerdict(history.summary);
+  if (verdict.kind === 'thin') {
+    return `Insufficient coverage · ${verdict.observedMinutes.toLocaleString()}m observed`;
   }
-  return `${formatPercent(summary.availabilityPercent)} available · ${formatPercent(summary.coveragePercent)} observed`;
+  if (verdict.kind === 'inconclusive') return 'Mostly inconclusive results';
+  return `${formatPercent(verdict.percent)} available · ${formatPercent(history.summary.coveragePercent)} observed`;
 };
 
 const latencyPaths = (
