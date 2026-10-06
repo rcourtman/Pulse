@@ -46,11 +46,31 @@ and installer tooling.
   give the attempted version or release asset (or say "unknown") and identify
   the installer or helper when known. Include an image tag or digest only for a
   running container, not for a bare-metal or LXC install.
-- Include screenshots, redacted logs, API output, or diagnostics when they
-  clarify the problem. If Pulse is running and it is safe to collect, use
-  `Settings -> Diagnostics -> Export for GitHub (sanitized)` for connection or
-  data failures. Never paste credentials, tokens, private keys, or a command
-  line containing them into an issue.
+- Include only evidence relevant to the symptom: a screenshot or exact redacted
+  error may be enough for a visual problem; existing logs or observations may
+  explain a connection or data failure. Diagnostics are optional, not a condition
+  of reporting. If a result is already displayed in **Settings → Diagnostics**,
+  its download buttons reuse that result without running checks again.
+- **Run Diagnostics** can make live API and guest-agent requests. Do not run it
+  during a backup, freeze/thaw or an unresponsive-host incident just to file a
+  report. Keep the original evidence instead; a successful one-off check does
+  not prove that normal monitoring has recovered or a guest has thawed. See
+  [safe diagnostics collection](docs/TROUBLESHOOTING.md#collect-diagnostics-safely).
+- Diagnostics downloads save a local file, not an upload. Choose **GitHub (review
+  first)** (called **Export for GitHub (sanitized)** in older versions), and review
+  files and screenshots locally before posting: a sanitized export is not a
+  guarantee that free-text errors contain no private information. Remove
+  credentials, session cookies, secret URLs and private host, network or personal
+  details, including those echoed in errors. Keep **Full (private)** exports
+  private. Do not attach configuration or `.env` files, private keys, **Copy as
+  cURL** commands or full network exports. Never put credentials in a command
+  line, URL or thread.
+- For CPU, memory or disk-write reports, use existing readings or safe passive
+  observations. Where known, say whether they measure the Pulse process, its
+  container or the whole host, with units, measurement window and uptime.
+  Unavailable readings are valid evidence. Do not restart, create load or change
+  polling or retention just to measure; do not attach raw profiles, heap dumps,
+  databases or full process command lines.
 - Lead with one primary bug or operator outcome. If the context also exposes
   another actionable topic, put it in the issue form's dedicated field. Triage
   will preserve it with a linked disposition; you do not need to refile text
