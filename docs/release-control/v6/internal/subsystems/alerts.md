@@ -3464,3 +3464,12 @@ metrics target, and for agent and Docker hosts `agent:<id>` and
 orders them most severe first. The Machines/Infrastructure and Docker host
 drawers build their "Needs attention" rows from it; resources no longer embed
 an alert list, so no drawer can silently read an always-empty copy.
+`getUnifiedResourceAlertStyles` computes row highlighting from that same set,
+so the Docker hosts and Machines table rows tint for exactly the unacknowledged
+alerts their drawers list. Docker host rows previously matched the row id and
+display name against `getAlertStyles`; Docker alerts are keyed
+`docker:<host source id>` and carry the hostname as their node, so a host whose
+display name differs from its hostname was never highlighted, and Machines rows
+had no alert highlighting at all. `getAlertStyles` keeps its
+id-plus-node-name matching for the platform tables whose alerts are keyed that
+way.

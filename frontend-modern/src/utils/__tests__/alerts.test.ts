@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { getAlertsForResource, getAlertsForUnifiedResource, getAlertStyles } from '@/utils/alerts';
+import {
+  getAlertsForResource,
+  getAlertsForUnifiedResource,
+  getAlertStyles,
+  getUnifiedResourceAlertStyles,
+} from '@/utils/alerts';
 import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 
@@ -374,5 +379,71 @@ describe('getAlertsForUnifiedResource', () => {
     );
 
     expect(ids(getAlertsForUnifiedResource(pod, active, true))).toEqual(['pod-incident']);
+  });
+
+  describe('getUnifiedResourceAlertStyles', () => {
+    // Mock "Ops Services 01": the Docker alerts carry the hostname as their
+    // node, which is neither the row's id nor its display name.
+    const dockerHost = resource({
+      id: 'agent-aa22ff2b2bc3257d',
+      type: 'docker-host',
+      name: 'Ops Services 01',
+      displayName: 'Ops Services 01',
+      platformType: 'docker',
+      docker: { hostSourceId: 'orion-2-mock', hostname: 'ops-services-01' },
+      canonicalIdentity: {
+        displayName: 'Ops Services 01',
+        primaryId: 'docker-host:orion-2-mock',
+        aliases: ['docker-host:orion-2-mock', 'orion-2-mock'],
+      },
+    } as Partial<Resource>);
+    const serviceAlert = (id: string, overrides: Partial<Alert> = {}) =>
+      alert(id, `docker:orion-2-mock/service/${id}`, {
+        type: 'docker-service-health',
+        node: 'ops-services-01',
+        ...overrides,
+      });
+
+    it('tints a Docker host row for the service alerts its drawer lists', () => {
+      const active = byId(serviceAlert('svc-1'), serviceAlert('svc-2'), serviceAlert('svc-3'));
+
+      const styles = getUnifiedResourceAlertStyles(dockerHost, active, true);
+      expect(styles.hasUnacknowledgedAlert).toBe(true);
+      expect(styles.severity).toBe('warning');
+      expect(styles.unacknowledgedCount).toBe(3);
+      // The row's previous id + display-name match found none of them.
+      expect(getAlertStyles(dockerHost.id, active, true, 'Ops Services 01').hasAlert).toBe(false);
+    });
+
+    it('tints a machine row for an alert on its agent key', () => {
+      const machine = resource({
+        id: 'agent-acdfdee2953587fb',
+        name: 'Apollo-114',
+        agent: { agentId: 'host-linux-1' },
+      } as Partial<Resource>);
+      const active = byId(
+        alert('memory', 'agent:host-linux-1', { type: 'memory' }),
+        alert('disk', 'agent:host-linux-1/disk:data', { level: 'critical' }),
+      );
+
+      const styles = getUnifiedResourceAlertStyles(machine, active, true);
+      expect(styles.severity).toBe('critical');
+      expect(styles.alertCount).toBe(2);
+    });
+
+    it('leaves the row untinted when every open alert is acknowledged', () => {
+      const active = byId(serviceAlert('svc-1', { acknowledged: true, level: 'critical' }));
+
+      const styles = getUnifiedResourceAlertStyles(dockerHost, active, true);
+      expect(styles.hasUnacknowledgedAlert).toBe(false);
+      expect(styles.hasAcknowledgedOnlyAlert).toBe(true);
+      expect(styles.severity).toBeNull();
+    });
+
+    it('reports nothing while alert detection is off', () => {
+      const styles = getUnifiedResourceAlertStyles(dockerHost, byId(serviceAlert('svc-1')), false);
+      expect(styles.hasAlert).toBe(false);
+      expect(styles.rowClass).toBe('');
+    });
   });
 });
