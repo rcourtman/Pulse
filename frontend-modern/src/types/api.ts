@@ -1376,16 +1376,20 @@ export interface Alert {
   ackUser?: string;
   correlation?: AlertCorrelation;
   metadata?: Record<string, unknown>;
-  operationalRecord?: OperationalRecord;
-  latestTransition?: LifecycleTransition;
-  transitions?: LifecycleTransition[];
-  evidence?: EvidenceEnvelope[];
   /**
    * Live evaluation behind an open threshold alert. `value`, `message` and
    * `lastSeen` keep the last reading that met the trigger; this is the
    * reading being evaluated now and why the alert has not cleared.
    */
   metricStatus?: MetricAlertStatus;
+  operationalRecord?: OperationalRecord;
+  latestTransition?: LifecycleTransition;
+  transitions?: LifecycleTransition[];
+  evidence?: EvidenceEnvelope[];
+}
+
+export interface ResolvedAlert extends Alert {
+  resolvedTime: string;
 }
 
 export type MetricAlertPhase = 'breaching' | 'latched' | 'recovering';
@@ -1406,10 +1410,6 @@ export interface MetricAlertStatus {
   recoveryDelaySeconds?: number;
   recoveryStartedAt?: string;
   recoveryElapsedSeconds?: number;
-}
-
-export interface ResolvedAlert extends Alert {
-  resolvedTime: string;
 }
 
 // One entry from the append-only alert event log

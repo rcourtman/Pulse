@@ -107,11 +107,17 @@ type Alert struct {
 	Acknowledged    bool       `json:"acknowledged"`
 	AckTime         *time.Time `json:"ackTime,omitempty"`
 	AckUser         string     `json:"ackUser,omitempty"`
+	// MetricStatus is the live evaluation behind an open threshold alert.
+	MetricStatus *MetricAlertStatus `json:"metricStatus,omitempty"`
 	// Metadata carries alert-engine annotations (notably resourceType) so the
 	// frontend can classify an alert without re-deriving resource identity.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
-	// MetricStatus is the live evaluation behind an open threshold alert.
-	MetricStatus *MetricAlertStatus `json:"metricStatus,omitempty"`
+}
+
+// ResolvedAlert represents a recently resolved alert
+type ResolvedAlert struct {
+	Alert
+	ResolvedTime time.Time `json:"resolvedTime"`
 }
 
 // Metric alert phases. A threshold alert stays open after its reading drops
@@ -162,12 +168,6 @@ func (s *MetricAlertStatus) Clone() *MetricAlertStatus {
 		clone.RecoveryStartedAt = &startedAt
 	}
 	return &clone
-}
-
-// ResolvedAlert represents a recently resolved alert
-type ResolvedAlert struct {
-	Alert
-	ResolvedTime time.Time `json:"resolvedTime"`
 }
 
 // Node represents a Proxmox VE node
