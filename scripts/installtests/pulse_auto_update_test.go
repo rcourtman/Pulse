@@ -647,6 +647,8 @@ func TestAutoUpdateBackupTransaction(t *testing.T) {
 		{name: "rollback_copy_failure", fault: "restore_copy", outcome: "failure", retained: true},
 		{name: "corrupt_rollback_copy", fault: "restore_corrupt", outcome: "failure", retained: true},
 		{name: "rollback_rename_failure", fault: "restore_rename", outcome: "failure", retained: true},
+		{name: "rollback_rename_noop", fault: "restore_noop", outcome: "failure", retained: true},
+		{name: "rollback_destination_changed", fault: "restore_changed", outcome: "failure", retained: true},
 		{name: "version_restore_failure", fault: "version_rename", outcome: "failure", retained: true},
 		{name: "new_destination_directory", outcome: "directory", retained: true},
 		{name: "successful_update", success: true},
@@ -773,8 +775,10 @@ cp() {
 mv() {
  local dest="${*: -1}"
  if [[ "$FAULT" == restore_rename && "$dest" == "$INSTALL_DIR/bin/pulse" ]]; then return 1; fi
+ if [[ "$FAULT" == restore_noop && "$dest" == "$INSTALL_DIR/bin/pulse" ]]; then return 0; fi
  if [[ "$FAULT" == version_rename && "$dest" == "$INSTALL_DIR/VERSION" ]]; then return 1; fi
- command mv "$@"
+ command mv "$@" || return
+ if [[ "$FAULT" == restore_changed && "$dest" == "$INSTALL_DIR/bin/pulse" ]]; then printf 'changed\n' > "$dest"; fi
 }
 curl() {
  local out="" url="" arg
@@ -840,7 +844,7 @@ else
  [[ -z "$backup" || ! -e "$backup" ]] || { echo 'unneeded backup leaked'; exit 1; }
 fi
 # Incomplete file restoration must not activate an unverified executable.
-case "$FAULT" in restore_tmp|restore_copy|restore_corrupt|restore_rename|version_rename|stop)
+case "$FAULT" in restore_tmp|restore_copy|restore_corrupt|restore_rename|restore_noop|restore_changed|version_rename|stop)
  if [[ -f "$FIXTURE_DIR/service-operations" ]]; then
   ! grep -Eq '^(start|restart):' "$FIXTURE_DIR/service-operations"
  fi

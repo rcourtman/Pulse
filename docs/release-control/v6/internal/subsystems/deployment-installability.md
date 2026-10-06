@@ -6421,6 +6421,8 @@ Installer failure, mismatched version and failure to restore a previously active
 service share one rollback path. It stops the service, stages and compares all
 saved files before any replacement, and renames each into its recorded original
 path without following a new symlink or treating a directory as a destination.
+Every restored destination must itself be regular and byte-equal to its saved
+copy before recovery may activate the service or discard the backup.
 Files absent before the attempt remain absent after recovery, including the
 legacy/current binary alternative and `VERSION`. Metadata is preserved. A
 partial restore must not invoke the RETURN restart backstop. The backup remains
