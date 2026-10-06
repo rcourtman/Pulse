@@ -6,12 +6,16 @@ on:
     paths:
       - '.github/workflows/unified-agent-native.yml'
       - 'cmd/pulse-agent/**'
+      - 'cmd/pulse-agent-helper/**'
+      - 'internal/agenthelper/**'
       - 'internal/agenttls/**'
       - 'internal/agentupdate/**'
       - 'internal/dockeragent/**'
+      - 'internal/filesystemprobe/**'
       - 'internal/hostagent/**'
       - 'internal/kubernetesagent/**'
       - 'internal/remoteconfig/**'
+      - 'internal/updatesignature/**'
       - 'pkg/agents/**'
       - 'frontend-modern/src/utils/agentInstallCommand.ts'
       - 'frontend-modern/src/utils/__tests__/agentInstallCommand.windows.test.ts'
@@ -25,12 +29,16 @@ on:
     paths:
       - '.github/workflows/unified-agent-native.yml'
       - 'cmd/pulse-agent/**'
+      - 'cmd/pulse-agent-helper/**'
+      - 'internal/agenthelper/**'
       - 'internal/agenttls/**'
       - 'internal/agentupdate/**'
       - 'internal/dockeragent/**'
+      - 'internal/filesystemprobe/**'
       - 'internal/hostagent/**'
       - 'internal/kubernetesagent/**'
       - 'internal/remoteconfig/**'
+      - 'internal/updatesignature/**'
       - 'pkg/agents/**'
       - 'frontend-modern/src/utils/agentInstallCommand.ts'
       - 'frontend-modern/src/utils/__tests__/agentInstallCommand.windows.test.ts'
@@ -129,6 +137,24 @@ jobs:
           ./internal/hostagent
           ./internal/kubernetesagent
           ./internal/remoteconfig
+
+      # The privileged helper is Linux-only. Keep its protocol, executable
+      # identity and shared filesystem fences in both native Linux jobs, even
+      # when a change leaves the unprivileged agent's source untouched. These
+      # tests run as the ordinary runner user; no helper service is installed.
+      - name: Test native Linux helper boundaries
+        if: runner.os == 'Linux'
+        run: >-
+          go test -race -count=1 -timeout 5m
+          ./cmd/pulse-agent-helper
+          ./internal/agenthelper
+          ./internal/filesystemprobe
+          ./internal/updatesignature
+          ./pkg/agents/host
+
+      - name: Build native Linux helper
+        if: runner.os == 'Linux'
+        run: go build -o pulse-agent-helper-native ./cmd/pulse-agent-helper
 
       - name: Test native Unix installer contracts
         if: matrix.unix
