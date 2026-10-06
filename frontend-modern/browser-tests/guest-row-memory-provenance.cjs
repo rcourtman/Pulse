@@ -117,8 +117,14 @@ assert.equal(
           ),
         dark,
       );
-      await page.goto(origin + '/browser-tests/guest-row-memory-provenance.html');
-      const row = page.locator('[data-guest-id="fixture-pve1-101"]');
+      // The first source-preview navigation also transforms its real imported
+      // components. Give that cold readiness a bounded window, rather than the
+      // shorter interaction deadline; the worker's overall 180s limit remains.
+      await page.goto(origin + '/browser-tests/guest-row-memory-provenance.html', {
+        timeout: 30_000,
+        waitUntil: 'domcontentloaded',
+      });
+      const row = page.locator('[data-guest-id="fixture:pve1:101"]');
       const memory = row.locator('[data-workload-col="memory"]');
       const notice = memory.locator('[data-workload-memory-read-status]');
       const identity = await row.elementHandle();
@@ -271,7 +277,7 @@ assert.equal(
         await page.keyboard.press('Tab');
         assert(
           await row
-            .getByRole('button', { name: /Expand.*details/ })
+            .getByRole('button', { name: 'Expand backup-guest', exact: true })
             .evaluate((el) => document.activeElement === el),
         );
         await page.keyboard.press('Enter');

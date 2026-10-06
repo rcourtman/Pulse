@@ -19,7 +19,7 @@ syncAIRuntimeSettings({ discovery_enabled: false });
 const capacity = 4 * 1024 ** 3;
 const observedAt = '2026-09-30T11:00:00Z';
 const initial: WorkloadGuest = {
-  id: 'fixture-pve1-101',
+  id: 'fixture:pve1:101',
   vmid: 101,
   name: 'backup-guest',
   instance: 'fixture',
