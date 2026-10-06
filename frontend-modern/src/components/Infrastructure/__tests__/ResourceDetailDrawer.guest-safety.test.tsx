@@ -9,6 +9,11 @@ import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSusp
 import * as discoveryApi from '@/api/discovery';
 import { getShippedDocUrl } from '@/utils/docsLinks';
 
+vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
+  useWebSocket: () => ({ activeAlerts: {} }),
+}));
+
 vi.mock('@/api/discovery', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/discovery')>()),
   getDiscovery: vi.fn(async () => null),

@@ -33,6 +33,7 @@ import {
   formatPlatformAlertResourceType,
   formatPlatformAlertStartedAt,
 } from '@/utils/alertDetailPresentation';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
 import {
   formatAlertSeverityLabel,
@@ -120,6 +121,7 @@ export const VsphereAlertsTable: Component<{
   // column hides (the row drawer still names it).
   singleVcenter?: boolean;
 }> = (props) => {
+  const now = useRelativeTimeNow();
   const tableState = createPlatformTableFilterState({
     resources: () => props.incidents,
     initialStatus: 'all' as VmwareIncidentSeverityFilter,
@@ -308,7 +310,9 @@ export const VsphereAlertsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {formatPlatformAlertStartedAt(incident.startedAt)}
+                            <span title={formatPlatformAlertDetailDateTime(incident.startedAt)}>
+                              {formatPlatformAlertStartedAt(incident.startedAt, now())}
+                            </span>
                           </TableCell>
                         </TableRow>
                         <Show when={isExpanded()}>

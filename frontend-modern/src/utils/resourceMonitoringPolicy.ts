@@ -61,8 +61,14 @@ function ownershipForPlatform(platform: string): ResourceInventoryOwnership | un
   if (platform === 'kubernetes') return KUBERNETES_OWNERSHIP;
   if (platform === 'docker') return CONTAINER_RUNTIME_OWNERSHIP;
   if (platform === 'truenas') return TRUENAS_OWNERSHIP;
-  if (platform === 'agent') return AGENT_OWNERSHIP;
   return undefined;
+}
+
+// The agent copy speaks about the agent's own machine and points at agent
+// removal. Everything else an agent reports (libvirt VMs, Unraid arrays) is a
+// record the host keeps, so it gets the neutral source-system copy instead.
+function ownershipForAgentPlatform(type: string): ResourceInventoryOwnership {
+  return type === '' || type === 'agent' ? AGENT_OWNERSHIP : SOURCE_SYSTEM_OWNERSHIP;
 }
 
 // Fallback for callers that know only the resource type. Resource types such
@@ -85,5 +91,6 @@ export function describeResourceInventoryOwnership(
   const type = (resourceType || '').toLowerCase();
   const platform = (platformType || '').trim().toLowerCase();
 
+  if (platform === 'agent') return ownershipForAgentPlatform(type);
   return ownershipForPlatform(platform) ?? ownershipForResourceType(type);
 }

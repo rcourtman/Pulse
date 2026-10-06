@@ -162,9 +162,6 @@ func TestConvertResourceToFrontend(t *testing.T) {
 		Labels:       map[string]string{"env": "prod"},
 		CustomURL:    "https://resource.internal",
 		LastSeenUnix: 12345,
-		Alerts: []ResourceAlertInput{
-			{ID: "a1", Type: "cpu", Level: "warn", Message: "high", Value: 90, Threshold: 80, StartTimeUnix: 111},
-		},
 		Identity:     identity,
 		PlatformData: json.RawMessage(`{"key":"value"}`),
 	}
@@ -178,9 +175,6 @@ func TestConvertResourceToFrontend(t *testing.T) {
 	}
 	if frontend.Network == nil || frontend.Network.RXBytes != 1000 || frontend.Network.TXBytes != 2000 {
 		t.Fatalf("Network = %#v, want RX/TX set", frontend.Network)
-	}
-	if len(frontend.Alerts) != 1 || frontend.Alerts[0].ID != "a1" {
-		t.Fatalf("Alerts = %#v, want 1 alert", frontend.Alerts)
 	}
 	if frontend.CustomURL != input.CustomURL {
 		t.Fatalf("CustomURL = %q, want %q", frontend.CustomURL, input.CustomURL)
@@ -201,7 +195,7 @@ func TestConvertResourceToFrontend_UsesCanonicalEmptyCollections(t *testing.T) {
 		Identity:     &ResourceIdentityInput{},
 	})
 
-	if frontend.Tags == nil || frontend.Labels == nil || frontend.Alerts == nil {
+	if frontend.Tags == nil || frontend.Labels == nil {
 		t.Fatalf("expected resource collections to normalize, got %#v", frontend)
 	}
 	if frontend.Identity == nil || frontend.Identity.IPs == nil {
@@ -536,10 +530,15 @@ func TestHostResourceAndStorageFrontend_JSONUsesCanonicalEmptyCollections(t *tes
 	}
 
 	resource := decoded["resource"].(map[string]any)
-	for _, key := range []string{"tags", "labels", "alerts"} {
+	for _, key := range []string{"tags", "labels"} {
 		if _, ok := resource[key]; !ok {
 			t.Fatalf("resource JSON missing %q in canonical empty shape: %#v", key, resource)
 		}
+	}
+	// Open alerts reach the frontend once, through the activeAlerts map;
+	// resources do not embed a copy.
+	if _, ok := resource["alerts"]; ok {
+		t.Fatalf("resource JSON must not embed alerts: %#v", resource)
 	}
 	identity := resource["identity"].(map[string]any)
 	if _, ok := identity["ips"]; !ok {

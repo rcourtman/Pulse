@@ -2219,6 +2219,21 @@ TrueNAS dataset's state (`state:readonly`, `state:locked`, `state:unmounted`)
 because a read-only dataset raises no incident, and uses the rollup's category
 label (Resource Health Issue, Capacity Pressure) only when no reason is more
 specific.
+Those open alerts come from the websocket `activeAlerts` map through
+`getAlertsForUnifiedResource` in `frontend-modern/src/utils/alerts.ts`, which
+the Docker host drawer (`DockerHostDrawerOverview.tsx`) uses the same way.
+Unified resources carry no embedded alert list: the frontend `ResourceAlert`
+type and the backend `ResourceFrontend.alerts` / `ResourceAlertInput` path were
+retired because no producer ever filled them, which left both drawers without
+their open alerts. The matcher keys a resource on its unified id, canonical
+primary and superseded ids, Proxmox source id and metrics target (PBS, PMG,
+storage); agent and Docker hosts also answer to `agent:<id>` and
+`docker:<host source id>` and to the component alerts nested under those keys
+(disks, RAID arrays, sensors, containers, services). A health reason counts as
+stated when it is a whole sentence of an open alert's text, because a unified
+incident alert on storage with consumers joins the incident summary and its
+impact ("... above threshold. Affects 2 dependent resources: ...") and neither
+may repeat beside it.
 Machine and host overview cards that render compact system, hardware, disk,
 and temperature facts must also compose the frontend-primitives
 `InfoCardKeyValueRow`. Mobile rows retain their condensed endpoint layout;
@@ -4301,7 +4316,8 @@ and platform alert detail fields must use
 `formatPlatformAlertDetailDateTime` from
 `frontend-modern/src/utils/alertDetailPresentation.ts` instead of restoring
 table-local provider code, resource-type, entity-type, or timestamp formatter
-helpers,
+helpers (the Started cell reads as an age with the exact time as its hover
+title, the drawer keeps the exact time),
 and local operator identity labels now split from governed detail summaries:
 infrastructure tables, selectors, links, and drawer headings must preserve the
 canonical local instance identity (`displayName`, canonical display name,

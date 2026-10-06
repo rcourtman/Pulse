@@ -1,6 +1,11 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
+  useWebSocket: () => ({ activeAlerts: {} }),
+}));
+
 vi.mock('@/components/Workloads/StackedDiskBar', () => ({
   StackedDiskBar: () => <div data-testid="stacked-disk-bar" />,
 }));

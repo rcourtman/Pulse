@@ -1048,9 +1048,6 @@ func TestMonitor_ResourcesForBroadcast_Extra(t *testing.T) {
 	if res[0].CPU == nil || res[0].Memory == nil || res[0].Network == nil {
 		t.Fatalf("expected cpu/memory/network payloads, got %#v", res[0])
 	}
-	if len(res[0].Alerts) != 0 {
-		t.Fatalf("expected no direct alert payload, got %#v", res[0].Alerts)
-	}
 	if res[0].Identity == nil || res[0].Identity.Hostname != "node1" {
 		t.Fatalf("expected identity payload to be preserved, got %#v", res[0].Identity)
 	}

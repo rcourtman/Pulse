@@ -32,6 +32,7 @@ const reconnectSpy = vi.hoisted(() => vi.fn());
 
 vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
+    activeAlerts: {},
     state: wsState,
     connected: () => true,
     initialDataReceived: () => true,

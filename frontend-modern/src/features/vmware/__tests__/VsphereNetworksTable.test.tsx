@@ -1,8 +1,13 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { VsphereNetworksTable } from '@/features/vmware/VsphereNetworksTable';
 import type { Resource } from '@/types/resource';
+
+vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
+  useWebSocket: () => ({ activeAlerts: {} }),
+}));
 
 const makeNetwork = (overrides: Partial<Resource> & Pick<Resource, 'id'>): Resource =>
   ({

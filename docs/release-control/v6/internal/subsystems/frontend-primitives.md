@@ -4355,7 +4355,12 @@ maps it to a page through `PRIMARY_PLATFORM_NAV_SCOPE_IDS` in
 with the `routing/resourceLinks.ts` path builders. It must not freeze raw
 route strings or keep its own platform alias table, because those drifted
 before: agent alerts linked to a `/machines` route that never existed, and
-TrueNAS incidents linked to Proxmox.
+TrueNAS incidents linked to Proxmox. Its fallback for alerts without platform
+metadata reads the resource type before any resource-id prefix, substring or
+message text, because a Proxmox guest id carries user-chosen cluster and node
+names and a message names the guest; those guesses sent a VM on node
+`docker-01` to the Docker page, one in a cluster named `agent` to Machines, and
+a guest named `vmware-test` to vSphere.
 
 Command palette and keyboard shortcuts moved to platform-first on 2026-05-16,
 and top-level aggregate workspace routes were retired on 2026-05-25
@@ -4993,7 +4998,12 @@ across the gateway's identity aliases, and its header status follows them, so
 it never shows "Healthy" beside an active warning; its inline detail row sets
 `whitespace-normal` because platform table cells do not wrap. The row itself
 marks the metric an alert is about instead of stacking a reason under the
-name, so it keeps the shared single-line rhythm. The remaining Overview rows are additive
+name, so it keeps the shared single-line rhythm. Drawers for unified resources
+(Machines/Infrastructure, Docker hosts) read their open alerts from the
+websocket `activeAlerts` map through `getAlertsForUnifiedResource`
+(`frontend-modern/src/utils/alerts.ts`), most severe first, never from a
+resource-embedded list, and show each alert's resource name and metric beside
+its text like the other drawers. The remaining Overview rows are additive
 operator context that the parent table row cannot carry, such as OS/runtime,
 Pulse observation or action coverage, primary reachability, protection gaps,
 pending updates, or an identified service. Routine health, placement, and
@@ -5183,6 +5193,21 @@ Docker, Kubernetes, TrueNAS, and vSphere alert tables. Those tables must call
 `formatPlatformAlertEntityType`, `formatPlatformAlertStartedAt`, and
 `formatPlatformAlertDetailDateTime` instead of declaring local formatter
 helpers.
+`formatPlatformAlertStartedAt` reads as an age ("2h ago"), because an open
+alert's Started cell answers how long it has been going on, as alert cards do;
+the absolute "Oct 6, 10:34 AM" also clipped at phone and tablet widths. Each
+table's Started cell carries `formatPlatformAlertDetailDateTime` as its hover
+title, the drawer's Started row keeps that exact time, an unset (pre-2000) or
+invalid time stays "-", and the column uses the `numeric-value` alignment kind
+on all four tables.
+Relative ages read one shared clock. `useRelativeTimeNow`
+(`frontend-modern/src/utils/relativeTimeClock.ts`) ticks every 30 seconds while
+any mounted cell reads it and stops when none do; `PlatformTableRelativeTimeValue`
+and the platform alert tables pass it as `now` to `formatRelativeTime` /
+`formatPlatformAlertStartedAt`. Platform tables keep their rows mounted across
+data refreshes, so an age computed only at render froze ("2h ago" three hours
+later) whenever its timestamp did not change. A relative-age cell must read the
+shared clock rather than `Date.now()` at render or a table-local interval.
 Read-only metadata badges follow the same primitive-owned shell rule.
 `frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
 outlined appearances, compact sizing, shape, typed tone vocabulary, fit

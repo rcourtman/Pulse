@@ -24,7 +24,19 @@ describe('describeResourceInventoryOwnership', () => {
     expect(ownerOf('vm', 'truenas')).toBe('TrueNAS');
     expect(ownerOf('vm', 'kubernetes')).toBe('Kubernetes');
     expect(ownerOf('system-container', 'docker')).toBe('container runtime');
-    expect(ownerOf('vm', 'agent')).toBe('Pulse agent');
+    expect(ownerOf('agent', 'agent')).toBe('Pulse agent');
+  });
+
+  it('keeps agent-removal copy to the agent machine, not what the agent reports', () => {
+    // libvirt VMs and Unraid arrays arrive through the agent but are not its machine.
+    for (const type of ['vm', 'storage']) {
+      const ownership = describeResourceInventoryOwnership(type, 'agent');
+      expect(ownership.ownerLabel).toBe('source system');
+      expect(ownership.retirementDescription).not.toContain('Machines');
+    }
+    expect(describeResourceInventoryOwnership('', 'agent').retirementDescription).toContain(
+      'Agent removal remains available from Machines',
+    );
   });
 
   it('accepts canonical platform keys as well as platform families', () => {

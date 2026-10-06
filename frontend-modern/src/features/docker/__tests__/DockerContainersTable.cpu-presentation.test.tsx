@@ -7,6 +7,11 @@ import type { Resource } from '@/types/resource';
 import { DockerContainersTable } from '../DockerContainersTable';
 import { CONTAINER_CPU_CAPACITY_DESCRIPTION } from '../dockerCpuPresentation';
 
+vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
+  useWebSocket: () => ({ activeAlerts: {} }),
+}));
+
 vi.mock('@/stores/license', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/stores/license')>()),
   loadRuntimeCapabilities: vi.fn(async () => undefined),

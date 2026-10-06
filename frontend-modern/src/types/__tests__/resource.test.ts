@@ -867,25 +867,6 @@ describe('Resource Interface', () => {
     expect(resource.labels).toEqual({ env: 'prod', role: 'frontend' });
   });
 
-  it('supports alerts array', () => {
-    const resource = createResource({
-      alerts: [
-        {
-          id: 'alert-1',
-          type: 'cpu',
-          level: 'warning',
-          message: 'High CPU usage',
-          value: 85,
-          threshold: 80,
-          startTime: Date.now(),
-        },
-      ],
-    });
-
-    expect(resource.alerts).toHaveLength(1);
-    expect(resource.alerts![0].type).toBe('cpu');
-  });
-
   it('supports identity for deduplication', () => {
     const resource = createResource({
       identity: {

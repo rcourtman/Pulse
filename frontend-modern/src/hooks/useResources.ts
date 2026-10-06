@@ -206,11 +206,6 @@ export function useResources(storeOverride?: ResourceStoreLike): UseResourcesRet
       result = result.filter((r) => r.clusterId === filter.clusterId);
     }
 
-    // Filter by alerts
-    if (filter.hasAlerts) {
-      result = result.filter((r) => r.alerts && r.alerts.length > 0);
-    }
-
     // Search filter (name, displayName)
     if (filter.search && filter.search.trim()) {
       const term = filter.search.toLowerCase().trim();

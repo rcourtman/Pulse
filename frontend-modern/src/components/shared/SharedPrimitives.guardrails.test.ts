@@ -2556,6 +2556,10 @@ describe('shared primitive guardrails', () => {
       expect(source).toContain('formatPlatformAlertResourceType');
       expect(source).toContain('formatPlatformAlertStartedAt');
       expect(source).toContain('formatPlatformAlertDetailDateTime');
+      // Started reads as an age on the shared clock, the exact time on hover.
+      expect(source).toContain('useRelativeTimeNow');
+      expect(source).toContain('formatPlatformAlertStartedAt(incident.startedAt, now())');
+      expect(source).toContain('title={formatPlatformAlertDetailDateTime(incident.startedAt)}');
       expect(source).not.toContain('severityVariant');
       expect(source).not.toContain('severityTextClass');
       expect(source).not.toContain('const alertTone');
@@ -6448,6 +6452,9 @@ describe('shared primitive guardrails', () => {
 
     expect(sharedPlatformPageSource).toContain('export function PlatformTableRelativeTimeValue');
     expect(sharedPlatformPageSource).toContain('formatPlatformTableRelativeTimeValue');
+    // Ages read the shared clock: rows stay mounted across refreshes, so an age
+    // computed only at render froze while its timestamp did not change.
+    expect(sharedPlatformPageSource).toContain('useRelativeTimeNow');
     expect(sharedPlatformPageSource).toContain('formatRelativeTime(value');
 
     for (const [path, source] of platformRelativeTimeConsumers) {

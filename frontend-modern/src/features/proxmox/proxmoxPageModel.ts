@@ -34,7 +34,6 @@ export type ProxmoxPageSummary = {
   pbsCount: number;
   pmgCount: number;
   cephCount: number;
-  alertCount: number;
 };
 
 export type ProxmoxPageModel = {
@@ -415,11 +414,6 @@ export function buildProxmoxPageModel(resources: Resource[]): ProxmoxPageModel {
     return a.label.localeCompare(b.label) || a.id.localeCompare(b.id);
   });
 
-  const alertCount = proxmoxResources.reduce(
-    (total, resource) => total + (resource.alerts?.length ?? 0) + (resource.incidentCount ?? 0),
-    0,
-  );
-
   return {
     resources: proxmoxResources,
     pveNodes,
@@ -448,7 +442,6 @@ export function buildProxmoxPageModel(resources: Resource[]): ProxmoxPageModel {
       pbsCount: pbs.length,
       pmgCount: pmg.length,
       cephCount: ceph.length,
-      alertCount,
     },
   };
 }

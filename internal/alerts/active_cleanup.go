@@ -341,6 +341,7 @@ func (m *Manager) ClearActiveAlerts() {
 		return
 	}
 	m.activeAlerts = make(map[string]*Alert)
+	m.restoredBackupNotifications = nil
 	m.activeAlertAlias = make(map[string]string)
 	m.core.Reset()
 	m.intentPending = make(map[string]IntentPendingState)
