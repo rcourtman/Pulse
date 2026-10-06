@@ -330,10 +330,23 @@ repair an older generated unit rather than adding a JSON-parsing wrapper.
 - Do not run guest-agent probes during backup freeze/thaw. An OK backup task
   or an absent lock does not confirm thaw.
 - See [VM Disk Monitoring](VM_DISK_MONITORING.md) for the passive host preflight;
-  it does not verify a fresh disk poll. If an affected installation needs to
-  pause monitoring, follow the [manual backup precaution](VM_DISK_MONITORING.md#pause-pulse-for-a-planned-freeze-enabled-backup).
-  It checks the server service and update timer before the backup, then requires
-  independent guest thaw confirmation before starting Pulse again.
+  it does not verify a fresh disk poll. For an affected installation, follow
+  the [manual backup precaution](VM_DISK_MONITORING.md#backup-safety) for your
+  actual server deployment: **systemd or Docker/Compose**. A planned pause is
+  **not incident recovery**, and stopping Pulse does not cancel a guest-agent
+  request already issued. If an existing operation's state is unknown, do not
+  start a backup on the strength of a stopped server or an elapsed wait.
+- Keep Pulse stopped until the backup has ended and independent post-backup
+  checks confirm **thaw, fresh successful workload writes to every filesystem
+  covered by the backup, and workload liveness**. Use established safe checks,
+  independent of Pulse and the QEMU Guest Agent; a console connection or a
+  successful read alone is not enough. If any check fails or is unavailable,
+  leave Pulse and its automatic updater paused and use the guest/platform's
+  recovery procedure, not new probes, forced writes or another backup.
+- After all checks pass, restore **only services and timers that were active
+  before the pause**, following the deployment-specific precaution. Unknown
+  pre-pause states are not permission to start them. **Pulse monitoring and
+  alerts are unavailable while stopped**; arrange independent outage coverage.
 
 #### Backup health disagrees with PBS
 
