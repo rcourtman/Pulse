@@ -466,7 +466,7 @@ class VMDiskHelpTest(unittest.TestCase):
             "sudo systemctl stop pulse.service\n"
             "systemctl show pulse.service --property=LoadState,ActiveState,MainPID",
             "sudo systemctl start pulse.service\nsystemctl is-active pulse.service",
-            "sudo systemctl start pulse-update.timer",
+            "sudo systemctl start pulse-update.timer\nsystemctl is-active pulse-update.timer",
         ])
         for block in bash_examples(guide.replace(precaution, "", 1)):
             self.assertNotRegex(block, r"\b(curl|wget|qm agent|pveum|systemctl)\b")

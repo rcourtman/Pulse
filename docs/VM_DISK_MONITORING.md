@@ -13,9 +13,12 @@ There is a [report of a VM remaining frozen despite an OK backup task](https://g
 The reported command-ID collision is not established as a reproduced cause.
 
 If your installation is affected, stop the Pulse service before the backup
-and restart it only after independently confirming the guest has thawed, using
-your existing guest console or workload checks. **Pulse monitoring and alerts
-are unavailable while it is stopped.** An OK backup task or an absent VM lock
+and keep it stopped until the backup has ended and independent checks confirm
+**thaw, fresh successful writes to every filesystem covered by the backup, and
+workload liveness**. Use your established guest-console or workload checks, not
+Pulse readings or guest-agent probes. Restore only services and timers that were
+active before the pause. **Pulse monitoring and alerts are unavailable while it
+is stopped.** An OK backup task or an absent VM lock
 does not prove thaw succeeded. This is a temporary precaution, not a claim
 that the monitoring defect is fixed.
 
@@ -81,13 +84,29 @@ in progress or an unresponsive guest, and **not an automatic backup hook**.
 
 4. **Verify the guest independently, then restore only what you paused.**
    Keep Pulse stopped until the backup has ended **and** your established
-   guest-console or workload checks confirm thaw, including **fresh successful
-   workload writes** to the filesystems covered by the backup. A console
-   connection or a successful read alone is not enough. If thaw cannot be
-   confirmed, leave Pulse stopped and use the guest/platform's recovery
-   procedure; do not repeat the backup or use guest-agent probes to test it.
+   guest-console or workload checks confirm all three: **thaw**, **fresh successful
+   workload writes to every filesystem covered by the backup**, and **workload
+   liveness**. Use evidence from **after the backup ended**, independent of Pulse
+   and the QEMU Guest Agent. A console connection or a successful read alone is
+   not enough; neither is a write to only the OS disk when the backup covers
+   other filesystems. Use the workload's normal safe checks, not forced writes,
+   test-file commands or a new freeze/thaw cycle. If any check is unavailable or
+   fails, leave Pulse stopped and use the guest/platform's recovery procedure;
+   do not repeat the backup or use guest-agent probes to test it.
 
-   Only after that confirmation, if Pulse was active beforehand:
+   Apply the recorded pre-pause states separately:
+
+   | Pulse server before pause | Update timer before pause | Restore after all safety checks pass |
+   | --- | --- | --- |
+   | Active | Active | Start Pulse and confirm it is active; then restore and check the timer. |
+   | Active | Inactive | Start Pulse and confirm it is active; leave the timer inactive. |
+   | Inactive | Active | Leave Pulse inactive. Restore the timer only if its installed updater is confirmed not to start an inactive Pulse server; otherwise keep it paused until that behaviour is resolved through normal maintenance. |
+   | Inactive | Inactive | Leave both inactive. |
+
+   If either pre-pause state is unknown, do not guess or start either unit;
+   establish the original states before restoring.
+
+   Only after all safety checks pass, if Pulse was active beforehand:
 
    ```bash
    sudo systemctl start pulse.service
@@ -96,12 +115,21 @@ in progress or an unresponsive guest, and **not an automatic backup hook**.
 
    `active` confirms service startup, not proof that polling or alerts have
    recovered. Check normal observation times in Pulse without Run Diagnostics
-   or manual guest-agent probes. Restore the update timer **only if it was
-   active beforehand**, after Pulse has started:
+   or manual guest-agent probes. If startup fails or its state is unknown, keep
+   the timer paused and resolve the startup failure through normal maintenance.
+   Restore the update timer **only if it was active beforehand**, using the
+   matching row above:
 
    ```bash
    sudo systemctl start pulse-update.timer
+   systemctl is-active pulse-update.timer
    ```
+
+   Require `active` for a timer you restored. A persistent timer may run a missed
+   update immediately, so do not restore it before the safety checks. The current
+   Pulse installer makes its updater skip an inactive Pulse server; an older or
+   customised installed unit may differ. A timer's `active` state does not prove
+   that an update or monitoring succeeded.
 
    Leave previously inactive services/timers inactive. Arrange independent
    outage coverage and repeat the precaution for each affected backup window;

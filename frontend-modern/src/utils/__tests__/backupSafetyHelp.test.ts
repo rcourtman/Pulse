@@ -19,6 +19,53 @@ function render(markdown: string, name: string): HTMLElement {
 }
 
 describe('manual backup safety help', () => {
+  it('puts the complete restart boundary in the opening backup warning', () => {
+    const opening = guide.split('### Pause Pulse for a planned freeze-enabled backup')[0];
+    const text = render(opening, 'VM_DISK_MONITORING').textContent?.replace(/\s+/g, ' ');
+    expect(text).toContain('until the backup has ended');
+    expect(text).toContain(
+      'thaw, fresh successful writes to every filesystem covered by the backup, and workload liveness',
+    );
+    expect(text).toContain('not Pulse readings or guest-agent probes');
+    expect(text).toContain('Restore only services and timers that were active before the pause');
+    expect(text).toContain('Pulse monitoring and alerts are unavailable');
+  });
+
+  it('requires post-backup evidence for every covered filesystem without manufacturing writes', () => {
+    const text = render(section, 'VM_DISK_MONITORING').textContent?.replace(/\s+/g, ' ');
+    expect(text).toContain('after the backup ended');
+    expect(text).toContain('independent of Pulse and the QEMU Guest Agent');
+    expect(text).toContain('a write to only the OS disk');
+    expect(text).toContain('not forced writes, test-file commands or a new freeze/thaw cycle');
+    expect(text).toContain('If any check is unavailable or fails, leave Pulse stopped');
+  });
+
+  it('renders each prior-state restoration choice without starting an originally inactive server', () => {
+    const rows = [...render(section, 'VM_DISK_MONITORING').querySelectorAll('tbody tr')].map(
+      (row) => [...row.querySelectorAll('td')].map((cell) => cell.textContent?.trim()),
+    );
+    expect(rows.map((row) => row.slice(0, 2))).toEqual([
+      ['Active', 'Active'],
+      ['Active', 'Inactive'],
+      ['Inactive', 'Active'],
+      ['Inactive', 'Inactive'],
+    ]);
+    expect(rows[0][2]).toContain('then restore and check the timer');
+    expect(rows[1][2]).toContain('leave the timer inactive');
+    expect(rows[2][2]).toContain('Leave Pulse inactive');
+    expect(rows[2][2]).toContain('confirmed not to start an inactive Pulse server');
+    expect(rows[2][2]).toContain('otherwise keep it paused');
+    expect(rows[3][2]).toBe('Leave both inactive.');
+    expect(words).toContain(
+      'If either pre-pause state is unknown, do not guess or start either unit',
+    );
+    expect(words).toContain('If startup fails or its state is unknown, keep the timer paused');
+    expect(words).toContain('A persistent timer may run a missed update immediately');
+    expect(words).toContain('an older or customised installed unit may differ');
+    expect(words).toContain('does not prove that an update or monitoring succeeded');
+    expect(read('install.sh')).toContain('Persistent=true');
+  });
+
   it('does not turn a FAQ disk dash into mandatory installation or unsafe recovery', () => {
     const faq = read('docs/FAQ.md');
     expect(read('frontend-modern/public/docs/FAQ.md')).toBe(faq);
@@ -122,7 +169,7 @@ describe('manual backup safety help', () => {
       'sudo systemctl stop pulse-update.timer\nsystemctl show pulse-update.timer pulse-update.service \\\n  --property=Id,LoadState,ActiveState,MainPID',
       'sudo systemctl stop pulse.service\nsystemctl show pulse.service --property=LoadState,ActiveState,MainPID',
       'sudo systemctl start pulse.service\nsystemctl is-active pulse.service',
-      'sudo systemctl start pulse-update.timer',
+      'sudo systemctl start pulse-update.timer\nsystemctl is-active pulse-update.timer',
     ]);
     // These defaults and the stopped-service condition are from the existing
     // installer, not a new service or a promise about a custom deployment.
@@ -158,7 +205,7 @@ describe('manual backup safety help', () => {
   it('does not turn a planned precaution into an incident recovery or an automatic restart hook', () => {
     expect(words).toContain('not a recovery procedure');
     expect(words).toContain('not an automatic backup hook');
-    expect(words).toContain('If thaw cannot be confirmed, leave Pulse stopped');
+    expect(words).toContain('If any check is unavailable or fails, leave Pulse stopped');
     expect(guide).toContain(
       'Do not test freeze/thaw commands, clear backup locks, disable backup freezing',
     );
