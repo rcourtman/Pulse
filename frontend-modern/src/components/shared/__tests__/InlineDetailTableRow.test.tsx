@@ -86,6 +86,76 @@ describe('InlineDetailTableRow', () => {
     });
   });
 
+  it('re-spans when a summary column is removed or restored while the row stays open', async () => {
+    const [showSystem, setShowSystem] = createSignal(true);
+    render(() => (
+      <Table>
+        <TableBody>
+          <tr>
+            <td>Machine</td>
+            <Show when={showSystem()}>
+              <td>System</td>
+            </Show>
+            <td>Seen</td>
+          </tr>
+          <InlineDetailTableRow colspan={3}>
+            <div>Column picker detail</div>
+          </InlineDetailTableRow>
+        </TableBody>
+      </Table>
+    ));
+    const detailCell = () => screen.getByText('Column picker detail').closest('td');
+
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '3'));
+    setShowSystem(false);
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '2'));
+    setShowSystem(true);
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '3'));
+    // The relayout nudge for a growing span must not leave a width behind.
+    expect(detailCell()?.style.width).toBe('');
+  });
+
+  it('re-spans when a summary cell is hidden in place while the row stays open', async () => {
+    const [hideUptime, setHideUptime] = createSignal(false);
+    render(() => (
+      <Table>
+        <TableBody>
+          <tr>
+            <td>Machine</td>
+            <td style={{ display: hideUptime() ? 'none' : undefined }}>Uptime</td>
+            <td>Seen</td>
+          </tr>
+          <InlineDetailTableRow colspan={3}>
+            <div>Hidden cell detail</div>
+          </InlineDetailTableRow>
+        </TableBody>
+      </Table>
+    ));
+    const detailCell = () => screen.getByText('Hidden cell detail').closest('td');
+
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '3'));
+    setHideUptime(true);
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '2'));
+  });
+
+  it('follows a changed requested span when there is no summary row to measure', async () => {
+    const [colspan, setColspan] = createSignal(5);
+    render(() => (
+      <Table>
+        <TableBody>
+          <InlineDetailTableRow colspan={colspan()}>
+            <div>Requested span detail</div>
+          </InlineDetailTableRow>
+        </TableBody>
+      </Table>
+    ));
+    const detailCell = () => screen.getByText('Requested span detail').closest('td');
+
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '5'));
+    setColspan(6);
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '6'));
+  });
+
   it('restores focus to the controlling disclosure when focused detail content closes', async () => {
     const Fixture = () => {
       const [open, setOpen] = createSignal(true);
