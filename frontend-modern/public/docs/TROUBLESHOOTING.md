@@ -14,9 +14,9 @@ matches how this self-hosted instance authenticates:
   Pulse administrator. If the administrator deliberately kept local login as a
   fallback, they can open the Pulse URL with `?show_local=true`; this only
   reveals the existing local form and does not reset credentials.
-- **Temporary lockout**: wait for the lockout to expire. Another signed-in
-  administrator can use the lockout reset in Pulse; password recovery is not
-  required.
+- **Temporary lockout**: wait for the displayed lockout to expire. An authorised
+  administrator can use the [manual recovery API](../SECURITY.md#manual-recovery-admin);
+  this does not reset a password or bypass SSO.
 
 #### Recover the existing local administrator login
 
@@ -190,13 +190,56 @@ origins, not a credential-bearing request or HAR file.
 ### Authentication
 
 #### "Invalid username or password" after setup
-- **Docker Compose**: Did you escape the `$` signs in your hash? Use `$$2a$$...`.
-- **Truncated Hash**: Ensure your bcrypt hash is exactly 60 characters.
+
+When the local login form reports this error, stop repeated password guesses:
+failed attempts count against both the username and client IP. Privately check
+the existing username and the active credential source. Deployment-supplied
+`PULSE_AUTH_USER` and `PULSE_AUTH_PASS` take precedence over Pulse's generated
+`.env`, so changing only that file may leave the running password unchanged.
+
+A bcrypt hash must be complete (60 characters). Compose YAML interpolation,
+Docker `--env-file` and Pulse's generated `.env` use different quoting rules;
+do not blindly replace every `$` with `$$`. Follow the
+[authentication-file guidance](CONFIGURATION.md#private-docker-authentication-file)
+for your actual source, keeping hashes and resolved deployment configuration
+private. If the password is genuinely lost, use
+[deployment-specific recovery](#i-forgot-my-password), not setup or re-enrolment.
 
 #### Cannot login / 401 Unauthorized
-- Clear browser cookies.
-- Check if your IP is locked out (wait 15 mins).
-- If another admin can log in, use `POST /api/security/reset-lockout` to clear the lockout for your username or IP.
+
+Identify which request failed before clearing cookies or changing credentials:
+
+- **Browser session:** a 401 on an ordinary UI request can mean a missing or
+  expired session, not a wrong password. Open the same public Pulse URL in a
+  fresh browser session and sign in through the configured method. Preserve any
+  working administrator session; do not clear unrelated sites' cookies.
+- **SSO or proxy login:** use the identity-provider or Pulse administrator's
+  recovery path. Check the [proxy authentication guide](PROXY_AUTH.md) when the
+  proxy signs you in but Pulse rejects the request. A local lockout reset does
+  not repair an identity-provider account or missing trusted proxy headers.
+- **Local login form:** an **Account locked** response gives the remaining wait.
+  Lockout applies separately to username and client IP, normally for 15 minutes;
+  clearing cookies does not reset it. A **Too many requests** response (429) is
+  rate limiting, not proof that the password is wrong. Wait rather than retrying
+  rapidly, restarting Pulse or disabling authentication.
+- **API client:** a missing or invalid API token can cause 401 even when browser
+  login works. Check the token's status and intended permissions privately.
+  A 403 can instead mean insufficient permissions or failed CSRF protection;
+  do not disable those checks or reset the password to repair API access. Use
+  the [private header-file examples](../SECURITY.md#usage), never a token or
+  session cookie pasted into a command or URL.
+
+Manual lockout reset requires an authenticated administrator with
+`settings:write` authority; session requests also require CSRF protection. The
+[manual recovery API](../SECURITY.md#manual-recovery-admin) resets one username
+or IP identifier at a time, not a password, SSO account or every lockout. Do not
+assume resetting the username also clears a separately locked IP.
+
+For a report, retain the time, sign-in method, redacted error, HTTP status and
+request path (without query strings). Keep passwords, hashes, cookies, tokens,
+full headers, **Copy as cURL** commands and network exports private. A 401 alone
+does not justify deleting configuration, recreating the data volume or
+re-enrolling agents.
 
 #### Audit Log verification shows unsigned events
 
