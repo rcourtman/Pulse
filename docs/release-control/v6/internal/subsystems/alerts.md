@@ -780,6 +780,25 @@ must migrate through `internal/alerts/operational_contract.go` and name their
 limited provenance honestly rather than inventing confirmed provider evidence.
 Acknowledgement remains distinct from resolution, and every resolution
 transition references recovery evidence separate from its trigger evidence.
+A resolved alert may carry a typed `AlertResolution`
+(`internal/alerts/resolution.go`) when it closed without its condition being
+observed to clear. The one reason so far, `moved_to_agent`, describes a metric
+alert whose resource's linked Pulse agent now owns the metric.
+`releaseCanonicalMetricAlert` is the disabled-threshold release extracted from
+`evaluateCanonicalMetricAlert`: a caller releasing a metric for any other
+reason passes a resolution, and `clearAlertWithResolution` stamps a copy on the
+removed alert before it is resolved. The resolved callback snapshot, the
+history row, the resolved event-log entry (the reason code, with `Summary()` as
+its message) and the Alert JSON then carry it. Resolved consumers still receive
+the close, because integrations close their incident by alert ID. The
+synthesized closing evidence carries the resolution reason and summary instead
+of `legacy_alert_recovery_projection`, and the resolve transition carries the
+summary as its `reason`. The cause stays `recovery_evidence`, the only cause
+operational trust lets enter `resolved`. A nil resolution leaves the
+disabled-threshold path and every recovery unchanged.
+`TestReleasedMetricAlertCarriesResolutionInsteadOfRecovery` and
+`TestResolvedHistoryRowKeepsResolutionWithoutEventLog` in
+`internal/alerts/operational_contract_test.go` pin this.
 
 ## Extension Points
 
