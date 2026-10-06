@@ -680,6 +680,14 @@ func TestHostAgentNodeLinkFollowsConfigAndReportOrder(t *testing.T) {
 		t.Fatalf("expected an older report not to remove the newer report's link")
 	}
 
+	olderCovering := m.beginHostAgentReport(host.ID)
+	newerRemoving := m.beginHostAgentReport(host.ID)
+	m.applyHostAgentNodeLink(hostAgentNodeLink{agentID: host.ID, nodeID: node.ID}, newerRemoving)
+	m.applyHostAgentNodeLink(covering, olderCovering)
+	if m.hasHostAgentForNode(node.ID) {
+		t.Fatalf("expected an older report not to restore ownership a newer report removed")
+	}
+
 	beforeOffline := m.beginHostAgentReport(host.ID)
 	m.HandleHostOffline(host)
 	m.applyHostAgentNodeLink(covering, beforeOffline)
@@ -721,24 +729,32 @@ func TestCheckNodeTakesBackMetricsWhenAgentUnlinks(t *testing.T) {
 // beats the per-type DiskFillByType default; otherwise the node released its
 // disk alert to an agent applying a looser per-type threshold.
 func TestHostDiskOverrideBeatsDiskFillByType(t *testing.T) {
-	m := newTestManager(t)
-	node, host := testNodeWithHostAgent()
-	m.mu.Lock()
-	m.config.Enabled = true
-	m.config.TimeThresholds = map[string]int{}
-	m.config.AgentDefaults.Disk = &HysteresisThreshold{Trigger: 90, Clear: 85}
-	m.config.DiskFillByType = map[string]HysteresisThreshold{"nvme": {Trigger: 92, Clear: 88}}
-	m.config.Overrides = map[string]ThresholdConfig{
-		node.ID: {Disk: &HysteresisThreshold{Trigger: 80, Clear: 75}},
-	}
-	m.mu.Unlock()
-	root := models.Disk{Mountpoint: "/", Device: "/dev/nvme0n1p2", Total: 100, Used: 85, Free: 15, Usage: 85}
-	host.Disks = []models.Disk{root}
+	for _, overrideOn := range []string{"linked node", "agent"} {
+		t.Run(overrideOn, func(t *testing.T) {
+			m := newTestManager(t)
+			node, host := testNodeWithHostAgent()
+			overrideID := node.ID
+			if overrideOn == "agent" {
+				overrideID = host.ID
+			}
+			m.mu.Lock()
+			m.config.Enabled = true
+			m.config.TimeThresholds = map[string]int{}
+			m.config.AgentDefaults.Disk = &HysteresisThreshold{Trigger: 90, Clear: 85}
+			m.config.DiskFillByType = map[string]HysteresisThreshold{"nvme": {Trigger: 92, Clear: 88}}
+			m.config.Overrides = map[string]ThresholdConfig{
+				overrideID: {Disk: &HysteresisThreshold{Trigger: 80, Clear: 75}},
+			}
+			m.mu.Unlock()
+			root := models.Disk{Mountpoint: "/", Device: "/dev/nvme0n1p2", Total: 100, Used: 85, Free: 15, Usage: 85}
+			host.Disks = []models.Disk{root}
 
-	m.CheckHost(host)
-	rootResourceID, _ := hostDiskResourceID(host, root)
-	if !testHasActiveAlert(t, m, canonicalMetricStateID(rootResourceID, "disk")) {
-		t.Fatalf("expected the inherited 80%% disk override to raise the agent's root disk alert at 85%%")
+			m.CheckHost(host)
+			rootResourceID, _ := hostDiskResourceID(host, root)
+			if !testHasActiveAlert(t, m, canonicalMetricStateID(rootResourceID, "disk")) {
+				t.Fatalf("expected the 80%% %s disk override to raise the agent's root disk alert at 85%%", overrideOn)
+			}
+		})
 	}
 }
 
