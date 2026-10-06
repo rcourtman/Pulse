@@ -787,6 +787,18 @@ that fast path entirely: active-alert and resolved-alert stores keep their
 own commit path, resource `alerts` facets are not in the fast-path
 allow-list, and a row whose patch touches alert-relevant structure always
 takes the full canonical merge.
+That commit path replaces each stored alert with the server's payload for its
+id instead of merging into it. A field the server omits is removed from the
+store, whether the payload came from a socket snapshot, a keyed delta, or REST
+recovery: a threshold alert restored after a restart carries no `metricStatus`
+until its next evaluation, so the previous live reading must not keep reading
+as "now"; an unacknowledge from another session clears `ackTime` and
+`ackUser`; a dropped `nodeDisplayName` or `metadata` disappears. Resolved
+alerts follow the same rule. The pending acknowledgement hold still skips a
+payload that contradicts an unconfirmed local acknowledge or unacknowledge,
+and the confirming payload then replaces the optimistic copy. Because a
+replacement reconciles the stored alert in place, local optimistic updates are
+stored as copies, so it never rewrites a record a caller keeps for rollback.
 Operational evidence and lifecycle identity are typed through
 `internal/operationaltrust`. Evidence envelopes distinguish completeness,
 confidence, permissions, freshness, correlation, and bounded provider detail.
