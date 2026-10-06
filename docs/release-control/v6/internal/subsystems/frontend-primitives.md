@@ -33,6 +33,26 @@ Patrol manual-rule confirmation keeps its title and safe Cancel/Remove controls 
 
 All drawer History fallbacks must distinguish current observations from retained, unavailable or freshness-unknown guest readings, using original memory evidence and filesystem read reasons.
 
+**Workloads rows preserve memory observation provenance.**
+
+Workloads rows use the same selected-memory qualification as both drawers.
+Retained and freshness-unknown values keep a visible cue in bars, sparklines,
+the hover History lens and host-capacity mode; compact layouts shorten only the
+visible label, not the accessible original source/time explanation. Sparkline
+accessible values never call retained, unknown or unavailable memory current.
+Unavailable numeric carriers remain N/A while recorded History stays intact.
+An independent qualified memory reading is not paused by a disk deferral.
+Neither Last seen, backup completion nor running power state renews memory.
+Unannotated unrelated platforms and actual zero readings retain their meaning.
+
+`GuestRow.test.tsx`, `MetricMiniSparkline.test.tsx` and
+`memoryObservation.test.ts` pin these boundaries, with existing drawer, adapter
+and History suites. `browser-tests/guest-row-memory-provenance.cjs` checks real
+production rows and drawers, visible/accessible labels, pointer/touch/keyboard,
+light/dark and narrow/desktop layouts using synthetic observations only.
+Presentation acceptance does not establish native thaw, covered-filesystem
+writes, guest liveness, service restoration or reporter recovery.
+
 ### Canonical drawer History preserves guest read provenance
 
 The shared resource drawer passes selected memory observation state/source/time

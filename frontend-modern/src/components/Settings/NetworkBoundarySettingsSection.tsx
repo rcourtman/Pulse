@@ -115,7 +115,7 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
           </p>
           <p id="cors-origin-limits" class="text-xs text-muted">
             Empty grants no cross-origin browser permission. * allows any origin without
-            credentialed browser access; it is not a login or proxy repair. CORS does not replace
+            credentialed browser access. It is not a login or proxy repair. CORS does not replace
             authentication, CSRF protection or TLS.
           </p>
           <div class="relative">

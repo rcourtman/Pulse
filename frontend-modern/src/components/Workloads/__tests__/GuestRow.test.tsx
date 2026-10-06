@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
@@ -919,6 +919,241 @@ describe('GuestRow', () => {
         }),
       );
       expect(container.querySelector('[data-workload-disk-read-status]')).toBeNull();
+    });
+  });
+
+  describe('memory observation provenance', () => {
+    const observedAt = '2026-09-30T11:00:00Z';
+    const observation = (state: string, date = observedAt, source = 'guest-agent-meminfo') =>
+      makeMemory({ observation: { state, source, observedAt: date } });
+    const noticeSelector = '[data-workload-memory-read-status]';
+    const history = {
+      getGuestMetricSeries: vi.fn(() => [
+        {
+          id: 'memory',
+          label: 'Memory',
+          color: '#f59e0b',
+          points: [
+            { timestamp: 1_000, value: 25 },
+            { timestamp: 2_000, value: 50 },
+          ],
+        },
+      ]),
+      getNodeMetricSeries: () => [],
+    };
+
+    beforeEach(() => {
+      vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-01T12:00:00Z'));
+    });
+
+    for (const mode of ['bars', 'sparklines'] as const) {
+      it(`labels retained memory in ${mode} without hover or a guest check`, () => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({ memory: observation('last-known'), lastSeen: '2026-10-01T12:00:00Z' }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+        });
+        const notice = container.querySelector(noticeSelector);
+        expect(notice?.querySelector('[aria-hidden]')).toHaveTextContent('Last known');
+        expect(notice?.querySelector('.sr-only')).toHaveTextContent(
+          'Last known. Source: QEMU guest agent. Observed: 2026-09-30 11:00:00 UTC. Not a current measurement.',
+        );
+        expect(notice).not.toHaveTextContent('2026-10-01');
+        expect(notice).not.toHaveAttribute('tabindex');
+        if (mode === 'sparklines') {
+          expect(
+            screen.getByRole('img', { name: 'test-vm memory history, last known 50%' }),
+          ).toBeInTheDocument();
+          expect(screen.queryByRole('img', { name: /current/ })).not.toBeInTheDocument();
+        } else {
+          expect(screen.getByTestId('memory-bar')).toHaveAttribute('data-unavailable', 'false');
+        }
+      });
+
+      it.each(['qemu', 'lxc'])(
+        `labels unannotated Proxmox %s memory freshness in ${mode}`,
+        (type) => {
+          const { container } = renderGuestRow({
+            guest: makeGuest({ type, diskStatusReason: 'prev-vm-locked' }),
+            metricDisplayMode: mode,
+            visibleColumnIds: ['name', 'memory'],
+          });
+          expect(container.querySelector(noticeSelector)).toHaveTextContent('Freshness unknown');
+          expect(container.querySelector(noticeSelector)).toHaveTextContent(
+            'Observation time unknown',
+          );
+          if (mode === 'sparklines') {
+            expect(
+              screen.getByRole('img', { name: 'test-vm memory history, freshness unknown 50%' }),
+            ).toBeInTheDocument();
+          }
+        },
+      );
+
+      it.each(['', 'not-a-date', '9999-01-01T00:00:00Z'])(
+        `does not qualify memory using an unusable current timestamp (%s) in ${mode}`,
+        (date) => {
+          const { container } = renderGuestRow({
+            guest: makeGuest({ memory: observation('current', date) }),
+            metricDisplayMode: mode,
+            visibleColumnIds: ['name', 'memory'],
+          });
+          expect(container.querySelector(noticeSelector)).toHaveTextContent('Freshness unknown');
+          expect(container.querySelector(noticeSelector)).toHaveTextContent(
+            'Observation time unknown',
+          );
+          expect(container.querySelector(noticeSelector)).not.toHaveTextContent(
+            date || 'not-a-date',
+          );
+        },
+      );
+
+      it(`hides an unavailable numeric carrier without removing recorded history in ${mode}`, () => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({ memory: observation('unavailable') }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+          metricHistory: history,
+        });
+        expect(container.querySelector(noticeSelector)).toHaveTextContent('Unavailable');
+        if (mode === 'sparklines') {
+          expect(
+            screen.getByRole('img', { name: 'test-vm memory history, unavailable N/A' }),
+          ).toBeInTheDocument();
+          expect(container.querySelector('path')?.getAttribute('d')).toContain('M');
+          expect(screen.queryByText('50%')).not.toBeInTheDocument();
+        } else {
+          expect(screen.getByTestId('memory-bar')).toHaveAttribute('data-unavailable', 'true');
+        }
+      });
+
+      it(`withdraws the ${mode} cue only for a qualified same-guest reading`, () => {
+        const [guest, setGuest] = createSignal(makeGuest({ memory: observation('last-known') }));
+        const { container } = render(() => (
+          <table>
+            <tbody>
+              <GuestRow
+                guest={guest()}
+                metricDisplayMode={mode}
+                visibleColumnIds={['name', 'memory']}
+              />
+            </tbody>
+          </table>
+        ));
+        const row = container.querySelector('tr');
+        setGuest({
+          ...guest(),
+          lastSeen: '2026-10-01T12:00:00Z',
+          backupInProgress: false,
+          lock: '',
+        });
+        expect(container.querySelector(noticeSelector)).toHaveTextContent('Last known');
+        setGuest({ ...guest(), memory: observation('current') });
+        expect(container.querySelector('tr')).toBe(row);
+        expect(container.querySelector(noticeSelector)).toBeNull();
+        if (mode === 'sparklines') {
+          expect(
+            screen.getByRole('img', { name: 'test-vm memory history, current 50%' }),
+          ).toBeInTheDocument();
+        }
+      });
+
+      it(`keeps a qualified independent memory reading current while disk reads defer in ${mode}`, () => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            memory: observation('current', observedAt, 'agent'),
+            diskStatusReason: 'prev-vm-locked',
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+        });
+        expect(container.querySelector(noticeSelector)).toBeNull();
+        if (mode === 'sparklines')
+          expect(
+            screen.getByRole('img', { name: 'test-vm memory history, current 50%' }),
+          ).toBeInTheDocument();
+      });
+
+      it(`keeps measured zero, original source and host-share freshness in ${mode}`, () => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({
+            memory: { ...observation('last-known', observedAt, 'status-mem'), used: 0, usage: 0 },
+          }),
+          metricDisplayMode: mode,
+          visibleColumnIds: ['name', 'memory'],
+          memoryDisplayBasis: 'host',
+          parentMemoryTotal: 8_589_934_592,
+        });
+        expect(container.querySelector(noticeSelector)).toHaveTextContent(
+          'Last known. Source: Proxmox',
+        );
+        if (mode === 'sparklines')
+          expect(
+            screen.getByRole('img', { name: 'test-vm host memory share history, last known 0%' }),
+          ).toBeInTheDocument();
+        else expect(screen.getByTestId('memory-bar')).toHaveAttribute('data-unavailable', 'false');
+      });
+    }
+
+    it('keeps original freshness across the real hover lens and preserves historical points', () => {
+      const { container } = renderGuestRow({
+        guest: makeGuest({ memory: observation('last-known') }),
+        metricDisplayMode: 'bars',
+        visibleColumnIds: ['name', 'memory'],
+        metricHistory: history,
+      });
+      const row = container.querySelector('tr')!;
+      fireEvent.pointerEnter(row, { pointerType: 'mouse' });
+      expect(screen.queryByTestId('memory-bar')).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('img', { name: 'test-vm memory history, last known 50%' }),
+      ).toBeInTheDocument();
+      expect(container.querySelector('path')?.getAttribute('d')).toContain('M');
+      expect(container.querySelector(noticeSelector)).toHaveTextContent('Last known');
+      fireEvent.pointerLeave(row, { pointerType: 'mouse' });
+      expect(screen.getByTestId('memory-bar')).toBeInTheDocument();
+      expect(container.querySelector(noticeSelector)).toHaveTextContent('Last known');
+    });
+
+    it.each([
+      ['last-known', 'Prior'],
+      ['future-state', 'Unknown'],
+      ['unavailable', 'N/A'],
+    ])('fits compact %s copy without losing the accessible source and time', (state, label) => {
+      const { container } = renderGuestRow({
+        guest: makeGuest({ memory: observation(state) }),
+        visibleColumnIds: ['name', 'memory'],
+        workloadTableLayoutMode: 'phone',
+      });
+      const notice = container.querySelector(noticeSelector);
+      expect(notice?.querySelector('[aria-hidden]')).toHaveTextContent(label);
+      expect(notice?.querySelector('.sr-only')).toHaveTextContent('QEMU guest agent');
+      expect(notice?.querySelector('.sr-only')).toHaveTextContent('2026-09-30 11:00:00 UTC');
+      expect(notice).not.toHaveTextContent('future-state');
+    });
+
+    it('does not expose unknown provider labels or borrow disk provenance', () => {
+      const { container } = renderGuestRow({
+        guest: makeGuest({ memory: observation('private-state', observedAt, 'private-source') }),
+        visibleColumnIds: ['name', 'memory'],
+      });
+      expect(container.querySelector(noticeSelector)).toHaveTextContent('Unknown source');
+      expect(container.querySelector(noticeSelector)).not.toHaveTextContent('private-');
+    });
+
+    it.each([
+      { type: 'vm', platformScopes: ['vmware-vsphere' as const] },
+      { type: 'docker', workloadType: 'app-container' as const, vmid: 0 },
+    ])('preserves unannotated unrelated platform memory ($type)', (scope) => {
+      const { container } = renderGuestRow({
+        guest: makeGuest(scope),
+        visibleColumnIds: ['name', 'memory'],
+        metricDisplayMode: 'sparklines',
+      });
+      expect(container.querySelector(noticeSelector)).toBeNull();
+      expect(
+        screen.getByRole('img', { name: 'test-vm memory history, current 50%' }),
+      ).toBeInTheDocument();
     });
   });
 

@@ -13,7 +13,8 @@ import {
 } from './workloadMetricHistoryModel';
 
 type MetricMiniSparklineValueLabelMode = 'inline' | 'tooltip' | 'hidden';
-export type MetricMiniSparklineValueLabelContext = 'current' | 'last known';
+export type MetricMiniSparklineValueLabelContext =
+  'current' | 'last known' | 'freshness unknown' | 'unavailable';
 
 interface MetricMiniSparklineProps {
   series: WorkloadMetricSparklineSeries[];

@@ -66,6 +66,37 @@ describe('MetricMiniSparkline', () => {
     expect(container.querySelector('path')?.getAttribute('d')).toBe(path);
   });
 
+  it.each(['freshness unknown', 'unavailable'] as const)(
+    'announces %s context without changing recorded History',
+    (context) => {
+      const { container } = render(() => (
+        <MetricMiniSparkline
+          title="Memory history"
+          valueLabel={context === 'unavailable' ? 'N/A' : '25%'}
+          valueLabelContext={context}
+          series={[
+            {
+              id: 'memory',
+              label: 'Memory',
+              color: '#f59e0b',
+              points: [
+                { timestamp: 1, value: 10 },
+                { timestamp: 2, value: 25 },
+              ],
+            },
+          ]}
+        />
+      ));
+      expect(
+        screen.getByRole('img', {
+          name: `Memory history, ${context} ${context === 'unavailable' ? 'N/A' : '25%'}`,
+        }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('img', { name: /current/ })).not.toBeInTheDocument();
+      expect(container.querySelector('path')?.getAttribute('d')).toContain('M');
+    },
+  );
+
   it('keeps the label visible when history has no renderable line', () => {
     render(() => (
       <MetricMiniSparkline
