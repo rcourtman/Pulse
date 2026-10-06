@@ -300,32 +300,99 @@ func buildClientStateDelta(previous, current *clientStateSnapshot) (map[string]i
 	return delta, nil
 }
 
+// Work on encoded object fields first. Most dashboard changes are a heartbeat
+// or one metric beside a large unchanged metadata object; decoding all nested
+// values just to discover equality costs far more than comparing owned bytes.
+// Non-identical leaves still use the exact-number semantic comparison below.
 func createJSONMergePatch(previous, current json.RawMessage) (json.RawMessage, error) {
-	previousValue, err := decodeJSONMergeValue(previous)
+	// Even equal inputs must be valid single JSON values. Snapshot producers
+	// validate their encodings, but this helper also has standalone callers.
+	if !json.Valid(previous) || !json.Valid(current) {
+		return nil, fmt.Errorf("invalid JSON merge value")
+	}
+	patch, changed, err := diffRawJSONMergeValue(previous, current)
 	if err != nil {
 		return nil, err
 	}
-	currentValue, err := decodeJSONMergeValue(current)
-	if err != nil {
-		return nil, err
-	}
-
-	patchValue, changed := diffJSONMergeValue(previousValue, currentValue)
 	if !changed {
 		return json.RawMessage(`{}`), nil
 	}
-	if patchObject, ok := patchValue.(map[string]interface{}); ok {
-		if currentObject, ok := currentValue.(map[string]interface{}); ok {
-			if id, ok := currentObject["id"]; ok {
-				patchObject["id"] = id
+	// Preserve the existing identity anchor for changed object entries.
+	if rawJSONObject(current) && rawJSONObject(patch) {
+		var object, patchObject map[string]json.RawMessage
+		if err := json.Unmarshal(current, &object); err != nil {
+			return nil, err
+		}
+		if id, ok := object["id"]; ok {
+			if err := json.Unmarshal(patch, &patchObject); err != nil {
+				return nil, err
 			}
+			patchObject["id"] = id
+			return json.Marshal(patchObject)
 		}
 	}
-	patch, err := json.Marshal(patchValue)
-	if err != nil {
-		return nil, err
-	}
 	return patch, nil
+}
+
+func rawJSONObject(value json.RawMessage) bool {
+	trimmed := bytes.TrimSpace(value)
+	return len(trimmed) > 0 && trimmed[0] == '{'
+}
+
+// Inputs here are validated by createJSONMergePatch. Raw equality is only a
+// fast positive match, never a content hash, source-ID hint or freshness test.
+func diffRawJSONMergeValue(previous, current json.RawMessage) (json.RawMessage, bool, error) {
+	if bytes.Equal(previous, current) {
+		return nil, false, nil
+	}
+	if !rawJSONObject(previous) || !rawJSONObject(current) {
+		before, err := decodeJSONMergeValue(previous)
+		if err != nil {
+			return nil, false, err
+		}
+		after, err := decodeJSONMergeValue(current)
+		if err != nil {
+			return nil, false, err
+		}
+		patch, changed := diffJSONMergeValue(before, after)
+		if !changed {
+			return nil, false, nil
+		}
+		encoded, err := json.Marshal(patch)
+		return encoded, true, err
+	}
+	var before, after map[string]json.RawMessage
+	if err := json.Unmarshal(previous, &before); err != nil {
+		return nil, false, err
+	}
+	if err := json.Unmarshal(current, &after); err != nil {
+		return nil, false, err
+	}
+	patch := make(map[string]json.RawMessage)
+	for key := range before {
+		if _, exists := after[key]; !exists {
+			patch[key] = json.RawMessage(`null`)
+		}
+	}
+	for key, value := range after {
+		old, exists := before[key]
+		if !exists {
+			patch[key] = value
+			continue
+		}
+		nested, changed, err := diffRawJSONMergeValue(old, value)
+		if err != nil {
+			return nil, false, err
+		}
+		if changed {
+			patch[key] = nested
+		}
+	}
+	if len(patch) == 0 {
+		return nil, false, nil
+	}
+	encoded, err := json.Marshal(patch)
+	return encoded, true, err
 }
 
 // A delta must preserve the authoritative encoded counters, not round them
