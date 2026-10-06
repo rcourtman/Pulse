@@ -6794,3 +6794,14 @@ matches, documentation/code controls, lookalikes and unavailable bases. Its
 downstream controls run the real audit script: the same critical fixture blocks
 a changed graph and warns only for an unchanged graph. It makes no registry
 request and does not clear an existing advisory or establish hosted acceptance.
+
+### Native Windows command verdicts (6 October 2026)
+
+The native agent and service-lifecycle workflow checks each build, version,
+self-test and lifecycle command immediately. PowerShell's final exit handling
+alone can hide an earlier native failure behind a later successful command.
+The exit regressions cover all seven boundaries and reject tolerant steps;
+Windows CI also executes the actual guards against failed and successful native
+processes, including the unguarded masking control. An unavailable local
+PowerShell is an explicit skip, not native acceptance. Installer behaviour,
+service-state exclusions and the existing lifecycle checks are unchanged.
