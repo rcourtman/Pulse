@@ -1931,6 +1931,15 @@ mode, row-hover mode, history range, and first-use hint on the same state owner
 for the generic surface and the Proxmox and vSphere platform compositions;
 provider pages must not recreate a partial metric prop list that can enable
 prefetching without exposing the matching control or discovery state.
+That first-use hint clears while the pointer is over a guest row, because the
+first populated preview marks it seen. Clearing it must not unmount it or
+change the toolbar height: wherever the hint wraps the action row onto its own
+line, removing it moved the table up under the pointer and the history lens
+retargeted the next guest. `WorkloadsFilter.tsx` therefore keeps the cleared
+hint mounted but `invisible` wherever the desktop History controls render,
+for as long as row hover stays in bars + history mode. Leaving that mode or
+remounting the filter releases the box. `WorkloadsFilter.test.tsx` pins the
+retained node and its release on a switch to Trends.
 
 The alert-bridge patrol-trigger callback wired in `internal/api/router.go` now
 short-circuits before queuing a scoped patrol when a firing alert does not meet
