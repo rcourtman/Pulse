@@ -895,8 +895,11 @@ func TestNotificationHandlers(t *testing.T) {
 		assert.Equal(t, 200, w.Code)
 		assert.NotContains(t, w.Body.String(), "app_token")
 		assert.NotContains(t, w.Body.String(), "user_token")
-		assert.Contains(t, w.Body.String(), "\"token\":\"legacy-app\"")
-		assert.Contains(t, w.Body.String(), "\"user\":\"legacy-user\"")
+		// Responses name the canonical fields but, like the list, mask their values.
+		assert.Contains(t, w.Body.String(), "\"token\":\"***REDACTED***\"")
+		assert.Contains(t, w.Body.String(), "\"user\":\"***REDACTED***\"")
+		assert.NotContains(t, w.Body.String(), "legacy-app")
+		assert.NotContains(t, w.Body.String(), "legacy-user")
 	})
 
 	t.Run("TestWebhook_UsesNotificationsOwnedTemplateSynthesis", func(t *testing.T) {
@@ -1054,8 +1057,11 @@ func TestNotificationHandlers(t *testing.T) {
 		assert.Equal(t, 200, w.Code)
 		assert.NotContains(t, w.Body.String(), "app_token")
 		assert.NotContains(t, w.Body.String(), "user_token")
-		assert.Contains(t, w.Body.String(), "\"token\":\"legacy-app\"")
-		assert.Contains(t, w.Body.String(), "\"user\":\"legacy-user\"")
+		// Responses name the canonical fields but, like the list, mask their values.
+		assert.Contains(t, w.Body.String(), "\"token\":\"***REDACTED***\"")
+		assert.Contains(t, w.Body.String(), "\"user\":\"***REDACTED***\"")
+		assert.NotContains(t, w.Body.String(), "legacy-app")
+		assert.NotContains(t, w.Body.String(), "legacy-user")
 	})
 
 	t.Run("TestNotification_InvalidJSON", func(t *testing.T) {
@@ -1382,5 +1388,168 @@ func TestNotificationHandlersWebhookSigningSecretLifecycle(t *testing.T) {
 		h.UpdateWebhook(w, req)
 		assert.Equal(t, 200, w.Code)
 		mockManager.AssertExpectations(t)
+	})
+}
+
+// The webhook editor sends back the masked values GetWebhooks returned for
+// every header, custom field and signing secret the user did not retype. Each
+// masked value must resolve to its own saved value: never to the mask itself,
+// never by discarding values typed in the same edit, and never back out in a
+// response.
+func TestWebhookMaskedValuesResolvePerKey(t *testing.T) {
+	newHandlers := func() (*NotificationHandlers, *MockNotificationManager, *MockNotificationConfigPersistence) {
+		monitor := new(MockNotificationMonitor)
+		manager := new(MockNotificationManager)
+		persistence := new(MockNotificationConfigPersistence)
+		monitor.On("GetNotificationManager").Return(manager)
+		monitor.On("GetConfigPersistence").Return(persistence)
+		return NewNotificationHandlers(nil, monitor), manager, persistence
+	}
+	saved := notifications.WebhookConfig{
+		ID:            "wh-ops",
+		Name:          "Ops",
+		URL:           "https://hooks.example.com/ops",
+		Enabled:       true,
+		Service:       "pushover",
+		Headers:       map[string]string{"Authorization": "Bearer saved-token", "Content-Type": "application/json"},
+		CustomFields:  map[string]string{"token": "saved-app-token", "user": "saved-user-key"},
+		SigningSecret: "saved-signing-secret",
+	}
+	savedSecrets := []string{"saved-token", "saved-app-token", "saved-user-key", "saved-signing-secret"}
+
+	t.Run("update keeps values typed in the same edit", func(t *testing.T) {
+		h, manager, persistence := newHandlers()
+		var published notifications.WebhookConfig
+		manager.On("GetWebhooks").Return([]notifications.WebhookConfig{saved}).Once()
+		manager.On("ValidateWebhookURL", saved.URL).Return(nil).Once()
+		manager.On("UpdateWebhook", "wh-ops", mock.Anything).Run(func(args mock.Arguments) {
+			published = args.Get(1).(notifications.WebhookConfig)
+		}).Return(nil).Once()
+		persistence.On("SaveWebhooks", mock.Anything).Return(nil).Once()
+
+		body, _ := json.Marshal(map[string]interface{}{
+			"name": "Ops", "url": saved.URL, "enabled": true, "service": "pushover",
+			"headers": map[string]string{
+				"Authorization": "***REDACTED***",
+				"Content-Type":  "***REDACTED***",
+				"X-Team":        "platform",
+			},
+			"customFields":  map[string]string{"token": "***REDACTED***", "user": "new-user-key"},
+			"signingSecret": "***REDACTED***",
+		})
+		rec := httptest.NewRecorder()
+		h.UpdateWebhook(rec, httptest.NewRequest(http.MethodPut, "/api/notifications/webhooks/wh-ops", bytes.NewReader(body)))
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, map[string]string{
+			"Authorization": "Bearer saved-token",
+			"Content-Type":  "application/json",
+			"X-Team":        "platform",
+		}, published.Headers)
+		assert.Equal(t, map[string]string{"token": "saved-app-token", "user": "new-user-key"}, published.CustomFields)
+		assert.Equal(t, "saved-signing-secret", published.SigningSecret)
+		for _, secret := range append(savedSecrets, "new-user-key", "platform") {
+			assert.NotContains(t, rec.Body.String(), secret, "update response must stay masked")
+		}
+		assert.Contains(t, rec.Body.String(), `"X-Team":"***REDACTED***"`)
+	})
+
+	t.Run("update never stores the mask or a cleared header", func(t *testing.T) {
+		h, manager, persistence := newHandlers()
+		var published notifications.WebhookConfig
+		manager.On("GetWebhooks").Return([]notifications.WebhookConfig{saved}).Once()
+		manager.On("ValidateWebhookURL", saved.URL).Return(nil).Once()
+		manager.On("UpdateWebhook", "wh-ops", mock.Anything).Run(func(args mock.Arguments) {
+			published = args.Get(1).(notifications.WebhookConfig)
+		}).Return(nil).Once()
+		persistence.On("SaveWebhooks", mock.Anything).Return(nil).Once()
+
+		body, _ := json.Marshal(map[string]interface{}{
+			"name": "Ops", "url": saved.URL, "enabled": true, "service": "pushover",
+			// Content-Type cleared in the editor; X-Unknown masked but never saved.
+			"headers":      map[string]string{"Authorization": "***REDACTED***", "Content-Type": "", "X-Unknown": "***REDACTED***"},
+			"customFields": map[string]string{"token": "***REDACTED***", "user": "***REDACTED***"},
+		})
+		rec := httptest.NewRecorder()
+		h.UpdateWebhook(rec, httptest.NewRequest(http.MethodPut, "/api/notifications/webhooks/wh-ops", bytes.NewReader(body)))
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, map[string]string{"Authorization": "Bearer saved-token"}, published.Headers)
+		assert.Equal(t, "", published.SigningSecret, "an omitted signing secret is removed, as before")
+	})
+
+	t.Run("create drops masked values and responds masked", func(t *testing.T) {
+		h, manager, persistence := newHandlers()
+		var added notifications.WebhookConfig
+		manager.On("ValidateWebhookURL", "https://hooks.example.com/new").Return(nil).Once()
+		manager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once()
+		manager.On("AddWebhook", mock.Anything).Run(func(args mock.Arguments) {
+			added = args.Get(0).(notifications.WebhookConfig)
+		}).Return().Once()
+		persistence.On("SaveWebhooks", mock.Anything).Return(nil).Once()
+
+		body, _ := json.Marshal(map[string]interface{}{
+			"name": "New", "url": "https://hooks.example.com/new", "enabled": true,
+			"headers":       map[string]string{"Authorization": "***REDACTED***", "X-Api-Key": "typed-key"},
+			"signingSecret": "typed-signing-secret",
+		})
+		rec := httptest.NewRecorder()
+		h.CreateWebhook(rec, httptest.NewRequest(http.MethodPost, "/api/notifications/webhooks", bytes.NewReader(body)))
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, map[string]string{"X-Api-Key": "typed-key"}, added.Headers)
+		assert.Equal(t, "typed-signing-secret", added.SigningSecret)
+		assert.NotContains(t, rec.Body.String(), "typed-key")
+		assert.NotContains(t, rec.Body.String(), "typed-signing-secret")
+		assert.Contains(t, rec.Body.String(), `"signingSecret":"***REDACTED***"`)
+	})
+
+	t.Run("form test of a saved webhook sends its saved values", func(t *testing.T) {
+		h, manager, _ := newHandlers()
+		var tested notifications.EnhancedWebhookConfig
+		manager.On("GetWebhooks").Return([]notifications.WebhookConfig{saved}).Once()
+		manager.On("TestEnhancedWebhook", mock.Anything).Run(func(args mock.Arguments) {
+			tested = args.Get(0).(notifications.EnhancedWebhookConfig)
+		}).Return(200, "OK", nil).Once()
+		manager.On("IsEnabled").Return(true).Once()
+
+		// The edit form posts its whole state, including the saved id.
+		body, _ := json.Marshal(map[string]interface{}{
+			"id": "wh-ops", "name": "Ops", "url": saved.URL, "enabled": true, "service": "pushover",
+			"headers":       map[string]string{"Authorization": "***REDACTED***", "X-Team": "platform"},
+			"customFields":  map[string]string{"token": "***REDACTED***", "user": "***REDACTED***"},
+			"signingSecret": "***REDACTED***",
+		})
+		rec := httptest.NewRecorder()
+		h.TestWebhook(rec, httptest.NewRequest(http.MethodPost, "/api/notifications/webhooks/test", bytes.NewReader(body)))
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, "Bearer saved-token", tested.Headers["Authorization"])
+		assert.Equal(t, "platform", tested.Headers["X-Team"])
+		assert.Equal(t, "saved-app-token", tested.CustomFields["token"])
+		assert.Equal(t, "saved-user-key", tested.CustomFields["user"])
+		assert.Equal(t, "saved-signing-secret", tested.SigningSecret)
+	})
+
+	t.Run("form test of an unsaved webhook never sends the mask", func(t *testing.T) {
+		h, manager, _ := newHandlers()
+		var tested notifications.EnhancedWebhookConfig
+		manager.On("TestEnhancedWebhook", mock.Anything).Run(func(args mock.Arguments) {
+			tested = args.Get(0).(notifications.EnhancedWebhookConfig)
+		}).Return(200, "OK", nil).Once()
+		manager.On("IsEnabled").Return(true).Once()
+
+		body, _ := json.Marshal(map[string]interface{}{
+			"url":     "https://hooks.example.com/new",
+			"headers": map[string]string{"Authorization": "***REDACTED***", "X-Team": "platform"},
+		})
+		rec := httptest.NewRecorder()
+		h.TestWebhook(rec, httptest.NewRequest(http.MethodPost, "/api/notifications/webhooks/test", bytes.NewReader(body)))
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		_, hasAuthorization := tested.Headers["Authorization"]
+		assert.False(t, hasAuthorization, "a mask with no saved value must not be sent")
+		assert.Equal(t, "platform", tested.Headers["X-Team"])
+		manager.AssertNotCalled(t, "GetWebhooks")
 	})
 }

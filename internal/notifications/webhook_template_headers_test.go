@@ -205,3 +205,40 @@ func TestCustomTemplateDeliveryKeepsStoredContentType(t *testing.T) {
 		t.Fatalf("Content-Type = %q, want the stored custom value", got)
 	}
 }
+
+// A cleared header in the editor means "no header". Generic webhooks have no
+// template headers to fall back on, so an empty stored Content-Type must not
+// replace the default and leave the receiver unable to parse the JSON body.
+func TestGenericWebhookBlankStoredHeaderKeepsDefaultContentType(t *testing.T) {
+	url, captured := newWebhookCaptureServer(t)
+	m := NewNotificationManager("")
+	t.Cleanup(m.Stop)
+	if err := m.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
+		t.Fatal(err)
+	}
+	m.webhookClient = nil
+	m.AddWebhook(WebhookConfig{
+		ID:      "generic",
+		Name:    "generic",
+		URL:     url + "/hook",
+		Enabled: true,
+		Headers: map[string]string{"Content-Type": "", " ": "orphan", "X-Team": "platform"},
+	})
+	webhook := m.GetWebhooks()[0]
+	if _, ok := webhook.Headers["Content-Type"]; ok || len(webhook.Headers) != 1 {
+		t.Fatalf("blank headers survived normalization: %v", webhook.Headers)
+	}
+	if err := m.sendGroupedWebhook(webhook, contractGroupedAlerts()); err != nil {
+		t.Fatalf("grouped send: %v", err)
+	}
+	requests := captured()
+	if len(requests) != 1 {
+		t.Fatalf("captured %d requests, want 1", len(requests))
+	}
+	if got := requests[0].headers.Values("Content-Type"); len(got) != 1 || got[0] != "application/json" {
+		t.Fatalf("Content-Type = %q, want [application/json]", got)
+	}
+	if got := requests[0].headers.Get("X-Team"); got != "platform" {
+		t.Fatalf("X-Team = %q, want platform", got)
+	}
+}
