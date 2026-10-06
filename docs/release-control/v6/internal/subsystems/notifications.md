@@ -15,6 +15,28 @@
 
 ## Purpose
 
+### Saved webhook identity is consistent for editing and Test
+
+Create, Update and Test share one resolver for masked header/custom-field and
+signing-secret values. Reject missing or ambiguous saved placeholders before
+persisting, changing live destinations or sending a test request. HTTP header
+identity is case-insensitive across the complete saved map, even where an exact
+spelling is present; conflicting submitted aliases cannot depend on map order.
+Custom fields retain exact, case-sensitive identity. A saved signing secret
+must be non-empty and not itself a placeholder to satisfy a signing mask.
+
+The replacement map still honours explicit add/change/delete and omitted keys;
+cleared headers are normalized away so the sender's JSON default survives.
+List/create/update responses remain masked. Create and unsaved Test reject masks
+instead of silently dropping credentials; a valid literal create still returns
+masked values. Saved-form Test uses the same resolved edit as Update but does
+not change live configuration or encrypted persistence. Persist-before-publish,
+SSRF/TLS policy, routing/scopes, notification pause honesty and already-admitted
+queue snapshots remain unchanged. Source controls
+`TestWebhookPlaceholderBoundaryAgreement` and
+`TestWebhookSavedFormTestMatchesEncryptedEdit` complement the existing real
+ordinary-delivery/restart/grouping controls; none proves native #2540 relief.
+
 ### Delivery health reconciliation follows the complete send transition
 
 The queue's automatic send worker records the retry/dead-letter outcome and

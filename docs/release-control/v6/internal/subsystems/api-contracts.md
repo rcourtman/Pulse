@@ -20,6 +20,39 @@
 
 ## Purpose
 
+### Origin-trust reversal and consistent webhook placeholders
+
+`POST /api/system/settings/update` treats the presence of a string
+`allowedOrigins` as a patch: an explicit empty string removes saved and runtime
+CORS trust, while omission changes neither. Null is not an empty-string clear.
+Persist first; a failed save changes no runtime policy or settings cache.
+`GET /api/system/settings` reports the effective value. Deployment-owned origins
+remain authoritative: changing them returns `409 env_locked` before any save;
+the form's unchanged locked value does not replace the underlying saved value
+or prevent other settings edits. Authentication, settings scopes, CSRF, TLS,
+comma-separated exact-origin matching and embedding policy stay independent.
+`TestAllowedOriginsPatchBoundaries`, `TestAllowedOriginsSavedEffectiveLifecycle`,
+`TestAllowedOriginsSaveFailurePreservesPolicy` and
+`TestAllowedOriginsGetUsesDeploymentPolicy` bind these boundaries to the real
+handlers, middleware, persisted settings, settings reload and production config
+loader. This is source acceptance, not an installed deployment observation.
+
+Webhook Create, Update and saved-form Test use one masked-value resolver.
+`***REDACTED***` means keep the corresponding saved value, not omit the field:
+missing, masked or conflicting saved identities return `400` before saving,
+live publication or a Test send. HTTP header names share case-insensitive
+identity, including aliases alongside an exact match; custom-field keys remain
+case-sensitive. Conflicting submitted header aliases are also rejected.
+A masked signing secret needs a non-empty, non-placeholder saved secret.
+Explicit additions/changes, omitted-map replacement/removals and blank-header
+normalization retain the existing semantics; list/create/update responses stay
+masked. Unsaved forms must supply literal values rather than saved masks.
+`TestWebhookPlaceholderBoundaryAgreement` and
+`TestWebhookSavedFormTestMatchesEncryptedEdit` exercise every entry point and a
+real Test request plus encrypted edit/readback. Existing ordinary-delivery
+integration retains grouped/ungrouped firing, resolution and restart controls;
+these do not establish native Telegram acceptance or alter old queued jobs.
+
 ### Existing disk History keeps native thermal fallback reachable
 
 The authenticated disk History endpoint supplements a missing or shallow
