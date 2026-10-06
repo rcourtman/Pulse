@@ -2466,6 +2466,7 @@ None yet.
                         "frontend-modern/src/features/alerts/__tests__/AlertDeadManDestinationSection.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/AlertIncidentSynthesisSummary.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/AlertIntentPolicyPanel.test.tsx",
+                        "frontend-modern/src/features/alerts/__tests__/AlertOverviewAlertCard.system-scope.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/OverviewTab.emptystate.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/OverviewTab.timelineerror.test.tsx",
                         "frontend-modern/src/features/alerts/__tests__/OverviewTab.total24h.test.tsx",

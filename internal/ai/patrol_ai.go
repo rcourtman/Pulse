@@ -2626,6 +2626,19 @@ func patrolPrecomputeStorageSources(snap patrolRuntimeState, scopedSet map[strin
 	return rows
 }
 
+// seedAlertSubject names the alert's resource unless its message already does.
+// Provider incidents such as a vCenter alarm ("Network packet loss above
+// threshold") say only what was flagged, so without the name two resources with
+// the same alarm read as one.
+func seedAlertSubject(alert models.Alert) string {
+	message := strings.TrimSpace(alert.Message)
+	name := strings.TrimSpace(alert.ResourceName)
+	if name == "" || strings.Contains(message, name) {
+		return message
+	}
+	return name + ": " + message
+}
+
 func patrolActiveAlertsInScope(snap patrolRuntimeState, scopedSet map[string]bool) []models.Alert {
 	if scopedSet == nil {
 		return snap.ActiveAlerts
@@ -3476,7 +3489,7 @@ func (p *PatrolService) seedHealthAndAlertsState(snap patrolRuntimeState, scoped
 		sb.WriteString("# Active Alerts\n")
 		for _, a := range alerts {
 			since := seedFormatTimeAgo(now, a.StartTime)
-			sb.WriteString(fmt.Sprintf("- [%s] %s — since %s\n", a.Level, a.Message, since))
+			sb.WriteString(fmt.Sprintf("- [%s] %s — since %s\n", a.Level, seedAlertSubject(a), since))
 		}
 		sb.WriteString("\n")
 	}
@@ -3486,7 +3499,7 @@ func (p *PatrolService) seedHealthAndAlertsState(snap patrolRuntimeState, scoped
 		sb.WriteString("# Recently Resolved Alerts\n")
 		for _, r := range alerts {
 			ago := seedFormatTimeAgo(now, r.ResolvedTime)
-			sb.WriteString(fmt.Sprintf("- %s — resolved %s\n", r.Alert.Message, ago))
+			sb.WriteString(fmt.Sprintf("- %s — resolved %s\n", seedAlertSubject(r.Alert), ago))
 		}
 		sb.WriteString("\n")
 	}

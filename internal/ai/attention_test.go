@@ -246,6 +246,7 @@ func TestAttentionTitleProducesHumanReadableLabels(t *testing.T) {
 	tests := []struct {
 		name         string
 		alertType    string
+		incidentCode string
 		message      string
 		resourceName string
 		want         string
@@ -253,6 +254,47 @@ func TestAttentionTitleProducesHumanReadableLabels(t *testing.T) {
 		{
 			name:         "VMware alarm uses the actual alarm",
 			alertType:    "storage-incident",
+			incidentCode: "vmware_alarm_state",
+			message:      "Datastore latency above threshold. Affects 2 dependent resources",
+			resourceName: "archive-tier",
+			want:         "Datastore latency above threshold on archive-tier",
+		},
+		{
+			name:         "VMware alarm recorded before the alarm-name summary",
+			alertType:    "resource-incident",
+			incidentCode: "vmware_alarm_state",
+			message:      "Network network-302 has VMware alarm Network packet loss above threshold (yellow)",
+			resourceName: "Edge Stateful",
+			want:         "Network packet loss above threshold on Edge Stateful",
+		},
+		{
+			name:         "VMware alarm keeps punctuation that belongs to its name",
+			alertType:    "storage-incident",
+			incidentCode: "vmware_alarm_state",
+			message:      "Storage warning. Latency (p99) above threshold. Puts backups for 2 protected workloads at risk: db-01, db-02",
+			resourceName: "archive-tier",
+			want:         "Storage warning. Latency (p99) above threshold on archive-tier",
+		},
+		{
+			name:         "VMware alarm strips only the one appended consumer summary",
+			alertType:    "storage-incident",
+			incidentCode: "vmware_alarm_state",
+			message:      "Latency high. Affects production. Puts backups for 2 protected workloads at risk",
+			resourceName: "archive-tier",
+			want:         "Latency high. Affects production on archive-tier",
+		},
+		{
+			name:         "VMware legacy alarm strips only its final colour",
+			alertType:    "resource-incident",
+			incidentCode: "vmware_alarm_state",
+			message:      "Network network-302 has VMware alarm Storage (yellow) (red)",
+			resourceName: "Edge Stateful",
+			want:         "Storage (yellow) on Edge Stateful",
+		},
+		{
+			name:         "VMware alarm recorded before the alarm-name summary on storage",
+			alertType:    "storage-incident",
+			incidentCode: "vmware_alarm_state",
 			message:      "Datastore datastore-202 has VMware alarm Datastore latency above threshold (yellow). Affects 2 dependent resources",
 			resourceName: "archive-tier",
 			want:         "Datastore latency above threshold on archive-tier",
@@ -260,9 +302,18 @@ func TestAttentionTitleProducesHumanReadableLabels(t *testing.T) {
 		{
 			name:         "VMware host status uses product language",
 			alertType:    "resource-incident",
-			message:      "Host has VMware overall status yellow",
+			incidentCode: "vmware_health_state",
+			message:      "vCenter health is yellow",
 			resourceName: "esxi-07.lab.local",
 			want:         "VMware host health on esxi-07.lab.local",
+		},
+		{
+			name:         "VMware datastore status names the datastore",
+			alertType:    "storage-incident",
+			incidentCode: "vmware_health_state",
+			message:      "vCenter health is yellow",
+			resourceName: "edge-cold-iscsi",
+			want:         "VMware datastore health on edge-cold-iscsi",
 		},
 		{
 			name:         "generic incident avoids incident placeholder",
@@ -294,7 +345,11 @@ func TestAttentionTitleProducesHumanReadableLabels(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := attentionTitle(alerts.Alert{Type: test.alertType, Message: test.message}, test.resourceName)
+			alert := alerts.Alert{Type: test.alertType, Message: test.message}
+			if test.incidentCode != "" {
+				alert.Metadata = map[string]interface{}{"incidentCode": test.incidentCode}
+			}
+			got := attentionTitle(alert, test.resourceName)
 			if got != test.want {
 				t.Fatalf("attentionTitle() = %q, want %q", got, test.want)
 			}

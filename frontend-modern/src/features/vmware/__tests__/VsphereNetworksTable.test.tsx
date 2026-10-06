@@ -86,4 +86,59 @@ describe('VsphereNetworksTable', () => {
     expect(row).not.toHaveAttribute('aria-expanded');
     expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
   });
+
+  it('says why an amber network needs attention and leaves healthy rows blank', () => {
+    const healthy = makeNetwork({ id: 'VM Network' });
+    const alarmed = makeNetwork({
+      id: 'Edge Stateful',
+      status: 'degraded',
+      incidents: [
+        {
+          provider: 'vmware',
+          code: 'vmware_alarm_state',
+          severity: 'warning',
+          summary: 'Network packet loss above threshold',
+        },
+      ],
+      vmware: { entityType: 'network', overallStatus: 'yellow', activeAlarmCount: 1 },
+    });
+    const countedOnly = makeNetwork({
+      id: 'Utility Network',
+      vmware: { entityType: 'network', activeAlarmCount: 2 },
+    });
+    const red = makeNetwork({
+      id: 'Archive Network',
+      vmware: { entityType: 'network', overallStatus: 'red' },
+    });
+
+    render(() => (
+      <VsphereNetworksTable
+        networks={[healthy, alarmed, countedOnly, red]}
+        scope={[healthy, alarmed, countedOnly, red]}
+        emptyIcon={<span />}
+        emptyTitle="No networks"
+        emptyDescription="No networks"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByRole('columnheader', { name: /Health/ })).toBeInTheDocument();
+    const health = (name: string) =>
+      screen.getByText(name).closest('tr')?.querySelector('[data-vsphere-health]');
+
+    expect(health('VM Network')).toBeNull();
+    // The alarm's own name explains the dot; vCenter's yellow adds nothing.
+    expect(health('Edge Stateful')).toHaveAttribute('data-vsphere-health', 'warning');
+    expect(health('Edge Stateful')).toHaveAttribute('title', 'Network packet loss above threshold');
+    expect(health('Utility Network')).toHaveAttribute('title', '2 active vCenter alarms');
+    // The dot reads from the same classification as the reason, even when the
+    // resource status is still online.
+    const dot = (name: string) =>
+      screen.getByText(name).closest('tr')?.querySelector('span.rounded-full[title]');
+    expect(dot('Utility Network')).toHaveAttribute('title', 'Attention');
+    expect(dot('Archive Network')).toHaveClass('bg-red-500');
+    expect(dot('VM Network')).toHaveAttribute('title', 'Online');
+    expect(health('Archive Network')).toHaveAttribute('data-vsphere-health', 'danger');
+    expect(health('Archive Network')).toHaveAttribute('title', 'vCenter health is red');
+  });
 });

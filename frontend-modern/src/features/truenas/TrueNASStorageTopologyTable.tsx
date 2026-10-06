@@ -26,6 +26,11 @@ import {
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
+  PlatformIssueReason,
+  type PlatformIssue,
+  type PlatformIssueTone,
+} from '@/features/platformPage/PlatformIssueReason';
+import {
   PlatformResourceDetailToggleButton,
   PlatformResourceDetailTableRow,
   createPlatformResourceDetailState,
@@ -193,44 +198,14 @@ const DiskEnduranceCell: Component<{ row: TrueNASStorageTopologyRow }> = (props)
   );
 };
 
-const issueReasonClass = (issue: TrueNASStorageIssue): string => {
-  if (issue.status === 'attention') return 'text-amber-700 dark:text-amber-300';
-  if (issue.status === 'offline') return 'text-red-600 dark:text-red-300';
-  return 'text-muted';
+const ISSUE_TONES: Record<TrueNASStorageIssue['status'], PlatformIssueTone> = {
+  attention: 'warning',
+  offline: 'danger',
+  unknown: 'muted',
 };
 
-// The visible reason is truncated and abbreviates the rest to a count, so
-// assistive technology gets the bucket and every reason instead.
-const issueScreenReaderText = (issue: TrueNASStorageIssue): string =>
-  `${issue.label}: ${issue.reasons.map((reason) => reason.replace(/[.\s]+$/, '')).join('. ')}.`;
-
-// Healthy rows leave the Health column empty: the status dot already says
-// healthy, and a column of green pills buried the few rows that are not. An
-// exception shows why, on the row's single line (the shared platform-table
-// rhythm), with every reason on hover and in the row drawer. The colour
-// carries the bucket, so a pill repeating Attention would only take room
-// from the reason.
-const IssueSummary: Component<{ issue: TrueNASStorageIssue | null }> = (props) => (
-  <Show when={props.issue}>
-    {(issue) => (
-      <div
-        class={`flex min-w-0 items-center gap-1 text-[11px] font-medium ${issueReasonClass(issue())}`}
-        title={issue().reasons.join('\n')}
-        data-truenas-storage-health={issue().status}
-      >
-        <span aria-hidden="true" class="min-w-0 truncate">
-          {issue().reasons[0] ?? issue().label}
-        </span>
-        <Show when={issue().reasons.length > 1}>
-          <span aria-hidden="true" class="shrink-0 tabular-nums">
-            +{issue().reasons.length - 1}
-          </span>
-        </Show>
-        <span class="sr-only">{issueScreenReaderText(issue())}</span>
-      </div>
-    )}
-  </Show>
-);
+const toPlatformIssue = (issue: TrueNASStorageIssue | null): PlatformIssue | null =>
+  issue && { tone: ISSUE_TONES[issue.status], label: issue.label, reasons: issue.reasons };
 
 const HEALTH_SORT_RANK: Record<TrueNASStorageIssue['status'] | 'healthy', number> = {
   attention: 0,
@@ -592,7 +567,10 @@ export const TrueNASStorageTopologyTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
                           >
-                            <IssueSummary issue={issue()} />
+                            <PlatformIssueReason
+                              issue={toPlatformIssue(issue())}
+                              data-truenas-storage-health={issue()?.status}
+                            />
                           </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow
