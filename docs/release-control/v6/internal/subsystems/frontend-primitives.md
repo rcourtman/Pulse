@@ -4334,6 +4334,14 @@ Storage / Recovery hrefs) were deleted from
 panel and Patrol findings panel that consumed them now keep investigation
 in-place through their existing handoff buttons and inline actions. Future
 cross-surface drilldown chips must not reanimate the legacy helpers.
+An alert card's single resource link opens the owning platform's page. It
+resolves the platform through the shared `utils/sourcePlatforms.ts` resolver,
+maps it to a page through `PRIMARY_PLATFORM_NAV_SCOPE_IDS` in
+`features/platformNavigation/platformNavigationModel.ts`, and builds the href
+with the `routing/resourceLinks.ts` path builders. It must not freeze raw
+route strings or keep its own platform alias table, because those drifted
+before: agent alerts linked to a `/machines` route that never existed, and
+TrueNAS incidents linked to Proxmox.
 
 Command palette and keyboard shortcuts moved to platform-first on 2026-05-16,
 and top-level aggregate workspace routes were retired on 2026-05-25

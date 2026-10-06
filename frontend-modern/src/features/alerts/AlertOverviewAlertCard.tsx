@@ -34,6 +34,29 @@ import { ResourceMonitoringPolicyAction } from './ResourceMonitoringPolicyAction
 import { AlertSnoozeAction } from './AlertSnoozeAction';
 import { isAlertSnoozed } from './useAlertSnoozeState';
 import { isPulseSystemAlert } from '@/utils/alertScope';
+import {
+  normalizeSourcePlatformQueryValue,
+  resolvePlatformTypeFromSources,
+} from '@/utils/sourcePlatforms';
+import {
+  DOCKER_PATH,
+  KUBERNETES_PATH,
+  PROXMOX_PATH,
+  STANDALONE_PATH,
+  TRUENAS_PATH,
+  VMWARE_PATH,
+  buildDockerPath,
+  buildKubernetesPath,
+  buildProxmoxPath,
+  buildStandalonePath,
+  buildTrueNASPath,
+  buildVmwarePath,
+} from '@/routing/resourceLinks';
+import {
+  PRIMARY_PLATFORM_NAV_IDS,
+  PRIMARY_PLATFORM_NAV_SCOPE_IDS,
+  type PrimaryPlatformNavId,
+} from '@/features/platformNavigation/platformNavigationModel';
 
 interface AlertOverviewAlertCardProps {
   alert: Alert;
@@ -47,6 +70,25 @@ interface AlertOverviewAlertCardProps {
 // Delivery holds that apply to every alert at once. The overview states them
 // in one banner instead of on each card.
 const GLOBAL_DELIVERY_HOLD_REASONS = new Set(['notifications_inactive', 'notifications_disabled']);
+
+// The page that lists each primary platform's resources, keyed by nav id so
+// a new platform page cannot ship without an alert link.
+const PLATFORM_PAGE_PATHS: Record<PrimaryPlatformNavId, string> = {
+  proxmox: buildProxmoxPath(),
+  docker: buildDockerPath(),
+  kubernetes: buildKubernetesPath(),
+  truenas: buildTrueNASPath(),
+  vmware: buildVmwarePath(),
+  standalone: buildStandalonePath(),
+};
+
+const platformPagePath = (platform: string | undefined): string | undefined => {
+  if (!platform) return undefined;
+  const navId = PRIMARY_PLATFORM_NAV_IDS.find((id) =>
+    PRIMARY_PLATFORM_NAV_SCOPE_IDS[id].includes(platform),
+  );
+  return navId ? PLATFORM_PAGE_PATHS[navId] : undefined;
+};
 
 export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
   const alertKey = () => getCanonicalAlertId(props.alert);
@@ -80,40 +122,61 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
     (isAlertSnoozed(props.alert) && Boolean(props.alert.operationalRecord?.suppression?.expiresAt));
   const timelineOpen = () => props.timelineState.expandedIncidents().has(alertKey());
 
+  // Incident alerts land on canonical agent/vm/storage/network resources, so
+  // the resource type alone cannot name the platform. Their metadata carries
+  // the incident's provider and the resource's sources, which do, whatever
+  // the message says.
+  const metadataPlatform = (): string | undefined => {
+    const metadata = props.alert.metadata;
+    const explicit =
+      typeof metadata?.platformType === 'string'
+        ? normalizeSourcePlatformQueryValue(metadata.platformType)
+        : '';
+    if (explicit) return explicit;
+    const provider =
+      typeof metadata?.incidentProvider === 'string'
+        ? resolvePlatformTypeFromSources([metadata.incidentProvider])
+        : undefined;
+    if (provider) return provider;
+    const sources = Array.isArray(metadata?.resourceSources)
+      ? metadata.resourceSources.filter((source): source is string => typeof source === 'string')
+      : [];
+    return resolvePlatformTypeFromSources(sources);
+  };
+
   const resourceLink = (): string => {
+    const platformPage = platformPagePath(metadataPlatform());
+    if (platformPage) return platformPage;
     const rid = props.alert.resourceId ?? '';
     const resourceType =
       typeof props.alert.metadata?.resourceType === 'string'
         ? (props.alert.metadata.resourceType as string)
         : '';
-    // vCenter incidents land on canonical agent/vm/storage/network resources
-    // and say only what vCenter flagged, so the incident's provider names the
-    // page, ahead of the generic resource-type routes: an ESXi host is an
-    // `agent` resource that the Machines page does not list.
-    if (props.alert.metadata?.incidentProvider === 'vmware') return '/vmware/overview';
-    if (rid.startsWith('agent:') || resourceType === 'agent') return '/machines';
+    if (rid.startsWith('agent:') || resourceType === 'agent') return buildStandalonePath();
     if (
       rid.includes('docker') ||
       resourceType === 'docker-container' ||
       resourceType === 'docker-host'
     )
-      return '/docker/overview';
+      return buildDockerPath();
     if (resourceType === 'kubernetes' || resourceType.startsWith('k8s-'))
-      return '/kubernetes/overview';
+      return buildKubernetesPath();
+    if (resourceType.startsWith('truenas-')) return buildTrueNASPath();
     if (resourceType.startsWith('vmware-') || props.alert.message?.toLowerCase().includes('vmware'))
-      return '/vmware/overview';
-    return '/proxmox/overview';
+      return buildVmwarePath();
+    return buildProxmoxPath();
   };
 
   const platformTypeForPolicy = (): string | undefined => {
-    const metadataPlatform = props.alert.metadata?.platformType;
-    if (typeof metadataPlatform === 'string' && metadataPlatform.trim()) return metadataPlatform;
+    const platform = metadataPlatform();
+    if (platform) return platform;
     const link = resourceLink();
-    if (link.startsWith('/proxmox')) return 'proxmox';
-    if (link.startsWith('/docker')) return 'docker';
-    if (link.startsWith('/kubernetes')) return 'kubernetes';
-    if (link.startsWith('/vmware')) return 'vmware';
-    if (link.startsWith('/machines')) return 'agent';
+    if (link.startsWith(PROXMOX_PATH)) return 'proxmox';
+    if (link.startsWith(DOCKER_PATH)) return 'docker';
+    if (link.startsWith(KUBERNETES_PATH)) return 'kubernetes';
+    if (link.startsWith(TRUENAS_PATH)) return 'truenas';
+    if (link.startsWith(VMWARE_PATH)) return 'vmware';
+    if (link.startsWith(STANDALONE_PATH)) return 'agent';
     return undefined;
   };
 
@@ -124,7 +187,7 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
     if (resourceId.startsWith('agent:')) return 'agent';
     if (resourceId.includes('docker')) return 'app-container';
     if (resourceId.includes('k8s') || resourceId.includes('kubernetes')) return 'pod';
-    if (resourceLink() === '/proxmox/overview') return 'vm';
+    if (resourceLink() === buildProxmoxPath()) return 'vm';
     return undefined;
   };
 
