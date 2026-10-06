@@ -36,7 +36,6 @@ import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { useActiveHorizontalRailItemVisibility } from '@/components/shared/useActiveHorizontalRailItemVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
-import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import type { Resource } from '@/types/resource';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
@@ -1103,14 +1102,6 @@ export type PlatformResourceStatusFilter = 'all' | 'online' | 'degraded' | 'offl
 
 const statusDot = filterChipStatusDot;
 
-export const PLATFORM_STATUS_FILTER_OPTIONS: PlatformTableFilterOption<PlatformResourceStatusFilter>[] =
-  [
-    { value: 'all', label: 'All' },
-    { value: 'online', label: 'Online', tone: 'success', leading: statusDot('bg-emerald-500') },
-    { value: 'degraded', label: 'Degraded', tone: 'warning', leading: statusDot('bg-amber-500') },
-    { value: 'offline', label: 'Offline', tone: 'danger', leading: statusDot('bg-red-500') },
-  ];
-
 export const PLATFORM_HEALTH_FILTER_OPTIONS: PlatformTableFilterOption<PlatformResourceStatusFilter>[] =
   [
     { value: 'all', label: 'All' },
@@ -1455,70 +1446,3 @@ export function PlatformTableToolbar<T extends string | number>(props: {
     />
   );
 }
-
-export const PlatformResourceTable: Component<{
-  resources: Resource[];
-  emptyIcon: JSX.Element;
-  emptyTitle: string;
-  emptyDescription: string;
-  groupingMode?: 'grouped' | 'flat';
-  searchPlaceholder?: string;
-}> = (props) => {
-  const [expandedResourceId, setExpandedResourceId] = createSignal<string | null>(null);
-  const tableState = createPlatformTableFilterState({
-    resources: () => props.resources,
-    initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
-  });
-
-  return (
-    <Show
-      when={props.resources.length > 0}
-      fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
-        />
-      }
-    >
-      <div class="space-y-3">
-        <PlatformTableToolbar
-          search={tableState.search}
-          onSearchChange={tableState.setSearch}
-          searchPlaceholder={props.searchPlaceholder ?? 'Search rows'}
-          searchSuggestions={tableState.searchSuggestions}
-          status={tableState.status()}
-          onStatusChange={tableState.setStatus}
-          statusOptions={withPlatformStatusCounts(
-            PLATFORM_STATUS_FILTER_OPTIONS,
-            tableState.countForStatus,
-          )}
-          visible={tableState.visible()}
-          total={tableState.total()}
-          rowNoun="rows"
-          hasActiveFilters={tableState.hasActiveFilters()}
-          onResetFilters={tableState.resetFilters}
-        />
-        <Show
-          when={tableState.filtered().length > 0}
-          fallback={
-            <PlatformTableEmptyState
-              icon={props.emptyIcon}
-              title="No rows match current filters"
-              description="Adjust the search or status filter to see more rows."
-              actions={<PlatformTableResetFiltersButton onReset={tableState.resetFilters} />}
-            />
-          }
-        >
-          <UnifiedResourceTable
-            resources={tableState.filtered()}
-            expandedResourceId={expandedResourceId()}
-            onExpandedResourceChange={setExpandedResourceId}
-            groupingMode={props.groupingMode ?? 'grouped'}
-          />
-        </Show>
-      </div>
-    </Show>
-  );
-};

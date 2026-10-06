@@ -3276,9 +3276,9 @@ default` instead of fusing provider and badge text such as
     Platform-first top-level pages registered through
     `frontend-modern/src/App.tsx` must stay chrome-only and route through the
     canonical app shell: each per-platform surface owns navigation and sub-tab
-    chrome, then embeds the canonical `WorkloadsSurface`, `StorageSurface`,
-    `RecoverySurface`, or `UnifiedResourceTable` in `embedded tableOnly` mode
-    with a forced platform or source filter. Per-platform features must not
+    chrome, then embeds the canonical `WorkloadsSurface`, `StorageSurface`, or
+    `RecoverySurface` in `embedded tableOnly` mode with a forced platform or
+    source filter. Per-platform features must not
     fork their own table primitives, header layouts, or summary cards when a
     shared canonical surface already exists; new shared platform-page
     primitives live under `frontend-modern/src/features/platformPage/` so the
@@ -6284,16 +6284,10 @@ layering on the default. Tables therefore state the padding they want in their
 own classes or presentation constants instead of carrying `!px-*` overrides to
 beat the primitive. `Table.test.tsx` pins the base, single-side, important,
 `p-*`, prefixed-only and reactive cases.
-That same shared table boundary now owns CSP-safe sizing for infrastructure
-tables and metric bars. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-and `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
-must express table layout and column sizing as shared class/attribute
-presentation instead of inline `style=` maps, and
-`frontend-modern/src/components/shared/ProgressBar.tsx` must render fill width
-through DOM attributes rather than inline width styles. Infrastructure host and
-service tables may still vary by breakpoint and column family, but they must do
-so through the shared presentation owner instead of lane-local style objects
-that break the public demo CSP.
+That same shared table boundary now owns CSP-safe fill rendering for metric
+bars: `frontend-modern/src/components/shared/ProgressBar.tsx` must render fill
+width through DOM attributes rather than inline width styles that break the
+public demo CSP.
 That same shared-boundary rule applies to summary density. The shared compact
 mode on `SummaryPanel.tsx` and `SummaryMetricCard.tsx` exists for genuinely
 dense monitoring surfaces, but pages that are trying to align with the normal

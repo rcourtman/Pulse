@@ -474,15 +474,6 @@ in-place click and chevron activation over a selection.
 64. `frontend-modern/src/components/Workloads/__tests__/workloadRouteStateModel.test.ts`
 65. `frontend-modern/src/components/Workloads/__tests__/workloadUrlSyncModel.test.ts`
 66. `frontend-modern/src/components/Workloads/__tests__/workloadTopology.test.ts`
-67. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
-68. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
-69. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-70. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
-71. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
-72. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
-73. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
-74. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
-75. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
 76. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
 77. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
 78. `frontend-modern/src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx`
@@ -504,7 +495,6 @@ in-place click and chevron activation over a selection.
 94. `frontend-modern/src/components/Workloads/__tests__/workloadMetricHistoryModel.test.ts`
 95. `frontend-modern/src/components/Workloads/GuestDrawer.test.tsx`
 96. `frontend-modern/src/components/Workloads/__tests__/useGroupedTableWindowing.test.ts`
-97. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
 98. `frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts`
 99. `frontend-modern/src/components/Workloads/__tests__/useWorkloadViewportSync.test.tsx`
 100. `frontend-modern/src/utils/workloadsSummaryCache.ts`
@@ -548,16 +538,7 @@ or a measured fleet performance improvement.
 
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `unified-resources`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `unified-resources`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-3. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx` shared with `unified-resources`: the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-4. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx` shared with `unified-resources`: the unified resource PBS section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-5. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx` shared with `unified-resources`: the unified resource PMG section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-6. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx` shared with `unified-resources`: the unified resource service infrastructure card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-7. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `unified-resources`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-8. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts` shared with `unified-resources`: unified resource service row shaping and I/O emphasis are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-9. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts` shared with `unified-resources`: unified resource table state derivation, sort-cycle policy, service sorting, and responsive column layout are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 10. `frontend-modern/src/components/Infrastructure/useTableWindowing.ts` shared with `frontend-primitives`: the shared bounded table-window controller is both a canonical frontend rendering primitive and a fleet-scale scrolling hot-path boundary.
-10. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `unified-resources`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-11. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `unified-resources`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 12. `frontend-modern/src/features/platformPage/PlatformWindowedList.tsx` shared with `frontend-primitives`: the shared bounded list renderer is both a canonical platform-page primitive and a fleet-scale mounted-DOM performance boundary.
 13. `frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx` shared with `frontend-primitives`: the shared bounded table-row renderer is both a canonical platform-page primitive and a fleet-scale mounted-DOM performance boundary.
 14. `frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts` shared with `frontend-primitives`: the platform windowing controller is both a canonical frontend scroll primitive and a directional-runway performance hot path.
@@ -1060,16 +1041,6 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    `/auth/trial-activate` and `POST /api/license/trial/start` from public-path
    and CSRF inventories must stay as constant-time route-table absence rather
    than replacing the old callback with persistence-backed router probes.
-   Infrastructure host-table health explanations follow the same hot-path
-   rule. `UnifiedResourceHostTableCard.tsx` may render compact issue labels
-   from the already-materialized resource incident and storage-risk fields, but
-   it must not introduce per-row API reads, broad resource scans, storage
-   topology recomputation, or layout-measuring work just to explain warning or
-   degraded rows. Infrastructure table source derivation follows the same
-   bounded-work rule: `unifiedResourceTableStateModel.ts` must read the
-   already-materialized top-level `resource.sources` array before legacy
-   `platformData.sources` hints, and must not reconstruct platform identity by
-   scanning sibling resources or making row-time API calls.
 5. Extend workload hot-path filter, sort, grouping, and stats math through `frontend-modern/src/components/Workloads/workloadSelectors.ts`, and extend workload identity, discovery routing, and node-topology helpers through `frontend-modern/src/components/Workloads/workloadTopology.ts`, rather than duplicating selector or topology logic in `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
    Platform-owned Workloads surfaces may force a platform scope, but that
    scope must be applied before deriving host, Kubernetes context/namespace,
@@ -1749,22 +1720,16 @@ without contention or cross-delivery.
 2. Update this contract when a new protected hot path is adopted
 3. Route runtime changes through the explicit performance proof policies in `registry.json`; default fallback proof routing is not allowed
 4. Record the evidence source for any claimed performance improvement
-5. Keep wide-desktop infrastructure table layout proof on the shared owner.
-   Changes to `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
-   that affect host, PBS, or PMG desktop column widths must ship with shared
-   model verification plus desktop Playwright proof that full-width shells
-   distribute surplus width across peer columns instead of stretching only the
-   `Resource` column.
-6. Keep entitlement and runtime capability lookups on shared router/settings
+5. Keep entitlement and runtime capability lookups on shared router/settings
    hot paths bounded and request-local. AI control-level clamping in
    `internal/api/router.go` may consult the already-wired runtime entitlement
    service, but it must not add broad persistence scans, metrics fan-out, or
    external network calls to protected settings or chat request paths.
-7. Initialize and cache each organization RBAC manager once per router
+6. Initialize and cache each organization RBAC manager once per router
    lifecycle. Request handlers may reuse the cached manager but must not reopen
    or remigrate SQLite on each role or assignment request, and shutdown must
    close the owned manager set.
-8. Guest Overview filesystem provenance is local presentation over the already
+7. Guest Overview filesystem provenance is local presentation over the already
    supplied snapshot: no additional query, timer, poll, History fetch or guest
    command may be added to establish it. Its existing linear filesystem mapping
    may label retained values and omit current utilization bars; it must preserve
@@ -1823,8 +1788,8 @@ definitions with four concurrent command or REST executions. Group/subgroup
 ordering and numeric, boolean, or timestamp rendering remain one bounded
 sort-and-map over that collection and stay outside table-row and virtualized
 viewport hot paths.
-`UnifiedResourceTable.performance.contract.test.tsx` pins the resource-local
-projection and no-fetch boundary.
+`resourceDetailMappers.test.ts` pins the resource-local projection and no-fetch
+boundary.
 
 ### Workload refreshes retain one coherent paged generation
 
@@ -2717,15 +2682,6 @@ re-accumulating discovery heuristics back into the performance hot-path mapper.
 That mapper may add simple host-agent thermals rows from already-loaded sensor
 metadata, including `thermalState`, but it must not perform additional resource
 lookups, history reads, or polling work to decorate the drawer.
-The PBS service-table hot path now follows that same split: raw job arrays may
-cross the transport boundary, but
-`frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
-must collapse them into one shared `Activity` presentation via the canonical
-service-model helpers, while
-`frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
-stays a thin render shell. Future running-task visibility changes must extend
-through the shared model and accepted performance proof file instead of adding
-per-row PBS status parsing or inline job scans in the table render path.
 The Workloads disk list now follows the same pattern: the shell stays in
 `frontend-modern/src/components/Workloads/DiskList.tsx`, while disk-row
 presentation derivations and fallback tooltip/runtime wiring live in
@@ -2889,48 +2845,11 @@ precedence, reinterpret ratios above an arbitrary threshold, or replace an
 established provider history series; source authority and canonical identity
 convergence belong upstream in the unified-resource and monitoring contracts.
 
-The unified resource table hot path is now also governed as explicit
-performance-owned runtime, with shared ownership against the unified-resource
-consumer boundary. The remaining performance work is no longer top-level
-ownership ambiguity on the main Infrastructure or Workloads tables.
-The table's reactive runtime, grouping, and row-windowing owner now lives in
-`frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`,
-while pure table-state derivation, service sorting, sort-cycle policy, and
-responsive column layout now live in
-`frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`,
-and viewport-sync plus selected-row reveal behavior now live in
-`frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`,
-so future hot-path table-state changes must not fold selector derivation,
-layout policy, and scroll coordination back into one mixed owner or the render
-shell.
-The same shared layout policy now treats the phone branch as a zero-overflow
-fixed-width table rather than preserving a 640-pixel intrinsic floor. The
-shared state model must select one identity track fixed at 30 percent plus five to seven
-source-relevant health or activity tracks, normalize those widths to the
-available container, and keep the document and table shell at scroll-width
-parity. That denser phone projection remains pure model/class work: it must not
-add row-time measurement, duplicate tables, viewport listeners, or per-row
-responsive signals to the infrastructure hot path.
-That same hot-path boundary now also owns CSP-safe table sizing. Infrastructure
-host, PBS, and PMG table shells must take their layout and column sizing from
-the shared presentation owner in
-`frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
-and apply those values through classes and width/height attributes, not inline
-`style=` maps on the live table DOM. Future hot-path table work must not
-reintroduce inline width, min/max width, or row-height styles into the render
-shell just to land a local layout tweak.
-That same shared sizing contract now also owns wide-desktop width
-distribution. In full-width shells, host, PBS, and PMG tables must keep an
-explicit desktop `Resource` column width in the shared presentation owner so
-surplus width is redistributed across peer metric, source, uptime, and action
-columns instead of being dumped into the first column and wasting operator
-visible table density.
-That hot-path contract now includes policy badge rendering on resource rows.
-Policy-rich table rows must only surface a single inline summary chip for
-blocking `local-only`/`restricted` posture; non-blocking `sensitive` +
+Resource table rows that surface policy posture must show at most a single
+inline summary chip for blocking `local-only`/`restricted` posture; non-blocking `sensitive` +
 `local-first` and redaction-only metadata belongs in Data Handling, detail, and
 AI/governance surfaces instead of spending default row visual budget.
-Agentless availability evidence belongs on that same bounded row path.
+Agentless availability evidence belongs on the bounded row path.
 Any resource row carrying an `AvailabilityData` facet—whether a standalone
 `network-endpoint` or a known guest that inherited the facet through explicit
 link or IP correlation—may replace otherwise empty host metric slots with one
@@ -2960,40 +2879,28 @@ The summary API feeding that hot path must also normalize mixed-resolution
 history into equal-time summary buckets before it reaches the shell/runtime
 owners, so long-range cards do not bunch recent higher-resolution samples at
 the right edge.
-It now also includes compact resource-facet summary chips rendered next to
-policy metadata, and table-row uses must set an explicit visible chip limit
-with overflow disclosure instead of allowing mock-rich resource rows to wrap
-an unbounded badge list. Those chips must stay within the same bounded
-windowing and mounted-row budget proved by
-`UnifiedResourceTable.performance.contract.test.tsx`.
-The same facet summary contract applies to the service-resource rows inside
-the unified table as well, so PBS and PMG entries must keep the same bounded
-presentation and verification surface as the primary fleet rows. The shared
-`ResourceFacetSummary` component now owns that chip rendering path, so any
-future summary changes must preserve the same bounded row budget instead of
-forking separate table-only presentation logic. That component now also
+Compact resource-facet summary chips render through the shared
+`ResourceFacetSummary` component, whose production consumer is the detail
+drawer's change history. A table-row use must set an explicit visible chip
+limit with overflow disclosure instead of letting mock-rich rows wrap an
+unbounded badge list, and must stay within the table's bounded windowing and
+mounted-row budget rather than forking separate table-only presentation
+logic. That component now also
 consumes the shared `frontend-modern/src/utils/resourceChangePresentation.ts`
 label helper for canonical change kinds, source types, and adapter provenance
 so the chip wording stays consistent without adding extra hot-path branching.
-Host, PBS, and PMG summary rows also declare themselves as the compact touch
-disclosure target through `SummaryRowActionButton`; the shared primitive hides
-the redundant visible mobile chevron while preserving accessible disclosure
-semantics, so provider sections do not pay a separate cell-width or tap-target
-cost for an action already owned by the whole row.
 The same infrastructure hot path now also depends on the shared
 `frontend-modern/src/components/shared/ProgressBar.tsx` primitive for metric
 fill rendering. Performance-sensitive metric bars may vary by value and color,
 but they must render width through shared attribute-driven progress geometry
 instead of per-row inline width styles that break the hosted demo CSP.
-The default table hot path now scopes those summary chips to timeline and
-change-provenance badges only. Generic capability and relationship badges are
-removed from the default row surface entirely until the underlying data is
-proven populated, which preserves the fleet-table scan path and avoids
-spending hot-path visual budget on model nouns that do not yet clear the
-product bar.
-Row summaries now also prefer canonical `facetCounts` on each resource when
-they are available, so the hot path can stay within the same budget while
-still reading totals from the shared resource contract. The drawer history
+Those summary chips are scoped to timeline and change-provenance badges only.
+Generic capability and relationship badges stay off the default surface until
+the underlying data is proven populated, so no surface spends visual budget on
+model nouns that do not yet clear the product bar.
+Facet summaries fall back to canonical `facetCounts` on each resource when no
+fetched facet counts are available, reading totals from the shared resource
+contract. The drawer history
 surface reuses the same governed resource route helpers for relationship and
 related-resource links, so cross-resource navigation stays within the existing
 infrastructure surface rather than branching into custom detail-only routing.
@@ -3007,23 +2914,17 @@ investigation-first product contract instead of rendering low-signal generic
 facet sections by default.
 Governance metadata such as sensitivity and routing scope may be visible in
 the table, but it must remain on the same bounded row-windowing and mounted-row
-budget proved by `UnifiedResourceTable.performance.contract.test.tsx` rather
-than creating a separate unbounded rendering path for policy-rich fleets.
-Infrastructure cluster-header presentation must stay inside that same bounded
-row model. `unifiedResourceTableStateModel.ts` owns whether the compact
-`Cluster` chip is rendered, including suppressing it when the visible group
-name already ends in `Cluster`, so label cleanup does not add a second
-row-rendering path or per-page DOM workaround.
-The shared table and detail drawer now also render governed resource labels
-through the shared identity/display contract, which routes policy-aware
-resources through the canonical policy-aware helper and suppresses the raw
-alternate name when policy requires governed handling. That keeps the
-policy-aware label path inside the same hot-row rendering budget instead of
-adding a second display branch for redacted fleets, and the proof for that
-behavior lives in `UnifiedResourceTable.performance.contract.test.tsx`.
-The shared table now also passes the same canonical resource-label resolver
-into the detail drawer so related-resource chips in the timeline/history path
-can resolve through the canonical catalog without adding a separate
+budget rather than creating a separate unbounded rendering path for
+policy-rich fleets.
+The detail drawer now also renders governed resource labels through the
+shared identity/display contract, which routes policy-aware resources through
+the canonical policy-aware helper and suppresses the raw alternate name when
+policy requires governed handling. That keeps the policy-aware label path
+inside the same rendering budget instead of adding a second display branch for
+redacted fleets.
+Platform tables pass the canonical resource-label resolver into the detail
+drawer through `PlatformResourceDetailTableRow` so related-resource chips in
+the timeline/history path can resolve through the canonical catalog without adding a separate
 detail-only lookup branch to the hot-row path.
 The same detail drawer also uses that resolver for correlation dependency and
 dependent chips, so the investigation path does not fall back to raw IDs in
