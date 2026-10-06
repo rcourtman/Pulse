@@ -5,10 +5,11 @@
 #
 #   1. bounded strict audit when the frontend dependency graph or runner changed
 #   2. canonical completion guard (contract/verification coupling, per commit)
-#   3. guard/registry snapshot tests when the subsystem registry changed
-#   4. mutation registry audits (fail closed on unclassified API routes)
-#   5. compilation plus tests for the Go packages the outgoing commits touch
-#   6. frontend type-check when frontend-modern changed (dependencies required)
+#   3. final frontend browser receipt coverage (same range semantics as CI)
+#   4. guard/registry snapshot tests when the subsystem registry changed
+#   5. mutation registry audits (fail closed on unclassified API routes)
+#   6. compilation plus tests for the Go packages the outgoing commits touch
+#   7. frontend type-check when frontend-modern changed (dependencies required)
 #
 # Usage: scripts/dev-prepush.sh [base-ref]
 #   base-ref defaults to origin/main. Run `git fetch origin` first for an
@@ -26,7 +27,7 @@ FAILURES=0
 step() { printf '\n=== %s ===\n' "$1"; }
 fail() { printf 'FAIL: %s\n' "$1"; FAILURES=$((FAILURES + 1)); }
 
-if ! git rev-parse --verify --quiet "$BASE" >/dev/null; then
+if ! BASE_SHA=$(git rev-parse --verify --quiet "${BASE}^{commit}"); then
   echo "Base ref $BASE not found; run git fetch origin first." >&2
   exit 2
 fi
@@ -35,13 +36,20 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
   echo "Note: working tree has uncommitted changes; only committed work is checked."
 fi
 
-AHEAD=$(git rev-list --count "$BASE"..HEAD)
+HEAD_SHA=$(git rev-parse --verify HEAD)
+AHEAD=$(git rev-list --count "$BASE_SHA".."$HEAD_SHA")
 if [ "$AHEAD" -eq 0 ]; then
   echo "No commits ahead of $BASE; nothing to check."
   exit 0
 fi
 
-CHANGED=$(git diff --name-only "$BASE"...HEAD)
+# origin/main may have advanced independently. Only the outgoing branch delta
+# owes browser proof; incoming upstream content is not part of this candidate.
+if ! RANGE_BASE=$(git merge-base "$BASE_SHA" "$HEAD_SHA"); then
+  echo "Base ref $BASE has no common ancestor with HEAD; choose a base in this history." >&2
+  exit 2
+fi
+CHANGED=$(git diff --name-only "$RANGE_BASE" "$HEAD_SHA")
 CHANGED_GO=$(printf '%s\n' "$CHANGED" | grep -E '\.go$' || true)
 
 # Match Build and Test's strict audit paths. A known-rejected graph should not
@@ -78,7 +86,17 @@ while IFS= read -r commit; do
         --files-from-stdin --diff-base "${commit}^" --commit "$commit"; then
     fail "canonical completion guard @ $commit"
   fi
-done < <(git rev-list --reverse --no-merges "$BASE"..HEAD)
+done < <(git rev-list --reverse --no-merges "$BASE_SHA".."$HEAD_SHA")
+
+# Type-checking cannot establish rendered acceptance. Use the existing final
+# content guard, including receipt-only edits and merge resolutions, without
+# rebinding honest receipts to a new parent or launching a browser here.
+step "Final frontend browser evidence (CI range mode)"
+if ! python3 scripts/release_control/browser_verification_guard.py \
+    --base "$RANGE_BASE" --commit "$HEAD_SHA"; then
+  echo "Frontend browser evidence failed; remaining source checks have not run." >&2
+  exit 1
+fi
 
 if printf '%s\n' "$CHANGED" | grep -q 'docs/release-control/v6/internal/subsystems/registry.json'; then
   step "Registry snapshot tests (registry.json changed)"

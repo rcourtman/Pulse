@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -17,7 +18,7 @@ PREPUSH = ROOT / "scripts/dev-prepush.sh"
 AUDIT = ROOT / "scripts/npm-audit-retry.sh"
 
 
-class DevPrepushFrontendTest(unittest.TestCase):
+class DevPrepushFixture(unittest.TestCase):
     def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
@@ -67,6 +68,12 @@ class DevPrepushFrontendTest(unittest.TestCase):
             "'reason':os.environ.get('PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT'),"
             "'files':sys.stdin.read().splitlines()})+'\\n')\n"
             "sys.exit(int(os.environ['PREPUSH_GUARD_STATUS']))\n",
+        )
+        # Audit/type-check orchestration cases do not claim browser proof.
+        # The browser cases below replace this double with the actual guard.
+        self.write(
+            "scripts/release_control/browser_verification_guard.py",
+            "import sys\nsys.exit(0)\n",
         )
         npm = self.bin / "npm"
         npm.write_text(
@@ -144,6 +151,8 @@ class DevPrepushFrontendTest(unittest.TestCase):
         self.assertTrue(all(call["require"] == "true" for call in calls))
         self.assertEqual(guards, [])
 
+
+class DevPrepushFrontendTest(DevPrepushFixture):
     def test_changed_manifest_rejects_critical_findings(self):
         self.change("frontend-modern/package.json")
         self.env["PREPUSH_AUDIT_MODE"] = "critical"
@@ -254,6 +263,140 @@ class DevPrepushFrontendTest(unittest.TestCase):
         paths = r"^frontend-modern/package(-lock)?\.json$|^scripts/npm-audit-retry\.sh$"
         self.assertIn(paths, classification)
         self.assertIn(paths, PREPUSH.read_text())
+
+
+class DevPrepushBrowserTest(DevPrepushFixture):
+    """Real Git and receipt admission; fixture receipts are not browser runs."""
+
+    SOURCE = "frontend-modern/src/example.ts"
+
+    def setUp(self):
+        super().setUp()
+        for name in ("browser_verification_guard.py", "format_staged_frontend.py"):
+            self.write(
+                "scripts/release_control/" + name,
+                (ROOT / "scripts/release_control" / name).read_text(),
+            )
+        self.git("add", "--", "scripts/release_control")
+        self.git("commit", "--quiet", "-m", "Use real browser guard in fixture")
+        self.base = self.git("rev-parse", "HEAD").stdout.strip()
+
+    def receipt(self, paths, *, parent=None, result="passed"):
+        digests = {
+            path: hashlib.sha256((self.repo / path).read_bytes()).hexdigest()
+            for path in paths
+        }
+        fingerprint = hashlib.sha256(
+            json.dumps(digests, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()[:16]
+        path = "frontend-modern/browser-verification/" + fingerprint + ".json"
+        self.write(path, json.dumps({
+            "version": 1,
+            "base_sha": parent or self.git("rev-parse", "HEAD").stdout.strip(),
+            "verified_at": "2026-10-06T09:00:00Z",
+            "result": result,
+            "changed_paths": paths,
+            "content_sha256": digests,
+            "routes": ["/fixture"],
+            "viewports": [{"width": 1280, "height": 800}, {"width": 390, "height": 844}],
+            "states": ["simulated receipt-schema fixture, not product acceptance"],
+            "interactions": ["simulated interaction for admission tests only"],
+        }) + "\n")
+        return path
+
+    def commit_source(self, *, proof=True, parent=None):
+        self.write(self.SOURCE, "export const value = 2;\n")
+        paths = [self.SOURCE]
+        if proof:
+            paths.append(self.receipt([self.SOURCE], parent=parent))
+        self.git("add", "--", *paths)
+        self.git("commit", "--quiet", "-m", "Frontend fixture change")
+        return self.git("rev-parse", "HEAD").stdout.strip()
+
+    def assert_browser_blocked(self, result, calls, guards):
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("BLOCKED: browser verification", result.stderr)
+        self.assertNotIn("All pre-push checks passed", result.stdout)
+        # Receipt admission is cheap and precedes source compilation.
+        self.assertEqual(calls, [])
+        self.assertTrue(guards)
+
+    def test_missing_browser_proof_does_not_pass_a_successful_typecheck(self):
+        self.commit_source(proof=False)
+        self.assert_browser_blocked(*self.run_gate())
+
+    def test_valid_own_parent_receipt_is_accepted(self):
+        self.commit_source()
+        result, calls, _ = self.run_gate()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Browser verification guard passed", result.stdout)
+        self.assertEqual([call["args"] for call in calls], [["run", "type-check"]])
+
+    def test_later_edit_cannot_reuse_the_old_verified_bytes(self):
+        self.commit_source()
+        self.write(self.SOURCE, "export const value = 3;\n")
+        self.git("add", "--", self.SOURCE)
+        self.git("commit", "--quiet", "-m", "Changed bytes after fixture proof")
+        result, calls, guards = self.run_gate()
+        self.assert_browser_blocked(result, calls, guards)
+        self.assertIn("different verified content", result.stderr)
+
+    def test_receipt_for_only_one_of_two_final_files_is_insufficient(self):
+        self.commit_source()
+        self.write("frontend-modern/src/other.ts", "export const other = 2;\n")
+        self.git("add", "--", "frontend-modern/src/other.ts")
+        self.git("commit", "--quiet", "-m", "Another unverified fixture file")
+        result, calls, guards = self.run_gate()
+        self.assert_browser_blocked(result, calls, guards)
+        self.assertIn("frontend-modern/src/other.ts final content", result.stderr)
+
+    def test_receipt_with_the_wrong_parent_stays_blocked(self):
+        self.commit_source(parent="a" * 40)
+        result, calls, guards = self.run_gate()
+        self.assert_browser_blocked(result, calls, guards)
+        self.assertIn("base_sha must match", result.stderr)
+
+    def test_metadata_only_nonpassing_receipt_stays_blocked(self):
+        # A receipt-only follow-up cannot launder unverified source already
+        # in the outgoing range. With no source delta, CI intentionally skips.
+        self.commit_source(proof=False)
+        path = self.receipt([self.SOURCE], result="replace-with-passed-after-verification")
+        self.git("add", "--", path)
+        self.git("commit", "--quiet", "-m", "Nonpassing fixture receipt")
+        self.assert_browser_blocked(*self.run_gate())
+
+    def test_receipt_only_range_without_source_changes_matches_ci_skip(self):
+        path = self.receipt([self.SOURCE], result="replace-with-passed-after-verification")
+        self.git("add", "--", path)
+        self.git("commit", "--quiet", "-m", "Receipt-only fixture without source delta")
+        result, calls, _ = self.run_gate()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Browser verification guard skipped", result.stdout)
+        self.assertEqual([call["args"] for call in calls], [["run", "type-check"]])
+
+    def test_merge_preserves_original_receipt_without_rebinding(self):
+        verified = self.commit_source()
+        receipt_before = self.git("rev-parse", verified + ":frontend-modern/browser-verification").stdout
+        self.git("checkout", "--quiet", "--detach", self.base)
+        self.change("README.md")
+        unrelated = self.git("rev-parse", "HEAD").stdout.strip()
+        self.git("checkout", "--quiet", "--detach", verified)
+        self.git("merge", "--quiet", "--no-ff", "-m", "Merge fixture documentation", unrelated)
+        result, _, _ = self.run_gate()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Browser verification guard passed", result.stdout)
+        self.assertEqual(self.git("rev-parse", "HEAD:frontend-modern/browser-verification").stdout, receipt_before)
+
+    def test_diverged_upstream_does_not_require_proof_for_incoming_source(self):
+        original_base = self.base
+        upstream = self.commit_source(proof=False)
+        self.git("checkout", "--quiet", "--detach", original_base)
+        self.change("README.md")
+        self.base = upstream
+        result, calls, _ = self.run_gate(dependencies=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Browser verification guard skipped", result.stdout)
+        self.assertEqual(calls, [])
 
 
 if __name__ == "__main__":
