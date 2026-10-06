@@ -5023,6 +5023,25 @@ reported as outdated. `TestRegistryChecker_MultipleLocalRepoDigestsSuppressFalse
 `TestRegistryChecker_DigestsDiffer` cases pin the comparison. This is synthetic
 registry-transport evidence, not reporter acceptance.
 
+### A failed image inspect leaves the update status unknown
+
+Image inspect shares the 15-second per-container collection budget with the
+container inspect (sized when disk metrics are on), the one-shot stats call and
+filesystem collection, so it can time out on a busy host. It previously
+returned an empty local digest and no platform, and comparing that empty
+digest reported `UpdateAvailable: false` with no error, which the alerts
+runtime took as an affirmative clear of a pending update (#2353).
+`localImageDigestsForUpdateCheck` now falls back to the last successful
+inspect of the same image ID, kept by the registry checker and pruned to the
+images of the collected containers; an image ID names immutable content. With
+no earlier inspect the container carries no update status that cycle, which
+the server treats as unknown. A locally built image (inspect succeeds, no
+RepoDigests) keeps its existing status. `getImageRepoDigests` keeps its
+signature for its other callers.
+`TestCollectContainerKeepsUpdateStatusWhenImageInspectFails` pins both the
+fallback and the unknown case, with the registry answer seeded offline; on the
+previous code it reproduces the false no-update status.
+
 ### Forked host reports cannot bypass a base-identity removal block
 
 Host report admission resolves identity before consulting removal blocks, so a
