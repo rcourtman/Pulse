@@ -734,6 +734,11 @@ agent's SMART temperature and I/O counters as last-known values but marks them
 report replaces them. Expiry is compare-and-set on the report time the offline
 sweep judged stale, so a report admitted between that judgement and the expiry
 is never expired.
+Unraid array-inventory temperatures follow the same lease: while the host is
+offline the unified-resources adapter reports them `unavailable` with the same
+reason (`models.HostAgentStoppedReportingReason`) and leaves them out of the
+disk's risk, and the metrics-history API does not return any such retained
+disk temperature as a live point.
 
 An enabled availability target assigned to a host agent creates an
 agent-lifecycle lease for that exact target/agent pairing. First assignment

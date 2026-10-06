@@ -633,3 +633,88 @@ func TestStandbyDiskRetainedTemperatureIsNotRecordedAsHistory(t *testing.T) {
 		}
 	}
 }
+
+// An Unraid agent reports array disk temperatures in its Unraid inventory,
+// which carries no per-field provenance, and a SMART row without a temperature
+// falls back to that inventory reading. Once the agent's reporting lease
+// expires both rows stay as last-known context, so the canonical disks must say
+// the retained temperature is no longer collected. The next report collects
+// it again.
+func TestSilentUnraidAgentDiskTemperatureIsRetainedButNotCollected(t *testing.T) {
+	now := time.Now()
+	state := models.NewState()
+	report := func(seen time.Time, temperature int) {
+		state.UpsertHost(models.Host{
+			ID: "agent-tower", Hostname: "tower", Status: "online", IntervalSeconds: 30, LastSeen: seen,
+			Unraid: &models.HostUnraidStorage{ArrayStarted: true, Disks: []models.HostUnraidDisk{
+				{Name: "disk1", Device: "sdc", Role: "data", Status: "online", Serial: "UNRAID-ONLY1", Temperature: temperature},
+				{Name: "disk2", Device: "sdd", Role: "data", Status: "online", Serial: "UNRAID-SMART2", Temperature: temperature + 2},
+				{Name: "disk3", Device: "sde", Role: "data", Status: "online", Serial: "UNRAID-SAS3", Temperature: temperature + 4},
+			}},
+			// The SMART rows for disk2 and disk3 carry no temperature of their
+			// own; disk3's smartctl could not read one at all.
+			Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{
+				{Device: "/dev/sdd", Serial: "UNRAID-SMART2", Type: "sata", Health: "PASSED"},
+				{Device: "/dev/sde", Serial: "UNRAID-SAS3", Type: "sas", Health: "PASSED", Collection: &diskinventory.CollectionStatus{
+					Temperature: diskinventory.Unsupported("smartctl", "no temperature attribute"),
+				}},
+			}},
+		})
+	}
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	m := &Monitor{state: state, resourceStore: adapter, startTime: now.Add(-time.Hour)}
+	temperatures := func() map[string]diskinventory.FieldStatus {
+		t.Helper()
+		adapter.PopulateFromSnapshot(state.GetSnapshot())
+		got := make(map[string]diskinventory.FieldStatus)
+		for _, view := range adapter.PhysicalDisks() {
+			status := diskinventory.FieldStatus{}
+			if collection := view.Collection(); collection != nil {
+				status = collection.Temperature
+			}
+			if _, seen := got[view.Serial()]; seen {
+				t.Fatalf("disk %s surfaced twice", view.Serial())
+			}
+			got[view.Serial()] = status
+			wantTemperature := map[string]int{"UNRAID-ONLY1": 37, "UNRAID-SMART2": 39, "UNRAID-SAS3": 41}[view.Serial()]
+			if view.Temperature() != wantTemperature {
+				t.Fatalf("disk %s temperature = %d, want %d", view.Serial(), view.Temperature(), wantTemperature)
+			}
+		}
+		if len(got) != 3 {
+			t.Fatalf("canonical disks = %v, want the three Unraid disks", got)
+		}
+		return got
+	}
+
+	// A reporting agent's readings are collected. The inventory-only disk
+	// keeps no state of its own (it counts as collected); the SMART rows that
+	// borrow the inventory reading take its provenance.
+	collected := map[string]diskinventory.FieldStatus{
+		"UNRAID-ONLY1":  {},
+		"UNRAID-SMART2": diskinventory.Available("unraid"),
+		"UNRAID-SAS3":   diskinventory.Available("unraid"),
+	}
+	report(now, 37)
+	for serial, status := range temperatures() {
+		if status != collected[serial] {
+			t.Fatalf("reporting agent: disk %s temperature status = %+v, want %+v", serial, status, collected[serial])
+		}
+	}
+
+	state.TouchHost("agent-tower", now.Add(-hostAgentHealthWindow(30)-time.Minute))
+	m.evaluateHostAgents(now)
+	for serial, status := range temperatures() {
+		if status != diskinventory.Unavailable("unraid", "host agent stopped reporting") {
+			t.Fatalf("silent agent: disk %s retained temperature presented as collected: %+v", serial, status)
+		}
+	}
+
+	report(time.Now(), 37)
+	m.evaluateHostAgents(time.Now())
+	for serial, status := range temperatures() {
+		if status != collected[serial] {
+			t.Fatalf("resumed agent: disk %s temperature status = %+v, want collected again (%+v)", serial, status, collected[serial])
+		}
+	}
+}

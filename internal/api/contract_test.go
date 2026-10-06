@@ -65,6 +65,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/edition"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	licensetestsupport "github.com/rcourtman/pulse-go-rewrite/pkg/licensing/testsupport"
@@ -12543,6 +12544,129 @@ func TestContract_MetricsHistoryAgentTemperatureLiveFallback(t *testing.T) {
 	}
 	if len(resp.Points) != 1 || resp.Points[0].Value != 62.5 {
 		t.Fatalf("expected one live temperature point 62.5, got %+v", resp.Points)
+	}
+}
+
+// Normalization may keep a disk temperature it did not collect this time: a
+// host agent past its reporting lease, or a disk in standby. The history
+// endpoint must not return that retained value as a live point at "now", and
+// mock mode must not grow a synthetic series that ends on it. A collected
+// temperature still answers an empty range with a live point.
+func TestContract_MetricsHistoryDiskLivePointOnlyForCollectedTemperature(t *testing.T) {
+	state := models.NewState()
+	lastReport := time.Now().Add(-time.Hour)
+	state.UpsertHost(models.Host{
+		ID: "agent-silent", Hostname: "silent", Status: "online", IntervalSeconds: 30, LastSeen: lastReport,
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+			Device: "/dev/sdb", Serial: "WD-SILENT-LIVE", Type: "sata", Health: "PASSED", Temperature: 41,
+			Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")},
+		}}},
+	})
+	if _, changed := state.ExpireHostTelemetry("agent-silent", lastReport); !changed {
+		t.Fatal("the silent agent's lease expiry did not mark its SMART readings")
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(state.GetSnapshot())
+	var resources []unifiedresources.Resource
+	for _, resource := range unifiedresources.NewMonitorAdapter(registry).GetAll() {
+		if resource.Type == unifiedresources.ResourceTypePhysicalDisk {
+			resources = append(resources, resource)
+		}
+	}
+	if len(resources) != 1 || resources[0].PhysicalDisk.Temperature != 41 {
+		t.Fatalf("silent agent disk resources = %+v, want one disk retaining 41", resources)
+	}
+	staticDisk := func(serial string, temperature int, status diskinventory.FieldStatus) unifiedresources.Resource {
+		return unifiedresources.Resource{
+			ID:   "physical-disk:" + serial,
+			Type: unifiedresources.ResourceTypePhysicalDisk,
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+				Serial:      serial,
+				Temperature: temperature,
+				Collection:  &diskinventory.CollectionStatus{Temperature: status},
+			},
+			MetricsTarget: &unifiedresources.MetricsTarget{ResourceType: "disk", ResourceID: serial},
+		}
+	}
+	resources = append(resources,
+		staticDisk("WD-STANDBY-LIVE", 38, diskinventory.Unavailable("smartctl", "disk is in standby")),
+		staticDisk("WD-AWAKE-LIVE", 36, diskinventory.Available("smartctl")),
+		staticDisk("WD-ASLEEP-LIVE", 0, diskinventory.Unavailable("smartctl", "disk is in standby")),
+	)
+
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(staticPhysicalDiskResourceStore{resources: resources})
+	setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
+	setUnexportedField(t, monitor, "metricsStore", store)
+	router := &Router{monitor: monitor}
+
+	history := func(query string) (metricsHistoryResponse, map[string]json.RawMessage) {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		router.handleMetricsHistory(rec, httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=disk&"+query, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d, body=%s", query, rec.Code, rec.Body.String())
+		}
+		var single metricsHistoryResponse
+		var all struct {
+			Metrics map[string]json.RawMessage `json:"metrics"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &single); err != nil {
+			t.Fatalf("%s: decode: %v", query, err)
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &all); err != nil {
+			t.Fatalf("%s: decode metrics: %v", query, err)
+		}
+		return single, all.Metrics
+	}
+
+	for _, serial := range []string{"WD-SILENT-LIVE", "WD-STANDBY-LIVE"} {
+		resp, _ := history("resourceId=" + serial + "&metric=smart_temp&range=5m")
+		if resp.Source == "live" || len(resp.Points) != 0 {
+			t.Fatalf("%s: retained temperature served as current: source=%q points=%+v", serial, resp.Source, resp.Points)
+		}
+		if _, all := history("resourceId=" + serial + "&range=5m"); all["smart_temp"] != nil {
+			t.Fatalf("%s: retained temperature served in the all-metrics response: %s", serial, all["smart_temp"])
+		}
+	}
+	resp, _ := history("resourceId=WD-AWAKE-LIVE&metric=smart_temp&range=5m")
+	if resp.Source != "live" || len(resp.Points) != 1 || resp.Points[0].Value != 36 {
+		t.Fatalf("collected temperature not served as a live point: source=%q points=%+v", resp.Source, resp.Points)
+	}
+
+	// Mock mode pads a sparse stored series out to now from the disk's current
+	// temperature. A retained temperature is not current, so the stored
+	// samples stay as they are.
+	// Without a current reading (retained, absent, or no such disk) there is
+	// nothing to pad with, so the last stored sample is not extended either.
+	setMockModeForTest(t, true)
+	now := time.Now()
+	for _, serial := range []string{"WD-STANDBY-LIVE", "WD-ASLEEP-LIVE", "WD-REMOVED-LIVE"} {
+		store.Write("disk", serial, "smart_temp", 38, now.Add(-50*time.Minute))
+		store.Write("disk", serial, "smart_temp", 38, now.Add(-40*time.Minute))
+	}
+	store.Flush()
+	for _, serial := range []string{"WD-STANDBY-LIVE", "WD-ASLEEP-LIVE", "WD-REMOVED-LIVE"} {
+		resp, _ = history("resourceId=" + serial + "&metric=smart_temp&range=1h")
+		if resp.Source != "store" || len(resp.Points) != 2 {
+			t.Fatalf("%s: mock mode padded stored temperature history to now without a current reading: source=%q points=%d", serial, resp.Source, len(resp.Points))
+		}
+	}
+	// With nothing stored, mock mode must not seed its synthetic series from a
+	// retained temperature either. (The monitor's generic demo series for the
+	// disk ID is not derived from the disk's reading.)
+	resp, _ = history("resourceId=WD-SILENT-LIVE&metric=smart_temp&range=1h")
+	if resp.Source == "mock_synthetic" {
+		t.Fatalf("mock mode synthesized history from a silent agent's retained temperature: points=%+v", resp.Points)
+	}
+	resp, _ = history("resourceId=WD-AWAKE-LIVE&metric=smart_temp&range=1h")
+	if resp.Source != "mock_synthetic" || len(resp.Points) < 2 || resp.Points[len(resp.Points)-1].Value != 36 {
+		t.Fatalf("mock mode stopped synthesizing a collected temperature: source=%q points=%+v", resp.Source, resp.Points)
 	}
 }
 
