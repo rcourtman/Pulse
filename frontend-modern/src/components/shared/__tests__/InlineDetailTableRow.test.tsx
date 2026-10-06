@@ -115,6 +115,93 @@ describe('InlineDetailTableRow', () => {
     expect(detailCell()?.style.width).toBe('');
   });
 
+  it('nudges the detail cell width once when its span grows, not when it shrinks', async () => {
+    const [showSystem, setShowSystem] = createSignal(false);
+    render(() => (
+      <Table>
+        <TableBody>
+          <tr>
+            <td>Machine</td>
+            <Show when={showSystem()}>
+              <td>System</td>
+            </Show>
+            <td>Seen</td>
+          </tr>
+          <InlineDetailTableRow colspan={3}>
+            <div>Growing span detail</div>
+          </InlineDetailTableRow>
+        </TableBody>
+      </Table>
+    ));
+    const detailCell = () => screen.getByText('Growing span detail').closest('td')!;
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '2'));
+
+    // jsdom has no layout, so record the style writes Chromium needs to
+    // recompute fixed-layout column widths for the widened cell.
+    const previousStyles: string[] = [];
+    const styleObserver = new MutationObserver((records) => {
+      for (const record of records) previousStyles.push(record.oldValue ?? '');
+    });
+    styleObserver.observe(detailCell(), {
+      attributes: true,
+      attributeFilter: ['style'],
+      attributeOldValue: true,
+    });
+
+    setShowSystem(true);
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '3'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(previousStyles.some((style) => style.includes('width: 0px'))).toBe(true);
+    expect(detailCell().style.width).toBe('');
+
+    previousStyles.length = 0;
+    setShowSystem(false);
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '2'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(previousStyles).toEqual([]);
+    styleObserver.disconnect();
+  });
+
+  it('re-measures for a summary cell span change but not for churn inside a cell', async () => {
+    const [uptimeSpan, setUptimeSpan] = createSignal(1);
+    const [reading, setReading] = createSignal({ value: '24%', tone: 'text-green-600' });
+    const [busy, setBusy] = createSignal(false);
+    render(() => (
+      <Table>
+        <TableBody>
+          <tr>
+            <td>Machine</td>
+            <td colspan={uptimeSpan()}>
+              <span class={reading().tone}>{reading().value}</span>
+              <Show when={busy()}>
+                <em>refreshing</em>
+              </Show>
+            </td>
+          </tr>
+          <InlineDetailTableRow colspan={2}>
+            <div>Live metric detail</div>
+          </InlineDetailTableRow>
+        </TableBody>
+      </Table>
+    ));
+    const detailCell = () => screen.getByText('Live metric detail').closest('td');
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '2'));
+
+    const getComputedStyleSpy = vi.spyOn(window, 'getComputedStyle');
+    try {
+      setReading({ value: '91%', tone: 'text-red-600' });
+      setBusy(true);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(getComputedStyleSpy).not.toHaveBeenCalled();
+
+      setUptimeSpan(2);
+      await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '3'));
+      expect(getComputedStyleSpy).toHaveBeenCalled();
+    } finally {
+      getComputedStyleSpy.mockRestore();
+    }
+  });
+
   it('re-spans when a summary cell is hidden in place while the row stays open', async () => {
     const [hideUptime, setHideUptime] = createSignal(false);
     render(() => (
