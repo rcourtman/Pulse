@@ -821,11 +821,11 @@ func TestMockHostAgentLeavingFixtureUsesRemovalLifecycle(t *testing.T) {
 
 	memory := models.Memory{Total: 32 << 30, Used: 30 << 30, Free: 2 << 30, Usage: 93.75}
 	kept := models.Host{ID: "host-linux-1", Hostname: "apollo-114", Status: "online", Memory: memory}
-	departed := models.Host{ID: "host-node-pve9", Hostname: "pve9", Status: "online", Memory: memory}
+	departed := models.Host{ID: "host-node-pve9", Hostname: "pve9", LinkedNodeID: "mock-cluster-1-pve9", Status: "online", Memory: memory}
 
-	monitor.evaluateMockHostAgents([]models.Host{kept, departed}, nil)
+	monitor.evaluateMockHostAgents([]models.Host{kept, departed}, nil, 1)
 	// A runtime mock config change rebuilt the estate without pve9.
-	monitor.evaluateMockHostAgents([]models.Host{kept}, nil)
+	monitor.evaluateMockHostAgents([]models.Host{kept}, nil, 2)
 
 	keptAlert := false
 	for _, alert := range manager.GetActiveAlerts() {
@@ -840,8 +840,8 @@ func TestMockHostAgentLeavingFixtureUsesRemovalLifecycle(t *testing.T) {
 		t.Fatal("agent still in the mock estate lost its memory alert")
 	}
 
-	// The departed agent's hostname deduplication is released too, so the
-	// node it was linked to owns its metric alerts again.
+	// The departed agent's node link is dropped too, so the node it was
+	// linked to owns its metric alerts again.
 	node := models.Node{
 		ID:       "mock-cluster-1-pve9",
 		Name:     "pve9",
@@ -856,4 +856,31 @@ func TestMockHostAgentLeavingFixtureUsesRemovalLifecycle(t *testing.T) {
 		}
 	}
 	t.Fatal("node pve9 raised no memory alert after its agent left the mock estate")
+}
+
+func TestMockDockerHostLeavingFixtureUsesRemovalLifecycle(t *testing.T) {
+	mustSetMockEnabled(t, true)
+	t.Cleanup(func() { mustSetMockEnabled(t, false) })
+	manager := newMockHostAlertTestManager(t)
+	monitor := &Monitor{alertManager: manager}
+
+	kept := newMockDockerHostWithExitedContainers("nebula-1-mock", "nebula-1")
+	// Nested Docker-in-LXC hosts are named after their guest's VMID, which a
+	// runtime mock config change can shift.
+	departed := newMockDockerHostWithExitedContainers("proxmox-lxc-docker:Production West:pve1:108", "pve1-ct108")
+
+	monitor.evaluateMockDockerHosts([]models.DockerHost{kept, departed}, 1)
+	monitor.evaluateMockDockerHosts([]models.DockerHost{kept, departed}, 1)
+	if ids := dockerAlertIDsForHost(manager, departed.ID); len(ids) != len(departed.Containers) {
+		t.Fatalf("departing host opened %v, want one alert per exited container", ids)
+	}
+
+	monitor.evaluateMockDockerHosts([]models.DockerHost{kept}, 2)
+
+	if ids := dockerAlertIDsForHost(manager, departed.ID); len(ids) != 0 {
+		t.Fatalf("Docker host that left the mock estate kept alerts %v", ids)
+	}
+	if ids := dockerAlertIDsForHost(manager, kept.ID); len(ids) != len(kept.Containers) {
+		t.Fatalf("Docker host still in the mock estate has alerts %v, want one per exited container", ids)
+	}
 }
