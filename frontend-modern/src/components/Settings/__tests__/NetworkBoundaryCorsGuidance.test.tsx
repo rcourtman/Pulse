@@ -46,6 +46,7 @@ describe('CORS settings guidance', () => {
     expect(input).toHaveAccessibleDescription(/without a path or trailing slash/);
     expect(input).toHaveAccessibleDescription(/Separate origins with commas/);
     expect(input).toHaveAccessibleDescription(/without credentialed browser access/);
+    expect(input).toHaveAccessibleDescription(/credentialed browser access\. It is not/);
     expect(input).toHaveAccessibleDescription(/not a login or proxy repair/);
     expect(input).toHaveAccessibleDescription(/authentication, CSRF protection or TLS/);
     expect(input).toHaveAttribute('placeholder', 'https://app.example.com:8443');
