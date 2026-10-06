@@ -9,6 +9,13 @@ vi.mock('@/components/Discovery/DiscoveryTab', () => ({
   DiscoveryTab: () => <div data-testid="docker-host-discovery" />,
 }));
 
+const wsActiveAlerts = vi.hoisted(() => ({}) as Record<string, unknown>);
+
+vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
+  useWebSocket: () => ({ activeAlerts: wsActiveAlerts }),
+}));
+
 vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
   GuestDrawerHistory: () => <div data-testid="docker-host-history" />,
   GuestDrawerHistoryRangeSelect: () => <select aria-label="History range" />,
@@ -44,6 +51,53 @@ afterEach(() => {
   cleanup();
   resetAIRuntimeState();
   vi.clearAllMocks();
+  for (const id of Object.keys(wsActiveAlerts)) delete wsActiveAlerts[id];
+});
+
+const openAlert = (id: string, resourceId: string, message: string, level = 'warning') => ({
+  id,
+  type: 'docker-service-health',
+  level,
+  resourceId,
+  resourceName: resourceId,
+  node: 'docker-1',
+  instance: 'Docker',
+  message,
+  value: 0,
+  threshold: 0,
+  startTime: '2026-10-06T10:00:00Z',
+  acknowledged: false,
+});
+
+describe('DockerHostDrawer open alerts', () => {
+  it('lists the open alerts of the host and its containers under Needs attention', () => {
+    // Docker alerts key on "docker:<host source id>" and nest containers and
+    // services under it. Resources carry no embedded alert list.
+    wsActiveAlerts.offline = openAlert(
+      'offline',
+      'docker:docker-source-1',
+      "Docker host 'Docker 1' is offline",
+      'critical',
+    );
+    wsActiveAlerts.service = openAlert(
+      'service',
+      'docker:docker-source-1/service/svc-1',
+      'Service backend-sftp has 0/2 running tasks',
+    );
+    wsActiveAlerts.elsewhere = openAlert(
+      'elsewhere',
+      'docker:docker-source-10/service/svc-1',
+      'Another host service is down',
+    );
+
+    render(() => <DockerHostDrawer host={host()} />);
+
+    const section = screen.getByTestId('drawer-attention-section');
+    expect(section).toHaveTextContent('2 active');
+    expect(section).toHaveTextContent("Docker host 'Docker 1' is offline");
+    expect(section).toHaveTextContent('Service backend-sftp has 0/2 running tasks');
+    expect(section).not.toHaveTextContent('Another host service is down');
+  });
 });
 
 describe('DockerHostDrawer Discovery availability', () => {

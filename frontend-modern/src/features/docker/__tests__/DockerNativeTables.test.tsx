@@ -17,6 +17,11 @@ import { DockerSwarmNodesTable } from '../DockerSwarmNodesTable';
 import { DockerTasksTable } from '../DockerTasksTable';
 import { DockerVolumesTable } from '../DockerVolumesTable';
 
+vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
+  useWebSocket: () => ({ activeAlerts: {} }),
+}));
+
 vi.mock('@/api/resourceActions', () => ({
   ResourceActionsAPI: {
     planAction: vi.fn().mockResolvedValue({

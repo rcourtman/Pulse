@@ -642,7 +642,7 @@ func TestFrontendNormalizeCollections_BranchCov0718(t *testing.T) {
 			t.Fatalf("Resources not preserved")
 		}
 		r := out.Resources[0]
-		if r.Tags == nil || r.Labels == nil || r.Alerts == nil {
+		if r.Tags == nil || r.Labels == nil {
 			t.Fatalf("nested ResourceFrontend collections not normalized: %+v", r)
 		}
 	})
@@ -651,8 +651,8 @@ func TestFrontendNormalizeCollections_BranchCov0718(t *testing.T) {
 	t.Run("ResourceFrontend_nil_and_nil_identity", func(t *testing.T) {
 		r := ResourceFrontend{ID: "res-1"}
 		out := r.NormalizeCollections()
-		if out.Tags == nil || out.Labels == nil || out.Alerts == nil {
-			t.Fatalf("Tags/Labels/Alerts should be non-nil after normalize")
+		if out.Tags == nil || out.Labels == nil {
+			t.Fatalf("Tags/Labels should be non-nil after normalize")
 		}
 		if out.Identity != nil {
 			t.Fatalf("Identity must remain nil when nil on input")
@@ -663,7 +663,6 @@ func TestFrontendNormalizeCollections_BranchCov0718(t *testing.T) {
 			ID:       "res-1",
 			Tags:     []string{"env:prod", "env:prod"}, // duplicate on purpose
 			Labels:   map[string]string{"team": "infra"},
-			Alerts:   []ResourceAlertFrontend{{ID: "al-1", Level: "warn"}},
 			Identity: &ResourceIdentityFrontend{Hostname: "host-1"}, // IPs nil → recursion observable
 		}
 		out := r.NormalizeCollections()
@@ -672,9 +671,6 @@ func TestFrontendNormalizeCollections_BranchCov0718(t *testing.T) {
 		}
 		if len(out.Labels) != 1 || out.Labels["team"] != "infra" {
 			t.Fatalf("Labels not preserved: %+v", out.Labels)
-		}
-		if len(out.Alerts) != 1 || out.Alerts[0].ID != "al-1" || out.Alerts[0].Level != "warn" {
-			t.Fatalf("Alerts not preserved: %+v", out.Alerts)
 		}
 		// The `if r.Identity != nil` branch must have run and recursed.
 		if out.Identity == nil {

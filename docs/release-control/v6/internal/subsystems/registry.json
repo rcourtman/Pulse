@@ -2511,6 +2511,7 @@
             "exact_files": [
               "frontend-modern/src/stores/__tests__/websocket-resilience.test.ts",
               "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
+              "frontend-modern/src/utils/__tests__/alerts.test.ts",
               "frontend-modern/src/utils/__tests__/alertsActivation.branchcov0712c.test.ts",
               "frontend-modern/src/utils/__tests__/alertsActivation.test.ts"
             ]
@@ -6360,6 +6361,7 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/dockeragent/swarm_coverage_test.go",
+              "internal/models/converters_additional_test.go",
               "internal/models/deepcopy_test.go",
               "internal/models/host_transient_expiry_test.go",
               "internal/models/issue1639_pbs_collision_test.go",

@@ -16,10 +16,13 @@ import {
   type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
 import { useResourceDetailDrawerDockerActionsState } from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
+import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource } from '@/types/resource';
+import { getAlertsForUnifiedResource } from '@/utils/alerts';
 import {
   formatBytes,
   formatRelativeTime,
@@ -169,6 +172,7 @@ export function DockerHostDrawerManagement(props: DockerHostDrawerOverviewProps)
 }
 
 export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
+  const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
   const docker = () => props.host.docker;
   const agent = () => props.host.agent;
@@ -363,10 +367,17 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
                 },
               ]
             : []),
-          ...(props.host.alerts ?? []).map((alert) => ({
+          ...getAlertsForUnifiedResource(
+            props.host,
+            activeAlerts,
+            alertsActivation.detectionEnabled(),
+          ).map((alert) => ({
             id: alert.id,
             message: alert.message,
+            subject: cleanText(alert.resourceName) || props.host.displayName || props.host.name,
+            metric: alertTypeDisplayLabel(alert.type),
             severity: alert.level,
+            acknowledged: alert.acknowledged,
           })),
         ]}
       />

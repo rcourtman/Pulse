@@ -1,4 +1,6 @@
 import type { Alert } from '@/types/api';
+import type { Resource } from '@/types/resource';
+import { getActionableAgentIdFromResource } from '@/utils/agentResources';
 import { isAlertsDetectionEnabled } from '@/utils/alertsActivation';
 
 const noAlertStyles = {
@@ -145,6 +147,77 @@ export function getAlertsForResource(
   return Object.values(activeAlerts).filter(
     (alert) => ids.has(alert.resourceId) || (nodeMatch !== undefined && alert.node === nodeMatch),
   );
+}
+
+const ALERT_LEVEL_RANK: Record<Alert['level'], number> = { critical: 0, warning: 1, info: 2 };
+
+// The alert keys one unified resource answers to. Alerts raised on the unified
+// resource itself (provider incidents, availability, TrueNAS, vSphere,
+// Kubernetes) carry its id; poller alerts carry the canonical primary id, the
+// Proxmox source id or the metrics target (PBS, PMG, storage). A machine also
+// answers to its agent ("agent:<id>") and Docker runtime ("docker:<id>") keys,
+// and its components' alerts nest under those: "agent:<id>/disk:<mount>",
+// "agent:<id>/raid:<device>", "docker:<id>/<container>".
+const getUnifiedResourceAlertKeys = (
+  resource: Resource,
+): { exact: Set<string>; machine: string[] } => {
+  const exact = new Set<string>();
+  const add = (value: string | undefined) => {
+    const trimmed = value?.trim();
+    if (trimmed) exact.add(trimmed);
+  };
+  add(resource.id);
+  add(resource.canonicalIdentity?.primaryId);
+  resource.canonicalIdentity?.supersededIds?.forEach(add);
+  add(resource.proxmox?.sourceId);
+  add(resource.metricsTarget?.resourceId);
+
+  const machine = new Set<string>();
+  if (resource.type === 'agent' || resource.type === 'docker-host') {
+    const agentId = getActionableAgentIdFromResource(resource);
+    if (agentId) machine.add(agentId.startsWith('agent:') ? agentId : `agent:${agentId}`);
+    // The backend writes the agent key of a machine reported through a linked
+    // agent (a Proxmox node, a Docker host) into the canonical aliases.
+    resource.canonicalIdentity?.aliases
+      ?.filter((alias) => alias.startsWith('agent:'))
+      .forEach((alias) => machine.add(alias));
+    // Docker hosts are "docker-host" resources or agents with a Docker runtime;
+    // the backend keys their alerts on the Docker host's source id.
+    const dockerHostId =
+      resource.docker?.hostSourceId?.trim() ||
+      (resource.metricsTarget?.resourceType === 'docker-host'
+        ? resource.metricsTarget.resourceId?.trim()
+        : undefined);
+    if (dockerHostId) machine.add(`docker:${dockerHostId}`);
+  }
+  machine.forEach(add);
+  return { exact, machine: [...machine] };
+};
+
+/**
+ * Open alerts for one unified resource, read from the websocket's active
+ * alert map, most severe first. This is the canonical source for a resource
+ * drawer's "Needs attention" list: resources do not embed their alerts.
+ */
+export function getAlertsForUnifiedResource(
+  resource: Resource,
+  activeAlerts: Record<string, Alert>,
+  alertsEnabled: boolean | undefined = isAlertsDetectionEnabled(),
+): Alert[] {
+  if (!alertsEnabled) return [];
+  const { exact, machine } = getUnifiedResourceAlertKeys(resource);
+  const machinePrefixes = machine.map((key) => `${key}/`);
+  return Object.values(activeAlerts)
+    .filter(
+      (alert) =>
+        exact.has(alert.resourceId) ||
+        machinePrefixes.some((prefix) => alert.resourceId?.startsWith(prefix)),
+    )
+    .sort(
+      (a, b) =>
+        (ALERT_LEVEL_RANK[a.level] ?? 3) - (ALERT_LEVEL_RANK[b.level] ?? 3) ||
+        Date.parse(a.startTime) - Date.parse(b.startTime),
+    );
 }
 
 // Alert types representing binary or enumerated state conditions rather

@@ -3452,3 +3452,15 @@ initial loading and current-request ownership; the production Notifications
 tab browser fixture verifies the connected read/retry states at desktop and
 phone widths. These are synthetic frontend controls, not recipient delivery
 or containing-release acceptance.
+
+### Resource drawers read open alerts from the active-alert map
+
+`getAlertsForUnifiedResource` in `frontend-modern/src/utils/alerts.ts` is the
+canonical lookup from one unified resource to its open alerts in the websocket
+`activeAlerts` map. It matches the alert keys the backend writes for that
+resource (unified id, canonical primary and superseded ids, Proxmox source id,
+metrics target, and for agent and Docker hosts `agent:<id>` and
+`docker:<host source id>` plus the component alerts nested under them) and
+orders them most severe first. The Machines/Infrastructure and Docker host
+drawers build their "Needs attention" rows from it; resources no longer embed
+an alert list, so no drawer can silently read an always-empty copy.

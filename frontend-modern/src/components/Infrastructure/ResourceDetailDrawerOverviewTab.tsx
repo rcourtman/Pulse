@@ -7,6 +7,10 @@ import type {
   ResourceChangeSourceAdapter,
   ResourceChangeSourceType,
 } from '@/types/resource';
+import { useWebSocket } from '@/contexts/appRuntime';
+import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
+import { useAlertsActivation } from '@/stores/alertsActivation';
+import { getAlertsForUnifiedResource } from '@/utils/alerts';
 import { formatUptime, formatRelativeTime } from '@/utils/format';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
 import { HardwareCard } from '@/components/shared/cards/HardwareCard';
@@ -35,7 +39,10 @@ import {
   TechnicalDetailsDisclosure,
   TechnicalDetailsSection,
 } from '@/components/shared/TechnicalDetailsDisclosure';
-import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
+import {
+  DrawerAttentionSection,
+  type DrawerAttentionItem,
+} from '@/components/shared/DrawerAttentionSection';
 import {
   RESOURCE_CHANGE_KIND_ORDER,
   RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER,
@@ -364,29 +371,46 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
     drawer.sortedResourceTimeline().length > 0 ||
     drawer.resourceTimelineCount() > 0 ||
     Boolean(drawer.facetBundleError());
+  const { activeAlerts } = useWebSocket();
+  const alertsActivation = useAlertsActivation();
   const attentionItems = () => {
-    const items = (resource().alerts ?? []).map((alert) => ({
+    const alerts = getAlertsForUnifiedResource(
+      resource(),
+      activeAlerts,
+      alertsActivation.detectionEnabled(),
+    );
+    const items: DrawerAttentionItem[] = alerts.map((alert) => ({
       id: alert.id,
       message: alert.message,
+      subject: alert.resourceName?.trim() || resource().displayName || resource().name,
+      metric: alertTypeDisplayLabel(alert.type),
       severity: alert.level,
+      acknowledged: alert.acknowledged,
     }));
     const healthIssue = drawer.healthIssue();
     if (healthIssue) {
       // Skip only the reasons an open alert already states. One matching alert
       // must not hide the other reasons (a pool's own degraded state beside a
-      // copied disk alert).
+      // copied disk alert). An incident alert may join the reason and its
+      // impact as sentences ("... above threshold. Affects 2 dependent
+      // resources: ..."), so a reason that is a whole sentence of an alert is
+      // already stated.
       const messageKey = (message: string) =>
         message
           .trim()
           .toLowerCase()
           .replace(/[.\s]+$/, '');
-      const stated = new Set(items.map((item) => messageKey(item.message)));
+      const alertSentences = alerts.map((alert) => `. ${messageKey(alert.message)}. `);
+      const isStated = (message: string) => {
+        const sentence = `. ${messageKey(message)}. `;
+        return alertSentences.some((stated) => stated.includes(sentence));
+      };
       const severity = /critical|failed|faulted|error/i.test(resource().status)
         ? 'critical'
         : 'warning';
       items.unshift(
         ...[healthIssue.primary, ...healthIssue.details]
-          .filter((message) => !stated.has(messageKey(message)))
+          .filter((message) => !isStated(message))
           .map((message, index) => ({
             id: `resource-health-issue-${index}`,
             message,
