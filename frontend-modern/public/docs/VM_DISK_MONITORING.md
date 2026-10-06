@@ -75,7 +75,8 @@ the systemd commands below do not stop a containerised Pulse server.
 
    ```bash
    sudo systemctl stop pulse.service
-   systemctl show pulse.service --property=LoadState,ActiveState,MainPID
+   systemctl show pulse.service \
+     --property=LoadState,ActiveState,MainPID,Result,ExecMainCode,ExecMainStatus
    ```
 
    Require `LoadState=loaded`, `ActiveState=inactive` and `MainPID=0` after a
@@ -83,6 +84,21 @@ the systemd commands below do not stop a containerised Pulse server.
    unknown or another Pulse server is still polling the affected guests.
    **Pulse monitoring and alerts are unavailable while stopped.** Do not run
    an update, start another Pulse instance or reboot its host during the pause.
+
+   For a server stopped in this step, also require `Result=success`,
+   `ExecMainCode=1` (normal process exit) and `ExecMainStatus=0`. A timeout,
+   signal termination, non-zero exit or unavailable shutdown result needs
+   normal maintenance before the backup. Do not force-kill Pulse or clear its
+   failed state to satisfy this check. Leave a previously inactive server
+   inactive; an old exit result is not evidence of a new shutdown.
+
+   **Stopping Pulse does not cancel a guest-agent request already issued.**
+   Even a successful process exit does not prove that an earlier request
+   finished inside Proxmox or the guest. Let existing guest/backup operations
+   finish normally before the planned backup, using your established task and
+   workload checks, not new guest-agent probes. If their state is unknown,
+   do not start the backup on the strength of a stopped service or an arbitrary
+   waiting period. A disk dash or cooldown is not evidence of completion.
 
 4. **Verify the guest independently, then restore only what you paused.**
    Keep Pulse stopped until the backup has ended **and** your established
