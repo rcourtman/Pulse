@@ -154,8 +154,10 @@ nothing; results are in the job log and step summary. Run
 it locally (`PULSE_REHEARSAL_ENGINE=podman` on hosts without Docker).
 
 `release-signing-preflight.yml` checks that the macOS release signing path
-would work, without building or publishing anything. The maintainer's nightly
-release rehearsal dispatches it from `main`. On a `macos-15` runner it imports
+would work, without building or publishing anything. It runs on manual
+dispatch from `main`; the nightly release rehearsal that used to dispatch it
+was switched off with the release steward on 4 October 2026. On a `macos-15`
+runner it imports
 the Developer ID certificate into a throwaway keychain, requires the configured
 identity to be valid for code signing and at least 30 days from expiry, signs
 and verifies a probe binary with a secure timestamp, and reads the Apple notary
@@ -203,9 +205,9 @@ mutable release. GitHub documents this boundary in
 Do not disable the continuity assertion, reset incident state, replace historical
 assets, or delete/recreate a published release to obtain a passing result.
 
-Recovery belongs to the governed release path: qualify a replacement candidate,
-retain its exact source and artifact identities, complete the required clean
-soak, and obtain release-steward admission of the exact stable packet under the
+Recovery belongs to the governed release path: the release train cuts a fresh
+candidate from `main`, which retains its exact source and artifact identities,
+completes the 24-hour soak, and is promoted unchanged under the
 [Release Train policy](../../docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md#release-train).
 An immutable prerelease alone does not satisfy those gates. After authorised
 stable activation, require the continuity read-back for the newly advertised
@@ -235,14 +237,13 @@ Use this decision sequence within the existing release authority:
    later replacement, older orphan tags no longer fail that specific check.
    This is supersession, not evidence that the old publication was successful
    or that customers pinned to its container version have migrated.
-3. Keep patch scope to named regression/security fixes. A changed patch RC
-   restarts 24 hours of clean soak; an older immutable RC or green main cannot
-   lend its qualification to changed bytes. Retain the exact candidate packet
-   for release-steward judgment and exact-source admission before stable
-   publication. Under standing authority granted on 8 September 2026, the
-   publisher needs no per-release founder approval or three-clean-trains
-   prerequisite; an explicit operator revocation still applies. This does not
-   waive qualification, soak, independent review or delivery verification.
+3. Repairs ship in a fresh candidate the release train cuts from `main`; the
+   train schedules no patch releases. A fresh candidate restarts the 24-hour
+   soak, and an older immutable RC or green main cannot lend its qualification
+   to changed bytes. Promotion is mechanical: the train promotes the exact
+   soaked candidate unless an open `release-blocker` issue stops it, with no
+   per-release founder approval. This does not waive qualification, soak or
+   delivery verification.
 4. After authorised publication and convergence, require all release, frontier,
    activation and provenance checks for the newly advertised identity. A
    passing frontier alone can coexist with a mutable release and is not

@@ -110,10 +110,11 @@ the build is believed capable of becoming stable without product changes.
    qualify installers, updater behavior, Helm, other architectures, private
    paid runtime, cross-repo compatibility, migrations, security boundaries,
    or the wider release.
-5. A successful test does not force an immediate patch release. Schedule the
-   fix by severity and active customer harm. Any later prerelease, stable, or patch
-   must rebuild and qualify through the canonical release workflow rather
-   than promote the reporter image.
+5. A successful test does not force a release. The fix ships in the next
+   candidate the release train cuts from `main`, or sooner through an early
+   cut when it should not wait. Any later prerelease, stable, or patch must
+   rebuild and qualify through the canonical release workflow rather than
+   promote the reporter image.
 
 ### Forbidden Release Mutations And Lifecycle
 
@@ -205,9 +206,10 @@ TLS-unverified receipts leave the claim at `implemented` or
      tightly controlled evaluation.
    - `beta.N` is the normal user-testing stage. It may contain known gaps and
      planned product changes and is not represented as a possible stable build.
-   - `rc.N` is reserved for a build the release owner believes can become
-     stable without product changes. RC publication runs the stable-depth
-     integration gate in addition to the common release checks.
+   - `rc.N` is the release train's candidate for stable: it is promoted
+     unchanged unless an open `release-blocker` issue stops it. RC publication
+     runs the stable-depth integration gate in addition to the common release
+     checks.
 2. Stable promotion lineage must come from a published `rc.N`. Alpha and beta
    evidence inform the release, but neither can be promoted directly to stable.
 3. Each published prerelease must have:
@@ -235,71 +237,73 @@ TLS-unverified receipts leave the claim at `implemented` or
 
 ## Release Train
 
-Adopted 2026-09-01 under the delivery contract
-(`pulse-dev-infra/docs/delivery-contract.md`). The train exists so that a
-stable release is an exact soaked candidate rather than the tip of a branch
-that keeps moving, and so that the always-running maintainer can release
-without the other lanes changing the candidate underneath it.
+Releases are mechanical (founder direction, 4 October 2026). No model judges,
+holds or schedules a release. The release train (`pulse-maintainer-ship` on
+pulse-dev, documented in `pulse-dev-infra/docs/release-train.md`) replaced the
+release steward, its publisher, the nightly rehearsal and the release-line
+lane. Every other document that describes releases defers to this section and
+to that direction.
 
-1. Founder direction, 2026-09-23: releasing is the default. Every 14 days
-   the maintainer cuts the next minor line from `main`, publishes its RC,
-   and promotes the exact RC to stable once its soak is clean. A due step is
-   held, and a candidate withdrawn or replaced, only for a listed stop
-   reason: a regression against the current stable release, a security
-   problem, data loss or a failed upgrade or rollback, a qualification
-   failure, or a release-pipeline failure. A defect the current stable
-   release already has, or a fix that landed after selection, waits for the
-   next cycle or a patch release. The operating policy is
-   `pulse-dev-infra/maintainer/RELEASE_POLICY.md`. This replaces the
-   2026-09-05 direction that left timing to open-ended judgment. The
-   exact-candidate, source, soak and publication-authority requirements
-   still apply.
-2. Each train has its own branch, `release/v6.N`, created from `main` at cut
-   time and declared in `docs/release-control/control_plane.json` so the
-   release workflow verifies that governed source line. `main` is never
-   frozen. A selected release is an immutable commit, not the current tip of
-   the train. Its preparation PR uses a fixed `release-candidate/<packet>`
-   ref and passes the normal protected review path into the governed line.
-   Qualification, builds and publication use that PR's exact head commit,
-   even when the merge or later train commits contain newer work. Snapshot
-   dispatch must verify the merged PR's head, canonical repository, source
-   line and continued ancestry in published history. The workflow and source
-   SHA must both equal the admitted snapshot. Later commits belong to another
-   release unless the maintainer explicitly rejects the selected candidate
-   for a concrete defect in that candidate. Merely finding newer work does
-   not invalidate qualification or restart a release.
-   A fix for something found in a checkpoint is backported to the
-   release branch through a pull request. Each changed RC starts its own full soak; beta time never counts toward
-   stable promotion. After general availability the branch is
-   the patch line for that train.
-3. General availability promotes the candidate's content. The resolver
-   refuses a stable promotion whose tree differs from the promoted candidate
-   in anything but release metadata (version, chart, compose, release notes,
-   upgrade guide, release records) unless `hotfix_exception` names active
-   customer harm. The v6.4.0 promotion, which shipped 64 changed files that
-   `v6.4.0-rc.12` had not soaked, is the case this rule prevents.
-4. A minor release (`X.Y.0`) and a patch release both require a 24 hour soak
-   of the promoted candidate (founder direction of 28 September 2026; it was
-   seven days for a minor and 72 hours for a patch). Few installs run
-   previews, so the longer soak saw little beyond the first day while stable
-   users waited. Patch releases are for a named regression or security issue
-   only.
-5. "Soaked clean" means all of: the soak has elapsed since the candidate's
-   release was published; no open issue reports an unresolved regression,
-   security or data-loss problem in the candidate, including any issue
-   labelled `affects-<candidate version>` at high or critical severity;
-   preview-channel telemetry, where it exists, shows no elevated failure
-   rate; and, where the candidate observation guest is operational, the
-   candidate ran there for the soak without an incident. An unavailable
-   guest is recorded as a limitation rather than a reason to hold. The
-   stable dogfood instance and the demo server keep running the current
-   stable release by design and are not soak evidence. The release steward
-   names this evidence in the packet.
-6. Version-bound owner exceptions waived the soak for v6.0.0, v6.1.0,
+1. **Cut.** Fourteen days after the last stable release, or earlier on
+   `pulse-maintainer-ship request`, the train cuts a release candidate for the
+   next minor version from the head of `main`. A release carries everything on
+   `main` at its cut. Nothing is selected for a release or copied onto it
+   afterwards. An important fix that should not wait for the cycle ships by
+   requesting an early cut. The train does not cut when `main` has nothing new
+   since the last stable release. A request takes effect at the next train run
+   when no candidate is in progress and `main` has changed. A request made
+   while a candidate is soaking replaces that candidate with a fresh one cut
+   from `main`, which restarts the soak. While a `release-blocker` issue holds
+   the soaking candidate the request waits. A request made while a candidate
+   is being prepared or published waits for that attempt to finish: once the
+   candidate publishes the request replaces it, and if the attempt fails the
+   request starts the retry at once, even while the failure's issue is open.
+2. **Versions.** Version numbers are consecutive: the release after stable
+   `vX.Y.Z` is `vX.(Y+1).0`. Patch releases are not scheduled. Each candidate
+   for a version takes the next unused `rc.N` number, one above every existing
+   candidate tag of that version.
+3. **Soak.** A published candidate soaks for 24 hours on the preview channel.
+   Successive candidates for one version are published at least 24 hours
+   apart, and beta time never counts toward a candidate's soak.
+4. **Promote.** After a clean soak the train promotes the exact candidate to
+   stable. The resolver refuses a stable promotion whose tree differs from the
+   promoted candidate in anything but release metadata (version, chart,
+   compose, release notes, upgrade guide, release records) unless
+   `hotfix_exception` names active customer harm. The v6.4.0 promotion, which
+   shipped 64 changed files that `v6.4.0-rc.12` had not soaked, is the case
+   this rule prevents.
+5. **Stop.** Only an open issue labelled `release-blocker` stops a promotion.
+   Product intelligence adds that label when a report shows that something
+   which worked in the previous stable release is broken in the current
+   candidate. When every such issue is closed, the train cuts a fresh
+   candidate from `main` and that candidate starts its own soak. The train
+   does not check that the fix landed, so a `release-blocker` issue is closed
+   only once its fix is on `main`. If a promotion stays held for more than 72
+   hours, the train notifies the operator once. A defect the current stable
+   release already has is fixed on `main` and ships in the next release.
+6. **Failures.** A failed build, test or publication is repaired on `main`.
+   The train reruns a failed release workflow once, then opens a
+   `release-blocker` issue naming the failure and cuts a fresh candidate from
+   `main` 12 hours later, or at once on request. A failed private Pro
+   source-pair pull request fails the attempt without a rerun.
+7. **Workflow checks.** The GitHub release workflow's own checks are
+   unchanged: exact source, signing, the private Pro build and the promotion
+   rules in this document.
+
+### History
+
+These records describe releases before the train and stay as written.
+
+1. The release train was first adopted on 2026-09-01 under the delivery
+   contract, with a release steward that cut `release/v6.N` lines, judged
+   holds against listed stop reasons, and backported fixes to the line. The
+   founder direction of 4 October 2026 replaced that with the mechanical
+   train above.
+2. Version-bound owner exceptions waived the soak for v6.0.0, v6.1.0,
    v6.2.0, v6.3.0, and v6.4.0. They remain recorded and bounded; the train
    does not continue the practice. An exception requires active customer
    harm and is recorded in the release notes.
-7. The `v6.4.3` patch line predates the first train and is the first line
+3. The `v6.4.3` patch line predates the first train and is the first line
    released under the train's branch rule. `release/v6.4` was created from
    `main` at the exact-SHA-qualified commit `56e51e622e` on 2026-09-02 and is
    declared in `control_plane.json` with the version prefix `6.4.3`, so the
@@ -307,7 +311,7 @@ without the other lanes changing the candidate underneath it.
    moving `main` can no longer invalidate the compiler's exact-SHA binding
    between dispatch and compilation, which is what failed run 33579042375.
    Earlier `6.4.x` versions keep their historical `main` mapping.
-8. The forward regression checkpoint `v6.4.4-beta.1` uses the same
+4. The forward regression checkpoint `v6.4.4-beta.1` uses the same
    `release/v6.4` line, with an explicit `6.4.4` mapping for beta, RC and
    eventual stable. This is a maturity reset, not new feature scope: a
    `6.4.3-beta.N` would sort below the published `v6.4.3-rc.1`.
@@ -321,7 +325,7 @@ without the other lanes changing the candidate underneath it.
    to the release line before taking a fresh bound packet. Unlisted patches
    and new product work retain their existing mapping and scope.
 
-9. The following reliability patch `v6.4.5` also uses `release/v6.4`,
+5. The following reliability patch `v6.4.5` also uses `release/v6.4`,
    explicitly mapped for beta, RC and stable. It remains separate from the
    selected `v6.4.4` candidates: this mapping does not change their source,
    version or qualification. Land the mapping and resolver tests on main,
@@ -700,9 +704,13 @@ without the other lanes changing the candidate underneath it.
    workflow performs the exact-SHA preflight before crossing the publication
    boundary.
 
-## Routine Stable Patch Path
+## Stable Patch Path
 
-1. A normal stable patch may omit a same-version RC only when all of these are
+The release train schedules no patch releases, and an important fix ships
+through an early cut from `main` (see Release Train). The release workflow
+still supports a stable patch; when one is published, these rules apply.
+
+1. A stable patch may omit a same-version RC only when all of these are
    true:
    - the rollback target is the latest preceding stable tag and the candidate
      descends from it;
@@ -715,14 +723,14 @@ without the other lanes changing the candidate underneath it.
      current candidate evidence; and
    - the integrated exact-SHA candidate build and release checks pass before
      the workflow creates or publishes the release.
-2. `scripts/trigger-stable-patch.sh` is the standard operator entrypoint. Run
+2. `scripts/trigger-stable-patch.sh` is the operator entrypoint. Run
    it once without `--dry-run`; it derives rollback and release notes, refuses
    local-only or dirty state, and supplies workflow metadata without
    interactive prompts. `--dry-run` is optional and exists only for an explicit
    no-public-release rehearsal.
 3. Creating a same-version RC or touching an RC-required path moves the patch
    onto the RC promotion path. The resolver enforces that boundary. Do not use
-   the routine helper to relabel a risky patch as routine.
+   the patch helper to relabel a risky patch as low-risk.
 4. `--emergency-hotfix-reason` is the narrow escape hatch for active customer
    harm. It does not remove the integrated exact-SHA candidate and release
    checks, and the reason is recorded in the release metadata.

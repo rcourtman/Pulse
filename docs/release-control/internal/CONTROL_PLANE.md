@@ -262,10 +262,11 @@ user language should update the control plane.
 7. The existing v6 control surfaces are still live, but they now sit underneath
    an evergreen Pulse control plane rather than pretending to be the whole
    long-term system.
-8. The v6 profile defaults to `main`; explicit version overrides in
-   `control_plane.json` bind existing releases to `release/v6.4` and
-   `release/v6.5`. A new checkpoint's mapping is verified during governed
-   preparation, not inferred from the profile default or this page.
+8. The v6 profile defaults to `main`, where the release train cuts every new
+   release. Legacy version overrides in `control_plane.json` keep the
+   historical `6.4.x` releases bound to `release/v6.4`. A new checkpoint's
+   mapping is verified during governed preparation, not inferred from the
+   profile default or this page.
 9. Legacy maintenance releases that still feed governed automation outside the
    active v6 line must also resolve through `control_plane.json`.
    Right now the remaining `5.1.x` stable maintenance line resolves to `main`

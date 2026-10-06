@@ -80,7 +80,9 @@ This file must not contain:
     completion obligations.
 11. `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`
     Canonical stable-versus-prerelease promotion rules, rollout criteria, and rollback
-    expectations for v6 and later release lines.
+    expectations for v6 and later release lines. Its Release Train section is the
+    single statement of release cadence, soak, versioning and promotion in this
+    repository; other documents defer to it rather than restating it.
 12. `docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md`
     Canonical v5 maintenance-only support policy, release-line rules, and GA
     notice requirements for the v6 cutover.
@@ -522,9 +524,9 @@ Assertion design rules:
     Claims reduce overlap, but they do not isolate hooks, formatters, staged
     reads, or unrelated dirt. Parallel mutation should use separate worktrees
     so each agent sees one slice's git state at a time.
-22. Do not publish a routine stable patch without a successful exact-SHA
-    `Release Dry Run` from the previous 24 hours. That run must prove the
-    current stable demo network/SSH/browser path without mutation, and the
+22. Do not publish a stable patch unless its exact-SHA publish run proves the
+    current stable demo network/SSH/browser path without mutation before the
+    publication boundary. A separate `Release Dry Run` is optional. The
     publish workflow must await demo deployment plus definitive verification;
     manual SSH deployment is not an acceptable release completion path.
 23. Do not authorize limited unattended Pulse Intelligence mutation until the
@@ -609,8 +611,9 @@ Assertion design rules:
     issue intended for v6 is fixed in the candidate, proven invalid with
     evidence, or conservatively superseded with the original problem resolved
     or explicitly narrowed.
-15. Routine stable patch releases after GA do not require a fabricated RC.
-    They may use the no-RC path only when the candidate descends from the latest
+15. The release train schedules no patch releases. When a stable patch is
+    published after GA it does not require a fabricated RC and may use the
+    no-RC path only when the candidate descends from the latest
     stable rollback target, no same-version RC exists, no governed high-risk
     auth/tenant, licensing/billing, persisted-data/migration, relay/mobile
     trust, or installer/update/rollback path changed, and the exact-SHA release
@@ -669,8 +672,8 @@ Assertion design rules:
     or other release surface. Broad, multi-platform, release-surface,
     migration, destructive-state, trust-boundary, cross-repo, and promotion-
     lineage validation remains on the governed RC path. Successful reporter
-    confirmation informs severity-based release scheduling but does not force
-    an immediate patch release.
+    confirmation does not force a release: the fix ships in the next candidate
+    the release train cuts from `main`, or sooner through an early cut.
 22. A published release candidate is a cohort checkpoint, not a per-fix delivery
     mechanism. After the first RC on a version line, at least 24 hours of public
     observation must elapse before another RC on that line is published.

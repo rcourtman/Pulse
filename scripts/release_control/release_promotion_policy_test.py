@@ -1371,7 +1371,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
     def test_release_promotion_policy_requires_live_rc_and_v5_policy(self) -> None:
         content = read("docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md")
         self.assertIn("`beta.N` is the normal user-testing stage", content)
-        self.assertIn("`rc.N` is reserved for a build the release owner believes", content)
+        self.assertIn("`rc.N` is the release train's candidate for stable", content)
         self.assertIn("Stable promotion lineage must come from a published `rc.N`", content)
         self.assertIn("live run of the release pipeline for the prerelease tag itself", content)
         self.assertIn("an accidental git tag by itself", content)
@@ -2962,7 +2962,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('--arg draft_only "false"', helper)
         self.assertNotIn("--argjson", helper)
         self.assertIn("Single-Build Release Path", policy)
-        self.assertIn("Routine Stable Patch Path", policy)
+        self.assertIn("## Stable Patch Path", policy)
         self.assertIn("single publish workflow performs the exact-SHA preflight", normalize_ws(policy))
         self.assertIn("An asynchronous dispatch or manual SSH deployment is not release completion.", normalize_ws(contract))
 
