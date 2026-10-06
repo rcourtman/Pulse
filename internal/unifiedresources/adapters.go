@@ -806,12 +806,8 @@ func resourceFromHostUnraidPhysicalDisk(host models.Host, disk models.HostUnraid
 	health := unraidPhysicalDiskHealth(disk)
 	assessment := assessUnraidPhysicalDisk(host, disk)
 	sizeBytes := unraidDiskSizeBytes(host, disk)
-	// The row records only a state that withdraws its reading. A positive
-	// claim from this provenance-less row would outrank another source's
-	// explicit state for the same disk when the registry merges them, even
-	// where that source's temperature is the one shown.
 	var collection *diskinventory.CollectionStatus
-	if status := unraidDiskTemperatureStatus(host, disk); status.State == diskinventory.FieldUnavailable {
+	if status := unraidDiskTemperatureStatus(host, disk); status.State != "" {
 		collection = &diskinventory.CollectionStatus{Temperature: status}
 	}
 	resource := Resource{
