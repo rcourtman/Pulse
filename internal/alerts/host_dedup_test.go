@@ -7,15 +7,17 @@ import (
 )
 
 func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
-	// Test 1: Without a host agent registered, node metrics ARE checked
+	agent := hostAgentNodeLink{agentID: "host-pi", nodeID: "node/pi", cpu: true, memory: true, disk: true}
+
+	// Test 1: Without a linked host agent, node metrics ARE checked
 	t.Run("node_metrics_checked_without_agent", func(t *testing.T) {
 		m := NewManager()
 		m.config.Enabled = true
 		m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
 
-		// Verify no host agent is registered
-		if m.hasHostAgentForNode("pi") {
-			t.Error("Expected no host agent for 'pi' initially")
+		// Verify no host agent is linked
+		if m.hasHostAgentForNode("node/pi") {
+			t.Error("Expected no host agent for 'node/pi' initially")
 		}
 
 		node := models.Node{
@@ -38,18 +40,18 @@ func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 		}
 	})
 
-	// Test 2: With host agent registered, node metrics are NOT checked
+	// Test 2: With a host agent linked to the node, node metrics are NOT checked
 	t.Run("node_metrics_skipped_with_agent", func(t *testing.T) {
 		m := NewManager()
 		m.config.Enabled = true
 		m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
 
-		// Register a host agent with the same hostname BEFORE checking the node
-		m.RegisterHostAgentHostname("pi")
+		// Link a host agent to the node BEFORE checking the node
+		m.registerHostAgentNodeLink(agent)
 
-		// Verify host agent IS registered
-		if !m.hasHostAgentForNode("pi") {
-			t.Error("Expected host agent for 'pi' to be registered")
+		// Verify host agent IS linked
+		if !m.hasHostAgentForNode("node/pi") {
+			t.Error("Expected host agent for 'node/pi' to be linked")
 		}
 
 		node := models.Node{
@@ -67,7 +69,7 @@ func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 		m.mu.RUnlock()
 
 		if hasPending {
-			t.Error("Expected NO pending alert for node CPU when host agent is registered")
+			t.Error("Expected NO pending alert for node CPU when host agent is linked")
 		}
 	})
 
@@ -78,12 +80,12 @@ func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 		m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
 
 		// Register and then unregister
-		m.RegisterHostAgentHostname("pi")
-		m.UnregisterHostAgentHostname("pi")
+		m.registerHostAgentNodeLink(agent)
+		m.unregisterHostAgentNodeLink(agent.agentID)
 
-		// Verify host agent is NOT registered
-		if m.hasHostAgentForNode("pi") {
-			t.Error("Expected host agent for 'pi' to be unregistered")
+		// Verify host agent is NOT linked
+		if m.hasHostAgentForNode("node/pi") {
+			t.Error("Expected host agent for 'node/pi' to be unregistered")
 		}
 
 		node := models.Node{
@@ -106,67 +108,77 @@ func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 	})
 }
 
-func TestHostAgentDeduplicationCaseInsensitive(t *testing.T) {
+// Deduplication follows the agent's node link, never a hostname match: two
+// instances can both have a node named "pve", and an agent can report an FQDN.
+func TestHostAgentDeduplicationFollowsNodeLink(t *testing.T) {
 	m := NewManager()
+	m.config.Enabled = true
 
-	// Register with lowercase
-	m.RegisterHostAgentHostname("myhost")
+	m.CheckHost(models.Host{ID: "host-a", Hostname: "pve.example.com", LinkedNodeID: "site-a-pve", CPUUsage: 10})
+	if !m.hasHostAgentForNode("site-a-pve") {
+		t.Error("Expected the linked node to dedup even though the agent hostname is an FQDN")
+	}
+	if m.hasHostAgentForNode("site-b-pve") {
+		t.Error("Expected a same-named node in another instance to keep its own alerts")
+	}
 
-	// Check should match regardless of case
-	if !m.hasHostAgentForNode("MYHOST") {
-		t.Error("Expected hasHostAgentForNode to match uppercase hostname")
+	m.CheckHost(models.Host{ID: "host-b", Hostname: "pve", CPUUsage: 10})
+	if m.hasHostAgentForNode("site-b-pve") {
+		t.Error("Expected an unlinked agent with a matching hostname not to suppress node alerts")
 	}
-	if !m.hasHostAgentForNode("MyHost") {
-		t.Error("Expected hasHostAgentForNode to match mixed-case hostname")
-	}
-	if !m.hasHostAgentForNode("myhost") {
-		t.Error("Expected hasHostAgentForNode to match lowercase hostname")
+
+	// An operator unlinking the agent hands the node's alerts back.
+	m.CheckHost(models.Host{ID: "host-a", Hostname: "pve.example.com", CPUUsage: 10})
+	if m.hasHostAgentForNode("site-a-pve") {
+		t.Error("Expected an unlinked agent to stop deduplicating its former node")
 	}
 }
 
-func TestCheckHostRegistersHostname(t *testing.T) {
+func TestCheckHostRegistersNodeLink(t *testing.T) {
 	m := NewManager()
 	m.config.Enabled = true
 
 	host := models.Host{
-		ID:       "host-test-123",
-		Hostname: "testhost",
-		CPUUsage: 50,
+		ID:           "host-test-123",
+		Hostname:     "testhost",
+		LinkedNodeID: "pve-testhost",
+		CPUUsage:     50,
 	}
 
-	// Initially no hostname registered
-	if m.hasHostAgentForNode("testhost") {
+	// Initially no node link registered
+	if m.hasHostAgentForNode("pve-testhost") {
 		t.Error("Expected no host agent registered initially")
 	}
 
-	// CheckHost should register the hostname
+	// CheckHost should register the node link
 	m.CheckHost(host)
 
-	if !m.hasHostAgentForNode("testhost") {
-		t.Error("Expected host agent hostname to be registered after CheckHost")
+	if !m.hasHostAgentForNode("pve-testhost") {
+		t.Error("Expected host agent node link to be registered after CheckHost")
 	}
 }
 
-func TestHandleHostOfflineUnregistersHostname(t *testing.T) {
+func TestHandleHostOfflineUnregistersNodeLink(t *testing.T) {
 	m := NewManager()
 	m.config.Enabled = true
 
 	host := models.Host{
-		ID:       "host-test-456",
-		Hostname: "offlinehost",
+		ID:           "host-test-456",
+		Hostname:     "offlinehost",
+		LinkedNodeID: "pve-offlinehost",
 	}
 
-	// Register the hostname
-	m.RegisterHostAgentHostname(host.Hostname)
+	// Register the node link
+	m.registerHostAgentNodeLink(hostAgentNodeLink{agentID: host.ID, nodeID: host.LinkedNodeID, cpu: true})
 
-	if !m.hasHostAgentForNode("offlinehost") {
+	if !m.hasHostAgentForNode("pve-offlinehost") {
 		t.Error("Expected host agent registered")
 	}
 
-	// HandleHostOffline should unregister the hostname
+	// HandleHostOffline should unregister the node link
 	m.HandleHostOffline(host)
 
-	if m.hasHostAgentForNode("offlinehost") {
+	if m.hasHostAgentForNode("pve-offlinehost") {
 		t.Error("Expected host agent to be unregistered after HandleHostOffline")
 	}
 }

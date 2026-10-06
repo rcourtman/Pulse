@@ -265,8 +265,8 @@ func TestCheckNodeKeepsTemperatureAlertWhenHostAgentMonitorsNode(t *testing.T) {
 
 	node, host := testNodeWithHostAgent()
 	m.CheckHost(host)
-	if !m.hasHostAgentForNode(node.Name) {
-		t.Fatalf("expected CheckHost to register %q for node deduplication", host.Hostname)
+	if !m.hasHostAgentForNode(node.ID) {
+		t.Fatalf("expected CheckHost to link %q to node %q for deduplication", host.ID, node.ID)
 	}
 
 	node.Temperature = &models.Temperature{Available: true, CPUPackage: 90}
@@ -356,6 +356,165 @@ func TestCheckNodeMissingTemperatureDoesNotResolveOpenAlert(t *testing.T) {
 	m.CheckNode(node)
 	if testHasActiveAlert(t, m, tempAlertID) {
 		t.Fatalf("expected disabled temperature threshold to clear %q without a reading", tempAlertID)
+	}
+}
+
+// Deduplication only hands the agent the usage metrics it evaluates. With agent
+// alerts switched off, or one agent threshold off, the node keeps those alerts
+// so the machine is never left unmonitored.
+func TestCheckNodeKeepsUsageMetricsTheAgentDoesNotEvaluate(t *testing.T) {
+	setup := func(t *testing.T) (*Manager, models.Node, models.Host) {
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.config.TimeThresholds = map[string]int{}
+		m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+		m.config.NodeDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+		m.config.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+		m.config.AgentDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+		m.mu.Unlock()
+		node, host := testNodeWithHostAgent()
+		node.CPU = 0.95
+		node.Memory = models.Memory{Total: 100, Used: 95, Free: 5, Usage: 95}
+		host.CPUUsage = 95
+		host.Memory = node.Memory
+		return m, node, host
+	}
+	nodeCPU := func(node models.Node) string { return canonicalMetricStateID(node.ID, "cpu") }
+	nodeMemory := func(node models.Node) string { return canonicalMetricStateID(node.ID, "memory") }
+
+	t.Run("agent_alerts_disabled", func(t *testing.T) {
+		m, node, host := setup(t)
+		m.CheckHost(host)
+		m.CheckNode(node)
+		if testHasActiveAlert(t, m, nodeCPU(node)) {
+			t.Fatalf("expected the agent to own CPU while its alerts are enabled")
+		}
+
+		m.mu.Lock()
+		m.config.DisableAllAgents = true
+		m.mu.Unlock()
+		m.CheckHost(host)
+		m.CheckNode(node)
+		if !testHasActiveAlert(t, m, nodeCPU(node)) || !testHasActiveAlert(t, m, nodeMemory(node)) {
+			t.Fatalf("expected the node to alert on CPU and memory while agent alerts are disabled")
+		}
+	})
+
+	t.Run("agent_cpu_threshold_off", func(t *testing.T) {
+		m, node, host := setup(t)
+		m.mu.Lock()
+		m.config.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 0, Clear: 0}
+		m.mu.Unlock()
+		m.CheckHost(host)
+		m.CheckNode(node)
+		if !testHasActiveAlert(t, m, nodeCPU(node)) {
+			t.Fatalf("expected the node to keep CPU when the agent CPU threshold is off")
+		}
+		if testHasActiveAlert(t, m, nodeMemory(node)) {
+			t.Fatalf("expected the agent to keep owning memory")
+		}
+		if got := testActiveAlertIDsOfType(m, "memory"); len(got) != 1 {
+			t.Fatalf("expected exactly one memory alert for the machine, got %v", got)
+		}
+	})
+}
+
+// A missing reading keeps the incident but must not let a sustained-for or
+// recovery delay complete across the gap in evidence.
+func TestCheckNodeMissingTemperatureInterruptsTimingRuns(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.MetricTimeThresholds = map[string]map[string]int{"node": {"temperature": 300}}
+	m.config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.mu.Unlock()
+
+	node, _ := testNodeWithHostAgent()
+	tempAlertID := canonicalMetricStateID(node.ID, "temperature")
+	specID := canonicalMetricSpecID(node.ID, "temperature")
+	hot := &models.Temperature{Available: true, CPUPackage: 85}
+
+	node.Temperature = hot
+	m.CheckNode(node)
+	m.mu.Lock()
+	pending := testCoreIsPending(m, node.ID, specID)
+	m.core.ShiftPending(-10 * time.Minute)
+	m.mu.Unlock()
+	if !pending {
+		t.Fatalf("expected a pending temperature run before the reading went missing")
+	}
+
+	node.Temperature = nil
+	m.CheckNode(node)
+	node.Temperature = hot
+	m.CheckNode(node)
+	if testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected the sustained-for delay to restart after a missing reading, not fire on the first sample back")
+	}
+
+	m.mu.Lock()
+	m.core.ShiftPending(-10 * time.Minute)
+	m.mu.Unlock()
+	m.CheckNode(node)
+	if !testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected the temperature alert to fire after a sustained run")
+	}
+
+	node.Temperature = &models.Temperature{Available: true, CPUPackage: 60}
+	m.CheckNode(node)
+	m.mu.RLock()
+	incident, _ := m.core.Incident(node.ID, specID)
+	m.mu.RUnlock()
+	if incident.RecoverySince.IsZero() {
+		t.Fatalf("expected a recovery run to start below the clear threshold")
+	}
+
+	node.Temperature = nil
+	m.CheckNode(node)
+	m.mu.RLock()
+	incident, _ = m.core.Incident(node.ID, specID)
+	m.mu.RUnlock()
+	if !incident.RecoverySince.IsZero() {
+		t.Fatalf("expected a missing reading to restart the recovery run")
+	}
+	if !testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected the temperature alert to stay open without a reading")
+	}
+}
+
+// Node alerts keep the PVE instance name in Instance. A config save must judge
+// them against node thresholds, not fall through to guest thresholds, which
+// have no temperature threshold and used to resolve a live temperature alert.
+func TestConfigSaveKeepsNodeTemperatureAlertOverTrigger(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.mu.Unlock()
+
+	node, _ := testNodeWithHostAgent()
+	node.Temperature = &models.Temperature{Available: true, CPUPackage: 90}
+	m.CheckNode(node)
+	tempAlertID := canonicalMetricStateID(node.ID, "temperature")
+	if !testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected node temperature alert %q", tempAlertID)
+	}
+
+	m.UpdateConfig(m.GetConfig())
+	if !testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected a config save to keep a node temperature alert still over its trigger")
+	}
+
+	config := m.GetConfig()
+	config.Overrides = map[string]ThresholdConfig{
+		node.ID: {Temperature: &HysteresisThreshold{Trigger: 95, Clear: 92}},
+	}
+	m.UpdateConfig(config)
+	if testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected a node override raising the trigger above the reading to resolve the alert")
 	}
 }
 

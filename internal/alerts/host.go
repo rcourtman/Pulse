@@ -220,12 +220,6 @@ func (m *Manager) CheckHost(host models.Host) {
 		return
 	}
 
-	// Register this host agent hostname for deduplication with Proxmox nodes.
-	// This prevents duplicate alerts when both a Node and Host agent monitor the same machine.
-	if host.Hostname != "" {
-		m.RegisterHostAgentHostname(host.Hostname)
-	}
-
 	// Cache display name so host alerts show the user-configured name.
 	m.UpdateNodeDisplayName("", host.Hostname, host.DisplayName)
 
@@ -244,11 +238,15 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 	m.mu.RUnlock()
 
+	// While this agent evaluates nothing, its linked node keeps its own usage
+	// alerts; the link is registered below once the evaluated metrics are known.
 	if !alertsEnabled {
+		m.unregisterHostAgentNodeLink(host.ID)
 		return
 	}
 
 	if disableAllAgents {
+		m.unregisterHostAgentNodeLink(host.ID)
 		// Clear any existing host alerts when all host alerts are disabled
 		m.clearHostMetricAlerts(host.ID)
 		m.clearHostDiskAlerts(host.ID)
@@ -259,6 +257,7 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	if thresholds.Disabled {
+		m.unregisterHostAgentNodeLink(host.ID)
 		m.clearHostMetricAlerts(host.ID)
 		m.clearHostDiskAlerts(host.ID)
 		m.clearHostRAIDAlerts(host.ID)
@@ -388,6 +387,7 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	seenDisks := make(map[string]struct{}, len(host.Disks))
+	evaluatesDiskUsage := false
 	if len(host.Sensors.SMART) > 0 {
 		for _, disk := range host.Sensors.SMART {
 			diskResourceID, diskName := hostSMARTDiskResourceID(host, disk)
@@ -445,6 +445,7 @@ func (m *Manager) CheckHost(host models.Host) {
 		if effectiveDiskThreshold == nil {
 			continue
 		}
+		evaluatesDiskUsage = evaluatesDiskUsage || effectiveDiskThreshold.Trigger > 0
 
 		diskMetadata := cloneMetadata(baseMetadata)
 		diskMetadata["metric"] = "disk"
@@ -491,6 +492,17 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	m.cleanupHostDiskAlerts(host, seenDisks)
+
+	// The linked node releases exactly the usage metrics evaluated above and
+	// keeps the rest, so deduplication never leaves the machine unmonitored.
+	m.registerHostAgentNodeLink(hostAgentNodeLink{
+		agentID:   host.ID,
+		agentName: resourceName,
+		nodeID:    host.LinkedNodeID,
+		cpu:       thresholds.CPU != nil && thresholds.CPU.Trigger > 0,
+		memory:    thresholds.Memory != nil && thresholds.Memory.Trigger > 0 && host.Memory.HasKnownUsage(),
+		disk:      evaluatesDiskUsage,
+	})
 
 	if host.Unraid != nil {
 		m.syncHostUnraidStorageAlert(host, nodeName, instanceName, resourceName, baseMetadata)
@@ -619,10 +631,8 @@ func (m *Manager) HandleHostRemoved(host models.Host) {
 		return
 	}
 
-	// Unregister the host agent hostname since it's being removed.
-	if host.Hostname != "" {
-		m.UnregisterHostAgentHostname(host.Hostname)
-	}
+	// The removed agent no longer owns its linked node's usage alerts.
+	m.unregisterHostAgentNodeLink(host.ID)
 
 	m.HandleHostOnline(host)
 	m.clearHostMetricAlerts(host.ID)
@@ -729,11 +739,9 @@ func (m *Manager) HandleHostOfflineWithCorrelation(host models.Host, correlation
 		return
 	}
 
-	// Unregister the host agent hostname since it's no longer actively monitoring.
-	// This allows node alerts to resume if a Proxmox node with the same hostname exists.
-	if host.Hostname != "" {
-		m.UnregisterHostAgentHostname(host.Hostname)
-	}
+	// The agent is no longer actively monitoring, so its linked Proxmox node
+	// resumes evaluating its own usage alerts.
+	m.unregisterHostAgentNodeLink(host.ID)
 	m.HandleHostTelemetryExpired(host)
 
 	m.mu.RLock()
