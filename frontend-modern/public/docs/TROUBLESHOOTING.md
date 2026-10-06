@@ -280,6 +280,76 @@ leave the original host unchanged. Follow
 [Clone identity recovery](UNIFIED_AGENT.md#duplicate-agents) for the configuration
 precedence, systemd example and checks after restart.
 
+#### Memory use keeps growing
+
+A Proxmox LXC memory chart covers the container, not just Pulse. It can include
+other processes and filesystem cache; Docker's displayed memory also uses its
+own cache accounting. Neither is interchangeable with Pulse's resident memory
+(RSS), a Go heap size, or virtual address space (`VSZ` / `VmSize`). A large
+container reading alone does not establish a Pulse memory leak.
+
+For a responsive **Linux systemd / Proxmox LXC** install, take this small,
+read-only sample at a normally occurring high point. Run it **inside the Pulse
+container** for LXC, not on the Proxmox host. Substitute the actual service name
+(`pulse-backend` on older installs) in both `systemctl` calls. Use an account
+authorised to read these counters; a failed read is unavailable, not zero.
+
+```bash
+# systemd / Proxmox LXC: Pulse resident-memory sample
+(
+  set -eu
+  date -u +'%Y-%m-%dT%H:%M:%SZ'
+  pid=$(systemctl show pulse --property=MainPID --value)
+  case "$pid" in
+    ''|0|*[!0-9]*) printf 'No running Pulse PID; sample unavailable.\n' >&2; exit 1 ;;
+  esac
+  identity=$(TZ=UTC ps -p "$pid" -o pid=,lstart=)
+  if [ -z "$identity" ]; then
+    printf 'Process identity unavailable.\n' >&2; exit 1
+  fi
+  counters=$(awk '
+    $1 == "VmRSS:" || $1 == "RssAnon:" || $1 == "RssFile:" ||
+    $1 == "RssShmem:" || $1 == "VmSwap:" {
+      if (NF != 3 || $2 !~ /^[0-9]+$/ || $3 != "kB" || seen[$1]++) exit 1
+      print; fields++
+    }
+    END { if (fields != 5) exit 1 }
+  ' "/proc/$pid/status")
+  current_pid=$(systemctl show pulse --property=MainPID --value)
+  current_identity=$(TZ=UTC ps -p "$pid" -o pid=,lstart=)
+  if [ "$pid" != "$current_pid" ] || [ "$identity" != "$current_identity" ]; then
+    printf 'Pulse changed during collection; discard this sample.\n' >&2; exit 1
+  fi
+  printf 'Pulse process (PID and UTC start): %s\n%s\n' "$identity" "$counters"
+)
+```
+
+Linux labels these values `kB`, meaning 1,024 bytes; divide by 1,024 for MiB.
+`VmRSS` is resident process memory, split into anonymous (`RssAnon`),
+file-backed (`RssFile`) and shared-memory (`RssShmem`) pages. `VmSwap` is swapped
+private anonymous memory, not additional resident memory or all container swap.
+These counters are approximate and not an atomic snapshot; a nonzero
+`RssFile` is not proof of a leak, and `RssAnon` is not specifically the Go heap.
+Missing fields on an older kernel make this recipe fail rather than invent
+values. If it fails or Pulse stops, retain that fact; do not loosen access
+controls or keep retrying against an unresponsive installation.
+
+Keep the sample time, PID/start time, running version, container memory limit,
+fleet size, polling interval and whether dashboards were open. If safe, compare
+another naturally occurring point with the **same PID and process start time**;
+record any restart or upgrade as a different run, not evidence that the cause
+was fixed. For Docker, the [bounded container statistics below](#excessive-cpu-writes-or-database-growth)
+retain the container start time and memory usage but do not measure Pulse RSS;
+do not assume its PID 1 is Pulse.
+
+Do not restart Pulse, drop caches, force garbage collection, change memory limits
+or delete history just to obtain a lower reading. If the container is near its
+limit or the host is unresponsive, stop sampling and prioritise safe recovery.
+Do not post a heap dump, profile, full `/proc` status or process command line:
+they can contain private details. Share only these counters and the relevant
+context after local review; existing screenshots remain useful if collection
+is unsafe.
+
 #### Excessive CPU, writes or database growth
 
 First distinguish **Pulse server activity**, agent activity and total host or
