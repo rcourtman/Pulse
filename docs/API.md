@@ -1021,6 +1021,7 @@ Returns a new raw token (shown once) and updates stored hashes:
   "requiresRestart": false,
   "message": "New API token generated and active immediately! Save this token - it won't be shown again."
 }
+```
 
 ---
 
