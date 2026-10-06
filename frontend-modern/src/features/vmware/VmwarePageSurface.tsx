@@ -58,6 +58,7 @@ import {
   getVmwarePageTabSpecs,
   type VmwarePageModel,
   type VmwarePageTabId,
+  isSingleVmwareVcenter,
 } from './vmwarePageModel';
 import { VsphereAlertsTable } from './VsphereAlertsTable';
 import { VsphereActivityTable } from './VsphereActivityTable';
@@ -262,6 +263,16 @@ export function VmwarePageSurface() {
     },
   );
   const model = createMemo(() => buildVmwarePageModel(resources(), activityTimeline() ?? []));
+  // Decided from the whole vSphere inventory so a filtered table keeps the
+  // column when more than one vCenter is connected.
+  // The Overview's own resources are hosts and VMs, but its signals also cover
+  // datastores and networks, so it counts their connections too.
+  const singleVcenter = createMemo(() =>
+    isSingleVmwareVcenter([
+      ...model().resources,
+      ...(activeTab() === 'overview' ? healthResources.resources() : []),
+    ]),
+  );
   const overviewIncidents = createMemo(() =>
     activeTab() === 'overview' ? buildVmwareIncidentRows(healthResources.resources()) : [],
   );
@@ -352,6 +363,7 @@ export function VmwarePageSurface() {
               <div class="space-y-4">
                 <Show when={overviewIncidents().length > 0}>
                   <VsphereAlertsTable
+                    singleVcenter={singleVcenter()}
                     incidents={overviewIncidents()}
                     emptyIcon={vmwareIcon()}
                     emptyTitle="No active vSphere health signals"
@@ -393,6 +405,7 @@ export function VmwarePageSurface() {
             </Show>
             <Show when={activeTab() === 'health'}>
               <VsphereAlertsTable
+                singleVcenter={singleVcenter()}
                 incidents={model().incidents}
                 emptyIcon={vmwareIcon()}
                 emptyTitle="No active vSphere health signals"
@@ -420,6 +433,7 @@ export function VmwarePageSurface() {
                   }
                 >
                   <VsphereActivityTable
+                    singleVcenter={singleVcenter()}
                     activity={model().activity}
                     emptyIcon={vmwareIcon()}
                     emptyTitle="No vSphere activity"

@@ -15,9 +15,9 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - [ ] Use `alpha.N` only for incomplete or experimental internal evaluation.
 - [ ] Use `beta.N` for the normal user-testing phase when known gaps or planned
   product changes mean the build is not a stable candidate.
-- [ ] Use `rc.N` only when the release owner believes the build can become
-  stable without product changes. RC publication runs the stable-depth
-  integration gate and is the only normal prerelease lineage eligible for
+- [ ] Use `rc.N` for the release train's candidate, which is promoted to
+  stable without product changes unless a `release-blocker` issue stops it.
+  RC publication runs the stable-depth integration gate and is the only normal prerelease lineage eligible for
   stable promotion.
 - [ ] Keep the existing `rc` update-channel wire value as the compatibility
   identifier for all published previews. User-facing copy calls this the
@@ -79,15 +79,15 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
   reports the `historical-credential-containment` gate as effectively passed,
   with complete provider and replacement record coverage. A raw `passed`
   value, prose approval, or optional history rewrite is insufficient.
-- [ ] For a routine stable patch, run `./scripts/trigger-stable-patch.sh --dry-run <version>` from the exact pushed candidate SHA, wait for the whole run including `Verify Current Stable Demo Path (No Mutation)` to pass, then run `./scripts/trigger-stable-patch.sh <version>` once.
-- [ ] Confirm a routine stable patch has no same-version RC and no diff in the RC-required authentication/tenant, licensing/billing, persisted-data/migration, relay/mobile-trust, or installer/update/rollback boundaries. Otherwise use RC promotion or record the emergency hotfix reason.
+- [ ] For a stable patch (none is scheduled, and the train ships important fixes through an early cut), run `./scripts/trigger-stable-patch.sh <version>` once from the exact pushed candidate SHA and wait for the whole run, including `Verify Current Stable Demo Path (No Mutation)`, to pass. `--dry-run` is optional and only for an explicit no-public-release rehearsal.
+- [ ] Confirm a stable patch has no same-version RC and no diff in the RC-required authentication/tenant, licensing/billing, persisted-data/migration, relay/mobile-trust, or installer/update/rollback boundaries. Otherwise use RC promotion or record the emergency hotfix reason.
 - [ ] Treat `Release Activation Commit Verdict` as the irreversible GitHub release result, and follow its exact linked `Release Convergence` run until `Customer Promotion Convergence Verdict` is green. A red convergence run is retriable customer-surface debt, not evidence that the committed release returned to draft.
 - [x] Record the previous stable tag and exact rollback pin command before publishing a new prerelease or stable release.
 - [ ] For any prerelease or stable publication, confirm the repo variable `PULSE_UPDATE_SIGNING_PUBLIC_KEY` is set to the intended active update signer public key and that the release workflows are consuming it alongside `PULSE_UPDATE_SIGNING_KEY`, so accidental trust-root rotation fails closed before publication.
 - [x] For the first GA or an RC-required stable promotion, confirm the release pipeline has already been exercised on a real prerelease tag, not only linted or YAML-parsed.
 - [x] For an RC-required stable promotion, confirm the candidate commit has already shipped on `rc`.
 - [x] For an RC-required stable promotion, confirm the chosen `promoted_from_tag` is a prerelease that was actually published through the governed prerelease path, not an accidental git tag.
-- [x] For an RC-required stable promotion, confirm the prerelease soak window is at least 72 hours or document the hotfix exception explicitly.
+- [x] For an RC-required stable promotion, confirm the candidate soaked for at least 24 hours (the release train's soak) or document the hotfix exception explicitly.
 - [x] For stable promotion, record the 2026-07-02 release-owner decision accepting the current-branch validation risk for the post-RC7 changes.
 - [x] For stable v6.2.0 promotion, record the 2026-08-09 release-owner decision
   accepting the shortened RC11 soak and bind it to the exact content cutoff,

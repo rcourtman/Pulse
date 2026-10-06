@@ -555,7 +555,7 @@ def resolve_metadata(
             promoted_tag_ts = release_published_unix_fn(promoted_from_tag)
             soak_hours_value = int((now_unix_fn() - promoted_tag_ts) / 3600)
             soak_hours = str(soak_hours_value)
-            # The seven-day minor-release cadence starts at v6.5.0.
+            # The release train's exact-candidate and soak rules start at v6.5.0.
             # Source binding below applies independently to every future stable.
             train_governed = bool(stable_version and stable_version >= RELEASE_TRAIN_MIN_VERSION)
             # Every new stable promotion must ship its observed source, including
@@ -581,7 +581,7 @@ def resolve_metadata(
                 raise ValueError(
                     f"Stable promotion {tag} would ship content that {promoted_from_tag} never soaked "
                     f"({len(candidate_content_drift)} paths beyond release metadata: {shown}). "
-                    "Cut another release candidate from the release branch, or use hotfix_exception "
+                    "Cut a fresh release candidate from main, or use hotfix_exception "
                     "with a concrete active-customer-harm reason."
                 )
             elif train_governed and not stable_patch and soak_hours_value < MIN_MINOR_STABLE_SOAK_HOURS:

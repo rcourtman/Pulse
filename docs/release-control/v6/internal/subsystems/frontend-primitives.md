@@ -2062,6 +2062,12 @@ consume it, and the column stays desktop-only on each of them; a platform
 table must not hand-roll its own reason cell. On vSphere Datastores and
 Networks the Hosts list shows only from a 72rem container, where it reads
 instead of truncating, and the drawer keeps it at every width.
+vSphere tables that carry a vCenter column (hosts, health signals, activity)
+render it only when more than one vCenter is connected: the page passes
+`singleVcenter` (or the hosts table derives it from its scope), the header and
+cell drop together, and the inline detail row's column span follows. A table
+must not hide a column by filtered rows, because a search that narrows to one
+vCenter would otherwise make the column vanish.
 Patrol's primary assessment strip is descriptive only; it must not render a
 Patrol-authored recommended next step, suggested prompt chips, or a secondary
 action band inside the assessment shell. If the same assessment opens
@@ -4345,6 +4351,14 @@ Storage / Recovery hrefs) were deleted from
 panel and Patrol findings panel that consumed them now keep investigation
 in-place through their existing handoff buttons and inline actions. Future
 cross-surface drilldown chips must not reanimate the legacy helpers.
+An alert card's single resource link opens the owning platform's page. It
+resolves the platform through the shared `utils/sourcePlatforms.ts` resolver,
+maps it to a page through `PRIMARY_PLATFORM_NAV_SCOPE_IDS` in
+`features/platformNavigation/platformNavigationModel.ts`, and builds the href
+with the `routing/resourceLinks.ts` path builders. It must not freeze raw
+route strings or keep its own platform alias table, because those drifted
+before: agent alerts linked to a `/machines` route that never existed, and
+TrueNAS incidents linked to Proxmox.
 
 Command palette and keyboard shortcuts moved to platform-first on 2026-05-16,
 and top-level aggregate workspace routes were retired on 2026-05-25

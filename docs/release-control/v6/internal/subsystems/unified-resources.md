@@ -1602,6 +1602,17 @@ titles the event change with that message and falls back to the event class
 type row read it. Rows stored before that titling still carry the class as
 their title, so the page model prefers an event's `vmwareEventMessage` when it
 has one.
+The vSphere hosts, health-signal and activity tables show a vCenter column only
+when the page's vSphere inventory spans more than one vCenter connection.
+`isSingleVmwareVcenter` decides that from the page's whole vSphere resource set
+(on Overview, its hosts and VMs plus the datastores and networks its health
+signals cover), never from the rows a search or filter leaves, so narrowing a
+table does not drop the column. It counts connections by connection ID, and
+matches a resource without one to a known connection by name or vCenter host,
+so one vCenter is never counted twice. With
+one connection the name would repeat on every row; each row drawer still names
+it. The column reads the connection name, as the other vSphere tables do, with
+the vCenter host on hover.
 Primary platform navigation is also resource-evidence gated: runtime lenses such
 as Docker / Podman must be admitted from explicit Docker source scopes, Docker
 host or service resource types, or concrete runtime identity/inventory evidence

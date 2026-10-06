@@ -15,7 +15,9 @@ vi.mock('@/components/Alerts/InvestigateAlertButton', () => ({
   InvestigateAlertButton: () => null,
 }));
 vi.mock('../ResourceMonitoringPolicyAction', () => ({
-  ResourceMonitoringPolicyAction: () => <button>Resource monitoring policy</button>,
+  ResourceMonitoringPolicyAction: (props: any) => (
+    <button data-platform-type={props.platformType}>Resource monitoring policy</button>
+  ),
 }));
 vi.mock('../AlertSnoozeAction', () => ({ AlertSnoozeAction: () => null }));
 import { AlertOverviewAlertCard } from '../AlertOverviewAlertCard';
@@ -133,6 +135,108 @@ describe('Pulse system-alert overview scope', () => {
     expect(screen.getByRole('link', { name: 'esxi-07.lab.local' })).toHaveAttribute(
       'href',
       '/vmware/overview',
+    );
+  });
+
+  it.each([
+    {
+      name: 'a vCenter alarm on a VM whose message does not say VMware',
+      resourceId: 'vm:vc-1:vm-2041',
+      resourceName: 'sql-prod-01',
+      message: 'Virtual machine memory usage on sql-prod-01 (red)',
+      metadata: {
+        resourceType: 'vm',
+        incidentProvider: 'vmware',
+        incidentCode: 'vmware_alarm_state',
+        resourceSources: ['vmware'],
+      },
+      href: '/vmware/overview',
+      platformType: 'vmware-vsphere',
+    },
+    {
+      name: 'a TrueNAS pool incident',
+      resourceId: 'storage:truenas-1:tank',
+      resourceName: 'tank',
+      message: 'Pool tank is degraded',
+      metadata: {
+        resourceType: 'storage',
+        incidentProvider: 'truenas',
+        incidentCode: 'pool_degraded',
+        resourceSources: ['truenas'],
+      },
+      href: '/truenas/overview',
+      platformType: 'truenas',
+    },
+    {
+      name: 'a PBS datastore incident whose provider is Pulse itself',
+      resourceId: 'storage:pbs-1:main',
+      resourceName: 'main',
+      message: 'Datastore main is nearly full',
+      metadata: {
+        resourceType: 'storage',
+        incidentProvider: 'pulse',
+        incidentCode: 'capacity_runway_low',
+        resourceSources: ['pbs'],
+      },
+      href: '/proxmox/overview',
+      platformType: 'proxmox-pbs',
+    },
+  ])(
+    'links $name to its platform page and policy owner',
+    ({ resourceId, resourceName, message, metadata, href, platformType }) => {
+      const alert = makeSystemAlert('resource-incident', {
+        id: resourceId,
+        resourceId,
+        resourceName,
+        message,
+        metadata,
+      });
+      render(() => (
+        <AlertOverviewAlertCard alert={alert} state={state} timelineState={timelineState} />
+      ));
+      expect(screen.getByRole('link', { name: resourceName })).toHaveAttribute('href', href);
+      fireEvent.click(screen.getByRole('button', { name: 'More' }));
+      expect(screen.getByText('Resource monitoring policy')).toHaveAttribute(
+        'data-platform-type',
+        platformType,
+      );
+    },
+  );
+
+  it.each([
+    {
+      name: 'an agent host metric alert to Machines',
+      resourceId: 'agent:host-12',
+      resourceType: 'agent',
+      href: '/standalone/machines',
+      platformType: 'agent',
+    },
+    {
+      name: 'a TrueNAS pool metric alert to TrueNAS',
+      resourceId: 'truenas-1:pool:tank',
+      resourceType: 'truenas-pool',
+      href: '/truenas/overview',
+      platformType: 'truenas',
+    },
+  ])('links $name when metadata names no platform', (example) => {
+    const alert = makeSystemAlert('usage', {
+      id: example.resourceId,
+      resourceId: example.resourceId,
+      resourceName: 'monitored-resource',
+      message: 'Usage at 92%',
+      metadata: { resourceType: example.resourceType },
+    });
+    render(() => (
+      <AlertOverviewAlertCard alert={alert} state={state} timelineState={timelineState} />
+    ));
+    expect(screen.getByRole('link', { name: 'monitored-resource' })).toHaveAttribute(
+      'href',
+      example.href,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    expect(screen.getByText('Resource monitoring policy')).toHaveAttribute(
+      'data-platform-type',
+      example.platformType,
     );
   });
 

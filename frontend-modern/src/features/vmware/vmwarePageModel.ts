@@ -169,6 +169,35 @@ export const getVmwarePageTabSpecs = (
 const normalize = (value: unknown): string =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
 
+const vmwareConnectionFields = (resource: Resource) => ({
+  id: resource.vmware?.connectionId?.trim().toLowerCase() || '',
+  aliases: [resource.vmware?.connectionName, resource.vmware?.vcenterHost]
+    .map((value) => value?.trim().toLowerCase() || '')
+    .filter(Boolean),
+});
+
+// Whether the page's vSphere inventory comes from one vCenter connection, which
+// makes a vCenter column repeat on every row. Decided from the whole inventory,
+// never from filtered rows, so a search that narrows to one vCenter does not
+// drop the column. A resource without a connection ID is matched to a known
+// connection by its name or host, so one vCenter is never counted twice.
+export const isSingleVmwareVcenter = (resources: readonly Resource[]): boolean => {
+  const fields = resources.map(vmwareConnectionFields);
+  const idByAlias = new Map<string, string>();
+  for (const { id, aliases } of fields) {
+    if (id) aliases.forEach((alias) => idByAlias.set(alias, id));
+  }
+  const connections = new Set<string>();
+  for (const { id, aliases } of fields) {
+    const key = id || aliases.map((alias) => idByAlias.get(alias)).find(Boolean) || aliases[0];
+    if (key) connections.add(key);
+  }
+  return connections.size <= 1;
+};
+
+export const vmwareVcenterLabel = (resource: Resource): string =>
+  resource.vmware?.connectionName?.trim() || resource.vmware?.vcenterHost?.trim() || '';
+
 export const getVmwareResourceDisplayStatus = (resource: Resource): string =>
   hasImpairedResourceSource(resource, 'vmware-vsphere') ? 'degraded' : resource.status;
 

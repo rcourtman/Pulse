@@ -55,21 +55,24 @@ requests are opened by `pulse-triage[bot]` and state what changed, why it
 was needed, which reports or demand-ledger entries it answers, and what
 validation was used, so the record on GitHub is the record of the decision.
 
-Releases run on a train rather than on demand. A release candidate is cut
-from `main` into a `release/vX.Y` branch on a fixed schedule, soaks on the
-opt-in preview channel, takes only backports of regression and security
-fixes while it soaks, and is promoted to stable as the exact candidate
-content. The promotion resolver in the release pipeline enforces the soak
-and the exact-content rule for every dispatcher. The full rules are in
-[RELEASE_PROMOTION_POLICY.md](https://github.com/rcourtman/Pulse/blob/b64709e7b7ad174e9c94ad2a0d3d841678690935/docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md),
-under "Release Train".
+Releases run on a fixed train. Fourteen days after the last stable release, or
+earlier when I ask for an early cut, a release candidate for the next minor
+version is cut from the head of `main`. Patch releases are not scheduled. The
+candidate carries everything merged at the cut and nothing is added to it
+afterwards. It soaks for 24 hours on the opt-in preview channel and is then
+promoted to stable unchanged. Only an open issue labelled `release-blocker`
+stops a promotion. The fix lands on `main`, the issue is closed, and a fresh
+candidate is cut from `main`. The promotion resolver in the release pipeline
+enforces the soak and the exact-content rule for every dispatcher. [Releases
+and update channels](RELEASE_PROCESS.md) describes the train for users.
 
 ## Authority and responsibility
 
 On 8 September 2026 I confirmed standing authority for the automated maintainer
 to own public Pulse issue replies and release publication, including stable
 releases. These actions do not require my approval for each comment or release.
-The maintainer chooses release scope, maturity and timing from current evidence.
+Since 4 October 2026 releases are mechanical: no model chooses release scope or
+timing, and the train cuts, soaks and promotes on its schedule.
 
 Standing authority does not waive independent review, release qualification,
 exact-candidate promotion, required soak, or verification after publication.
