@@ -3789,6 +3789,46 @@ exists or the agent payload has no usable positive reading. Identity-only or
 zero-temperature SMART rows do not count as usable by themselves, but the
 runtime must not keep probing legacy SSH solely to augment an otherwise healthy
 agent temperature payload with SMART data.
+A host agent's sensors feed the node the agent is linked to. Several Proxmox
+connections can each have a node of the same name (one `px1` per site), and
+`Host.LinkedNodeID` always holds the Proxmox source node ID, whether the link is
+automatic, manual or restored from host continuity. The poller therefore hands
+`getHostAgentTemperatureForNode` in `internal/monitoring/host_agent_temps.go` the
+polled node itself, and the lookup works on that node's slot. A node the read
+state holds under its own source ID is its own slot. The state folds the views
+of one machine reached through two connections (a cluster added twice, or a
+multi-homed host added by each address) into one node kept under one view's ID,
+chosen by its merge preference, and an automatic agent link follows that node.
+So a polled view the read state does not hold also takes the one same-named
+node proven to be the same machine, by `models.NodeObservationsSameMachine` or,
+for the agent linked to that node, `models.HostAgentBridgesNodeViews` (the agent
+reports both endpoints and the views' TLS fingerprints do not contradict), both
+in `internal/models/node_machine_identity.go`. These are pairwise forms of
+evidence `UpdateNodesForInstance` folds on, and it shares the agent
+corroboration rule with them;
+`TestNodeObservationsSameMachineMatchesStateFold` and
+`TestHostAgentBridgesNodeViewsMatchesStateFold` pin them against the state's
+fold for the covered cases. Two or more such candidates are ambiguous and none
+is taken, as the state declines an ambiguous alias. An agent linked to a slot ID
+is the node's agent. A manual link stays pinned to the source ID the operator
+chose, because the state never transfers operator intent to a replacement
+provider identity, so while the state keeps that machine under the other view's
+ID the node has no linked agent and no agent reading. Otherwise the hostname
+fallback takes only an agent with no node, VM or container link whose hostname
+is exactly the node name, and only when no Proxmox node outside the slot and no
+second unlinked agent has that name. Cluster-sibling readings an agent collects over SSH arrive keyed by bare
+node name, so the cluster sensor cache records the reporting agent. A reading
+serves the node only when the node that agent is currently linked to belongs to
+one of the slot's connections, or to a connection whose configured view of the
+node carries a matching TLS fingerprint (the other connection of a cluster added
+twice). The reading follows the agent's link the way the agent's own sensors do,
+and a reading from an unlinked agent serves no node. Without these bounds, site
+B's `px1` showed, alerted on and recorded history for site A's agent or
+cluster-sibling sensors. `TestNodeTemperatureStaysWithinSameNamedNodesSite` in
+`internal/monitoring/monitor_additional_test.go` pins the poller lookup,
+including the folded-view cases, and
+`TestApplyHostReportScopesClusterSensorsToReportersConnection` in
+`internal/monitoring/monitor_host_agents_test.go` pins the agent ingest side.
 A node temperature presented as available must describe the node now, because
 node alert evaluation, node history writes, reporting, and the UI all read it as
 a live measurement. A host agent linked to a Proxmox node merges into one host

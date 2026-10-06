@@ -4051,7 +4051,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	hostAgentByHostname := make(map[string]map[string]struct{}) // lowercase hostname -> hostAgentIDs
 	hostAgentByIP := make(map[string]map[string]struct{})       // normalized ip -> hostAgentIDs
 	validHostAgentIDs := make(map[string]bool)                  // set of existing host agent IDs
-	hostHostnameByID := make(map[string]string)                 // hostAgentID -> normalized full hostname
+	hostByID := make(map[string]Host)                           // hostAgentID -> host
 	addHostAlias := func(name, hostID string) {
 		name = strings.TrimSpace(strings.ToLower(name))
 		if name == "" || hostID == "" {
@@ -4086,7 +4086,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	for _, host := range s.Hosts {
 		if host.ID != "" {
 			validHostAgentIDs[host.ID] = true
-			hostHostnameByID[host.ID] = strings.TrimSpace(strings.ToLower(host.Hostname))
+			hostByID[host.ID] = host
 			addHostAlias(host.Hostname, host.ID)
 			// Also index by short hostname
 			if idx := strings.Index(host.Hostname, "."); idx > 0 {
@@ -4109,16 +4109,8 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	// Preserve legitimate split views when the same agent strongly bridges
 	// both endpoints through an exact IP or a full (dotted) hostname.
 	hostStronglyCorroboratesNode := func(hostID string, node Node) bool {
-		endpoint := extractHostEndpoint(node.Host)
-		if endpoint == "" {
-			return false
-		}
-		if ip := normalizeIPAddress(endpoint); ip != "" {
-			_, ok := hostIPsByID[hostID][ip]
-			return ok
-		}
-		hostname := hostHostnameByID[hostID]
-		return strings.Contains(endpoint, ".") && endpoint == hostname
+		host, ok := hostByID[hostID]
+		return ok && hostReportsNodeEndpoint(host, node)
 	}
 	sharedAgentProvesNodePair := func(hostID string, existing, candidate Node) bool {
 		if nodeCrossViewMergeProven(existing, candidate) {
