@@ -102,9 +102,9 @@ type Manager struct {
 	// Cleanup control
 	cleanupStop chan struct{} // Signal to stop cleanup goroutine
 	// Host agent deduplication: the Proxmox node each reporting host agent is
-	// linked to. While a link holds, the agent resource owns that machine's
-	// CPU, memory and disk usage alerts and the node releases its own copies.
-	hostAgentNodeLinks map[string]string // Host agent ID -> linked node ID
+	// linked to and the usage metrics the agent evaluates for it. The node
+	// releases only those metrics and keeps evaluating the rest itself.
+	hostAgentNodeLinks map[string]hostAgentNodeLink // Host agent ID -> node link
 	// Node display name caches. Proxmox nodes can share the same raw node name
 	// across multiple configured instances, so keep instance-scoped entries in
 	// addition to the legacy raw-name cache used by instance-less resources.
@@ -245,7 +245,7 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		flappingHistory:                 make(map[string][]time.Time),
 		flappingActive:                  make(map[string]bool),
 		cleanupStop:                     make(chan struct{}),
-		hostAgentNodeLinks:              make(map[string]string),
+		hostAgentNodeLinks:              make(map[string]hostAgentNodeLink),
 		nodeDisplayNames:                make(map[string]string),
 		instanceNodeDisplayNames:        make(map[string]string),
 		now:                             time.Now,

@@ -241,10 +241,6 @@ func (m *Manager) CheckHost(host models.Host) {
 		return
 	}
 
-	// Record the Proxmox node this agent is linked to, so the node releases the
-	// usage alerts the agent now owns instead of alerting twice for one machine.
-	m.registerHostAgentNodeLink(host)
-
 	// Cache display name so host alerts show the user-configured name.
 	m.UpdateNodeDisplayName("", host.Hostname, host.DisplayName)
 
@@ -263,11 +259,15 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 	m.mu.RUnlock()
 
+	// While this agent evaluates nothing, its linked node keeps its own usage
+	// alerts; the link is registered below once the evaluated metrics are known.
 	if !alertsEnabled {
+		m.unregisterHostAgentNodeLink(host.ID)
 		return
 	}
 
 	if disableAllAgents {
+		m.unregisterHostAgentNodeLink(host.ID)
 		// Clear any existing host alerts when all host alerts are disabled
 		m.clearHostMetricAlerts(host.ID)
 		m.clearHostDiskAlerts(host.ID)
@@ -278,6 +278,7 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	if thresholds.Disabled {
+		m.unregisterHostAgentNodeLink(host.ID)
 		m.clearHostMetricAlerts(host.ID)
 		m.clearHostDiskAlerts(host.ID)
 		m.clearHostRAIDAlerts(host.ID)
@@ -408,6 +409,13 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	seenDisks := make(map[string]struct{}, len(host.Disks))
+	// A linked node's disk metric is this agent's summary filesystem (root when
+	// reported), so the agent owns it only while it evaluates that filesystem.
+	summaryDiskResourceID := ""
+	if summary, ok := models.SummaryDisk(host.Disks); ok {
+		summaryDiskResourceID, _ = hostDiskResourceID(host, summary)
+	}
+	evaluatesSummaryDisk := false
 	if len(host.Sensors.SMART) > 0 {
 		for _, disk := range host.Sensors.SMART {
 			diskResourceID, diskName := hostSMARTDiskResourceID(host, disk)
@@ -465,6 +473,7 @@ func (m *Manager) CheckHost(host models.Host) {
 		if effectiveDiskThreshold == nil {
 			continue
 		}
+		evaluatesSummaryDisk = evaluatesSummaryDisk || (diskResourceID == summaryDiskResourceID && effectiveDiskThreshold.Trigger > 0)
 
 		diskMetadata := hostChildAlertMetadata(baseMetadata, hostDiskAlertResourceType)
 		diskMetadata["metric"] = "disk"
@@ -511,6 +520,20 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	m.cleanupHostDiskAlerts(host, seenDisks)
+
+	// The linked node releases exactly the usage metrics this agent is set up
+	// to evaluate and keeps the rest, so deduplication never leaves the machine
+	// unmonitored. Ownership follows configuration, not one report's data: a
+	// missing memory reading keeps the agent's alert open rather than handing
+	// memory back to the node for a cycle.
+	m.registerHostAgentNodeLink(hostAgentNodeLink{
+		agentID:   host.ID,
+		agentName: resourceName,
+		nodeID:    host.LinkedNodeID,
+		cpu:       thresholds.CPU != nil && thresholds.CPU.Trigger > 0,
+		memory:    thresholds.Memory != nil && thresholds.Memory.Trigger > 0,
+		disk:      evaluatesSummaryDisk,
+	})
 
 	if host.Unraid != nil {
 		m.syncHostUnraidStorageAlert(host, nodeName, instanceName, resourceName, baseMetadata)
