@@ -670,6 +670,9 @@ func (m *Manager) removeActiveAlertNoLock(alertID string) {
 	}
 	if exists {
 		delete(m.activeAlerts, key)
+		if currentAlert != nil {
+			delete(m.restoredBackupNotifications, canonicalTrackingKeyForAlert(currentAlert))
+		}
 		m.removeActiveRecoveryAlert(currentAlert, key)
 	}
 

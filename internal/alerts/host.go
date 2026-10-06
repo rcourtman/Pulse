@@ -220,11 +220,9 @@ func (m *Manager) CheckHost(host models.Host) {
 		return
 	}
 
-	// Register this host agent hostname for deduplication with Proxmox nodes.
-	// This prevents duplicate alerts when both a Node and Host agent monitor the same machine.
-	if host.Hostname != "" {
-		m.RegisterHostAgentHostname(host.Hostname)
-	}
+	// Record the Proxmox node this agent is linked to, so the node releases the
+	// usage alerts the agent now owns instead of alerting twice for one machine.
+	m.registerHostAgentNodeLink(host)
 
 	// Cache display name so host alerts show the user-configured name.
 	m.UpdateNodeDisplayName("", host.Hostname, host.DisplayName)
@@ -619,10 +617,8 @@ func (m *Manager) HandleHostRemoved(host models.Host) {
 		return
 	}
 
-	// Unregister the host agent hostname since it's being removed.
-	if host.Hostname != "" {
-		m.UnregisterHostAgentHostname(host.Hostname)
-	}
+	// The removed agent no longer owns its linked node's usage alerts.
+	m.unregisterHostAgentNodeLink(host.ID)
 
 	m.HandleHostOnline(host)
 	m.clearHostMetricAlerts(host.ID)
@@ -729,11 +725,9 @@ func (m *Manager) HandleHostOfflineWithCorrelation(host models.Host, correlation
 		return
 	}
 
-	// Unregister the host agent hostname since it's no longer actively monitoring.
-	// This allows node alerts to resume if a Proxmox node with the same hostname exists.
-	if host.Hostname != "" {
-		m.UnregisterHostAgentHostname(host.Hostname)
-	}
+	// The agent is no longer actively monitoring, so its linked Proxmox node
+	// resumes evaluating its own usage alerts.
+	m.unregisterHostAgentNodeLink(host.ID)
 	m.HandleHostTelemetryExpired(host)
 
 	m.mu.RLock()

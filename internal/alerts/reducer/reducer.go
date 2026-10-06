@@ -583,6 +583,29 @@ func (s *State) Forget(resourceID, subKey string, at time.Time) {
 	}
 }
 
+// InterruptMetricRun ends the timing evidence for one metric key without
+// resolving anything: a pending activation run is dropped and a firing
+// incident's recovery run restarts. Evaluators call it when an observation is
+// missing, so neither a sustained-for delay nor a recovery delay spans a gap
+// in evidence. It reports whether a run was interrupted.
+func (s *State) InterruptMetricRun(resourceID, subKey string) bool {
+	key := incidentKey(resourceID, subKey)
+	incident, ok := s.incidents[key]
+	if !ok {
+		return false
+	}
+	switch incident.State {
+	case StatePending:
+		delete(s.incidents, key)
+		return true
+	case StateFiring:
+		interrupted := !incident.RecoverySince.IsZero()
+		resetMetricRecoveryRun(incident)
+		return interrupted
+	}
+	return false
+}
+
 // ShiftResolved moves every resolved-occurrence timestamp by delta
 // (negative = older). It exists for tests and simulations that age
 // resolved records past RefireRetention; production code has no reason to
