@@ -5838,6 +5838,29 @@ action requests, approvals, links or exclusions. Separate monitor, API and
 Assistant store handles must see current persisted aliases. Missing identity
 storage is an error, not evidence of empty history. Retention removes an alias
 only after neither identity has retained journal records.
+Other alert source references resolve at `MonitorAdapter.RecordChange`
+through `ResourceRegistry.resolveHistoryReference`, which accepts only durable
+identities: the canonical ID, a retired era, a source ID (Proxmox node, guest
+and storage IDs), a node-scoped Proxmox guest reference after migration, or
+`agent:<host ID>`. Names and hostnames never bind history, unlike the wider
+`ResolveReferenceID` used by alert policy, so a resource named like a system
+reference cannot capture its events. A reference two resources answer to binds
+to neither: its event keeps its own reference and creates or changes no
+binding, though an earlier binding still covers that reference on read. A
+reference no resource
+answers to follows its retained binding after inventory removal, or keeps its
+own history. Docker references never take this path. Alert journal references
+without a binding (read once per process, plus any written before inventory
+named their resource) are retried on each published registry generation for
+`legacyHistoryBindWindow`. Bound rows keep their recorded resource ID, so a
+change list may show the source reference on rows written before the binding.
+Only the full-presentation `ResourceDetailDrawer` reads this history in the UI
+(facets and resource intelligence); the `table-row` drawer used by Proxmox node
+and Agents rows, and the guest and storage drawers, do not request it.
+Assistant and Patrol resource contexts read it from the store. Proof:
+`TestHistoryIdentityMonitorAdapterResolvesProxmoxAlertReferences` and
+`TestHistoryIdentityBindsLegacyAlertRowsFromRegistryGenerations` in
+`internal/unifiedresources/history_identity_test.go`.
 That same shared timeline vocabulary now includes the `activity` change kind
 for provider-read breadcrumbs such as VMware tasks and events, plus the
 `vmware_adapter` source-adapter token for canonical provenance drill-down.

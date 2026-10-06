@@ -1043,6 +1043,15 @@ join another container's history. The real alert-manager callback path is
 covered by `TestDockerAlertTimelineUsesCanonicalHistoryIdentity` in
 `internal/monitoring/monitor_alert_handling_test.go`.
 
+Proxmox node, guest and storage alert lifecycle events carry source-native IDs
+and pass through the same writer, which resolves them to the canonical
+resource. Resource facets, resource intelligence and Assistant resource context
+therefore include their alert history, including events emitted after the
+resource left inventory. Event IDs still hash the alert's source reference, so
+replay stays idempotent. The real alert-manager callback path is covered by
+`TestProxmoxAlertTimelineUsesCanonicalHistoryIdentity` in
+`internal/monitoring/monitor_alert_handling_test.go`.
+
 TrueNAS native alert projection preserves the trimmed, uppercase provider level in ResourceIncident.NativeSeverity. INFO and NOTICE retain the same canonical monitor risk; consumers must not lose their distinct actionability when projecting provider evidence. Native CRITICAL, ALERT, and EMERGENCY all project to canonical critical severity; EMERGENCY must not be discarded as unknown or make a still-active condition appear recovered. WARNING remains warning, and INFO and NOTICE remain informational at this projection boundary.
 
 Verification: `TestIncidentProjectionPreservesNativeSeverity` in `internal/truenas/provider_pool_health_contract_test.go` covers all seven native levels and case/whitespace normalization. `TestTrueNASNativeSeverityDispatch` in `internal/alerts/truenas_native_dispatch_test.go` verifies downstream INFO suppression, NOTICE preservation, notification severity, duplicate-poll retention, and confirmed recovery callback identity. The TrueNAS lifecycle tests in `internal/alerts/unified_incidents_test.go` require repeated EMERGENCY evidence to interrupt recovery confirmation. These are fixture-based projection and manager checks, not appliance ingestion or external notification-provider receipt proof.

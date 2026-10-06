@@ -92,6 +92,64 @@ func TestDockerAlertTimelineUsesCanonicalHistoryIdentity(t *testing.T) {
 	t.Logf("DOCKER_HISTORY_LIFECYCLE %s", encoded)
 }
 
+// Proxmox node and guest alerts carry source-native IDs. Their lifecycle must
+// reach the canonical resource history that facets, the drawer and the
+// assistant read, including events emitted after the resource left inventory.
+func TestProxmoxAlertTimelineUsesCanonicalHistoryIdentity(t *testing.T) {
+	store, err := unifiedresources.NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	config := manager.GetConfig()
+	config.Enabled = true
+	config.ActivationState = alerts.ActivationPending
+	config.TimeThresholds = map[string]int{"node": 0, "guest": 0}
+	config.SuppressionWindow = 0
+	manager.UpdateConfig(config)
+	now := time.Now()
+	node := models.Node{ID: "lab-pve1", Name: "pve1", Instance: "lab", Host: "https://pve1.lab:8006", Status: "online", CPU: 0.99, LastSeen: now}
+	vm := models.VM{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "stopped", Type: "qemu", LastSeen: now}
+	registry := unifiedresources.NewRegistry(store)
+	registry.IngestSnapshot(models.StateSnapshot{Nodes: []models.Node{node}, VMs: []models.VM{vm}})
+	monitor := &Monitor{alertManager: manager, resourceStore: unifiedresources.NewMonitorAdapter(registry)}
+	manager.SubscribeLifecycleCallback(monitor.handleAlertLifecycleEvent)
+	manager.CheckNode(node)
+	manager.CheckGuest(vm, vm.Instance)
+	manager.CheckGuest(vm, vm.Instance)
+
+	canonical := map[string]string{}
+	for _, resource := range registry.List() {
+		canonical[resource.Name] = resource.ID
+	}
+	require.NotEqual(t, node.ID, canonical["pve1"])
+	require.NotEqual(t, vm.ID, canonical["web"])
+	filters := unifiedresources.ResourceChangeFilters{Kinds: []unifiedresources.ChangeKind{unifiedresources.ChangeAlertFired, unifiedresources.ChangeAlertResolved}}
+	for name, sourceID := range map[string]string{"pve1": node.ID, "web": vm.ID} {
+		changes, err := store.GetRecentChangesFiltered(canonical[name], time.Time{}, 10, filters)
+		require.NoError(t, err)
+		require.Len(t, changes, 1, name)
+		require.Equal(t, unifiedresources.ChangeAlertFired, changes[0].Kind)
+		require.Equal(t, canonical[name], changes[0].ResourceID)
+		kinds, err := store.CountRecentChangesByKind(canonical[name], time.Time{})
+		require.NoError(t, err)
+		require.Equal(t, 1, kinds[unifiedresources.ChangeAlertFired], name)
+		legacy, err := store.GetRecentChangesFiltered(sourceID, time.Time{}, 10, filters)
+		require.NoError(t, err)
+		require.Equal(t, changes, legacy, "the source reference reads the same history")
+	}
+
+	// The node recovers after it left inventory; its retained binding holds.
+	monitor.resourceStore = unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
+	node.CPU = 0.05
+	manager.CheckNode(node)
+	changes, err := store.GetRecentChangesFiltered(canonical["pve1"], time.Time{}, 10, filters)
+	require.NoError(t, err)
+	require.Len(t, changes, 2)
+	require.Equal(t, unifiedresources.ChangeAlertResolved, changes[0].Kind)
+	require.Equal(t, canonical["pve1"], changes[0].ResourceID)
+}
+
 func TestMonitor_HandleAlertFired_Extra(t *testing.T) {
 	// 1. Alert is nil
 	m1 := &Monitor{}
