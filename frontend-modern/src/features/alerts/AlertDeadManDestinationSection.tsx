@@ -58,22 +58,43 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
   const [unavailable, setUnavailable] = createSignal(false);
   const [showUrl, setShowUrl] = createSignal(false);
 
-  let backgroundLoad = false;
+  // The status read has no timeout, so every read gets a sequence number and
+  // only the newest one applies: a read that never settles cannot hold the
+  // panel on an old status or swallow a later Refresh. A background read
+  // waits while the newest read is younger than one poll interval and leaves
+  // the Refresh button alone; a failed read keeps the last status and marks it
+  // unavailable. Nothing applies after the panel unmounts.
+  let latestRequest = 0;
+  let pendingSince: number | undefined;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
   const loadStatus = async (options: { background?: boolean } = {}) => {
-    if (loading() || backgroundLoad) return;
-    // A background re-read leaves the Refresh button alone; a failed one keeps
-    // the last status and marks it unavailable.
-    if (options.background) backgroundLoad = true;
-    else setLoading(true);
+    if (options.background) {
+      if (pendingSince !== undefined && Date.now() - pendingSince < DEAD_MAN_STATUS_POLL_MS) {
+        return;
+      }
+    } else if (loading()) {
+      return;
+    }
+    const request = ++latestRequest;
+    pendingSince = Date.now();
+    if (!options.background) setLoading(true);
     try {
-      setStatus(await AlertsAPI.getDeadManStatus());
+      const next = await AlertsAPI.getDeadManStatus();
+      if (disposed || request !== latestRequest) return;
+      setStatus(next);
       setUnavailable(false);
     } catch (error) {
+      if (disposed || request !== latestRequest) return;
       logger.error('Failed to load external watchdog status', error);
       setUnavailable(true);
     } finally {
-      if (options.background) backgroundLoad = false;
-      else setLoading(false);
+      if (!disposed && request === latestRequest) {
+        pendingSince = undefined;
+        setLoading(false);
+      }
     }
   };
 
