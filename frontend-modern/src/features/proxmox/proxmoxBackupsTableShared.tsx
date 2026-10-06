@@ -233,11 +233,8 @@ export function formatCompactBackupAge(createdAt: string, now?: number): string 
 
 export function ProxmoxBackupAgeText(props: { artifact: RecoverableArtifact; compact?: boolean }) {
   // Backup rows stay mounted while an artifact's creation time never changes,
-  // so the age and its freshness band both read the shared clock. The clock
-  // can trail the wall clock by up to one tick, and a backup that finished
-  // inside that window must not band as a future (unknown) age.
-  const tickNow = useRelativeTimeNow();
-  const now = () => Math.max(tickNow(), Date.now());
+  // so the age and its freshness band both read the shared clock.
+  const now = useRelativeTimeNow();
   const band = () => getRecoveryAgeBand(props.artifact.createdMs, now());
   const title = () => {
     if (band() === 'unknown') return recoveryAgeTitleByBand.unknown;

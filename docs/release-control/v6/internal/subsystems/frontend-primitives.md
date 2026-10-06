@@ -4649,6 +4649,21 @@ Each query run receives an `AbortSignal`; changing the source, resetting the
 query, or unmounting its owner must abort the superseded browser request before
 starting replacement work. Consumers must forward that signal through their
 API/cache layer when the transport supports cancellation.
+A poll (`pollMs`) does not replace a read that an earlier poll started while
+that read is still in flight; it skips the tick. The API answers 429 with
+`Retry-After: 60` and `apiFetch` honours up to two minutes, so a polled read
+slower than the poll interval would otherwise be discarded on every tick and
+never settle. Any other read (a refresh, a source change, a remount
+revalidation) stays replaceable at the next tick, so a slow or hung refresh is
+replaced at most once before polling protects its replacement. A polled read
+still in flight at the first poll tick at or after `STALLED_QUERY_READ_MS` (150
+seconds) is presumed stalled: that tick replaces it and settles it as a failed
+read, clearing `loading`, setting `resolvedOnce` and publishing a timed-out
+`error`, so no consumer is left waiting on a read that never returns. Each
+consumer renders that failure as it renders any other (the Proxmox Replication
+table shows its error and Retry; workload sparklines keep retained series). A
+transport that always takes longer than that deadline plus one poll interval
+never publishes.
 The settings reporting shell now also owns a deliberate split between
 historical performance reports and current-state VM inventory export.
 `frontend-modern/src/components/Settings/ReportingPanel.tsx`,
@@ -5210,9 +5225,10 @@ cells: a value formatted through `formatPlatformTableRelativeTimeValue` or
 and tooltips, an open drawer's summary rows and annotations) passes `now` from
 the owning component's `useRelativeTimeNow`, and a countdown or freshness band
 derived from the same time (replication Next sync, backup age bands) reads it
-too. The clock can trail the wall clock by up to one tick, so a check that
-treats a future time as invalid (the backup age band) measures from the later
-of the two.
+too. Every read of the clock returns the wall clock; the 30-second tick only
+tells readers to re-read, so a cell that mounts between ticks never measures
+from a stale time and a timestamp from the last few seconds never reads as a
+future time.
 Read-only metadata badges follow the same primitive-owned shell rule.
 `frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
 outlined appearances, compact sizing, shape, typed tone vocabulary, fit

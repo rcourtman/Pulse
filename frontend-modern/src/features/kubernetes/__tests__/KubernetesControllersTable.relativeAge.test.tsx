@@ -17,6 +17,7 @@ vi.mock('@/api/resources', () => ({
 }));
 
 import type { Resource } from '@/types/resource';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 import { KubernetesControllersTable } from '../KubernetesControllersTable';
 
 const makeResource = ({
@@ -85,7 +86,8 @@ describe('KubernetesControllersTable relative ages', () => {
 
     // No data changes: the timestamps stay put and only the clock moves. A
     // detail computed once at render would still read "31m ago" here.
-    vi.advanceTimersByTime(3 * 60 * 60 * 1000);
+    vi.setSystemTime(Date.parse('2026-05-24T16:31:00Z'));
+    vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
 
     expect(screen.getByText('Completed 3h ago')).toBeInTheDocument();
     expect(screen.getByText('Last success 3h ago')).toBeInTheDocument();
