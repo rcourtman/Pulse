@@ -1,7 +1,9 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentMetadataAPI } from '@/api/agentMetadata';
 import { MonitoringAPI } from '@/api/monitoring';
+import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { RESOURCE_METADATA_CHANGED_EVENT } from '@/utils/resourceMetadataEvents';
@@ -31,6 +33,13 @@ vi.mock('@/api/monitoring', () => ({
   MonitoringAPI: {
     deleteAgent: vi.fn(async () => undefined),
   },
+}));
+
+// The websocket's activeAlerts is a Solid store, so rows must follow it live.
+const activeAlertsRef = vi.hoisted(() => ({ current: {} as Record<string, Alert> }));
+
+vi.mock('@/contexts/appRuntime', () => ({
+  useWebSocket: () => ({ activeAlerts: activeAlertsRef.current }),
 }));
 
 vi.mock('@/stores/notifications', () => ({
@@ -111,6 +120,9 @@ const resource = (overrides: Partial<Resource>): Resource =>
     ...overrides,
   }) as Resource;
 
+const [activeAlerts, setActiveAlerts] = createStore<Record<string, Alert>>({});
+activeAlertsRef.current = activeAlerts;
+
 const emptyIcon = <span data-testid="empty-icon" />;
 const getAllAgentMetadataMock = vi.mocked(AgentMetadataAPI.getAllMetadata);
 const deleteAgentMetadataMock = vi.mocked(AgentMetadataAPI.deleteMetadata);
@@ -140,6 +152,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  setActiveAlerts(reconcile({}));
   window.localStorage.clear();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
@@ -188,6 +201,65 @@ describe('AgentsMachinesTable', () => {
     expect(onResetFilters).toHaveBeenCalledTimes(1);
     expect(onExternalSearchChange).not.toHaveBeenCalled();
     expect(onExternalStatusChange).not.toHaveBeenCalled();
+  });
+
+  it('tints a machine row for the open alerts its drawer lists', () => {
+    const agentAlert = (id: string, resourceId: string, overrides: Partial<Alert> = {}): Alert => ({
+      id,
+      type: 'memory',
+      level: 'warning',
+      resourceId,
+      resourceName: id,
+      node: id,
+      instance: '',
+      message: id,
+      value: 91,
+      threshold: 85,
+      startTime: '2026-10-06T10:00:00Z',
+      acknowledged: false,
+      ...overrides,
+    });
+    // Agent alerts are keyed "agent:<agentId>", never the row's resource id.
+    setActiveAlerts({
+      memory: agentAlert('memory', 'agent:host-tower'),
+      disk: agentAlert('disk', 'agent:host-nas/disk:data', { type: 'disk', level: 'critical' }),
+      acked: agentAlert('acked', 'agent:host-pi', { acknowledged: true }),
+    });
+    const machine = (id: string, agentId: string) =>
+      resource({ id, name: id, agent: { agentId } } as Partial<Resource>);
+
+    render(() => (
+      <AgentsMachinesTable
+        resources={[
+          machine('tower', 'host-tower'),
+          machine('nas', 'host-nas'),
+          machine('pi', 'host-pi'),
+          machine('laptop', 'host-laptop'),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    const row = (id: string) => document.querySelector(`[data-agents-machine-row="${id}"]`)!;
+    expect(row('tower')).toHaveClass('bg-yellow-50');
+    expect(row('nas')).toHaveClass('bg-red-50');
+    // An acknowledged alert stays in the drawer but no longer tints the row.
+    for (const id of ['pi', 'laptop']) {
+      expect(row(id)).not.toHaveClass('bg-yellow-50');
+      expect(row(id)).not.toHaveClass('bg-red-50');
+    }
+
+    // The tint follows the live alert store without a re-render: acknowledging
+    // clears it, escalation turns it red, and resolution clears it.
+    setActiveAlerts('memory', 'acknowledged', true);
+    expect(row('tower')).not.toHaveClass('bg-yellow-50');
+    setActiveAlerts('memory', { acknowledged: false, level: 'critical' });
+    expect(row('tower')).toHaveClass('bg-red-50');
+    setActiveAlerts(reconcile({}));
+    expect(row('tower')).not.toHaveClass('bg-red-50');
+    expect(row('nas')).not.toHaveClass('bg-red-50');
   });
 
   it('keeps the column picker inside the shared View preferences disclosure', async () => {

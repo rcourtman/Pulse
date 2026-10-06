@@ -25,6 +25,7 @@ import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import {
   compareAgentVersions,
@@ -61,6 +62,7 @@ import type { Disk } from '@/types/api';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { getActionableAgentIdFromResource } from '@/utils/agentResources';
+import { getUnifiedResourceAlertStyles } from '@/utils/alerts';
 import { formatBytes, formatSpeed, formatObservedSpeed, normalizeDiskArray } from '@/utils/format';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -1196,6 +1198,7 @@ export const AgentsMachinesTable: Component<{
     }
     tableState.resetFilters();
   };
+  const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
   const [sortKey, setSortKey] = createSignal<AgentMachineSortKey>('name');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
@@ -1577,6 +1580,22 @@ export const AgentsMachinesTable: Component<{
                       getAgentMachineThermalPressurePresentation(machine);
                     const isExpanded = () => drawer.isExpanded(machine);
                     const detailRowId = () => drawer.detailRowId(machine);
+                    // Tint the row for the open alerts its drawer lists, so a
+                    // machine over a threshold stands out without opening it.
+                    const machineAlertStyles = createMemo(() =>
+                      getUnifiedResourceAlertStyles(
+                        machine,
+                        activeAlerts,
+                        alertsActivation.detectionEnabled(),
+                      ),
+                    );
+                    const machineAlertBg = () => {
+                      const s = machineAlertStyles();
+                      if (!s.hasUnacknowledgedAlert) return '';
+                      return s.severity === 'critical'
+                        ? 'bg-red-50 dark:bg-red-950/25'
+                        : 'bg-yellow-50 dark:bg-yellow-950/25';
+                    };
                     const agentMetadataId = () => agentMetadataIdFor(machine);
                     const agentRemovalId = () => agentRemovalIdFor(machine);
                     const savedWebInterfaceUrl = () => savedAgentCustomUrlFor(agentMetadataId());
@@ -1587,7 +1606,9 @@ export const AgentsMachinesTable: Component<{
                     return (
                       <>
                         <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs ${
+                            isExpanded() ? '' : machineAlertBg()
+                          }`}
                           data-agents-machine-row={machine.id}
                           onClick={toggleDetails}
                         >

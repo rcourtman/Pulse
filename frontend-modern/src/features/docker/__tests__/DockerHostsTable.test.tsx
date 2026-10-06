@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { Disk } from '@/types/api';
+import type { Alert, Disk } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { DockerHostsTable } from '../DockerHostsTable';
@@ -38,8 +38,10 @@ vi.mock('@/components/shared/responsive', () => ({
   ),
 }));
 
+const activeAlertsMock = vi.hoisted(() => ({}) as Record<string, Alert>);
+
 vi.mock('@/contexts/appRuntime', () => ({
-  useWebSocket: () => ({ activeAlerts: {} as Record<string, never> }),
+  useWebSocket: () => ({ activeAlerts: activeAlertsMock }),
 }));
 vi.mock('@/stores/alertsActivation', () => ({
   useAlertsActivation: () => ({
@@ -125,6 +127,7 @@ const makeDockerHost = (overrides: Partial<Resource> = {}): Resource => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  for (const key of Object.keys(activeAlertsMock)) delete activeAlertsMock[key];
 });
 
 describe('DockerHostsTable', () => {
@@ -212,6 +215,64 @@ describe('DockerHostsTable', () => {
     expect(document.querySelector('[data-docker-host-stale] .sr-only')).toHaveTextContent(
       'No report for 1h',
     );
+  });
+
+  it('tints a host row for the Docker alerts its drawer lists, not by display name', () => {
+    // Docker alerts are keyed on the Docker host id and carry the hostname
+    // as their node; neither is the row's id or its display name.
+    const dockerAlert = (id: string, resourceId: string, level: Alert['level']): Alert => ({
+      id,
+      type: 'docker-service-health',
+      level,
+      resourceId,
+      resourceName: id,
+      node: 'ops-services-01',
+      instance: '',
+      message: id,
+      value: 0,
+      threshold: 0,
+      startTime: '2026-10-06T10:00:00Z',
+      acknowledged: false,
+    });
+    Object.assign(activeAlertsMock, {
+      service: dockerAlert('service', 'docker:orion-2-mock/service/svc-backend-1', 'warning'),
+      offline: dockerAlert('offline', 'docker:orion-20-mock', 'critical'),
+    });
+    const hostWithSource = (id: string, name: string, hostSourceId: string) =>
+      makeDockerHost({
+        id,
+        name,
+        displayName: name,
+        docker: { hostSourceId, hostname: name.toLowerCase().replaceAll(' ', '-') },
+      });
+
+    render(() => (
+      <DockerHostsTable
+        resources={[
+          hostWithSource('agent-aa22ff2b2bc3257d', 'Ops Services 01', 'orion-2-mock'),
+          hostWithSource('agent-bb33', 'Ops Services 20', 'orion-20-mock'),
+          hostWithSource('agent-cc44', 'Quiet Host', 'quiet-mock'),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    const row = (id: string) => document.querySelector(`[data-docker-host-row="${id}"]`)!;
+    expect(row('agent-aa22ff2b2bc3257d')).toHaveClass('bg-yellow-50');
+    expect(row('agent-bb33')).toHaveClass('bg-red-50');
+    expect(row('agent-cc44')).not.toHaveClass('bg-yellow-50');
+    expect(row('agent-cc44')).not.toHaveClass('bg-red-50');
+
+    // The tinted row's drawer lists the same alert; the quiet host's lists none.
+    fireEvent.click(row('agent-aa22ff2b2bc3257d').querySelector('button[aria-controls]')!);
+    const attention = screen.getByTestId('drawer-attention-section');
+    expect(within(attention).getAllByRole('listitem')).toHaveLength(1);
+    expect(attention).toHaveTextContent('service');
+    fireEvent.click(row('agent-cc44').querySelector('button[aria-controls]')!);
+    expect(screen.queryByTestId('drawer-attention-section')).toBeNull();
   });
 
   it('colors row metric bars from alert-configured thresholds, not display defaults', () => {
