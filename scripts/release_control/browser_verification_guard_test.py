@@ -618,6 +618,68 @@ class IntegrationRangeTest(GuardRepoTestCase):
         self.assertIn(CHANGED_PATH, stderr)
         self.assertNotIn(OTHER_PATH, stderr)
 
+    def test_stale_stylesheet_reports_verified_source_and_final_digest(self) -> None:
+        path = "frontend-modern/src/index.css"
+        old = ".alert-history { min-width: 20rem; }\n"
+        final = old + ".form-select { background-position: right 0.5rem center; }\n"
+        verified = self.verified_change(path, old, "verified alert stylesheet")
+        (receipt,) = self.receipts_in_tree()
+        self.write(path, final)
+        self.commit("compose select styling without a new browser pass")
+
+        status, stderr = self.run_range()
+
+        self.assertEqual(status, 1)
+        self.assertIn(f"{path} final content {hashlib.sha256(final.encode()).hexdigest()}", stderr)
+        self.assertIn(f"different verified content {hashlib.sha256(old.encode()).hexdigest()}", stderr)
+        self.assertIn(f"{verified}:{receipt} (parent {self.base})", stderr)
+        self.assertIn("Changing a receipt's hash or parent is not a browser pass", stderr)
+        # A real follow-up receipt, not editing the stale one, covers the
+        # composed bytes while preserving the original reviewed source.
+        self.write_receipt([path])
+        self.commit("record browser proof of final composed stylesheet")
+        self.assertEqual(self.run_range(), (0, ""))
+        self.git("merge-base", "--is-ancestor", verified, "HEAD")
+
+    def test_missing_receipt_is_distinct_from_a_valid_receipt_for_different_bytes(self) -> None:
+        self.write(CHANGED_PATH, "export const a = 1;\n")
+        self.commit("unverified frontend change")
+
+        status, stderr = self.run_range()
+
+        self.assertEqual(status, 1)
+        self.assertIn(f"{CHANGED_PATH}: no valid in-range receipt names this path", stderr)
+        self.assertNotIn("different verified content", stderr)
+
+    def test_invalid_receipt_never_contributes_a_verified_source_hint(self) -> None:
+        self.write(CHANGED_PATH, "export const a = 1;\n")
+        self.write_receipt([CHANGED_PATH], base="b" * 40)
+        self.commit("invalid parent binding")
+        self.write(CHANGED_PATH, "export const a = 2;\n")
+        self.commit("later frontend change")
+
+        status, stderr = self.run_range()
+
+        self.assertEqual(status, 1)
+        self.assertIn("base_sha must match", stderr)
+        self.assertIn("no valid in-range receipt names this path", stderr)
+        self.assertNotIn("different verified content", stderr)
+
+    def test_verified_source_hints_are_bounded_without_limiting_coverage(self) -> None:
+        for version in range(1, 5):
+            self.verified_change(CHANGED_PATH, f"export const a = {version};\n", f"pass {version}")
+        # The fourth pass is admitted even though a blocked diagnostic would
+        # display at most three earlier sources.
+        self.assertEqual(self.run_range(), (0, ""))
+        self.write(CHANGED_PATH, "export const a = 5;\n")
+        self.commit("unverified later frontend change")
+
+        status, stderr = self.run_range()
+
+        self.assertEqual(status, 1)
+        self.assertEqual(stderr.count("different verified content"), 3)
+        self.assertIn("1 further valid receipt(s) omitted from hints", stderr)
+
     def test_merge_resolution_receipt_is_not_evidence(self) -> None:
         # A conflict resolution that changes source and rewrites the receipt
         # inside the merge commit has no browser run behind it.

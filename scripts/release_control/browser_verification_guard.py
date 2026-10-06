@@ -462,7 +462,7 @@ def range_receipt_coverage(
     head: str,
     *,
     repo_root: Path = REPO_ROOT,
-) -> tuple[dict[str, set[str]], list[str], list[str]]:
+) -> tuple[dict[str, dict[str, list[str]]], list[str], list[str]]:
     """Content digests verified by valid receipts authored inside base..head.
 
     Each receipt is validated exactly as the per-commit guard validates it at
@@ -475,7 +475,9 @@ def range_receipt_coverage(
     (recreated, or kept while resolving a merge with the main that deleted
     it), or a commit that both records and deletes receipts.
     """
-    covered: dict[str, set[str]] = {}
+    # Keep provenance beside each admitted digest so a failed composition
+    # names what actually passed, without rereading or trusting invalid proof.
+    covered: dict[str, dict[str, list[str]]] = {}
     diagnostics: list[str] = []
     violations: list[str] = []
     if LEGACY_RECEIPT_PATH in blob_ids(head, [LEGACY_RECEIPT_PATH], repo_root=repo_root):
@@ -535,7 +537,8 @@ def range_receipt_coverage(
                 diagnostics.append(f"{label}: receipt is invalid: " + "; ".join(errors))
                 continue
             for path, digest in payload["content_sha256"].items():
-                covered.setdefault(path, set()).add(digest)
+                origins = covered.setdefault(path, {}).setdefault(digest, [])
+                origins.append(f"{commit}:{receipt_path} (parent {commit_base})")
     return covered, diagnostics, violations
 
 
@@ -561,13 +564,28 @@ def range_coverage_errors(
     """
     covered, diagnostics, violations = range_receipt_coverage(base, head, repo_root=repo_root)
     final = content_sha256(changed_paths, commit=head, repo_root=repo_root)
-    uncovered = [path for path in changed_paths if final[path] not in covered.get(path, set())]
+    uncovered = [path for path in changed_paths if final[path] not in covered.get(path, {})]
     if not uncovered:
         return [], violations
-    errors = [
-        f"{path} final content {final[path][:12]} is not verified by any valid receipt in the range"
-        for path in uncovered
-    ]
+    errors: list[str] = []
+    for path in uncovered:
+        errors.append(
+            f"{path} final content {final[path]} is not verified by any valid receipt in the range"
+        )
+        prior = sorted(
+            (digest, origin)
+            for digest, origins in covered.get(path, {}).items()
+            for origin in origins
+        )
+        if not prior:
+            errors.append(f"{path}: no valid in-range receipt names this path")
+            continue
+        # A long-lived branch can contain many earlier browser passes. Bound
+        # hints, not admission: every valid digest still contributes coverage.
+        for digest, origin in prior[:3]:
+            errors.append(f"{path}: different verified content {digest} at {origin}")
+        if len(prior) > 3:
+            errors.append(f"{path}: {len(prior) - 3} further valid receipt(s) omitted from hints")
     errors.extend(diagnostics)
     return errors, violations
 
@@ -881,7 +899,9 @@ def check_range(paths: Sequence[str], *, base: str, head: str, repo_root: Path =
             advice=[
                 "Content changed after its browser pass (a correction, a conflict resolution, "
                 "or two changes to one file) needs a fresh receipt for the final content, "
-                "committed in its own non-merge commit and bound to that commit's parent."
+                "committed in its own non-merge commit and bound to that commit's parent.",
+                "Keep earlier receipts and reviewed history unchanged. Changing a receipt's "
+                "hash or parent is not a browser pass for the final content.",
             ],
         )
     if violations:
