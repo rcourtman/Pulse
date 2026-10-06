@@ -126,9 +126,28 @@ Do not post full service environments, `docker inspect` output or resolved
 only the relevant port numbers and a redacted error if help is needed.
 
 ### "Connection Refused"
-- Check if Pulse is running.
-- Verify the port is open on your firewall.
-- **PBS**: Remember PBS uses port **8007** and requires **HTTPS**.
+
+Identify which connection failed before changing ports or credentials:
+
+- **Your browser cannot open Pulse:** check that the intended Pulse service or
+  container is running, then its actual listening port, container port mapping
+  and reverse proxy target. Pulse's default port is **7655**, but an existing
+  deployment can use a different one. Use the [port-change checks](#port-change-didnt-take-effect)
+  and [reverse proxy guide](REVERSE_PROXY.md) for that path; do not broadly open
+  firewall access or expose Pulse directly to bypass a proxy.
+- **Pulse opens, but a monitored platform request is refused:** check the
+  affected connection's saved hostname, scheme and port in **Settings →
+  Infrastructure**, and the network path **from the Pulse server**. Browser
+  access to the platform is a different path. Proxmox VE normally uses HTTPS
+  on **8006**; PBS uses HTTPS on **8007**. Other platforms use their saved
+  endpoint, not an assumed Proxmox port. Changing Pulse's listening port does
+  not repair this connection.
+
+A connection refusal is not an authentication response (**401/403**) or a
+certificate-validation error. Keep the original time and redacted error;
+do not replace credentials or disable TLS verification on a refusal alone.
+For a page that opens but has missing readings, use the
+[missing-data checks](FAQ.md#no-data-showing) instead of resetting the connection.
 
 ---
 
