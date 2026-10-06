@@ -1403,6 +1403,14 @@ to traverse the list again. At widths where the detail replaces the queue's
 reading position, its visible close affordance is an explicit `Back to list`
 control; wide layouts retain the compact close icon. Both controls clear the
 deep link and restore focus to the originating queue row.
+A resolved item whose latest close is an `ownership_transferred` transition did
+not recover: its condition moved to another record, such as the linked Pulse
+agent's own alert. The detail's state badge reads `Moved` in the info tone
+instead of the green `Resolved`, and the transition's reason (where the
+condition went, and that it is not a recovery) sits directly under the summary
+rather than only inside Evidence and history (`getAttentionHandoverClose` in
+`patrolHomePresentation.ts`). The timeline names that cause `Ownership
+transferred`, never `Recovery evidence`.
 
 The active Patrol queue now uses compact severity-accented rows for
 prioritisation and a single focused review panel for the selected issue. The

@@ -992,6 +992,56 @@ describe('PatrolAttentionWorkbench', () => {
     expect(screen.getByText('Show all 11 transitions')).toBeInTheDocument();
   });
 
+  it('shows an alert handed to its Pulse agent as moved, not recovered', async () => {
+    const reason =
+      'Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading.';
+    const moved = item({
+      id: 'record-moved',
+      operationalRecordId: 'record-moved',
+      subjectResourceId: 'pve1',
+      subjectResourceName: 'pve1',
+      subjectResourceType: 'node',
+      kind: 'memory',
+      title: 'Memory on pve1',
+      plainLanguageSummary: 'Memory usage at 95%',
+      severity: 'warning',
+      state: 'resolved',
+      protectionPosture: undefined,
+    });
+    const movedDetail = detail(moved);
+    movedDetail.timeline = [
+      ...movedDetail.timeline,
+      {
+        id: 'transition-moved',
+        operationalRecordId: 'record-moved',
+        from: 'open',
+        to: 'resolved',
+        at: '2026-07-19T07:45:00Z',
+        cause: 'ownership_transferred',
+        causeKey: 'memory:pve1',
+        evidenceIds: ['evidence-handover'],
+        reason,
+      },
+    ];
+    window.history.replaceState({}, '', '/patrol?attention=record-moved');
+    apiMocks.getList.mockResolvedValue(listResponse([], summary()));
+    apiMocks.getDetail.mockResolvedValue(movedDetail);
+    renderWorkbench();
+
+    const panel = await screen.findByRole('complementary', { name: 'pve1 · Memory' });
+    expect(await within(panel).findByText('Moved')).toBeInTheDocument();
+    expect(within(panel).queryByText('Resolved')).not.toBeInTheDocument();
+    // The account sits under the summary, outside the collapsed history.
+    const summaryLine = within(panel).getByText('Memory usage at 95%');
+    expect(summaryLine.nextElementSibling).toHaveTextContent(reason);
+    expect(summaryLine.nextElementSibling?.closest('details')).toBeNull();
+
+    fireEvent.click(within(panel).getByText('Evidence and history'));
+    expect(within(panel).getByText('Open to Resolved')).toBeInTheDocument();
+    expect(within(panel).getByText(/Ownership transferred/)).toBeInTheDocument();
+    expect(within(panel).queryByText(/Recovery evidence/)).not.toBeInTheDocument();
+  });
+
   it('opens the canonical governed action review from an eligible attention item', async () => {
     const actionOffer = {
       targetResourceId: 'docker:host-1/container-1',

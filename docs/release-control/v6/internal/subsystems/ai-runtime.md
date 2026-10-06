@@ -4652,7 +4652,22 @@ summaries became the alarm name still carry "<entity> <moref> has VMware alarm
 <name> (<colour>)", so the title strips that wording to the same alarm name.
 Patrol's seed context lists active and recently resolved alerts by resource:
 each line names the alert's resource unless the message already does, because
-provider incidents such as vCenter alarms say only what was flagged. The projection also collapses open/resolved churn:
+provider incidents such as vCenter alarms say only what was flagged.
+A recently resolved alert that closed without recovering, such as a node metric
+handed to its Pulse agent, must not read as a recovery to Patrol, the
+assistant or the alert tool: Patrol's seed writes `closed <ago>. <summary>` in place of `resolved <ago>`, the
+assistant's alert context writes `closed <ago> ago) <summary>`, the
+`pulse_alerts` `resolved` action returns the summary as `resolution` with
+`successor_resource_id`, and incident memory titles the close with the summary
+(`alertResolvedEventSummary`, or the `alert_resolution` resource-change
+metadata when it projects from the canonical timeline).
+`TestSeedHealthAndAlerts_HandoverIsNotARecovery`,
+`TestService_buildAlertContext_HandoverIsNotARecovery`,
+`TestExecuteListResolvedAlertsReportsHandover` and
+`TestIncidentStore_HandoverCloseIsNotARecovery` pin it. Performance reports
+(`pkg/reporting`, the report narrator) do not carry the resolution yet: a
+report generated within the five-minute recently-resolved window after a
+handover still lists that alert as resolved. The projection also collapses open/resolved churn:
 when a record's timeline holds at least four open-to-resolved or
 resolved-to-open transitions inside the last 24 hours, the item carries a
 `flapping` summary (transition count, window, first and latest transition) and

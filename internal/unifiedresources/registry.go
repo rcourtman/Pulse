@@ -3719,9 +3719,17 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 			if previous.IO != nil {
 				existing.PhysicalDisk.IO = clonePhysicalDiskIOMeta(previous.IO)
 			}
-			existing.PhysicalDisk.Collection = diskinventory.MergeStatus(
+			// The agent's own report is the later word on fields it supplied;
+			// the Proxmox row may still carry an earlier copy of them.
+			existing.PhysicalDisk.Collection = diskinventory.MergeReportedStatus(
 				incoming.PhysicalDisk.Collection,
 				previous.Collection,
+			)
+		}
+		if source == SourceAgent && previous != nil {
+			existing.PhysicalDisk.Collection = diskinventory.MergeReportedStatus(
+				previous.Collection,
+				incoming.PhysicalDisk.Collection,
 			)
 		}
 	}

@@ -1289,6 +1289,12 @@ text keeps it. The resolution rides the Alert JSON, so it survives the delivery
 queue round trip and appears in the default JSON payload's `alerts` array.
 Issue #1682 is the precedent: a recipient called "is now healthy" a false
 factual claim when an alert closed without recovering.
+The resolve transition such a close links to has cause `ownership_transferred`
+in `internal/operationaltrust/contracts.go`, not `recovery_evidence`. A
+notification link records the transition ID and lifecycle state, never the
+cause, so delivery, receipts and recovery admission treat it exactly like a
+recovery's resolve transition. `TestOwnershipTransferOnlyClosesWithEvidence`
+pins that the cause may only enter `resolved` and only with evidence.
 
 Verification: `resolved_handover_test.go` drives the firing, its receipt and
 the queued close through the normal entry points for ntfy, and renders Discord,

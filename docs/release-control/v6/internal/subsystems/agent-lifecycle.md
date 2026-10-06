@@ -773,6 +773,12 @@ into monitoring's models. Absent evidence has to carry its declared sentinel
 rather than a zero value that reads as a real measurement: an absent
 physical-disk view projects `Wearout` as `unifiedresources.WearoutUnreported`,
 never `0`, which would announce a spent disk the agent never reported.
+When the host heartbeat lease expires, `State.ExpireHostTelemetry` keeps that
+agent's SMART temperature and I/O counters as last-known values but marks them
+`unavailable` ("host agent stopped reporting"); the agent's next accepted
+report replaces them. Expiry is compare-and-set on the report time the offline
+sweep judged stale, so a report admitted between that judgement and the expiry
+is never expired.
 
 An enabled availability target assigned to a host agent creates an
 agent-lifecycle lease for that exact target/agent pairing. First assignment
@@ -1309,6 +1315,10 @@ update, profile rollout, command reachability, or fleet-control authority.
     lifecycle presentation evidence. It keeps mock active-alert and history
     payloads aligned with the canonical alert contract, but it cannot enroll,
     identify, link, command, remove, or otherwise grant authority to an agent.
+    The optional `models.Alert.Resolution` field is the same kind of
+    evidence: it says a resolved node alert now belongs to a linked agent's
+    own alert and names that agent as display text, but the link itself stays
+    the agent lifecycle's, and the field cannot create, change or authorize it.
 27. `internal/monitoring/monitor.go` shared with `monitoring`: monitor construction owns both monitoring runtime initialization and fail-closed agent lifecycle journal hydration before report admission.
 28. `internal/monitoring/monitor_agents.go` shared with `monitoring`: server-side Unified Agent report, removal, token binding, tombstone expiry, and re-enrollment semantics are jointly owned by agent lifecycle authority and monitoring ingest.
 29. `pkg/agents/host/report.go` shared with `monitoring`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host maintenance posture.
@@ -8883,3 +8893,15 @@ no update status, instead of reporting "no update available" (#2353). Agent
 registration, enrolment, install, update, removal and report identity are
 unchanged; the per-image memo lives in the registry checker and is pruned
 each collection cycle to the images in use.
+
+### Host snapshots report a linked agent's own heartbeat
+
+`internal/monitoring/monitor.go` changed only so a host produced from the read
+state carries the agent source's own last report and reads offline past the
+agent's reporting lease, even when the agent's row is merged with a Proxmox
+node that PVE polling keeps fresh. The agent connection on the Connections
+list and the update-readiness agent-continuity check therefore age a silent
+agent from its last report instead of from the PVE poll, and mark it stale at
+their own heartbeat cutoff (`fleethealth.AgentStaleThreshold`, which is
+separate from the monitoring reporting lease). Agent registration, enrolment,
+install, update, removal and report identity are unchanged.

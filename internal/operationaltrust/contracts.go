@@ -493,8 +493,12 @@ const (
 	TransitionSuppression        TransitionCause = "suppression"
 	TransitionSuppressionExpired TransitionCause = "suppression_expired"
 	TransitionRecoveryEvidence   TransitionCause = "recovery_evidence"
-	TransitionCollectionStale    TransitionCause = "collection_stale"
-	TransitionCollectionUnknown  TransitionCause = "collection_unknown"
+	// TransitionOwnershipTransferred closes a record whose condition another
+	// record now owns, such as a node metric a linked Pulse agent took over.
+	// The condition was not observed to clear, so it is not a recovery.
+	TransitionOwnershipTransferred TransitionCause = "ownership_transferred"
+	TransitionCollectionStale      TransitionCause = "collection_stale"
+	TransitionCollectionUnknown    TransitionCause = "collection_unknown"
 )
 
 func (cause TransitionCause) valid() bool {
@@ -505,6 +509,7 @@ func (cause TransitionCause) valid() bool {
 		TransitionSuppression,
 		TransitionSuppressionExpired,
 		TransitionRecoveryEvidence,
+		TransitionOwnershipTransferred,
 		TransitionCollectionStale,
 		TransitionCollectionUnknown:
 		return true
@@ -616,6 +621,13 @@ func (transition LifecycleTransition) validateWithoutID() error {
 		}
 		if len(canonicalIDs(transition.EvidenceIDs)) == 0 {
 			return errors.New("recovery transition requires evidence")
+		}
+	case TransitionOwnershipTransferred:
+		if transition.To != OperationalResolved {
+			return errors.New("ownership transfer must enter resolved state")
+		}
+		if len(canonicalIDs(transition.EvidenceIDs)) == 0 {
+			return errors.New("ownership transfer requires evidence")
 		}
 	case TransitionCollectionStale:
 		if transition.To != OperationalStale {

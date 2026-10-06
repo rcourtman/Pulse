@@ -285,6 +285,7 @@ func markOperationalResolved(
 	}
 	alert.Evidence = appendOperationalEvidence(alert.Evidence, recoveryEvidence.Clone())
 	recoveryEvidenceIDs := []string{recoveryEvidence.ID}
+	cause := resolvedTransitionCause(alert.Resolution)
 	from := record.State
 	record.State = operationaltrust.OperationalResolved
 	record.StateChangedAt = resolvedAt
@@ -295,7 +296,7 @@ func markOperationalResolved(
 		from,
 		operationaltrust.OperationalResolved,
 		resolvedAt,
-		operationaltrust.TransitionRecoveryEvidence,
+		cause,
 		record.CauseKey,
 		recoveryEvidenceIDs,
 	)
@@ -308,7 +309,7 @@ func markOperationalResolved(
 		From:                from,
 		To:                  operationaltrust.OperationalResolved,
 		At:                  resolvedAt,
-		Cause:               operationaltrust.TransitionRecoveryEvidence,
+		Cause:               cause,
 		CauseKey:            record.CauseKey,
 		EvidenceIDs:         recoveryEvidenceIDs,
 		Reason:              alert.Resolution.Summary(),
@@ -317,6 +318,16 @@ func markOperationalResolved(
 		alert.Transitions,
 		alert.LatestTransition.Clone(),
 	)
+}
+
+// resolvedTransitionCause names why a record entered resolved. Only a close
+// with no typed resolution is a recovery; a handover keeps its own cause so
+// timelines and alert-quality counts never report it as one.
+func resolvedTransitionCause(resolution *AlertResolution) operationaltrust.TransitionCause {
+	if resolution != nil && resolution.Reason == AlertResolutionMovedToAgent {
+		return operationaltrust.TransitionOwnershipTransferred
+	}
+	return operationaltrust.TransitionRecoveryEvidence
 }
 
 func (m *Manager) newResolvedAlert(
