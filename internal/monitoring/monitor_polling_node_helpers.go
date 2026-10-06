@@ -331,7 +331,15 @@ func (m *Monitor) collectNodeTemperatureData(
 				}
 			}
 
-			if prevTemp != nil && time.Since(prevTemp.LastUpdate) > m.nodeTemperatureCarryWindow() {
+			if m.carriedTemperatureOutlivesAgentLease(modelNode.ID, node.Node, prevTemp, time.Now()) {
+				// The reading came from a host agent that has stopped reporting.
+				// Its reporting lease already rode out transient gaps, so
+				// carrying it would outlive that lease.
+				log.Debug().
+					Str("node", node.Node).
+					Time("lastUpdate", prevTemp.LastUpdate).
+					Msg("Dropped temperature data (host agent stopped reporting)")
+			} else if prevTemp != nil && time.Since(prevTemp.LastUpdate) > m.nodeTemperatureCarryWindow() {
 				// Collection has stayed broken past the carry window. Re-presenting
 				// the old reading would let alerts, history and the UI treat it as
 				// a live measurement forever, so the node has no reading now.
@@ -340,11 +348,9 @@ func (m *Monitor) collectNodeTemperatureData(
 					Bool("isCluster", modelNode.IsClusterMember).
 					Time("lastUpdate", prevTemp.LastUpdate).
 					Msg("Dropped stale temperature data (collection has not returned a reading within the carry window)")
-			} else if prevTemp != nil {
-				// Clone the previous temperature to avoid modifying historical data
-				preserved := *prevTemp
-				preserved.LastUpdate = prevTemp.LastUpdate // Keep original update time to indicate staleness
-				modelNode.Temperature = &preserved
+			} else if preserved := carriedNodeTemperature(prevTemp); preserved != nil {
+				// The carried copy keeps its original LastUpdate to indicate staleness.
+				modelNode.Temperature = preserved
 				log.Debug().
 					Str("node", node.Node).
 					Bool("isCluster", modelNode.IsClusterMember).
@@ -359,6 +365,30 @@ func (m *Monitor) collectNodeTemperatureData(
 			}
 		}
 	}
+}
+
+// carriedNodeTemperature returns the part of an earlier reading a node may
+// keep presenting while collection fails: its CPU and GPU temperatures, with
+// the original LastUpdate. Disk temperatures (SMART, NVMe) are left out. They
+// also stamp the node's physical disks, which have their own freshness and
+// standby state that a carried copy cannot follow: a disk that spun down would
+// be stamped, and recorded, with its pre-sleep reading. Returns nil when the
+// earlier reading held nothing else.
+func carriedNodeTemperature(prev *models.Temperature) *models.Temperature {
+	if prev == nil || !prev.Available {
+		return nil
+	}
+	carried := *prev
+	carried.Cores = append([]models.CoreTemp(nil), prev.Cores...)
+	carried.GPU = append([]models.GPUTemp(nil), prev.GPU...)
+	carried.SMART = []models.DiskTemp{}
+	carried.HasSMART = false
+	carried.NVMe = []models.NVMeTemp{}
+	carried.HasNVMe = false
+	if !hasUsableTemperatureReading(&carried) {
+		return nil
+	}
+	return &carried
 }
 
 func (m *Monitor) applyNodePendingUpdates(ctx context.Context, instanceName string, client PVEClientInterface, node proxmox.Node, nodeID string, effectiveStatus string, modelNode *models.Node) {

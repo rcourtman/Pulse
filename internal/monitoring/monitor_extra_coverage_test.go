@@ -2132,22 +2132,32 @@ func TestMonitor_PreviousNodesForInstance_Extra(t *testing.T) {
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestSnapshot(models.StateSnapshot{
 		Nodes: []models.Node{
-			{ID: "node-1", Instance: "pve1", Name: "a", DisplayName: "a", Memory: models.Memory{Total: 100}},
+			{
+				ID: "node-1", Instance: "pve1", Name: "a", DisplayName: "a", ClusterName: "lab",
+				Memory:      models.Memory{Total: 100, Used: 40, Free: 60, Usage: 40},
+				Temperature: &models.Temperature{CPUPackage: 52, CPUMin: 41, CPUMaxRecord: 70, Available: true, HasCPU: true},
+			},
 			{ID: "node-2", Instance: "pve2", Name: "b", DisplayName: "b", Memory: models.Memory{Total: 200}},
 		},
 	})
 	m.resourceStore = unifiedresources.NewMonitorAdapter(registry)
 
-	prevNodeMemory, prevNodes := m.previousNodesForInstance("pve1")
+	prevNodes := m.previousNodesForInstance("pve1")
 
 	if len(prevNodes) != 1 || prevNodes[0].Instance != "pve1" || prevNodes[0].DisplayName != "a" {
 		t.Fatalf("expected only pve1 nodes, got %#v", prevNodes)
 	}
-	if mem, ok := prevNodeMemory[prevNodes[0].ID]; !ok || mem.Total != 100 {
-		t.Fatalf("expected node memory for node-1, got %#v", prevNodeMemory)
+	// The poller matches previous nodes by its own source ID, never the
+	// registry's unified resource ID.
+	if prevNodes[0].ID != "node-1" || prevNodes[0].NodeIdentity != "node-1" {
+		t.Fatalf("previous node ID = %q / identity %q, want source ID node-1", prevNodes[0].ID, prevNodes[0].NodeIdentity)
 	}
-	if len(prevNodeMemory) != 1 {
-		t.Fatalf("expected node-2 to be filtered out, got %#v", prevNodeMemory)
+	if prevNodes[0].ClusterName != "lab" || prevNodes[0].Memory.Total != 100 || prevNodes[0].Memory.Used != 40 {
+		t.Fatalf("previous node lost cluster or memory: %#v", prevNodes[0])
+	}
+	temp := prevNodes[0].Temperature
+	if temp == nil || temp.CPUPackage != 52 || temp.CPUMin != 41 || temp.CPUMaxRecord != 70 {
+		t.Fatalf("previous node temperature = %#v, want the stored reading with its min/max records", temp)
 	}
 }
 
