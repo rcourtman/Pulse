@@ -21,6 +21,21 @@ describe('workloadGuestPresentation', () => {
     },
   );
 
+  it.each(['agent-not-running', 'agent-disabled', 'future-private-error', undefined])(
+    'keeps %s out of installation, activation and guessed OS advice',
+    (reason) => {
+      for (const current of [reason, `prev-${reason ?? 'unknown'}`]) {
+        const text = getWorkloadGuestDiskStatusMessage(current);
+        expect(text).not.toMatch(
+          /Install and start|Enable it in VM Options|may not be installed|qemu-guest-agent/,
+        );
+        expect(text).toMatch(/backup/);
+        expect(text).toMatch(/guest incident/);
+        expect(text).not.toContain('future-private-error');
+      }
+    },
+  );
+
   it('returns canonical guest backup status presentation', () => {
     expect(getWorkloadsGuestBackupStatusPresentation('fresh')).toEqual({
       color: 'text-green-600 dark:text-green-400',
@@ -98,7 +113,7 @@ describe('workloadGuestPresentation', () => {
       'No filesystems found. VM may be booting or using a Live ISO.',
     );
     expect(getWorkloadGuestDiskStatusMessage()).toBe(
-      'Disk stats unavailable. Guest agent may not be installed.',
+      'Guest filesystem usage is unavailable; the cause is unknown. Use guest-local filesystem tools. Defer setup and live probes during backups or a guest incident.',
     );
     expect(getWorkloadGuestDiskStatusMessage('prev-no-filesystems')).toBe(
       'Using last known disk stats. No filesystems found. VM may be booting or using a Live ISO.',

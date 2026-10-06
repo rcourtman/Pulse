@@ -106,7 +106,7 @@ export function getWorkloadGuestDiskStatusMessage(reason?: string): string {
   const message = (() => {
     switch (normalizedReason) {
       case 'agent-not-running':
-        return 'Guest agent not running. Install and start qemu-guest-agent in the VM.';
+        return 'Proxmox could not query the guest agent. This does not prove it is absent or stopped. Defer setup and live probes during backups or a guest incident.';
       case 'agent-timeout':
         return 'Guest request timed out. Completion is uncertain. Do not restart the guest agent during a backup.';
       case 'vm-locked':
@@ -126,7 +126,7 @@ export function getWorkloadGuestDiskStatusMessage(reason?: string): string {
       case 'permission-denied':
         return 'Permission denied. Check that your Pulse user/token has VM.Monitor permission (PVE 8) or VM.GuestAgent.Audit permission (PVE 9).';
       case 'agent-disabled':
-        return 'Guest agent is disabled in VM configuration. Enable it in VM Options.';
+        return 'Proxmox reports the guest agent disabled in VM configuration. Review guest-OS-specific setup outside backups or guest incidents.';
       case 'no-filesystems':
         return 'No filesystems found. VM may be booting or using a Live ISO.';
       case 'special-filesystems-only':
@@ -140,7 +140,7 @@ export function getWorkloadGuestDiskStatusMessage(reason?: string): string {
       case 'no-status':
         return 'Guest filesystem stats unavailable because Pulse could not read the VM status from Proxmox.';
       default:
-        return 'Disk stats unavailable. Guest agent may not be installed.';
+        return 'Guest filesystem usage is unavailable; the cause is unknown. Use guest-local filesystem tools. Defer setup and live probes during backups or a guest incident.';
     }
   })();
 
