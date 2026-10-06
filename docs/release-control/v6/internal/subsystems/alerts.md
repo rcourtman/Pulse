@@ -1632,6 +1632,35 @@ an alert the next evaluation raises again.
 `TestConfigSaveKeepsAlertTheEvaluatorKeepsWithoutRecoveryBand` in
 `internal/alerts/host_unraid_lifecycle_test.go` pin these paths.
 
+### Agent disk temperature alerts clear when their disk leaves the report
+
+`CheckHost` also clears a disk temperature alert, and drops its pending
+threshold run, once its device is missing from three consecutive non-empty
+SMART lists (`cleanupHostDiskTemperatureAlerts`, a seen map keyed by resource
+ID like `cleanupHostCustomSensorAlerts`). A removed, replaced or renamed disk
+never sends the reading that would resolve its alert, and
+`shouldPreserveAlertOutsideNodeCleanup` exempts `agent:` alerts from node
+cleanup, so before this only the 24-hour stale-alert sweep in
+`cleanupStaleMaps` resolved it. One omission is not proof the disk left: the
+Windows, FreeBSD and controller-multiplexed Linux collectors drop a disk whose
+probe fails, so the count restarts whenever the disk is reported again. Three
+reports in a row of failed probes on such a disk still clear its alert.
+
+An empty SMART list skips this cleanup and does not count toward the three,
+because the agent omits the list when SMART collection fails or is
+unsupported. A listed disk in standby or without a temperature also holds its
+alert, since neither shows the disk cooled: standby reports avoid waking the
+disk, and most failed Linux probes still list the disk with identity only.
+SMART health alerts hold through standby the same way. A held alert resolves
+through the normal recovery path, including any configured recovery delay,
+once the disk reports cool readings again; with no evaluation for 24 hours,
+the stale-alert sweep resolves it. Turning the threshold off, or removing the
+agent, drops the host's pending disk temperature runs and absence counts as
+well as its alerts.
+`TestCheckHostClearsDiskTemperatureAlertWhenDiskLeavesSMARTReport` in
+`internal/alerts/host_unraid_lifecycle_test.go` pins the clear, the holds, the
+restarted count and the pending-run and count cleanup.
+
 ### Configured flapping thresholds remain reachable
 
 Every accepted positive `FlappingThreshold`, including values above ten, must

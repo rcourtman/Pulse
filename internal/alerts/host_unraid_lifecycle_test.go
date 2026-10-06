@@ -294,6 +294,159 @@ func TestHostDiskTemperatureAlertsClearWhenAgentLeaves(t *testing.T) {
 	})
 }
 
+func TestCheckHostClearsDiskTemperatureAlertWhenDiskLeavesSMARTReport(t *testing.T) {
+	const hostID = "host-temp-absent"
+	smartDisk := func(device string, temperature int) models.HostDiskSMART {
+		return models.HostDiskSMART{Device: device, Model: "test-disk", Type: "sata", Temperature: temperature}
+	}
+	alertIDFor := func(device string) string {
+		return canonicalMetricStateID(hostDiskTemperatureResourceID(hostID, device), "diskTemperature")
+	}
+	sdaActive := func(m *Manager) bool {
+		_, exists := testLookupActiveAlert(t, m, alertIDFor("/dev/sda"))
+		return exists
+	}
+	// sda runs hot (sata trigger 55, clear 50); sdb stays cool.
+	hotHost := func(t *testing.T) (*Manager, models.Host) {
+		m := configureDiskTempTypeHostManager(t)
+		host := hostWithSMARTDiskTemp(hostID, "sata", 60)
+		host.Sensors.SMART = []models.HostDiskSMART{smartDisk("/dev/sda", 60), smartDisk("/dev/sdb", 40)}
+		m.CheckHost(host)
+		if !sdaActive(m) {
+			t.Fatalf("expected sda disk temperature alert at 60C, active: %v", alertKeys(m))
+		}
+		return m, host
+	}
+
+	cases := []struct {
+		name       string
+		next       []models.HostDiskSMART
+		wantHeld   bool
+		wantRaised string
+	}{
+		{name: "disk removed", next: []models.HostDiskSMART{smartDisk("/dev/sdb", 40)}},
+		{name: "device renamed", next: []models.HostDiskSMART{smartDisk("/dev/sdc", 60), smartDisk("/dev/sdb", 40)}, wantRaised: "/dev/sdc"},
+		// No fresh reading says the disk cooled or left, so the alert holds.
+		{name: "SMART collection empty", next: nil, wantHeld: true},
+		{name: "disk in standby", next: []models.HostDiskSMART{{Device: "/dev/sda", Type: "sata", Temperature: 45, Standby: true}, smartDisk("/dev/sdb", 40)}, wantHeld: true},
+		{name: "probe returned no temperature", next: []models.HostDiskSMART{{Device: "/dev/sda", Type: "sata"}, smartDisk("/dev/sdb", 40)}, wantHeld: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m, host := hotHost(t)
+
+			host.Sensors.SMART = tc.next
+			for report := 1; report <= hostDiskTemperatureAbsenceConfirmations; report++ {
+				m.CheckHost(host)
+				wantActive := tc.wantHeld || report < hostDiskTemperatureAbsenceConfirmations
+				if active := sdaActive(m); active != wantActive {
+					t.Fatalf("report %d: sda disk temperature alert active = %v, want %v; active: %v", report, active, wantActive, alertKeys(m))
+				}
+			}
+			if tc.wantRaised != "" {
+				if _, exists := testLookupActiveAlert(t, m, alertIDFor(tc.wantRaised)); !exists {
+					t.Fatalf("expected %s disk temperature alert, active: %v", tc.wantRaised, alertKeys(m))
+				}
+			}
+			if !tc.wantHeld {
+				return
+			}
+
+			// A held alert still resolves on the disk's next cool reading.
+			host.Sensors.SMART = []models.HostDiskSMART{smartDisk("/dev/sda", 45), smartDisk("/dev/sdb", 40)}
+			m.CheckHost(host)
+			if sdaActive(m) {
+				t.Fatalf("held sda disk temperature alert outlived a 45C reading, active: %v", alertKeys(m))
+			}
+		})
+	}
+
+	t.Run("intermittently dropped disk keeps its alert", func(t *testing.T) {
+		m, host := hotHost(t)
+		present := host.Sensors.SMART
+		dropped := []models.HostDiskSMART{smartDisk("/dev/sdb", 40)}
+
+		// The run of omissions restarts whenever the disk is reported again.
+		for _, smart := range [][]models.HostDiskSMART{dropped, dropped, present, dropped, dropped} {
+			host.Sensors.SMART = smart
+			m.CheckHost(host)
+			if !sdaActive(m) {
+				t.Fatalf("sda disk temperature alert cleared by an omission run shorter than %d reports, active: %v", hostDiskTemperatureAbsenceConfirmations, alertKeys(m))
+			}
+		}
+	})
+
+	// pendingHost leaves a hot sda inside a 300s alert delay, so sda holds a
+	// pending run and no alert.
+	pendingHost := func(t *testing.T) (*Manager, models.Host, func() bool) {
+		m := configureDiskTempTypeHostManager(t)
+		m.mu.Lock()
+		m.config.TimeThresholds = map[string]int{"agent": 300}
+		m.mu.Unlock()
+		sdaResourceID := hostDiskTemperatureResourceID(hostID, "/dev/sda")
+		sdaPending := func() bool {
+			m.mu.RLock()
+			defer m.mu.RUnlock()
+			for _, resourceID := range m.core.PendingResourceIDs() {
+				if resourceID == sdaResourceID {
+					return true
+				}
+			}
+			return false
+		}
+
+		host := hostWithSMARTDiskTemp(hostID, "sata", 60)
+		host.Sensors.SMART = []models.HostDiskSMART{smartDisk("/dev/sda", 60), smartDisk("/dev/sdb", 40)}
+		m.CheckHost(host)
+		if sdaActive(m) || !sdaPending() {
+			t.Fatalf("expected a pending sda run inside the 300s delay, active: %v", alertKeys(m))
+		}
+		return m, host, sdaPending
+	}
+
+	t.Run("departed disk drops its pending run", func(t *testing.T) {
+		m, host, sdaPending := pendingHost(t)
+
+		host.Sensors.SMART = []models.HostDiskSMART{smartDisk("/dev/sdb", 40)}
+		for report := 1; report <= hostDiskTemperatureAbsenceConfirmations; report++ {
+			m.CheckHost(host)
+			wantPending := report < hostDiskTemperatureAbsenceConfirmations
+			if pending := sdaPending(); pending != wantPending {
+				t.Fatalf("report %d: pending sda run = %v, want %v", report, pending, wantPending)
+			}
+		}
+	})
+
+	t.Run("threshold off drops pending runs", func(t *testing.T) {
+		m, host, sdaPending := pendingHost(t)
+
+		m.mu.Lock()
+		m.config.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 0, Clear: 0}
+		m.mu.Unlock()
+		m.CheckHost(host)
+		if sdaPending() {
+			t.Fatal("pending sda run survived its threshold being turned off; re-enabling would inherit its old start time")
+		}
+	})
+
+	t.Run("removed host leaves no pending run or absence count", func(t *testing.T) {
+		m, host, sdaPending := pendingHost(t)
+
+		host.Sensors.SMART = []models.HostDiskSMART{smartDisk("/dev/sdb", 40)}
+		m.CheckHost(host)
+		m.HandleHostRemoved(host)
+		if sdaPending() {
+			t.Fatal("pending sda run outlived its removed host")
+		}
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+		if len(m.hostDiskTempAbsences) != 0 {
+			t.Fatalf("absence counts outlived their removed host: %v", m.hostDiskTempAbsences)
+		}
+	})
+}
+
 func TestConfigSaveResolvesDiskTemperatureAlertAgainstItsDiskTypeThreshold(t *testing.T) {
 	m := configureDiskTempTypeHostManager(t)
 

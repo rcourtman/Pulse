@@ -78,6 +78,7 @@ type Manager struct {
 	unifiedIncidentConfirmations map[string]int                  // Track consecutive provider-incident observations before activation
 	unifiedIncidentFirstSeen     map[string]time.Time            // Preserve the first confirmed observation as lifecycle start
 	unifiedIncidentRecoveries    map[string]int                  // Track consecutive healthy observations before provider-incident recovery
+	hostDiskTempAbsences         map[string]int                  // Track consecutive SMART reports missing a disk that holds temperature alert state
 	dockerRestartTracking        map[string]*dockerRestartRecord // Track restart counts and times for restart loop detection
 	dockerUpdateFirstSeen        map[string]time.Time            // Track when image updates were first detected for alert delay
 	// Stable identity tracking prevents update-delay resets when host IDs churn.
@@ -233,6 +234,7 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		unifiedIncidentConfirmations:    make(map[string]int),
 		unifiedIncidentFirstSeen:        make(map[string]time.Time),
 		unifiedIncidentRecoveries:       make(map[string]int),
+		hostDiskTempAbsences:            make(map[string]int),
 		dockerRestartTracking:           make(map[string]*dockerRestartRecord),
 		dockerUpdateFirstSeen:           make(map[string]time.Time),
 		dockerUpdateFirstSeenByIdentity: make(map[string]time.Time),
