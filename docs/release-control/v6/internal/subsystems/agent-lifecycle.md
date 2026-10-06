@@ -1262,6 +1262,10 @@ update, profile rollout, command reachability, or fleet-control authority.
     lifecycle presentation evidence. It keeps mock active-alert and history
     payloads aligned with the canonical alert contract, but it cannot enroll,
     identify, link, command, remove, or otherwise grant authority to an agent.
+    The optional `models.Alert.Resolution` field is the same kind of
+    evidence: it says a resolved node alert now belongs to a linked agent's
+    own alert and names that agent as display text, but the link itself stays
+    the agent lifecycle's, and the field cannot create, change or authorize it.
 27. `internal/monitoring/monitor.go` shared with `monitoring`: monitor construction owns both monitoring runtime initialization and fail-closed agent lifecycle journal hydration before report admission.
 28. `internal/monitoring/monitor_agents.go` shared with `monitoring`: server-side Unified Agent report, removal, token binding, tombstone expiry, and re-enrollment semantics are jointly owned by agent lifecycle authority and monitoring ingest.
 29. `pkg/agents/host/report.go` shared with `monitoring`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host maintenance posture.

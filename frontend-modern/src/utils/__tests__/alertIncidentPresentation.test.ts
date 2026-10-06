@@ -10,8 +10,10 @@ import {
   ALERT_RESOURCE_INCIDENT_REFRESH_LABEL,
   ALERT_RESOURCE_INCIDENT_SAVE_NOTE_LABEL,
   ALERT_RESOURCE_INCIDENT_SAVING_NOTE_LABEL,
+  ALERT_HISTORY_MOVED_STATUS,
   getAlertHistoryStatusPresentation,
   getAlertIncidentLevelBadgeClass,
+  getAlertResolutionDetail,
   getAlertIncidentTimelineDialogTitle,
   getAlertHistoryInvestigationDialogTitle,
   getAlertResourceIncidentAcknowledgedByLabel,
@@ -103,6 +105,29 @@ describe('alertIncidentPresentation', () => {
       className: 'text-xs px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
       rowClassName: '',
     });
+
+    expect(getAlertHistoryStatusPresentation(ALERT_HISTORY_MOVED_STATUS)).toEqual({
+      label: 'moved to agent',
+      className:
+        'text-xs px-2 py-0.5 rounded-sm bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300',
+      rowClassName: '',
+    });
+  });
+
+  it('says a handed-over alert did not recover, and leaves recoveries alone', () => {
+    expect(getAlertResolutionDetail(undefined)).toBeUndefined();
+    expect(
+      getAlertResolutionDetail({ reason: 'moved_to_agent', successorName: 'pve1 (Host Agent)' }),
+    ).toBe(
+      'Moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading.',
+    );
+    expect(getAlertResolutionDetail({ reason: 'moved_to_agent' })).toBe(
+      'Moved to its Pulse agent. This is not a recovery: check the agent for the current reading.',
+    );
+    // A future reason the UI has no copy for still shows the engine's account.
+    expect(
+      getAlertResolutionDetail({ reason: 'replaced', summary: 'Alert replaced by a new check.' }),
+    ).toBe('Alert replaced by a new check.');
   });
 
   it('returns canonical resource incident loading and empty-state copy', () => {

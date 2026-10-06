@@ -3499,6 +3499,12 @@ func (p *PatrolService) seedHealthAndAlertsState(snap patrolRuntimeState, scoped
 		sb.WriteString("# Recently Resolved Alerts\n")
 		for _, r := range alerts {
 			ago := seedFormatTimeAgo(now, r.ResolvedTime)
+			// A handover closes the alert without the condition clearing, so
+			// it must not read as the resource having recovered.
+			if r.Resolution != nil && strings.TrimSpace(r.Resolution.Summary) != "" {
+				sb.WriteString(fmt.Sprintf("- %s — closed %s. %s\n", seedAlertSubject(r.Alert), ago, strings.TrimSpace(r.Resolution.Summary)))
+				continue
+			}
 			sb.WriteString(fmt.Sprintf("- %s — resolved %s\n", seedAlertSubject(r.Alert), ago))
 		}
 		sb.WriteString("\n")

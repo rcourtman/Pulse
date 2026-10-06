@@ -110,6 +110,20 @@ type Alert struct {
 	// Metadata carries alert-engine annotations (notably resourceType) so the
 	// frontend can classify an alert without re-deriving resource identity.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	// Resolution is set only on a resolved alert whose close was not a
+	// recovery, so readers never report its resource as healthy.
+	Resolution *AlertResolution `json:"resolution,omitempty"`
+}
+
+// AlertResolution is the state projection of the alert engine's
+// AlertResolution: why an alert closed without its condition clearing.
+type AlertResolution struct {
+	Reason              string `json:"reason"`
+	SuccessorResourceID string `json:"successorResourceId,omitempty"`
+	SuccessorName       string `json:"successorName,omitempty"`
+	// Summary is the alert engine's one-line account, such as "Alert moved
+	// to pve1 (Host Agent). This is not a recovery: ...".
+	Summary string `json:"summary,omitempty"`
 }
 
 // ResolvedAlert represents a recently resolved alert
