@@ -474,7 +474,6 @@ function VmwareOverview(props: VmwareOverviewProps) {
     statusModeStorageScope: VMWARE_WORKLOAD_STATUS_STORAGE_SCOPE,
     columnVisibilityStorageScope: VMWARE_WORKLOAD_COLUMN_VISIBILITY_SCOPE,
     additionalDefaultHiddenColumnIds: [...VMWARE_WORKLOAD_DEFAULT_HIDDEN_COLUMN_IDS],
-    compactGroupHeaders: true,
     inventorySourcesQuery: props.inventorySourcesQuery,
     groupNodeDrawerMode: 'disabled',
     metricDisplayMode: props.metricDisplayMode,
@@ -545,7 +544,6 @@ function VmwareOverview(props: VmwareOverviewProps) {
         useWorkloads
         forcedPlatform={VMWARE_PLATFORM_FILTER}
         forcedViewMode="vm"
-        compactGroupHeaders
         groupNodeDrawerMode="disabled"
         suppressFilterToolbar
         emptyStateTitle="No vSphere VMs"

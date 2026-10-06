@@ -17,7 +17,6 @@ type WorkloadsTableProps = Pick<
   | 'activeAlerts'
   | 'alertsEnabled'
   | 'bottomSpacerHeight'
-  | 'compactGroupHeaders'
   | 'getGroupLabel'
   | 'getNodeTemperatureThresholds'
   | 'groupedGuests'
@@ -133,7 +132,6 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             activeAlerts={props.activeAlerts}
             alertsEnabled={props.alertsEnabled}
             bottomSpacerHeight={props.bottomSpacerHeight}
-            compactGroupHeaders={props.compactGroupHeaders}
             getGroupLabel={props.getGroupLabel}
             getNodeTemperatureThresholds={props.getNodeTemperatureThresholds}
             groupedGuests={props.groupedGuests}
@@ -150,7 +148,6 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             focusedSummaryWorkloadGroupScope={props.focusedSummaryWorkloadGroupScope}
             focusedSummaryWorkloadGroupId={props.focusedSummaryWorkloadGroupId}
             hoveredSummaryWorkloadGroupScope={props.hoveredSummaryWorkloadGroupScope}
-            isMobile={props.isMobile}
             nestedWorkloadContextByGuestId={props.nestedWorkloadContextByGuestId}
             nodeByInstance={props.nodeByInstance}
             search={props.search}
@@ -171,7 +168,6 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             workloadMetricHistory={props.workloadMetricHistory}
             workloadTableLayoutMode={props.workloadTableLayoutMode}
             workloadTableVisibleColumnIds={props.workloadTableVisibleColumnIds}
-            workloadTableVisibleColumns={props.workloadTableVisibleColumns}
             workloadColumnWidths={props.workloadColumnWidths}
           />
         </Table>
