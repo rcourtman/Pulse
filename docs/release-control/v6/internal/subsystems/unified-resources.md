@@ -1274,9 +1274,14 @@ tooltip, and the Proxmox replication Last sync and Next sync in the row, phone
 projection and disclosure. A silent agent or a stalled pvesr scheduler is the
 case whose age matters most, so a replication Next sync turns overdue on the
 clock without new data. Replication jobs bypass the unified-resource stream,
-so `ProxmoxPageSurface` re-reads them in the background every 30 seconds;
-moving ages over a snapshot read once at mount would age a job that keeps
-syncing and count it overdue.
+so `ProxmoxPageSurface` polls them in the background every 30 seconds,
+skipping a tick while the previous poll's read is still in flight unless that
+read has stalled past `STALLED_QUERY_READ_MS`; moving ages over a snapshot read
+once at mount would age a job that keeps syncing and count it overdue.
+`fetchReplicationJobs` takes the query's abort signal and passes it to
+`apiFetch`, so a replaced or unmounted replication read stops instead of
+running on in the background, and it throws `apiErrorFromResponse` errors that
+keep the HTTP status, so a 401 or 403 withdraws the jobs as an access failure.
 Kubernetes name columns hold the chevron, status dot and name inside one
 track, so their md widths leave the name room for a typical node or service
 name at a 768px viewport: Nodes 20 percent (with Capacity at 16 so its

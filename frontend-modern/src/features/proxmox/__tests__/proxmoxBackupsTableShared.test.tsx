@@ -242,6 +242,27 @@ describe('backup age cell on the shared clock', () => {
     );
   });
 
+  it('keeps the full age text and its band in step between clock ticks', () => {
+    vi.useFakeTimers({ now: new Date('2026-10-04T12:00:00Z') });
+    // Another mounted cell starts the shared clock.
+    render(() => <ProxmoxBackupAgeText artifact={artifact()} />);
+
+    // Before the next tick, a backup crosses seven days old as its row mounts.
+    vi.setSystemTime(new Date('2026-10-11T12:00:10Z'));
+    const createdAt = '2026-10-04T12:00:00Z';
+    render(() => (
+      <span data-testid="boundary">
+        <ProxmoxBackupAgeText
+          artifact={artifact({ createdAt, createdMs: Date.parse(createdAt) })}
+        />
+      </span>
+    ));
+
+    const cell = within(screen.getByTestId('boundary')).getByTitle(/backup age/);
+    expect(cell).toHaveTextContent('7d ago');
+    expect(cell).toHaveClass('text-amber-600');
+  });
+
   it('does not band a backup that finished after the last clock tick as unknown', () => {
     vi.useFakeTimers({ now: new Date('2026-10-04T12:00:00Z') });
     // Another mounted cell starts the shared clock at 12:00:00.

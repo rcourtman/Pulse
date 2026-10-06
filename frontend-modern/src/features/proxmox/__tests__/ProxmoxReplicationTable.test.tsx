@@ -7,6 +7,7 @@ import {
   REPLICATION_MOBILE_COLUMNS,
   REPLICATION_MOBILE_COLUMN_WIDTHS,
   compactReplicationNextSyncText,
+  fetchReplicationJobs,
   formatMobileReplicationGuestLabel,
 } from '../ProxmoxReplicationTable';
 import replicationTableSource from '../ProxmoxReplicationTable.tsx?raw';
@@ -131,6 +132,30 @@ describe('ProxmoxReplicationTable', () => {
 
   it('matches jobs by their error text', () => {
     expect(replicationTableSource).toMatch(/job\.lastSyncStatus,\s*job\.error,\s*job\.comment,/);
+  });
+});
+
+describe('fetchReplicationJobs', () => {
+  it('passes the caller abort signal to the network request', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ data: [], meta: { total: 0 } })));
+    const controller = new AbortController();
+
+    await expect(fetchReplicationJobs(controller.signal)).resolves.toEqual([]);
+
+    const init = fetchSpy.mock.calls.find(([url]) =>
+      String(url).includes('/api/replication/jobs'),
+    )?.[1];
+    expect(init?.signal).toBe(controller.signal);
+  });
+
+  it('keeps the HTTP status on a failed read so access denials are recognised', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ message: 'Insufficient permissions' }), { status: 403 }),
+    );
+
+    await expect(fetchReplicationJobs()).rejects.toMatchObject({ status: 403 });
   });
 });
 
