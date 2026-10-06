@@ -166,6 +166,13 @@ clearing, false/zero values, unchanged peer-site rows and full/fast equivalence.
 merges, row, Overview and History with synthetic inputs. This is no native
 QGA/thaw, installed recovery, fleet-performance or release-availability claim.
 
+Choosing a node's temperature source in `resourceStateAdapters.ts` reads one
+more field of the facet already in the canonical payload
+(`proxmox.temperatureDetails`), only when the existing record selection yields
+no usable reading, and keeps it only when it holds a CPU reading. That is one
+extra record mapping per such node per adapter call. It adds no resource read,
+merge pass, timer or subscription.
+
 ### Unavailable filesystem values share the existing disk model
 
 The filesystem list and guest Overview use the same nullable measured-byte ratio
@@ -1948,22 +1955,20 @@ query persistence once per resource, or run on the steady-state alert hot path;
 ancestor lookup remains bounded by canonical hierarchy depth for each active
 alert actually evaluated.
 
-The embedded WorkloadsSurface exposes a `compactGroupHeaders` prop on
-`frontend-modern/src/components/Workloads/useWorkloadsState.ts` that
-platform pages owning their own hosts table (Proxmox overview today) set
-to strip per-host metric cells out of the `NodeGroupHeader` rows in
-grouped mode. The flag is threaded through
-`frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`,
-`frontend-modern/src/components/Workloads/WorkloadsTable.tsx`, and
-`frontend-modern/src/components/Workloads/WorkloadPanel.tsx`; when set,
-`WorkloadPanel` calls `NodeGroupHeader` without `columns` /
-`renderColumnCell` so the existing colspan layout renders just the
-status dot, linked node name, cluster badge, and agent badge — the
-duplicate CPU / Memory / Disk / uptime / temperature / version stats
-the top-of-page hosts table already owns are dropped. New embedded
-platform-page consumers that render their own hosts summary must set
-this flag; standalone Workloads surfaces (no top hosts table) keep the
-original verbose group rows by default.
+Grouped host rows in the embedded WorkloadsSurface are identity-only
+dividers. `frontend-modern/src/components/Workloads/WorkloadPanel.tsx`
+renders each grouped node through `NodeGroupHeader` as one cell spanning
+the table: status dot, linked node name, cluster badge, and agent badge.
+Per-host CPU, memory, disk, network and disk I/O, uptime, temperature,
+and version stats belong to the platform page's own hosts table (the
+Proxmox nodes table today), so the workloads table must not render them
+per column or inline in the group row. The former `compactGroupHeaders`
+option and the per-column node metric cells it switched off were removed
+because both remaining production mounts (Proxmox and vSphere overview)
+set it unconditionally, so the non-compact path no longer rendered
+anywhere. A new embedded consumer that needs host
+stats beside its workloads must render its own hosts table rather than
+re-growing metric cells in the shared group row.
 
 WorkloadsSurface stays monitoring-first. It must not render a persistent
 aggregate banner just because running VMs or system containers lack an

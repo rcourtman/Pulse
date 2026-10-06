@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "3b290640a51ef0f488f9cd06b4aa644adbdcc6b3",
+  "verified_at": "2026-10-06T15:25:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "5b170b1c0d735afc584b0784403cd3510a8ab12aeb3e387e9baec6b80fcb5853"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack built from this tree (backend :7681, Vite :5199); /api/resources confirmed the real node payload shape: proxmox.temperature is the scalar maximum and proxmox.temperatureDetails the full reading",
+    "Proxmox node Analytics A (pve31) as a PVE-only node (agent facet removed from REST and websocket payloads), main's adapter swapped in: drawer Thermals showed CPU low 82\u00b0C and CPU record 82\u00b0C, the current reading repeated as history",
+    "Same PVE-only node with this change and no low/record in temperatureDetails: CPU low and CPU record rows absent, Temperature and NVMe still shown",
+    "Same PVE-only node with this change and temperatureDetails carrying cpuMin 38.5 and cpuMaxRecord 91.2: drawer showed CPU low 39\u00b0C and CPU record 91\u00b0C at 1440x900 and 390x844",
+    "Agent-linked mock node (agent facet present) with this change, with and without an injected record: drawer identical to main (Temperature from the agent facet, no CPU low/record rows), table TEMP column unchanged at 82\u00b0C"
+  ],
+  "interactions": [
+    "Opened the node drawer from the row's detail toggle (aria-controls proxmox-host-drawer-<id>) on /proxmox at desktop and phone widths",
+    "Read the Thermals card rows and the row's TEMP cell, and took screenshots, for main's adapter and for this change, via Playwright with REST and websocket payload rewriting"
+  ]
+}
