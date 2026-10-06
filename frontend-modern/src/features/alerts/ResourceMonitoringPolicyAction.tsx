@@ -79,6 +79,11 @@ export function ResourceMonitoringPolicyAction(props: ResourceMonitoringPolicyAc
 
   const ownership = () =>
     describeResourceInventoryOwnership(props.resourceType, props.platformType);
+  // Owner labels such as "container runtime" open sentences in this menu.
+  const ownerSubject = () => {
+    const label = ownership().ownerLabel;
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  };
   const choices = (): PolicyChoice[] => [
     {
       label: 'Normal monitoring',
@@ -100,7 +105,7 @@ export function ResourceMonitoringPolicyAction(props: ResourceMonitoringPolicyAc
     },
     {
       label: 'Retire from monitoring',
-      description: `${ownership().ownerLabel} keeps the inventory record. Pulse stops attention and automation.`,
+      description: `${ownerSubject()} keeps the inventory record. Pulse stops attention and automation.`,
       lifecycleState: 'retired',
     },
   ];
@@ -185,7 +190,7 @@ export function ResourceMonitoringPolicyAction(props: ResourceMonitoringPolicyAc
             }}
           >
             <p class="px-2 pb-1.5 text-[11px] text-muted">
-              This changes Pulse policy only. {ownership().ownerLabel} remains the inventory owner.
+              This changes Pulse policy only. {ownerSubject()} remains the inventory owner.
             </p>
             <For each={choices()}>
               {(choice) => (
