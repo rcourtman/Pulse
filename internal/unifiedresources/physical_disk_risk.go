@@ -82,7 +82,7 @@ func physicalDiskAssessmentFromMeta(meta *PhysicalDiskMeta) storagehealth.Assess
 	sample := storagehealth.Sample{
 		Model:        meta.Model,
 		Health:       meta.Health,
-		Temperature:  meta.Temperature,
+		Temperature:  storagehealth.CollectedTemperature(meta.Temperature, meta.Collection),
 		Wearout:      meta.Wearout,
 		WearoutKnown: storagehealth.WearoutReported(meta.Wearout, meta.DiskType),
 	}

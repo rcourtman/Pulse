@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 type RiskLevel string
@@ -76,11 +77,29 @@ type Sample struct {
 	UnsafeShutdowns      int64
 }
 
+// CollectedTemperature returns a disk temperature only when its collection
+// state marks it as observed now. Normalization may keep the last known value
+// when the current observation is not available, such as a disk in standby or
+// a host agent past its reporting lease. That retained value is history, not
+// evidence that the disk is hot now, so risk must not judge it. A source that
+// predates collection state counts as collected.
+func CollectedTemperature(temperature int, collection *diskinventory.CollectionStatus) int {
+	if collection == nil {
+		return temperature
+	}
+	switch collection.Temperature.State {
+	case "", diskinventory.FieldAvailable:
+		return temperature
+	default:
+		return 0
+	}
+}
+
 func AssessPhysicalDisk(disk models.PhysicalDisk) Assessment {
 	sample := Sample{
 		Model:        disk.Model,
 		Health:       disk.Health,
-		Temperature:  disk.Temperature,
+		Temperature:  CollectedTemperature(disk.Temperature, disk.Collection),
 		Wearout:      disk.Wearout,
 		WearoutKnown: WearoutReported(disk.Wearout, disk.Type),
 	}
@@ -96,7 +115,7 @@ func AssessHostSMARTDiskWithThresholds(disk models.HostDiskSMART, thresholds SMA
 	sample := Sample{
 		Model:       disk.Model,
 		Health:      disk.Health,
-		Temperature: disk.Temperature,
+		Temperature: CollectedTemperature(disk.Temperature, disk.Collection),
 		Wearout:     -1,
 	}
 	applySMARTAttributes(&sample, disk.Attributes)

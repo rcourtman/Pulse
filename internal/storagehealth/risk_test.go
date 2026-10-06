@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 // --- AssessSample: comprehensive branch coverage ---
@@ -536,5 +537,61 @@ func TestAssessPhysicalDisk_RotationalZeroIsNotRisk(t *testing.T) {
 	})
 	if assessment.Level == RiskCritical {
 		t.Error("a rotational disk reporting 0 wearout reports no endurance at all and must not assess critical")
+	}
+}
+
+func TestCollectedTemperatureKeepsOnlyCurrentReadings(t *testing.T) {
+	cases := []struct {
+		name       string
+		collection *diskinventory.CollectionStatus
+		want       int
+	}{
+		{name: "no collection state", collection: nil, want: 72},
+		{name: "empty state", collection: &diskinventory.CollectionStatus{}, want: 72},
+		{name: "available", collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")}, want: 72},
+		{name: "unavailable", collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("smartctl", "disk is in standby")}, want: 0},
+		{name: "unsupported", collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Unsupported("proxmox_disks", "")}, want: 0},
+		{name: "missing", collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Missing("smartctl", "")}, want: 0},
+	}
+	for _, tc := range cases {
+		if got := CollectedTemperature(72, tc.collection); got != tc.want {
+			t.Errorf("%s: CollectedTemperature = %d, want %d", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestDiskAssessmentsIgnoreRetainedTemperature(t *testing.T) {
+	retained := &diskinventory.CollectionStatus{
+		Temperature: diskinventory.Unavailable("host_agent", "host agent stopped reporting"),
+	}
+	collected := &diskinventory.CollectionStatus{Temperature: diskinventory.Available("host_agent")}
+
+	hasTemperatureReason := func(assessment Assessment) bool {
+		for _, reason := range assessment.Reasons {
+			if reason.Code == "temperature_high" {
+				return true
+			}
+		}
+		return false
+	}
+
+	disk := models.PhysicalDisk{Model: "WDC WD80EFAX", Type: "sata", Health: "PASSED", Wearout: -1, Temperature: 72}
+	disk.Collection = collected
+	if got := AssessPhysicalDisk(disk); got.Level != RiskCritical || !hasTemperatureReason(got) {
+		t.Fatalf("collected 72C physical disk = %+v, want critical temperature_high", got)
+	}
+	disk.Collection = retained
+	if got := AssessPhysicalDisk(disk); got.Level != RiskHealthy || hasTemperatureReason(got) {
+		t.Fatalf("retained 72C physical disk = %+v, want healthy", got)
+	}
+
+	smart := models.HostDiskSMART{Device: "/dev/sda", Model: "WDC WD80EFAX", Type: "sata", Health: "PASSED", Temperature: 72}
+	smart.Collection = collected
+	if got := AssessHostSMARTDisk(smart); got.Level != RiskCritical || !hasTemperatureReason(got) {
+		t.Fatalf("collected 72C host SMART disk = %+v, want critical temperature_high", got)
+	}
+	smart.Collection = retained
+	if got := AssessHostSMARTDisk(smart); got.Level != RiskHealthy || hasTemperatureReason(got) {
+		t.Fatalf("retained 72C host SMART disk = %+v, want healthy", got)
 	}
 }

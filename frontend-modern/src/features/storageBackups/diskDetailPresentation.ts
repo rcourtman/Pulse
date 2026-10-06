@@ -1,16 +1,20 @@
 import {
   getPhysicalDiskHealthStatus,
   getPhysicalDiskHealthSummary,
+  getPhysicalDiskTemperaturePresentation,
   type PhysicalDiskPresentationData,
 } from '@/features/storageBackups/diskPresentation';
 import type { HistoryTimeRange } from '@/api/charts';
 import { formatPowerOnHours } from '@/utils/format';
 import { getMetricSeverity, type MetricDisplayThresholds } from '@/utils/metricThresholds';
-import { formatTemperature } from '@/utils/temperature';
 import type { StatusIndicatorVariant } from '@/utils/status';
 
 export function getDiskAttributeValueTextClass(ok: boolean): string {
   return ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+}
+
+export function getDiskAttributeCardValueTextClass(card: DiskDetailAttributeCard): string {
+  return card.lastKnown ? 'text-muted' : getDiskAttributeValueTextClass(card.ok);
 }
 
 export function getLinkedDiskHealthDotVariant(hasIssue: boolean): StatusIndicatorVariant {
@@ -38,6 +42,8 @@ export type DiskDetailAttributeCard = {
   label: string;
   value: string;
   ok: boolean;
+  /** A retained value that is not a current reading. */
+  lastKnown?: boolean;
 };
 
 export type DiskDetailChartOption = {
@@ -126,11 +132,21 @@ export function getDiskDetailAttributeCards(
     });
   }
 
-  if (Number.isFinite(disk.temperature) && disk.temperature > 0) {
+  const temperature = getPhysicalDiskTemperaturePresentation(disk);
+  if (temperature?.current) {
     cards.push({
       label: 'Temperature',
-      value: formatTemperature(disk.temperature),
+      value: temperature.label,
       ok: getMetricSeverity(disk.temperature, 'diskTemperature', diskTempThresholds) !== 'critical',
+    });
+  } else if (temperature) {
+    // A retained reading is neither healthy nor hot now. The collection
+    // message above the cards says why it is not current.
+    cards.push({
+      label: 'Last known temperature',
+      value: temperature.label,
+      ok: true,
+      lastKnown: true,
     });
   }
 
