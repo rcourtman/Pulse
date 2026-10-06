@@ -317,7 +317,9 @@ export const toAgentFromResource = (
     sensors: agent.sensors,
     raid: agent.raid,
     status: resource.status,
-    uptimeSeconds: agent.uptimeSeconds ?? resource.uptime ?? 0,
+    // A silent agent's uptime is from its last report, not how long the
+    // machine has been up.
+    uptimeSeconds: resource.agent?.stale ? 0 : (agent.uptimeSeconds ?? resource.uptime ?? 0),
     lastSeen: resource.lastSeen,
     agentVersion: agent.agentVersion,
     commandsEnabled: agent.commandsEnabled,
@@ -400,7 +402,23 @@ const buildTypedGPUTemperatureKeys = (gpus?: HostSensorSummary['gpu']) => {
   return keys;
 };
 
-export const buildTemperatureRows = (sensors?: HostSensorSummary) => {
+// Matches the backend's reason for readings a host agent past its reporting
+// lease no longer collects (models.HostAgentStoppedReportingReason).
+export const HOST_AGENT_STOPPED_REPORTING_REASON = 'host agent stopped reporting';
+
+export type TemperatureRowsOptions = {
+  /**
+   * Why the machine's own sensor readings are retained rather than current,
+   * such as a host agent past its reporting lease. Disk rows keep their own
+   * collection state instead.
+   */
+  lastKnownReason?: string;
+};
+
+export const buildTemperatureRows = (
+  sensors?: HostSensorSummary,
+  options: TemperatureRowsOptions = {},
+) => {
   const rows: { label: string; value: string; valueTitle?: string }[] = [];
   const thermalState = sensors?.thermalState;
   const typedGPUTemperatureKeys = buildTypedGPUTemperatureKeys(sensors?.gpu);
@@ -498,6 +516,17 @@ export const buildTemperatureRows = (sensors?: HostSensorSummary) => {
           valueTitle: `${label} ${value}`,
         });
       });
+  }
+
+  // This card has no other cue that a value is not current, so a retained
+  // sensor reading says so in its value, as a retained disk reading does.
+  const lastKnownReason = options.lastKnownReason?.trim();
+  if (lastKnownReason) {
+    const title = `Last known reading, not current: ${lastKnownReason}`;
+    for (const row of rows) {
+      row.value = `${row.value} (last known)`;
+      row.valueTitle = title;
+    }
   }
 
   const smart = sensors?.smart;

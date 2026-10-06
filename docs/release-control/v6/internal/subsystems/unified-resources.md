@@ -2270,10 +2270,12 @@ and temperature facts must also compose the frontend-primitives
 desktop rows use the shared fixed label track so labels and values remain
 visually adjacent instead of spanning the full drawer width.
 A standalone host agent past its reporting lease reaches the Machines table as
-`warning` with `agent.stale`, not `offline`: by the time the lease expires the
-registry has marked its only source stale, which outranks offline. The offline
-metric fallback therefore does not blank its cells, and the temperature cell
-has no such gate. For SMART disk temperatures the provenance travels on
+`offline`, as described in "A push reporter past its lease is offline". The
+offline metric fallback blanks its CPU, memory, disk, network, disk I/O, uptime
+and temperature cells. The machine drawer drops a silent agent's uptime and
+marks its non-disk Thermals rows "(last known)" with the reason as title,
+keyed on `agent.stale` because those rows are that agent's own sensors. For SMART disk
+temperatures on rows that still render, the provenance travels on
 `agent.sensors.smart[].collection`: the Machines temperature cell
 (`AgentsMachinesTable.tsx`, `agentMachineTableModel.ts`), its tooltip and the
 drawer's Thermals rows (`resourceDetailMappers.ts`) read it through
@@ -6029,6 +6031,34 @@ to that boolean. Identity succession continues to rekey the same state row.
 `resource_operator_state_policy_test.go` pin normalization, validation,
 round-trip persistence, attention suppression, and the retired remediation
 lock.
+
+### A push reporter past its lease is offline
+
+The host agent, Docker and Kubernetes collectors push their own reports, and
+the monitor marks the machine, Docker host or cluster offline only once its
+reporting lease runs out. Ingest records that verdict on the source's
+sighting, and `aggregateStatus` counts such a sighting as `offline` whatever
+its age. The stale pass used to rank the stale sighting above `offline`, so a
+silent standalone agent reached every consumer as `warning`. The Machines
+table then showed it amber with its last report rendered as current readings,
+while its own drawer led with a critical "Host is offline" alert. A Docker host
+was offline only until its sighting crossed the 120-second stale threshold,
+then flipped to `warning`. With this rule, such rows take the existing
+offline treatment: frontend danger gates, the health verdict's `offline`
+reason, offline filters and counts.
+
+`SourceStatus.Status` keeps describing delivery freshness, so the sighting
+still reads `stale`. Health keeps its `telemetry_stale` reason, and
+monitored-system reasons are unchanged. A live source still carries a merged
+row: a Proxmox node whose linked agent stopped reporting stays `online` through
+the PVE poll. Pull sources (Proxmox, PBS, PMG, TrueNAS, vSphere) and the
+resources push collectors report about (guests, containers, pods, disks) keep
+the stale-to-warning rule. A JSON copy re-derives the unexported marker from
+its stored status in `IngestResources`, and a manual link that joins two
+resources reported by one source keeps the fresher sighting. The tests in
+`registry_merge_policy_test.go` pin the agent, Docker, Kubernetes,
+mixed-source, round-trip and manual-link cases, plus the boundaries that stay
+unchanged.
 
 ### Canonical object drawer hierarchy
 

@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -128,6 +129,353 @@ func TestHostnameIPDoesNotAutoMerge(t *testing.T) {
 	resources := registry.List()
 	if len(resources) != 2 {
 		t.Fatalf("expected hostname+ip to stay separate, got %d resources", len(resources))
+	}
+}
+
+func onlyResourceOfType(t *testing.T, rr *ResourceRegistry, resourceType ResourceType) Resource {
+	t.Helper()
+	resources := rr.ListByType(resourceType)
+	if len(resources) != 1 {
+		t.Fatalf("expected one %s resource, got %d: %+v", resourceType, len(resources), resources)
+	}
+	return resources[0]
+}
+
+// A host agent past its reporting lease is offline. Its source sighting is
+// stale too, and the stale pass used to rank that above offline, so the
+// machine reached the frontend as a warning with its last report rendered
+// as current readings.
+func TestLeaseExpiredHostAgentStaysOffline(t *testing.T) {
+	lastReport := time.Now().UTC().Add(-14 * time.Minute)
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:              "host-silent",
+			MachineID:       "machine-silent",
+			Hostname:        "silent",
+			Status:          "offline",
+			LastSeen:        lastReport,
+			IntervalSeconds: 30,
+			CPUUsage:        32,
+		}},
+	})
+
+	resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+	if resource.Status != StatusOffline {
+		t.Fatalf("status = %q, want offline for an agent past its lease", resource.Status)
+	}
+	if resource.Agent == nil || !resource.Agent.Stale {
+		t.Fatalf("expected the agent facet to stay flagged stale, got %+v", resource.Agent)
+	}
+	// Status describes the resource; the sighting keeps describing delivery
+	// freshness, which health and monitored-system reasons read.
+	if got := resource.SourceStatus[SourceAgent].Status; got != "stale" {
+		t.Fatalf("agent sighting = %q, want stale", got)
+	}
+
+	// The monitor adapter runs the stale pass again after record sources.
+	rr.MarkStale(time.Now().UTC(), nil)
+	if got, _ := rr.Get(resource.ID); got.Status != StatusOffline {
+		t.Fatalf("second stale pass changed status to %q, want offline", got.Status)
+	}
+
+	health := EvaluateResourceHealth(resource, nil, time.Now().UTC())
+	if health.Verdict != HealthCritical || len(health.Reasons) < 2 ||
+		health.Reasons[0].Code != "offline" || health.Reasons[1].Code != "telemetry_stale" {
+		t.Fatalf("health = %+v, want critical offline with the stale reason after it", health)
+	}
+}
+
+// An agent that is late but still inside its lease keeps the warning: the
+// monitor has not decided it is gone, so its last readings are only stale.
+func TestLateHostAgentInsideLeaseStaysWarning(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:              "host-late",
+			MachineID:       "machine-late",
+			Hostname:        "late",
+			Status:          "online",
+			LastSeen:        time.Now().UTC().Add(-90 * time.Second),
+			IntervalSeconds: 30,
+		}},
+	})
+
+	resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+	if resource.Status != StatusWarning {
+		t.Fatalf("status = %q, want warning for a late agent inside its lease", resource.Status)
+	}
+}
+
+// A Proxmox node whose linked agent stopped reporting stays online through
+// the PVE poll (issue #1515). Only the agent sighting carries the lease.
+func TestLeaseExpiredAgentOnLiveProxmoxNodeStaysOnline(t *testing.T) {
+	now := time.Now().UTC()
+	const machineID = "machine-pve1"
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:          "homelab-pve1",
+			Name:        "pve1",
+			Instance:    "homelab",
+			ClusterName: "homelab",
+			Status:      "online",
+			LastSeen:    now,
+		}},
+		Hosts: []models.Host{{
+			ID:              machineID,
+			MachineID:       machineID,
+			Hostname:        "pve1",
+			LinkedNodeID:    "homelab-pve1",
+			Status:          "offline",
+			LastSeen:        now.Add(-14 * time.Minute),
+			IntervalSeconds: 30,
+		}},
+	})
+
+	resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+	if _, ok := resource.SourceStatus[SourceProxmox]; !ok {
+		t.Fatalf("expected the node and its agent to share one resource, got sources %+v", resource.SourceStatus)
+	}
+	if resource.Status != StatusOnline {
+		t.Fatalf("status = %q, want online through the live PVE poll", resource.Status)
+	}
+	if resource.Agent == nil || !resource.Agent.Stale {
+		t.Fatalf("expected the dead agent to stay flagged stale, got %+v", resource.Agent)
+	}
+}
+
+// Docker hosts hold a shorter lease than the registry's Docker stale
+// threshold, so a silent Docker host was offline for a while and then
+// flipped to warning once its sighting went stale.
+func TestLeaseExpiredDockerHostStaysOfflineAfterSightingGoesStale(t *testing.T) {
+	lastReport := time.Now().UTC().Add(-5 * time.Minute)
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{{
+			ID:              "docker-silent",
+			AgentID:         "docker-agent-silent",
+			Hostname:        "docker-silent",
+			MachineID:       "machine-docker-silent",
+			Status:          "offline",
+			LastSeen:        lastReport,
+			IntervalSeconds: 30,
+			Containers: []models.DockerContainer{{
+				ID:    "container-web",
+				Name:  "web",
+				State: "running",
+			}},
+		}},
+	})
+
+	host := onlyResourceOfType(t, rr, ResourceTypeAgent)
+	if host.Status != StatusOffline {
+		t.Fatalf("docker host status = %q, want offline after its sighting went stale", host.Status)
+	}
+	if got := host.SourceStatus[SourceDocker].Status; got != "stale" {
+		t.Fatalf("docker sighting = %q, want stale", got)
+	}
+
+	// Containers are what the host reports about, not lease holders: a
+	// running container on a silent host is stale, not known to be down.
+	container := onlyResourceOfType(t, rr, ResourceTypeAppContainer)
+	if container.Status != StatusWarning {
+		t.Fatalf("container status = %q, want warning on a silent host", container.Status)
+	}
+}
+
+// A machine reporting through both the host agent and Docker is offline once
+// both leases expire. The Docker lease ends first, so its sighting can still
+// be fresh when the agent's goes stale.
+func TestMachineWithExpiredAgentAndDockerLeasesIsOffline(t *testing.T) {
+	now := time.Now().UTC()
+	const machineID = "machine-both"
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:              "host-both",
+			MachineID:       machineID,
+			Hostname:        "both",
+			Status:          "offline",
+			LastSeen:        now.Add(-3 * time.Minute),
+			IntervalSeconds: 30,
+		}},
+		DockerHosts: []models.DockerHost{{
+			ID:              "docker-both",
+			AgentID:         "host-both",
+			Hostname:        "both",
+			MachineID:       machineID,
+			Status:          "offline",
+			LastSeen:        now.Add(-90 * time.Second),
+			IntervalSeconds: 10,
+		}},
+	})
+
+	resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+	if _, ok := resource.SourceStatus[SourceDocker]; !ok {
+		t.Fatalf("expected agent and Docker to share one resource, got sources %+v", resource.SourceStatus)
+	}
+	if got := resource.SourceStatus[SourceDocker].Status; got != "online" {
+		t.Fatalf("docker sighting = %q, want it still inside the stale threshold", got)
+	}
+	if resource.Status != StatusOffline {
+		t.Fatalf("status = %q, want offline once both leases expired", resource.Status)
+	}
+}
+
+// A live reporter still carries the machine when the other lease expired.
+func TestMachineWithLiveDockerReporterStaysOnline(t *testing.T) {
+	now := time.Now().UTC()
+	const machineID = "machine-split"
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:              "host-split",
+			MachineID:       machineID,
+			Hostname:        "split",
+			Status:          "offline",
+			LastSeen:        now.Add(-14 * time.Minute),
+			IntervalSeconds: 30,
+		}},
+		DockerHosts: []models.DockerHost{{
+			ID:              "docker-split",
+			AgentID:         "docker-agent-split",
+			Hostname:        "split",
+			MachineID:       machineID,
+			Status:          "online",
+			LastSeen:        now,
+			IntervalSeconds: 10,
+		}},
+	})
+
+	resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+	if resource.Status != StatusOnline {
+		t.Fatalf("status = %q, want online through the live Docker reporter", resource.Status)
+	}
+}
+
+// The lease marker is unexported, so a resource that went through JSON (a
+// persisted or remote copy) must recover it from its stored status.
+func TestLeaseExpiredHostAgentStaysOfflineAfterJSONRoundTrip(t *testing.T) {
+	source := NewRegistry(nil)
+	source.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:              "host-silent",
+			MachineID:       "machine-silent",
+			Hostname:        "silent",
+			Status:          "offline",
+			LastSeen:        time.Now().UTC().Add(-14 * time.Minute),
+			IntervalSeconds: 30,
+		}},
+	})
+	payload, err := json.Marshal(source.List())
+	if err != nil {
+		t.Fatalf("marshal resources: %v", err)
+	}
+	var copied []Resource
+	if err := json.Unmarshal(payload, &copied); err != nil {
+		t.Fatalf("unmarshal resources: %v", err)
+	}
+
+	rr := NewRegistry(nil)
+	rr.IngestResources(copied)
+
+	resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+	if resource.Status != StatusOffline {
+		t.Fatalf("status = %q, want offline after a JSON round trip", resource.Status)
+	}
+}
+
+// A manual link can join two resources reported by the same source, such as
+// an agent reinstalled under a new id. The expired sighting of the old one
+// must not replace the live sighting of the new one.
+func TestManualLinkKeepsTheLiveSightingOfASharedSource(t *testing.T) {
+	now := time.Now().UTC()
+	store := NewMemoryStore()
+	if err := store.AddLink(ResourceLink{
+		ResourceA: "agent-reinstalled",
+		ResourceB: "agent-retired",
+		PrimaryID: "agent-reinstalled",
+	}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	rr := NewRegistry(store)
+	rr.IngestResources([]Resource{
+		{
+			ID:       "agent-reinstalled",
+			Type:     ResourceTypeAgent,
+			Name:     "tower",
+			Status:   StatusOnline,
+			LastSeen: now,
+			Sources:  []DataSource{SourceAgent},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceAgent: {Status: "online", LastSeen: now},
+			},
+			Agent: &AgentData{AgentID: "host-new", Hostname: "tower"},
+		},
+		{
+			ID:       "agent-retired",
+			Type:     ResourceTypeAgent,
+			Name:     "tower",
+			Status:   StatusOffline,
+			LastSeen: now.Add(-14 * time.Minute),
+			Sources:  []DataSource{SourceAgent},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceAgent: {Status: "stale", LastSeen: now.Add(-14 * time.Minute)},
+			},
+			Agent: &AgentData{AgentID: "host-old", Hostname: "tower", Stale: true},
+		},
+	})
+
+	resource, ok := rr.Get("agent-reinstalled")
+	if !ok {
+		t.Fatal("linked resource missing")
+	}
+	if resource.Status != StatusOnline {
+		t.Fatalf("status = %q, want online through the live reinstalled agent", resource.Status)
+	}
+	if got := resource.SourceStatus[SourceAgent]; !got.LastSeen.Equal(now) {
+		t.Fatalf("agent sighting = %+v, want the live sighting", got)
+	}
+}
+
+func TestLeaseExpiredKubernetesClusterStaysOffline(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{{
+			ID:              "cluster-silent",
+			AgentID:         "k8s-agent-silent",
+			Name:            "silent",
+			Status:          "offline",
+			LastSeen:        time.Now().UTC().Add(-5 * time.Minute),
+			IntervalSeconds: 30,
+		}},
+	})
+
+	cluster := onlyResourceOfType(t, rr, ResourceTypeK8sCluster)
+	if cluster.Status != StatusOffline {
+		t.Fatalf("cluster status = %q, want offline after its sighting went stale", cluster.Status)
+	}
+}
+
+// Pull sources keep the stale-to-warning rule: a stale PVE sighting means
+// Pulse lost its poller, not that the node reported itself gone.
+func TestStaleProxmoxNodeStaysWarning(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:          "homelab-pve9",
+			Name:        "pve9",
+			Instance:    "homelab",
+			ClusterName: "homelab",
+			Status:      "online",
+			LastSeen:    time.Now().UTC().Add(-5 * time.Minute),
+		}},
+	})
+
+	node := onlyResourceOfType(t, rr, ResourceTypeAgent)
+	if node.Status != StatusWarning {
+		t.Fatalf("node status = %q, want warning for a stale PVE sighting", node.Status)
 	}
 }
 

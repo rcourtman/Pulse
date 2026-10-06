@@ -3169,6 +3169,16 @@ pointer isolation are
 pinned by `TestResourceFromHostPreservesCustomSensorMeta` and
 `TestCloneResourceIsolatesCustomSensorValues`.
 
+### Expired reporting leases change status only
+
+`SourceStatus` now carries an unexported marker that a push reporter (host
+agent, Docker, Kubernetes) delivered its machine, Docker host or cluster as
+offline at lease expiry. Status aggregation reads it, so such a row is
+`offline` instead of `warning`. The marker is not serialized, persisted or
+exposed on the wire, and the public `status`, `lastSeen` and cadence fields
+are unchanged. No storage path, recovery read or protection judgement depends
+on it. `TestCloneResource_MutateSourceStatusMap` pins that clones keep it.
+
 ### Shared system-settings boundary dropped dead auto-update schedule fields
 
 The shared `internal/api` system-settings surface this subsystem consumes

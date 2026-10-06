@@ -1160,14 +1160,15 @@ describe('AgentsMachinesTable', () => {
     expect(screen.getByText('1400 RPM')).toBeInTheDocument();
   });
 
-  it('shows a silent agent disk temperature as last known, never as a current reading', async () => {
-    // A host agent past its reporting lease is stale and keeps its last SMART
-    // temperatures with a non-available collection state.
+  it('shows a retained disk temperature as last known, never as a current reading', async () => {
+    // A reporting agent whose SMART probe returned no temperature keeps the
+    // last reading with a non-available collection state. (A host agent past
+    // its lease is offline, and its row shows no temperature at all.)
     const stoppedReporting = {
       temperature: {
         state: 'unavailable' as const,
         source: 'smartctl',
-        reason: 'host agent stopped reporting',
+        reason: 'SMART probe returned no usable temperature data',
       },
     };
     const { container } = render(() => (
@@ -1176,9 +1177,7 @@ describe('AgentsMachinesTable', () => {
           resource({
             id: 'silent-nas',
             name: 'Silent NAS',
-            status: 'warning',
             agent: {
-              stale: true,
               sensors: {
                 smart: [
                   { device: '/dev/sda', model: 'Archive HDD', temperature: 71 },
@@ -1247,6 +1246,92 @@ describe('AgentsMachinesTable', () => {
     expect(mixed).toHaveTextContent('44°C');
     expect(mixed.querySelector('[data-temperature-reading="last-known"]')).toBeNull();
     expect(within(mixed).queryByText('69°C')).toBeNull();
+  });
+
+  it("blanks an offline machine's retained readings, temperature and uptime included", async () => {
+    // A host agent past its reporting lease is offline: CPU, memory, disk and
+    // the sensors, uptime and disks it last reported are not current.
+    const stoppedReporting = {
+      temperature: {
+        state: 'unavailable' as const,
+        source: 'smartctl',
+        reason: 'host agent stopped reporting',
+      },
+    };
+    const lastReport: Partial<Resource> = {
+      cpu: { current: 32 },
+      memory: { total: 100, used: 73, free: 27, current: 73 },
+      disk: { total: 100, used: 80, free: 20, current: 80 },
+    };
+    const sensors = {
+      temperatureCelsius: { 'cpu.package': 45 },
+      thermalState: { pressure: 'serious' },
+      smart: [
+        {
+          device: '/dev/sda',
+          model: 'Archive HDD',
+          temperature: 41,
+          collection: stoppedReporting,
+        },
+      ],
+    };
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'silent-host',
+            name: 'Silent Host',
+            status: 'offline',
+            uptime: 2_500_000,
+            ...lastReport,
+            agent: { stale: true, uptimeSeconds: 2_500_000, sensors },
+          }),
+          resource({
+            id: 'live-host',
+            name: 'Live Host',
+            uptime: 2_500_000,
+            ...lastReport,
+            agent: {
+              uptimeSeconds: 2_500_000,
+              sensors: { temperatureCelsius: { 'cpu.package': 45 } },
+            },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    await openMachineColumnPicker();
+    await fireEvent.click(screen.getByLabelText('Temp'));
+    await fireEvent.click(screen.getByLabelText('Uptime'));
+
+    const cells = (id: string) => {
+      const row = container.querySelector(`[data-agents-machine-row="${id}"]`) as HTMLElement;
+      const headers = Array.from(container.querySelectorAll('thead th')).map((th) =>
+        (th.textContent ?? '').replace(/[▲▼]/g, '').trim(),
+      );
+      const values = Array.from(row.querySelectorAll('td')).map((td) =>
+        (td.textContent ?? '').trim(),
+      );
+      return (label: string) => values[headers.indexOf(label)];
+    };
+
+    const silent = cells('silent-host');
+    expect(silent('CPU')).toBe('—');
+    expect(silent('Up')).toBe('—');
+    expect(silent('Temp')).toBe('—');
+    expect(
+      container.querySelector(
+        '[data-agents-machine-row="silent-host"] [data-agent-machine-temperature-trigger="true"]',
+      ),
+    ).toBeNull();
+
+    const live = cells('live-host');
+    expect(live('CPU')).not.toBe('—');
+    expect(live('Up')).toBe('28d');
+    expect(live('Temp')).toBe('45°C');
   });
 
   it('moves a machine temperature between current and last known as its disk reports change', async () => {

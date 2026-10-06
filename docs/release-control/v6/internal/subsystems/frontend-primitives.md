@@ -5591,6 +5591,14 @@ Standalone, TrueNAS, and vSphere platform tables and their table-model helpers
 must compose those helpers instead of declaring local `metricFallback` /
 `finiteMetric` helpers or inlining centered muted dash fallback markup in
 metric cells.
+A row whose status indicator is `danger` (offline) blanks every reading from
+its last report, not only the metric bars. Proxmox node rows already gate
+uptime and temperature on online. The Machines table gates its Uptime and
+Temperature cells, and the Docker hosts table its temperature cell, on the same
+check. A machine another source keeps up stays rendered, since its cell may
+carry that source's current reading. Numeric cells keep their own
+right-aligned empty dash; the centred `PlatformTableMetricFallback` marker
+stays specific to metric-bar cells.
 Platform table metric severity coloring is alert-backed, not hardcoded. The
 Docker host and container, Proxmox node, Kubernetes cluster and node, TrueNAS
 system and app, and vSphere host tables must resolve display thresholds

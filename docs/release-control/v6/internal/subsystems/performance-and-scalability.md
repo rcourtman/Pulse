@@ -2051,6 +2051,11 @@ in `frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts`.
 That module stays separate from `diskPresentation.ts` so the drawer and
 Machines chunks take the decision without the Storage presenter, and the rows
 add no reads, polling or aggregation work.
+A silent host agent's other Thermals rows (pressure, limits, GPU, temperatures,
+additional sensors, fans, power) take the same "(last known)" suffix and reason
+title. `buildTemperatureRows` gets them through its `lastKnownReason` option,
+which the drawer sets from the resource's own `agent.stale`, so the drawer
+still reads nothing extra.
 The Proxmox node drawer overview should follow the existing guest drawer
 compact detail-section pattern and expose node-specific context such as platform,
 kernel, hardware, raw capacity, telemetry, and thermal facts rather than

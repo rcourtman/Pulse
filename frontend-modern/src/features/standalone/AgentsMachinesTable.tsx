@@ -1806,7 +1806,9 @@ export const AgentsMachinesTable: Component<{
                               class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('uptime')} text-base-content`}
                             >
                               {formatPlatformTableUptimeValue(
-                                machine.uptime ?? machine.agent?.uptimeSeconds,
+                                canRenderMetrics()
+                                  ? (machine.uptime ?? machine.agent?.uptimeSeconds)
+                                  : undefined,
                               )}
                             </TableCell>
                           </Show>
@@ -1814,15 +1816,20 @@ export const AgentsMachinesTable: Component<{
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('temp')} text-base-content`}
                             >
-                              <AgentMachineTemperatureCell
-                                celsius={temperature()}
-                                lastKnown={temperatureLastKnown()}
-                                metric={temperatureMetric()}
-                                sections={temperatureSections()}
-                                thresholds={temperatureThresholds()}
-                                title={temperatureTitle()}
-                                thermalPressure={thermalPressure()}
-                              />
+                              <Show
+                                when={canRenderMetrics()}
+                                fallback={<span class="text-muted">—</span>}
+                              >
+                                <AgentMachineTemperatureCell
+                                  celsius={temperature()}
+                                  lastKnown={temperatureLastKnown()}
+                                  metric={temperatureMetric()}
+                                  sections={temperatureSections()}
+                                  thresholds={temperatureThresholds()}
+                                  title={temperatureTitle()}
+                                  thermalPressure={thermalPressure()}
+                                />
+                              </Show>
                             </TableCell>
                           </Show>
                           <Show when={columnVisibility.isColumnVisible('lastSeen')}>
