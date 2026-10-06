@@ -5831,6 +5831,35 @@ and `TestHistoryIdentityMonitorAdapterResolvesSubResourceReferences` in
 `TestOwnerAlertTimelinesUseCanonicalHistoryIdentity` in
 `internal/monitoring/monitor_alert_handling_test.go` against the real alert
 producers.
+PVE disk health and wearout alerts (`ProxmoxPhysicalDiskAlertResourceID`,
+`<instance>:<node>:disk:<device key>`) stay unbound, although
+`ResolveReferenceID` resolves the same reference to the physical disk at that
+path for operator mutes (#2112). A device path is not hardware identity: a
+replacement disk in the same slot, or a reboot that reorders devices, takes
+over the path, and disk alerts are evaluated before their poll's disks reach
+the registry, so a lifecycle event can resolve against a generation that still
+places another disk there. A binding belongs to the reference string and
+moves to its latest target, carrying every row journaled under the reference
+and every read of it. Bound, the path would put rows a replaced disk journaled
+into its successor's history, and the Alerts history Resource action, which
+reads incidents by the alert's own reference, would show the successor's
+incidents for its predecessor's alert. Checking the serial each disk alert
+records (`disk_serial`) narrows this but does not close it: an event rejected
+for naming other hardware is still journaled under the reference and joins the
+disk the reference is bound to, the check and the journal write are not
+atomic, and an atomic check would still leave one binding owning every row
+under the path. A disk's history therefore omits its own SMART health and
+wearout alerts; they stay under the alert's reference, where incident
+timelines by alert identifier and start time find them. The Resource action
+reads the whole reference, so it lists every disk that has held the path, and
+alert identifiers derive from the path too. Binding them needs ownership per
+row, not per reference: each event written under the disk its recorded
+hardware identity names, rows with missing, unusable or ambiguous identity
+left under the reference rather than inferred from the current path, and a
+decided read for the Resource action. `proxmoxDiskAlertMetadata` records the
+serial but not the WWN, so WWN ownership also needs a producer change. Proof:
+`TestHistoryIdentityLeavesProxmoxDiskAlertReferencesUnbound` in
+`internal/unifiedresources/history_identity_test.go`.
 That same shared timeline vocabulary now includes the `activity` change kind
 for provider-read breadcrumbs such as VMware tasks and events, plus the
 `vmware_adapter` source-adapter token for canonical provenance drill-down.
