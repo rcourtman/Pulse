@@ -99,61 +99,105 @@ func TestMovedAlertCloseIsDeliveredAsMovedNotRecovered(t *testing.T) {
 	}
 }
 
-func TestMovedAlertCloseRendersHonestlyOnEveryChannel(t *testing.T) {
-	capture := func(t *testing.T, service string) map[string]any {
-		t.Helper()
-		var gotBody []byte
-		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			gotBody, _ = io.ReadAll(r.Body)
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-		nm := NewNotificationManager("https://pulse.local")
-		_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
-		webhook := WebhookConfig{Name: service, URL: server.URL + "/hook", Enabled: true, Service: service,
-			CustomFields: map[string]string{"routing_key": "rk"}}
-		if err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{movedNodeMemoryAlert()}, time.Now()); err != nil {
-			t.Fatalf("sendResolvedWebhook %s: %v", service, err)
-		}
-		var payload map[string]any
-		if err := json.Unmarshal(gotBody, &payload); err != nil {
-			t.Fatalf("unmarshal %s payload: %v", service, err)
-		}
-		return payload
+// captureResolvedWebhook renders one resolved delivery through an isolated
+// manager and returns what the destination received.
+func captureResolvedWebhook(t *testing.T, service string, alertList []*alerts.Alert) ([]byte, http.Header) {
+	t.Helper()
+	type request struct {
+		body   []byte
+		header http.Header
 	}
+	received := make(chan request, 1)
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		received <- request{body: body, header: r.Header.Clone()}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	nm := NewNotificationManagerWithDataDir("https://pulse.local", t.TempDir())
+	t.Cleanup(nm.Stop)
+	if err := nm.UpdateAllowedPrivateCIDRs("127.0.0.1"); err != nil {
+		t.Fatal(err)
+	}
+	webhook := WebhookConfig{Name: service, URL: server.URL + "/hook", Enabled: true, Service: service,
+		CustomFields: map[string]string{"routing_key": "rk"}}
+	if err := nm.sendResolvedWebhook(webhook, alertList, time.Now()); err != nil {
+		t.Fatalf("sendResolvedWebhook %s: %v", service, err)
+	}
+	select {
+	case got := <-received:
+		return got.body, got.header
+	case <-time.After(5 * time.Second):
+		t.Fatalf("%s destination received nothing", service)
+		return nil, nil
+	}
+}
 
-	t.Run("discord says moved", func(t *testing.T) {
-		embed := capture(t, "discord")["embeds"].([]any)[0].(map[string]any)
+func decodeResolvedPayload(t *testing.T, service string, body []byte) map[string]any {
+	t.Helper()
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("unmarshal %s payload: %v\n%s", service, err, body)
+	}
+	return payload
+}
+
+func TestMovedAlertCloseRendersHonestlyOnEveryChannel(t *testing.T) {
+	recovered := &alerts.Alert{ID: "vm-cpu", Type: "cpu", ResourceName: "web-vm-01", Node: "pve1", StartTime: time.Now().Add(-time.Minute)}
+
+	t.Run("discord says moved without the recovery colour", func(t *testing.T) {
+		body, _ := captureResolvedWebhook(t, "discord", []*alerts.Alert{movedNodeMemoryAlert()})
+		embed := decodeResolvedPayload(t, "discord", body)["embeds"].([]any)[0].(map[string]any)
 		description, _ := embed["description"].(string)
 		if !strings.Contains(description, movedSummary) || strings.Contains(description, "healthy") {
 			t.Fatalf("description = %q, want the handover summary", description)
 		}
+		if embed["color"] != float64(3447003) {
+			t.Fatalf("embed color = %v, want the neutral 3447003, not recovery green", embed["color"])
+		}
+	})
+
+	t.Run("teams cards drop recovery green", func(t *testing.T) {
+		body, _ := captureResolvedWebhook(t, "teams", []*alerts.Alert{movedNodeMemoryAlert()})
+		if got := decodeResolvedPayload(t, "teams", body)["themeColor"]; got != "0076D7" {
+			t.Fatalf("teams themeColor = %v, want 0076D7", got)
+		}
+		body, _ = captureResolvedWebhook(t, "teams-adaptive", []*alerts.Alert{movedNodeMemoryAlert()})
+		if !strings.Contains(string(body), `"color": "Accent"`) || strings.Contains(string(body), `"color": "Good"`) {
+			t.Fatalf("teams adaptive card = %s, want the Accent title colour", body)
+		}
+	})
+
+	t.Run("mattermost drops the check mark", func(t *testing.T) {
+		body, _ := captureResolvedWebhook(t, "mattermost", []*alerts.Alert{movedNodeMemoryAlert()})
+		text, _ := decodeResolvedPayload(t, "mattermost", body)["text"].(string)
+		if strings.Contains(text, ":white_check_mark:") || !strings.Contains(text, ":arrow_right: **RESOLVED**") || !strings.Contains(text, movedSummary) {
+			t.Fatalf("mattermost text = %q", text)
+		}
 	})
 
 	t.Run("pagerduty still closes the incident", func(t *testing.T) {
-		payload := capture(t, "pagerduty")
+		body, _ := captureResolvedWebhook(t, "pagerduty", []*alerts.Alert{movedNodeMemoryAlert()})
+		payload := decodeResolvedPayload(t, "pagerduty", body)
 		if payload["event_action"] != "resolve" || payload["dedup_key"] != "pve1-memory" {
 			t.Fatalf("payload = %v, want a resolve for the node alert's incident", payload)
 		}
 	})
 
 	t.Run("grouped list names the move", func(t *testing.T) {
-		var gotBody []byte
-		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			gotBody, _ = io.ReadAll(r.Body)
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-		nm := NewNotificationManager("https://pulse.local")
-		_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
-		recovered := &alerts.Alert{ID: "vm-cpu", Type: "cpu", ResourceName: "web-vm-01", Node: "pve1", StartTime: time.Now().Add(-time.Minute)}
-		webhook := WebhookConfig{Name: "slack", URL: server.URL + "/hook", Enabled: true, Service: "slack"}
-		if err := nm.sendResolvedWebhook(webhook, []*alerts.Alert{movedNodeMemoryAlert(), recovered}, time.Now()); err != nil {
-			t.Fatalf("sendResolvedWebhook: %v", err)
-		}
-		body := string(gotBody)
-		if !strings.Contains(body, "pve1 on pve1, moved to pve1 (Host Agent)") || !strings.Contains(body, "web-vm-01 on pve1") {
+		body, _ := captureResolvedWebhook(t, "slack", []*alerts.Alert{movedNodeMemoryAlert(), recovered})
+		if !strings.Contains(string(body), "pve1 on pve1, moved to pve1 (Host Agent)") || !strings.Contains(string(body), "web-vm-01 on pve1") {
 			t.Fatalf("grouped body = %s, want the moved alert marked and the recovery listed", body)
+		}
+	})
+
+	t.Run("grouped ntfy batch drops the check mark", func(t *testing.T) {
+		body, header := captureResolvedWebhook(t, "ntfy", []*alerts.Alert{movedNodeMemoryAlert(), recovered})
+		if tags := header.Get("Tags"); strings.Contains(tags, "white_check_mark") || !strings.Contains(tags, "arrow_right") {
+			t.Fatalf("ntfy tags = %q, want no check mark on a batch holding a move", tags)
+		}
+		if !strings.Contains(string(body), "- pve1 on pve1, moved to pve1 (Host Agent)\n") {
+			t.Fatalf("ntfy body = %q", body)
 		}
 	})
 
@@ -170,14 +214,26 @@ func TestMovedAlertCloseRendersHonestlyOnEveryChannel(t *testing.T) {
 		}
 	})
 
-	t.Run("ordinary recovery is unchanged", func(t *testing.T) {
-		recovered := movedNodeMemoryAlert()
-		recovered.Resolution = nil
-		if got := resolvedAlertMessage(recovered); got != "pve1 on pve1 is now healthy" {
+	t.Run("ordinary recovery keeps its wording and visuals", func(t *testing.T) {
+		plain := movedNodeMemoryAlert()
+		plain.Resolution = nil
+		if got := resolvedAlertMessage(plain); got != "pve1 on pve1 is now healthy" {
 			t.Fatalf("resolvedAlertMessage() = %q", got)
 		}
-		if title, _, _ := buildResolvedNotificationContent([]*alerts.Alert{recovered}, time.Now(), ""); title != "Pulse alert resolved: pve1" {
+		if title, _, _ := buildResolvedNotificationContent([]*alerts.Alert{plain}, time.Now(), ""); title != "Pulse alert resolved: pve1" {
 			t.Fatalf("title = %q", title)
+		}
+		body, _ := captureResolvedWebhook(t, "discord", []*alerts.Alert{plain})
+		if embed := decodeResolvedPayload(t, "discord", body)["embeds"].([]any)[0].(map[string]any); embed["color"] != float64(3066993) {
+			t.Fatalf("ordinary recovery embed color = %v, want green 3066993", embed["color"])
+		}
+		body, _ = captureResolvedWebhook(t, "mattermost", []*alerts.Alert{plain})
+		if text, _ := decodeResolvedPayload(t, "mattermost", body)["text"].(string); !strings.Contains(text, ":white_check_mark: **RESOLVED**") {
+			t.Fatalf("ordinary mattermost text = %q", text)
+		}
+		_, header := captureResolvedWebhook(t, "ntfy", []*alerts.Alert{plain})
+		if tags := header.Get("Tags"); tags != "white_check_mark,pulse,resolved" {
+			t.Fatalf("ordinary ntfy tags = %q", tags)
 		}
 	})
 }

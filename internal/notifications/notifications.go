@@ -453,6 +453,17 @@ func resolvedAlertNotRecoveredSummary(alert *alerts.Alert) string {
 	return alert.Resolution.Describe(label)
 }
 
+// resolvedAlertsIncludeNotRecovered reports whether any close in a resolved
+// notification was not a recovery, so recovery visuals must not be used.
+func resolvedAlertsIncludeNotRecovered(alertList []*alerts.Alert) bool {
+	for _, alert := range alertList {
+		if alert != nil && alert.Resolution.Outcome() != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // resolvedAlertListEntry names one alert in a grouped recovery list.
 func resolvedAlertListEntry(alert *alerts.Alert) string {
 	entry := fmt.Sprintf("%s on %s", alert.ResourceName, alert.Node)
@@ -3018,6 +3029,7 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 	data.ResolvedAtISO = resolvedAt.Format(time.RFC3339)
 	data.Duration = formatWebhookDuration(resolvedAt.Sub(alert.StartTime))
 	data.Message = resolvedAlertMessage(alert)
+	data.NotRecovered = resolvedAlertsIncludeNotRecovered(alertList)
 	data.AlertCount = len(alertList)
 	data.Alerts = alertList
 	if len(alertList) > 1 {
@@ -3074,16 +3086,19 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 	}
 
 	// Build plain-text body and title. A single alert that moved rather than
-	// recovered says so in both, and drops the green check.
+	// recovered says so in both, and no batch holding such a close carries
+	// the green check.
 	var body strings.Builder
 	title := "RESOLVED"
 	tags := "white_check_mark,pulse,resolved"
+	if resolvedAlertsIncludeNotRecovered(alertList) {
+		tags = "arrow_right,pulse,resolved"
+	}
 	if len(alertList) == 1 && alertList[0] != nil {
 		a := alertList[0]
 		title = fmt.Sprintf("RESOLVED: %s", a.ResourceName)
 		if summary := resolvedAlertNotRecoveredSummary(a); summary != "" {
 			title = fmt.Sprintf("MOVED: %s", a.ResourceName)
-			tags = "arrow_right,pulse,resolved"
 			body.WriteString(summary)
 		} else {
 			fmt.Fprintf(&body, "Resolved: %s", resolvedAlertMessage(a))
