@@ -5702,6 +5702,18 @@ When focused detail content is removed, `InlineDetailTableRow` restores focus
 to its current `aria-controls` disclosure with `preventScroll`; live refresh,
 collapse, and row replacement must not move the surrounding application
 viewport merely to reveal that control.
+The detail cell spans the summary row's visible cells, and `InlineDetailTableRow`
+re-measures that span while the row stays open: whenever summary cells are
+added, removed, or hidden (a column picker toggle, or a data-driven column
+such as the vCenter column that shows only with several vCenters), and
+whenever the caller's requested colspan changes. An open drawer must never
+keep a phantom column or stop short of a newly shown one. Changes inside a
+cell's content do not re-measure, so live metric updates stay cheap. When
+the span grows, the row changes the cell's own width for one forced layout
+and restores it, because Chromium otherwise keeps a fixed-layout table's old
+column widths for the widened cell. Callers keep passing their requested
+colspan; they must not re-key or remount the detail row to force a new span,
+which would discard drawer state.
 Inline detail section content is registry-backed separately from the row shell.
 `DetailSectionTable`, `InlineDetailPanel`, and `detailSectionModel.ts` own
 detail row compaction, section-table rendering, value-tone classes, and the
