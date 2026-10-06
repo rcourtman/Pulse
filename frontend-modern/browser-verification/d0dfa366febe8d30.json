@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "f4191494584f05c731f5c7a9aaa15c3b777a3f13",
+  "verified_at": "2026-10-06T16:39:54Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/DiskDetail.tsx",
+    "frontend-modern/src/components/Storage/DiskList.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolDetail.tsx",
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts",
+    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/DiskDetail.tsx": "85a1bb30e4914c98b65b820e649322de9bf5412f913d85a7638d3f8400e987e2",
+    "frontend-modern/src/components/Storage/DiskList.tsx": "6e4d7ce022fe2b1262581cf8482e1ad11bb287de7a3c255d639a6eeac5c5cc31",
+    "frontend-modern/src/components/Storage/StoragePoolDetail.tsx": "020f64a6044f17619f30e3dd79e49fb863dcc9775de6a65a47f97b8fcca02819",
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts": "7d01c07370a710227a39423670a5f1611bbfa64ba5488aa9a845fbdf2fe5176d",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "9ae039f89878e5274cbe6fdff436d3175a8656d717ffb51e72e5bb96d8f62d7c",
+    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts": "f52b9a2ada8e10bc84fb29ac9bc389a0d255fa794d99ff4c237e604e4cd30130"
+  },
+  "routes": [
+    "/proxmox/storage?tab=disks&q=West%20Production",
+    "/proxmox/storage?q=analytics-c-service-pool"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (50 nodes) whose generator was overlaid locally, never committed, to stamp real collector states on disk temperatures: a SATA disk on pve1 retaining 36C with unavailable 'disk is in standby', an NVMe disk on pve2 retaining 72C with unavailable 'host agent stopped reporting', a SATA disk on pve3 reading 72C live (available, host_agent), an NVMe disk on pve3 retaining 41C as missing with no reason, every other Proxmox disk available, TrueNAS disks with no collection state",
+    "Same-session control with origin/main's files swapped in under Vite: the pve2 silent-agent disk showed a red 72C identical to the live hot pve3 disk, the standby disk a green 36C, and its drawer printed 'Temperature is temporarily unavailable: host agent stopped reporting' directly above a red Temperature 72C card; the pool list showed the retained 71C in red",
+    "Physical Disks table after the change, light 1440 and dark 390: the three retained readings render muted (rgb(71,85,105) light, rgb(148,163,184) dark) with a dotted underline, titles 'Last known reading, not current: host agent stopped reporting', '... disk is in standby' and 'Last known reading, not current', and screen-reader text ', last known'; the live 72C stays red, 51C amber, the rest green; no clipping in the 41px phone Temp column",
+    "Disk drawer: silent-agent and standby disks show the existing collection message above a 'Last known temperature' card with a muted value; the live hot disk keeps 'Temperature 72C' in red with no message",
+    "Pool drawer for analytics-c-service-pool (pve33, ZFS devices sda2 and sdb2 linked to overlay disks): the retained 71C reads muted, dotted, with the reason title; the live 73C beside it stays red",
+    "Re-run on the rebased tree (origin/main f419149458, none of the changed files differ from the verified copies): identical results, no page errors at either width"
+  ],
+  "interactions": [
+    "Loaded the Physical Disks tab filtered to West Production and read every Temp cell's text, computed colour, decoration, title and overflow",
+    "Opened and closed the inline disk drawer for the silent-agent, standby and live hot disks at both viewports and read the collection message and temperature card",
+    "Opened the analytics-c-service-pool row on the Pools tab and read the linked-disk temperatures in its Physical Disks card",
+    "Swapped origin/main's versions of the six runtime files in under the running Vite and repeated the same reads, then restored the change and confirmed the diff byte-identical"
+  ]
+}

@@ -84,6 +84,59 @@ describe('DiskList', () => {
     cleanup();
   });
 
+  it('shows a retained temperature as last known, not as a live threshold reading', async () => {
+    const withTemperature = (collection: NonNullable<Resource['physicalDisk']>['collection']) =>
+      buildDisk('sda', 'tower', { diskType: 'sata', temperature: 72, collection });
+    const [disks, setDisks] = createSignal([
+      withTemperature({ temperature: { state: 'available', source: 'host_agent' } }),
+    ]);
+    const view = render(() => (
+      <DiskList
+        disks={disks()}
+        nodes={[]}
+        selectedNode={null}
+        searchTerm=""
+        selectedDiskId={null}
+        onSelectedDiskChange={() => {}}
+      />
+    ));
+    const reading = () =>
+      view.container.querySelector<HTMLElement>(
+        '[data-row-id="sda"] td[data-storage-column="temp"] [data-temperature-reading]',
+      )!;
+
+    expect(reading()).toHaveAttribute('data-temperature-reading', 'current');
+    expect(reading()).toHaveClass('text-red-600');
+    expect(reading()).not.toHaveAttribute('title');
+    expect(reading()).toHaveTextContent(/^72°C$/);
+
+    // The same row, retained after its host agent stopped reporting.
+    setDisks([
+      withTemperature({
+        temperature: {
+          state: 'unavailable',
+          source: 'host_agent',
+          reason: 'host agent stopped reporting',
+        },
+      }),
+    ]);
+    await waitFor(() =>
+      expect(reading()).toHaveAttribute('data-temperature-reading', 'last-known'),
+    );
+    expect(reading()).toHaveClass('text-muted');
+    expect(reading().className).not.toMatch(/text-(red|amber|green)-/);
+    expect(reading()).toHaveAttribute(
+      'title',
+      'Last known reading, not current: host agent stopped reporting',
+    );
+    expect(reading()).toHaveTextContent('72°C, last known');
+
+    // A source that predates collection state still reads as current.
+    setDisks([withTemperature(undefined)]);
+    await waitFor(() => expect(reading()).toHaveAttribute('data-temperature-reading', 'current'));
+    expect(reading()).toHaveClass('text-red-600');
+  });
+
   it('refreshes keyed disk rows without losing the expanded detail or keyboard focus', async () => {
     const initial = buildDisk('sda', 'tower', { diskType: 'ssd', wearout: 96 });
     const [disks, setDisks] = createSignal([initial]);

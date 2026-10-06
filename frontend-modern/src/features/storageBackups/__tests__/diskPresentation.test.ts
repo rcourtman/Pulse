@@ -37,10 +37,12 @@ import {
   getPhysicalDiskSourceKey,
   getPhysicalDiskSourceBadgePresentation,
   getPhysicalDiskTableLayoutModeForContainer,
+  getPhysicalDiskTemperaturePresentation,
   hasUnraidPhysicalDiskFaultSignal,
   hasPhysicalDiskSmartWarning,
   isPhysicalDiskWearoutReported,
   isPhysicalDiskColumnVisible,
+  isPhysicalDiskTemperatureCurrent,
   isUnraidPhysicalDisk,
   matchesPhysicalDiskSearch,
   normalizePhysicalDiskFacetFilter,
@@ -70,6 +72,65 @@ function makeDiskData(
 }
 
 describe('diskPresentation', () => {
+  it('reads a disk temperature as current only when its collection state says so', () => {
+    // Sources that predate collection state, and empty states, stay current.
+    expect(isPhysicalDiskTemperatureCurrent(undefined)).toBe(true);
+    expect(isPhysicalDiskTemperatureCurrent({})).toBe(true);
+    expect(isPhysicalDiskTemperatureCurrent({ temperature: { state: '' as never } })).toBe(true);
+    expect(
+      isPhysicalDiskTemperatureCurrent({ temperature: { state: 'available', source: 'smartctl' } }),
+    ).toBe(true);
+    for (const state of ['unavailable', 'unsupported', 'missing'] as const) {
+      expect(isPhysicalDiskTemperatureCurrent({ temperature: { state } })).toBe(false);
+    }
+
+    expect(
+      getPhysicalDiskTemperaturePresentation(
+        makeDiskData({
+          temperature: 72,
+          collection: { temperature: { state: 'available', source: 'host_agent' } },
+        }),
+      ),
+    ).toEqual({ label: '72°C', current: true, title: undefined });
+    expect(
+      getPhysicalDiskTemperaturePresentation(
+        makeDiskData({
+          temperature: 72,
+          collection: {
+            temperature: {
+              state: 'unavailable',
+              source: 'host_agent',
+              reason: 'host agent stopped reporting',
+            },
+          },
+        }),
+      ),
+    ).toEqual({
+      label: '72°C',
+      current: false,
+      title: 'Last known reading, not current: host agent stopped reporting',
+    });
+    expect(
+      getPhysicalDiskTemperaturePresentation(
+        makeDiskData({
+          temperature: 41,
+          collection: { temperature: { state: 'missing', source: 'smartctl', reason: '  ' } },
+        }),
+      ),
+    ).toEqual({ label: '41°C', current: false, title: 'Last known reading, not current' });
+    // No reading at all is not a last-known reading either.
+    for (const temperature of [0, -1, NaN]) {
+      expect(
+        getPhysicalDiskTemperaturePresentation(
+          makeDiskData({
+            temperature,
+            collection: { temperature: { state: 'unavailable', reason: 'disk is in standby' } },
+          }),
+        ),
+      ).toBeNull();
+    }
+  });
+
   it('distinguishes unsupported, unavailable, and unexpectedly missing disk evidence', () => {
     expect(
       getPhysicalDiskFieldStatusMessage('Disk I/O', {
