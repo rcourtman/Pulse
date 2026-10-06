@@ -3,7 +3,6 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
-import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformWindowedRows,
@@ -22,6 +21,7 @@ import {
   PlatformTableShell,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import { PlatformIssueReason } from '@/features/platformPage/PlatformIssueReason';
 import {
   PlatformResourceDetailToggleButton,
   PlatformResourceDetailTableRow,
@@ -32,7 +32,9 @@ import {
 import type { Resource } from '@/types/resource';
 import {
   filterVmwareDatastores,
-  getVmwareResourceDisplayStatus,
+  getVmwareDatastoreIssue,
+  vmwareIssueSortRank,
+  getVmwareRowIndicator,
   type VmwareDatastoreStatusFilter,
 } from './vmwarePageModel';
 
@@ -104,7 +106,14 @@ const hasCapacityMetric = (resource: Resource): boolean => {
 // Columns a user can sort by. Hosts and Consumers summarize several names at
 // once, so they carry no single scalar to order on. Capacity orders on the
 // used percentage the bar shows.
-const VSPHERE_DATASTORE_SORT_KEYS = ['datastore', 'type', 'capacity', 'vms', 'datacenter'] as const;
+const VSPHERE_DATASTORE_SORT_KEYS = [
+  'datastore',
+  'type',
+  'capacity',
+  'vms',
+  'datacenter',
+  'health',
+] as const;
 
 type VsphereDatastoreSortKey = (typeof VSPHERE_DATASTORE_SORT_KEYS)[number];
 
@@ -125,6 +134,8 @@ const getVsphereDatastoreSortValue = (
       return consumerCount(resource);
     case 'datacenter':
       return asTrimmedString(resource.vmware?.datacenterName) || null;
+    case 'health':
+      return vmwareIssueSortRank(getVmwareDatastoreIssue(resource));
     default:
       key satisfies never;
       return null;
@@ -204,7 +215,8 @@ export const VsphereDatastoresTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="datastore"
-                  class="platform-table-mobile-w-30 md:w-[21%]"
+                  class="platform-table-mobile-w-30 md:w-[16%]"
+                  bandWidth={28}
                 >
                   Datastore
                 </PlatformSortableTableHead>
@@ -212,7 +224,8 @@ export const VsphereDatastoresTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="type"
-                  class="platform-table-mobile-w-15 md:w-[9%]"
+                  class="platform-table-mobile-w-15 md:w-[6%]"
+                  bandWidth={11}
                 >
                   Type
                 </PlatformSortableTableHead>
@@ -220,29 +233,31 @@ export const VsphereDatastoresTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="capacity"
-                  class="platform-table-mobile-w-25 md:w-[18%]"
+                  class="platform-table-mobile-w-25 md:w-[16%]"
+                  bandWidth={22}
                 >
                   <PlatformResponsiveTableLabel compact="Cap" full="Capacity" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="platform-table-phone-hidden md:w-[14%]"
+                  class="hidden md:table-cell md:w-[16%]"
                 >
-                  <PlatformResponsiveTableLabel compact="H" full="Hosts" />
+                  Hosts
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="numeric-value"
                   sort={sort}
                   sortKey="vms"
-                  class="platform-table-mobile-w-15 md:w-[7%]"
+                  class="platform-table-mobile-w-15 md:w-[5%]"
+                  bandWidth={9}
                 >
                   VMs
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="hidden lg:table-cell md:w-[13%]"
+                  class="hidden lg:table-cell md:w-[15%]"
                 >
                   Consumers
                 </PlatformSortableTableHead>
@@ -250,9 +265,18 @@ export const VsphereDatastoresTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="datacenter"
-                  class="hidden md:table-cell md:w-[10%]"
+                  class="hidden md:table-cell md:w-[8%]"
                 >
                   Datacenter
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="health"
+                  class="platform-table-phone-hidden md:w-[18%]"
+                  bandWidth={30}
+                >
+                  Health
                 </PlatformSortableTableHead>
               </>
             }
@@ -262,8 +286,8 @@ export const VsphereDatastoresTable: Component<{
                   {(datastore) => {
                     const hosts = createMemo(() => hostSummary(datastore));
                     const consumers = createMemo(() => consumerSummary(datastore));
-                    const displayStatus = () => getVmwareResourceDisplayStatus(datastore);
-                    const indicator = () => getSimpleStatusIndicator(displayStatus());
+                    const issue = createMemo(() => getVmwareDatastoreIssue(datastore));
+                    const indicator = () => getVmwareRowIndicator(datastore, issue());
                     const name = () => datastoreName(datastore);
                     const datacenter = () =>
                       asTrimmedString(datastore.vmware?.datacenterName) || '—';
@@ -317,7 +341,7 @@ export const VsphereDatastoresTable: Component<{
                             </Show>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                             title={hosts().title}
                           >
                             <span class="block truncate">{hosts().label}</span>
@@ -339,12 +363,20 @@ export const VsphereDatastoresTable: Component<{
                           >
                             <span class="block truncate">{datacenter()}</span>
                           </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
+                          >
+                            <PlatformIssueReason
+                              issue={issue()}
+                              data-vsphere-health={issue()?.tone}
+                            />
+                          </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={datastore}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
-                          colSpan={7}
+                          colSpan={8}
                           resolveResourceLabel={resolveResourceLabel}
                           onClose={() => drawer.close(datastore)}
                         />

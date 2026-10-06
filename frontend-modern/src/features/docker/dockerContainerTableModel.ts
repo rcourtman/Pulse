@@ -72,9 +72,10 @@ const DOCKER_CONTAINER_COLUMN_MIN_LAYOUT: Record<
   state: 'narrow',
   cpu: 'narrow',
   memory: 'narrow',
-  // A phone row cannot fit the Restarts header beside the Update control;
-  // the count stays in the row expansion there and returns at mobile width.
-  restarts: 'mobile',
+  // Below a 720px table the Restarts header cannot fit beside State, the
+  // metric bars and the Update control without clipping one of them; the
+  // count stays in the row expansion there and returns at tablet width.
+  restarts: 'tablet',
   // Uptime is the current run, so a short one shows a container that just
   // restarted. Its header needs about 57px, which a tablet row cannot spare
   // beside State, Restarts and the Update control; the drawer keeps it there.
@@ -160,7 +161,6 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
     state: 14.5,
     cpu: 10,
     memory: 13.5,
-    restarts: 8,
     updates: 16.25,
     actions: 7.75,
   },
@@ -169,8 +169,8 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
     host: 15,
     state: 14,
     cpu: 9.5,
-    memory: 13,
-    restarts: 9,
+    memory: 12,
+    restarts: 10,
     updates: 14.5,
     actions: 6,
   },
@@ -192,6 +192,15 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
     actions: 6,
   },
 };
+
+// Whether a layout has room for a column at all (before row-set gates such
+// as "only when some container restarted").
+export const isDockerContainerColumnInLayout = (
+  columnId: DockerContainerTableColumnId,
+  layoutMode: WorkloadTableLayoutMode,
+): boolean =>
+  DOCKER_CONTAINER_TABLE_LAYOUT_ORDER[DOCKER_CONTAINER_COLUMN_MIN_LAYOUT[columnId]] <=
+  DOCKER_CONTAINER_TABLE_LAYOUT_ORDER[layoutMode];
 
 export const getDockerContainerVisibleColumnsForLayout = (
   layoutMode: WorkloadTableLayoutMode,

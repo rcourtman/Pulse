@@ -700,7 +700,11 @@ but registry IDs, merge keys, parent links, metrics targets, source-native
 guest IDs, external URLs, discovery targets, and actions must not. Children
 such as VMs, containers, and storage inherit the parent's presentation and
 native aliases so Overview, search, API/websocket/mobile, storage, backups,
-and filters agree. A linked agent may enrich the canonical node but cannot
+and filters agree. That inheritance stays in the child's `ProxmoxData`: only
+the node itself lists its node identity, native name, and native-name aliases
+as canonical aliases, because a child carrying them would answer to the node's
+alert resource ID and every guest would show each node alert as its own.
+A linked agent may enrich the canonical node but cannot
 replace a configured override with its hostname; same-name cluster identity
 remains provider scoped even after a native rename.
 Physical-disk resources own cross-source disk identity. When Proxmox inventory
@@ -1111,6 +1115,17 @@ The first reason renders in the desktop Health column on the row's single line,
 coloured by bucket, with a count for the rest and the full list in the title
 and screen-reader text. Phones keep the status dot and reach the reason through
 the row drawer. Health sorts by severity rank, not label text.
+The vSphere Datastores and Networks tables follow the same exception-first
+Health column. `getVmwareDatastoreIssue` and `getVmwareNetworkIssue` return
+nothing for a green row; otherwise the reasons are, in order, an impaired
+vCenter source, a datastore's inaccessible or maintenance state, the
+resource's incident summaries worst first, and, only when no incident explains
+the colour, vCenter's overall status or its active alarm count. Inaccessible,
+offline, red, or critical rows take the red tone. VMware incident summaries say
+only what vCenter flagged, the alarm's own name or `vCenter health is
+<colour>`, without the managed object ID or alarm colour: every surface that
+shows them (alert cards, notifications, the Overview and Health signal tables,
+the drawer, Patrol titles) already names the resource and its severity.
 That shell also owns responsive width composition. Source tables may declare
 desktop breakpoint floors, but the phone branch must fit its selected columns
 inside the available container without a horizontal rail. Each unified-resource
@@ -6050,6 +6065,10 @@ than the unified online/offline status, a running container's health check
 gets its own row (Failing, Starting, Passing), and Uptime is the current run,
 so a stopped container shows neither a stale health check nor leftover
 uptime. Both surfaces read `dockerContainerStatePresentation.ts`.
+Below a 720px table the containers table has no Restarts column (its header
+cannot fit beside State, the metric bars and the Update control), so a running
+container that restarted more than five times says `N restarts` in its State
+cell there instead; wider tables keep the count in its own column.
 
 ResourceDetailDrawer headings wrap long display names rather than ellipsising
 them. Overview rows may still truncate identity; keyboard expansion exposes the

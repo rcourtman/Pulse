@@ -2052,6 +2052,16 @@ deck or VMware-local page shell. Its rows are canonical `network` resources in
 the shared reportable/resource vocabulary, so source badges, resource pickers,
 command-palette search, table chrome, and detail disclosure must all consume
 shared primitives before VMware-specific presentation logic.
+A platform table's Health column, which says why a row's status dot is not
+green, renders through `PlatformIssueReason`
+(`frontend-modern/src/features/platformPage/PlatformIssueReason.tsx`): the
+first reason on the row's single line in the tone's colour, a count for the
+rest, every reason in the title and screen-reader text, and an empty cell for
+a healthy row. TrueNAS storage and the vSphere Datastores and Networks tables
+consume it, and the column stays desktop-only on each of them; a platform
+table must not hand-roll its own reason cell. On vSphere Datastores and
+Networks the Hosts list shows only from a 72rem container, where it reads
+instead of truncating, and the drawer keeps it at every width.
 Patrol's primary assessment strip is descriptive only; it must not render a
 Patrol-authored recommended next step, suggested prompt chips, or a secondary
 action band inside the assessment shell. If the same assessment opens
@@ -2342,6 +2352,10 @@ not a replacement status card, CTA band, or page-local nested card.
    `platformTableBandWidthStyle` or the sortable header's `bandWidth`, which
    sets `--platform-table-band-width`; the shell applies it only inside the band,
    after the name anchor, so md widths and phone widths are unchanged.
+   A header whose full label outgrows its band column (Kubernetes
+   Configuration's `Lifecycle / trust`) passes `compactInBand` to
+   `PlatformResponsiveTableLabel`, which keeps the compact label it already
+   shows on phones through the band; other headers switch at 34rem as before.
    A column whose content must read in full (a status badge) is sized for its
    widest label at the narrowest table in each range: a 34rem container for the
    band, and the table a 768px viewport leaves (about 695px) for md widths. The
@@ -5879,6 +5893,11 @@ not overlap or create horizontal overflow. The 390px operator qualification
 must assert three visible labels, non-overlapping client rectangles, keyboard
 reachability, and a contained document before its actual-pixels receipt is
 recorded.
+The Alert History table's density tracks in `index.css` carry per-column widths
+through `--alert-history-<column>-width` custom properties set on the table at
+each density. Fixed layout sizes all nine tracks before collapsed ones are
+removed, so the visible widths sum to 100% and the table width is the sum of
+all nine; `App.architecture.test.ts` checks both at every density.
 Alert History investigation detail is also responsive by interaction model,
 not only by CSS. Desktop may keep Timeline and Resource incident detail inline
 with its table row, while the virtualized phone card list must open the shared

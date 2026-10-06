@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "base_sha": "417cd7f67517d6ac46d3b2cd9a1cc6255026f7ce",
+  "verified_at": "2026-10-06T08:20:06Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/index.css"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/index.css": "239625623ccbb17c44b967f59ad68fc9495345a07565d584b07897512e017340"
+  },
+  "routes": [
+    "/docker/containers",
+    "/kubernetes/configuration",
+    "/alerts/history"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 1000
+    },
+    {
+      "width": 430,
+      "height": 1000
+    },
+    {
+      "width": 600,
+      "height": 1000
+    },
+    {
+      "width": 680,
+      "height": 1000
+    },
+    {
+      "width": 760,
+      "height": 1000
+    },
+    {
+      "width": 768,
+      "height": 900
+    },
+    {
+      "width": 800,
+      "height": 900
+    },
+    {
+      "width": 900,
+      "height": 900
+    },
+    {
+      "width": 1000,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 900
+    },
+    {
+      "width": 1100,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "width": 1920,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Merge of main (#2537 Alert History column widths) into this branch: the two index.css changes touch separate rules, and the merged file is what this receipt covers, served by a private mock stack on the merged tree 417cd7f675",
+    "Docker containers table measured at 390-1920: every column width, header and cell clip count is byte-identical to the pre-merge run of this branch (Restarts only from the tablet band, no header clipped at any width; Container, Image, Ports and Networks values truncate with an ellipsis as before)",
+    "Kubernetes configuration at 600-1100: the Lifecycle / trust header reads Status inside the tablet band and no header clips; long values truncate as before",
+    "Alert History at 768, 1024, 1440 and 1920: #2537's per-column widths apply in the merged file (Message 117, 109, 230 and 335px; no header clips; 66 of 85 mock messages read in full at 1440 and 79 at 1920)"
+  ],
+  "interactions": [
+    "Loaded each route fresh per viewport and measured every visible header and cell for clipping with a script",
+    "Screenshot of Alert History at 1440 to confirm the merged layout renders"
+  ]
+}

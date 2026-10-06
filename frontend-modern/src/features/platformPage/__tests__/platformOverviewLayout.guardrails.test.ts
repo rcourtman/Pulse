@@ -21,6 +21,7 @@ import kubernetesAlertsTableSource from '@/features/kubernetes/KubernetesAlertsT
 import kubernetesAutoscalingTableSource from '@/features/kubernetes/KubernetesAutoscalingTable.tsx?raw';
 import kubernetesClustersTableSource from '@/features/kubernetes/KubernetesClustersTable.tsx?raw';
 import kubernetesConfigTableSource from '@/features/kubernetes/KubernetesConfigTable.tsx?raw';
+import dockerContainerTableModelSource from '@/features/docker/dockerContainerTableModel.ts?raw';
 import kubernetesControllersTableSource from '@/features/kubernetes/KubernetesControllersTable.tsx?raw';
 import kubernetesDeploymentsTableSource from '@/features/kubernetes/KubernetesDeploymentsTable.tsx?raw';
 import kubernetesEventsTableSource from '@/features/kubernetes/KubernetesEventsTable.tsx?raw';
@@ -453,6 +454,17 @@ describe('platform overview layout guardrails', () => {
     }
   });
 
+  it('keeps long tablet headers from clipping', () => {
+    // "Lifecycle / trust" outgrows its tablet-band column, so it keeps the
+    // compact label it shows on phones through that band.
+    expect(kubernetesConfigTableSource).toMatch(
+      /compact="Status"\s+full="Lifecycle \/ trust"\s+compactInBand/,
+    );
+    // The Docker Restarts header cannot fit below a 720px table; the count
+    // waits in the drawer there and a crash-looper says so in State.
+    expect(dockerContainerTableModelSource).toMatch(/restarts: 'tablet',/);
+  });
+
   it('keeps phone-priority visibility container-led and symmetric across table rows', () => {
     expect(indexCssSource).toContain(':is(th, td).platform-table-phone-hidden');
     expect(indexCssSource).toContain(':is(th, td).platform-table-phone-only');
@@ -504,10 +516,10 @@ describe('platform overview layout guardrails', () => {
       /sortKey="resource"[\s\S]{0,120}?class="platform-table-mobile-w-30 md:w-\[32%\]"/,
     );
     expect(vsphereNetworksTableSource).toMatch(
-      /sortKey="network"[\s\S]{0,120}?class="platform-table-mobile-w-30 md:w-\[24%\]"/,
+      /sortKey="network"[\s\S]{0,120}?class="platform-table-mobile-w-30 md:w-\[20%\]"/,
     );
     expect(vsphereNetworksTableSource).toMatch(
-      /sortKey="type"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[13%\]"/,
+      /sortKey="type"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[10%\]"/,
     );
     expect(agentsMachinesTableSource).toContain(
       'class="-my-2 min-h-11 min-w-11 sm:my-0 sm:min-h-0 sm:min-w-0"',
@@ -628,7 +640,7 @@ describe('platform overview layout guardrails', () => {
     expect(vmwarePageSurfaceSource).toContain('<VsphereDatastoresTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereNetworksTable');
     expect(vsphereNetworksTableSource).toMatch(
-      /sortKey="vms"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[7%\]"/,
+      /sortKey="vms"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[5%\]"/,
     );
     expect(vmwarePageSurfaceSource).toContain('<VsphereActivityTable');
     expect(vmwarePageSurfaceSource).not.toContain('<StorageSurface');

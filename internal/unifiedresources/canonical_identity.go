@@ -111,12 +111,18 @@ func canonicalAliases(resource Resource, primaryID, platformID, hostname string)
 		values = append(values, "agent:"+agentID)
 	}
 	if resource.Proxmox != nil {
-		values = append(
-			values,
-			strings.TrimSpace(resource.Proxmox.NodeIdentity),
-			strings.TrimSpace(resource.Proxmox.NodeName),
-		)
-		values = append(values, resource.Proxmox.NodeAliases...)
+		// Only the node owns its node identity. Guests and storage inherit
+		// the parent's NodeIdentity and NodeAliases for presentation and
+		// search, but as aliases they would make every child answer to the
+		// node's alert resource ID, so one node alert painted every guest.
+		if CanonicalResourceType(resource.Type) == ResourceTypeAgent {
+			values = append(
+				values,
+				strings.TrimSpace(resource.Proxmox.NodeIdentity),
+				strings.TrimSpace(resource.Proxmox.NodeName),
+			)
+			values = append(values, resource.Proxmox.NodeAliases...)
+		}
 		// PVE disk alerts predate the unified resource registry and retain a
 		// path-shaped resource reference. Resolve it to this exact physical
 		// disk so a UI mute reaches both new and restored occurrences (#2112).

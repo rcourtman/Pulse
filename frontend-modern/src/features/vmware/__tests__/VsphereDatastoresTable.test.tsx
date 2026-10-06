@@ -96,4 +96,87 @@ describe('VsphereDatastoresTable', () => {
     expect(row).not.toHaveAttribute('aria-expanded');
     expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
   });
+
+  it('says why a datastore is not green and leaves healthy rows blank', () => {
+    const vmware = (extra: Record<string, unknown>) =>
+      ({ entityType: 'datastore', datastoreAccessible: true, ...extra }) as Resource['vmware'];
+    const healthy = makeDatastore({ id: 'nvme-primary' });
+    const alarmed = makeDatastore({
+      id: 'archive-tier',
+      status: 'degraded',
+      incidents: [
+        {
+          provider: 'vmware',
+          code: 'vmware_alarm_state',
+          severity: 'warning',
+          summary: 'Datastore latency above threshold',
+        },
+      ],
+      vmware: vmware({ overallStatus: 'yellow' }),
+    });
+    const yellow = makeDatastore({
+      id: 'edge-cold-iscsi',
+      vmware: vmware({ overallStatus: 'yellow' }),
+    });
+    const maintenance = makeDatastore({
+      id: 'edge-warm-nfs',
+      vmware: vmware({ maintenanceMode: 'inMaintenance' }),
+    });
+    const inaccessible = makeDatastore({
+      id: 'backup-nfs',
+      status: 'offline',
+      vmware: vmware({ datastoreAccessible: false }),
+    });
+    const stale = makeDatastore({
+      id: 'edge-vsan',
+      platformData: { sourceStatus: { vmware: { status: 'stale' } } },
+    });
+    const unreachableInMaintenance = makeDatastore({
+      id: 'edge-nvme-tier',
+      status: 'offline',
+      vmware: vmware({ maintenanceMode: 'inMaintenance', datastoreAccessible: false }),
+    });
+    const all = [
+      healthy,
+      alarmed,
+      yellow,
+      maintenance,
+      inaccessible,
+      stale,
+      unreachableInMaintenance,
+    ];
+
+    render(() => (
+      <VsphereDatastoresTable
+        datastores={all}
+        scope={all}
+        emptyIcon={<span />}
+        emptyTitle="No datastores"
+        emptyDescription="No datastores"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByRole('columnheader', { name: /Health/ })).toBeInTheDocument();
+    const health = (name: string) =>
+      screen.getByText(name).closest('tr')?.querySelector('[data-vsphere-health]');
+
+    expect(health('nvme-primary')).toBeNull();
+    expect(health('archive-tier')).toHaveAttribute('title', 'Datastore latency above threshold');
+    expect(health('edge-cold-iscsi')).toHaveAttribute('title', 'vCenter health is yellow');
+    expect(health('edge-warm-nfs')).toHaveAttribute('title', 'In maintenance mode');
+    expect(health('backup-nfs')).toHaveAttribute('data-vsphere-health', 'danger');
+    expect(health('backup-nfs')).toHaveAttribute('title', 'vCenter reports it inaccessible');
+    expect(health('edge-vsan')).toHaveAttribute('title', 'vCenter has not updated this recently');
+    // Maintenance does not hide that vCenter cannot reach the datastore.
+    expect(health('edge-nvme-tier')).toHaveAttribute('data-vsphere-health', 'danger');
+    expect(health('edge-nvme-tier')).toHaveAttribute(
+      'title',
+      'vCenter reports it inaccessible\nIn maintenance mode',
+    );
+    const dot = (name: string) =>
+      screen.getByText(name).closest('tr')?.querySelector('span.rounded-full[title]');
+    expect(dot('edge-warm-nfs')).toHaveAttribute('title', 'Maintenance');
+    expect(dot('nvme-primary')).toHaveAttribute('title', 'Online');
+  });
 });

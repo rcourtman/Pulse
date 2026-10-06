@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "base_sha": "25f4131720dad07540378f4d82aa9c33b291e75d",
+  "verified_at": "2026-10-06T09:35:44Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx",
+    "frontend-modern/src/features/platformPage/PlatformIssueReason.tsx",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx",
+    "frontend-modern/src/features/vmware/VsphereDatastoresTable.tsx",
+    "frontend-modern/src/features/vmware/VsphereNetworksTable.tsx",
+    "frontend-modern/src/features/vmware/vmwarePageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "13b98540debb4cc90930515da2ee02bfafe107dc3d12c9a1c4b493e834f228a9",
+    "frontend-modern/src/features/platformPage/PlatformIssueReason.tsx": "42c44157e730f97aaa7ae4aed113152a80fe0586164f9d368a716ce40ee9bbda",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx": "39792cde214d652d18a5d89a1b4a61167839ad9dad3df49aa28f474f14f37753",
+    "frontend-modern/src/features/vmware/VsphereDatastoresTable.tsx": "b87fb28920d00483c8de236f95a30d8ee37931a340469b613d313f9f6ec6de4e",
+    "frontend-modern/src/features/vmware/VsphereNetworksTable.tsx": "c35298763d75b87586a2faa40b832fee724c6d751d4761103bf9fbd5c1444dcc",
+    "frontend-modern/src/features/vmware/vmwarePageModel.ts": "d64d6ea8059ecc1e68801eddf95546b185834e4288a2bf052d3eb7005b5b7af1"
+  },
+  "routes": [
+    "/vmware/networks",
+    "/vmware/storage",
+    "/vmware/overview",
+    "/vmware/health",
+    "/truenas/storage",
+    "/alerts/overview",
+    "/patrol"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 600,
+      "height": 844
+    },
+    {
+      "width": 640,
+      "height": 844
+    },
+    {
+      "width": 700,
+      "height": 844
+    },
+    {
+      "width": 760,
+      "height": 844
+    },
+    {
+      "width": 768,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1920,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Private mock stack on main 1896f1f2ba plus this change (rebased onto main through 25f4131720, whose Docker update-alert and Windows harness changes touch no frontend file here) (backend rebuilt from the tree), mock vCenter with two alarmed networks, an alarmed datastore and a yellow datastore and ESXi host; before = main on the same stack",
+    "vSphere Networks and Datastores: a Health column now says why a row is amber (Network packet loss above threshold, Distributed portgroup uplink redundancy, Datastore latency above threshold, vCenter health is yellow) and is empty on green rows; main showed only the dot, with the reason one click or one tab away",
+    "Column sweep against main at 390-1920: names never clip at any width (main clipped none either); Hosts clipped 7-8 rows at 600-1024 on main and now shows only from a 72rem container where at most 4 rows truncate, fewer than main at 1280 and 1440; tablet band (600-760) splits columns by weight with DC compact, Type no longer clips, only the longest alarm names truncate with the full text on hover; phones keep the dot and hide Health as TrueNAS does",
+    "vSphere Overview and Health tab signal columns read the alarm in full (main: 'Network network-302 has VMware alarm Network packet loss above thres...'); drawer header badge and Needs attention read the alarm name",
+    "Alerts overview cards read 'vCenter health is yellow' / alarm names under the resource name; every vCenter alarm card, including the ESXi host, links to /vmware/overview (main sent the host to /machines, which does not list it)",
+    "Patrol inbox titles unchanged in substance ('Network packet loss above threshold on Edge Stateful', 'VMware host health on esxi-07.lab.local'), now derived from the incident code",
+    "TrueNAS storage Health cells on the shared PlatformIssueReason: markup, classes, colours and sizes identical to main in light and dark",
+    "Dark mode at 1440: Health reasons amber-300 on dark rows, readable"
+  ],
+  "interactions": [
+    "Sorted both tables by Health (amber rows first, reversed on second click)",
+    "Filtered both tables to Attention (only the two amber rows remain, each with its reason)",
+    "Expanded an amber datastore row: drawer spans the full table and names the alarm",
+    "Clicked the Edge Stateful alert card link from Alerts overview and landed on /vmware/overview",
+    "Expanded Patrol's full decision list and read every vSphere title",
+    "Measured every visible header and cell for clipping per viewport with a script, before and after"
+  ]
+}

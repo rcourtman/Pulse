@@ -927,6 +927,26 @@ The saved observation is aged deliberately; this is deterministic source-level
 restart/housekeeping proof, not a naturally elapsed day, live registry or
 destination result, or reporter confirmation of #2353's full daily cycle.
 
+### A "no update" report without a local digest is unknown
+
+An image-update clear is a comparison: the agent must have known the local
+digest it compared. Agents before #2353 reported `UpdateAvailable: false` with
+an empty `CurrentDigest` when an image inspect failed, because an empty digest
+compares as "not different". The server took that as recovery, resolving the
+alert (attributed to `legacy-alert-recovery-adapter`, the default for clears
+without explicit recovery evidence) and restarting the delay, so the alert
+re-fired a full delay later with no fresh registry check in between.
+`checkDockerContainerImageUpdate` now treats a no-update status without a
+current digest like an absent or failed check: it refreshes `LastSeen` and
+keeps the occurrence and its pending age. Only the agent produces these
+statuses and it always sends the current digest when it knows it; locally
+built images, which have none, never assert an update, so they lose nothing.
+The "no update without a current digest" case of
+`TestCheckDockerContainerImageUpdate` pins the guard and that a real
+comparison still resolves; the retention and restart tests' clear fixtures
+carry a current digest as real agents do. The agent side is in the monitoring
+contract.
+
 ### Continuing unacknowledged alerts survive age-based cleanup
 
 `MaxAlertAgeDays` removes an unacknowledged alert only when both its occurrence
@@ -1080,6 +1100,15 @@ low-urgency information accidentally. Informational alerts use the shared blue
 presentation and sort below warnings, while the history facet exposes a real
 Info option whose count and filtered rows use the same predicate as every
 other severity.
+
+The desktop alert history table sizes each column for its content instead of
+giving all visible columns an equal share. Timestamp, severity, duration,
+status, type and node get what their content needs (status fits
+"acknowledged"), Resource and Node keep at least their old share, the two row
+actions stay within two lines (one line from an 80rem card), and Message, the
+column that says what happened, takes the rest. Equal shares held Message to
+the same 100-160px as the timestamp, so at most a fifth of messages read in
+full at any width; from a 960px viewport a third to four fifths now do.
 
 Alert history row timestamps render clock time in the viewer's own locale and
 must carry the absolute date and time as a title. The date otherwise lives
@@ -2402,6 +2431,12 @@ mapping. Acknowledged cards keep their canonical badge and omit that redundant
 line; held delivery states that can surprise an operator use the attention
 tone, while cooldown, quiet-hours, monitor-only, and successful/pending states
 remain neutral.
+The card's resource link resolves the owning platform page from alert
+metadata, never from message wording alone: a provider incident whose
+`incidentProvider` is `vmware` links to the vSphere overview even though its
+message is only the alarm vCenter raised, and VMware incidents land on
+canonical `vm`, `storage`, `network`, and `agent` resource types rather than a
+`vmware-` prefixed type.
 The retired dashboard recent-alert panel must not be reintroduced as a
 parallel alert surface. Alert summary/tone copy belongs to the alert overview
 presentation owner, and any future compact alert surface must compose the

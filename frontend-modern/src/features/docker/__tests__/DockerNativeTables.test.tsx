@@ -965,6 +965,72 @@ describe('Docker native tables', () => {
     expect(screen.getByText('Exited (1)')).toHaveAttribute('data-docker-container-state', 'danger');
   });
 
+  it('flags a crash-looping container in State where the Restarts column is hidden', () => {
+    const rows = [
+      makeResource({
+        id: 'container-1',
+        type: 'app-container',
+        name: 'edge-web',
+        status: 'running',
+        docker: { hostname: 'edge-01', containerState: 'running', restartCount: 7 },
+      }),
+      makeResource({
+        id: 'container-2',
+        type: 'app-container',
+        name: 'edge-api',
+        status: 'running',
+        docker: { hostname: 'edge-01', containerState: 'running', restartCount: 1 },
+      }),
+    ];
+    // 600px is the mobile layout, which has no Restarts column.
+    setViewportWidth(600);
+    const { unmount } = renderInRouter(() => (
+      <DockerContainersTable
+        resources={rows}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+    expect(screen.queryByText('Restarts')).not.toBeInTheDocument();
+    expect(screen.getByText('7 restarts')).toHaveAttribute(
+      'data-docker-container-state',
+      'warning',
+    );
+    // State sorts by the words the row shows: "7 restarts" ranks apart from
+    // "Running" both ways (with equal labels both orders would be the same).
+    const rowOrder = () =>
+      [...document.querySelectorAll('[data-docker-container-row]')].map((row) =>
+        row.getAttribute('data-docker-container-row'),
+      );
+    const clickState = () => {
+      const header = screen
+        .getAllByRole('columnheader')
+        .find((th) => th.textContent?.trim().startsWith('State'));
+      fireEvent.click(header!.querySelector('button') ?? header!);
+    };
+    clickState();
+    expect(rowOrder()).toEqual(['container-1', 'container-2']);
+    clickState();
+    expect(rowOrder()).toEqual(['container-2', 'container-1']);
+    unmount();
+
+    // A wide table shows the count in its own column instead.
+    setViewportWidth(WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH);
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={rows}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+    expect(screen.getByText('Restarts')).toBeInTheDocument();
+    expect(screen.queryByText('7 restarts')).not.toBeInTheDocument();
+  });
+
   it('leaves out the Uptime column when no container reports one', () => {
     setViewportWidth(WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH);
 

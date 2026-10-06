@@ -38,6 +38,7 @@ import {
   withPlatformStatusCounts,
   type PlatformResourceStatusFilter,
   platformTableBandWidthStyle,
+  PlatformResponsiveTableLabel,
 } from '../sharedPlatformPage';
 
 afterEach(() => {
@@ -923,5 +924,24 @@ describe('PlatformTableMetricFallback', () => {
     expect(platformTableBandWidthStyle(36)).toEqual({ '--platform-table-band-width': '36%' });
     expect(platformTableBandWidthStyle(9.5)).toEqual({ '--platform-table-band-width': '9.5%' });
     expect(platformTableBandWidthStyle(undefined)).toBeUndefined();
+  });
+
+  it('lets a long header keep its compact label through the tablet band', () => {
+    render(() =>
+      createComponent(PlatformResponsiveTableLabel, {
+        compact: 'Status',
+        full: 'Lifecycle / trust',
+        compactInBand: true,
+      }),
+    );
+    expect(screen.getByText('Status').className).toBe(
+      'platform-table-label-compact platform-table-label-band-compact',
+    );
+    expect(screen.getByText('Lifecycle / trust').className).toBe(
+      'platform-table-label-full platform-table-label-band-compact',
+    );
+    cleanup();
+    render(() => createComponent(PlatformResponsiveTableLabel, { compact: 'Rdy', full: 'Ready' }));
+    expect(screen.getByText('Ready').className).toBe('platform-table-label-full');
   });
 });

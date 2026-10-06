@@ -302,6 +302,18 @@ describe('App architecture', () => {
     expect(band).toMatch(
       /width: 30%;\s*\}[\s\S]*?th\[style\*='--platform-table-band-width'\] \{\s*width: var\(--platform-table-band-width\);/,
     );
+    // A header whose full label outgrows its band column keeps its compact
+    // label there; these rules sit after the 34rem label switch so they win.
+    expect(band).toMatch(
+      /--platform-table-band-width\);\s*\}[\s\S]*?\.platform-table-label-compact\.platform-table-label-band-compact \{\s*display: inline;\s*\}\s*\.platform-table-label-full\.platform-table-label-band-compact \{\s*display: none;/,
+    );
+    const labelSwitch = appStylesSource.indexOf(
+      '@container (min-width: 34rem) {\n    .platform-table-label-compact',
+    );
+    expect(labelSwitch).toBeGreaterThan(0);
+    expect(appStylesSource.indexOf('.platform-table-label-band-compact')).toBeGreaterThan(
+      labelSwitch,
+    );
   });
 
   it('draws the shared select arrow that appearance-none removes', () => {
@@ -1102,5 +1114,65 @@ describe('Docker phone update reflow boundary', () => {
     expect(appStylesSource).toMatch(
       /\.table-scroll-shell\.table-scroll-shell-phone-page\s*\{\s*overflow: clip;/,
     );
+  });
+});
+
+describe('Alert History column widths', () => {
+  // Fixed layout sizes all nine tracks against the table width before the
+  // collapsed ones are removed, so at each density the visible tracks must sum
+  // to 100% and the table width must be the sum of all nine; otherwise the
+  // visible columns stop filling the card or overflow it.
+  const columns = [
+    'timestamp',
+    'resource',
+    'type',
+    'severity',
+    'message',
+    'duration',
+    'status',
+    'node',
+    'actions',
+  ] as const;
+  const densities: Array<{ name: string; visible: readonly (typeof columns)[number][] }> = [
+    {
+      name: 'base',
+      visible: ['timestamp', 'resource', 'severity', 'message', 'status', 'actions'],
+    },
+    {
+      name: '50rem',
+      visible: ['timestamp', 'resource', 'severity', 'message', 'duration', 'status', 'actions'],
+    },
+    { name: '64rem', visible: columns },
+    { name: '80rem', visible: columns },
+  ];
+  const blocks = [
+    ...appStylesSource.matchAll(
+      /table\.alert-history-responsive-table \{\s*((?:--alert-history-[a-z]+-width: [\d.]+%;\s*)+)width: ([\d.]+)%;/g,
+    ),
+  ];
+
+  it('declares every track width at each density', () => {
+    expect(blocks).toHaveLength(densities.length);
+    for (const column of columns) {
+      expect(appStylesSource).toContain(
+        `col.alert-history-${column}-track {\n    width: var(--alert-history-${column}-width);`,
+      );
+    }
+  });
+
+  it('fills the card exactly with the visible tracks', () => {
+    blocks.forEach((block, index) => {
+      const widths = Object.fromEntries(
+        [...block[1].matchAll(/--alert-history-([a-z]+)-width: ([\d.]+)%;/g)].map((match) => [
+          match[1],
+          Number(match[2]),
+        ]),
+      );
+      expect(Object.keys(widths).sort()).toEqual([...columns].sort());
+      const visibleSum = densities[index].visible.reduce((sum, column) => sum + widths[column], 0);
+      const allSum = columns.reduce((sum, column) => sum + widths[column], 0);
+      expect(visibleSum).toBeCloseTo(100, 6);
+      expect(Number(block[2])).toBeCloseTo(allSum, 6);
+    });
   });
 });

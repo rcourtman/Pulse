@@ -360,6 +360,23 @@ func NormalizeWebhookConfig(webhook WebhookConfig) WebhookConfig {
 	if strings.EqualFold(strings.TrimSpace(normalized.Service), "pushover") {
 		normalized.CustomFields = normalizePushoverWebhookCustomFields(normalized.CustomFields)
 	}
+	normalized.Headers = normalizeWebhookHeaders(normalized.Headers)
+	return normalized
+}
+
+// normalizeWebhookHeaders drops headers with a blank name or value. A cleared
+// header field in the editor means "no header"; sending it empty would replace
+// the default Content-Type and leave receivers unable to parse the body.
+func normalizeWebhookHeaders(headers map[string]string) map[string]string {
+	if len(headers) == 0 {
+		return headers
+	}
+	normalized := make(map[string]string, len(headers))
+	for key, value := range headers {
+		if strings.TrimSpace(key) != "" && strings.TrimSpace(value) != "" {
+			normalized[key] = value
+		}
+	}
 	return normalized
 }
 

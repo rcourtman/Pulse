@@ -1369,6 +1369,15 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 		return
 	}
 
+	// "No update" is a comparison result only when the agent knew the local
+	// digest. Agents before #2353 compared an empty digest after a failed image
+	// inspect and reported no update, which resolved a pending alert and
+	// restarted its delay. Without a current digest the result is unknown.
+	if !container.UpdateStatus.UpdateAvailable && strings.TrimSpace(container.UpdateStatus.CurrentDigest) == "" {
+		m.touchDockerContainerUpdateAlert(canonicalAlertID)
+		return
+	}
+
 	// Check if an update is available
 	if !container.UpdateStatus.UpdateAvailable {
 		// No update available - clear tracking and alert

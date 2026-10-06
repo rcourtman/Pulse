@@ -158,3 +158,30 @@ describe('drawer runtime rows', () => {
     expect(getDockerContainerHealthCheckPresentation(crashed)).toBeUndefined();
   });
 });
+
+describe('restart warning where the Restarts column is hidden', () => {
+  it('names a crash-looping running container in State only when asked', () => {
+    const looping = container({ containerState: 'running', health: 'healthy', restartCount: 7 });
+    expect(getDockerContainerStatePresentation(looping, { flagRestarts: true })).toEqual({
+      label: '7 restarts',
+      title: 'Running, but Docker has restarted it 7 times',
+      tone: 'warning',
+    });
+    expect(getDockerContainerStatePresentation(looping)).toMatchObject({ label: 'Healthy' });
+    expect(
+      getDockerContainerStatePresentation(
+        container({ containerState: 'running', restartCount: 5 }),
+        { flagRestarts: true },
+      ),
+    ).toMatchObject({ label: 'Running', tone: null });
+  });
+
+  it('keeps a worse state ahead of the restart count', () => {
+    expect(
+      getDockerContainerStatePresentation(
+        container({ containerState: 'running', health: 'unhealthy', restartCount: 9 }),
+        { flagRestarts: true },
+      ),
+    ).toMatchObject({ label: 'Unhealthy', tone: 'danger' });
+  });
+});

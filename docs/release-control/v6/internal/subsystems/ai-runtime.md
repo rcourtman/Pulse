@@ -4643,7 +4643,16 @@ titles: provider alarm messages yield their bounded alarm subject, generic
 resource/storage incident types become plain issue language, and known
 acronyms such as CPU, ZFS, and I/O retain their canonical casing. Clients must
 not receive machine-title-cased placeholders such as `Resource Incident` and
-repair them independently. The projection also collapses open/resolved churn:
+repair them independently. VMware incidents are recognized by the alert's
+`incidentCode` metadata, never by parsing message wording: a
+`vmware_alarm_state` alert is titled with the alarm name its message carries,
+cut before any appended consumer summary, and a `vmware_health_state` alert
+reads as VMware host or datastore health. Records persisted before VMware
+summaries became the alarm name still carry "<entity> <moref> has VMware alarm
+<name> (<colour>)", so the title strips that wording to the same alarm name.
+Patrol's seed context lists active and recently resolved alerts by resource:
+each line names the alert's resource unless the message already does, because
+provider incidents such as vCenter alarms say only what was flagged. The projection also collapses open/resolved churn:
 when a record's timeline holds at least four open-to-resolved or
 resolved-to-open transitions inside the last 24 hours, the item carries a
 `flapping` summary (transition count, window, first and latest transition) and

@@ -522,6 +522,11 @@ describe('tab path helpers', () => {
     expect(alertHistoryTableSectionSource).toMatch(/<Table(?:\s|>)/);
     expect(alertHistoryTableSectionSource).toContain('alert-history-responsive-table');
     expect(alertHistoryTableSectionSource).toContain('<colgroup>');
+    // Each track carries its own width so message, the column that says what
+    // happened, is not held to the same share as the timestamp.
+    expect(alertHistoryTableSectionSource).toMatch(
+      /alert-history-timestamp-track[\s\S]*alert-history-resource-track[\s\S]*alert-history-type-track[\s\S]*alert-history-severity-track[\s\S]*alert-history-message-track[\s\S]*alert-history-duration-track[\s\S]*alert-history-status-track[\s\S]*alert-history-node-track[\s\S]*alert-history-actions-track/,
+    );
     expect(alertHistoryTableSectionSource).toContain('alert-history-timestamp-column');
     expect(alertHistoryTableSectionSource).toContain('alert-history-full-detail-column');
     expect(alertHistoryTableAlertRowSource).toContain('alert-history-timestamp-column');
