@@ -71,6 +71,23 @@ func CloneStatus(status *CollectionStatus) *CollectionStatus {
 	return &clone
 }
 
+// TemperatureCollected reports whether a disk temperature was collected by the
+// observation that carries it. Normalization may keep a last-known temperature
+// it did not collect (a disk in standby, a host agent past its reporting
+// lease) under a non-available state; that value must not be recorded or
+// presented as a current reading. A temperature without collection state
+// predates this contract and counts as collected.
+func TemperatureCollected(temperature int, status *CollectionStatus) bool {
+	if temperature <= 0 {
+		return false
+	}
+	if status == nil {
+		return true
+	}
+	state := status.Temperature.State
+	return state == "" || state == FieldAvailable
+}
+
 // MergeStatus keeps an available observation over a weaker state while still
 // allowing a current available observation to replace older provenance.
 func MergeStatus(existing, incoming *CollectionStatus) *CollectionStatus {

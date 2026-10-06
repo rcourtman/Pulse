@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 func strPointer(v string) *string {
@@ -1043,5 +1044,121 @@ func TestMetricPercent(t *testing.T) {
 				t.Fatalf("metricPercent(%#v) = %v, want %v", tt.metric, got, tt.want)
 			}
 		})
+	}
+}
+
+// Unraid inventory temperatures have no agent provenance, so the adapter
+// derives their state from the host's reporting lease and the disk's spin
+// state. A native row records only a state that withdraws its reading, a SMART
+// row that borrows the inventory reading takes the inventory's state, and a
+// SMART row with its own reading keeps the agent's state. A withdrawn reading
+// never counts as heat in the disk's risk.
+func TestUnraidDiskTemperatureFollowsTheHostLease(t *testing.T) {
+	smartWithout := models.HostDiskSMART{Device: "/dev/sdc", Serial: "UNRAID-1", Collection: &diskinventory.CollectionStatus{
+		Serial:      diskinventory.Available("smartctl"),
+		Temperature: diskinventory.Unsupported("smartctl", "no temperature attribute"),
+	}}
+	smartWith := models.HostDiskSMART{Device: "/dev/sdc", Serial: "UNRAID-1", Temperature: 40, Collection: &diskinventory.CollectionStatus{
+		Temperature: diskinventory.Unavailable("smartctl", models.HostAgentStoppedReportingReason),
+	}}
+	stopped := diskinventory.Unavailable("unraid", models.HostAgentStoppedReportingReason)
+	spunDown := diskinventory.Unavailable("unraid", "disk is reported spun down")
+	hotRisk := func(risk *PhysicalDiskRisk) bool {
+		if risk == nil {
+			return false
+		}
+		for _, reason := range risk.Reasons {
+			if reason.Code == "temperature_high" {
+				return true
+			}
+		}
+		return false
+	}
+	for _, tc := range []struct {
+		name     string
+		status   string
+		spunDown bool
+		native   diskinventory.FieldStatus
+		borrowed diskinventory.FieldStatus
+	}{
+		{"reporting", "online", false, diskinventory.FieldStatus{}, diskinventory.Available("unraid")},
+		{"silent agent", "offline", false, stopped, stopped},
+		{"spun down", "online", true, spunDown, spunDown},
+	} {
+		inventory := models.HostUnraidDisk{Name: "disk1", Device: "sdc", Role: "data", Status: "online", Serial: "UNRAID-1",
+			Temperature: 72, SpunDown: tc.spunDown}
+		host := models.Host{ID: "agent-tower", Hostname: "tower", Status: tc.status,
+			Unraid: &models.HostUnraidStorage{Disks: []models.HostUnraidDisk{inventory}}}
+		collected := tc.borrowed.State == diskinventory.FieldAvailable
+
+		native, _ := resourceFromHostUnraidPhysicalDisk(host, inventory)
+		got := native.PhysicalDisk
+		var nativeStatus diskinventory.FieldStatus
+		if got.Collection != nil {
+			nativeStatus = got.Collection.Temperature
+		}
+		if got.Temperature != 72 || nativeStatus != tc.native {
+			t.Fatalf("%s: Unraid row temperature=%d state=%+v, want 72 with %+v", tc.name, got.Temperature, nativeStatus, tc.native)
+		}
+		if hotRisk(got.Risk) != collected {
+			t.Fatalf("%s: Unraid row temperature risk = %v, want %v: %+v", tc.name, hotRisk(got.Risk), collected, got.Risk)
+		}
+
+		borrowed, _ := resourceFromHostSMARTDisk(host, smartWithout)
+		got = borrowed.PhysicalDisk
+		if got.Temperature != 72 || got.Collection.Temperature != tc.borrowed ||
+			got.Collection.Serial != diskinventory.Available("smartctl") {
+			t.Fatalf("%s: SMART row borrowing the inventory reading: temperature=%d collection=%+v", tc.name, got.Temperature, got.Collection)
+		}
+		if hotRisk(got.Risk) != collected {
+			t.Fatalf("%s: borrowed temperature risk = %v, want %v: %+v", tc.name, hotRisk(got.Risk), collected, got.Risk)
+		}
+		if smartWithout.Collection.Temperature.State != diskinventory.FieldUnsupported {
+			t.Fatal("the adapter mutated the SMART row's own collection state")
+		}
+
+		own, _ := resourceFromHostSMARTDisk(host, smartWith)
+		if got := own.PhysicalDisk; got.Temperature != 40 || got.Collection.Temperature != smartWith.Collection.Temperature {
+			t.Fatalf("%s: SMART row with its own reading lost the agent's state: temperature=%d collection=%+v", tc.name, got.Temperature, got.Collection)
+		}
+	}
+
+	cold := models.HostUnraidDisk{Name: "disk2", Device: "sdd", Serial: "UNRAID-2", SpunDown: true}
+	native, _ := resourceFromHostUnraidPhysicalDisk(models.Host{ID: "agent-tower", Status: "online"}, cold)
+	if native.PhysicalDisk.Collection != nil {
+		t.Fatalf("an Unraid row without a temperature claimed temperature state: %+v", native.PhysicalDisk.Collection)
+	}
+}
+
+// The registry merges an Unraid inventory row and the agent's SMART row for the
+// same disk, choosing the temperature and the collection state separately. A
+// reporting host's inventory row must not lend the merged disk an "available"
+// state when the reading it shows is the SMART row's, and that row says it was
+// not collected.
+func TestUnraidInventoryRowDoesNotMaskTheSMARTRowState(t *testing.T) {
+	state := models.NewState()
+	state.UpsertHost(models.Host{
+		ID: "agent-tower", Hostname: "tower", Status: "online",
+		Unraid: &models.HostUnraidStorage{Disks: []models.HostUnraidDisk{
+			{Name: "disk1", Device: "sdc", Role: "data", Status: "online", Serial: "UNRAID-MERGE1", Temperature: 37},
+		}},
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+			Device: "/dev/sdc", Serial: "UNRAID-MERGE1", Temperature: 40,
+			Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("smartctl", "disk is in standby")},
+		}}},
+	})
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(state.GetSnapshot())
+	var disks []*PhysicalDiskMeta
+	for _, resource := range registry.List() {
+		if resource.Type == ResourceTypePhysicalDisk {
+			disks = append(disks, resource.PhysicalDisk)
+		}
+	}
+	if len(disks) != 1 {
+		t.Fatalf("physical disks = %d, want the inventory and SMART rows merged into one", len(disks))
+	}
+	if got := disks[0]; got.Temperature != 40 || diskinventory.TemperatureCollected(got.Temperature, got.Collection) {
+		t.Fatalf("merged disk presents the SMART row's uncollected reading as collected: temperature=%d collection=%+v", got.Temperature, got.Collection)
 	}
 }

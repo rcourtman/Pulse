@@ -3778,6 +3778,12 @@ predates collection state), so a retained reading has to keep its non-available
 state to stay out of history; a path that relabels a carried reading as
 available, such as a node-temperature carry stamped `proxmox_node_smart`, is
 not covered by this rule.
+`diskinventory.TemperatureCollected` is the shared form of that test for
+consumers outside the history writers: the metrics-history API serves a disk
+`smart_temp` live point, and mock mode derives a synthetic disk temperature
+series from the disk's reading or pads a stored one, only from a collected
+temperature, so a retained standby or silent-agent reading never reappears as a
+point at the current time.
 Unified-resource physical-disk round trips must retain named
 `StorageGroup` membership rather than degrading it to the generic `Used`
 filesystem label.

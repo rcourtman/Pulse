@@ -3576,6 +3576,20 @@ state the Proxmox row still carries from the same source
 past its reporting lease must not stay "collected" through the Proxmox row's
 copy of the agent's own state, including when its host is down and no disk
 poll refreshes that copy.
+Unraid array-inventory rows carry no per-field provenance, so the adapter
+derives the state of a temperature taken from one: `unavailable` from `unraid`
+with "host agent stopped reporting" once `State.ExpireHostTelemetry` has marked
+the host offline, or with "disk is reported spun down" for a spun-down disk,
+and otherwise `available`. The value is kept as last-known context; it is
+collected again only when a reporting host sends a positive reading for a disk
+that is no longer spun down. A SMART row that falls back to
+the inventory reading because it has none of its own takes that state with it.
+The Unraid-native disk row records only the withdrawing states, never
+`available`: the registry chooses a merged disk's temperature and its state
+separately, and an `available` claim from the provenance-less row would
+outrank the SMART row's explicit state for the same disk when the SMART
+reading is the one shown. A withdrawn inventory temperature also stops
+counting as heat in the disk's risk assessment.
 
 Cross-source correlation compares normalized serial and WWN values across
 fields without truncation, allowing a PVE bare-hex array-volume serial to join
