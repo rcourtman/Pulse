@@ -273,8 +273,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # internal/api has its own sharded job below; every other package
-        # splits across these two.
+        # internal/api has its own sharded job below. Measured weights balance
+        # every other whole package across these two unchanged required checks.
         shard: [rest-0, rest-1]
 
     steps:
@@ -310,15 +310,20 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         env:
           PULSE_DATA_DIR: /tmp/pulse-test-data
-        # Packages other than internal/api are split deterministically by
-        # list position.
+        # Source, not the timing file, defines coverage. Longest measured
+        # packages go to the lightest shard; new packages use a default weight.
+        # Package binaries are independent, so only internal/api needs the
+        # contiguous, order-preserving test slices used in its separate job.
         run: |
           set -euo pipefail
           case "${{ matrix.shard }}" in
-            rest-0) pkgs=$(go list ./... | grep -v '/internal/api$' | awk 'NR % 2 == 0') ;;
-            rest-1) pkgs=$(go list ./... | grep -v '/internal/api$' | awk 'NR % 2 == 1') ;;
+            rest-0) index=0 ;;
+            rest-1) index=1 ;;
             *) echo "unknown shard ${{ matrix.shard }}" >&2; exit 1 ;;
           esac
+          pkgs=$(go list ./... | grep -v '/internal/api$' \
+            | python3 .github/scripts/select-go-package-shard.py \
+                .github/scripts/go-package-test-seconds.txt 2 "$index")
           if [ -z "$pkgs" ]; then
             echo "shard resolved to an empty package list" >&2
             exit 1
