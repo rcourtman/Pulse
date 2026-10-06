@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"reflect"
 	"sort"
 
@@ -300,12 +301,12 @@ func buildClientStateDelta(previous, current *clientStateSnapshot) (map[string]i
 }
 
 func createJSONMergePatch(previous, current json.RawMessage) (json.RawMessage, error) {
-	var previousValue interface{}
-	if err := json.Unmarshal(previous, &previousValue); err != nil {
+	previousValue, err := decodeJSONMergeValue(previous)
+	if err != nil {
 		return nil, err
 	}
-	var currentValue interface{}
-	if err := json.Unmarshal(current, &currentValue); err != nil {
+	currentValue, err := decodeJSONMergeValue(current)
+	if err != nil {
 		return nil, err
 	}
 
@@ -325,6 +326,29 @@ func createJSONMergePatch(previous, current json.RawMessage) (json.RawMessage, e
 		return nil, err
 	}
 	return patch, nil
+}
+
+// A delta must preserve the authoritative encoded counters, not round them
+// through float64. Otherwise adjacent int64/uint64 readings above 2^53 can
+// compare equal, and a changed nested value/array can be sent with altered
+// numbers. Keep number tokens exact while retaining the existing merge rules.
+func decodeJSONMergeValue(encoded json.RawMessage) (interface{}, error) {
+	decoder := json.NewDecoder(bytes.NewReader(encoded))
+	decoder.UseNumber()
+	var value interface{}
+	if err := decoder.Decode(&value); err != nil {
+		return nil, err
+	}
+	// Decode accepts a stream by default. Preserve Unmarshal's one-value
+	// contract, including rejection of a valid prefix followed by more JSON.
+	var trailing interface{}
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			err = fmt.Errorf("multiple JSON merge values")
+		}
+		return nil, err
+	}
+	return value, nil
 }
 
 func diffJSONMergeValue(previous, current interface{}) (interface{}, bool) {
