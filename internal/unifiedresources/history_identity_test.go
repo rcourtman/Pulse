@@ -173,3 +173,163 @@ func TestHistoryIdentityRetentionAndUnavailableLookup(t *testing.T) {
 	_, err = store.GetRecentChanges(canonical, time.Time{}, 10)
 	require.Error(t, err)
 }
+
+func proxmoxHistoryIdentitySnapshot(now time.Time) models.StateSnapshot {
+	return models.StateSnapshot{
+		Nodes:      []models.Node{{ID: "lab-pve1", Name: "pve1", Instance: "lab", Host: "https://pve1.lab:8006", Status: "online", LinkedAgentID: "host-pve1", LastSeen: now}},
+		Hosts:      []models.Host{{ID: "host-pve1", Hostname: "pve1", LinkedNodeID: "lab-pve1", MachineID: "0123456789abcdef", Status: "online", LastSeen: now}},
+		VMs:        []models.VM{{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now}},
+		Containers: []models.Container{{ID: "lab-pve1-102", VMID: 102, Name: "dns", Node: "pve1", Instance: "lab", Status: "running", Type: "lxc", LastSeen: now}},
+	}
+}
+
+func historyIdentityResourceID(t *testing.T, registry *ResourceRegistry, resourceType ResourceType, name string) string {
+	t.Helper()
+	for _, resource := range registry.List() {
+		if resource.Type == resourceType && resource.Name == name {
+			return resource.ID
+		}
+	}
+	t.Fatalf("no %s resource named %q", resourceType, name)
+	return ""
+}
+
+// Proxmox alerts carry the source-native node and guest IDs. Their lifecycle
+// must land in the history the drawer, facets and assistant read by canonical ID.
+func TestHistoryIdentityMonitorAdapterResolvesProxmoxAlertReferences(t *testing.T) {
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	now := time.Now().UTC().Truncate(time.Second)
+	snapshot := proxmoxHistoryIdentitySnapshot(now)
+	// A guest named like the system alert reference must not capture it.
+	snapshot.VMs = append(snapshot.VMs, models.VM{ID: "lab:pve1:120", VMID: 120, Name: "pulse-system", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now})
+	registry := NewRegistry(store)
+	registry.IngestSnapshot(snapshot)
+	adapter := NewMonitorAdapter(registry)
+	nodeID := historyIdentityResourceID(t, registry, ResourceTypeAgent, "pve1")
+	vmID := historyIdentityResourceID(t, registry, ResourceTypeVM, "web")
+	ctID := historyIdentityResourceID(t, registry, ResourceTypeSystemContainer, "dns")
+
+	// "lab:pve2:101" names a node other than the guest's current one, as an
+	// alert raised before a live migration does; it still names the guest.
+	refs := []string{"lab-pve1", "agent:host-pve1", "lab:pve2:101", "lab-pve1-102", "pulse-system", "web"}
+	for i, ref := range refs {
+		require.NoError(t, adapter.RecordChange(ResourceChange{ID: "fired-" + ref, ResourceID: ref, Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: now.Add(time.Duration(i) * time.Second)}))
+	}
+	for canonicalID, want := range map[string][]string{nodeID: {"agent:host-pve1", "lab-pve1"}, vmID: {"lab:pve2:101"}, ctID: {"lab-pve1-102"}} {
+		got, err := store.GetRecentChanges(canonicalID, time.Time{}, 10)
+		require.NoError(t, err)
+		require.Len(t, got, len(want), canonicalID)
+		for i, ref := range want {
+			require.Equal(t, "fired-"+ref, got[i].ID)
+			require.Equal(t, canonicalID, got[i].ResourceID)
+			bound, found, err := store.ResolveHistorySourceIdentity(ref)
+			require.NoError(t, err)
+			require.True(t, found, ref)
+			require.Equal(t, canonicalID, bound)
+		}
+		kinds, err := store.CountRecentChangesByKind(canonicalID, time.Time{})
+		require.NoError(t, err)
+		require.Equal(t, len(want), kinds[ChangeAlertFired], canonicalID)
+	}
+	// Names are display identities: they keep their own history and no binding.
+	for _, ref := range []string{"pulse-system", "web"} {
+		got, err := store.GetRecentChanges(ref, time.Time{}, 10)
+		require.NoError(t, err)
+		require.Len(t, got, 1, ref)
+		_, found, err := store.ResolveHistorySourceIdentity(ref)
+		require.NoError(t, err)
+		require.False(t, found, ref)
+	}
+	got, err := store.GetRecentChanges(historyIdentityResourceID(t, registry, ResourceTypeVM, "pulse-system"), time.Time{}, 10)
+	require.NoError(t, err)
+	require.Empty(t, got)
+
+	// Recovery after the node left inventory still reaches the same history.
+	removed := NewMonitorAdapter(NewRegistry(store))
+	require.NoError(t, removed.RecordChange(ResourceChange{ID: "resolved-lab-pve1", ResourceID: "lab-pve1", Kind: ChangeAlertResolved, SourceType: SourceHeuristic, ObservedAt: now.Add(time.Minute)}))
+	got, err = store.GetRecentChanges(nodeID, time.Time{}, 10)
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	require.Equal(t, "resolved-lab-pve1", got[0].ID)
+	require.Equal(t, nodeID, got[0].ResourceID)
+
+	// When two resources answer to the reference, neither the registry nor the
+	// retained binding may choose: the event keeps its own reference.
+	registry.mu.Lock()
+	registry.bySource[SourcePBS] = map[string]string{"lab-pve1": vmID}
+	registry.mu.Unlock()
+	require.NoError(t, adapter.RecordChange(ResourceChange{ID: "ambiguous-lab-pve1", ResourceID: "lab-pve1", Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: now.Add(2 * time.Minute)}))
+	var recordedAs string
+	require.NoError(t, store.db.QueryRow(`SELECT canonical_id FROM resource_changes WHERE id = 'ambiguous-lab-pve1'`).Scan(&recordedAs))
+	require.Equal(t, "lab-pve1", recordedAs)
+	bound, _, err := store.ResolveHistorySourceIdentity("lab-pve1")
+	require.NoError(t, err)
+	require.Equal(t, nodeID, bound, "an ambiguous reference never rebinds")
+	got, err = store.GetRecentChanges(vmID, time.Time{}, 10)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+}
+
+// Alert rows recorded under source-native references before they resolved join
+// canonical history once a registry generation can name their resource: rows
+// journaled before this process started, and rows written before inventory
+// knew the resource. The rows themselves are never rewritten.
+func TestHistoryIdentityBindsLegacyAlertRowsFromRegistryGenerations(t *testing.T) {
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	now := time.Now().UTC().Truncate(time.Second)
+	for i, ref := range []string{"lab-pve1", "lab-pve1-102", "lab:pve1:103", "lab:pve1:999", "docker:tower/worker"} {
+		require.NoError(t, store.RecordChange(ResourceChange{ID: "legacy-" + ref, ResourceID: ref, Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: now.Add(time.Duration(i) * time.Second)}))
+	}
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	snapshot := proxmoxHistoryIdentitySnapshot(now)
+	adapter.PopulateFromSnapshot(snapshot)
+	registry := adapter.currentRegistry()
+	for ref, canonicalID := range map[string]string{
+		"lab-pve1":     historyIdentityResourceID(t, registry, ResourceTypeAgent, "pve1"),
+		"lab-pve1-102": historyIdentityResourceID(t, registry, ResourceTypeSystemContainer, "dns"),
+	} {
+		got, err := store.GetRecentChangesFiltered(canonicalID, time.Time{}, 10, ResourceChangeFilters{Kinds: []ChangeKind{ChangeAlertFired}})
+		require.NoError(t, err)
+		require.Len(t, got, 1, ref)
+		require.Equal(t, "legacy-"+ref, got[0].ID)
+		require.Equal(t, ref, got[0].ResourceID)
+	}
+
+	// An alert raised after the journal scan, before inventory names its guest.
+	require.NoError(t, adapter.RecordChange(ResourceChange{ID: "early-lab:pve1:104", ResourceID: "lab:pve1:104", Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: now.Add(time.Minute)}))
+	for _, ref := range []string{"lab:pve1:103", "lab:pve1:104"} {
+		_, found, err := store.ResolveHistorySourceIdentity(ref)
+		require.NoError(t, err)
+		require.False(t, found, ref)
+	}
+	// Both guests join inventory in a later generation and are bound then.
+	snapshot.VMs = append(snapshot.VMs,
+		models.VM{ID: "lab:pve1:103", VMID: 103, Name: "late", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now},
+		models.VM{ID: "lab:pve1:104", VMID: 104, Name: "early", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now})
+	adapter.PopulateFromSnapshot(snapshot)
+	for name, id := range map[string]string{"late": "legacy-lab:pve1:103", "early": "early-lab:pve1:104"} {
+		got, err := store.GetRecentChangesFiltered(historyIdentityResourceID(t, adapter.currentRegistry(), ResourceTypeVM, name), time.Time{}, 10, ResourceChangeFilters{Kinds: []ChangeKind{ChangeAlertFired}})
+		require.NoError(t, err)
+		require.Len(t, got, 1, name)
+		require.Equal(t, id, got[0].ID)
+	}
+
+	// Unknown guests and Docker names stay unbound, and retries end at the deadline.
+	for _, ref := range []string{"lab:pve1:999", "docker:tower/worker"} {
+		_, found, err := store.ResolveHistorySourceIdentity(ref)
+		require.NoError(t, err)
+		require.False(t, found, ref)
+	}
+	require.Len(t, adapter.legacyHistory.pending, 1)
+	require.Contains(t, adapter.legacyHistory.pending, "lab:pve1:999")
+	adapter.legacyHistory.pending["lab:pve1:999"] = time.Now().Add(-time.Second)
+	adapter.PopulateFromSnapshot(snapshot)
+	require.Empty(t, adapter.legacyHistory.pending)
+	refs, err := store.unboundHistoryReferences()
+	require.NoError(t, err)
+	require.Equal(t, []string{"lab:pve1:999"}, refs)
+}
