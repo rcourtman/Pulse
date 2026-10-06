@@ -3,16 +3,20 @@ name: Release Signing Preflight
 # the dispatch answer is lost.
 run-name: ${{ format('Release signing preflight (no release build or publication){0}', inputs.request_id && format(' [{0}]', inputs.request_id) || '') }}
 
-# Dispatch this from main to find a lapsed Apple developer agreement, a revoked
-# notary key or an expiring Developer ID certificate before a release candidate
-# fails on it. The maintainer's nightly release rehearsal (pulse-dev-infra
+# This finds a lapsed Apple developer agreement, a revoked notary key or an
+# expiring Developer ID certificate before a release candidate fails on it. It
+# runs every Monday and can be dispatched from main at any time. The
+# maintainer's nightly release rehearsal (pulse-dev-infra
 # pulse-maintainer-release-rehearsal) dispatched it until that rehearsal was
-# switched off with the release steward on 4 October 2026.
+# switched off with the release steward on 4 October 2026. The weekly schedule
+# replaces it, and the certificate check's 30-day margin leaves weeks to renew.
 # On 2 Oct 2026 v6.4.6-rc.1 failed notarization because the agreement was
 # unsigned. This signs only a throwaway probe binary on the runner; it builds,
 # notarizes, uploads and publishes nothing. The certificate and notary checks
 # are independent, so one run names every broken credential.
 on:
+  schedule:
+    - cron: '23 6 * * 1'
   workflow_dispatch:
     inputs:
       request_id:
@@ -162,3 +166,52 @@ jobs:
             exit 1
           fi
           echo "Release signing credentials are ready."
+
+  # Scheduled runs have no caller watching them, and GitHub only emails
+  # whoever last edited the cron line. Keep one open issue while the weekly
+  # check fails and close it when the check passes again.
+  report-scheduled-result:
+    name: Report scheduled result
+    needs: apple-signing-preflight
+    if: ${{ always() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open, update or close the signing preflight issue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RESULT: ${{ needs.apple-signing-preflight.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Release signing preflight is failing"
+          # Search by title on the server, then keep only an exact match, so
+          # the alert is found however many newer issues are open.
+          number="$(gh issue list --state open --search "\"${title}\" in:title" \
+            --limit 100 --json number,title \
+            --jq "map(select(.title == \"${title}\")) | first | .number // empty")"
+          case "${RESULT}" in
+            success)
+              if [[ -n "${number}" ]]; then
+                gh issue close "${number}" --comment "The weekly signing preflight passed again: ${RUN_URL}"
+              fi
+              ;;
+            failure)
+              if [[ -n "${number}" ]]; then
+                gh issue comment "${number}" --body "It failed again: ${RUN_URL}"
+              else
+                gh issue create --title "${title}" --body "The weekly release signing preflight failed: ${RUN_URL}
+
+          The run's annotations name each failing check: Developer ID identity, certificate expiry, signing, or Apple notary access. Renew or replace that credential before the next release is cut, or the release will fail at signing or notarization.
+
+          This issue closes itself when the weekly check passes again."
+              fi
+              ;;
+            *)
+              echo "The preflight ended as ${RESULT}; nothing to report."
+              ;;
+          esac

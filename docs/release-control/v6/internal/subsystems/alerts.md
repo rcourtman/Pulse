@@ -1819,6 +1819,20 @@ owns node metric and temperature projection, node offline lifecycle handling,
 host-agent deduplication bookkeeping, and instance-scoped node display-name
 cache updates; future Proxmox node alert behavior should extend that resource
 checker owner rather than expanding the central Manager file.
+When a host agent with the node's hostname is registered, the agent resource
+owns the machine's CPU, memory and disk usage alerts, and `CheckNode` releases
+its own copies through the disabled-threshold path every cycle: the pending run
+is dropped and any node alert still open from before the agent registered is
+resolved, never left frozen until the agent goes offline. CPU temperature has no
+host-agent metric, so the node keeps evaluating it whether or not an agent is
+registered; the node poll already merges agent sensor readings into
+`node.Temperature`, giving one temperature alert per machine. A missing CPU
+reading is not recovery evidence: with a live trigger, `checkNodeTemperature`
+skips evaluation instead of feeding 0°C, while a disabled threshold still clears.
+`TestCheckNodeKeepsTemperatureAlertWhenHostAgentMonitorsNode`,
+`TestCheckNodeReleasesOpenMetricAlertWhenHostAgentRegisters` and
+`TestCheckNodeMissingTemperatureDoesNotResolveOpenAlert` in
+`internal/alerts/threshold_resolution_shared_test.go` pin these rules.
 Host-agent alert evaluation now lives in `internal/alerts/host.go`. That file
 owns host identity, host-agent metric projection, host disk/SMART/RAID/Unraid
 health handling, host cleanup, and host offline lifecycle handling; future host
