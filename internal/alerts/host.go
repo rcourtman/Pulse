@@ -157,7 +157,22 @@ func (m *Manager) resolveHostAlertThresholdsNoLock(alert *Alert, resourceID stri
 		linkedContainerID = metadataStringValue(alert.Metadata, "linkedContainerId")
 	}
 
-	return m.resolveHostThresholdsNoLock(hostID, linkedNodeID, linkedVMID, linkedContainerID)
+	thresholds := m.resolveHostThresholdsNoLock(hostID, linkedNodeID, linkedVMID, linkedContainerID)
+	// A disk temperature alert is judged against the per-type threshold
+	// CheckHost evaluates for that disk, so a config save does not resolve an
+	// alert the next report would raise again.
+	if alert != nil && alert.Type == "diskTemperature" {
+		override, exists := m.hostThresholdOverrideNoLock(hostID, linkedNodeID, linkedVMID, linkedContainerID)
+		overridden := exists && override.DiskTemperature != nil
+		if diskType, known := alert.Metadata["diskType"].(string); known || overridden {
+			thresholds.DiskTemperature = m.hostDiskTemperatureThresholdNoLock(thresholds.DiskTemperature, overridden, diskType)
+		} else {
+			// Alerts persisted before CheckHost recorded diskType carry no
+			// disk type until their next firing evaluation.
+			thresholds.DiskTemperature = m.lowestHostDiskTemperatureThresholdNoLock(thresholds.DiskTemperature)
+		}
+	}
+	return thresholds
 }
 
 func sanitizeHostComponent(value string) string {
@@ -366,18 +381,12 @@ func (m *Manager) CheckHost(host models.Host) {
 		if len(host.Sensors.SMART) > 0 {
 			for _, disk := range host.Sensors.SMART {
 				if disk.Temperature > 0 && !disk.Standby {
-					effectiveTempThreshold := thresholds.DiskTemperature
-					if diskType := strings.ToLower(strings.TrimSpace(disk.Type)); diskType != "" && !diskTempOverridden {
-						m.mu.RLock()
-						if th, ok := m.config.DiskTempByType[diskType]; ok {
-							t := th
-							effectiveTempThreshold = &t
-						}
-						m.mu.RUnlock()
-					}
+					m.mu.RLock()
+					effectiveTempThreshold := m.hostDiskTemperatureThresholdNoLock(thresholds.DiskTemperature, diskTempOverridden, disk.Type)
+					m.mu.RUnlock()
 
 					// Use specific resource ID for the disk: hostID/disk-temp:device
-					tempResourceID := fmt.Sprintf("%s/disk_temp:%s", hostResourceID(host.ID), sanitizeHostComponent(disk.Device))
+					tempResourceID := hostDiskTemperatureResourcePrefix(host.ID) + sanitizeHostComponent(disk.Device)
 					tempResourceName := fmt.Sprintf("%s (%s Temp)", hostDisplayName(host), disk.Device)
 
 					diskTempMetadata := hostChildAlertMetadata(baseMetadata, hostDiskAlertResourceType)
@@ -402,10 +411,9 @@ func (m *Manager) CheckHost(host models.Host) {
 			}
 		}
 	} else {
-		// We can't easily clear all disk temp alerts without tracking them,
-		// but checkMetric logic handles auto-resolution if value drops.
-		// If feature is disabled, ideally we should clear existing alerts.
-		// For now simple implementation.
+		// Disk temperature alerting is off for this host, so no later reading
+		// will resolve an alert it raised while it was on.
+		m.clearHostDiskTemperatureAlerts(host.ID)
 	}
 
 	seenDisks := make(map[string]struct{}, len(host.Disks))
@@ -875,6 +883,7 @@ func (m *Manager) HandleHostOfflineWithCorrelation(host models.Host, correlation
 
 	diskResourcePrefixes := []string{
 		fmt.Sprintf("%s/disk:", resourceKey),
+		hostDiskTemperatureResourcePrefix(host.ID),
 	}
 	raidAlertPrefix := fmt.Sprintf("host-%s-raid-", host.ID)
 	var alertsToClear []string
@@ -931,6 +940,7 @@ func (m *Manager) clearHostDiskAlerts(hostID string) {
 
 	prefixes := []string{
 		fmt.Sprintf("%s/disk:", hostResourceID(hostID)),
+		hostDiskTemperatureResourcePrefix(hostID),
 	}
 
 	m.mu.Lock()
@@ -952,6 +962,68 @@ func (m *Manager) clearHostDiskAlerts(hostID string) {
 			continue
 		}
 		m.clearAlertNoLock(alertID)
+	}
+}
+
+// hostDiskTemperatureResourcePrefix is the resource ID prefix of every SMART
+// disk temperature alert CheckHost raises for a host.
+func hostDiskTemperatureResourcePrefix(hostID string) string {
+	return hostResourceID(hostID) + "/disk_temp:"
+}
+
+// hostDiskTemperatureThresholdNoLock returns the threshold for one SMART disk
+// given the host's resolved disk temperature threshold. An enabled threshold
+// gives way to the disk type's DiskTempByType entry unless an explicit host or
+// linked-resource override set it. Callers must hold m.mu.
+func (m *Manager) hostDiskTemperatureThresholdNoLock(hostThreshold *HysteresisThreshold, overridden bool, diskType string) *HysteresisThreshold {
+	if hostThreshold == nil || hostThreshold.Trigger <= 0 || overridden {
+		return hostThreshold
+	}
+	if diskType = strings.ToLower(strings.TrimSpace(diskType)); diskType != "" {
+		if th, ok := m.config.DiskTempByType[diskType]; ok {
+			return &th
+		}
+	}
+	return hostThreshold
+}
+
+// lowestHostDiskTemperatureThresholdNoLock returns the lowest enabled
+// threshold any SMART disk of the host can be evaluated against. An alert
+// whose disk type is unknown is judged against it, so a config save never
+// resolves an alert its disk type would still fire. Callers must hold m.mu.
+func (m *Manager) lowestHostDiskTemperatureThresholdNoLock(hostThreshold *HysteresisThreshold) *HysteresisThreshold {
+	if hostThreshold == nil || hostThreshold.Trigger <= 0 {
+		return hostThreshold
+	}
+	lowest := hostThreshold
+	for _, th := range m.config.DiskTempByType {
+		if th.Trigger > 0 && th.Trigger < lowest.Trigger {
+			t := th
+			lowest = &t
+		}
+	}
+	return lowest
+}
+
+// clearHostDiskTemperatureAlerts resolves every SMART disk temperature alert
+// for a host.
+func (m *Manager) clearHostDiskTemperatureAlerts(hostID string) {
+	if hostID == "" {
+		return
+	}
+
+	resourcePrefix := hostDiskTemperatureResourcePrefix(hostID)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for storageKey, alert := range m.activeAlerts {
+		if alert == nil || alert.Type != "diskTemperature" {
+			continue
+		}
+		if strings.HasPrefix(alert.ResourceID, resourcePrefix) {
+			m.clearAlertNoLock(storageKey)
+		}
 	}
 }
 
