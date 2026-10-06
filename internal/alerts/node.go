@@ -94,11 +94,10 @@ func (m *Manager) CheckNode(node models.Node) {
 
 			// Check each metric (only if node is online and reachable)
 			// Check for host agent deduplication: if a host agent is running on this node,
-			// prefer the host agent alerts and skip node metric alerts to avoid duplicates.
+			// CPU, memory and disk usage alerts belong to the agent resource (CheckHost
+			// evaluates them), so the node releases its own copies instead of alerting twice.
 			if m.hasHostAgentForNode(node.Name) {
-				log.Debug().
-					Str("node", node.Name).
-					Msg("Skipping node metric alerts - host agent is monitoring this machine")
+				m.releaseNodeMetricAlerts(node, "cpu", "memory", "disk")
 			} else {
 				var memoryMetric *UnifiedResourceMetric
 				if node.Memory.HasKnownUsage() {
@@ -114,30 +113,61 @@ func (m *Manager) CheckNode(node models.Node) {
 					Memory:   memoryMetric,
 					Disk:     &UnifiedResourceMetric{Percent: node.Disk.Usage},
 				}, thresholds, nil)
-
-				// Check temperature if available
-				// We pass the check unconditionally so that if the threshold triggers are disabled (set to 0),
-				// any existing alerts will be properly cleared.
-				var temp float64
-				if node.Temperature != nil && node.Temperature.Available {
-					// Use CPU package temp if available, otherwise use max core temp
-					temp = node.Temperature.CPUPackage
-					if temp == 0 {
-						temp = node.Temperature.CPUMax
-					}
-				}
-				spec, err := buildCanonicalMetricSpec(node.ID, node.Name, unifiedresources.ResourceType("node"), "temperature", thresholds.Temperature)
-				if err != nil {
-					log.Warn().
-						Err(err).
-						Str("resourceID", node.ID).
-						Str("node", node.Name).
-						Msg("Skipping invalid canonical node temperature metric spec")
-				} else {
-					m.checkMetricWithCanonicalSpec(spec, node.Name, node.Name, node.Instance, "node", temp, thresholds.Temperature, nil)
-				}
 			}
+
+			// CPU temperature stays with the node even when a host agent runs on it:
+			// CheckHost has no CPU temperature metric, and the node poll already
+			// merges the agent's sensor readings into node.Temperature.
+			m.checkNodeTemperature(node, thresholds.Temperature)
 		}
+	}
+}
+
+// checkNodeTemperature evaluates the node CPU temperature alert.
+// A disabled threshold (nil or trigger 0) is always passed through so any
+// existing alert is cleared. Otherwise a missing CPU reading is not evidence:
+// feeding 0°C would resolve an open alert without proving the node cooled down.
+func (m *Manager) checkNodeTemperature(node models.Node, threshold *HysteresisThreshold) {
+	var temp float64
+	if node.Temperature != nil && node.Temperature.Available {
+		// Use CPU package temp if available, otherwise use max core temp
+		temp = node.Temperature.CPUPackage
+		if temp == 0 {
+			temp = node.Temperature.CPUMax
+		}
+	}
+	if temp <= 0 && threshold != nil && threshold.Trigger > 0 {
+		return
+	}
+	spec, err := buildCanonicalMetricSpec(node.ID, node.Name, unifiedresources.ResourceType("node"), "temperature", threshold)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("resourceID", node.ID).
+			Str("node", node.Name).
+			Msg("Skipping invalid canonical node temperature metric spec")
+		return
+	}
+	m.checkMetricWithCanonicalSpec(spec, node.Name, node.Name, node.Instance, "node", temp, threshold, nil)
+}
+
+// releaseNodeMetricAlerts stops node-side evaluation of the given metrics the
+// same way a disabled threshold does: any pending run is dropped and any open
+// node alert is resolved. Without this, a node alert that was open when a host
+// agent registered would stay frozen until the agent went offline.
+func (m *Manager) releaseNodeMetricAlerts(node models.Node, metrics ...string) {
+	for _, metric := range metrics {
+		spec, err := buildCanonicalMetricSpec(node.ID, node.Name, unifiedresources.ResourceType("node"), metric, nil)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("resourceID", node.ID).
+				Str("node", node.Name).
+				Str("metric", metric).
+				Msg("Skipping invalid canonical node metric spec")
+			continue
+		}
+		m.checkMetricWithCanonicalSpec(spec, node.Name, node.Name, node.Instance, "node", 0, nil, nil)
 	}
 }
 

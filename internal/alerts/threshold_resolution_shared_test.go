@@ -223,6 +223,142 @@ func TestCheckNodeDisabledOverrideClearsExistingAlerts(t *testing.T) {
 	}
 }
 
+func testActiveAlertIDsOfType(m *Manager, alertType string) []string {
+	var ids []string
+	for _, alert := range m.GetActiveAlerts() {
+		if alert.Type == alertType {
+			ids = append(ids, alert.ID)
+		}
+	}
+	return ids
+}
+
+func testNodeWithHostAgent() (models.Node, models.Host) {
+	node := models.Node{
+		ID:       "homelab-delly2",
+		Name:     "delly2",
+		Instance: "homelab",
+		Status:   "online",
+		CPU:      0.10,
+		Memory:   models.Memory{Total: 100, Used: 40, Free: 60, Usage: 40},
+		Disk:     models.Disk{Usage: 30},
+	}
+	host := models.Host{
+		ID:           "agent-delly2",
+		Hostname:     "delly2",
+		LinkedNodeID: node.ID,
+		CPUUsage:     10,
+		Memory:       models.Memory{Total: 100, Used: 40, Free: 60, Usage: 40},
+	}
+	return node, host
+}
+
+// A host agent on a Proxmox node takes over CPU, memory and disk alerts, but it
+// has no CPU temperature metric, so the node must keep raising temperature.
+func TestCheckNodeKeepsTemperatureAlertWhenHostAgentMonitorsNode(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.mu.Unlock()
+
+	node, host := testNodeWithHostAgent()
+	m.CheckHost(host)
+	if !m.hasHostAgentForNode(node.Name) {
+		t.Fatalf("expected CheckHost to register %q for node deduplication", host.Hostname)
+	}
+
+	node.Temperature = &models.Temperature{Available: true, CPUPackage: 90}
+	m.CheckNode(node)
+	m.CheckHost(host)
+
+	tempAlertID := canonicalMetricStateID(node.ID, "temperature")
+	if got := testActiveAlertIDsOfType(m, "temperature"); len(got) != 1 || got[0] != tempAlertID {
+		t.Fatalf("expected exactly one temperature alert %q, got %v", tempAlertID, got)
+	}
+
+	node.Temperature = &models.Temperature{Available: true, CPUPackage: 60}
+	m.CheckNode(node)
+	if got := testActiveAlertIDsOfType(m, "temperature"); len(got) != 0 {
+		t.Fatalf("expected node temperature alert to recover while the agent is registered, got %v", got)
+	}
+}
+
+// A node alert that was open when the host agent registered must be handed
+// over, not frozen until the agent goes offline.
+func TestCheckNodeReleasesOpenMetricAlertWhenHostAgentRegisters(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.NodeDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+	m.config.AgentDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+	m.mu.Unlock()
+
+	node, host := testNodeWithHostAgent()
+	node.Memory = models.Memory{Total: 100, Used: 95, Free: 5, Usage: 95}
+	host.Memory = node.Memory
+
+	m.CheckNode(node)
+	nodeAlertID := canonicalMetricStateID(node.ID, "memory")
+	if !testHasActiveAlert(t, m, nodeAlertID) {
+		t.Fatalf("expected node memory alert %q before the agent registers", nodeAlertID)
+	}
+
+	m.CheckHost(host)
+	m.CheckNode(node)
+
+	if testHasActiveAlert(t, m, nodeAlertID) {
+		t.Fatalf("expected node memory alert %q to be released once the host agent owns memory", nodeAlertID)
+	}
+	m.mu.RLock()
+	nodeIncident := testCoreHasIncident(m, node.ID, canonicalMetricSpecID(node.ID, "memory"))
+	m.mu.RUnlock()
+	if nodeIncident {
+		t.Fatalf("expected no node memory incident left in the reducer core after handover")
+	}
+	agentAlertID := canonicalMetricStateID(hostResourceID(host.ID), "memory")
+	if got := testActiveAlertIDsOfType(m, "memory"); len(got) != 1 || got[0] != agentAlertID {
+		t.Fatalf("expected exactly one memory alert %q, got %v", agentAlertID, got)
+	}
+}
+
+// Missing temperature telemetry is not a reading: it must not resolve an open
+// node temperature alert, while a disabled threshold still clears it.
+func TestCheckNodeMissingTemperatureDoesNotResolveOpenAlert(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.mu.Unlock()
+
+	node, _ := testNodeWithHostAgent()
+	node.Temperature = &models.Temperature{Available: true, CPUPackage: 90}
+	m.CheckNode(node)
+	tempAlertID := canonicalMetricStateID(node.ID, "temperature")
+	if !testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected node temperature alert %q", tempAlertID)
+	}
+
+	for _, missing := range []*models.Temperature{nil, {Available: false}, {Available: true}} {
+		node.Temperature = missing
+		m.CheckNode(node)
+		if !testHasActiveAlert(t, m, tempAlertID) {
+			t.Fatalf("expected temperature alert to stay open without a reading (temperature %+v)", missing)
+		}
+	}
+
+	m.mu.Lock()
+	m.config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 0, Clear: 0}
+	m.mu.Unlock()
+	m.CheckNode(node)
+	if testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected disabled temperature threshold to clear %q without a reading", tempAlertID)
+	}
+}
+
 func TestReevaluateActiveAlertsUsesSharedAgentOverrideResolution(t *testing.T) {
 	m := newTestManager(t)
 
