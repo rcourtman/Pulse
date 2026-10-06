@@ -28,3 +28,45 @@ func compareResourceNameIdentity(
 func CompareResourcesByCanonicalName(a, b Resource) int {
 	return compareResourceNameIdentity(a.Name, a.Type, a.ID, b.Name, b.Type, b.ID)
 }
+
+// Per-sort keys avoid normalising mixed-case names O(n log n) times and
+// copying a large Resource into every comparison. Keys move with their rows.
+type resourceNameSortKey struct {
+	name string
+	kind ResourceType
+	id   string
+}
+
+func (k resourceNameSortKey) less(other resourceNameSortKey) bool {
+	if k.name != other.name {
+		return k.name < other.name
+	}
+	if k.kind != other.kind {
+		return k.kind < other.kind
+	}
+	return k.id < other.id
+}
+
+type resourceNameSort struct {
+	rows []Resource
+	keys []resourceNameSortKey
+}
+
+func (s resourceNameSort) Len() int           { return len(s.rows) }
+func (s resourceNameSort) Less(i, j int) bool { return s.keys[i].less(s.keys[j]) }
+func (s resourceNameSort) Swap(i, j int) {
+	s.rows[i], s.rows[j] = s.rows[j], s.rows[i]
+	s.keys[i], s.keys[j] = s.keys[j], s.keys[i]
+}
+
+type namedResourceSort[T namedResourceView] struct {
+	rows []T
+	keys []resourceNameSortKey
+}
+
+func (s namedResourceSort[T]) Len() int           { return len(s.rows) }
+func (s namedResourceSort[T]) Less(i, j int) bool { return s.keys[i].less(s.keys[j]) }
+func (s namedResourceSort[T]) Swap(i, j int) {
+	s.rows[i], s.rows[j] = s.rows[j], s.rows[i]
+	s.keys[i], s.keys[j] = s.keys[j], s.keys[i]
+}

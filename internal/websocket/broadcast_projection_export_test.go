@@ -33,6 +33,38 @@ func NewBroadcastProjectionProbeForTest(getState func(string) interface{}, recip
 	}, nil
 }
 
+// NewQuietBroadcastProjectionProbeForTest also admits an actually quiet delta.
+func NewQuietBroadcastProjectionProbeForTest(getState func(string) interface{}, recipients int) (func() (int, error), error) {
+	hub := NewHub(getState)
+	clients := make([]*Client, recipients)
+	for i := range clients {
+		client := &Client{hub: hub, orgID: "default", send: make(chan []byte, 1)}
+		if _, sent, err := client.queueFullState("initialState", getState("default")); err != nil || !sent {
+			return nil, fmt.Errorf("initial state: sent=%v error=%v", sent, err)
+		}
+		<-client.send
+		clients[i] = client
+		hub.clients[client] = true
+	}
+	return func() (int, error) {
+		hub.dispatchStateBroadcast(&Message{Type: "rawData", Data: stateBroadcastRequest{}}, "")
+		bytes := 0
+		for _, client := range clients {
+			if !hub.clients[client] {
+				return 0, fmt.Errorf("cost probe lost a client")
+			}
+			select {
+			case data := <-client.send:
+				bytes += len(data)
+			default:
+				// An unchanged snapshot queues no frame.
+				continue
+			}
+		}
+		return bytes, nil
+	}, nil
+}
+
 // NewBroadcastProjectionCaptureForTest retains the actual per-client frames,
 // including a nil frame for a quiet or unrelated tenant. It runs the production
 // current-state getter, projection, delta baseline and queue path without timers
