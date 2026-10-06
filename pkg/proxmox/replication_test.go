@@ -963,3 +963,87 @@ func TestGetReplicationStatus_StatusEndpointFails(t *testing.T) {
 		t.Error("LastSyncTime should be nil (status endpoint failed)")
 	}
 }
+
+func TestReplicationObservedSyncOutcome(t *testing.T) {
+	cases := []struct{ name, status, want string }{
+		{"successful native status", `{"last_sync":1735689600,"fail_count":0,"state":"ok"}`, "ok"},
+		{"successful without state", `{"last_sync":1735689600,"fail_count":0}`, "ok"},
+		{"successful string scalars", `{"last_sync":"1735689600","fail_count":"0","state":"OK"}`, "ok"},
+		{"never synced", `{"last_sync":0,"fail_count":0,"state":"ok"}`, ""},
+		{"absent sync", `{"fail_count":0,"state":"ok"}`, ""},
+		{"absent fail count", `{"last_sync":1735689600,"state":"ok"}`, ""},
+		{"negative count", `{"last_sync":1735689600,"fail_count":-1}`, ""},
+		{"fractional count", `{"last_sync":1735689600,"fail_count":0.4}`, ""},
+		{"invalid count", `{"last_sync":1735689600,"fail_count":"bad"}`, ""},
+		{"unknown state", `{"last_sync":1735689600,"fail_count":0,"state":"future-state"}`, ""},
+		{"running", `{"last_sync":1735689600,"fail_count":0,"state":"syncing"}`, ""},
+		{"zero-count error", `{"last_sync":1735689600,"fail_count":0,"error":"sync failed"}`, "error"},
+		{"zero-count error state", `{"last_sync":1735689600,"fail_count":0,"state":"error"}`, "error"},
+		{"failed explicit outcome", `{"last_sync":1735689600,"fail_count":0,"last_sync_status":"failed"}`, "error"},
+		{"failure overrides explicit success", `{"last_sync":1735689600,"fail_count":2,"last_sync_status":"ok"}`, "error"},
+		{"error overrides success", `{"last_sync":1735689600,"fail_count":0,"state":"ok","error":"failed"}`, "error"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var status map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(tc.status), &status); err != nil {
+				t.Fatal(err)
+			}
+			if got := replicationSyncOutcome(status); got != tc.want {
+				t.Fatalf("outcome = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestReplicationStatusBindsOutcomeToSourceJob(t *testing.T) {
+	cases := []struct {
+		name, body, outcome string
+		httpStatus          int
+	}{
+		{"single legacy array", `{"data":[{"last_sync":1735689600,"fail_count":0}]}`, "ok", 200},
+		{"single object", `{"data":{"id":"100-0","source":"pve1","last_sync":1735689600,"fail_count":0}}`, "ok", 200},
+		{"matching row not first", `{"data":[{"id":"200-0","last_sync":1735689600,"fail_count":4},{"id":"100-0","last_sync":1735689600,"fail_count":0}]}`, "ok", 200},
+		{"different job", `{"data":[{"id":"200-0","last_sync":1735689600,"fail_count":0}]}`, "", 200},
+		{"different source", `{"data":{"source":"pve2","last_sync":1735689600,"fail_count":0}}`, "", 200},
+		{"duplicate job", `{"data":[{"id":"100-0","last_sync":1735689600,"fail_count":0},{"id":"100-0","last_sync":1735689600,"fail_count":1}]}`, "", 200},
+		{"ambiguous no identity", `{"data":[{"last_sync":1735689600,"fail_count":0},{"last_sync":1735689600,"fail_count":0}]}`, "", 200},
+		{"empty", `{"data":[]}`, "", 200},
+		{"malformed", `{not-json}`, "", 200},
+		{"unavailable permission", `{"errors":"permission denied"}`, "", 403},
+		{"error with zero fails", `{"data":{"last_sync":1735689600,"fail_count":0,"error":"sync failed"}}`, "error", 200},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/api2/json/cluster/replication":
+					fmt.Fprint(w, `{"data":[{"id":"100-0","guest":100,"source":"pve1","target":"pve2","schedule":"*/5"}]}`)
+				case "/api2/json/nodes/pve1/replication/100-0/status":
+					w.WriteHeader(tc.httpStatus)
+					fmt.Fprint(w, tc.body)
+				default:
+					t.Errorf("wrong source/job endpoint: %s", r.URL.Path)
+					w.WriteHeader(404)
+				}
+			}))
+			defer server.Close()
+			client, err := NewClient(ClientConfig{Host: server.URL, TokenName: "test@pve!token", TokenValue: "fixture", Timeout: time.Second})
+			if err != nil {
+				t.Fatal(err)
+			}
+			jobs, err := client.GetReplicationStatus(context.Background())
+			if err != nil || len(jobs) != 1 {
+				t.Fatalf("config inventory lost: %v %+v", err, jobs)
+			}
+			job := jobs[0]
+			if job.ID != "100-0" || job.Source != "pve1" || job.Target != "pve2" || job.LastSyncStatus != tc.outcome {
+				t.Fatalf("outcome/job identity = %+v, want %q", job, tc.outcome)
+			}
+			if tc.outcome == "" && job.LastSyncTime != nil {
+				t.Fatal("unmatched/unavailable status published another job's timestamp")
+			}
+		})
+	}
+}

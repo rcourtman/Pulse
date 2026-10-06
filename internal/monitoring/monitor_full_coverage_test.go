@@ -1135,3 +1135,91 @@ func TestPollPBSBackupsCachedIncompleteSnapshotLosesStaleTaskObservation(t *test
 		t.Fatalf("cached snapshot retained stale task observation: %+v", backups[0])
 	}
 }
+
+// Real client -> collector -> state -> JSON projection, across normal polls.
+// Local HTTP is an API-shape control, not a PVE reboot/installed acceptance.
+func TestReplicationObservedOutcomeSurvivesNormalPolling(t *testing.T) {
+	var phase atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api2/json/cluster/replication" {
+			jobs := make([]map[string]interface{}, 14)
+			for i := range jobs {
+				jobs[i] = map[string]interface{}{"id": fmt.Sprintf("%d-0", 100+i), "guest": 100 + i, "source": fmt.Sprintf("node%d", i%5), "target": fmt.Sprintf("node%d", (i+1)%5)}
+			}
+			json.NewEncoder(w).Encode(map[string]interface{}{"data": jobs})
+			return
+		}
+		for i := range 14 {
+			if r.URL.Path != fmt.Sprintf("/api2/json/nodes/node%d/replication/%d-0/status", i%5, 100+i) {
+				continue
+			}
+			if phase.Load() == 2 && i == 0 {
+				w.WriteHeader(403)
+				return
+			}
+			status := map[string]interface{}{"id": fmt.Sprintf("%d-0", 100+i), "source": fmt.Sprintf("node%d", i%5), "last_sync": 1735689600 + int64(phase.Load())*300, "fail_count": 0}
+			if phase.Load() == 1 && i == 0 {
+				status["error"] = "sync failed"
+			}
+			json.NewEncoder(w).Encode(map[string]interface{}{"data": status})
+			return
+		}
+		t.Errorf("unexpected source/job path: %s", r.URL.Path)
+		w.WriteHeader(404)
+	}))
+	defer server.Close()
+	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "test@pve!token", TokenValue: "fixture", Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Monitor{state: models.NewState()}
+	// An identically numbered job on another configured instance stays separate.
+	m.state.UpdateReplicationJobsForInstance("other", []models.ReplicationJob{{ID: "other-100-0", Instance: "other", JobID: "100-0", LastSyncStatus: "error"}})
+	for step := range 4 {
+		phase.Store(int32(step))
+		m.pollReplicationStatus(context.Background(), "cluster", client, []models.VM{{VMID: 100, Name: "guest", Type: "qemu", Node: "node0"}})
+		snapshot := m.state.GetSnapshot()
+		if len(snapshot.ReplicationJobs) != 15 {
+			t.Fatalf("phase %d lost inventory: %+v", step, snapshot.ReplicationJobs)
+		}
+		for _, job := range snapshot.ReplicationJobs {
+			if job.Instance == "other" {
+				if job.LastSyncStatus != "error" {
+					t.Fatal("poll changed another instance")
+				}
+				continue
+			}
+			want := "ok"
+			if job.JobID == "100-0" {
+				if step == 1 {
+					want = "error"
+				}
+				if step == 2 {
+					want = ""
+				}
+			}
+			if job.LastSyncStatus != want || job.ID != "cluster-"+job.JobID || job.LastPolled.IsZero() {
+				t.Fatalf("phase %d outcome/identity: %+v, want %q", step, job, want)
+			}
+			if job.JobID == "100-0" && (job.GuestName != "guest" || job.SourceNode != "node0" || job.TargetNode != "node1") {
+				t.Fatalf("projection changed guest/source/target: %+v", job)
+			}
+			if !(step == 2 && job.JobID == "100-0") && job.LastSyncUnix != 1735689600+int64(step)*300 {
+				t.Fatalf("phase %d retained old sync time: %+v", step, job)
+			}
+			encoded, err := json.Marshal(job)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var projected map[string]interface{}
+			json.Unmarshal(encoded, &projected)
+			if want != "" && projected["lastSyncStatus"] != want {
+				t.Fatal("wire projection lost outcome")
+			}
+			if want == "" && projected["lastSyncStatus"] != nil {
+				t.Fatal("unavailable status acquired a wire outcome")
+			}
+		}
+	}
+}
