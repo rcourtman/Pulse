@@ -31,6 +31,8 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
             "Frontend unit tests",
             "Require frontend dependency audit",
         ]
+        for name in ordered:
+            self.step(name)
         positions = [names.index(name) for name in ordered]
         self.assertEqual(positions, sorted(positions))
 
