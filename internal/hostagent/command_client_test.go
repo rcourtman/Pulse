@@ -601,7 +601,59 @@ func newCommandIdentityHarness(t *testing.T, presentedID string, interval time.D
 	agent.httpClient = h.server.Client()
 	agent.trimmedPulseURL = h.server.URL
 	h.agent = agent
+	// Some identity tests exercise acknowledgements or start the channel
+	// directly, without Run's deferred shutdown. Release their client before
+	// TempDir cleanup; Windows cannot remove an open receipt file.
+	t.Cleanup(func() { h.agent.stopCommandClient(true) })
 	return h
+}
+
+func TestCommandIdentityHarnessClosesClientsWithoutAgentRun(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		start bool
+	}{
+		{name: "staged"},
+		{name: "manually started", start: true},
+	} {
+		var h *commandIdentityHarness
+		var client *CommandClient
+		t.Run(test.name, func(t *testing.T) {
+			h = newCommandIdentityHarness(t, "configured-id", time.Hour, func(_ int, w http.ResponseWriter) {
+				writeAck(w, `{"success":true}`)
+			})
+			client = h.agent.commandClient
+			if test.start {
+				h.agent.commandClientMu.Lock()
+				h.agent.commandClientParentCtx = context.Background()
+				h.agent.commandClientMu.Unlock()
+				if !h.agent.startCommandClient(client) {
+					t.Fatal("manual command client did not start")
+				}
+				h.expectStart(t, "configured-id")
+			}
+		})
+		if h == nil || client == nil {
+			continue // Construction already failed the subtest.
+		}
+
+		// Subtest cleanup has now run. Check shutdown even on Unix, where
+		// deleting an open file would otherwise hide a missing client close.
+		h.agent.commandClientMu.Lock()
+		retained := h.agent.commandClient != nil || h.agent.commandClientRunCancel != nil
+		h.agent.commandClientMu.Unlock()
+		if retained {
+			t.Errorf("%s: fixture retained its command client or run slot after cleanup", test.name)
+		}
+		client.connMu.Lock()
+		done := client.done
+		client.connMu.Unlock()
+		select {
+		case <-done:
+		default:
+			t.Errorf("%s: fixture did not close its command client", test.name)
+		}
+	}
 }
 
 func (h *commandIdentityHarness) run(t *testing.T) {
