@@ -630,7 +630,8 @@ func (m *Monitor) checkMockAlerts() {
 	}
 
 	// Get mock state
-	state := mock.CurrentFixtureGraph().State
+	graph, fixtureRevision := mock.CurrentFixtureGraphWithRevision()
+	state := graph.State
 
 	log.Debug().
 		Int("vms", len(state.VMs)).
@@ -694,7 +695,7 @@ func (m *Monitor) checkMockAlerts() {
 	// and disk alerts to its agent on the first tick, as the host-agent
 	// hostname deduplication does in production.
 	log.Debug().Int("hostCount", len(state.Hosts)).Msg("checking host agent alerts")
-	m.evaluateMockHostAgents(state.Hosts, state.Nodes)
+	m.evaluateMockHostAgents(state.Hosts, state.Nodes, fixtureRevision)
 
 	// Check alerts for each node
 	for _, node := range state.Nodes {
@@ -728,9 +729,7 @@ func (m *Monitor) checkMockAlerts() {
 	// so skipping this loop leaves the docker alert lifecycle unexercisable
 	// against mock data.
 	log.Debug().Int("dockerHostCount", len(state.DockerHosts)).Msg("checking docker alerts")
-	for _, dockerHost := range state.DockerHosts {
-		m.checkMockDockerHostAlerts(dockerHost)
-	}
+	m.evaluateMockDockerHosts(state.DockerHosts, fixtureRevision)
 
 	// Cache the latest alert snapshots directly in the mock data so the API can serve
 	// mock state without needing to grab the alert manager lock again.
@@ -741,13 +740,11 @@ func (m *Monitor) checkMockAlerts() {
 // A runtime mock config change rebuilds the estate, so an agent can leave it
 // between passes; it then goes through HandleHostRemoved, as a deleted live
 // agent does, or its alerts and hostname deduplication would outlive it.
-func (m *Monitor) evaluateMockHostAgents(hosts []models.Host, nodes []models.Node) {
+func (m *Monitor) evaluateMockHostAgents(hosts []models.Host, nodes []models.Node, fixtureRevision uint64) {
 	m.mockHostAgentsMu.Lock()
 	defer m.mockHostAgentsMu.Unlock()
 
-	// A pass that took its snapshot before the monitor left mock mode must
-	// not re-register fixture agents after forgetMockHostAgents ran.
-	if !mock.IsMockEnabled() {
+	if !m.acceptMockFixturePassLocked(fixtureRevision) {
 		return
 	}
 
@@ -770,20 +767,77 @@ func (m *Monitor) evaluateMockHostAgents(hosts []models.Host, nodes []models.Nod
 	m.mockHostAgents = current
 }
 
-// forgetMockHostAgents removes the fixture agents when the monitor leaves mock
-// mode. ClearActiveAlerts drops their alerts but not their hostname
-// deduplication, so a real node named like a fixture agent (pve1) would keep
-// its CPU, memory and disk alerts suppressed with no agent to own them. The
-// removal also clears anything a pass already in flight recreated; mock mode
-// is off before this runs, so no later pass can register them again.
-func (m *Monitor) forgetMockHostAgents() {
+// evaluateMockDockerHosts is the Docker counterpart of evaluateMockHostAgents,
+// under the same lock and mode check. Nested Docker-in-LXC hosts are named
+// after their guest's VMID, so a runtime mock config change can drop a host
+// from the estate; it then goes through HandleDockerHostRemoved, as a deleted
+// live host does. pruneStaleDockerAlerts clears the same alerts, but only when
+// something reads state, so an unwatched stack would keep them active.
+func (m *Monitor) evaluateMockDockerHosts(hosts []models.DockerHost, fixtureRevision uint64) {
 	m.mockHostAgentsMu.Lock()
 	defer m.mockHostAgentsMu.Unlock()
 
+	if !m.acceptMockFixturePassLocked(fixtureRevision) {
+		return
+	}
+
+	current := make(map[string]models.DockerHost, len(hosts))
+	for _, host := range hosts {
+		if host.ID != "" {
+			current[host.ID] = host
+		}
+	}
+	for id, host := range m.mockDockerHosts {
+		if _, ok := current[id]; !ok {
+			m.alertManager.HandleDockerHostRemoved(host)
+		}
+	}
+	for _, host := range hosts {
+		m.checkMockDockerHostAlerts(host)
+	}
+	m.mockDockerHosts = current
+}
+
+// acceptMockFixturePassLocked reports whether a mock alert pass may update the
+// tracked fixture hosts. A pass that took its snapshot before the monitor left
+// mock mode must not evaluate fixtures after forgetMockFixtureHosts ran. Ticks
+// start passes concurrently, so one that took its snapshot before an estate
+// rebuild can also reach this lock after a newer pass; applying it would
+// remove the new estate's hosts and re-evaluate retired ones. The fixture
+// revision only advances on such rebuilds, so an older revision is rejected.
+// Callers hold mockHostAgentsMu.
+func (m *Monitor) acceptMockFixturePassLocked(fixtureRevision uint64) bool {
+	if !mock.IsMockEnabled() || fixtureRevision < m.mockFixtureRevision {
+		return false
+	}
+	m.mockFixtureRevision = fixtureRevision
+	return true
+}
+
+// forgetMockFixtureHosts removes the fixture agents and Docker hosts when the
+// monitor leaves mock mode. ClearActiveAlerts drops their alerts but not the
+// agents' hostname deduplication, so a real node named like a fixture agent
+// (pve1) would keep its CPU, memory and disk alerts suppressed with no agent to
+// own them. The removal also clears anything a pass already in flight
+// recreated; mock mode is off before this runs, so no later pass can evaluate
+// them again while it stays off. Disabling advanced the fixture revision, and
+// recording it here keeps a pass paused across a disable and re-enable from
+// evaluating the old estate once mock mode is back on.
+func (m *Monitor) forgetMockFixtureHosts() {
+	m.mockHostAgentsMu.Lock()
+	defer m.mockHostAgentsMu.Unlock()
+
+	if _, revision := mock.CurrentFixtureGraphWithRevision(); revision > m.mockFixtureRevision {
+		m.mockFixtureRevision = revision
+	}
 	for _, host := range m.mockHostAgents {
 		m.alertManager.HandleHostRemoved(host)
 	}
 	m.mockHostAgents = nil
+	for _, host := range m.mockDockerHosts {
+		m.alertManager.HandleDockerHostRemoved(host)
+	}
+	m.mockDockerHosts = nil
 }
 
 // checkMockHostAlerts applies the live host-agent boundary to a fixture. An

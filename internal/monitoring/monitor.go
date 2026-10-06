@@ -1264,6 +1264,8 @@ type Monitor struct {
 	mockMetricsCancel         context.CancelFunc
 	mockMetricsWg             sync.WaitGroup
 	mockHostAgentsMu          sync.Mutex
+	mockDockerHosts           map[string]models.DockerHost
+	mockFixtureRevision       uint64
 	mockHostAgents            map[string]models.Host   // Fixture agents evaluated by the last mock alert pass
 	dockerChecker             DockerChecker            // Optional Docker checker for LXC containers
 	dockerCheckerConfiguredAt time.Time                // Last time the Docker checker was configured
@@ -4569,7 +4571,7 @@ func (m *Monitor) SetMockMode(enable bool) error {
 			return err
 		}
 		m.alertManager.ClearActiveAlerts()
-		m.forgetMockHostAgents()
+		m.forgetMockFixtureHosts()
 		m.mu.Lock()
 		m.resetStateLocked()
 		m.metricsHistory.Reset()

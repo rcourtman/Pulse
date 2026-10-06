@@ -1596,6 +1596,21 @@ supporting inventory rather than a new batch of independent exits, so the
 confirmed host incident clears child alerts instead of producing one alert per
 container.
 
+Mock Docker hosts also keep the live removal boundary. Nested Docker-in-LXC
+hosts are named after their guest's VMID, so a runtime mock config change can
+drop one from the estate; `evaluateMockDockerHosts` then routes it through
+`HandleDockerHostRemoved`, as a deleted live host is. `pruneStaleDockerAlerts`
+clears the same alerts, but only on a state read or subscribed broadcast, so an
+unwatched stack would otherwise keep them active for `/api/alerts/active`,
+Patrol and escalations. The Docker pass shares the host-agent pass's lock and
+mock-mode check, and leaving mock mode removes the fixture Docker hosts too, so
+a pass in flight cannot leave Docker alerts behind in live mode.
+`TestMockDockerHostLeavingFixtureUsesRemovalLifecycle`,
+`TestMockDockerPassAfterLeavingMockModeRaisesNothing`,
+`TestLeavingMockModeRemovesFixtureDockerHostAlerts`,
+`TestMockFixturePassFromBeforeAnEstateRebuildIsRejected` and
+`TestMockFixturePassPausedAcrossDisableAndReenableIsRejected` pin this.
+
 Mock alert evaluation covers host agents the same way. Live agents are
 evaluated by `CheckHost` as each report lands. Mock mode discards reports, and
 the `evaluateHostAgents` health sweep reads monitor state, which never holds
@@ -1617,10 +1632,16 @@ boundaries:
 - Leaving mock mode routes the fixture agents through `HandleHostRemoved`.
   `ClearActiveAlerts` drops their alerts but not their hostname registrations,
   and a real node named like a fixture agent (`pve1`) would otherwise keep its
-  metric alerts suppressed with no agent to own them. A pass whose snapshot
-  predates the switch finds mock mode off under the same lock and evaluates
-  nothing. Two overlapping passes can still evaluate an older snapshot after
-  a newer one; the next pass reconciles the set again.
+  metric alerts suppressed with no agent to own them. The agent and Docker
+  steps of a pass whose snapshot predates the switch find mock mode off under
+  the same lock and evaluate nothing.
+- Ticks start passes concurrently, so a pass whose snapshot predates an
+  estate rebuild can reach the lock after a newer one. Each pass carries the
+  fixture's structural revision, and the agent and Docker steps of a pass
+  older than the last applied or disabled revision are skipped, so they
+  cannot remove the new estate's hosts or re-evaluate retired ones, even
+  across a disable and re-enable. The pass's other loops (guests, nodes,
+  storage, PBS, PMG) take no part in this tracking and are not guarded.
 
 Fixture agents must carry readings a real agent could report. Mock Kubernetes
 pods share 0.7 single-pod memory footprints per node, which keeps a node's pods
