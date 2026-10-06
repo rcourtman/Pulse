@@ -348,12 +348,13 @@ wait_for_service_active() {
 
 # Guarantee the Pulse service is left running after an update attempt if (and
 # only if) it was running beforehand. Invoked from perform_update's RETURN trap
-# so that no exit path — present or future — can leave Pulse stopped (#1630:
+# after pre-install failures or a verified update/recovery (#1630:
 # the install-failed rollback branch restored the backup but never restarted
 # the service). This matters doubly because the generated pulse-update.service
 # uses ExecCondition=systemctl is-active pulse.service: once Pulse is down,
 # every subsequent timer run is skipped and the install stays down until
-# someone intervenes. Always returns 0 (it runs under set -e in a trap).
+# someone intervenes. Incomplete recovery deliberately suppresses this backstop:
+# activating a partial restore would be unsafe. Always returns 0 in the trap.
 ensure_service_restarted() {
     local service_name=$1
     local service_was_active=$2
@@ -397,9 +398,9 @@ perform_update() {
         service_was_active="true"
     fi
 
-    # Whatever way this function exits, never leave Pulse stopped when it was
-    # running before the update (#1630). Extended below once the installer
-    # tempfiles exist. The trap disarms itself on the first RETURN: a RETURN
+    # Keep the prior-active restart backstop (#1630), except when incomplete
+    # recovery requires manual intervention. The trap disarms itself on the
+    # first RETURN: a RETURN
     # trap is not scoped to the function that set it, so leaving it installed
     # makes it re-run when any later function returns — with these locals gone
     # that aborted the updater under set -u after a successful update (#2128).
@@ -434,7 +435,7 @@ perform_update() {
                 log error "Unsupported rollback source ${file_paths[i]}; refusing update"
                 return 1
             fi
-            if ! cp -p -- "${file_paths[i]}" "$backup_dir/${backup_names[i]}" ||
+            if ! cp -a -- "${file_paths[i]}" "$backup_dir/${backup_names[i]}" ||
                ! cmp -s -- "${file_paths[i]}" "$backup_dir/${backup_names[i]}"; then
                 log error "Could not verify rollback backup for ${file_paths[i]}; refusing update"
                 return 1
@@ -543,7 +544,7 @@ perform_update() {
     for i in "${!file_paths[@]}"; do
         if [[ "${file_present[i]}" == "true" ]]; then
             if ! restore_files[i]=$(mktemp "${file_paths[i]}.rollback.XXXXXX") ||
-               ! cp -p -- "$backup_dir/${backup_names[i]}" "${restore_files[i]}" ||
+               ! cp -a -- "$backup_dir/${backup_names[i]}" "${restore_files[i]}" ||
                ! cmp -s -- "$backup_dir/${backup_names[i]}" "${restore_files[i]}"; then
                 log error "Could not stage rollback for ${file_paths[i]}; backup retained at $backup_dir; manual recovery required"
                 return 1
@@ -554,7 +555,7 @@ perform_update() {
         if [[ "${file_present[i]}" == "true" ]]; then
             if [[ -d "${file_paths[i]}" ]] ||
                ! mv -f -- "${restore_files[i]}" "${file_paths[i]}" ||
-               [[ -L "${file_paths[i]}" ]] ||
+               [[ ! -f "${file_paths[i]}" || -L "${file_paths[i]}" ]] ||
                ! cmp -s -- "$backup_dir/${backup_names[i]}" "${file_paths[i]}"; then
                 log error "Could not restore ${file_paths[i]}; backup retained at $backup_dir; manual recovery required"
                 return 1

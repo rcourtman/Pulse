@@ -639,6 +639,7 @@ func TestAutoUpdateBackupTransaction(t *testing.T) {
 		{name: "installer_failure", outcome: "failure"},
 		{name: "wrong_version", outcome: "mismatch"},
 		{name: "original_version_absent", outcome: "failure", noVersion: true},
+		{name: "extended_metadata", fault: "xattrs", outcome: "failure"},
 		{name: "legacy_layout_migration", outcome: "failure", layout: "legacy"},
 		{name: "both_binary_paths", outcome: "failure", layout: "both"},
 		{name: "new_destination_symlink", outcome: "symlink"},
@@ -648,6 +649,7 @@ func TestAutoUpdateBackupTransaction(t *testing.T) {
 		{name: "corrupt_rollback_copy", fault: "restore_corrupt", outcome: "failure", retained: true},
 		{name: "rollback_rename_failure", fault: "restore_rename", outcome: "failure", retained: true},
 		{name: "rollback_rename_noop", fault: "restore_noop", outcome: "failure", retained: true},
+		{name: "rollback_nonregular_destination", fault: "restore_noop", outcome: "fifo", retained: true},
 		{name: "rollback_destination_changed", fault: "restore_changed", outcome: "failure", retained: true},
 		{name: "version_restore_failure", fault: "version_rename", outcome: "failure", retained: true},
 		{name: "new_destination_directory", outcome: "directory", retained: true},
@@ -673,6 +675,11 @@ func TestAutoUpdateBackupTransaction(t *testing.T) {
 
 func runAutoUpdateTransactionScenario(t *testing.T, fault, outcome, layout, active string, noVersion, preflight, retained, success bool) {
 	t.Helper()
+	if fault == "xattrs" {
+		if _, err := exec.LookPath("python3"); err != nil {
+			t.Skip("python3 unavailable for extended metadata fixture")
+		}
+	}
 	updater, err := filepath.Abs(repoFile("scripts", "pulse-auto-update.sh"))
 	if err != nil {
 		t.Fatal(err)
@@ -703,6 +710,26 @@ case "$FAULT" in
  binary_symlink) mv "$INSTALL_DIR/bin/pulse" "$FIXTURE_DIR/original/linked-binary"; ln -s "$FIXTURE_DIR/original/linked-binary" "$INSTALL_DIR/bin/pulse" ;;
  version_symlink) rm "$INSTALL_DIR/VERSION"; ln -s "$FIXTURE_DIR/original/VERSION" "$INSTALL_DIR/VERSION" ;;
 esac
+if [[ "$FAULT" == xattrs ]]; then
+ if python3 - "$INSTALL_DIR" <<'METADATA'
+import errno, os, sys
+try:
+    for name in ('bin/pulse', 'VERSION'):
+        os.setxattr(os.path.join(sys.argv[1], name), 'user.pulse-updater-test', b'original extended metadata')
+except AttributeError:
+    sys.exit(77)
+except OSError as exc:
+    if exc.errno in (errno.ENOTSUP, errno.EOPNOTSUPP):
+        sys.exit(77)
+    raise
+METADATA
+ then :
+ else
+  metadata_status=$?
+  if [[ "$metadata_status" == 77 ]]; then echo TRANSACTION_METADATA_UNAVAILABLE; exit 0; fi
+  exit "$metadata_status"
+ fi
+fi
 printf '%s\n' "$PRIOR_ACTIVE" > "$FIXTURE_DIR/active"
 export FIXTURE_DIR OUTCOME FAULT
 cat > "$FIXTURE_DIR/installer" <<'INSTALLER'
@@ -726,7 +753,11 @@ if [[ "$OUTCOME" == directory ]]; then
  mkdir "$PULSE_INSTALL_DIR/bin/pulse"
  printf 'unexpected directory\n' > "$PULSE_INSTALL_DIR/bin/pulse/keep"
 fi
-case "$OUTCOME" in failure|symlink|directory) exit 23 ;; esac
+if [[ "$OUTCOME" == fifo ]]; then
+ rm "$PULSE_INSTALL_DIR/bin/pulse"
+ mkfifo "$PULSE_INSTALL_DIR/bin/pulse"
+fi
+case "$OUTCOME" in failure|symlink|directory|fifo) exit 23 ;; esac
 exit 0
 INSTALLER
 command ssh-keygen -q -t ed25519 -N '' -f "$FIXTURE_DIR/fixture-key"
@@ -869,6 +900,13 @@ if [[ "$PREFLIGHT" != true && "$RETAINED" != true && "$EXPECTED_RESULT" != succe
  [[ "$(cat "$FIXTURE_DIR/active")" == "$PRIOR_ACTIVE" ]]
 fi
 if [[ "$EXPECTED_RESULT" == success ]]; then [[ "$(get_current_version)" == v6.5.0 ]]; fi
+if [[ "$FAULT" == xattrs ]]; then
+ python3 - "$INSTALL_DIR" <<'METADATA'
+import os, sys
+for name in ('bin/pulse', 'VERSION'):
+    assert os.getxattr(os.path.join(sys.argv[1], name), 'user.pulse-updater-test') == b'original extended metadata'
+METADATA
+fi
 printf 'TRANSACTION_ASSERTIONS_PASSED\n'
 `
 	cmd := exec.Command("bash", "-c", script)
@@ -889,6 +927,9 @@ printf 'TRANSACTION_ASSERTIONS_PASSED\n'
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("complete updater transaction: %v\n%s", err, out)
+	}
+	if strings.Contains(string(out), "TRANSACTION_METADATA_UNAVAILABLE") {
+		t.Skip("extended metadata unsupported by fixture filesystem")
 	}
 	if !strings.Contains(string(out), "TRANSACTION_ASSERTIONS_PASSED") {
 		t.Fatalf("transaction assertions did not finish:\n%s", out)
