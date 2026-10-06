@@ -504,6 +504,15 @@ func TestReleasedMetricAlertCarriesResolutionInsteadOfRecovery(t *testing.T) {
 	if err := transition.Validate(); err != nil {
 		t.Fatalf("resolve transition Validate() error = %v", err)
 	}
+	// Patrol's timeline prints the cause above the reason, so a handover
+	// must not be labelled as recovery evidence.
+	if transition.Cause != operationaltrust.TransitionOwnershipTransferred {
+		t.Fatalf("resolve transition cause = %q, want %q", transition.Cause, operationaltrust.TransitionOwnershipTransferred)
+	}
+	if recorded := moved.Alert.Transitions[len(moved.Alert.Transitions)-1]; recorded.ID != transition.ID ||
+		recorded.Cause != operationaltrust.TransitionOwnershipTransferred {
+		t.Fatalf("recorded timeline transition = %+v, want the ownership transfer", recorded)
+	}
 	closing := moved.Alert.Evidence[len(moved.Alert.Evidence)-1]
 	if closing.ID != transition.EvidenceIDs[0] ||
 		closing.Reason == nil ||
@@ -519,6 +528,10 @@ func TestReleasedMetricAlertCarriesResolutionInsteadOfRecovery(t *testing.T) {
 	if last := recovered.Alert.Evidence[len(recovered.Alert.Evidence)-1]; last.Reason == nil ||
 		last.Reason.Code != legacyAlertRecoveryEvidenceReason {
 		t.Fatalf("plain release evidence = %+v, want legacy recovery projection", last.Reason)
+	}
+	if recovered.Alert.LatestTransition == nil ||
+		recovered.Alert.LatestTransition.Cause != operationaltrust.TransitionRecoveryEvidence {
+		t.Fatalf("plain release transition = %+v, want recovery_evidence", recovered.Alert.LatestTransition)
 	}
 
 	var historyResolution *AlertResolution

@@ -301,12 +301,27 @@ func (m *Manager) GetRecentlyResolved() []models.ResolvedAlert {
 				StartTime:       exported.StartTime,
 				Acknowledged:    exported.Acknowledged,
 				// exported is a deep clone, so the map is already private.
-				Metadata: exported.Metadata,
+				Metadata:   exported.Metadata,
+				Resolution: modelAlertResolution(exported.Resolution),
 			},
 			ResolvedTime: alert.ResolvedTime,
 		})
 	}
 	return resolved
+}
+
+// modelAlertResolution projects a non-recovery close into the state model, so
+// snapshot and assistant readers can tell a handover from a recovery.
+func modelAlertResolution(resolution *AlertResolution) *models.AlertResolution {
+	if resolution == nil {
+		return nil
+	}
+	return &models.AlertResolution{
+		Reason:              string(resolution.Reason),
+		SuccessorResourceID: resolution.SuccessorResourceID,
+		SuccessorName:       resolution.SuccessorName,
+		Summary:             resolution.Summary(),
+	}
 }
 
 // GetResolvedAlert returns a copy of a recently resolved alert by ID.

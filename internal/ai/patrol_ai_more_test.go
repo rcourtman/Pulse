@@ -922,6 +922,42 @@ func TestSeedHealthAndAlerts_NoIssues(t *testing.T) {
 	}
 }
 
+// Patrol's seed must not tell the model a node recovered when its alert only
+// moved to the node's Pulse agent.
+func TestSeedHealthAndAlerts_HandoverIsNotARecovery(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	cfg := DefaultPatrolConfig()
+	now := time.Now()
+	summary := "Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading."
+	state := models.StateSnapshot{
+		RecentlyResolved: []models.ResolvedAlert{
+			{
+				Alert: models.Alert{
+					ResourceName: "pve1",
+					Message:      "Memory usage at 95%",
+					Resolution:   &models.AlertResolution{Reason: "moved_to_agent", Summary: summary},
+				},
+				ResolvedTime: now.Add(-3 * time.Minute),
+			},
+			{
+				Alert:        models.Alert{ResourceName: "pve2", Message: "CPU usage at 90%"},
+				ResolvedTime: now.Add(-5 * time.Minute),
+			},
+		},
+	}
+
+	out := ps.seedHealthAndAlertsState(patrolRuntimeStateForTest(ps, state), nil, cfg, now)
+	if !strings.Contains(out, "- pve1: Memory usage at 95% — closed 3m ago. "+summary+"\n") {
+		t.Fatalf("expected the handover line, got: %s", out)
+	}
+	if strings.Contains(out, "pve1: Memory usage at 95% — resolved") {
+		t.Fatalf("handover reported as a recovery: %s", out)
+	}
+	if !strings.Contains(out, "- pve2: CPU usage at 90% — resolved 5m ago\n") {
+		t.Fatalf("expected the ordinary recovery line, got: %s", out)
+	}
+}
+
 func TestSeedHealthAndAlerts_UnknownDiskHealthDoesNotClaimSMARTPassed(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	cfg := DefaultPatrolConfig()

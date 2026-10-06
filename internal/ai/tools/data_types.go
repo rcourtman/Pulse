@@ -2364,4 +2364,9 @@ type ResolvedAlertSummary struct {
 	Threshold    float64   `json:"threshold,omitempty"`
 	StartTime    time.Time `json:"start_time"`
 	ResolvedTime time.Time `json:"resolved_time"`
+	// Resolution is set only when the alert closed without recovering, such
+	// as a node metric handed to its Pulse agent; the successor resource
+	// owns the condition from then on.
+	Resolution          string `json:"resolution,omitempty"`
+	SuccessorResourceID string `json:"successor_resource_id,omitempty"`
 }

@@ -793,12 +793,26 @@ its message) and the Alert JSON then carry it. Resolved consumers still receive
 the close, because integrations close their incident by alert ID. The
 synthesized closing evidence carries the resolution reason and summary instead
 of `legacy_alert_recovery_projection`, and the resolve transition carries the
-summary as its `reason`. The cause stays `recovery_evidence`, the only cause
-operational trust lets enter `resolved`. A nil resolution leaves the
-disabled-threshold path and every recovery unchanged.
+summary as its `reason`. Its cause is `ownership_transferred`, an
+`operationaltrust.TransitionCause` that may only enter `resolved` and only with
+evidence (`resolvedTransitionCause` in `operational_contract.go`), so Patrol's
+timeline never labels a handover "Recovery evidence" and alert-quality
+telemetry does not count a handover during a snooze as resolved while snoozed.
+A nil resolution leaves the disabled-threshold path and every recovery on
+`recovery_evidence`.
 `TestReleasedMetricAlertCarriesResolutionInsteadOfRecovery` and
 `TestResolvedHistoryRowKeepsResolutionWithoutEventLog` in
 `internal/alerts/operational_contract_test.go` pin this.
+The in-app readers carry it too. `GetRecentlyResolved` projects it into
+`models.Alert.Resolution` (reason, successor and the `Summary()` text) for the
+state snapshot, the websocket and the assistant and Patrol prompts, pinned by
+`TestRecentlyResolvedCarriesHandoverResolution` in `history_test.go`. The
+alerts history lists such a row as `moved to agent` instead of `resolved`, even
+when it was acknowledged, with the account in the badge title and on the phone
+card (`buildAlertHistoryItems`, `getAlertResolutionDetail`). The resolved
+lifecycle change written to the resource timeline carries the summary as its
+reason and the code as `alert_resolution` metadata, so the row's incident
+timeline says the alert moved instead of "Alert resolved: <breach message>".
 
 ## Extension Points
 
@@ -2819,7 +2833,8 @@ legacy alert timestamp.
 Suppression is bounded and reasoned, leaves the default active queue, and
 remains inspectable. Expiry or explicit unsuppression returns the record to its
 detector-owned state; it never resolves it. Only fresh sufficient recovery
-evidence may enter resolving, and only detector recovery may resolve.
+evidence may enter resolving, and only detector recovery, or a handover
+recorded as `ownership_transferred` with its closing evidence, may resolve.
 
 Per-alert snooze is the customer-facing bounded suppression contract, not a
 page-local timer. `SnoozeAlert` writes the same canonical operational record,

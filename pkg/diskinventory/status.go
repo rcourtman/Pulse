@@ -89,6 +89,35 @@ func MergeStatus(existing, incoming *CollectionStatus) *CollectionStatus {
 	return &merged
 }
 
+// MergeReportedStatus merges a source's own report into existing state that
+// may still hold an earlier copy of that report. It behaves like MergeStatus,
+// except that a field the report no longer marks available supersedes an
+// available state that existing carries from the same source: the source's
+// later word on its own field wins, so a stale copy cannot keep claiming the
+// field was collected.
+func MergeReportedStatus(existing, reported *CollectionStatus) *CollectionStatus {
+	merged := MergeStatus(existing, reported)
+	if existing == nil || reported == nil {
+		return merged
+	}
+	merged.Serial = supersedeFieldStatus(merged.Serial, existing.Serial, reported.Serial)
+	merged.Temperature = supersedeFieldStatus(merged.Temperature, existing.Temperature, reported.Temperature)
+	merged.IO = supersedeFieldStatus(merged.IO, existing.IO, reported.IO)
+	merged.Controller = supersedeFieldStatus(merged.Controller, existing.Controller, reported.Controller)
+	merged.Pool = supersedeFieldStatus(merged.Pool, existing.Pool, reported.Pool)
+	return merged
+}
+
+func supersedeFieldStatus(merged, existing, reported FieldStatus) FieldStatus {
+	source := strings.TrimSpace(existing.Source)
+	if existing.State == FieldAvailable &&
+		reported.State != "" && reported.State != FieldAvailable &&
+		source != "" && strings.EqualFold(source, strings.TrimSpace(reported.Source)) {
+		return reported
+	}
+	return merged
+}
+
 func mergeFieldStatus(existing, incoming FieldStatus) FieldStatus {
 	if incoming.State == "" {
 		return existing

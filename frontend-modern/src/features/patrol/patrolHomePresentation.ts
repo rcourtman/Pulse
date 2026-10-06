@@ -1,5 +1,5 @@
 import type { PatrolAutonomyLevel, PatrolObjective } from '@/api/patrol';
-import type { AttentionFlapping, AttentionItem } from '@/api/patrolAttention';
+import type { AttentionFlapping, AttentionItem, AttentionItemDetail } from '@/api/patrolAttention';
 import type { UnifiedFinding } from '@/stores/aiIntelligence';
 
 export interface PatrolAutonomyExperience {
@@ -205,6 +205,26 @@ export function getAttentionFlappingPresentation(
 ): FlappingPresentation | null {
   if (!flapping || flapping.transitionCount <= 0) return null;
   return getFlappingPresentation(flapping.transitionCount, flapping.windowHours);
+}
+
+/**
+ * A resolved item whose close handed the condition to another record, such as
+ * a node metric its Pulse agent took over, did not recover. Returns the
+ * account to show instead of a healthy "Resolved", or null for a recovery.
+ */
+export function getAttentionHandoverClose(
+  detail: Pick<AttentionItemDetail, 'item' | 'timeline'> | null | undefined,
+): string | null {
+  if (!detail || detail.item.state !== 'resolved') return null;
+  let close: AttentionItemDetail['timeline'][number] | undefined;
+  for (const transition of detail.timeline ?? []) {
+    if (transition.to !== 'resolved') continue;
+    if (!close || Date.parse(transition.at) >= Date.parse(close.at)) close = transition;
+  }
+  if (close?.cause !== 'ownership_transferred') return null;
+  return (
+    close.reason?.trim() || 'This alert moved to another owner when it closed. It did not recover.'
+  );
 }
 
 const normalizeResourceKey = (value: string | undefined): string =>
