@@ -3923,6 +3923,9 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 		"name: Backend tests (${{ matrix.shard }})",
 		"shard: [rest-0, rest-1]",
 		"grep -v '/internal/api$'",
+		"python3 .github/scripts/select-go-package-shard.py",
+		`.github/scripts/go-package-test-seconds.txt 2 "$index")`,
+		"set -euo pipefail",
 		"go test -race -timeout 50m $pkgs",
 	} {
 		if !strings.Contains(backend, required) {
