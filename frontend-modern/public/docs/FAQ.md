@@ -165,7 +165,16 @@ Yes. Pulse supports **OIDC** and **SAML** SSO providers, with multi-provider sup
 Pulse defaults to same-origin only. If you access the API from a different domain, set **Settings → System → Network → Allowed Origins** or use `ALLOWED_ORIGINS` (single origin, or `*` if you explicitly want all origins).
 
 ### High memory usage?
-If you are storing long history windows, reduce metrics retention (see [METRICS_HISTORY.md](METRICS_HISTORY.md)). Also confirm your polling intervals match your environment size.
+First distinguish container usage from Pulse's resident memory (RSS); a high
+LXC or Docker chart alone does not establish a leak. Use the
+[read-only memory checks](TROUBLESHOOTING.md#memory-use-keeps-growing) for your
+deployment while it is responsive.
+
+Do not shorten retention, slow polling, restart Pulse or drop caches just to
+lower the reading. Shorter retention removes history, and slower polling can
+delay monitoring; neither establishes the cause. If the container is near its
+memory limit or the host is unresponsive, stop sampling and prioritise safe
+recovery.
 
 ### Can Pulse monitor 50 or more Proxmox hosts?
 
