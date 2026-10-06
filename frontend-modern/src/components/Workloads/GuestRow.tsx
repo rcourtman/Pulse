@@ -1,4 +1,4 @@
-import { createMemo, createSignal, Show, splitProps } from 'solid-js';
+import { createMemo, createSignal, Show, splitProps, type JSX } from 'solid-js';
 import BoxIcon from 'lucide-solid/icons/box';
 import type { VM } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
@@ -22,6 +22,7 @@ import { getWorkloadCPUPercent, resolveWorkloadType } from '@/utils/workloads';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
 import {
   MetricMiniSparkline,
+  MetricMiniSparklineRatePair,
   type MetricMiniSparklineValueLabelContext,
 } from '@/components/Workloads/MetricMiniSparkline';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
@@ -38,6 +39,7 @@ import type { GuestRowProps } from './guestRowModel';
 import { useGuestRowState } from './useGuestRowState';
 import type {
   WorkloadMetricHistoryReader,
+  WorkloadRateMetric,
   WorkloadTableMetric,
 } from './workloadMetricHistoryModel';
 
@@ -200,29 +202,88 @@ export function GuestRow(props: GuestRowProps) {
     }
     return clampMetricPercent(fallbackUsage);
   };
+  // Every input is an accessor so a live snapshot updates the mounted chart in
+  // place. Reading signals while building the chart would remount it on each
+  // update and drop an open scrub tooltip.
   const renderMetricSparkline = (
     metric: WorkloadTableMetric,
-    valueLabel: string,
-    title: string,
-    unit = '%',
-    valueLabelMode: 'inline' | 'tooltip' | 'hidden' = 'inline',
-    formatValue?: (value: number) => string,
-    seriesOptions?: Parameters<WorkloadMetricHistoryReader['getGuestMetricSeries']>[2],
-    valueLabelContext?: MetricMiniSparklineValueLabelContext,
+    options: {
+      valueLabel: () => string;
+      title: () => string;
+      unit?: string;
+      formatValue: (value: number) => string;
+      seriesOptions?: () => Parameters<WorkloadMetricHistoryReader['getGuestMetricSeries']>[2];
+      valueLabelContext?: () => MetricMiniSparklineValueLabelContext;
+      valueContent?: () => JSX.Element;
+    },
   ) => (
     <MetricMiniSparkline
-      series={props.metricHistory?.getGuestMetricSeries(props.guest, metric, seriesOptions) ?? []}
-      valueLabel={valueLabel}
-      valueLabelContext={valueLabelContext}
-      valueLabelMode={valueLabelMode}
-      title={title}
-      unit={unit}
-      formatValue={formatValue}
+      series={
+        props.metricHistory?.getGuestMetricSeries(props.guest, metric, options.seriesOptions?.()) ??
+        []
+      }
+      valueLabel={options.valueLabel()}
+      valueContent={options.valueContent?.()}
+      valueLabelContext={options.valueLabelContext?.()}
+      valueLabelMode="inline"
+      title={options.title()}
+      unit={options.unit ?? '%'}
+      formatValue={options.formatValue}
       cursorRatio={historyCursorRatio()}
       onCursorRatioChange={setTrackedHistoryCursorRatio}
       showTooltip={true}
     />
   );
+  const renderCpuSparkline = () =>
+    renderMetricSparkline('cpu', {
+      valueLabel: () => formatMetricPercent(cpuPercent()),
+      title: () => `${props.guest.name} CPU history`,
+      formatValue: formatMetricPercent,
+    });
+  const renderMemorySparkline = () =>
+    renderMetricSparkline('memory', {
+      valueLabel: () =>
+        memoryDisplayUnavailable()
+          ? 'N/A'
+          : formatMetricPercent(
+              usagePercent(
+                props.guest.memory?.used,
+                memoryDisplayTotal(),
+                isHostMemoryBasis() ? undefined : props.guest.memory?.usage,
+              ),
+            ),
+      title: () =>
+        isHostMemoryBasis()
+          ? `${props.guest.name} host memory share history`
+          : `${props.guest.name} memory history`,
+      formatValue: formatMetricPercent,
+      seriesOptions: () => ({
+        memoryDisplayBasis: props.memoryDisplayBasis,
+        parentMemoryTotal: props.parentMemoryTotal,
+      }),
+    });
+  const renderDiskSparkline = () =>
+    renderMetricSparkline('disk', {
+      valueLabel: () => (hasDiskUsage() ? formatMetricPercent(props.guest.disk?.usage) : '—'),
+      title: () => `${props.guest.name} disk usage history`,
+      formatValue: formatMetricPercent,
+      valueLabelContext: () => diskValueLabelContext(),
+    });
+  const renderRateSparkline = (metric: WorkloadRateMetric) => {
+    const isNetwork = metric === 'netIo';
+    const live = () => isRunning() && telemetryAvailable(isNetwork ? 'networkIO' : 'diskIO');
+    const values = (): [number, number] =>
+      isNetwork ? [networkIn(), networkOut()] : [diskRead(), diskWrite()];
+    return renderMetricSparkline(metric, {
+      valueLabel: () =>
+        live() ? `${formatSpeed(values()[0])} / ${formatSpeed(values()[1])}` : '—',
+      title: () => `${props.guest.name} ${isNetwork ? 'network' : 'disk'} I/O history`,
+      unit: 'B/s',
+      formatValue: formatSpeed,
+      valueContent: () =>
+        live() ? <MetricMiniSparklineRatePair metric={metric} values={values()} /> : undefined,
+    });
+  };
 
   const getDiskStatusTooltip = () => {
     if (!isVM(props.guest)) return 'Disk stats unavailable';
@@ -475,27 +536,13 @@ export function GuestRow(props: GuestRowProps) {
                       }
                     >
                       <div class="h-4 animate-in fade-in-0 duration-100 motion-reduce:animate-none">
-                        {renderMetricSparkline(
-                          'cpu',
-                          formatMetricPercent(cpuPercent()),
-                          `${props.guest.name} CPU history`,
-                          '%',
-                          'inline',
-                          formatMetricPercent,
-                        )}
+                        {renderCpuSparkline()}
                       </div>
                     </Show>
                   </div>
                 }
               >
-                {renderMetricSparkline(
-                  'cpu',
-                  formatMetricPercent(cpuPercent()),
-                  `${props.guest.name} CPU history`,
-                  '%',
-                  'inline',
-                  formatMetricPercent,
-                )}
+                {renderCpuSparkline()}
               </Show>
             </Show>
           </td>
@@ -545,55 +592,13 @@ export function GuestRow(props: GuestRowProps) {
                     }
                   >
                     <div class="h-4 animate-in fade-in-0 duration-100 motion-reduce:animate-none">
-                      {renderMetricSparkline(
-                        'memory',
-                        memoryDisplayUnavailable()
-                          ? 'N/A'
-                          : formatMetricPercent(
-                              usagePercent(
-                                props.guest.memory?.used,
-                                memoryDisplayTotal(),
-                                isHostMemoryBasis() ? undefined : props.guest.memory?.usage,
-                              ),
-                            ),
-                        isHostMemoryBasis()
-                          ? `${props.guest.name} host memory share history`
-                          : `${props.guest.name} memory history`,
-                        '%',
-                        'inline',
-                        formatMetricPercent,
-                        {
-                          memoryDisplayBasis: props.memoryDisplayBasis,
-                          parentMemoryTotal: props.parentMemoryTotal,
-                        },
-                      )}
+                      {renderMemorySparkline()}
                     </div>
                   </Show>
                 </div>
               }
             >
-              {renderMetricSparkline(
-                'memory',
-                memoryDisplayUnavailable()
-                  ? 'N/A'
-                  : formatMetricPercent(
-                      usagePercent(
-                        props.guest.memory?.used,
-                        memoryDisplayTotal(),
-                        isHostMemoryBasis() ? undefined : props.guest.memory?.usage,
-                      ),
-                    ),
-                isHostMemoryBasis()
-                  ? `${props.guest.name} host memory share history`
-                  : `${props.guest.name} memory history`,
-                '%',
-                'inline',
-                formatMetricPercent,
-                {
-                  memoryDisplayBasis: props.memoryDisplayBasis,
-                  parentMemoryTotal: props.parentMemoryTotal,
-                },
-              )}
+              {renderMemorySparkline()}
             </Show>
           </td>
         </Show>
@@ -605,18 +610,7 @@ export function GuestRow(props: GuestRowProps) {
             data-workload-col="disk"
             title={diskReadStatus()?.message}
           >
-            <Show when={isSparklineMode()}>
-              {renderMetricSparkline(
-                'disk',
-                hasDiskUsage() ? formatMetricPercent(props.guest.disk?.usage) : '—',
-                `${props.guest.name} disk usage history`,
-                '%',
-                'inline',
-                formatMetricPercent,
-                undefined,
-                diskValueLabelContext(),
-              )}
-            </Show>
+            <Show when={isSparklineMode()}>{renderDiskSparkline()}</Show>
             <Show when={!isSparklineMode()}>
               <Show
                 when={hasDiskUsage()}
@@ -647,16 +641,7 @@ export function GuestRow(props: GuestRowProps) {
                     }
                   >
                     <div class="h-4 animate-in fade-in-0 duration-100 motion-reduce:animate-none">
-                      {renderMetricSparkline(
-                        'disk',
-                        formatMetricPercent(props.guest.disk?.usage),
-                        `${props.guest.name} disk usage history`,
-                        '%',
-                        'inline',
-                        formatMetricPercent,
-                        undefined,
-                        diskValueLabelContext(),
-                      )}
+                      {renderDiskSparkline()}
                     </div>
                   </Show>
                 </div>
@@ -916,18 +901,7 @@ export function GuestRow(props: GuestRowProps) {
         {/* Net I/O */}
         <Show when={isColVisible('netIo')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <Show when={isSparklineMode()}>
-              {renderMetricSparkline(
-                'netIo',
-                isRunning() && telemetryAvailable('networkIO')
-                  ? `${formatSpeed(networkIn())} / ${formatSpeed(networkOut())}`
-                  : '—',
-                `${props.guest.name} network I/O history`,
-                'B/s',
-                'tooltip',
-                formatSpeed,
-              )}
-            </Show>
+            <Show when={isSparklineMode()}>{renderRateSparkline('netIo')}</Show>
             <Show when={!isSparklineMode()}>
               <Show
                 when={isRunning() && telemetryAvailable('networkIO')}
@@ -939,30 +913,39 @@ export function GuestRow(props: GuestRowProps) {
                   </div>
                 }
               >
-                <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
-                  <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
-                  <span
-                    class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
-                    title={
-                      networkEmphasis().showOutlierHint
-                        ? `${formatSpeed(networkIn())} (Top outlier)`
-                        : formatSpeed(networkIn())
-                    }
-                  >
-                    {formatSpeed(networkIn())}
-                  </span>
-                  <span class="inline-flex w-3 justify-center text-orange-400">↑</span>
-                  <span
-                    class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
-                    title={
-                      networkEmphasis().showOutlierHint
-                        ? `${formatSpeed(networkOut())} (Top outlier)`
-                        : formatSpeed(networkOut())
-                    }
-                  >
-                    {formatSpeed(networkOut())}
-                  </span>
-                </div>
+                <Show
+                  when={historyLensVisible()}
+                  fallback={
+                    <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
+                      <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
+                      <span
+                        class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
+                        title={
+                          networkEmphasis().showOutlierHint
+                            ? `${formatSpeed(networkIn())} (Top outlier)`
+                            : formatSpeed(networkIn())
+                        }
+                      >
+                        {formatSpeed(networkIn())}
+                      </span>
+                      <span class="inline-flex w-3 justify-center text-orange-400">↑</span>
+                      <span
+                        class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
+                        title={
+                          networkEmphasis().showOutlierHint
+                            ? `${formatSpeed(networkOut())} (Top outlier)`
+                            : formatSpeed(networkOut())
+                        }
+                      >
+                        {formatSpeed(networkOut())}
+                      </span>
+                    </div>
+                  }
+                >
+                  <div class="h-4 animate-in fade-in-0 duration-100 motion-reduce:animate-none">
+                    {renderRateSparkline('netIo')}
+                  </div>
+                </Show>
               </Show>
             </Show>
           </td>
@@ -971,18 +954,7 @@ export function GuestRow(props: GuestRowProps) {
         {/* Disk I/O */}
         <Show when={isColVisible('diskIo')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <Show when={isSparklineMode()}>
-              {renderMetricSparkline(
-                'diskIo',
-                isRunning() && telemetryAvailable('diskIO')
-                  ? `${formatSpeed(diskRead())} / ${formatSpeed(diskWrite())}`
-                  : '—',
-                `${props.guest.name} disk I/O history`,
-                'B/s',
-                'tooltip',
-                formatSpeed,
-              )}
-            </Show>
+            <Show when={isSparklineMode()}>{renderRateSparkline('diskIo')}</Show>
             <Show when={!isSparklineMode()}>
               <Show
                 when={isRunning() && telemetryAvailable('diskIO')}
@@ -994,30 +966,39 @@ export function GuestRow(props: GuestRowProps) {
                   </div>
                 }
               >
-                <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
-                  <span class="inline-flex w-3 justify-center font-mono text-blue-500">R</span>
-                  <span
-                    class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
-                    title={
-                      diskIOEmphasis().showOutlierHint
-                        ? `${formatSpeed(diskRead())} (Top outlier)`
-                        : formatSpeed(diskRead())
-                    }
-                  >
-                    {formatSpeed(diskRead())}
-                  </span>
-                  <span class="inline-flex w-3 justify-center font-mono text-amber-500">W</span>
-                  <span
-                    class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
-                    title={
-                      diskIOEmphasis().showOutlierHint
-                        ? `${formatSpeed(diskWrite())} (Top outlier)`
-                        : formatSpeed(diskWrite())
-                    }
-                  >
-                    {formatSpeed(diskWrite())}
-                  </span>
-                </div>
+                <Show
+                  when={historyLensVisible()}
+                  fallback={
+                    <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
+                      <span class="inline-flex w-3 justify-center font-mono text-blue-500">R</span>
+                      <span
+                        class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
+                        title={
+                          diskIOEmphasis().showOutlierHint
+                            ? `${formatSpeed(diskRead())} (Top outlier)`
+                            : formatSpeed(diskRead())
+                        }
+                      >
+                        {formatSpeed(diskRead())}
+                      </span>
+                      <span class="inline-flex w-3 justify-center font-mono text-amber-500">W</span>
+                      <span
+                        class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
+                        title={
+                          diskIOEmphasis().showOutlierHint
+                            ? `${formatSpeed(diskWrite())} (Top outlier)`
+                            : formatSpeed(diskWrite())
+                        }
+                      >
+                        {formatSpeed(diskWrite())}
+                      </span>
+                    </div>
+                  }
+                >
+                  <div class="h-4 animate-in fade-in-0 duration-100 motion-reduce:animate-none">
+                    {renderRateSparkline('diskIo')}
+                  </div>
+                </Show>
               </Show>
             </Show>
           </td>

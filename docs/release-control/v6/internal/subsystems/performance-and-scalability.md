@@ -1977,8 +1977,10 @@ Trend-mode and row-history-lens cells own their vertical scale through
 `getMetricMiniSparklineScale` in
 `frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts`.
 Percent series are zero-floored and scaled to their own observed peak with a
-5% floor ceiling and a 100% cap, the same shape rule the network and disk I/O
-series already follow. A fixed 0-100 window is not the contract, because inside
+5% floor ceiling and a 100% cap. Network and disk I/O series follow the same
+shape rule with a 100 KiB/s floor ceiling, so an idle guest's background
+chatter stays near the axis instead of drawing the full-height spike a busy
+guest draws. A fixed 0-100 window is not the contract, because inside
 a 16px table cell it draws low-domain series such as a guest's share of host
 memory or an idle guest's CPU on top of the axis rule, where a flat line is
 indistinguishable from missing history. Absolute level stays readable through
@@ -1987,7 +1989,10 @@ work must not remove those. The scale is derived from the points already
 fetched for that cell and must not add history reads or a second pass over the
 Workloads hot path. Pointer scrubbing may synchronize one normalized cursor
 position across the active guest row, but it must remain row-local and operate
-only on the already-fetched series.
+only on the already-fetched series. `GuestRow` builds each chart from accessors,
+so a live snapshot updates the mounted lens or Trends chart in place instead of
+remounting it, and an open scrub tooltip re-reads the current series at its
+pointer position rather than holding the values from the last mouse move.
 
 The Workloads table metric display mode is part of the protected Workloads
 hot path. Default bar mode keeps compact current-value bars at rest and swaps
