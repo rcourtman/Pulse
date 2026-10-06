@@ -5218,7 +5218,9 @@ not re-read stays the age at read time, because a moving age over a snapshot
 that never refreshes claims the reading stopped when it may not have. Such a
 surface either re-reads the snapshot in the background, as Proxmox replication
 and the external watchdog panel do, or keeps the read-time age, as the Patrol
-attention detail does for Last seen. An immutable event time (when a delivery
+attention detail does for Last seen. A background re-read applies only its
+newest answer, so a read that never settles cannot pin the surface to an older
+snapshot while its ages keep moving. An immutable event time (when a delivery
 was attempted, a transition happened, a policy was set) ages correctly over any
 snapshot and reads the clock.
 Read-only metadata badges follow the same primitive-owned shell rule.

@@ -3048,7 +3048,11 @@ seconds. A moving age over a status read once at mount would claim the
 heartbeat stopped while Pulse kept pinging every minute, and a status that is
 never re-read kept its read-time age through a real stall, which is the one
 case this panel exists to show. A background re-read leaves the Refresh control
-alone, and a failed one keeps the last status and marks it unavailable.
+alone, and a failed one keeps the last status and marks it unavailable. The
+status read has no timeout, so reads carry a sequence number and only the
+newest one applies: a read that never settles cannot hold the panel on an old
+status or swallow a later Refresh, the next background read goes out once it has
+been pending a full interval, and a late answer from it is discarded.
 The delivery log's relative hover time on each row reads the same clock: a
 logged attempt's time never changes, so its age is correct over a log that is
 only re-read on demand.
