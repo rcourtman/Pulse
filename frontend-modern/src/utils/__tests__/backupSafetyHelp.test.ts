@@ -8,8 +8,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const read = (name: string) => readFileSync(path.join(root, name), 'utf8');
 const guide = read('docs/VM_DISK_MONITORING.md');
 const section =
-  guide.split('### Pause Pulse for a planned freeze-enabled backup')[1]?.split('## 🚀 Setup')[0] ??
-  '';
+  guide
+    .split('### Pause Pulse for a planned freeze-enabled backup')[1]
+    ?.split('### Pause a Docker or Compose server for a planned backup')[0] ?? '';
 const words = section.replace(/\s+/g, ' ');
 
 function render(markdown: string, name: string): HTMLElement {

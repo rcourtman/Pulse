@@ -52,6 +52,12 @@ volumes:
 
 Run with: `docker compose up -d`
 
+**Freeze-enabled VM backups:** API-only monitoring can still send QEMU Guest
+Agent requests. For an affected installation, follow the
+[planned server pause and checked restoration](VM_DISK_MONITORING.md#pause-a-docker-or-compose-server-for-a-planned-backup),
+not container recreation or guest-agent probes. Monitoring and alerts are
+unavailable while Pulse is stopped; an OK backup alone does not prove recovery.
+
 Leave authentication overrides unset for a new install and complete
 [bootstrap-token setup](INSTALL.md#step-1-get-the-token) in your browser. Do not add a
 shared example password to the Compose file. If automation must skip setup,
