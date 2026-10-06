@@ -207,7 +207,9 @@ describe('manual backup safety help', () => {
     const text = render(section, 'VM_DISK_MONITORING').textContent?.replace(/\s+/g, ' ');
     expect(text).toContain('Stopping Pulse does not cancel a guest-agent request already issued');
     expect(text).toContain('Even a successful process exit does not prove');
-    expect(text).toContain('Let existing guest/backup operations finish normally before the planned backup');
+    expect(text).toContain(
+      'Let existing guest/backup operations finish normally before the planned backup',
+    );
     expect(text).toContain('not new guest-agent probes');
     expect(text).toContain('If their state is unknown, do not start the backup');
     expect(text).toContain('a stopped service or an arbitrary waiting period');
@@ -239,5 +241,51 @@ describe('manual backup safety help', () => {
     expect(commands).not.toMatch(
       /qm |pct |pvesh |guest-fsfreeze|restart|disable|enable|mask|reset|rm |kill|curl|wget|Environment/,
     );
+  });
+  it('offers existing Machines disk readings without assuming identity, freshness or a repaired link', () => {
+    expect(read('frontend-modern/public/docs/VM_DISK_MONITORING.md')).toBe(guide);
+    const alternative = guide
+      .split('### Use existing Machines readings without changing the guest')[1]
+      ?.split('| Observation |')[0];
+    expect(alternative).toBeTruthy();
+    const rendered = render(alternative!, 'VM_DISK_MONITORING');
+    const text = rendered.textContent?.replace(/\s+/g, ' ');
+    expect(text).toContain('use different collection paths');
+    expect(text).toContain('already has a Pulse Agent');
+    expect(text).toContain('existing entry in Machines');
+    expect(text).toContain('same guest');
+    expect(text).toContain('not a similar name alone');
+    expect(text).toContain(
+      "a retained History sample or an agent's recent contact is not proof of a current disk reading",
+    );
+    expect(text).toContain('does not repair the missing Proxmox reading');
+    expect(text).toContain('prove that the two entries are linked correctly');
+    expect(text).toContain('no current filesystem readings, use its own filesystem tools');
+    expect(rendered.querySelector('pre')).toBeNull();
+  });
+
+  it('keeps the Machines workaround separate from guest changes and independent backup recovery', () => {
+    const alternative = guide
+      .split('### Use existing Machines readings without changing the guest')[1]
+      ?.split('| Observation |')[0];
+    expect(alternative).toBeTruthy();
+    const rendered = render(alternative!, 'VM_DISK_MONITORING');
+    const text = rendered.textContent?.replace(/\s+/g, ' ');
+    expect(text).toContain(
+      'Do not install another agent, restart services, restore a VM or force guest-agent checks',
+    );
+    expect(text).toContain('does not relax Backup safety');
+    expect(text).toContain(
+      'A responsive guest, running agent services, working Machines readings or an expired cooldown is not proof of thaw',
+    );
+    expect(text).toContain('successful writes to every filesystem covered by the backup');
+    expect(text).toContain('Keep the monitoring-outage precaution');
+    expect(text).toContain('do not clear or bypass a guest-read pause');
+    const target = render(guide, 'VM_DISK_MONITORING');
+    expect(
+      target.querySelector('#use-existing-machines-readings-without-changing-the-guest'),
+    ).not.toBeNull();
+    expect(rendered.querySelector('a[href="#backup-safety"]')).not.toBeNull();
+    expect(target.querySelector('#backup-safety')).not.toBeNull();
   });
 });
