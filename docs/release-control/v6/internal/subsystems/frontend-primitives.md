@@ -20,6 +20,28 @@
 
 ## Purpose
 
+### Narrow Workloads identity during guest locks
+
+In narrow and phone layouts, the guest name and status occupy the first line;
+the unchanged backup evidence control moves below the name, retaining its
+44 px touch target. The guest lock occupies a separate, wrapping line below
+that identity. It must not consume the name's
+horizontal space or spill into the adjacent metrics. The full lock remains
+visible; a long name keeps its full title and existing truncation. Wider layouts
+keep the inline lock. Disclosure, first-touch row activation and memory
+observation source/time are unchanged. This is presentation only: a backup lock
+or successful backup never proves guest recovery.
+
+`GuestRow.test.tsx` checks layout structure, lock updates and existing action
+ownership. `browser-tests/build-guest-row-lock-fixture.mjs` compiles the real row,
+stylesheet and drawer before bounded static browser execution. Use
+`node browser-tests/build-guest-row-lock-fixture.mjs --with-parent --parent <full-parent-SHA>`
+to read the exact parent row from Git; no manually supplied control is accepted.
+`browser-tests/guest-row-lock-identity.cjs` measures the rendered name/lock at 320 and 390 px in bars and sparklines, and exercises keyboard/first
+touch through the existing drawer, checks long-name bounds, and rejects the current
+parent with the same static fixture. No dev compiler or old terminated preview
+is replayed. Native recovery remains separate.
+
 ### Confirmed operations opt out of silent transport fallback
 
 The shared API client accepts expectedOrgID and retry:false for confirmed

@@ -350,51 +350,60 @@ export function GuestRow(props: GuestRowProps) {
                 onPreviewClear={() => props.onHoverChange?.(null)}
               />
             </Show>
-            <div class="flex items-center gap-1.5 min-w-0">
-              <StatusDot
-                variant={guestStatus().variant}
-                title={guestStatus().label}
-                ariaLabel={guestStatus().label}
-                size="xs"
-              />
-              <div class="flex items-center gap-1.5 min-w-0 group/name">
-                <ResourceNameWithWebInterfaceLink
-                  name={props.guest.name}
-                  url={customUrl()}
-                  class={`min-w-0 ${usesCondensedIdentity() ? '[&>a]:hidden' : ''}`}
-                  nameClass="truncate text-[11px] font-medium text-base-content select-none"
-                />
-                {/* Show backup indicator in name cell only if backup column is hidden */}
-                <Show when={!isColVisible('backup') && supportsBackup()}>
-                  <BackupIndicator
-                    guestName={props.guest.name}
-                    lastBackup={props.guest.lastBackup}
-                    isTemplate={props.guest.template}
-                    backupRunning={props.guest.backupInProgress}
-                  />
-                </Show>
-                <Show when={nestedWorkloadCueLabel()}>
-                  <span
-                    class="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-medium leading-none text-muted"
-                    data-testid="nested-workload-cue"
-                    title={nestedWorkloadCueLabel()}
-                    aria-label={nestedWorkloadCueLabel()}
-                  >
-                    <BoxIcon class="h-3 w-3" aria-hidden="true" />
-                    <span class="tabular-nums">{props.nestedWorkloadContext?.count}</span>
-                  </span>
-                </Show>
-              </div>
-            </div>
-
-            <Show when={lockLabel()}>
-              <span
-                class="text-[10px] font-medium text-muted uppercase tracking-wide whitespace-nowrap"
-                title={`Guest is locked (${lockLabel()})`}
+            <div
+              class={`min-w-0 ${usesCondensedIdentity() ? 'flex flex-1 flex-col items-start gap-0.5' : 'flex items-center gap-2'}`}
+            >
+              <div
+                class={`flex items-center gap-1.5 min-w-0 ${usesCondensedIdentity() ? 'w-full' : ''}`}
               >
-                Lock: {lockLabel()}
-              </span>
-            </Show>
+                <StatusDot
+                  variant={guestStatus().variant}
+                  title={guestStatus().label}
+                  ariaLabel={guestStatus().label}
+                  size="xs"
+                  class={usesCondensedIdentity() ? 'self-start mt-1.5' : undefined}
+                />
+                <div
+                  class={`min-w-0 group/name ${usesCondensedIdentity() ? 'flex flex-1 flex-col items-start gap-0.5' : 'flex items-center gap-1.5'}`}
+                >
+                  <ResourceNameWithWebInterfaceLink
+                    name={props.guest.name}
+                    url={customUrl()}
+                    class={`min-w-0 ${usesCondensedIdentity() ? 'w-full [&>a]:hidden' : ''}`}
+                    nameClass="truncate text-[11px] font-medium text-base-content select-none"
+                  />
+                  {/* Show backup indicator in name cell only if backup column is hidden */}
+                  <Show when={!isColVisible('backup') && supportsBackup()}>
+                    <BackupIndicator
+                      guestName={props.guest.name}
+                      lastBackup={props.guest.lastBackup}
+                      isTemplate={props.guest.template}
+                      backupRunning={props.guest.backupInProgress}
+                    />
+                  </Show>
+                  <Show when={nestedWorkloadCueLabel()}>
+                    <span
+                      class="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-medium leading-none text-muted"
+                      data-testid="nested-workload-cue"
+                      title={nestedWorkloadCueLabel()}
+                      aria-label={nestedWorkloadCueLabel()}
+                    >
+                      <BoxIcon class="h-3 w-3" aria-hidden="true" />
+                      <span class="tabular-nums">{props.nestedWorkloadContext?.count}</span>
+                    </span>
+                  </Show>
+                </div>
+              </div>
+
+              <Show when={lockLabel()}>
+                <span
+                  class={`max-w-full text-[10px] font-medium text-muted uppercase tracking-wide ${usesCondensedIdentity() ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}
+                  title={`Guest is locked (${lockLabel()})`}
+                >
+                  Lock: {lockLabel()}
+                </span>
+              </Show>
+            </div>
           </div>
         </td>
 

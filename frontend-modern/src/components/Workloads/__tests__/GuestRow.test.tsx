@@ -1196,6 +1196,79 @@ describe('GuestRow', () => {
       expect(screen.getByText(/Lock:.*migrate/)).toBeTruthy();
     });
 
+    it.each(['narrow', 'phone'] as const)(
+      'keeps a %s lock below the identity without changing row activation',
+      (layout) => {
+        const onClick = vi.fn();
+        const { container } = renderGuestRow({
+          guest: makeGuest({ name: 'backup-guest', lock: 'backup' }),
+          workloadTableLayoutMode: layout,
+          onClick,
+        });
+        const lock = screen.getByTitle('Guest is locked (backup)');
+        const name = screen.getByText('backup-guest');
+        expect(lock.parentElement).toHaveClass('flex-col', 'items-start', 'min-w-0');
+        expect(lock.parentElement).toContainElement(name);
+        expect(name.parentElement).toHaveClass('w-full');
+        expect(name.parentElement?.parentElement).toHaveClass('flex-col', 'items-start');
+        expect(name.parentElement?.parentElement?.parentElement).toHaveClass('w-full');
+        expect(lock).toHaveClass('whitespace-normal', 'break-words', 'max-w-full');
+        expect(lock).not.toHaveAttribute('tabindex');
+        fireEvent.click(lock);
+        expect(onClick).toHaveBeenCalledTimes(1);
+        fireEvent.keyDown(screen.getByRole('button', { name: 'Expand backup-guest' }), {
+          key: 'Enter',
+        });
+        expect(onClick).toHaveBeenCalledTimes(2);
+        expect(container.querySelector('tr')).not.toHaveAttribute('tabindex');
+      },
+    );
+
+    it.each(['mobile', 'tablet', 'compact', 'wide'] as const)(
+      'preserves inline identity and lock at the %s table layout',
+      (layout) => {
+        renderGuestRow({
+          guest: makeGuest({ lock: 'migrate' }),
+          workloadTableLayoutMode: layout,
+        });
+        const lock = screen.getByTitle('Guest is locked (migrate)');
+        expect(lock.parentElement).toHaveClass('items-center');
+        expect(lock.parentElement).not.toHaveClass('flex-col');
+        expect(lock).toHaveClass('whitespace-nowrap');
+      },
+    );
+
+    it('updates a lock on the same guest without renewing retained memory', () => {
+      const initial = makeGuest({
+        lock: 'backup',
+        memory: makeMemory({
+          observation: {
+            state: 'last-known',
+            source: 'guest-agent-meminfo',
+            observedAt: '2026-09-30T11:00:00Z',
+          },
+        }),
+      });
+      const [guest, setGuest] = createSignal(initial);
+      const { container } = render(() => (
+        <table>
+          <tbody>
+            <GuestRow guest={guest()} workloadTableLayoutMode="phone" />
+          </tbody>
+        </table>
+      ));
+      const row = container.querySelector('tr');
+      const notice = container.querySelector('[data-workload-memory-read-status]');
+      expect(notice).toHaveTextContent('2026-09-30 11:00:00 UTC');
+      setGuest({ ...initial, lock: 'snapshot-delete' });
+      expect(screen.getByTitle('Guest is locked (snapshot-delete)')).toBeVisible();
+      setGuest({ ...initial, lock: '', lastSeen: '2026-10-06T10:00:00Z' });
+      expect(screen.queryByTitle('Guest is locked (snapshot-delete)')).toBeNull();
+      expect(container.querySelector('tr')).toBe(row);
+      expect(container.querySelector('[data-workload-memory-read-status]')).toBe(notice);
+      expect(notice).toHaveTextContent('2026-09-30 11:00:00 UTC');
+    });
+
     it('does not show lock label when not locked', () => {
       renderGuestRow({ guest: makeGuest({ lock: '' }) });
       expect(screen.queryByText('Lock:')).toBeNull();
