@@ -898,7 +898,7 @@ func TestHostChildAlertsSurviveProxmoxNodeCleanup(t *testing.T) {
 // no firing alert for UpdateConfig to visit. Linked overrides keep precedence.
 func TestDiskTemperaturePendingConfigDisablement(t *testing.T) {
 	for _, explicit := range []bool{false, true} {
-		for _, scope := range []string{"global", "all-agents", "host", "node", "vm", "container", "type", "unrelated"} {
+		for _, scope := range []string{"global", "agent-default", "all-agents", "host", "host-disabled", "node", "vm", "container", "type", "unrelated"} {
 			t.Run(fmt.Sprintf("%s/explicit=%v", scope, explicit), func(t *testing.T) {
 				m, elapsed := continuityManager(t, explicit)
 				host := hostWithSMARTDiskTemp("pending-temp", "custom", 85)
@@ -912,6 +912,10 @@ func TestDiskTemperaturePendingConfigDisablement(t *testing.T) {
 				switch scope {
 				case "global":
 					cfg.Enabled = false
+				case "agent-default":
+					cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 0}
+				case "host-disabled":
+					cfg.Overrides[host.ID] = ThresholdConfig{Disabled: true}
 				case "all-agents":
 					cfg.DisableAllAgents = true
 				case "host":
@@ -940,6 +944,7 @@ func TestDiskTemperaturePendingConfigDisablement(t *testing.T) {
 					return
 				}
 				cfg.Enabled, cfg.DisableAllAgents = true, false
+				cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 80, Clear: 70}
 				cfg.Overrides = map[string]ThresholdConfig{}
 				cfg.DiskTempByType = map[string]HysteresisThreshold{"custom": {Trigger: 80, Clear: 70}}
 				m.UpdateConfig(cfg)
