@@ -142,6 +142,23 @@ export function sortPatrolAttentionDecisions(
   });
 }
 
+// Ending a suppression, early or at its expiry, puts the alert in
+// Acknowledged when it is acknowledged, which is not active attention, and
+// otherwise in Open, back in the decision inbox.
+function getAttentionSuppressionEndPresentation(reviewed: boolean) {
+  return reviewed
+    ? {
+        durationLabel: 'End suppression after',
+        actionLabel: 'End suppression',
+        successLabel: 'Suppression ended. It stays reviewed',
+      }
+    : {
+        durationLabel: 'Return it to active attention after',
+        actionLabel: 'Return to active attention',
+        successLabel: 'Returned to decision inbox',
+      };
+}
+
 export function PatrolAttentionWorkbench(
   props: {
     autonomyLevel?: PatrolAutonomyLevel;
@@ -311,7 +328,7 @@ export function PatrolAttentionWorkbench(
   };
   const changeLifecycle = async (
     operation: () => Promise<unknown>,
-    options: { advanceAfter?: boolean; successLabel?: string } = {},
+    options: { advanceAfter?: boolean; successLabel?: string | (() => string) } = {},
   ) => {
     if (lifecycleBusy()) return;
     const selected = selectedItemId();
@@ -328,7 +345,10 @@ export function PatrolAttentionWorkbench(
         const remaining = orderedDecisions();
         const next =
           remaining.find((decision) => decision.item.id === nextCandidateId) ?? remaining[0];
-        const successLabel = options.successLabel ?? 'Decision updated';
+        const successLabel =
+          (typeof options.successLabel === 'function'
+            ? options.successLabel()
+            : options.successLabel) ?? 'Decision updated';
         setReviewNotice(
           attentionView() === 'handled'
             ? remaining.length > 0
@@ -565,10 +585,17 @@ export function PatrolAttentionWorkbench(
                   successLabel: 'Suppressed temporarily',
                 })
               }
-              onUnsuppress={(itemId) =>
+              onUnsuppress={(itemId, reviewed) =>
                 changeLifecycle(() => unsuppressPatrolAttention(itemId), {
                   advanceAfter: attentionView() === 'handled',
-                  successLabel: 'Returned to decision inbox',
+                  // Announce the state the reload reports, so a detail read
+                  // before the review changed elsewhere cannot misstate it.
+                  successLabel: () => {
+                    const after = patrolAttentionStore.items().find((entry) => entry.id === itemId);
+                    return getAttentionSuppressionEndPresentation(
+                      after ? after.state === 'acknowledged' : reviewed,
+                    ).successLabel;
+                  },
                 })
               }
               onOpenFindings={props.onOpenFindings}
@@ -835,7 +862,7 @@ function AttentionDetail(props: {
   onAcknowledge: (itemId: string) => Promise<void>;
   onUnacknowledge: (itemId: string) => Promise<void>;
   onSuppress: (itemId: string, reason: string, expiresAt: string) => Promise<void>;
-  onUnsuppress: (itemId: string) => Promise<void>;
+  onUnsuppress: (itemId: string, reviewed: boolean) => Promise<void>;
   onOpenFindings?: (item: AttentionItem) => void;
   findings?: () => UnifiedFinding[];
 }) {
@@ -1254,12 +1281,14 @@ function AttentionLifecycleControls(props: {
   onAcknowledge: (itemId: string) => Promise<void>;
   onUnacknowledge: (itemId: string) => Promise<void>;
   onSuppress: (itemId: string, reason: string, expiresAt: string) => Promise<void>;
-  onUnsuppress: (itemId: string) => Promise<void>;
+  onUnsuppress: (itemId: string, reviewed: boolean) => Promise<void>;
 }) {
   const [showSuppression, setShowSuppression] = createSignal(false);
   const [reason, setReason] = createSignal('');
   const [durationMs, setDurationMs] = createSignal<number>(SUPPRESSION_DURATIONS[1].value);
   const state = () => props.detail.item.state;
+  const reviewed = () => Boolean(props.detail.operationalRecord.acknowledgement);
+  const suppressionEnd = () => getAttentionSuppressionEndPresentation(reviewed());
   const canAcknowledge = () => ['open', 'stale', 'unknown', 'resolving'].includes(state());
   const canSuppress = () =>
     ['open', 'acknowledged', 'stale', 'unknown', 'resolving'].includes(state());
@@ -1333,9 +1362,9 @@ function AttentionLifecycleControls(props: {
               size="sm"
               class="min-h-11 sm:min-h-0"
               isLoading={props.busy}
-              onClick={() => void props.onUnsuppress(props.detail.item.id)}
+              onClick={() => void props.onUnsuppress(props.detail.item.id, reviewed())}
             >
-              Return to active attention
+              {suppressionEnd().actionLabel}
             </Button>
           </Show>
           <Show when={canSuppress() && !showSuppression()}>
@@ -1376,7 +1405,7 @@ function AttentionLifecycleControls(props: {
             />
             <FormSelect
               id={`attention-suppression-duration-${props.detail.item.id}`}
-              label="Return it to active attention after"
+              label={suppressionEnd().durationLabel}
               fieldBaseClass="block"
               labelClass="text-xs"
               selectClass="mt-1 w-auto"
