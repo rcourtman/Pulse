@@ -2432,11 +2432,21 @@ line; held delivery states that can surprise an operator use the attention
 tone, while cooldown, quiet-hours, monitor-only, and successful/pending states
 remain neutral.
 The card's resource link resolves the owning platform page from alert
-metadata, never from message wording alone: a provider incident whose
-`incidentProvider` is `vmware` links to the vSphere overview even though its
-message is only the alarm vCenter raised, and VMware incidents land on
+metadata, never from message wording alone. Provider incidents land on
 canonical `vm`, `storage`, `network`, and `agent` resource types rather than a
-`vmware-` prefixed type.
+platform-prefixed type, so the card reads the platform from an explicit
+`platformType`, then the incident's `incidentProvider`, then the resource's
+`resourceSources`, all through `resolvePlatformTypeFromSources` in
+`frontend-modern/src/utils/sourcePlatforms.ts`: a vCenter alarm whose message
+is only the alarm's name links to the vSphere overview, a TrueNAS pool
+incident to TrueNAS, and a PBS incident that Pulse itself raised (provider
+`pulse`) to Proxmox by its `pbs` source. The resolved platform maps to its
+page through `PRIMARY_PLATFORM_NAV_SCOPE_IDS` and the `routing/resourceLinks.ts`
+path builders, and the same canonical platform id goes to the Monitoring
+policy menu, so the link and the named inventory owner cannot disagree. Only
+an alert whose metadata names no platform falls back to its resource type
+(`agent`, `docker-*`, `k8s-*`, `truenas-*`, `vmware-*`) and finally the message;
+agent alerts open `/standalone/machines`, because no `/machines` route exists.
 The retired dashboard recent-alert panel must not be reintroduced as a
 parallel alert surface. Alert summary/tone copy belongs to the alert overview
 presentation owner, and any future compact alert surface must compose the
