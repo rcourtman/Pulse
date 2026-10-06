@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -120,6 +121,53 @@ func TestWindowsAgentLifecycleWorkflowChecksEveryNativeExit(t *testing.T) {
 	}
 }
 
+func nativeWindowsHarnessExitGuards(script string) ([]string, error) {
+	commands := []string{
+		`$version = ((& $AgentPath --version`,
+		`& $script:powerShellPath -NoLogo`,
+		`$installedVersion = ((& "$env:ProgramFiles\Pulse\pulse-agent.exe" --version`,
+		`$recovery = (& sc.exe qfailure `,
+		`$failureFlag = (& sc.exe qfailureflag `,
+	}
+	guardPattern := regexp.MustCompile(`^\s*if \(\$LASTEXITCODE -ne 0\) \{\s*throw "[^"\n]*\$LASTEXITCODE[^"\n]*"\s*\}`)
+	var guards []string
+	for _, command := range commands {
+		i := strings.Index(script, command)
+		if i < 0 {
+			return nil, fmt.Errorf("missing lifecycle native command %s", command)
+		}
+		newline := strings.IndexByte(script[i:], '\n')
+		if newline < 0 {
+			return nil, fmt.Errorf("lifecycle command %s has no exit check", command)
+		}
+		guard := guardPattern.FindString(script[i+newline+1:])
+		if guard == "" {
+			return nil, fmt.Errorf("lifecycle command %s must fail before interpreting its output", command)
+		}
+		guards = append(guards, strings.TrimSpace(guard))
+	}
+	return guards, nil
+}
+
+func TestWindowsAgentLifecycleHarnessChecksEveryNativeExit(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "installtests", "windows_agent_lifecycle.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	guards, err := nativeWindowsHarnessExitGuards(string(content))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, guard := range guards {
+		t.Run(guard, func(t *testing.T) {
+			changed := strings.Replace(string(content), guard, "", 1)
+			if _, err := nativeWindowsHarnessExitGuards(changed); err == nil {
+				t.Fatal("accepted failed version/installer/service query evidence")
+			}
+		})
+	}
+}
+
 func TestWindowsAgentLifecycleNativeExitChecksStopFollowingCommands(t *testing.T) {
 	shell := "pwsh"
 	if runtime.GOOS == "windows" {
@@ -138,6 +186,15 @@ func TestWindowsAgentLifecycleNativeExitChecksStopFollowingCommands(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
+	harness, err := os.ReadFile(repoFile("scripts", "installtests", "windows_agent_lifecycle.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	harnessGuards, err := nativeWindowsHarnessExitGuards(string(harness))
+	if err != nil {
+		t.Fatal(err)
+	}
+	guards = append(guards, harnessGuards...)
 	nativeExit := func(code int) string {
 		if runtime.GOOS == "windows" {
 			return fmt.Sprintf(`cmd.exe /d /c "exit /b %d"`, code)
@@ -148,7 +205,7 @@ func TestWindowsAgentLifecycleNativeExitChecksStopFollowingCommands(t *testing.T
 		t.Helper()
 		// Match Actions' error preference and final native exit propagation.
 		// The second successful native command reproduces the masking case.
-		script := "$ErrorActionPreference = 'Stop'\n" + nativeExit(code) + "\n" + guard + "\n" +
+		script := "$ErrorActionPreference = 'Stop'\n$Label = 'Controlled installer'\n" + nativeExit(code) + "\n" + guard + "\n" +
 			nativeExit(0) + "\nWrite-Output 'FOLLOWING_COMMAND_RAN'\nexit $LASTEXITCODE\n"
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
@@ -164,7 +221,8 @@ func TestWindowsAgentLifecycleNativeExitChecksStopFollowingCommands(t *testing.T
 	for i, guard := range guards {
 		t.Run(fmt.Sprintf("command %d", i+1), func(t *testing.T) {
 			output, err := run(t, guard, 23)
-			if err == nil || strings.Contains(string(output), "FOLLOWING_COMMAND_RAN") || !strings.Contains(string(output), "exit 23") {
+			if err == nil || strings.Contains(string(output), "FOLLOWING_COMMAND_RAN") ||
+				(!strings.Contains(string(output), "exit 23") && !strings.Contains(string(output), "exit code 23")) {
 				t.Fatalf("failed native command must stop immediately and retain its exit: %v\n%s", err, output)
 			}
 			output, err = run(t, guard, 0)

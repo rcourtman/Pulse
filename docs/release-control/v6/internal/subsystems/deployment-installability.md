@@ -6800,7 +6800,9 @@ request and does not clear an existing advisory or establish hosted acceptance.
 The native agent and service-lifecycle workflow checks each build, version,
 self-test and lifecycle command immediately. PowerShell's final exit handling
 alone can hide an earlier native failure behind a later successful command.
-The exit regressions cover all seven boundaries and reject tolerant steps;
+The service harness also checks captured version and service-query exits before
+accepting their text. Exit regressions cover all twelve boundaries (seven
+workflow commands and five harness commands) and reject tolerant steps;
 Windows CI also executes the actual guards against failed and successful native
 processes, including the unguarded masking control. An unavailable local
 PowerShell is an explicit skip, not native acceptance. Installer behaviour,
