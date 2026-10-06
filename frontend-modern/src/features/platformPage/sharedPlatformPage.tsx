@@ -39,6 +39,7 @@ import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import type { Resource } from '@/types/resource';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   matchesSearchTermSplit,
   splitSearchExclusions,
@@ -776,6 +777,7 @@ export type PlatformTableRelativeTimeValueInput = number | string | Date | null 
 export type PlatformTableRelativeTimeValueOptions = {
   compact?: boolean;
   emptyText?: string;
+  now?: number;
 };
 
 export const formatPlatformTableRelativeTimeValue = (
@@ -788,6 +790,7 @@ export const formatPlatformTableRelativeTimeValue = (
     formatRelativeTime(value, {
       compact: options.compact ?? true,
       emptyText,
+      now: options.now,
     }) || emptyText
   );
 };
@@ -797,8 +800,11 @@ export function PlatformTableRelativeTimeValue(props: {
   compact?: boolean;
   emptyText?: string;
 }) {
+  // Rows stay mounted across refreshes, so the age reads the shared clock to
+  // keep moving while the timestamp itself does not change.
+  const now = useRelativeTimeNow();
   const options = (): PlatformTableRelativeTimeValueOptions => {
-    const resolved: PlatformTableRelativeTimeValueOptions = {};
+    const resolved: PlatformTableRelativeTimeValueOptions = { now: now() };
     if (props.compact !== undefined) resolved.compact = props.compact;
     if (props.emptyText !== undefined) resolved.emptyText = props.emptyText;
     return resolved;

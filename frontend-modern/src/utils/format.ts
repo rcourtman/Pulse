@@ -148,10 +148,12 @@ export function formatAbsoluteTime(timestamp: number | undefined): string {
  * @param timestamp - Unix ms number, ISO date string, Date object, or undefined
  * @param options.compact - Use short format: "5m ago" instead of "5 mins ago"
  * @param options.emptyText - Text for falsy input (default: '')
+ * @param options.now - The time to measure from (default: Date.now()). A cell
+ *   that must keep its age current passes the shared relative-time clock.
  */
 export function formatRelativeTime(
   timestamp: number | string | Date | undefined,
-  options?: { compact?: boolean; emptyText?: string },
+  options?: { compact?: boolean; emptyText?: string; now?: number },
 ): string {
   if (!timestamp) return options?.emptyText ?? '';
 
@@ -164,7 +166,7 @@ export function formatRelativeTime(
     ms = timestamp.getTime();
   }
 
-  const diffMs = Date.now() - ms;
+  const diffMs = (options?.now ?? Date.now()) - ms;
   return formatTimeDiff(diffMs, options?.compact);
 }
 

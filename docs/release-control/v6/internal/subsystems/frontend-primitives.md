@@ -5206,6 +5206,21 @@ Docker, Kubernetes, TrueNAS, and vSphere alert tables. Those tables must call
 `formatPlatformAlertEntityType`, `formatPlatformAlertStartedAt`, and
 `formatPlatformAlertDetailDateTime` instead of declaring local formatter
 helpers.
+`formatPlatformAlertStartedAt` reads as an age ("2h ago"), because an open
+alert's Started cell answers how long it has been going on, as alert cards do;
+the absolute "Oct 6, 10:34 AM" also clipped at phone and tablet widths. Each
+table's Started cell carries `formatPlatformAlertDetailDateTime` as its hover
+title, the drawer's Started row keeps that exact time, an unset (pre-2000) or
+invalid time stays "-", and the column uses the `numeric-value` alignment kind
+on all four tables.
+Relative ages read one shared clock. `useRelativeTimeNow`
+(`frontend-modern/src/utils/relativeTimeClock.ts`) ticks every 30 seconds while
+any mounted cell reads it and stops when none do; `PlatformTableRelativeTimeValue`
+and the platform alert tables pass it as `now` to `formatRelativeTime` /
+`formatPlatformAlertStartedAt`. Platform tables keep their rows mounted across
+data refreshes, so an age computed only at render froze ("2h ago" three hours
+later) whenever its timestamp did not change. A relative-age cell must read the
+shared clock rather than `Date.now()` at render or a table-local interval.
 Read-only metadata badges follow the same primitive-owned shell rule.
 `frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
 outlined appearances, compact sizing, shape, typed tone vocabulary, fit
