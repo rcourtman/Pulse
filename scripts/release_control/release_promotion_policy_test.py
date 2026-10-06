@@ -1819,15 +1819,20 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                     self.assertIn(distinction, prose)
                 self.assertNotIn("render", summary["attributes"])
 
-        triage = normalize_ws(read("docs/ISSUE_TRIAGE.md"))
-        for precaution in (
-            "installation type does not make Docker commands relevant",
-            "Read later comments", "retain both topics",
-            "not Pulse's displayed connection status",
-            "Responsiveness is not proof that every filesystem is writable",
-            'Accept "unknown"', "Existing reports need no refile",
+        for document in (
+            "docs/ISSUE_TRIAGE.md",
+            "frontend-modern/public/docs/ISSUE_TRIAGE.md",
         ):
-            self.assertIn(precaution, triage)
+            with self.subTest(document=document):
+                triage = normalize_ws(read(document))
+                for precaution in (
+                    "installation type does not make Docker commands relevant",
+                    "Read later comments", "retain both topics",
+                    "not Pulse's displayed connection status",
+                    "Responsiveness is not proof that every filesystem is writable",
+                    'Accept "unknown"', "Existing reports need no refile",
+                ):
+                    self.assertIn(precaution, triage)
 
     def test_demo_site_copy_points_at_current_release_packet_index(self) -> None:
         demo_copy = read("docs/releases/V6_RC_DEMO_SITE_COPY.md")
