@@ -6,7 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 func TestHostCustomSensorAlertLifecycle(t *testing.T) {
@@ -411,7 +413,7 @@ func TestCheckHostClearsDiskTemperatureAlertWhenDiskLeavesSMARTReport(t *testing
 		host.Sensors.SMART = []models.HostDiskSMART{smartDisk("/dev/sdb", 40)}
 		for report := 1; report <= hostDiskTemperatureAbsenceConfirmations; report++ {
 			m.CheckHost(host)
-			wantPending := report < hostDiskTemperatureAbsenceConfirmations
+			wantPending := false // A single omission interrupts pending evidence, not firing alerts.
 			if pending := sdaPending(); pending != wantPending {
 				t.Fatalf("report %d: pending sda run = %v, want %v", report, pending, wantPending)
 			}
@@ -890,4 +892,144 @@ func TestHostChildAlertsSurviveProxmoxNodeCleanup(t *testing.T) {
 			t.Errorf("Proxmox node cleanup removed an agent %s alert", alertType)
 		}
 	}
+}
+
+// Disabling between two reports is a real policy interval even when there is
+// no firing alert for UpdateConfig to visit. Linked overrides keep precedence.
+func TestDiskTemperaturePendingConfigDisablement(t *testing.T) {
+	for _, explicit := range []bool{false, true} {
+		for _, scope := range []string{"global", "all-agents", "host", "node", "vm", "container", "type", "unrelated"} {
+			t.Run(fmt.Sprintf("%s/explicit=%v", scope, explicit), func(t *testing.T) {
+				m, elapsed := continuityManager(t, explicit)
+				host := hostWithSMARTDiskTemp("pending-temp", "sata", 85)
+				host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID = "site:node", "site:node:101", "site:node:102"
+				id := hostDiskTemperatureResourceID(host.ID, host.Sensors.SMART[0].Device)
+				m.CheckHost(host)
+				if incident, ok := continuityIncident(m, id, "diskTemperature"); !ok || incident.State != reducer.StatePending {
+					t.Fatalf("no initial pending run: %+v %v", incident, ok)
+				}
+				cfg := m.GetConfig()
+				switch scope {
+				case "global":
+					cfg.Enabled = false
+				case "all-agents":
+					cfg.DisableAllAgents = true
+				case "host":
+					cfg.Overrides[host.ID] = ThresholdConfig{DiskTemperature: &HysteresisThreshold{Trigger: 0}}
+				case "node":
+					cfg.Overrides[host.LinkedNodeID] = ThresholdConfig{DiskTemperature: &HysteresisThreshold{Trigger: 0}}
+				case "vm":
+					host.LinkedNodeID = "" // The linked node override must not mask the VM.
+					m.CheckHost(host)
+					cfg.Overrides[host.LinkedVMID] = ThresholdConfig{DiskTemperature: &HysteresisThreshold{Trigger: 0}}
+				case "container":
+					host.LinkedNodeID, host.LinkedVMID = "", ""
+					m.CheckHost(host)
+					cfg.Overrides[host.LinkedContainerID] = ThresholdConfig{DiskTemperature: &HysteresisThreshold{Trigger: 0}}
+				case "type":
+					cfg.DiskTempByType = map[string]HysteresisThreshold{"sata": {Trigger: 0}}
+				case "unrelated":
+					cfg.Schedule.QuietHours.Timezone = "UTC"
+				}
+				m.UpdateConfig(cfg)
+				_, pending := continuityIncident(m, id, "diskTemperature")
+				if pending != (scope == "unrelated") {
+					t.Fatalf("after save pending=%v; unrelated saves alone must preserve evidence", pending)
+				}
+				if scope == "unrelated" {
+					return
+				}
+				cfg.Enabled, cfg.DisableAllAgents = true, false
+				cfg.Overrides = map[string]ThresholdConfig{}
+				cfg.DiskTempByType = nil
+				m.UpdateConfig(cfg)
+				elapsed.Store(int64(2 * time.Minute))
+				m.CheckHost(host)
+				if len(m.GetActiveAlerts()) != 0 {
+					t.Fatal("re-enable inherited the pre-disable start")
+				}
+				elapsed.Store(int64(2*time.Minute + 59*time.Second))
+				m.CheckHost(host)
+				if len(m.GetActiveAlerts()) != 0 {
+					t.Fatal("fresh grace fired early")
+				}
+				elapsed.Store(int64(3 * time.Minute))
+				m.CheckHost(host)
+				if len(m.GetActiveAlerts()) != 1 {
+					t.Fatal("fresh continuous breach never fired")
+				}
+				m.mu.RLock()
+				defer m.mu.RUnlock()
+				if len(m.hostDiskTempPendingContexts) != 0 {
+					t.Fatal("context outlived the pending run")
+				}
+			})
+		}
+	}
+}
+
+func TestDiskTemperaturePendingRestartContextIsNotInvented(t *testing.T) {
+	m, elapsed := continuityManager(t, true)
+	host := hostWithSMARTDiskTemp("restored-temp", "sata", 85)
+	id := hostDiskTemperatureResourceID(host.ID, host.Sensors.SMART[0].Device)
+	m.CheckHost(host)
+	m.mu.Lock()
+	// Persisted intent carries grace but not host link/type context. Reducer
+	// pending incidents are not restored; this is the actual restart shape.
+	m.core.Reset()
+	m.hostDiskTempPendingContexts = nil
+	key := canonicalMetricStateID(id, "diskTemperature")
+	_, pending := m.intentPending[key]
+	m.mu.Unlock()
+	if !pending {
+		t.Fatal("explicit intent control did not retain grace")
+	}
+	m.UpdateConfig(m.GetConfig())
+	m.mu.RLock()
+	_, pending = m.intentPending[key]
+	m.mu.RUnlock()
+	if pending {
+		t.Fatal("save retained grace whose link/type enablement is unknown")
+	}
+	elapsed.Store(int64(2 * time.Minute))
+	m.CheckHost(host)
+	if len(m.GetActiveAlerts()) != 0 {
+		t.Fatal("restored grace fired without fresh evidence")
+	}
+}
+
+func TestDiskTemperatureCurrentCollectionAndOverrideControls(t *testing.T) {
+	for _, provenance := range []string{"legacy", "available", "other-field-only"} {
+		t.Run(provenance, func(t *testing.T) {
+			m, elapsed := continuityManager(t, false)
+			host := hostWithSMARTDiskTemp("current-temp", "sata", 85)
+			switch provenance {
+			case "available":
+				host.Sensors.SMART[0].Collection = &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")}
+			case "other-field-only":
+				host.Sensors.SMART[0].Collection = &diskinventory.CollectionStatus{Serial: diskinventory.Available("smartctl")}
+			}
+			m.CheckHost(host)
+			elapsed.Store(int64(time.Minute))
+			m.CheckHost(host)
+			if len(m.GetActiveAlerts()) != 1 {
+				t.Fatal("continuous accepted temperature did not fire")
+			}
+		})
+	}
+	t.Run("host override wins over disabled type", func(t *testing.T) {
+		m, elapsed := continuityManager(t, false)
+		host := hostWithSMARTDiskTemp("override-temp", "sata", 85)
+		cfg := m.GetConfig()
+		cfg.DiskTempByType = map[string]HysteresisThreshold{"sata": {Trigger: 0}}
+		cfg.Overrides[host.ID] = ThresholdConfig{DiskTemperature: &HysteresisThreshold{Trigger: 80, Clear: 70}}
+		m.UpdateConfig(cfg)
+		m.CheckHost(host)
+		m.UpdateConfig(m.GetConfig())
+		elapsed.Store(int64(time.Minute))
+		m.CheckHost(host)
+		if len(m.GetActiveAlerts()) != 1 {
+			t.Fatal("save discarded an enabled explicit override")
+		}
+	})
 }

@@ -93,6 +93,12 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 		Interface("guestDefaults", config.GuestDefaults).
 		Msg("Alert configuration updated")
 
+	// Pending-only temperature runs have no active alert to re-evaluate.
+	// Disabling and re-enabling between reports must not reuse their grace.
+	if m.reevaluateHostDiskTemperaturePendingNoLock() {
+		m.saveActiveAlertsAsync("disk temperature pending policy disabled")
+	}
+
 	// Re-evaluate active alerts against new thresholds
 	m.reevaluateActiveAlertsLocked()
 }

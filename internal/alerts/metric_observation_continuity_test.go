@@ -13,17 +13,20 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 func continuityManager(t *testing.T, explicit bool) (*Manager, *atomic.Int64) {
 	t.Helper()
 	m := newEventLogManager(t)
 	cfg := characterizationBaseConfig()
-	cfg.MetricTimeThresholds = map[string]map[string]int{"all": {"cpu": 60, "memory": 60, "disk": 60, "temperature": 60, "diskRead": 60, "diskWrite": 60, "networkIn": 60, "networkOut": 60, "usage": 60}}
+	cfg.MetricTimeThresholds = map[string]map[string]int{"all": {"cpu": 60, "memory": 60, "disk": 60, "temperature": 60, "diskTemperature": 60, "diskRead": 60, "diskWrite": 60, "networkIn": 60, "networkOut": 60, "usage": 60}}
 	cfg.MetricEvaluationWindows = nil
 	cfg.GuestDefaults.CPU = &HysteresisThreshold{Trigger: 99, Clear: 98}
 	cfg.GuestDefaults.Memory = &HysteresisThreshold{Trigger: 80, Clear: 70}
 	cfg.GuestDefaults.Disk = &HysteresisThreshold{Trigger: 80, Clear: 70}
+	cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 80, Clear: 70}
+	cfg.DiskTempByType = nil
 	cfg.AgentDefaults.Memory = &HysteresisThreshold{Trigger: 80, Clear: 70}
 	m.UpdateConfig(cfg)
 	elapsed := &atomic.Int64{}
@@ -32,7 +35,7 @@ func continuityManager(t *testing.T, explicit bool) (*Manager, *atomic.Int64) {
 	m.intentClock = func() time.Duration { return time.Duration(elapsed.Load()) }
 	if explicit {
 		doc := NewAlertIntentPolicyDocument()
-		for _, metric := range []string{"cpu", "memory", "disk", "temperature", "diskWrite", "networkIn", "networkOut", "diskRead", "usage"} {
+		for _, metric := range []string{"cpu", "memory", "disk", "temperature", "diskTemperature", "diskWrite", "networkIn", "networkOut", "diskRead", "usage"} {
 			doc.Defaults[MetricAlertIntentSignal(metric)] = AlertIntentRule{GraceSeconds: intPointer(60)}
 		}
 		if err := m.LoadIntentPolicies(doc); err != nil {
@@ -114,6 +117,34 @@ func continuityObserver(t *testing.T, m *Manager, route, gap string) (string, st
 			}
 			m.CheckHost(host)
 		}
+	case "host-disk-temperature":
+		id, metric = hostDiskTemperatureResourceID("temp-host", "/dev/sda"), "diskTemperature"
+		return id, metric, func(value float64, missing bool) {
+			host := models.Host{ID: "temp-host", Hostname: "host", Status: "online",
+				Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{Device: "/dev/sda", Temperature: int(value)}}}}
+			if missing {
+				switch gap {
+				case "empty":
+					host.Sensors.SMART = nil
+				case "omitted":
+					host.Sensors.SMART = []models.HostDiskSMART{{Device: "/dev/sdb", Temperature: 10}}
+				case "zero", "legacy":
+					host.Sensors.SMART[0].Temperature = 0
+				case "negative":
+					host.Sensors.SMART[0].Temperature = -1
+				case "standby":
+					host.Sensors.SMART[0].Standby = true
+				case "expired":
+					m.HandleHostTelemetryExpired(host)
+					return
+				default:
+					host.Sensors.SMART[0].Collection = &diskinventory.CollectionStatus{Temperature: diskinventory.FieldStatus{State: diskinventory.FieldState(gap)}}
+				}
+			} else if gap != "legacy" {
+				host.Sensors.SMART[0].Collection = &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")}
+			}
+			m.CheckHost(host)
+		}
 	case "guest-memory", "guest-aggregate", "guest-filesystem", "guest-filesystem-expired":
 		if route != "guest-memory" {
 			metric = "disk"
@@ -153,10 +184,13 @@ func continuityObserver(t *testing.T, m *Manager, route, gap string) (string, st
 
 func TestMetricObservationGapRestartsActivation(t *testing.T) {
 	for _, explicit := range []bool{false, true} {
-		for _, route := range []string{"legacy", "canonical", "unified", "host", "guest-memory", "guest-aggregate", "guest-filesystem", "guest-filesystem-expired"} {
+		for _, route := range []string{"legacy", "canonical", "unified", "host", "guest-memory", "guest-aggregate", "guest-filesystem", "guest-filesystem-expired", "host-disk-temperature"} {
 			gaps := []string{"missing"}
 			if route == "legacy" || route == "canonical" {
 				gaps = []string{"NaN", "+Inf", "-Inf", "history-error", "history-empty", "history-gap", "history-NaN"}
+			}
+			if route == "host-disk-temperature" {
+				gaps = []string{"empty", "omitted", "zero", "negative", "standby", "unavailable", "unsupported", "missing", "invalid-state", "expired", "legacy"}
 			}
 			for _, gap := range gaps {
 				t.Run(route+"/"+gap+"/explicit="+map[bool]string{false: "false", true: "true"}[explicit], func(t *testing.T) {
@@ -203,10 +237,13 @@ func TestMetricObservationGapRestartsActivation(t *testing.T) {
 }
 
 func TestMetricObservationGapRestartsRecovery(t *testing.T) {
-	for _, route := range []string{"legacy", "canonical", "unified", "host", "guest-memory"} {
+	for _, route := range []string{"legacy", "canonical", "unified", "host", "guest-memory", "host-disk-temperature"} {
 		gaps := []string{"missing"}
 		if route == "legacy" || route == "canonical" {
 			gaps = []string{"NaN", "+Inf", "-Inf", "history-error", "history-empty", "history-gap", "history-NaN"}
+		}
+		if route == "host-disk-temperature" {
+			gaps = []string{"empty", "omitted", "zero", "negative", "standby", "unavailable", "unsupported", "missing", "invalid-state", "expired", "legacy"}
 		}
 		for _, gap := range gaps {
 			t.Run(route+"/"+gap, func(t *testing.T) {
