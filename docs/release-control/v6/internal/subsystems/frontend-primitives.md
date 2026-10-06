@@ -8831,3 +8831,20 @@ probe is prescribed. Independent thaw, every-covered-filesystem writes and
 liveness remain the backup restoration boundary. The shipped mirror and
 `backupSafetyHelp.test.ts` validate the rendered guidance and anchor; both new
 controls reject the original parent guide. No runtime or wire contract changes.
+
+### PBS protection disagreement help (6 October 2026)
+
+The existing PBS guide separates visible/matched/verified backup artifacts from
+subject-linked protection assessment and independent restore or guest recovery
+proof. Its passive Coverage check uses the shipped Job, History and Access
+labels, existing PBS records and scoped redacted reporting. No task is induced,
+no identity/permission/retention setting is changed and no policy cause is
+assumed. Frozen/unresponsive guests retain independent post-backup thaw, writes
+on every covered filesystem, liveness and only-prior-active restoration with
+the monitoring/alert outage disclosed.
+
+`pbsProtectionHelp.test.ts` checks the production Markdown renderer, ordered
+passive steps, evidence distinctions, safety link/target, disclosure and exact
+shipped mirror. Exact-parent controls reject the old guide. This is safe help
+maintenance, not a collector/classifier repair, browser acceptance, native
+backup/recovery proof or published availability.

@@ -302,6 +302,52 @@ private keys. If help is needed, provide only the HTTP status, relevant redacted
 error and which expected reading is missing. Do not clear History or recreate a
 working connection to make missing data look resolved.
 
+### Backups are visible but Coverage says Unprotected
+
+The **Backup health** strip and the backup list answer different questions.
+If they disagree, use **PBS's own backup and verification records** for the
+same guest while checking Pulse's assessment; do not assume either a failed
+backup or working protection from the strip alone.
+
+| Observation in Pulse | What it does not establish |
+| --- | --- |
+| **With PBS snapshots** or a matching backup row | That Pulse's protection assessment received the same subject-linked backup evidence. A similar name or guest ID alone is not identity proof. |
+| **Verified** on a PBS backup | That every backup is current, every covered disk is included, or the guest recovered after the backup. Verification is evidence about that backup, not a successful restore. |
+| **Protected**, **Attention**, **Unprotected** or **Unknown** | An independent check that backups are restorable. These are Pulse's assessment from the backup evidence it can read, not instructions to change backups. |
+
+Check one affected guest without changing its setup:
+
+1. Open **Proxmox → Backups → Coverage** and expand that guest. Read its
+   protection explanation and the PBS **Job**, **History** and **Access**
+   evidence. Access describes permissions; if provider evidence is absent,
+   record that rather than interpreting it as healthy. These are backup
+   evidence states, not the PBS host's CPU/metrics History chart.
+2. Compare the listed backup with the existing record in PBS: server,
+   datastore, namespace (including root), guest type/ID and backup time.
+   Independent PVE installations can reuse an ID; confirm the owning
+   installation too. A **guest snapshot** is not a PBS backup. Check the
+   existing backup task and verification result in PBS, not just the last
+   time Pulse refreshed.
+3. If the records still disagree, report the Pulse version, one guest's
+   protection explanation, PBS Job/History/Access values and the matching
+   backup's time and verification result. Use consistent placeholders for
+   private server, datastore, namespace and guest identities. Do not share
+   tokens, full API responses, HAR exports, or screenshots with secrets.
+
+Do not delete backups, clear History, change retention or freshness settings,
+recreate tokens/connections, restart or downgrade Pulse, or run a new backup,
+verification or restore just to clear the strip. Missing or contradictory
+Pulse evidence needs investigation, not a destructive diagnostic or an
+assumed freshness-policy cause. Use your established backup checks meanwhile.
+
+**An OK backup task or a Verified label does not prove the guest thawed.** If a
+backup left a guest unresponsive or frozen, follow [Backup safety](VM_DISK_MONITORING.md#backup-safety)
+and the platform's established recovery procedure, not this display check.
+Keep affected Pulse monitoring stopped until independent post-backup checks
+confirm thaw, fresh successful writes to every filesystem covered by the
+backup and workload liveness; restore only services and timers active before
+the pause. Monitoring and alerts are unavailable while Pulse is stopped.
+
 ### PBS is connected but History stays empty
 
 Open **Proxmox → Backups → Backup Server → History**, not a datastore or the
