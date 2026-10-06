@@ -3,11 +3,12 @@
 # Fast local validation before pushing to main. CI takes 10+ minutes to
 # deliver a verdict; this catches the common failure classes in a few:
 #
-#   1. canonical completion guard (contract/verification coupling, per commit)
-#   2. guard/registry snapshot tests when the subsystem registry changed
-#   3. mutation registry audits (fail closed on unclassified API routes)
-#   4. compilation plus tests for the Go packages the outgoing commits touch
-#   5. frontend type-check when frontend-modern changed
+#   1. bounded strict audit when the frontend dependency graph or runner changed
+#   2. canonical completion guard (contract/verification coupling, per commit)
+#   3. guard/registry snapshot tests when the subsystem registry changed
+#   4. mutation registry audits (fail closed on unclassified API routes)
+#   5. compilation plus tests for the Go packages the outgoing commits touch
+#   6. frontend type-check when frontend-modern changed (dependencies required)
 #
 # Usage: scripts/dev-prepush.sh [base-ref]
 #   base-ref defaults to origin/main. Run `git fetch origin` first for an
@@ -42,6 +43,19 @@ fi
 
 CHANGED=$(git diff --name-only "$BASE"...HEAD)
 CHANGED_GO=$(printf '%s\n' "$CHANGED" | grep -E '\.go$' || true)
+
+# Match Build and Test's strict audit paths. A known-rejected graph should not
+# wait for the expensive source checks, or get a local passing verdict instead.
+# Unchanged graphs are left to CI's existing inherited-finding warning policy.
+# Consume the whole list rather than using grep -q: under pipefail an early
+# match in a large diff must not turn the producer's SIGPIPE into a false skip.
+if printf '%s\n' "$CHANGED" | grep -E '^frontend-modern/package(-lock)?\.json$|^scripts/npm-audit-retry\.sh$' >/dev/null; then
+  step "Frontend dependency audit (changed graph or audit runner)"
+  if ! (cd frontend-modern && NPM_AUDIT_REQUIRE_RESULT=true bash "$ROOT_DIR/scripts/npm-audit-retry.sh" all); then
+    echo "Frontend dependency audit failed; remaining source checks have not run." >&2
+    exit 1
+  fi
+fi
 
 step "Canonical completion guard (per commit, CI mode)"
 while IFS= read -r commit; do
@@ -96,12 +110,12 @@ if [ -n "$CHANGED_GO" ]; then
   go test -count=1 -timeout 15m $PKGS || fail "go tests for touched packages"
 fi
 
-if printf '%s\n' "$CHANGED" | grep -q '^frontend-modern/'; then
+if printf '%s\n' "$CHANGED" | grep '^frontend-modern/' >/dev/null; then
   step "Frontend type-check"
   if [ -d frontend-modern/node_modules ]; then
     (cd frontend-modern && npm run type-check) || fail "frontend type-check"
   else
-    echo "Skipped: frontend-modern/node_modules missing (run npm ci there first)."
+    fail "frontend type-check: frontend-modern/node_modules missing (run npm ci there first)"
   fi
 fi
 
