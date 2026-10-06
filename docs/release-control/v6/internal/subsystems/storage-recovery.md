@@ -6774,3 +6774,12 @@ blank header is removed on the next save. Export and import pass through the
 same normalization. No new file, retention window, backup, migration or
 recovery authority is introduced; `TestWebhookMaskedValuesResolvePerKey` in
 `internal/api/alerting/notifications_test.go` covers the write path.
+
+### Retained disk temperatures open no storage or recovery path
+
+The metrics-history handler in `internal/api/router.go` serves a disk
+temperature live point only when `diskinventory.TemperatureCollected` holds,
+and the Unraid physical-disk adapter marks an inventory temperature kept past
+the host agent's lease as no longer collected. Both change presentation of
+values Pulse already holds: no metrics write, retention window, backup,
+migration or recovery authority is added or moved.

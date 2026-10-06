@@ -5695,7 +5695,9 @@ func (s *State) ExpireHostTelemetry(hostID string, lastSeen time.Time) (Host, bo
 	return Host{}, false
 }
 
-const hostAgentStoppedReportingReason = "host agent stopped reporting"
+// HostAgentStoppedReportingReason is the collection-state reason recorded on
+// readings a host agent supplied once its reporting lease has expired.
+const HostAgentStoppedReportingReason = "host agent stopped reporting"
 
 // expireHostSMARTReadings marks the temperature and I/O counters of one SMART
 // row as no longer collected, keeping their values as last-known evidence.
@@ -5725,7 +5727,7 @@ func expireCollectedReading(status *diskinventory.FieldStatus, hasValue bool) bo
 	default:
 		return false
 	}
-	*status = diskinventory.Unavailable(status.Source, hostAgentStoppedReportingReason)
+	*status = diskinventory.Unavailable(status.Source, HostAgentStoppedReportingReason)
 	return true
 }
 

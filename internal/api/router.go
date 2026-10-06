@@ -6723,7 +6723,9 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				return points
 			}
 			pd := disk.PhysicalDisk
-			if pd.Temperature > 0 {
+			// A retained temperature (standby, a silent host agent) is not a
+			// reading taken now.
+			if diskinventory.TemperatureCollected(pd.Temperature, pd.Collection) {
 				points["smart_temp"] = monitoring.MetricPoint{Timestamp: now, Value: float64(pd.Temperature)}
 			}
 			if pd.SMART != nil {
@@ -6802,7 +6804,8 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 
 		if mock.IsMockEnabled() && runtimeResourceType == "disk" {
 			current := 0.0
-			if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil && metricType == "smart_temp" {
+			if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil && metricType == "smart_temp" &&
+				diskinventory.TemperatureCollected(disk.PhysicalDisk.Temperature, disk.PhysicalDisk.Collection) {
 				current = float64(disk.PhysicalDisk.Temperature)
 			}
 			if current > 0 || metricType == "disk" || metricType == "diskread" || metricType == "diskwrite" {
@@ -7235,7 +7238,12 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			if len(points) > 0 && len(points) < targetPoints {
 				current := points[len(points)-1].Value
 				if metricType == "smart_temp" {
-					if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil && disk.PhysicalDisk.Temperature > 0 {
+					// Pad a temperature series to now only with a reading
+					// collected now. Without one (retained, absent, or no
+					// such disk) the stored samples stay as they are.
+					current = 0
+					if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil &&
+						diskinventory.TemperatureCollected(disk.PhysicalDisk.Temperature, disk.PhysicalDisk.Collection) {
 						current = float64(disk.PhysicalDisk.Temperature)
 					}
 				}

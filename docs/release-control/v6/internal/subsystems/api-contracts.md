@@ -6400,6 +6400,17 @@ windows. `/api/metrics-store/history` must accept `resourceType=disk`, keep
 `MetricsTarget.ResourceID` that unified resources already expose, instead of
 leaving storage drawers or other callers to fork a disk-local history route or
 invent an alternate disk identity.
+When a disk range has no samples, the `smart_temp` live fallback (single-metric
+and all-metrics) is served only for a temperature that is collected
+(`diskinventory.TemperatureCollected`). A temperature that normalization kept
+under a non-available collection state, such as a disk in standby or a host
+agent past its reporting lease, is omitted, so the range stays empty instead of
+returning that value at `now` with `source: "live"`. Mock mode derives a
+synthetic disk temperature series from the disk's reading, or pads a sparse
+stored one out to `now`, only from a temperature collected now; without one the
+stored samples are returned as they are. An empty mock range can still fall
+through to the monitor's generic demo chart series for that disk ID, which is
+not derived from the disk's reading.
 That same metrics-history contract also owns Kubernetes pod identity
 normalization. `/api/metrics-store/history` must accept legacy bare pod IDs
 such as `cluster-1:pod:pod-1`, canonicalize them onto the unified pod metrics
