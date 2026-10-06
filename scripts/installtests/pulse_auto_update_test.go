@@ -732,6 +732,7 @@ INSTALLER
 command ssh-keygen -q -t ed25519 -N '' -f "$FIXTURE_DIR/fixture-key"
 PINNED_RELEASE_SSH_PUBLIC_KEY=$(cat "$FIXTURE_DIR/fixture-key.pub")
 command ssh-keygen -Y sign -f "$FIXTURE_DIR/fixture-key" -n pulse-install "$FIXTURE_DIR/installer" >/dev/null 2>&1
+[[ -s "$FIXTURE_DIR/installer.sig" ]]
 [[ "$FAULT" != invalid_signature ]] || printf 'tampered\n' >> "$FIXTURE_DIR/installer"
 log() { printf '[%s] %s\n' "$1" "${*:2}"; }
 detect_service_name() { printf 'pulse\n'; }
@@ -789,7 +790,7 @@ curl() {
  printf '%s\n' "$url" >> "$FIXTURE_DIR/downloads"
  if [[ "$url" == *.sshsig ]]; then
   [[ "$FAULT" != download_signature ]] || return 1
-  command cp "$FIXTURE_DIR/installer.sshsig" "$out"
+  command cp "$FIXTURE_DIR/installer.sig" "$out"
  else
   [[ "$FAULT" != download_installer ]] || return 1
   command cp "$FIXTURE_DIR/installer" "$out"
