@@ -8,19 +8,95 @@ import { renderDocMarkdown } from '@/features/docs/docMarkdown';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const read = (relative: string): string => readFileSync(path.join(repoRoot, relative), 'utf8');
 const guide = read('docs/RECOVERY.md');
+const safetyText = () => {
+  const article = document.createElement('article');
+  const section = guide
+    .split("**A backup task's OK status")[1]
+    .split('Before relying on an artifact')[0];
+  article.innerHTML = renderDocMarkdown(`**A backup task's OK status${section}`, 'RECOVERY');
+  return article.textContent?.replace(/\s+/g, ' ');
+};
 
 describe('recovery help', () => {
   it('separates backup evidence from thaw and tested recovery in the shipped guide', () => {
     expect(read('frontend-modern/public/docs/RECOVERY.md')).toBe(guide);
     expect(guide).toContain('Pulse does not restore workloads from these views.');
     expect(guide).toContain('OK status is not confirmation that the guest has thawed.');
-    expect(guide).toContain('only after independently confirming guest thaw');
-    expect(guide).toContain('Pulse monitoring and alert\ndelivery are unavailable');
+    expect(safetyText()).toContain('Pulse monitoring and alert delivery are unavailable');
     expect(guide).toContain('restore to an isolated destination');
     expect(guide).toContain('Do not overwrite the live\nworkload');
     expect(guide).toContain('an omitted value supplies no verification result');
     expect(guide).toContain('An unknown outcome is not success');
     expect(guide).not.toContain('What can I actually recover?');
+  });
+
+  it('keeps the planned pause distinct from incident recovery and in-flight completion', () => {
+    expect(safetyText()).toContain('For an affected installation');
+    expect(safetyText()).toContain('before a planned freeze-enabled Proxmox backup');
+    expect(safetyText()).toContain(
+      'actual server deployment and automatic updaters, not just a guest agent',
+    );
+    expect(safetyText()).toContain('A planned pause is not an incident recovery procedure');
+    expect(safetyText()).toContain(
+      'stopping Pulse does not cancel a guest-agent request already issued',
+    );
+    expect(safetyText()).toContain(
+      'do not start a backup on the strength of a stopped service or an elapsed waiting period',
+    );
+  });
+
+  it('requires all three independent post-backup checks, including writes to every covered filesystem', () => {
+    const article = document.createElement('article');
+    article.innerHTML = renderDocMarkdown(guide, 'RECOVERY');
+    const checks = [...article.querySelector('ol')!.querySelectorAll('li')].map(
+      (item) => item.textContent,
+    );
+    expect(checks).toEqual([
+      'Guest thaw.',
+      'Fresh successful workload writes to every filesystem covered by the backup.',
+      'Workload liveness.',
+    ]);
+    expect(safetyText()).toContain(
+      'until the backup has ended and independent post-backup checks confirm all three',
+    );
+    expect(safetyText()).toContain(
+      'established safe checks, independent of Pulse and the QEMU Guest Agent',
+    );
+    expect(safetyText()).toContain(
+      'a console connection, a successful read or a write to only the OS disk is not enough',
+    );
+  });
+
+  it('leaves failed or unavailable recovery checks paused without inducing unsafe proof', () => {
+    expect(safetyText()).toContain(
+      'If any check fails or is unavailable, leave Pulse and its automatic updater paused',
+    );
+    expect(safetyText()).toContain("use the guest/platform's recovery procedure");
+    expect(safetyText()).toContain(
+      'Do not force writes, repeat a backup or send guest-agent probes to fill the gap',
+    );
+    expect(safetyText()).toContain('Do not disable filesystem freezing');
+    const article = document.createElement('article');
+    article.innerHTML = renderDocMarkdown(
+      guide
+        .split('If the guest stopped responding during backup')[1]
+        .split('When reporting missing records')[0],
+      'RECOVERY',
+    );
+    expect(article.textContent?.replace(/\s+/g, ' ')).toContain(
+      'a console connection alone does not clear the precaution',
+    );
+  });
+
+  it('restores only prior-active services and timers and preserves outage coverage', () => {
+    expect(safetyText()).toContain(
+      'After all checks pass, restore only services and timers that were active before the pause',
+    );
+    expect(safetyText()).toContain('Unknown pre-pause states are not permission to start them');
+    expect(safetyText()).toContain('An updater must not restart a previously inactive server');
+    expect(safetyText()).toContain('deployment-specific restoration steps');
+    expect(safetyText()).toContain('arrange independent outage coverage');
+    expect(safetyText()).toContain('not proof of a repaired or reproduced native thaw failure');
   });
 
   it('points to existing platform views and a usable backup-safety heading', () => {
