@@ -815,6 +815,9 @@ func TestAllowedOriginsSavedEffectiveLifecycle(t *testing.T) {
 			t.Setenv("ALLOWED_ORIGINS", "")
 			t.Setenv("PULSE_DEV", "false")
 			t.Setenv("NODE_ENV", "production")
+			InitPersistentAuthStores(dir)
+			t.Cleanup(resetSessionStoreForTests)
+			t.Cleanup(resetCSRFStoreForTests)
 			cfg := &config.Config{DataPath: dir, ConfigPath: dir, AllowedOrigins: original, PublicURL: "https://pulse.example", AuthUser: "admin", AuthPass: "synthetic-unused-hash", EnvOverrides: map[string]bool{}, TLSCertFile: "synthetic-cert", TLSKeyFile: "synthetic-key"}
 			h, persistence, token := setupTelemetryTest(t, cfg)
 			initial := config.DefaultSystemSettings()
