@@ -615,7 +615,14 @@ least-privilege installs using that helper reported `provider_unavailable`
 on every report (#2511). Discovery hands the whole node back to `pct list`
 whenever it cannot establish a guest's state (no cgroup v2, an unreadable
 listing, config, cgroup or process, a search limit, or cancellation); only a
-guest without a cgroup counts as stopped. The fixed `lxc-info -n <vmid> -p`
+guest without a cgroup counts as stopped. Exactly 128 running guests remain
+admissible, but discovery must inspect the rest of the bounded config listing:
+a 129th running guest or an unestablished later guest makes discovery unavailable,
+not a truncated complete inventory. The existing bounded `pct list` fallback
+then either establishes the full node or remains degraded under PrivateNetwork.
+`TestSocketFreeProxmoxLXCDiscoveryCannotTruncateCompleteInventory` covers 127/128/129
+running guests and stopped/unknown guests after the limit through discovery and
+collection. The fixed `lxc-info -n <vmid> -p`
 PID lookup remains for that path, and `pct df` remains the per-container
 fallback, including through the `--grant-pct` wrapper.
 `TestHelperProxmoxLXCFilesystemsNeedNoPctOrLXCSockets` drives the collector

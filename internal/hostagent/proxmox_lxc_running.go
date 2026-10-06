@@ -130,8 +130,11 @@ func (a *Agent) discoverRunningProxmoxLXCContainers(ctx context.Context) ([]prox
 			return nil, false
 		}
 		running = append(running, proxmoxLXCRunningContainer{VMID: vmid, Name: proxmoxLXCConfigName(string(raw), vmid), PID: pid})
-		if len(running) == proxmoxLXCMaxContainers {
-			break
+		if len(running) > proxmoxLXCMaxContainers {
+			// A truncated list cannot authoritatively declare the node complete.
+			// Keep the same bound as pct parsing and let the caller report a
+			// degraded fallback, rather than erase uninspected running guests.
+			return nil, false
 		}
 	}
 	return running, true

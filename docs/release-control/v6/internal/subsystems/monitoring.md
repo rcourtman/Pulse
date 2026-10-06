@@ -966,7 +966,14 @@ opt-in owned tmpfs collector fixture. Installed-agent and model qualification
 are tracked separately in PATROL_ASSISTANT_CUSTOMER_JOURNEY.md.
 
 The same observer reads Proxmox LXC guests for the host agent and its typed
-helper (#2511). An `lxc` request names the decimal VMID; the pinned process
+helper (#2511). Its socket-free producer must not label the first 128 guests as
+a complete inventory without inspecting later configs. A 129th running guest or
+an unknown guest after the limit leaves collection unavailable/degraded through
+the existing bounded fallback; a stopped later guest does not invalidate 128
+established guests. This preserves the consumer's distinction between complete
+inventory replacement and explicit partial omissions. The producer boundary is
+covered by `TestSocketFreeProxmoxLXCDiscoveryCannotTruncateCompleteInventory`;
+partial-wire, omitted-reading and complete-empty cache tests remain authoritative. An `lxc` request names the decimal VMID; the pinned process
 must sit in that guest's exact `lxc/<vmid>` cgroup and be its init (`NSpid` is
 exactly `<pid> 1`, so the PID 1 of a namespace nested inside the guest, such
 as Docker in LXC, cannot stand in for it), checked before and after the read.

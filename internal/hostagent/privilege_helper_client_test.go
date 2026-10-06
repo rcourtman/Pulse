@@ -609,3 +609,53 @@ func TestHelperProxmoxLXCFilesystemsNeedNoPctOrLXCSockets(t *testing.T) {
 		t.Fatalf("126 disks = %+v, want rootfs and the mp0 mount with its own usage", got[0].Disks)
 	}
 }
+
+func TestSocketFreeProxmoxLXCDiscoveryCannotTruncateCompleteInventory(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		running  int
+		tail     string
+		complete bool
+	}{
+		{"below limit", proxmoxLXCMaxContainers - 1, "", true},
+		{"exact limit", proxmoxLXCMaxContainers, "", true},
+		{"exact limit plus stopped", proxmoxLXCMaxContainers, "stopped", true},
+		{"over limit", proxmoxLXCMaxContainers + 1, "", false},
+		{"unknown after limit", proxmoxLXCMaxContainers, "unknown", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newFakeProxmoxLXCHost()
+			for n := 0; n < tc.running; n++ {
+				vmid, pid := 100+n, 1000+n
+				h.config(vmid, fmt.Sprintf("hostname: ct%d\nrootfs: local:vm-%d-disk-0,size=1G\n", vmid, vmid))
+				h.cgroup(strconv.Itoa(vmid)+"/ns", pid)
+				h.proc(pid, fmt.Sprintf("%d\t1", pid), fmt.Sprintf("/lxc/%d/ns", vmid))
+				h.observations[pid] = map[string]lxcObservation{"/": lxcUsage(4096, 1024, 3072)}
+			}
+			if tc.tail != "" {
+				vmid := 100 + tc.running
+				h.config(vmid, "hostname: tail\nrootfs: local:tail,size=1G\n")
+				if tc.tail == "unknown" {
+					h.cgroup(strconv.Itoa(vmid) + "/ns") // exists, but has no established init
+				}
+			}
+			collector, commands := h.collector(t)
+			agent := &Agent{logger: zerolog.Nop(), collector: collector}
+			rows, ok := agent.discoverRunningProxmoxLXCContainers(t.Context())
+			if ok != tc.complete || (ok && len(rows) != tc.running) || (!ok && rows != nil) || *commands != 0 {
+				t.Fatalf("socket-free discovery: complete=%v rows=%d commands=%d", ok, len(rows), *commands)
+			}
+			result := agent.collectProxmoxLXCFilesystemsResult(t.Context())
+			if tc.complete {
+				if !result.Applicable || result.Degraded || result.Inventory == nil || result.Inventory.Status != "complete" || len(result.Inventory.Containers) != tc.running || *commands != 0 {
+					t.Fatalf("complete boundary inventory=%+v commands=%d", result, *commands)
+				}
+				if last := result.Inventory.Containers[tc.running-1]; last.VMID != 99+tc.running || len(last.Disks) != 1 || last.Disks[0].UsedBytes != 1024 {
+					t.Fatalf("boundary guest reading lost: %+v", last)
+				}
+			} else if !result.Applicable || !result.Degraded || result.Inventory != nil || *commands != 1 {
+				t.Fatalf("unestablished node appeared complete instead of one failed pct fallback: %+v commands=%d", result, *commands)
+			}
+		})
+	}
+}
