@@ -927,6 +927,26 @@ The saved observation is aged deliberately; this is deterministic source-level
 restart/housekeeping proof, not a naturally elapsed day, live registry or
 destination result, or reporter confirmation of #2353's full daily cycle.
 
+### A "no update" report without a local digest is unknown
+
+An image-update clear is a comparison: the agent must have known the local
+digest it compared. Agents before #2353 reported `UpdateAvailable: false` with
+an empty `CurrentDigest` when an image inspect failed, because an empty digest
+compares as "not different". The server took that as recovery, resolving the
+alert (attributed to `legacy-alert-recovery-adapter`, the default for clears
+without explicit recovery evidence) and restarting the delay, so the alert
+re-fired a full delay later with no fresh registry check in between.
+`checkDockerContainerImageUpdate` now treats a no-update status without a
+current digest like an absent or failed check: it refreshes `LastSeen` and
+keeps the occurrence and its pending age. Only the agent produces these
+statuses and it always sends the current digest when it knows it; locally
+built images, which have none, never assert an update, so they lose nothing.
+The "no update without a current digest" case of
+`TestCheckDockerContainerImageUpdate` pins the guard and that a real
+comparison still resolves; the retention and restart tests' clear fixtures
+carry a current digest as real agents do. The agent side is in the monitoring
+contract.
+
 ### Continuing unacknowledged alerts survive age-based cleanup
 
 `MaxAlertAgeDays` removes an unacknowledged alert only when both its occurrence

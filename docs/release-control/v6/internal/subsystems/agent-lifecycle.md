@@ -8752,3 +8752,12 @@ update or removal path changed.
 webhook header, custom field and signing secret values per key on update and
 form test, and to mask create and update responses. No agent registration,
 enrolment, install, update or removal path changed.
+
+### Docker update-check digest fallback only
+
+`internal/dockeragent/collect.go` changed only so a failed image inspect
+reuses the last successful local digest lookup for the same image ID, or sends
+no update status, instead of reporting "no update available" (#2353). Agent
+registration, enrolment, install, update, removal and report identity are
+unchanged; the per-image memo lives in the registry checker and is pruned
+each collection cycle to the images in use.
