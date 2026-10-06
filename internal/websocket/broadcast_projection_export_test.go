@@ -50,6 +50,9 @@ func NewQuietBroadcastProjectionProbeForTest(getState func(string) interface{}, 
 		hub.dispatchStateBroadcast(&Message{Type: "rawData", Data: stateBroadcastRequest{}}, "")
 		bytes := 0
 		for _, client := range clients {
+			if !hub.clients[client] {
+				return 0, fmt.Errorf("cost probe lost a client")
+			}
 			select {
 			case data := <-client.send:
 				bytes += len(data)

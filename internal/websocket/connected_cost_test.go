@@ -85,6 +85,9 @@ func BenchmarkConnectedDashboardCost(b *testing.B) {
 					if err != nil {
 						b.Fatal(err)
 					}
+					if viewers > 0 && mode != "quiet" && mode != "cold" && wire == 0 {
+						b.Fatal("live workload queued no frame")
+					}
 				}
 				b.ReportMetric(float64(wire), "wire-B/op")
 			})

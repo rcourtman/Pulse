@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"testing"
-
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func TestStateDeltaDispatchSharesOnlyAcceptedBaseline(t *testing.T) {
