@@ -30,18 +30,31 @@ type pbsPosturePollFixture struct {
 	ids      []string
 }
 
-func newPBSPosturePollFixture(t *testing.T, count int) *pbsPosturePollFixture {
+func newPBSPosturePollFixture(t *testing.T, count int, backupTypes ...string) *pbsPosturePollFixture {
 	t.Helper()
 	m, manager := recoveryIngestTestMonitor(t)
 	m.state = models.NewState()
 	f := &pbsPosturePollFixture{m: m, backupAt: time.Now().Add(-14 * time.Hour).Truncate(time.Second).Unix()}
+	backupType := "vm"
+	if len(backupTypes) > 0 {
+		backupType = backupTypes[0]
+	}
 	var vms []models.VM
+	var containers []models.Container
 	for i := 0; i < count; i++ {
 		id := 100 + i
-		vms = append(vms, models.VM{ID: makeGuestID("cluster", fmt.Sprintf("node-%d", i%4), id), VMID: id, Instance: "cluster", Node: fmt.Sprintf("node-%d", i%4), Name: fmt.Sprintf("guest-%d", id), Status: "running"})
-		f.ids = append(f.ids, unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeVM, "cluster", id))
+		node := fmt.Sprintf("node-%d", i%4)
+		resourceType := unifiedresources.ResourceTypeVM
+		if backupType == "ct" {
+			resourceType = unifiedresources.ResourceTypeSystemContainer
+			containers = append(containers, models.Container{ID: makeGuestID("cluster", node, id), VMID: id, Instance: "cluster", Node: node, Name: fmt.Sprintf("guest-%d", id), Status: "running"})
+		} else {
+			vms = append(vms, models.VM{ID: makeGuestID("cluster", node, id), VMID: id, Instance: "cluster", Node: node, Name: fmt.Sprintf("guest-%d", id), Status: "running"})
+		}
+		f.ids = append(f.ids, unifiedresources.ProxmoxGuestCanonicalID(resourceType, "cluster", id))
 	}
 	m.state.UpdateVMs(vms)
+	m.state.UpdateContainers(containers)
 	var err error
 	f.store, err = manager.StoreForOrg("default")
 	if err != nil {
@@ -66,7 +79,7 @@ func newPBSPosturePollFixture(t *testing.T, count int) *pbsPosturePollFixture {
 			var groups []map[string]any
 			if mode != 1 {
 				for i := 0; i < count; i++ {
-					groups = append(groups, map[string]any{"backup-type": "vm", "backup-id": strconv.Itoa(100 + i), "last-backup": f.backupAt, "backup-count": 1})
+					groups = append(groups, map[string]any{"backup-type": backupType, "backup-id": strconv.Itoa(100 + i), "last-backup": f.backupAt, "backup-count": 1})
 				}
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"data": groups})
@@ -80,7 +93,7 @@ func newPBSPosturePollFixture(t *testing.T, count int) *pbsPosturePollFixture {
 				http.Error(w, "unreadable", status)
 				return
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"backup-type": "vm", "backup-id": id, "backup-time": f.backupAt, "size": 1024, "files": []string{"index.json.blob"}, "verification": map[string]any{"state": "ok"}, "comment": "guest-" + id}}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"backup-type": backupType, "backup-id": id, "backup-time": f.backupAt, "size": 1024, "files": []string{"index.json.blob"}, "verification": map[string]any{"state": "ok"}, "comment": "guest-" + id}}})
 		} else {
 			http.NotFound(w, r)
 		}
@@ -160,7 +173,11 @@ func (f *pbsPosturePollFixture) assertProtected(t *testing.T, instance string) {
 	}
 	for _, p := range mapped {
 		vmid, _ := strconv.Atoi(p.Details["vmid"].(string))
-		expected := unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeVM, "cluster", vmid)
+		resourceType := unifiedresources.ResourceTypeVM
+		if p.Details["backupType"] == "ct" {
+			resourceType = unifiedresources.ResourceTypeSystemContainer
+		}
+		expected := unifiedresources.ProxmoxGuestCanonicalID(resourceType, "cluster", vmid)
 		if p.SubjectResourceID != expected || p.Outcome != recovery.OutcomeSuccess {
 			t.Fatalf("mapped subject=%s outcome=%s, want %s success", p.SubjectResourceID, p.Outcome, expected)
 		}
@@ -178,7 +195,16 @@ func (f *pbsPosturePollFixture) assertProtected(t *testing.T, instance string) {
 }
 
 func TestPBSOrdinaryPollRootNamespacePostureLifecycle(t *testing.T) {
-	f := newPBSPosturePollFixture(t, 40)
+	exercisePBSRootNamespacePostureLifecycle(t, "vm")
+}
+
+func TestPBSOrdinaryPollRootNamespaceContainerPostureLifecycle(t *testing.T) {
+	exercisePBSRootNamespacePostureLifecycle(t, "ct")
+}
+
+func exercisePBSRootNamespacePostureLifecycle(t *testing.T, backupType string) {
+	t.Helper()
+	f := newPBSPosturePollFixture(t, 40, backupType)
 	ds := []models.PBSDatastore{{Name: "archive"}}
 	f.poll(t, "pbs-main", 0, ds)
 	f.assertProtected(t, "pbs-main")
