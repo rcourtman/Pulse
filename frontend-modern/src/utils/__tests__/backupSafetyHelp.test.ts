@@ -19,6 +19,38 @@ function render(markdown: string, name: string): HTMLElement {
 }
 
 describe('manual backup safety help', () => {
+  it('does not turn a FAQ disk dash into mandatory installation or unsafe recovery', () => {
+    const faq = read('docs/FAQ.md');
+    expect(read('frontend-modern/public/docs/FAQ.md')).toBe(faq);
+    const section = faq.split('### Why do VMs show "-" for disk usage?')[1]?.split('\n### ')[0];
+    expect(section).toBeTruthy();
+    const rendered = render(section!, 'FAQ');
+    const text = rendered.textContent?.replace(/\s+/g, ' ');
+    expect(text).toContain('unavailable, not zero');
+    expect(text).toContain('does not establish that the agent is absent or stopped');
+    expect(text).toContain('rather than treating a retained Pulse value as current');
+    expect(text).toContain(
+      'Do not install, enable or restart an agent solely to clear a disk dash',
+    );
+    expect(text).toContain('defer setup and live probes');
+    expect(text).toContain('an OK backup does not prove thaw');
+    expect(text).toContain('monitoring-outage precaution');
+    expect(text).toContain('fresh writes to every covered filesystem and workload liveness');
+    expect(text).toContain('Restore only services and timers that were previously active');
+    expect(text).toContain('not a Windows or Android installation instruction');
+    expect(text).not.toMatch(/You must install|Enable it in VM Options|qm agent/);
+    expect(rendered.querySelector('pre')).toBeNull();
+    const target = render(guide, 'VM_DISK_MONITORING');
+    for (const [label, fragment] of [
+      ['Backup safety', 'backup-safety'],
+      ['Missing-reading and setup guidance', 'a-missing-reading-is-not-an-installation-diagnosis'],
+    ]) {
+      const link = rendered.querySelector(`a[href="/docs/VM_DISK_MONITORING#${fragment}"]`);
+      expect(link?.textContent).toBe(label);
+      expect(target.querySelector(`#${fragment}`)).not.toBeNull();
+    }
+  });
+
   it('makes missing-reading guidance observational, OS-specific and safe before setup', () => {
     const rendered = render(guide, 'VM_DISK_MONITORING');
     const troubleshooting = rendered.querySelector(
