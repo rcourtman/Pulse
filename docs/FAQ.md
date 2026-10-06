@@ -203,7 +203,12 @@ redacted error and use its platform guide above; changing Pulse's listening
 port does not repair the platform connection.
 
 ### CORS errors?
-Pulse defaults to same-origin only. If you access the API from a different domain, set **Settings → System → Network → Allowed Origins** or use `ALLOWED_ORIGINS` (single origin, or `*` if you explicitly want all origins).
+
+Keep the default same-origin policy when Pulse and its API use the same public
+origin, including behind a reverse proxy. If a separate trusted browser app
+needs cross-origin API access, allow only its exact origin (scheme, host and
+port); `*` is not a login or proxy repair. Follow the
+[CORS checks](TROUBLESHOOTING.md#cors-errors) before broadening browser access.
 
 ### High memory usage?
 First distinguish container usage from Pulse's resident memory (RSS); a high

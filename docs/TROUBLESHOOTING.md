@@ -149,6 +149,40 @@ do not replace credentials or disable TLS verification on a refusal alone.
 For a page that opens but has missing readings, use the
 [missing-data checks](FAQ.md#no-data-showing) instead of resetting the connection.
 
+### CORS errors
+
+CORS controls whether a browser can read a response from a different origin.
+It is not Pulse's connection to Proxmox, PBS or TrueNAS, and it does not replace
+authentication, CSRF protection or TLS.
+
+In your browser's developer tools, compare the page's origin with the failed
+API request's origin and HTTP status. An origin consists of **scheme, host and
+port**: HTTP and HTTPS, or two different ports, are different origins. Review
+the original console error locally; a certificate failure, login redirect or
+401/403 response needs its own correction, not a broader CORS allowlist.
+
+- **Pulse UI and API share a public origin:** a same-origin reverse proxy needs
+  no CORS exception. Keep the API behind that proxy and correct its routing or
+  [trusted forwarded headers](REVERSE_PROXY.md#before-configuring-the-proxy);
+  do not expose the backend or add wildcard response headers to bypass it.
+- **A separate trusted browser app needs API access:** in **Settings → System →
+  Network → CORS Allowed Origins**, list only that app's exact origin, for
+  example `https://app.example.com:8443`. Do not include a path, trailing slash
+  or a hostname pattern. Multiple exact origins are comma-separated.
+  `ALLOWED_ORIGINS` overrides the saved setting; removing that environment
+  override does not erase an existing saved allowlist. Re-open settings after
+  saving and verify the effective value and the ordinary browser request.
+
+An empty policy grants no cross-origin browser permission. `*` allows any
+origin **without credentialed browser access**; it cannot fix a request that
+needs a browser session cookie. Do not disable authentication, CSRF protection
+or TLS verification to make such a request work. Iframe embedding and proxy
+authentication have separate settings; CORS is not their trust boundary.
+
+Keep cookies, authorization headers, API tokens and full network exports
+private. A report needs only the redacted error, HTTP status and relevant
+origins, not a credential-bearing request or HAR file.
+
 ---
 
 ## 🔍 Common Issues

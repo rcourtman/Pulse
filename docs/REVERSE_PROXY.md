@@ -10,6 +10,11 @@ Keep Pulse authentication enabled; TLS termination does not authenticate users.
 For identity supplied by an IdP/proxy, follow the separate
 [proxy authentication guide](PROXY_AUTH.md), including its Header Trust Boundary.
 
+A same-origin reverse proxy needs no CORS exception. Keep the UI and API on the
+same public origin rather than adding `*` to repair a login or routing error.
+For a separate trusted browser app, follow the
+[exact-origin CORS checks](TROUBLESHOOTING.md#cors-errors).
+
 **Forwarded HTTPS headers are trusted only from a configured immediate peer.**
 Set `PULSE_TRUSTED_PROXY_CIDRS` in Pulse's deployment configuration to the proxy
 address **as seen by Pulse**, not the browser's address or the public hostname.
