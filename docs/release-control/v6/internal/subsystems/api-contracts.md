@@ -674,6 +674,13 @@ transitions. Older payloads without these optional fields remain readable;
 frontend consumers use `frontend-modern/src/types/operationalTrust.ts` as the
 single TypeScript projection rather than recreating lifecycle or evidence
 enums locally.
+`TransitionCause` includes `ownership_transferred` for a close whose condition
+another record now owns, such as a node metric handed to its Pulse agent; it
+may only enter `resolved`. Alert payloads (history, state snapshot and
+websocket) may also carry an optional `resolution` (`reason`,
+`successorResourceId`, `successorName`, and on state payloads the alert
+engine's `summary`), typed once as `AlertResolution` in
+`frontend-modern/src/types/api.ts`. Its absence means an ordinary recovery.
 
 ## Shared Boundaries
 

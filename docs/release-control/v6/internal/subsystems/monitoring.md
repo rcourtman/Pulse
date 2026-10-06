@@ -2646,6 +2646,25 @@ online/running/healthy vocabulary. The diagnostics subject set is unchanged:
 snapshot (real agents), which now matches what agent-only surfaces show once
 integration-backed ledger rows are excluded.
 
+A host produced by `hostFromReadStateView` describes the agent, so its
+`Status` and `LastSeen` are the agent's own. A host agent linked to a Proxmox
+node merges into one row whose `LastSeen` follows its freshest source and
+whose status stays online while PVE polling continues, so the row's values
+would present a silent agent as online and current. The projection reads the
+agent source's sighting from `HostView.SourceStatus(SourceAgent)`: the host
+carries that report time and reads `offline` once it is past the reporting
+lease (`hostAgentReportCurrent`, the `hostAgentHealthWindow` that
+`evaluateHostAgents` applies to the host in state). Rows without an agent
+sighting, such as vSphere and TrueNAS integration hosts, keep the row's
+values. `linkedHostForNode` therefore stops handing a silent agent's retained
+filesystem summary and ZFS datasets to its node, whose disk falls back to the
+Proxmox rootfs or `/nodes` reading before disk alerts and history read it, and
+agent connections built from `HostsSnapshot()` (the Connections list and the
+update-readiness agent-continuity check) age the agent from its last report
+rather than the PVE poll time, applying their own heartbeat cutoff.
+`TestSilentLinkedAgentStopsFeedingNodeDisk` drives the disk and projection
+path through `evaluateHostAgents` and the registry-backed store refresh.
+
 Unified Agent host reports now make module readiness and updater/config
 lifecycle evidence monitoring-owned observed state. Monitoring preserves the
 last successful one-shot update transition across subsequent reports, forwards
@@ -3647,6 +3666,15 @@ truth. Monitoring APIs that still serve `StateSnapshot` must project
 instead of trusting the cached snapshot fields, so externally served alert
 counts and recently resolved incidents do not lag behind acknowledgement,
 resolve, or clear operations between explicit sync points.
+A recently resolved alert that closed without recovering keeps that on the
+projection: `models.Alert.Resolution` (reason, successor resource ID and name,
+and the alert engine's summary) is set only for such a close, `cloneAlert`
+copies it into every snapshot, and `recordAlertTimelineChange` passes it into
+the `alert_resolved` resource change so the incident timeline says the alert
+moved. `TestAlertResolutionWireContract` in
+`internal/models/metrics_types_test.go` and
+`TestMonitor_HandleAlertLifecycle_HandoverCloseIsNotARecovery` in
+`internal/monitoring/monitor_alert_handling_test.go` pin it.
 The container entrypoint in `docker-entrypoint.sh` now also lives under this
 boundary. Hosted or managed tenant bootstrap changes must preserve safe startup
 when immutable read-only mounts are layered into `/etc/pulse`; the entrypoint
@@ -3744,7 +3772,21 @@ transiently `unavailable`, provider/controller `unsupported`, or unexpectedly
 `missing`. Normalization may retain the last known value when the current
 observation is not available, but it must preserve the current state and
 reason so API and UI consumers do not present retained evidence as freshly
-collected. Unified-resource physical-disk round trips must retain named
+collected. A host agent's SMART temperature and I/O counters follow its
+reporting lease: once `State.ExpireHostTelemetry` expires the agent, they stay
+as last-known values marked `unavailable` ("host agent stopped reporting"),
+and the linked Proxmox disk merge and the registry let the agent's own later
+state supersede the availability it supplied earlier
+(`diskinventory.MergeReportedStatus`), so neither a skipped disk poll nor a
+host that is never disk-polled again can carry it forward. Expiry is
+compare-and-set on the report time the evaluation judged stale, so a report
+accepted in between is never expired. Every SMART temperature history writer
+records a temperature only when its current collection state is available (or
+predates collection state), so a retained reading has to keep its non-available
+state to stay out of history; a path that relabels a carried reading as
+available, such as a node-temperature carry stamped `proxmox_node_smart`, is
+not covered by this rule.
+Unified-resource physical-disk round trips must retain named
 `StorageGroup` membership rather than degrading it to the generic `Used`
 filesystem label.
 That same host-agent temperature boundary must prefer a recent linked host-agent

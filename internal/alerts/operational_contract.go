@@ -285,6 +285,7 @@ func markOperationalResolved(
 	}
 	alert.Evidence = appendOperationalEvidence(alert.Evidence, recoveryEvidence.Clone())
 	recoveryEvidenceIDs := []string{recoveryEvidence.ID}
+	cause := resolvedTransitionCause(alert.Resolution)
 	from := record.State
 	record.State = operationaltrust.OperationalResolved
 	record.StateChangedAt = resolvedAt
@@ -295,7 +296,7 @@ func markOperationalResolved(
 		from,
 		operationaltrust.OperationalResolved,
 		resolvedAt,
-		operationaltrust.TransitionRecoveryEvidence,
+		cause,
 		record.CauseKey,
 		recoveryEvidenceIDs,
 	)
@@ -308,14 +309,25 @@ func markOperationalResolved(
 		From:                from,
 		To:                  operationaltrust.OperationalResolved,
 		At:                  resolvedAt,
-		Cause:               operationaltrust.TransitionRecoveryEvidence,
+		Cause:               cause,
 		CauseKey:            record.CauseKey,
 		EvidenceIDs:         recoveryEvidenceIDs,
+		Reason:              alert.Resolution.Summary(),
 	}
 	alert.Transitions = appendOperationalTransition(
 		alert.Transitions,
 		alert.LatestTransition.Clone(),
 	)
+}
+
+// resolvedTransitionCause names why a record entered resolved. Only a close
+// with no typed resolution is a recovery; a handover keeps its own cause so
+// timelines and alert-quality counts never report it as one.
+func resolvedTransitionCause(resolution *AlertResolution) operationaltrust.TransitionCause {
+	if resolution != nil && resolution.Reason == AlertResolutionMovedToAgent {
+		return operationaltrust.TransitionOwnershipTransferred
+	}
+	return operationaltrust.TransitionRecoveryEvidence
 }
 
 func (m *Manager) newResolvedAlert(
@@ -497,6 +509,16 @@ func legacyAlertRecoveryEvidenceEnvelope(
 	if err != nil {
 		return operationaltrust.EvidenceEnvelope{}, false
 	}
+	reason := &operationaltrust.EvidenceReason{
+		Code: legacyAlertRecoveryEvidenceReason,
+	}
+	// A close that was not a recovery must not be recorded as one.
+	if summary := alert.Resolution.Summary(); summary != "" {
+		reason = &operationaltrust.EvidenceReason{
+			Code:    string(alert.Resolution.Reason),
+			Message: summary,
+		}
+	}
 	envelope := operationaltrust.EvidenceEnvelope{
 		ID:           id,
 		Source:       source,
@@ -506,9 +528,7 @@ func legacyAlertRecoveryEvidenceEnvelope(
 		Completeness: operationaltrust.EvidencePartial,
 		Confidence:   operationaltrust.EvidenceUnknown,
 		Permissions:  operationaltrust.EvidencePermissionsUnknown,
-		Reason: &operationaltrust.EvidenceReason{
-			Code: legacyAlertRecoveryEvidenceReason,
-		},
+		Reason:       reason,
 	}
 	return envelope, envelope.Validate() == nil
 }

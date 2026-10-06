@@ -1386,6 +1386,18 @@ export interface Alert {
   latestTransition?: LifecycleTransition;
   transitions?: LifecycleTransition[];
   evidence?: EvidenceEnvelope[];
+  // Set only on a closed alert whose condition did not clear, such as a node
+  // metric handed to its Pulse agent. Absent for an ordinary recovery.
+  resolution?: AlertResolution;
+}
+
+// Why an alert closed without recovering (alerts.AlertResolution).
+export interface AlertResolution {
+  reason: 'moved_to_agent' | (string & {});
+  successorResourceId?: string;
+  successorName?: string;
+  // The alert engine's one-line account; carried on state snapshots only.
+  summary?: string;
 }
 
 export interface ResolvedAlert extends Alert {

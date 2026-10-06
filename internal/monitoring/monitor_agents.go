@@ -4086,7 +4086,7 @@ func (m *Monitor) writeHostSMARTMetrics(host models.Host, now time.Time) {
 			continue
 		}
 
-		if disk.Temperature > 0 {
+		if diskTemperatureCollected(disk.Temperature, disk.Collection) {
 			m.metricsStore.Write("disk", resourceID, "smart_temp", float64(disk.Temperature), now)
 		}
 
@@ -5090,7 +5090,7 @@ func (m *Monitor) evaluateHostAgents(now time.Time) {
 					Bool("lastSeenZero", host.LastSeen.IsZero()).
 					Msg("Host agent appears offline")
 			}
-			if expiredHost, changed := m.state.ExpireHostTelemetry(host.ID); expiredHost.ID != "" {
+			if expiredHost, changed := m.state.ExpireHostTelemetry(host.ID, host.LastSeen); expiredHost.ID != "" {
 				hostCopy = expiredHost
 				resourceRefreshNeeded = resourceRefreshNeeded || changed
 			} else {

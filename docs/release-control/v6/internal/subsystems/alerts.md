@@ -797,6 +797,39 @@ must migrate through `internal/alerts/operational_contract.go` and name their
 limited provenance honestly rather than inventing confirmed provider evidence.
 Acknowledgement remains distinct from resolution, and every resolution
 transition references recovery evidence separate from its trigger evidence.
+A resolved alert may carry a typed `AlertResolution`
+(`internal/alerts/resolution.go`) when it closed without its condition being
+observed to clear. The one reason so far, `moved_to_agent`, describes a metric
+alert whose resource's linked Pulse agent now owns the metric.
+`releaseCanonicalMetricAlert` is the disabled-threshold release extracted from
+`evaluateCanonicalMetricAlert`: a caller releasing a metric for any other
+reason passes a resolution, and `clearAlertWithResolution` stamps a copy on the
+removed alert before it is resolved. The resolved callback snapshot, the
+history row, the resolved event-log entry (the reason code, with `Summary()` as
+its message) and the Alert JSON then carry it. Resolved consumers still receive
+the close, because integrations close their incident by alert ID. The
+synthesized closing evidence carries the resolution reason and summary instead
+of `legacy_alert_recovery_projection`, and the resolve transition carries the
+summary as its `reason`. Its cause is `ownership_transferred`, an
+`operationaltrust.TransitionCause` that may only enter `resolved` and only with
+evidence (`resolvedTransitionCause` in `operational_contract.go`), so Patrol's
+timeline never labels a handover "Recovery evidence" and alert-quality
+telemetry does not count a handover during a snooze as resolved while snoozed.
+A nil resolution leaves the disabled-threshold path and every recovery on
+`recovery_evidence`.
+`TestReleasedMetricAlertCarriesResolutionInsteadOfRecovery` and
+`TestResolvedHistoryRowKeepsResolutionWithoutEventLog` in
+`internal/alerts/operational_contract_test.go` pin this.
+The in-app readers carry it too. `GetRecentlyResolved` projects it into
+`models.Alert.Resolution` (reason, successor and the `Summary()` text) for the
+state snapshot, the websocket and the assistant and Patrol prompts, pinned by
+`TestRecentlyResolvedCarriesHandoverResolution` in `history_test.go`. The
+alerts history lists such a row as `moved to agent` instead of `resolved`, even
+when it was acknowledged, with the account in the badge title and on the phone
+card (`buildAlertHistoryItems`, `getAlertResolutionDetail`). The resolved
+lifecycle change written to the resource timeline carries the summary as its
+reason and the code as `alert_resolution` metadata, so the row's incident
+timeline says the alert moved instead of "Alert resolved: <breach message>".
 
 ## Extension Points
 
@@ -1608,6 +1641,75 @@ suppression, monitor-only notification suppression, cooldown decisions, and
 per-alert rate limiting; future notification-gating changes should extend that
 policy owner rather than burying new checks inside metric or resource-specific
 evaluators.
+
+### Agent disk temperature alerts clear when their threshold is off
+
+Host-agent SMART disk temperature alerts (`diskTemperature`, resource
+`agent:<host>/disk_temp:<device>`) follow one effective threshold: the
+resolved agent `DiskTemperature`, refined by the disk type's `DiskTempByType`
+entry unless an explicit host or linked-resource override set it
+(`hostDiskTemperatureThresholdNoLock` in `internal/alerts/host.go`). When the
+host's resolved `DiskTemperature` is off, `CheckHost` clears every disk
+temperature alert on the host. A disabled `DiskTempByType` entry clears only
+the alerts of disks of that type, through the disabled metric spec. The
+all-agents switch, a disabled host override, agent removal and confirmed
+agent offline clear them with the host's other disk alerts. Before this,
+nothing cleared them once the agent-level threshold was off.
+
+A config save judges an open disk temperature alert against the same
+threshold (`resolveHostAlertThresholdsNoLock` refines it by the alert's
+`diskType` metadata, and `metric_runtime.go` classifies `diskTemperature` as a
+threshold metric), so turning the host's `DiskTemperature` off resolves the
+alert immediately. An alert persisted before `CheckHost` recorded `diskType` (May
+2026) carries no disk type until its next firing evaluation, so a save judges
+it against the lowest enabled trigger any of the host's disks can use: the
+agent threshold or a `DiskTempByType` entry
+(`lowestHostDiskTemperatureThresholdNoLock`). A save therefore cannot resolve
+an alert its disk type would still fire.
+
+For a metric alert that reaches the threshold comparison in
+`reevaluateActiveAlertsLocked` (docker-host alerts return before it), a config
+save resolves an alert whose reading is
+below the new trigger. That includes readings inside a valid recovery band,
+which the evaluator would hold. A clear level at or above the trigger is no
+recovery band (`buildCanonicalMetricSpec` drops it), and a reading at the
+trigger stays firing, as it does in the reducer, so a save no longer resolves
+an alert the next evaluation raises again.
+`TestCheckHostClearsDiskTemperatureAlertsWhenThresholdTurnsOff`,
+`TestHostDiskTemperatureAlertsClearWhenAgentLeaves`,
+`TestConfigSaveResolvesDiskTemperatureAlertAgainstItsDiskTypeThreshold`,
+`TestConfigSaveKeepsDiskTemperatureAlertWithoutDiskType` and
+`TestConfigSaveKeepsAlertTheEvaluatorKeepsWithoutRecoveryBand` in
+`internal/alerts/host_unraid_lifecycle_test.go` pin these paths.
+
+### Agent disk temperature alerts clear when their disk leaves the report
+
+`CheckHost` also clears a disk temperature alert, and drops its pending
+threshold run, once its device is missing from three consecutive non-empty
+SMART lists (`cleanupHostDiskTemperatureAlerts`, a seen map keyed by resource
+ID like `cleanupHostCustomSensorAlerts`). A removed, replaced or renamed disk
+never sends the reading that would resolve its alert, and
+`shouldPreserveAlertOutsideNodeCleanup` exempts `agent:` alerts from node
+cleanup, so before this only the 24-hour stale-alert sweep in
+`cleanupStaleMaps` resolved it. One omission is not proof the disk left: the
+Windows, FreeBSD and controller-multiplexed Linux collectors drop a disk whose
+probe fails, so the count restarts whenever the disk is reported again. Three
+reports in a row of failed probes on such a disk still clear its alert.
+
+An empty SMART list skips this cleanup and does not count toward the three,
+because the agent omits the list when SMART collection fails or is
+unsupported. A listed disk in standby or without a temperature also holds its
+alert, since neither shows the disk cooled: standby reports avoid waking the
+disk, and most failed Linux probes still list the disk with identity only.
+SMART health alerts hold through standby the same way. A held alert resolves
+through the normal recovery path, including any configured recovery delay,
+once the disk reports cool readings again; with no evaluation for 24 hours,
+the stale-alert sweep resolves it. Turning the threshold off, or removing the
+agent, drops the host's pending disk temperature runs and absence counts as
+well as its alerts.
+`TestCheckHostClearsDiskTemperatureAlertWhenDiskLeavesSMARTReport` in
+`internal/alerts/host_unraid_lifecycle_test.go` pins the clear, the holds, the
+restarted count and the pending-run and count cleanup.
 
 ### Configured flapping thresholds remain reachable
 
@@ -2748,7 +2850,8 @@ legacy alert timestamp.
 Suppression is bounded and reasoned, leaves the default active queue, and
 remains inspectable. Expiry or explicit unsuppression returns the record to its
 detector-owned state; it never resolves it. Only fresh sufficient recovery
-evidence may enter resolving, and only detector recovery may resolve.
+evidence may enter resolving, and only detector recovery, or a handover
+recorded as `ownership_transferred` with its closing evidence, may resolve.
 
 Per-alert snooze is the customer-facing bounded suppression contract, not a
 page-local timer. `SnoozeAlert` writes the same canonical operational record,

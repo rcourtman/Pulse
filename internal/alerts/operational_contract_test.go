@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
@@ -409,6 +410,175 @@ func TestResolvedOperationalContractUpdatesHistorySnapshot(t *testing.T) {
 			len(entry.Transitions),
 			len(entry.Evidence),
 		)
+	}
+}
+
+func TestReleasedMetricAlertCarriesResolutionInsteadOfRecovery(t *testing.T) {
+	manager := newUnifiedEvalParityManager(t)
+	store, err := eventlog.OpenInMemory()
+	if err != nil {
+		t.Fatalf("open in-memory event log: %v", err)
+	}
+	manager.SetEventLog(store)
+	manager.UpdateConfig(AlertConfig{
+		Enabled: true,
+		NodeDefaults: ThresholdConfig{
+			CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
+			Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
+		},
+	})
+	disableTestTimeThresholds(manager)
+	node := models.Node{
+		ID:       "pve-1",
+		Name:     "pve-1",
+		Instance: "test",
+		Status:   "online",
+		CPU:      0.95,
+		Memory:   models.Memory{Total: 8 << 30, Used: 7 << 30, Usage: 95},
+	}
+	manager.CheckNode(node)
+	if active := manager.GetActiveAlerts(); len(active) != 2 {
+		t.Fatalf("active alerts = %#v, want cpu and memory", active)
+	}
+
+	resolvedByType := map[string]*ResolvedAlert{}
+	manager.SetResolvedAlertCallback(func(resolved *ResolvedAlert) {
+		resolvedByType[resolved.Alert.Type] = resolved
+	})
+	release := func(metric string, resolution *AlertResolution) {
+		t.Helper()
+		spec, err := buildCanonicalMetricSpec(node.ID, node.Name, unifiedresources.ResourceType("node"), metric, nil)
+		if err != nil {
+			t.Fatalf("build %s spec: %v", metric, err)
+		}
+		manager.releaseCanonicalMetricAlert(spec, node.Name, node.Name, node.Instance, "node", 0, resolution)
+	}
+
+	handover := &AlertResolution{
+		Reason:              AlertResolutionMovedToAgent,
+		SuccessorResourceID: "agent-pve-1",
+		SuccessorName:       "pve-1 (Host Agent)",
+	}
+	release("memory", handover)
+	// The close is recorded as a copy: the caller's value cannot rewrite it.
+	handover.SuccessorName = "changed"
+	release("cpu", nil)
+
+	if active := manager.GetActiveAlerts(); len(active) != 0 {
+		t.Fatalf("active alerts after release = %#v, want none: the close must still happen", active)
+	}
+
+	moved := resolvedByType["memory"]
+	if moved == nil {
+		t.Fatal("memory release did not reach the resolved consumer")
+	}
+	resolution := moved.Alert.Resolution
+	if resolution == nil ||
+		resolution.Reason != AlertResolutionMovedToAgent ||
+		resolution.SuccessorResourceID != "agent-pve-1" ||
+		resolution.SuccessorName != "pve-1 (Host Agent)" {
+		t.Fatalf("resolution = %+v, want moved to pve-1 (Host Agent)", resolution)
+	}
+	wantSummary := "Alert moved to pve-1 (Host Agent). This is not a recovery: check the agent for the current reading."
+	if got := resolution.Summary(); got != wantSummary {
+		t.Fatalf("Summary() = %q, want %q", got, wantSummary)
+	}
+	if got := resolution.Outcome(); got != "moved to pve-1 (Host Agent)" {
+		t.Fatalf("Outcome() = %q", got)
+	}
+	if got := resolution.Describe("Memory alert"); got != "Memory alert moved to pve-1 (Host Agent). This is not a recovery: check the agent for the current reading." {
+		t.Fatalf("Describe() = %q", got)
+	}
+
+	record := moved.Alert.OperationalRecord
+	if record == nil || record.State != operationaltrust.OperationalResolved {
+		t.Fatalf("operational record = %+v, want resolved", record)
+	}
+	if err := record.Validate(); err != nil {
+		t.Fatalf("operational record Validate() error = %v", err)
+	}
+	transition := moved.Alert.LatestTransition
+	if transition == nil || transition.Reason != wantSummary {
+		t.Fatalf("resolve transition = %+v, want reason %q", transition, wantSummary)
+	}
+	if err := transition.Validate(); err != nil {
+		t.Fatalf("resolve transition Validate() error = %v", err)
+	}
+	// Patrol's timeline prints the cause above the reason, so a handover
+	// must not be labelled as recovery evidence.
+	if transition.Cause != operationaltrust.TransitionOwnershipTransferred {
+		t.Fatalf("resolve transition cause = %q, want %q", transition.Cause, operationaltrust.TransitionOwnershipTransferred)
+	}
+	if recorded := moved.Alert.Transitions[len(moved.Alert.Transitions)-1]; recorded.ID != transition.ID ||
+		recorded.Cause != operationaltrust.TransitionOwnershipTransferred {
+		t.Fatalf("recorded timeline transition = %+v, want the ownership transfer", recorded)
+	}
+	closing := moved.Alert.Evidence[len(moved.Alert.Evidence)-1]
+	if closing.ID != transition.EvidenceIDs[0] ||
+		closing.Reason == nil ||
+		closing.Reason.Code != string(AlertResolutionMovedToAgent) ||
+		closing.Reason.Message != wantSummary {
+		t.Fatalf("closing evidence = %+v, want the handover, not a recovery projection", closing)
+	}
+
+	recovered := resolvedByType["cpu"]
+	if recovered == nil || recovered.Alert.Resolution != nil {
+		t.Fatalf("plain disabled release = %+v, want an ordinary resolve with no resolution", recovered)
+	}
+	if last := recovered.Alert.Evidence[len(recovered.Alert.Evidence)-1]; last.Reason == nil ||
+		last.Reason.Code != legacyAlertRecoveryEvidenceReason {
+		t.Fatalf("plain release evidence = %+v, want legacy recovery projection", last.Reason)
+	}
+	if recovered.Alert.LatestTransition == nil ||
+		recovered.Alert.LatestTransition.Cause != operationaltrust.TransitionRecoveryEvidence {
+		t.Fatalf("plain release transition = %+v, want recovery_evidence", recovered.Alert.LatestTransition)
+	}
+
+	var historyResolution *AlertResolution
+	for _, entry := range manager.GetAlertHistory(10) {
+		if entry.Type == "memory" {
+			historyResolution = entry.Resolution
+		}
+	}
+	if historyResolution == nil || historyResolution.Reason != AlertResolutionMovedToAgent {
+		t.Fatalf("history resolution = %+v, want moved_to_agent", historyResolution)
+	}
+
+	events, err := manager.AlertEvents(eventlog.Filter{AlertID: moved.Alert.ID, Types: []string{eventlog.TypeResolved}})
+	if err != nil {
+		t.Fatalf("AlertEvents: %v", err)
+	}
+	if len(events) != 1 ||
+		events[0].Reason != string(AlertResolutionMovedToAgent) ||
+		events[0].Message != wantSummary {
+		t.Fatalf("resolved events = %+v, want one handover event", events)
+	}
+}
+
+func TestResolvedHistoryRowKeepsResolutionWithoutEventLog(t *testing.T) {
+	firstObservedAt := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
+	alert := &Alert{
+		ID:              "pve-1-memory",
+		Type:            "memory",
+		Level:           AlertLevelWarning,
+		ResourceID:      "pve-1",
+		CanonicalSpecID: "metric-threshold:memory",
+		CanonicalState:  "pve-1::metric-threshold:memory",
+		StartTime:       firstObservedAt,
+		LastSeen:        firstObservedAt,
+	}
+	ensureOperationalContract(alert, firstObservedAt)
+	history := newTestHistoryManager(t)
+	history.AddAlert(*alert)
+	manager := &Manager{historyManager: history}
+
+	alert.Resolution = &AlertResolution{Reason: AlertResolutionMovedToAgent, SuccessorName: "pve-1 (Host Agent)"}
+	manager.newResolvedAlert(alert, firstObservedAt.Add(time.Minute), nil)
+
+	entries := history.GetAllHistory(1)
+	if len(entries) != 1 || entries[0].Resolution == nil ||
+		entries[0].Resolution.Reason != AlertResolutionMovedToAgent {
+		t.Fatalf("history entries = %+v, want the row to keep the moved_to_agent resolution", entries)
 	}
 }
 

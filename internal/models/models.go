@@ -112,6 +112,20 @@ type Alert struct {
 	// Metadata carries alert-engine annotations (notably resourceType) so the
 	// frontend can classify an alert without re-deriving resource identity.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	// Resolution is set only on a resolved alert whose close was not a
+	// recovery, so readers never report its resource as healthy.
+	Resolution *AlertResolution `json:"resolution,omitempty"`
+}
+
+// AlertResolution is the state projection of the alert engine's
+// AlertResolution: why an alert closed without its condition clearing.
+type AlertResolution struct {
+	Reason              string `json:"reason"`
+	SuccessorResourceID string `json:"successorResourceId,omitempty"`
+	SuccessorName       string `json:"successorName,omitempty"`
+	// Summary is the alert engine's one-line account, such as "Alert moved
+	// to pve1 (Host Agent). This is not a recovery: ...".
+	Summary string `json:"summary,omitempty"`
 }
 
 // ResolvedAlert represents a recently resolved alert
@@ -5686,13 +5700,22 @@ func (s *State) SetHostStatus(hostID, status string) bool {
 // ExpireHostTelemetry marks a host offline and clears transient operation
 // claims that cannot remain authoritative after the reporting lease expires.
 // Static topology and health counters remain available as last-known context.
-func (s *State) ExpireHostTelemetry(hostID string) (Host, bool) {
+// SMART temperature and I/O readings stay as last-known values, but their
+// collection state says they are no longer collected.
+//
+// lastSeen is the report time the caller judged stale. A host that has
+// reported since then is left untouched and nothing is returned, so a report
+// accepted between that judgement and this call is never expired.
+func (s *State) ExpireHostTelemetry(hostID string, lastSeen time.Time) (Host, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	for i, host := range s.Hosts {
 		if host.ID != hostID {
 			continue
+		}
+		if !host.LastSeen.Equal(lastSeen) {
+			return Host{}, false
 		}
 		changed := host.Status != "offline"
 		host.Status = "offline"
@@ -5710,6 +5733,11 @@ func (s *State) ExpireHostTelemetry(hostID string) (Host, bool) {
 			host.Unraid.SyncProgress = 0
 			changed = true
 		}
+		for idx := range host.Sensors.SMART {
+			if expireHostSMARTReadings(&host.Sensors.SMART[idx]) {
+				changed = true
+			}
+		}
 		s.Hosts[i] = host
 		if changed {
 			s.LastUpdate = time.Now()
@@ -5717,6 +5745,40 @@ func (s *State) ExpireHostTelemetry(hostID string) (Host, bool) {
 		return cloneHost(host), changed
 	}
 	return Host{}, false
+}
+
+const hostAgentStoppedReportingReason = "host agent stopped reporting"
+
+// expireHostSMARTReadings marks the temperature and I/O counters of one SMART
+// row as no longer collected, keeping their values as last-known evidence.
+// Reports from agents that predate collection provenance carry no state, so a
+// present reading is treated as collected. It reports whether anything changed.
+func expireHostSMARTReadings(disk *HostDiskSMART) bool {
+	collection := diskinventory.CloneStatus(disk.Collection)
+	if collection == nil {
+		collection = &diskinventory.CollectionStatus{}
+	}
+	temperature := expireCollectedReading(&collection.Temperature, disk.Temperature > 0)
+	io := expireCollectedReading(&collection.IO, disk.IO != nil)
+	if !temperature && !io {
+		return false
+	}
+	disk.Collection = collection
+	return true
+}
+
+func expireCollectedReading(status *diskinventory.FieldStatus, hasValue bool) bool {
+	switch status.State {
+	case diskinventory.FieldAvailable:
+	case "":
+		if !hasValue {
+			return false
+		}
+	default:
+		return false
+	}
+	*status = diskinventory.Unavailable(status.Source, hostAgentStoppedReportingReason)
+	return true
 }
 
 // TouchHost updates the last seen timestamp for a host.
