@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSignal } from 'solid-js';
 import { ChartsAPI } from '@/api/charts';
 import { eventBus } from '@/stores/events';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import historyChartHeaderSource from '@/components/shared/HistoryChartHeader.tsx?raw';
 import historyChartHoverGroupSource from '@/components/shared/HistoryChartHoverGroup.tsx?raw';
 import historyChartOverlaySource from '@/components/shared/HistoryChartOverlay.tsx?raw';
@@ -10,6 +10,8 @@ import historyChartSource from '@/components/shared/HistoryChart.tsx?raw';
 import historyChartModelSource from '@/components/shared/historyChartModel.ts?raw';
 import historyChartStateSource from '@/components/shared/useHistoryChartState.ts?raw';
 import historyChartTooltipSource from '@/components/shared/HistoryChartTooltip.tsx?raw';
+import { HistoryChartHeader } from '@/components/shared/HistoryChartHeader';
+import type { HistoryChartState } from '@/components/shared/useHistoryChartState';
 import { HistoryChart, HistoryChartHoverGroup } from '@/components/shared/HistoryChart';
 import {
   formatHistoryChartTooltipValue,
@@ -707,4 +709,70 @@ describe('History access boundary rendering', () => {
       expect(container.querySelector('[data-history-chart-tooltip]')).toBeNull();
     },
   );
+});
+
+describe('History window controls', () => {
+  afterEach(cleanup);
+
+  const makeChart = () => {
+    const [range, setRange] = createSignal<
+      '1h' | '6h' | '12h' | '24h' | '7d' | '14d' | '30d' | '90d'
+    >('1h');
+    const updateRange = vi.fn(setRange);
+    const chart = {
+      ranges: HISTORY_CHART_RANGES,
+      range,
+      updateRange,
+      dataMin: () => 0,
+      dataMax: () => 75,
+      source: () => 'store',
+    } as unknown as HistoryChartState;
+    return { chart, updateRange };
+  };
+
+  it('names each chart window and announces only its selected period', () => {
+    const cpu = makeChart();
+    const memory = makeChart();
+    render(() => (
+      <>
+        <HistoryChartHeader chart={cpu.chart} label="CPU" unit="%" />
+        <HistoryChartHeader chart={memory.chart} label="Memory" unit="%" />
+      </>
+    ));
+    const cpuGroup = within(screen.getByRole('group', { name: 'CPU history window' }));
+    const memoryGroup = within(screen.getByRole('group', { name: 'Memory history window' }));
+    expect(cpuGroup.getAllByRole('button', { pressed: true })).toHaveLength(1);
+    expect(cpuGroup.getByRole('button', { name: '1h' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(cpuGroup.getByRole('button', { name: '24h' }));
+    expect(cpu.updateRange).toHaveBeenCalledExactlyOnceWith('24h');
+    expect(cpuGroup.getByRole('button', { name: '24h' })).toHaveAttribute('aria-pressed', 'true');
+    expect(cpuGroup.getByRole('button', { name: '1h' })).toHaveAttribute('aria-pressed', 'false');
+    expect(cpuGroup.getAllByRole('button', { pressed: true })).toHaveLength(1);
+    expect(memoryGroup.getByRole('button', { name: '1h' })).toHaveAttribute('aria-pressed', 'true');
+    expect(memory.updateRange).not.toHaveBeenCalled();
+  });
+
+  it('keeps range changes out of surrounding form submission', () => {
+    const { chart } = makeChart();
+    const onSubmit = vi.fn((event: SubmitEvent) => event.preventDefault());
+    render(() => (
+      <form onSubmit={onSubmit}>
+        <HistoryChartHeader chart={chart} />
+      </form>
+    ));
+    const group = within(screen.getByRole('group', { name: 'History window' }));
+    for (const button of group.getAllByRole('button'))
+      expect(button).toHaveAttribute('type', 'button');
+    fireEvent.click(group.getByRole('button', { name: '7d' }));
+    expect(group.getByRole('button', { name: '7d' })).toHaveAttribute('aria-pressed', 'true');
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('does not expose a phantom window group when the caller hides it', () => {
+    const { chart } = makeChart();
+    render(() => <HistoryChartHeader chart={chart} label="Disk I/O" hideSelector />);
+    expect(screen.queryByRole('group')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.getByText('Disk I/O')).toBeInTheDocument();
+  });
 });

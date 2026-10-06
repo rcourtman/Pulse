@@ -8439,6 +8439,23 @@ for missing data. Tooltips reserve room for a wrapped local timestamp and readin
 fixture cover navigation, bounds, focus exit, refresh and replacement. Synthetic
 browser proof does not establish native collector or assistive-device acceptance.
 
+### Shared History window control access
+
+Each visible shared chart window selector is a named group for its metric (or
+"History window" when no label is supplied). Exactly the current period carries
+`aria-pressed=true`; switching one chart must not change another chart's selected
+state. Period buttons retain native keyboard/touch behaviour and explicit
+`type=button`, so changing the window cannot submit an enclosing form. A hidden
+selector exposes neither a group nor controls.
+
+The header, summary and existing period choices wrap within their chart on
+narrow screens instead of forcing horizontal overflow. This changes neither
+available periods, subscriptions, History ownership nor sample interpretation.
+Mounted `HistoryChart.test.tsx` and the production-component
+`browser-tests/history-window-controls.cjs` cover selection, scope, native input,
+form non-submission and phone layout. Synthetic observations are not native
+PBS/NAS, physical device or assistive-device acceptance.
+
 ### Shared History request-state honesty
 
 An empty successful response states only that the selected time range has no
