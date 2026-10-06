@@ -64,6 +64,7 @@ func newMockHostAlertTestManager(t *testing.T) *alerts.Manager {
 	config.TimeThresholds = map[string]int{}
 	config.MetricTimeThresholds = nil
 	config.BackupDefaults.Enabled = false
+	config.DockerDefaults.StateDisableConnectivity = false
 	config.AgentDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 1, Clear: 0.5}
 	config.NodeDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 1, Clear: 0.5}
 	manager.UpdateConfig(config)
@@ -109,12 +110,12 @@ func TestCheckMockAlertsEvaluatesHostAgentsBeforeLinkedNodes(t *testing.T) {
 	}
 
 	// A node whose linked agent reported on the same pass must hand its
-	// memory alert to the agent on the first tick, as hostname
+	// memory alert to the agent on the first tick, as node-link
 	// deduplication does for live agents.
 	linkedNodes := 0
 	for _, node := range state.Nodes {
 		host, ok := onlineHosts[strings.TrimSpace(node.LinkedAgentID)]
-		if !ok || !strings.EqualFold(host.Hostname, node.Name) {
+		if !ok || strings.TrimSpace(host.LinkedNodeID) != node.ID {
 			continue
 		}
 		linkedNodes++
@@ -165,7 +166,7 @@ func TestCheckMockHostAlertsUsesHostLifecycleForOfflineFixtures(t *testing.T) {
 	}
 }
 
-func TestLeavingMockModeReleasesFixtureAgentHostnames(t *testing.T) {
+func TestLeavingMockModeReleasesFixtureAgentNodeLinks(t *testing.T) {
 	setMockSamplerTestEnv(t, time.Hour, 5*time.Minute)
 	manager := newMockHostAlertTestManager(t)
 	monitor := &Monitor{
@@ -177,21 +178,22 @@ func TestLeavingMockModeReleasesFixtureAgentHostnames(t *testing.T) {
 	t.Cleanup(func() { mustSetMockEnabled(t, false) })
 	monitor.checkMockAlerts()
 
-	registeredPVE1 := false
+	linkedNodeID := ""
 	for _, host := range mock.CurrentFixtureGraph().State.Hosts {
-		if host.Hostname == "pve1" && !strings.EqualFold(host.Status, "offline") {
-			registeredPVE1 = true
+		if host.LinkedNodeID != "" && !strings.EqualFold(host.Status, "offline") {
+			linkedNodeID = host.LinkedNodeID
+			break
 		}
 	}
-	if !registeredPVE1 {
-		t.Fatal("mock fixture has no online agent named pve1")
+	if linkedNodeID == "" {
+		t.Fatal("mock fixture has no online agent linked to a node")
 	}
 	mustSetMonitorMockMode(t, monitor, false)
 
-	// A real node named like a fixture agent, with no agent of its own,
+	// A node carrying the linked fixture node's ID, with no agent of its own,
 	// must own its metric alerts once the monitor shows live data again.
 	node := models.Node{
-		ID:       "real-pve1",
+		ID:       linkedNodeID,
 		Name:     "pve1",
 		Instance: "real",
 		Status:   "online",
@@ -203,7 +205,7 @@ func TestLeavingMockModeReleasesFixtureAgentHostnames(t *testing.T) {
 			return
 		}
 	}
-	t.Fatal("real node pve1 raised no memory alert: the fixture agent's hostname deduplication outlived mock mode")
+	t.Fatalf("node %s raised no memory alert: a fixture agent's node link outlived mock mode", node.ID)
 }
 
 func TestMockHostAgentPassAfterLeavingMockModeRegistersNothing(t *testing.T) {
@@ -212,14 +214,15 @@ func TestMockHostAgentPassAfterLeavingMockModeRegistersNothing(t *testing.T) {
 	mustSetMockEnabled(t, false)
 
 	// A pass whose snapshot predates leaving mock mode reaches the agent step
-	// after forgetMockHostAgents ran.
+	// after forgetMockFixtureHosts ran.
 	stale := models.Host{
-		ID:       "host-node-mock-cluster-1-pve1",
-		Hostname: "pve1",
-		Status:   "online",
-		Memory:   models.Memory{Total: 32 << 30, Used: 30 << 30, Free: 2 << 30, Usage: 93.75},
+		ID:           "host-node-mock-cluster-1-pve1",
+		Hostname:     "pve1",
+		LinkedNodeID: "real-pve1",
+		Status:       "online",
+		Memory:       models.Memory{Total: 32 << 30, Used: 30 << 30, Free: 2 << 30, Usage: 93.75},
 	}
-	monitor.evaluateMockHostAgents([]models.Host{stale}, nil)
+	monitor.evaluateMockHostAgents([]models.Host{stale}, nil, 1)
 
 	if active := manager.GetActiveAlerts(); len(active) != 0 {
 		t.Fatalf("stale mock pass opened %d alerts in live mode", len(active))
@@ -237,5 +240,117 @@ func TestMockHostAgentPassAfterLeavingMockModeRegistersNothing(t *testing.T) {
 			return
 		}
 	}
-	t.Fatal("stale mock pass registered fixture hostname pve1 and suppressed the real node's memory alert")
+	t.Fatal("stale mock pass linked a fixture agent to real-pve1 and suppressed its memory alert")
+}
+
+// newMockDockerHostWithExitedContainers returns a reporting Docker host whose
+// containers exited, so two evaluation passes open one alert per container.
+func newMockDockerHostWithExitedContainers(id, hostname string) models.DockerHost {
+	return models.DockerHost{
+		ID:          id,
+		Hostname:    hostname,
+		DisplayName: hostname,
+		Status:      "online",
+		Containers: []models.DockerContainer{
+			{ID: id + "-web", Name: "web", State: "exited", Status: "Exited (137)"},
+			{ID: id + "-db", Name: "db", State: "exited", Status: "Exited (137)"},
+		},
+	}
+}
+
+func dockerAlertIDsForHost(manager *alerts.Manager, hostID string) []string {
+	var ids []string
+	for _, alert := range manager.GetActiveAlerts() {
+		if alert.ResourceID == "docker:"+hostID || strings.HasPrefix(alert.ResourceID, "docker:"+hostID+"/") {
+			ids = append(ids, alert.ID)
+		}
+	}
+	return ids
+}
+
+func TestMockDockerPassAfterLeavingMockModeRaisesNothing(t *testing.T) {
+	manager := newMockHostAlertTestManager(t)
+	monitor := &Monitor{alertManager: manager}
+	mustSetMockEnabled(t, false)
+
+	// A pass whose snapshot predates leaving mock mode reaches the Docker
+	// step after forgetMockFixtureHosts ran.
+	host := newMockDockerHostWithExitedContainers("nebula-1-mock", "nebula-1")
+	monitor.evaluateMockDockerHosts([]models.DockerHost{host}, 1)
+	monitor.evaluateMockDockerHosts([]models.DockerHost{host}, 1)
+
+	if ids := dockerAlertIDsForHost(manager, host.ID); len(ids) != 0 {
+		t.Fatalf("stale mock pass opened Docker alerts in live mode: %v", ids)
+	}
+}
+
+func TestLeavingMockModeRemovesFixtureDockerHostAlerts(t *testing.T) {
+	mustSetMockEnabled(t, true)
+	t.Cleanup(func() { mustSetMockEnabled(t, false) })
+	manager := newMockHostAlertTestManager(t)
+	monitor := &Monitor{alertManager: manager}
+
+	host := newMockDockerHostWithExitedContainers("nebula-1-mock", "nebula-1")
+	monitor.evaluateMockDockerHosts([]models.DockerHost{host}, 1)
+	monitor.evaluateMockDockerHosts([]models.DockerHost{host}, 1)
+	if ids := dockerAlertIDsForHost(manager, host.ID); len(ids) != len(host.Containers) {
+		t.Fatalf("fixture Docker host opened %v, want one alert per exited container", ids)
+	}
+
+	// The alerts stand in for ones a pass in flight recreated after
+	// SetMockMode(false) cleared the manager.
+	mustSetMockEnabled(t, false)
+	monitor.forgetMockFixtureHosts()
+
+	if ids := dockerAlertIDsForHost(manager, host.ID); len(ids) != 0 {
+		t.Fatalf("fixture Docker host alerts outlived mock mode: %v", ids)
+	}
+}
+
+func TestMockFixturePassFromBeforeAnEstateRebuildIsRejected(t *testing.T) {
+	mustSetMockEnabled(t, true)
+	t.Cleanup(func() { mustSetMockEnabled(t, false) })
+	manager := newMockHostAlertTestManager(t)
+	monitor := &Monitor{alertManager: manager}
+
+	retired := newMockDockerHostWithExitedContainers("proxmox-lxc-docker:Production West:pve1:108", "pve1-ct108")
+	current := newMockDockerHostWithExitedContainers("proxmox-lxc-docker:Production West:pve1:105", "pve1-ct105")
+	monitor.evaluateMockDockerHosts([]models.DockerHost{current}, 2)
+	monitor.evaluateMockDockerHosts([]models.DockerHost{current}, 2)
+
+	// A slow pass whose snapshot predates the rebuild reaches the lock after
+	// the newer passes. Applying it would remove the current host and
+	// re-evaluate the retired one.
+	monitor.evaluateMockDockerHosts([]models.DockerHost{retired}, 1)
+	monitor.evaluateMockDockerHosts([]models.DockerHost{retired}, 1)
+
+	if ids := dockerAlertIDsForHost(manager, current.ID); len(ids) != len(current.Containers) {
+		t.Fatalf("superseded pass disturbed the current host's alerts: %v", ids)
+	}
+	if ids := dockerAlertIDsForHost(manager, retired.ID); len(ids) != 0 {
+		t.Fatalf("superseded pass re-evaluated a retired host: %v", ids)
+	}
+}
+
+func TestMockFixturePassPausedAcrossDisableAndReenableIsRejected(t *testing.T) {
+	mustSetMockEnabled(t, true)
+	t.Cleanup(func() { mustSetMockEnabled(t, false) })
+	manager := newMockHostAlertTestManager(t)
+	monitor := &Monitor{alertManager: manager}
+
+	retired := newMockDockerHostWithExitedContainers("proxmox-lxc-docker:Production West:pve1:108", "pve1-ct108")
+	_, staleRevision := mock.CurrentFixtureGraphWithRevision()
+	monitor.evaluateMockDockerHosts([]models.DockerHost{retired}, staleRevision)
+
+	// Mock mode goes off and back on while a pass holding the old snapshot
+	// is paused; it resumes before any pass of the rebuilt estate applies.
+	mustSetMockEnabled(t, false)
+	monitor.forgetMockFixtureHosts()
+	mustSetMockEnabled(t, true)
+	monitor.evaluateMockDockerHosts([]models.DockerHost{retired}, staleRevision)
+	monitor.evaluateMockDockerHosts([]models.DockerHost{retired}, staleRevision)
+
+	if ids := dockerAlertIDsForHost(manager, retired.ID); len(ids) != 0 {
+		t.Fatalf("pass from before the disable re-evaluated the old estate: %v", ids)
+	}
 }

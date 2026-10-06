@@ -8313,8 +8313,12 @@ cannot become an accidental re-enrollment transition.
 mock alert pass evaluated. When a runtime mock config change drops an agent
 from the estate, `evaluateMockHostAgents` routes it through the alert
 manager's `HandleHostRemoved`, the same alert boundary a deleted live agent
-crosses. Leaving mock mode routes every fixture agent through the same call,
-which also releases their hostname deduplication. Neither path writes a
+crosses. Fixture Docker hosts that leave the estate go through
+`HandleDockerHostRemoved` the same way. Leaving mock mode routes every fixture
+agent and Docker host through those calls, which also drops the agents' node
+links. The monitor also records the fixture's structural revision so a mock
+pass that predates an estate rebuild, or a disable and re-enable, cannot
+re-run that removal against the current fixture agents. Neither path writes a
 removal tombstone, revokes a token, touches continuity evidence or admits a
 report: fixture agents have no credentials or durable identity, and real
 reports stay discarded while mock mode is on.
