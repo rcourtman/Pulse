@@ -5275,3 +5275,37 @@ func TestNpmAuditReportCleanupRemainsParentOwned(t *testing.T) {
 		})
 	}
 }
+
+func TestCITestCompilationPreservesChecks(t *testing.T) {
+	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := string(workflowBytes)
+	for _, required := range []string{
+		"name: Compile backend race tests (no execution)",
+		"run: bash scripts/compile-go-tests.sh",
+		"name: Backend tests (${{ matrix.shard }})",
+		"name: Backend tests (api)",
+		"shard: [rest-0, rest-1]",
+		"index: [0, 1, 2, 3, 4]",
+		"go test -race -timeout 50m",
+		"name: Require frontend dependency audit",
+		"NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}",
+	} {
+		if !strings.Contains(workflow, required) {
+			t.Fatalf("compile admission removed independent CI requirement: %s", required)
+		}
+	}
+	if strings.Count(workflow, "name: Require compiled backend tests") != 2 {
+		t.Fatal("both required backend matrices must report compilation failures")
+	}
+	for _, path := range []string{
+		repoFile("scripts", "compile-go-tests.sh"),
+		repoFile("scripts", "tests", "test_go_test_compilation.py"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
