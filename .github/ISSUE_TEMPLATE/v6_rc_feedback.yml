@@ -33,24 +33,44 @@ body:
     attributes:
       label: Pulse version
       description: Running version for an existing install; for a failed install, the exact version or release asset attempted, or "unknown" if it was not shown.
-      placeholder: v6.0.0-rc.N, release asset name, or unknown
+      placeholder: v6.x.y-rc.N, release asset name, or unknown
     validations:
       required: true
+
+  - type: input
+    id: previous_version
+    attributes:
+      label: Last known working Pulse version
+      description: If you already observed the same behaviour working, give that version. The version before an upgrade is not necessarily a working baseline. Leave blank or write "unknown" if not known; do not downgrade, restart or repeat the action to find out.
+      placeholder: v6.x.y or unknown
+    validations:
+      required: false
+
+  - type: input
+    id: agent_version
+    attributes:
+      label: Agent version
+      description: Running version of the affected agent, separately from the Pulse server; write "none" for an API-only connection or "unknown" if unavailable. Do not reinstall or re-enrol an agent to find out.
+      placeholder: v6.x.y, none, or unknown
+    validations:
+      required: false
 
   - type: input
     id: image_ref
     attributes:
       label: Running Pulse container image tag or digest
       description: For a running Docker, Compose, or Kubernetes container, give its exact Pulse image tag or digest. Leave blank for LXC, bare metal, and failed installs that never started; put an attempted release asset in Pulse version instead.
-      placeholder: rcourtman/pulse:v6.0.0-rc.N or rcourtman/pulse@sha256:...
+      placeholder: rcourtman/pulse:v6.x.y-rc.N or rcourtman/pulse@sha256:...
 
   - type: dropdown
     id: install_path
     attributes:
       label: Install path
+      description: How you reached the affected version; an upgrade path alone does not establish that the previous version worked.
       options:
         - Clean v6 install
         - Upgrade from v5
+        - Upgrade from a stable v6 release
         - Upgrade from an earlier v6 prerelease
         - Not sure
     validations:
@@ -84,7 +104,7 @@ body:
     id: environment
     attributes:
       label: OS / environment
-      description: Host OS, distro, or environment details that matter to the report.
+      description: Pulse server OS and, for platform-specific failures, the affected monitored platform and its release where known. Keep these separate from the Pulse server and agent versions; write "unknown" for unavailable details.
       placeholder: Ubuntu 24.04, Debian 12, Unraid 7, Proxmox 8, macOS 15
     validations:
       required: true

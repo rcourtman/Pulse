@@ -1751,10 +1751,51 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
 
     def test_prerelease_feedback_template_uses_generic_current_rc_wording(self) -> None:
         template = read(".github/ISSUE_TEMPLATE/v6_rc_feedback.yml")
-        self.assertIn("placeholder: v6.0.0-rc.N", template)
-        self.assertIn("placeholder: rcourtman/pulse:v6.0.0-rc.N or rcourtman/pulse@sha256:...", template)
+        self.assertIn("placeholder: v6.x.y-rc.N", template)
+        self.assertIn("placeholder: rcourtman/pulse:v6.x.y-rc.N or rcourtman/pulse@sha256:...", template)
         self.assertIn("I upgraded to the current v6 RC build", template)
         self.assertNotIn("v6.0.0-rc.1", template)
+
+    def test_prerelease_intake_covers_stable_upgrades_and_separate_agent_versions(self) -> None:
+        form = yaml.load(read(".github/ISSUE_TEMPLATE/v6_rc_feedback.yml"), Loader=UniqueKeyLoader)
+        fields = {field["id"]: field for field in form["body"] if "id" in field}
+        self.assertEqual(len(fields), sum("id" in field for field in form["body"]))
+        self.assertEqual(fields["install_path"]["attributes"]["options"], [
+            "Clean v6 install", "Upgrade from v5", "Upgrade from a stable v6 release",
+            "Upgrade from an earlier v6 prerelease", "Not sure",
+        ])
+        self.assertTrue(fields["install_path"]["validations"]["required"])
+        agent = fields["agent_version"]
+        self.assertEqual(agent["type"], "input")
+        self.assertEqual(agent["attributes"]["label"], "Agent version")
+        self.assertFalse(agent["validations"]["required"])
+        for distinction in ("affected agent", "separately from the Pulse server", '"none"',
+                            '"unknown"', "Do not reinstall or re-enrol"):
+            self.assertIn(distinction, agent["attributes"]["description"])
+        self.assertIn("affected monitored platform and its release", fields["environment"]["attributes"]["description"])
+
+    def test_working_version_context_is_optional_and_never_requires_another_attempt(self) -> None:
+        for name in ("bug_report.yml", "v6_rc_feedback.yml"):
+            with self.subTest(form=name):
+                form = yaml.load(read(f".github/ISSUE_TEMPLATE/{name}"), Loader=UniqueKeyLoader)
+                fields = {field["id"]: field for field in form["body"] if "id" in field}
+                self.assertEqual(len(fields), sum("id" in field for field in form["body"]))
+                previous = fields["previous_version"]
+                self.assertEqual(previous["type"], "input")
+                self.assertEqual(previous["attributes"]["label"], "Last known working Pulse version")
+                self.assertFalse(previous["validations"]["required"])
+                for precaution in ("already observed the same behaviour working",
+                                   "not necessarily a working baseline", 'write "unknown"',
+                                   "do not downgrade, restart or repeat the action"):
+                    self.assertIn(precaution, previous["attributes"]["description"])
+                self.assertEqual(fields["pulse_version"]["attributes"]["label"], "Pulse version")
+                self.assertTrue(fields["pulse_version"]["validations"]["required"])
+                self.assertIn('"unknown"', fields["agent_version"]["attributes"]["description"])
+                self.assertNotIn("render", previous["attributes"])
+        for document in ("docs/ISSUE_TRIAGE.md", "frontend-modern/public/docs/ISSUE_TRIAGE.md"):
+            triage = normalize_ws(read(document))
+            self.assertIn("an upgrade's starting version alone does not establish that", triage)
+            self.assertIn("do not ask for a downgrade, restart, reinstall or re-enrolment", triage)
 
     def test_report_intake_safety_is_self_contained_for_installed_releases(self) -> None:
         for name, evidence_id in (("bug_report.yml", "logs"), ("v6_rc_feedback.yml", "evidence")):

@@ -65,11 +65,20 @@ body:
       required: true
 
   - type: input
+    id: previous_version
+    attributes:
+      label: Last known working Pulse version
+      description: If you already observed the same behaviour working, give that version. The version before an upgrade is not necessarily a working baseline. Leave blank or write "unknown" if not known; do not downgrade, restart or repeat the action to find out.
+      placeholder: v6.x.y or unknown
+    validations:
+      required: false
+
+  - type: input
     id: agent_version
     attributes:
       label: Agent version
-      description: Exact agent version (or "none" if no agents are involved).
-      placeholder: v6.x.y or none
+      description: Running version of the affected agent, separately from the Pulse server; write "none" for an API-only connection or "unknown" if unavailable. Do not reinstall or re-enrol an agent to find out.
+      placeholder: v6.x.y, none, or unknown
     validations:
       required: true
 
