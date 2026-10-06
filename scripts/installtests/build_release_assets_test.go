@@ -4206,7 +4206,8 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	}
 	assertFileContainsAll(t, runnerPath,
 		`NPM_AUDIT_REQUIRE_RESULT:-true`,
-		`AUDIT_ARGS=("$@")`,
+		`AUDIT_ARGS=(audit --json "$@")`,
+		`AUDIT_ARGS+=(--omit=dev)`,
 		`if type(value) is int and value >= 0:`,
 		`has_findings = isinstance(findings, dict) and bool(findings)`,
 		`if has_findings or any(count > 0 for count in counts.values()):`,
@@ -5066,7 +5067,110 @@ func TestFrontendChangeClassificationPreservesStrictAudit(t *testing.T) {
 				t.Errorf("downstream critical-audit status=%d; want %d: %s", auditStatus, tc.auditStatus, auditResult)
 			}
 			if !strings.Contains(string(auditResult), `"severity": "critical"`) {
-				t.Fatal("the observed finding disappeared")
+				t.Fatalf("the observed finding disappeared: %s", auditResult)
+			}
+		})
+	}
+}
+
+// Run through the native Bash, including macOS's Bash 3.2. An empty optional
+// argument list must still invoke npm once, preserve its finding and obey the
+// existing strict/inherited verdict split. Quoting and production scope must
+// survive combining the formerly empty arrays into one nonempty argv vector.
+func TestNpmAuditNativeScopeArgumentsPreserveFindings(t *testing.T) {
+	const finding = `{"metadata":{"vulnerabilities":{"critical":1,"total":1}},"vulnerabilities":{"fixture":{"name":"fixture","severity":"critical"}}}`
+	for _, scope := range []string{"all", "production"} {
+		for _, extra := range [][]string{nil, {"--package-lock-only", "--fixture=two words", ""}} {
+			for _, require := range []string{"true", "false"} {
+				t.Run(scope+"/args="+strconv.Itoa(len(extra))+"/strict="+require, func(t *testing.T) {
+					directory := t.TempDir()
+					argvPath := filepath.Join(directory, "argv")
+					npmPath := filepath.Join(directory, "npm")
+					stub := "#!/bin/sh\nprintf '%s\\0' \"$@\" >> \"$AUDIT_ARGV\"\nprintf '%s\\n' '" + finding + "'\nexit 1\n"
+					if err := os.WriteFile(npmPath, []byte(stub), 0700); err != nil {
+						t.Fatal(err)
+					}
+					args := append([]string{repoFile("scripts", "npm-audit-retry.sh"), scope}, extra...)
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					cmd := exec.CommandContext(ctx, "bash", args...)
+					cmd.Env = append(os.Environ(), "AUDIT_ARGV="+argvPath, "NPM_AUDIT_CMD="+npmPath,
+						"NPM_AUDIT_REQUIRE_RESULT="+require, "NPM_AUDIT_ATTEMPTS=1",
+						"NPM_AUDIT_RETRY_DELAY=0", "NPM_AUDIT_ATTEMPT_TIMEOUT=5", "NPM_AUDIT_MAX_SECONDS=10")
+					output, err := cmd.CombinedOutput()
+					status := 0
+					if err != nil {
+						exit, ok := err.(*exec.ExitError)
+						if !ok {
+							t.Fatal(err)
+						}
+						status = exit.ExitCode()
+					}
+					wantStatus, annotation := 1, "::error::"
+					if require == "false" {
+						wantStatus, annotation = 0, "::warning::"
+					}
+					if status != wantStatus || !strings.Contains(string(output), annotation) ||
+						!strings.Contains(string(output), `"severity": "critical"`) ||
+						strings.Contains(string(output), "advisory endpoint did not return") {
+						t.Fatalf("native audit lost its finding/verdict: exit=%d want=%d\n%s", status, wantStatus, output)
+					}
+					recorded, err := os.ReadFile(argvPath)
+					if err != nil {
+						t.Fatal(err)
+					}
+					want := append([]string{"audit", "--json"}, extra...)
+					if scope == "production" {
+						want = append(want, "--omit=dev")
+					}
+					if string(recorded) != strings.Join(want, "\x00")+"\x00" {
+						t.Fatalf("npm must run once with exact arguments: got %q want %q", recorded, want)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestNpmAuditReportCleanupRemainsParentOwned(t *testing.T) {
+	runner, err := os.ReadFile(repoFile("scripts", "npm-audit-retry.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook := regexp.MustCompile(`(?m)^trap '.*' EXIT$`).FindString(string(runner))
+	if hook == "" {
+		t.Fatal("audit report cleanup hook is missing")
+	}
+	for _, tc := range []struct {
+		name, hook string
+		status     int
+	}{
+		{"actual_parent_owned_hook", hook, 0},
+		{"legacy_child_cleanup_rejected", `trap 'rm -f "${report_file}"' EXIT`, 23},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "report")
+			// Install the exact source hook in the child explicitly to model
+			// the early-signal window, without timing a background process.
+			// It must retain the report there, and still remove it at parent exit.
+			script := "report_file=\"$REPORT_FIXTURE\"\nprintf retained >\"$report_file\"\n" + tc.hook +
+				"\n(\n" + tc.hook + "\n)\ntest -f \"$report_file\" || exit 23\n"
+			cmd := exec.Command("bash", "-c", script)
+			cmd.Env = append(os.Environ(), "REPORT_FIXTURE="+path)
+			output, err := cmd.CombinedOutput()
+			status := 0
+			if err != nil {
+				exit, ok := err.(*exec.ExitError)
+				if !ok {
+					t.Fatal(err)
+				}
+				status = exit.ExitCode()
+			}
+			if status != tc.status {
+				t.Fatalf("child cleanup verdict=%d want=%d: %s", status, tc.status, output)
+			}
+			if _, err := os.Stat(path); !os.IsNotExist(err) {
+				t.Fatalf("invoking shell did not clean up its report: %v", err)
 			}
 		})
 	}
