@@ -1060,6 +1060,20 @@ replay stays idempotent. The real alert-manager callback path is covered by
 `TestProxmoxAlertTimelineUsesCanonicalHistoryIdentity` in
 `internal/monitoring/monitor_alert_handling_test.go`.
 
+Docker host and Swarm service alert lifecycle events, and sub-resource alert
+events (ZFS pools and devices, host filesystems, disks, RAID arrays, sensors
+and the Unraid array), pass through the same writer, which binds them to the
+Docker host, Swarm service, storage or host named in the unified-resources
+history identity clause. Container names and shortened container IDs still
+bind nothing. `CheckDockerHost` gives a container without an ID its host's
+reference, so that container's events join the host's history. A producer
+that changes one of these reference shapes must change
+`dockerHostHistoryReference` or `historySubResourceOwner` with it.
+`TestOwnerAlertTimelinesUseCanonicalHistoryIdentity` in
+`internal/monitoring/monitor_alert_handling_test.go` pins the Docker host,
+Swarm service, ZFS pool and device, and host filesystem shapes against the
+real alert manager.
+
 TrueNAS native alert projection preserves the trimmed, uppercase provider level in ResourceIncident.NativeSeverity. INFO and NOTICE retain the same canonical monitor risk; consumers must not lose their distinct actionability when projecting provider evidence. Native CRITICAL, ALERT, and EMERGENCY all project to canonical critical severity; EMERGENCY must not be discarded as unknown or make a still-active condition appear recovered. WARNING remains warning, and INFO and NOTICE remain informational at this projection boundary.
 
 Verification: `TestIncidentProjectionPreservesNativeSeverity` in `internal/truenas/provider_pool_health_contract_test.go` covers all seven native levels and case/whitespace normalization. `TestTrueNASNativeSeverityDispatch` in `internal/alerts/truenas_native_dispatch_test.go` verifies downstream INFO suppression, NOTICE preservation, notification severity, duplicate-poll retention, and confirmed recovery callback identity. The TrueNAS lifecycle tests in `internal/alerts/unified_incidents_test.go` require repeated EMERGENCY evidence to interrupt recovery confirmation. These are fixture-based projection and manager checks, not appliance ingestion or external notification-provider receipt proof.
