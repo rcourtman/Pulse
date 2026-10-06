@@ -844,8 +844,10 @@ export function getTrueNASStorageIssue(
   if (reasons.length === leading) {
     for (const reason of resource.storage?.risk?.reasons ?? []) push(reason.summary);
     for (const reason of resource.physicalDisk?.risk?.reasons ?? []) push(reason.summary);
-    push(getTrueNASDiskHeatSummary(resource, resolveDiskTemperatureThresholds));
   }
+  // Heat is Pulse's own judgement, not a restatement of TrueNAS state, so it
+  // stays listed beside any native alert text.
+  push(getTrueNASDiskHeatSummary(resource, resolveDiskTemperatureThresholds));
   // A read-only dataset raises no incident, so its state tag is the only
   // reason the provider gives. The drawer reads the same shared mapping.
   if (reasons.length === leading && resource.storage?.topology === 'dataset') {

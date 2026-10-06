@@ -676,6 +676,16 @@ describe('truenasPageModel', () => {
       filterTrueNASStorageTopologyRows(rows, '', 'healthy', resolveFactory).map((row) => row.id),
     ).toEqual(['disk:disk-cool']);
 
+    // Native TrueNAS alert text leads, and the heat reason stays listed.
+    const hotWithIncident = makeResource({
+      ...hotDisk,
+      incidents: [{ code: 'truenas_smart', severity: 'info', summary: 'SMART test scheduled' }],
+    });
+    expect(getTrueNASStorageIssue(hotWithIncident, resolveFactory)?.reasons).toEqual([
+      'SMART test scheduled',
+      'Disk temperature is 56°C, at or above its 55°C alert threshold.',
+    ]);
+
     // An NVMe at 63C is under its 70C trigger.
     const warmNVMe = makeResource({
       ...hotDisk,

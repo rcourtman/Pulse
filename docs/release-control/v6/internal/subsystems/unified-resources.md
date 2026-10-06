@@ -1118,7 +1118,9 @@ threshold.". The trigger comes from the alerts store's
 `getDiskTemperatureThresholds`, which the table passes to the row build,
 filter, counts, sort and issue. `isPhysicalDiskRunningHot` in
 `features/storageBackups/diskTemperaturePresentation.ts` makes the same call
-for the Physical Disks verdict. The status dot keeps the source's own state.
+for the Physical Disks verdict. The heat reason follows any native TrueNAS
+alert text, and a hot disk's status dot turns warning though its source state
+stays `online`, because phones show only the dot.
 `truenasPageModel.test.ts` and `TrueNASStorageTopologyTable.test.tsx` pin it.
 The vSphere Datastores and Networks tables follow the same exception-first
 Health column. `getVmwareDatastoreIssue` and `getVmwareNetworkIssue` return
