@@ -4240,6 +4240,11 @@ class DevPrepushScriptTest(unittest.TestCase):
                 (REPO_ROOT / "scripts" / "dev-prepush.sh").read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
+            # This case checks per-commit contract binding, not browser proof.
+            # Real browser admission is exercised by test_dev_prepush_frontend.
+            (repo / "scripts" / "release_control" / "browser_verification_guard.py").write_text(
+                "import sys\nsys.exit(0)\n", encoding="utf-8",
+            )
             (repo / "scripts" / "release_control" / "canonical_completion_guard.py").write_text(
                 """#!/usr/bin/env python3
 import os
