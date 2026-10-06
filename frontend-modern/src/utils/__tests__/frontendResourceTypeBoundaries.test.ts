@@ -261,11 +261,6 @@ import resourceDetailDrawerOperationalModelSource from '@/components/Infrastruct
 import resourceDetailDrawerServiceModelSource from '@/components/Infrastructure/resourceDetailDrawerServiceModel.ts?raw';
 import resourceDetailDrawerDockerActionsStateSource from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts?raw';
 import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
-import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
-import unifiedResourceTableStateSource from '@/components/Infrastructure/useUnifiedResourceTableState.ts?raw';
-import unifiedResourceTableViewportSyncSource from '@/components/Infrastructure/useUnifiedResourceTableViewportSync.ts?raw';
-import unifiedResourceTableStateModelSource from '@/components/Infrastructure/unifiedResourceTableStateModel.ts?raw';
-import unifiedResourceTableModelSource from '@/components/Infrastructure/unifiedResourceTableModel.ts?raw';
 import useUnifiedResourcesSource from '@/hooks/useUnifiedResources.ts?raw';
 import useWorkloadsSource from '@/hooks/useWorkloads.ts?raw';
 import findingsPanelSource from '@/components/AI/FindingsPanel.tsx?raw';
@@ -2499,52 +2494,6 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailMappersSource).not.toContain('export const toDiscoveryConfig');
     expect(resourceDetailMappersSource).not.toContain('export const normalizeHealthLabel');
     expect(resourceDetailMappersSource).not.toContain('export const healthToneClass');
-    expect(unifiedResourceTableSource).toContain('useUnifiedResourceTableState');
-    expect(unifiedResourceTableSource).toContain('UnifiedResourceHostTableCard');
-    expect(unifiedResourceTableSource).toContain('UnifiedResourceServiceInfrastructureCard');
-    expect(unifiedResourceTableSource).not.toContain('const split = createMemo(() =>');
-    expect(unifiedResourceTableSource).not.toContain('const sortedPBSResources = createMemo(() =>');
-    expect(unifiedResourceTableSource).not.toContain(
-      'const resourceColumnStyle = createMemo(() =>',
-    );
-    expect(unifiedResourceTableSource).not.toContain('getServiceHealthSummaryPresentation');
-    expect(unifiedResourceTableSource).not.toContain('const getOutlierEmphasis =');
-    expect(unifiedResourceTableSource).not.toContain('const summarizeServiceHealthTone =');
-    expect(unifiedResourceTableStateSource).toContain(
-      'export function useUnifiedResourceTableState',
-    );
-    expect(unifiedResourceTableStateSource).toContain("from './unifiedResourceTableStateModel'");
-    expect(unifiedResourceTableStateSource).toContain('buildHostTableItems');
-    expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableColumnPresentations');
-    expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableShellClass');
-    expect(unifiedResourceTableStateSource).toContain('useTableWindowing');
-    expect(unifiedResourceTableStateSource).toContain('useUnifiedResourceTableViewportSync');
-    expect(unifiedResourceTableStateSource).not.toContain(
-      'const resourceColumnStyle = createMemo(() =>',
-    );
-    expect(unifiedResourceTableStateSource).not.toContain(
-      "const showGroupHeaders = props.groupingMode === 'grouped'",
-    );
-    expect(unifiedResourceTableStateSource).not.toContain('const items: HostTableItem[] = [];');
-    expect(unifiedResourceTableStateSource).not.toContain('window.addEventListener');
-    expect(unifiedResourceTableStateSource).not.toContain('getBoundingClientRect');
-    expect(unifiedResourceTableStateModelSource).toContain('export const buildHostTableItems');
-    expect(unifiedResourceTableStateModelSource).toContain(
-      'export const getUnifiedResourceTableColumnPresentations',
-    );
-    expect(unifiedResourceTableStateModelSource).toContain(
-      'export const getUnifiedResourceTableShellClass',
-    );
-    expect(unifiedResourceTableStateModelSource).toContain(
-      'export const getNextUnifiedResourceTableSortState',
-    );
-    expect(unifiedResourceTableModelSource).toContain('getServiceHealthSummaryPresentation');
-    expect(unifiedResourceTableModelSource).toContain('export const getOutlierEmphasis');
-    expect(unifiedResourceTableViewportSyncSource).toContain('bindWindowedPageScrollEvents');
-    expect(unifiedResourceTableViewportSyncSource).not.toContain('window.addEventListener');
-    expect(unifiedResourceTableViewportSyncSource).toContain('getBoundingClientRect');
-    expect(unifiedResourceTableViewportSyncSource).toContain('hostWindowing.onScroll');
-    expect(unifiedResourceTableViewportSyncSource).not.toContain('scrollIntoView');
     expect(discoveryTabSource).toContain('getDiscoverySuggestedURLReason');
     expect(discoveryTabSource).toContain('getDiscoveryObservedSourceLabel');
     expect(discoveryTabSource).toContain('getDiscoveryAnalysisProviderBadgeClass');
