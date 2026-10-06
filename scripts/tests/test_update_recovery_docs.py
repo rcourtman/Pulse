@@ -40,7 +40,17 @@ if name == 'systemctl':
     assert args == ['show', 'pulse', '--property=FragmentPath', '--property=DropInPaths']
     print('FragmentPath=/etc/systemd/system/pulse.service\nDropInPaths=/etc/systemd/system/pulse.service.d/local.conf')
 elif name == 'docker':
-    if args == ['inspect', 'pulse', '--format', '{{.Config.Image}} {{.Image}}']:
+    if args == ['ps', '-a', '--format', '{{.Names}}']:
+        print('example-app\nexample-app_pulse_backup_123')
+    elif args == ['inspect', '--type', 'container', '--format',
+                  'State={{.State.Status}} ImageRef={{.Config.Image}} ImageID={{.Image}} Started={{.State.StartedAt}}',
+                  'example-app']:
+        if os.environ.get('INSPECT_EXIT'):
+            print('No such container: example-app', file=sys.stderr)
+            sys.exit(int(os.environ['INSPECT_EXIT']))
+        print('State=' + os.environ['CONTAINER_STATE'] +
+              ' ImageRef=private.example/app:latest ImageID=sha256:current Started=2026-10-06T12:00:00Z')
+    elif args == ['inspect', 'pulse', '--format', '{{.Config.Image}} {{.Image}}']:
         print('private.example/pulse:old sha256:previous')
     elif args == ['compose', 'pull', 'pulse']:
         sys.exit(int(os.environ.get('PULL_EXIT', '0')))
@@ -64,6 +74,7 @@ class UpdateRecoveryDocsTest(unittest.TestCase):
             calls_path = root / "calls.jsonl"
             env = dict(os.environ, PATH=f"{root}:{os.environ['PATH']}",
                        CALLS=str(calls_path), SERVICE_STATE="active",
+                       CONTAINER_STATE="running",
                        SYNTHETIC_CREDENTIAL="never-print-this-private-value")
             env.update(settings)
             result = subprocess.run(["bash", "-c", recipe], env=env,
@@ -185,6 +196,54 @@ class UpdateRecoveryDocsTest(unittest.TestCase):
         short = section("AUTO_UPDATE", "Docker", "###")
         self.assertIn("DOCKER.md#-updates", short)
         self.assertNotIn("docker pull", short)
+
+    def workload_check_recipes(self):
+        return re.findall(r"```bash\n(.*?)```", section(
+            "DOCKER", "Check a failed or pending workload update", "###"), re.S)
+
+    def test_workload_discovery_and_inspection_are_scoped_read_only(self):
+        recipes = self.workload_check_recipes()
+        self.assertEqual(len(recipes), 2)
+        result, calls = self.exercise(recipes[0])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, [{"name": "docker", "args": ["ps", "-a", "--format", "{{.Names}}"]}])
+        self.assertIn("example-app_pulse_backup_123", result.stdout)
+        recipe = recipes[1].replace("container='affected-container'", "container='example-app'")
+        for state in ("running", "exited", "restarting"):
+            with self.subTest(state=state):
+                result, calls = self.exercise(recipe, CONTAINER_STATE=state)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(calls, [{"name": "docker", "args": [
+                    "inspect", "--type", "container", "--format",
+                    "State={{.State.Status}} ImageRef={{.Config.Image}} ImageID={{.Image}} Started={{.State.StartedAt}}",
+                    "example-app",
+                ]}])
+                self.assertIn(f"State={state}", result.stdout)
+                self.assertIn("ImageID=sha256:current", result.stdout)
+                self.assertNotIn("Environment", result.stdout)
+
+    def test_missing_workload_preserves_the_error_without_recovery_mutation(self):
+        recipe = self.workload_check_recipes()[1].replace(
+            "container='affected-container'", "container='example-app'")
+        result, calls = self.exercise(recipe, INSPECT_EXIT="1")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("No such container", result.stderr)
+
+    def test_workload_identity_and_pending_receipt_help_preserve_uncertainty(self):
+        text = " ".join(section("DOCKER", "Check a failed or pending workload update", "###").split())
+        for phrase in ("on the host running the affected container", "same Docker context",
+                       "do not change socket permissions", "not `pulse` unless Pulse itself was the target",
+                       "tag such as `latest` can stay unchanged", "not a registry manifest digest",
+                       "cannot establish whether the image changed", "not proof of an image update",
+                       "Do not start, rename, delete or update anything", "not proof that its application or data is healthy",
+                       "does not send another container update", "not the full inspection"):
+            self.assertIn(phrase, text)
+        ui = (ROOT / "frontend-modern/src/features/actions/ActionReviewDialog.tsx").read_text()
+        badge = (ROOT / "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts").read_text()
+        self.assertIn("Review action", badge)
+        self.assertIn("Check for receipt", ui)
+        self.assertIn("refreshReceipt()", ui)
 
 
 if __name__ == "__main__":
