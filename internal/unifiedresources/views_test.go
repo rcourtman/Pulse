@@ -932,6 +932,46 @@ func TestView_HostViewIntegrationSource(t *testing.T) {
 	}
 }
 
+// A host agent linked to a Proxmox node merges into one row whose LastSeen
+// follows the freshest source. Agent-owned samples (sensors) need the agent's
+// own sighting, which SourceStatus exposes.
+func TestView_HostViewSourceStatusSeparatesAgentFromMergedRow(t *testing.T) {
+	now := time.Now().UTC()
+	agentLastReport := now.Add(-30 * time.Minute)
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online",
+			LastSeen: now, LinkedAgentID: "agent-1",
+		}},
+		Hosts: []models.Host{{
+			ID: "agent-1", Hostname: "node1", Status: "offline", LinkedNodeID: "pve1-node1",
+			IntervalSeconds: 30, LastSeen: agentLastReport,
+		}},
+	})
+
+	hosts := registry.Hosts()
+	if len(hosts) != 1 {
+		t.Fatalf("expected the agent and node to merge into one host row, got %d", len(hosts))
+	}
+	host := hosts[0]
+	if !host.LastSeen().Equal(now) {
+		t.Fatalf("merged row LastSeen = %v, want the fresher Proxmox sighting %v", host.LastSeen(), now)
+	}
+	agent, ok := host.SourceStatus(SourceAgent)
+	if !ok || !agent.LastSeen.Equal(agentLastReport) {
+		t.Fatalf("agent source status = %+v (ok=%v), want the agent's own report time %v", agent, ok, agentLastReport)
+	}
+	if _, ok := host.SourceStatus(SourceTrueNAS); ok {
+		t.Fatal("a source that never reported must not have a status")
+	}
+
+	var nilView HostView
+	if _, ok := nilView.SourceStatus(SourceAgent); ok {
+		t.Fatal("nil-backed view must report no source status")
+	}
+}
+
 func TestView_HostViewMetricsTargetAccessor(t *testing.T) {
 	r := &Resource{
 		ID:   "host-metrics",

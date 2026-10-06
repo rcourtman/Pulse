@@ -5755,6 +5755,18 @@ When focused detail content is removed, `InlineDetailTableRow` restores focus
 to its current `aria-controls` disclosure with `preventScroll`; live refresh,
 collapse, and row replacement must not move the surrounding application
 viewport merely to reveal that control.
+The detail cell spans the summary row's visible cells, and `InlineDetailTableRow`
+re-measures that span while the row stays open: whenever summary cells are
+added, removed, or hidden (a column picker toggle, or a data-driven column
+such as the vCenter column that shows only with several vCenters), and
+whenever the caller's requested colspan changes. An open drawer must never
+keep a phantom column or stop short of a newly shown one. Changes inside a
+cell's content do not re-measure, so live metric updates stay cheap. When
+the span grows, the row changes the cell's own width for one forced layout
+and restores it, because Chromium otherwise keeps a fixed-layout table's old
+column widths for the widened cell. Callers keep passing their requested
+colspan; they must not re-key or remount the detail row to force a new span,
+which would discard drawer state.
 Inline detail section content is registry-backed separately from the row shell.
 `DetailSectionTable`, `InlineDetailPanel`, and `detailSectionModel.ts` own
 detail row compaction, section-table rendering, value-tone classes, and the
@@ -7623,6 +7635,12 @@ inside the fleet surface with explicit copy while current status and resource
 navigation remain usable. Desktop and phone layouts must keep every tile
 keyboard-operable, preserve the textual legend, and avoid horizontal clipping
 at fleet scale.
+In the table, a secondary `MetadataBadge` beside a cell's primary value shares
+one flex line with it: the value is `shrink-0` and the badge `min-w-0` with a
+truncating label, so the value never clips and rows keep the single height
+`PlatformWindowedRows` measures. A second line under the value would break
+that windowing. Passing `flex` to the badge alongside its own `inline-flex`
+left the display to stylesheet order, which clipped the availability result.
 The Machines page must not pretend its machine list is a generic overview:
 the default tab is `Machines`, the Machines table is only for Pulse Agent-backed
 resources with host telemetry, and the full availability-check row list belongs
@@ -8431,6 +8449,13 @@ inventory and Storage search below the fold at desktop and phone widths, and
 from competing with real warnings for attention, while preserving every
 affected name on demand. The component test pins collapsed, expanded and collapsed-again
 states; 1440px, 768px and 390px browser checks verify placement and overflow.
+Each platform page names what the update brings in the reader's words through
+`missingLabel`: the latest fixes and machine, node, system or VM details.
+The notice selects hosts by agent version alone, and command execution is a
+separate setting the update preserves, so the notice must not promise Patrol
+actions or command support. Internal phrasing such as "agent-contributed
+detail", "agent-managed platform detail" or "in-guest telemetry" does not
+belong in the notice.
 The shared `InlineNotice` action text uses opaque 800-level colors for its four
 tones. The current Tailwind configuration overrides several 900-level palette
 tokens with 25%-alpha colors for translucent backgrounds, so using those

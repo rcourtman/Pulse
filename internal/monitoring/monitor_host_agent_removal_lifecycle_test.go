@@ -812,3 +812,48 @@ func TestUnifiedStorageMetricSyncPreservesHostRemovalBlock(t *testing.T) {
 		t.Fatal("storage metric sync allowed a removed host to report with its denied token")
 	}
 }
+
+func TestMockHostAgentLeavingFixtureUsesRemovalLifecycle(t *testing.T) {
+	mustSetMockEnabled(t, true)
+	t.Cleanup(func() { mustSetMockEnabled(t, false) })
+	manager := newMockHostAlertTestManager(t)
+	monitor := &Monitor{alertManager: manager}
+
+	memory := models.Memory{Total: 32 << 30, Used: 30 << 30, Free: 2 << 30, Usage: 93.75}
+	kept := models.Host{ID: "host-linux-1", Hostname: "apollo-114", Status: "online", Memory: memory}
+	departed := models.Host{ID: "host-node-pve9", Hostname: "pve9", Status: "online", Memory: memory}
+
+	monitor.evaluateMockHostAgents([]models.Host{kept, departed}, nil)
+	// A runtime mock config change rebuilt the estate without pve9.
+	monitor.evaluateMockHostAgents([]models.Host{kept}, nil)
+
+	keptAlert := false
+	for _, alert := range manager.GetActiveAlerts() {
+		switch alert.ResourceID {
+		case "agent:" + departed.ID:
+			t.Fatalf("agent that left the mock estate kept alert %s", alert.ID)
+		case "agent:" + kept.ID:
+			keptAlert = keptAlert || alert.Type == "memory"
+		}
+	}
+	if !keptAlert {
+		t.Fatal("agent still in the mock estate lost its memory alert")
+	}
+
+	// The departed agent's hostname deduplication is released too, so the
+	// node it was linked to owns its metric alerts again.
+	node := models.Node{
+		ID:       "mock-cluster-1-pve9",
+		Name:     "pve9",
+		Instance: "mock-cluster-1",
+		Status:   "online",
+		Memory:   memory,
+	}
+	manager.CheckNode(node)
+	for _, alert := range manager.GetActiveAlerts() {
+		if alert.ResourceID == node.ID && alert.Type == "memory" {
+			return
+		}
+	}
+	t.Fatal("node pve9 raised no memory alert after its agent left the mock estate")
+}
