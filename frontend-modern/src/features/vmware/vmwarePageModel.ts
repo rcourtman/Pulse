@@ -86,6 +86,9 @@ export type VmwareActivityRow = {
   activityType: string;
   stateBucket: VmwareActivityStateBucket;
   title: string;
+  // vCenter's event class (HostConnectedEvent); the title reads as vCenter's
+  // own message when it sent one, so the class is kept for search and detail.
+  eventType: string;
   state: string;
   message: string;
   description: string;
@@ -795,7 +798,10 @@ const buildActivityRow = (
   const metadata = change.metadata;
   const activityType = metadataString(metadata, 'activity_type');
   const activityKind = mapVmwareActivityKind(activityType, metadata);
+  // An event reads as vCenter's own message. The provider titles new events
+  // with it; records stored before that carry the event class as their title.
   const title =
+    (activityKind === 'event' ? metadataString(metadata, 'vmwareEventMessage') : '') ||
     metadataString(metadata, 'activity_title', 'vmwareTaskName', 'vmwareEventType') ||
     trimString(change.reason) ||
     'vSphere activity';
@@ -805,6 +811,7 @@ const buildActivityRow = (
     metadataString(metadata, 'activity_message', 'vmwareTaskError', 'vmwareEventMessage') ||
     trimString(change.reason);
   const description = metadataString(metadata, 'vmwareTaskDescription', 'vmwareEventMessage');
+  const eventType = metadataString(metadata, 'vmwareEventType');
   const actor = trimString(change.actor) || metadataString(metadata, 'vmwareEventUser');
   const nativeId = metadataString(metadata, 'activity_native_id', 'vmwareTask', 'vmwareEvent');
   const observedAt = trimString(change.observedAt);
@@ -829,6 +836,7 @@ const buildActivityRow = (
     activityType,
     stateBucket: mapVmwareActivityStateBucket(state),
     title,
+    eventType,
     state,
     message,
     description,
@@ -1112,6 +1120,7 @@ const activitySearchHaystack = (row: VmwareActivityRow): string =>
     row.activityKind,
     row.activityType,
     row.title,
+    row.eventType,
     row.state,
     row.message,
     row.description,

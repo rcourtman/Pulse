@@ -1577,6 +1577,15 @@ legacy/direct object routes fall back to `Overview` when the requested workflow
 has no rows for the current setup. Signals outside unified-resource inventory,
 such as TrueNAS recovery protection points or vSphere activity timeline rows,
 must be treated as explicit tab evidence rather than permanent navigation.
+A vSphere event activity row reads as vCenter's own sentence. The VMware
+client asks `QueryEvents` for each event's `fullFormattedMessage` explicitly,
+since vCenter leaves it out when `disableFullMessage` is unset. The provider
+titles the event change with that message and falls back to the event class
+(`HostConnectedEvent`) only when vCenter sends none. The class stays in
+`vmwareEventType` metadata, where activity search and the row drawer's Event
+type row read it. Rows stored before that titling still carry the class as
+their title, so the page model prefers an event's `vmwareEventMessage` when it
+has one.
 Primary platform navigation is also resource-evidence gated: runtime lenses such
 as Docker / Podman must be admitted from explicit Docker source scopes, Docker
 host or service resource types, or concrete runtime identity/inventory evidence

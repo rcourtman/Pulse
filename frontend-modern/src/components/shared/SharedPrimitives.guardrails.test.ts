@@ -6283,7 +6283,6 @@ describe('shared primitive guardrails', () => {
     );
     const platformDateTimeConsumers: Array<[string, string]> = [
       ['src/features/truenas/TrueNASProtectionTable.tsx', truenasProtectionTableSource],
-      ['src/features/vmware/VsphereActivityTable.tsx', vsphereActivityTableSource],
     ];
     const platformDateTimeConsumerPaths = platformDateTimeConsumers.map(([path]) => path);
 
@@ -6298,13 +6297,6 @@ describe('shared primitive guardrails', () => {
       {
         path: 'src/features/truenas/TrueNASProtectionTable.tsx',
         patterns: ['const formatPointTime', 'formatPointTime(point)'],
-      },
-      {
-        path: 'src/features/vmware/VsphereActivityTable.tsx',
-        patterns: [
-          'const formatActivityDate',
-          'formatActivityDate(activity.occurredAt || activity.observedAt)',
-        ],
       },
     ]);
     expect(truenasDateGuard?.canonical?.path).toBe(
@@ -6322,7 +6314,7 @@ describe('shared primitive guardrails', () => {
     expect(vsphereDateGuard?.canonical?.path).toBe(
       'src/features/platformPage/sharedPlatformPage.tsx',
     );
-    expect(vsphereDateGuard?.canonical?.export).toBe('PlatformTableDateTimeValue');
+    expect(vsphereDateGuard?.canonical?.export).toBe('PlatformTableRelativeTimeValue');
     expect(vsphereDateGuard?.allPatterns).toEqual([
       'const formatActivityDate',
       'toLocaleString(undefined, {',
@@ -6346,9 +6338,10 @@ describe('shared primitive guardrails', () => {
     }
 
     // The When header renders through the shared sortable head; the
-    // numeric-value alignment intent now lives on its kind prop.
+    // numeric-value alignment intent now lives on its kind prop. vCenter's
+    // unset times (before 2000) stay an empty marker, not a decades-old age.
     expect(vsphereActivityTableSource).toContain('kind="numeric-value"');
-    expect(vsphereActivityTableSource).toContain('minYear={2000}');
+    expect(vsphereActivityTableSource).toContain('getUTCFullYear() < 2000');
   });
 
   it('keeps platform table relative timestamps on the shared primitive', () => {
@@ -6384,6 +6377,7 @@ describe('shared primitive guardrails', () => {
       ['src/features/proxmox/ProxmoxReplicationTable.tsx', proxmoxReplicationTableSource],
       ['src/features/standalone/AvailabilityChecksTable.tsx', availabilityChecksTableSource],
       ['src/features/standalone/AgentsMachinesTable.tsx', agentsMachinesTableSource],
+      ['src/features/vmware/VsphereActivityTable.tsx', vsphereActivityTableSource],
     ];
     const platformRelativeTimeConsumerPaths = platformRelativeTimeConsumers.map(([path]) => path);
 
@@ -6427,6 +6421,13 @@ describe('shared primitive guardrails', () => {
       {
         path: 'src/features/standalone/AvailabilityChecksTable.tsx',
         patterns: ['formatRelativeTime(availability?.lastChecked', 'const formatChecked'],
+      },
+      {
+        path: 'src/features/vmware/VsphereActivityTable.tsx',
+        patterns: [
+          'const formatActivityDate',
+          'formatActivityDate(activity.occurredAt || activity.observedAt)',
+        ],
       },
     ]);
     expect(localHelperGuard?.canonical?.path).toBe(

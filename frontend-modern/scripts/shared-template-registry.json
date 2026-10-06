@@ -2546,20 +2546,12 @@
         "export": "PlatformTableDateTimeValue"
       },
       "requiredConsumers": [
-        { "path": "src/features/truenas/TrueNASProtectionTable.tsx" },
-        { "path": "src/features/vmware/VsphereActivityTable.tsx" }
+        { "path": "src/features/truenas/TrueNASProtectionTable.tsx" }
       ],
       "forbiddenPatterns": [
         {
           "path": "src/features/truenas/TrueNASProtectionTable.tsx",
           "patterns": ["const formatPointTime", "formatPointTime(point)"]
-        },
-        {
-          "path": "src/features/vmware/VsphereActivityTable.tsx",
-          "patterns": [
-            "const formatActivityDate",
-            "formatActivityDate(activity.occurredAt || activity.observedAt)"
-          ]
         }
       ],
       "proof": [
@@ -2583,7 +2575,8 @@
         { "path": "src/features/proxmox/proxmoxBackupsTableShared.tsx" },
         { "path": "src/features/proxmox/ProxmoxReplicationTable.tsx" },
         { "path": "src/features/standalone/AvailabilityChecksTable.tsx" },
-        { "path": "src/features/standalone/AgentsMachinesTable.tsx" }
+        { "path": "src/features/standalone/AgentsMachinesTable.tsx" },
+        { "path": "src/features/vmware/VsphereActivityTable.tsx" }
       ],
       "forbiddenPatterns": [
         {
@@ -2618,6 +2611,13 @@
         {
           "path": "src/features/standalone/AvailabilityChecksTable.tsx",
           "patterns": ["formatRelativeTime(availability?.lastChecked", "const formatChecked"]
+        },
+        {
+          "path": "src/features/vmware/VsphereActivityTable.tsx",
+          "patterns": [
+            "const formatActivityDate",
+            "formatActivityDate(activity.occurredAt || activity.observedAt)"
+          ]
         }
       ],
       "proof": [
@@ -4464,7 +4464,7 @@
       "summary": "vSphere activity tables must not recreate compact activity-date helpers for timestamp cells.",
       "canonical": {
         "path": "src/features/platformPage/sharedPlatformPage.tsx",
-        "export": "PlatformTableDateTimeValue"
+        "export": "PlatformTableRelativeTimeValue"
       },
       "scopes": ["src/features/vmware/VsphereActivityTable.tsx"],
       "extensions": [".tsx"],
@@ -4473,7 +4473,7 @@
         "toLocaleString(undefined, {",
         "minute: '2-digit'"
       ],
-      "legacyReason": "Retired migration debt. Compact platform timestamp cells must compose PlatformTableDateTimeValue so date parsing, empty markers, minimum-year handling, and tabular styling stay shared.",
+      "legacyReason": "Retired migration debt. vSphere activity reads as an age through PlatformTableRelativeTimeValue, with the exact time on hover and in the drawer, so date parsing, empty markers, and tabular styling stay shared.",
       "allowedPaths": [],
       "ignoredPaths": [],
       "proof": [

@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-lib
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { VsphereActivityTable } from '@/features/vmware/VsphereActivityTable';
-import { buildVmwareActivityRows } from '@/features/vmware/vmwarePageModel';
+import { buildVmwareActivityRows, filterVmwareActivity } from '@/features/vmware/vmwarePageModel';
 import type { Resource } from '@/types/resource';
 
 const makeVm = (overrides: Partial<Resource> = {}): Resource =>
@@ -55,11 +55,13 @@ const makeVm = (overrides: Partial<Resource> = {}): Resource =>
         sourceAdapter: 'vmware_adapter',
         confidence: 'high',
         actor: 'administrator@vsphere.local',
-        reason: 'VmPoweredOnEvent',
+        reason: 'Virtual machine warehouse-api-01 was powered on',
         metadata: {
           activity_type: 'vmware_event',
           activity_native_id: 'event-501',
-          activity_title: 'VmPoweredOnEvent',
+          // The provider titles an event with vCenter's message, keeping the
+          // event class in vmwareEventType.
+          activity_title: 'Virtual machine warehouse-api-01 was powered on',
           activity_message: 'Virtual machine warehouse-api-01 was powered on',
           vmwareEventType: 'VmPoweredOnEvent',
           vmwareEventMessage: 'Virtual machine warehouse-api-01 was powered on',
@@ -103,7 +105,8 @@ describe('VsphereActivityTable', () => {
       screen.getByTitle('Reconfigure virtual machine · Permission denied while reconfiguring VM'),
     ).toBeInTheDocument();
     expect(screen.getByText('Error')).toBeInTheDocument();
-    expect(screen.getByText('VmPoweredOnEvent')).toBeInTheDocument();
+    expect(screen.getByText('Virtual machine warehouse-api-01 was powered on')).toBeInTheDocument();
+    expect(screen.queryByText('VmPoweredOnEvent')).not.toBeInTheDocument();
     expect(screen.getByText('administrator@vsphere.local')).toBeInTheDocument();
 
     const row = screen.getByText('Reconfigure virtual machine').closest('tr');
@@ -134,5 +137,62 @@ describe('VsphereActivityTable', () => {
       'aria-expanded',
       'false',
     );
+  });
+  it("reads an event as vCenter's message and its time as an age", async () => {
+    const vm = makeVm();
+    const unset = {
+      ...vm.recentChanges![1],
+      id: 'activity-event-unset-time',
+      observedAt: '1970-01-01T00:00:00Z',
+      occurredAt: '1970-01-01T00:00:00Z',
+      reason: 'Alarm status changed on warehouse-api-01',
+      metadata: {
+        ...vm.recentChanges![1].metadata,
+        activity_native_id: 'event-502',
+        // Stored before the provider titled events with vCenter's message.
+        activity_title: 'AlarmStatusChangedEvent',
+        activity_message: 'Alarm status changed on warehouse-api-01',
+        vmwareEventType: 'AlarmStatusChangedEvent',
+        vmwareEventMessage: 'Alarm status changed on warehouse-api-01',
+      },
+    };
+    const activity = buildVmwareActivityRows([
+      makeVm({ recentChanges: [...vm.recentChanges!, unset] }),
+    ]);
+
+    render(() => (
+      <VsphereActivityTable
+        activity={activity}
+        emptyIcon={<span />}
+        emptyTitle="No activity"
+        emptyDescription="No activity"
+        showToolbar={false}
+      />
+    ));
+
+    // Searching by the event class still finds the row it no longer titles.
+    expect(
+      filterVmwareActivity(activity, 'VmPoweredOnEvent', 'all').map((row) => row.nativeId),
+    ).toEqual(['event-501']);
+
+    const powered = screen.getByText('Virtual machine warehouse-api-01 was powered on');
+    // The hover title does not repeat the message the row already shows.
+    expect(powered).toHaveAttribute(
+      'title',
+      'Virtual machine warehouse-api-01 was powered on · event-501',
+    );
+    const poweredRow = powered.closest('tr')!;
+    const when = poweredRow.querySelector('td:last-child span[title]');
+    expect(when?.textContent).toMatch(/ago$/);
+    expect(when?.getAttribute('title')).toMatch(/2026/);
+
+    const unsetRow = screen.getByText('Alarm status changed on warehouse-api-01').closest('tr')!;
+    expect(unsetRow.querySelector('td:last-child')?.textContent).toBe('-');
+
+    await fireEvent.click(poweredRow);
+    const detail = within(screen.getByTestId('vsphere-activity-detail'));
+    expect(detail.getByText('Event type')).toBeInTheDocument();
+    expect(detail.getByText('VmPoweredOnEvent')).toBeInTheDocument();
+    expect(detail.queryByText('Message')).not.toBeInTheDocument();
   });
 });
