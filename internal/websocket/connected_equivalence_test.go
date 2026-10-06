@@ -19,7 +19,7 @@ func TestDashboardDispatchLifecycleEquivalence(t *testing.T) {
 	state.PolicyCatalog = map[string]json.RawMessage{"policy": json.RawMessage(`{"write":false}`)}
 	state.AISafeSummaryCatalog = map[string]string{"summary": "initial"}
 	state.ConnectedInfrastructure = []models.ConnectedInfrastructureItemFrontend{{ID: "infra", LastSeen: 1, Status: "online"}}
-	state.ActiveAlerts = []models.Alert{{ID: "alert", Level: "warning", Message: "initial"}}
+	state.ActiveAlerts = []models.Alert{{ID: "alert", ResourceID: state.Resources[0].ID, Level: "warning", Message: "initial"}}
 	getter := func(string) interface{} { return state }
 	hub := NewHub(getter)
 	clients := []*Client{{orgID: "own", send: make(chan []byte, 1)}, {orgID: "own", send: make(chan []byte, 1)}, {orgID: "other", send: make(chan []byte, 1)}}
@@ -35,7 +35,7 @@ func TestDashboardDispatchLifecycleEquivalence(t *testing.T) {
 		hub.clientsByTenant[client.orgID][client] = true
 	}
 	otherBaseline := clients[2].stateSnapshot
-	for phase := 0; phase < 8; phase++ {
+	for phase := 0; phase < 11; phase++ {
 		t.Run(fmt.Sprint(phase), func(t *testing.T) {
 			before := clients[0].stateSnapshot
 			switch phase {
@@ -51,8 +51,10 @@ func TestDashboardDispatchLifecycleEquivalence(t *testing.T) {
 				state.Resources[0].PlatformData = json.RawMessage(`{"counter":18446744073709551615,"inventory":["c"]}`)
 			case 2:
 				state.Resources[0].Health = json.RawMessage(`{"status":"unhealthy","age":70}`)
-				state.Resources[0].Alerts = []models.ResourceAlertFrontend{{ID: "live", Level: "critical"}}
 				state.ActiveAlerts[0].Level = "critical"
+				// Resource alerts have one canonical owner: ActiveAlerts, not
+				// an embedded resource copy. Preserve both arrival and update.
+				state.ActiveAlerts = append(state.ActiveAlerts, models.Alert{ID: "live", ResourceID: state.Resources[0].ID, Level: "critical"})
 			case 3:
 				state.Resources[0].Labels = map[string]string{"team": "changed"}
 				state.Resources[0].Tags = []string{"new"}
@@ -72,10 +74,16 @@ func TestDashboardDispatchLifecycleEquivalence(t *testing.T) {
 				state.ActiveAlerts = nil
 			case 6:
 				state.Resources[0].Health = nil
-				state.Resources[0].Alerts = nil
 				state.Resources[0].PlatformData = nil
 				state.ConnectionHealth = nil
-			case 7: // unchanged evidence must not manufacture a heartbeat
+			case 7: // Alert-only changes must not depend on a resource update.
+				state.ActiveAlerts = []models.Alert{{ID: "alert-only", ResourceID: state.Resources[0].ID, Level: "warning", Message: "arrived"}}
+			case 8:
+				state.ActiveAlerts[0].Level = "critical"
+				state.ActiveAlerts[0].Message = "changed"
+			case 9:
+				state.ActiveAlerts = nil
+			case 10: // unchanged evidence must not manufacture a heartbeat
 			}
 			current, err := buildGenericClientStateSnapshot(state)
 			if err != nil {
@@ -84,6 +92,34 @@ func TestDashboardDispatchLifecycleEquivalence(t *testing.T) {
 			want, err := referenceBuildClientStateDelta(before, current)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if phase >= 7 && phase <= 9 {
+				// Keep an explicit alert oracle as well as reference/wire
+				// equivalence: dropping alerts from both paths cannot pass.
+				alerts, ok := want[activeAlertsDeltaField].(resourceDeltaPayload)
+				if !ok || len(want) != 1 {
+					t.Fatalf("alert-only phase %d: delta = %#v", phase, want)
+				}
+				if phase == 9 {
+					if len(alerts.Upserts) != 0 || !reflect.DeepEqual(alerts.Removed, []string{"alert-only"}) {
+						t.Fatalf("alert-only removal = %#v", alerts)
+					}
+				} else {
+					if len(alerts.Upserts) != 1 || len(alerts.Removed) != 0 {
+						t.Fatalf("alert-only upsert = %#v", alerts)
+					}
+					var alert models.Alert
+					if err := json.Unmarshal(alerts.Upserts[0], &alert); err != nil {
+						t.Fatal(err)
+					}
+					if phase == 7 {
+						if alert.ID != "alert-only" || alert.ResourceID != state.Resources[0].ID || alert.Level != "warning" || alert.Message != "arrived" {
+							t.Fatalf("alert-only arrival = %#v", alert)
+						}
+					} else if alert.ID != "alert-only" || alert.Level != "critical" || alert.Message != "changed" {
+						t.Fatalf("alert-only change = %#v", alert)
+					}
+				}
 			}
 			encoded, err := json.Marshal(Message{Type: "rawData", Data: want})
 			if err != nil {
