@@ -176,6 +176,42 @@ func TestRefreshCanonicalIdentityKeepsProxmoxPresentationSeparateFromNativeAlias
 	}
 }
 
+func TestRefreshCanonicalIdentityKeepsParentNodeIdentityOffProxmoxChildren(t *testing.T) {
+	parentNode := &ProxmoxData{
+		Instance:     "homelab",
+		NodeIdentity: "homelab-minipc",
+		NodeName:     "minipc",
+		NodeAliases:  []string{"minipc-old"},
+	}
+	for _, resourceType := range []ResourceType{ResourceTypeVM, ResourceTypeSystemContainer, ResourceTypeStorage} {
+		resource := Resource{
+			ID:   string(resourceType) + "-1",
+			Type: resourceType,
+			Name: "cloudflared",
+			Proxmox: &ProxmoxData{
+				SourceID:     "homelab:minipc:104",
+				Instance:     parentNode.Instance,
+				NodeIdentity: parentNode.NodeIdentity,
+				NodeName:     parentNode.NodeName,
+				NodeAliases:  append([]string(nil), parentNode.NodeAliases...),
+			},
+			MetricsTarget: &MetricsTarget{ResourceType: string(resourceType), ResourceID: "homelab:minipc:104"},
+		}
+
+		RefreshCanonicalIdentity(&resource)
+
+		if resource.Canonical == nil {
+			t.Fatalf("%s: canonical identity missing", resourceType)
+		}
+		for _, alias := range resource.Canonical.Aliases {
+			if alias == "homelab-minipc" || alias == "minipc-old" {
+				t.Fatalf("%s carries parent node identity %q as an alias, so node alerts attach to it: %v",
+					resourceType, alias, resource.Canonical.Aliases)
+			}
+		}
+	}
+}
+
 func TestProxmoxDiskAlertAliasIsScopedAndNotPrimaryIdentity(t *testing.T) {
 	resource := Resource{
 		ID: "physical-disk-1", Type: ResourceTypePhysicalDisk,
