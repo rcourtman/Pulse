@@ -357,14 +357,26 @@ class DevPrepushBrowserTest(DevPrepushFixture):
         self.assertIn("base_sha must match", result.stderr)
 
     def test_metadata_only_nonpassing_receipt_stays_blocked(self):
+        # A receipt-only follow-up cannot launder unverified source already
+        # in the outgoing range. With no source delta, CI intentionally skips.
+        self.commit_source(proof=False)
         path = self.receipt([self.SOURCE], result="replace-with-passed-after-verification")
         self.git("add", "--", path)
         self.git("commit", "--quiet", "-m", "Nonpassing fixture receipt")
         self.assert_browser_blocked(*self.run_gate())
 
+    def test_receipt_only_range_without_source_changes_matches_ci_skip(self):
+        path = self.receipt([self.SOURCE], result="replace-with-passed-after-verification")
+        self.git("add", "--", path)
+        self.git("commit", "--quiet", "-m", "Receipt-only fixture without source delta")
+        result, calls, _ = self.run_gate()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Browser verification guard skipped", result.stdout)
+        self.assertEqual([call["args"] for call in calls], [["run", "type-check"]])
+
     def test_merge_preserves_original_receipt_without_rebinding(self):
         verified = self.commit_source()
-        receipt_before = self.git("show", verified + ":frontend-modern/browser-verification").stdout
+        receipt_before = self.git("rev-parse", verified + ":frontend-modern/browser-verification").stdout
         self.git("checkout", "--quiet", "--detach", self.base)
         self.change("README.md")
         unrelated = self.git("rev-parse", "HEAD").stdout.strip()
@@ -373,7 +385,7 @@ class DevPrepushBrowserTest(DevPrepushFixture):
         result, _, _ = self.run_gate()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("Browser verification guard passed", result.stdout)
-        self.assertEqual(self.git("show", "HEAD:frontend-modern/browser-verification").stdout, receipt_before)
+        self.assertEqual(self.git("rev-parse", "HEAD:frontend-modern/browser-verification").stdout, receipt_before)
 
     def test_diverged_upstream_does_not_require_proof_for_incoming_source(self):
         original_base = self.base
