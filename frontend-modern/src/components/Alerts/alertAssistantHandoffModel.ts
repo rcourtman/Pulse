@@ -2,6 +2,7 @@ import type { Alert } from '@/types/api';
 import type { AIChatContext } from '@/stores/aiChat';
 import { DEFAULT_LOCALE, t, type SupportedLocale } from '@/i18n';
 import { getCanonicalAlertId } from '@/features/alerts/identity';
+import { getMetricAlertPresentation } from '@/features/alerts/metricAlertPresentation';
 import { formatAlertValue } from '@/utils/alertFormatters';
 import { isMetricAlertType } from '@/utils/alerts';
 import { isPulseSystemAlert } from '@/utils/alertScope';
@@ -35,7 +36,16 @@ export function buildAlertAssistantHandoff({
   // to convey what's wrong.
   const systemScoped = isPulseSystemAlert(alert);
   const hasMetricValues = !systemScoped && isMetricAlertType(alert.type);
-  const currentValue = hasMetricValues ? formatAlertValue(alert.value, alert.type) : '';
+  // An open threshold alert keeps value/message at its last breach while it
+  // holds; the live status is what the metric reads now.
+  const metricStatus = hasMetricValues ? alert.metricStatus : undefined;
+  const presentation = metricStatus ? getMetricAlertPresentation(alert, now.getTime()) : null;
+  const currentValue = hasMetricValues
+    ? formatAlertValue(metricStatus ? metricStatus.value : alert.value, alert.type)
+    : '';
+  const briefingMessage = presentation
+    ? `${presentation.summary}. ${presentation.detail}`
+    : alert.message;
   const thresholdValue = hasMetricValues ? formatAlertValue(alert.threshold, alert.type) : '';
   const nodeLabel = !systemScoped && alert.node ? alert.nodeDisplayName || alert.node : '';
   const levelLabel = formatAlertLevel(alert.level);
@@ -98,8 +108,8 @@ export function buildAlertAssistantHandoff({
               })
             : undefined,
           nodeLabel ? t('alerts.assistant.detail.node', { node: nodeLabel }) : undefined,
-          alert.message
-            ? t('alerts.assistant.detail.message', { message: alert.message })
+          briefingMessage
+            ? t('alerts.assistant.detail.message', { message: briefingMessage })
             : undefined,
         ].filter((line): line is string => Boolean(line)),
         actionLabel: t('alerts.assistant.action.investigate', { alertIdentifier }),
@@ -149,6 +159,7 @@ function buildAlertAssistantModelContext({
     systemScoped ? undefined : formatContextLine('Resource ID', alert.resourceId),
     formatContextLine('Current Value', currentValue),
     formatContextLine('Threshold', thresholdValue),
+    ...metricStatusContextLines(alert),
     formatContextLine('Duration', durationText),
     formatContextLine('Node', nodeLabel),
     formatContextLine('Message', alert.message),
@@ -156,6 +167,34 @@ function buildAlertAssistantModelContext({
   ]
     .filter((line): line is string => Boolean(line))
     .join('\n');
+}
+
+const METRIC_PHASE_CONTEXT: Record<string, string> = {
+  breaching: 'breaching (at or above the threshold)',
+  latched: 'holding (below the threshold, not yet down to the clear level)',
+  recovering: 'recovering (at or below the clear level, waiting out the recovery delay)',
+};
+
+function metricStatusContextLines(alert: Alert): Array<string | undefined> {
+  const status = isMetricAlertType(alert.type) ? alert.metricStatus : undefined;
+  if (!status) return [];
+  const delay = status.recoveryDelaySeconds ?? 0;
+  return [
+    formatContextLine('Alert Phase', METRIC_PHASE_CONTEXT[status.phase] ?? status.phase),
+    formatContextLine(
+      'Clears At',
+      `${formatAlertValue(status.recovery, alert.type)} or lower${delay > 0 ? ` for ${delay}s` : ''}`,
+    ),
+    status.phase === 'recovering' && status.recoveryElapsedSeconds
+      ? formatContextLine('Recovery Progress', `${status.recoveryElapsedSeconds}s of ${delay}s`)
+      : undefined,
+    status.phase === 'breaching'
+      ? undefined
+      : formatContextLine(
+          'Last Reading At Or Above Threshold',
+          formatAlertValue(alert.value, alert.type),
+        ),
+  ];
 }
 
 function formatContextLine(label: string, value?: string | number | null): string | undefined {

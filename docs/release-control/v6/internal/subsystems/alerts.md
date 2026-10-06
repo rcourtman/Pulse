@@ -70,6 +70,23 @@ isolation. `guest_observation_test.go` no longer treats a retained-reading gap
 as elapsed breach evidence. These controls establish source lifecycle
 truthfulness, not native freeze/thaw safety or external notification delivery.
 
+### Open threshold alerts carry a volatile live status — issue #2068
+
+`evaluateCanonicalMetricAlert` builds `MetricStatus` from the evaluator's own
+inputs on every evaluation, including the hysteresis hold and the recovery
+run, where `Value`, `Message` and `LastSeen` stay at the last breach and no
+branch may notify. The phase comes from the trigger, the clear level handed to
+the reducer (a value at or below it counts toward recovery) and the reducer's
+recovery run; progress uses that run's monotonic elapsed time. The status is
+stripped from the active-state checkpoint, the recovery mirror and the
+degraded recovery projection, so a held alert adds no durable writes, and
+after a restart it is absent until the next evaluation. Resolved records carry
+no live status. Stale-alert cleanup and the retention TTLs use the latest
+observation (`lastObservedAt`), so an alert held below its trigger for over a
+day is not auto-resolved as unmonitored. Frontend surfaces format the status
+through `features/alerts/metricAlertPresentation.ts` and never re-derive the
+phase or recovery timing.
+
 ### Retained guest observations are not alert evidence
 
 Guest memory marked `last-known`, `unavailable` or an unknown observation state

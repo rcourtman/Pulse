@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import {
+  STALLED_QUERY_READ_MS,
   createNonSuspendingQuery,
   getCreateNonSuspendingQueryCacheDiagnosticsForTest,
   resetCreateNonSuspendingQueryCacheForTest,
@@ -311,6 +312,111 @@ it.each(['success', 'failure'] as const)(
     expect(screen.getByTestId('query')).toHaveTextContent(expected);
   },
 );
+
+it('lets a background read slower than the poll interval settle', async () => {
+  vi.useFakeTimers();
+  // The second read takes 40s, for example while apiFetch waits out a 429
+  // Retry-After, and the query polls every 30s.
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce('first')
+    .mockImplementationOnce(
+      () => new Promise<string>((resolve) => setTimeout(() => resolve('second'), 40_000)),
+    )
+    .mockResolvedValue('third');
+  const Probe = () => {
+    const query = createNonSuspendingQuery({
+      source: () => 'replication',
+      fetcher,
+      initialValue: '',
+      pollMs: 30_000,
+    });
+    return <output data-testid="query">{query.value()}</output>;
+  };
+  render(() => <Probe />);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(screen.getByTestId('query')).toHaveTextContent('first');
+
+  // The 30s poll starts the slow read; the 60s poll must not discard it.
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(fetcher.mock.calls[1][1].aborted).toBe(false);
+
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(screen.getByTestId('query')).toHaveTextContent('second');
+
+  // Polling resumes on the next tick once nothing is in flight.
+  await vi.advanceTimersByTimeAsync(20_000);
+  expect(fetcher).toHaveBeenCalledTimes(3);
+  expect(screen.getByTestId('query')).toHaveTextContent('third');
+});
+
+it('drops a stalled read loading state even when its replacement also hangs', async () => {
+  vi.useFakeTimers();
+  const hang = () => new Promise<string>(() => undefined);
+  const fetcher = vi.fn().mockResolvedValueOnce('first').mockImplementation(hang);
+  const Probe = () => {
+    const query = createNonSuspendingQuery({
+      source: () => 'pbs-host',
+      fetcher,
+      initialValue: '',
+      pollMs: 30_000,
+    });
+    return (
+      <>
+        <button onClick={() => void query.refetch()}>Refresh</button>
+        <output data-testid="query">{`${query.value()}|loading:${query.loading()}`}</output>
+      </>
+    );
+  };
+  render(() => <Probe />);
+  await vi.advanceTimersByTimeAsync(0);
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+  expect(screen.getByTestId('query')).toHaveTextContent('first|loading:true');
+
+  // The refresh never returns, so the next poll replaces it; that read never
+  // returns either, and later polls leave it alone until it has stalled.
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(fetcher).toHaveBeenCalledTimes(3);
+  expect(fetcher.mock.calls[1][1].aborted).toBe(true);
+  await vi.advanceTimersByTimeAsync(STALLED_QUERY_READ_MS - 30_000);
+  expect(fetcher).toHaveBeenCalledTimes(3);
+  expect(screen.getByTestId('query')).toHaveTextContent('first|loading:true');
+
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(fetcher).toHaveBeenCalledTimes(4);
+  expect(fetcher.mock.calls[2][1].aborted).toBe(true);
+  expect(screen.getByTestId('query')).toHaveTextContent('first|loading:false');
+});
+
+it('reports a never-loaded query as failed once its polled read stalls', async () => {
+  vi.useFakeTimers();
+  // Every read hangs, from the first one on.
+  const fetcher = vi.fn().mockImplementation(() => new Promise<string>(() => undefined));
+  const Probe = () => {
+    const query = createNonSuspendingQuery({
+      source: () => 'replication',
+      fetcher,
+      initialValue: '',
+      pollMs: 30_000,
+    });
+    return (
+      <output data-testid="query">{`resolved:${query.resolvedOnce()}|error:${
+        (query.error() as Error | null)?.message ?? ''
+      }|loading:${query.loading()}`}</output>
+    );
+  };
+  render(() => <Probe />);
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(screen.getByTestId('query')).toHaveTextContent('resolved:false|error:|loading:true');
+
+  await vi.advanceTimersByTimeAsync(STALLED_QUERY_READ_MS);
+  expect(fetcher).toHaveBeenCalledTimes(3);
+  expect(screen.getByTestId('query')).toHaveTextContent(
+    'resolved:true|error:The request timed out.|loading:false',
+  );
+});
 
 const settle = async () => {
   await Promise.resolve();

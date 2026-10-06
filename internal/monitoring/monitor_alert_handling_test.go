@@ -150,6 +150,67 @@ func TestProxmoxAlertTimelineUsesCanonicalHistoryIdentity(t *testing.T) {
 	require.Equal(t, canonical["pve1"], changes[0].ResourceID)
 }
 
+// Docker host, Swarm service and sub-resource alerts (a ZFS pool and device,
+// a host filesystem) carry references the registry has no resource for. Their
+// lifecycle must reach the owner's canonical history, so the producers' ref
+// shapes are pinned here against the real alert manager.
+func TestOwnerAlertTimelinesUseCanonicalHistoryIdentity(t *testing.T) {
+	store, err := unifiedresources.NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	config := manager.GetConfig()
+	config.Enabled = true
+	config.ActivationState = alerts.ActivationPending
+	config.TimeThresholds = map[string]int{"all": 0}
+	config.MetricTimeThresholds = map[string]map[string]int{"all": {"disk": 0}}
+	config.SuppressionWindow = 0
+	manager.UpdateConfig(config)
+	now := time.Now()
+	dockerHost := models.DockerHost{ID: "dh-7f3a", Hostname: "tower", DisplayName: "tower", Status: "online", LastSeen: now,
+		Swarm:    &models.DockerSwarmInfo{NodeID: "node-a", NodeRole: "manager", LocalState: "active", ControlAvailable: true, ClusterID: "swarm-1"},
+		Services: []models.DockerService{{ID: "x7k2m9q4w1e8r5t3y6u0i2o4p", Name: "web", DesiredTasks: 2, RunningTasks: 0}}}
+	storage := models.Storage{ID: "lab-pve1-local-zfs", Name: "local-zfs", Node: "pve1", Instance: "lab", Type: "zfspool", Status: "available", Total: 100, Used: 10, Usage: 10, Enabled: true, Active: true, LastSeen: now,
+		ZFSPool: &models.ZFSPool{Name: "rpool", State: "DEGRADED", Status: "Degraded", Devices: []models.ZFSDevice{{Name: "sda2", Type: "disk", State: "FAULTED"}}}}
+	agentHost := models.Host{ID: "host-nas", Hostname: "nas", DisplayName: "nas", MachineID: "fedcba9876543210", Status: "online", LastSeen: now,
+		Disks: []models.Disk{{Mountpoint: "/var", Device: "/dev/sdb1", Type: "ext4", Total: 100, Used: 99, Free: 1, Usage: 99}}}
+	registry := unifiedresources.NewRegistry(store)
+	registry.IngestSnapshot(models.StateSnapshot{DockerHosts: []models.DockerHost{dockerHost}, Storage: []models.Storage{storage}, Hosts: []models.Host{agentHost}})
+	monitor := &Monitor{alertManager: manager, resourceStore: unifiedresources.NewMonitorAdapter(registry)}
+	manager.SubscribeLifecycleCallback(monitor.handleAlertLifecycleEvent)
+	manager.CheckDockerHost(dockerHost)
+	manager.CheckStorage(storage)
+	manager.CheckHost(agentHost)
+	for range 3 {
+		manager.HandleDockerHostOffline(dockerHost)
+	}
+
+	owner := map[string]string{}
+	for _, resource := range registry.List() {
+		owner[string(resource.Type)+"/"+resource.Name] = resource.ID
+	}
+	filters := unifiedresources.ResourceChangeFilters{Kinds: []unifiedresources.ChangeKind{unifiedresources.ChangeAlertFired}}
+	want := map[string]string{
+		"docker-host-offline":   owner["agent/tower"],
+		"docker-service-health": owner["docker-service/web"],
+		"zfs-pool-state":        owner["storage/local-zfs"],
+		"zfs-device":            owner["storage/local-zfs"],
+		"disk":                  owner["agent/nas"],
+	}
+	for alertType, canonicalID := range want {
+		require.NotEmpty(t, canonicalID, alertType)
+		changes, err := store.GetRecentChangesFiltered(canonicalID, time.Time{}, 10, filters)
+		require.NoError(t, err)
+		found := false
+		for _, change := range changes {
+			require.Equal(t, canonicalID, change.ResourceID)
+			found = found || change.Metadata["alert_type"] == alertType
+		}
+		require.True(t, found, "%s alert missing from %s history: %+v", alertType, canonicalID, changes)
+	}
+}
+
 func TestMonitor_HandleAlertFired_Extra(t *testing.T) {
 	// 1. Alert is nil
 	m1 := &Monitor{}

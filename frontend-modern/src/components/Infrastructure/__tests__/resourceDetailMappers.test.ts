@@ -8,6 +8,8 @@ import {
   toAgentFromResource,
   toNodeFromProxmox,
 } from '@/components/Infrastructure/resourceDetailMappers';
+import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
+import resourceDetailDiscoveryModelSource from '@/components/Infrastructure/resourceDetailDiscoveryModel.ts?raw';
 import type { Resource } from '@/types/resource';
 
 const createHybridHostResource = (): Resource =>
@@ -303,6 +305,41 @@ describe('resourceDetailMappers', () => {
           valueTitle: 'Offline · Critical',
         },
       ]);
+    });
+
+    it('formats an online boolean metric with an OK status', () => {
+      expect(
+        buildCustomSensorRows({
+          custom: [
+            {
+              id: 'service_online',
+              name: 'Checkout',
+              group: 'Main server',
+              subgroup: 'Services',
+              kind: 'boolean',
+              value: 1,
+              status: 'ok',
+              observedAt: '2026-07-30T20:00:00Z',
+            },
+          ],
+        }),
+      ).toEqual([
+        {
+          label: 'Main server / Services / Checkout',
+          value: 'Online',
+          valueTitle: 'Online · OK',
+        },
+      ]);
+    });
+  });
+
+  describe('detail row projection boundary', () => {
+    it('formats temperature, GPU, power, fan and custom rows from the selected resource payload only', () => {
+      expect(resourceDetailMappersSource).not.toContain('fetch(');
+      expect(resourceDetailMappersSource).not.toContain('nvidia-smi');
+      expect(resourceDetailMappersSource).not.toContain('powercap');
+      expect(resourceDetailMappersSource).not.toContain('export const toDiscoveryConfig');
+      expect(resourceDetailDiscoveryModelSource).toContain('export const toDiscoveryConfig');
     });
   });
 

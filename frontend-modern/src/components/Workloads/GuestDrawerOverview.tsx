@@ -22,7 +22,7 @@ import {
 import { AvailabilityProbeSuggestionCard } from './AvailabilityProbeSuggestionCard';
 import { buildWorkloadsDiskPresentation } from './diskListModel';
 import {
-  getGuestDrawerAlertMessage,
+  getGuestDrawerAlertAttention,
   getGuestDrawerMemoryRows,
   getGuestDrawerMemoryReading,
   getGuestDrawerGuestReadPresentation,
@@ -307,7 +307,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       <DrawerAttentionSection
         items={(props.alerts ?? []).map((alert) => ({
           id: alert.id,
-          message: getGuestDrawerAlertMessage(alert, {
+          ...getGuestDrawerAlertAttention(alert, {
             guest: props.guest,
             memoryDisplayBasis: props.memoryDisplayBasis,
             parentMemoryTotal: props.parentMemoryTotal,

@@ -1384,8 +1384,21 @@ remove settled items and append genuinely new work. Acknowledging an occurrence
 is presented as `Mark reviewed`: on success the item leaves the active inbox,
 Patrol announces the remaining decision count, and advances to the next current
 item. Temporary suppression uses the same advancement loop and explicitly says
-that the occurrence will return at the chosen time. Clearing the final item
-returns to the calm inbox with an honest completion announcement.
+when it ends and which state it hands the occurrence back to. Clearing the
+final item returns to the calm inbox with an honest completion announcement.
+Ending a suppression, early or at its expiry, puts the alert in Acknowledged
+when it is acknowledged and in Open otherwise (`unsuppressOperationalAlert`),
+and Acknowledged is not active attention. So for an issue marked reviewed
+(`operationalRecord.acknowledgement` present) the suppression form's duration
+reads `End suppression after` and the early-end control reads `End
+suppression`; an unreviewed issue keeps `Return it to active attention after`
+and `Return to active attention`. The handled-view notice after ending it reads
+the state the post-change reload reports for the item, `Suppression ended. It
+stays reviewed.` for Acknowledged and `Returned to decision inbox` otherwise,
+so a detail read before the review changed elsewhere cannot misstate the
+outcome; it falls back to the detail's acknowledgement only when the item is
+gone from the reload. `getAttentionSuppressionEndPresentation` owns that copy
+and `PatrolAttentionWorkbench.test.tsx` pins all three cases.
 
 The attention queue orders genuine operator decisions by severity, actionable
 approval/review state, and latest observation time. Collapsed rows expose the

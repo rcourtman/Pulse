@@ -52,6 +52,7 @@ import { ProxmoxMailGatewayTable } from './ProxmoxMailGatewayTable';
 import { ProxmoxNodesTable } from './ProxmoxNodesTable';
 import { ProxmoxReplicationTable, fetchReplicationJobs } from './ProxmoxReplicationTable';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
+import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import type { ReplicationJob } from '@/types/api';
 import type { Resource } from '@/types/resource';
@@ -127,11 +128,22 @@ export function ProxmoxPageSurface() {
   // last jobs, so the tab does not vanish under the user.
   const replicationJobs = createNonSuspendingQuery({
     source: () => 'proxmox-pve',
-    fetcher: () => fetchReplicationJobs(),
+    fetcher: (_source, signal) => fetchReplicationJobs(signal),
     initialValue: NO_REPLICATION_JOBS,
     pollMs: REPLICATION_JOBS_POLL_MS,
   });
   const replicationJobCount = createMemo(() => replicationJobs.value().length);
+  // Replication presence is known once a read has succeeded. A failed read
+  // before that says nothing, so a direct link holds on its error and Retry
+  // instead of falling to Overview; a failed poll after that keeps the last
+  // answer rather than reopening a route an empty read already closed. An
+  // access denial withdraws that answer, so the link holds on the denial.
+  const replicationJobsConfirmed = createMemo<boolean>((confirmed) => {
+    if (!replicationJobs.resolvedOnce()) return false;
+    const error = replicationJobs.error();
+    if (getAPIReadAccessErrorMessage(error)) return false;
+    return confirmed || !error;
+  }, false);
   const visibleTabs = createMemo(() => {
     // An unknown snapshot is not evidence that every optional integration is
     // present. Never use estate-wide aggregations here: unrelated VMware VMs
@@ -149,7 +161,7 @@ export function ProxmoxPageSurface() {
     // Do not discard a direct link while counts are still unknown: its own
     // resource query must be allowed to hydrate before deciding it is absent.
     const countsUnknown =
-      !tabEvidence.facets?.() || (requested === 'replication' && !replicationJobs.resolvedOnce());
+      !tabEvidence.facets?.() || (requested === 'replication' && !replicationJobsConfirmed());
     return countsUnknown || visibleTabIds().has(requested) ? requested : 'overview';
   });
   const shouldHydrateTab = (tab: ProxmoxPageTabId) => activeTab() === tab;

@@ -37,6 +37,14 @@ credential. `TestAllowedOriginsSavedEffectiveLifecycle`,
 No database/driver/schema, backup recovery, retention or old queue snapshot
 policy changes are part of this repair.
 
+### Storage usage headline follows the alert phase — issue #2068
+
+`describeStorageAlertHeadline` says "Over N% usage limit" only while a usage
+alert is breaching. When `metricStatus.phase` is `latched` or `recovering`,
+the row says usage is under the limit and names the clear level, so the
+headline never contradicts the usage bar beside it. Fill-forecast headlines
+are unchanged.
+
 ### Guest-memory read state stays independent of backup disk state
 
 The existing guest drawer retains Core's selected memory provenance through
@@ -1002,15 +1010,21 @@ composition, and visible source/state chips must render through `MetadataBadge`
 instead of restoring local rounded-sm xs badge spans.
 Backup ages read the frontend-primitives shared relative-time clock:
 `ProxmoxBackupAgeText` measures the full and compact age text and its
-current, aging, or stale band from `useRelativeTimeNow`, never earlier than the
-wall clock, so a backup row that stays mounted for days moves from current to
-aging without new inventory, and a backup that finished inside the clock's last
-tick never bands as a future, unknown age. `ProxmoxPageSurface` reads
+current, aging, or stale band from `useRelativeTimeNow`, so a backup row that
+stays mounted for days moves from current to aging without new inventory, and
+because every clock read returns the wall clock, a backup that finished since
+the last tick never bands as a future, unknown age. `ProxmoxPageSurface` reads
 replication jobs through `createNonSuspendingQuery` with a 30-second background
 poll, because the Replication table's Last sync and Next sync move on the same
-clock: a failed read reports the error but keeps the last jobs and the tab, and
-a direct replication link holds until the first read resolves instead of
-falling back to Overview. The poll re-reads the existing read-only
+clock. Each read forwards the query's abort signal, so a replaced or unmounted
+read is cancelled. Whether replication exists is unknown until a read
+succeeds, counted from the last reset (an organization switch): a failed read
+before then holds a direct replication link on the error and its Retry instead
+of falling back to Overview, and once a read has succeeded a failed poll
+reports the error but keeps that answer (the jobs and the tab, or the Overview
+fallback for an empty answer) rather than reopening the route. An access
+denial (401 or 403) withdraws the jobs and the tab, and a direct link holds on
+the denial so the operator sees why. The poll re-reads the existing read-only
 `/api/replication/jobs` snapshot and opens no new storage or recovery path.
 Proxmox backup-health and recoverable-artifact summary rows follow the same
 platform-table density contract as every other provider surface. Storage and

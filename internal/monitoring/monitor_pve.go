@@ -785,7 +785,7 @@ func (m *Monitor) boundCarriedNodeTemperature(node *models.Node, now time.Time) 
 		return
 	}
 	if now.Sub(node.Temperature.LastUpdate) > m.nodeTemperatureCarryWindow() ||
-		m.carriedTemperatureOutlivesAgentLease(node.ID, node.Name, node.Temperature, now) {
+		m.carriedTemperatureOutlivesAgentLease(*node, node.Temperature, now) {
 		node.Temperature = nil
 		return
 	}

@@ -378,11 +378,11 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
         )
 
-    def test_lookup_paths_assigns_unified_resource_table_state_model_to_shared_infrastructure_hot_path(
+    def test_lookup_paths_assigns_resource_detail_mappers_to_shared_infrastructure_hot_path(
         self,
     ) -> None:
         result = lookup_paths(
-            ["frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts"]
+            ["frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts"]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
@@ -426,7 +426,7 @@ class SubsystemLookupTest(unittest.TestCase):
             "resource-consumers",
         )
         self.assertIn(
-            "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
+            "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
             unified_resources_match["verification_requirement"]["exact_files"],
         )
 

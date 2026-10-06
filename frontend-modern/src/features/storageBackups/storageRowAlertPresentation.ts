@@ -78,6 +78,18 @@ export const describeStorageAlertHeadline = (
     if (options.compact) return `Full in ~${rounded}d`;
     return `Full in ~${rounded} ${rounded === 1 ? 'day' : 'days'}`;
   }
+  const status = alert.type === 'usage' ? alert.metricStatus : undefined;
+  if (status && status.phase !== 'breaching') {
+    // Usage has dropped back under the limit but the alert holds until it
+    // reaches the clear level, so "Over" would contradict the bar beside it.
+    const recovery = `${Math.round(status.recovery)}%`;
+    if (status.phase === 'recovering') {
+      return options.compact ? 'Recovering' : `Recovering, clears at ${recovery} or lower`;
+    }
+    return options.compact
+      ? `Clears ≤${recovery}`
+      : `Under ${Math.round(status.trigger)}% limit, clears at ${recovery} or lower`;
+  }
   if (alert.type === 'usage' && alert.threshold > 0 && alert.threshold < 100) {
     return options.compact ? `Over ${alert.threshold}%` : `Over ${alert.threshold}% usage limit`;
   }

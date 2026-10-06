@@ -39,6 +39,14 @@ also consumes that same live registry and production broadcast JSON while
 checking History withholding. Source clearance is not independent guest thaw,
 covered-filesystem writes or native monitoring recovery.
 
+### Proxmox node temperature cell follows its own open alert — issue #2068
+
+`ProxmoxNodesTable` finds the node's own temperature alert through
+`hostOverrideIdCandidates` and passes its severity (unless acknowledged) and
+the shared live-status copy to `TemperatureGauge`. Other node alerts never
+recolour the cell. The Mail Gateway drawer formats its attention rows through
+`getAlertAttentionCopy`.
+
 ### Canonical Discovery honours VM guest-read deferrals
 
 The canonical resource drawer uses the same fixed PVE VM lock, backup and
@@ -842,12 +850,6 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 49. `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
 50. `frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx`
     50a. `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
-51. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
-52. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
-53. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
-54. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
-55. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
-56. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
 57. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
 58. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts`
 59. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts`
@@ -857,8 +859,6 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 62. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
 63. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`
 64. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
-65. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-66. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
 67. `frontend-modern/src/components/Discovery/discoveryReadiness.ts`
 68. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
 69. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
@@ -1290,9 +1290,14 @@ tooltip, and the Proxmox replication Last sync and Next sync in the row, phone
 projection and disclosure. A silent agent or a stalled pvesr scheduler is the
 case whose age matters most, so a replication Next sync turns overdue on the
 clock without new data. Replication jobs bypass the unified-resource stream,
-so `ProxmoxPageSurface` re-reads them in the background every 30 seconds;
-moving ages over a snapshot read once at mount would age a job that keeps
-syncing and count it overdue.
+so `ProxmoxPageSurface` polls them in the background every 30 seconds,
+skipping a tick while the previous poll's read is still in flight unless that
+read has stalled past `STALLED_QUERY_READ_MS`; moving ages over a snapshot read
+once at mount would age a job that keeps syncing and count it overdue.
+`fetchReplicationJobs` takes the query's abort signal and passes it to
+`apiFetch`, so a replaced or unmounted replication read stops instead of
+running on in the background, and it throws `apiErrorFromResponse` errors that
+keep the HTTP status, so a 401 or 403 withdraws the jobs as an access failure.
 Kubernetes name columns hold the chevron, status dot and name inside one
 track, so their md widths leave the name room for a typical node or service
 name at a 768px viewport: Nodes 20 percent (with Capacity at 16 so its
@@ -1722,15 +1727,6 @@ container inventory table.
 
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `performance-and-scalability`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `performance-and-scalability`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-3. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx` shared with `performance-and-scalability`: the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-4. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx` shared with `performance-and-scalability`: the unified resource PBS section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-5. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx` shared with `performance-and-scalability`: the unified resource PMG section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-6. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx` shared with `performance-and-scalability`: the unified resource service infrastructure card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-7. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx` shared with `performance-and-scalability`: the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-8. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts` shared with `performance-and-scalability`: unified resource service row shaping and I/O emphasis are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-9. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts` shared with `performance-and-scalability`: unified resource table state derivation, sort-cycle policy, service sorting, and responsive column layout are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-10. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `performance-and-scalability`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-11. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `performance-and-scalability`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 12. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx` shared with `storage-recovery`: Proxmox backup server table rows are both a storage/recovery backup-health surface and a unified-resource platform-table consumer boundary.
     The table is composed on the Proxmox Backups tab and must not be duplicated
     on Overview. The Backups placement keeps the canonical PBS row and drawer
@@ -2363,18 +2359,7 @@ provider identity or governed safe-summary posture when that context helps
 an operator, but the rendered labels must stay product-neutral and use
 `Analysis`, `Analysis Reasoning`, and `Safe Summary` rather than reviving
 generic `AI` or `AI-Safe` branding inside the resource drawer or discovery
-shell. 14. Keep the operator-facing unified resource table width-aware at the table
-surface, not just at the browser viewport. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
-must route its root ref through `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`,
-and `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
-owns the column-priority breakpoints for host and service infrastructure
-rows. When the app shell leaves tablet-sized space during live resize, the
-table hides lower-priority metadata first. At phone width, the state model
-must remove the old 640-pixel floor, preserve identity at exactly 30 percent
-of the table, and allocate the remaining width across the bounded
-source-relevant health and activity columns. Both the document and table
-shell must remain free of horizontal overflow; desktop and tablet stages
-retain their existing complete column contracts. 15. Keep shared policy-posture framing on the unified-resource card owner.
+shell. 15. Keep shared policy-posture framing on the unified-resource card owner.
 `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
 may accept caller-owned subtitle or resource-count wording when Patrol or
 another shared surface needs to explain how the same governed policy counts
@@ -2586,67 +2571,13 @@ application resource-provider or WebSocket lifecycle.
     counts or capacity must use the shared `AnimatedNumber` primitive rather
     than page-local counter state, so readout motion stays presentation-only and
     canonical unified-resource identity and scope stay unchanged.
-12. Keep infrastructure chart hover non-destructive to the unified-resource
-    table. If the hovered resource row is already visible in
-    `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`,
-    the row may highlight in place through the shared active-resource id; if it
-    is off-screen, the page must offer an explicit `Jump to row` affordance
-    rather than auto-scrolling or collapsing the table on hover.
-    12a. Keep infrastructure summary visibility as display preference, not a
+12. Keep infrastructure summary visibility as display preference, not a
     unified-resource filter. Platform/runtime pages and shared infrastructure
     summary consumers may hide or restore chart sections through shared
     presentation controls, but those controls must not mutate resource
     identity, table membership, source scope, or summary-hover state. The
     retired top-level `/infrastructure` page and its saved-view/route-state
     machinery must not be reintroduced for this purpose.
-13. Keep infrastructure cluster headers as canonical summary scope. Grouped
-    headers in `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
-    must publish cluster scope from the same `ResourceGroup` / unified-resource
-    ids that power the table rows, and
-    `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-    must consume that scope through the shared page/group/entity interaction
-    contract rather than inventing infrastructure-local summary filters or
-    route-backed cluster hover state. Host and service infrastructure table
-    card frames must consume the frontend-primitives-owned `TableCard` wrapper;
-    unified-resource ownership remains on resource identity, grouping, and row
-    semantics rather than forking a table border/background shell. Deliberate
-    cluster focus must also stay
-    on the canonical infrastructure route through the shared `summaryGroup`
-    query state, so pinned scope is shareable, reversible, and owned by the
-    same route-backed summary contract as row focus. Infrastructure must stay
-    row-first here: the pinned cluster header remains the visible scoped
-    state, and explicit clearing belongs to the shared infrastructure table
-    card header action plus the shared `Escape` reset path rather than a
-    search-row fallback widget, page-level scope strip, or a second
-    scope/pinned pill inside the cluster row chrome. Background whitespace
-    clearing may remain a convenience, but infrastructure must not rely on it
-    as the only reversible control.
-14. Keep infrastructure row emphasis on the shared frontend presentation
-    contract. Host, PBS, and PMG table sections may decide whether a resource
-    is contextually active, but they must expose that state through
-    `data-summary-row-active` and rely on the shared row presentation owned by
-    `frontend-modern/src/index.css` instead of provider-specific background
-    classes that drift across resource tables or hide inline metric bars.
-    Cluster-member rows must also expose shared preview-versus-pinned group
-    emphasis through `data-summary-group-member-active`, so the whole cluster
-    block reads as the active scope without inventing a second infrastructure-
-    local outline or banner treatment.
-    Static grouped cluster-header emphasis must route through
-    `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` and
-    the shared `.grouped-table-row` CSS contract in `frontend-modern/src/index.css`,
-    rather than infrastructure-local background or hover-fill classes.
-    Summary-linked infrastructure rows and cluster headers must also route
-    pointer preview and focus preview through
-    `frontend-modern/src/components/shared/summaryInteractionA11y.ts`, while
-    deliberate expand/scope ownership must route through
-    `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`, so the
-    unified-resource table does not fork mouse-only hover logic, focusable-row
-    button shims, touch-hostile synthetic hover, or provider-specific control
-    handling across host, PBS, and PMG sections. Those three resource rows are
-    themselves the compact touch disclosure target and must explicitly enable
-    the shared mobile-chevron suppression; their accessible row/button state
-    remains available without spending a visible summary-cell slot on a
-    duplicate control.
 15. Keep infrastructure search aligned with the governed display label. Shared
     infrastructure filtering through
     `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
@@ -4045,8 +3976,6 @@ when the opened drawer would otherwise fall below the fold. That reveal must
 scroll only enough of the infrastructure table to keep the row header plus the
 start of the detail visible, not leave the drawer clipped and not hard-center
 the selected row.
-`useUnifiedResourceTableViewportSync.ts` must stay viewport-only; it may not
-grow a second selected-row reveal path or a resource-local centering rule.
 That same unified-resource boundary now also owns stored metrics-target
 continuity for provider-backed resources. When registry rebuild cannot derive a
 fresh metrics target from raw source facets, `internal/unifiedresources/registry.go`
@@ -4430,9 +4359,8 @@ raw backup, sync, verify, prune, and garbage job arrays travel through the
 unified-resource metadata contract in `frontend-modern/src/types/resource.ts`
 and `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`,
 `resourceDetailDrawerServiceModel.ts` owns active-task status classification and
-shared activity wording, and both
-`frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
-and `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`
+shared activity wording, and
+`frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`
 must render from that shared projection instead of rescanning raw job arrays or
 inventing local PBS status heuristics,
 `resourceDetailDrawerIdentityModel.ts` owns the pure identity-card,
@@ -4600,30 +4528,9 @@ The shared node-state adapter also routes Proxmox cluster labels through that
 same helper, so infrastructure summary projections keep the same canonical
 cluster name as the rest of the unified resource model instead of rewriting
 the label locally.
-The unified resource table now routes reactive table-state composition,
-grouping, and row-windowing through
-`frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`,
-while pure table-state derivation, service sorting, sort-cycle policy, and
-responsive column layout now route through
-`frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`,
-and viewport reveal plus scroll synchronization now route through
-`frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`,
-so the shared consumer model is no longer interleaving selector derivation,
-layout policy, and DOM viewport coordination inside one mixed state boundary.
-That viewport controller must consume
-`frontend-modern/src/components/shared/windowedPageScroll.ts` for scroll-
-ancestor selection, wheel normalization, and listener lifecycle. Wheel may
-prewarm the bounded row runway, but touch remains compositor-native and updates
-the runway only through the passive native page-scroll event; unified-resource
-tables must not register their own touch listener.
-The mobile shell class from that shared state model now uses `min-w-full` for
-the phone stage and restores the existing wider-stage floor above it. Mobile
-column weights must sum to the available table width, retain the prioritized
-identity and operational set, and avoid both local and document-level
-horizontal scrolling. This is a phone projection only; wider stages keep the
-established desktop distribution.
-The native provider rollout now applies the same projection to Proxmox backup,
-coverage, recoverable, Ceph, Mail Gateway, and replication rows; Docker native
+Native provider tables keep a phone projection: prioritized identity and
+operational columns sized to the available width, with no local or
+document-level horizontal scrolling, for Proxmox backup, coverage, recoverable, Ceph, Mail Gateway, and replication rows; Docker native
 and Swarm inventories; Kubernetes native inventories; TrueNAS systems and
 workflows; vSphere hosts and workflows; and Standalone machines. The shared
 `platform-table-phone-hidden` marker removes secondary or duplicate tracks at
@@ -4633,17 +4540,6 @@ demotion while promoting identity to a 40-percent track. Docker rows whose full 
 labels, image references, or placement values cannot fit now expose those
 values in the same touch- and keyboard-operable inline detail pattern used by
 the other platform tables rather than relying on hover titles.
-That same unified-resource consumer contract now also owns CSP-safe table
-presentation for infrastructure rows. Host, PBS, and PMG table sections must
-consume the shared column presentation owner and render canonical table sizing
-through classes plus DOM width/height attributes rather than lane-local inline
-style objects, so the same unified-resource dataset can reach the public demo
-without transport-specific DOM drift.
-That same consumer contract now also owns full-width desktop balance for the
-infrastructure tables. The shared column presentation owner must publish an
-explicit desktop `Resource` width for host, PBS, and PMG sections so wide
-shells redistribute surplus width across the remaining columns instead of
-turning the first column into blank filler that hides metric density.
 The canonical unified-resource change and relationship presenters now also
 share the same elapsed-time and "ago" wording utilities, so `observed`,
 `last seen`, and `ago` fragments stay consistent without each formatter
@@ -5884,10 +5780,12 @@ and storage IDs), a node-scoped Proxmox guest reference after migration, or
 `ResolveReferenceID` used by alert policy, so a resource named like a system
 reference cannot capture its events. A reference two resources answer to binds
 to neither: its event keeps its own reference and creates or changes no
-binding, though an earlier binding still covers that reference on read. A
+binding, though an earlier binding still covers that reference on read. Like
+any unbound reference it is retried, and once a later generation resolves it
+to one resource it binds there, replacing an earlier binding. A
 reference no resource
 answers to follows its retained binding after inventory removal, or keeps its
-own history. Docker references never take this path. Alert journal references
+own history. Docker container references never take this path. Alert journal references
 without a binding (read once per process, plus any written before inventory
 named their resource) are retried on each published registry generation for
 `legacyHistoryBindWindow`. Bound rows keep their recorded resource ID, so a
@@ -5899,6 +5797,46 @@ Assistant and Patrol resource contexts read it from the store. Proof:
 `TestHistoryIdentityMonitorAdapterResolvesProxmoxAlertReferences` and
 `TestHistoryIdentityBindsLegacyAlertRowsFromRegistryGenerations` in
 `internal/unifiedresources/history_identity_test.go`.
+Docker host alerts (`docker:<host ID>`) and Swarm service alerts
+(`docker:<host ID>/service/<service ID>`) resolve only through the registry's
+Docker source identities: the host ID is the Docker host's source ID, and a
+service reference names the service with that exact ID in the host's Swarm
+cluster, whichever manager reported it. A hostname in the host position is
+only ever looked up as a Docker host source ID. A service without an ID is
+referenced by its normalized name in the same place, so while its cluster has
+such a service every service reference there is a conflict. Alert references
+do not record whether they came from an ID, so a row journaled by an ID-less
+service can still join another service's history if a later generation or
+event binds the same reference; Swarm always reports service IDs, so that needs a malformed
+report naming a service exactly like another service's ID. Hostless
+`docker-service:<name>` references, container names and shortened container
+IDs never bind and are never retried against later inventory. A container
+without an ID alerts under its host's reference (`alerts.DockerResourceID`), so
+its events join that host's history, never another container's.
+Sub-resource alert references name no resource of their own and bind to the
+owner whose durable ID they carry (`historySubResourceOwner`): ZFS pool and
+device alerts (`<storage ID>/zfs-pool:<pool>[/device:<device>]`) to the
+storage, the Unraid array alert (`agent:<host ID>/storage:unraid-array`) to
+the array storage with that agent source ID, and host filesystem, SMART disk,
+disk temperature, RAID and custom-sensor alerts (`agent:<host ID>/disk:`,
+`/disk_temp:`, `/raid:`, `/custom:`) to the host. The owner reference must
+resolve to exactly one resource of the expected type; an ambiguous or
+incompatible owner is a conflict, so the event keeps its own reference,
+follows no retained binding and is retried. Pool, mount and kernel device labels are names,
+and a device name can denote a different disk after a reboot, so these alerts
+never bind a physical disk. Any other sub-resource shape stays unbound until
+its producer and this list change together. The Docker, storage and platform
+host-row drawers do not request per-resource history, so these bindings reach
+the facets, timeline and intelligence APIs and Assistant resource context, not
+a drawer. Patrol's scoped change feed matches the stored resource ID without
+expanding bindings, so it includes events recorded under the owner's
+canonical ID but not rows journaled before their binding.
+Proof: `TestHistoryIdentityMonitorAdapterResolvesDockerHostAndServiceReferences`
+and `TestHistoryIdentityMonitorAdapterResolvesSubResourceReferences` in
+`internal/unifiedresources/history_identity_test.go`, and
+`TestOwnerAlertTimelinesUseCanonicalHistoryIdentity` in
+`internal/monitoring/monitor_alert_handling_test.go` against the real alert
+producers.
 That same shared timeline vocabulary now includes the `activity` change kind
 for provider-read breadcrumbs such as VMware tasks and events, plus the
 `vmware_adapter` source-adapter token for canonical provenance drill-down.

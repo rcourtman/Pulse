@@ -1180,9 +1180,8 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     aliases such as `/settings/workloads/docker` or nested
     `/settings/infrastructure/platforms/*` paths. Each platform page must
     remain chrome-only: routing plus sub-tab navigation that embeds the
-    canonical `WorkloadsSurface`, `StorageSurface`, `RecoverySurface`, or
-    `UnifiedResourceTable` in `embedded tableOnly` mode with a forced
-    platform/source filter. The shell must not introduce dashboard cards,
+    canonical `WorkloadsSurface`, `StorageSurface`, or `RecoverySurface` in
+    `embedded tableOnly` mode with a forced platform/source filter. The shell must not introduce dashboard cards,
     bespoke per-family tables, synthetic placeholder data, or reintroduce
     Infrastructure as a primary navigation entry without a governed contract
     decision recorded by the frontend-primitives owner.

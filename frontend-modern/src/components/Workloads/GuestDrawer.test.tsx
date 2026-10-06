@@ -528,6 +528,46 @@ describe('GuestDrawer', () => {
     ).toBeInTheDocument();
   });
 
+  it('leads with the live reading when an open alert holds below its trigger', () => {
+    solidRender(() => (
+      <GuestDrawer
+        guest={makeGuest()}
+        alerts={[
+          {
+            id: 'alert-memory-holding',
+            type: 'memory',
+            level: 'warning',
+            resourceId: 'inst1-node1-100',
+            resourceName: 'test-vm',
+            node: 'node1',
+            instance: 'inst1',
+            message: 'VM memory at 91.0%',
+            value: 91,
+            threshold: 90,
+            startTime: new Date().toISOString(),
+            acknowledged: false,
+            metricStatus: {
+              phase: 'latched',
+              value: 87,
+              unit: '%',
+              observedAt: new Date().toISOString(),
+              trigger: 90,
+              recovery: 85,
+              recoveryDelaySeconds: 300,
+            },
+          },
+        ]}
+        onClose={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText('Memory 87% now, back under the 90% alert level')).toBeInTheDocument();
+    expect(
+      screen.getByText('Stays open until it reaches 85% or lower and stays there for 5 minutes.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('VM memory at 91.0%')).not.toBeInTheDocument();
+  });
+
   it('keeps generic Assistant and context-copy actions out of the drawer header', () => {
     render(() => <GuestDrawer guest={makeGuest({ name: 'homeassistant' })} onClose={vi.fn()} />);
 

@@ -13,6 +13,7 @@ import {
   getNodeChartKeyCandidates,
   getWorkloadChartKeyCandidates,
   isWorkloadTableMetricHistoryRange,
+  MIN_RATE_SCALE_CEILING,
   normalizeWorkloadChartKey,
   WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE,
   WORKLOAD_TABLE_HISTORY_MAX_POINTS,
@@ -189,6 +190,37 @@ describe('workloadMetricHistoryModel', () => {
     );
 
     expect(scale).toEqual({ minValue: 0, maxValue: 100 });
+  });
+
+  it('keeps idle I/O chatter near the axis instead of drawing it as a full-height spike', () => {
+    const rateSeries = (inbound: number[], outbound: number[]) => [
+      {
+        id: 'netin',
+        label: 'In',
+        color: '#10b981',
+        points: inbound.map((value, index) => ({ timestamp: index + 1, value })),
+      },
+      {
+        id: 'netout',
+        label: 'Out',
+        color: '#fb923c',
+        points: outbound.map((value, index) => ({ timestamp: index + 1, value })),
+      },
+    ];
+
+    const idle = rateSeries([2 * 1024, 6 * 1024, 3 * 1024], [1024, 1536, 1024]);
+    const idleScale = getMetricMiniSparklineScale(idle, 'B/s');
+    expect(idleScale).toEqual({ minValue: 0, maxValue: MIN_RATE_SCALE_CEILING });
+    // The 6 KB/s blip stays within a pixel of the axis rule at y=16 instead of reaching the top.
+    expect(buildMetricMiniSparklinePath(idle[0].points, idleScale)).toBe(
+      'M1.00,15.72 L48.00,15.16 L95.00,15.58',
+    );
+
+    const busy = rateSeries([400 * 1024 ** 2, 500 * 1024 ** 2], [1024, 2048]);
+    expect(getMetricMiniSparklineScale(busy, 'B/s')).toEqual({
+      minValue: 0,
+      maxValue: 500 * 1024 ** 2 * 1.15,
+    });
   });
 
   it('uses a shared time range and resolves nearest hover values for paired I/O sparklines', () => {

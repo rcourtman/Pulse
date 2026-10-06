@@ -7,6 +7,10 @@ import type {
 } from '@/api/charts';
 
 import { formatHistoryChartTooltipValue } from '@/components/shared/historyChartModel';
+import {
+  getAlertAttentionCopy,
+  type AlertAttentionCopy,
+} from '@/features/alerts/metricAlertPresentation';
 import { formatBytes, formatPercent, getBackupInfo, type BackupThresholds } from '@/utils/format';
 import {
   getWorkloadGuestDiskStatusMessage,
@@ -82,12 +86,13 @@ export interface GuestDrawerBackupPresentation {
 
 export const isGuestDrawerVM = (guest: Guest): guest is VM => resolveWorkloadType(guest) === 'vm';
 
-export const getGuestDrawerAlertMessage = (
+export const getGuestDrawerAlertAttention = (
   alert: Alert,
   context: Pick<GuestDrawerProps, 'guest' | 'memoryDisplayBasis' | 'parentMemoryTotal'>,
-): string => {
+): AlertAttentionCopy => {
+  const copy = getAlertAttentionCopy(alert);
   if (context.memoryDisplayBasis !== 'host' || alert.type.trim().toLowerCase() !== 'memory') {
-    return alert.message;
+    return copy;
   }
 
   const used = context.guest.memory?.used;
@@ -104,7 +109,7 @@ export const getGuestDrawerAlertMessage = (
   const comparison = hostShare
     ? `guest allocation · ${hostShare} of host capacity`
     : 'guest allocation · row uses host capacity';
-  return `${alert.message} (${comparison})`;
+  return { ...copy, message: `${copy.message} (${comparison})` };
 };
 
 const getGuestDrawerDiskUsage = (guest: Guest): number | undefined => {

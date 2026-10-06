@@ -9,6 +9,7 @@ import {
 } from '@/components/shared/DetailSectionTable';
 import type { Alert, Disk, HostGPUSensor, Node, Temperature } from '@/types/api';
 import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
+import { getAlertAttentionCopy } from '@/features/alerts/metricAlertPresentation';
 import { formatBytes, normalizeDiskArray } from '@/utils/format';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { getProxmoxUpdateEvidencePresentation } from '@/utils/proxmoxUpdateEvidence';
@@ -370,7 +371,7 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
       <DrawerAttentionSection
         items={(props.alerts ?? []).map((alert) => ({
           id: alert.id,
-          message: alert.message,
+          ...getAlertAttentionCopy(alert),
           subject:
             cleanText(alert.resourceName) ||
             cleanText(alert.nodeDisplayName) ||

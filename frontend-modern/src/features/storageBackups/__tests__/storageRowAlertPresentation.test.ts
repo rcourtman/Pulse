@@ -66,6 +66,31 @@ describe('storageRowAlertPresentation', () => {
     expect(result.dataAlertState).toBe('acknowledged');
   });
 
+  it('does not claim usage is over the limit while the alert holds below it', () => {
+    const holding = (phase: 'latched' | 'recovering') =>
+      makeAlert({
+        metricStatus: {
+          phase,
+          value: phase === 'latched' ? 83 : 79,
+          unit: '%',
+          observedAt: '2026-10-04T12:30:00Z',
+          trigger: 85,
+          recovery: 80,
+          recoveryDelaySeconds: 300,
+        },
+      });
+    expect(describeStorageAlertHeadline(holding('latched'))).toBe(
+      'Under 85% limit, clears at 80% or lower',
+    );
+    expect(describeStorageAlertHeadline(holding('latched'), { compact: true })).toBe('Clears ≤80%');
+    expect(describeStorageAlertHeadline(holding('recovering'))).toBe(
+      'Recovering, clears at 80% or lower',
+    );
+    expect(describeStorageAlertHeadline(holding('recovering'), { compact: true })).toBe(
+      'Recovering',
+    );
+  });
+
   it('explains a highlighted row with a fill forecast, a crossed limit or the alert text', () => {
     const forecast = (days: number) =>
       makeAlert({ threshold: 100, metadata: { forecastDaysToFull: days } });

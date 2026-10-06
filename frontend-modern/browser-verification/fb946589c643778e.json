@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "9aaac4d3e502c01913fb3637d0997b0ce03a8b7b",
+  "verified_at": "2026-10-06T19:36:25Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "11fbba8f8a4e3a62aaceaed796ff9d67a09e6248bfe8eb95163a92c3dd85e728"
+  },
+  "routes": [
+    "/patrol"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 800,
+      "height": 600
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (PULSE_MOCK_MODE) built from this tree on origin/main 9aaac4d3e5, Vite on the same checkout; real alert-manager lifecycle, no injected data",
+    "Reviewed then suppressed issue (operationalRecord.acknowledgement and suppression both set, state suppressed): Lifecycle shows the acknowledgement line, the suppression reason and an End suppression button, and no Return to active attention button (1440, 800 and 390 widths)",
+    "Suppression form on a Reviewed issue labels its duration End suppression after; on an open issue it still reads Return it to active attention after",
+    "After ending a reviewed issue's suppression: notice Suppression ended. It stays reviewed. N handled issues remain., list row reads Reviewed, and the attention API reports state acknowledged with acknowledgement kept and the active count unchanged",
+    "After ending an unreviewed issue's suppression: Return to active attention button, notice Returned to decision inbox. N handled issues remain., API state open (1440 and 390 widths)",
+    "Stale detail: a reviewed, suppressed issue whose review was removed through POST /api/ai/patrol/attention/{id}/unacknowledge while its detail stayed open; the button still read End suppression, and after clicking it the notice read Returned to decision inbox. 5 handled issues remain., matching the API state open",
+    "The suppression expiry line still reads Returns to active attention just now on main; fix/future-relative-time changes that line separately, and it was left untouched here",
+    "No page errors in any run"
+  ],
+  "interactions": [
+    "Browser pane at 800x600: opened west-d-service-pool (local-zfs) \u00b7 ZFS pool state, Mark reviewed, Reviewed and suppressed (1), reopened it, Suppress temporarily with a typed reason and 24 hours, then End suppression",
+    "Playwright 1440x900: reviewed case (Mark reviewed, handled view, suppress, End suppression) on mail-gateway-eu and esxi-07.lab.local; unreviewed case (suppress from the inbox, handled view, Return to active attention) on backend-seafile and edge-cold-iscsi; stale-detail case on Utility Network",
+    "Playwright 390x844: reviewed case on postgres-replica-18 and Edge Stateful, unreviewed case on dev-portal-01 and archive-tier, reopening items through Back to handled issues after the queue advanced",
+    "Read each item's resulting state through GET /api/ai/patrol/attention/{id} and the attention summary after every lifecycle change"
+  ]
+}

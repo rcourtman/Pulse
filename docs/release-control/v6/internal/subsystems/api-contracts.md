@@ -91,6 +91,18 @@ slice, and only deletes a rule_ identity with explicit manual origin and no
 finding/dismissal attribution. Transport success alone is not removal: the UI
 must read the same collection back and establish exact-ID absence.
 
+### Open threshold alerts expose their live evaluation — issue #2068
+
+`Alert.metricStatus` (`/api/alerts/active`, the websocket state and
+`/api/state`) is optional and additive. It carries `phase` (`breaching`,
+`latched` or `recovering`), `value` (the value compared with the rule, the
+average for a rolling-average rule) with `rawValue` and
+`evaluationWindowSeconds` when windowed, `unit`, `observedAt`, `trigger`,
+`recovery` (the alert clears at or below it), `recoveryDelaySeconds`, and,
+while recovering, `recoveryStartedAt` and `recoveryElapsedSeconds`. Legacy
+`value`, `message` and `lastSeen` keep meaning the last reading that met the
+trigger. The field is absent for non-threshold alerts and until the first
+evaluation after a restart, and clients then fall back to `message`.
 
 ### Organisation deletion retains data after incomplete monitoring shutdown
 

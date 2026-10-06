@@ -1585,3 +1585,213 @@ func TestCarriedNodeTemperatureLeavesDiskReadingsOut(t *testing.T) {
 		})
 	}
 }
+
+// Two Proxmox connections can each have a node with the same name (one "px1"
+// per site). The poller's temperature lookup must never hand one site's node the
+// host agent, or the agent's cluster-sibling SSH readings, of the other.
+func TestNodeTemperatureStaysWithinSameNamedNodesSite(t *testing.T) {
+	instanceCfg := config.PVEInstance{Name: "siteB"}
+	poll := func(m *Monitor, instance, nodeName string) *models.Temperature {
+		m.config = &config.Config{TemperatureMonitoringEnabled: true}
+		polled := readStateTestNode(instance, nodeName)
+		m.collectNodeTemperatureData(context.Background(), instance, &instanceCfg, proxmox.Node{Node: nodeName}, &polled, nil, "online")
+		return polled.Temperature
+	}
+	sites := func() []models.Node {
+		return []models.Node{readStateTestNode("siteA", "px1"), readStateTestNode("siteA", "px2"), readStateTestNode("siteB", "px1")}
+	}
+
+	t.Run("agent linked to the other site's node", func(t *testing.T) {
+		m := readStateMonitor(sites(), []models.Host{reportingTestHost("agent-a", "px1", "siteA-px1", 77)})
+		if temp := poll(m, "siteA", "px1"); temp == nil || temp.CPUPackage != 77 {
+			t.Fatalf("siteA px1 temperature = %#v, want its linked agent's 77", temp)
+		}
+		if temp := poll(m, "siteB", "px1"); temp != nil {
+			t.Fatalf("siteB px1 took site A's agent reading: %#v", temp)
+		}
+	})
+
+	t.Run("unlinked agent whose hostname several nodes share", func(t *testing.T) {
+		m := readStateMonitor(sites(), []models.Host{reportingTestHost("agent-x", "px1", "", 66)})
+		for _, instance := range []string{"siteA", "siteB"} {
+			if temp := poll(m, instance, "px1"); temp != nil {
+				t.Fatalf("%s px1 took an agent the linker could not place: %#v", instance, temp)
+			}
+		}
+	})
+
+	t.Run("unlinked agent whose hostname one node has", func(t *testing.T) {
+		m := readStateMonitor(sites(), []models.Host{reportingTestHost("agent-y", "px2", "", 61)})
+		if temp := poll(m, "siteA", "px2"); temp == nil || temp.CPUPackage != 61 {
+			t.Fatalf("siteA px2 temperature = %#v, want the unambiguous agent's 61", temp)
+		}
+	})
+
+	t.Run("two unlinked agents with the node's hostname", func(t *testing.T) {
+		m := readStateMonitor(sites(), []models.Host{reportingTestHost("agent-y1", "px2", "", 61), reportingTestHost("agent-y2", "px2", "", 62)})
+		if temp := poll(m, "siteA", "px2"); temp != nil {
+			t.Fatalf("siteA px2 took one of two candidate agents: %#v", temp)
+		}
+	})
+
+	t.Run("one cluster added through two connections", func(t *testing.T) {
+		// The state folds both views of pve01 into one slot, held under whichever
+		// view merged last, and the agent link follows the slot. Each view's poll
+		// must still take the agent's reading.
+		var instances []config.PVEInstance
+		for _, name := range []string{"enacon-a", "enacon-b"} {
+			instances = append(instances, config.PVEInstance{
+				Name: name, IsCluster: true, ClusterName: "enacon",
+				ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "pve01", Host: "https://192.168.1.11:8006", Fingerprint: "AA:AA"}},
+			})
+		}
+		adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+		m := &Monitor{config: &config.Config{TemperatureMonitoringEnabled: true, PVEInstances: instances}, state: models.NewState(), resourceStore: adapter}
+		view := func(instanceCfg *config.PVEInstance) models.Node {
+			return models.Node{
+				ID: instanceCfg.Name + "-pve01", NodeIdentity: instanceCfg.Name + "-pve01", Name: "pve01", Instance: instanceCfg.Name,
+				ClusterName: "enacon", IsClusterMember: true, Host: "https://192.168.1.11:8006",
+				TLSFingerprint: pveNodeTLSFingerprint(instanceCfg, "pve01"), Status: "online", LastSeen: time.Now(),
+			}
+		}
+		m.state.UpdateNodesForInstance("enacon-a", []models.Node{view(&instances[0])})
+		m.state.UpsertHost(reportingTestHost("agent-pve01", "pve01", "", 64))
+		if err := m.state.LinkHostAgentToNode("agent-pve01", "enacon-a-pve01"); err != nil {
+			t.Fatalf("LinkHostAgentToNode: %v", err)
+		}
+		adapter.PopulateFromSnapshot(m.state.GetSnapshot())
+
+		for round := 0; round < 3; round++ {
+			for i := range instances {
+				polled := view(&instances[i])
+				m.collectNodeTemperatureData(context.Background(), instances[i].Name, &instances[i], proxmox.Node{Node: "pve01"}, &polled, nil, "online")
+				if polled.Temperature == nil || polled.Temperature.CPUPackage != 64 {
+					t.Fatalf("round %d %s temperature = %#v, want the folded node's agent reading 64", round, instances[i].Name, polled.Temperature)
+				}
+				m.state.UpdateNodesForInstance(instances[i].Name, []models.Node{polled})
+				adapter.PopulateFromSnapshot(m.state.GetSnapshot())
+			}
+		}
+		if nodes := m.state.GetSnapshot().Nodes; len(nodes) != 1 {
+			t.Fatalf("state holds %d nodes, want both views folded into one", len(nodes))
+		}
+	})
+
+	t.Run("unclustered node whose address two sites' namesakes share", func(t *testing.T) {
+		// Both site nodes would fold with the polled view by address alone; the
+		// state declines an ambiguous alias, so the lookup must take neither.
+		nodes := sites()
+		for i := range nodes {
+			nodes[i].ClusterName = map[string]string{"siteA": "a", "siteB": "b"}[nodes[i].Instance]
+			nodes[i].Host = "https://10.0.0.5:8006"
+		}
+		m := readStateMonitor(nodes, []models.Host{reportingTestHost("agent-a", "px1", "siteA-px1", 77)})
+		polled := readStateTestNode("siteC", "px1")
+		polled.Host = "https://10.0.0.5:8006"
+		m.config = &config.Config{TemperatureMonitoringEnabled: true}
+		m.collectNodeTemperatureData(context.Background(), "siteC", &config.PVEInstance{Name: "siteC"}, proxmox.Node{Node: "px1"}, &polled, nil, "online")
+		if polled.Temperature != nil {
+			t.Fatalf("siteC px1 took a namesake's agent reading: %#v", polled.Temperature)
+		}
+	})
+
+	t.Run("multi-homed host added through two standalone connections", func(t *testing.T) {
+		// The agent reports both connection addresses, so the state folds the two
+		// views into one slot through it. Each view's poll must take its reading.
+		adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+		m := &Monitor{config: &config.Config{TemperatureMonitoringEnabled: true}, state: models.NewState(), resourceStore: adapter}
+		views := map[string]string{"lan-a": "https://10.0.0.5:8006", "lan-b": "https://10.0.1.5:8006"}
+		view := func(instance string) models.Node {
+			polled := readStateTestNode(instance, "minipc")
+			polled.Host = views[instance]
+			return polled
+		}
+		m.state.UpdateNodesForInstance("lan-a", []models.Node{view("lan-a")})
+		agent := reportingTestHost("agent-minipc", "minipc", "", 64)
+		agent.ReportIP = "10.0.0.5"
+		agent.NetworkInterfaces = []models.HostNetworkInterface{{Name: "eth0", Addresses: []string{"10.0.0.5/24"}}, {Name: "eth1", Addresses: []string{"10.0.1.5/24"}}}
+		m.state.UpsertHost(agent)
+		if err := m.state.LinkHostAgentToNode("agent-minipc", "lan-a-minipc"); err != nil {
+			t.Fatalf("LinkHostAgentToNode: %v", err)
+		}
+		adapter.PopulateFromSnapshot(m.state.GetSnapshot())
+
+		for round := 0; round < 3; round++ {
+			for _, instance := range []string{"lan-a", "lan-b"} {
+				polled := view(instance)
+				m.collectNodeTemperatureData(context.Background(), instance, &config.PVEInstance{Name: instance}, proxmox.Node{Node: "minipc"}, &polled, nil, "online")
+				if polled.Temperature == nil || polled.Temperature.CPUPackage != 64 {
+					t.Fatalf("round %d %s temperature = %#v, want the folded host's agent reading 64", round, instance, polled.Temperature)
+				}
+				m.state.UpdateNodesForInstance(instance, []models.Node{polled})
+				adapter.PopulateFromSnapshot(m.state.GetSnapshot())
+			}
+		}
+		if nodes := m.state.GetSnapshot().Nodes; len(nodes) != 1 {
+			t.Fatalf("state holds %d nodes, want both views folded into one", len(nodes))
+		}
+	})
+
+	t.Run("namesake's agent reporting the polled node's address", func(t *testing.T) {
+		// Site A's px1 agent also reports 10.0.1.5, the address site B's px1
+		// uses. The fingerprints contradict, so site B's node is another machine.
+		siteA := readStateTestNode("siteA", "px1")
+		siteA.Host = "https://10.0.0.5:8006"
+		agent := reportingTestHost("agent-a", "px1", "siteA-px1", 77)
+		agent.ReportIP = "10.0.0.5"
+		agent.NetworkInterfaces = []models.HostNetworkInterface{{Name: "eth0", Addresses: []string{"10.0.0.5/24", "10.0.1.5/24"}}}
+		m := readStateMonitor([]models.Node{siteA}, []models.Host{agent})
+		m.config = &config.Config{TemperatureMonitoringEnabled: true, PVEInstances: []config.PVEInstance{
+			{Name: "siteA", Host: "https://10.0.0.5:8006", Fingerprint: "AA:AA"},
+			{Name: "siteB", Host: "https://10.0.1.5:8006", Fingerprint: "BB:BB"},
+		}}
+		polled := readStateTestNode("siteB", "px1")
+		polled.Host = "https://10.0.1.5:8006"
+		polled.TLSFingerprint = pveNodeTLSFingerprint(&m.config.PVEInstances[1], "px1")
+		m.collectNodeTemperatureData(context.Background(), "siteB", &m.config.PVEInstances[1], proxmox.Node{Node: "px1"}, &polled, nil, "online")
+		if polled.Temperature != nil {
+			t.Fatalf("siteB px1 took site A's agent reading: %#v", polled.Temperature)
+		}
+	})
+
+	t.Run("sibling reading across the two connections of one cluster", func(t *testing.T) {
+		// A cluster added twice can keep px1 under one connection's view and the
+		// reporting px2 under the other's; both connections list the same
+		// members with the same fingerprints, so the reading is px1's.
+		var instances []config.PVEInstance
+		for _, name := range []string{"enacon-a", "enacon-b"} {
+			instances = append(instances, config.PVEInstance{
+				Name: name, IsCluster: true, ClusterName: "enacon",
+				ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "px1", Fingerprint: "11:11"}, {NodeName: "px2", Fingerprint: "22:22"}},
+			})
+		}
+		member := func(instanceCfg *config.PVEInstance, name string) models.Node {
+			node := readStateTestNode(instanceCfg.Name, name)
+			node.ClusterName, node.IsClusterMember = "enacon", true
+			node.TLSFingerprint = pveNodeTLSFingerprint(instanceCfg, name)
+			return node
+		}
+		m := readStateMonitor(
+			[]models.Node{member(&instances[0], "px1"), member(&instances[1], "px2")},
+			[]models.Host{reportingTestHost("agent-px2", "px2", "enacon-b-px2", 50)},
+		)
+		m.applyClusterSensors("agent-px2", clusterSensorReport("px1", 88), time.Now())
+		m.config = &config.Config{TemperatureMonitoringEnabled: true, PVEInstances: instances}
+		polled := member(&instances[0], "px1")
+		m.collectNodeTemperatureData(context.Background(), "enacon-a", &instances[0], proxmox.Node{Node: "px1"}, &polled, nil, "online")
+		if polled.Temperature == nil || polled.Temperature.CPUPackage != 88 {
+			t.Fatalf("px1 temperature = %#v, want the sibling reading 88", polled.Temperature)
+		}
+	})
+
+	t.Run("cluster sibling reading from the other site", func(t *testing.T) {
+		m := readStateMonitor(sites(), []models.Host{reportingTestHost("agent-a2", "px2", "siteA-px2", 50)})
+		m.applyClusterSensors("agent-a2", clusterSensorReport("px1", 88), time.Now())
+		if temp := poll(m, "siteA", "px1"); temp == nil || temp.CPUPackage != 88 {
+			t.Fatalf("siteA px1 temperature = %#v, want its cluster sibling's 88", temp)
+		}
+		if temp := poll(m, "siteB", "px1"); temp != nil {
+			t.Fatalf("siteB px1 took site A's cluster sibling reading: %#v", temp)
+		}
+	})
+}

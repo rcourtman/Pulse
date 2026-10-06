@@ -112,6 +112,14 @@ light/dark and narrow/desktop layouts using synthetic observations only.
 Presentation acceptance does not establish native thaw, covered-filesystem
 writes, guest liveness, service restoration or reporter recovery.
 
+### Drawer attention detail line and temperature alert floor — issue #2068
+
+`DrawerAttentionSection` items accept an optional `detail` (a muted second
+line) and `title` (hover text). `TemperatureGauge` accepts `alertSeverity`
+and `title`, and `getTemperatureTextClass` treats an open alert's severity as
+a floor: a reading that has dipped under an open alert's trigger keeps the
+alert's tone, while the reading still wins when it is worse.
+
 ### Canonical drawer History preserves guest read provenance
 
 The shared resource drawer passes selected memory observation state/source/time
@@ -756,13 +764,18 @@ existing picker unchanged.
 
 The default Workloads metric presentation keeps compact progress bars at rest.
 A fine-pointer preview or keyboard focus on one guest row replaces CPU, memory,
-and disk together with the existing `MetricMiniSparkline` presentation without
-changing row height; touch pointer entry does not trigger this transient lens,
-and the persistent Trends View choice remains the touch-accessible fallback.
+disk, Net I/O, and Disk I/O together with the existing `MetricMiniSparkline`
+presentation without changing row height; touch pointer entry does not trigger
+this transient lens, and the persistent Trends View choice remains the
+touch-accessible fallback. Both I/O cells render through one rate renderer in
+the lens and in Trends: the chart keeps a compact current pair beside it
+(`MetricMiniSparklineRatePair`, the at-rest ↓/↑ and R/W glyphs coloured like
+the series they label) while the full rates stay in the chart's accessible
+label, and a stopped guest or unavailable I/O keeps its dash.
 The active chart owns its local tooltip while its normalized cursor position is
 shared across sibling charts in that guest row, so every guide represents the
 same relative point in the selected history range. Leaving the row clears the
-cursor and restores all three bars together. The lens mounts with a short
+cursor and restores the bars and I/O readouts together. The lens mounts with a short
 reduced-motion-safe fade and must not leave both bar and chart semantics in the
 accessibility tree simultaneously.
 Bar mode resolves history only for that active guest through its canonical
@@ -3366,9 +3379,9 @@ default` instead of fusing provider and badge text such as
     Platform-first top-level pages registered through
     `frontend-modern/src/App.tsx` must stay chrome-only and route through the
     canonical app shell: each per-platform surface owns navigation and sub-tab
-    chrome, then embeds the canonical `WorkloadsSurface`, `StorageSurface`,
-    `RecoverySurface`, or `UnifiedResourceTable` in `embedded tableOnly` mode
-    with a forced platform or source filter. Per-platform features must not
+    chrome, then embeds the canonical `WorkloadsSurface`, `StorageSurface`, or
+    `RecoverySurface` in `embedded tableOnly` mode with a forced platform or
+    source filter. Per-platform features must not
     fork their own table primitives, header layouts, or summary cards when a
     shared canonical surface already exists; new shared platform-page
     primitives live under `frontend-modern/src/features/platformPage/` so the
@@ -4739,6 +4752,21 @@ Each query run receives an `AbortSignal`; changing the source, resetting the
 query, or unmounting its owner must abort the superseded browser request before
 starting replacement work. Consumers must forward that signal through their
 API/cache layer when the transport supports cancellation.
+A poll (`pollMs`) does not replace a read that an earlier poll started while
+that read is still in flight; it skips the tick. The API answers 429 with
+`Retry-After: 60` and `apiFetch` honours up to two minutes, so a polled read
+slower than the poll interval would otherwise be discarded on every tick and
+never settle. Any other read (a refresh, a source change, a remount
+revalidation) stays replaceable at the next tick, so a slow or hung refresh is
+replaced at most once before polling protects its replacement. A polled read
+still in flight at the first poll tick at or after `STALLED_QUERY_READ_MS` (150
+seconds) is presumed stalled: that tick replaces it and settles it as a failed
+read, clearing `loading`, setting `resolvedOnce` and publishing a timed-out
+`error`, so no consumer is left waiting on a read that never returns. Each
+consumer renders that failure as it renders any other (the Proxmox Replication
+table shows its error and Retry; workload sparklines keep retained series). A
+transport that always takes longer than that deadline plus one poll interval
+never publishes.
 The settings reporting shell now also owns a deliberate split between
 historical performance reports and current-state VM inventory export.
 `frontend-modern/src/components/Settings/ReportingPanel.tsx`,
@@ -5300,9 +5328,10 @@ cells: a value formatted through `formatPlatformTableRelativeTimeValue` or
 and tooltips, an open drawer's summary rows and annotations) passes `now` from
 the owning component's `useRelativeTimeNow`, and a countdown or freshness band
 derived from the same time (replication Next sync, backup age bands) reads it
-too. The clock can trail the wall clock by up to one tick, so a check that
-treats a future time as invalid (the backup age band) measures from the later
-of the two.
+too. Every read of the clock returns the wall clock; the 30-second tick only
+tells readers to re-read, so a cell that mounts between ticks never measures
+from a stale time and a timestamp from the last few seconds never reads as a
+future time.
 Read-only metadata badges follow the same primitive-owned shell rule.
 `frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
 outlined appearances, compact sizing, shape, typed tone vocabulary, fit
@@ -6374,16 +6403,10 @@ layering on the default. Tables therefore state the padding they want in their
 own classes or presentation constants instead of carrying `!px-*` overrides to
 beat the primitive. `Table.test.tsx` pins the base, single-side, important,
 `p-*`, prefixed-only and reactive cases.
-That same shared table boundary now owns CSP-safe sizing for infrastructure
-tables and metric bars. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-and `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
-must express table layout and column sizing as shared class/attribute
-presentation instead of inline `style=` maps, and
-`frontend-modern/src/components/shared/ProgressBar.tsx` must render fill width
-through DOM attributes rather than inline width styles. Infrastructure host and
-service tables may still vary by breakpoint and column family, but they must do
-so through the shared presentation owner instead of lane-local style objects
-that break the public demo CSP.
+That same shared table boundary now owns CSP-safe fill rendering for metric
+bars: `frontend-modern/src/components/shared/ProgressBar.tsx` must render fill
+width through DOM attributes rather than inline width styles that break the
+public demo CSP.
 That same shared-boundary rule applies to summary density. The shared compact
 mode on `SummaryPanel.tsx` and `SummaryMetricCard.tsx` exists for genuinely
 dense monitoring surfaces, but pages that are trying to align with the normal
