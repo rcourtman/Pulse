@@ -901,3 +901,69 @@ func TestResolvedOccurrenceCallbackSurvivesLegacyPanic(t *testing.T) {
 		t.Fatal("legacy panic prevented occurrence-qualified recovery")
 	}
 }
+
+func TestConnectionDegradedAlertNamesItsPlatform(t *testing.T) {
+	tests := []struct {
+		connectionType ConnectionType
+		wantPlatform   string
+	}{
+		{connectionType: ConnectionTypePVE, wantPlatform: "proxmox-pve"},
+		{connectionType: ConnectionTypePBS, wantPlatform: "proxmox-pbs"},
+		{connectionType: ConnectionTypePMG, wantPlatform: "proxmox-pmg"},
+		{connectionType: ConnectionTypeVMware, wantPlatform: "vmware-vsphere"},
+		{connectionType: ConnectionTypeTrueNAS, wantPlatform: "truenas"},
+	}
+
+	for _, test := range tests {
+		t.Run(string(test.connectionType), func(t *testing.T) {
+			m := newTestManager(t)
+			snap := ConnectionSnapshot{
+				ID:      string(test.connectionType) + ":lab",
+				Name:    "Lab",
+				Type:    test.connectionType,
+				State:   ConnectionStateUnreachable,
+				Enabled: true,
+			}
+			for range 5 {
+				m.CheckConnection(snap)
+			}
+
+			alert := testRequireActiveAlert(t, m, canonicalDiscreteStateStateID(snap.ID, connectionDegradedStateKey))
+			if got, _ := alert.Metadata["platformType"].(string); got != test.wantPlatform {
+				t.Fatalf("platformType metadata = %q, want %q", got, test.wantPlatform)
+			}
+		})
+	}
+}
+
+func TestCapacityForecastAlertNamesItsPlatform(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.config.VMwareDefaults.Usage = &HysteresisThreshold{Trigger: 85, Clear: 75}
+	m.mu.Unlock()
+
+	input := &UnifiedResourceInput{
+		ID:       "vmware:vc-1/datastore:ds-ssd",
+		Type:     "vmware-datastore",
+		Name:     "ds-ssd",
+		Node:     "Lab DC",
+		Instance: "Lab vCenter",
+		Disk:     &UnifiedResourceMetric{Percent: 70},
+	}
+	trend := CapacityTrendObservation{
+		Ready: true, Reason: "increasing", ObservedAt: time.Now(), DailyChange: 7,
+		Confidence: 0.99, SampleCount: 300, BucketCount: 48, CoverageSpan: 48 * time.Hour,
+	}
+	m.CheckUnifiedResourceWithCapacityTrend(input, trend)
+	m.CheckUnifiedResourceWithCapacityTrend(input, trend)
+
+	alert := testRequireActiveAlert(t, m, canonicalMetricStateID(input.ID, "usage"))
+	if got := alert.Metadata[capacityAlertOriginKey]; got != capacityAlertOriginForecast {
+		t.Fatalf("capacity origin = %v, want forecast", got)
+	}
+	if got := alert.Metadata[alertPlatformTypeKey]; got != "vmware-vsphere" {
+		t.Fatalf("platformType metadata = %v, want vmware-vsphere", got)
+	}
+}

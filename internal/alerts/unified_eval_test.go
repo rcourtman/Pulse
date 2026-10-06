@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -422,6 +423,15 @@ func TestCheckUnifiedResourceSupportsKubernetesTrueNASAndVMwareMetricTargets(t *
 			alert := activeAlert(t, m, tt.alertID)
 			if got := alert.Metadata["resourceType"]; got != tt.wantResourceType {
 				t.Fatalf("resourceType metadata = %v, want %s", got, tt.wantResourceType)
+			}
+			// resourceType is a display label, so the owning platform travels separately.
+			wantPlatform := map[string]string{
+				"Kubernetes": "kubernetes",
+				"TrueNAS":    "truenas",
+				"vSphere":    "vmware-vsphere",
+			}[strings.Fields(tt.wantResourceType)[0]]
+			if got := alert.Metadata["platformType"]; got != wantPlatform {
+				t.Fatalf("platformType metadata = %v, want %s", got, wantPlatform)
 			}
 		})
 	}

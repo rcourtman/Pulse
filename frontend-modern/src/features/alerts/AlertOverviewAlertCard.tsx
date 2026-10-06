@@ -152,17 +152,26 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
       typeof props.alert.metadata?.resourceType === 'string'
         ? (props.alert.metadata.resourceType as string)
         : '';
-    if (rid.startsWith('agent:') || resourceType === 'agent') return buildStandalonePath();
+    // Ids and messages carry names the user chose: a Proxmox guest id embeds
+    // its cluster and node names (docker-01:docker-01:100, agent:pve1:100) and
+    // a powered-off message names the guest. They may only decide the page
+    // when the alert names no resource type at all.
+    const typeless = !resourceType;
+    if (resourceType === 'agent' || (typeless && rid.startsWith('agent:')))
+      return buildStandalonePath();
     if (
-      rid.includes('docker') ||
-      resourceType === 'docker-container' ||
-      resourceType === 'docker-host'
+      resourceType.startsWith('docker-') ||
+      resourceType === 'app-container' ||
+      (typeless && rid.includes('docker'))
     )
       return buildDockerPath();
     if (resourceType === 'kubernetes' || resourceType.startsWith('k8s-'))
       return buildKubernetesPath();
     if (resourceType.startsWith('truenas-')) return buildTrueNASPath();
-    if (resourceType.startsWith('vmware-') || props.alert.message?.toLowerCase().includes('vmware'))
+    if (
+      resourceType.startsWith('vmware-') ||
+      (typeless && props.alert.message?.toLowerCase().includes('vmware'))
+    )
       return buildVmwarePath();
     return buildProxmoxPath();
   };

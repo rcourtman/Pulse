@@ -181,6 +181,35 @@ describe('Pulse system-alert overview scope', () => {
       href: '/proxmox/overview',
       platformType: 'proxmox-pbs',
     },
+    {
+      // Metric alerts carry a display label in resourceType; the backend
+      // stamps the canonical platform beside it.
+      name: 'a Kubernetes pod metric alert',
+      resourceId: 'k8s:prod/ns:default/pod:api-7d9f',
+      resourceName: 'api-7d9f',
+      message: 'Kubernetes Pod api-7d9f disk at 93%',
+      metadata: { resourceType: 'Kubernetes Pod', platformType: 'kubernetes' },
+      href: '/kubernetes/overview',
+      platformType: 'kubernetes',
+    },
+    {
+      name: 'a vSphere VM metric alert',
+      resourceId: 'vm:vc-1:vm-2041',
+      resourceName: 'sql-prod-01',
+      message: 'vSphere VM sql-prod-01 CPU at 95%',
+      metadata: { resourceType: 'vSphere VM', platformType: 'vmware-vsphere' },
+      href: '/vmware/overview',
+      platformType: 'vmware-vsphere',
+    },
+    {
+      name: 'a TrueNAS connection alert',
+      resourceId: 'truenas:nas',
+      resourceName: 'NAS',
+      message: "Connection 'NAS' is unreachable",
+      metadata: { resourceType: 'connection', connectionType: 'truenas', platformType: 'truenas' },
+      href: '/truenas/overview',
+      platformType: 'truenas',
+    },
   ])(
     'links $name to its platform page and policy owner',
     ({ resourceId, resourceName, message, metadata, href, platformType }) => {
@@ -208,6 +237,7 @@ describe('Pulse system-alert overview scope', () => {
       name: 'an agent host metric alert to Machines',
       resourceId: 'agent:host-12',
       resourceType: 'agent',
+      message: 'Usage at 92%',
       href: '/standalone/machines',
       platformType: 'agent',
     },
@@ -215,15 +245,49 @@ describe('Pulse system-alert overview scope', () => {
       name: 'a TrueNAS pool metric alert to TrueNAS',
       resourceId: 'truenas-1:pool:tank',
       resourceType: 'truenas-pool',
+      message: 'Usage at 92%',
       href: '/truenas/overview',
       platformType: 'truenas',
+    },
+    {
+      // Guest ids embed the cluster and node names the user chose.
+      name: 'a Proxmox VM alert on a node named docker-01 to Proxmox',
+      resourceId: 'docker-01:docker-01:100',
+      resourceType: 'vm',
+      message: "VM 'billing-db-01' is powered off",
+      href: '/proxmox/overview',
+      platformType: 'proxmox',
+    },
+    {
+      name: 'a Proxmox VM alert in a cluster named agent to Proxmox',
+      resourceId: 'agent:pve1:100',
+      resourceType: 'VM',
+      message: 'VM CPU at 95%',
+      href: '/proxmox/overview',
+      platformType: 'proxmox',
+    },
+    {
+      name: 'a Proxmox VM alert for a guest named vmware-test to Proxmox',
+      resourceId: 'lab:pve1:101',
+      resourceType: 'vm',
+      message: "VM 'vmware-test' is powered off",
+      href: '/proxmox/overview',
+      platformType: 'proxmox',
+    },
+    {
+      name: 'a Docker container alert to Docker by its type alone',
+      resourceId: 'app-container-7c1e',
+      resourceType: 'app-container',
+      message: "Docker container 'nginx' is Paused",
+      href: '/docker/overview',
+      platformType: 'docker',
     },
   ])('links $name when metadata names no platform', (example) => {
     const alert = makeSystemAlert('usage', {
       id: example.resourceId,
       resourceId: example.resourceId,
       resourceName: 'monitored-resource',
-      message: 'Usage at 92%',
+      message: example.message,
       metadata: { resourceType: example.resourceType },
     });
     render(() => (

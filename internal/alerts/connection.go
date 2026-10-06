@@ -40,6 +40,25 @@ const (
 	ConnectionTypeTrueNAS ConnectionType = "truenas"
 )
 
+// platformType returns the canonical platform id of the connection's source,
+// so a connection alert links to and names the platform it belongs to.
+func (t ConnectionType) platformType() string {
+	switch t {
+	case ConnectionTypePVE:
+		return "proxmox-pve"
+	case ConnectionTypePBS:
+		return "proxmox-pbs"
+	case ConnectionTypePMG:
+		return "proxmox-pmg"
+	case ConnectionTypeVMware:
+		return "vmware-vsphere"
+	case ConnectionTypeTrueNAS:
+		return "truenas"
+	default:
+		return ""
+	}
+}
+
 // ConnectionErrorSnapshot mirrors the api.ConnectionError shape that the
 // aggregator computes per target. Only the fields used in alert metadata are
 // carried.
@@ -220,6 +239,9 @@ func (m *Manager) CheckConnection(snap ConnectionSnapshot) {
 		"resourceType":   "connection",
 		"connectionType": string(snap.Type),
 		"state":          string(snap.State),
+	}
+	if platformType := snap.Type.platformType(); platformType != "" {
+		metadata[alertPlatformTypeKey] = platformType
 	}
 	var correlation *AlertCorrelation
 	if snap.Type == ConnectionTypePVE {
