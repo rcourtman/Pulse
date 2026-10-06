@@ -431,6 +431,16 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				continue
 			}
 			threshold = getThresholdForMetric(thresholds, metricType)
+			// Agent policy is the only policy for agent alerts. Falling
+			// through would let the storage or guest switches resolve a
+			// SMART, RAID or sensor alert that CheckHost re-raises on the
+			// next report.
+			if threshold == nil {
+				if isMetricThresholdAlertType(metricType) {
+					alertsToResolve = append(alertsToResolve, alertID)
+				}
+				continue
+			}
 		}
 
 		if alert.Type == "docker-host-offline" ||
