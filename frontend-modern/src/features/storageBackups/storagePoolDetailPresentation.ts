@@ -1,4 +1,5 @@
 import type { HistoryTimeRange, ResourceType as HistoryChartResourceType } from '@/api/charts';
+import { getPhysicalDiskTemperaturePresentation } from '@/features/storageBackups/diskPresentation';
 import type { StorageRecord } from '@/features/storageBackups/models';
 import {
   getStorageRecordContent,
@@ -27,6 +28,8 @@ export type StoragePoolDetailLinkedDisk = {
   sizeLabel: string;
   diskType: string;
   temperature: number;
+  /** Set only when the temperature is a retained, not current, reading. */
+  temperatureLastKnownTitle?: string;
   hasIssue: boolean;
   spunDown: boolean;
   errorCount: number;
@@ -305,6 +308,12 @@ const readDiskTemperature = (disk: Resource): number => {
   return typeof physicalDisk.temperature === 'number' ? physicalDisk.temperature : 0;
 };
 
+const readDiskTemperatureLastKnownTitle = (disk: Resource): string | undefined =>
+  getPhysicalDiskTemperaturePresentation({
+    temperature: readDiskTemperature(disk),
+    collection: readPhysicalDisk(disk).collection,
+  })?.title;
+
 const readDiskType = (disk: Resource): string => {
   const physicalDisk = readPhysicalDisk(disk);
   return typeof physicalDisk.diskType === 'string' ? physicalDisk.diskType.trim() : '';
@@ -424,6 +433,7 @@ export function getStoragePoolLinkedDisks(
       sizeLabel: readDiskSizeLabel(disk),
       diskType: readDiskType(disk),
       temperature: readDiskTemperature(disk),
+      temperatureLastKnownTitle: readDiskTemperatureLastKnownTitle(disk),
       hasIssue: readDiskHasIssue(disk),
       spunDown: readDiskSpunDown(disk),
       errorCount: readDiskErrorCount(disk),

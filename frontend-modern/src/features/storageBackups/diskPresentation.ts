@@ -14,6 +14,7 @@ import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresent
 import { getPhysicalDiskNodeIdentity } from '@/components/Storage/diskResourceUtils';
 import { getInfrastructureSettingsLocationLabel } from '@/utils/infrastructureSettingsPresentation';
 import { normalizeStorageSourceKey, storageSourceMatchesFilter } from '@/utils/storageSources';
+import { formatTemperature } from '@/utils/temperature';
 import type { NormalizedHealth, StorageHealthFilter } from './models';
 import { matchesStorageNodeTerms, parseStorageSearchQuery } from './storageSearchQuery';
 
@@ -253,6 +254,11 @@ export const PHYSICAL_DISK_HEALTH_WRAP_CLASS =
 // that would compete with it for the track.
 export const PHYSICAL_DISK_HEALTH_LABEL_CLASS = 'shrink-0 text-[11px] font-semibold';
 export const PHYSICAL_DISK_TEMPERATURE_CLASS = 'text-[11px] font-medium';
+// A retained reading takes no threshold colour, so it cannot read as a disk
+// running hot or cool right now. The dotted underline marks the value as one
+// its title explains.
+export const PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS =
+  'text-muted underline decoration-dotted underline-offset-2 cursor-help';
 export const PHYSICAL_DISK_SIZE_VALUE_CLASS = 'text-[11px] text-base-content';
 
 const titleize = (value: string | undefined | null): string =>
@@ -465,6 +471,45 @@ export function getPhysicalDiskFieldStatusMessage(
     default:
       return '';
   }
+}
+
+// Normalization may keep the last known temperature when the current
+// observation is not available, such as a disk in standby or a host agent that
+// stopped reporting. The value is a current reading only when its collection
+// state is available, or when the source predates collection state.
+export function isPhysicalDiskTemperatureCurrent(
+  collection: PhysicalDiskCollectionStatus | null | undefined,
+): boolean {
+  const state = collection?.temperature?.state;
+  return !state || state === 'available';
+}
+
+export function getPhysicalDiskLastKnownTemperatureTitle(
+  status: PhysicalDiskFieldStatus | null | undefined,
+): string {
+  const reason = status?.reason?.trim();
+  return reason ? `Last known reading, not current: ${reason}` : 'Last known reading, not current';
+}
+
+export interface PhysicalDiskTemperaturePresentation {
+  label: string;
+  current: boolean;
+  /** Set only for a last-known reading: why the value is not current. */
+  title?: string;
+}
+
+export function getPhysicalDiskTemperaturePresentation(
+  disk: Pick<PhysicalDiskPresentationData, 'temperature' | 'collection'>,
+): PhysicalDiskTemperaturePresentation | null {
+  if (!Number.isFinite(disk.temperature) || disk.temperature <= 0) return null;
+  const current = isPhysicalDiskTemperatureCurrent(disk.collection);
+  return {
+    label: formatTemperature(disk.temperature),
+    current,
+    title: current
+      ? undefined
+      : getPhysicalDiskLastKnownTemperatureTitle(disk.collection?.temperature),
+  };
 }
 
 export function getPhysicalDiskCollectionMessages(disk: PhysicalDiskPresentationData): string[] {

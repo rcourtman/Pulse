@@ -7772,6 +7772,15 @@ candidates. Domain ownership stays with Patrol intelligence, storage recovery,
 alerts, and unified resources; the primitive layer owns consistent rendering,
 accessibility, and handoff behavior only.
 
+The same storage presenters own the last-known disk temperature treatment. A
+temperature whose collection state is not `available` renders through
+`PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS` (muted, dotted underline, help
+cursor) with its reason as the title and screen-reader "last known" text,
+never through the threshold colour classes, so a retained reading cannot look
+hot or healthy. Table, drawer and pool surfaces share that one decision in
+`frontend-modern/src/features/storageBackups/diskPresentation.ts` rather than
+each re-reading `collection.temperature`.
+
 The focused browser proofs are
 `frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts`,
 `frontend-modern/src/components/Storage/__tests__/DiskDetail.test.tsx`,

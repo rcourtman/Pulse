@@ -3784,6 +3784,23 @@ remain explicit. In particular, members behind a shared controller must not
 inherit aggregate I/O counters, and a disk drawer must hide live-I/O charts
 when per-member collection is unavailable or unsupported.
 
+A retained disk temperature reads as last known, never as a live reading. The
+Physical Disks table, the disk drawer and the pool drawer's linked-disk list
+decide through `isPhysicalDiskTemperatureCurrent` and
+`getPhysicalDiskTemperaturePresentation` in
+`frontend-modern/src/features/storageBackups/diskPresentation.ts`: only an
+`available` temperature state, or a source that predates collection state, is
+current and takes the per-disk-type threshold colour. Any other state, such as
+a disk in standby or a host agent past its reporting lease, renders the value
+muted with no hot or warm colour, a dotted underline, a title carrying the
+collection reason and screen-reader "last known" text; the drawer card is
+labelled "Last known temperature" beneath the existing collection message.
+This is presentation only. It does not change the stored value, history writes
+or alert evaluation. Verification: `diskPresentation.test.ts`,
+`diskDetailPresentation.test.ts`, `storagePoolDetailPresentation.test.ts`,
+`DiskList.test.tsx` (a row moving between current, retained and legacy states)
+and `DiskDetail.test.tsx`.
+
 Direct SATA, SAS, and NVMe device fallback identities remain compatible.
 Controller-member fallback identities add controller/target scope only where
 needed to keep multiple members distinct; serial and WWN continue to take
