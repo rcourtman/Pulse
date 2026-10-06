@@ -576,7 +576,7 @@ func (m *Monitor) recordAlertTimelineChange(alert *alerts.Alert, kind unifiedres
 		return
 	}
 
-	change := unifiedresources.BuildAlertTimelineChange(alert.ResourceID, kind, occurredAt, actor, unifiedresources.AlertTimelineChange{
+	timelineChange := unifiedresources.AlertTimelineChange{
 		AlertIdentifier: alert.ID,
 		AlertStartedAt:  alert.StartTime,
 		AlertType:       alert.Type,
@@ -585,7 +585,12 @@ func (m *Monitor) recordAlertTimelineChange(alert *alerts.Alert, kind unifiedres
 		AlertValue:      alert.Value,
 		AlertThreshold:  alert.Threshold,
 		AlertMetadata:   alert.Metadata,
-	})
+	}
+	if summary := alert.Resolution.Summary(); summary != "" {
+		timelineChange.ResolutionReason = string(alert.Resolution.Reason)
+		timelineChange.ResolutionSummary = summary
+	}
+	change := unifiedresources.BuildAlertTimelineChange(alert.ResourceID, kind, occurredAt, actor, timelineChange)
 	if change == nil {
 		return
 	}

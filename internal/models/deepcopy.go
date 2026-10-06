@@ -1337,6 +1337,10 @@ func cloneAlert(src Alert) Alert {
 			dest.Metadata[k] = v
 		}
 	}
+	if src.Resolution != nil {
+		resolution := *src.Resolution
+		dest.Resolution = &resolution
+	}
 	return dest
 }
 
