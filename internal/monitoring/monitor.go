@@ -3577,6 +3577,7 @@ func hostFromReadStateView(view *unifiedresources.HostView) models.Host {
 	if trimmed := strings.TrimSpace(view.Name()); trimmed != "" && trimmed != view.Hostname() {
 		displayName = trimmed
 	}
+	status, lastSeen := hostAgentLivenessFromReadStateView(view, time.Now())
 
 	return models.Host{
 		ID:                firstNonEmptyString(view.AgentID(), view.ID()),
@@ -3598,10 +3599,10 @@ func hostFromReadStateView(view *unifiedresources.HostView) models.Host {
 		RAID:              hostRAIDFromReadStateView(view.RAID()),
 		Unraid:            hostUnraidFromReadStateView(view.Unraid()),
 		Ceph:              hostCephFromReadStateView(view.Ceph()),
-		Status:            string(view.Status()),
+		Status:            status,
 		UptimeSeconds:     view.UptimeSeconds(),
 		IntervalSeconds:   view.IntervalSeconds(),
-		LastSeen:          view.LastSeen(),
+		LastSeen:          lastSeen,
 		AgentVersion:      view.AgentVersion(),
 		IntegrationSource: view.IntegrationSource(),
 		MachineID:         view.MachineID(),
@@ -3622,6 +3623,25 @@ func hostFromReadStateView(view *unifiedresources.HostView) models.Host {
 		LinkedVMID:        view.LinkedVMID(),
 		LinkedContainerID: view.LinkedContainerID(),
 	}
+}
+
+// hostAgentLivenessFromReadStateView returns the status and last report of the
+// agent behind a read-state host row. A row merged with a Proxmox node takes
+// LastSeen from its freshest source and stays online while PVE polling
+// continues, so a silent agent would look current: its retained disk summary
+// and datasets kept feeding the node, and its connection read as active. A
+// models.Host describes the agent, so read the agent source's own sighting
+// and lease, as evaluateHostAgents does for the host in state.
+func hostAgentLivenessFromReadStateView(view *unifiedresources.HostView, now time.Time) (string, time.Time) {
+	status, lastSeen := string(view.Status()), view.LastSeen()
+	agentSighting, ok := view.SourceStatus(unifiedresources.SourceAgent)
+	if !ok || agentSighting.LastSeen.IsZero() {
+		return status, lastSeen
+	}
+	if !hostAgentReportCurrent(agentSighting.LastSeen, view.IntervalSeconds(), now) {
+		status = "offline"
+	}
+	return status, agentSighting.LastSeen
 }
 
 func vmFromReadStateView(view *unifiedresources.VMView) models.VM {
