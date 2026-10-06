@@ -1556,6 +1556,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 	var allBackups []models.PBSBackup
 	retainedGroups := make(map[pbsBackupGroupKey]struct{}, len(existingGroups))
+	refreshedGroups := make(map[pbsBackupGroupKey]time.Time)
 	datastoreCount := len(datastores) // Number of datastores to query
 	datastoreFetches := 0             // Number of successful datastore fetches
 	datastoreErrors := 0              // Datastores with incomplete history
@@ -1696,12 +1697,12 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			datastoreNamespaceErrors += fetched.errors
 			datastoreTerminalNamespaceErrors += fetched.terminalErrors
 
-			// Only a successful snapshot read renews cache freshness. Retrying a
-			// lost read on the next ordinary poll is preferable to treating its
-			// fallback row as a newly successful collection during the TTL.
+			// Stage successful read times until their matching rows are published.
+			// A later cancellation must not freshen the previously published rows
+			// when this poll's refreshed payload never reaches state.
 			fetchedAt := time.Now()
 			for _, key := range fetched.refreshed {
-				m.setPBSBackupCacheTime(instanceName, key, fetchedAt)
+				refreshedGroups[key] = fetchedAt
 			}
 		}
 
@@ -1816,10 +1817,20 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		}
 	}
 
-	m.prunePBSBackupCacheTimes(instanceName, retainedGroups)
+	if ctx.Err() != nil {
+		// Running-task correlation is the last HTTP read and can also be
+		// interrupted. Do not publish its incomplete payload or renew cache.
+		return
+	}
 
-	// Update state
+	// Publication is the commit boundary: no cancellation return may split a
+	// successful read time from its matching payload. Per-instance poller
+	// admission serializes this publication with the next ordinary poll.
 	m.state.UpdatePBSBackups(instanceName, allBackups)
+	m.prunePBSBackupCacheTimes(instanceName, retainedGroups)
+	for key, fetchedAt := range refreshedGroups {
+		m.setPBSBackupCacheTime(instanceName, key, fetchedAt)
+	}
 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
 	candidates := buildPBSGuestCandidates(m.GetUnifiedReadStateOrSnapshot())
