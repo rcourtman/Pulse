@@ -315,7 +315,8 @@ configuration applies. A disk is hot from its trigger: a triage warning, a disk
 issue and an AI chat "needing attention" entry, as its temperature alert and
 Physical Disks Running Hot verdict are. A disk-high finding recovers at or
 below the clear value (under the trigger when there is no band below it), as
-the alert does. Scoped runs keep the provider, and a
+the alert does. With no current reading, a disk last seen hot leaves that
+verification unknown rather than recovered. Scoped runs keep the provider, and a
 provider set before Patrol starts is handed to it. Below the trigger Patrol flags nothing, so an NVMe at 63C stays
 quiet and a SATA disk at 56C is flagged. Proofs:
 `internal/ai/patrol_disk_temperature_test.go` and

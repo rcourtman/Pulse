@@ -2296,6 +2296,11 @@ func verifyMetricRecoveredState(snap patrolRuntimeState, thresholds PatrolThresh
 					if !disk.temperatureLimits.cooled(disk.temperature) {
 						return false, nil
 					}
+					// A disk last seen hot with no current reading has not
+					// shown that it cooled, so its recovery is unknown.
+					if disk.temperature <= 0 && !disk.temperatureLimits.cooled(disk.lastKnownTemperature) {
+						return false, fmt.Errorf("%w: no current temperature reading for %s", aicontracts.ErrVerificationUnknown, rid)
+					}
 					return true, nil
 				}
 				break
@@ -2317,10 +2322,13 @@ func verifyMetricRecoveredState(snap patrolRuntimeState, thresholds PatrolThresh
 }
 
 type patrolPhysicalDiskVerification struct {
-	health            string
-	wearout           int
-	temperature       int
-	temperatureLimits diskTemperatureLimits
+	health      string
+	wearout     int
+	temperature int
+	// lastKnownTemperature is a retained reading the current observation
+	// did not collect (a disk in standby, a silent agent).
+	lastKnownTemperature int
+	temperatureLimits    diskTemperatureLimits
 }
 
 type patrolPhysicalDiskVisitor func(identifiers []string, verification patrolPhysicalDiskVerification) bool
@@ -2464,10 +2472,11 @@ func patrolVisitPhysicalDiskVerification(snap patrolRuntimeState, visit patrolPh
 	rows := patrolPhysicalDiskRows(snap, nil)
 	for _, disk := range rows {
 		if !visit([]string{disk.id, disk.name, disk.devPath, disk.model}, patrolPhysicalDiskVerification{
-			health:            strings.TrimSpace(disk.health),
-			wearout:           disk.wearout,
-			temperature:       disk.temperature.Collected,
-			temperatureLimits: disk.temperatureLimits,
+			health:               strings.TrimSpace(disk.health),
+			wearout:              disk.wearout,
+			temperature:          disk.temperature.Collected,
+			lastKnownTemperature: disk.temperature.LastKnown,
+			temperatureLimits:    disk.temperatureLimits,
 		}) {
 			return true
 		}

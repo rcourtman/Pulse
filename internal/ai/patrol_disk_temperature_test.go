@@ -1,12 +1,15 @@
 package ai
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 // raisedNVMeThresholds is a user who raised the NVMe disk temperature trigger
@@ -224,5 +227,23 @@ func TestDiskHeatRecoversAtTheClearValue(t *testing.T) {
 	noBand := diskTemperatureLimitsFor(&mockThresholdProvider{diskTemperature: map[string][2]float64{"sas": {70, 70}}}, "sas")
 	if !noBand.hot(70) || noBand.cooled(70) || !noBand.cooled(69) {
 		t.Fatalf("no-band limits %+v: want 70C hot and not cooled, 69C cooled", noBand)
+	}
+}
+
+// With no current reading (standby, a silent agent) a disk last seen hot has
+// not shown that it cooled, so heat recovery is unknown rather than proven.
+func TestDiskHeatRecoveryNeedsACurrentReading(t *testing.T) {
+	retained := &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("smartctl", "disk is in standby")}
+	state := newPatrolRuntimeState(models.StateSnapshot{PhysicalDisks: []models.PhysicalDisk{
+		{ID: "sata-retained-hot", DevPath: "/dev/sda", Type: "sata", Health: "PASSED", Wearout: -1, Temperature: 56, Collection: retained},
+		{ID: "sata-retained-cool", DevPath: "/dev/sdb", Type: "sata", Health: "PASSED", Wearout: -1, Temperature: 40, Collection: retained},
+	}})
+
+	if _, err := verifyMetricRecoveredState(state, PatrolThresholds{}, "disk-high", "sata-retained-hot", "physical_disk"); !errors.Is(err, aicontracts.ErrVerificationUnknown) {
+		t.Fatalf("retained 56C: err = %v, want ErrVerificationUnknown", err)
+	}
+	recovered, err := verifyMetricRecoveredState(state, PatrolThresholds{}, "disk-high", "sata-retained-cool", "physical_disk")
+	if err != nil || !recovered {
+		t.Fatalf("retained 40C: recovered = %v, err = %v, want recovered", recovered, err)
 	}
 }
