@@ -321,6 +321,30 @@ supported QEMU Guest Agent. The Linux package name is not a Windows or Android
 installation instruction. If no supported agent is available, use the guest's
 own filesystem tools; missing Pulse usage is unknown, not zero.
 
+### Use existing Machines readings without changing the guest
+
+The Proxmox disk view and an in-guest **Pulse Agent** use different collection
+paths. A paused Proxmox guest-agent read does not mean the Pulse Agent has
+stopped reporting. If the affected VM **already has a Pulse Agent** and an
+existing entry in **Machines**, check that view's filesystem readings and
+History before changing anything in the guest.
+
+Confirm the Machines entry belongs to the **same guest**, using its existing
+identity and host details, not a similar name alone. Check the filesystem and
+its observation time: a retained History sample or an agent's recent contact
+is not proof of a current disk reading. Use available, current readings there
+as an interim view; this does not repair the missing Proxmox reading or prove
+that the two entries are linked correctly. If the guest has no existing Pulse
+Agent entry or no current filesystem readings, use its own filesystem tools
+through your normal interface. **Do not install another agent, restart services,
+restore a VM or force guest-agent checks just to recover these readings.**
+
+This alternative does **not** relax [Backup safety](#backup-safety). A responsive
+guest, running agent services, working Machines readings or an expired cooldown
+is not proof of thaw and successful writes to every filesystem covered by the
+backup. Keep the monitoring-outage precaution until those independent checks
+pass; do not clear or bypass a guest-read pause to test recovery.
+
 | Observation | Useful next check |
 | --- | --- |
 | **Disk shows “-”** | Read its explanation and observation time. Check the owning host, current VM options, guest-local service and configured API token access. |

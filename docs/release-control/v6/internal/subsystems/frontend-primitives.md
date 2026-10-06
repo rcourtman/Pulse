@@ -8787,3 +8787,15 @@ title as a muted line (`data-thresholds-defaults-summary`) that wraps only
 between items on phones and truncates from `sm` up, and is hidden while
 `isGloballyDisabled` is set, where it would promise alerts that cannot fire. Callers pass the shared summary helper's output rather than
 composing per-section strings.
+
+### Passive alternative for unavailable Proxmox guest disks (6 October 2026)
+
+The existing disk guide offers already-present Machines filesystem readings and
+History as an interim view, with same-guest identity and metric-age checks.
+Recent agent contact and retained History do not establish current disk usage;
+working Machines readings do not repair Proxmox collection or prove correlation
+or thaw. No new agent installation, guest restart/restore, pause bypass or active
+probe is prescribed. Independent thaw, every-covered-filesystem writes and
+liveness remain the backup restoration boundary. The shipped mirror and
+`backupSafetyHelp.test.ts` validate the rendered guidance and anchor; both new
+controls reject the original parent guide. No runtime or wire contract changes.
