@@ -99,6 +99,11 @@ A retained artifact can remain visible while posture is unknown. A running
 backup is not a new completed recovery point; inspect any earlier completed
 point separately rather than treating current activity as protection.
 
+For PBS artifacts that disagree with the health strip, use the
+[backup health checks](PBS.md#backup-health-disagrees-with-visible-pbs-backups)
+to compare one workload's explanation and provider evidence without running a
+new backup or changing stored history.
+
 ## Missing or inconsistent evidence
 
 1. Open the relevant platform view, clear its search and filters, and check the

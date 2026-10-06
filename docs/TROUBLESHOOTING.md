@@ -335,6 +335,14 @@ repair an older generated unit rather than adding a JSON-parsing wrapper.
   It checks the server service and update timer before the backup, then requires
   independent guest thaw confirmation before starting Pulse again.
 
+#### Backup health disagrees with PBS
+
+A visible or Verified PBS backup is not the same reading as a workload's
+Coverage posture. Use the [backup health checks](PBS.md#backup-health-disagrees-with-visible-pbs-backups)
+to compare one affected row's explanation, Job, History and Access with the
+matching native PBS record. Do not run a new backup, restart or clear history
+just to diagnose the disagreement.
+
 #### Temperature data missing
 - Compare the affected host's active agent version, last report, sensor and
   observation time. A current server or another sensor's value is not evidence
