@@ -18,7 +18,7 @@ import type { NestedWorkloadContext } from './nestedWorkloadContext';
 import type { WorkloadsMemoryDisplayBasis } from './workloadsFilterModel';
 
 import {
-  getMemoryObservationPresentation,
+  getWorkloadMemoryObservationPresentation,
   type MemoryObservationPresentation,
 } from '@/utils/memoryObservation';
 
@@ -126,23 +126,7 @@ const getGuestDrawerMemoryUsage = (guest: Guest): number | undefined => {
     : undefined;
 };
 
-export const getGuestDrawerMemoryReading = (guest: Guest): GuestDrawerMemoryReading | null => {
-  const observation = guest.memory?.observation;
-  const nonProxmoxVMware =
-    guest.platformScopes?.includes('vmware-vsphere') &&
-    !guest.platformScopes.includes('proxmox-pve');
-  const proxmoxGuest =
-    !nonProxmoxVMware &&
-    (guest.type === 'qemu' ||
-      guest.type === 'lxc' ||
-      guest.platformScopes?.includes('proxmox-pve') ||
-      (guest.vmid > 0 && Boolean(guest.node && guest.instance)));
-  return getMemoryObservationPresentation(
-    getGuestDrawerMemoryUsage(guest),
-    observation,
-    proxmoxGuest,
-  );
-};
+export const getGuestDrawerMemoryReading = getWorkloadMemoryObservationPresentation;
 
 export const getGuestDrawerDeferredMetrics = (
   guest: Guest,

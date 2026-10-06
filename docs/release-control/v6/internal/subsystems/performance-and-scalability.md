@@ -15,6 +15,23 @@
 
 ## Purpose
 
+**Memory freshness is preserved at the Workloads row boundary.**
+
+`GuestRow.tsx` qualifies selected memory once per reactive reading using the
+shared drawer policy. Non-current rows keep a visible/accessibility cue through
+bars, sparklines, the History lens and host-capacity mode. An unavailable
+numeric carrier is not a current value; retained History paths stay unchanged.
+Source-time qualification never uses Last seen or a filesystem deferral,
+and same-guest observation updates do not remount the row or request History.
+No collection, chart sampling, sorting, retention or alert threshold changes.
+
+`GuestRow.test.tsx` (memory observation provenance),
+`MetricMiniSparkline.test.tsx`, `memoryObservation.test.ts` and the existing
+drawer/History suites pin this boundary. The production browser fixture
+`browser-tests/guest-row-memory-provenance.cjs` checks touch/pointer/keyboard
+and narrow/desktop layouts with synthetic observations, not native recovery.
+
+
 Drawer observation labels derive locally from the selected snapshot without renewing timestamps, adding reads, remounting charts or changing stored metric coordinates.
 
 ### Drawer provenance stays local to snapshot presentation

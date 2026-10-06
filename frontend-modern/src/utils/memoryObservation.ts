@@ -1,4 +1,5 @@
 import type { MemoryObservation } from '@/types/api';
+import type { WorkloadGuest } from '@/types/workloads';
 
 // Keep only the existing server-owned wire fields. Missing/future state is not
 // replaced by a resource poll time or a platform facet from another metric.
@@ -37,6 +38,7 @@ export const getMemoryObservationPresentation = (
   value: number | undefined,
   observation: MemoryObservation | undefined,
   requiresObservation = false,
+  options: { includeCurrent?: boolean } = {},
 ): MemoryObservationPresentation | null => {
   // Unannotated unrelated platforms retain their existing behaviour. Legacy
   // Proxmox readings lack authority to assert current freshness.
@@ -44,9 +46,6 @@ export const getMemoryObservationPresentation = (
   const timestamp =
     typeof observation?.observedAt === 'string' ? Date.parse(observation.observedAt) : NaN;
   const validTime = Number.isFinite(timestamp) && timestamp > 0 && timestamp <= Date.now();
-  const observed = validTime
-    ? new Date(timestamp).toISOString().replace('T', ' ').replace('.000Z', 'Z').replace('Z', ' UTC')
-    : null;
   const state =
     typeof value !== 'number' ||
     !Number.isFinite(value) ||
@@ -59,6 +58,12 @@ export const getMemoryObservationPresentation = (
         : observation?.state === 'current' && validTime
           ? 'current'
           : 'unknown';
+  // Most table rows are current and need no cue. Qualify them identically,
+  // but avoid building source/date strings that will never be rendered.
+  if (state === 'current' && options.includeCurrent === false) return null;
+  const observed = validTime
+    ? new Date(timestamp).toISOString().replace('T', ' ').replace('.000Z', 'Z').replace('Z', ' UTC')
+    : null;
   const label =
     state === 'current'
       ? 'Current'
@@ -77,4 +82,27 @@ export const getMemoryObservationPresentation = (
     summary: `${label} · ${source}${observed ? ` · ${observed}` : ' · time unknown'}`,
     message: `${label}. Source: ${source}. ${time}${state === 'last-known' || state === 'unknown' ? ' Not a current measurement.' : ''}`,
   };
+};
+
+// Rows and drawers qualify the same selected reading. Neither a disk-read
+// deferral nor a refreshed Last seen can renew the memory observation.
+export const getWorkloadMemoryObservationPresentation = (
+  guest: WorkloadGuest,
+  options: { includeCurrent?: boolean } = {},
+): MemoryObservationPresentation | null => {
+  const usage = guest.memory?.usage;
+  const value =
+    guest.telemetryAvailability?.memory !== false && !guest.memory?.usageUnavailable
+      ? usage
+      : undefined;
+  const nonProxmoxVMware =
+    guest.platformScopes?.includes('vmware-vsphere') &&
+    !guest.platformScopes.includes('proxmox-pve');
+  const proxmoxGuest =
+    !nonProxmoxVMware &&
+    (guest.type === 'qemu' ||
+      guest.type === 'lxc' ||
+      guest.platformScopes?.includes('proxmox-pve') ||
+      (guest.vmid > 0 && Boolean(guest.node && guest.instance)));
+  return getMemoryObservationPresentation(value, guest.memory?.observation, proxmoxGuest, options);
 };

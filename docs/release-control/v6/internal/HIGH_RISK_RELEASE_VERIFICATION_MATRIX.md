@@ -8,6 +8,22 @@ A gate is only `passed` when its automated proof still passes and the manual
 scenario has been exercised in a staging-like environment with the expected
 result.
 
+## Workloads memory observation presentation
+
+Automated: `GuestRow.test.tsx` (memory observation provenance),
+`MetricMiniSparkline.test.tsx`, `memoryObservation.test.ts`, and existing
+GuestDrawer/canonical History/selected-source adapter tests. The browser fixture
+`frontend-modern/browser-tests/guest-row-memory-provenance.cjs` exercises the
+production renderer with synthetic last-known, unknown, unavailable, current,
+zero and independent-memory/disk-deferral snapshots on desktop and narrow touch.
+Check source/time labels without hovering, every display mode, host-capacity
+labels, historical path preservation and same-guest updates without remount.
+
+Installed follow-through remains separate: independent thaw, writes to every
+covered filesystem, guest liveness and only-prior-active restoration belong to
+the native safety owners. These presentation checks do not set a release gate,
+prove a safe guest or authorise a diagnostic/restart.
+
 ## How To Use This Matrix
 
 1. Run the automated proof first.
