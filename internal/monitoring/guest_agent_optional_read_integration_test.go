@@ -143,7 +143,16 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 					if !resolved || view.ID() != canonicalID || view.DiskUsed() != vm.Disk.Used || view.DiskStatusReason() != vm.DiskStatusReason {
 						t.Fatalf("filesystem observation changed at the read boundary: id=%q resolved=%q ok=%v used=%d/%d reason=%q/%q", view.ID(), canonicalID, resolved, view.DiskUsed(), vm.Disk.Used, view.DiskStatusReason(), vm.DiskStatusReason)
 					}
-					encoded, err := json.Marshal(m.buildBroadcastFrontendStateFromSnapshot(models.StateSnapshot{VMs: []models.VM{vm}}).Resources)
+					// Publish the completed poll at the normal ingest boundary.
+					// Read-only hydration may deliberately reuse a generation for
+					// two seconds; it is not a replacement for poll publication.
+					snapshot := models.StateSnapshot{VMs: []models.VM{vm}, LastUpdate: vm.LastSeen}
+					m.updateResourceStore(snapshot)
+					live := m.GetUnifiedReadState().VMs()[0]
+					if live.ID() != canonicalID || live.DiskUsed() != vm.Disk.Used || live.DiskStatusReason() != vm.DiskStatusReason {
+						t.Fatal("accepted poll did not replace the production read generation")
+					}
+					encoded, err := json.Marshal(m.buildBroadcastFrontendStateFromSnapshot(snapshot).Resources)
 					if err != nil || !strings.Contains(string(encoded), canonicalID) {
 						t.Fatal("guest identity missing from JSON read projection")
 					}
@@ -153,7 +162,7 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 					}
 					var facet unifiedresources.ProxmoxData
 					if err := json.Unmarshal(served[0].Proxmox, &facet); err != nil || facet.DiskStatusReason != vm.DiskStatusReason || facet.GuestAgentStatus != vm.GuestAgentStatus || facet.GuestAgentExpected != vm.GuestAgentExpected {
-						t.Fatal("guest admission state changed in production JSON")
+						t.Fatalf("guest admission state changed in production JSON: reason=%q/%q state=%q/%q expected=%v/%v", facet.DiskStatusReason, vm.DiskStatusReason, facet.GuestAgentStatus, vm.GuestAgentStatus, facet.GuestAgentExpected, vm.GuestAgentExpected)
 					}
 					next := previousVMFromView(view)
 					previous = &next
