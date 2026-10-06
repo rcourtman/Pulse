@@ -220,10 +220,6 @@ func (m *Manager) CheckHost(host models.Host) {
 		return
 	}
 
-	// Record the Proxmox node this agent is linked to, so the node releases the
-	// usage alerts the agent now owns instead of alerting twice for one machine.
-	m.registerHostAgentNodeLink(host)
-
 	// Cache display name so host alerts show the user-configured name.
 	m.UpdateNodeDisplayName("", host.Hostname, host.DisplayName)
 
@@ -242,11 +238,15 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 	m.mu.RUnlock()
 
+	// While this agent evaluates nothing, its linked node keeps its own usage
+	// alerts; the link is registered below once the evaluated metrics are known.
 	if !alertsEnabled {
+		m.unregisterHostAgentNodeLink(host.ID)
 		return
 	}
 
 	if disableAllAgents {
+		m.unregisterHostAgentNodeLink(host.ID)
 		// Clear any existing host alerts when all host alerts are disabled
 		m.clearHostMetricAlerts(host.ID)
 		m.clearHostDiskAlerts(host.ID)
@@ -257,6 +257,7 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	if thresholds.Disabled {
+		m.unregisterHostAgentNodeLink(host.ID)
 		m.clearHostMetricAlerts(host.ID)
 		m.clearHostDiskAlerts(host.ID)
 		m.clearHostRAIDAlerts(host.ID)
@@ -386,6 +387,7 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	seenDisks := make(map[string]struct{}, len(host.Disks))
+	evaluatesDiskUsage := false
 	if len(host.Sensors.SMART) > 0 {
 		for _, disk := range host.Sensors.SMART {
 			diskResourceID, diskName := hostSMARTDiskResourceID(host, disk)
@@ -443,6 +445,7 @@ func (m *Manager) CheckHost(host models.Host) {
 		if effectiveDiskThreshold == nil {
 			continue
 		}
+		evaluatesDiskUsage = evaluatesDiskUsage || effectiveDiskThreshold.Trigger > 0
 
 		diskMetadata := cloneMetadata(baseMetadata)
 		diskMetadata["metric"] = "disk"
@@ -489,6 +492,17 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	m.cleanupHostDiskAlerts(host, seenDisks)
+
+	// The linked node releases exactly the usage metrics evaluated above and
+	// keeps the rest, so deduplication never leaves the machine unmonitored.
+	m.registerHostAgentNodeLink(hostAgentNodeLink{
+		agentID:   host.ID,
+		agentName: resourceName,
+		nodeID:    host.LinkedNodeID,
+		cpu:       thresholds.CPU != nil && thresholds.CPU.Trigger > 0,
+		memory:    thresholds.Memory != nil && thresholds.Memory.Trigger > 0 && host.Memory.HasKnownUsage(),
+		disk:      evaluatesDiskUsage,
+	})
 
 	if host.Unraid != nil {
 		m.syncHostUnraidStorageAlert(host, nodeName, instanceName, resourceName, baseMetadata)

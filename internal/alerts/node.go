@@ -93,27 +93,37 @@ func (m *Manager) CheckNode(node models.Node) {
 			m.clearNodeOfflineAlert(node)
 
 			// Check each metric (only if node is online and reachable)
-			// Check for host agent deduplication: if a host agent is linked to this node,
-			// CPU, memory and disk usage alerts belong to the agent resource (CheckHost
-			// evaluates them), so the node releases its own copies instead of alerting twice.
-			if m.hasHostAgentForNode(node.ID) {
-				m.releaseNodeMetricAlerts(node, "cpu", "memory", "disk")
-			} else {
-				var memoryMetric *UnifiedResourceMetric
-				if node.Memory.HasKnownUsage() {
-					memoryMetric = &UnifiedResourceMetric{Percent: node.Memory.Usage}
-				}
-				m.evaluateUnifiedMetrics(&UnifiedResourceInput{
-					ID:       node.ID,
-					Type:     "node",
-					Name:     node.Name,
-					Node:     node.Name,
-					Instance: node.Instance,
-					CPU:      &UnifiedResourceMetric{Percent: node.CPU * 100},
-					Memory:   memoryMetric,
-					Disk:     &UnifiedResourceMetric{Percent: node.Disk.Usage},
-				}, thresholds, nil)
+			// Check for host agent deduplication: a usage metric that a linked host
+			// agent evaluates belongs to the agent resource (CheckHost raises it), so
+			// the node releases its own copy instead of alerting twice. A metric the
+			// agent does not evaluate (agent alerts disabled, threshold off, usage
+			// unknown) stays with the node, so the machine is never left unmonitored.
+			link, _ := m.linkedHostAgentForNode(node.ID)
+			input := &UnifiedResourceInput{
+				ID:       node.ID,
+				Type:     "node",
+				Name:     node.Name,
+				Node:     node.Name,
+				Instance: node.Instance,
 			}
+			released := make([]string, 0, 3)
+			if link.cpu {
+				released = append(released, "cpu")
+			} else {
+				input.CPU = &UnifiedResourceMetric{Percent: node.CPU * 100}
+			}
+			if link.memory {
+				released = append(released, "memory")
+			} else if node.Memory.HasKnownUsage() {
+				input.Memory = &UnifiedResourceMetric{Percent: node.Memory.Usage}
+			}
+			if link.disk {
+				released = append(released, "disk")
+			} else {
+				input.Disk = &UnifiedResourceMetric{Percent: node.Disk.Usage}
+			}
+			m.releaseNodeMetricAlerts(node, released...)
+			m.evaluateUnifiedMetrics(input, thresholds, nil)
 
 			// CPU temperature stays with the node even when a host agent runs on it:
 			// CheckHost has no CPU temperature metric, and the node poll already
@@ -189,32 +199,46 @@ func (m *Manager) releaseNodeMetricAlerts(node models.Node, metrics ...string) {
 	}
 }
 
-// registerHostAgentNodeLink records which Proxmox node a reporting host agent
-// is linked to. While the link holds, the agent resource owns that machine's
-// CPU, memory and disk usage alerts. The link is the monitor's identity decision
-// (automatic or operator-set), so an agent whose hostname merely matches a node
-// name in another instance, or one an operator unlinked, never makes a node
-// release its alerts, and an agent reporting an FQDN still dedups its node.
-func (m *Manager) registerHostAgentNodeLink(host models.Host) {
-	hostID := strings.TrimSpace(host.ID)
-	if hostID == "" {
+// hostAgentNodeLink is a reporting host agent's link to a Proxmox node and the
+// usage metrics the agent evaluates for that machine. The link is the monitor's
+// identity decision (automatic or operator-set), so an agent whose hostname
+// merely matches a node name in another instance, or one an operator unlinked,
+// never makes a node release its alerts, and an agent reporting an FQDN still
+// dedups its node.
+type hostAgentNodeLink struct {
+	agentID   string
+	agentName string
+	nodeID    string
+	cpu       bool
+	memory    bool
+	disk      bool
+}
+
+// registerHostAgentNodeLink records a host agent's node link after CheckHost
+// has decided which usage metrics it evaluates. A link without a node or
+// without any evaluated metric is removed, so the node keeps all its alerts.
+func (m *Manager) registerHostAgentNodeLink(link hostAgentNodeLink) {
+	link.agentID = strings.TrimSpace(link.agentID)
+	link.nodeID = strings.TrimSpace(link.nodeID)
+	if link.agentID == "" {
 		return
 	}
-	linkedNodeID := strings.TrimSpace(host.LinkedNodeID)
-	m.mu.Lock()
-	previous, existed := m.hostAgentNodeLinks[hostID]
-	if linkedNodeID == "" {
-		delete(m.hostAgentNodeLinks, hostID)
-	} else {
-		m.hostAgentNodeLinks[hostID] = linkedNodeID
+	if link.nodeID == "" || !(link.cpu || link.memory || link.disk) {
+		m.unregisterHostAgentNodeLink(link.agentID)
+		return
 	}
+	m.mu.Lock()
+	previous, existed := m.hostAgentNodeLinks[link.agentID]
+	m.hostAgentNodeLinks[link.agentID] = link
 	m.mu.Unlock()
 
-	if !existed || previous != linkedNodeID {
+	if !existed || previous != link {
 		log.Debug().
-			Str("hostID", hostID).
-			Str("hostname", host.Hostname).
-			Str("linkedNodeID", linkedNodeID).
+			Str("hostID", link.agentID).
+			Str("linkedNodeID", link.nodeID).
+			Bool("cpu", link.cpu).
+			Bool("memory", link.memory).
+			Bool("disk", link.disk).
 			Msg("Updated host agent node link for deduplication")
 	}
 }
@@ -227,33 +251,47 @@ func (m *Manager) unregisterHostAgentNodeLink(hostID string) {
 		return
 	}
 	m.mu.Lock()
-	linkedNodeID, existed := m.hostAgentNodeLinks[hostID]
+	link, existed := m.hostAgentNodeLinks[hostID]
 	delete(m.hostAgentNodeLinks, hostID)
 	m.mu.Unlock()
 
 	if existed {
 		log.Debug().
 			Str("hostID", hostID).
-			Str("linkedNodeID", linkedNodeID).
+			Str("linkedNodeID", link.nodeID).
 			Msg("Removed host agent node link from deduplication")
 	}
 }
 
-// hasHostAgentForNode reports whether a reporting host agent is linked to the
-// given Proxmox node, in which case the node's usage alerts belong to the agent.
-func (m *Manager) hasHostAgentForNode(nodeID string) bool {
+// linkedHostAgentForNode returns the host agent link that owns usage metrics
+// for the given Proxmox node. If several agents are linked to one node, the
+// lowest agent ID wins so the choice is stable.
+func (m *Manager) linkedHostAgentForNode(nodeID string) (hostAgentNodeLink, bool) {
 	nodeID = strings.TrimSpace(nodeID)
 	if nodeID == "" {
-		return false
+		return hostAgentNodeLink{}, false
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	for _, linkedNodeID := range m.hostAgentNodeLinks {
-		if linkedNodeID == nodeID {
-			return true
+	var found hostAgentNodeLink
+	ok := false
+	for _, link := range m.hostAgentNodeLinks {
+		if link.nodeID != nodeID {
+			continue
+		}
+		if !ok || link.agentID < found.agentID {
+			found = link
+			ok = true
 		}
 	}
-	return false
+	return found, ok
+}
+
+// hasHostAgentForNode reports whether a reporting host agent is linked to the
+// given Proxmox node and owns at least one of its usage metrics.
+func (m *Manager) hasHostAgentForNode(nodeID string) bool {
+	_, ok := m.linkedHostAgentForNode(nodeID)
+	return ok
 }
 
 // UpdateNodeDisplayName caches the display name for a node/host so alerts

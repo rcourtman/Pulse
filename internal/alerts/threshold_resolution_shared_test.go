@@ -359,6 +359,67 @@ func TestCheckNodeMissingTemperatureDoesNotResolveOpenAlert(t *testing.T) {
 	}
 }
 
+// Deduplication only hands the agent the usage metrics it evaluates. With agent
+// alerts switched off, or one agent threshold off, the node keeps those alerts
+// so the machine is never left unmonitored.
+func TestCheckNodeKeepsUsageMetricsTheAgentDoesNotEvaluate(t *testing.T) {
+	setup := func(t *testing.T) (*Manager, models.Node, models.Host) {
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.config.TimeThresholds = map[string]int{}
+		m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+		m.config.NodeDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+		m.config.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+		m.config.AgentDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+		m.mu.Unlock()
+		node, host := testNodeWithHostAgent()
+		node.CPU = 0.95
+		node.Memory = models.Memory{Total: 100, Used: 95, Free: 5, Usage: 95}
+		host.CPUUsage = 95
+		host.Memory = node.Memory
+		return m, node, host
+	}
+	nodeCPU := func(node models.Node) string { return canonicalMetricStateID(node.ID, "cpu") }
+	nodeMemory := func(node models.Node) string { return canonicalMetricStateID(node.ID, "memory") }
+
+	t.Run("agent_alerts_disabled", func(t *testing.T) {
+		m, node, host := setup(t)
+		m.CheckHost(host)
+		m.CheckNode(node)
+		if testHasActiveAlert(t, m, nodeCPU(node)) {
+			t.Fatalf("expected the agent to own CPU while its alerts are enabled")
+		}
+
+		m.mu.Lock()
+		m.config.DisableAllAgents = true
+		m.mu.Unlock()
+		m.CheckHost(host)
+		m.CheckNode(node)
+		if !testHasActiveAlert(t, m, nodeCPU(node)) || !testHasActiveAlert(t, m, nodeMemory(node)) {
+			t.Fatalf("expected the node to alert on CPU and memory while agent alerts are disabled")
+		}
+	})
+
+	t.Run("agent_cpu_threshold_off", func(t *testing.T) {
+		m, node, host := setup(t)
+		m.mu.Lock()
+		m.config.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 0, Clear: 0}
+		m.mu.Unlock()
+		m.CheckHost(host)
+		m.CheckNode(node)
+		if !testHasActiveAlert(t, m, nodeCPU(node)) {
+			t.Fatalf("expected the node to keep CPU when the agent CPU threshold is off")
+		}
+		if testHasActiveAlert(t, m, nodeMemory(node)) {
+			t.Fatalf("expected the agent to keep owning memory")
+		}
+		if got := testActiveAlertIDsOfType(m, "memory"); len(got) != 1 {
+			t.Fatalf("expected exactly one memory alert for the machine, got %v", got)
+		}
+	})
+}
+
 // A missing reading keeps the incident but must not let a sustained-for or
 // recovery delay complete across the gap in evidence.
 func TestCheckNodeMissingTemperatureInterruptsTimingRuns(t *testing.T) {
