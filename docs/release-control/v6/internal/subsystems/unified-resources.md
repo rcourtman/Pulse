@@ -2230,7 +2230,17 @@ may repeat beside it. The Docker hosts (`DockerHostsTable.tsx`) and Machines
 `getUnifiedResourceAlertStyles`, so a collapsed row never looks healthy while
 its drawer lists an unacknowledged alert (an expanded row drops the tint while
 its drawer shows the alerts); acknowledged alerts stay in the drawer without
-tinting the row.
+tinting the row. Kubernetes node rows (`KubernetesNodesTable.tsx`) tint the
+same way: a node that runs a Pulse agent is an agent row whose alerts are keyed
+`agent:<id>` and carry the hostname, so the earlier id-and-display-name match
+left it untinted while its drawer listed a critical alert. The Kubernetes
+overview's "Nodes needing attention" and the nodes table's default order rank
+a node by the stronger of its readiness state and those unacknowledged alerts
+(`getKubernetesNodeAttentionRank`), so a Ready node at 100% memory is named
+beside the NotReady ones. vSphere host and TrueNAS system rows keep
+`getAlertStyles` with the host name: their VMs', pools' and apps' alerts carry
+that name as their node, and no producer keys alerts on those rows' `agent:`
+aliases (a Pulse agent on a TrueNAS box stays a separate resource).
 Machine and host overview cards that render compact system, hardware, disk,
 and temperature facts must also compose the frontend-primitives
 `InfoCardKeyValueRow`. Mobile rows retain their condensed endpoint layout;

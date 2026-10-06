@@ -6,7 +6,7 @@ import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { asTrimmedString } from '@/utils/stringUtils';
-import { getAlertStyles } from '@/utils/alerts';
+import { getUnifiedResourceAlertStyles } from '@/utils/alerts';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { unifiedPlatformOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
@@ -41,6 +41,7 @@ import type { Resource } from '@/types/resource';
 import {
   compareKubernetesNodes,
   filterKubernetesResources,
+  getKubernetesNodeAttentionRank,
   kubernetesClusterLabel,
   mapKubernetesNodeStatus,
   type KubernetesResourceStatusFilter,
@@ -145,19 +146,27 @@ export const KubernetesNodesTable: Component<{
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-node-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
   // User-controlled sorting layered over the attention-first default: rows
-  // are pre-sorted by the status compare, so a user sort keeps that order
-  // for ties and the table falls straight back to it when the sort clears.
+  // are pre-sorted by attention (status and open alerts), then the status
+  // compare, so a user sort keeps that order for ties and the table falls
+  // straight back to it when the sort clears.
   const sort = createPlatformTableSortState({
     storageKey: props.sortStorageKey ?? 'kubernetesNodes',
     sortKeys: KUBERNETES_NODE_SORT_KEYS,
     descendingFirst: ['cpu', 'memory', 'uptime', 'capacity'],
   });
-  const sortedRows = createMemo(() =>
-    sort.sortRows(
-      [...tableState.filtered()].sort(compareKubernetesNodes),
+  const sortedRows = createMemo(() => {
+    const rows = tableState.filtered();
+    const enabled = alertsEnabled();
+    const ranks = new Map(
+      rows.map((node) => [node.id, getKubernetesNodeAttentionRank(node, activeAlerts, enabled)]),
+    );
+    return sort.sortRows(
+      [...rows].sort(
+        (a, b) => (ranks.get(a.id) ?? 2) - (ranks.get(b.id) ?? 2) || compareKubernetesNodes(a, b),
+      ),
       getKubernetesNodeSortValue,
-    ),
-  );
+    );
+  });
 
   return (
     <Show
@@ -367,8 +376,12 @@ export const KubernetesNodesTable: Component<{
                     const canRenderMetrics = () => indicator().variant !== 'muted';
                     const detailRowId = () => drawer.detailRowId(node);
                     const isExpanded = () => drawer.isExpanded(node);
+                    // The same open alerts the node's drawer lists: a node that
+                    // runs a Pulse agent has its alerts keyed on the agent and
+                    // labelled with its hostname, so matching the row's id or
+                    // display name finds none of them.
                     const nodeAlertStyles = createMemo(() =>
-                      getAlertStyles(node.id, activeAlerts, alertsEnabled(), name()),
+                      getUnifiedResourceAlertStyles(node, activeAlerts, alertsEnabled()),
                     );
                     const nodeAlertBg = () => {
                       const s = nodeAlertStyles();
@@ -380,7 +393,9 @@ export const KubernetesNodesTable: Component<{
                     return (
                       <>
                         <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs ${nodeAlertBg()}`}
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs ${
+                            isExpanded() ? '' : nodeAlertBg()
+                          }`}
                           data-kubernetes-node-row={node.id}
                           onClick={() => drawer.toggle(node)}
                         >
