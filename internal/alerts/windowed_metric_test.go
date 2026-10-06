@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"math"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -371,5 +373,58 @@ func TestNonFiniteMetricDoesNotPreventExplicitDisable(t *testing.T) {
 		if len(m.GetActiveAlerts()) != 0 || len(queryAlertEvents(t, m, eventlog.Filter{Types: []string{eventlog.TypeFired}})) != 1 || len(queryAlertEvents(t, m, eventlog.Filter{Types: []string{eventlog.TypeResolved}})) != 1 {
 			t.Fatal("explicit disable must still resolve the active rule independently of telemetry")
 		}
+	}
+}
+
+// A skipped window must not leave grace on disk for a restart to resume.
+func TestUnknownMetricObservationDropsDurableIntentCheckpoint(t *testing.T) {
+	for _, route := range []string{"legacy", "canonical", "unified", "host", "guest-memory", "guest-filesystem-expired"} {
+		t.Run(route, func(t *testing.T) {
+			m, elapsed := continuityManager(t, true)
+			gap := "missing"
+			if route == "legacy" || route == "canonical" {
+				gap = "history-empty"
+			}
+			_, _, observe := continuityObserver(t, m, route, gap)
+			observe(85, false)
+			elapsed.Store(int64(40 * time.Second))
+			observe(85, false)
+			if err := m.SaveActiveAlerts(); err != nil {
+				t.Fatal(err)
+			}
+			file := filepath.Join(m.getAlertsDir(), intentPendingFileName)
+			read := func() []IntentPendingState {
+				data, err := os.ReadFile(file)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var saved []IntentPendingState
+				if err := json.Unmarshal(data, &saved); err != nil {
+					t.Fatal(err)
+				}
+				return saved
+			}
+			if len(read()) != 1 {
+				t.Fatal("control did not retain a real in-progress grace checkpoint")
+			}
+			elapsed.Store(int64(2 * time.Minute))
+			observe(85, true)
+			if err := m.SaveActiveAlerts(); err != nil {
+				t.Fatal(err)
+			}
+			if len(read()) != 0 {
+				t.Fatal("unknown observation left grace for a restart to reuse")
+			}
+			dir := filepath.Dir(m.getAlertsDir())
+			m.Stop()
+			restarted := NewManagerWithDataDir(dir)
+			t.Cleanup(restarted.Stop)
+			restarted.mu.RLock()
+			pending := len(restarted.intentPending)
+			restarted.mu.RUnlock()
+			if pending != 0 {
+				t.Fatal("restart restored interrupted grace")
+			}
+		})
 	}
 }

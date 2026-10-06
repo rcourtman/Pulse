@@ -303,6 +303,9 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 	// removal. CPU/I/O and independent current memory were evaluated above.
 	// Still apply explicit per-filesystem disablement to retained identities;
 	// this is operator policy, not recovery inferred from an old value.
+	if snapshot.DiskUnavailable {
+		m.interruptGuestFilesystemMetricRuns(guestID)
+	}
 
 	if len(disks) > 0 {
 		seenDiskKeys := make(map[string]struct{})

@@ -271,6 +271,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 
 	windowed := m.evaluateMetricWindow(resourceID, resourceType, metricType, value, m.policyNow())
 	if !windowed.Ready {
+		m.interruptMetricRunIDs(resourceID, canonicalSpecID, canonicalStateID)
 		return
 	}
 	value = windowed.Value

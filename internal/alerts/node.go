@@ -153,22 +153,6 @@ func (m *Manager) checkNodeTemperature(node models.Node, threshold *HysteresisTh
 	m.checkMetricWithCanonicalSpec(spec, node.Name, node.Name, node.Instance, "node", temp, threshold, nil)
 }
 
-// interruptMetricRun records a missing observation for a metric spec. The
-// incident and any open alert are kept, but a pending activation run is
-// dropped and a recovery run restarts, so a sustained-for or recovery delay
-// never completes across a gap in evidence.
-func (m *Manager) interruptMetricRun(spec alertspecs.ResourceAlertSpec) {
-	m.mu.Lock()
-	for _, state := range m.mirrorStatesNoLock() {
-		state.InterruptMetricRun(spec.ResourceID, spec.ID)
-	}
-	intentChanged := m.clearIntentPendingNoLock(canonicalTrackingKeyForSpec(spec, spec.ID))
-	m.mu.Unlock()
-	if intentChanged {
-		m.saveActiveAlertsAsync("canonical metric intent pending state")
-	}
-}
-
 // releaseNodeMetricAlerts stops node-side evaluation of the given metrics the
 // same way a disabled threshold does: any pending run is dropped and any open
 // node alert is resolved. Without this, a node alert that was open when a host

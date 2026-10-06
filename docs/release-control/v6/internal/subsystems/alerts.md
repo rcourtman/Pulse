@@ -40,6 +40,33 @@ and exactly-once callbacks with shadow parity. `TestInterruptDiscreteRun` in
 acknowledgement, no fabricated resolution and idempotent interruption. These
 synthetic source checks do not establish native outage or destination delivery.
 
+### Metric timing requires continuous observed evidence
+
+Unknown metric evidence interrupts timing, not the occurrence. Missing or
+rejected unified values, non-finite current readings, and unavailable,
+incomplete or invalid rolling windows drop a pending activation run and reset
+an open incident's recovery run. Explicit metric-intent grace and its durable
+pending checkpoint are reset as well. Fresh evidence must complete a new full
+configured delay; unknown time cannot fulfil a sustained-for or recovery rule.
+Existing alert values, identity, start time, acknowledgement, notification and
+lifecycle records are not refreshed or resolved by that interruption.
+
+Guest backup/QGA deferrals apply this boundary to retained memory and aggregate
+and per-filesystem disk readings. Failed or expired empty disk inventory
+interrupts tracked filesystem runs, including a guest's former node-scoped
+identities, without implying filesystem removal. Different guests, instances,
+metrics and independently current CPU/I/O remain independent. Host memory also
+interrupts timing when its usage is unknown; explicit rule disablement still
+uses its normal clearing path independently of telemetry. Node temperature's
+existing interruption rule is unchanged.
+
+`metric_observation_continuity_test.go` verifies actual legacy/canonical,
+unified, host and VM entry points, full-delay fresh activation/recovery,
+explicit grace, empty/migrated filesystem inventory and rejected-value/source
+isolation. `guest_observation_test.go` no longer treats a retained-reading gap
+as elapsed breach evidence. These controls establish source lifecycle
+truthfulness, not native freeze/thaw safety or external notification delivery.
+
 ### Retained guest observations are not alert evidence
 
 Guest memory marked `last-known`, `unavailable` or an unknown observation state
