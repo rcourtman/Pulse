@@ -5213,6 +5213,28 @@ derived from the same time (replication Next sync, backup age bands) reads it
 too. The clock can trail the wall clock by up to one tick, so a check that
 treats a future time as invalid (the backup age band) measures from the later
 of the two.
+Future times have their own formatter. `formatRelativeTime` is past-only: it
+reads a time ahead of `now` as "just now", which is right for clock skew on
+something already observed and wrong for an expiry, a reminder or a schedule.
+Those go through `formatTimeUntil` (`frontend-modern/src/utils/format.ts`),
+which counts down ("in 3h", "in 1d"), rounds to the nearest unit so a duration
+just chosen reads as chosen, and returns `dueText` (default "now") once the
+time arrives. A countdown target does not change while its surface stays open,
+so the countdown passes `now` from the shared clock, as the Patrol suppression
+expiry and the Patrol findings reminder and snooze lines do. The replication
+Next sync column and the Patrol header's next-check `CountdownTimer` keep their
+own minute- and second-precision countdowns.
+The rule has one deliberate exception. The age of a latest reading (last used,
+last seen, last success, last checked) on data the surface reads once and does
+not re-read stays the age at read time, because a moving age over a snapshot
+that never refreshes claims the reading stopped when it may not have. Such a
+surface either re-reads the snapshot in the background, as Proxmox replication
+and the external watchdog panel do, or keeps the read-time age, as the Patrol
+attention detail does for Last seen. A background re-read applies only its
+newest answer, so a read that never settles cannot pin the surface to an older
+snapshot while its ages keep moving. An immutable event time (when a delivery
+was attempted, a transition happened, a policy was set) ages correctly over any
+snapshot and reads the clock.
 Read-only metadata badges follow the same primitive-owned shell rule.
 `frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
 outlined appearances, compact sizing, shape, typed tone vocabulary, fit

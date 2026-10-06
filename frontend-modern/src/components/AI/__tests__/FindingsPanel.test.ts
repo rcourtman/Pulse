@@ -22,6 +22,8 @@ import {
   getFindingSeveritySortOrder,
   getFindingResolutionReason,
   getFindingRecencyPresentation,
+  getFindingReminderPresentation,
+  getFindingSnoozePresentation,
   getFindingLoopStateBadgeClasses,
   getFindingLoopStateBadgeTone,
   getFindingSeverityBadgeClasses,
@@ -369,11 +371,11 @@ describe('FindingsPanel assistant handoff', () => {
     // Once a finding is dismissed as will_fix_later, the row must surface the
     // pending reminder so the operator knows the commitment exists; otherwise
     // the only place the deadline lives is the lifecycle log. The amber tone
-    // signals "pending operator action" rather than a generic muted note.
-    expect(findingsPanelSource).toContain(
-      "finding.dismissedReason === 'will_fix_later' && finding.remindAt",
-    );
-    expect(findingsPanelSource).toContain('Reminding {formatTime(finding.remindAt!)}');
+    // signals "pending operator action" rather than a generic muted note. The
+    // deadline is in the future, so it counts down on the shared clock rather
+    // than going through the past-only age formatter.
+    expect(findingsPanelSource).toContain('getFindingReminderPresentation(finding, now())');
+    expect(findingsPanelSource).not.toContain('formatTime(finding.remindAt');
     expect(findingsPanelSource).toContain('text-amber-600 dark:text-amber-400');
   });
 
@@ -649,6 +651,76 @@ describe('aiFindingPresentation', () => {
         label: 'detected',
         timestamp: '2026-03-01T00:00:00Z',
       });
+    });
+  });
+
+  describe('findingReminderAndSnoozePresentation', () => {
+    const now = Date.parse('2026-03-25T12:00:00Z');
+
+    it('counts down to a will_fix_later reminder instead of reading it as just now', () => {
+      const reminder = getFindingReminderPresentation(
+        { dismissedReason: 'will_fix_later', remindAt: '2026-03-31T12:00:00Z' },
+        now,
+      );
+      expect(reminder?.label).toBe('Reminding in 6d');
+      expect(reminder?.title).toMatch(
+        /^Reminder due .+\. Pulse brings this finding back on its first reminder check after that\.$/,
+      );
+      expect(reminder?.title).not.toContain('still tripping');
+      expect(
+        getFindingReminderPresentation(
+          { dismissedReason: 'will_fix_later', remindAt: '2026-03-25T15:00:00Z' },
+          now,
+        )?.label,
+      ).toBe('Reminding in 3h');
+    });
+
+    it('calls a passed reminder overdue, matching the Overdue commitments filter', () => {
+      const reminder = getFindingReminderPresentation(
+        { dismissedReason: 'will_fix_later', remindAt: '2026-03-25T11:00:00Z' },
+        now,
+      );
+      expect(reminder?.label).toBe('Reminder overdue');
+      expect(reminder?.title).toMatch(
+        /^Reminder was due .+\. Pulse brings this finding back on its next reminder check\.$/,
+      );
+    });
+
+    it('shows no reminder for other dismissals or an unusable remind time', () => {
+      expect(
+        getFindingReminderPresentation(
+          { dismissedReason: 'not_an_issue', remindAt: '2026-03-31T12:00:00Z' },
+          now,
+        ),
+      ).toBeNull();
+      expect(getFindingReminderPresentation({ dismissedReason: 'will_fix_later' }, now)).toBeNull();
+      expect(
+        getFindingReminderPresentation(
+          { dismissedReason: 'will_fix_later', remindAt: 'not a date' },
+          now,
+        ),
+      ).toBeNull();
+    });
+
+    it('counts down to the end of a snooze and keeps the exact time on hover', () => {
+      const snooze = getFindingSnoozePresentation(
+        { status: 'snoozed', snoozedUntil: '2026-03-25T15:00:00Z' },
+        now,
+      );
+      expect(snooze?.label).toBe('snoozed, returns in 3h');
+      expect(snooze?.title).toMatch(/^Snoozed until .+/);
+      expect(
+        getFindingSnoozePresentation(
+          { status: 'snoozed', snoozedUntil: '2026-03-25T11:00:00Z' },
+          now,
+        )?.label,
+      ).toBe('snooze ended');
+      expect(
+        getFindingSnoozePresentation(
+          { status: 'active', snoozedUntil: '2026-03-25T15:00:00Z' },
+          now,
+        ),
+      ).toBeNull();
     });
   });
 
@@ -997,7 +1069,8 @@ describe('aiFindingPresentation', () => {
     it('uses explicit textual separators in finding metadata instead of relying on visual spacing', () => {
       expect(findingsPanelSource).toContain("{' · '}acknowledged");
       expect(findingsPanelSource).toContain("{' · '}last investigated");
-      expect(findingsPanelSource).toContain("{' · '}snoozed until");
+      expect(findingsPanelSource).toMatch(/\{' · '\}\s*\{snooze\(\)\.label\}/);
+      expect(findingsPanelSource).toMatch(/\{' · '\}\s*\{reminder\(\)\.label\}/);
     });
 
     it('keeps the Open work heading free of a duplicate count badge', () => {

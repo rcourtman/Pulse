@@ -7,6 +7,7 @@ import type {
   AttentionListResponse,
   AttentionSummary,
 } from '@/api/patrolAttention';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 
 const apiMocks = vi.hoisted(() => ({
   getList: vi.fn(),
@@ -90,6 +91,7 @@ vi.mock('@/features/actions/ActionReviewDialog', async () => {
 });
 
 import {
+  getAttentionSuppressionExpiryLabel,
   getDistinctPatrolImpact,
   getPatrolDecisionDisplayTitle,
   PatrolAttentionWorkbench,
@@ -477,6 +479,113 @@ describe('PatrolAttentionWorkbench', () => {
       'sm:min-h-0',
     );
     expect(window.location.search).toBe('?attention=record-1');
+  });
+
+  it('keeps the open detail transition, evidence and acknowledgement ages moving', async () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+      now: Date.parse('2026-07-19T08:10:00Z'),
+    });
+    const active = item({ state: 'acknowledged' });
+    const opened = detail(active);
+    opened.timeline[0].at = '2026-07-19T08:03:00Z';
+    opened.evidence[0].observedAt = '2026-07-19T08:05:00Z';
+    opened.operationalRecord.acknowledgement = { by: 'admin', at: '2026-07-19T08:07:00Z' };
+    apiMocks.getList.mockResolvedValue(
+      listResponse([active], summary({ activeCount: 1, acknowledgedCount: 1, calm: false })),
+    );
+    apiMocks.getDetail.mockResolvedValue(opened);
+
+    try {
+      renderWorkbench();
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Open Database VM · Disk pressure' }),
+      );
+      const detailRegion = await screen.findByRole('complementary', {
+        name: 'Database VM · Disk pressure',
+      });
+      await waitFor(() => expect(detailRegion).toHaveTextContent('7m ago'));
+      expect(detailRegion).toHaveTextContent('5m ago');
+      expect(detailRegion).toHaveTextContent('3m ago');
+
+      // The detail is not re-read: its records never change and only the
+      // clock moves.
+      vi.advanceTimersByTime(2 * 60 * 2 * RELATIVE_TIME_TICK_MS);
+
+      expect(detailRegion).not.toHaveTextContent(/[357]m ago/);
+      expect(detailRegion.textContent?.match(/2h ago/g)?.length).toBeGreaterThanOrEqual(3);
+      expect(apiMocks.getDetail).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('counts down to when a suppressed issue returns to active attention', async () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+      now: Date.parse('2026-07-19T08:10:00Z'),
+    });
+    const suppressed = item({ state: 'suppressed' });
+    const suppressedDetail = detail(suppressed);
+    // A 24-hour suppression set just now.
+    suppressedDetail.operationalRecord.suppression = {
+      at: '2026-07-19T08:10:00Z',
+      by: 'operator',
+      reason: 'Planned storage maintenance',
+      expiresAt: '2026-07-20T08:10:00Z',
+    };
+    const handled = summary({ suppressedCount: 1 });
+    apiMocks.getList.mockImplementation((scope: string) =>
+      Promise.resolve(listResponse(scope === 'all' ? [suppressed] : [], handled)),
+    );
+    apiMocks.getDetail.mockResolvedValue(suppressedDetail);
+
+    try {
+      renderWorkbench();
+      fireEvent.click(await screen.findByRole('button', { name: 'Reviewed and suppressed (1)' }));
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Open Database VM · Disk pressure' }),
+      );
+      const detailRegion = await screen.findByRole('complementary', {
+        name: 'Database VM · Disk pressure',
+      });
+      const expiry = await within(detailRegion).findByText(/Returns to active attention/);
+      expect(expiry).toHaveTextContent('Returns to active attention in 1d.');
+      expect(expiry).toHaveAttribute('title', expect.stringMatching(/^Suppressed until /));
+
+      // The detail is not re-read: its suppression never changes and only the
+      // clock moves.
+      vi.advanceTimersByTime(4 * 60 * 60 * 1000);
+      expect(expiry).toHaveTextContent('Returns to active attention in 20h.');
+
+      vi.setSystemTime(Date.parse('2026-07-20T07:30:00Z'));
+      vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
+      expect(expiry).toHaveTextContent('Returns to active attention in 40m.');
+
+      vi.setSystemTime(Date.parse('2026-07-20T08:11:00Z'));
+      vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
+      expect(expiry).toHaveTextContent('Suppression has ended.');
+      expect(detailRegion).not.toHaveTextContent('just now');
+      expect(apiMocks.getDetail).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says a reviewed issue stays reviewed when its suppression ends', () => {
+    const now = Date.parse('2026-07-19T08:10:00Z');
+    // Expiry restores Acknowledged for a reviewed alert, which is not active
+    // attention, so only an unreviewed issue "returns to active attention".
+    expect(getAttentionSuppressionExpiryLabel('2026-07-20T08:10:00Z', true, now)).toBe(
+      'Suppression ends in 1d. It stays reviewed.',
+    );
+    expect(getAttentionSuppressionExpiryLabel('2026-07-19T11:10:00Z', false, now)).toBe(
+      'Returns to active attention in 3h.',
+    );
+    expect(getAttentionSuppressionExpiryLabel('2026-07-19T08:00:00Z', true, now)).toBe(
+      'Suppression has ended.',
+    );
+    expect(getAttentionSuppressionExpiryLabel('not a date', false, now)).toBe('');
   });
 
   it('keeps the detail header and queue controls pinned while a long decision scrolls', async () => {

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { NotificationDeliveryLog, Webhook } from '@/api/notifications';
 import type { AlertEvent } from '@/types/api';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 
 import { AlertDeliveryLogCard, mergeDeliveryLogRows } from './AlertDeliveryLogCard';
 
@@ -436,5 +437,37 @@ describe('AlertDeliveryLogCard', () => {
     ));
     expect(screen.getByRole('status')).toHaveTextContent('Loading delivery attempts...');
     expect(screen.queryByText(/No alert deliveries were attempted/)).not.toBeInTheDocument();
+  });
+
+  it("keeps each row's age tooltip moving while the log is not refreshed", () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+      now: Date.parse('2026-08-27T12:05:00Z'),
+    });
+
+    try {
+      render(() => (
+        <AlertDeliveryLogCard
+          log={{
+            ...log,
+            entries: [{ ...log.entries[1], timestamp: '2026-08-27T12:00:00Z' }],
+          }}
+          unavailable={false}
+          refreshing={false}
+          onRefresh={vi.fn()}
+          webhooks={webhooks}
+        />
+      ));
+      const time = () => document.querySelector('time[datetime="2026-08-27T12:00:00Z"]');
+
+      expect(time()).toHaveAttribute('title', '5 mins ago');
+
+      // The log is not re-read: the entry never changes and only the clock moves.
+      vi.advanceTimersByTime(2 * 60 * 2 * RELATIVE_TIME_TICK_MS);
+
+      expect(time()).toHaveAttribute('title', '2 hours ago');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

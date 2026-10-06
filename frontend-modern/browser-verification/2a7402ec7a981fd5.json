@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "32ef1d366d38fa666429200dce5a19b53bb16a4d",
+  "verified_at": "2026-10-06T19:18:36Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/utils/aiFindingPresentation.ts",
+    "frontend-modern/src/utils/format.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "64e67d2579a9084e19bf139d3a9066aedc87eaf224f0532a35bc4bcc2398dbb6",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "18bebdc9b07cf73a9d11953d83c3106273f5c72719ba9dc9f8f7d8f3b2abe743",
+    "frontend-modern/src/utils/aiFindingPresentation.ts": "676b7a92ecf0de56a175eb894ba79e714079917f4bfb31dff9bfd2f25c2a30f8",
+    "frontend-modern/src/utils/format.ts": "cbf31428b081e035a6dad6efdf97ca1318fad2b255c09c6b058b84bdc8867bc4"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol/activity"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (backend :7761 built from this clone, Vite :5281 serving this branch on 32ef1d366d, PR 2598 plus its follow-up) with Playwright page.clock installed before load; data was not held, the attention detail and findings payloads keep fixed expiresAt, remind_at and snoozed_until",
+    "Patrol inbox, backend-seafile suppressed through the real form with the default 24 hours (read 'in 1d' when first suppressed): Reviewed and suppressed view, detail Lifecycle reads 'Returns to active attention in 21h.' with hover 'Suppressed until 7 Oct 17:33', and 'in 17h.' after the page clock moved 4 hours, at 1440 and 390",
+    "ops-prometheus marked reviewed through Mark reviewed, then suppressed for 24 hours from the handled view: Lifecycle reads 'Suppression ends in 23h. It stays reviewed.' (1d when first suppressed) with hover 'Suppressed until 7 Oct 19:19', and 'Suppression has ended.' after the page clock moved 25 hours, at 1440 and 390",
+    "Patrol activity, Finding options and history, Resolved: mail-gateway-us dismissed as Later through Finding options reads '(will fix later) \u00b7 Reminding in 7d' with hover 'Reminder due 13 Oct 17:34. Pulse brings this finding back on its first reminder check after that.'; after the page clock moved 7 days it reads 'Reminder overdue' (hover 'Reminder was due 13 Oct 17:34. Pulse brings this finding back on its next reminder check.') and the 'Overdue commitments (1)' chip appears on the same tick and filters to that finding",
+    "Same list, dr-vault snoozed for 1 hour through POST /api/ai/patrol/snooze (Patrol rows hide the snooze buttons): reads 'snoozed, returns in 1h' with hover 'Snoozed until 6 Oct 21:17', 'in 20m' after 40 clock minutes, and after 70 minutes the next findings re-read shows it under Active with no snoozed row left in Resolved",
+    "No 'just now' on any future time at either viewport",
+    "Open Overdue rows staying mounted across clock ticks is covered by FindingsPanel.links.test.tsx (fails on the previous version of this change at the tick assertion); a live check cannot separate the tick from Patrol's 60-second findings re-read under a fast-forwarded clock",
+    "Same-session control (first pass of this change): with FindingsPanel.tsx and PatrolAttentionWorkbench.tsx swapped back to the PR 2598 base under the running Vite, the same rows read 'Returns to active attention just now.' (still after 4 clock hours), 'snoozed until just now' and 'Reminding just now'"
+  ],
+  "interactions": [
+    "Opened a decision in the Patrol inbox, filled the suppression reason and submitted Suppress temporarily (24 hours), then Reviewed and suppressed and opened the item",
+    "Opened a second decision, clicked Mark reviewed, opened it from Reviewed and suppressed and suppressed it for 24 hours",
+    "Opened Finding options on a finding, chose Dismiss: Later and Confirm Dismiss",
+    "Opened Activity, Finding options and history, switched the filter to Resolved, read hover text from title attributes, then clicked the Overdue commitments chip",
+    "Advanced the page clock 4 and 25 hours on the attention details, 40 then 30 minutes and 7 days on the findings list, at 1440x900 and 390x844",
+    "Read the same rows with the pre-change components as the control"
+  ]
+}

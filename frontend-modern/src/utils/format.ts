@@ -141,9 +141,18 @@ export function formatAbsoluteTime(timestamp: number | undefined): string {
   return `${day} ${month} ${hours}:${minutes}`;
 }
 
+function relativeTimeInputMs(timestamp: number | string | Date): number {
+  if (typeof timestamp === 'number') return timestamp;
+  if (typeof timestamp === 'string') return new Date(timestamp).getTime();
+  return timestamp.getTime();
+}
+
 /**
- * Format a timestamp as a human-readable relative time string.
- * ALL relative time formatting MUST use this function.
+ * Format a timestamp as a human-readable relative age ("5m ago").
+ * ALL relative ages MUST use this function. It is past-only: a time ahead of
+ * `now` is clock skew on something already observed and reads as "just now".
+ * A time meant to be in the future (an expiry, a reminder, a schedule) uses
+ * formatTimeUntil instead.
  *
  * @param timestamp - Unix ms number, ISO date string, Date object, or undefined
  * @param options.compact - Use short format: "5m ago" instead of "5 mins ago"
@@ -157,17 +166,49 @@ export function formatRelativeTime(
 ): string {
   if (!timestamp) return options?.emptyText ?? '';
 
-  let ms: number;
-  if (typeof timestamp === 'number') {
-    ms = timestamp;
-  } else if (typeof timestamp === 'string') {
-    ms = new Date(timestamp).getTime();
-  } else {
-    ms = timestamp.getTime();
-  }
-
-  const diffMs = (options?.now ?? Date.now()) - ms;
+  const diffMs = (options?.now ?? Date.now()) - relativeTimeInputMs(timestamp);
   return formatTimeDiff(diffMs, options?.compact);
+}
+
+/**
+ * Format a future timestamp as a countdown: "in 3h" (compact) or "in 3 hours".
+ * ALL relative future times (expiries, reminders, schedules) MUST use this
+ * function, because formatRelativeTime reads any future time as "just now".
+ *
+ * Unlike an age, a countdown rounds to the nearest unit, so a 24-hour
+ * suppression set a moment ago reads "in 1d" rather than "in 23h".
+ *
+ * @param timestamp - Unix ms number, ISO date string, Date object, or undefined
+ * @param options.compact - Use short format: "in 5m" instead of "in 5 mins"
+ * @param options.emptyText - Text for falsy or unparseable input (default: '')
+ * @param options.dueText - Text once the time has arrived or passed (default: 'now')
+ * @param options.now - The time to count down from (default: Date.now()). A
+ *   countdown that must keep moving passes the shared relative-time clock.
+ */
+export function formatTimeUntil(
+  timestamp: number | string | Date | undefined,
+  options?: { compact?: boolean; emptyText?: string; dueText?: string; now?: number },
+): string {
+  if (!timestamp) return options?.emptyText ?? '';
+
+  const remainingMs = relativeTimeInputMs(timestamp) - (options?.now ?? Date.now());
+  if (!Number.isFinite(remainingMs)) return options?.emptyText ?? '';
+  if (remainingMs <= 0) return options?.dueText ?? 'now';
+  if (remainingMs < 60_000) return 'in under a minute';
+
+  const compact = options?.compact;
+  const inUnits = (value: number, short: string, singular: string, plural: string) =>
+    compact ? `in ${value}${short}` : `in ${value} ${value === 1 ? singular : plural}`;
+
+  const minutes = Math.round(remainingMs / 60_000);
+  if (minutes < 60) return inUnits(minutes, 'm', 'min', 'mins');
+  const hours = Math.round(remainingMs / 3_600_000);
+  if (hours < 24) return inUnits(hours, 'h', 'hour', 'hours');
+  const days = Math.round(remainingMs / 86_400_000);
+  if (compact || days < 30) return inUnits(days, 'd', 'day', 'days');
+  const months = Math.round(remainingMs / (30 * 86_400_000));
+  if (months < 12) return inUnits(months, '', 'month', 'months');
+  return inUnits(Math.round(remainingMs / (365 * 86_400_000)), '', 'year', 'years');
 }
 
 /**

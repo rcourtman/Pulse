@@ -5,7 +5,7 @@ import type { MetadataBadgeTone } from '@/components/shared/MetadataBadge';
 import { isLivePendingApproval } from '@/utils/approvalState';
 import { getPatrolProviderSettingsAction } from '@/utils/patrolRuntimeActions';
 import { formatIdentifierLabel, titleCaseDelimitedLabel } from '@/utils/textPresentation';
-import { formatBytes } from '@/utils/format';
+import { formatAbsoluteTime, formatBytes, formatTimeUntil } from '@/utils/format';
 
 const DEFAULT_BADGE_CLASSES = 'border-border bg-surface-alt text-muted';
 const DEFAULT_LOOP_STATE_CLASSES = 'border-border bg-surface-alt text-muted';
@@ -273,6 +273,11 @@ export interface FindingEmptyStateCopy {
 export interface FindingRecencyPresentation {
   label: string;
   timestamp: string;
+}
+
+export interface FindingCountdownPresentation {
+  label: string;
+  title: string;
 }
 
 export interface PatrolFindingClassification {
@@ -911,6 +916,44 @@ export const getFindingRecencyPresentation = (
     label: 'detected',
     timestamp: finding.detectedAt,
   };
+};
+
+// A will_fix_later reminder and the end of a snooze are future times, so the
+// row counts down to them ("Reminding in 6d") from the `now` the panel passes
+// from the shared relative-time clock, and keeps the exact time on hover. Once
+// the time passes, the reminder is overdue (the Overdue commitments filter
+// counts it) until the hourly reminder sweep brings the finding back, whether
+// or not it still trips, and the snooze has ended, so neither keeps counting.
+export const getFindingReminderPresentation = (
+  finding: Pick<UnifiedFinding, 'dismissedReason' | 'remindAt'>,
+  now: number,
+): FindingCountdownPresentation | null => {
+  if (finding.dismissedReason !== 'will_fix_later' || !finding.remindAt) return null;
+  const due = Date.parse(finding.remindAt);
+  if (!Number.isFinite(due)) return null;
+  const at = formatAbsoluteTime(due);
+  if (due <= now) {
+    return {
+      label: 'Reminder overdue',
+      title: `Reminder was due ${at}. Pulse brings this finding back on its next reminder check.`,
+    };
+  }
+  return {
+    label: `Reminding ${formatTimeUntil(due, { compact: true, now })}`,
+    title: `Reminder due ${at}. Pulse brings this finding back on its first reminder check after that.`,
+  };
+};
+
+export const getFindingSnoozePresentation = (
+  finding: Pick<UnifiedFinding, 'status' | 'snoozedUntil'>,
+  now: number,
+): FindingCountdownPresentation | null => {
+  if (finding.status !== 'snoozed' || !finding.snoozedUntil) return null;
+  const until = Date.parse(finding.snoozedUntil);
+  if (!Number.isFinite(until)) return null;
+  const title = `Snoozed until ${formatAbsoluteTime(until)}`;
+  if (until <= now) return { label: 'snooze ended', title };
+  return { label: `snoozed, returns ${formatTimeUntil(until, { compact: true, now })}`, title };
 };
 
 export const getInvestigationStatusBadgeClasses = (status: InvestigationStatus): string =>
