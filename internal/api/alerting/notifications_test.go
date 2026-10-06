@@ -1416,7 +1416,7 @@ func TestWebhookEditPreservesOnlyMaskedValues(t *testing.T) {
 			map[string]string{"token": "synthetic-token", "channel": ""}, false},
 		{"header case is insensitive", map[string]string{"authorization": masked}, map[string]string{"token": masked},
 			map[string]string{"authorization": "synthetic-auth"}, map[string]string{"token": "synthetic-token"}, false},
-		{"explicit empty maps", map[string]string{}, map[string]string{}, map[string]string{}, nil, false},
+		{"explicit empty maps", map[string]string{}, map[string]string{}, map[string]string{}, map[string]string{}, false},
 		{"omitted maps keep replacement semantics", nil, nil, nil, nil, false},
 		{"unknown masked header", map[string]string{"X-Unknown": masked}, nil, nil, nil, true},
 		{"unknown masked field", nil, map[string]string{"unknown": masked}, nil, nil, true},
@@ -1442,7 +1442,16 @@ func TestWebhookEditPreservesOnlyMaskedValues(t *testing.T) {
 			}
 			incoming := stored
 			incoming.Headers, incoming.CustomFields = tc.headers, tc.fields
-			body, err := json.Marshal(incoming)
+			// Marshal maps explicitly: WebhookConfig's omitempty would turn an
+			// explicit empty CustomFields map into an omitted field instead.
+			form := map[string]any{"id": incoming.ID, "url": incoming.URL, "enabled": incoming.Enabled}
+			if tc.headers != nil {
+				form["headers"] = tc.headers
+			}
+			if tc.fields != nil {
+				form["customFields"] = tc.fields
+			}
+			body, err := json.Marshal(form)
 			assert.NoError(t, err)
 			rec := httptest.NewRecorder()
 			NewNotificationHandlers(nil, monitor).UpdateWebhook(rec, httptest.NewRequest(http.MethodPut,
