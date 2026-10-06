@@ -15,6 +15,19 @@
 
 ## Purpose
 
+### Shared origin and webhook edit boundaries
+
+The referenced `internal/api/` settings boundary treats explicit empty
+`allowedOrigins` as a durable clear and omitted values as unchanged. Effective
+GET values and deployment-owned overrides remain consistent; failed/rejected
+saves cannot change live trust. This does not change agent identity, enrolment,
+credential scope, execution permission, installer transport or TLS policy.
+Notification Create/Update/Test consistently reject unresolved saved masks and
+conflicting HTTP header identities before mutation or sending; literal edits,
+masked responses and persist-before-publish remain intact. Source verification
+uses `TestAllowedOrigins*` and `TestWebhookPlaceholderBoundaryAgreement` plus
+the existing settings/notification authority and ordinary-delivery controls.
+
 ### Cluster installation keyboard continuity
 
 `ClusterAgentDeployDialog` keeps one mounted dismissal button while loading,

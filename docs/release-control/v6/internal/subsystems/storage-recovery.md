@@ -21,6 +21,22 @@
 
 ## Purpose
 
+### Persisted trust edits and restart consistency
+
+The shared `internal/api/` settings path durably saves an explicit empty
+`allowedOrigins` before clearing live CORS policy. An omitted field does not
+replace a different effective value; a failed or deployment-locked patch does
+not partially change disk/runtime/cache state. Production config reload retains
+the saved clear while existing deployment overrides stay authoritative.
+Webhook edits resolve every saved placeholder before persistence or live
+publication, and saved-form Test uses the same resolution without changing
+configuration. Unknown/ambiguous placeholders fail rather than silently lose a
+credential. `TestAllowedOriginsSavedEffectiveLifecycle`,
+`TestAllowedOriginsSaveFailurePreservesPolicy` and
+`TestWebhookSavedFormTestMatchesEncryptedEdit` cover these shared boundaries.
+No database/driver/schema, backup recovery, retention or old queue snapshot
+policy changes are part of this repair.
+
 ### Guest-memory read state stays independent of backup disk state
 
 The existing guest drawer retains Core's selected memory provenance through

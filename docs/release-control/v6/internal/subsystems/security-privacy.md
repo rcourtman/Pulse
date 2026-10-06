@@ -18,6 +18,26 @@
 
 ## Purpose
 
+### Removing browser-origin trust is a durable explicit patch
+
+The system settings handler accepts an explicit empty string for
+`allowedOrigins` and applies it only after the durable save succeeds. Omitted
+origins do not reapply a different saved value to the runtime. Null and
+non-string values are invalid requests. GET presents the effective runtime
+policy, not a saved value concealed by a deployment override.
+
+Either existing override marker (`ALLOWED_ORIGINS` or `allowedOrigins`) keeps
+the deployment policy authoritative. A requested different value is rejected
+with `409 env_locked` before any part of the patch is persisted. The unchanged
+value sent by a disabled form field leaves underlying disk policy untouched
+and permits other settings to be saved. Clearing origins grants no CORS headers;
+production config reload does not revive removed trust. No change to the
+existing development localhost fallback or deployment environment precedence
+is made. CORS never replaces authentication, `settings:write`, CSRF, TLS or
+iframe policy. The `TestAllowedOrigins*` controls in
+`internal/api/system_settings_telemetry_test.go` cover real middleware responses,
+exact-list matching, protected writes, rejected/failed saves and reload.
+
 Assistant retained-history wiring uses the store belonging to its current
 monitor and read-only metric queries. Canonical identity resolution precedes
 store lookup, and ambiguous names fail with a request for canonical identity.

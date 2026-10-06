@@ -1603,6 +1603,8 @@ func TestWebhookMaskedEditPersistsAndDelivers(t *testing.T) {
 				if edit.Headers["Authorization"] != "***REDACTED***" || edit.CustomFields["token"] != "***REDACTED***" {
 					t.Fatal("list disclosed credentials")
 				}
+				edit.Headers["authorization"] = edit.Headers["Authorization"]
+				delete(edit.Headers, "Authorization")
 				edit.Headers["Content-Type"], edit.Headers["X-Route"] = "application/json", "new"
 				delete(edit.Headers, "X-Remove")
 				edit.CustomFields["channel"] = "new"
@@ -1624,7 +1626,7 @@ func TestWebhookMaskedEditPersistsAndDelivers(t *testing.T) {
 				monitor.manager = m
 				saved := m.GetWebhooks()[0]
 				if saved.Service != service || saved.Template != hook.Template || saved.URL != hook.URL ||
-					saved.Headers["Authorization"] != "synthetic-auth" || saved.Headers["Content-Type"] != "application/json" ||
+					saved.Headers["authorization"] != "synthetic-auth" || saved.Headers["Content-Type"] != "application/json" ||
 					saved.Headers["X-Route"] != "new" || len(saved.Headers) != 3 ||
 					saved.CustomFields["token"] != "synthetic-token" || saved.CustomFields["channel"] != "new" || len(saved.CustomFields) != 2 {
 					t.Fatal("masked edit did not survive encrypted reload with explicit edits/removals intact")
@@ -1819,7 +1821,7 @@ func TestWebhookMaskedValuesResolvePerKey(t *testing.T) {
 		assert.Equal(t, "", published.SigningSecret, "an omitted signing secret is removed, as before")
 	})
 
-	t.Run("create drops masked values and responds masked", func(t *testing.T) {
+	t.Run("create keeps literal values and responds masked", func(t *testing.T) {
 		h, manager, persistence := newHandlers()
 		var added notifications.WebhookConfig
 		manager.On("ValidateWebhookURL", "https://hooks.example.com/new").Return(nil).Once()
@@ -1831,7 +1833,7 @@ func TestWebhookMaskedValuesResolvePerKey(t *testing.T) {
 
 		body, _ := json.Marshal(map[string]interface{}{
 			"name": "New", "url": "https://hooks.example.com/new", "enabled": true,
-			"headers":       map[string]string{"Authorization": "***REDACTED***", "X-Api-Key": "typed-key"},
+			"headers":       map[string]string{"X-Api-Key": "typed-key"},
 			"signingSecret": "typed-signing-secret",
 		})
 		rec := httptest.NewRecorder()
@@ -1872,25 +1874,187 @@ func TestWebhookMaskedValuesResolvePerKey(t *testing.T) {
 		assert.Equal(t, "saved-signing-secret", tested.SigningSecret)
 	})
 
-	t.Run("form test of an unsaved webhook never sends the mask", func(t *testing.T) {
+	t.Run("form test of an unsaved webhook rejects the mask before sending", func(t *testing.T) {
 		h, manager, _ := newHandlers()
-		var tested notifications.EnhancedWebhookConfig
-		manager.On("TestEnhancedWebhook", mock.Anything).Run(func(args mock.Arguments) {
-			tested = args.Get(0).(notifications.EnhancedWebhookConfig)
-		}).Return(200, "OK", nil).Once()
-		manager.On("IsEnabled").Return(true).Once()
-
 		body, _ := json.Marshal(map[string]interface{}{
 			"url":     "https://hooks.example.com/new",
-			"headers": map[string]string{"Authorization": "***REDACTED***", "X-Team": "platform"},
+			"headers": map[string]string{"Authorization": maskedWebhookSecret, "X-Team": "platform"},
 		})
 		rec := httptest.NewRecorder()
 		h.TestWebhook(rec, httptest.NewRequest(http.MethodPost, "/api/notifications/webhooks/test", bytes.NewReader(body)))
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		_, hasAuthorization := tested.Headers["Authorization"]
-		assert.False(t, hasAuthorization, "a mask with no saved value must not be sent")
-		assert.Equal(t, "platform", tested.Headers["X-Team"])
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		manager.AssertNotCalled(t, "TestEnhancedWebhook", mock.Anything)
 		manager.AssertNotCalled(t, "GetWebhooks")
 	})
+}
+
+// A masked form must fail before persistence or a Test send if its saved
+// identity is missing or ambiguous. Test and Update must resolve the same map.
+func TestWebhookPlaceholderBoundaryAgreement(t *testing.T) {
+	for _, route := range []string{"update", "test", "create"} {
+		for _, tc := range []struct {
+			name                                                       string
+			savedHeaders, incomingHeaders, savedFields, incomingFields map[string]string
+			savedSigning, incomingSigning                              string
+			valid                                                      bool
+		}{
+			{"case varied saved header", map[string]string{"Authorization": "synthetic-auth"}, map[string]string{"authorization": maskedWebhookSecret}, nil, nil, "", "", true},
+			{"unknown header", nil, map[string]string{"X-Missing": maskedWebhookSecret}, nil, nil, "", "", false},
+			{"stored header is a mask", map[string]string{"Authorization": maskedWebhookSecret}, map[string]string{"Authorization": maskedWebhookSecret}, nil, nil, "", "", false},
+			{"exact match also has conflicting alias", map[string]string{"Authorization": "synthetic-one", "authorization": "synthetic-two"}, map[string]string{"Authorization": maskedWebhookSecret}, nil, nil, "", "", false},
+			{"incoming aliases conflict", nil, map[string]string{"X-Route": "one", "x-route": "two"}, nil, nil, "", "", false},
+			{"custom fields are case sensitive", nil, nil, map[string]string{"Token": "synthetic-token"}, map[string]string{"token": maskedWebhookSecret}, "", "", false},
+			{"missing signing secret", nil, nil, nil, nil, "", maskedWebhookSecret, false},
+			{"saved signing secret is a mask", nil, nil, nil, nil, maskedWebhookSecret, maskedWebhookSecret, false},
+		} {
+			if route == "create" && tc.valid {
+				continue
+			}
+			t.Run(route+"/"+tc.name, func(t *testing.T) {
+				manager := new(MockNotificationManager)
+				persistence := new(MockNotificationConfigPersistence)
+				monitor := new(MockNotificationMonitor)
+				monitor.On("GetNotificationManager").Return(manager)
+				monitor.On("GetConfigPersistence").Return(persistence)
+				saved := notifications.WebhookConfig{ID: "saved", URL: "https://hooks.example.test/alerts", Headers: tc.savedHeaders, CustomFields: tc.savedFields, SigningSecret: tc.savedSigning}
+				manager.On("GetWebhooks").Return([]notifications.WebhookConfig{saved}).Maybe()
+				manager.On("ValidateWebhookURL", mock.Anything).Return(nil).Maybe()
+				manager.On("IsEnabled").Return(true).Maybe()
+				manager.On("UpdateWebhook", mock.Anything, mock.Anything).Return(nil).Maybe()
+				manager.On("AddWebhook", mock.Anything).Return().Maybe()
+				persistence.On("SaveWebhooks", mock.Anything).Return(nil).Maybe()
+				var tested notifications.EnhancedWebhookConfig
+				manager.On("TestEnhancedWebhook", mock.Anything).Run(func(a mock.Arguments) { tested = a.Get(0).(notifications.EnhancedWebhookConfig) }).Return(200, "OK", nil).Maybe()
+				incoming := notifications.WebhookConfig{ID: "saved", URL: saved.URL, Headers: tc.incomingHeaders, CustomFields: tc.incomingFields, SigningSecret: tc.incomingSigning}
+				body, err := json.Marshal(incoming)
+				if err != nil {
+					t.Fatal(err)
+				}
+				rec := httptest.NewRecorder()
+				h := NewNotificationHandlers(nil, monitor)
+				switch route {
+				case "create":
+					h.CreateWebhook(rec, httptest.NewRequest(http.MethodPost, "/api/notifications/webhooks", bytes.NewReader(body)))
+				case "update":
+					h.UpdateWebhook(rec, httptest.NewRequest(http.MethodPut, "/api/notifications/webhooks/saved", bytes.NewReader(body)))
+				case "test":
+					h.TestWebhook(rec, httptest.NewRequest(http.MethodPost, "/api/notifications/webhooks/test", bytes.NewReader(body)))
+				}
+				if tc.valid {
+					if rec.Code != http.StatusOK {
+						t.Fatalf("status = %d, want 200", rec.Code)
+					}
+					if route == "test" && tested.Headers["authorization"] != "synthetic-auth" {
+						t.Fatal("Test silently dropped the case-varied saved credential")
+					}
+				} else {
+					if rec.Code != http.StatusBadRequest {
+						t.Errorf("status = %d, want 400", rec.Code)
+					}
+					manager.AssertNotCalled(t, "TestEnhancedWebhook", mock.Anything)
+					manager.AssertNotCalled(t, "UpdateWebhook", mock.Anything, mock.Anything)
+					manager.AssertNotCalled(t, "AddWebhook", mock.Anything)
+					persistence.AssertNotCalled(t, "SaveWebhooks", mock.Anything)
+				}
+				for _, secret := range []string{"synthetic-auth", "synthetic-one", "synthetic-two", "synthetic-token"} {
+					if strings.Contains(rec.Body.String(), secret) {
+						t.Error("response disclosed a synthetic saved value")
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestWebhookSavedFormTestMatchesEncryptedEdit(t *testing.T) {
+	type observation struct {
+		header  http.Header
+		payload string
+	}
+	var mu sync.Mutex
+	var observed []observation
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			w.WriteHeader(400)
+			return
+		}
+		mu.Lock()
+		observed = append(observed, observation{r.Header.Clone(), string(payload)})
+		mu.Unlock()
+		fmt.Fprint(w, "OK")
+	}))
+	defer server.Close()
+	dir := t.TempDir()
+	persistence := config.NewConfigPersistence(dir)
+	saved := notifications.WebhookConfig{ID: "saved-form", Name: "Ops", URL: server.URL, Enabled: true, Service: "generic", Headers: map[string]string{"Authorization": "synthetic-auth", "Content-Type": "text/plain", "X-Delete": "remove"}, CustomFields: map[string]string{"token": "synthetic-token", "channel": "old", "delete": "remove"}, SigningSecret: "synthetic-signing"}
+	if err := persistence.SaveWebhooks([]notifications.WebhookConfig{saved}); err != nil {
+		t.Fatal(err)
+	}
+	manager := notifications.NewNotificationManagerWithDeferredQueue("", dir)
+	defer manager.Stop()
+	if err := manager.UpdateAllowedPrivateCIDRs("127.0.0.1/32,::1/128"); err != nil {
+		t.Fatal(err)
+	}
+	manager.AddWebhook(saved)
+	liveBefore := manager.GetWebhooks()[0]
+	h := NewNotificationHandlers(nil, &webhookEditMonitor{manager, persistence})
+	listed := httptest.NewRecorder()
+	h.GetWebhooks(listed, httptest.NewRequest(http.MethodGet, "/api/notifications/webhooks", nil))
+	var editable []notifications.WebhookConfig
+	if err := json.Unmarshal(listed.Body.Bytes(), &editable); err != nil || len(editable) != 1 {
+		t.Fatal("masked saved form unavailable")
+	}
+	form := editable[0]
+	form.Headers["authorization"] = form.Headers["Authorization"]
+	delete(form.Headers, "Authorization")
+	form.Headers["Content-Type"] = ""
+	delete(form.Headers, "X-Delete")
+	form.Headers["X-New"] = "new"
+	form.CustomFields["channel"] = "new"
+	delete(form.CustomFields, "delete")
+	body, err := json.Marshal(form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(filepath.Join(dir, "webhooks.enc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tested := httptest.NewRecorder()
+	h.TestWebhook(tested, httptest.NewRequest(http.MethodPost, "/api/notifications/webhooks/test", bytes.NewReader(body)))
+	if tested.Code != http.StatusOK {
+		t.Fatalf("saved form test: %d", tested.Code)
+	}
+	after, err := os.ReadFile(filepath.Join(dir, "webhooks.enc"))
+	if err != nil || !bytes.Equal(before, after) || !reflect.DeepEqual(manager.GetWebhooks()[0], liveBefore) {
+		t.Fatal("form Test mutated durable or live configuration")
+	}
+	mu.Lock()
+	got := append([]observation(nil), observed...)
+	mu.Unlock()
+	if len(got) != 1 || got[0].header.Get("Authorization") != "synthetic-auth" || got[0].header.Get("Content-Type") != "application/json" || got[0].header.Get("X-New") != "new" || got[0].header.Get("X-Delete") != "" || strings.Contains(got[0].payload, maskedWebhookSecret) {
+		t.Fatal("real Test did not honour saved identities, explicit edits/removals and JSON default")
+	}
+	updated := httptest.NewRecorder()
+	h.UpdateWebhook(updated, httptest.NewRequest(http.MethodPut, "/api/notifications/webhooks/saved-form", bytes.NewReader(body)))
+	if updated.Code != http.StatusOK {
+		t.Fatalf("saved form update: %d", updated.Code)
+	}
+	loaded, err := persistence.LoadWebhooks()
+	if err != nil || len(loaded) != 1 {
+		t.Fatal("encrypted edit unavailable after reload")
+	}
+	if loaded[0].Headers["authorization"] != "synthetic-auth" || loaded[0].Headers["X-New"] != "new" || len(loaded[0].Headers) != 2 || loaded[0].CustomFields["token"] != "synthetic-token" || loaded[0].CustomFields["channel"] != "new" || len(loaded[0].CustomFields) != 2 || loaded[0].SigningSecret != "synthetic-signing" {
+		t.Fatal("Test and persisted edit resolved different identities")
+	}
+	for _, response := range []string{listed.Body.String(), updated.Body.String(), tested.Body.String()} {
+		for _, secret := range []string{"synthetic-auth", "synthetic-token", "synthetic-signing"} {
+			if strings.Contains(response, secret) {
+				t.Fatal("configuration response disclosed a synthetic saved secret")
+			}
+		}
+	}
+	// The existing ordinary-delivery integration separately covers restart,
+	// grouped/un-grouped firing and resolution using the saved destination.
 }
