@@ -1038,3 +1038,32 @@ func TestDiskTemperatureCurrentCollectionAndOverrideControls(t *testing.T) {
 		}
 	})
 }
+
+func TestDiskTemperaturePendingContextCleanup(t *testing.T) {
+	for _, removal := range []bool{false, true} {
+		t.Run(fmt.Sprintf("removed=%v", removal), func(t *testing.T) {
+			m, _ := continuityManager(t, false)
+			m.mu.Lock()
+			m.shadow = nil
+			m.mu.Unlock()
+			host := hostWithSMARTDiskTemp("pending-cleanup", "custom", 85)
+			m.CheckHost(host)
+			m.mu.RLock()
+			tracked := len(m.hostDiskTempPendingContexts)
+			m.mu.RUnlock()
+			if tracked != 1 || len(m.GetActiveAlerts()) != 0 {
+				t.Fatal("control must have pending context and no active alert")
+			}
+			if removal {
+				m.HandleHostRemoved(host)
+			} else {
+				m.ClearActiveAlerts()
+			}
+			m.mu.RLock()
+			defer m.mu.RUnlock()
+			if len(m.hostDiskTempPendingContexts) != 0 || m.hostDiskTemperaturePendingNoLock(hostDiskTemperatureResourceID(host.ID, host.Sensors.SMART[0].Device)) {
+				t.Fatal("pending context/state outlived its host or explicit clear")
+			}
+		})
+	}
+}

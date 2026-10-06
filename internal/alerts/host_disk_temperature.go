@@ -48,6 +48,9 @@ func (m *Manager) rememberHostDiskTemperaturePending(host models.Host, disk mode
 
 func (m *Manager) hostDiskTemperatureTrackedResourcesNoLock() map[string]struct{} {
 	resources := make(map[string]struct{})
+	for resourceID := range m.hostDiskTempPendingContexts {
+		resources[resourceID] = struct{}{}
+	}
 	for _, state := range m.mirrorStatesNoLock() {
 		for _, resourceID := range state.PendingResourceIDs() {
 			resources[resourceID] = struct{}{}

@@ -336,7 +336,7 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 // ClearActiveAlerts removes all active and pending alerts, resetting the manager state.
 func (m *Manager) ClearActiveAlerts() {
 	m.mu.Lock()
-	if len(m.activeAlerts) == 0 && len(m.intentPending) == 0 && len(m.smartCounterSnapshots) == 0 {
+	if len(m.activeAlerts) == 0 && len(m.intentPending) == 0 && len(m.smartCounterSnapshots) == 0 && len(m.hostDiskTempPendingContexts) == 0 {
 		m.mu.Unlock()
 		return
 	}
@@ -344,6 +344,7 @@ func (m *Manager) ClearActiveAlerts() {
 	m.restoredBackupNotifications = nil
 	m.activeAlertAlias = make(map[string]string)
 	m.core.Reset()
+	m.hostDiskTempPendingContexts = nil
 	m.intentPending = make(map[string]IntentPendingState)
 	m.intentRuntimeTicks = make(map[string]time.Duration)
 	m.recentAlerts = make(map[string]*Alert)
