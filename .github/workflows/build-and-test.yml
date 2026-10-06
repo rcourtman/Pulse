@@ -72,6 +72,7 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       frontend_deps: ${{ steps.filter.outputs.frontend_deps }}
+      go_compile: ${{ steps.filter.outputs.go_compile }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -97,6 +98,7 @@ jobs:
             echo "Base commit unavailable; assuming code and dependencies changed."
             echo "code=true" >> "$GITHUB_OUTPUT"
             echo "frontend_deps=true" >> "$GITHUB_OUTPUT"
+            echo "go_compile=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           changed=$(git diff --name-only "$base" "${{ github.sha }}")
@@ -109,6 +111,14 @@ jobs:
             code=false
           fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
+          # A full race-test compilation cost 386 seconds in a cold offline
+          # guest. Reserve that admission for Go source/graph/backend embeds
+          # and its own control path, not the much more frequent UI changes.
+          go_compile=false
+          if [ "$code" = true ]; then
+            go_compile=$(printf '%s\n' "$changed" | bash scripts/go-test-compile-required.sh)
+          fi
+          echo "go_compile=$go_compile" >> "$GITHUB_OUTPUT"
           # Whether this change moves the frontend dependency graph. It decides
           # whether the audit blocks it: a change that moves the graph answers
           # for any finding and for an unreachable endpoint, while one that
@@ -268,9 +278,39 @@ jobs:
             exit 1
           fi
 
+  # Reject cross-package test/API incompatibilities before spending seven
+  # runners on race tests. This links test binaries but never executes them;
+  # the existing required checks below still own runtime and vet verdicts.
+  test-compile:
+    name: Compile backend race tests (no execution)
+    needs: changes
+    if: needs.changes.outputs.go_compile == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Provide frontend test embed stub
+        run: bash scripts/ensure_test_assets.sh
+
+      - name: Compile every Go race-test binary without executing it
+        run: bash scripts/compile-go-tests.sh
+
   backend:
     name: Backend tests (${{ matrix.shard }})
-    needs: changes
+    needs: [changes, test-compile]
+    # Expand the unchanged required checks even when compilation fails. A
+    # skipped dependency must not turn a broken source into a green check.
+    if: ${{ !cancelled() && needs.changes.result == 'success' }}
     # Expand every required shard even for documentation-only changes. A
     # job-level condition skips expansion and leaves the named checks pending.
     runs-on: ubuntu-24.04
@@ -283,6 +323,16 @@ jobs:
         shard: [rest-0, rest-1]
 
     steps:
+      - name: Require compiled backend tests
+        env:
+          COMPILE_REQUIRED: ${{ needs.changes.outputs.go_compile }}
+          COMPILE_RESULT: ${{ needs.test-compile.result }}
+        run: |
+          if [ "$COMPILE_REQUIRED" = true ] && [ "$COMPILE_RESULT" != success ]; then
+            echo "::error::Backend test compilation did not pass (result: ${COMPILE_RESULT:-unknown}); no runtime tests started."
+            exit 1
+          fi
+
       - name: Report documentation-only change
         if: needs.changes.outputs.code != 'true'
         run: echo "No backend code changed. Tests are not required for this shard."
@@ -344,7 +394,10 @@ jobs:
   # name by passing only when every shard passed.
   backend-api:
     name: Backend tests (api-${{ matrix.index }})
-    needs: changes
+    needs: [changes, test-compile]
+    # Expand the unchanged required checks even when compilation fails. A
+    # skipped dependency must not turn a broken source into a green check.
+    if: ${{ !cancelled() && needs.changes.result == 'success' }}
     # Like the rest shards, expand even for documentation-only changes so the
     # verdict job sees real shard results rather than skipped jobs.
     runs-on: ubuntu-24.04
@@ -358,6 +411,16 @@ jobs:
       API_SHARD_COUNT: 5
 
     steps:
+      - name: Require compiled backend tests
+        env:
+          COMPILE_REQUIRED: ${{ needs.changes.outputs.go_compile }}
+          COMPILE_RESULT: ${{ needs.test-compile.result }}
+        run: |
+          if [ "$COMPILE_REQUIRED" = true ] && [ "$COMPILE_RESULT" != success ]; then
+            echo "::error::Backend test compilation did not pass (result: ${COMPILE_RESULT:-unknown}); no runtime tests started."
+            exit 1
+          fi
+
       - name: Report documentation-only change
         if: needs.changes.outputs.code != 'true'
         run: echo "No backend code changed. Tests are not required for this shard."

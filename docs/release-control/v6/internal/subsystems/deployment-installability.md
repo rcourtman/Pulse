@@ -6786,6 +6786,39 @@ helper and `npm-audit-retry.sh` against the 1 October 2026 heads selected
 `release/v6.4` (`GHSA-p98j-92pf-mc4p`) and `release/v6.5`
 (`brace-expansion` and DOMPurify advisories). The hosted run is not yet claimed.
 
+
+### Backend test compilation before CI fan-out
+
+Build and Test links every Linux Go test binary with the same race instrumentation
+as its backend shards before those shards start runtime work. The compile-only
+job uses the declared Go toolchain, credential-free checkout and a test embed
+stub. `scripts/compile-go-tests.sh` replaces binary execution with `/bin/true`;
+it must not run package initialisers, TestMain, tests or examples. Its success
+is compilation evidence only, never a runtime, vet, real-frontend or installed
+acceptance verdict. Full required race-test shards retain those responsibilities.
+
+The diff classifier reserves this admission for Go source/manifests, backend
+embedded files and its own workflow/scripts. Unavailable diffs fail open into
+full compilation. Frontend-only changes do not pay for this Go-only preflight
+(the measured cold VM pass took 386 seconds); their existing backend runtime
+checks still run. `scripts/go-test-compile-required.sh` consumes the complete
+file list without an early-close/SIGPIPE path.
+
+A failed, cancelled, skipped or unknown compile result when compilation is required must
+fail the unchanged required backend check names, not let dependency skipping
+report success. Documentation-only changes still expand those named checks and
+accept the deliberately skipped compiler, as do changes outside Go compilation. Frontend and independent secret-scan
+work do not wait for compilation; their existing audit rules remain unchanged.
+
+`scripts/tests/test_go_test_compilation.py` exercises the actual compiler on
+inert multi-package fixtures, rejects a test-only removed API and a normal-source
+compile defect, and proves init/TestMain/test/example code is never executed.
+It executes both matrix prerequisite scripts against successful and adverse
+results and the documentation-only skip. `TestCITestCompilationPreservesChecks`
+retains the required names, full race execution and separate dependency audit.
+These proofs establish CI source admission, not hosted queue-time relief.
+
+
 ## Release-body updater ownership (30 September 2026)
 
 Each executable `/bin/update --version` example in a published body must carry
