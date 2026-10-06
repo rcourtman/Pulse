@@ -233,7 +233,6 @@ test_ensure_service_restarted_starts_stopped_service() {
         ENSURE_TEST_UP="yes"
         return 0
         ;;
-      stop) AUTOUPDATE_TEST_UP="no"; return 0 ;;
     esac
     return 1
   }
@@ -327,6 +326,7 @@ INSTALLER
         AUTOUPDATE_TEST_UP="yes"
         return 0
         ;;
+      stop) AUTOUPDATE_TEST_UP="no"; return 0 ;;
     esac
     return 1
   }
