@@ -617,7 +617,7 @@ func TestGuestFilesystemFailureGuidanceUsesObservedEvidence(t *testing.T) {
 		{"unauthorised-quotes-stopped", "API error 500: QEMU guest agent is not running", "permission-denied", "Guest filesystem query was not authorised", 401, true},
 		{"bad-request-quotes-permission", "API error 403: permission denied", "agent-error", "Guest filesystem query failed", 400, true},
 		{"empty", `{"data":{"result":[]}}`, "no-filesystems", "Guest agent returned no filesystem readings", 200, true},
-		{"malformed", `{"data":`, "agent-error", "Guest filesystem query failed", 200, true},
+		{"malformed", `{"data":`, "agent-completion-unverified", "", 200, false},
 		{"server-uncertain", "provider-private-detail", "agent-completion-unverified", "", 500, false},
 		{"gateway-quotes-stopped", "QEMU guest agent is not running", "agent-completion-unverified", "", 502, false},
 	}
@@ -664,6 +664,16 @@ func TestGuestFilesystemFailureGuidanceUsesObservedEvidence(t *testing.T) {
 			}
 			if calls.Load() != 1 {
 				t.Errorf("wire guest commands = %d, want one even with retries configured", calls.Load())
+			}
+			if guestAgentDiskDeferred(tc.reason) {
+				diagnostic, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = diagnostic.GetVMAgentInfo(context.Background(), res.Node, res.VMID)
+				if proxmox.GuestAgentDeferredReason(err) != "agent-cooldown" || calls.Load() != 1 {
+					t.Errorf("filesystem uncertainty let a fresh diagnostic queue another command: %v calls=%d", err, calls.Load())
+				}
 			}
 			guidance := 0
 			for _, line := range bytes.Split(bytes.TrimSpace(output.Bytes()), []byte("\n")) {
