@@ -4390,7 +4390,13 @@ must render from that shared projection instead of rescanning raw job arrays or
 inventing local PBS status heuristics,
 `resourceDetailDrawerIdentityModel.ts` owns the pure identity-card,
 discovery-summary, source-debug, and debug-bundle derivations that feed the
-overview and debug drawer surfaces,
+overview and debug drawer surfaces (the `Identity` card shows each identifier
+once: Discovery and Metrics Target rows appear only when they name something
+not already on screen, meaning the header's `getPreferredInfrastructureDisplayName`,
+the rows above, or the Platform ID row, and Aliases omits the same displayed
+values; candidate names the drawer never shows do not count, a shown Platform
+ID counts as identity data for the empty state, and a Machines agent drawer
+used to list one ID four times),
 `useResourceDetailDrawerDockerActionsState.ts` owns Docker action runtime, and
 the overview/debug render-heavy surfaces live in dedicated drawer-local owners
 instead of staying inline in the shell.
