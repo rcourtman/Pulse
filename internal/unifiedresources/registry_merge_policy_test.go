@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 func TestLinkedMergeAllowsOneSidedNodeHostLinkWhenHostnameCorroborates(t *testing.T) {
@@ -555,5 +556,81 @@ func TestProxmoxOneWayLinkRejectsHostLocalEndpointCorroboration(t *testing.T) {
 	host.ReportIP = "172.17.0.1"
 	if !trustedProxmoxNodeHostLink(node, host) {
 		t.Fatal("explicit private report-IP corroboration lost")
+	}
+}
+
+// The Proxmox disk row carries a copy of the agent's collection state from the
+// last disk poll. When the agent's own row later withdraws a reading (its
+// reporting lease expired), the canonical disk must follow the agent in either
+// ingest order, even if no disk poll has refreshed the Proxmox copy (a host that
+// is down entirely is never disk-polled).
+func TestPhysicalDiskMergeFollowsAgentWithdrawalOfItsOwnReadings(t *testing.T) {
+	proxmoxDisk := func(agent diskinventory.FieldStatus) Resource {
+		return Resource{
+			Type: ResourceTypePhysicalDisk, Name: "WDC", Status: StatusOnline,
+			PhysicalDisk: &PhysicalDiskMeta{
+				DevPath: "/dev/sdb", Serial: "WD-SILENT1", Temperature: 41,
+				Collection: &diskinventory.CollectionStatus{
+					Serial:      diskinventory.Available("proxmox_disks"),
+					Temperature: agent,
+					Pool:        diskinventory.Available("proxmox_zfs"),
+				},
+			},
+		}
+	}
+	agentDisk := func(temperature diskinventory.FieldStatus) Resource {
+		return Resource{
+			Type: ResourceTypePhysicalDisk, Name: "WDC", Status: StatusOnline,
+			PhysicalDisk: &PhysicalDiskMeta{
+				DevPath: "/dev/sdb", Serial: "WD-SILENT1", Temperature: 41,
+				Collection: &diskinventory.CollectionStatus{
+					Serial:      diskinventory.Available("smartctl"),
+					Temperature: temperature,
+				},
+			},
+		}
+	}
+	identity := ResourceIdentity{MachineID: "WD-SILENT1", Hostnames: []string{"node1"}}
+	collected := diskinventory.Available("smartctl")
+	expired := diskinventory.Unavailable("smartctl", "host agent stopped reporting")
+
+	for _, tc := range []struct {
+		name         string
+		proxmoxFirst bool
+		agent        diskinventory.FieldStatus
+		want         diskinventory.FieldStatus
+	}{
+		{"proxmox then expired agent", true, expired, expired},
+		{"expired agent then proxmox", false, expired, expired},
+		{"proxmox then reporting agent", true, collected, collected},
+		{"reporting agent then proxmox", false, collected, collected},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := NewRegistry(nil)
+			// The Proxmox row still holds the earlier "collected" copy.
+			ingestProxmox := func() { registry.ingest(SourceProxmox, "pve1-node1-sdb", proxmoxDisk(collected), identity) }
+			ingestAgent := func() { registry.ingest(SourceAgent, "agent-1-sdb", agentDisk(tc.agent), identity) }
+			if tc.proxmoxFirst {
+				ingestProxmox()
+				ingestAgent()
+			} else {
+				ingestAgent()
+				ingestProxmox()
+			}
+			disks := registry.ListByType(ResourceTypePhysicalDisk)
+			if len(disks) != 1 || disks[0].PhysicalDisk == nil || disks[0].PhysicalDisk.Collection == nil {
+				t.Fatalf("expected one merged disk, got %+v", disks)
+			}
+			collection := disks[0].PhysicalDisk.Collection
+			if collection.Temperature != tc.want {
+				t.Fatalf("temperature collection = %+v, want %+v", collection.Temperature, tc.want)
+			}
+			if disks[0].PhysicalDisk.Temperature != 41 {
+				t.Fatalf("last-known temperature was not retained: %d", disks[0].PhysicalDisk.Temperature)
+			}
+			if collection.Pool != diskinventory.Available("proxmox_zfs") {
+				t.Fatalf("Proxmox-owned evidence changed: %+v", collection.Pool)
+			}
+		})
 	}
 }

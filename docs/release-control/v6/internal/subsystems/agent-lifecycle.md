@@ -728,6 +728,12 @@ into monitoring's models. Absent evidence has to carry its declared sentinel
 rather than a zero value that reads as a real measurement: an absent
 physical-disk view projects `Wearout` as `unifiedresources.WearoutUnreported`,
 never `0`, which would announce a spent disk the agent never reported.
+When the host heartbeat lease expires, `State.ExpireHostTelemetry` keeps that
+agent's SMART temperature and I/O counters as last-known values but marks them
+`unavailable` ("host agent stopped reporting"); the agent's next accepted
+report replaces them. Expiry is compare-and-set on the report time the offline
+sweep judged stale, so a report admitted between that judgement and the expiry
+is never expired.
 
 An enabled availability target assigned to a host agent creates an
 agent-lifecycle lease for that exact target/agent pairing. First assignment

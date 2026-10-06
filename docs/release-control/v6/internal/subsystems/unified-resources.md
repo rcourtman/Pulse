@@ -3569,6 +3569,13 @@ the five field statuses for serial, temperature, I/O, controller, and pool.
 `unavailable`, `unsupported`, or `missing` state may retain a prior value for
 continuity, but the state and reason must survive so the consumer cannot claim
 fresh evidence or synthesize controller-level activity for one member.
+The one exception is a source withdrawing its own evidence: when the agent
+row reports a field as no longer available, that supersedes an `available`
+state the Proxmox row still carries from the same source
+(`diskinventory.MergeReportedStatus`), in either ingest order. A host agent
+past its reporting lease must not stay "collected" through the Proxmox row's
+copy of the agent's own state, including when its host is down and no disk
+poll refreshes that copy.
 
 Cross-source correlation compares normalized serial and WWN values across
 fields without truncation, allowing a PVE bare-hex array-volume serial to join

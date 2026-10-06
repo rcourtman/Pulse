@@ -648,7 +648,10 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 			ioCopy := *matched.IO
 			updated[i].IO = &ioCopy
 		}
-		updated[i].Collection = diskinventory.MergeStatus(updated[i].Collection, matched.Collection)
+		// The agent's later word on a field it supplied (its lease expired, or
+		// the disk went into standby) must win over the copy a skipped disk
+		// poll carries forward from the previous merge.
+		updated[i].Collection = diskinventory.MergeReportedStatus(updated[i].Collection, hostAgentSMARTCollection(*matched))
 
 		if shouldUseHostAgentPhysicalDiskHealth(updated[i].Health, matched.Health) {
 			updated[i].Health = matched.Health
@@ -656,6 +659,28 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 	}
 
 	return updated
+}
+
+// hostAgentLegacySource is the provenance recorded for a temperature from an
+// agent that predates collection provenance (before 6.2). Those agents only
+// send readings they collected.
+const hostAgentLegacySource = "host_agent"
+
+// hostAgentSMARTCollection returns the agent's collection state for one SMART
+// row, giving a provenance-less temperature the legacy agent source so that
+// history and later lease expiry treat it like any other agent reading.
+func hostAgentSMARTCollection(smart models.HostDiskSMART) *diskinventory.CollectionStatus {
+	collection := diskinventory.CloneStatus(smart.Collection)
+	if collection == nil {
+		collection = &diskinventory.CollectionStatus{}
+	}
+	switch {
+	case collection.Temperature.State == "" && smart.Temperature > 0 && !smart.Standby:
+		collection.Temperature = diskinventory.Available(hostAgentLegacySource)
+	case collection.Temperature.State != "" && strings.TrimSpace(collection.Temperature.Source) == "":
+		collection.Temperature.Source = hostAgentLegacySource
+	}
+	return collection
 }
 
 func shouldUseHostAgentPhysicalDiskHealth(existing, incoming string) bool {
@@ -914,8 +939,7 @@ func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
 		return
 	}
 
-	// Temperature (always write if > 0)
-	if disk.Temperature > 0 && m.metricsHistory != nil {
+	if diskTemperatureCollected(disk.Temperature, disk.Collection) && m.metricsHistory != nil {
 		m.metricsHistory.AddDiskMetric(resourceID, "smart_temp", float64(disk.Temperature), now)
 	}
 
@@ -927,6 +951,22 @@ func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
 	if len(writes) > 0 {
 		m.metricsStore.WriteBatchBounded(writes)
 	}
+}
+
+// diskTemperatureCollected reports whether a disk temperature was collected by
+// its current observation. Normalization may carry a last-known temperature
+// when it was not (standby, an agent past its reporting lease); that value must
+// not be recorded as a new history sample. A temperature without collection
+// state predates the contract and keeps the old behavior.
+func diskTemperatureCollected(temperature int, collection *diskinventory.CollectionStatus) bool {
+	if temperature <= 0 {
+		return false
+	}
+	if collection == nil {
+		return true
+	}
+	state := collection.Temperature.State
+	return state == "" || state == diskinventory.FieldAvailable
 }
 
 // smartMetricStoreWrites builds the persisted SMART writes for one physical
@@ -949,8 +989,7 @@ func (m *Monitor) smartMetricStoreWrites(disk models.PhysicalDisk, resourceID st
 		})
 	}
 
-	// Temperature (always write if > 0)
-	if disk.Temperature > 0 {
+	if diskTemperatureCollected(disk.Temperature, disk.Collection) {
 		appendWrite("smart_temp", float64(disk.Temperature))
 	}
 
@@ -5987,6 +6026,7 @@ func (m *Monitor) syncUnifiedPhysicalDiskMetrics(store ResourceStoreInterface) {
 			RPM:             resource.PhysicalDisk.RPM,
 			Used:            resource.PhysicalDisk.Used,
 			SmartAttributes: smartAttributesFromUnifiedMeta(resource.PhysicalDisk.SMART),
+			Collection:      diskinventory.CloneStatus(resource.PhysicalDisk.Collection),
 			LastChecked:     resource.LastSeen,
 		}
 		if disk.Serial == "" {
