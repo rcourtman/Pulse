@@ -230,7 +230,10 @@ else:
 }
 
 report_file="$(mktemp)"
-trap 'rm -f "${report_file}"' EXIT
+# A watchdog stopped before its subshell initialises can run this inherited
+# EXIT trap. Only the invoking shell owns cleanup: the captured verdict must
+# remain available after the watchdog is stopped, on Bash 3.2 as well as 5.x.
+trap 'if [ "$BASH_SUBSHELL" -eq 0 ]; then rm -f "${report_file}"; fi' EXIT
 
 attempt=1
 delay="${DELAY}"

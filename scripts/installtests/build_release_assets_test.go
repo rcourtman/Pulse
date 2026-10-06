@@ -5131,3 +5131,47 @@ func TestNpmAuditNativeScopeArgumentsPreserveFindings(t *testing.T) {
 		}
 	}
 }
+
+func TestNpmAuditReportCleanupRemainsParentOwned(t *testing.T) {
+	runner, err := os.ReadFile(repoFile("scripts", "npm-audit-retry.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook := regexp.MustCompile(`(?m)^trap '.*' EXIT$`).FindString(string(runner))
+	if hook == "" {
+		t.Fatal("audit report cleanup hook is missing")
+	}
+	for _, tc := range []struct {
+		name, hook string
+		status     int
+	}{
+		{"actual_parent_owned_hook", hook, 0},
+		{"legacy_child_cleanup_rejected", `trap 'rm -f "${report_file}"' EXIT`, 23},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "report")
+			// Install the exact source hook in the child explicitly to model
+			// the early-signal window, without timing a background process.
+			// It must retain the report there, and still remove it at parent exit.
+			script := "report_file=\"$REPORT_FIXTURE\"\nprintf retained >\"$report_file\"\n" + tc.hook +
+				"\n(\n" + tc.hook + "\n)\ntest -f \"$report_file\" || exit 23\n"
+			cmd := exec.Command("bash", "-c", script)
+			cmd.Env = append(os.Environ(), "REPORT_FIXTURE="+path)
+			output, err := cmd.CombinedOutput()
+			status := 0
+			if err != nil {
+				exit, ok := err.(*exec.ExitError)
+				if !ok {
+					t.Fatal(err)
+				}
+				status = exit.ExitCode()
+			}
+			if status != tc.status {
+				t.Fatalf("child cleanup verdict=%d want=%d: %s", status, tc.status, output)
+			}
+			if _, err := os.Stat(path); !os.IsNotExist(err) {
+				t.Fatalf("invoking shell did not clean up its report: %v", err)
+			}
+		})
+	}
+}
