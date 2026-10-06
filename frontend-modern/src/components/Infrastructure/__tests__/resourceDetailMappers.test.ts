@@ -10,7 +10,7 @@ import {
 } from '@/components/Infrastructure/resourceDetailMappers';
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
 import resourceDetailDiscoveryModelSource from '@/components/Infrastructure/resourceDetailDiscoveryModel.ts?raw';
-import type { Resource } from '@/types/resource';
+import type { PhysicalDiskCollectionStatus, Resource } from '@/types/resource';
 
 const createHybridHostResource = (): Resource =>
   ({
@@ -200,6 +200,89 @@ describe('resourceDetailMappers', () => {
           label: 'DRAM Power',
           value: '13.2 W',
           valueTitle: 'DRAM Power 13.2 W',
+        },
+      ]);
+    });
+
+    it('marks a silent agent disk temperature as last known and drops disks without one', () => {
+      const rows = buildTemperatureRows({
+        smart: [
+          {
+            device: 'sda',
+            temperature: 71,
+            // A host agent past its reporting lease keeps its last reading.
+            collection: {
+              temperature: {
+                state: 'unavailable',
+                source: 'host_agent',
+                reason: 'host agent stopped reporting',
+              },
+            },
+          },
+          {
+            device: 'sdb',
+            temperature: 38,
+            collection: { temperature: { state: 'available', source: 'smartctl' } },
+          },
+          {
+            device: 'sdc',
+            temperature: 0,
+            collection: {
+              temperature: {
+                state: 'unsupported',
+                source: 'smartctl',
+                reason: 'device did not expose a temperature reading',
+              },
+            },
+          },
+        ],
+      });
+
+      expect(rows).toEqual([
+        {
+          label: 'Disk sda',
+          value: '71°C (last known)',
+          valueTitle: 'Last known reading, not current: host agent stopped reporting',
+        },
+        { label: 'Disk sdb', value: '38°C', valueTitle: '38.0°C' },
+      ]);
+    });
+
+    it('lists a SMART row only for a positive reading in any state, never a standby disk', () => {
+      const states: (PhysicalDiskCollectionStatus | undefined)[] = [
+        undefined,
+        { temperature: { state: 'available', source: 'smartctl' } },
+        { temperature: { state: 'unavailable', source: 'smartctl' } },
+      ];
+      for (const collection of states) {
+        for (const temperature of [0, -3]) {
+          expect(
+            buildTemperatureRows({ smart: [{ device: 'sda', temperature, collection }] }),
+          ).toEqual([]);
+        }
+      }
+
+      expect(
+        buildTemperatureRows({
+          smart: [
+            {
+              device: 'sda',
+              temperature: 44,
+              standby: true,
+              collection: { temperature: { state: 'unavailable', source: 'smartctl' } },
+            },
+            {
+              device: 'sdb',
+              temperature: 39,
+              collection: { temperature: { state: 'missing', source: 'smartctl' } },
+            },
+          ],
+        }),
+      ).toEqual([
+        {
+          label: 'Disk sdb',
+          value: '39°C (last known)',
+          valueTitle: 'Last known reading, not current',
         },
       ]);
     });

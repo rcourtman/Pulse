@@ -7803,6 +7803,16 @@ never through the threshold colour classes, so a retained reading cannot look
 hot or healthy. Table, drawer and pool surfaces share that one decision in
 `frontend-modern/src/features/storageBackups/diskPresentation.ts` rather than
 each re-reading `collection.temperature`.
+That decision and its class now live in the small
+`frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts`
+module, which `diskPresentation.ts` re-exports, so the Machines table and the
+machine drawer's Thermals rows apply the same treatment without pulling the
+Storage presenter into their chunks. Those surfaces and the guest drawer's
+Physical Disks card import it directly.
+When the cell's value is a retained host-agent SMART temperature, it renders
+muted with a dotted underline and screen-reader "last known", as does a
+retained value in the guest card. Tooltip and Thermals rows say "(last known)",
+and the Thermals row carries the collection reason as its title.
 
 The focused browser proofs are
 `frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts`,

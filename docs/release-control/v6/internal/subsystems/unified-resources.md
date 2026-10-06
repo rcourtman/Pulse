@@ -2269,6 +2269,20 @@ and temperature facts must also compose the frontend-primitives
 `InfoCardKeyValueRow`. Mobile rows retain their condensed endpoint layout;
 desktop rows use the shared fixed label track so labels and values remain
 visually adjacent instead of spanning the full drawer width.
+A standalone host agent past its reporting lease reaches the Machines table as
+`warning` with `agent.stale`, not `offline`: by the time the lease expires the
+registry has marked its only source stale, which outranks offline. The offline
+metric fallback therefore does not blank its cells, and the temperature cell
+has no such gate. For SMART disk temperatures the provenance travels on
+`agent.sensors.smart[].collection`: the Machines temperature cell
+(`AgentsMachinesTable.tsx`, `agentMachineTableModel.ts`), its tooltip and the
+drawer's Thermals rows (`resourceDetailMappers.ts`) read it through
+`isPhysicalDiskTemperatureCurrent`, so a retained disk reading never stands for
+the machine while another disk has a current one. A positive direct
+`temperature` or `temperatureCelsius` reading carries no collection state and
+still leads the cell. Without one, and with no current non-standby disk, the
+hottest retained non-standby disk reading shows as last known without
+threshold colour.
 The same boundary applies to availability facts, resource change-history
 metadata, Docker/PBS/PMG service facts, nested PMG queue/mail breakdowns, and
 Docker container-update management facts. It also covers action-history facts,

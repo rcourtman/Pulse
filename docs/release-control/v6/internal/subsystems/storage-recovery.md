@@ -3814,6 +3814,21 @@ or alert evaluation. Verification: `diskPresentation.test.ts`,
 `diskDetailPresentation.test.ts`, `storagePoolDetailPresentation.test.ts`,
 `DiskList.test.tsx` (a row moving between current, retained and legacy states)
 and `DiskDetail.test.tsx`.
+The same decision reaches the disks that only a host agent's own SMART rows
+describe. `HostDiskSMART.collection` now crosses into the frontend type, and the
+helpers live in `frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts`
+(re-exported by `diskPresentation.ts`, one implementation) so the Machines
+table and the machine drawer can use them without loading the Storage
+presenter. The guest drawer's card already loads it for extraction and health.
+A silent agent's retained SMART temperature never becomes the Machines row's
+value while another disk has a current reading. When the machine has no
+positive direct or `temperatureCelsius` reading and no non-standby disk is
+current, the cell shows the hottest retained non-standby value as last known,
+without the per-disk-type threshold colour. The guest drawer's Physical Disks card marks a
+retained value the way the Physical Disks table does. Still presentation only.
+Verification: `diskPresentation.test.ts` (one implementation behind both import
+paths), `agentMachineTableModel.test.ts`, `AgentsMachinesTable.test.tsx`,
+`resourceDetailMappers.test.ts` and `GuestPhysicalDisks.test.tsx`.
 
 Direct SATA, SAS, and NVMe device fallback identities remain compatible.
 Controller-member fallback identities add controller/target scope only where

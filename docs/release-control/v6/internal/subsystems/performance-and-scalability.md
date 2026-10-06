@@ -2044,6 +2044,13 @@ render those sensor values already present on the selected resource payload,
 but it must not add host powercap reads, sensor-specific history reads,
 per-row polling, browser-side command assumptions, or table-wide aggregation
 work.
+Host-agent SMART disk rows in `resourceDetailMappers.ts` mark a retained
+temperature "(last known)", with its collection reason as the title, from the
+payload's own `collection.temperature` state, through `getPhysicalDiskTemperaturePresentation`
+in `frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts`.
+That module stays separate from `diskPresentation.ts` so the drawer and
+Machines chunks take the decision without the Storage presenter, and the rows
+add no reads, polling or aggregation work.
 The Proxmox node drawer overview should follow the existing guest drawer
 compact detail-section pattern and expose node-specific context such as platform,
 kernel, hardware, raw capacity, telemetry, and thermal facts rather than

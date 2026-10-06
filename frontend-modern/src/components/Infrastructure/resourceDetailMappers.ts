@@ -15,6 +15,7 @@ import type {
 } from '@/types/api';
 import type { Resource, ResourceMetric, ResourceVMwareMeta } from '@/types/resource';
 import { formatTemperature } from '@/utils/temperature';
+import { getPhysicalDiskTemperaturePresentation } from '@/features/storageBackups/diskTemperaturePresentation';
 import { formatBytes } from '@/utils/format';
 import { getActionableAgentIdFromResource } from '@/utils/agentResources';
 import {
@@ -502,13 +503,17 @@ export const buildTemperatureRows = (sensors?: HostSensorSummary) => {
   const smart = sensors?.smart;
   if (smart) {
     smart
-      .filter((disk) => !disk.standby && Number.isFinite(disk.temperature))
+      .filter((disk) => !disk.standby)
       .sort((a, b) => a.device.localeCompare(b.device))
       .forEach((disk) => {
+        const temperature = getPhysicalDiskTemperaturePresentation(disk);
+        if (!temperature) return;
+        // A retained reading, such as a silent agent's, says so in the value
+        // because this card has no other cue that it is not current.
         rows.push({
           label: `Disk ${disk.device}`,
-          value: formatTemperature(disk.temperature),
-          valueTitle: `${disk.temperature.toFixed(1)}°C`,
+          value: temperature.current ? temperature.label : `${temperature.label} (last known)`,
+          valueTitle: temperature.title ?? `${disk.temperature.toFixed(1)}°C`,
         });
       });
   }
