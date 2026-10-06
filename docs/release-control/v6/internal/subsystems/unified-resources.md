@@ -485,6 +485,18 @@ layer consumes it only as a fallback replacement for Proxmox LXC memory, so
 platform metric priority for a healthy agent is unchanged.
 `TestContainerViewLinkedAgentMemory` pins those boundaries.
 
+**Host-row agent source freshness (6 October 2026)**
+
+`HostView.SourceStatus(source)` exposes the per-source delivery freshness the
+registry already records, matching the VM, container, and physical-disk views.
+A host agent linked to a Proxmox node merges into one row whose `LastSeen`
+follows the freshest source, so consumers of agent-owned samples (monitoring's
+linked-agent node temperature lookup) must read the agent source's own sighting
+here instead of the row's `LastSeen`. The accessor returns a copy of the recorded
+status and adds no freshness policy of its own.
+`TestView_HostViewSourceStatusSeparatesAgentFromMergedRow` pins the merged-row
+split.
+
 ### Bounded incident-history selection
 
 Canonical history queries filter exact alert identifiers and observation windows

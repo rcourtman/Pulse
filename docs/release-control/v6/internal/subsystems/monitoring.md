@@ -3695,6 +3695,23 @@ exists or the agent payload has no usable positive reading. Identity-only or
 zero-temperature SMART rows do not count as usable by themselves, but the
 runtime must not keep probing legacy SSH solely to augment an otherwise healthy
 agent temperature payload with SMART data.
+A node temperature presented as available must describe the node now, because
+node alert evaluation, node history writes, reporting, and the UI all read it as
+a live measurement. A host agent linked to a Proxmox node merges into one host
+row whose `LastSeen` every PVE poll keeps fresh, while the agent's last sensors
+stay in state after it stops reporting, so the row's `LastSeen` cannot decide
+whether those sensors are current. `internal/monitoring/host_agent_temps.go`
+reads the agent's own sighting from the row's `SourceStatus(SourceAgent)`, feeds
+the agent's sensors into the node only while that sighting is inside the
+reporting lease that keeps the agent online (`hostAgentReportCurrent`, the same
+`hostAgentHealthWindow` that `evaluateHostAgents` applies, so a slow-interval
+agent's readings count exactly while the agent is shown online), and stamps the
+reading with that report time. Past the lease the lookup falls back to the
+cluster sensor cache, which keeps its own recency check. When every source
+returns nothing, `internal/monitoring/monitor_polling_node_helpers.go` may carry
+a previous reading, with its original `LastUpdate`, only inside the carry window
+(twice the PVE polling interval, never under five minutes); an older reading is
+dropped rather than re-presented as current.
 Legacy SSH temperature collection must also use the Pulse sensor-wrapper
 contract before falling back to raw lm-sensors output. `internal/monitoring/temperature.go`
 must request `/usr/local/sbin/pulse-sensors` when it exists, parse the wrapper
