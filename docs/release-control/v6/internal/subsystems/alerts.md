@@ -2459,8 +2459,29 @@ page through `PRIMARY_PLATFORM_NAV_SCOPE_IDS` and the `routing/resourceLinks.ts`
 path builders, and the same canonical platform id goes to the Monitoring
 policy menu, so the link and the named inventory owner cannot disagree. Only
 an alert whose metadata names no platform falls back to its resource type
-(`agent`, `docker-*`, `k8s-*`, `truenas-*`, `vmware-*`) and finally the message;
-agent alerts open `/standalone/machines`, because no `/machines` route exists.
+(`agent`, `docker-*`, `app-container`, `k8s-*`, `truenas-*`, `vmware-*`)
+and finally the message; agent alerts open `/standalone/machines`, because no
+`/machines` route exists. A resource-id prefix or substring and the
+message may pick the page only when the alert names no resource type at all,
+because Proxmox guest ids embed the user's cluster and node names and messages
+name the guest: VM alerts on node `docker-01`, in a cluster named `agent`, or
+for a guest named `vmware-test` still link to Proxmox and name Proxmox as their
+owner. Metric alerts put a display label in `resourceType` (`vSphere VM`,
+`Kubernetes Pod`), so the unified metric and capacity evaluators
+(`internal/alerts/unified_eval.go`, `internal/alerts/capacity_forecast.go`)
+stamp the canonical `platformType` beside it, and connection-degraded alerts
+(`internal/alerts/connection.go`) stamp it from the connection type; the card
+reads that ahead of every fallback. The menu's owner copy comes from
+`frontend-modern/src/utils/resourceMonitoringPolicy.ts`, where an explicit
+platform outranks the resource-type guess and the agent-removal copy is kept
+to the agent's own machine: libvirt VMs and Unraid arrays in resource drawers
+get the neutral source-system copy. Agent disk-usage, SMART disk and Unraid
+array alerts still carry their host's `agent` metadata, so their menu names
+the Pulse agent until those producers emit child-resource metadata. Alerts
+restored from before `platformType` existed gain it at their next full
+evaluation; a metric alert held between its clear and trigger thresholds keeps
+the earlier fallback until then. Menu sentences open with the owner
+label capitalised.
 The retired dashboard recent-alert panel must not be reintroduced as a
 parallel alert surface. Alert summary/tone copy belongs to the alert overview
 presentation owner, and any future compact alert surface must compose the

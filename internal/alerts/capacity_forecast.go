@@ -381,6 +381,9 @@ func (m *Manager) evaluateCapacityForecast(input *UnifiedResourceInput, threshol
 	if len(input.StorageAliases) > 0 {
 		metadata[storagePolicyAliasesKey] = append([]string(nil), input.StorageAliases...)
 	}
+	if platformType := unifiedAlertPlatformType(input.Type); platformType != "" {
+		metadata[alertPlatformTypeKey] = platformType
+	}
 	_, _ = m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
 		Spec: spec,
 		Evidence: alertspecs.AlertEvidence{

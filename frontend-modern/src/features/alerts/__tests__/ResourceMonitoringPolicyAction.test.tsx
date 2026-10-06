@@ -54,6 +54,26 @@ describe('ResourceMonitoringPolicyAction', () => {
     });
   });
 
+  it('opens menu sentences with a capitalised owner label', () => {
+    operatorStateMock.get.mockResolvedValue(null);
+    render(() => (
+      <ResourceMonitoringPolicyAction
+        resourceId="app-container-7c1e"
+        resourceName="nginx"
+        resourceType="app-container"
+        platformType="docker"
+      />
+    ));
+
+    fireEvent.click(screen.getByText('Monitoring'));
+    expect(
+      screen.getByText(
+        'This changes Pulse policy only. Container runtime remains the inventory owner.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/^Container runtime keeps the inventory record\./)).toBeInTheDocument();
+  });
+
   it('renders the policy menu through a body portal so scroll containers cannot clip it', () => {
     operatorStateMock.get.mockResolvedValue(null);
     render(() => (
