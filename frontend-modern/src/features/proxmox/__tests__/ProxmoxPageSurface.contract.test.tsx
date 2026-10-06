@@ -214,6 +214,16 @@ describe('ProxmoxPageSurface contract', () => {
     );
   });
 
+  it('leaves host details to the nodes table instead of the embedded guest table', () => {
+    setResources([makeResource({ id: 'vm-1', type: 'vm' })]);
+
+    renderSurface();
+
+    expect(mockWorkloadsOptions).toHaveBeenCalledWith(
+      expect.objectContaining({ groupNodeDrawerMode: 'disabled' }),
+    );
+  });
+
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();

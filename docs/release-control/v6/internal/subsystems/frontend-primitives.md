@@ -2911,9 +2911,9 @@ Agent`), with the plain-language source phrase available through accessible
    `pveVersion` or a Pulse Agent report whose OS identity resolves to Unraid or
    Proxmox VE. They must omit the version rather than showing unrelated
    collector OS versions, such as Debian 12, beside an API-backed PVE badge.
-   Shared row primitives that render Proxmox node identity, including
-   `frontend-modern/src/components/shared/NodeGroupHeader.tsx`, must route raw
-   PVE manager payloads through
+   Surfaces that render Proxmox node versions, including the Proxmox page
+   model at `frontend-modern/src/features/proxmox/proxmoxPageModel.ts`, must
+   route raw PVE manager payloads through
    `frontend-modern/src/utils/proxmoxVersion.ts` rather than inlining
    page-local parsing or falling back to unrelated agent OS versions.
    System title metadata must apply the same identity rule: once the primary
@@ -4395,12 +4395,14 @@ The shared table chrome now allows `TableCardHeader` to expose a right-aligned
 action slot, currently used by the Workloads/Proxmox metric display control.
 That slot belongs to the table header band and must not reintroduce nested
 cards or page-local toolbar wrappers inside `TableCard`. Proxmox host grouping
-also extends the shared `NodeGroupHeader` row pattern: host metrics may align
-with workload table columns, but the shared primitive owns the header/table
-shell boundary rather than platform pages copying their own card headers.
-Compact PVE version text in that header must come from the shared Proxmox
-version formatter so raw `pve-manager/...` payloads and platform-page host
-version cells stay consistent.
+also extends the shared `NodeGroupHeader` row pattern, which owns the
+header/table shell boundary rather than platform pages copying their own card
+headers. `frontend-modern/src/components/shared/NodeGroupHeader.tsx` renders
+node identity only (status dot, linked name, cluster and agent badges); in
+table-row mode that identity sits in one cell spanning the table. It carries no
+per-column cell renderer and no inline
+version, temperature, or uptime facts: host metrics and versions belong to the
+platform page's host table, so a group row must not duplicate them.
 Mobile navigation now recognizes `proxmox` as a first-class platform tab in
 the shared priority model so app-shell ordering remains centralized.
 

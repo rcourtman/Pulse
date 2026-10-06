@@ -192,7 +192,6 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
             activeAlerts={state.activeAlerts}
             alertsEnabled={state.alertsEnabled}
             bottomSpacerHeight={state.bottomSpacerHeight}
-            compactGroupHeaders={state.compactGroupHeaders}
             getGroupLabel={state.getGroupLabel}
             getNodeTemperatureThresholds={state.getNodeTemperatureThresholds}
             groupedGuests={state.groupedGuests}
