@@ -5219,10 +5219,9 @@ not re-read stays the age at read time, because a moving age over a snapshot
 that never refreshes claims the reading stopped when it may not have. Such a
 surface either re-reads the snapshot in the background, as Proxmox replication
 and the external watchdog panel do, or keeps the read-time age, as the Patrol
-attention detail does for Last seen. A background re-read applies an answer
-only when it is newer than the last one applied, so a slow or hung read can
-neither pin the surface to an older snapshot nor overwrite a newer one while
-its ages keep moving. An immutable event time (when a delivery
+attention detail does for Last seen. The external watchdog panel orders its
+re-reads by request, so a slow or hung read can neither pin it to an older
+snapshot nor overwrite a newer outcome while its ages keep moving. An immutable event time (when a delivery
 was attempted, a transition happened, a policy was set) ages correctly over any
 snapshot and reads the clock.
 A presentation helper that formats an age measures it from the time its caller

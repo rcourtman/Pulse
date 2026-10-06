@@ -3174,12 +3174,16 @@ heartbeat stopped while Pulse kept pinging every minute, and a status that is
 never re-read kept its read-time age through a real stall, which is the one
 case this panel exists to show. A background re-read leaves the Refresh control
 alone, and a failed one keeps the last status and marks it unavailable. The
-status read has no timeout, so reads carry a sequence number and an answer
-applies only when it is newer than the last one applied: a slow or hung read can
-neither overwrite a newer status nor block later reads, reads slower than the
-poll still land in order, the next background read goes out at the first poll
-once the newest has been pending a full interval, and a Refresh still pending at
-such a poll frees the button (within two intervals of the click).
+status read has no timeout, so reads carry a sequence number and a read's
+outcome applies only when it is newer than the last read that settled: a
+success shows its status and clears the unavailable mark, a failure sets it. A
+slow or hung read can therefore neither overwrite a newer outcome nor block
+later reads, and reads slower than the poll still land in order. While the
+panel's poll runs, the next background read goes out at the first poll once the
+newest read has been pending at least 29 seconds (one second of slack absorbs
+timer jitter), and a Refresh is released by its own read, by any newer read that
+settles, or by the first poll at which it has been pending that long, so a hung
+Refresh frees within about two intervals of the click.
 The delivery log's relative hover time on each row reads the same clock: a
 logged attempt's time never changes, so its age is correct over a log that is
 only re-read on demand.
