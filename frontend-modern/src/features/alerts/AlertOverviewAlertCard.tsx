@@ -86,6 +86,11 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
       typeof props.alert.metadata?.resourceType === 'string'
         ? (props.alert.metadata.resourceType as string)
         : '';
+    // vCenter incidents land on canonical agent/vm/storage/network resources
+    // and say only what vCenter flagged, so the incident's provider names the
+    // page, ahead of the generic resource-type routes: an ESXi host is an
+    // `agent` resource that the Machines page does not list.
+    if (props.alert.metadata?.incidentProvider === 'vmware') return '/vmware/overview';
     if (rid.startsWith('agent:') || resourceType === 'agent') return '/machines';
     if (
       rid.includes('docker') ||

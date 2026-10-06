@@ -2431,6 +2431,12 @@ mapping. Acknowledged cards keep their canonical badge and omit that redundant
 line; held delivery states that can surprise an operator use the attention
 tone, while cooldown, quiet-hours, monitor-only, and successful/pending states
 remain neutral.
+The card's resource link resolves the owning platform page from alert
+metadata, never from message wording alone: a provider incident whose
+`incidentProvider` is `vmware` links to the vSphere overview even though its
+message is only the alarm vCenter raised, and VMware incidents land on
+canonical `vm`, `storage`, `network`, and `agent` resource types rather than a
+`vmware-` prefixed type.
 The retired dashboard recent-alert panel must not be reintroduced as a
 parallel alert surface. Alert summary/tone copy belongs to the alert overview
 presentation owner, and any future compact alert surface must compose the

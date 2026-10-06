@@ -2,7 +2,6 @@ import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
-import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformWindowedRows,
@@ -19,6 +18,7 @@ import {
   PlatformTableShell,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import { PlatformIssueReason } from '@/features/platformPage/PlatformIssueReason';
 import {
   PlatformResourceDetailToggleButton,
   PlatformResourceDetailTableRow,
@@ -29,7 +29,9 @@ import {
 import type { Resource } from '@/types/resource';
 import {
   filterVmwareNetworks,
-  getVmwareResourceDisplayStatus,
+  getVmwareNetworkIssue,
+  vmwareIssueSortRank,
+  getVmwareRowIndicator,
   type VmwareNetworkStatusFilter,
 } from './vmwarePageModel';
 
@@ -82,7 +84,7 @@ const vmCount = (resource: Resource): number =>
 
 // Columns a user can sort by. Hosts and Connected VMs summarize several names
 // at once, so they carry no single scalar to order on.
-const VSPHERE_NETWORK_SORT_KEYS = ['network', 'type', 'vms', 'datacenter'] as const;
+const VSPHERE_NETWORK_SORT_KEYS = ['network', 'type', 'vms', 'datacenter', 'health'] as const;
 
 type VsphereNetworkSortKey = (typeof VSPHERE_NETWORK_SORT_KEYS)[number];
 
@@ -101,6 +103,8 @@ const getVsphereNetworkSortValue = (
       return vmCount(resource);
     case 'datacenter':
       return asTrimmedString(resource.vmware?.datacenterName) || null;
+    case 'health':
+      return vmwareIssueSortRank(getVmwareNetworkIssue(resource));
     default:
       key satisfies never;
       return null;
@@ -180,7 +184,8 @@ export const VsphereNetworksTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="network"
-                  class="platform-table-mobile-w-30 md:w-[24%]"
+                  class="platform-table-mobile-w-30 md:w-[20%]"
+                  bandWidth={28}
                 >
                   Network
                 </PlatformSortableTableHead>
@@ -188,14 +193,15 @@ export const VsphereNetworksTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="type"
-                  class="platform-table-mobile-w-15 md:w-[13%]"
+                  class="platform-table-mobile-w-15 md:w-[10%]"
+                  bandWidth={21}
                 >
                   Type
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="platform-table-phone-hidden md:w-[18%]"
+                  class="hidden md:table-cell md:w-[18%]"
                 >
                   Hosts
                 </PlatformSortableTableHead>
@@ -203,14 +209,15 @@ export const VsphereNetworksTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="vms"
-                  class="platform-table-mobile-w-15 md:w-[7%]"
+                  class="platform-table-mobile-w-15 md:w-[5%]"
+                  bandWidth={7}
                 >
                   VMs
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="hidden lg:table-cell md:w-[18%]"
+                  class="hidden lg:table-cell md:w-[20%]"
                 >
                   Connected VMs
                 </PlatformSortableTableHead>
@@ -218,9 +225,19 @@ export const VsphereNetworksTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="datacenter"
-                  class="platform-table-mobile-w-20 md:w-[12%]"
+                  class="platform-table-mobile-w-20 md:w-[8%]"
+                  bandWidth={14}
                 >
-                  <PlatformResponsiveTableLabel compact="DC" full="Datacenter" />
+                  <PlatformResponsiveTableLabel compact="DC" full="Datacenter" compactInBand />
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="health"
+                  class="platform-table-phone-hidden md:w-[19%]"
+                  bandWidth={30}
+                >
+                  Health
                 </PlatformSortableTableHead>
               </>
             }
@@ -230,8 +247,8 @@ export const VsphereNetworksTable: Component<{
                   {(network) => {
                     const hosts = createMemo(() => hostSummary(network));
                     const vms = createMemo(() => vmSummary(network));
-                    const displayStatus = () => getVmwareResourceDisplayStatus(network);
-                    const indicator = () => getSimpleStatusIndicator(displayStatus());
+                    const issue = createMemo(() => getVmwareNetworkIssue(network));
+                    const indicator = () => getVmwareRowIndicator(network, issue());
                     const name = () => networkName(network);
                     const datacenter = () => asTrimmedString(network.vmware?.datacenterName) || '—';
                     const networkSubtitle = () =>
@@ -274,12 +291,10 @@ export const VsphereNetworksTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="font-mono text-[11px] text-base-content">
-                              {networkType(network)}
-                            </span>
+                            <span class="block truncate">{networkType(network)}</span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                             title={hosts().title}
                           >
                             <span class="block truncate">{hosts().label}</span>
@@ -301,12 +316,20 @@ export const VsphereNetworksTable: Component<{
                           >
                             <span class="block truncate">{datacenter()}</span>
                           </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
+                          >
+                            <PlatformIssueReason
+                              issue={issue()}
+                              data-vsphere-health={issue()?.tone}
+                            />
+                          </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={network}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
-                          colSpan={6}
+                          colSpan={7}
                           resolveResourceLabel={resolveResourceLabel}
                           onClose={() => drawer.close(network)}
                         />

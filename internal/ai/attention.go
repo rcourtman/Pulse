@@ -530,7 +530,7 @@ func attentionTitle(alert alerts.Alert, resourceName string) string {
 	if alertType == "" {
 		return "Issue on " + resourceName
 	}
-	if incidentTitle := attentionIncidentTitle(alertType, alert.Message); incidentTitle != "" {
+	if incidentTitle := attentionIncidentTitle(alert); incidentTitle != "" {
 		return incidentTitle + " on " + resourceName
 	}
 	switch strings.ToLower(alertType) {
@@ -564,30 +564,48 @@ func attentionTitle(alert alerts.Alert, resourceName string) string {
 	return strings.Join(words, " ") + " on " + resourceName
 }
 
-func attentionIncidentTitle(alertType, message string) string {
+func attentionIncidentTitle(alert alerts.Alert) string {
 	normalizedType := strings.NewReplacer("-", "_", " ", "_").Replace(
-		strings.ToLower(strings.TrimSpace(alertType)),
+		strings.ToLower(strings.TrimSpace(alert.Type)),
 	)
 	if normalizedType != "resource_incident" && normalizedType != "storage_incident" {
 		return ""
 	}
+	message := strings.TrimSpace(alert.Message)
 	if strings.Contains(strings.ToLower(message), "pg degraded") {
 		return "Ceph placement groups degraded"
 	}
 
-	const vmwareAlarmMarker = " has VMware alarm "
-	if markerIndex := strings.Index(message, vmwareAlarmMarker); markerIndex >= 0 {
-		issue := strings.TrimSpace(message[markerIndex+len(vmwareAlarmMarker):])
-		for _, suffix := range []string{" (", ". Affects "} {
-			if suffixIndex := strings.Index(issue, suffix); suffixIndex >= 0 {
-				issue = issue[:suffixIndex]
+	switch attentionIncidentCode(alert) {
+	case "vmware_alarm_state":
+		// The message is the alarm's name, with the consumers it affects
+		// appended on storage. Strip only that appended summary: a custom
+		// alarm name may itself contain ". " or parentheses.
+		issue := message
+		summaryIndex := -1
+		for _, consumerMarker := range []string{". Affects ", ". Puts backups for "} {
+			summaryIndex = max(summaryIndex, strings.LastIndex(issue, consumerMarker))
+		}
+		if summaryIndex >= 0 {
+			issue = issue[:summaryIndex]
+		}
+		// Alerts recorded before the summary became the alarm name carry
+		// "Network network-302 has VMware alarm <name> (yellow)", and resolved
+		// ones keep that text in history.
+		const legacyAlarmMarker = " has VMware alarm "
+		if markerIndex := strings.Index(issue, legacyAlarmMarker); markerIndex >= 0 {
+			issue = issue[markerIndex+len(legacyAlarmMarker):]
+			for _, status := range []string{"red", "yellow", "green", "gray", "active"} {
+				if trimmed, found := strings.CutSuffix(issue, " ("+status+")"); found {
+					issue = trimmed
+					break
+				}
 			}
 		}
 		if issue = strings.TrimSpace(strings.TrimSuffix(issue, ".")); issue != "" {
 			return issue
 		}
-	}
-	if strings.Contains(message, " has VMware overall status ") {
+	case "vmware_health_state":
 		if normalizedType == "storage_incident" {
 			return "VMware datastore health"
 		}
@@ -597,6 +615,15 @@ func attentionIncidentTitle(alertType, message string) string {
 		return "Storage issue"
 	}
 	return "Infrastructure issue"
+}
+
+func attentionIncidentCode(alert alerts.Alert) string {
+	if alert.Metadata != nil {
+		if value, ok := alert.Metadata["incidentCode"].(string); ok {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func attentionResourceType(alert alerts.Alert) string {
