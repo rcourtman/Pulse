@@ -310,26 +310,12 @@ func createJSONMergePatch(previous, current json.RawMessage) (json.RawMessage, e
 	if !json.Valid(previous) || !json.Valid(current) {
 		return nil, fmt.Errorf("invalid JSON merge value")
 	}
-	patch, changed, err := diffRawJSONMergeValue(previous, current)
+	patch, changed, err := diffRawJSONMergeValue(previous, current, true)
 	if err != nil {
 		return nil, err
 	}
 	if !changed {
 		return json.RawMessage(`{}`), nil
-	}
-	// Preserve the existing identity anchor for changed object entries.
-	if rawJSONObject(current) && rawJSONObject(patch) {
-		var object, patchObject map[string]json.RawMessage
-		if err := json.Unmarshal(current, &object); err != nil {
-			return nil, err
-		}
-		if id, ok := object["id"]; ok {
-			if err := json.Unmarshal(patch, &patchObject); err != nil {
-				return nil, err
-			}
-			patchObject["id"] = id
-			return json.Marshal(patchObject)
-		}
 	}
 	return patch, nil
 }
@@ -341,7 +327,7 @@ func rawJSONObject(value json.RawMessage) bool {
 
 // Inputs here are validated by createJSONMergePatch. Raw equality is only a
 // fast positive match, never a content hash, source-ID hint or freshness test.
-func diffRawJSONMergeValue(previous, current json.RawMessage) (json.RawMessage, bool, error) {
+func diffRawJSONMergeValue(previous, current json.RawMessage, anchorIdentity bool) (json.RawMessage, bool, error) {
 	if bytes.Equal(previous, current) {
 		return nil, false, nil
 	}
@@ -357,6 +343,15 @@ func diffRawJSONMergeValue(previous, current json.RawMessage) (json.RawMessage, 
 		patch, changed := diffJSONMergeValue(before, after)
 		if !changed {
 			return nil, false, nil
+		}
+		if anchorIdentity {
+			if object, ok := patch.(map[string]interface{}); ok {
+				if currentObject, ok := after.(map[string]interface{}); ok {
+					if id, exists := currentObject["id"]; exists {
+						object["id"] = id
+					}
+				}
+			}
 		}
 		encoded, err := json.Marshal(patch)
 		return encoded, true, err
@@ -380,7 +375,7 @@ func diffRawJSONMergeValue(previous, current json.RawMessage) (json.RawMessage, 
 			patch[key] = value
 			continue
 		}
-		nested, changed, err := diffRawJSONMergeValue(old, value)
+		nested, changed, err := diffRawJSONMergeValue(old, value, false)
 		if err != nil {
 			return nil, false, err
 		}
@@ -390,6 +385,12 @@ func diffRawJSONMergeValue(previous, current json.RawMessage) (json.RawMessage, 
 	}
 	if len(patch) == 0 {
 		return nil, false, nil
+	}
+	// Preserve the existing identity anchor without decoding current twice.
+	if anchorIdentity {
+		if id, ok := after["id"]; ok {
+			patch["id"] = id
+		}
 	}
 	encoded, err := json.Marshal(patch)
 	return encoded, true, err
