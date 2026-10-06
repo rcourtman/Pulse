@@ -541,7 +541,9 @@ const runPrivateUnix = (
     timeout: 20000,
   });
 
-describe('credential-free Unix lifecycle execution', () => {
+// The PTY has a 15s deadline and its caller a 20s ceiling. Let both return
+// their terminal/cleanup assertions before Vitest's enclosing budget expires.
+describe('credential-free Unix lifecycle execution', { timeout: 25_000 }, () => {
   it.each(['0', '1000'])(
     'keeps private input out of root/sudo argv, environment, output and history (uid=%s)',
     (uid) => {
