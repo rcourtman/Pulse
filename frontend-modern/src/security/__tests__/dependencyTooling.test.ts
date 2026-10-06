@@ -133,7 +133,7 @@ describe('patched transitive dependency compatibility', () => {
   });
 
   it('preserves original CSS positions through the actual PostCSS consumer', async () => {
-    const postcss = require('postcss') as typeof import('postcss');
+    const postcss = require('postcss') as typeof import('postcss').default;
     const { SourceMapConsumer } = require('source-map-js') as typeof import('source-map-js');
     const source = '.status {\n  color: red;\n}\n';
     const result = await postcss([
