@@ -8,6 +8,20 @@ A gate is only `passed` when its automated proof still passes and the manual
 scenario has been exercised in a staging-like environment with the expected
 result.
 
+## Workloads locked-guest identity on phones
+
+Automated: `GuestRow.test.tsx` lock-label cases and
+`frontend-modern/browser-tests/guest-row-lock-identity.cjs` after precompiling
+with `node browser-tests/build-guest-row-lock-fixture.mjs --with-parent --parent <full-parent-SHA>`. The parent
+row is the exact own-parent source, not a replay of a terminated preview. Inspect the real
+name, status/backup indicator, full lock and visible memory-freshness cue at
+320 and 390 px in light/dark bars and sparklines. The backup evidence control sits below the name on phones without shrinking
+its touch target; the lock remains separately visible. Long locks wrap inside the identity cell and long names retain their full title.
+Check that desktop keyboard Enter and the first phone touch open the same guest,
+that drawer safety copy stays intact, and that lock transitions on the same row
+do not renew the original memory timestamp. Wider rows keep their inline layout.
+This fixture uses synthetic data, not installed/native guest recovery proof.
+
 ## Workloads memory observation presentation
 
 Automated: `GuestRow.test.tsx` (memory observation provenance),
