@@ -1802,20 +1802,34 @@ owns node metric and temperature projection, node offline lifecycle handling,
 host-agent deduplication bookkeeping, and instance-scoped node display-name
 cache updates; future Proxmox node alert behavior should extend that resource
 checker owner rather than expanding the central Manager file.
-When a host agent with the node's hostname is registered, the agent resource
-owns the machine's CPU, memory and disk usage alerts, and `CheckNode` releases
-its own copies through the disabled-threshold path every cycle: the pending run
-is dropped and any node alert still open from before the agent registered is
-resolved, never left frozen until the agent goes offline. CPU temperature has no
-host-agent metric, so the node keeps evaluating it whether or not an agent is
-registered; the node poll already merges agent sensor readings into
-`node.Temperature`, giving one temperature alert per machine. A missing CPU
-reading is not recovery evidence: with a live trigger, `checkNodeTemperature`
-skips evaluation instead of feeding 0°C, while a disabled threshold still clears.
+When a reporting host agent is linked to a node (`LinkedNodeID`, the monitor's
+automatic or operator-set identity decision), the agent resource owns that
+machine's CPU, memory and disk usage alerts, and `CheckNode` releases its own
+copies through the disabled-threshold path every cycle: the pending run is
+dropped and any node alert still open from before the link is resolved, never
+left frozen until the agent goes offline. Deduplication keys on that link,
+never on a hostname match, so a same-named node in another instance keeps its
+alerts, an agent reporting an FQDN still dedups its node, and an operator unlink
+hands the alerts back. CPU temperature has no host-agent metric, so the node
+keeps evaluating it whether or not an agent is linked; the node poll already
+merges agent sensor readings into `node.Temperature`, giving one temperature
+alert per machine. A missing CPU reading is not evidence: with a live trigger,
+`checkNodeTemperature` neither feeds 0°C nor resolves the open alert, but
+`interruptMetricRun` (reducer `InterruptMetricRun`) drops a pending activation
+run and restarts a recovery run, so no sustained-for or recovery delay spans a
+gap in readings; a disabled threshold still clears. Config-save reevaluation
+classifies alerts whose metadata `resourceType` is `node` as node alerts and
+judges them against node thresholds; the `Instance` heuristic only covers legacy
+alerts without a resource type, because current node alerts keep the PVE
+instance name in `Instance`.
 `TestCheckNodeKeepsTemperatureAlertWhenHostAgentMonitorsNode`,
-`TestCheckNodeReleasesOpenMetricAlertWhenHostAgentRegisters` and
-`TestCheckNodeMissingTemperatureDoesNotResolveOpenAlert` in
-`internal/alerts/threshold_resolution_shared_test.go` pin these rules.
+`TestCheckNodeReleasesOpenMetricAlertWhenHostAgentRegisters`,
+`TestCheckNodeMissingTemperatureDoesNotResolveOpenAlert`,
+`TestCheckNodeMissingTemperatureInterruptsTimingRuns` and
+`TestConfigSaveKeepsNodeTemperatureAlertOverTrigger` in
+`internal/alerts/threshold_resolution_shared_test.go`, and
+`TestHostAgentDeduplicationFollowsNodeLink` in
+`internal/alerts/host_dedup_test.go`, pin these rules.
 Host-agent alert evaluation now lives in `internal/alerts/host.go`. That file
 owns host identity, host-agent metric projection, host disk/SMART/RAID/Unraid
 health handling, host cleanup, and host offline lifecycle handling; future host
