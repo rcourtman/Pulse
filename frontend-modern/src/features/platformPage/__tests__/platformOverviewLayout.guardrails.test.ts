@@ -516,10 +516,10 @@ describe('platform overview layout guardrails', () => {
       /sortKey="resource"[\s\S]{0,120}?class="platform-table-mobile-w-30 md:w-\[32%\]"/,
     );
     expect(vsphereNetworksTableSource).toMatch(
-      /sortKey="network"[\s\S]{0,120}?class="platform-table-mobile-w-30 md:w-\[24%\]"/,
+      /sortKey="network"[\s\S]{0,120}?class="platform-table-mobile-w-30 md:w-\[20%\]"/,
     );
     expect(vsphereNetworksTableSource).toMatch(
-      /sortKey="type"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[13%\]"/,
+      /sortKey="type"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[10%\]"/,
     );
     expect(agentsMachinesTableSource).toContain(
       'class="-my-2 min-h-11 min-w-11 sm:my-0 sm:min-h-0 sm:min-w-0"',
@@ -640,7 +640,7 @@ describe('platform overview layout guardrails', () => {
     expect(vmwarePageSurfaceSource).toContain('<VsphereDatastoresTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereNetworksTable');
     expect(vsphereNetworksTableSource).toMatch(
-      /sortKey="vms"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[7%\]"/,
+      /sortKey="vms"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[5%\]"/,
     );
     expect(vmwarePageSurfaceSource).toContain('<VsphereActivityTable');
     expect(vmwarePageSurfaceSource).not.toContain('<StorageSurface');

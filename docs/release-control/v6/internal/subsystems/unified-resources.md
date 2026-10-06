@@ -1095,6 +1095,17 @@ The first reason renders in the desktop Health column on the row's single line,
 coloured by bucket, with a count for the rest and the full list in the title
 and screen-reader text. Phones keep the status dot and reach the reason through
 the row drawer. Health sorts by severity rank, not label text.
+The vSphere Datastores and Networks tables follow the same exception-first
+Health column. `getVmwareDatastoreIssue` and `getVmwareNetworkIssue` return
+nothing for a green row; otherwise the reasons are, in order, an impaired
+vCenter source, a datastore's inaccessible or maintenance state, the
+resource's incident summaries worst first, and, only when no incident explains
+the colour, vCenter's overall status or its active alarm count. Inaccessible,
+offline, red, or critical rows take the red tone. VMware incident summaries say
+only what vCenter flagged, the alarm's own name or `vCenter health is
+<colour>`, without the managed object ID or alarm colour: every surface that
+shows them (alert cards, notifications, the Overview and Health signal tables,
+the drawer, Patrol titles) already names the resource and its severity.
 That shell also owns responsive width composition. Source tables may declare
 desktop breakpoint floors, but the phone branch must fit its selected columns
 inside the available container without a horizontal rail. Each unified-resource

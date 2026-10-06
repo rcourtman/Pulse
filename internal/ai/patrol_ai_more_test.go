@@ -1212,3 +1212,25 @@ func TestSeedIntelligenceContext_WithData(t *testing.T) {
 		}
 	}
 }
+
+func TestSeedAlertSubjectNamesTheResourceOnce(t *testing.T) {
+	tests := []struct {
+		alert models.Alert
+		want  string
+	}{
+		{
+			alert: models.Alert{ResourceName: "Edge Stateful", Message: "Network packet loss above threshold"},
+			want:  "Edge Stateful: Network packet loss above threshold",
+		},
+		{
+			alert: models.Alert{ResourceName: "Field Office Edge 01", Message: "Docker host 'Field Office Edge 01' is offline"},
+			want:  "Docker host 'Field Office Edge 01' is offline",
+		},
+		{alert: models.Alert{Message: "CPU high"}, want: "CPU high"},
+	}
+	for _, test := range tests {
+		if got := seedAlertSubject(test.alert); got != test.want {
+			t.Fatalf("seedAlertSubject(%+v) = %q, want %q", test.alert, got, test.want)
+		}
+	}
+}

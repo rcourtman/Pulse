@@ -2,6 +2,8 @@ import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import type { Resource, ResourceChange, ResourceIncident, ResourceType } from '@/types/resource';
+import type { PlatformIssue } from '@/features/platformPage/PlatformIssueReason';
+import { getSimpleStatusIndicator, type StatusIndicator } from '@/utils/status';
 
 export type VmwarePageTabId = 'overview' | 'storage' | 'networks' | 'health' | 'activity';
 export type VmwareDatastoreStatusFilter =
@@ -413,6 +415,106 @@ export function mapVmwareNetworkStatus(
   }
   if (['online', 'running'].includes(status) || overall === 'green') return 'healthy';
   return 'unknown';
+}
+
+const ATTENTION_OVERALL_STATUSES = new Set(['red', 'yellow']);
+
+// Why a datastore or network row is not green, in the order a user should
+// read them. Stale vCenter data comes first, since everything else on the row
+// may be out of date; then vCenter's own alarms, worst first. vCenter's
+// overall colour only shows when no alarm explains it.
+const vmwareAttentionReasons = (resource: Resource, leading: string[] = []): string[] => {
+  const reasons: string[] = [];
+  const push = (value: unknown) => {
+    const text = trimString(value);
+    if (text && !reasons.some((existing) => existing.toLowerCase() === text.toLowerCase())) {
+      reasons.push(text);
+    }
+  };
+  if (hasImpairedResourceSource(resource, 'vmware-vsphere')) {
+    push('vCenter has not updated this recently');
+  }
+  leading.forEach(push);
+  const incidents = (resource.incidents ?? [])
+    .filter(hasIncidentSignal)
+    .sort(
+      (a, b) => incidentSeverityRank(b.severity ?? '') - incidentSeverityRank(a.severity ?? ''),
+    );
+  const beforeIncidents = reasons.length;
+  incidents.forEach((incident) =>
+    push(incident.summary || vmwareIncidentLabel(resource, incident)),
+  );
+  if (reasons.length === beforeIncidents) {
+    const overall = normalize(resource.vmware?.overallStatus);
+    const alarms = resource.vmware?.activeAlarmCount ?? 0;
+    if (ATTENTION_OVERALL_STATUSES.has(overall)) push(`vCenter health is ${overall}`);
+    else if (alarms > 0) push(`${alarms} active vCenter alarm${alarms === 1 ? '' : 's'}`);
+  }
+  return reasons;
+};
+
+const hasCriticalVmwareSignal = (resource: Resource): boolean =>
+  normalize(resource.vmware?.overallStatus) === 'red' ||
+  (resource.incidents ?? []).some(
+    (incident) => mapVmwareIncidentSeverity(incident.severity) === 'critical',
+  );
+
+// A row's status dot and its Health reason come from one classification, so a
+// datastore in maintenance or a network with an active alarm never shows a
+// green dot beside an amber reason.
+export const getVmwareRowIndicator = (
+  resource: Resource,
+  issue: PlatformIssue | null,
+): StatusIndicator =>
+  issue
+    ? { variant: issue.tone === 'danger' ? 'danger' : 'warning', label: issue.label }
+    : getSimpleStatusIndicator(getVmwareResourceDisplayStatus(resource));
+
+// Health sorts the worst rows first: red, then amber, then healthy.
+export const vmwareIssueSortRank = (issue: PlatformIssue | null): number =>
+  issue ? (issue.tone === 'danger' ? 0 : 1) : 2;
+
+const DATASTORE_ISSUE_LABELS = {
+  inaccessible: 'Inaccessible',
+  maintenance: 'Maintenance',
+  attention: 'Attention',
+} as const;
+
+export function getVmwareDatastoreIssue(resource: Resource): PlatformIssue | null {
+  const bucket = mapVmwareDatastoreStatus(resource);
+  if (bucket === 'accessible' || bucket === 'unknown') return null;
+  // The bucket picks one filter, but a datastore in maintenance can also be
+  // unreachable or carry a critical alarm: each condition gives its reason,
+  // and the worst sets the colour.
+  const inaccessible =
+    resource.vmware?.datastoreAccessible === false ||
+    normalize(getVmwareResourceDisplayStatus(resource)) === 'offline';
+  const leading: string[] = [];
+  if (inaccessible) leading.push('vCenter reports it inaccessible');
+  if (bucket === 'maintenance') {
+    leading.push(
+      normalize(resource.vmware?.maintenanceMode).includes('entering')
+        ? 'Entering maintenance mode'
+        : 'In maintenance mode',
+    );
+  }
+  const reasons = vmwareAttentionReasons(resource, leading);
+  return {
+    tone: inaccessible || hasCriticalVmwareSignal(resource) ? 'danger' : 'warning',
+    label: DATASTORE_ISSUE_LABELS[bucket],
+    reasons: reasons.length > 0 ? reasons : ['vCenter reports a problem'],
+  };
+}
+
+export function getVmwareNetworkIssue(resource: Resource): PlatformIssue | null {
+  if (mapVmwareNetworkStatus(resource) !== 'attention') return null;
+  const offline = normalize(getVmwareResourceDisplayStatus(resource)) === 'offline';
+  const reasons = vmwareAttentionReasons(resource);
+  return {
+    tone: offline || hasCriticalVmwareSignal(resource) ? 'danger' : 'warning',
+    label: 'Attention',
+    reasons: reasons.length > 0 ? reasons : ['vCenter reports a problem'],
+  };
 }
 
 const titleize = (value: string): string =>

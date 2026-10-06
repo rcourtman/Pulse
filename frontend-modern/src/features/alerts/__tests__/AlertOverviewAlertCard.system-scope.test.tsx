@@ -92,6 +92,50 @@ describe('Pulse system-alert overview scope', () => {
     expect(screen.getByText('Resource monitoring policy')).toBeInTheDocument();
   });
 
+  it('links a vCenter alarm on a network to vSphere by its incident provider', () => {
+    // The summary is the alarm's own name, so the message no longer says VMware.
+    const alert = makeSystemAlert('resource-incident', {
+      id: 'vmware-network-alarm',
+      resourceId: 'network:vc-1:network-302',
+      resourceName: 'Edge Stateful',
+      message: 'Network packet loss above threshold',
+      metadata: {
+        resourceType: 'network',
+        incidentProvider: 'vmware',
+        incidentCode: 'vmware_alarm_state',
+      },
+    });
+    render(() => (
+      <AlertOverviewAlertCard alert={alert} state={state} timelineState={timelineState} />
+    ));
+    expect(screen.getByRole('link', { name: 'Edge Stateful' })).toHaveAttribute(
+      'href',
+      '/vmware/overview',
+    );
+  });
+
+  it('links a vCenter health signal on an ESXi host to vSphere, not Machines', () => {
+    // ESXi hosts are canonical agent resources the Machines page does not list.
+    const alert = makeSystemAlert('resource-incident', {
+      id: 'vmware-host-health',
+      resourceId: 'agent:vc-1:host-107',
+      resourceName: 'esxi-07.lab.local',
+      message: 'vCenter health is yellow',
+      metadata: {
+        resourceType: 'agent',
+        incidentProvider: 'vmware',
+        incidentCode: 'vmware_health_state',
+      },
+    });
+    render(() => (
+      <AlertOverviewAlertCard alert={alert} state={state} timelineState={timelineState} />
+    ));
+    expect(screen.getByRole('link', { name: 'esxi-07.lab.local' })).toHaveAttribute(
+      'href',
+      '/vmware/overview',
+    );
+  });
+
   it('closes the open timeline when the disclosure is collapsed', () => {
     const alert = makeSystemAlert('cpu', { id: 'open-timeline', resourceId: 'vm-pulse' });
     const openTimeline = {
