@@ -146,6 +146,29 @@ custom monitoring role if the required read privileges are absent.
 
 ## 🔧 Troubleshooting
 
+### A missing reading is not an installation diagnosis
+
+Pulse's **“agent not running”** disk explanation means Proxmox could not query
+the guest agent. It can also cover a general guest-agent HTTP 500 response; it
+does not establish whether an agent is absent or stopped. An unknown explanation
+establishes neither. **Do not install, enable or restart an agent solely to clear
+a disk dash.**
+
+Read [Backup safety](#backup-safety) before changing anything. During a backup,
+freeze/thaw or an unresponsive-guest incident, defer setup and live probes and
+use the guest/platform's established recovery procedure. A running VM, an absent
+lock or an OK backup does not prove thaw. Keep the monitoring-outage precaution
+until independent checks confirm thaw, fresh successful writes to **every
+filesystem covered by the backup** and workload liveness. Restore only services
+and timers that were previously active.
+
+When the guest is responsive and outside those conditions, review its existing
+agent configuration and guest-local service through your normal console. Use
+[Setup](#-setup) only if it actually needs configuration and the guest OS has a
+supported QEMU Guest Agent. The Linux package name is not a Windows or Android
+installation instruction. If no supported agent is available, use the guest's
+own filesystem tools; missing Pulse usage is unknown, not zero.
+
 | Observation | Useful next check |
 | --- | --- |
 | **Disk shows “-”** | Read its explanation and observation time. Check the owning host, current VM options, guest-local service and configured API token access. |
