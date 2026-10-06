@@ -506,3 +506,22 @@ func TestMetricAlertStatusCloneIsDeep(t *testing.T) {
 		t.Fatal("nil status must clone to nil")
 	}
 }
+
+// The websocket alert projection omits LastSeen, so the status dates the
+// last breach; without a breach time the field stays off the wire and
+// clients fall back to lastSeen.
+func TestMetricAlertStatusLastBreachAtWireShape(t *testing.T) {
+	breachAt := time.Date(2026, 10, 6, 20, 25, 16, 0, time.UTC)
+	status := &MetricAlertStatus{Phase: MetricAlertPhaseLatched, Value: 78, LastBreachAt: breachAt}
+	if clone := status.Clone(); !clone.LastBreachAt.Equal(breachAt) {
+		t.Fatalf("clone lost lastBreachAt: %+v", clone)
+	}
+	payload, err := json.Marshal(status)
+	if err != nil || !strings.Contains(string(payload), `"lastBreachAt":"2026-10-06T20:25:16Z"`) {
+		t.Fatalf("status payload = %s / %v", payload, err)
+	}
+	payload, err = json.Marshal(&MetricAlertStatus{Phase: MetricAlertPhaseLatched, Value: 78})
+	if err != nil || strings.Contains(string(payload), "lastBreachAt") {
+		t.Fatalf("zero breach time reached the wire: %s / %v", payload, err)
+	}
+}

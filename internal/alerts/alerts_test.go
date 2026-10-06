@@ -21712,6 +21712,42 @@ func TestMetricStatusStaysOutOfDurableAlertSnapshots(t *testing.T) {
 	}
 }
 
+// The websocket alert projection omits LastSeen, so the live status dates the
+// last breach itself and follows each new breach.
+func TestHeldTemperatureAlertStatusDatesTheLatestBreach(t *testing.T) {
+	m, clock := newMetricStatusTestManager(t)
+	m.SetAlertCallback(func(*Alert) {})
+
+	fired := fireNodeTemperatureAlert(t, m, clock, 85)
+	clock.advance(30 * time.Second)
+	checkMetricStatusNode(m, 78)
+	if got := activeNodeTemperatureAlert(t, m).MetricStatus; got == nil ||
+		got.Phase != models.MetricAlertPhaseLatched || !got.LastBreachAt.Equal(fired.LastSeen) {
+		t.Fatalf("held status = %+v, want lastBreachAt %v", got, fired.LastSeen)
+	}
+
+	clock.advance(30 * time.Second)
+	rebreachAt := clock.now
+	checkMetricStatusNode(m, 90)
+	rebreached := activeNodeTemperatureAlert(t, m)
+	if rebreached.Value != 90 || !rebreached.LastSeen.Equal(rebreachAt) {
+		t.Fatalf("re-breach snapshot: value=%v lastSeen=%v", rebreached.Value, rebreached.LastSeen)
+	}
+	if got := rebreached.MetricStatus; got == nil ||
+		got.Phase != models.MetricAlertPhaseBreaching || !got.LastBreachAt.Equal(rebreachAt) {
+		t.Fatalf("re-breach status = %+v, want lastBreachAt %v", got, rebreachAt)
+	}
+
+	clock.advance(30 * time.Second)
+	checkMetricStatusNode(m, 78)
+	held := activeNodeTemperatureAlert(t, m)
+	if got := held.MetricStatus; got == nil ||
+		got.Phase != models.MetricAlertPhaseLatched || !got.LastBreachAt.Equal(rebreachAt) ||
+		!got.LastBreachAt.Equal(held.LastSeen) {
+		t.Fatalf("held after re-breach status = %+v, want lastBreachAt %v", got, rebreachAt)
+	}
+}
+
 func TestStaleCleanupKeepsThresholdAlertStillBeingEvaluated(t *testing.T) {
 	m := newTestManager(t)
 	now := time.Now()

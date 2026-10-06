@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "3baab9bc5965eefd5ac249ea4e0d20b40b7c069a",
+  "verified_at": "2026-10-06T21:59:18Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts",
+    "frontend-modern/src/features/alerts/metricAlertPresentation.ts",
+    "frontend-modern/src/types/api.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts": "c7ab2bb12475bf4475a4d409c897fa2e59e5fcbad9749b7faf7cb6bdb064d1de",
+    "frontend-modern/src/features/alerts/metricAlertPresentation.ts": "2dc8ab44c5bd49ed10a44e4bcce180d27a8a9f867d0113b430bd84b140200ae4",
+    "frontend-modern/src/types/api.ts": "0a5ae9118dc6ffb47947fbf9a686ba73c1dde38bd4a503bb4be93cc0c401403b"
+  },
+  "routes": [
+    "/alerts/overview",
+    "/alerts/history",
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack with this commit's backend; pve2 CPU temperature pinned through a local-only generator overlay: 88C opened the node temperature alert, then 78C held it latched below the 80C trigger",
+    "Websocket activeAlerts frame for the held alert: no lastSeen, metricStatus.phase latched, metricStatus.lastBreachAt equal to the REST lastSeen of the last breaching sample",
+    "Proxmox node drawer (West Production B) Needs attention row: hover reads 'Last reading at or above 80C: 88C, 15 mins ago' at both widths",
+    "Alerts overview card and History row (with the unlanded alert-card and history-row work present in the verifying tree): hover reads 'Last reading at or above 80C: 88C, 14 mins ago' at both widths",
+    "Same-session control with the previous helper under the running Vite: the card hover read 'Last reading at or above 80C: 88C' with no time"
+  ],
+  "interactions": [
+    "Opened /alerts/overview and read the held alert card's summary hover text",
+    "Opened /alerts/history and read the active row's hover text; opened the row's Resource incident panel (mock serves synthetic incident history, so no open occurrence matched the live alert)",
+    "Expanded West Production B on /proxmox and read the drawer attention row's hover text",
+    "Captured websocket frames and compared the held alert's fields with /api/alerts/active"
+  ]
+}

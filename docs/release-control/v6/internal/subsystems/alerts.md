@@ -15,6 +15,19 @@
 
 ## Purpose
 
+### A held alert's live status dates its last breach — issue #2068
+
+`MetricStatus.LastBreachAt` is when the alert's `Value` was observed: the
+breaching sample's time, or the held alert's `LastSeen` through the hysteresis
+hold and recovery run, so every status the canonical evaluator publishes for
+an open alert carries the alert's `LastSeen`. The monitor's active-alert
+projection (`Monitor.activeAlertsSnapshot`, served by the websocket state and
+`/api/state`) omits `LastSeen`, which powered-off guests and other lifecycle
+alerts advance on every evaluation, so publishing it would change every such
+alert on every poll. The breach time rides in the live status instead, which
+exists only for open threshold alerts and is already rebuilt whenever the
+evaluator compares their reading.
+
 ### Open threshold alerts carry a volatile live status — issue #2068
 
 `evaluateCanonicalMetricAlert` builds `MetricStatus` from the evaluator's own

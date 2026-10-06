@@ -20,6 +20,10 @@ type metricStatusInput struct {
 	window               metricWindowObservation
 	incident             reducer.Incident
 	observedAt           time.Time
+	// lastBreachAt is when the alert's last reading at or above the trigger
+	// was observed: observedAt while breaching, the held alert's LastSeen
+	// otherwise.
+	lastBreachAt time.Time
 }
 
 // metricStatusUnit is the unit of an evaluated metric value. CPU and memory
@@ -52,6 +56,7 @@ func buildMetricAlertStatus(input metricStatusInput) *models.MetricAlertStatus {
 		Trigger:              input.trigger,
 		Recovery:             recovery,
 		RecoveryDelaySeconds: input.recoveryDelaySeconds,
+		LastBreachAt:         input.lastBreachAt,
 	}
 	if input.window.WindowSeconds > 0 {
 		raw := input.window.CurrentValue

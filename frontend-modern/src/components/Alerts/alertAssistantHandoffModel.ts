@@ -2,7 +2,10 @@ import type { Alert } from '@/types/api';
 import type { AIChatContext } from '@/stores/aiChat';
 import { DEFAULT_LOCALE, t, type SupportedLocale } from '@/i18n';
 import { getCanonicalAlertId } from '@/features/alerts/identity';
-import { getMetricAlertPresentation } from '@/features/alerts/metricAlertPresentation';
+import {
+  getMetricAlertLastBreachMs,
+  getMetricAlertPresentation,
+} from '@/features/alerts/metricAlertPresentation';
 import { formatAlertValue } from '@/utils/alertFormatters';
 import { isMetricAlertType } from '@/utils/alerts';
 import { isPulseSystemAlert } from '@/utils/alertScope';
@@ -192,9 +195,14 @@ function metricStatusContextLines(alert: Alert): Array<string | undefined> {
       ? undefined
       : formatContextLine(
           'Last Reading At Or Above Threshold',
-          formatAlertValue(alert.value, alert.type),
+          `${formatAlertValue(alert.value, alert.type)}${formatBreachTime(getMetricAlertLastBreachMs(alert))}`,
         ),
   ];
+}
+
+// An absolute time, so the context stays true however long the conversation runs.
+function formatBreachTime(ms: number | undefined): string {
+  return ms === undefined ? '' : ` at ${new Date(ms).toISOString()}`;
 }
 
 function formatContextLine(label: string, value?: string | number | null): string | undefined {

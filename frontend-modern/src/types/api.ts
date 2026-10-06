@@ -1422,6 +1422,11 @@ export interface MetricAlertStatus {
   recoveryDelaySeconds?: number;
   recoveryStartedAt?: string;
   recoveryElapsedSeconds?: number;
+  /**
+   * When the alert's `value`, its last reading at or above the trigger, was
+   * observed. Websocket alerts omit `lastSeen`, so this dates the breach.
+   */
+  lastBreachAt?: string;
 }
 
 // One entry from the append-only alert event log

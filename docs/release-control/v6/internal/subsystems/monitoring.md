@@ -17,6 +17,14 @@
 
 ## Purpose
 
+### Active-alert state projection dates the last breach through the status — issue #2068
+
+`activeAlertsSnapshot` still leaves `lastSeen` off `models.Alert`, because
+powered-off guests and other lifecycle alerts advance it on every evaluation.
+The copied `metricStatus` carries `lastBreachAt` instead, so websocket and
+`/api/state` clients can say when a held threshold alert last met its
+trigger.
+
 ### Active-alert state projection carries the live metric status — issue #2068
 
 `activeAlertsSnapshot` copies the alert manager's volatile `MetricStatus`

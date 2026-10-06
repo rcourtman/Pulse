@@ -22,6 +22,18 @@
 
 All drawer History fallbacks must distinguish current observations from retained, unavailable or freshness-unknown guest readings, using original memory evidence and filesystem read reasons.
 
+### Held alerts date their last breach from the live status — issue #2068
+
+`getMetricAlertLastBreachMs` dates an open threshold alert's last breach from
+`metricStatus.lastBreachAt`, falling back to `alert.lastSeen`, because active
+alerts from the websocket carry no `lastSeen`; it checks each time before
+choosing it and rejects Go's zero time. `getMetricAlertPresentation` uses it
+for `lastBreach`, the hover line of the node, guest and Mail Gateway drawer
+attention rows, so that line now says when the last breach happened as well as
+its value. The Assistant handoff's "Last Reading At Or Above Threshold" line adds
+the same time as an ISO timestamp, which stays correct however long the
+conversation runs.
+
 ### Drawer attention detail line and temperature alert floor — issue #2068
 
 `DrawerAttentionSection` items accept an optional `detail` (a muted second

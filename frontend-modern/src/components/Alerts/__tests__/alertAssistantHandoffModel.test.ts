@@ -174,6 +174,7 @@ describe('alertAssistantHandoffModel', () => {
           recovery: 75,
           recoveryDelaySeconds: 300,
           recoveryElapsedSeconds: 120,
+          lastBreachAt: '2026-05-07T09:41:12.000Z',
         },
       }),
       now: new Date('2026-05-07T10:05:00.000Z'),
@@ -186,6 +187,9 @@ describe('alertAssistantHandoffModel', () => {
     expect(handoff.context.handoffContext).toContain('Alert Phase: recovering');
     expect(handoff.context.handoffContext).toContain('Clears At: 75.0°C or lower for 300s');
     expect(handoff.context.handoffContext).toContain('Recovery Progress: 120s of 300s');
-    expect(handoff.context.handoffContext).toContain('Last Reading At Or Above Threshold: 80.0°C');
+    // Websocket alerts carry no lastSeen; the live status dates the breach.
+    expect(handoff.context.handoffContext).toContain(
+      'Last Reading At Or Above Threshold: 80.0°C at 2026-05-07T09:41:12.000Z',
+    );
   });
 });

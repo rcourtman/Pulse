@@ -273,6 +273,12 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 				alertMetadata[k] = v
 			}
 		}
+		// A breaching sample becomes the alert's LastSeen below; a held alert
+		// keeps LastSeen at its last breach.
+		lastBreachAt := observedAt
+		if !triggered && exists && existingAlert != nil {
+			lastBreachAt = existingAlert.LastSeen
+		}
 		metricStatus := buildMetricAlertStatus(metricStatusInput{
 			value:                value,
 			triggered:            triggered,
@@ -283,6 +289,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			window:               windowed,
 			incident:             incident,
 			observedAt:           observedAt,
+			lastBreachAt:         lastBreachAt,
 		})
 
 		if !exists {

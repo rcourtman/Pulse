@@ -16,6 +16,7 @@ import {
 import {
   METRIC_ALERT_STATUS_STALE_MS,
   getAlertAttentionCopy,
+  getMetricAlertLastBreachMs,
   getMetricAlertPresentation,
 } from '@/features/alerts/metricAlertPresentation';
 
@@ -337,6 +338,36 @@ describe('getMetricAlertPresentation', () => {
     expect(presentation?.summary).toMatch(/^Last reading: Temperature 76°C, /);
     expect(presentation?.summary).not.toContain('now');
     expect(presentation?.phaseLabel).toBe('No recent reading');
+  });
+
+  it('dates the last breach from the live status when the alert has no lastSeen', () => {
+    // Websocket active alerts omit lastSeen; the hover read "Last reading at
+    // or above 80°C: 80°C" with no time.
+    const websocketAlert: Alert = {
+      ...minipcAlert({
+        phase: 'latched',
+        value: 76,
+        lastBreachAt: new Date(NOW - 3 * 60_000).toISOString(),
+      }),
+      lastSeen: undefined,
+    };
+    expect(getMetricAlertPresentation(websocketAlert, NOW)?.lastBreach).toBe(
+      'Last reading at or above 80°C: 80°C, 3 mins ago',
+    );
+  });
+
+  it('checks each breach time before choosing it', () => {
+    const lastSeen = Date.parse('2026-10-06T10:48:52Z');
+    const breachAt = (lastBreachAt?: string) =>
+      getMetricAlertLastBreachMs(minipcAlert({ phase: 'latched', lastBreachAt }));
+    expect(breachAt('2026-10-06T10:40:00Z')).toBe(Date.parse('2026-10-06T10:40:00Z'));
+    // A missing, unparseable or Go zero time falls back to lastSeen.
+    expect(breachAt(undefined)).toBe(lastSeen);
+    expect(breachAt('not a time')).toBe(lastSeen);
+    expect(breachAt('0001-01-01T00:00:00Z')).toBe(lastSeen);
+    expect(
+      getMetricAlertLastBreachMs({ ...minipcAlert({ phase: 'latched' }), lastSeen: undefined }),
+    ).toBeUndefined();
   });
 
   it('shows the averaged value the rule follows beside the latest sample', () => {

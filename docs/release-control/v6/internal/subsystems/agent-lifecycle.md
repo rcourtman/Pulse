@@ -15,6 +15,13 @@
 
 ## Purpose
 
+### The metric status on alert projections dates the last breach — issue #2068
+
+`models.MetricAlertStatus` gains `lastBreachAt`, omitted when zero: when the
+alert's last reading at or above the trigger was observed. Like the rest of
+the status it is owned by the alerts subsystem; agent report admission, host
+continuity and re-enrollment never read or write it.
+
 ### Alert projections carry a volatile metric status — issue #2068
 
 `models.Alert` gains an optional `metricStatus` (`models.MetricAlertStatus`)

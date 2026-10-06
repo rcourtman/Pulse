@@ -33,6 +33,14 @@ while recovering, `recoveryStartedAt` and `recoveryElapsedSeconds`. Legacy
 trigger. The field is absent for non-threshold alerts and until the first
 evaluation after a restart, and clients then fall back to `message`.
 
+### The live alert status dates the last breach — issue #2068
+
+`Alert.metricStatus.lastBreachAt` is optional and additive: when the legacy
+`value`, the last reading that met the trigger, was observed. The monitor's
+active-alert projection, which the websocket state and `/api/state` serve,
+carries no `lastSeen`, so clients date the last breach from this field and fall
+back to `lastSeen` (`/api/alerts/active`) when it is absent.
+
 ### Organisation deletion retains data after incomplete monitoring shutdown
 
 Authenticated organisation-owner deletion waits for tenant-loop exit and sealed

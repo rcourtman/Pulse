@@ -70,6 +70,21 @@ const isUsableStatus = (status: MetricAlertStatus | undefined): status is Metric
   (status.phase === 'breaching' || status.phase === 'latched' || status.phase === 'recovering');
 
 /**
+ * When the alert's last reading at or above the trigger was observed.
+ * Websocket alerts omit lastSeen, so the live status dates the breach; each
+ * candidate is checked before it is chosen, and Go's zero time is rejected.
+ */
+export const getMetricAlertLastBreachMs = (
+  alert: Pick<Alert, 'lastSeen' | 'metricStatus'>,
+): number | undefined => {
+  for (const candidate of [alert.metricStatus?.lastBreachAt, alert.lastSeen]) {
+    const ms = candidate ? Date.parse(candidate) : NaN;
+    if (Number.isFinite(ms) && ms > 0) return ms;
+  }
+  return undefined;
+};
+
+/**
  * Describes an open threshold alert from the backend's live evaluation, so
  * every surface says what the reading is now and why the alert is still open
  * instead of repeating the last breach. Returns null when the alert carries
@@ -127,7 +142,8 @@ export function getMetricAlertPresentation(
 
   let lastBreach: string | undefined;
   if (status.phase !== 'breaching' && Number.isFinite(alert.value)) {
-    const when = alert.lastSeen ? `, ${formatRelativeTime(alert.lastSeen)}` : '';
+    const breachedAt = getMetricAlertLastBreachMs(alert);
+    const when = breachedAt !== undefined ? `, ${formatRelativeTime(breachedAt)}` : '';
     lastBreach = `Last reading at or above ${trigger}: ${formatMetricValue(alert.value, status.unit)}${when}`;
   }
 
