@@ -69,6 +69,7 @@ func equivalentEndpointTestClient(t *testing.T, endpoint string, server *httptes
 		return (&net.Dialer{}).DialContext(ctx, network, server.Listener.Addr().String())
 	}
 	c.httpClient.Transport = transport
+	c.httpClient.Timeout = 5 * time.Second
 	t.Cleanup(c.httpClient.CloseIdleConnections)
 	return c
 }
@@ -81,6 +82,7 @@ func TestGuestAgentEquivalentEndpointsFenceInflight(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			entered, finish := make(chan struct{}), make(chan struct{})
+			finished := false
 			var commands, configs atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if !strings.HasPrefix(r.URL.Path, "/tenant/api2/json/") {
@@ -110,7 +112,7 @@ func TestGuestAgentEquivalentEndpointsFenceInflight(t *testing.T) {
 			go func() { _, err := first.GetVMFSInfo(context.Background(), "node", 105); done <- err }()
 			<-entered
 			defer func() {
-				if finish != nil {
+				if !finished {
 					close(finish)
 					<-done
 				}
@@ -127,7 +129,7 @@ func TestGuestAgentEquivalentEndpointsFenceInflight(t *testing.T) {
 				t.Errorf("independent VM blocked: %v", err)
 			}
 			close(finish)
-			finish = nil
+			finished = true
 			if err := <-done; err != nil {
 				t.Fatal(err)
 			}
@@ -178,8 +180,8 @@ func TestGuestAgentEquivalentEndpointsRetainUncertainty(t *testing.T) {
 	}
 	// Other endpoint identity remains independent of this VM's uncertainty.
 	other := equivalentEndpointTestClient(t, "http://different.uncertain.invalid:80", server)
-	if _, err := other.GetVMAgentInfo(context.Background(), "node", 106); err != nil {
-		t.Fatal(err)
+	if _, err := other.GetVMAgentInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-response-incomplete" {
+		t.Fatalf("independent endpoint could not send its own VM command: %v", err)
 	}
 }
 
