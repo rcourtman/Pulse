@@ -251,20 +251,23 @@ jobs:
         working-directory: frontend-modern
         run: npm run lint:cpd
 
-      - name: Frontend unit tests
-        working-directory: frontend-modern
-        run: npm run test
-
       - name: Type-check frontend
         working-directory: frontend-modern
         run: npm run type-check
 
+      # Reject an unshippable bundle before the whole-tree unit suite. On
+      # PR2624 that suite took 8m45s before the size gate rejected the bundle.
+      # Passing builds still require the same tests, audit and size budgets.
       - name: Build frontend bundle (with embed copy)
         run: make frontend
 
       - name: Check frontend bundle size budget
         working-directory: frontend-modern
         run: npm run check:bundlesize
+
+      - name: Frontend unit tests
+        working-directory: frontend-modern
+        run: npm run test
 
       # An audit service failure or real advisory stays gating, but it must not
       # suppress formatting, tests, type-checking, or production-build proof.
