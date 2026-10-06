@@ -1,13 +1,23 @@
 package monitoring
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 type stubPVEClientLXCStatus struct {
@@ -565,5 +575,132 @@ func TestIssue2148LXCRejectsAgentMemoryWithMismatchedTotal(t *testing.T) {
 	}
 	if container.Memory.Used != int64(resource.Mem) {
 		t.Fatalf("memory used = %d, want provider value %d", container.Memory.Used, resource.Mem)
+	}
+}
+
+func TestGuestFilesystemStatusDoesNotDiagnoseFromErrorText(t *testing.T) {
+	cases := []struct {
+		err  error
+		want string
+	}{
+		{nil, ""},
+		{errors.New("API error 500: internal server error"), "agent-error"},
+		{errors.New("API error 500: unsupported command: guest-get-fsinfo"), "agent-error"},
+		{errors.New("API error 500: QEMU guest agent is not running"), "agent-error"},
+		{errors.New("request for VM 500 failed"), "agent-error"},
+		{errors.New("API error 400: upstream API error 403: permission denied"), "agent-error"},
+		{errors.New("QEMU guest agent is not running"), "agent-not-running"},
+		{context.DeadlineExceeded, "agent-timeout"},
+		{fmt.Errorf("wrapped: %w", context.DeadlineExceeded), "agent-timeout"},
+		{errors.New("guest agent request timeout"), "agent-timeout"},
+		{errors.New("guest agent request: context deadline exceeded"), "agent-timeout"},
+	}
+	for _, tc := range cases {
+		if got := classifyGuestAgentDiskStatusError(tc.err); got != tc.want {
+			t.Errorf("%v: reason = %q, want %q", tc.err, got, tc.want)
+		}
+	}
+}
+
+// These synthetic responses exercise the production command guard, filesystem
+// collector, unavailable sentinel and emitted operator guidance together. They
+// perform no native QGA, backup, guest activation or recovery action.
+func TestGuestFilesystemFailureGuidanceUsesObservedEvidence(t *testing.T) {
+	cases := []struct {
+		name, body, reason, message string
+		status                      int
+		logged                      bool
+	}{
+		{"stopped", `{"message":"QEMU guest agent is not running"}`, "agent-not-running", "Proxmox reports the guest agent is not running", 500, true},
+		{"unsupported", "unsupported command: guest-get-fsinfo", "agent-error", "Guest filesystem query failed", 500, true},
+		{"forbidden", "provider-private-detail", "permission-denied", "Guest filesystem query was not authorised", 403, true},
+		{"unauthorised-quotes-stopped", "API error 500: QEMU guest agent is not running", "permission-denied", "Guest filesystem query was not authorised", 401, true},
+		{"bad-request-quotes-permission", "API error 403: permission denied", "agent-error", "Guest filesystem query failed", 400, true},
+		{"empty", `{"data":{"result":[]}}`, "no-filesystems", "Guest agent returned no filesystem readings", 200, true},
+		{"malformed", `{"data":`, "agent-error", "Guest filesystem query failed", 200, true},
+		{"server-uncertain", "provider-private-detail", "agent-completion-unverified", "", 500, false},
+		{"gateway-quotes-stopped", "QEMU guest agent is not running", "agent-completion-unverified", "", 502, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/status/current") {
+					fmt.Fprint(w, `{"data":{"status":"running","cpu":0.25,"diskread":0,"diskwrite":null,"netin":42}}`)
+					return
+				}
+				if strings.HasSuffix(r.URL.Path, "/config") {
+					fmt.Fprint(w, `{"data":{}}`)
+					return
+				}
+				calls.Add(1)
+				w.WriteHeader(tc.status)
+				fmt.Fprint(w, tc.body)
+			}))
+			defer server.Close()
+			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var output bytes.Buffer
+			previousLogger := log.Logger
+			log.Logger = zerolog.New(&output)
+			defer func() { log.Logger = previousLogger }()
+			m := &Monitor{guestAgentFSInfoTimeout: time.Second, guestAgentRetries: 2}
+			res := proxmox.ClusterResource{Node: "node", VMID: 105, Name: "fixture-vm", Type: "qemu", Status: "running", MaxDisk: 1000}
+			total, used, free, usage, disks, fromAgent, reason := m.updateVMDisksFromGuestAgentFSInfo(context.Background(), "fixture-instance", res, client, 1000, 0, 0)
+			if reason != tc.reason || fromAgent || usage != -1 || total != 1000 || used != 0 || free != 1000 || disks != nil {
+				t.Errorf("unavailable reading = %d/%d/%d/%v/%v/%t/%q", total, used, free, usage, disks, fromAgent, reason)
+			}
+			beforeStatus := time.Now()
+			status, err := client.GetVMStatus(context.Background(), res.Node, res.VMID)
+			afterStatus := time.Now()
+			if err != nil {
+				t.Fatal(err)
+			}
+			presence := status.IOCounters.Effective()
+			if status.CPU != 0.25 || status.DiskRead != 0 || status.NetIn != 42 || !presence.DiskRead || !presence.NetworkIn || presence.DiskWrite || presence.NetworkOut || status.ObservedAt.Before(beforeStatus) || status.ObservedAt.After(afterStatus) {
+				t.Errorf("filesystem failure changed independent live counters/presence/receipt: %+v", status)
+			}
+			if calls.Load() != 1 {
+				t.Errorf("wire guest commands = %d, want one even with retries configured", calls.Load())
+			}
+			guidance := 0
+			for _, line := range bytes.Split(bytes.TrimSpace(output.Bytes()), []byte("\n")) {
+				if len(line) == 0 {
+					continue
+				}
+				var event map[string]interface{}
+				if json.Unmarshal(line, &event) != nil {
+					t.Fatalf("invalid structured log: %s", line)
+				}
+				if event["vmid"] != float64(res.VMID) {
+					continue // Request-layer status logs are separate, not guidance.
+				}
+				guidance++
+				message, _ := event["message"].(string)
+				if !tc.logged || event["level"] != "info" || event["instance"] != "fixture-instance" || event["vm"] != "fixture-vm" || event["reason"] != tc.reason || !strings.HasPrefix(message, tc.message) {
+					t.Errorf("observed-evidence guidance lost: %v", event)
+				}
+				if !strings.Contains(message, "guest-agent and backup settings") {
+					t.Errorf("backup-settings precaution missing: %s", message)
+				}
+				if tc.reason == "permission-denied" && (!strings.Contains(message, "this VM") || !strings.Contains(message, "Do not broaden shared roles")) {
+					t.Errorf("credential advice is not scoped: %s", message)
+				}
+				for _, unsafe := range []string{"Install and start", "restart", "systemctl", "ps aux", "Re-run", "PulseMonitor", "VM.Monitor", "Sys.Audit", "provider-private-detail"} {
+					if strings.Contains(message, unsafe) {
+						t.Errorf("unsafe/unobserved advice %q: %s", unsafe, message)
+					}
+				}
+			}
+			wantGuidance := 0
+			if tc.logged {
+				wantGuidance = 1
+			}
+			if guidance != wantGuidance {
+				t.Errorf("guidance records = %d, want %d", guidance, wantGuidance)
+			}
+		})
 	}
 }

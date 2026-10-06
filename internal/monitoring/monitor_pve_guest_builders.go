@@ -593,70 +593,38 @@ func (m *Monitor) fetchVMFSInfo(ctx context.Context, instanceName string, res pr
 		if reason := proxmox.GuestAgentDeferredReason(err); reason != "" {
 			return nil, reason, false
 		}
-		// Log more helpful error messages based on the error type
-		errMsg := err.Error()
-		if strings.Contains(errMsg, "500") || strings.Contains(errMsg, "QEMU guest agent is not running") {
-			log.Info().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Int("vmid", res.VMID).
-				Msg("Guest agent enabled in VM config but not running inside guest OS. Install and start qemu-guest-agent in the VM")
-			log.Info().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Msg("To verify: ssh into VM and run 'systemctl status qemu-guest-agent' or 'ps aux | grep qemu-ga'")
-		} else if strings.Contains(errMsg, "timeout") {
-			log.Info().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Int("vmid", res.VMID).
-				Msg("Guest agent timeout - agent may be installed but not responding")
-		} else if strings.Contains(errMsg, "403") || strings.Contains(errMsg, "401") || strings.Contains(errMsg, "authentication error") {
-			// Permission error - user/token lacks required permissions
-			log.Info().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Int("vmid", res.VMID).
-				Msg("VM disk monitoring permission denied. Check permissions:")
-			log.Info().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Msg("• Proxmox 9: Ensure token/user has VM.GuestAgent.Audit privilege (Pulse setup adds this via PulseMonitor role)")
-			log.Info().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Msg("• Proxmox 8: Ensure token/user has VM.Monitor privilege (Pulse setup adds this via PulseMonitor role)")
-			log.Info().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Msg("• All versions: Sys.Audit is recommended for Ceph metrics and applied when available")
-			log.Info().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Msg("• Re-run Pulse setup script if node was added before v4.7")
-			log.Info().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Msg("• Verify guest agent is installed and running inside the VM")
-		} else {
-			log.Debug().
-				Err(err).
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Int("vmid", res.VMID).
-				Msg("Failed to get filesystem info from guest agent")
-		}
+		reason := classifyGuestAgentDiskStatusError(err)
+		logVMFilesystemUnavailable(instanceName, res, reason)
 		return nil, classifyGuestAgentDiskStatusError(err), false
 	}
 	if len(fsInfo) == 0 {
-		log.Info().
-			Str("instance", instanceName).
-			Str("vm", res.Name).
-			Int("vmid", res.VMID).
-			Msg("Guest agent returned no filesystem info - agent may need restart or VM may have no mounted filesystems")
+		logVMFilesystemUnavailable(instanceName, res, "no-filesystems")
 		return nil, "no-filesystems", false
 	}
 	return fsInfo, "", true
+}
+
+// Missing optional readings do not establish a need to activate/restart QGA,
+// change backup policy, or reconfigure a shared Proxmox role. Keep this guidance
+// independent of provider error text and the guest's operating system.
+func logVMFilesystemUnavailable(instanceName string, res proxmox.ClusterResource, reason string) {
+	message := "Guest filesystem query failed; check disk usage inside the guest. Keep existing guest-agent and backup settings."
+	switch reason {
+	case "agent-not-running":
+		message = "Proxmox reports the guest agent is not running; check disk usage inside the guest. Keep existing guest-agent and backup settings."
+	case "permission-denied":
+		message = "Guest filesystem query was not authorised; check the existing credential's access to this VM. Do not broaden shared roles or change guest-agent and backup settings to diagnose missing readings."
+	case "agent-timeout":
+		message = "Guest filesystem query did not complete; check disk usage inside the guest. Keep existing guest-agent and backup settings."
+	case "no-filesystems":
+		message = "Guest agent returned no filesystem readings; check disk usage inside the guest. Keep existing guest-agent and backup settings."
+	}
+	log.Info().
+		Str("instance", instanceName).
+		Str("vm", res.Name).
+		Int("vmid", res.VMID).
+		Str("reason", reason).
+		Msg(message)
 }
 
 func (m *Monitor) summarizeVMFSInfo(instanceName string, res proxmox.ClusterResource, fsInfo []proxmox.VMFileSystem) vmFSInfoSummary {

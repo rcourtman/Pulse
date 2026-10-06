@@ -1,6 +1,8 @@
 package monitoring
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -21,25 +23,17 @@ func classifyGuestAgentDiskStatusError(err error) string {
 		return ""
 	}
 
-	if reason := proxmox.GuestAgentDeferredReason(err); reason != "" {
+	if reason := proxmox.GuestAgentErrorReason(err); reason != "" {
 		return reason
 	}
 
-	errStr := err.Error()
-	errStrLower := strings.ToLower(errStr)
-
+	// Non-Proxmox client implementations may return untyped local errors.
+	// Never infer HTTP status or a stopped agent from numbers/body substrings.
 	switch {
-	case strings.Contains(errStr, "QEMU guest agent is not running"):
+	case err.Error() == "QEMU guest agent is not running":
 		return "agent-not-running"
-	case strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded"):
+	case errors.Is(err, context.DeadlineExceeded) || strings.Contains(strings.ToLower(err.Error()), "timeout") || strings.Contains(strings.ToLower(err.Error()), "deadline exceeded"):
 		return "agent-timeout"
-	case strings.Contains(errStr, "500") && (strings.Contains(errStr, "not running") || strings.Contains(errStr, "not available")):
-		return "agent-not-running"
-	case (strings.Contains(errStr, "403") || strings.Contains(errStr, "401")) &&
-		(strings.Contains(errStrLower, "permission") || strings.Contains(errStrLower, "forbidden") || strings.Contains(errStrLower, "not allowed")):
-		return "permission-denied"
-	case strings.Contains(errStr, "500"):
-		return "agent-not-running"
 	default:
 		return "agent-error"
 	}

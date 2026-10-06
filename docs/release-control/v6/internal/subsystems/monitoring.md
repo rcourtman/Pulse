@@ -231,6 +231,24 @@ required; all responses in this fixture are synthetic.
 
 ### Guest-agent coordination around backups — issue #2439
 
+Filesystem-query diagnostics preserve this safety boundary. Missing, empty,
+unsupported or refused readings do not prescribe installing, activating or
+restarting QGA, changing backup settings, re-running setup or broadening a
+shared Proxmox role. Operator logs identify the existing guest and fixed reason,
+lead to guest-local disk checks, and keep existing guest-agent/backup settings.
+An actual HTTP 401/403 leads only to checking the existing credential's access
+to that VM. A stopped-agent reason requires exact command-bound rejection
+evidence, not an HTTP 500 or a status/diagnosis quoted in provider text.
+Unsupported commands remain errors without claiming that QGA is stopped.
+Untyped local timeout/deadline errors keep their conservative timeout reason;
+this diagnostic correction does not turn local uncertainty into recovery.
+Deferrals retain their fixed reasons and do not gain new diagnostic commands.
+`TestGuestFilesystemFailureGuidanceUsesObservedEvidence` crosses the real
+client/collector/log boundary and preserves unavailable disk sentinels and
+single-attempt uncertainty. The error-reason controls preserve original error
+text/causes and terminal-rejection admission. These synthetic diagnostics are
+not independent thaw, every-filesystem writes or native backup recovery.
+
 All PVE QEMU guest-agent reads, including disk diagnostics and legacy meminfo
 callers, share fail-fast per-guest admission within this Pulse process. Clients
 for the same endpoint and configured cluster aliases coordinate across methods;

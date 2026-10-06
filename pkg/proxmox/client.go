@@ -639,9 +639,11 @@ func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path s
 			apiErr = fmt.Errorf("authentication error: %w", apiErr)
 		}
 
+		guestFailureReason := guestAgentTerminalFailureReason(path, body)
 		return nil, &apiResponseError{
 			statusCode:           resp.StatusCode,
-			guestCommandRejected: resp.StatusCode == http.StatusInternalServerError && guestAgentTerminalFailure(path, body),
+			guestCommandRejected: resp.StatusCode == http.StatusInternalServerError && guestFailureReason != "",
+			guestFailureReason:   guestFailureReason,
 			cause:                apiErr,
 		}
 	}
