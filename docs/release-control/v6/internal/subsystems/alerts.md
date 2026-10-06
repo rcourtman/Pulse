@@ -15,6 +15,31 @@
 
 ## Purpose
 
+### Connection confirmations cannot span unknown or disabled observations
+
+The existing PVE/PBS/PMG/vSphere/TrueNAS connection-degraded detector requires
+three consecutive degraded observations to activate and three consecutive
+healthy observations to recover. Pending or unknown connection state is neither
+degradation nor recovery: it drops pending activation and intent grace, restarts
+recovery confirmation, and retains an active occurrence's identity, severity,
+acknowledgement, trusted metadata and observation time without fire/resolve
+callbacks. Paused connections, disabled connections and owning-resource offline
+policy disablement clear active alerts immediately and reset pending activation
+even when no active alert exists. Healthy evidence also ends pending intent grace.
+
+Resets address exactly the connection's canonical discrete-state key, not another
+connection, condition or metric. Core and optional shadow reducer observe the same
+reset. Intent bookkeeping and its persisted checkpoint lose the interrupted run;
+re-enabled detection must establish fresh confirmations and any explicit grace.
+No new alert family, threshold, grace policy, route or external probe is added.
+
+`connection_confirmation_gap_test.go` covers all five platforms, six interruption
+paths, exact-connection isolation, fresh activation/grace, acknowledged recovery
+and exactly-once callbacks with shadow parity. `TestInterruptDiscreteRun` in
+`reducer/discrete_test.go` pins exact-key isolation, retained firing state,
+acknowledgement, no fabricated resolution and idempotent interruption. These
+synthetic source checks do not establish native outage or destination delivery.
+
 ### Retained guest observations are not alert evidence
 
 Guest memory marked `last-known`, `unavailable` or an unknown observation state
