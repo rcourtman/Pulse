@@ -105,6 +105,12 @@ type Manager struct {
 	// linked to and the usage metrics the agent evaluates for it. The node
 	// releases only those metrics and keeps evaluating the rest itself.
 	hostAgentNodeLinks map[string]hostAgentNodeLink // Host agent ID -> node link
+	// hostAgentReportSeq numbers each agent's CheckHost runs, and
+	// hostAgentLinkApplied is the newest run whose link update was applied (or
+	// the barrier an unregister set), so an older, slower run cannot overwrite
+	// a newer outcome.
+	hostAgentReportSeq   map[string]uint64
+	hostAgentLinkApplied map[string]uint64
 	// Node display name caches. Proxmox nodes can share the same raw node name
 	// across multiple configured instances, so keep instance-scoped entries in
 	// addition to the legacy raw-name cache used by instance-less resources.
@@ -246,6 +252,8 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		flappingActive:                  make(map[string]bool),
 		cleanupStop:                     make(chan struct{}),
 		hostAgentNodeLinks:              make(map[string]hostAgentNodeLink),
+		hostAgentReportSeq:              make(map[string]uint64),
+		hostAgentLinkApplied:            make(map[string]uint64),
 		nodeDisplayNames:                make(map[string]string),
 		instanceNodeDisplayNames:        make(map[string]string),
 		now:                             time.Now,

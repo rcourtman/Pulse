@@ -1840,16 +1840,35 @@ automatic or operator-set identity decision), the agent resource owns each
 CPU, memory or disk usage metric it actually evaluates, and `CheckNode` releases
 its own copy of those metrics through the disabled-threshold path every cycle:
 the pending run is dropped and any node alert still open from before the link is
-resolved, never left frozen until the agent goes offline. `CheckHost` registers
-the link only after evaluation, recording which metrics the agent is configured
-to evaluate (a live CPU or memory threshold; for disk, a live threshold on the
-summary filesystem `models.SummaryDisk` picks, which is also what the linked
-node's disk metric reports), and removes it while agent alerts are disabled.
-Ownership follows configuration, not one report's data, so a missing agent
-reading keeps the agent's alert open instead of handing the metric back to the
-node for a cycle. With several agents linked to one node, a metric is owned when
-any of them evaluates it. A metric no agent evaluates stays with the node, so
-deduplication never leaves a machine unmonitored.
+resolved, never left frozen until the agent goes offline. `CheckHost` updates
+the link only after evaluation, and the agent owns a metric only while the
+current config lets it evaluate the metric and it has usable evidence: it
+evaluated the metric this report (`checkMetricWithCanonicalSpec` reports a live
+threshold, a finite value and a ready evaluation window), or it still holds an
+alert or a pending or firing run for it. For disk, the evidence must be about
+the summary filesystem `models.SummaryDisk` picks, which is also what the
+linked node's disk metric reports. A missing agent reading therefore keeps an
+open agent alert as the single source instead of opening a node duplicate,
+while an agent with no usable evidence and nothing open hands the metric to the
+node; configuration alone is not coverage. Turning an agent threshold off
+releases its pending run even without a reading. With several agents linked to
+one node, a metric is owned when any of them covers it. Coverage comes only
+from links that agent reports keep current, never from stale evidence such as
+an old alert's metadata, because a stale cover would silence the node; the
+accepted cost is a bounded window in which both sources evaluate: between a
+Pulse restart and each agent's first report, and between an agent's first
+offline observation (which unregisters the link) and the confirmed-offline
+clear of its usage alerts. Agents an operator manually links to the same node
+each keep their own alerts. Link updates, removals
+included, apply in report order (a per-agent report sequence; offline and
+removal set a barrier), so an older report can neither restore nor remove
+ownership after a newer one, and
+`UpdateConfig` revokes at once any ownership the new config no longer supports;
+a report evaluated before that change is checked against the current config when
+applied. Releasing a metric also clears its explicit intent pending state, and
+an explicit host or inherited disk override beats `DiskFillByType`. A metric no
+agent covers stays with the node, so deduplication never leaves a machine
+unmonitored.
 Deduplication keys on that link,
 never on a hostname match, so a same-named node in another instance keeps its
 alerts, an agent reporting an FQDN still dedups its node, and an operator unlink
@@ -1868,22 +1887,30 @@ instance name in `Instance`.
 `TestCheckNodeKeepsTemperatureAlertWhenHostAgentMonitorsNode`,
 `TestCheckNodeReleasesOpenMetricAlertWhenHostAgentRegisters`,
 `TestCheckNodeMissingTemperatureDoesNotResolveOpenAlert`,
-`TestCheckNodeMissingTemperatureInterruptsTimingRuns` and
-`TestConfigSaveKeepsNodeTemperatureAlertOverTrigger` and
+`TestCheckNodeMissingTemperatureInterruptsTimingRuns`,
+`TestConfigSaveKeepsNodeTemperatureAlertOverTrigger`,
 `TestCheckNodeKeepsUsageMetricsTheAgentDoesNotEvaluate`,
-`TestCheckNodeUsageOwnershipFollowsWhatAgentsEvaluate` in
+`TestCheckNodeUsageOwnershipFollowsWhatAgentsEvaluate`,
+`TestCheckNodeKeepsMetricsTheAgentCannotEvaluate`,
+`TestDisabledAgentThresholdReleasesPendingRunWithoutReading`,
+`TestHostAgentNodeLinkFollowsConfigAndReportOrder`,
+`TestCheckNodeTakesBackMetricsWhenAgentUnlinks`,
+`TestHostDiskOverrideBeatsDiskFillByType` and
+`TestReleaseCanonicalMetricAlertClearsIntentPending` in
 `internal/alerts/threshold_resolution_shared_test.go`, and
 `TestHostAgentDeduplicationFollowsNodeLink` in
-`internal/alerts/host_dedup_test.go`, pin these rules.
+`internal/alerts/host_dedup_test.go`, and
+`TestCheckMetricReportsWhetherObservationWasUsable` in
+`internal/alerts/windowed_metric_test.go`, pin these rules.
 The release closes as a handover, not a recovery. `releaseNodeMetricAlerts`
 passes the link's agent (its alert resource ID and `hostDisplayName` name) as
 an `AlertResolution` with reason `moved_to_agent` to
 `releaseCanonicalMetricAlert`, so the close still reaches resolved consumers
 while notifications say the alert moved to that agent. A metric is released
-only while the node's agent link records a linked agent evaluating it. The
-link refreshes on every agent report and not on a configuration save, so for up
-to one report interval after an agent threshold is turned off, a close can
-still be stamped as moved. With several agents linked to one node, the lowest
+only while the node's agent link records a linked agent covering it. A
+configuration save revokes ownership the new config no longer supports at once,
+so after an agent threshold is turned off the node takes the metric back on its
+next check and no later close is stamped as moved. With several agents linked to one node, the lowest
 agent ID names the move even when a sibling agent is the one evaluating that
 metric.
 `TestCheckNodeReleasesOpenMetricAlertWhenHostAgentRegisters` pins the

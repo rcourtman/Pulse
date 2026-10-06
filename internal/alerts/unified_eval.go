@@ -448,11 +448,13 @@ func buildCanonicalMetricSpec(resourceID, title string, resourceType unifiedreso
 	return spec, spec.Validate()
 }
 
-func (m *Manager) checkMetricWithCanonicalSpec(spec alertspecs.ResourceAlertSpec, resourceName, node, instance, resourceType string, value float64, threshold *HysteresisThreshold, opts *metricOptions) {
+// checkMetricWithCanonicalSpec evaluates a metric and reports whether the
+// observation was usable evidence (see evaluateCanonicalMetricAlert).
+func (m *Manager) checkMetricWithCanonicalSpec(spec alertspecs.ResourceAlertSpec, resourceName, node, instance, resourceType string, value float64, threshold *HysteresisThreshold, opts *metricOptions) bool {
 	if spec.MetricThreshold == nil {
-		return
+		return false
 	}
-	m.evaluateCanonicalMetricAlert(spec, resourceName, node, instance, resourceType, value, threshold, opts)
+	return m.evaluateCanonicalMetricAlert(spec, resourceName, node, instance, resourceType, value, threshold, opts)
 }
 
 func unifiedMetricResourceType(typeKey string) (unifiedresources.ResourceType, bool) {

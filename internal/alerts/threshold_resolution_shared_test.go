@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -488,13 +489,14 @@ func TestCheckNodeUsageOwnershipFollowsWhatAgentsEvaluate(t *testing.T) {
 		agentA.ID = "agent-a"
 		agentB := host
 		agentB.ID = "agent-b"
-		agentB.CPUUsage = 95
+		// agent-b evaluates CPU without alerting, so only its link (not an open
+		// alert) can tell the node that CPU is covered.
+		agentB.CPUUsage = 50
 		m.CheckHost(agentA)
 		m.CheckHost(agentB)
 		m.CheckNode(node)
-		agentBAlertID := canonicalMetricStateID(hostResourceID(agentB.ID), "cpu")
-		if got := testActiveAlertIDsOfType(m, "cpu"); len(got) != 1 || got[0] != agentBAlertID {
-			t.Fatalf("expected only agent-b's CPU alert when it covers CPU for the node, got %v", got)
+		if got := testActiveAlertIDsOfType(m, "cpu"); len(got) != 0 {
+			t.Fatalf("expected no CPU alert while agent-b covers CPU for the node, got %v", got)
 		}
 	})
 
@@ -528,6 +530,245 @@ func TestCheckNodeUsageOwnershipFollowsWhatAgentsEvaluate(t *testing.T) {
 			t.Fatalf("expected the agent's root filesystem alert")
 		}
 	})
+}
+
+// An agent owns a usage metric only with usable evidence: it evaluated the
+// metric this report, or it still holds an alert or run for it. Configuration
+// alone is not coverage.
+func TestCheckNodeKeepsMetricsTheAgentCannotEvaluate(t *testing.T) {
+	setup := func(t *testing.T) (*Manager, models.Node, models.Host) {
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.config.TimeThresholds = map[string]int{}
+		m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+		m.config.NodeDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+		m.config.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+		m.config.AgentDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+		m.mu.Unlock()
+		node, host := testNodeWithHostAgent()
+		node.CPU = 0.95
+		node.Memory = models.Memory{Total: 100, Used: 95, Free: 5, Usage: 95}
+		return m, node, host
+	}
+
+	t.Run("memory_unknown_from_the_start", func(t *testing.T) {
+		m, node, host := setup(t)
+		host.Memory = models.Memory{Total: 100, UsageUnavailable: true}
+		m.CheckHost(host)
+		m.CheckNode(node)
+		if !testHasActiveAlert(t, m, canonicalMetricStateID(node.ID, "memory")) {
+			t.Fatalf("expected the node to alert on memory while the agent has no memory reading")
+		}
+	})
+
+	t.Run("non_finite_cpu", func(t *testing.T) {
+		m, node, host := setup(t)
+		host.CPUUsage = math.NaN()
+		m.CheckHost(host)
+		m.CheckNode(node)
+		if !testHasActiveAlert(t, m, canonicalMetricStateID(node.ID, "cpu")) {
+			t.Fatalf("expected the node to alert on CPU while the agent reports no usable CPU value")
+		}
+	})
+}
+
+// Turning an agent threshold off releases its pending run even when the agent
+// reports no reading for that metric, so the old run cannot keep ownership and
+// leave the node silent.
+func TestDisabledAgentThresholdReleasesPendingRunWithoutReading(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.MetricTimeThresholds = map[string]map[string]int{"agent": {"memory": 300}}
+	m.config.NodeDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+	m.config.AgentDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+	m.mu.Unlock()
+	node, host := testNodeWithHostAgent()
+	// 90% stays below the 95% critical level, which would bypass the delay.
+	node.Memory = models.Memory{Total: 100, Used: 90, Free: 10, Usage: 90}
+	host.Memory = node.Memory
+	agentResourceID := hostResourceID(host.ID)
+	agentMemorySpec := canonicalMetricSpecID(agentResourceID, "memory")
+
+	m.CheckHost(host)
+	m.mu.RLock()
+	pending := testCoreIsPending(m, agentResourceID, agentMemorySpec)
+	m.mu.RUnlock()
+	if !pending {
+		t.Fatalf("expected a pending agent memory run")
+	}
+
+	m.mu.Lock()
+	m.config.AgentDefaults.Memory = &HysteresisThreshold{Trigger: 0, Clear: 0}
+	m.mu.Unlock()
+	host.Memory = models.Memory{Total: 100, UsageUnavailable: true}
+	m.CheckHost(host)
+	m.CheckNode(node)
+
+	m.mu.RLock()
+	agentIncident := testCoreHasIncident(m, agentResourceID, agentMemorySpec)
+	nodeIncident := testCoreHasIncident(m, node.ID, canonicalMetricSpecID(node.ID, "memory"))
+	m.mu.RUnlock()
+	if agentIncident {
+		t.Fatalf("expected the disabled agent memory threshold to release its pending run")
+	}
+	if !nodeIncident {
+		t.Fatalf("expected the node to evaluate memory once the agent no longer covers it")
+	}
+}
+
+// Ownership follows the config at once and link updates apply in report order:
+// a config change revokes what it no longer supports without waiting for the
+// agent's next report, an older report can neither restore revoked ownership
+// nor remove a newer report's link, and a report started before the agent went
+// offline is stale.
+func TestHostAgentNodeLinkFollowsConfigAndReportOrder(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.config.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.mu.Unlock()
+	node, host := testNodeWithHostAgent()
+	node.CPU = 0.95
+	host.CPUUsage = 50
+
+	m.CheckHost(host)
+	m.CheckNode(node)
+	nodeCPUSpec := canonicalMetricSpecID(node.ID, "cpu")
+	m.mu.RLock()
+	evaluatedBefore := testCoreHasIncident(m, node.ID, nodeCPUSpec)
+	m.mu.RUnlock()
+	if evaluatedBefore {
+		t.Fatalf("expected the agent to own CPU before the config change")
+	}
+
+	// A report already in flight when agent alerts are disabled must not
+	// restore ownership once it lands.
+	inFlight := m.beginHostAgentReport(host.ID)
+
+	// No agent report follows the config change; the node must evaluate CPU on
+	// its very next check. (UpdateConfig restores the default activation delay,
+	// so the run is pending rather than firing.)
+	config := m.GetConfig()
+	config.DisableAllAgents = true
+	m.UpdateConfig(config)
+	m.CheckNode(node)
+	m.mu.RLock()
+	evaluatedAfter := testCoreHasIncident(m, node.ID, nodeCPUSpec)
+	m.mu.RUnlock()
+	if !evaluatedAfter {
+		t.Fatalf("expected the node to evaluate CPU right after agent alerts were disabled")
+	}
+
+	covering := hostAgentNodeLink{agentID: host.ID, nodeID: node.ID, cpu: true}
+	m.applyHostAgentNodeLink(covering, inFlight)
+	if m.hasHostAgentForNode(node.ID) {
+		t.Fatalf("expected a report evaluated before agent alerts were disabled not to restore ownership")
+	}
+
+	config.DisableAllAgents = false
+	m.UpdateConfig(config)
+	older := m.beginHostAgentReport(host.ID)
+	newer := m.beginHostAgentReport(host.ID)
+	m.applyHostAgentNodeLink(covering, newer)
+	m.applyHostAgentNodeLink(hostAgentNodeLink{agentID: host.ID, nodeID: node.ID}, older)
+	if !m.hasHostAgentForNode(node.ID) {
+		t.Fatalf("expected an older report not to remove the newer report's link")
+	}
+
+	beforeOffline := m.beginHostAgentReport(host.ID)
+	m.HandleHostOffline(host)
+	m.applyHostAgentNodeLink(covering, beforeOffline)
+	if m.hasHostAgentForNode(node.ID) {
+		t.Fatalf("expected a report started before the agent went offline not to re-register")
+	}
+}
+
+// An agent that reports unlinked hands its former node the usage metrics back
+// on the node's next check, even while the agent's own alert is still firing.
+func TestCheckNodeTakesBackMetricsWhenAgentUnlinks(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.config.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.mu.Unlock()
+	node, host := testNodeWithHostAgent()
+	node.CPU = 0.95
+	host.CPUUsage = 95
+
+	m.CheckHost(host)
+	m.CheckNode(node)
+	nodeCPU := canonicalMetricStateID(node.ID, "cpu")
+	if testHasActiveAlert(t, m, nodeCPU) {
+		t.Fatalf("expected the linked agent to own CPU")
+	}
+
+	host.LinkedNodeID = ""
+	m.CheckHost(host)
+	m.CheckNode(node)
+	if !testHasActiveAlert(t, m, nodeCPU) {
+		t.Fatalf("expected the node to alert on CPU once its agent reports unlinked")
+	}
+}
+
+// An explicit disk override, including one inherited from the linked node,
+// beats the per-type DiskFillByType default; otherwise the node released its
+// disk alert to an agent applying a looser per-type threshold.
+func TestHostDiskOverrideBeatsDiskFillByType(t *testing.T) {
+	m := newTestManager(t)
+	node, host := testNodeWithHostAgent()
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.AgentDefaults.Disk = &HysteresisThreshold{Trigger: 90, Clear: 85}
+	m.config.DiskFillByType = map[string]HysteresisThreshold{"nvme": {Trigger: 92, Clear: 88}}
+	m.config.Overrides = map[string]ThresholdConfig{
+		node.ID: {Disk: &HysteresisThreshold{Trigger: 80, Clear: 75}},
+	}
+	m.mu.Unlock()
+	root := models.Disk{Mountpoint: "/", Device: "/dev/nvme0n1p2", Total: 100, Used: 85, Free: 15, Usage: 85}
+	host.Disks = []models.Disk{root}
+
+	m.CheckHost(host)
+	rootResourceID, _ := hostDiskResourceID(host, root)
+	if !testHasActiveAlert(t, m, canonicalMetricStateID(rootResourceID, "disk")) {
+		t.Fatalf("expected the inherited 80%% disk override to raise the agent's root disk alert at 85%%")
+	}
+}
+
+// Releasing a metric drops its explicit intent grace run too, so a later
+// resume does not activate at once on time counted while nothing evaluated.
+func TestReleaseCanonicalMetricAlertClearsIntentPending(t *testing.T) {
+	m := newTestManager(t)
+	spec, err := buildCanonicalMetricSpec("homelab-delly2", "delly2", "node", "cpu", nil)
+	if err != nil {
+		t.Fatalf("spec: %v", err)
+	}
+	trackingKey := canonicalTrackingKeyForSpec(spec, spec.ID)
+	m.mu.Lock()
+	m.intentPending[trackingKey] = IntentPendingState{
+		TrackingKey:    trackingKey,
+		ResourceID:     spec.ResourceID,
+		Signal:         MetricAlertIntentSignal("cpu"),
+		FirstMatchedAt: time.Now().Add(-10 * time.Minute),
+		LastObservedAt: time.Now().Add(-9 * time.Minute),
+	}
+	m.mu.Unlock()
+
+	m.releaseCanonicalMetricAlert(spec, "delly2", "delly2", "homelab", "node", 0, nil)
+
+	m.mu.RLock()
+	_, stillPending := m.intentPending[trackingKey]
+	m.mu.RUnlock()
+	if stillPending {
+		t.Fatalf("expected releasing the metric to clear its intent pending state")
+	}
 }
 
 // A missing reading keeps the incident but must not let a sustained-for or
