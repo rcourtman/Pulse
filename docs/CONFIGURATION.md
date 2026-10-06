@@ -203,7 +203,7 @@ Controls runtime behavior like logging, polling intervals, and UI preferences. L
   "logLevel": "info",             // debug, info, warn, error
   "autoUpdateEnabled": false,     // Enable auto-update checks
   "adaptivePollingEnabled": false, // Smart polling for large clusters
-  "allowedOrigins": "",           // CORS allowlist (single origin or "*")
+  "allowedOrigins": "",           // CORS: empty or comma-separated exact origins
   "allowEmbedding": false,        // Allow iframe embedding
   "allowedEmbedOrigins": "",      // Comma-separated origins for iframe embedding
   "webhookAllowedPrivateCIDRs": "" // Allowlist for private webhook targets
@@ -230,7 +230,7 @@ Numeric intervals are **seconds** unless noted otherwise.
 | `adaptivePollingMaxInterval` | Maximum adaptive polling interval |
 | `connectionTimeout` | API connection timeout |
 | `logLevel` | Server log level (`debug`, `info`, `warn`, `error`) |
-| `allowedOrigins` | CORS allowlist (single origin or `*`) |
+| `allowedOrigins` | CORS: empty grants no cross-origin browser permission; comma-separated exact origins allow credentialed browser requests. `*` allows any origin without credentials. |
 | `allowEmbedding` | Allow iframe embedding |
 | `allowedEmbedOrigins` | Comma-separated `frame-ancestors` allowlist |
 | `webhookAllowedPrivateCIDRs` | Allowlist for private webhook targets |
@@ -293,7 +293,7 @@ Environment variables take precedence over `system.json`.
 | `PULSE_AGENT_CONFIG_SIGNING_KEY` | Base64 Ed25519 private key used to sign remote agent config payloads. | *(unset)* |
 | `PULSE_AGENT_CONFIG_PUBLIC_KEYS` | Comma-separated base64 Ed25519 public keys (raw 32-byte or PKIX-encoded) trusted by agents. | *(unset)* |
 | `PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED` | Require signed remote config payloads (set on Pulse and agents). | `false` |
-| `ALLOWED_ORIGINS` | CORS allowed origin (`*` or a single origin). Empty = same-origin only. | *(unset)* |
+| `ALLOWED_ORIGINS` | Overrides the saved CORS allowlist with comma-separated exact origins. `*` permits any origin without credentialed browser access; not a login/proxy repair. | *(unset)* |
 | `DISCOVERY_ENABLED` | Auto-discover nodes | `false` |
 | `DISCOVERY_SUBNET` | CIDR or `auto` | `auto` |
 | `DISCOVERY_ENVIRONMENT_OVERRIDE` | Force discovery environment (`auto`, `native`, `docker-host`, `docker-bridge`, `lxc-privileged`, `lxc-unprivileged`) | `auto` |

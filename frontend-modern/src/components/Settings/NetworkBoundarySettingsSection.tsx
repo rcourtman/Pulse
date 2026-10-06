@@ -108,13 +108,21 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
           <label for="cors-allowed-origins" class="text-sm font-medium text-base-content">
             CORS Allowed Origins
           </label>
-          <p class="text-xs text-muted">
-            For reverse proxy setups (* = allow all, empty = same-origin only)
+          <p id="cors-origin-help" class="text-xs text-muted">
+            A same-origin reverse proxy needs no CORS exception. For a separate browser app, allow
+            only its exact trusted origin (scheme, host and port), without a path or trailing slash.
+            Separate origins with commas.
+          </p>
+          <p id="cors-origin-limits" class="text-xs text-muted">
+            Empty grants no cross-origin browser permission. * allows any origin without
+            credentialed browser access; it is not a login or proxy repair. CORS does not replace
+            authentication, CSRF protection or TLS.
           </p>
           <div class="relative">
             <input
               id="cors-allowed-origins"
               type="text"
+              aria-describedby="cors-origin-help cors-origin-limits"
               value={props.allowedOrigins()}
               onInput={(e) => {
                 if (!props.envOverrides().allowedOrigins) {
@@ -123,7 +131,7 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
                 }
               }}
               disabled={props.envOverrides().allowedOrigins}
-              placeholder="* or https://example.com"
+              placeholder="https://app.example.com:8443"
               class={`w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md ${
                 props.envOverrides().allowedOrigins
                   ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/25 cursor-not-allowed opacity-75'
