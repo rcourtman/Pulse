@@ -983,6 +983,18 @@ Proxmox backup source/state chips are also a frontend-primitives boundary:
 badge tones, `proxmoxBackupsTableShared.tsx` owns the backup table helper
 composition, and visible source/state chips must render through `MetadataBadge`
 instead of restoring local rounded-sm xs badge spans.
+Backup ages read the frontend-primitives shared relative-time clock:
+`ProxmoxBackupAgeText` measures the full and compact age text and its
+current, aging, or stale band from `useRelativeTimeNow`, never earlier than the
+wall clock, so a backup row that stays mounted for days moves from current to
+aging without new inventory, and a backup that finished inside the clock's last
+tick never bands as a future, unknown age. `ProxmoxPageSurface` reads
+replication jobs through `createNonSuspendingQuery` with a 30-second background
+poll, because the Replication table's Last sync and Next sync move on the same
+clock: a failed read reports the error but keeps the last jobs and the tab, and
+a direct replication link holds until the first read resolves instead of
+falling back to Overview. The poll re-reads the existing read-only
+`/api/replication/jobs` snapshot and opens no new storage or recovery path.
 Proxmox backup-health and recoverable-artifact summary rows follow the same
 platform-table density contract as every other provider surface. Storage and
 recovery owns which backup, datastore, workload-type, and VMID facts matter to

@@ -7,6 +7,7 @@ import type { HostNetworkInterface } from '@/types/api';
 import { requiresGovernedResourceDisplay } from '@/types/resource';
 import type { ResourceVMwareMeta } from '@/types/resource';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getAgentStatusIndicator } from '@/utils/status';
 import {
   dedupeResourceBadges,
@@ -135,7 +136,11 @@ export const useResourceDetailDrawerDerivedState = (
     resolveResourceLabelInput?.(resourceId)?.trim() || resourceId;
   const statusIndicator = createMemo(() => getAgentStatusIndicator({ status: resource().status }));
   const healthIssue = createMemo(() => getResourceHealthIssuePresentation(resource()));
-  const lastSeen = createMemo(() => formatRelativeTime(resource().lastSeen));
+  // An open drawer keeps its rows while a resource's timestamps stay the same,
+  // which is exactly when a silent resource's Last seen must keep aging, so
+  // the drawer's ages read the shared clock.
+  const now = useRelativeTimeNow();
+  const lastSeen = createMemo(() => formatRelativeTime(resource().lastSeen, { now: now() }));
   const lastSeenAbsolute = createMemo(() => formatAbsoluteTime(resource().lastSeen));
 
   const platformBadge = createMemo(() => getPlatformBadge(resource().platformType));
@@ -210,7 +215,7 @@ export const useResourceDetailDrawerDerivedState = (
     if (!raw) return '';
     const parsed = Date.parse(raw);
     if (!Number.isFinite(parsed)) return '';
-    return formatRelativeTime(parsed);
+    return formatRelativeTime(parsed, { now: now() });
   });
   const dockerHostCommand = createMemo(() => dockerHostData()?.command);
   const dockerHostCommandActive = createMemo(() => {
@@ -278,7 +283,7 @@ export const useResourceDetailDrawerDerivedState = (
     if (!raw) return '';
     const parsed = Date.parse(raw);
     if (!Number.isFinite(parsed)) return '';
-    return formatRelativeTime(parsed);
+    return formatRelativeTime(parsed, { now: now() });
   });
   const pbsVisibleJobBreakdown = createMemo(() => buildPbsVisibleJobBreakdown(pbsData()));
   const pbsActiveTasks = createMemo(() => buildPbsActiveTasks(pbsData()));
