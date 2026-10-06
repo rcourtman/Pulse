@@ -2658,6 +2658,29 @@ clock while it stays open. Its `Last seen` and flapping window are latest
 readings of a record that may have moved since, so they stay the ages at
 read time, and the queue rows, summary, recent work, run history and digest
 re-derive on their own 30- or 60-second re-reads.
+Future times in Patrol count down instead of reading as ages, because the
+past-only `formatRelativeTime` reads each of them as "just now" for their
+whole duration. The attention detail's suppression line counts down to the
+expiry with the exact time on hover and names the state expiry restores: an
+open issue reads `Returns to active attention in 1d.`, one marked reviewed
+reads `Suppression ends in 1d. It stays reviewed.` (expiry restores
+Acknowledged, which is not active attention), and a passed expiry reads
+`Suppression has ended.` (`getAttentionSuppressionExpiryLabel`). The findings
+list reads `Reminding in 6d` for a will_fix_later reminder and
+`snoozed, returns in 3h` for a snooze, both through `formatTimeUntil` on the
+shared clock with the exact time on hover. A reminder whose time has passed
+reads `Reminder overdue`, and the Overdue commitments chip and filter read the
+same clock so they agree with the label. They share one overdue id list that
+only notifies when its ids change, so a clock tick that moves no deadline past
+now does not rebuild the open Overdue rows. The hourly reminder sweep then
+brings the finding back whether or not it still trips. An ended snooze reads
+`snooze ended` until the next findings re-read drops the snoozed status (the
+store derives `snoozed` only while `snoozed_until` is ahead, so the finding
+shows as Active unless it has since resolved or been dismissed).
+`getFindingReminderPresentation` and `getFindingSnoozePresentation` in
+`aiFindingPresentation.ts` own the findings copy.
+`PatrolAttentionWorkbench.test.tsx`, `FindingsPanel.links.test.tsx` and
+`FindingsPanel.test.ts` pin it.
 
 ### This week card answers what Patrol did for the customer
 

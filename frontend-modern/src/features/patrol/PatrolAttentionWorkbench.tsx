@@ -63,7 +63,7 @@ import {
 import type { EvidenceEnvelope } from '@/types/operationalTrust';
 import type { ActionDetailResponse } from '@/types/actionAudit';
 import { getAlertResourceIncidentAcknowledgedByLabel } from '@/utils/alertIncidentPresentation';
-import { formatRelativeTime } from '@/utils/format';
+import { formatAbsoluteTime, formatRelativeTime, formatTimeUntil } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { copyToClipboard } from '@/utils/clipboard';
 import type { PatrolAutonomyLevel } from '@/api/patrol';
@@ -1241,6 +1241,22 @@ const SUPPRESSION_DURATIONS = [
   { value: 7 * 24 * 60 * 60 * 1000, label: '7 days' },
 ] as const;
 
+// Suppression expiry hands the alert back to the state it had before:
+// Reviewed if it was acknowledged, otherwise open and back in active attention.
+export function getAttentionSuppressionExpiryLabel(
+  expiresAt: string,
+  reviewed: boolean,
+  now: number,
+): string {
+  const expiry = Date.parse(expiresAt);
+  if (!Number.isFinite(expiry)) return '';
+  if (expiry <= now) return 'Suppression has ended.';
+  const remaining = formatTimeUntil(expiry, { compact: true, now });
+  return reviewed
+    ? `Suppression ends ${remaining}. It stays reviewed.`
+    : `Returns to active attention ${remaining}.`;
+}
+
 function AttentionLifecycleControls(props: {
   detail: AttentionItemDetail;
   busy: boolean;
@@ -1250,8 +1266,9 @@ function AttentionLifecycleControls(props: {
   onSuppress: (itemId: string, reason: string, expiresAt: string) => Promise<void>;
   onUnsuppress: (itemId: string) => Promise<void>;
 }) {
-  // The acknowledgement time never changes while the detail stays open, so its
-  // age reads the shared clock.
+  // The acknowledgement and suppression expiry times never change while the
+  // detail stays open, so the acknowledgement age and the countdown to the
+  // expiry read the shared clock.
   const now = useRelativeTimeNow();
   const [showSuppression, setShowSuppression] = createSignal(false);
   const [reason, setReason] = createSignal('');
@@ -1292,9 +1309,12 @@ function AttentionLifecycleControls(props: {
               </p>
               <Show when={suppression().expiresAt}>
                 {(expiresAt) => (
-                  <p>
-                    Returns to active attention {formatRelativeTime(expiresAt(), { compact: true })}
-                    .
+                  <p title={`Suppressed until ${formatAbsoluteTime(Date.parse(expiresAt()))}`}>
+                    {getAttentionSuppressionExpiryLabel(
+                      expiresAt(),
+                      Boolean(props.detail.operationalRecord.acknowledgement),
+                      now(),
+                    )}
                   </p>
                 )}
               </Show>
