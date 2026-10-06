@@ -26,7 +26,7 @@ func continuityManager(t *testing.T, explicit bool) (*Manager, *atomic.Int64) {
 	cfg.GuestDefaults.Memory = &HysteresisThreshold{Trigger: 80, Clear: 70}
 	cfg.GuestDefaults.Disk = &HysteresisThreshold{Trigger: 80, Clear: 70}
 	cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 80, Clear: 70}
-	cfg.DiskTempByType = nil
+	cfg.DiskTempByType = map[string]HysteresisThreshold{"sata": {Trigger: 80, Clear: 70}, "custom": {Trigger: 80, Clear: 70}}
 	cfg.AgentDefaults.Memory = &HysteresisThreshold{Trigger: 80, Clear: 70}
 	m.UpdateConfig(cfg)
 	elapsed := &atomic.Int64{}

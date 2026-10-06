@@ -901,7 +901,7 @@ func TestDiskTemperaturePendingConfigDisablement(t *testing.T) {
 		for _, scope := range []string{"global", "all-agents", "host", "node", "vm", "container", "type", "unrelated"} {
 			t.Run(fmt.Sprintf("%s/explicit=%v", scope, explicit), func(t *testing.T) {
 				m, elapsed := continuityManager(t, explicit)
-				host := hostWithSMARTDiskTemp("pending-temp", "sata", 85)
+				host := hostWithSMARTDiskTemp("pending-temp", "custom", 85)
 				host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID = "site:node", "site:node:101", "site:node:102"
 				id := hostDiskTemperatureResourceID(host.ID, host.Sensors.SMART[0].Device)
 				m.CheckHost(host)
@@ -927,7 +927,7 @@ func TestDiskTemperaturePendingConfigDisablement(t *testing.T) {
 					m.CheckHost(host)
 					cfg.Overrides[host.LinkedContainerID] = ThresholdConfig{DiskTemperature: &HysteresisThreshold{Trigger: 0}}
 				case "type":
-					cfg.DiskTempByType = map[string]HysteresisThreshold{"sata": {Trigger: 0}}
+					cfg.DiskTempByType = map[string]HysteresisThreshold{"custom": {Trigger: 0}}
 				case "unrelated":
 					cfg.Schedule.QuietHours.Timezone = "UTC"
 				}
@@ -941,7 +941,7 @@ func TestDiskTemperaturePendingConfigDisablement(t *testing.T) {
 				}
 				cfg.Enabled, cfg.DisableAllAgents = true, false
 				cfg.Overrides = map[string]ThresholdConfig{}
-				cfg.DiskTempByType = nil
+				cfg.DiskTempByType = map[string]HysteresisThreshold{"custom": {Trigger: 80, Clear: 70}}
 				m.UpdateConfig(cfg)
 				elapsed.Store(int64(2 * time.Minute))
 				m.CheckHost(host)
@@ -1019,9 +1019,9 @@ func TestDiskTemperatureCurrentCollectionAndOverrideControls(t *testing.T) {
 	}
 	t.Run("host override wins over disabled type", func(t *testing.T) {
 		m, elapsed := continuityManager(t, false)
-		host := hostWithSMARTDiskTemp("override-temp", "sata", 85)
+		host := hostWithSMARTDiskTemp("override-temp", "custom", 85)
 		cfg := m.GetConfig()
-		cfg.DiskTempByType = map[string]HysteresisThreshold{"sata": {Trigger: 0}}
+		cfg.DiskTempByType = map[string]HysteresisThreshold{"custom": {Trigger: 0}}
 		cfg.Overrides[host.ID] = ThresholdConfig{DiskTemperature: &HysteresisThreshold{Trigger: 80, Clear: 70}}
 		m.UpdateConfig(cfg)
 		m.CheckHost(host)

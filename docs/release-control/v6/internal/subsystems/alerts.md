@@ -3703,7 +3703,9 @@ consecutive omissions; empty/expired inventory breaks that confirmation sequence
 
 Configuration saves reset pending-only runs when global agent policy, host or
 inherited node/guest overrides, or the applicable disk-type threshold disables
-evaluation, even if no report arrives before re-enablement. Only live pending
+evaluation, even if no report arrives before re-enablement. Existing known-type
+default normalisation is unchanged; the zero-type save control uses a custom
+type whose zero threshold the normaliser preserves. Only live pending
 identity/link/type context is retained; unrelated saves preserve a known enabled
 run and explicit overrides retain precedence over type defaults. Restored intent
 without that context restarts conservatively on a save rather than inventing
