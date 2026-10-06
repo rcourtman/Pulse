@@ -391,6 +391,8 @@ func TestHistoryIdentityMonitorAdapterResolvesDockerHostAndServiceReferences(t *
 	hostA.AgentID, hostA.MachineID = "host-tower", "0123456789abcdef"
 	hostA.Containers = []models.DockerContainer{{ID: container, Name: "worker", State: "running"}}
 	hostB := manager("dh-91c0", "rack", "swarm-1", web)
+	// A container without an ID, named like its host's ID.
+	hostB.Containers = []models.DockerContainer{{Name: "dh-91c0", State: "running"}}
 	// In swarm-2 a service without an ID is named like another service's ID.
 	hostC := manager("dh-c4d2", "edge", "swarm-2", models.DockerService{ID: otherServiceID, Name: "api"}, models.DockerService{Name: strings.ToUpper(otherServiceID)})
 	// Rows journaled before this process started are bound by a later generation.
@@ -407,6 +409,7 @@ func TestHistoryIdentityMonitorAdapterResolvesDockerHostAndServiceReferences(t *
 	hostAID := registry.sourceResourceID(SourceDocker, "dh-7f3a")
 	hostBID := registry.sourceResourceID(SourceDocker, "dh-91c0")
 	serviceResourceID := historyIdentityResourceID(t, registry, ResourceTypeDockerService, "web")
+	apiID := historyIdentityResourceID(t, registry, ResourceTypeDockerService, "api")
 	containerID := registry.sourceResourceID(SourceDocker, "dh-7f3a/container/"+container)
 	require.Equal(t, registry.sourceResourceID(SourceAgent, "host-tower"), hostAID, "the Docker host merges into its agent's machine")
 	require.NotEqual(t, hostAID, hostBID)
@@ -417,17 +420,22 @@ func TestHistoryIdentityMonitorAdapterResolvesDockerHostAndServiceReferences(t *
 		"docker:dh-91c0/service/" + serviceID: serviceResourceID,
 		"docker:dh-7f3a":                      hostAID,
 		"docker:dh-7f3a/service/" + serviceID: serviceResourceID,
+		// A service without an ID in the same cluster no longer shares this
+		// reference, so it binds.
+		"docker:dh-c4d2/service/" + otherServiceID: apiID,
 	}
 	unbound := []string{
-		"docker:tower",                             // hostname
-		"docker:dh-7f3a/service/web",               // service name
-		"docker:dh-c4d2/service/" + otherServiceID, // its cluster has a service without an ID
-		"docker-service:web",                       // hostless service name
-		"docker:dh-7f3a/worker",                    // container name
-		"docker:dh-7f3a/" + container[:12],         // shortened container ID
+		"docker:tower",                                  // hostname
+		"docker:dh-7f3a/service/web",                    // service name
+		"docker:dh-c4d2/service/name:" + otherServiceID, // service without an ID
+		"docker-service:name:web",                       // hostless service name
+		"docker:dh-7f3a/worker",                         // container name
+		"docker:dh-7f3a/" + container[:12],              // shortened container ID
+		"docker:dh-91c0/name:dh-91c0",                   // container without an ID
 		"docker:unknown",
 	}
-	for i, ref := range append([]string{"docker:dh-7f3a", "docker:dh-7f3a/service/" + serviceID}, unbound...) {
+	ids := []string{"docker:dh-7f3a", "docker:dh-7f3a/service/" + serviceID, "docker:dh-c4d2/service/" + otherServiceID}
+	for i, ref := range append(ids, unbound...) {
 		if ref == "docker:dh-7f3a/worker" {
 			continue // journaled above
 		}
@@ -436,29 +444,29 @@ func TestHistoryIdentityMonitorAdapterResolvesDockerHostAndServiceReferences(t *
 	requireHistoryReferenceBindings(t, store, bound, unbound)
 	// Names and shortened IDs are never retried against later inventory.
 	require.Contains(t, adapter.legacyHistory.pending, "docker:tower")
-	for _, ref := range []string{"docker:dh-7f3a/worker", "docker:dh-7f3a/" + container[:12], "docker-service:web"} {
+	for _, ref := range []string{"docker:dh-7f3a/worker", "docker:dh-7f3a/" + container[:12], "docker-service:name:web",
+		"docker:dh-91c0/name:dh-91c0", "docker:dh-c4d2/service/name:" + otherServiceID} {
 		require.NotContains(t, adapter.legacyHistory.pending, ref)
 	}
 	got, err := store.GetRecentChangesFiltered(containerID, time.Time{}, 10, ResourceChangeFilters{Kinds: []ChangeKind{ChangeAlertFired}})
 	require.NoError(t, err)
 	require.Empty(t, got, "a container name or short ID never joins the container's history")
-	// While its cluster has a service without an ID, a service reference is a
-	// conflict and must not follow a binding recorded earlier.
-	collision := "docker:dh-c4d2/service/" + otherServiceID
-	apiID := historyIdentityResourceID(t, registry, ResourceTypeDockerService, "api")
-	require.NoError(t, store.RecordChangeWithSourceIdentity(ResourceChange{ID: "earlier-api", ResourceID: apiID, Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: now}, collision))
-	require.NoError(t, adapter.RecordChange(ResourceChange{ID: "conflict-api", ResourceID: collision, Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: now.Add(2 * time.Minute)}))
-	// The same holds once the service with that ID has left inventory.
+	// The service's ID reference follows its binding once the service has left
+	// inventory, while the service without an ID is still there; the name
+	// reference stays its own.
 	hostC.Services = hostC.Services[1:]
 	adapter.PopulateFromSnapshot(models.StateSnapshot{
 		Hosts:       []models.Host{{ID: "host-tower", Hostname: "tower", MachineID: "0123456789abcdef", Status: "online", LastSeen: now}},
 		DockerHosts: []models.DockerHost{hostA, hostB, hostC},
 	})
-	require.NoError(t, adapter.RecordChange(ResourceChange{ID: "conflict-api-removed", ResourceID: collision, Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: now.Add(3 * time.Minute)}))
-	for _, id := range []string{"conflict-api", "conflict-api-removed"} {
+	nameRef := "docker:dh-c4d2/service/name:" + otherServiceID
+	for id, ref := range map[string]string{"api-removed": "docker:dh-c4d2/service/" + otherServiceID, "name-removed": nameRef} {
+		require.NoError(t, adapter.RecordChange(ResourceChange{ID: id, ResourceID: ref, Kind: ChangeAlertResolved, SourceType: SourceHeuristic, ObservedAt: now.Add(3 * time.Minute)}))
+	}
+	for id, want := range map[string]string{"api-removed": apiID, "name-removed": nameRef} {
 		var recordedAs string
 		require.NoError(t, store.db.QueryRow(`SELECT canonical_id FROM resource_changes WHERE id = ?`, id).Scan(&recordedAs))
-		require.Equal(t, collision, recordedAs, id)
+		require.Equal(t, want, recordedAs, id)
 	}
 
 	// After the service leaves inventory its alerts follow the retained binding;

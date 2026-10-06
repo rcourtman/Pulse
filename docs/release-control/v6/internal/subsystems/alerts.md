@@ -1477,6 +1477,45 @@ short-ID, unified-hash, and slash-tail forms as trailing lookup candidates).
 Container override work must not reintroduce a runtime-container-ID
 persistence key.
 
+Docker alert references come only from the builders in
+`internal/alerts/docker.go`: a host's own alert `docker:<host ID>`
+(`DockerHostResourceID`, used only by its connectivity alert), a container
+`docker:<host ID>/<container ID>` (`DockerContainerResourceID`), and a Swarm
+service `docker:<host ID>/service/<service ID>` (`DockerServiceResourceID`).
+A container or service reported without an ID alerts under its name, marked in
+the ID position (`docker:<host ID>/name:<name>`,
+`docker:<host ID>/service/name:<normalized name>`). Docker and Swarm IDs never
+contain a colon, so a name reference never takes its host's reference or
+another service's ID reference, and one with neither an ID nor a name raises
+no alert. Report cleanup, host removal and the host's offline alert firing
+clear children by the `docker:<host ID>/` prefix; the container and service
+policy switches classify by the first path segment after the host
+(`dockerAlertResourcePath`), so a container name containing `/service/` stays
+a container; and Patrol's scope aliases and resource history parse the same
+forms. Service overrides key on the same reference, so an override written for
+a service without an ID under its old unmarked name no longer applies. A
+reference can contain the canonical state separator (a Docker host
+disambiguated as `<base>::<suffix>`), so `splitCanonicalStateID` splits a
+state ID before the alert's recorded spec ID, or else after its resource ID,
+and only without either at the first `::`. Splitting at the first `::` gave
+such a host's alerts the reference of the host named `<base>`; an alert saved
+that way recovers its reference on restore because its spec ID is intact.
+Before name references existed, a container without an ID alerted under its
+host's reference. Only the connectivity alert belongs there, so the host's
+next report, or its offline alert firing, clears any such alert
+left active whose recorded host matches and whose container ID is empty. A
+pending image update recorded there keeps its age under the container's new
+reference when that first report still shows the update pending; a first
+report with missing or failed update evidence clears it, and the delay starts
+again on the next positive report. Proof:
+`TestDockerAlertsWithoutIDsUseTheirOwnReferences`,
+`TestDockerHostIDWithSeparatorKeepsItsAlertReferences`,
+`TestDockerAlertsRestoredWithCutShortReferencesRecover`,
+`TestDockerContainerWithoutIDKeepsPendingUpdateAgeAcrossUpgrade` and
+`TestDockerContainerResourceID` in `internal/alerts/alerts_test.go`, and
+`TestOwnerAlertTimelinesUseCanonicalHistoryIdentity` in
+`internal/monitoring/monitor_alert_handling_test.go`.
+
 Backup orphan evaluation is also inventory-scoped. The alerts runtime may
 evaluate recovery rollups for backup age, but unresolved Proxmox PVE backup
 subjects must not be treated as orphaned until monitoring has supplied the

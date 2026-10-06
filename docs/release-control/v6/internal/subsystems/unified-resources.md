@@ -5809,17 +5809,20 @@ Docker host alerts (`docker:<host ID>`) and Swarm service alerts
 Docker source identities: the host ID is the Docker host's source ID, and a
 service reference names the service with that exact ID in the host's Swarm
 cluster, whichever manager reported it. A hostname in the host position is
-only ever looked up as a Docker host source ID. A service without an ID is
-referenced by its normalized name in the same place, so while its cluster has
-such a service every service reference there is a conflict. Alert references
-do not record whether they came from an ID, so a row journaled by an ID-less
-service can still join another service's history if a later generation or
-event binds the same reference; Swarm always reports service IDs, so that needs a malformed
-report naming a service exactly like another service's ID. Hostless
-`docker-service:<name>` references, container names and shortened container
-IDs never bind and are never retried against later inventory. A container
-without an ID alerts under its host's reference (`alerts.DockerResourceID`), so
-its events join that host's history, never another container's.
+only ever looked up as a Docker host source ID. The registry keys a service
+without an ID by its raw name, so the service entry must also carry exactly
+the referenced ID. A container or service reported without an ID alerts under
+its name, marked in the ID position (`docker:<host ID>/name:<name>` and
+`docker:<host ID>/service/name:<name>`, from `alerts.DockerContainerResourceID`
+and `alerts.DockerServiceResourceID`). Docker and Swarm IDs never contain a
+colon, so such a reference never equals its host's reference or another
+service's ID reference, and `dockerHostHistoryReference` treats a service slot
+with a colon as a name. These name references, hostless `docker-service:`
+references, container names and shortened container IDs never bind and are
+never retried against later inventory. Rows journaled before name references
+existed keep the reference they were written under: an ID-less container's
+rows stay in its host's history, and an ID-less service's rows bind only to a
+service in that cluster whose ID equals its normalized name.
 Sub-resource alert references name no resource of their own and bind to the
 owner whose durable ID they carry (`historySubResourceOwner`): ZFS pool and
 device alerts (`<storage ID>/zfs-pool:<pool>[/device:<device>]`) to the

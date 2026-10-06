@@ -9,32 +9,37 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-// dockerAlertScopeAlias mirrors the alert subsystem's docker resource IDs
-// ("docker:<host>" and "docker:<host>/<container>") so an alert's resource ID
-// resolves to the patrol runtime record for that host or container (#1699).
-// Returns "" without a host part rather than the shared "docker:unknown"
-// fallback, which would alias unrelated records together.
-func dockerAlertScopeAlias(hostID, containerID string) string {
+// dockerAlertScopeAlias mirrors the alert subsystem's Docker container
+// resource IDs ("docker:<host>/<container ID>", or "docker:<host>/name:<name>"
+// for a container without an ID) so an alert's resource ID resolves to the
+// patrol runtime record for that container (#1699). A host's own records use
+// alerts.DockerHostResourceID. Returns "" without a host part rather than a
+// hostless form, which would alias unrelated records together.
+func dockerAlertScopeAlias(hostID, containerID, containerName string) string {
 	if strings.TrimSpace(hostID) == "" {
 		return ""
 	}
-	return alerts.DockerResourceID(hostID, containerID)
+	return alerts.DockerContainerResourceID(hostID, containerID, containerName)
 }
 
 // dockerServiceAlertScopeAliases mirrors the alert subsystem's Swarm service
-// resource IDs ("docker:<host>/service/<serviceID>") onto the owning Docker
+// resource IDs ("docker:<host>/service/<serviceID>", or
+// "docker:<host>/service/name:<name>" without an ID) onto the owning Docker
 // host record. Patrol has no service-level analysis, and a service's tasks run
 // as containers on the host, so the host is the smallest unit Patrol can
 // investigate for a service alert (#1699). Hosts without an ID are skipped for
 // the same anti-aliasing reason as dockerAlertScopeAlias: the host-less
-// "docker-service:<name>" fallback could collide across hosts.
+// "docker-service:<name>" fallback could collide across hosts. A service with
+// neither an ID nor a name raises no alert, so it has no alias.
 func dockerServiceAlertScopeAliases(hostID string, services []models.DockerService) []string {
 	if strings.TrimSpace(hostID) == "" || len(services) == 0 {
 		return nil
 	}
 	aliases := make([]string, 0, len(services))
 	for _, service := range services {
-		aliases = append(aliases, alerts.DockerServiceResourceID(hostID, service.ID, service.Name))
+		if alias := alerts.DockerServiceResourceID(hostID, service.ID, service.Name); alias != "" {
+			aliases = append(aliases, alias)
+		}
 	}
 	return aliases
 }
@@ -246,14 +251,14 @@ func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeR
 			}
 		}
 		for _, dh := range rs.DockerHosts() {
-			aliases := append([]string{dh.Name(), dh.Hostname(), dockerAlertScopeAlias(dh.HostSourceID(), "")},
+			aliases := append([]string{dh.Name(), dh.Hostname(), alerts.DockerHostResourceID(dh.HostSourceID())},
 				dockerServiceAlertScopeAliases(dh.HostSourceID(), dh.Services())...)
 			if !emit(patrolRuntimeResourceDockerHost, []string{dh.ID(), dh.HostSourceID()}, aliases...) {
 				return
 			}
 		}
 		for _, dc := range rs.DockerContainers() {
-			if !emit(patrolRuntimeResourceDockerItem, []string{dc.ID(), dc.ContainerID()}, dc.Name(), dockerAlertScopeAlias(dc.HostSourceID(), dc.ContainerID())) {
+			if !emit(patrolRuntimeResourceDockerItem, []string{dc.ID(), dc.ContainerID()}, dc.Name(), dockerAlertScopeAlias(dc.HostSourceID(), dc.ContainerID(), dc.Name())) {
 				return
 			}
 		}
@@ -299,13 +304,13 @@ func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeR
 			}
 		}
 		for _, dh := range s.DockerHosts {
-			aliases := append([]string{dh.DisplayName, dh.CustomDisplayName, dh.Hostname, dockerAlertScopeAlias(dh.ID, "")},
+			aliases := append([]string{dh.DisplayName, dh.CustomDisplayName, dh.Hostname, alerts.DockerHostResourceID(dh.ID)},
 				dockerServiceAlertScopeAliases(dh.ID, dh.Services)...)
 			if !emit(patrolRuntimeResourceDockerHost, []string{dh.ID}, aliases...) {
 				return
 			}
 			for _, dc := range dh.Containers {
-				if !emit(patrolRuntimeResourceDockerItem, []string{dc.ID}, dc.Name, dockerAlertScopeAlias(dh.ID, dc.ID)) {
+				if !emit(patrolRuntimeResourceDockerItem, []string{dc.ID}, dc.Name, dockerAlertScopeAlias(dh.ID, dc.ID, dc.Name)) {
 					return
 				}
 			}
