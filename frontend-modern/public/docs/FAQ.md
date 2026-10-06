@@ -111,12 +111,28 @@ older release candidate.
 Yes. Go to **Alerts → Thresholds** and use the On/Off toggle next to any metric while editing, or set the value to `-1`. You can do this globally or per-resource (VM/Node).
 
 ### How do I monitor temperature?
-Recommended: install the unified agent on your Proxmox hosts with Proxmox integration enabled:
 
-1. Install `lm-sensors` on the host (`apt install lm-sensors && sensors-detect`)
-2. Install `pulse-agent` with `--enable-proxmox`
+Check the affected host's active agent version, sensor and observation time
+before changing its setup. A current Pulse server does not update every agent.
+Compare the same host and sensor at the same time; CPU/SoC temperature is not
+physical-disk SMART temperature. A missing reading is unavailable, **not zero**.
 
-If you do not run the agent, Pulse can collect temperatures over SSH. When the agent is reporting usable temperatures, Pulse uses the agent path and does not also require SSH for that host. See [Temperature Monitoring](TEMPERATURE_MONITORING.md).
+On Linux, the agent reads existing `sensors -j` output and recognised CPU/SoC
+thermal sysfs sources. `lm-sensors` is not required for the CPU/SoC fallback.
+Start with the [bounded, private local reading check](TEMPERATURE_MONITORING.md#check-existing-linux-readings-safely)
+on the monitored host, not inside the Pulse container.
+
+Do not run hardware detection, bus scans, load drivers or reboot the host merely
+to fill a temperature row. Necessary sensor setup belongs in that host's normal
+maintenance window. During backups, freeze/thaw or an unresponsive-host incident,
+defer setup and diagnostics.
+
+For a new Proxmox agent installation, follow the
+[verified HTTPS and token-file setup](TEMPERATURE_MONITORING.md#recommended-pulse-agent-proxmox).
+Recent usable agent temperature data does not also require SSH for that host;
+do not mount root SSH keys into Pulse or loosen an existing restricted key to
+repair a missing reading. Other platforms have different providers and limits:
+see [Temperature Monitoring](TEMPERATURE_MONITORING.md).
 
 ---
 
