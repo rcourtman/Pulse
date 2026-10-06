@@ -3,6 +3,7 @@ package installtests
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
@@ -15,8 +16,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/ssh"
+	"gopkg.in/yaml.v3"
 )
 
 func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
@@ -4894,5 +4897,174 @@ func TestInstallMCPFreeBSDSHA256Fallback(t *testing.T) {
 		if !strings.Contains(script, want) {
 			t.Fatalf("install-mcp.sh lost FreeBSD sha256 fallback %q", want)
 		}
+	}
+}
+
+// Exercise the actual workflow shell, not a second implementation of its
+// classifier. The stub supplies only Git's read results; Bash, grep, pipefail
+// and the downstream audit runner remain real.
+func TestFrontendChangeClassificationPreservesStrictAudit(t *testing.T) {
+	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workflow struct {
+		Jobs map[string]struct {
+			Steps []struct {
+				ID  string `yaml:"id"`
+				Run string `yaml:"run"`
+			} `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal(workflowBytes, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	script := ""
+	for _, step := range workflow.Jobs["changes"].Steps {
+		if step.ID == "filter" {
+			script = step.Run
+		}
+	}
+	if script == "" {
+		t.Fatal("actual change-classification shell is missing")
+	}
+	var largeDocs strings.Builder
+	for i := 0; i < 4000; i++ {
+		largeDocs.WriteString("docs/receipts/" + strconv.Itoa(i) + "-" + strings.Repeat("x", 80) + ".md\n")
+	}
+	docs := largeDocs.String()
+	if len(docs) < 256*1024 {
+		t.Fatal("large fixture must exceed the pipe buffer")
+	}
+	cases := []struct {
+		name, files, event, base string
+		missingBase              bool
+		diffStatus               int
+		code, dependencies       string
+		audit                    bool
+		auditStatus              int
+	}{
+		{name: "docs_only", files: "docs/FAQ.md\nREADME.md\n", code: "false", dependencies: "false"},
+		{name: "unrelated_code", files: "internal/config/config.go\n", code: "true", dependencies: "false"},
+		{name: "manifest", files: "frontend-modern/package.json\n", code: "true", dependencies: "true"},
+		{name: "lock", files: "frontend-modern/package-lock.json\n", code: "true", dependencies: "true"},
+		{name: "audit_runner", files: "scripts/npm-audit-retry.sh\n", code: "true", dependencies: "true"},
+		{name: "large_manifest_first", files: "frontend-modern/package.json\n" + docs, code: "true", dependencies: "true"},
+		{name: "large_lock_first", files: "frontend-modern/package-lock.json\n" + docs, code: "true", dependencies: "true"},
+		{name: "large_runner_first", files: "scripts/npm-audit-retry.sh\n" + docs, code: "true", dependencies: "true"},
+		{name: "large_lock_last", files: docs + "frontend-modern/package-lock.json\n", code: "true", dependencies: "true"},
+		{name: "large_docs_only", files: docs, code: "false", dependencies: "false"},
+		{name: "large_unrelated_code", files: docs + "internal/config/config.go\n", code: "true", dependencies: "false"},
+		{name: "exact_path_lookalikes", files: "frontend-modern/package.json.extra\nother/frontend-modern/package-lock.json\nscripts/npm-audit-retry.sh.extra\n", code: "true", dependencies: "false"},
+		{name: "pull_request_docs", files: "docs/FAQ.md\n", event: "pull_request", code: "false", dependencies: "false"},
+		{name: "zero_push_base", base: strings.Repeat("0", 40), code: "true", dependencies: "true"},
+		{name: "missing_base", missingBase: true, code: "true", dependencies: "true"},
+		{name: "manual_dispatch", event: "workflow_dispatch", base: "empty", code: "true", dependencies: "true"},
+		{name: "failed_diff", diffStatus: 42},
+		{name: "large_changed_graph_critical_blocks", files: "frontend-modern/package-lock.json\n" + docs, code: "true", dependencies: "true", audit: true, auditStatus: 1},
+		{name: "unchanged_graph_critical_warns", files: "internal/config/config.go\n", code: "true", dependencies: "false", audit: true, auditStatus: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			directory := t.TempDir()
+			bin := filepath.Join(directory, "bin")
+			if err := os.Mkdir(bin, 0700); err != nil {
+				t.Fatal(err)
+			}
+			files := filepath.Join(directory, "changed")
+			output := filepath.Join(directory, "outputs")
+			if err := os.WriteFile(files, []byte(tc.files), 0600); err != nil {
+				t.Fatal(err)
+			}
+			git := "#!/bin/sh\ncase \"$1\" in\ncat-file) test \"$BASE_MISSING\" != true ;;\ndiff) cat \"$CHANGED_FIXTURE\"; exit \"$DIFF_STATUS\" ;;\n*) exit 97 ;;\nesac\n"
+			if err := os.WriteFile(filepath.Join(bin, "git"), []byte(git), 0700); err != nil {
+				t.Fatal(err)
+			}
+			event := tc.event
+			if event == "" {
+				event = "push"
+			}
+			base := tc.base
+			if base == "" {
+				base = strings.Repeat("a", 40)
+			}
+			if base == "empty" {
+				base = ""
+			}
+			run := strings.NewReplacer(
+				"${{ github.event_name }}", event,
+				"${{ github.event.pull_request.base.sha }}", base,
+				"${{ github.event.before }}", base,
+				"${{ github.sha }}", strings.Repeat("b", 40),
+			).Replace(script)
+			if strings.Contains(run, "${{") {
+				t.Fatal("unresolved workflow expression")
+			}
+			env := append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"),
+				"CHANGED_FIXTURE="+files, "GITHUB_OUTPUT="+output,
+				"BASE_MISSING="+strconv.FormatBool(tc.missingBase), "DIFF_STATUS="+strconv.Itoa(tc.diffStatus))
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", "-c", run)
+			cmd.Env = env
+			result, commandErr := cmd.CombinedOutput()
+			if tc.diffStatus != 0 {
+				if commandErr == nil {
+					t.Fatal("failed Git diff must fail classification")
+				}
+				if _, err := os.Stat(output); !os.IsNotExist(err) {
+					t.Fatal("failed diff published a passing classification")
+				}
+				return
+			}
+			if commandErr != nil {
+				t.Fatalf("classification failed: %v (%d output bytes)", commandErr, len(result))
+			}
+			valuesBytes, err := os.ReadFile(output)
+			if err != nil {
+				t.Fatal(err)
+			}
+			values := map[string]string{}
+			for _, line := range strings.Split(strings.TrimSpace(string(valuesBytes)), "\n") {
+				key, value, ok := strings.Cut(line, "=")
+				if !ok {
+					t.Fatalf("invalid output: %q", line)
+				}
+				if _, exists := values[key]; exists {
+					t.Fatalf("duplicate output: %q", key)
+				}
+				values[key] = value
+			}
+			if values["code"] != tc.code || values["frontend_deps"] != tc.dependencies {
+				t.Errorf("actual classification = %v; want code=%s frontend_deps=%s (%d changed bytes)", values, tc.code, tc.dependencies, len(tc.files))
+			}
+			if !tc.audit {
+				return
+			}
+			// A real finding, supplied offline, must fail the changed graph
+			// and warn only for an unchanged graph. No npm service is queried.
+			finding := `{"metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":0,"high":0,"critical":1,"total":1}},"vulnerabilities":{"seroval":{"name":"seroval","severity":"critical"}}}`
+			npm := filepath.Join(bin, "npm")
+			if err := os.WriteFile(npm, []byte("#!/bin/sh\nprintf '%s\\n' '"+finding+"'\nexit 1\n"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			audit := exec.CommandContext(ctx, "bash", repoFile("scripts", "npm-audit-retry.sh"), "all")
+			audit.Env = append(env, "NPM_AUDIT_CMD="+npm, "NPM_AUDIT_REQUIRE_RESULT="+values["frontend_deps"], "NPM_AUDIT_ATTEMPTS=1", "NPM_AUDIT_RETRY_DELAY=0")
+			auditResult, auditErr := audit.CombinedOutput()
+			auditStatus := 0
+			if auditErr != nil {
+				exit, ok := auditErr.(*exec.ExitError)
+				if !ok {
+					t.Fatal(auditErr)
+				}
+				auditStatus = exit.ExitCode()
+			}
+			if auditStatus != tc.auditStatus {
+				t.Errorf("downstream critical-audit status=%d; want %d: %s", auditStatus, tc.auditStatus, auditResult)
+			}
+			if !strings.Contains(string(auditResult), `"severity": "critical"`) {
+				t.Fatal("the observed finding disappeared")
+			}
+		})
 	}
 }
