@@ -593,6 +593,7 @@ func TestGuestFilesystemStatusDoesNotDiagnoseFromErrorText(t *testing.T) {
 		{context.DeadlineExceeded, "agent-timeout"},
 		{fmt.Errorf("wrapped: %w", context.DeadlineExceeded), "agent-timeout"},
 		{errors.New("guest agent request timeout"), "agent-timeout"},
+		{errors.New("guest agent request: context deadline exceeded"), "agent-timeout"},
 	}
 	for _, tc := range cases {
 		if got := classifyGuestAgentDiskStatusError(tc.err); got != tc.want {

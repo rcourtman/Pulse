@@ -240,6 +240,8 @@ An actual HTTP 401/403 leads only to checking the existing credential's access
 to that VM. A stopped-agent reason requires exact command-bound rejection
 evidence, not an HTTP 500 or a status/diagnosis quoted in provider text.
 Unsupported commands remain errors without claiming that QGA is stopped.
+Untyped local timeout/deadline errors keep their conservative timeout reason;
+this diagnostic correction does not turn local uncertainty into recovery.
 Deferrals retain their fixed reasons and do not gain new diagnostic commands.
 `TestGuestFilesystemFailureGuidanceUsesObservedEvidence` crosses the real
 client/collector/log boundary and preserves unavailable disk sentinels and

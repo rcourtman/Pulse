@@ -32,7 +32,7 @@ func classifyGuestAgentDiskStatusError(err error) string {
 	switch {
 	case err.Error() == "QEMU guest agent is not running":
 		return "agent-not-running"
-	case errors.Is(err, context.DeadlineExceeded) || strings.Contains(strings.ToLower(err.Error()), "timeout"):
+	case errors.Is(err, context.DeadlineExceeded) || strings.Contains(strings.ToLower(err.Error()), "timeout") || strings.Contains(strings.ToLower(err.Error()), "deadline exceeded"):
 		return "agent-timeout"
 	default:
 		return "agent-error"
