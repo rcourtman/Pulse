@@ -109,8 +109,6 @@ export type TemperatureDisplayMetric = Extract<
   'temperature' | 'diskTemperature'
 >;
 
-const TEMPERATURE_SEVERITY_RANK = { normal: 0, warning: 1, critical: 2 } as const;
-
 /**
  * Colour for a temperature reading. An open alert on the reading sets a floor:
  * the alert holds until the reading falls to its clear level, so a reading
@@ -130,10 +128,8 @@ export const getTemperatureTextClass = (
     metric,
     thresholds ?? getDefaultDisplayMetricThresholds(metric),
   );
-  const severity =
-    openAlertSeverity &&
-    TEMPERATURE_SEVERITY_RANK[openAlertSeverity] > TEMPERATURE_SEVERITY_RANK[readingSeverity]
-      ? openAlertSeverity
-      : readingSeverity;
-  return TEMPERATURE_TEXT_CLASSES[severity];
+  // Below critical, an open alert's severity is never lower than the reading's.
+  return TEMPERATURE_TEXT_CLASSES[
+    readingSeverity === 'critical' || !openAlertSeverity ? readingSeverity : openAlertSeverity
+  ];
 };
