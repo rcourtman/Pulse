@@ -46,6 +46,11 @@ and installer tooling.
   give the attempted version or release asset (or say "unknown") and identify
   the installer or helper when known. Include an image tag or digest only for a
   running container, not for a bare-metal or LXC install.
+- Where already known, give the affected platform and release (for example,
+  TrueNAS SCALE or CORE), separately from the Pulse server OS and version.
+  Say whether its readings come through the platform API, a Pulse agent, or
+  both. Use existing settings or observations; blank or "unknown" is valid.
+  Do not run diagnostics, probe, restart or change a connection to fill this in.
 - Include only evidence relevant to the symptom: a screenshot or exact redacted
   error may be enough for a visual problem; existing logs or observations may
   explain a connection or data failure. Diagnostics are optional, not a condition

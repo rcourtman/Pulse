@@ -41,6 +41,15 @@ An API-only connection can have no agent. Accept "unknown" or an omitted optiona
 field, and use existing evidence; do not ask for a downgrade, restart, reinstall
 or re-enrolment to obtain version context. Existing reports need no refile.
 
+The optional **OS / environment** field in both bug forms also distinguishes
+where readings come from: the platform API, a Pulse agent, or both. Retain the
+affected platform release, including TrueNAS SCALE versus CORE, separately from
+the Pulse and agent versions and the server OS. Different collection paths can
+supply different readings for the same target; a working agent view does not
+prove that the API view recovered. Use existing settings and observations;
+blank or "unknown" is valid. Do not request diagnostics, a probe, restart or
+connection change just to fill this context. Existing reports need no refile.
+
 Keep the Pulse server's installation separate from the affected target. A
 Docker-hosted Pulse server can monitor a VM, LXC or NAS; its installation type
 does not make Docker commands relevant to that target. Read later comments as
