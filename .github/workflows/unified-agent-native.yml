@@ -84,6 +84,21 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Set up Node.js for native runtime test assets
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: 'frontend-modern/package-lock.json'
+
+      - name: Install frontend test dependencies
+        working-directory: frontend-modern
+        run: npm ci
+
+      - name: Build real frontend assets for API-linked native tests
+        working-directory: frontend-modern
+        run: npm run build
+
       - name: Supply GNU timeout for macOS guidance checks
         if: runner.os == 'macOS'
         shell: bash
@@ -122,19 +137,6 @@ jobs:
       - name: Test native Windows installer contracts
         if: ${{ !matrix.unix }}
         run: go test ./scripts/installtests -run '^Test(InstallPS1|WindowsAgentLifecycle)'
-
-      - name: Set up Node.js for Windows command proof
-        if: ${{ !matrix.unix }}
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: 'frontend-modern/package-lock.json'
-
-      - name: Install frontend test dependencies
-        if: ${{ !matrix.unix }}
-        working-directory: frontend-modern
-        run: npm ci
 
       - name: Execute generated command with Windows PowerShell 5.1
         if: ${{ !matrix.unix }}
