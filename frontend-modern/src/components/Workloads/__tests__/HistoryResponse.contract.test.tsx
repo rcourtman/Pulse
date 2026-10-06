@@ -205,6 +205,7 @@ describe('production History consumers reject unbound response evidence', () => 
         onDemand: () => true,
         range: () => '24h',
         selectedNode: () => null,
+        series: 'guests',
       });
       return (
         <output>

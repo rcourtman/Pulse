@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +10,7 @@ const nodeDrawerMock = vi.hoisted(() => vi.fn());
 const activeAlertsMock = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
 const getMetricThresholdsMock = vi.hoisted(() => vi.fn());
 const temperatureGaugeMock = vi.hoisted(() => vi.fn());
+const metricHistoryMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/hooks/useBreakpoint', () => ({
   useBreakpoint: () => ({
@@ -63,9 +65,12 @@ vi.mock('@/components/shared/TemperatureGauge', () => ({
 }));
 
 vi.mock('@/components/Workloads/useWorkloadTableMetricHistory', () => ({
-  useWorkloadTableMetricHistory: () => ({
-    getNodeMetricSeries: () => [],
-  }),
+  useWorkloadTableMetricHistory: (options: unknown) => {
+    metricHistoryMock(options);
+    return {
+      getNodeMetricSeries: () => [],
+    };
+  },
 }));
 
 vi.mock('@/components/Workloads/NodeDrawer', () => ({
@@ -576,6 +581,34 @@ describe('ProxmoxNodesTable', () => {
     expect(row?.className).toContain('opacity-60');
     expect(screen.queryByTestId('metric-mini-sparkline')).not.toBeInTheDocument();
     expect(screen.queryByTestId('temperature-gauge')).not.toBeInTheDocument();
+  });
+
+  it('reads node history only, and only while Trends is on', () => {
+    const [mode, setMode] = createSignal<'bars' | 'sparklines'>('bars');
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[makeNodeResource()]}
+        guests={[]}
+        metricDisplayMode={mode}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    expect(metricHistoryMock).toHaveBeenCalledTimes(1);
+    const options = metricHistoryMock.mock.calls[0][0] as {
+      enabled: () => boolean;
+      selectedNode?: unknown;
+      series: string;
+    };
+    // Guest history belongs to the workloads table below; a second guest
+    // reader here would poll the workloads route for rows it never draws.
+    expect(options.series).toBe('nodes');
+    expect(options.selectedNode).toBeUndefined();
+    expect(options.enabled()).toBe(false);
+    setMode('sparklines');
+    expect(options.enabled()).toBe(true);
   });
 
   it('updates every availability signal when a live row becomes offline', () => {

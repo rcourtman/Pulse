@@ -575,6 +575,9 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     prefetchGuests: metricHistoryPrefetchGuests,
     range: workloadMetricHistoryRange,
     selectedNode,
+    // Grouped node rows carry no metric cells, so this reader never polls
+    // the infrastructure summary.
+    series: 'guests',
   });
   const [workloadHistoryHintSeen, setWorkloadHistoryHintSeen] = usePersistentSignal<boolean>(
     STORAGE_KEYS.WORKLOADS_HISTORY_HINT_SEEN,
