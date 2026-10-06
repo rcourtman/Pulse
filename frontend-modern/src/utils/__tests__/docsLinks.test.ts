@@ -22,6 +22,7 @@ import securityOverviewPanelSource from '@/components/Settings/SecurityOverviewP
 import selfHostedCommercialRecoverySectionSource from '@/components/Settings/SelfHostedCommercialRecoverySection.tsx?raw';
 import securityWarningSource from '@/components/SecurityWarning.tsx?raw';
 import { DIAGNOSTICS_PANEL_COPY } from '@/utils/diagnosticsPresentation';
+import { renderDocMarkdown } from '@/features/docs/docMarkdown';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,6 +63,49 @@ function getRuntimeSourceFiles(dir: string): string[] {
 }
 
 describe('docsLinks', () => {
+  const memoryFAQ = () => {
+    const faq = readFileSync(path.join(repoRoot, 'docs', 'FAQ.md'), 'utf8');
+    const article = document.createElement('article');
+    article.innerHTML = renderDocMarkdown(
+      faq.split('### High memory usage?')[1].split('\n### ')[0],
+      'FAQ',
+    );
+    return article;
+  };
+
+  it('makes the resident-memory FAQ lead to the shipped passive recipe', () => {
+    const link = memoryFAQ().querySelector(
+      'a[href="/docs/TROUBLESHOOTING#memory-use-keeps-growing"]',
+    );
+    expect(link?.textContent).toBe('read-only memory checks');
+    const source = readFileSync(path.join(repoRoot, 'docs', 'TROUBLESHOOTING.md'), 'utf8');
+    expect(readFileSync(path.join(frontendRoot, 'public/docs/TROUBLESHOOTING.md'), 'utf8')).toBe(
+      source,
+    );
+    const guide = document.createElement('article');
+    guide.innerHTML = renderDocMarkdown(source, 'TROUBLESHOOTING');
+    expect(guide.querySelector('#memory-use-keeps-growing')?.textContent).toBe(
+      'Memory use keeps growing',
+    );
+    expect(guide.textContent).toContain('Pulse resident-memory sample');
+  });
+
+  it('keeps the resident-memory FAQ from sacrificing history or claiming a leak', () => {
+    const article = memoryFAQ();
+    const text = article.textContent?.replace(/\s+/g, ' ');
+    expect(text).toContain("container usage from Pulse's resident memory (RSS)");
+    expect(text).toContain('a high LXC or Docker chart alone does not establish a leak');
+    expect(text).toContain('Do not shorten retention, slow polling, restart Pulse or drop caches');
+    expect(text).toContain('Shorter retention removes history');
+    expect(text).toContain('slower polling can delay monitoring');
+    expect(text).toContain('neither establishes the cause');
+    expect(text).toContain('stop sampling and prioritise safe recovery');
+    expect(article.querySelector('pre')).toBeNull();
+    expect(readFileSync(path.join(frontendRoot, 'public/docs/FAQ.md'), 'utf8')).toBe(
+      readFileSync(path.join(repoRoot, 'docs/FAQ.md'), 'utf8'),
+    );
+  });
+
   it('keeps report collection precautions usable without unpublished documentation links', () => {
     for (const form of ['bug_report.yml', 'v6_rc_feedback.yml']) {
       const source = readFileSync(path.join(repoRoot, '.github', 'ISSUE_TEMPLATE', form), 'utf8');
