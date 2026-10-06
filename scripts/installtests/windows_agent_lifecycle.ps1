@@ -51,6 +51,7 @@ function Start-LifecycleServer {
     param([string]$AgentPath)
     Stop-LifecycleServer
     $version = ((& $AgentPath --version 2>$null) | Select-Object -First 1).Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Lifecycle input version check failed (exit $LASTEXITCODE)." }
     if ([string]::IsNullOrWhiteSpace($version)) {
         throw "Could not read agent version from $AgentPath"
     }
@@ -111,6 +112,7 @@ function Assert-AgentRuntime {
         throw "Unexpected service state: $($service | ConvertTo-Json -Compress)"
     }
     $installedVersion = ((& "$env:ProgramFiles\Pulse\pulse-agent.exe" --version 2>$null) | Select-Object -First 1).Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Installed agent version check failed (exit $LASTEXITCODE)." }
     if ($installedVersion -ne $ExpectedVersion) {
         throw "Installed version is $installedVersion; expected $ExpectedVersion."
     }
@@ -126,10 +128,12 @@ function Assert-AgentRuntime {
         throw "Agent log does not contain startup evidence for $ExpectedVersion."
     }
     $recovery = (& sc.exe qfailure $serviceName 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw "Service recovery query failed (exit $LASTEXITCODE)." }
     if ([regex]::Matches($recovery, 'RESTART').Count -lt 3) {
         throw "Service recovery actions are incomplete: $recovery"
     }
     $failureFlag = (& sc.exe qfailureflag $serviceName 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw "Service failure-flag query failed (exit $LASTEXITCODE)." }
     if ($failureFlag -notmatch 'TRUE|1') {
         throw "Service non-crash recovery flag is not enabled: $failureFlag"
     }

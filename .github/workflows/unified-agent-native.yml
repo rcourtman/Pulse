@@ -156,12 +156,17 @@ jobs:
         if: ${{ !matrix.unix }}
         shell: pwsh
         run: |
+          # PowerShell does not stop on native nonzero exits. Check each one
+          # before a later success can replace LASTEXITCODE.
           go build -o pulse-agent-native.exe ./cmd/pulse-agent
+          if ($LASTEXITCODE -ne 0) { throw "Native Windows agent build failed (exit $LASTEXITCODE)." }
           .\pulse-agent-native.exe --version
+          if ($LASTEXITCODE -ne 0) { throw "Native Windows agent version check failed (exit $LASTEXITCODE)." }
           $selfTestStateDir = Join-Path $env:RUNNER_TEMP 'pulse-agent-self-test'
           $selfTestLogFile = Join-Path $selfTestStateDir 'pulse-agent.log'
           New-Item -ItemType Directory -Path $selfTestStateDir -Force | Out-Null
           .\pulse-agent-native.exe --self-test --state-dir $selfTestStateDir --log-file $selfTestLogFile
+          if ($LASTEXITCODE -ne 0) { throw "Native Windows agent self-test failed (exit $LASTEXITCODE)." }
           $errors = $null
           [System.Management.Automation.Language.Parser]::ParseFile(
             (Resolve-Path 'scripts/install.ps1'),
@@ -187,8 +192,11 @@ jobs:
             Remove-Item -Path $lifecycleStateDir -Recurse -Force
           }
           go build -buildvcs=false -trimpath -ldflags="-s -w -X main.Version=6.0.5-ci.1" -o pulse-agent-windows-ci-1.exe ./cmd/pulse-agent
+          if ($LASTEXITCODE -ne 0) { throw "Windows lifecycle v1 build failed (exit $LASTEXITCODE)." }
           go build -buildvcs=false -trimpath -ldflags="-s -w -X main.Version=6.0.5-ci.2" -o pulse-agent-windows-ci-2.exe ./cmd/pulse-agent
+          if ($LASTEXITCODE -ne 0) { throw "Windows lifecycle v2 build failed (exit $LASTEXITCODE)." }
           go build -buildvcs=false -trimpath -o windows-lifecycle-server.exe ./scripts/installtests/windowslifecycleserver
+          if ($LASTEXITCODE -ne 0) { throw "Windows lifecycle server build failed (exit $LASTEXITCODE)." }
           & ./scripts/installtests/windows_agent_lifecycle.ps1 `
             -Phase Full `
             -ServerBinary ./windows-lifecycle-server.exe `
@@ -196,6 +204,7 @@ jobs:
             -AgentV2 ./pulse-agent-windows-ci-2.exe `
             -InstallerPath ./scripts/install.ps1 `
             -ConfirmLifecycleMutation
+          if ($LASTEXITCODE -ne 0) { throw "Windows service lifecycle proof failed (exit $LASTEXITCODE)." }
 
   freebsd-build-contract:
     name: FreeBSD cross-build contract
