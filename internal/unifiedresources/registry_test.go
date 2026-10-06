@@ -10,6 +10,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 func TestRegistry_CachedReadsUseSharedLock(t *testing.T) {
@@ -7031,5 +7032,157 @@ func TestRegistryProjectionSnapshotDetachesAndTracksMappings(t *testing.T) {
 	rows, emptyTargets := empty.ListWithMetricsTargets()
 	if len(rows) != 0 || len(emptyTargets) != 0 {
 		t.Fatal("empty projection invented resources or targets")
+	}
+}
+
+// A retained temperature is last-known history, not evidence that the disk is
+// hot now. The risk verdict (and the warning status it drives) must judge only
+// a temperature whose collection state says it was observed now.
+func TestPhysicalDiskRiskIgnoresRetainedTemperature(t *testing.T) {
+	// A fresh check time keeps the registry's source-staleness sweep out of
+	// the status this test reads.
+	now := time.Now()
+	retained := diskinventory.Unavailable("host_agent", "host agent stopped reporting")
+
+	cases := []struct {
+		name       string
+		collection *diskinventory.CollectionStatus
+		wantHot    bool
+	}{
+		{name: "collected now", collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Available("proxmox_node_smart")}, wantHot: true},
+		{name: "source predates collection state", collection: nil, wantHot: true},
+		{name: "state left empty", collection: &diskinventory.CollectionStatus{}, wantHot: true},
+		{name: "retained after the agent went silent", collection: &diskinventory.CollectionStatus{Temperature: retained}, wantHot: false},
+		{name: "retained while in standby", collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("smartctl", "disk is in standby")}, wantHot: false},
+		{name: "retained after the source stopped exposing it", collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Unsupported("proxmox_disks", "Proxmox disk inventory does not expose temperature")}, wantHot: false},
+		{name: "retained while unexpectedly missing", collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Missing("smartctl", "")}, wantHot: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			adapter := NewMonitorAdapter(NewRegistry(nil))
+			adapter.PopulateFromSnapshot(models.StateSnapshot{
+				PhysicalDisks: []models.PhysicalDisk{{
+					ID:          "homelab-pve--dev-sda",
+					Node:        "pve",
+					Instance:    "homelab",
+					DevPath:     "/dev/sda",
+					Model:       "WDC WD80EFAX",
+					Serial:      "SERIAL-SDA",
+					Type:        "sata",
+					Health:      "PASSED",
+					Wearout:     -1,
+					Temperature: 72,
+					Collection:  tc.collection,
+					LastChecked: now,
+				}},
+			})
+			var disks []Resource
+			for _, resource := range adapter.GetAll() {
+				if resource.Type == ResourceTypePhysicalDisk {
+					disks = append(disks, resource)
+				}
+			}
+			if len(disks) != 1 || disks[0].PhysicalDisk == nil {
+				t.Fatalf("physical disks = %+v, want one", disks)
+			}
+			disk := disks[0]
+			if disk.PhysicalDisk.Temperature != 72 {
+				t.Fatalf("temperature = %d, want the reading kept at 72", disk.PhysicalDisk.Temperature)
+			}
+			hot := false
+			if disk.PhysicalDisk.Risk != nil {
+				for _, reason := range disk.PhysicalDisk.Risk.Reasons {
+					hot = hot || reason.Code == "temperature_high"
+				}
+			}
+			if hot != tc.wantHot {
+				t.Fatalf("temperature_high = %v, want %v (risk %+v)", hot, tc.wantHot, disk.PhysicalDisk.Risk)
+			}
+			if tc.wantHot && disk.Status != StatusWarning {
+				t.Fatalf("status = %q, want warning for a collected 72C", disk.Status)
+			}
+			if !tc.wantHot && (disk.PhysicalDisk.Risk != nil || disk.Status != StatusOnline) {
+				t.Fatalf("retained 72C: status = %q risk = %+v, want online with no risk", disk.Status, disk.PhysicalDisk.Risk)
+			}
+		})
+	}
+
+	// A host agent's SMART row merged with the Proxmox inventory row for the
+	// same disk: the agent's retained reading keeps its unavailable state
+	// through the registry merge and recompute, so it stays out of risk.
+	for _, tc := range []struct {
+		name    string
+		state   diskinventory.FieldStatus
+		wantHot bool
+	}{
+		{name: "agent reading collected", state: diskinventory.Available("host_agent"), wantHot: true},
+		{name: "agent reading retained", state: retained, wantHot: false},
+	} {
+		t.Run("merged "+tc.name, func(t *testing.T) {
+			adapter := NewMonitorAdapter(NewRegistry(nil))
+			adapter.PopulateFromSnapshot(models.StateSnapshot{
+				Hosts: []models.Host{{
+					ID:       "host-pve",
+					Hostname: "pve",
+					Status:   "online",
+					LastSeen: now,
+					Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+						Device:      "/dev/sda",
+						Model:       "WDC WD80EFAX",
+						Serial:      "SERIAL-SDA",
+						Type:        "sata",
+						Temperature: 72,
+						Health:      "PASSED",
+						Collection:  &diskinventory.CollectionStatus{Temperature: tc.state},
+					}}},
+				}},
+				PhysicalDisks: []models.PhysicalDisk{{
+					ID:          "homelab-pve--dev-sda",
+					Node:        "pve",
+					Instance:    "homelab",
+					DevPath:     "/dev/sda",
+					Model:       "WDC WD80EFAX",
+					Serial:      "SERIAL-SDA",
+					Type:        "sata",
+					Health:      "PASSED",
+					Wearout:     -1,
+					Collection:  &diskinventory.CollectionStatus{Temperature: diskinventory.Unsupported("proxmox_disks", "Proxmox disk inventory does not expose temperature")},
+					LastChecked: now,
+				}},
+			})
+			var disks []Resource
+			for _, resource := range adapter.GetAll() {
+				if resource.Type == ResourceTypePhysicalDisk {
+					disks = append(disks, resource)
+				}
+			}
+			if len(disks) != 1 || disks[0].PhysicalDisk == nil {
+				t.Fatalf("physical disks = %d, want the agent and Proxmox rows merged into one", len(disks))
+			}
+			disk := disks[0]
+			if disk.PhysicalDisk.Temperature != 72 {
+				t.Fatalf("merged temperature = %d, want 72", disk.PhysicalDisk.Temperature)
+			}
+			hot := false
+			if disk.PhysicalDisk.Risk != nil {
+				for _, reason := range disk.PhysicalDisk.Risk.Reasons {
+					hot = hot || reason.Code == "temperature_high"
+				}
+			}
+			if hot != tc.wantHot {
+				t.Fatalf("merged temperature_high = %v, want %v (collection %+v, risk %+v)", hot, tc.wantHot, disk.PhysicalDisk.Collection, disk.PhysicalDisk.Risk)
+			}
+		})
+	}
+
+	// The registry recomputes risk from merged metadata after a source merge;
+	// that path follows the same rule.
+	meta := &PhysicalDiskMeta{Health: "PASSED", Temperature: 72, Collection: &diskinventory.CollectionStatus{Temperature: retained}}
+	if risk := physicalDiskRiskFromMeta(meta, nil); risk != nil {
+		t.Fatalf("meta recompute risk = %+v, want none for a retained temperature", risk)
+	}
+	meta.Collection = &diskinventory.CollectionStatus{Temperature: diskinventory.Available("host_agent")}
+	if risk := physicalDiskRiskFromMeta(meta, nil); risk == nil || risk.Level != storagehealth.RiskCritical {
+		t.Fatalf("meta recompute risk = %+v, want critical for a collected 72C", risk)
 	}
 }
