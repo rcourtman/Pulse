@@ -3732,6 +3732,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 				incoming.PhysicalDisk.Collection,
 			)
 		}
+		pairPhysicalDiskTemperatureState(existing.PhysicalDisk, previous, incoming.PhysicalDisk)
 	}
 	if existing.PhysicalDisk != nil && (mergedPhysicalDisk || len(incoming.Incidents) > 0) {
 		existing.PhysicalDisk.Risk = physicalDiskRiskFromMeta(existing.PhysicalDisk, existing.Incidents)
@@ -4004,6 +4005,39 @@ func mergeTrueNASData(existing *TrueNASData, incoming *TrueNASData) *TrueNASData
 		merged.Services = cloneTrueNASServices(incoming.Services)
 	}
 	return &merged
+}
+
+// pairPhysicalDiskTemperatureState stops one merge step presenting the shown
+// temperature under the other row's availability. The merge rules choose the
+// value by source preference and merge field states separately, so when the
+// two rows carry different temperatures the shown value can sit under the
+// other row's "available" state: a silent agent's retained reading beside a
+// Proxmox row that collected its own reading now, for example. When the
+// merged state says collected but the row the shown value came from says it
+// was not, the merged state becomes that row's own. Values never change, and a
+// state is only ever withdrawn here, never granted. previous may already be an
+// earlier step's merge, whose single state per field stands in for its rows.
+func pairPhysicalDiskTemperatureState(merged, previous, incoming *PhysicalDiskMeta) {
+	if merged == nil || previous == nil || incoming == nil || previous.Temperature == incoming.Temperature ||
+		!diskinventory.TemperatureCollected(merged.Temperature, merged.Collection) {
+		return
+	}
+	var shown *PhysicalDiskMeta
+	switch merged.Temperature {
+	case incoming.Temperature:
+		shown = incoming
+	case previous.Temperature:
+		shown = previous
+	default:
+		return
+	}
+	if diskinventory.TemperatureCollected(shown.Temperature, shown.Collection) {
+		return
+	}
+	if merged.Collection == nil {
+		merged.Collection = &diskinventory.CollectionStatus{}
+	}
+	merged.Collection.Temperature = shown.Collection.Temperature
 }
 
 func mergePhysicalDiskData(existing *PhysicalDiskMeta, incoming *PhysicalDiskMeta) *PhysicalDiskMeta {

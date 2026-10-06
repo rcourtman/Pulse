@@ -3,6 +3,7 @@ package monitoring
 import (
 	"math"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,7 +20,7 @@ import (
 // duplicate hostname scenarios), then falls back to hostname matching.
 // Returns nil if no matching host agent is found or if no temperature data is available.
 func (m *Monitor) getHostAgentTemperature(nodeName string) *models.Temperature {
-	return m.getHostAgentTemperatureByID("", nodeName)
+	return m.getHostAgentTemperatureForNode(models.Node{Name: nodeName})
 }
 
 func shouldSkipTemperatureSSHCollection(hostAgentTemp *models.Temperature) bool {
@@ -77,19 +78,23 @@ func hasUsableSMARTTemperature(temp *models.Temperature) bool {
 	return false
 }
 
-// getHostAgentTemperatureByID looks for a matching host agent by node ID first,
-// then falls back to hostname matching. This correctly handles clusters where
-// multiple nodes may have the same hostname (e.g., "px1" on different IPs).
-func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.Temperature {
+// getHostAgentTemperatureForNode returns a polled Proxmox node's reading from
+// its host agent (see hostAgentForNode), else from a sibling agent's cluster
+// sensor cache. node is the poller's model of the node: its source ID, native
+// name, connection and identity stamps.
+func (m *Monitor) getHostAgentTemperatureForNode(node models.Node) *models.Temperature {
 	readState := m.GetUnifiedReadStateOrSnapshot()
 	if readState == nil {
 		return nil
 	}
+	hosts := readState.Hosts()
+	nodes := readState.Nodes()
+	slot := m.polledNodeSlot(hosts, nodes, node)
 
-	matchedHost := hostAgentForNode(readState.Hosts(), nodeID, nodeName)
+	matchedHost := hostAgentForNode(hosts, nodes, slot, node.Name)
 	if matchedHost == nil {
 		// No directly-linked host agent found — check cluster sensor cache
-		return m.getClusterSensorTemperature(nodeName)
+		return m.getClusterSensorTemperature(hosts, nodes, node, slot)
 	}
 
 	// Check if the host agent has temperature data. SMART-only reports are
@@ -98,7 +103,7 @@ func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.T
 	sensors := matchedHost.Sensors()
 	if sensors == nil || (len(sensors.TemperatureCelsius) == 0 && len(sensors.SMART) == 0) {
 		// Host agent exists but has no temperature data — try cluster cache
-		return m.getClusterSensorTemperature(nodeName)
+		return m.getClusterSensorTemperature(hosts, nodes, node, slot)
 	}
 
 	// An agent that stopped reporting keeps its last sensors in state. Those
@@ -108,7 +113,7 @@ func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.T
 	// every PVE poll, so read the agent source's sighting.
 	agentStatus, ok := matchedHost.SourceStatus(unifiedresources.SourceAgent)
 	if !ok || !hostAgentReportCurrent(agentStatus.LastSeen, matchedHost.IntervalSeconds(), time.Now()) {
-		return m.getClusterSensorTemperature(nodeName)
+		return m.getClusterSensorTemperature(hosts, nodes, node, slot)
 	}
 
 	// Convert host agent sensor data to Temperature model, stamped with the
@@ -125,7 +130,7 @@ func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.T
 // reading of that age is dropped too; it is already older than the lease, and
 // the bound errs toward a gap rather than a stale value. A reading stamped
 // after that report keeps the ordinary carry window.
-func (m *Monitor) carriedTemperatureOutlivesAgentLease(nodeID, nodeName string, temp *models.Temperature, now time.Time) bool {
+func (m *Monitor) carriedTemperatureOutlivesAgentLease(node models.Node, temp *models.Temperature, now time.Time) bool {
 	if temp == nil {
 		return false
 	}
@@ -133,7 +138,9 @@ func (m *Monitor) carriedTemperatureOutlivesAgentLease(nodeID, nodeName string, 
 	if readState == nil {
 		return false
 	}
-	matchedHost := hostAgentForNode(readState.Hosts(), nodeID, nodeName)
+	hosts := readState.Hosts()
+	nodes := readState.Nodes()
+	matchedHost := hostAgentForNode(hosts, nodes, m.polledNodeSlot(hosts, nodes, node), node.Name)
 	if matchedHost == nil {
 		return false
 	}
@@ -145,37 +152,186 @@ func (m *Monitor) carriedTemperatureOutlivesAgentLease(nodeID, nodeName string, 
 	return !temp.LastUpdate.After(agentStatus.LastSeen)
 }
 
-// hostAgentForNode returns the host agent for a Proxmox node: the agent linked
-// to the node ID, else one whose hostname matches. This correctly handles
-// clusters where multiple nodes may have the same hostname (e.g., "px1" on
-// different IPs).
-func hostAgentForNode(hosts []*unifiedresources.HostView, nodeID, nodeName string) *unifiedresources.HostView {
-	// First, try to find a host agent that is explicitly linked to this node
-	// via LinkedNodeID. This is the most reliable method and handles duplicate
-	// hostnames correctly.
-	if nodeID != "" {
-		for i := range hosts {
-			if hosts[i].LinkedNodeID() == nodeID {
-				log.Debug().
-					Str("nodeID", nodeID).
-					Str("hostAgentID", hosts[i].ID()).
-					Str("hostname", hosts[i].Hostname()).
-					Msg("Matched host agent to node via LinkedNodeID")
-				return hosts[i]
-			}
+// nodeSlot is the read-state identity of one polled Proxmox node: the source
+// node IDs and connections that denote it.
+type nodeSlot struct {
+	ids       []string
+	instances []string
+}
+
+func (s *nodeSlot) add(id, instance string) {
+	if id = strings.TrimSpace(id); id != "" && !s.hasID(id) {
+		s.ids = append(s.ids, id)
+	}
+	if instance = strings.TrimSpace(instance); instance != "" && !s.hasInstance(instance) {
+		s.instances = append(s.instances, instance)
+	}
+}
+
+func (s nodeSlot) hasID(id string) bool {
+	return id != "" && slices.Contains(s.ids, id)
+}
+
+func (s nodeSlot) hasInstance(instance string) bool {
+	return instance != "" && slices.Contains(s.instances, instance)
+}
+
+// polledNodeSlot returns the read-state identity of a polled Proxmox node. A
+// node the read state holds under its own source ID is that node alone. The
+// state folds the views of one machine reached through two connections (a
+// cluster added twice, or a multi-homed host added by each address) into one
+// slot, kept under whichever view its merge preference keeps, so a polled view
+// the read state does not hold also counts as the one same-named node proven to
+// be that machine: by models.NodeObservationsSameMachine, or by
+// models.HostAgentBridgesNodeViews for the agent linked to that node. Two or
+// more such candidates are ambiguous and none is taken, as the state's alias
+// resolution declines them. Agent links and cluster-sensor scope are matched
+// against the slot, never against a same-named node of another machine.
+func (m *Monitor) polledNodeSlot(hosts []*unifiedresources.HostView, nodes []*unifiedresources.NodeView, node models.Node) nodeSlot {
+	var slot nodeSlot
+	if strings.TrimSpace(node.ID) == "" {
+		return slot
+	}
+	for _, view := range nodes {
+		if view != nil && view.SourceID() == node.ID {
+			slot.add(node.ID, firstNonEmptyString(node.Instance, view.Instance()))
+			return slot
+		}
+	}
+	slot.add(node.ID, node.Instance)
+
+	var partner *unifiedresources.NodeView
+	for _, view := range nodes {
+		if view == nil || !strings.EqualFold(view.NodeName(), node.Name) {
+			continue
+		}
+		if !m.nodeViewIsSameMachine(hosts, view, node) {
+			continue
+		}
+		if partner != nil {
+			return slot
+		}
+		partner = view
+	}
+	if partner != nil {
+		slot.add(partner.SourceID(), partner.Instance())
+	}
+	return slot
+}
+
+// nodeViewIsSameMachine reports whether a read-state Proxmox node and a polled
+// node are one machine by the evidence the state folds node views on.
+func (m *Monitor) nodeViewIsSameMachine(hosts []*unifiedresources.HostView, view *unifiedresources.NodeView, node models.Node) bool {
+	stateNode := m.stateNodeFromView(view)
+	if models.NodeObservationsSameMachine(stateNode, node) {
+		return true
+	}
+	for _, host := range hosts {
+		if host.LinkedNodeID() == stateNode.ID {
+			return models.HostAgentBridgesNodeViews(hostFromReadStateView(host), stateNode, node)
+		}
+	}
+	return false
+}
+
+// nodeHasProvenViewInConnection reports whether a polled node has a view under
+// another Proxmox connection that is the same machine: a cluster added through
+// two connections lists the same members, each with its TLS fingerprint, so
+// that connection's view of the node's name is the polled node.
+func (m *Monitor) nodeHasProvenViewInConnection(node models.Node, instance string) bool {
+	instanceCfg := m.getInstanceConfig(instance)
+	if instanceCfg == nil || !instanceCfg.IsCluster {
+		return false
+	}
+	fingerprint := pveNodeTLSFingerprint(instanceCfg, node.Name)
+	if fingerprint == "" {
+		return false
+	}
+	return models.NodeObservationsSameMachine(models.Node{
+		Name:            node.Name,
+		Instance:        instanceCfg.Name,
+		ClusterName:     instanceCfg.ClusterName,
+		IsClusterMember: true,
+		TLSFingerprint:  fingerprint,
+	}, node)
+}
+
+// stateNodeFromView restores the identity a read-state Proxmox node carries in
+// state, including the config-derived TLS fingerprint the registry does not
+// keep, the way previousNodesForInstance does.
+func (m *Monitor) stateNodeFromView(view *unifiedresources.NodeView) models.Node {
+	node := previousNodeFromView(view)
+	node.TLSFingerprint = pveNodeTLSFingerprint(m.getInstanceConfig(node.Instance), node.Name)
+	return node
+}
+
+// hostAgentForNode returns the host agent for a polled Proxmox node: the agent
+// linked to the node's slot, else the one unlinked agent whose hostname is the
+// node's name. Several connections can each have a node with the same name
+// (one "px1" per site), so the hostname fallback never takes an agent linked to
+// another node or to a guest, and finds nothing when a Proxmox node outside the
+// slot or a second unlinked agent has the name. Every link source (automatic,
+// manual, restored from continuity) stores the Proxmox source node ID, so slot
+// IDs compare with LinkedNodeID directly.
+func hostAgentForNode(hosts []*unifiedresources.HostView, nodes []*unifiedresources.NodeView, slot nodeSlot, nodeName string) *unifiedresources.HostView {
+	for _, host := range hosts {
+		if slot.hasID(host.LinkedNodeID()) {
+			log.Debug().
+				Str("nodeID", host.LinkedNodeID()).
+				Str("hostAgentID", host.ID()).
+				Str("hostname", host.Hostname()).
+				Msg("Matched host agent to node via LinkedNodeID")
+			return host
 		}
 	}
 
-	// Fallback: match by hostname if no linked host was found
-	// This maintains backwards compatibility for setups where linking hasn't occurred yet
-	nodeLower := strings.ToLower(strings.TrimSpace(nodeName))
-	for i := range hosts {
-		hostnameLower := strings.ToLower(strings.TrimSpace(hosts[i].Hostname()))
-		if hostnameLower == nodeLower {
-			return hosts[i]
+	// Fallback for an agent that is not linked yet.
+	name := strings.ToLower(strings.TrimSpace(nodeName))
+	if name == "" || otherProxmoxNodeHasName(nodes, slot, name) {
+		return nil
+	}
+	var match *unifiedresources.HostView
+	for _, host := range hosts {
+		if host.LinkedNodeID() != "" || host.LinkedVMID() != "" || host.LinkedContainerID() != "" {
+			continue
+		}
+		if strings.ToLower(strings.TrimSpace(host.Hostname())) != name {
+			continue
+		}
+		if match != nil {
+			return nil
+		}
+		match = host
+	}
+	return match
+}
+
+// otherProxmoxNodeHasName reports whether a Proxmox node outside slot is named
+// name (lowercase). With an empty slot every node of that name counts.
+func otherProxmoxNodeHasName(nodes []*unifiedresources.NodeView, slot nodeSlot, name string) bool {
+	for _, node := range nodes {
+		if node == nil || slot.hasID(node.SourceID()) {
+			continue
+		}
+		if strings.ToLower(node.NodeName()) == name {
+			return true
 		}
 	}
-	return nil
+	return false
+}
+
+// proxmoxNodeInstance returns the Proxmox connection a node belongs to, or ""
+// when the node is not in the read state.
+func proxmoxNodeInstance(nodes []*unifiedresources.NodeView, nodeID string) string {
+	if nodeID == "" {
+		return ""
+	}
+	for _, node := range nodes {
+		if node != nil && node.SourceID() == nodeID {
+			return node.Instance()
+		}
+	}
+	return ""
 }
 
 func convertUnifiedHostSensorsToTemperature(sensors *unifiedresources.HostSensorMeta, lastSeen time.Time) *models.Temperature {
@@ -243,30 +399,57 @@ func cloneSMARTAttributesModel(src *models.SMARTAttributes) *models.SMARTAttribu
 	return &dest
 }
 
-// getClusterSensorTemperature looks up cached temperature data that was collected
-// by a sibling agent in the same Proxmox cluster via SSH. Returns nil if no
-// recent data is available.
-func (m *Monitor) getClusterSensorTemperature(nodeName string) *models.Temperature {
-	if nodeName == "" {
-		return nil
-	}
-
-	key := strings.ToLower(strings.TrimSpace(nodeName))
-
-	m.clusterSensorsMu.RLock()
-	entry, ok := m.clusterSensorsCache[key]
-	m.clusterSensorsMu.RUnlock()
-
-	if !ok {
+// getClusterSensorTemperature returns the reading a host agent on a sibling
+// cluster node collected for this node over SSH. Siblings are reported by bare
+// node name, which nodes of different connections can share, so a reading only
+// serves the node when the node its reporting agent is linked to belongs to one
+// of the slot's connections, or to a connection with a proven view of the node
+// (a cluster added twice). Readings from an unlinked agent serve no node.
+func (m *Monitor) getClusterSensorTemperature(hosts []*unifiedresources.HostView, nodes []*unifiedresources.NodeView, node models.Node, slot nodeSlot) *models.Temperature {
+	name := strings.ToLower(strings.TrimSpace(node.Name))
+	if name == "" {
 		return nil
 	}
 
 	// Reuse the same staleness threshold as direct host agents (2 minutes)
-	if !isHostAgentTemperatureRecent(entry.updatedAt) {
+	var candidates []clusterSensorsCacheEntry
+	m.clusterSensorsMu.RLock()
+	for _, entry := range m.clusterSensorsCache {
+		if entry.nodeName == name && isHostAgentTemperatureRecent(entry.updatedAt) {
+			candidates = append(candidates, entry)
+		}
+	}
+	m.clusterSensorsMu.RUnlock()
+
+	var newest *clusterSensorsCacheEntry
+	for i := range candidates {
+		reporterInstance := proxmoxNodeInstance(nodes, linkedNodeIDForAgent(hosts, candidates[i].reporterID))
+		if reporterInstance == "" ||
+			(!slot.hasInstance(reporterInstance) && !m.nodeHasProvenViewInConnection(node, reporterInstance)) {
+			continue
+		}
+		if newest == nil || candidates[i].updatedAt.After(newest.updatedAt) {
+			newest = &candidates[i]
+		}
+	}
+	if newest == nil {
 		return nil
 	}
+	return convertHostSensorsToTemperature(newest.sensors, newest.updatedAt)
+}
 
-	return convertHostSensorsToTemperature(entry.sensors, entry.updatedAt)
+// linkedNodeIDForAgent returns the Proxmox source node ID the agent with the
+// given agent ID (models.Host.ID) is linked to, or "".
+func linkedNodeIDForAgent(hosts []*unifiedresources.HostView, agentID string) string {
+	if agentID == "" {
+		return ""
+	}
+	for _, host := range hosts {
+		if host.AgentID() == agentID {
+			return host.LinkedNodeID()
+		}
+	}
+	return ""
 }
 
 // convertHostSensorsToTemperature converts HostSensorSummary to the Temperature model.

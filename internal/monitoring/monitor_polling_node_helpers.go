@@ -164,9 +164,9 @@ func (m *Monitor) collectNodeTemperatureData(
 	if effectiveStatus == "online" && tempMonitoringEnabled {
 		// First, check if there's a matching host agent with temperature data.
 		// Host agent temperatures are preferred because they don't require SSH access.
-		// Use getHostAgentTemperatureByID with the unique node ID to correctly handle
-		// duplicate hostname scenarios (e.g., two "px1" nodes on different IPs).
-		hostAgentTemp := m.getHostAgentTemperatureByID(modelNode.ID, node.Node)
+		// Match by the polled node's identity, not its name, so two connections'
+		// same-named nodes (e.g., "px1" at two sites) never share an agent.
+		hostAgentTemp := m.getHostAgentTemperatureForNode(*modelNode)
 		if hostAgentTemp != nil {
 			log.Debug().
 				Str("node", node.Node).
@@ -331,7 +331,7 @@ func (m *Monitor) collectNodeTemperatureData(
 				}
 			}
 
-			if m.carriedTemperatureOutlivesAgentLease(modelNode.ID, node.Node, prevTemp, time.Now()) {
+			if m.carriedTemperatureOutlivesAgentLease(*modelNode, prevTemp, time.Now()) {
 				// The reading came from a host agent that has stopped reporting.
 				// Its reporting lease already rode out transient gaps, so
 				// carrying it would outlive that lease.

@@ -1068,6 +1068,20 @@ replay stays idempotent. The real alert-manager callback path is covered by
 `TestProxmoxAlertTimelineUsesCanonicalHistoryIdentity` in
 `internal/monitoring/monitor_alert_handling_test.go`.
 
+Docker host and Swarm service alert lifecycle events, and sub-resource alert
+events (ZFS pools and devices, host filesystems, disks, RAID arrays, sensors
+and the Unraid array), pass through the same writer, which binds them to the
+Docker host, Swarm service, storage or host named in the unified-resources
+history identity clause. Container names and shortened container IDs still
+bind nothing. `CheckDockerHost` gives a container without an ID its host's
+reference, so that container's events join the host's history. A producer
+that changes one of these reference shapes must change
+`dockerHostHistoryReference` or `historySubResourceOwner` with it.
+`TestOwnerAlertTimelinesUseCanonicalHistoryIdentity` in
+`internal/monitoring/monitor_alert_handling_test.go` pins the Docker host,
+Swarm service, ZFS pool and device, and host filesystem shapes against the
+real alert manager.
+
 TrueNAS native alert projection preserves the trimmed, uppercase provider level in ResourceIncident.NativeSeverity. INFO and NOTICE retain the same canonical monitor risk; consumers must not lose their distinct actionability when projecting provider evidence. Native CRITICAL, ALERT, and EMERGENCY all project to canonical critical severity; EMERGENCY must not be discarded as unknown or make a still-active condition appear recovered. WARNING remains warning, and INFO and NOTICE remain informational at this projection boundary.
 
 Verification: `TestIncidentProjectionPreservesNativeSeverity` in `internal/truenas/provider_pool_health_contract_test.go` covers all seven native levels and case/whitespace normalization. `TestTrueNASNativeSeverityDispatch` in `internal/alerts/truenas_native_dispatch_test.go` verifies downstream INFO suppression, NOTICE preservation, notification severity, duplicate-poll retention, and confirmed recovery callback identity. The TrueNAS lifecycle tests in `internal/alerts/unified_incidents_test.go` require repeated EMERGENCY evidence to interrupt recovery confirmation. These are fixture-based projection and manager checks, not appliance ingestion or external notification-provider receipt proof.
@@ -3820,6 +3834,46 @@ exists or the agent payload has no usable positive reading. Identity-only or
 zero-temperature SMART rows do not count as usable by themselves, but the
 runtime must not keep probing legacy SSH solely to augment an otherwise healthy
 agent temperature payload with SMART data.
+A host agent's sensors feed the node the agent is linked to. Several Proxmox
+connections can each have a node of the same name (one `px1` per site), and
+`Host.LinkedNodeID` always holds the Proxmox source node ID, whether the link is
+automatic, manual or restored from host continuity. The poller therefore hands
+`getHostAgentTemperatureForNode` in `internal/monitoring/host_agent_temps.go` the
+polled node itself, and the lookup works on that node's slot. A node the read
+state holds under its own source ID is its own slot. The state folds the views
+of one machine reached through two connections (a cluster added twice, or a
+multi-homed host added by each address) into one node kept under one view's ID,
+chosen by its merge preference, and an automatic agent link follows that node.
+So a polled view the read state does not hold also takes the one same-named
+node proven to be the same machine, by `models.NodeObservationsSameMachine` or,
+for the agent linked to that node, `models.HostAgentBridgesNodeViews` (the agent
+reports both endpoints and the views' TLS fingerprints do not contradict), both
+in `internal/models/node_machine_identity.go`. These are pairwise forms of
+evidence `UpdateNodesForInstance` folds on, and it shares the agent
+corroboration rule with them;
+`TestNodeObservationsSameMachineMatchesStateFold` and
+`TestHostAgentBridgesNodeViewsMatchesStateFold` pin them against the state's
+fold for the covered cases. Two or more such candidates are ambiguous and none
+is taken, as the state declines an ambiguous alias. An agent linked to a slot ID
+is the node's agent. A manual link stays pinned to the source ID the operator
+chose, because the state never transfers operator intent to a replacement
+provider identity, so while the state keeps that machine under the other view's
+ID the node has no linked agent and no agent reading. Otherwise the hostname
+fallback takes only an agent with no node, VM or container link whose hostname
+is exactly the node name, and only when no Proxmox node outside the slot and no
+second unlinked agent has that name. Cluster-sibling readings an agent collects over SSH arrive keyed by bare
+node name, so the cluster sensor cache records the reporting agent. A reading
+serves the node only when the node that agent is currently linked to belongs to
+one of the slot's connections, or to a connection whose configured view of the
+node carries a matching TLS fingerprint (the other connection of a cluster added
+twice). The reading follows the agent's link the way the agent's own sensors do,
+and a reading from an unlinked agent serves no node. Without these bounds, site
+B's `px1` showed, alerted on and recorded history for site A's agent or
+cluster-sibling sensors. `TestNodeTemperatureStaysWithinSameNamedNodesSite` in
+`internal/monitoring/monitor_additional_test.go` pins the poller lookup,
+including the folded-view cases, and
+`TestApplyHostReportScopesClusterSensorsToReportersConnection` in
+`internal/monitoring/monitor_host_agents_test.go` pins the agent ingest side.
 A node temperature presented as available must describe the node now, because
 node alert evaluation, node history writes, reporting, and the UI all read it as
 a live measurement. A host agent linked to a Proxmox node merges into one host

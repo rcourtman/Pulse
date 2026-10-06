@@ -3507,20 +3507,30 @@ state the Proxmox row still carries from the same source
 past its reporting lease must not stay "collected" through the Proxmox row's
 copy of the agent's own state, including when its host is down and no disk
 poll refreshes that copy.
+Each merge step also stops the shown temperature borrowing another row's
+availability (`pairPhysicalDiskTemperatureState`). The value is still chosen
+by source preference and the states merged as above, so when the two rows of a
+step carry different temperatures the shown value could sit under the other
+row's `available` state, for example a silent agent's retained reading carried
+over a Proxmox row that collected its own reading now. When the merged state
+says collected but the row the shown value came from says it was not, the
+merged state becomes that row's own. The rule never changes a value and never
+grants availability; rows with the same value keep the merged state. It sees
+only the two rows of one step: the merged disk keeps one state per field, so
+with three or more rows for one disk a withdrawal an earlier step replaced is
+not visible to a later step, and the earlier step's merged state stands in for
+its row. Tracking each reading's own state across merges would close that.
 Unraid array-inventory rows carry no per-field provenance, so the adapter
-derives the state of a temperature taken from one: `unavailable` from `unraid`
+derives the state of a positive temperature taken from one (a row without a
+temperature claims no state): `unavailable` from `unraid`
 with "host agent stopped reporting" once `State.ExpireHostTelemetry` has marked
 the host offline, or with "disk is reported spun down" for a spun-down disk,
 and otherwise `available`. The value is kept as last-known context; it is
 collected again only when a reporting host sends a positive reading for a disk
-that is no longer spun down. A SMART row that falls back to
-the inventory reading because it has none of its own takes that state with it.
-The Unraid-native disk row records only the withdrawing states, never
-`available`: the registry chooses a merged disk's temperature and its state
-separately, and an `available` claim from the provenance-less row would
-outrank the SMART row's explicit state for the same disk when the SMART
-reading is the one shown. A withdrawn inventory temperature also stops
-counting as heat in the disk's risk assessment.
+that is no longer spun down. The Unraid-native disk row carries that state, and
+so does a SMART row that falls back to the inventory reading because it has
+none of its own. The adapter's risk assessment of an Unraid row no longer counts
+a withdrawn inventory temperature as heat.
 
 Cross-source correlation compares normalized serial and WWN values across
 fields without truncation, allowing a PVE bare-hex array-volume serial to join
@@ -5764,10 +5774,12 @@ and storage IDs), a node-scoped Proxmox guest reference after migration, or
 `ResolveReferenceID` used by alert policy, so a resource named like a system
 reference cannot capture its events. A reference two resources answer to binds
 to neither: its event keeps its own reference and creates or changes no
-binding, though an earlier binding still covers that reference on read. A
+binding, though an earlier binding still covers that reference on read. Like
+any unbound reference it is retried, and once a later generation resolves it
+to one resource it binds there, replacing an earlier binding. A
 reference no resource
 answers to follows its retained binding after inventory removal, or keeps its
-own history. Docker references never take this path. Alert journal references
+own history. Docker container references never take this path. Alert journal references
 without a binding (read once per process, plus any written before inventory
 named their resource) are retried on each published registry generation for
 `legacyHistoryBindWindow`. Bound rows keep their recorded resource ID, so a
@@ -5779,6 +5791,46 @@ Assistant and Patrol resource contexts read it from the store. Proof:
 `TestHistoryIdentityMonitorAdapterResolvesProxmoxAlertReferences` and
 `TestHistoryIdentityBindsLegacyAlertRowsFromRegistryGenerations` in
 `internal/unifiedresources/history_identity_test.go`.
+Docker host alerts (`docker:<host ID>`) and Swarm service alerts
+(`docker:<host ID>/service/<service ID>`) resolve only through the registry's
+Docker source identities: the host ID is the Docker host's source ID, and a
+service reference names the service with that exact ID in the host's Swarm
+cluster, whichever manager reported it. A hostname in the host position is
+only ever looked up as a Docker host source ID. A service without an ID is
+referenced by its normalized name in the same place, so while its cluster has
+such a service every service reference there is a conflict. Alert references
+do not record whether they came from an ID, so a row journaled by an ID-less
+service can still join another service's history if a later generation or
+event binds the same reference; Swarm always reports service IDs, so that needs a malformed
+report naming a service exactly like another service's ID. Hostless
+`docker-service:<name>` references, container names and shortened container
+IDs never bind and are never retried against later inventory. A container
+without an ID alerts under its host's reference (`alerts.DockerResourceID`), so
+its events join that host's history, never another container's.
+Sub-resource alert references name no resource of their own and bind to the
+owner whose durable ID they carry (`historySubResourceOwner`): ZFS pool and
+device alerts (`<storage ID>/zfs-pool:<pool>[/device:<device>]`) to the
+storage, the Unraid array alert (`agent:<host ID>/storage:unraid-array`) to
+the array storage with that agent source ID, and host filesystem, SMART disk,
+disk temperature, RAID and custom-sensor alerts (`agent:<host ID>/disk:`,
+`/disk_temp:`, `/raid:`, `/custom:`) to the host. The owner reference must
+resolve to exactly one resource of the expected type; an ambiguous or
+incompatible owner is a conflict, so the event keeps its own reference,
+follows no retained binding and is retried. Pool, mount and kernel device labels are names,
+and a device name can denote a different disk after a reboot, so these alerts
+never bind a physical disk. Any other sub-resource shape stays unbound until
+its producer and this list change together. The Docker, storage and platform
+host-row drawers do not request per-resource history, so these bindings reach
+the facets, timeline and intelligence APIs and Assistant resource context, not
+a drawer. Patrol's scoped change feed matches the stored resource ID without
+expanding bindings, so it includes events recorded under the owner's
+canonical ID but not rows journaled before their binding.
+Proof: `TestHistoryIdentityMonitorAdapterResolvesDockerHostAndServiceReferences`
+and `TestHistoryIdentityMonitorAdapterResolvesSubResourceReferences` in
+`internal/unifiedresources/history_identity_test.go`, and
+`TestOwnerAlertTimelinesUseCanonicalHistoryIdentity` in
+`internal/monitoring/monitor_alert_handling_test.go` against the real alert
+producers.
 That same shared timeline vocabulary now includes the `activity` change kind
 for provider-read breadcrumbs such as VMware tasks and events, plus the
 `vmware_adapter` source-adapter token for canonical provenance drill-down.

@@ -303,6 +303,19 @@ not disable the local host, SMART, Ceph, or Proxmox reporting modules, alter
 agent enrollment or identity, or add remote command authority. The disabled
 path is pinned by `TestCollectClusterSensors_Disabled`; configuration parsing
 is pinned by `TestLoadConfigDisableClusterPeerSensorsFlag`.
+Pulse attributes peer readings to the agent that reported them. Peers are
+named by bare Proxmox node name, which a node of another connection can share,
+so monitoring keys its cluster sensor cache by reporting agent and node name.
+A reading serves a node only when the agent's currently linked node belongs to
+that node's connection, or to another connection with a fingerprint-proven view
+of the node (a cluster added twice); attribution follows the agent's link like
+its own sensors. An unlinked reporter's peer readings serve no node, nor do
+those of a reporter whose manual link names a node ID the read state does not
+hold. This reads
+the existing agent link and adds no identity, enrollment, link or command
+authority; the ingest path is pinned by
+`TestApplyHostReportScopesClusterSensorsToReportersConnection` in
+`internal/monitoring/monitor_host_agents_test.go`.
 On supported Linux systemd hosts, the opt-in safe runtime is a root-owned,
 unprivileged monitoring collector plus the no-network typed helper, with
 remediation installed only as the separate root-owned `pulse-agent-runner`.
