@@ -972,6 +972,39 @@ func TestApplyHostReportRefreshesUnifiedReadStateWithoutBroadcast(t *testing.T) 
 	t.Fatal("accepted host report did not refresh the canonical headless read state")
 }
 
+// An agent reports its Proxmox cluster siblings' sensors by bare node name,
+// which another connection's node can share. Ingest records the reporting
+// agent, so the readings serve only nodes of that agent's own connection.
+func TestApplyHostReportScopesClusterSensorsToReportersConnection(t *testing.T) {
+	monitor := newTestMonitor(t)
+	monitor.clusterSensorsCache = make(map[string]clusterSensorsCacheEntry)
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	monitor.SetResourceStore(adapter)
+	monitor.state.UpdateNodesForInstance("siteA", []models.Node{readStateTestNode("siteA", "px1"), readStateTestNode("siteA", "px2")})
+	monitor.state.UpdateNodesForInstance("siteB", []models.Node{readStateTestNode("siteB", "px1")})
+	adapter.PopulateFromSnapshot(monitor.state.GetSnapshot())
+
+	host, err := monitor.ApplyHostReport(agentshost.Report{
+		Agent:          agentshost.AgentInfo{ID: "agent-px2", IntervalSeconds: 30},
+		Host:           agentshost.HostInfo{ID: "machine-px2", Hostname: "px2", Platform: "linux"},
+		ClusterSensors: clusterSensorReport("px1", 88),
+		Timestamp:      time.Now().UTC(),
+	}, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	if host.LinkedNodeID != "siteA-px2" {
+		t.Fatalf("reporting agent linked to %q, want siteA-px2", host.LinkedNodeID)
+	}
+
+	if temp := monitor.getHostAgentTemperatureForNode(readStateTestNode("siteA", "px1")); temp == nil || temp.CPUPackage != 88 {
+		t.Fatalf("siteA px1 temperature = %#v, want the sibling reading 88", temp)
+	}
+	if temp := monitor.getHostAgentTemperatureForNode(readStateTestNode("siteB", "px1")); temp != nil {
+		t.Fatalf("siteB px1 took site A's cluster sibling reading: %#v", temp)
+	}
+}
+
 func TestApplyHostReportProjectsAndPreservesLibvirtInventory(t *testing.T) {
 	monitor := newTestMonitor(t)
 	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
