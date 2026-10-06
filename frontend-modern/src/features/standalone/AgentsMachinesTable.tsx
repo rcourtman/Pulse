@@ -73,6 +73,7 @@ import {
 } from '@/utils/raidPresentation';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { getPreferredResourceIP } from '@/utils/resourceIdentity';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   RESOURCE_METADATA_CHANGED_EVENT,
   type ResourceMetadataChangedDetail,
@@ -1174,6 +1175,9 @@ export const AgentsMachinesTable: Component<{
   onExternalStatusChange?: (value: PlatformResourceStatusFilter) => void;
   onResetFilters?: () => void;
 }> = (props) => {
+  // A machine that stops reporting keeps the same last-seen time, which is
+  // exactly when its age must keep moving, so row ages read the shared clock.
+  const now = useRelativeTimeNow();
   const [locallyRemovedResourceIds, setLocallyRemovedResourceIds] = createSignal<
     Record<string, boolean>
   >({});
@@ -1482,7 +1486,7 @@ export const AgentsMachinesTable: Component<{
                     const agentStaleTitle = () => {
                       const last = asTrimmedString(machine.agent?.lastReportAt);
                       const when = last
-                        ? ` Last report ${formatPlatformTableRelativeTimeValue(last)}.`
+                        ? ` Last report ${formatPlatformTableRelativeTimeValue(last, { now: now() })}.`
                         : '';
                       return `Agent has stopped reporting.${when} Re-run the install command from the Pulse UI to refresh its token.`;
                     };
@@ -1534,7 +1538,7 @@ export const AgentsMachinesTable: Component<{
                         ? availabilityFor(machine)?.lastChecked
                         : machine.lastSeen;
                     const lastSeenLabel = () =>
-                      formatPlatformTableRelativeTimeValue(lastSeenValue());
+                      formatPlatformTableRelativeTimeValue(lastSeenValue(), { now: now() });
                     const machineSubtitle = () =>
                       machineRowSubtitleFor(
                         name(),

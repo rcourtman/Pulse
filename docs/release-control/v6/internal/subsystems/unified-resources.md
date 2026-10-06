@@ -1250,6 +1250,21 @@ platform-details disclosure. The `KubernetesControllersTable` phone projection
 keeps controller, kind, ready, and issues and demotes Target with
 `platform-table-phone-hidden`, so kind labels such as `DaemonSet` and
 `StatefulSet` fit whole instead of clipping in a 15 percent track.
+Every relative age a unified-resource consumer derives from a timestamp reads
+the frontend-primitives shared relative-time clock (`useRelativeTimeNow`)
+rather than `Date.now()` at render, because rows and open drawers stay mounted
+while a timestamp that has stopped changing must keep aging: the Kubernetes
+controller Detail ages and the drawer's controller section, the drawer's Docker
+container Created, Started and Finished rows, its Last seen, and its Docker
+update-check and Mail Gateway updated ages, the Machines identity subtitle
+(`seen ...` while the Last seen column is hidden) and stale-agent Last report
+tooltip, and the Proxmox replication Last sync and Next sync in the row, phone
+projection and disclosure. A silent agent or a stalled pvesr scheduler is the
+case whose age matters most, so a replication Next sync turns overdue on the
+clock without new data. Replication jobs bypass the unified-resource stream,
+so `ProxmoxPageSurface` re-reads them in the background every 30 seconds;
+moving ages over a snapshot read once at mount would age a job that keeps
+syncing and count it overdue.
 Kubernetes name columns hold the chevron, status dot and name inside one
 track, so their md widths leave the name room for a typical node or service
 name at a 768px viewport: Nodes 20 percent (with Capacity at 16 so its

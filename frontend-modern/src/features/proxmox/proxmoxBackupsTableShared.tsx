@@ -10,6 +10,7 @@ import {
   PlatformTableRelativeTimeValue,
   formatPlatformTableRelativeTimeValue,
 } from '@/features/platformPage/sharedPlatformPage';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 import {
   getRecoveryAgeBand,
@@ -224,14 +225,20 @@ export function RowMetricBar(props: {
 
 // Phone columns are too narrow for "18h ago", so the compact form drops the
 // suffix ("18h", "now") and keeps the full age band and timestamp on hover.
-export function formatCompactBackupAge(createdAt: string): string {
-  const relative = formatPlatformTableRelativeTimeValue(createdAt);
+export function formatCompactBackupAge(createdAt: string, now?: number): string {
+  const relative = formatPlatformTableRelativeTimeValue(createdAt, { now });
   if (relative === 'just now') return 'now';
   return relative.replace(/ ago$/, '');
 }
 
 export function ProxmoxBackupAgeText(props: { artifact: RecoverableArtifact; compact?: boolean }) {
-  const band = () => getRecoveryAgeBand(props.artifact.createdMs);
+  // Backup rows stay mounted while an artifact's creation time never changes,
+  // so the age and its freshness band both read the shared clock. The clock
+  // can trail the wall clock by up to one tick, and a backup that finished
+  // inside that window must not band as a future (unknown) age.
+  const tickNow = useRelativeTimeNow();
+  const now = () => Math.max(tickNow(), Date.now());
+  const band = () => getRecoveryAgeBand(props.artifact.createdMs, now());
   const title = () => {
     if (band() === 'unknown') return recoveryAgeTitleByBand.unknown;
     const parts = [recoveryAgeTitleByBand[band()], props.artifact.createdAt].filter(Boolean);
@@ -250,7 +257,7 @@ export function ProxmoxBackupAgeText(props: { artifact: RecoverableArtifact; com
           when={props.compact}
           fallback={<PlatformTableRelativeTimeValue value={props.artifact.createdAt} />}
         >
-          {formatCompactBackupAge(props.artifact.createdAt)}
+          {formatCompactBackupAge(props.artifact.createdAt, now())}
         </Show>
       </Show>
     </span>

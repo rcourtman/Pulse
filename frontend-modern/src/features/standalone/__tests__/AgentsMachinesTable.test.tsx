@@ -4,6 +4,7 @@ import { AgentMetadataAPI } from '@/api/agentMetadata';
 import { MonitoringAPI } from '@/api/monitoring';
 import type { Resource } from '@/types/resource';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 import { RESOURCE_METADATA_CHANGED_EVENT } from '@/utils/resourceMetadataEvents';
 import { AgentsMachinesTable } from '../AgentsMachinesTable';
 
@@ -1120,5 +1121,51 @@ describe('AgentsMachinesTable', () => {
       'title',
       'Thermal pressure nominal via pmset',
     );
+  });
+
+  it("keeps a silent machine's seen and last-report ages moving while its data does not change", async () => {
+    const start = Date.parse('2026-07-08T09:05:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+
+    try {
+      render(() => (
+        <AgentsMachinesTable
+          resources={[
+            resource({
+              id: 'omv',
+              name: 'omv',
+              lastSeen: Date.parse('2026-07-08T09:00:00Z'),
+              identity: { ips: ['192.168.0.21'] },
+              agent: {
+                agentVersion: '6.0.2',
+                stale: true,
+                lastReportAt: '2026-07-08T09:00:00Z',
+              },
+            }),
+          ]}
+          emptyIcon={emptyIcon}
+          emptyTitle="No machines"
+          emptyDescription="Install Pulse Agent."
+        />
+      ));
+      await openMachineColumnPicker();
+      await fireEvent.click(screen.getByLabelText('Last seen'));
+
+      expect(screen.getByTitle('omv · 192.168.0.21 | seen 5m ago')).toBeInTheDocument();
+      expect(
+        screen.getByTitle(/Agent has stopped reporting\. Last report 5m ago\./),
+      ).toBeInTheDocument();
+
+      // The agent stays silent: no new data arrives and only the clock moves.
+      vi.setSystemTime(start + 3 * 60 * 60 * 1000);
+      vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
+
+      expect(screen.getByTitle('omv · 192.168.0.21 | seen 3h ago')).toBeInTheDocument();
+      expect(
+        screen.getByTitle(/Agent has stopped reporting\. Last report 3h ago\./),
+      ).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

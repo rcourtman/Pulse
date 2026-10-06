@@ -11,6 +11,7 @@ import {
 } from '@/components/shared/detailSectionModel';
 import { TagBadges } from '@/components/shared/TagBadges';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getDockerImageRegistryLink } from '@/features/docker/dockerImageReference';
 import {
   getDockerContainerHealthCheckPresentation,
@@ -92,7 +93,7 @@ const dockerRuntimeRow = (
       })
     : null;
 
-const dockerSection = (docker: NonNullable<Resource['docker']>): DetailSection => {
+const dockerSection = (docker: NonNullable<Resource['docker']>, now: number): DetailSection => {
   const labels = docker.labels ?? {};
   const labelEntries = Object.entries(labels);
   const createdAt = dockerTimestampMillis(docker.createdAt);
@@ -157,17 +158,17 @@ const dockerSection = (docker: NonNullable<Resource['docker']>): DetailSection =
         })
       : null,
     createdAt
-      ? makeDetailRow('Created', formatRelativeTime(createdAt), {
+      ? makeDetailRow('Created', formatRelativeTime(createdAt, { now }), {
           title: new Date(createdAt).toLocaleString(),
         })
       : null,
     startedAt
-      ? makeDetailRow('Started', formatRelativeTime(startedAt), {
+      ? makeDetailRow('Started', formatRelativeTime(startedAt, { now }), {
           title: new Date(startedAt).toLocaleString(),
         })
       : null,
     finishedAt
-      ? makeDetailRow('Finished', formatRelativeTime(finishedAt), {
+      ? makeDetailRow('Finished', formatRelativeTime(finishedAt, { now }), {
           title: new Date(finishedAt).toLocaleString(),
         })
       : null,
@@ -210,6 +211,10 @@ const dockerSection = (docker: NonNullable<Resource['docker']>): DetailSection =
 };
 
 export const InlineResourceSummaryTables: Component<ResourceSummaryPresentationProps> = (props) => {
+  // An open drawer keeps its rows while the resource's timestamps stay the
+  // same, so container and controller ages read the shared clock to keep
+  // moving.
+  const now = useRelativeTimeNow();
   const sections = (): DetailSection[] => {
     const docker = dockerContainerMeta(props.resource);
     const uptimeSeconds = docker
@@ -317,8 +322,8 @@ export const InlineResourceSummaryTables: Component<ResourceSummaryPresentationP
             ]),
           }
         : null,
-      props.content !== 'overview' && docker ? dockerSection(docker) : null,
-      props.content !== 'overview' ? buildKubernetesControllerSection(props.resource) : null,
+      props.content !== 'overview' && docker ? dockerSection(docker, now()) : null,
+      props.content !== 'overview' ? buildKubernetesControllerSection(props.resource, now()) : null,
       props.content !== 'overview'
         ? {
             label: 'Identity',
