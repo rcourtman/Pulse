@@ -5524,3 +5524,22 @@ that actually accepted the same occurrence. The connected
 HTTP 200/503 split, reopens the persistent queue, and requires the old accepted
 destination's recovery plus the new firing, with no recovery to the unannounced
 destination. Quiet hours and disabled recovery controls still apply.
+
+### Observed Proxmox replication sync outcome
+
+Replication configuration is enriched only from the source node's per-job
+status endpoint. A successful timestamp plus an explicitly valid zero failure
+count and no failure/unknown-state evidence yields `lastSyncStatus: ok`;
+error text, positive failures or an explicit failed state yields `error`,
+including error-with-zero-failures. Missing, denied, malformed, never-synced,
+invalid-count or unknown-state responses do not acquire success from defaults.
+Job/source mismatches and ambiguous array identities are rejected before any
+status fields merge. Single legacy rows without IDs retain endpoint binding;
+a multi-row response requires exactly one matching job.
+
+`replication_test.go` covers native field shapes, failure/unknown controls,
+HTTP enrichment and identity. `monitor_full_coverage_test.go` carries the real
+client through four normal fourteen-job/five-node polls into model/wire state,
+with zero-count error, denied status, recovery and another-instance isolation.
+The unchanged replication table consumes those explicit outcomes. These local
+HTTP controls are not native restart recovery; issue #2606 remains separate.

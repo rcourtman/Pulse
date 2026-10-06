@@ -3688,3 +3688,32 @@ display name differs from its hostname was never highlighted, and Machines rows
 had no alert highlighting at all. `getAlertStyles` keeps its
 id-plus-node-name matching for the platform tables whose alerts are keyed that
 way.
+
+### SMART temperature continuity and pending-only policy intervals
+
+Disk temperature activation/grace and recovery require continuous accepted
+observations. Empty SMART inventory, one disk omission, standby, non-positive
+readings, explicit missing/unavailable/unsupported collection and reporting-lease
+expiry interrupt pending/recovery timing without changing an open alert, its
+acknowledgement or lifecycle events. Positive legacy readings without temperature
+provenance remain accepted; an expired last-known positive value is not live
+health. Canonical and shadow reducers plus explicit intent grace are interrupted
+together. A non-empty inventory still resolves a departed disk only after three
+consecutive omissions; empty/expired inventory breaks that confirmation sequence.
+
+Configuration saves reset pending-only runs when global agent policy, host or
+inherited node/guest overrides, or the applicable disk-type threshold disables
+evaluation, even if no report arrives before re-enablement. Existing known-type
+default normalisation is unchanged; the zero-type save control uses a custom
+type whose zero threshold the normaliser preserves. Only live pending
+identity/link/type context is retained; unrelated saves preserve a known enabled
+run and explicit overrides retain precedence over type defaults. Restored intent
+without that context restarts conservatively on a save rather than inventing
+continuous enablement. Cleared intent grace is checkpointed. Existing active-alert
+per-type/save/offline/removal resolution remains unchanged.
+
+`metric_observation_continuity_test.go` and `host_unraid_lifecycle_test.go` cover
+valid/legacy/provenance controls, missing/rejected/expiry gaps on both timing
+edges, explicit grace, acknowledgement/event preservation, host isolation,
+configuration intervals, override precedence and departure. These deterministic
+source tests do not establish installed temperatures or native guest recovery.

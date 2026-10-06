@@ -390,7 +390,7 @@ func (m *Manager) CheckHost(host models.Host) {
 				// reading resolves it instead of clearing and re-raising.
 				tempResourceID := hostDiskTemperatureResourceID(host.ID, disk.Device)
 				seenDiskTemps[tempResourceID] = struct{}{}
-				if disk.Temperature > 0 && !disk.Standby {
+				if hostDiskTemperatureObserved(disk) {
 					m.mu.RLock()
 					effectiveTempThreshold := m.hostDiskTemperatureThresholdNoLock(thresholds.DiskTemperature, diskTempOverridden, disk.Type)
 					m.mu.RUnlock()
@@ -411,15 +411,21 @@ func (m *Manager) CheckHost(host models.Host) {
 							Str("host", resourceName).
 							Str("device", disk.Device).
 							Msg("Skipping invalid canonical host disk temperature metric spec")
+						m.interruptHostDiskTemperatureRun(tempResourceID)
 						continue
 					}
 
 					m.checkMetricWithCanonicalSpec(spec, tempResourceName, nodeName, disk.Device, "agent", float64(disk.Temperature), effectiveTempThreshold, &metricOptions{Metadata: diskTempMetadata})
+					m.rememberHostDiskTemperaturePending(host, disk, tempResourceID)
+				} else {
+					m.interruptHostDiskTemperatureRun(tempResourceID)
 				}
 			}
 			// A disk missing from consecutive non-empty reports was removed,
 			// replaced or renamed, so no later reading will resolve its alert.
 			m.cleanupHostDiskTemperatureAlerts(host.ID, seenDiskTemps)
+		} else {
+			m.interruptHostDiskTemperatureRuns(host.ID)
 		}
 	} else {
 		// Disk temperature alerting is off for this host, so no later reading
@@ -703,6 +709,9 @@ func (m *Manager) HandleHostTelemetryExpired(host models.Host) {
 	if host.ID == "" {
 		return
 	}
+
+	// Expiry interrupts timing, not the separate connectivity confirmation.
+	m.interruptHostDiskTemperatureRuns(host.ID)
 
 	if host.Unraid != nil {
 		unraid := *host.Unraid
@@ -1054,6 +1063,12 @@ func (m *Manager) cleanupHostDiskTemperatureAlerts(hostID string, seen map[strin
 	// Absent resources map to the storage keys of their active alerts; a
 	// resource with only a pending run maps to none.
 	absent := make(map[string][]string)
+	intentChanged := false
+	defer func() {
+		if intentChanged {
+			m.saveActiveAlertsAsync("disk temperature inventory gap")
+		}
+	}()
 	for storageKey, alert := range m.activeAlerts {
 		// Only CheckHost raises alerts under this prefix. Matching on it
 		// alone also catches alerts raised before the type became
@@ -1066,7 +1081,7 @@ func (m *Manager) cleanupHostDiskTemperatureAlerts(hostID string, seen map[strin
 		}
 		absent[alert.ResourceID] = append(absent[alert.ResourceID], storageKey)
 	}
-	for _, resourceID := range m.core.PendingResourceIDs() {
+	for resourceID := range m.hostDiskTemperatureTrackedResourcesNoLock() {
 		if !strings.HasPrefix(resourceID, resourcePrefix) {
 			continue
 		}
@@ -1092,6 +1107,9 @@ func (m *Manager) cleanupHostDiskTemperatureAlerts(hostID string, seen map[strin
 	}
 	for resourceID, storageKeys := range absent {
 		if seen != nil {
+			// One omission breaks sustained/recovery evidence; only confirmed
+			// departure resolves a firing alert.
+			intentChanged = m.interruptHostDiskTemperatureRunNoLock(resourceID) || intentChanged
 			m.hostDiskTempAbsences[resourceID]++
 			if m.hostDiskTempAbsences[resourceID] < hostDiskTemperatureAbsenceConfirmations {
 				continue
@@ -1099,7 +1117,7 @@ func (m *Manager) cleanupHostDiskTemperatureAlerts(hostID string, seen map[strin
 		}
 		delete(m.hostDiskTempAbsences, resourceID)
 		// A departed disk never sends the reading that would close its run.
-		m.core.DropPendingForResource(resourceID)
+		intentChanged = m.interruptHostDiskTemperatureRunNoLock(resourceID) || intentChanged
 		for _, storageKey := range storageKeys {
 			m.clearAlertNoLock(storageKey)
 		}
