@@ -1722,6 +1722,8 @@ func TestWebhookMaskedEditPersistsAndDelivers(t *testing.T) {
 			})
 		}
 	}
+}
+
 // The webhook editor sends back the masked values GetWebhooks returned for
 // every header, custom field and signing secret the user did not retype. Each
 // masked value must resolve to its own saved value: never to the mask itself,
@@ -1798,7 +1800,7 @@ func TestWebhookMaskedValuesResolvePerKey(t *testing.T) {
 		body, _ := json.Marshal(map[string]interface{}{
 			"name": "Ops", "url": saved.URL, "enabled": true, "service": "pushover",
 			// Content-Type cleared in the editor; known masked values stay saved.
-		// Unknown masks are rejected by TestWebhookEditPreservesOnlyMaskedValues.
+			// Unknown masks are rejected by TestWebhookEditPreservesOnlyMaskedValues.
 			"headers":      map[string]string{"Authorization": "***REDACTED***", "Content-Type": ""},
 			"customFields": map[string]string{"token": "***REDACTED***", "user": "***REDACTED***"},
 		})

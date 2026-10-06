@@ -598,12 +598,12 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 			if routingPresence.MinimumSeverity == nil {
 				webhook.MinimumSeverity = existing.MinimumSeverity
 			}
-			webhook.Headers, err = restoreMaskedWebhookValues(webhook.Headers, existing.Headers, true)
+			webhook.Headers, err = restoreStrictMaskedWebhookValues(webhook.Headers, existing.Headers, true)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			webhook.CustomFields, err = restoreMaskedWebhookValues(webhook.CustomFields, existing.CustomFields, false)
+			webhook.CustomFields, err = restoreStrictMaskedWebhookValues(webhook.CustomFields, existing.CustomFields, false)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
