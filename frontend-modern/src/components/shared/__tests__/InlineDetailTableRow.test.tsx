@@ -115,7 +115,7 @@ describe('InlineDetailTableRow', () => {
     expect(detailCell()?.style.width).toBe('');
   });
 
-  it('nudges the detail cell width once when its span grows, not when it shrinks', async () => {
+  it('forces one layout of the widened detail cell when its span grows, none when it shrinks', async () => {
     const [showSystem, setShowSystem] = createSignal(false);
     render(() => (
       <Table>
@@ -127,39 +127,42 @@ describe('InlineDetailTableRow', () => {
             </Show>
             <td>Seen</td>
           </tr>
-          <InlineDetailTableRow colspan={3}>
+          <InlineDetailTableRow colspan={showSystem() ? 3 : 2}>
             <div>Growing span detail</div>
           </InlineDetailTableRow>
         </TableBody>
       </Table>
     ));
-    const detailCell = () => screen.getByText('Growing span detail').closest('td')!;
-    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '2'));
+    const detailCell = screen.getByText('Growing span detail').closest('td')!;
+    await waitFor(() => expect(detailCell).toHaveAttribute('colspan', '2'));
 
-    // jsdom has no layout, so record the style writes Chromium needs to
+    // jsdom has no layout, so record the forced layout reads Chromium needs to
     // recompute fixed-layout column widths for the widened cell.
-    const previousStyles: string[] = [];
-    const styleObserver = new MutationObserver((records) => {
-      for (const record of records) previousStyles.push(record.oldValue ?? '');
-    });
-    styleObserver.observe(detailCell(), {
-      attributes: true,
-      attributeFilter: ['style'],
-      attributeOldValue: true,
-    });
+    const layoutReads: Array<{ width: string; colspan: string | null }> = [];
+    const offsetWidth = vi
+      .spyOn(HTMLElement.prototype, 'offsetWidth', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        if (this === detailCell) {
+          layoutReads.push({ width: this.style.width, colspan: this.getAttribute('colspan') });
+        }
+        return 0;
+      });
+    try {
+      // The requested span and the summary cells change in the same update.
+      setShowSystem(true);
+      await waitFor(() => expect(detailCell).toHaveAttribute('colspan', '3'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(layoutReads).toEqual([{ width: '0px', colspan: '3' }]);
+      expect(detailCell.style.width).toBe('');
 
-    setShowSystem(true);
-    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '3'));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(previousStyles.some((style) => style.includes('width: 0px'))).toBe(true);
-    expect(detailCell().style.width).toBe('');
-
-    previousStyles.length = 0;
-    setShowSystem(false);
-    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '2'));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(previousStyles).toEqual([]);
-    styleObserver.disconnect();
+      layoutReads.length = 0;
+      setShowSystem(false);
+      await waitFor(() => expect(detailCell).toHaveAttribute('colspan', '2'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(layoutReads).toEqual([]);
+    } finally {
+      offsetWidth.mockRestore();
+    }
   });
 
   it('re-measures for a summary cell span change but not for churn inside a cell', async () => {
