@@ -153,13 +153,38 @@ Yes. Pulse supports **OIDC** and **SAML** SSO providers, with multi-provider sup
 ## ⚠️ Troubleshooting
 
 ### No data showing?
-- Check Proxmox API is reachable (port 8006).
-- Verify credentials in **Settings → Infrastructure**.
-- Check logs: `journalctl -u pulse -f` or `docker logs -f pulse`.
+
+First distinguish what is missing; Pulse monitors more than Proxmox.
+
+| Missing item | Check existing evidence first |
+| --- | --- |
+| Whole page or resource | Open its platform page, not just Machines. Follow the [current navigation guide](TROUBLESHOOTING.md#old-bookmarks-dont-work) for moved pages and bookmarks. |
+| Current readings | Check the affected connection in **Settings → Infrastructure**: is it enabled, and does its last activity advance during ordinary polling? For an agent, compare **Last seen** with the particular missing reading. |
+| History only | Check the selected resource and time range. A current value does not prove that samples were stored for that chart; use [History troubleshooting](METRICS_HISTORY.md#troubleshooting). |
+
+A green connection badge, recent **Last seen** or successful **Test Connection**
+does not prove that every reading is fresh. Missing or unavailable is not zero.
+Use the relevant checks for [stale TrueNAS data](TRUENAS.md#stale-truenas-data),
+[empty PBS History](PBS.md#pbs-is-connected-but-history-stays-empty) or
+[missing VM disk usage](VM_DISK_MONITORING.md#troubleshooting). Check Proxmox
+[effective permissions](TROUBLESHOOTING.md#check-permissions-proxmox) only when
+the affected operation reports an access error, not on a missing chart alone.
+
+Keep the original time and displayed error. Do not replace credentials, delete
+connections or re-enrol agents just to populate a chart. During a backup,
+freeze/thaw or an unresponsive-host incident, defer setup, live tests and
+**Run Diagnostics**; follow [safe evidence collection](TROUBLESHOOTING.md#collect-diagnostics-safely).
+If logs are needed, use a bounded excerpt from the original incident and review
+it locally before sharing, as described in [Getting Help](TROUBLESHOOTING.md#-getting-help).
 
 ### Connection refused?
-- Check if Pulse is running: `systemctl status pulse` or `docker ps`.
-- Verify the port (default 7655) is open on your firewall.
+
+Distinguish your browser's connection to Pulse from Pulse's connection to a
+monitored platform. If the browser cannot reach Pulse, check the actual service,
+listening port and proxy using the [connection guide](TROUBLESHOOTING.md#connection-refused).
+If Pulse opens but a platform request is refused, preserve that request's
+redacted error and use its platform guide above; changing Pulse's listening
+port does not repair the platform connection.
 
 ### CORS errors?
 Pulse defaults to same-origin only. If you access the API from a different domain, set **Settings → System → Network → Allowed Origins** or use `ALLOWED_ORIGINS` (single origin, or `*` if you explicitly want all origins).
