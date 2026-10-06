@@ -206,6 +206,50 @@ describe('AvailabilityChecksTable', () => {
     expect(screen.getByText('via host-gone')).toBeInTheDocument();
   });
 
+  it('keeps the result whole on one line beside a multi-location source', () => {
+    renderTable([
+      availabilityResource({
+        availability: {
+          targetId: 'mock-availability-frontend',
+          protocol: 'https',
+          address: 'frontend.demo.pulse.local',
+          enabled: true,
+          available: false,
+          lastChecked: 1_700_000_300_000,
+          reportingLocations: 2,
+          expectedLocations: 2,
+          locations: [
+            { locationId: 'pulse', kind: 'pulse' },
+            { locationId: 'agent:host-edge-01', kind: 'agent', probeAgentId: 'host-edge-01' },
+          ],
+        } as unknown as Resource['availability'],
+      }),
+    ]);
+
+    // Settings words the same fact the same way.
+    const source = screen.getByText('2/2 locations reporting');
+    // One line (rows are windowed at a single height): the source truncates
+    // while the result keeps its full width at the cell's right edge.
+    expect(source).toHaveClass('truncate');
+    const line = source.closest('div');
+    expect(line?.className).toContain('flex');
+    const result = line?.lastElementChild as HTMLElement;
+    expect(result).toHaveClass('shrink-0');
+    expect(result.textContent).not.toBe('');
+  });
+
+  it('gives the check name the room on phones by hiding method and target', () => {
+    renderTable([availabilityResource()]);
+    const headers = screen.getAllByRole('columnheader');
+    const method = headers.find((th) => th.textContent?.trim() === 'Method');
+    const target = headers.find((th) => th.textContent?.trim() === 'Target');
+    expect(method).toHaveClass('platform-table-phone-hidden');
+    expect(target).toHaveClass('platform-table-phone-hidden');
+    const row = screen.getByText('MQTT power meter').closest('tr')!;
+    expect(row.children[1]).toHaveClass('platform-table-phone-hidden');
+    expect(row.children[2]).toHaveClass('platform-table-phone-hidden');
+  });
+
   it('shows no source chip for locally executed checks', () => {
     renderTable([availabilityResource()]);
 

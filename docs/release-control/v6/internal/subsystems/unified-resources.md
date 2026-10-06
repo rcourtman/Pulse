@@ -3495,6 +3495,14 @@ with the offline threshold on hover, not an "N/M" fraction.
 Recent check timing and fuller failure context may stay in tooltip or drawer
 detail, but the table row must not duplicate the same probe protocol and
 result text across both identity and metric cells.
+The probe source chip ("via Edge 01", or "2/2 locations reporting" for a
+multi-location check, the same wording Settings uses) shares the result's
+single line: the result keeps its full width at the cell's right edge and the
+chip takes the room left, truncating with its full text on hover. Before, the
+chip pushed "failed" out of its column at every width up to 1440px. Rows stay
+one line because the table windows them at a single measured height. On
+phones the method and target columns hide so the check name reads, and both
+stay in the row drawer.
 That same frontend-owned compatibility boundary must remain intentionally
 narrow. Shared resource adapters may admit explicit aliases such as `host`,
 `truenas`, and `ceph`, and VMware detail mappers may project typed metadata

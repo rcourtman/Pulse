@@ -7582,6 +7582,12 @@ inside the fleet surface with explicit copy while current status and resource
 navigation remain usable. Desktop and phone layouts must keep every tile
 keyboard-operable, preserve the textual legend, and avoid horizontal clipping
 at fleet scale.
+In the table, a secondary `MetadataBadge` beside a cell's primary value shares
+one flex line with it: the value is `shrink-0` and the badge `min-w-0` with a
+truncating label, so the value never clips and rows keep the single height
+`PlatformWindowedRows` measures. A second line under the value would break
+that windowing. Passing `flex` to the badge alongside its own `inline-flex`
+left the display to stylesheet order, which clipped the availability result.
 The Machines page must not pretend its machine list is a generic overview:
 the default tab is `Machines`, the Machines table is only for Pulse Agent-backed
 resources with host telemetry, and the full availability-check row list belongs
