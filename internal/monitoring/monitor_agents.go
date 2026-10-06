@@ -3781,7 +3781,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	}
 
 	// Store cluster peer sensor data if present and evict stale entries
-	m.applyClusterSensors(report.ClusterSensors, observedAt)
+	m.applyClusterSensors(host.ID, report.ClusterSensors, observedAt)
 	// Availability results are ingested only once the host identity is
 	// committed, because ownership is checked against that host ID.
 	m.ApplyProbeAvailabilityResults(host.ID, probeAvailabilityResultsFromReport(report.AvailabilityResults))
@@ -4351,10 +4351,11 @@ func (m *Monitor) proxmoxPhysicalDiskMatchesForLinkedNode(linkedNodeID string) [
 	return matches
 }
 
-// applyClusterSensors stores temperature data collected from Proxmox cluster
-// siblings via SSH. Each entry is keyed by lowercase node name so that
-// getHostAgentTemperatureByID can use it as a fallback.
-func (m *Monitor) applyClusterSensors(entries []agentshost.ClusterNodeSensors, reportTime time.Time) {
+// applyClusterSensors stores temperature data a host agent collected from its
+// Proxmox cluster siblings via SSH, so that getHostAgentTemperatureForNode can use
+// it as a fallback. Entries are keyed by reporting agent and lowercase node
+// name: agents in different clusters can each report a sibling of the same name.
+func (m *Monitor) applyClusterSensors(reporterID string, entries []agentshost.ClusterNodeSensors, reportTime time.Time) {
 	// Fast path: nothing to add and cache is empty — skip lock
 	if len(entries) == 0 {
 		m.clusterSensorsMu.RLock()
@@ -4377,7 +4378,9 @@ func (m *Monitor) applyClusterSensors(entries []agentshost.ClusterNodeSensors, r
 			continue
 		}
 
-		m.clusterSensorsCache[nodeName] = clusterSensorsCacheEntry{
+		m.clusterSensorsCache[reporterID+"\x00"+nodeName] = clusterSensorsCacheEntry{
+			reporterID: reporterID,
+			nodeName:   nodeName,
 			sensors: models.HostSensorSummary{
 				TemperatureCelsius: cloneStringFloatMap(entry.Sensors.TemperatureCelsius),
 				FanRPM:             cloneStringFloatMap(entry.Sensors.FanRPM),

@@ -1373,8 +1373,10 @@ func (m *Monitor) getRuntimeContext() context.Context {
 
 // clusterSensorsCacheEntry stores temperature data collected by a sibling agent via SSH.
 type clusterSensorsCacheEntry struct {
-	sensors   models.HostSensorSummary
-	updatedAt time.Time
+	reporterID string // host agent that collected the reading over SSH
+	nodeName   string // lowercase Proxmox node name the reading describes
+	sensors    models.HostSensorSummary
+	updatedAt  time.Time
 }
 
 type rrdMemCacheEntry struct {
