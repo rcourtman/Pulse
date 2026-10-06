@@ -380,15 +380,21 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	if thresholds.DiskTemperature != nil && thresholds.DiskTemperature.Trigger > 0 {
+		// An empty SMART list means collection failed or is unsupported for
+		// this report, not that every disk left, so existing alerts are held.
 		if len(host.Sensors.SMART) > 0 {
+			seenDiskTemps := make(map[string]struct{}, len(host.Sensors.SMART))
 			for _, disk := range host.Sensors.SMART {
+				// A listed disk in standby, or without a temperature after a
+				// failed probe, is still present. Its alert holds until a fresh
+				// reading resolves it instead of clearing and re-raising.
+				tempResourceID := hostDiskTemperatureResourceID(host.ID, disk.Device)
+				seenDiskTemps[tempResourceID] = struct{}{}
 				if disk.Temperature > 0 && !disk.Standby {
 					m.mu.RLock()
 					effectiveTempThreshold := m.hostDiskTemperatureThresholdNoLock(thresholds.DiskTemperature, diskTempOverridden, disk.Type)
 					m.mu.RUnlock()
 
-					// Use specific resource ID for the disk: hostID/disk-temp:device
-					tempResourceID := hostDiskTemperatureResourcePrefix(host.ID) + sanitizeHostComponent(disk.Device)
 					tempResourceName := fmt.Sprintf("%s (%s Temp)", hostDisplayName(host), disk.Device)
 
 					diskTempMetadata := hostChildAlertMetadata(baseMetadata, hostDiskAlertResourceType)
@@ -411,6 +417,9 @@ func (m *Manager) CheckHost(host models.Host) {
 					m.checkMetricWithCanonicalSpec(spec, tempResourceName, nodeName, disk.Device, "agent", float64(disk.Temperature), effectiveTempThreshold, &metricOptions{Metadata: diskTempMetadata})
 				}
 			}
+			// A disk missing from consecutive non-empty reports was removed,
+			// replaced or renamed, so no later reading will resolve its alert.
+			m.cleanupHostDiskTemperatureAlerts(host.ID, seenDiskTemps)
 		}
 	} else {
 		// Disk temperature alerting is off for this host, so no later reading
@@ -681,6 +690,9 @@ func (m *Manager) HandleHostRemoved(host models.Host) {
 	m.clearHostRAIDAlerts(host.ID)
 	m.clearHostUnraidAlerts(host.ID)
 	m.clearHostCustomSensorAlerts(host.ID)
+	// No later report will close the host's pending disk temperature runs or
+	// reset its disk absence counts.
+	m.clearHostDiskTemperatureAlerts(host.ID)
 }
 
 // HandleHostTelemetryExpired re-evaluates transient storage-operation evidence
@@ -973,6 +985,12 @@ func hostDiskTemperatureResourcePrefix(hostID string) string {
 	return hostResourceID(hostID) + "/disk_temp:"
 }
 
+// hostDiskTemperatureResourceID is the resource ID of the SMART disk
+// temperature alert for one device on a host.
+func hostDiskTemperatureResourceID(hostID, device string) string {
+	return hostDiskTemperatureResourcePrefix(hostID) + sanitizeHostComponent(device)
+}
+
 // hostDiskTemperatureThresholdNoLock returns the threshold for one SMART disk
 // given the host's resolved disk temperature threshold. An enabled threshold
 // gives way to the disk type's DiskTempByType entry unless an explicit host or
@@ -1010,6 +1028,20 @@ func (m *Manager) lowestHostDiskTemperatureThresholdNoLock(hostThreshold *Hyster
 // clearHostDiskTemperatureAlerts resolves every SMART disk temperature alert
 // for a host.
 func (m *Manager) clearHostDiskTemperatureAlerts(hostID string) {
+	m.cleanupHostDiskTemperatureAlerts(hostID, nil)
+}
+
+// hostDiskTemperatureAbsenceConfirmations is how many consecutive non-empty
+// SMART reports must omit a disk before its temperature alert clears. The
+// Windows, FreeBSD and controller-multiplexed Linux collectors drop a disk
+// whose probe fails, so one omission is not evidence the disk left.
+const hostDiskTemperatureAbsenceConfirmations = 3
+
+// cleanupHostDiskTemperatureAlerts resolves a host's SMART disk temperature
+// alerts, and drops their pending threshold runs, once their resource ID has
+// been missing from seen for hostDiskTemperatureAbsenceConfirmations calls in
+// a row. A nil seen resolves all of them at once.
+func (m *Manager) cleanupHostDiskTemperatureAlerts(hostID string, seen map[string]struct{}) {
 	if hostID == "" {
 		return
 	}
@@ -1019,11 +1051,56 @@ func (m *Manager) clearHostDiskTemperatureAlerts(hostID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// Absent resources map to the storage keys of their active alerts; a
+	// resource with only a pending run maps to none.
+	absent := make(map[string][]string)
 	for storageKey, alert := range m.activeAlerts {
-		if alert == nil || alert.Type != "diskTemperature" {
+		// Only CheckHost raises alerts under this prefix. Matching on it
+		// alone also catches alerts raised before the type became
+		// diskTemperature ("disk_temperature", January 2026).
+		if alert == nil || !strings.HasPrefix(alert.ResourceID, resourcePrefix) {
 			continue
 		}
-		if strings.HasPrefix(alert.ResourceID, resourcePrefix) {
+		if _, exists := seen[alert.ResourceID]; exists {
+			continue
+		}
+		absent[alert.ResourceID] = append(absent[alert.ResourceID], storageKey)
+	}
+	for _, resourceID := range m.core.PendingResourceIDs() {
+		if !strings.HasPrefix(resourceID, resourcePrefix) {
+			continue
+		}
+		if _, exists := seen[resourceID]; exists {
+			continue
+		}
+		if _, exists := absent[resourceID]; !exists {
+			absent[resourceID] = nil
+		}
+	}
+
+	if m.hostDiskTempAbsences == nil {
+		m.hostDiskTempAbsences = make(map[string]int)
+	}
+	// A disk seen again, or whose state is gone, restarts its count.
+	for resourceID := range m.hostDiskTempAbsences {
+		if !strings.HasPrefix(resourceID, resourcePrefix) {
+			continue
+		}
+		if _, exists := absent[resourceID]; !exists {
+			delete(m.hostDiskTempAbsences, resourceID)
+		}
+	}
+	for resourceID, storageKeys := range absent {
+		if seen != nil {
+			m.hostDiskTempAbsences[resourceID]++
+			if m.hostDiskTempAbsences[resourceID] < hostDiskTemperatureAbsenceConfirmations {
+				continue
+			}
+		}
+		delete(m.hostDiskTempAbsences, resourceID)
+		// A departed disk never sends the reading that would close its run.
+		m.core.DropPendingForResource(resourceID)
+		for _, storageKey := range storageKeys {
 			m.clearAlertNoLock(storageKey)
 		}
 	}
