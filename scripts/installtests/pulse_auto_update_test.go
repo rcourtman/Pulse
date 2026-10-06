@@ -450,6 +450,7 @@ systemctl() {
       SERVICE_UP="yes"
       return 0
       ;;
+    stop) SERVICE_UP="no"; return 0 ;;
   esac
   return 1
 }
@@ -733,6 +734,7 @@ command ssh-keygen -Y sign -f "$FIXTURE_DIR/fixture-key" -n pulse-install "$FIXT
 log() { printf '[%s] %s\n' "$1" "${*:2}"; }
 detect_service_name() { printf 'pulse\n'; }
 sleep() { :; }
+file_mode() { command stat -c '%a' "$1" 2>/dev/null || command stat -f '%Lp' "$1"; }
 # Keep real crypto but place all temporary files inside this disposable fixture.
 mktemp() {
  local -a args=("$@")
@@ -831,7 +833,7 @@ fi
 backup=""; [[ ! -f "$FIXTURE_DIR/backup-path" ]] || backup=$(cat "$FIXTURE_DIR/backup-path")
 if [[ "$RETAINED" == true ]]; then
  [[ -d "$backup" ]] || { echo 'rollback backup lost after failed recovery'; exit 1; }
- [[ "$(stat -c '%a' "$backup")" == 700 ]]
+ [[ "$(file_mode "$backup")" == 700 ]]
  cmp "$FIXTURE_DIR/original/pulse-bin" "$backup/pulse-bin"
  cmp "$FIXTURE_DIR/original/VERSION" "$backup/VERSION"
 else
@@ -854,11 +856,11 @@ if [[ "$PREFLIGHT" != true && "$RETAINED" != true && "$EXPECTED_RESULT" != succe
   [[ ! -e "$INSTALL_DIR/VERSION" ]]
  else
   cmp "$FIXTURE_DIR/original/VERSION" "$INSTALL_DIR/VERSION"
-  [[ "$(stat -c '%a' "$INSTALL_DIR/VERSION")" == 640 ]]
+  [[ "$(file_mode "$INSTALL_DIR/VERSION")" == 640 ]]
  fi
  [[ "$(get_current_version)" == v6.4.5 ]]
  binary="$INSTALL_DIR/bin/pulse"; [[ "$LAYOUT" != legacy ]] || binary="$INSTALL_DIR/pulse"
- [[ "$(stat -c '%a' "$binary")" == 751 ]]
+ [[ "$(file_mode "$binary")" == 751 ]]
  [[ "$(cat "$FIXTURE_DIR/active")" == "$PRIOR_ACTIVE" ]]
 fi
 if [[ "$EXPECTED_RESULT" == success ]]; then [[ "$(get_current_version)" == v6.5.0 ]]; fi

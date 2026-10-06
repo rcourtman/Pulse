@@ -552,7 +552,7 @@ perform_update() {
     done
     for i in "${!file_paths[@]}"; do
         if [[ "${file_present[i]}" == "true" ]]; then
-            if ! mv -fT -- "${restore_files[i]}" "${file_paths[i]}"; then
+            if [[ -d "${file_paths[i]}" ]] || ! mv -f -- "${restore_files[i]}" "${file_paths[i]}"; then
                 log error "Could not restore ${file_paths[i]}; backup retained at $backup_dir; manual recovery required"
                 return 1
             fi
