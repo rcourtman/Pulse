@@ -402,20 +402,29 @@ func (m *Manager) CheckHost(host models.Host) {
 		m.clearHostDiskTemperatureAlerts(host.ID)
 	}
 
-	seenDisks := make(map[string]struct{}, len(host.Disks))
-	if len(host.Sensors.SMART) > 0 {
-		for _, disk := range host.Sensors.SMART {
-			diskResourceID, diskName := hostSMARTDiskResourceID(host, disk)
-			if host.LinkedNodeID == "" {
-				seenDisks[diskResourceID] = struct{}{}
+	if host.LinkedNodeID != "" {
+		// The linked Proxmox node raises SMART health and wearout alerts for
+		// this machine's disks.
+		m.clearHostSMARTDiskAlerts(host.ID)
+	} else {
+		// An empty SMART list means collection failed or is unsupported for
+		// this report, not that every disk left, so it leaves seen nil.
+		var seenSMARTDisks map[string]struct{}
+		if len(host.Sensors.SMART) > 0 {
+			seenSMARTDisks = make(map[string]struct{}, len(host.Sensors.SMART))
+			for _, disk := range host.Sensors.SMART {
+				diskResourceID, diskName := hostSMARTDiskResourceID(host, disk)
+				seenSMARTDisks[diskResourceID] = struct{}{}
 				m.syncHostSMARTDiskRiskAlerts(host, disk, diskResourceID, diskName, nodeName, instanceName, baseMetadata, thresholds)
-				continue
 			}
-			m.syncHostSMARTDiskAlert(host, disk, diskResourceID, diskName, nodeName, instanceName, baseMetadata, "disk-health", nil)
-			m.syncHostSMARTDiskAlert(host, disk, diskResourceID, diskName, nodeName, instanceName, baseMetadata, "disk-wearout", nil)
 		}
+		// No later reading will resolve the alerts of a disk that was
+		// removed, replaced or renamed, or whose rules were turned off while
+		// it was unlisted.
+		m.cleanupHostSMARTDiskAlerts(host.ID, seenSMARTDisks, thresholds)
 	}
 
+	seenDisks := make(map[string]struct{}, len(host.Disks))
 	for _, disk := range host.Disks {
 		diskResourceID, diskName := hostDiskResourceID(host, disk)
 		seenDisks[diskResourceID] = struct{}{}
@@ -646,6 +655,7 @@ func (m *Manager) HandleHostRemoved(host models.Host) {
 	// No later report will close the host's pending disk temperature runs or
 	// reset its disk absence counts.
 	m.clearHostDiskTemperatureAlerts(host.ID)
+	m.clearHostSMARTDiskAlerts(host.ID)
 }
 
 // HandleHostTelemetryExpired re-evaluates transient storage-operation evidence
@@ -982,15 +992,48 @@ func (m *Manager) clearHostDiskTemperatureAlerts(hostID string) {
 	m.cleanupHostDiskTemperatureAlerts(hostID, nil)
 }
 
-// hostDiskTemperatureAbsenceConfirmations is how many consecutive non-empty
-// SMART reports must omit a disk before its temperature alert clears. The
+// hostSMARTDiskAbsenceConfirmations is how many consecutive non-empty
+// SMART reports must omit a disk before the alerts held for it clear. The
 // Windows, FreeBSD and controller-multiplexed Linux collectors drop a disk
-// whose probe fails, so one omission is not evidence the disk left.
-const hostDiskTemperatureAbsenceConfirmations = 3
+// whose probe fails or times out, so one omission is not evidence the disk
+// left.
+const hostSMARTDiskAbsenceConfirmations = 3
+
+// confirmHostSMARTDiskAbsencesNoLock counts one more report missing each
+// resource in absent and returns those now missing for
+// hostSMARTDiskAbsenceConfirmations reports in a row, or every absent
+// resource when counted is false. Any other count under resourcePrefix
+// restarts, because its disk was seen again or its alert state is gone.
+// Callers must hold m.mu.
+func (m *Manager) confirmHostSMARTDiskAbsencesNoLock(resourcePrefix string, absent map[string][]string, counted bool) []string {
+	if m.hostSMARTDiskAbsences == nil {
+		m.hostSMARTDiskAbsences = make(map[string]int)
+	}
+	for resourceID := range m.hostSMARTDiskAbsences {
+		if !strings.HasPrefix(resourceID, resourcePrefix) {
+			continue
+		}
+		if _, exists := absent[resourceID]; !exists {
+			delete(m.hostSMARTDiskAbsences, resourceID)
+		}
+	}
+	confirmed := make([]string, 0, len(absent))
+	for resourceID := range absent {
+		if counted {
+			m.hostSMARTDiskAbsences[resourceID]++
+			if m.hostSMARTDiskAbsences[resourceID] < hostSMARTDiskAbsenceConfirmations {
+				continue
+			}
+		}
+		delete(m.hostSMARTDiskAbsences, resourceID)
+		confirmed = append(confirmed, resourceID)
+	}
+	return confirmed
+}
 
 // cleanupHostDiskTemperatureAlerts resolves a host's SMART disk temperature
 // alerts, and drops their pending threshold runs, once their resource ID has
-// been missing from seen for hostDiskTemperatureAbsenceConfirmations calls in
+// been missing from seen for hostSMARTDiskAbsenceConfirmations calls in
 // a row. A nil seen resolves all of them at once.
 func (m *Manager) cleanupHostDiskTemperatureAlerts(hostID string, seen map[string]struct{}) {
 	if hostID == "" {
@@ -1029,32 +1072,126 @@ func (m *Manager) cleanupHostDiskTemperatureAlerts(hostID string, seen map[strin
 		}
 	}
 
-	if m.hostDiskTempAbsences == nil {
-		m.hostDiskTempAbsences = make(map[string]int)
-	}
-	// A disk seen again, or whose state is gone, restarts its count.
-	for resourceID := range m.hostDiskTempAbsences {
-		if !strings.HasPrefix(resourceID, resourcePrefix) {
-			continue
-		}
-		if _, exists := absent[resourceID]; !exists {
-			delete(m.hostDiskTempAbsences, resourceID)
-		}
-	}
-	for resourceID, storageKeys := range absent {
-		if seen != nil {
-			m.hostDiskTempAbsences[resourceID]++
-			if m.hostDiskTempAbsences[resourceID] < hostDiskTemperatureAbsenceConfirmations {
-				continue
-			}
-		}
-		delete(m.hostDiskTempAbsences, resourceID)
+	for _, resourceID := range m.confirmHostSMARTDiskAbsencesNoLock(resourcePrefix, absent, seen != nil) {
 		// A departed disk never sends the reading that would close its run.
 		m.core.DropPendingForResource(resourceID)
-		for _, storageKey := range storageKeys {
+		for _, storageKey := range absent[resourceID] {
 			m.clearAlertNoLock(storageKey)
 		}
 	}
+}
+
+// isHostSMARTRiskAlertType reports whether alertType is a SMART health or
+// wearout alert. CheckHost raises them under the same disk resource prefix
+// as filesystem usage alerts.
+func isHostSMARTRiskAlertType(alertType string) bool {
+	return alertType == "disk-health" || alertType == "disk-wearout"
+}
+
+// hostSMARTRiskAlertsMissingNoLock groups a host's active SMART health and
+// wearout alerts whose resource ID is not in seen by resource ID, as storage
+// keys. Callers must hold m.mu.
+func (m *Manager) hostSMARTRiskAlertsMissingNoLock(resourcePrefix string, seen map[string]struct{}) map[string][]string {
+	missing := make(map[string][]string)
+	for storageKey, alert := range m.activeAlerts {
+		if alert == nil || !isHostSMARTRiskAlertType(alert.Type) || !strings.HasPrefix(alert.ResourceID, resourcePrefix) {
+			continue
+		}
+		if _, exists := seen[alert.ResourceID]; exists {
+			continue
+		}
+		missing[alert.ResourceID] = append(missing[alert.ResourceID], storageKey)
+	}
+	return missing
+}
+
+// clearHostSMARTDiskAlerts resolves every SMART disk health and wearout alert
+// for a host and forgets its disks' absence counts.
+func (m *Manager) clearHostSMARTDiskAlerts(hostID string) {
+	if hostID == "" {
+		return
+	}
+
+	resourcePrefix := hostResourceID(hostID) + "/disk:"
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	absent := m.hostSMARTRiskAlertsMissingNoLock(resourcePrefix, nil)
+	for _, resourceID := range m.confirmHostSMARTDiskAbsencesNoLock(resourcePrefix, absent, false) {
+		for _, storageKey := range absent[resourceID] {
+			m.clearAlertNoLock(storageKey)
+		}
+	}
+}
+
+// cleanupHostSMARTDiskAlerts resolves the SMART disk health and wearout
+// alerts of disks missing from seen, the resource IDs a report's SMART list
+// carried. An alert clears at once when every rule that raised it is off,
+// since disabling a rule needs no disk reading, and otherwise once its disk
+// has been missing from hostSMARTDiskAbsenceConfirmations non-empty lists in
+// a row. A nil seen, a report without a SMART list, counts toward no
+// absence. These alerts fire on their first matching report, so they leave
+// no pending run to drop.
+func (m *Manager) cleanupHostSMARTDiskAlerts(hostID string, seen map[string]struct{}, thresholds ThresholdConfig) {
+	if hostID == "" {
+		return
+	}
+
+	resourcePrefix := hostResourceID(hostID) + "/disk:"
+	smartThresholds, crcMinimumDelta := hostSMARTRiskThresholds(thresholds)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	absent := m.hostSMARTRiskAlertsMissingNoLock(resourcePrefix, seen)
+	var rulesOff []string
+	for resourceID, storageKeys := range absent {
+		held := storageKeys[:0]
+		for _, storageKey := range storageKeys {
+			if hostSMARTRiskRulesOff(m.activeAlerts[storageKey], smartThresholds, crcMinimumDelta) {
+				rulesOff = append(rulesOff, storageKey)
+				continue
+			}
+			held = append(held, storageKey)
+		}
+		if len(held) == 0 {
+			delete(absent, resourceID)
+			continue
+		}
+		absent[resourceID] = held
+	}
+	for _, storageKey := range rulesOff {
+		m.clearAlertNoLock(storageKey)
+	}
+
+	if seen == nil {
+		return
+	}
+	for _, resourceID := range m.confirmHostSMARTDiskAbsencesNoLock(resourcePrefix, absent, true) {
+		for _, storageKey := range absent[resourceID] {
+			m.clearAlertNoLock(storageKey)
+		}
+	}
+}
+
+// hostSMARTRiskRulesOff reports whether every rule that raised a SMART alert
+// is now off. An alert without recorded risk codes predates that metadata,
+// so the rules that raised it are unknown and it is not released.
+func hostSMARTRiskRulesOff(alert *Alert, thresholds storagehealth.SMARTThresholds, crcMinimumDelta int64) bool {
+	if alert == nil {
+		return false
+	}
+	codes := hostSMARTRiskCodes(alert.Metadata["riskCodes"])
+	if len(codes) == 0 {
+		return false
+	}
+	for _, code := range codes {
+		if hostSMARTRiskRuleEnabled(code, thresholds, crcMinimumDelta) {
+			return false
+		}
+	}
+	return true
 }
 
 var customSensorAssessmentCodes = []string{
@@ -1288,6 +1425,11 @@ func (m *Manager) cleanupHostDiskAlerts(host models.Host, seen map[string]struct
 		if !matches {
 			continue
 		}
+		// SMART health and wearout alerts follow the SMART list instead, in
+		// cleanupHostSMARTDiskAlerts.
+		if isHostSMARTRiskAlertType(alert.Type) {
+			continue
+		}
 		if _, exists := seen[alert.ResourceID]; exists {
 			continue
 		}
@@ -1295,8 +1437,10 @@ func (m *Manager) cleanupHostDiskAlerts(host models.Host, seen map[string]struct
 	}
 }
 
-func (m *Manager) syncHostSMARTDiskRiskAlerts(host models.Host, disk models.HostDiskSMART, resourceID, resourceName, nodeName, instanceName string, baseMetadata map[string]interface{}, thresholds ThresholdConfig) {
-	smartThresholds := storagehealth.SMARTThresholds{
+// hostSMARTRiskThresholds returns the SMART rules a host's resolved
+// thresholds enable, and the minimum CRC error growth that raises an alert.
+func hostSMARTRiskThresholds(thresholds ThresholdConfig) (storagehealth.SMARTThresholds, int64) {
+	return storagehealth.SMARTThresholds{
 		HealthFailure:        intValue(thresholds.SMARTHealthFailure) > 0,
 		ReallocatedSectors:   int64Value(thresholds.SMARTReallocated),
 		PendingSectors:       int64Value(thresholds.SMARTPending),
@@ -1306,15 +1450,19 @@ func (m *Manager) syncHostSMARTDiskRiskAlerts(host models.Host, disk models.Host
 		LifeCritical:         intValue(thresholds.SMARTLifeCritical),
 		AvailableSpareWarn:   intValue(thresholds.SMARTSpareWarning),
 		AvailableSpareCrit:   intValue(thresholds.SMARTSpareCritical),
-	}
+	}, int64Value(thresholds.SMARTCRCErrorDelta)
+}
+
+func (m *Manager) syncHostSMARTDiskRiskAlerts(host models.Host, disk models.HostDiskSMART, resourceID, resourceName, nodeName, instanceName string, baseMetadata map[string]interface{}, thresholds ThresholdConfig) {
+	smartThresholds, crcMinimumDelta := hostSMARTRiskThresholds(thresholds)
 	assessment := storagehealth.AssessHostSMARTDiskWithThresholds(disk, smartThresholds)
-	assessment.Reasons = append(assessment.Reasons, m.hostSMARTCounterGrowthReasons(resourceID, disk, int64Value(thresholds.SMARTCRCErrorDelta))...)
+	assessment.Reasons = append(assessment.Reasons, m.hostSMARTCounterGrowthReasons(resourceID, disk, crcMinimumDelta)...)
 	healthReasons, wearReasons := splitSMARTAlertReasons(assessment.Reasons)
 
-	if m.hostSMARTDiskAlertEvidenceKnown(resourceID, "disk-health", disk, healthReasons, smartThresholds, int64Value(thresholds.SMARTCRCErrorDelta)) {
+	if m.hostSMARTDiskAlertEvidenceKnown(resourceID, "disk-health", disk, healthReasons, smartThresholds, crcMinimumDelta) {
 		m.syncHostSMARTDiskAlert(host, disk, resourceID, resourceName, nodeName, instanceName, baseMetadata, "disk-health", healthReasons)
 	}
-	if m.hostSMARTDiskAlertEvidenceKnown(resourceID, "disk-wearout", disk, wearReasons, smartThresholds, int64Value(thresholds.SMARTCRCErrorDelta)) {
+	if m.hostSMARTDiskAlertEvidenceKnown(resourceID, "disk-wearout", disk, wearReasons, smartThresholds, crcMinimumDelta) {
 		m.syncHostSMARTDiskAlert(host, disk, resourceID, resourceName, nodeName, instanceName, baseMetadata, "disk-wearout", wearReasons)
 	}
 }

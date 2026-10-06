@@ -337,9 +337,9 @@ func TestCheckHostClearsDiskTemperatureAlertWhenDiskLeavesSMARTReport(t *testing
 			m, host := hotHost(t)
 
 			host.Sensors.SMART = tc.next
-			for report := 1; report <= hostDiskTemperatureAbsenceConfirmations; report++ {
+			for report := 1; report <= hostSMARTDiskAbsenceConfirmations; report++ {
 				m.CheckHost(host)
-				wantActive := tc.wantHeld || report < hostDiskTemperatureAbsenceConfirmations
+				wantActive := tc.wantHeld || report < hostSMARTDiskAbsenceConfirmations
 				if active := sdaActive(m); active != wantActive {
 					t.Fatalf("report %d: sda disk temperature alert active = %v, want %v; active: %v", report, active, wantActive, alertKeys(m))
 				}
@@ -372,7 +372,7 @@ func TestCheckHostClearsDiskTemperatureAlertWhenDiskLeavesSMARTReport(t *testing
 			host.Sensors.SMART = smart
 			m.CheckHost(host)
 			if !sdaActive(m) {
-				t.Fatalf("sda disk temperature alert cleared by an omission run shorter than %d reports, active: %v", hostDiskTemperatureAbsenceConfirmations, alertKeys(m))
+				t.Fatalf("sda disk temperature alert cleared by an omission run shorter than %d reports, active: %v", hostSMARTDiskAbsenceConfirmations, alertKeys(m))
 			}
 		}
 	})
@@ -409,9 +409,9 @@ func TestCheckHostClearsDiskTemperatureAlertWhenDiskLeavesSMARTReport(t *testing
 		m, host, sdaPending := pendingHost(t)
 
 		host.Sensors.SMART = []models.HostDiskSMART{smartDisk("/dev/sdb", 40)}
-		for report := 1; report <= hostDiskTemperatureAbsenceConfirmations; report++ {
+		for report := 1; report <= hostSMARTDiskAbsenceConfirmations; report++ {
 			m.CheckHost(host)
-			wantPending := report < hostDiskTemperatureAbsenceConfirmations
+			wantPending := report < hostSMARTDiskAbsenceConfirmations
 			if pending := sdaPending(); pending != wantPending {
 				t.Fatalf("report %d: pending sda run = %v, want %v", report, pending, wantPending)
 			}
@@ -441,8 +441,173 @@ func TestCheckHostClearsDiskTemperatureAlertWhenDiskLeavesSMARTReport(t *testing
 		}
 		m.mu.RLock()
 		defer m.mu.RUnlock()
-		if len(m.hostDiskTempAbsences) != 0 {
-			t.Fatalf("absence counts outlived their removed host: %v", m.hostDiskTempAbsences)
+		if len(m.hostSMARTDiskAbsences) != 0 {
+			t.Fatalf("absence counts outlived their removed host: %v", m.hostSMARTDiskAbsences)
+		}
+	})
+}
+
+func TestCheckHostHoldsSMARTRiskAlertsUntilDiskLeavesSMARTReport(t *testing.T) {
+	const hostID = "host-smart-absent"
+	used := 96
+	failingSDA := models.HostDiskSMART{Device: "/dev/sda", Model: "test-disk", Serial: "SERIAL-SDA", Health: "FAILED"}
+	wornNVMe := models.HostDiskSMART{Device: "/dev/nvme0n1", Model: "test-nvme", Serial: "SERIAL-NVME", Health: "PASSED", Attributes: &models.SMARTAttributes{PercentageUsed: &used}}
+	healthySDB := models.HostDiskSMART{Device: "/dev/sdb", Model: "test-disk", Serial: "SERIAL-SDB", Health: "PASSED"}
+	riskAlertID := func(device, alertType string) string {
+		resourceID := hostResourceID(hostID) + "/disk:" + device
+		return buildCanonicalStateID(resourceID, resourceID+"-"+alertType)
+	}
+	healthAlertID := riskAlertID("sda", "disk-health")
+	wearAlertID := riskAlertID("nvme0n1", "disk-wearout")
+	riskAlertsActive := func(m *Manager) (bool, bool) {
+		return testHasActiveAlert(t, m, healthAlertID), testHasActiveAlert(t, m, wearAlertID)
+	}
+	// sda reports SMART FAILED and nvme0n1 a worn-out life; sdb is healthy.
+	// A filesystem on sdb runs full, so the host also holds a usage alert
+	// under the same disk resource prefix.
+	riskyHost := func(t *testing.T) (*Manager, models.Host) {
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.TimeThresholds = map[string]int{}
+		m.mu.Unlock()
+		host := models.Host{
+			ID:       hostID,
+			Hostname: hostID,
+			Status:   "online",
+			Disks:    []models.Disk{{Mountpoint: "/data", Device: "/dev/sdb1", Usage: 95, Total: 1000, Used: 950, Free: 50}},
+			Sensors:  models.HostSensorSummary{SMART: []models.HostDiskSMART{failingSDA, wornNVMe, healthySDB}},
+		}
+		m.CheckHost(host)
+		if health, wear := riskAlertsActive(m); !health || !wear {
+			t.Fatalf("expected sda disk-health and nvme0n1 disk-wearout alerts, active: %v", alertKeys(m))
+		}
+		return m, host
+	}
+
+	cases := []struct {
+		name     string
+		next     []models.HostDiskSMART
+		wantHeld bool
+	}{
+		// The disk was pulled or replaced under a new name, so no later
+		// reading will resolve its alerts.
+		{name: "disks removed", next: []models.HostDiskSMART{healthySDB}},
+		// The agent omits the list when collection fails or is unsupported.
+		{name: "SMART collection empty", next: nil, wantHeld: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m, host := riskyHost(t)
+
+			host.Sensors.SMART = tc.next
+			for report := 1; report <= hostSMARTDiskAbsenceConfirmations+1; report++ {
+				m.CheckHost(host)
+				wantActive := tc.wantHeld || report < hostSMARTDiskAbsenceConfirmations
+				if health, wear := riskAlertsActive(m); health != wantActive || wear != wantActive {
+					t.Fatalf("report %d: disk-health/disk-wearout active = %v/%v, want %v; active: %v", report, health, wear, wantActive, alertKeys(m))
+				}
+			}
+			if !tc.wantHeld {
+				return
+			}
+
+			// A held alert still resolves on the disk's next healthy reading.
+			healed := 10
+			host.Sensors.SMART = []models.HostDiskSMART{
+				{Device: "/dev/sda", Model: "test-disk", Serial: "SERIAL-SDA", Health: "PASSED"},
+				{Device: "/dev/nvme0n1", Model: "test-nvme", Serial: "SERIAL-NVME", Health: "PASSED", Attributes: &models.SMARTAttributes{PercentageUsed: &healed}},
+				healthySDB,
+			}
+			m.CheckHost(host)
+			if health, wear := riskAlertsActive(m); health || wear {
+				t.Fatalf("held disk-health/disk-wearout alerts outlived healthy readings, active: %v", alertKeys(m))
+			}
+		})
+	}
+
+	t.Run("intermittently dropped disk keeps its alerts", func(t *testing.T) {
+		m, host := riskyHost(t)
+		present := host.Sensors.SMART
+		// A FreeBSD or controller-multiplexed probe that fails or times out
+		// drops the disk from an otherwise complete list.
+		dropped := []models.HostDiskSMART{healthySDB}
+
+		// The run of omissions restarts whenever the disk is reported again.
+		// Clearing and re-raising would send a recovery and a new firing
+		// notification each time, so the alerts must stay active throughout.
+		for report, smart := range [][]models.HostDiskSMART{dropped, dropped, present, dropped, dropped, nil, present} {
+			host.Sensors.SMART = smart
+			m.CheckHost(host)
+			if health, wear := riskAlertsActive(m); !health || !wear {
+				t.Fatalf("report %d: disk-health/disk-wearout active = %v/%v after an omission run shorter than %d reports; active: %v", report+1, health, wear, hostSMARTDiskAbsenceConfirmations, alertKeys(m))
+			}
+		}
+	})
+
+	t.Run("filesystem alert clears on its first absence", func(t *testing.T) {
+		m, host := riskyHost(t)
+		fsResourceID, _ := hostDiskResourceID(host, host.Disks[0])
+		fsAlertID := canonicalMetricStateID(fsResourceID, "disk")
+		if !testHasActiveAlert(t, m, fsAlertID) {
+			t.Fatalf("expected /data usage alert at 95%%, active: %v", alertKeys(m))
+		}
+
+		// The filesystem collector always reports every mount, so a missing
+		// mount left; the SMART list is empty this report.
+		host.Disks = nil
+		host.Sensors.SMART = nil
+		m.CheckHost(host)
+		if testHasActiveAlert(t, m, fsAlertID) {
+			t.Fatalf("/data usage alert outlived its unmounted filesystem, active: %v", alertKeys(m))
+		}
+		if health, wear := riskAlertsActive(m); !health || !wear {
+			t.Fatalf("empty SMART list cleared disk-health/disk-wearout = %v/%v, active: %v", !health, !wear, alertKeys(m))
+		}
+	})
+
+	t.Run("linked Proxmox node takes over", func(t *testing.T) {
+		m, host := riskyHost(t)
+
+		// The node owns SMART risk for a linked machine, even in a report
+		// without a SMART list.
+		host.LinkedNodeID = "pve-node-1"
+		host.Sensors.SMART = nil
+		m.CheckHost(host)
+		if health, wear := riskAlertsActive(m); health || wear {
+			t.Fatalf("disk-health/disk-wearout stayed on the agent after its node link, active: %v", alertKeys(m))
+		}
+	})
+
+	t.Run("rule turned off releases an unlisted disk's alert", func(t *testing.T) {
+		m, host := riskyHost(t)
+
+		// Turning a rule off needs no disk reading, so it applies while SMART
+		// collection is failing; the wearout rule is still on.
+		off := 0
+		m.mu.Lock()
+		m.config.AgentDefaults.SMARTHealthFailure = &off
+		m.mu.Unlock()
+		host.Sensors.SMART = nil
+		m.CheckHost(host)
+		if health, wear := riskAlertsActive(m); health || !wear {
+			t.Fatalf("failed-health rule off: disk-health/disk-wearout active = %v/%v, want false/true; active: %v", health, wear, alertKeys(m))
+		}
+	})
+
+	t.Run("removed host leaves no absence count", func(t *testing.T) {
+		m, host := riskyHost(t)
+
+		host.Sensors.SMART = []models.HostDiskSMART{healthySDB}
+		m.CheckHost(host)
+		m.HandleHostRemoved(host)
+		if health, wear := riskAlertsActive(m); health || wear {
+			t.Fatalf("disk-health/disk-wearout outlived their removed host, active: %v", alertKeys(m))
+		}
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+		if len(m.hostSMARTDiskAbsences) != 0 {
+			t.Fatalf("absence counts outlived their removed host: %v", m.hostSMARTDiskAbsences)
 		}
 	})
 }

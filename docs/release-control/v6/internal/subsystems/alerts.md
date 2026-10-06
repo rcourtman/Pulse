@@ -429,6 +429,26 @@ remains authoritative and may clear the alert without waking the disk.
 `internal/alerts/alerts_test.go` pins the fire, standby hold, partial-evidence
 hold, and authoritative recovery sequence.
 
+A disk missing from the report holds its SMART alerts the same way. The agent
+omits the SMART list when collection fails or is unsupported, and the FreeBSD
+and controller-multiplexed Linux collectors drop a disk whose probe fails or
+times out, as a failing disk's probe may. So `cleanupHostSMARTDiskAlerts` (not
+the filesystem `cleanupHostDiskAlerts`, which shares the `agent:<host>/disk:`
+prefix) counts no absence for an empty list and clears a `disk-health` or
+`disk-wearout` alert only once its disk is missing from
+`hostSMARTDiskAbsenceConfirmations` (3) consecutive non-empty lists, the rule
+disk temperature alerts use. A list that stays empty leaves the alert to the
+24-hour stale-alert sweep. Before this, one empty or partial report resolved
+the alert and the next listing raised it again, firing the resolved and alert
+notification callbacks on every flap. Turning off every rule an alert records
+in its `riskCodes` still clears it at once, whether or not its disk is listed;
+an alert restored without them stays held, as it does for a listed disk, and a
+linked Proxmox node or agent removal clears them with the absence counts.
+`TestCheckHostHoldsSMARTRiskAlertsUntilDiskLeavesSMARTReport` in
+`internal/alerts/host_unraid_lifecycle_test.go` pins the holds, the clear, the
+restarted count, the rule-off release and the filesystem alert's immediate
+clear.
+
 Threshold sections are keyed by override identity, not by resource type. The
 Virtualization Hosts section reads and writes overrides on the bare resource id,
 while the Machines section resolves through the agent-derived identity
