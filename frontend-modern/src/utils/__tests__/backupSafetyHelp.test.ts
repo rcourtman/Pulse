@@ -137,14 +137,59 @@ describe('manual backup safety help', () => {
     const troubleshooting = read('docs/TROUBLESHOOTING.md');
     expect(read('frontend-modern/public/docs/TROUBLESHOOTING.md')).toBe(troubleshooting);
     const link = render(troubleshooting, 'TROUBLESHOOTING').querySelector(
-      'a[href="/docs/VM_DISK_MONITORING#pause-pulse-for-a-planned-freeze-enabled-backup"]',
+      'a[href="/docs/VM_DISK_MONITORING#backup-safety"]',
     );
     expect(link?.textContent).toBe('manual backup precaution');
-    expect(
-      render(guide, 'VM_DISK_MONITORING').querySelector(
-        '#pause-pulse-for-a-planned-freeze-enabled-backup',
-      )?.textContent,
-    ).toBe('Pause Pulse for a planned freeze-enabled backup');
+    const target = render(guide, 'VM_DISK_MONITORING');
+    expect(target.querySelector('#backup-safety')?.textContent).toBe('Backup safety');
+    for (const fragment of [
+      'pause-pulse-for-a-planned-freeze-enabled-backup',
+      'pause-a-docker-or-compose-server-for-a-planned-backup',
+    ]) {
+      expect(target.querySelector(`#${fragment}`)).not.toBeNull();
+    }
+  });
+
+  const troubleshootingDiskHelp = () => {
+    const section = read('docs/TROUBLESHOOTING.md')
+      .split('#### VMs show "-" for disk usage')[1]
+      .split('#### Backup health disagrees with PBS')[0];
+    const article = render(section, 'TROUBLESHOOTING');
+    return { article, text: article.textContent?.replace(/\s+/g, ' ') };
+  };
+
+  it('keeps the troubleshooting entry point deployment-aware and separate from incident recovery', () => {
+    const { article, text } = troubleshootingDiskHelp();
+    expect(text).toContain('actual server deployment: systemd or Docker/Compose');
+    expect(text).toContain('A planned pause is not incident recovery');
+    expect(text).toContain('stopping Pulse does not cancel a guest-agent request already issued');
+    expect(text).toContain("If an existing operation's state is unknown, do not start a backup");
+    expect(text).toContain('a stopped server or an elapsed wait');
+    expect(article.querySelector('pre')).toBeNull();
+  });
+
+  it('requires all independent recovery checks in troubleshooting, not merely thaw', () => {
+    const { text } = troubleshootingDiskHelp();
+    expect(text).toContain('until the backup has ended and independent post-backup checks confirm');
+    expect(text).toContain(
+      'thaw, fresh successful workload writes to every filesystem covered by the backup, and workload liveness',
+    );
+    expect(text).toContain('independent of Pulse and the QEMU Guest Agent');
+    expect(text).toContain('a console connection or a successful read alone is not enough');
+    expect(text).toContain('If any check fails or is unavailable');
+    expect(text).toContain('leave Pulse and its automatic updater paused');
+    expect(text).toContain('not new probes, forced writes or another backup');
+    expect(text).not.toContain('thaw confirmation before starting Pulse again');
+  });
+
+  it('preserves prior-active restoration and independent outage coverage in troubleshooting', () => {
+    const { text } = troubleshootingDiskHelp();
+    expect(text).toContain('After all checks pass');
+    expect(text).toContain('restore only services and timers that were active before the pause');
+    expect(text).toContain('following the deployment-specific precaution');
+    expect(text).toContain('Unknown pre-pause states are not permission to start them');
+    expect(text).toContain('Pulse monitoring and alerts are unavailable while stopped');
+    expect(text).toContain('arrange independent outage coverage');
   });
 
   it('keeps service control in the actual Pulse server container, not the guest or host agent', () => {
