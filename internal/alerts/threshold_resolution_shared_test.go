@@ -306,11 +306,30 @@ func TestCheckNodeReleasesOpenMetricAlertWhenHostAgentRegisters(t *testing.T) {
 		t.Fatalf("expected node memory alert %q before the agent registers", nodeAlertID)
 	}
 
+	var closed []*ResolvedAlert
+	m.SetResolvedAlertCallback(func(resolved *ResolvedAlert) { closed = append(closed, resolved) })
 	m.CheckHost(host)
 	m.CheckNode(node)
 
 	if testHasActiveAlert(t, m, nodeAlertID) {
 		t.Fatalf("expected node memory alert %q to be released once the host agent owns memory", nodeAlertID)
+	}
+	// The close still reaches resolved consumers, so an incident opened from
+	// the node alert closes, but it says where the alert went instead of
+	// reading as a recovery.
+	if len(closed) != 1 || closed[0].Alert.ID != nodeAlertID {
+		t.Fatalf("resolved callbacks = %+v, want one close for %q", closed, nodeAlertID)
+	}
+	want := AlertResolution{
+		Reason:              AlertResolutionMovedToAgent,
+		SuccessorResourceID: hostResourceID(host.ID),
+		SuccessorName:       "delly2 (Host Agent)",
+	}
+	if got := closed[0].Alert.Resolution; got == nil || *got != want {
+		t.Fatalf("node alert resolution = %+v, want %+v", got, want)
+	}
+	if got := closed[0].Alert.Resolution.Summary(); got != "Alert moved to delly2 (Host Agent). This is not a recovery: check the agent for the current reading." {
+		t.Fatalf("resolution summary = %q", got)
 	}
 	m.mu.RLock()
 	nodeIncident := testCoreHasIncident(m, node.ID, canonicalMetricSpecID(node.ID, "memory"))

@@ -122,7 +122,7 @@ func (m *Manager) CheckNode(node models.Node) {
 			} else {
 				input.Disk = &UnifiedResourceMetric{Percent: node.Disk.Usage}
 			}
-			m.releaseNodeMetricAlerts(node, released...)
+			m.releaseNodeMetricAlerts(node, link, released...)
 			m.evaluateUnifiedMetrics(input, thresholds, nil)
 
 			// CPU temperature stays with the node even when a host agent runs on it:
@@ -182,8 +182,16 @@ func (m *Manager) interruptMetricRun(spec alertspecs.ResourceAlertSpec) {
 // releaseNodeMetricAlerts stops node-side evaluation of the given metrics the
 // same way a disabled threshold does: any pending run is dropped and any open
 // node alert is resolved. Without this, a node alert that was open when a host
-// agent registered would stay frozen until the agent went offline.
-func (m *Manager) releaseNodeMetricAlerts(node models.Node, metrics ...string) {
+// agent registered would stay frozen until the agent went offline. The close
+// still reaches every resolved consumer, so an incident opened from the node
+// alert closes, but it says the alert moved to the agent rather than that the
+// node recovered.
+func (m *Manager) releaseNodeMetricAlerts(node models.Node, agent hostAgentNodeLink, metrics ...string) {
+	resolution := &AlertResolution{
+		Reason:              AlertResolutionMovedToAgent,
+		SuccessorResourceID: hostResourceID(agent.agentID),
+		SuccessorName:       agent.agentName,
+	}
 	for _, metric := range metrics {
 		spec, err := buildCanonicalMetricSpec(node.ID, node.Name, unifiedresources.ResourceType("node"), metric, nil)
 		if err != nil {
@@ -195,7 +203,7 @@ func (m *Manager) releaseNodeMetricAlerts(node models.Node, metrics ...string) {
 				Msg("Skipping invalid canonical node metric spec")
 			continue
 		}
-		m.checkMetricWithCanonicalSpec(spec, node.Name, node.Name, node.Instance, "node", 0, nil, nil)
+		m.releaseCanonicalMetricAlert(spec, node.Name, node.Name, node.Instance, "node", 0, resolution)
 	}
 }
 

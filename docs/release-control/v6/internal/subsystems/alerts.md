@@ -1855,6 +1855,14 @@ instance name in `Instance`.
 `internal/alerts/threshold_resolution_shared_test.go`, and
 `TestHostAgentDeduplicationFollowsNodeLink` in
 `internal/alerts/host_dedup_test.go`, pin these rules.
+The release closes as a handover, not a recovery. `releaseNodeMetricAlerts`
+passes the link's agent (its alert resource ID and `hostDisplayName` name) as
+an `AlertResolution` with reason `moved_to_agent` to
+`releaseCanonicalMetricAlert`, so the close still reaches resolved consumers
+while notifications say the alert moved to that agent. The link covers only
+the metrics the agent evaluates, so the reason is stamped only where the agent
+really raises that metric. `TestCheckNodeReleasesOpenMetricAlertWhenHostAgentRegisters`
+pins the resolution on the close.
 Host-agent alert evaluation now lives in `internal/alerts/host.go`. That file
 owns host identity, host-agent metric projection, host disk/SMART/RAID/Unraid
 health handling, host cleanup, and host offline lifecycle handling; future host
