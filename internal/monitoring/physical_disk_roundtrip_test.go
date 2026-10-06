@@ -554,3 +554,82 @@ func TestMergeHostAgentSMARTIntoDisks_LegacyAgentTemperatureFollowsLease(t *test
 		}
 	}
 }
+
+// A disk that goes into standby keeps its pre-sleep temperature as retained
+// evidence (preserveUnavailablePhysicalDiskEvidence), with the agent's standby
+// state. Full disk polls during standby must not record that value again.
+func TestStandbyDiskRetainedTemperatureIsNotRecordedAsHistory(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	state := models.NewState()
+	state.UpdateNodesForInstance("pve1", []models.Node{{
+		ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online",
+		LastSeen: time.Now(), LinkedAgentID: "agent-1",
+	}})
+	report := func(row models.HostDiskSMART) {
+		row.Device, row.Serial, row.Type, row.Health = "/dev/sdb", "WD-SILENT1", "sata", "PASSED"
+		state.UpsertHost(models.Host{
+			ID: "agent-1", Hostname: "node1", LinkedNodeID: "pve1-node1", Status: "online",
+			IntervalSeconds: 30, LastSeen: time.Now(),
+			Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{row}},
+		})
+	}
+	alertManager := alerts.NewManager()
+	t.Cleanup(alertManager.Stop)
+	storeConfig := metrics.DefaultConfig(t.TempDir())
+	storeConfig.FlushInterval = time.Hour
+	store, err := metrics.NewStore(storeConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	history := NewMetricsHistory(100, time.Hour)
+	m := &Monitor{
+		state: state, resourceStore: adapter, metricsHistory: history, metricsStore: store,
+		alertManager: alertManager, startTime: time.Now().Add(-time.Hour),
+		lastPhysicalDiskPoll: make(map[string]time.Time),
+	}
+	fullPoll := func() models.PhysicalDisk {
+		t.Helper()
+		adapter.PopulateFromSnapshot(state.GetSnapshot())
+		started := time.Now()
+		delete(m.lastPhysicalDiskPoll, "pve1")
+		m.maybePollPhysicalDisksAsync(context.Background(), "pve1", &config.PVEInstance{}, &silentAgentDiskPVEClient{},
+			[]proxmox.Node{{Node: "node1", Status: "online"}}, map[string]string{"node1": "online"}, nil)
+		deadline := time.Now().Add(3 * time.Second)
+		for {
+			if disks := state.GetSnapshot().PhysicalDisks; len(disks) == 1 && !disks[0].LastChecked.Before(started) {
+				return disks[0]
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("full physical disk poll did not land in state")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	samples := func(d models.PhysicalDisk) int {
+		return len(history.GetDiskMetrics(unifiedresources.PhysicalDiskMetricID(d), "smart_temp", time.Hour))
+	}
+
+	report(models.HostDiskSMART{Temperature: 38, Collection: &diskinventory.CollectionStatus{
+		Temperature: diskinventory.Available("smartctl"),
+	}})
+	if got := fullPoll(); got.Temperature != 38 || samples(got) != 1 {
+		t.Fatalf("awake disk temperature not recorded: temp=%d samples=%d", got.Temperature, samples(got))
+	}
+
+	// The agent keeps reporting, but the disk is now asleep.
+	report(models.HostDiskSMART{Standby: true, Collection: &diskinventory.CollectionStatus{
+		Temperature: diskinventory.Unavailable("smartctl", "disk is in standby"),
+	}})
+	for poll := 0; poll < 2; poll++ {
+		got := fullPoll()
+		if got.Temperature != 38 || got.Collection == nil || got.Collection.Temperature.State != diskinventory.FieldUnavailable {
+			t.Fatalf("poll %d: standby disk lost its retained temperature or claims it was collected: temp=%d collection=%+v",
+				poll, got.Temperature, got.Collection)
+		}
+		if n := samples(got); n != 1 {
+			t.Fatalf("poll %d: standby disk's pre-sleep temperature recorded as new history: samples=%d", poll, n)
+		}
+	}
+}
