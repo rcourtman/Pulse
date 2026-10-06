@@ -58,7 +58,10 @@ identities, without implying filesystem removal. Different guests, instances,
 metrics and independently current CPU/I/O remain independent. Host memory also
 interrupts timing when its usage is unknown; explicit rule disablement still
 uses its normal clearing path independently of telemetry. Node temperature's
-existing interruption rule is unchanged.
+existing interruption rule is unchanged. Typed metric dispatchers must exclude
+metrics they evaluate separately from their own missing-value checks: node
+usage dispatch does not infer a temperature gap before the node's independent
+temperature evaluator observes its actual reading.
 
 `metric_observation_continuity_test.go` verifies actual legacy/canonical,
 unified, host and VM entry points, full-delay fresh activation/recovery,

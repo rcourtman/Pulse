@@ -275,7 +275,7 @@ func (m *Manager) resolveResourceThresholds(typeKey, resourceID string) Threshol
 }
 
 // evaluateUnifiedMetrics runs the common metric dispatch path for unified resources.
-func (m *Manager) evaluateUnifiedMetrics(input *UnifiedResourceInput, thresholds ThresholdConfig, opts *metricOptions) {
+func (m *Manager) evaluateUnifiedMetrics(input *UnifiedResourceInput, thresholds ThresholdConfig, opts *metricOptions, separatelyEvaluated ...string) {
 	if input == nil {
 		return
 	}
@@ -301,7 +301,7 @@ func (m *Manager) evaluateUnifiedMetrics(input *UnifiedResourceInput, thresholds
 		opts = &merged
 	}
 	candidates := buildUnifiedMetricCandidates(input, thresholds)
-	m.interruptUnobservedUnifiedMetrics(input, candidates)
+	m.interruptUnobservedUnifiedMetrics(input, candidates, separatelyEvaluated)
 	for _, candidate := range candidates {
 		m.checkMetricWithCanonicalSpec(candidate.Spec, input.Name, input.Node, input.Instance, unifiedAlertType(input.Type), candidate.Value, candidate.Threshold, opts)
 	}
@@ -310,7 +310,7 @@ func (m *Manager) evaluateUnifiedMetrics(input *UnifiedResourceInput, thresholds
 // An omitted/rejected metric is unknown, not a pause in its sustained-for
 // clock. Build candidates stays pure; dispatch owns interruption for metrics
 // this resource supports but cannot currently observe.
-func (m *Manager) interruptUnobservedUnifiedMetrics(input *UnifiedResourceInput, candidates []unifiedMetricCandidate) {
+func (m *Manager) interruptUnobservedUnifiedMetrics(input *UnifiedResourceInput, candidates []unifiedMetricCandidate, separatelyEvaluated []string) {
 	if _, ok := unifiedMetricResourceType(input.Type); !ok {
 		return
 	}
@@ -318,6 +318,16 @@ func (m *Manager) interruptUnobservedUnifiedMetrics(input *UnifiedResourceInput,
 	m.mu.Lock()
 	intentChanged := false
 	for _, metric := range metrics {
+		separateOwner := false
+		for _, separateMetric := range separatelyEvaluated {
+			if metric == separateMetric {
+				separateOwner = true
+				break
+			}
+		}
+		if separateOwner {
+			continue
+		}
 		switch metric {
 		case "diskRead", "diskWrite", "networkIn", "networkOut":
 			if !supportsUnifiedIOMetrics(input.Type) {

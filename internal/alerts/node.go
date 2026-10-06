@@ -112,7 +112,7 @@ func (m *Manager) CheckNode(node models.Node) {
 					CPU:      &UnifiedResourceMetric{Percent: node.CPU * 100},
 					Memory:   memoryMetric,
 					Disk:     &UnifiedResourceMetric{Percent: node.Disk.Usage},
-				}, thresholds, nil)
+				}, thresholds, nil, "temperature") // checkNodeTemperature owns its observation gaps.
 			}
 
 			// CPU temperature stays with the node even when a host agent runs on it:
