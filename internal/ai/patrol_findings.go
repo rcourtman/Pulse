@@ -2291,7 +2291,9 @@ func verifyMetricRecoveredState(snap patrolRuntimeState, thresholds PatrolThresh
 					if disk.wearout >= 0 && disk.wearout < 20 {
 						return false, nil
 					}
-					if disk.temperature > 55 {
+					// A hot disk recovers once it cools to the alert clear
+					// value, as its disk temperature alert does.
+					if !disk.temperatureLimits.cooled(disk.temperature) {
 						return false, nil
 					}
 					return true, nil
@@ -2315,9 +2317,10 @@ func verifyMetricRecoveredState(snap patrolRuntimeState, thresholds PatrolThresh
 }
 
 type patrolPhysicalDiskVerification struct {
-	health      string
-	wearout     int
-	temperature int
+	health            string
+	wearout           int
+	temperature       int
+	temperatureLimits diskTemperatureLimits
 }
 
 type patrolPhysicalDiskVisitor func(identifiers []string, verification patrolPhysicalDiskVerification) bool
@@ -2461,9 +2464,10 @@ func patrolVisitPhysicalDiskVerification(snap patrolRuntimeState, visit patrolPh
 	rows := patrolPhysicalDiskRows(snap, nil)
 	for _, disk := range rows {
 		if !visit([]string{disk.id, disk.name, disk.devPath, disk.model}, patrolPhysicalDiskVerification{
-			health:      strings.TrimSpace(disk.health),
-			wearout:     disk.wearout,
-			temperature: disk.temperature.Collected,
+			health:            strings.TrimSpace(disk.health),
+			wearout:           disk.wearout,
+			temperature:       disk.temperature.Collected,
+			temperatureLimits: disk.temperatureLimits,
 		}) {
 			return true
 		}

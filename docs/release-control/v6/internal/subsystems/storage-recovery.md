@@ -6759,23 +6759,33 @@ not live appliance collection or recovery success.
 
 ### Physical-disk heat is not a replacement verdict
 
-The Physical Disks Health verdict names the action it asks for. Risk whose only
-reason is `temperature_high` reads `Running Hot` (compact `Hot`), red at the
-critical tier and amber at warning, with the temperature reason as its summary.
-`Replace Now` stays reserved for FAILED health, any other critical reason, and
-a critical level that no listed reason explains. `Needs Attention` keeps the
-remaining warning evidence. When heat and other evidence both apply, the more
-severe class names the verdict and failure evidence wins a tie, whatever order
-merged reasons arrive in. Sorting follows the verdict (replace, critical heat,
-attention, warning heat), and the health filter places a hot disk at its
-temperature tier, so `Needs attention` still lists it. This matches alerting,
-which raises disk heat as a Temperature metric and never as disk health.
-Thresholds are unchanged: the tier still comes from the server's disk risk
-(flat 60/70C), not the per-type alert thresholds that colour the Temp column.
-Reconciling those is separate work. `frontend-modern/src/features/storageBackups/__tests__/diskPresentation.test.ts`
-and `frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx` cover
-the split, merged reason order, the unexplained critical level, sorting and
-filtering.
+The Physical Disks Health verdict names the action it asks for. A disk whose
+current temperature has reached its alert trigger reads `Running Hot` (compact
+`Hot`), red, with the reading and the trigger as its summary. `Replace Now`
+stays reserved for FAILED health, any critical risk reason, and a critical
+level that no listed reason explains. `Needs Attention` keeps the remaining
+warning evidence. Heat outranks warning evidence and failure evidence outranks
+heat. Sorting follows the verdict (replace, heat, attention), and the health
+filter places a hot disk with the critical disks, as its Temp cell reads red.
+
+Heat has one owner: the alert disk temperature policy (the per-type triggers in
+Alerts > Thresholds, `diskTempByType`, else the agent Disk Temp default).
+Disk risk never carries heat, because every registry that rebuilds it lacks the
+alert configuration. `extractPhysicalDiskPresentationData` takes the alerts
+store's `getDiskTemperatureThresholds` resolver, so the Temp cell colour and the
+verdict read one thresholds object. The band below the trigger is a Temp cell
+colour only, and a retained (not current) reading is never heat. The verdict
+judges the current reading, with no memory of an alert. A disk temperature
+alert held between its clear value and trigger shows an amber Temp cell, not
+`Running Hot`. A switched-off agent Disk Temp default resolves to null, which
+leaves the reading uncoloured and never hot, as alerting is off for it.
+Per-host Disk Temp overrides do not yet reach Physical Disks.
+`frontend-modern/src/features/storageBackups/__tests__/diskPresentation.test.ts`
+pins cell-and-verdict agreement for every type from 40C to 80C under factory and
+raised triggers, plus retained readings, failure evidence, sorting and
+filtering. `frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx`
+covers NVMe 63C, SATA 56C and a raised NVMe trigger loaded through the alerts
+store.
 
 ### Pool-to-physical-disk ownership in Storage details
 

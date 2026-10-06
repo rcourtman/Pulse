@@ -1953,10 +1953,9 @@ func zfsPoolRecommendation(assessment storagehealth.Assessment) string {
 
 func assessDisk(disk Disk) storagehealth.Assessment {
 	sampleAssessment := storagehealth.AssessSample(storagehealth.Sample{
-		Model:       strings.TrimSpace(disk.Model),
-		Health:      healthForAssessment(disk),
-		Temperature: disk.Temperature,
-		Wearout:     -1,
+		Model:   strings.TrimSpace(disk.Model),
+		Health:  healthForAssessment(disk),
+		Wearout: -1,
 	})
 
 	stateUpper := normalizedDiskStatus(disk)

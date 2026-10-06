@@ -154,6 +154,9 @@ func (stubThresholdProvider) GetGuestMemoryThreshold() float64 {
 }
 func (stubThresholdProvider) GetGuestDiskThreshold() float64 { return 95 }
 func (stubThresholdProvider) GetStorageThreshold() float64   { return 92 }
+func (stubThresholdProvider) GetDiskTemperatureThreshold(string) (float64, float64) {
+	return 70, 65
+}
 
 type stubMetricsHistoryProvider struct{}
 

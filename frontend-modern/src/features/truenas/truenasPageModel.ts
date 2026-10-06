@@ -2,6 +2,11 @@ import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
 import { getTrueNASDatasetStateSummary } from '@/utils/truenasDatasetState';
+import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
+import {
+  getPhysicalDiskHeatSummary,
+  isPhysicalDiskRunningHot,
+} from '@/features/storageBackups/diskTemperaturePresentation';
 import type {
   Resource,
   ResourceIncident,
@@ -402,7 +407,10 @@ export function buildTrueNASStorageChildCounts(
 
 export function buildTrueNASStorageTopologyRows(
   resources: Resource[],
+  resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
 ): TrueNASStorageTopologyRow[] {
+  const compareStorageResources = (left: Resource, right: Resource): number =>
+    compareStorageResourcesByStatus(left, right, resolveDiskTemperatureThresholds);
   const storageResources = resources.filter(
     (resource) =>
       isTrueNASPlatform(resource) &&
@@ -556,8 +564,14 @@ function filterTrueNASStorageTopologyRow(
   row: TrueNASStorageTopologyRow,
   search: string,
   status: TrueNASStorageStatusFilter,
+  resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
 ): boolean {
-  if (status !== 'all' && mapTrueNASStorageStatus(row.resource) !== status) return false;
+  if (
+    status !== 'all' &&
+    mapTrueNASStorageStatus(row.resource, resolveDiskTemperatureThresholds) !== status
+  ) {
+    return false;
+  }
   if (!search.trim()) return true;
   if (row.kind.includes(search.trim().toLowerCase())) return true;
   return matchesTrueNASStorageSearch(row.resource, search);
@@ -567,9 +581,14 @@ export function filterTrueNASStorageTopologyRows(
   rows: TrueNASStorageTopologyRow[],
   search: string,
   status: TrueNASStorageStatusFilter,
+  resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
 ): TrueNASStorageTopologyRow[] {
   const directMatches = new Set(
-    rows.filter((row) => filterTrueNASStorageTopologyRow(row, search, status)).map((row) => row.id),
+    rows
+      .filter((row) =>
+        filterTrueNASStorageTopologyRow(row, search, status, resolveDiskTemperatureThresholds),
+      )
+      .map((row) => row.id),
   );
   if (directMatches.size === rows.length) return rows;
 
@@ -628,8 +647,11 @@ const titleize = (value: string): string =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join(' ');
 
-const storageStatusRank = (resource: Resource): number => {
-  switch (mapTrueNASStorageStatus(resource)) {
+const storageStatusRank = (
+  resource: Resource,
+  resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
+): number => {
+  switch (mapTrueNASStorageStatus(resource, resolveDiskTemperatureThresholds)) {
     case 'attention':
       return 0;
     case 'offline':
@@ -641,8 +663,14 @@ const storageStatusRank = (resource: Resource): number => {
   }
 };
 
-const compareStorageResources = (left: Resource, right: Resource): number => {
-  const rankDelta = storageStatusRank(left) - storageStatusRank(right);
+const compareStorageResourcesByStatus = (
+  left: Resource,
+  right: Resource,
+  resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
+): number => {
+  const rankDelta =
+    storageStatusRank(left, resolveDiskTemperatureThresholds) -
+    storageStatusRank(right, resolveDiskTemperatureThresholds);
   if (rankDelta !== 0) return rankDelta;
   const nameDelta = resourceDisplayName(left).localeCompare(resourceDisplayName(right));
   if (nameDelta !== 0) return nameDelta;
@@ -699,8 +727,45 @@ export function mapTrueNASIncidentSeverity(
   return 'info';
 }
 
+/**
+ * Resolves a disk type's alert disk temperature thresholds: the alerts store's
+ * `getDiskTemperatureThresholds`. Without one, disk heat is not judged.
+ */
+export type TrueNASDiskTemperatureThresholdResolver = (
+  diskType: string,
+) => MetricDisplayThresholds | null;
+
+// Disk risk carries no heat, so a disk whose current reading has reached its
+// type's alert trigger is judged here, by the same policy as the Physical
+// Disks Running Hot verdict. Returns the heat reason, or null.
+function getTrueNASDiskHeatSummary(
+  resource: Resource,
+  resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
+): string | null {
+  const disk = resource.physicalDisk;
+  if (!resolveDiskTemperatureThresholds || resource.type !== 'physical_disk' || !disk) return null;
+  const temperature = disk.temperature ?? 0;
+  const thresholds = resolveDiskTemperatureThresholds(disk.diskType || '');
+  return isPhysicalDiskRunningHot({ temperature, collection: disk.collection }, thresholds)
+    ? getPhysicalDiskHeatSummary(temperature, thresholds)
+    : null;
+}
+
+// A hot disk reports `online` (disk risk carries no heat), so its status dot
+// takes the warning tone its Health cell gives it. On phones the dot is the
+// row's only health signal.
+export function getTrueNASStorageDotStatus(
+  resource: Resource,
+  resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
+): string {
+  const status = getTrueNASResourceDisplayStatus(resource);
+  if (normalize(status) !== 'online') return status;
+  return getTrueNASDiskHeatSummary(resource, resolveDiskTemperatureThresholds) ? 'warning' : status;
+}
+
 export function mapTrueNASStorageStatus(
   resource: Resource,
+  resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
 ): Exclude<TrueNASStorageStatusFilter, 'all'> | 'unknown' {
   const status = normalize(getTrueNASResourceDisplayStatus(resource));
   const zfsState = normalize(resource.storage?.zfsPoolState);
@@ -719,6 +784,7 @@ export function mapTrueNASStorageStatus(
   if (diskHealth && !['passed', 'healthy', 'ok', 'unknown', 'unavailable'].includes(diskHealth)) {
     return 'attention';
   }
+  if (getTrueNASDiskHeatSummary(resource, resolveDiskTemperatureThresholds)) return 'attention';
   if (['online', 'running', 'healthy'].includes(status)) return 'healthy';
   return 'unknown';
 }
@@ -753,8 +819,11 @@ const reasonKey = (text: string): string =>
 // the failing member or test, so it leads. Pulse's derived risk summaries
 // restate the same pool and disk state, so they only stand in when TrueNAS
 // raised no alert; the row drawer still lists every one of them.
-export function getTrueNASStorageIssue(resource: Resource): TrueNASStorageIssue | null {
-  const status = mapTrueNASStorageStatus(resource);
+export function getTrueNASStorageIssue(
+  resource: Resource,
+  resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
+): TrueNASStorageIssue | null {
+  const status = mapTrueNASStorageStatus(resource, resolveDiskTemperatureThresholds);
   if (status === 'healthy') return null;
 
   const reasons: string[] = [];
@@ -775,6 +844,7 @@ export function getTrueNASStorageIssue(resource: Resource): TrueNASStorageIssue 
   if (reasons.length === leading) {
     for (const reason of resource.storage?.risk?.reasons ?? []) push(reason.summary);
     for (const reason of resource.physicalDisk?.risk?.reasons ?? []) push(reason.summary);
+    push(getTrueNASDiskHeatSummary(resource, resolveDiskTemperatureThresholds));
   }
   // A read-only dataset raises no incident, so its state tag is the only
   // reason the provider gives. The drawer reads the same shared mapping.
