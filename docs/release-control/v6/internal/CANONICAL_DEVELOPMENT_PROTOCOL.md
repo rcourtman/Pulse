@@ -369,8 +369,9 @@ destructive state changes, authentication or another trust boundary, or
 stable-promotion lineage. When classification is uncertain, choose the RC
 path.
 
-Successful reporter validation does not force an immediate patch release.
-Severity and active customer harm decide scheduling. After a stable release
+Successful reporter validation does not force a release. The fix ships in
+the next candidate the release train cuts from `main`, or sooner through an
+early cut. After a stable release
 containing the fix ships and the issue is resolved, the test image becomes
 eligible for removal only with explicit maintainer approval. Its tag must
 never be reused.

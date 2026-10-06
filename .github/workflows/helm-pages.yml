@@ -191,7 +191,7 @@ jobs:
           # A chart release is a prerelease exactly when its version is one;
           # stable chart releases were being published as prereleases
           # (helm-chart-6.4.0, 6.4.1 and every earlier stable chart), which
-          # the release steward reports as an incident. Never "latest": that
+          # was recorded as a release incident. Never "latest": that
           # pointer belongs to the Pulse release itself.
           if [[ "${VERSION}" == *-* ]]; then
             prerelease=true

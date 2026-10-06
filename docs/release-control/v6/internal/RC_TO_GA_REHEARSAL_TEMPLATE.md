@@ -38,7 +38,7 @@ command, or GA/EOS dates into the record.
 
 ## Minimum Human Notes
 
-1. Confirm the rehearsed branch matched the governed release line from `control_plane.json` (currently `pulse/v6-release`).
+1. Confirm the rehearsed branch matched the governed release line from `control_plane.json` (`pulse/v6-release` for the v6.0.0 GA rehearsal, `main` for the v6 profile under the release train).
 2. Confirm the release path was exercised end to end up to, but not including,
    publication.
 3. Confirm no manual input was surprising or ambiguous during the run.

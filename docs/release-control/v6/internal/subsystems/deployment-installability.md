@@ -307,9 +307,10 @@ head and ref match the admitted snapshot, and that its merge remains in that
 line's published history. Qualification, workflow execution, compiler dispatch
 and published artifacts bind to that head, not a later merge or branch tip.
 The source workflow must implement the snapshot input and provenance contract
-before the maintainer spends an exact qualification run on it. Later changes
-belong to the next candidate unless the maintainer explicitly rejects the
-selected source for a concrete defect. Existing maturity, soak, failed-check
+before the release train spends an exact qualification run on it. Later
+changes belong to the next candidate. The train replaces a candidate only with
+a fresh cut from `main`: after its `release-blocker` issues are closed, on an
+early-cut request during its soak, or after a failed attempt. Existing maturity, soak, failed-check
 and publication-authority boundaries still apply.
 `scripts/release_control/release_snapshot.py` owns snapshot identity validation.
 Its executable identity cases are in `release_snapshot_test.py`, and the staged
@@ -756,11 +757,10 @@ release assets and four release signatures, runs the canonical twenty-three-scen
 schema-v7 lab, and applies the release-candidate attester against the exact
 GitHub release ID, tag, source commit, checksums, compiler provenance, assembly
 provenance, and update-key fingerprint. The attester anchors the candidate to
-the branch the control plane maps the version to, either `origin/main` or the
-release train's `origin/release/vX.Y`, and verifies that remote-tracking ref
-against the canonical origin's live branch tip, so a release-train candidate is
-qualified against the line that owns its version rather than being required to
-appear on `main`. The v7 host starts a rootful Docker
+the branch the control plane maps the version to: `origin/main`, where the
+release train cuts every release, or a legacy `origin/release/vX.Y` line that
+the control plane still maps for a historical version. It verifies that
+remote-tracking ref against the canonical origin's live branch tip. The v7 host starts a rootful Docker
 daemon inside the disposable systemd container without mounting the hosted
 runner socket or exposing a TCP listener. It imports an offline, source-bound
 fixture image and proves legacy inventory, summary-only typed-helper parity,
@@ -1527,8 +1527,8 @@ artifact-selection behaviour.
    candidate workflow; publishing releases invoke it as a sibling of inert
    draft staging so qualification and upload overlap without weakening the
    activation join.
-   A provider-isolation security backport also requires a live two-installation
-   Docker result before the release steward freezes a packet. On protected
+   A provider-isolation security fix also requires a live two-installation
+   Docker result before a candidate carrying it is published. On protected
    `release/v*` pushes, Build and Test checks out the event SHA, preloads a
    digest-pinned helper image, and runs the opt-in provider-pair case against a
    fresh daemon; a skipped test is not a pass. The case provisions the same
@@ -2263,7 +2263,8 @@ artifact-selection behaviour.
    `pulse_sha` equal to the frozen public commit. A missing or mismatched
    declaration must stop the run before any draft release object exists, so a
    private build that cannot resolve its pair never orphans another draft. The
-   check is a fact check only; the release steward still selects the pair.
+   check is a fact check only; the release train selects the pair, pairing the
+   candidate with Enterprise `main` at its cut.
    Only after public release asset validation, staged install smoke, exact
    public Docker publication, exact Helm OCI publication, durable convergence
    dispatch, and the publicly readable activation-commit marker may the
@@ -2474,8 +2475,9 @@ artifact-selection behaviour.
 7. Preserve release-matched installer and Helm operator documentation links through `scripts/install.sh`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-helm-chart.yml`, and the chart metadata itself so deployment guidance and packaged chart metadata do not drift back to branch-tip `main` docs when a release line or promoted tag already exists.
    The same governed Helm boundary also owns `deploy/helm/pulse/` itself:
    chart metadata, default values, templates, and generated chart docs must
-   stay on the validated release line rather than mutating `main` or packaging
-   from whatever branch GitHub happened to check out.
+   be packaged from the validated release tag, which the release train cuts
+   from `main`, rather than mutating `main` after release or packaging from
+   whatever branch GitHub happened to check out.
    The chart's `agent.enabled=true` workload must point at an image that is
    actually published. The default `agent.image.repository` must be the main
    `rcourtman/pulse` image (the only agent-capable image `publish-docker.yml`
@@ -4167,7 +4169,8 @@ the manual `trigger-release*.sh` entrypoints must all derive their governed
 release line from control-plane metadata before they touch public artifacts or
 deployment targets, rather than treating tag names or workflow triggers as
 enough proof on their own.
-For routine stable patches, `scripts/trigger-stable-patch.sh` is the
+For stable patches, which the release train does not schedule,
+`scripts/trigger-stable-patch.sh` is the
 noninteractive operator path. It derives the latest stable rollback, consumes
 the canonical `docs/releases/RELEASE_NOTES_vX.Y.Z.md` packet, infers
 `no-mobile-impact` only when no mobile-facing path changed, and dispatches one
@@ -6081,12 +6084,11 @@ the founder direction of 28 September 2026 minor releases (`X.Y.0`) and
 patches both require a 24 hour soak (`MIN_STABLE_SOAK_HOURS` and
 `MIN_MINOR_STABLE_SOAK_HOURS`); it was seven days and 72 hours. The workflow
 and trigger prompts describe the hotfix exception against the same 24 hours.
-A release line cut earlier keeps its own resolver's longer minimum, which the
-maintainer's release admission relaxes to the release plan's soak only
-through that exception and only once the stable source is shown to add
-nothing beyond release metadata. `docs/release-control/control_plane.json` declares `release/v6.5` for
-the first release train so the workflow refuses a v6.5 dispatch from any other
-branch. `scripts/release_control/resolve_release_promotion_test.py` pins the
+A release line cut earlier keeps its own resolver's longer minimum.
+`docs/release-control/control_plane.json` resolves the v6 profile's prerelease
+and stable branches to `main` for the release train, and binds only the legacy
+6.3.2 and 6.4.3 to 6.4.6 versions to their release lines, so the workflow
+refuses a dispatch of those versions from any other branch. `scripts/release_control/resolve_release_promotion_test.py` pins the
 allowlist, the drift refusal, the hotfix path, and the 24 hour minor and
 patch soak;
 `release_promotion_policy_test.py` pins the policy's Release Train section.
@@ -6540,8 +6542,9 @@ redacted settings receipts are retained for seven days. Successful screenshots
 contain only synthetic state. Auth files, bootstrap/API/node tokens, encrypted
 file manifests and raw installer/updater/service logs are not artifacts.
 Delivery must reconcile terminal logs and all receipts with the exact RC;
-a workflow conclusion alone is insufficient. Existing qualification, soak,
-release-steward judgment and publication boundaries remain unchanged. The
+a workflow conclusion alone is insufficient. Existing qualification, soak
+and publication boundaries remain unchanged, and the release train's
+`release-blocker` rule decides promotion. The
 previous target's undiagnosed HTTP401 is not diagnosed or cleared by this mode.
 
 Verification: `scripts/tests/test_release_browser_packet.py` executes immutable
