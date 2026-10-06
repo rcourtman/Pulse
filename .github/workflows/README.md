@@ -154,10 +154,10 @@ nothing; results are in the job log and step summary. Run
 it locally (`PULSE_REHEARSAL_ENGINE=podman` on hosts without Docker).
 
 `release-signing-preflight.yml` checks that the macOS release signing path
-would work, without building or publishing anything. It runs on manual
-dispatch from `main`; the nightly release rehearsal that used to dispatch it
-was switched off with the release steward on 4 October 2026. On a `macos-15`
-runner it imports
+would work, without building or publishing anything. It runs every Monday at
+06:23 UTC and on manual dispatch from `main`. The schedule replaces the nightly
+release rehearsal that dispatched it until that rehearsal was switched off with
+the release steward on 4 October 2026. On a `macos-15` runner it imports
 the Developer ID certificate into a throwaway keychain, requires the configured
 identity to be valid for code signing and at least 30 days from expiry, signs
 and verifies a probe binary with a secure timestamp, and reads the Apple notary
