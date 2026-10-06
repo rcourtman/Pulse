@@ -408,6 +408,54 @@ Pulse Agent's stored History request. Restarting that guest is not a diagnosis
 of an empty PBS chart. See [VM Disk Monitoring](VM_DISK_MONITORING.md) if the
 separate symptom is missing filesystem information in a PVE VM row.
 
+### Backup health disagrees with visible PBS backups
+
+The backup health strip rates monitored workloads, not individual artifacts.
+A count of **with PBS snapshots**, a visible restore point or a **Verified**
+label does not by itself establish the workload's protection posture:
+
+| Reading | What it tells you | What it does not prove |
+|---|---|---|
+| With PBS snapshots / restore points | Pulse lists backup artifacts matched in that view | The protection calculation has the same linked evidence and readable history |
+| Verified | PBS reported verification for that artifact | Every workload is protected, guest thaw succeeded or an application restore works |
+| Coverage posture | Pulse's assessment of linked backup and provider evidence | A recovery guarantee or a reason to delete other backups |
+
+**Attention** can mean an old qualifying backup, a newer failed job, partial
+history or missing/overdue verification when expected. **Unprotected** means
+Pulse's protection calculation sees complete history but no qualifying backup;
+it is not the label for an old successful backup alone. **Unknown** means the
+available evidence cannot support a protection claim. A guest-local snapshot
+alone is not an independent backup; a PBS backup snapshot is different. See
+[protection posture](RECOVERY.md#protection-posture) for the policy distinctions.
+
+If the strip disagrees with recent PBS records, keep the disagreement visible
+and use PBS's own backup and verification records to judge coverage meanwhile:
+
+1. In **Proxmox → Backups → Coverage**, expand one affected workload. Note its
+   posture explanation and the PBS provider's **Job**, **History** and **Access**
+   values (Access describes permissions). If the provider evidence is absent,
+   record that rather than assuming access is complete. Use the existing page;
+   do not run **Run Diagnostics** or a guest-agent probe to fill the gap.
+2. Compare the corresponding **By date** artifact with PBS's own inventory in
+   an existing authorised session: PBS connection, datastore, namespace, guest
+   type/ID, backup time and verification result. Keep its PVE connection/node
+   context too; independent PVE installations can reuse a VMID. A recent backup
+   for a same-named or same-numbered guest is not necessarily this workload's
+   backup. A successful connection test is not proof of readable backup history.
+3. If they still disagree, report just that row's explanation, Job/History/Access
+   values, artifact source/time/verification and the running Pulse version.
+   Use consistent placeholders for private identities; retain full inventories
+   and credentials locally. An absent or unavailable value is not zero or
+   evidence that no backup exists.
+
+Do not restart, downgrade, recreate connections, re-enrol agents, delete history,
+change retention or run another backup just to make the strip green. Do not
+relax TLS or grant write/admin permissions for this check. **Verified** or an
+OK backup task does not prove guest thaw or a tested restore. If a workload
+stopped responding during a backup, stop this display check and follow the
+[backup safety precaution](VM_DISK_MONITORING.md#backup-safety); do not reproduce
+freeze/thaw to diagnose a status disagreement.
+
 ### Slow Backup Loading
 
 If you notice slow loading for PBS storage accessed via PVE:
