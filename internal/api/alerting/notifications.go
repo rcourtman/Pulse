@@ -473,7 +473,39 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// UpdateWebhook updates an existing webhook
+// restoreMaskedWebhookValues resolves only submitted placeholders. The editor
+// sends a replacement map: explicit edits and omitted keys must not be undone
+// just because another value is still masked. Header names are case-insensitive;
+// custom-field names are not. Never store a placeholder without a saved value.
+func restoreMaskedWebhookValues(incoming, existing map[string]string, headers bool) (map[string]string, error) {
+	if incoming == nil {
+		return nil, nil
+	}
+	resolved := make(map[string]string, len(incoming))
+	for key, value := range incoming {
+		if value == "***REDACTED***" {
+			stored, found := existing[key]
+			if !found && headers {
+				for oldKey, oldValue := range existing {
+					if strings.EqualFold(oldKey, key) {
+						if found && stored != oldValue {
+							return nil, fmt.Errorf("ambiguous saved value for masked header %q", key)
+						}
+						stored, found = oldValue, true
+					}
+				}
+			}
+			if !found || stored == "***REDACTED***" {
+				return nil, fmt.Errorf("no saved value for masked field %q", key)
+			}
+			value = stored
+		}
+		resolved[key] = value
+	}
+	return resolved, nil
+}
+
+// UpdateWebhook updates an existing webhook.
 func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Request) {
 	h.configMu.Lock()
 	defer h.configMu.Unlock()
@@ -510,12 +542,14 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 	}
 	_ = json.Unmarshal(bodyBytes, &routingPresence)
 	webhook = notifications.NormalizeWebhookConfig(webhook)
+	// Keep the canonical submitted fields for the response. Resolving a mask
+	// must not expose an unchanged stored credential to the caller.
+	responseCustomFields := webhook.CustomFields
 
 	monitor := h.getMonitor(r.Context())
 	manager := monitor.GetNotificationManager()
 
-	// Preserve original headers/customFields if the incoming values are redacted
-	// This happens when the frontend sends back masked values from GetWebhooks
+	// Restore each masked value returned by GetWebhooks, not its entire map.
 	existingWebhooks := manager.GetWebhooks()
 	found := false
 	for _, existing := range existingWebhooks {
@@ -530,31 +564,15 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 			if routingPresence.MinimumSeverity == nil {
 				webhook.MinimumSeverity = existing.MinimumSeverity
 			}
-			// Preserve headers if incoming contains redacted values
-			if len(webhook.Headers) > 0 && len(existing.Headers) > 0 {
-				hasRedacted := false
-				for _, v := range webhook.Headers {
-					if v == "***REDACTED***" {
-						hasRedacted = true
-						break
-					}
-				}
-				if hasRedacted {
-					webhook.Headers = existing.Headers
-				}
+			webhook.Headers, err = restoreMaskedWebhookValues(webhook.Headers, existing.Headers, true)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
 			}
-			// Preserve customFields if incoming contains redacted values
-			if len(webhook.CustomFields) > 0 && len(existing.CustomFields) > 0 {
-				hasRedacted := false
-				for _, v := range webhook.CustomFields {
-					if v == "***REDACTED***" {
-						hasRedacted = true
-						break
-					}
-				}
-				if hasRedacted {
-					webhook.CustomFields = existing.CustomFields
-				}
+			webhook.CustomFields, err = restoreMaskedWebhookValues(webhook.CustomFields, existing.CustomFields, false)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
 			}
 			// Preserve the signing secret if the incoming value is redacted
 			if webhook.SigningSecret == "***REDACTED***" {
@@ -606,7 +624,7 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 		responseData = make(map[string]interface{})
 	}
 	responseData["id"] = webhookID
-	responseData["customFields"] = webhook.CustomFields
+	responseData["customFields"] = responseCustomFields
 	responseData["tagFilter"] = webhook.TagFilter
 	responseData["tagFilterMode"] = webhook.TagMode
 	responseData["minimumSeverity"] = webhook.MinimumSeverity

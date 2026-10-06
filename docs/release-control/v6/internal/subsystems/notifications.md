@@ -242,6 +242,31 @@ stable opaque routing identities and must not expose credentials.
 
 ## Current State
 
+### Masked destination edits preserve each submitted value independently
+
+Webhook editing restores each submitted `***REDACTED***` header/custom-field
+value from that destination, rather than replacing the entire submitted map.
+Explicit changes, additions, empty values and removals beside another masked
+credential survive live publication and encrypted reload. Header names match
+case-insensitively; custom fields retain exact, canonical service-specific names.
+An unknown, already-masked or ambiguous saved value fails with HTTP 400 before
+any save or live mutation. Omitted maps retain their existing replacement
+semantics. A response must not disclose a stored custom-field value restored
+from a mask; it echoes the canonical submitted value instead.
+
+`TestWebhookEditPreservesOnlyMaskedValues` and
+`TestWebhookEditRejectsUnrecoverableMasks` pin editing, deletion, blank values,
+case matching, no-mutation rejection and confidentiality.
+`TestWebhookMaskedEditPersistsAndDelivers` connects masked form reads/edits,
+encrypted save/reopen, ordinary grouped firing/recovery and disabling an active
+group to individual deliveries through the persistent sender. Built-in Telegram
+and custom Generic bodies retain all members, exact headers/fields and ordinary
+per-occurrence recovery receipts. This is loopback source proof, not native
+Telegram acceptance or a reproduction of the reporter's actual stored settings.
+Already admitted queue jobs keep their configuration snapshots and current
+pause/disable/removal checks; editing does not rewrite or replay them. The
+built-in template-header correction remains separate and unchanged.
+
 ### Apprise diagnostic confidentiality
 
 Apprise CLI targets may carry credentials in arbitrary provider schemes. CLI
