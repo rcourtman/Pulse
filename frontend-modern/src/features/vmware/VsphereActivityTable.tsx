@@ -262,6 +262,9 @@ export const VsphereActivityTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
   showToolbar?: boolean;
+  // One vCenter connection: its name would repeat on every row, so the
+  // column hides (the row drawer still names it).
+  singleVcenter?: boolean;
 }> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.activity,
@@ -363,14 +366,16 @@ export const VsphereActivityTable: Component<{
                 >
                   Actor
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="vcenter"
-                  class="hidden lg:table-cell md:w-[10%]"
-                >
-                  vCenter
-                </PlatformSortableTableHead>
+                <Show when={!props.singleVcenter}>
+                  <PlatformSortableTableHead
+                    kind="text"
+                    sort={sort}
+                    sortKey="vcenter"
+                    class="hidden lg:table-cell md:w-[10%]"
+                  >
+                    vCenter
+                  </PlatformSortableTableHead>
+                </Show>
                 <PlatformSortableTableHead
                   kind="numeric-value"
                   sort={sort}
@@ -460,21 +465,23 @@ export const VsphereActivityTable: Component<{
                               {activity.actor || '-'}
                             </span>
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden lg:table-cell`}
-                          >
-                            <span
-                              class="block truncate text-base-content"
-                              title={[
-                                meta()?.connectionName || meta()?.vcenterHost,
-                                meta()?.datacenterName || meta()?.clusterName,
-                              ]
-                                .filter(Boolean)
-                                .join(' · ')}
+                          <Show when={!props.singleVcenter}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} hidden lg:table-cell`}
                             >
-                              {meta()?.connectionName || meta()?.vcenterHost || '-'}
-                            </span>
-                          </TableCell>
+                              <span
+                                class="block truncate text-base-content"
+                                title={[
+                                  meta()?.connectionName || meta()?.vcenterHost,
+                                  meta()?.datacenterName || meta()?.clusterName,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              >
+                                {meta()?.connectionName || meta()?.vcenterHost || '-'}
+                              </span>
+                            </TableCell>
+                          </Show>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
@@ -489,7 +496,7 @@ export const VsphereActivityTable: Component<{
                         <Show when={isExpanded()}>
                           <InlineDetailTableRow
                             cellId={detailRowId()}
-                            colspan={7}
+                            colspan={props.singleVcenter ? 6 : 7}
                             data-inline-detail-for={activity.id}
                             data-vsphere-activity-detail-row={activity.id}
                           >

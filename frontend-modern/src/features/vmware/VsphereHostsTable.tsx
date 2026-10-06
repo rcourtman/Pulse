@@ -16,6 +16,8 @@ import {
   getVmwareResourceDisplayStatus,
   getVmwarePowerStateVariant,
   normalizeVmwarePowerStateToken,
+  isSingleVmwareVcenter,
+  vmwareVcenterLabel,
 } from './vmwarePageModel';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
@@ -128,7 +130,7 @@ const getVsphereHostSortValue = (
     case 'uptime':
       return typeof host.uptime === 'number' && host.uptime > 0 ? host.uptime : null;
     case 'vcenter':
-      return asTrimmedString(meta?.vcenterHost) || null;
+      return vmwareVcenterLabel(host) || null;
     default:
       key satisfies never;
       return null;
@@ -157,6 +159,7 @@ export const VsphereHostsTable: Component<{
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'vsphere-host-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
+  const singleVcenter = createMemo(() => isSingleVmwareVcenter(props.scope));
 
   const vmCountByHost = createMemo(() => {
     const map = new Map<string, number>();
@@ -313,14 +316,16 @@ export const VsphereHostsTable: Component<{
                 >
                   <PlatformResponsiveTableLabel compact="Up" full="Uptime" />
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="vcenter"
-                  class="hidden md:table-cell md:w-[9%]"
-                >
-                  vCenter
-                </PlatformSortableTableHead>
+                <Show when={!singleVcenter()}>
+                  <PlatformSortableTableHead
+                    kind="text"
+                    sort={sort}
+                    sortKey="vcenter"
+                    class="hidden md:table-cell md:w-[9%]"
+                  >
+                    vCenter
+                  </PlatformSortableTableHead>
+                </Show>
               </>
             }
             body={
@@ -332,7 +337,7 @@ export const VsphereHostsTable: Component<{
                     const datacenter = () => asTrimmedString(meta()?.datacenterName) || '—';
                     const cluster = () => asTrimmedString(meta()?.clusterName) || '—';
                     const clusterServices = () => formatVmwareClusterServices(meta());
-                    const vcenter = () => asTrimmedString(meta()?.vcenterHost) || '—';
+                    const vcenter = () => vmwareVcenterLabel(host) || '—';
                     // ESXi version from agent.osVersion (canonical projection of
                     // HostSystem.config.product.fullName); uptime from the
                     // sys.uptime.latest PerformanceManager counter routed onto
@@ -500,19 +505,24 @@ export const VsphereHostsTable: Component<{
                           >
                             {uptimeLabel()}
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
-                          >
-                            <span class="block truncate" title={vcenter()}>
-                              {vcenter()}
-                            </span>
-                          </TableCell>
+                          <Show when={!singleVcenter()}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            >
+                              <span
+                                class="block truncate"
+                                title={asTrimmedString(meta()?.vcenterHost) || vcenter()}
+                              >
+                                {vcenter()}
+                              </span>
+                            </TableCell>
+                          </Show>
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={host}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
-                          colSpan={11}
+                          colSpan={singleVcenter() ? 10 : 11}
                           resolveResourceLabel={resolveResourceLabel}
                           onClose={() => drawer.close(host)}
                         />
