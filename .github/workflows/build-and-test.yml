@@ -111,7 +111,10 @@ jobs:
           # base commit's. A change to the audit runner itself also demands a
           # clean result, so it can never be relaxed under cover of its own
           # tolerant mode.
-          if printf '%s\n' "$changed" | grep -qE '^frontend-modern/package(-lock)?\.json$|^scripts/npm-audit-retry\.sh$'; then
+          # Consume the full list: grep -q can close the pipe on an early
+          # match, making printf fail with SIGPIPE under pipefail. A large
+          # dependency change must not enter the inherited-advisory mode.
+          if printf '%s\n' "$changed" | grep -E '^frontend-modern/package(-lock)?\.json$|^scripts/npm-audit-retry\.sh$' >/dev/null; then
             frontend_deps=true
           else
             frontend_deps=false

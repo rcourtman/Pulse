@@ -6778,3 +6778,19 @@ metrics wire/decompression and Kubernetes agent controls, managed-runtime
 smoke tests, read-only graph tests/vet and real server/agent builds at the same
 source. No install, release or native Kubernetes acceptance is implied by a
 manifest edit or acquisition receipt.
+
+### Complete CI dependency-change classification (6 October 2026)
+
+Build and Test consumes the complete changed-file list before choosing the
+existing strict frontend audit. An early manifest, lock or audit-runner match
+must remain `frontend_deps=true` even when later files exceed the shell pipe
+buffer; a producer SIGPIPE must never select inherited-advisory warning mode.
+Exact strict paths, unknown-base fail-wide behaviour and unchanged-graph warning
+policy stay the same. A failed Git diff produces no successful classification.
+
+`TestFrontendChangeClassificationPreservesStrictAudit` executes the actual YAML
+shell with bounded offline Git-result fixtures, including large early/late
+matches, documentation/code controls, lookalikes and unavailable bases. Its
+downstream controls run the real audit script: the same critical fixture blocks
+a changed graph and warns only for an unchanged graph. It makes no registry
+request and does not clear an existing advisory or establish hosted acceptance.
