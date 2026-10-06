@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 )
 
 // Keep the wire status separate from the existing diagnostic text. In
@@ -110,6 +111,33 @@ func guestAgentErrorMessage(body []byte) (string, bool) {
 		return "", false
 	}
 	return strings.TrimSpace(text), true
+}
+
+// PVE guest-command success has one data dictionary. Preserve its existing
+// method-specific decoding (including empty/null result, object-style rows,
+// and partial row admission), but do not treat a proxy response, duplicate
+// envelope or case-insensitive overwrite as a completed reply. This is not
+// payload-to-command provenance or proof of native QGA completion/thaw.
+func guestAgentSuccessResponse(body []byte) bool {
+	if !utf8.Valid(body) {
+		return false
+	}
+	envelope, ok := guestAgentResponseFields(body, "data")
+	if !ok {
+		return false
+	}
+	data, ok := guestAgentResponseFields(envelope["data"])
+	if !ok {
+		return false
+	}
+	for name := range data {
+		for _, canonical := range []string{"result", "content", "truncated"} {
+			if name != canonical && strings.EqualFold(name, canonical) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // Reject ambiguous envelopes (including duplicate keys and trailing values)

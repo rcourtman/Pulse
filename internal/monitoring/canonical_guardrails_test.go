@@ -3084,7 +3084,14 @@ func TestGuestAgentTransportMonitoringContract(t *testing.T) {
 			t.Errorf("completed/ordinary error %q became transport uncertainty", reason)
 		}
 	}
-	testGuestAgentTransportDeferralKeepsLastKnownHistory(t)
+	testGuestAgentTransportDeferralKeepsLastKnownHistory(t, "lost reply", "redirect", "server error", "gateway error")
+}
+
+func TestGuestAgentSuccessEnvelopeMonitoringContract(t *testing.T) {
+	// A complete HTTP 200 is not enough to renew guest caches or History when
+	// it only supplies a malformed, ambiguous or prefix-only reply. These
+	// real client/builder controls also keep independent CPU progressing.
+	testGuestAgentTransportDeferralKeepsLastKnownHistory(t, "malformed success", "ambiguous success", "trailing success")
 }
 
 func TestBackupAlertEvaluationCallersShareFailureVisibility(t *testing.T) {
