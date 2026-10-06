@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -52,8 +53,6 @@ func TestDashboardDispatchLifecycleEquivalence(t *testing.T) {
 			case 2:
 				state.Resources[0].Health = json.RawMessage(`{"status":"unhealthy","age":70}`)
 				state.ActiveAlerts[0].Level = "critical"
-				// Resource alerts have one canonical owner: ActiveAlerts, not
-				// an embedded resource copy. Preserve both arrival and update.
 				state.ActiveAlerts = append(state.ActiveAlerts, models.Alert{ID: "live", ResourceID: state.Resources[0].ID, Level: "critical"})
 			case 3:
 				state.Resources[0].Labels = map[string]string{"team": "changed"}
@@ -76,11 +75,10 @@ func TestDashboardDispatchLifecycleEquivalence(t *testing.T) {
 				state.Resources[0].Health = nil
 				state.Resources[0].PlatformData = nil
 				state.ConnectionHealth = nil
-			case 7: // Alert-only changes must not depend on a resource update.
-				state.ActiveAlerts = []models.Alert{{ID: "alert-only", ResourceID: state.Resources[0].ID, Level: "warning", Message: "arrived"}}
+			case 7: // Alert-only changes must reach both connected clients.
+				state.ActiveAlerts = []models.Alert{{ID: "recurrence", ResourceID: state.Resources[0].ID, Level: "warning", Value: 85}}
 			case 8:
-				state.ActiveAlerts[0].Level = "critical"
-				state.ActiveAlerts[0].Message = "changed"
+				state.ActiveAlerts[0].Level, state.ActiveAlerts[0].Value = "critical", 97
 			case 9:
 				state.ActiveAlerts = nil
 			case 10: // unchanged evidence must not manufacture a heartbeat
@@ -93,32 +91,40 @@ func TestDashboardDispatchLifecycleEquivalence(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if phase >= 7 && phase <= 9 {
-				// Keep an explicit alert oracle as well as reference/wire
-				// equivalence: dropping alerts from both paths cannot pass.
-				alerts, ok := want[activeAlertsDeltaField].(resourceDeltaPayload)
-				if !ok || len(want) != 1 {
-					t.Fatalf("alert-only phase %d: delta = %#v", phase, want)
+			// Pin the alert oracle independently of reference/wire equality:
+			// both encoders dropping alerts must not make this fixture pass.
+			if phase == 2 || phase == 5 || phase >= 7 && phase <= 9 {
+				payload, ok := want[activeAlertsDeltaField].(resourceDeltaPayload)
+				if !ok {
+					t.Fatalf("phase %d lost the active-alert delta: %#v", phase, want)
 				}
-				if phase == 9 {
-					if len(alerts.Upserts) != 0 || !reflect.DeepEqual(alerts.Removed, []string{"alert-only"}) {
-						t.Fatalf("alert-only removal = %#v", alerts)
+				switch phase {
+				case 2:
+					if len(payload.Upserts) != 2 || len(payload.Removed) != 0 {
+						t.Fatalf("alert update/insertion delta = %#v", payload)
 					}
-				} else {
-					if len(alerts.Upserts) != 1 || len(alerts.Removed) != 0 {
-						t.Fatalf("alert-only upsert = %#v", alerts)
+				case 5:
+					if len(payload.Upserts) != 0 || len(payload.Removed) != 2 || !slices.Contains(payload.Removed, "alert") || !slices.Contains(payload.Removed, "live") {
+						t.Fatalf("alert removal delta = %#v", payload)
 					}
-					var alert models.Alert
-					if err := json.Unmarshal(alerts.Upserts[0], &alert); err != nil {
+				case 7, 8:
+					if len(payload.Upserts) != 1 || len(payload.Removed) != 0 {
+						t.Fatalf("alert-only upsert delta = %#v", payload)
+					}
+					var patch models.Alert
+					if err := json.Unmarshal(payload.Upserts[0], &patch); err != nil {
 						t.Fatal(err)
 					}
-					if phase == 7 {
-						if alert.ID != "alert-only" || alert.ResourceID != state.Resources[0].ID || alert.Level != "warning" || alert.Message != "arrived" {
-							t.Fatalf("alert-only arrival = %#v", alert)
-						}
-					} else if alert.ID != "alert-only" || alert.Level != "critical" || alert.Message != "changed" {
-						t.Fatalf("alert-only change = %#v", alert)
+					if patch.ID != "recurrence" || patch.Level != state.ActiveAlerts[0].Level || patch.Value != state.ActiveAlerts[0].Value || phase == 7 && patch.ResourceID != state.Resources[0].ID {
+						t.Fatalf("alert-only patch lost occurrence, target or changed values: %s", payload.Upserts[0])
 					}
+				case 9:
+					if len(payload.Upserts) != 0 || !reflect.DeepEqual(payload.Removed, []string{"recurrence"}) {
+						t.Fatalf("alert-only removal delta = %#v", payload)
+					}
+				}
+				if phase >= 7 && len(want) != 1 {
+					t.Fatalf("alert-only change altered another state field: %#v", want)
 				}
 			}
 			encoded, err := json.Marshal(Message{Type: "rawData", Data: want})

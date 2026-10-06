@@ -3,9 +3,12 @@ package alerts
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,27 +41,40 @@ func TestStorageLifecycleAcrossProcessExit(t *testing.T) {
 		}
 	}
 	if phase := os.Getenv(helperEnv); phase != "" {
+		// Use test output rather than application logging: a stuck child must
+		// identify its last application boundary even when logging is disabled.
+		stage := func(name string) { t.Logf("child phase=%s stage=%s", phase, name) }
+		stage("validate")
 		if phase != "fired" && phase != "resolved" {
 			t.Fatal("invalid child phase")
 		}
+		stage("manager-start")
 		m := start(t, os.Getenv("PULSE_TEST_STORAGE_CRASH_DIR"))
+		stage("manager-ready")
 		if phase == "resolved" {
+			stage("seed-firing")
 			observe(m, storage)
 			testRequireActiveAlert(t, m, id)
 		}
+		stage("initial-checkpoint")
 		if err := m.SaveActiveAlerts(); err != nil {
 			t.Fatal(err)
 		}
 		// Freeze checkpoints, leaving either an empty or a firing JSON mirror.
 		// Lifecycle commits must remain independent of periodic/async saves.
+		stage("checkpoint-lock")
 		m.saveMu.Lock()
+		stage("checkpoint-locked")
 		if phase == "resolved" {
 			storage.Used, storage.Free, storage.Usage = 0, 1000, 0
 		}
+		stage("lifecycle-observation")
 		observe(m, storage)
+		stage("lifecycle-observed")
 		if testHasActiveAlert(t, m, id) != (phase == "fired") {
 			t.Fatal("child did not reach expected lifecycle state")
 		}
+		stage("process-exit")
 		os.Exit(0) // Intentionally bypass all cleanups, Stop and store Close.
 	}
 
@@ -67,11 +83,13 @@ func TestStorageLifecycleAcrossProcessExit(t *testing.T) {
 			dir := t.TempDir()
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestStorageLifecycleAcrossProcessExit$")
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestStorageLifecycleAcrossProcessExit$", "-test.v")
 			cmd.Env = append(os.Environ(), helperEnv+"="+phase, "PULSE_TEST_STORAGE_CRASH_DIR="+dir)
-			if output, err := cmd.CombinedOutput(); err != nil {
-				t.Fatalf("child failed: %v\n%s", err, output)
+			output, err := storageProcessExitChildResult(ctx, cmd, phase)
+			if err != nil {
+				t.Fatal(err)
 			}
+			t.Logf("child output:\n%s", output)
 			mirror, err := os.ReadFile(filepath.Join(dir, "alerts", "active-alerts.json"))
 			if err != nil {
 				t.Fatal(err)
@@ -115,6 +133,66 @@ func TestStorageLifecycleAcrossProcessExit(t *testing.T) {
 			observe(m, missing)
 			if testHasActiveAlert(t, m, id) != (phase == "fired") {
 				t.Fatal("missing post-restart counters changed the incident state")
+			}
+		})
+	}
+}
+
+// Keep the command failure and actual context result separate. In particular,
+// "signal: killed" alone is not evidence that this harness's deadline fired.
+func storageProcessExitChildResult(ctx context.Context, cmd *exec.Cmd, phase string) ([]byte, error) {
+	started := time.Now()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return output, fmt.Errorf("child phase=%s failed after %s (context=%v): %w\n%s",
+			phase, time.Since(started), ctx.Err(), errors.Join(err, ctx.Err()), output)
+	}
+	return output, nil
+}
+
+// These child controls use no Manager or database. They prove timeout and
+// nonzero-exit diagnostics without reenacting a persistence failure or making
+// the real lifecycle test's deadline more permissive.
+func TestStorageProcessExitChildDiagnostics(t *testing.T) {
+	const helperEnv = "PULSE_TEST_STORAGE_CHILD_DIAGNOSTIC"
+	if mode := os.Getenv(helperEnv); mode != "" {
+		fmt.Fprintf(os.Stderr, "helper-stage=%s\n", mode)
+		switch mode {
+		case "timeout":
+			<-time.After(time.Minute)
+		case "exit":
+			os.Exit(17)
+		case "success":
+			os.Exit(0)
+		default:
+			t.Fatal("invalid diagnostic mode")
+		}
+		return
+	}
+	for _, mode := range []string{"timeout", "exit", "success"} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestStorageProcessExitChildDiagnostics$")
+			cmd.Env = append(os.Environ(), helperEnv+"="+mode)
+			output, err := storageProcessExitChildResult(ctx, cmd, mode)
+			if !strings.Contains(string(output), "helper-stage="+mode) {
+				t.Fatalf("missing executed-child stage: %q; error: %v", output, err)
+			}
+			switch mode {
+			case "timeout":
+				if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "child phase=timeout") || !strings.Contains(err.Error(), "helper-stage=timeout") {
+					t.Fatalf("timeout lost context, phase or stage: %v", err)
+				}
+			case "exit":
+				var exitErr *exec.ExitError
+				if !errors.As(err, &exitErr) || exitErr.ExitCode() != 17 || !strings.Contains(err.Error(), "context=<nil>") || !strings.Contains(err.Error(), "helper-stage=exit") {
+					t.Fatalf("nonzero exit lost command result or invented a deadline: %v", err)
+				}
+			case "success":
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 		})
 	}
