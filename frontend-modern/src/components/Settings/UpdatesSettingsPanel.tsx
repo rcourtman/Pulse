@@ -36,6 +36,7 @@ import {
   UPDATES_PANEL_COPY,
 } from '@/utils/updatesPresentation';
 import { updateStore } from '@/stores/updates';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 export interface UpdatesSettingsPanelProps {
   versionInfo: Accessor<VersionInfo | null>;
@@ -55,6 +56,9 @@ export interface UpdatesSettingsPanelProps {
 
 export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props) => {
   const autoUpdateTitleId = `settings-updates-${createUniqueId()}-auto-update-title`;
+  // Update checks run a day apart while the panel stays open, so the age of the
+  // check behind the verdict reads the shared clock.
+  const now = useRelativeTimeNow();
   const latestVersion = () => props.updateInfo()?.latestVersion;
   const dockerImageTag = () => buildDockerImageTag(latestVersion());
   const systemdDownloadCommand = () => buildLinuxAmd64DownloadCommand(latestVersion());
@@ -198,7 +202,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                           </p>
                           <Show when={!props.versionInfo()?.isSourceBuild}>
                             <p class="mt-0.5 text-xs text-muted">
-                              {getUpdateCheckedLabel(updateStore.lastCheckedAt())}
+                              {getUpdateCheckedLabel(updateStore.lastCheckedAt(), now())}
                             </p>
                           </Show>
                         </>

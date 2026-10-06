@@ -15,6 +15,7 @@ import {
 } from '@/api/resourceOperatorState';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { ResourceCapability } from '@/types/resource';
 import { describeResourceInventoryOwnership } from '@/utils/resourceMonitoringPolicy';
 
@@ -44,6 +45,9 @@ interface ResourceOperatorStateSectionProps {
 export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectionProps> = (
   props,
 ) => {
+  // The policy's set time only changes when it is saved again, so its age
+  // reads the shared clock while the drawer stays open.
+  const now = useRelativeTimeNow();
   // Fetch the persisted state via the non-suspending helper so the
   // drawer's parent Suspense boundary does not flicker the page-level
   // fallback while operator-state is in flight. null means "no entry"
@@ -568,7 +572,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
               <span>Set by {persisted()!.setBy} </span>
             </Show>
             <Show when={persisted()?.setAt}>
-              <span>{formatRelativeTime(persisted()!.setAt, { compact: true })}</span>
+              <span>{formatRelativeTime(persisted()!.setAt, { compact: true, now: now() })}</span>
             </Show>
           </span>
         </Show>

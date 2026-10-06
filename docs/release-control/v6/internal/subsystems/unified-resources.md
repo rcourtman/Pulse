@@ -1265,6 +1265,21 @@ clock without new data. Replication jobs bypass the unified-resource stream,
 so `ProxmoxPageSurface` re-reads them in the background every 30 seconds;
 moving ages over a snapshot read once at mount would age a job that keeps
 syncing and count it overdue.
+The same clock drives the remaining consumers whose rows, cards and drawers
+stay mounted over unchanged data. Availability check rows, fleet tiles and the
+drawer probe card measure the checked and last-success ages and the fresh or
+stale band from it, and the standalone status indicator, its filter bucket,
+the attention sort and the availability posture counts and `latest data` age
+read it too, so a probe that stops reporting turns stale, sorts first and
+counts as needing attention without new data. The Machines status dot's
+five-minute stale fallback for a silent agent reads it, so the row renders as
+a fresh load at the same moment would. The Docker host drawer's container
+update Last checked, and the resource drawer's change history observed and
+occurred ages, operator-state set time, maintenance-verification window end
+and review times and debug source last-seen ages read it as well. The drawer's
+correlation last-seen and action-audit updated ages stay read-time: those
+facets are read once per drawer and describe latest readings of records that
+may have moved since.
 Kubernetes name columns hold the chevron, status dot and name inside one
 track, so their md widths leave the name room for a typical node or service
 name at a 768px viewport: Nodes 20 percent (with Capacity at 16 so its

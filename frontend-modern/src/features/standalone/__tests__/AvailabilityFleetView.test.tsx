@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSignal } from 'solid-js';
 import type { AvailabilityHistoryTarget } from '@/api/availabilityHistory';
 import type { Resource } from '@/types/resource';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 import { AvailabilityFleetView } from '../AvailabilityFleetView';
 
 vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
@@ -94,7 +95,10 @@ const history = (index: number): AvailabilityHistoryTarget => ({
   revisionBoundaries: [{ revision: 2, at: '2026-08-30T10:30:00Z' }],
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe('AvailabilityFleetView', () => {
   it('keeps open details bound to the selected ID in the current fleet, not the clicked snapshot', () => {
@@ -170,5 +174,28 @@ describe('AvailabilityFleetView', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('History unavailable')).toBeInTheDocument();
     expect(screen.getByText('Reachable')).toBeInTheDocument();
+  });
+
+  it('keeps a stalled check tile aging into stale while its data does not change', () => {
+    const start = Date.parse('2026-08-30T11:59:30Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+
+    render(() => (
+      <AvailabilityFleetView
+        resources={[resource(1)]}
+        historyByTarget={new Map()}
+        historyLoading={false}
+      />
+    ));
+    const tile = screen.getByRole('button', { name: 'Open details for Service 1' });
+
+    expect(tile).toHaveTextContent('Checked just now');
+    expect(tile.querySelector('[title="Online"]')).not.toBeNull();
+
+    // The probe stalls: lastChecked never changes and only the clock moves.
+    vi.advanceTimersByTime(20 * RELATIVE_TIME_TICK_MS);
+
+    expect(tile).toHaveTextContent('Checked 10m ago');
+    expect(tile.querySelector('[title="Stale"]')).not.toBeNull();
   });
 });

@@ -8,6 +8,7 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { GuestNetworkInterface } from '@/types/api';
 import { formatBytes, formatRelativeTime, getBackupInfo, type BackupInfo } from '@/utils/format';
 import type { AvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   getWorkloadsGuestBackupStatusPresentation,
   getWorkloadsGuestBackupTooltip,
@@ -66,12 +67,14 @@ function BackupIndicator(props: {
 function getBackupAgeBadgeLabel(
   lastBackup: string | number | null | undefined,
   info: BackupInfo,
+  now: number,
 ): string {
   if (info.status === 'never') return 'None';
   if (info.status === 'unknown') return 'Unknown';
   const compact = formatRelativeTime(lastBackup ?? undefined, {
     compact: true,
     emptyText: 'Unknown',
+    now,
   });
   if (compact === 'just now') return 'Now';
   return compact.replace(/\s+ago$/, '');
@@ -316,8 +319,14 @@ function BackupStatusCell(props: {
   let trigger: HTMLButtonElement | undefined;
 
   const alertsActivation = useAlertsActivation();
+  // Guest rows stay mounted while the last backup time never changes, so the
+  // age badge and its fresh, stale or overdue band read the shared clock. The
+  // clock can trail the wall clock by up to one tick, and a backup that
+  // finished inside that window must not band as a future, unknown age.
+  const tickNow = useRelativeTimeNow();
+  const now = () => Math.max(tickNow(), Date.now());
   const info = createMemo(() =>
-    getBackupInfo(props.lastBackup, alertsActivation.getBackupThresholds()),
+    getBackupInfo(props.lastBackup, alertsActivation.getBackupThresholds(), now()),
   );
   // The badge shows "running" while a backup is underway: green would claim
   // a completed backup that does not exist yet, and the age states would
@@ -328,7 +337,9 @@ function BackupStatusCell(props: {
   );
   const config = createMemo(() => getWorkloadsGuestBackupStatusPresentation(displayStatus()));
   const badgeLabel = createMemo(() =>
-    displayStatus() === 'running' ? 'Running' : getBackupAgeBadgeLabel(props.lastBackup, info()),
+    displayStatus() === 'running'
+      ? 'Running'
+      : getBackupAgeBadgeLabel(props.lastBackup, info(), now()),
   );
   const hasCompletedBackup = createMemo(() => info().ageMs !== null);
   const ariaLabel = createMemo(() => {

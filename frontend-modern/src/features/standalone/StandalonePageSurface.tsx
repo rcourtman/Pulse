@@ -32,6 +32,7 @@ import {
 } from '@/routing/resourceLinks';
 import { updateStore } from '@/stores/updates';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { buildProbeAgentOptions } from '@/utils/availabilityProbeAgents';
 import {
   AvailabilityChecksTable,
@@ -87,9 +88,16 @@ const StandalonePostureCard: Component<{
     if (props.summary.unknown > 0) return 'info';
     return 'success';
   };
+  // When every check goes quiet the latest update time stops changing, which
+  // is exactly when "latest data" must keep aging, so it reads the shared clock.
+  const now = useRelativeTimeNow();
   const latestUpdate = () =>
     props.summary.latestUpdateAt
-      ? formatRelativeTime(props.summary.latestUpdateAt, { compact: true, emptyText: 'unknown' })
+      ? formatRelativeTime(props.summary.latestUpdateAt, {
+          compact: true,
+          emptyText: 'unknown',
+          now: now(),
+        })
       : 'unknown';
 
   return (
@@ -182,8 +190,11 @@ export function StandalonePageSurface() {
   const setAvailabilityView = (view: AvailabilityChecksView) => {
     setSearchParams({ [STANDALONE_QUERY_PARAMS.view]: view }, { replace: true });
   };
+  // A stalled probe turns stale by time alone, so the posture counts measure
+  // from the shared clock like the rows they summarize.
+  const now = useRelativeTimeNow();
   const availabilityPosture = createMemo(() =>
-    buildStandalonePostureSummary(model().availabilityChecks),
+    buildStandalonePostureSummary(model().availabilityChecks, now()),
   );
   const showLoading = createMemo(
     () =>

@@ -236,4 +236,30 @@ describe('availabilityProbePresentation', () => {
     expect(presentation?.detailLabel).toContain('2 possible resource matches');
     expect(presentation?.toneClassName).toContain('amber');
   });
+
+  it('measures the checked and last-success ages from the time it is given', () => {
+    // A caller passes the shared relative-time clock, so the ages and the
+    // freshness band move together without the probe data changing.
+    const resource = makeAvailabilityResource({
+      status: 'offline',
+      availability: {
+        protocol: 'tcp',
+        port: 1883,
+        available: false,
+        lastChecked: '2026-05-06T13:00:00Z',
+        lastSuccess: '2026-05-06T12:00:00Z',
+        pollIntervalSeconds: 60,
+      },
+    });
+
+    const early = getAvailabilityProbePresentation(resource, new Date('2026-05-06T13:00:30Z'));
+    expect(early?.rowLabel).toContain('checked 30s ago');
+    expect(early?.detailLabel).toContain('last success 1 hour ago');
+    expect(early?.freshnessLabel).toBe('fresh');
+
+    const late = getAvailabilityProbePresentation(resource, new Date('2026-05-06T15:00:00Z'));
+    expect(late?.rowLabel).toContain('checked 2 hours ago');
+    expect(late?.detailLabel).toContain('last success 3 hours ago');
+    expect(late?.freshnessLabel).toBe('stale');
+  });
 });

@@ -52,6 +52,7 @@ import {
   getResourceChangeSourceTypePresentation,
 } from '@/utils/resourceChangePresentation';
 import { formatConfidenceLabel } from '@/utils/confidencePresentation';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 import { shouldShowResourcePlatformId } from '@/utils/resourceIdentity';
 import { isPulseAgentPlatformResource } from '@/utils/agentResources';
@@ -364,6 +365,9 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
   const { drawer } = props;
   const showPlatformId = () => shouldShowResourcePlatformId(resource());
   const pbsJobHealthEvidence = () => buildPbsJobHealthEvidenceModel(drawer.pbsData());
+  // Change history rows stay open while their observed and occurred times
+  // never change, so their ages read the shared clock.
+  const now = useRelativeTimeNow();
   const compactTableRow = () => props.presentation === 'table-row';
   const shouldRenderChangeHistorySection = () =>
     !compactTableRow() ||
@@ -608,10 +612,12 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                               {kindPresentation.label}
                             </div>
                             <div class="mt-0.5 text-muted">
-                              {formatRelativeTime(change.observedAt)}
+                              {formatRelativeTime(change.observedAt, { now: now() })}
                               <Show when={change.occurredAt}>
                                 <span class="mx-1">•</span>
-                                <span>Occurred {formatRelativeTime(change.occurredAt)}</span>
+                                <span>
+                                  Occurred {formatRelativeTime(change.occurredAt, { now: now() })}
+                                </span>
                               </Show>
                             </div>
                           </div>

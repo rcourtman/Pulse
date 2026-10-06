@@ -2629,6 +2629,14 @@ and the canonical row contract and per-row hot-path derivations live in
 identity, column, cell-tooltip, anomaly-correlation, and link-state changes
 must extend through those owners instead of rebuilding row-local state inside
 the shell.
+Workload rows keep their object while a guest's serialized data is unchanged,
+so a quiet guest's row re-derives nothing on refresh, and an age computed at
+render froze there. The guest backup cell in `GuestRowCells.tsx` therefore
+reads the frontend-primitives shared relative-time clock for its age badge and
+its fresh, stale or overdue band (measured from the later of the clock and the
+wall clock), and `useGuestRowState.ts` passes the clock to the availability
+probe presentation only for guests that carry a probe, so the rest of the
+table never re-runs on the 30-second tick.
 That per-row link state now also consumes the shared
 `frontend-modern/src/routing/resourceLinks.ts` workload-to-infrastructure
 helper instead of a workload-local routing shim. Future infrastructure-link

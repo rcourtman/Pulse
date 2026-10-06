@@ -1,8 +1,9 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { NodeDrawerOverview } from '@/components/Workloads/NodeDrawerOverview';
 import type { Node } from '@/types/api';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 
 const makeNode = (overrides: Partial<Node>): Node =>
   ({
@@ -24,7 +25,10 @@ const makeNode = (overrides: Partial<Node>): Node =>
     ...overrides,
   }) as Node;
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe('NodeDrawerOverview update evidence', () => {
   it('shows confirmed zero evidence instead of omitting the update row', () => {
@@ -53,5 +57,30 @@ describe('NodeDrawerOverview update evidence', () => {
     ));
 
     expect(screen.getByText('Unavailable · Update check access denied')).toBeInTheDocument();
+  });
+
+  it('keeps the update check age moving while the drawer stays open', () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+      now: Date.parse('2026-08-29T12:05:00Z'),
+    });
+
+    render(() => (
+      <NodeDrawerOverview
+        node={makeNode({
+          pendingUpdates: 0,
+          pendingUpdatesStatus: 'checked',
+          pendingUpdatesCheckedAt: '2026-08-29T12:00:00Z',
+        })}
+      />
+    ));
+
+    expect(screen.getByText('No pending updates · checked 5 mins ago')).toBeInTheDocument();
+
+    // No new update check lands: the node never changes and only the clock
+    // moves.
+    vi.advanceTimersByTime(6 * 60 * 2 * RELATIVE_TIME_TICK_MS);
+
+    expect(screen.getByText('No pending updates · checked 6 hours ago')).toBeInTheDocument();
   });
 });

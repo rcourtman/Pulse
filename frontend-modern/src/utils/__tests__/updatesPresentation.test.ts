@@ -78,6 +78,16 @@ describe('updatesPresentation', () => {
         'Checked 1 day ago',
       );
     });
+
+    it('measures the age from the shared clock time it is given', () => {
+      const checkedAt = new Date('2026-08-10T09:00:00Z').getTime();
+      expect(getUpdateCheckedLabel(checkedAt, new Date('2026-08-10T12:00:00Z').getTime())).toBe(
+        'Checked 3 hours ago',
+      );
+      expect(getUpdateCheckedLabel(checkedAt, new Date('2026-08-11T09:00:00Z').getTime())).toBe(
+        'Checked 1 day ago',
+      );
+    });
   });
 });
 

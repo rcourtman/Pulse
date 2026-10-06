@@ -78,9 +78,12 @@ export function getUpdateCheckModeLabel(enabled: boolean, sourceBuild = false): 
 // The displayed verdict can come from a day-old cached check, so "Up to date"
 // must carry the age of the check it is based on or it reads as a live
 // comparison (#1601).
-export function getUpdateCheckedLabel(lastCheckedMs: number | null | undefined): string {
+export function getUpdateCheckedLabel(
+  lastCheckedMs: number | null | undefined,
+  now?: number,
+): string {
   if (!lastCheckedMs || lastCheckedMs <= 0) return 'Not checked yet';
-  const relative = formatRelativeTime(lastCheckedMs);
+  const relative = formatRelativeTime(lastCheckedMs, { now });
   return relative ? `Checked ${relative}` : 'Not checked yet';
 }
 

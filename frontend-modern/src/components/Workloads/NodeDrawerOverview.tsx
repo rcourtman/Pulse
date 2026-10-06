@@ -9,9 +9,10 @@ import {
 } from '@/components/shared/DetailSectionTable';
 import type { Alert, Disk, HostGPUSensor, Node, Temperature } from '@/types/api';
 import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
-import { formatBytes, normalizeDiskArray } from '@/utils/format';
+import { formatBytes, formatRelativeTime, normalizeDiskArray } from '@/utils/format';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { getProxmoxUpdateEvidencePresentation } from '@/utils/proxmoxUpdateEvidence';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { formatTemperature, getCpuTemperature, getTemperatureTextClass } from '@/utils/temperature';
 
 import { buildDrawerDiskListItems } from './DrawerDiskListCard';
@@ -190,7 +191,13 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
     return clock && clock !== '0' ? clock : '';
   };
   const loadAverageLabel = () => formatLoadAverage(props.node.loadAverage);
-  const updateEvidence = () => getProxmoxUpdateEvidencePresentation(props.node);
+  // The drawer stays open between update checks, so the checked age reads the
+  // shared clock instead of freezing when the drawer opened.
+  const now = useRelativeTimeNow();
+  const updateEvidence = () =>
+    getProxmoxUpdateEvidencePresentation(props.node, (value) =>
+      formatRelativeTime(value, { now: now() }),
+    );
 
   const platformRows = (): NodeOverviewRow[] => [
     ...(cleanText(props.node.kernelVersion)

@@ -44,6 +44,7 @@ import {
 } from '@/utils/availabilityProbePresentation';
 import { getProbeSourceChipLabel, type ProbeAgentOption } from '@/utils/availabilityProbeAgents';
 import { buildAvailabilityTargetAddPath } from '@/components/Settings/availabilitySettingsModel';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   getStandaloneResourceStatusIndicator,
   sortStandaloneResourcesByAttention,
@@ -122,12 +123,16 @@ export const AvailabilityChecksTable: Component<{
   onExternalStatusChange?: (status: PlatformResourceStatusFilter) => void;
   onResetFilters?: () => void;
 }> = (props) => {
+  // Rows stay mounted while a stalled probe's lastChecked stops changing, so
+  // the stale status, its filter bucket and the probe detail read the shared
+  // clock.
+  const now = useRelativeTimeNow();
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: (resources, search, status) =>
       filterPlatformResources(resources, search, status, (resource) => {
-        const variant = getStandaloneResourceStatusIndicator(resource).variant;
+        const variant = getStandaloneResourceStatusIndicator(resource, now()).variant;
         if (variant === 'success') return 'online';
         if (variant === 'danger') return 'offline';
         return 'degraded';
@@ -144,7 +149,9 @@ export const AvailabilityChecksTable: Component<{
     }
     tableState.resetFilters();
   };
-  const orderedChecks = createMemo(() => sortStandaloneResourcesByAttention(tableState.filtered()));
+  const orderedChecks = createMemo(() =>
+    sortStandaloneResourcesByAttention(tableState.filtered(), now()),
+  );
   const historyTargetIDs = createMemo(() =>
     props.resources
       .map((resource) => availabilityFor(resource)?.targetId)
@@ -321,8 +328,8 @@ export const AvailabilityChecksTable: Component<{
                 <PlatformWindowedRows items={orderedChecks} estimatedRowHeight={32}>
                   {(check) => {
                     const availability = () => availabilityFor(check);
-                    const probe = () => getAvailabilityProbePresentation(check);
-                    const indicator = () => getStandaloneResourceStatusIndicator(check);
+                    const probe = () => getAvailabilityProbePresentation(check, new Date(now()));
+                    const indicator = () => getStandaloneResourceStatusIndicator(check, now());
                     const method = () =>
                       probe()?.methodLabel ?? availability()?.protocol ?? 'Probe';
                     const result = () => probe()?.resultLabel ?? indicator().label;

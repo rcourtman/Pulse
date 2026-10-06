@@ -24,10 +24,14 @@ import Users from 'lucide-solid/icons/users';
 import Settings from 'lucide-solid/icons/settings';
 import Lightbulb from 'lucide-solid/icons/lightbulb';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { useAgentProfilesPanelState } from './useAgentProfilesPanelState';
 
 export const AgentProfilesPanel: Component = () => {
   const featureGateCopy = getAgentProfilesFeatureGateCopy();
+  // An agent that stops reporting keeps the same last-seen time while its row
+  // stays listed, so the age reads the shared clock.
+  const now = useRelativeTimeNow();
   const {
     aiAvailable,
     checkingLicense,
@@ -310,7 +314,9 @@ export const AgentProfilesPanel: Component = () => {
                     hiddenOnMobile: true,
                     render: (agent) => (
                       <span class="text-muted">
-                        {agent.lastSeen ? formatRelativeTime(agent.lastSeen) : 'Never'}
+                        {agent.lastSeen
+                          ? formatRelativeTime(agent.lastSeen, { now: now() })
+                          : 'Never'}
                       </span>
                     ),
                   },

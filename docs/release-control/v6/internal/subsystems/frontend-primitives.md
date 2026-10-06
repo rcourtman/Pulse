@@ -5221,6 +5221,12 @@ and the external watchdog panel do, or keeps the read-time age, as the Patrol
 attention detail does for Last seen. An immutable event time (when a delivery
 was attempted, a transition happened, a policy was set) ages correctly over any
 snapshot and reads the clock.
+A presentation helper that formats an age measures it from the time its caller
+passes rather than reading the wall clock itself, so the caller's
+`useRelativeTimeNow` reaches every age and band the helper derives:
+`getAvailabilityProbePresentation(resource, now)` measures its checked and
+last-success ages from the same `now` as its fresh or stale band, and
+`getUpdateCheckedLabel(lastCheckedMs, now)` takes the Updates panel's clock.
 Read-only metadata badges follow the same primitive-owned shell rule.
 `frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
 outlined appearances, compact sizing, shape, typed tone vocabulary, fit
