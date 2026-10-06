@@ -601,6 +601,10 @@ func newCommandIdentityHarness(t *testing.T, presentedID string, interval time.D
 	agent.httpClient = h.server.Client()
 	agent.trimmedPulseURL = h.server.URL
 	h.agent = agent
+	// Run closes the command client on exit, but several tests never call
+	// run. Close it here, before the state TempDir is removed: Windows cannot
+	// delete the open operation-receipts.db.
+	t.Cleanup(func() { agent.stopCommandClient(true) })
 	return h
 }
 
