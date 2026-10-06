@@ -32,6 +32,8 @@ redacted error, rather than repeat a potentially harmful backup for a report.
 This manual precaution is for an affected **systemd installation**, before a
 scheduled backup starts. It is **not a recovery procedure** for a backup already
 in progress or an unresponsive guest, and **not an automatic backup hook**.
+For a Docker or Compose server, use the [container pause procedure](#pause-a-docker-or-compose-server-for-a-planned-backup) instead;
+the systemd commands below do not stop a containerised Pulse server.
 
 1. **Identify the Pulse server service.** Run these commands on the machine
    running the Pulse server: for Proxmox LXC, **inside the Pulse LXC**,
@@ -134,6 +136,112 @@ in progress or an unresponsive guest, and **not an automatic backup hook**.
    Leave previously inactive services/timers inactive. Arrange independent
    outage coverage and repeat the precaution for each affected backup window;
    this manual sequence does not schedule future pauses or prove a fix.
+
+### Pause a Docker or Compose server for a planned backup
+
+This is a manual precaution for an affected **standalone Docker or plain Compose
+Pulse server**, before a scheduled freeze-enabled backup. It is **not incident
+recovery or an automatic backup hook**. Swarm, Kubernetes and other controllers
+need their own supported pause controls: stopping a container alone does not
+stop a controller from replacing it. Do not use this procedure if you cannot
+prevent another server from polling the affected guests.
+
+**Pulse monitoring and alerts are unavailable while stopped.** Arrange
+independent outage coverage. A container stop does not cancel a guest-agent
+request already issued; let any existing guest/backup operation finish normally
+before the planned backup. If that state is unknown, do not start the backup on
+the strength of a stopped container.
+
+1. **Identify the existing Pulse server container on its Docker host**, not a
+   monitored workload, the backed-up VM or a Pulse Agent container. For Compose,
+   use the original project directory and the same project/file options used to
+   deploy it. The example service is `pulse`; substitute your actual service:
+
+   ```bash
+   docker compose ps --all --quiet pulse
+   ```
+
+   Record every returned server container ID privately. An empty list or a
+   failed command is not proof that monitoring has stopped. For a `docker run`
+   installation, identify the existing server through its saved deployment.
+   Set the ID explicitly, then read only its identity and state:
+
+   ```bash
+   PULSE_CONTAINER_ID='paste-the-recorded-server-container-id'
+   docker inspect --format 'Id={{.Id}} Running={{.State.Running}} Paused={{.State.Paused}} Restarting={{.State.Restarting}} Status={{.State.Status}} Pid={{.State.Pid}} ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}' "$PULSE_CONTAINER_ID"
+   ```
+
+   Record whether this exact container was running before the pause. Require a
+   stable state: either running and not paused/restarting, or already exited
+   with PID 0. If it is paused, restarting, being replaced or its state cannot
+   be read, resolve that through the deployment's normal controls first. Repeat
+   the state check for every server; do not infer another container's state.
+   Do not share full `docker inspect`, container environments or resolved
+   Compose configuration: they can contain credentials.
+
+2. **Prevent a deployment or updater from restarting/replacing Pulse.** Do not
+   install, update, recreate the server, run `docker compose up` or reboot the
+   Docker host during this window. Pause any automatic updater or deployment
+   job using its supported controls, recording whether it was active first.
+   Let an in-progress update finish normally; do not interrupt an installation.
+   The supplied Compose example uses `restart: unless-stopped`, but that does
+   not prevent an external updater or another operator from starting Pulse.
+   Do not change the restart policy, image, mounts or saved deployment as a
+   substitute for these checks.
+
+3. **Stop each previously running server and verify the same ID is stopped.**
+   Docker commands on the recorded existing container also work for a plain
+   Compose deployment; they do not recreate its configuration or data volume:
+
+   ```bash
+   docker stop --timeout 60 "$PULSE_CONTAINER_ID"
+   docker inspect --format 'Id={{.Id}} Running={{.State.Running}} Paused={{.State.Paused}} Restarting={{.State.Restarting}} Status={{.State.Status}} Pid={{.State.Pid}} ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}' "$PULSE_CONTAINER_ID"
+   ```
+
+   Require a successful stop and readback of the **same recorded ID** with
+   `Running=false`, `Paused=false`, `Restarting=false`, `Status=exited` and
+   `Pid=0`. For a server stopped in this step, also require `ExitCode=0` and
+   `OOMKilled=false`; a non-zero exit (including 137 after forced termination)
+   or unknown shutdown result needs normal maintenance before the backup.
+   Leave an already stopped server stopped. If stopping times out,
+   fails, the identity changes or any state is unknown, do not start the backup.
+   Do not delete/recreate a container, remove volumes or force-kill it to clear
+   this check. Docker can terminate a process after its stop timeout; stopped
+   state alone does not prove graceful shutdown or completion of earlier guest
+   requests. Preserve a shutdown failure for normal maintenance, not a forced
+   backup test.
+
+4. **Keep every server stopped until independent recovery checks pass.** The
+   backup must have ended, and evidence from **after it ended**, independent of
+   Pulse and the QEMU Guest Agent, must confirm **thaw, fresh successful workload
+   writes to every filesystem covered by the backup, and workload liveness**.
+   Use the workload's established safe checks, not forced writes, test files or
+   another freeze/thaw cycle. An OK backup, an absent lock, a console connection
+   or a successful read alone is not enough. If any check fails or is unavailable,
+   leave Pulse and its automatic updater paused and use the platform's recovery
+   procedure, without guest-agent probes or repeating the backup.
+
+   Only for a container recorded as running before the pause, start that
+   **same existing ID**, then repeat the bounded state readback from step 1:
+
+   ```bash
+   docker start "$PULSE_CONTAINER_ID"
+   ```
+
+   Require the original ID, `Running=true`, `Paused=false`, `Restarting=false`
+   and `Status=running`. A previously stopped container stays stopped; if its
+   original state is unknown, do not guess. Do not use a blanket Compose start
+   or `up` to restore a mixture of previously running and stopped servers. If
+   the original container is missing or startup fails, keep automation paused
+   and resolve that through normal maintenance rather than creating another
+   server against the same data.
+
+   Running state is not proof of healthy collection or alert delivery. Check
+   normal observation times in Pulse without Run Diagnostics or guest-agent
+   probes. Restore only automatic jobs that were active before the pause, after
+   verifying they will not start a previously inactive server. Unknown original
+   job state or restart behaviour means leave that job paused. Repeat the
+   precaution for each affected backup window; this is not proof of a fix.
 
 ## 🚀 Setup
 

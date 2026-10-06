@@ -20,6 +20,26 @@
 
 ## Purpose
 
+### Container backup-pause help preserves identity and prior state
+
+The existing VM Disk Monitoring guide also covers a standalone Docker or plain
+Compose Pulse server, linked from the Docker guide and the systemd precaution.
+It identifies the original server container(s), discloses the monitoring/alert
+outage, requires suspended external restart controls and same-ID stopped-state
+readback before a planned backup. Stopped state never proves an earlier guest
+request completed. Incident recovery and controller-managed replacement are
+outside this manual sequence.
+
+Restoration requires independent post-backup thaw, fresh successful workload
+writes on every covered filesystem and liveness. Only previously running,
+existing container IDs and previously active automatic jobs may be restored;
+unknown state, missing IDs, failed startup or unknown restart behaviour keep
+automation paused. No image, restart-policy, mounted data, guest operation or
+diagnostic permission changes. Bounded state templates omit environment/config
+secrets. `dockerBackupSafetyHelp.test.ts` exercises rendered commands, gates,
+cross-links and shipped mirrors; this is help validation, not a Docker daemon,
+installed guest recovery, native acceptance or release proof.
+
 ### Narrow Workloads identity during guest locks
 
 In narrow and phone layouts, the guest name and status occupy the first line;
