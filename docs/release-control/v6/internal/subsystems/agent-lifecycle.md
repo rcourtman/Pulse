@@ -620,6 +620,17 @@ admissible, but discovery must inspect the rest of the bounded config listing:
 a 129th running guest or an unestablished later guest makes discovery unavailable,
 not a truncated complete inventory. The existing bounded `pct list` fallback
 then either establishes the full node or remains degraded under PrivateNetwork.
+The init search checks the preferred `ns/init.scope` path before unrelated
+workload cgroups, even when either level has hundreds of siblings. Its bounded
+priority frontier permits at most 64 cgroup process reads and 4,096 candidate
+PIDs; reaching either limit without a verified init remains unknown, not stopped.
+Unreadable or cancelled traversal still fails closed. Width alone cannot prevent
+a verified init from supporting the existing pinned filesystem observation.
+`TestHelperProxmoxLXCInitSearchPrioritizesBoundedReads` connects wide-tree discovery
+to complete measured collection without IPC commands;
+`TestProxmoxLXCInitSearchKeepsBoundsAndIdentity` pins exact directory/PID limits,
+foreign VM and nested namespace rejection, unreadable input and cancellation.
+These are synthetic source controls, not installed helper or native PVE recovery.
 `TestSocketFreeProxmoxLXCDiscoveryCannotTruncateCompleteInventory` covers 127/128/129
 running guests and stopped/unknown guests after the limit through discovery and
 collection. The fixed `lxc-info -n <vmid> -p`
