@@ -205,6 +205,13 @@ clearing, false/zero values, unchanged peer-site rows and full/fast equivalence.
 merges, row, Overview and History with synthetic inputs. This is no native
 QGA/thaw, installed recovery, fleet-performance or release-availability claim.
 
+Choosing a node's temperature source in `resourceStateAdapters.ts` reads one
+more field of the facet already in the canonical payload
+(`proxmox.temperatureDetails`), only when the existing record selection yields
+no usable reading, and keeps it only when it holds a CPU reading. That is one
+extra record mapping per such node per adapter call. It adds no resource read,
+merge pass, timer or subscription.
+
 ### Unavailable filesystem values share the existing disk model
 
 The filesystem list and guest Overview use the same nullable measured-byte ratio

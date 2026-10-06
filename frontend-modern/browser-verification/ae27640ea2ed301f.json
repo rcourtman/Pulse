@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "60fb6e842b702c35c93ce7c5e8397487c15aab6a",
+  "verified_at": "2026-10-06T16:05:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "744fb071acc493f973c6064e7c7eaaac831c9cef2a88491a8b51e49a08f139be"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack built from this tree (backend :7681, Vite :5199) after restoring the original record selection and gating temperatureDetails on a current CPU reading",
+    "Proxmox node Analytics A (pve31) made PVE-only (agent facet removed from REST and websocket payloads), compared on identical data: main's adapter showed CPU low 63\u00b0C and CPU record 63\u00b0C (the current reading repeated); this change showed CPU low 39\u00b0C and CPU record 91\u00b0C from an injected temperatureDetails record (cpuMin 38.5, cpuMaxRecord 91.2) at 1440x900 and 390x844",
+    "Same PVE-only node without a record in temperatureDetails: CPU low and CPU record rows absent; NVMe row and table TEMP unchanged",
+    "Operator-context Temperature row: hidden on main and on this change at 63\u00b0C (it appears only in the warning band), so no difference",
+    "Agent-linked mock node with and without an injected record, desktop and phone width: no CPU low/record rows and Temperature from the agent facet, as on main",
+    "Unit tests cover the two cases this commit fixes: details with only NVMe do not displace a valid scalar CPU reading, and an unusable legacy record still falls back to the scalar"
+  ],
+  "interactions": [
+    "Opened the node drawer from the row's detail toggle (aria-controls proxmox-host-drawer-<id>) on /proxmox at desktop and phone widths",
+    "Read the Thermals and Operator context rows and the row's TEMP cell, and took screenshots, for main's adapter and for this change via Playwright with REST and websocket payload rewriting"
+  ]
+}
