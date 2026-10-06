@@ -3684,7 +3684,21 @@ transiently `unavailable`, provider/controller `unsupported`, or unexpectedly
 `missing`. Normalization may retain the last known value when the current
 observation is not available, but it must preserve the current state and
 reason so API and UI consumers do not present retained evidence as freshly
-collected. Unified-resource physical-disk round trips must retain named
+collected. A host agent's SMART temperature and I/O counters follow its
+reporting lease: once `State.ExpireHostTelemetry` expires the agent, they stay
+as last-known values marked `unavailable` ("host agent stopped reporting"),
+and the linked Proxmox disk merge and the registry let the agent's own later
+state supersede the availability it supplied earlier
+(`diskinventory.MergeReportedStatus`), so neither a skipped disk poll nor a
+host that is never disk-polled again can carry it forward. Expiry is
+compare-and-set on the report time the evaluation judged stale, so a report
+accepted in between is never expired. Every SMART temperature history writer
+records a temperature only when its current collection state is available (or
+predates collection state), so a retained reading has to keep its non-available
+state to stay out of history; a path that relabels a carried reading as
+available, such as a node-temperature carry stamped `proxmox_node_smart`, is
+not covered by this rule.
+Unified-resource physical-disk round trips must retain named
 `StorageGroup` membership rather than degrading it to the generic `Used`
 filesystem label.
 That same host-agent temperature boundary must prefer a recent linked host-agent
