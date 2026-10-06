@@ -161,4 +161,42 @@ describe('VsphereHostsTable', () => {
     expect(container.querySelector('[data-vsphere-host-row="host-healthy"]')).toBeNull();
     expect(screen.getByText('1 of 2 hosts')).toBeInTheDocument();
   });
+  it('shows the vCenter column by connection name only when several vCenters are connected', () => {
+    const lab = makeHost({ id: 'host-1' });
+    lab.vmware = { ...lab.vmware!, connectionId: 'vc-lab', connectionName: 'Lab vCenter' };
+    const edge = makeHost({ id: 'host-2' });
+    edge.vmware = {
+      ...edge.vmware!,
+      connectionId: 'vc-edge',
+      connectionName: 'Edge vCenter',
+      vcenterHost: 'vcsa-edge.lab.local',
+    };
+
+    const single = render(() => (
+      <VsphereHostsTable
+        hosts={[lab]}
+        scope={[lab]}
+        emptyIcon={<span />}
+        emptyTitle="No hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+    expect(screen.queryByRole('columnheader', { name: /vCenter/ })).not.toBeInTheDocument();
+    single.unmount();
+
+    render(() => (
+      <VsphereHostsTable
+        hosts={[lab, edge]}
+        scope={[lab, edge]}
+        emptyIcon={<span />}
+        emptyTitle="No hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+    expect(screen.getByRole('columnheader', { name: /vCenter/ })).toBeInTheDocument();
+    expect(screen.getByText('Edge vCenter')).toHaveAttribute('title', 'vcsa-edge.lab.local');
+    expect(screen.getByText('Lab vCenter')).toBeInTheDocument();
+  });
 });

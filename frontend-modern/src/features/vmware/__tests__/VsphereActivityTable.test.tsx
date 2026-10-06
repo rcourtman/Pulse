@@ -195,4 +195,20 @@ describe('VsphereActivityTable', () => {
     expect(detail.getByText('VmPoweredOnEvent')).toBeInTheDocument();
     expect(detail.queryByText('Message')).not.toBeInTheDocument();
   });
+  it('drops the vCenter column when one vCenter is connected', () => {
+    render(() => (
+      <VsphereActivityTable
+        activity={buildVmwareActivityRows([makeVm()])}
+        emptyIcon={<span />}
+        emptyTitle="No activity"
+        emptyDescription="No activity"
+        showToolbar={false}
+        singleVcenter
+      />
+    ));
+    expect(
+      within(screen.getByRole('table')).queryByRole('columnheader', { name: /vCenter/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('lab-vcenter')).not.toBeInTheDocument();
+  });
 });

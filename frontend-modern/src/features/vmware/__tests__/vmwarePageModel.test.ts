@@ -11,6 +11,7 @@ import {
   filterVmwareVirtualMachines,
   getVmwarePageTabSpecs,
   getVmwareResourceDisplayStatus,
+  isSingleVmwareVcenter,
   mapVmwareActivityStateBucket,
   mapVmwareDatastoreStatus,
   mapVmwareIncidentSeverity,
@@ -542,5 +543,35 @@ describe('vmwarePageModel', () => {
     expect(
       filterVmwareActivity(rows, 'administrator', 'events').map((row) => row.nativeId),
     ).toEqual(['event-501']);
+  });
+  it('counts vCenter connections across the whole inventory', () => {
+    const at = (vmware: Record<string, string>) =>
+      ({ id: JSON.stringify(vmware), vmware }) as never;
+    expect(isSingleVmwareVcenter([])).toBe(true);
+    expect(
+      isSingleVmwareVcenter([
+        at({ connectionId: 'vc-1', connectionName: 'Lab vCenter' }),
+        at({ connectionId: 'vc-1', vcenterHost: 'vcsa.lab.local' }),
+      ]),
+    ).toBe(true);
+    expect(
+      isSingleVmwareVcenter([at({ connectionId: 'vc-1' }), at({ connectionId: 'vc-2' })]),
+    ).toBe(false);
+    // A resource without the connection ID still matches its connection by
+    // name or host, so one vCenter is not counted twice.
+    expect(
+      isSingleVmwareVcenter([
+        at({ connectionId: 'vc-1', connectionName: 'Lab', vcenterHost: 'vcsa.lab.local' }),
+        at({ connectionName: 'Lab', vcenterHost: 'vcsa.lab.local' }),
+        at({ vcenterHost: 'vcsa.lab.local' }),
+      ]),
+    ).toBe(true);
+    // Without connection ids, the name or host still tells connections apart.
+    expect(
+      isSingleVmwareVcenter([
+        at({ vcenterHost: 'vcsa.lab.local' }),
+        at({ vcenterHost: 'vcsa-edge.lab.local' }),
+      ]),
+    ).toBe(false);
   });
 });

@@ -151,4 +151,24 @@ describe('VsphereAlertsTable', () => {
       'false',
     );
   });
+  it('drops the vCenter column when one vCenter is connected and keeps it in the drawer', async () => {
+    render(() => (
+      <VsphereAlertsTable
+        incidents={buildVmwareIncidentRows([makeHost()])}
+        emptyIcon={<span />}
+        emptyTitle="No signals"
+        emptyDescription="No signals"
+        showToolbar={false}
+        singleVcenter
+      />
+    ));
+
+    const table = screen.getByRole('table');
+    expect(within(table).queryByRole('columnheader', { name: /vCenter/ })).not.toBeInTheDocument();
+    const row = document.querySelector('[data-vsphere-alert-row]') as HTMLElement;
+    expect(within(row).queryByText('lab-vcenter')).not.toBeInTheDocument();
+
+    await fireEvent.click(row);
+    expect(screen.getByText('lab-vcenter')).toBeInTheDocument();
+  });
 });
