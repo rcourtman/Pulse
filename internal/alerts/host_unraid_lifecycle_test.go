@@ -305,3 +305,242 @@ func TestHostCustomSensorEscalationDelivery(t *testing.T) {
 		})
 	}
 }
+
+// An agent reports things besides its own machine: filesystems, disks,
+// arrays and custom sensors. Their alerts target a child resource, and the
+// alert card's monitoring policy writes to that child, so they must not
+// carry the machine's "agent" type: the card would offer the machine's
+// retirement copy ("Agent removal remains available from Machines") for a
+// policy that never touches the machine. platformType keeps every one of
+// them linked to the agent's page.
+func TestHostChildAlertsNameTheirOwnResourceType(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.config.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 70}
+	m.config.AgentDefaults.Disk = &HysteresisThreshold{Trigger: 80, Clear: 70}
+	m.config.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 50, Clear: 45}
+	m.mu.Unlock()
+
+	pending := int64(2)
+	sensorValue := 23.0
+	linuxHost := models.Host{
+		ID:          "child-linux",
+		Hostname:    "storage-host",
+		DisplayName: "Storage Host",
+		Platform:    "linux",
+		CPUUsage:    95,
+		Disks: []models.Disk{{
+			Mountpoint: "/srv",
+			Device:     "/dev/sdc1",
+			Usage:      92,
+			Total:      100,
+			Used:       92,
+			Free:       8,
+		}},
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{{
+				Device:      "/dev/sda",
+				Model:       "IronWolf",
+				Serial:      "SERIAL-CHILD-1",
+				Health:      "PASSED",
+				Temperature: 55,
+				Attributes:  &models.SMARTAttributes{PendingSectors: &pending},
+			}},
+			Custom: []models.HostCustomSensorMetric{{
+				ID:         "queue_depth",
+				Name:       "Queue depth",
+				Value:      &sensorValue,
+				Status:     "critical",
+				ObservedAt: time.Now().UTC(),
+			}},
+		},
+		RAID: []models.HostRAIDArray{{
+			Device:         "/dev/md0",
+			Level:          "raid1",
+			State:          "degraded",
+			TotalDevices:   2,
+			ActiveDevices:  1,
+			WorkingDevices: 1,
+			FailedDevices:  1,
+		}},
+	}
+	unraidHost := models.Host{
+		ID:          "child-unraid",
+		Hostname:    "tower",
+		DisplayName: "Tower",
+		Platform:    "unraid",
+		Unraid: &models.HostUnraidStorage{
+			ArrayStarted: true,
+			ArrayState:   "STARTED",
+			Disks: []models.HostUnraidDisk{
+				{Name: "disk1", Role: "data", Status: "online", Device: "/dev/sdb"},
+			},
+		},
+	}
+	m.CheckHost(linuxHost)
+	m.CheckHost(unraidHost)
+
+	want := map[string]string{
+		"cpu":              "agent",
+		"disk":             "agent-disk",
+		"diskTemperature":  "agent-disk",
+		"disk-health":      "agent-disk",
+		"raid":             "agent-storage",
+		"storage-topology": "agent-storage",
+		"custom-sensor":    "agent-sensor",
+	}
+	seen := make(map[string]bool, len(want))
+	for _, alert := range m.GetActiveAlerts() {
+		wantType, ok := want[alert.Type]
+		if !ok {
+			continue
+		}
+		seen[alert.Type] = true
+		if got := alert.Metadata["resourceType"]; got != wantType {
+			t.Errorf("%s alert resourceType = %v, want %s", alert.Type, got, wantType)
+		}
+		if got := alert.Metadata["platformType"]; got != "agent" {
+			t.Errorf("%s alert platformType = %v, want agent", alert.Type, got)
+		}
+		hostID, _ := alert.Metadata["hostId"].(string)
+		if wantType != "agent" && alert.ResourceID == hostResourceID(hostID) {
+			t.Errorf("%s alert targets the machine itself (%s), so it is not a child alert", alert.Type, alert.ResourceID)
+		}
+	}
+	for alertType := range want {
+		if !seen[alertType] {
+			t.Errorf("expected an active %s alert", alertType)
+		}
+	}
+}
+
+// Child alerts keep the agent policy path. A configuration save that turns
+// off storage or guest alerts must leave them alone: CheckHost only consults
+// the agent switches, so resolving them here would re-raise and re-notify
+// on the next report.
+func TestHostChildAlertsIgnoreOtherPlatformSwitchesOnConfigSave(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.mu.Unlock()
+
+	pending := int64(2)
+	sensorValue := 23.0
+	host := models.Host{
+		ID:       "child-policy",
+		Hostname: "storage-host",
+		Platform: "linux",
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{{
+				Device:     "/dev/sda",
+				Serial:     "SERIAL-CHILD-2",
+				Health:     "PASSED",
+				Attributes: &models.SMARTAttributes{PendingSectors: &pending},
+			}},
+			Custom: []models.HostCustomSensorMetric{{
+				ID:         "queue_depth",
+				Name:       "Queue depth",
+				Value:      &sensorValue,
+				Status:     "critical",
+				ObservedAt: time.Now().UTC(),
+			}},
+		},
+		RAID: []models.HostRAIDArray{{
+			Device:         "/dev/md0",
+			Level:          "raid1",
+			State:          "degraded",
+			TotalDevices:   2,
+			ActiveDevices:  1,
+			WorkingDevices: 1,
+			FailedDevices:  1,
+		}},
+	}
+	m.CheckHost(host)
+	childTypes := []string{"disk-health", "raid", "custom-sensor"}
+	for _, alertType := range childTypes {
+		if !hasAlertType(m.GetActiveAlerts(), alertType) {
+			t.Fatalf("expected an active %s alert before the config save", alertType)
+		}
+	}
+
+	m.mu.Lock()
+	m.config.DisableAllStorage = true
+	m.config.DisableAllGuests = true
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+
+	for _, alertType := range childTypes {
+		if !hasAlertType(m.GetActiveAlerts(), alertType) {
+			t.Errorf("%s alert was resolved by the storage or guest switch", alertType)
+		}
+	}
+
+	m.mu.Lock()
+	m.config.DisableAllAgents = true
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+
+	for _, alertType := range childTypes {
+		if hasAlertType(m.GetActiveAlerts(), alertType) {
+			t.Errorf("%s alert survived disabling agent alerts", alertType)
+		}
+	}
+}
+
+// The Proxmox node sweep removes alerts whose node is not a Proxmox node
+// unless it recognises them as agent alerts, by an agent: resource id or the
+// agent type. Child alerts no longer carry the agent type, so they must keep
+// the agent: id their canonical spec gives them.
+func TestHostChildAlertsSurviveProxmoxNodeCleanup(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	pending := int64(2)
+	sensorValue := 23.0
+	host := models.Host{
+		ID:       "child-sweep",
+		Hostname: "storage-host",
+		Platform: "linux",
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{{
+				Device:     "/dev/sda",
+				Serial:     "SERIAL-CHILD-3",
+				Health:     "PASSED",
+				Attributes: &models.SMARTAttributes{PendingSectors: &pending},
+			}},
+			Custom: []models.HostCustomSensorMetric{{
+				ID:         "queue_depth",
+				Name:       "Queue depth",
+				Value:      &sensorValue,
+				Status:     "critical",
+				ObservedAt: time.Now().UTC(),
+			}},
+		},
+		RAID: []models.HostRAIDArray{{
+			Device:         "/dev/md0",
+			Level:          "raid1",
+			State:          "degraded",
+			TotalDevices:   2,
+			ActiveDevices:  1,
+			WorkingDevices: 1,
+			FailedDevices:  1,
+		}},
+	}
+	m.CheckHost(host)
+	childTypes := []string{"disk-health", "raid", "custom-sensor"}
+	for _, alertType := range childTypes {
+		if !hasAlertType(m.GetActiveAlerts(), alertType) {
+			t.Fatalf("expected an active %s alert", alertType)
+		}
+	}
+
+	m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+
+	for _, alertType := range childTypes {
+		if !hasAlertType(m.GetActiveAlerts(), alertType) {
+			t.Errorf("Proxmox node cleanup removed an agent %s alert", alertType)
+		}
+	}
+}

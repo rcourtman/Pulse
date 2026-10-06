@@ -5003,7 +5003,10 @@ name, so it keeps the shared single-line rhythm. Drawers for unified resources
 websocket `activeAlerts` map through `getAlertsForUnifiedResource`
 (`frontend-modern/src/utils/alerts.ts`), most severe first, never from a
 resource-embedded list, and show each alert's resource name and metric beside
-its text like the other drawers. The remaining Overview rows are additive
+its text like the other drawers. Their table rows take the platform host rows'
+red (critical) or yellow tint from the same set through
+`getUnifiedResourceAlertStyles`, only for unacknowledged alerts and never on
+an expanded row, so a row and its drawer agree. The remaining Overview rows are additive
 operator context that the parent table row cannot carry, such as OS/runtime,
 Pulse observation or action coverage, primary reachability, protection gaps,
 pending updates, or an identified service. Routine health, placement, and
@@ -5208,6 +5211,15 @@ and the platform alert tables pass it as `now` to `formatRelativeTime` /
 data refreshes, so an age computed only at render froze ("2h ago" three hours
 later) whenever its timestamp did not change. A relative-age cell must read the
 shared clock rather than `Date.now()` at render or a table-local interval.
+That rule covers every relative age, not only `PlatformTableRelativeTimeValue`
+cells: a value formatted through `formatPlatformTableRelativeTimeValue` or
+`formatRelativeTime` (compact phone ages, labelled Detail ages, row subtitles
+and tooltips, an open drawer's summary rows and annotations) passes `now` from
+the owning component's `useRelativeTimeNow`, and a countdown or freshness band
+derived from the same time (replication Next sync, backup age bands) reads it
+too. The clock can trail the wall clock by up to one tick, so a check that
+treats a future time as invalid (the backup age band) measures from the later
+of the two.
 Read-only metadata badges follow the same primitive-owned shell rule.
 `frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
 outlined appearances, compact sizing, shape, typed tone vocabulary, fit
@@ -5698,6 +5710,18 @@ When focused detail content is removed, `InlineDetailTableRow` restores focus
 to its current `aria-controls` disclosure with `preventScroll`; live refresh,
 collapse, and row replacement must not move the surrounding application
 viewport merely to reveal that control.
+The detail cell spans the summary row's visible cells, and `InlineDetailTableRow`
+re-measures that span while the row stays open: whenever summary cells are
+added, removed, or hidden (a column picker toggle, or a data-driven column
+such as the vCenter column that shows only with several vCenters), and
+whenever the caller's requested colspan changes. An open drawer must never
+keep a phantom column or stop short of a newly shown one. Changes inside a
+cell's content do not re-measure, so live metric updates stay cheap. When
+the span grows, the row changes the cell's own width for one forced layout
+and restores it, because Chromium otherwise keeps a fixed-layout table's old
+column widths for the widened cell. Callers keep passing their requested
+colspan; they must not re-key or remount the detail row to force a new span,
+which would discard drawer state.
 Inline detail section content is registry-backed separately from the row shell.
 `DetailSectionTable`, `InlineDetailPanel`, and `detailSectionModel.ts` own
 detail row compaction, section-table rendering, value-tone classes, and the
@@ -7566,6 +7590,12 @@ inside the fleet surface with explicit copy while current status and resource
 navigation remain usable. Desktop and phone layouts must keep every tile
 keyboard-operable, preserve the textual legend, and avoid horizontal clipping
 at fleet scale.
+In the table, a secondary `MetadataBadge` beside a cell's primary value shares
+one flex line with it: the value is `shrink-0` and the badge `min-w-0` with a
+truncating label, so the value never clips and rows keep the single height
+`PlatformWindowedRows` measures. A second line under the value would break
+that windowing. Passing `flex` to the badge alongside its own `inline-flex`
+left the display to stylesheet order, which clipped the availability result.
 The Machines page must not pretend its machine list is a generic overview:
 the default tab is `Machines`, the Machines table is only for Pulse Agent-backed
 resources with host telemetry, and the full availability-check row list belongs
@@ -8374,6 +8404,13 @@ inventory and Storage search below the fold at desktop and phone widths, and
 from competing with real warnings for attention, while preserving every
 affected name on demand. The component test pins collapsed, expanded and collapsed-again
 states; 1440px, 768px and 390px browser checks verify placement and overflow.
+Each platform page names what the update brings in the reader's words through
+`missingLabel`: the latest fixes and machine, node, system or VM details.
+The notice selects hosts by agent version alone, and command execution is a
+separate setting the update preserves, so the notice must not promise Patrol
+actions or command support. Internal phrasing such as "agent-contributed
+detail", "agent-managed platform detail" or "in-guest telemetry" does not
+belong in the notice.
 The shared `InlineNotice` action text uses opaque 800-level colors for its four
 tones. The current Tailwind configuration overrides several 900-level palette
 tokens with 25%-alpha colors for translucent backgrounds, so using those

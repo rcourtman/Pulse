@@ -1819,20 +1819,46 @@ owns node metric and temperature projection, node offline lifecycle handling,
 host-agent deduplication bookkeeping, and instance-scoped node display-name
 cache updates; future Proxmox node alert behavior should extend that resource
 checker owner rather than expanding the central Manager file.
-When a host agent with the node's hostname is registered, the agent resource
-owns the machine's CPU, memory and disk usage alerts, and `CheckNode` releases
-its own copies through the disabled-threshold path every cycle: the pending run
-is dropped and any node alert still open from before the agent registered is
-resolved, never left frozen until the agent goes offline. CPU temperature has no
-host-agent metric, so the node keeps evaluating it whether or not an agent is
-registered; the node poll already merges agent sensor readings into
-`node.Temperature`, giving one temperature alert per machine. A missing CPU
-reading is not recovery evidence: with a live trigger, `checkNodeTemperature`
-skips evaluation instead of feeding 0°C, while a disabled threshold still clears.
+When a reporting host agent is linked to a node (`LinkedNodeID`, the monitor's
+automatic or operator-set identity decision), the agent resource owns each
+CPU, memory or disk usage metric it actually evaluates, and `CheckNode` releases
+its own copy of those metrics through the disabled-threshold path every cycle:
+the pending run is dropped and any node alert still open from before the link is
+resolved, never left frozen until the agent goes offline. `CheckHost` registers
+the link only after evaluation, recording which metrics the agent is configured
+to evaluate (a live CPU or memory threshold; for disk, a live threshold on the
+summary filesystem `models.SummaryDisk` picks, which is also what the linked
+node's disk metric reports), and removes it while agent alerts are disabled.
+Ownership follows configuration, not one report's data, so a missing agent
+reading keeps the agent's alert open instead of handing the metric back to the
+node for a cycle. With several agents linked to one node, a metric is owned when
+any of them evaluates it. A metric no agent evaluates stays with the node, so
+deduplication never leaves a machine unmonitored.
+Deduplication keys on that link,
+never on a hostname match, so a same-named node in another instance keeps its
+alerts, an agent reporting an FQDN still dedups its node, and an operator unlink
+hands the alerts back. CPU temperature has no host-agent metric, so the node
+keeps evaluating it whether or not an agent is linked; the node poll already
+merges agent sensor readings into `node.Temperature`, giving one temperature
+alert per machine. A missing CPU reading is not evidence: with a live trigger,
+`checkNodeTemperature` neither feeds 0°C nor resolves the open alert, but
+`interruptMetricRun` (reducer `InterruptMetricRun`) drops a pending activation
+run and restarts a recovery run, so no sustained-for or recovery delay spans a
+gap in readings; a disabled threshold still clears. Config-save reevaluation
+classifies alerts whose metadata `resourceType` is `node` as node alerts and
+judges them against node thresholds; the `Instance` heuristic only covers legacy
+alerts without a resource type, because current node alerts keep the PVE
+instance name in `Instance`.
 `TestCheckNodeKeepsTemperatureAlertWhenHostAgentMonitorsNode`,
-`TestCheckNodeReleasesOpenMetricAlertWhenHostAgentRegisters` and
-`TestCheckNodeMissingTemperatureDoesNotResolveOpenAlert` in
-`internal/alerts/threshold_resolution_shared_test.go` pin these rules.
+`TestCheckNodeReleasesOpenMetricAlertWhenHostAgentRegisters`,
+`TestCheckNodeMissingTemperatureDoesNotResolveOpenAlert`,
+`TestCheckNodeMissingTemperatureInterruptsTimingRuns` and
+`TestConfigSaveKeepsNodeTemperatureAlertOverTrigger` and
+`TestCheckNodeKeepsUsageMetricsTheAgentDoesNotEvaluate`,
+`TestCheckNodeUsageOwnershipFollowsWhatAgentsEvaluate` in
+`internal/alerts/threshold_resolution_shared_test.go`, and
+`TestHostAgentDeduplicationFollowsNodeLink` in
+`internal/alerts/host_dedup_test.go`, pin these rules.
 Host-agent alert evaluation now lives in `internal/alerts/host.go`. That file
 owns host identity, host-agent metric projection, host disk/SMART/RAID/Unraid
 health handling, host cleanup, and host offline lifecycle handling; future host
@@ -2492,13 +2518,23 @@ reads that ahead of every fallback. The menu's owner copy comes from
 `frontend-modern/src/utils/resourceMonitoringPolicy.ts`, where an explicit
 platform outranks the resource-type guess and the agent-removal copy is kept
 to the agent's own machine: libvirt VMs and Unraid arrays in resource drawers
-get the neutral source-system copy. Agent disk-usage, SMART disk and Unraid
-array alerts still carry their host's `agent` metadata, so their menu names
-the Pulse agent until those producers emit child-resource metadata. Alerts
-restored from before `platformType` existed gain it at their next full
-evaluation; a metric alert held between its clear and trigger thresholds keeps
-the earlier fallback until then. Menu sentences open with the owner
-label capitalised.
+get the neutral source-system copy. Host-agent alerts
+(`internal/alerts/host.go`) stamp `platformType` `agent`, and only the
+machine's own alerts keep `resourceType` `agent`: filesystem,
+disk-temperature and SMART alerts carry `agent-disk`, RAID and Unraid array
+alerts `agent-storage`, and custom-sensor alerts `agent-sensor`, because the
+menu writes policy to their child resource id, never to the machine. Each
+child type keeps `agent` among its `CanonicalResourceTypeKeys`, and
+configuration re-evaluation treats agent policy as final for host-agent
+alerts (TrueNAS systems and vSphere hosts keep their platform policy), so the
+storage and guest switches cannot resolve a SMART, RAID or sensor alert that
+the next agent report would re-raise. A metric alert held between its clear
+and trigger thresholds still refreshes `resourceType` and `platformType` from
+its producer while its value, message and last-seen time stay at the last
+breach, so a restored alert that is still firing or held picks up the current
+classification at its next evaluation; one that resolves on that evaluation
+keeps the stored classification in its resolved record. Menu sentences open
+with the owner label capitalised.
 The retired dashboard recent-alert panel must not be reintroduced as a
 parallel alert surface. Alert summary/tone copy belongs to the alert overview
 presentation owner, and any future compact alert surface must compose the
@@ -3502,3 +3538,12 @@ metrics target, and for agent and Docker hosts `agent:<id>` and
 orders them most severe first. The Machines/Infrastructure and Docker host
 drawers build their "Needs attention" rows from it; resources no longer embed
 an alert list, so no drawer can silently read an always-empty copy.
+`getUnifiedResourceAlertStyles` computes row highlighting from that same set,
+so the Docker hosts and Machines table rows tint for exactly the unacknowledged
+alerts their drawers list. Docker host rows previously matched the row id and
+display name against `getAlertStyles`; Docker alerts are keyed
+`docker:<host source id>` and carry the hostname as their node, so a host whose
+display name differs from its hostname was never highlighted, and Machines rows
+had no alert highlighting at all. `getAlertStyles` keeps its
+id-plus-node-name matching for the platform tables whose alerts are keyed that
+way.

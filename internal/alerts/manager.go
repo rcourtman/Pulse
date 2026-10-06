@@ -101,10 +101,10 @@ type Manager struct {
 	flappingActive  map[string]bool        // Track which alerts are currently in flapping state
 	// Cleanup control
 	cleanupStop chan struct{} // Signal to stop cleanup goroutine
-	// Host agent deduplication: track hostnames of active host agents
-	// When a host agent is running on a Proxmox node, we prefer the host agent
-	// alerts and suppress the node alerts to avoid duplicate monitoring.
-	hostAgentHostnames map[string]struct{} // Normalized hostnames (lowercase)
+	// Host agent deduplication: the Proxmox node each reporting host agent is
+	// linked to and the usage metrics the agent evaluates for it. The node
+	// releases only those metrics and keeps evaluating the rest itself.
+	hostAgentNodeLinks map[string]hostAgentNodeLink // Host agent ID -> node link
 	// Node display name caches. Proxmox nodes can share the same raw node name
 	// across multiple configured instances, so keep instance-scoped entries in
 	// addition to the legacy raw-name cache used by instance-less resources.
@@ -245,7 +245,7 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		flappingHistory:                 make(map[string][]time.Time),
 		flappingActive:                  make(map[string]bool),
 		cleanupStop:                     make(chan struct{}),
-		hostAgentHostnames:              make(map[string]struct{}),
+		hostAgentNodeLinks:              make(map[string]hostAgentNodeLink),
 		nodeDisplayNames:                make(map[string]string),
 		instanceNodeDisplayNames:        make(map[string]string),
 		now:                             time.Now,

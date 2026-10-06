@@ -493,6 +493,18 @@ layer consumes it only as a fallback replacement for Proxmox LXC memory, so
 platform metric priority for a healthy agent is unchanged.
 `TestContainerViewLinkedAgentMemory` pins those boundaries.
 
+**Host-row agent source freshness (6 October 2026)**
+
+`HostView.SourceStatus(source)` exposes the per-source delivery freshness the
+registry already records, matching the VM, container, and physical-disk views.
+A host agent linked to a Proxmox node merges into one row whose `LastSeen`
+follows the freshest source, so consumers of agent-owned samples (monitoring's
+linked-agent node temperature lookup) must read the agent source's own sighting
+here instead of the row's `LastSeen`. The accessor returns a copy of the recorded
+status and adds no freshness policy of its own.
+`TestView_HostViewSourceStatusSeparatesAgentFromMergedRow` pins the merged-row
+split.
+
 ### Bounded incident-history selection
 
 Canonical history queries filter exact alert identifiers and observation windows
@@ -1258,6 +1270,21 @@ platform-details disclosure. The `KubernetesControllersTable` phone projection
 keeps controller, kind, ready, and issues and demotes Target with
 `platform-table-phone-hidden`, so kind labels such as `DaemonSet` and
 `StatefulSet` fit whole instead of clipping in a 15 percent track.
+Every relative age a unified-resource consumer derives from a timestamp reads
+the frontend-primitives shared relative-time clock (`useRelativeTimeNow`)
+rather than `Date.now()` at render, because rows and open drawers stay mounted
+while a timestamp that has stopped changing must keep aging: the Kubernetes
+controller Detail ages and the drawer's controller section, the drawer's Docker
+container Created, Started and Finished rows, its Last seen, and its Docker
+update-check and Mail Gateway updated ages, the Machines identity subtitle
+(`seen ...` while the Last seen column is hidden) and stale-agent Last report
+tooltip, and the Proxmox replication Last sync and Next sync in the row, phone
+projection and disclosure. A silent agent or a stalled pvesr scheduler is the
+case whose age matters most, so a replication Next sync turns overdue on the
+clock without new data. Replication jobs bypass the unified-resource stream,
+so `ProxmoxPageSurface` re-reads them in the background every 30 seconds;
+moving ages over a snapshot read once at mount would age a job that keeps
+syncing and count it overdue.
 Kubernetes name columns hold the chevron, status dot and name inside one
 track, so their md widths leave the name room for a typical node or service
 name at a 768px viewport: Nodes 20 percent (with Capacity at 16 so its
@@ -2233,7 +2260,12 @@ storage); agent and Docker hosts also answer to `agent:<id>` and
 stated when it is a whole sentence of an open alert's text, because a unified
 incident alert on storage with consumers joins the incident summary and its
 impact ("... above threshold. Affects 2 dependent resources: ...") and neither
-may repeat beside it.
+may repeat beside it. The Docker hosts (`DockerHostsTable.tsx`) and Machines
+(`AgentsMachinesTable.tsx`) table rows tint from the same set through
+`getUnifiedResourceAlertStyles`, so a collapsed row never looks healthy while
+its drawer lists an unacknowledged alert (an expanded row drops the tint while
+its drawer shows the alerts); acknowledged alerts stay in the drawer without
+tinting the row.
 Machine and host overview cards that render compact system, hardware, disk,
 and temperature facts must also compose the frontend-primitives
 `InfoCardKeyValueRow`. Mobile rows retain their condensed endpoint layout;
@@ -2378,6 +2410,9 @@ for the column when evidence later appears. The
 compact row action trigger chrome stays under the frontend-primitives
 `ActionIconButton` boundary rather than becoming a unified-resource-local
 button shell.
+The Machines outdated-agent notice names what an update brings in plain
+words, the latest fixes and machine details, and stays maintenance guidance
+rather than a membership or health signal.
 Machines list search and online-state narrowing are frontend route state,
 not new unified-resource membership fields. `StandalonePageSurface.tsx`
 owns the `STANDALONE_QUERY_PARAMS` query/status projection and one composite
@@ -3468,6 +3503,14 @@ with the offline threshold on hover, not an "N/M" fraction.
 Recent check timing and fuller failure context may stay in tooltip or drawer
 detail, but the table row must not duplicate the same probe protocol and
 result text across both identity and metric cells.
+The probe source chip ("via Edge 01", or "2/2 locations reporting" for a
+multi-location check, the same wording Settings uses) shares the result's
+single line: the result keeps its full width at the cell's right edge and the
+chip takes the room left, truncating with its full text on hover. Before, the
+chip pushed "failed" out of its column at every width up to 1440px. Rows stay
+one line because the table windows them at a single measured height. On
+phones the method and target columns hide so the check name reads, and both
+stay in the row drawer.
 That same frontend-owned compatibility boundary must remain intentionally
 narrow. Shared resource adapters may admit explicit aliases such as `host`,
 `truenas`, and `ceph`, and VMware detail mappers may project typed metadata
@@ -4339,7 +4382,13 @@ must render from that shared projection instead of rescanning raw job arrays or
 inventing local PBS status heuristics,
 `resourceDetailDrawerIdentityModel.ts` owns the pure identity-card,
 discovery-summary, source-debug, and debug-bundle derivations that feed the
-overview and debug drawer surfaces,
+overview and debug drawer surfaces (the `Identity` card shows each identifier
+once: Discovery and Metrics Target rows appear only when they name something
+not already on screen, meaning the header's `getPreferredInfrastructureDisplayName`,
+the rows above, or the Platform ID row, and Aliases omits the same displayed
+values; candidate names the drawer never shows do not count, a shown Platform
+ID counts as identity data for the empty state, and a Machines agent drawer
+used to list one ID four times),
 `useResourceDetailDrawerDockerActionsState.ts` owns Docker action runtime, and
 the overview/debug render-heavy surfaces live in dedicated drawer-local owners
 instead of staying inline in the shell.

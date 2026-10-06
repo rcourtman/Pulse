@@ -1604,6 +1604,58 @@ supporting inventory rather than a new batch of independent exits, so the
 confirmed host incident clears child alerts instead of producing one alert per
 container.
 
+Mock alert evaluation covers host agents the same way. Live agents are
+evaluated by `CheckHost` as each report lands. Mock mode discards reports, and
+the `evaluateHostAgents` health sweep reads monitor state, which never holds
+fixture agents, so `checkMockAlerts` evaluates every fixture agent itself
+through `evaluateMockHostAgents`. Without that pass no agent CPU, memory, disk,
+temperature or offline alert could open against mock data, while the same
+reading on a real agent would alert. The pass keeps the live lifecycle
+boundaries:
+
+- An offline fixture goes through `HandleHostOfflineWithCorrelation`, as a
+  lapsed live report does, because `CheckHost` treats its input as a fresh
+  report and would mark the host online.
+- Agents are evaluated before nodes, so a node with an online linked agent
+  hands its CPU, memory and disk alerts to the agent on the first tick, as
+  host-agent hostname deduplication does in production.
+- A runtime mock config change rebuilds the estate. An agent that leaves it
+  goes through `HandleHostRemoved`, as a deleted live agent does, so its alerts
+  and hostname deduplication do not outlive it.
+- Leaving mock mode routes the fixture agents through `HandleHostRemoved`.
+  `ClearActiveAlerts` drops their alerts but not their hostname registrations,
+  and a real node named like a fixture agent (`pve1`) would otherwise keep its
+  metric alerts suppressed with no agent to own them. A pass whose snapshot
+  predates the switch finds mock mode off under the same lock and evaluates
+  nothing. Two overlapping passes can still evaluate an older snapshot after
+  a newer one; the next pass reconciles the set again.
+
+Fixture agents must carry readings a real agent could report. Mock Kubernetes
+pods share 0.7 single-pod memory footprints per node, which keeps a node's pods
+at or below 58% of allocatable memory in steady state, and a 60% per-node
+ceiling clips the transient while rescheduled pods' readings settle. A dense
+node and its linked agent therefore no longer read a constant 100% and raise a
+critical alert no real cluster would. Whether a demo agent alerts at default thresholds depends on
+the readings each boot draws. On 2026-10-06, private stacks with the public
+demo's estate (8 nodes, 2 standalone agents and 3 Kubernetes node agents)
+opened none on one boot and one (a standalone agent at 91% memory) on another.
+With the agent memory trigger lowered to 60%, exactly the agents above it
+alerted and their linked Proxmox nodes raised none, and shrinking the estate
+through the mock settings API cleared the departed agents' alerts on the next
+pass. Those are measurements, not test guarantees. The tests pin the
+boundaries:
+`TestCheckMockAlertsEvaluatesHostAgentsBeforeLinkedNodes`,
+`TestCheckMockHostAlertsUsesHostLifecycleForOfflineFixtures`,
+`TestLeavingMockModeReleasesFixtureAgentHostnames` and
+`TestMockHostAgentPassAfterLeavingMockModeRegistersNothing` in
+`internal/monitoring/monitor_mock_alerts_test.go`,
+`TestMockHostAgentLeavingFixtureUsesRemovalLifecycle` in
+`internal/monitoring/monitor_host_agent_removal_lifecycle_test.go`, and
+`TestMockKubernetesDenseNodesStayBelowAllocatableMemory`,
+`TestMockKubernetesRescheduledPodsDoNotSaturateReceivingNode` and
+`TestMockKubernetesLoneHeavyPodStaysUnderNodeCeiling` in
+`internal/mock/generator_test.go`.
+
 Host and container-runtime disk collection supports an explicit include list
 for filesystems hidden by Pulse's automatic virtual/container filtering. The
 include list is bounded to that automatic filter; explicit disk exclusions
@@ -3703,6 +3755,23 @@ exists or the agent payload has no usable positive reading. Identity-only or
 zero-temperature SMART rows do not count as usable by themselves, but the
 runtime must not keep probing legacy SSH solely to augment an otherwise healthy
 agent temperature payload with SMART data.
+A node temperature presented as available must describe the node now, because
+node alert evaluation, node history writes, reporting, and the UI all read it as
+a live measurement. A host agent linked to a Proxmox node merges into one host
+row whose `LastSeen` every PVE poll keeps fresh, while the agent's last sensors
+stay in state after it stops reporting, so the row's `LastSeen` cannot decide
+whether those sensors are current. `internal/monitoring/host_agent_temps.go`
+reads the agent's own sighting from the row's `SourceStatus(SourceAgent)`, feeds
+the agent's sensors into the node only while that sighting is inside the
+reporting lease that keeps the agent online (`hostAgentReportCurrent`, the same
+`hostAgentHealthWindow` that `evaluateHostAgents` applies, so a slow-interval
+agent's readings count exactly while the agent is shown online), and stamps the
+reading with that report time. Past the lease the lookup falls back to the
+cluster sensor cache, which keeps its own recency check. When every source
+returns nothing, `internal/monitoring/monitor_polling_node_helpers.go` may carry
+a previous reading, with its original `LastUpdate`, only inside the carry window
+(twice the PVE polling interval, never under five minutes); an older reading is
+dropped rather than re-presented as current.
 Legacy SSH temperature collection must also use the Pulse sensor-wrapper
 contract before falling back to raw lm-sensors output. `internal/monitoring/temperature.go`
 must request `/usr/local/sbin/pulse-sensors` when it exists, parse the wrapper

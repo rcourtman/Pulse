@@ -431,6 +431,16 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				continue
 			}
 			threshold = getThresholdForMetric(thresholds, metricType)
+			// Agent policy is the only policy for agent alerts. Falling
+			// through would let the storage or guest switches resolve a
+			// SMART, RAID or sensor alert that CheckHost re-raises on the
+			// next report.
+			if threshold == nil {
+				if isMetricThresholdAlertType(metricType) {
+					alertsToResolve = append(alertsToResolve, alertID)
+				}
+				continue
+			}
 		}
 
 		if alert.Type == "docker-host-offline" ||
@@ -487,9 +497,16 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			threshold = getThresholdForMetric(thresholds, metricType)
 		}
 
-		isNodeResource := primaryResourceType == "" || primaryResourceType == "node"
+		// Node alerts carry resourceType "node" in metadata and keep the PVE
+		// instance name in Instance, so the metadata decides. The Instance
+		// heuristic only classifies legacy alerts without a resource type;
+		// applied to current node alerts it fell through to guest thresholds,
+		// which have no temperature threshold, and a config save resolved
+		// temperature alerts that were still over their trigger.
+		isNodeResource := primaryResourceType == "node" ||
+			(primaryResourceType == "" && !strings.Contains(resourceID, ":") && (alert.Instance == "Node" || alert.Instance == alert.Node))
 		isStorageResource := alertResourceTypeKeysContain(resourceTypeKeys, "storage")
-		if threshold == nil && !handledModernPlatformType && isNodeResource && !strings.Contains(resourceID, ":") && (alert.Instance == "Node" || alert.Instance == alert.Node) {
+		if threshold == nil && !handledModernPlatformType && isNodeResource {
 			if allDisabled, _ := m.alertPolicyTypeSwitchesNoLock("node"); allDisabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue

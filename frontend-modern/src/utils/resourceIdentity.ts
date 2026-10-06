@@ -289,11 +289,21 @@ export const getPrimaryResourceIdentityRows = (resource: Resource): ResourceIden
     rows.push({ label: 'Parent', value: resource.parentId });
   }
 
+  // Discovery and metrics targets usually point at the resource itself, so
+  // they show only when they name something not already on screen: the
+  // drawer header's name, the rows above, or the Platform ID row.
+  const shownIdentity = (value: string): boolean =>
+    [
+      getPreferredInfrastructureDisplayName(resource),
+      shouldShowResourcePlatformId(resource) ? asTrimmedString(resource.platformId) : undefined,
+      ...rows.map((row) => row.value),
+    ].some((shown) => Boolean(shown) && shown!.toLowerCase() === value.toLowerCase());
+
   const discoveryIdentity = formatIdentityTarget(
     resource.discoveryTarget?.resourceType,
     resource.discoveryTarget?.resourceId,
   );
-  if (discoveryIdentity) {
+  if (discoveryIdentity && !shownIdentity(discoveryIdentity)) {
     rows.push({ label: 'Discovery', value: discoveryIdentity });
   }
 
@@ -301,7 +311,7 @@ export const getPrimaryResourceIdentityRows = (resource: Resource): ResourceIden
     resource.metricsTarget?.resourceType,
     resource.metricsTarget?.resourceId,
   );
-  if (metricsIdentity) {
+  if (metricsIdentity && !shownIdentity(metricsIdentity)) {
     rows.push({ label: 'Metrics Target', value: metricsIdentity });
   }
 

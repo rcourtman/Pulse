@@ -138,8 +138,19 @@ func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.T
 		return m.getClusterSensorTemperature(nodeName)
 	}
 
-	// Convert host agent sensor data to Temperature model
-	return convertUnifiedHostSensorsToTemperature(sensors, matchedHost.LastSeen())
+	// An agent that stopped reporting keeps its last sensors in state. Those
+	// describe the machine as it was, so they must not keep feeding the node
+	// (and through it alerts and history) as a live reading. The row's own
+	// LastSeen cannot tell: a row merged with the Proxmox node stays fresh from
+	// every PVE poll, so read the agent source's sighting.
+	agentStatus, ok := matchedHost.SourceStatus(unifiedresources.SourceAgent)
+	if !ok || !hostAgentReportCurrent(agentStatus.LastSeen, matchedHost.IntervalSeconds(), time.Now()) {
+		return m.getClusterSensorTemperature(nodeName)
+	}
+
+	// Convert host agent sensor data to Temperature model, stamped with the
+	// agent's report time rather than the merged row's.
+	return convertUnifiedHostSensorsToTemperature(sensors, agentStatus.LastSeen)
 }
 
 func convertUnifiedHostSensorsToTemperature(sensors *unifiedresources.HostSensorMeta, lastSeen time.Time) *models.Temperature {
@@ -411,6 +422,13 @@ func canonicalSMARTDevicePath(device string) string {
 
 // isHostAgentTemperatureRecent checks if the host agent temperature data is recent enough to use.
 // We consider data stale if the host hasn't reported in more than 2 minutes.
+// hostAgentReportCurrent reports whether an agent's last report is still inside
+// the reporting lease that keeps the agent online (evaluateHostAgents uses the
+// same window), so its sensor readings still describe the machine.
+func hostAgentReportCurrent(lastSeen time.Time, intervalSeconds int, now time.Time) bool {
+	return !lastSeen.IsZero() && now.Sub(lastSeen) <= hostAgentHealthWindow(intervalSeconds)
+}
+
 func isHostAgentTemperatureRecent(lastSeen time.Time) bool {
 	const staleDuration = 2 * time.Minute
 	return time.Since(lastSeen) < staleDuration
