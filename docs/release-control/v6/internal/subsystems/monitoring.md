@@ -17,6 +17,14 @@
 
 ## Purpose
 
+### Active-alert state projection carries the live metric status — issue #2068
+
+`activeAlertsSnapshot` copies the alert manager's volatile `MetricStatus`
+into `models.Alert.metricStatus`, so the websocket and `/api/state` alert
+lists carry the reading being evaluated now for a threshold alert held below
+its trigger, while `value` and `message` keep the last breach. The projection
+adds no copy of its own: `GetActiveAlerts` already returns deep clones.
+
 ### Fresh broadcast projection owns one resource/target capture
 
 Canonical live, fallback and standalone-host continuity broadcast reads prefer

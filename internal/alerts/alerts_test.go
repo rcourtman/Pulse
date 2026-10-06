@@ -21689,3 +21689,57 @@ func TestCleanupRetentionRequiresObservationInactivity(t *testing.T) {
 		})
 	}
 }
+
+func TestMetricStatusStaysOutOfDurableAlertSnapshots(t *testing.T) {
+	m, clock := newMetricStatusTestManager(t)
+	fireNodeTemperatureAlert(t, m, clock, 85)
+	clock.advance(30 * time.Second)
+	checkMetricStatusNode(m, 78)
+
+	live := m.GetActiveAlerts()
+	if len(live) != 1 || live[0].MetricStatus == nil || live[0].MetricStatus.Value != 78 {
+		t.Fatalf("live alerts do not carry the current reading: %+v", live)
+	}
+	for _, alert := range m.snapshotActiveAlerts() {
+		if alert.MetricStatus != nil {
+			t.Fatalf("durable checkpoint carries volatile status for %s: %+v", alert.ID, alert.MetricStatus)
+		}
+	}
+	for _, alert := range m.activeRecoverySnapshot() {
+		if alert.MetricStatus != nil {
+			t.Fatalf("recovery projection carries volatile status for %s: %+v", alert.ID, alert.MetricStatus)
+		}
+	}
+}
+
+func TestStaleCleanupKeepsThresholdAlertStillBeingEvaluated(t *testing.T) {
+	m := newTestManager(t)
+	now := time.Now()
+	breachedLongAgo := now.Add(-StaleTrackingThreshold - time.Hour)
+
+	held := &Alert{
+		ID: "held::metric-threshold:usage", Type: "usage", ResourceID: "held",
+		StartTime: breachedLongAgo, LastSeen: breachedLongAgo,
+		MetricStatus: &models.MetricAlertStatus{Phase: models.MetricAlertPhaseLatched, ObservedAt: now},
+	}
+	abandoned := &Alert{
+		ID: "gone::metric-threshold:usage", Type: "usage", ResourceID: "gone",
+		StartTime: breachedLongAgo, LastSeen: breachedLongAgo,
+		MetricStatus: &models.MetricAlertStatus{Phase: models.MetricAlertPhaseLatched, ObservedAt: breachedLongAgo},
+	}
+	m.mu.Lock()
+	m.activeAlerts[held.ID] = held
+	m.activeAlerts[abandoned.ID] = abandoned
+	m.mu.Unlock()
+
+	m.cleanupStaleMaps()
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, ok := m.activeAlerts[held.ID]; !ok {
+		t.Fatal("cleanup resolved a held alert whose condition is still being evaluated")
+	}
+	if _, ok := m.activeAlerts[abandoned.ID]; ok {
+		t.Fatal("cleanup kept an alert nobody has evaluated for over a day")
+	}
+}

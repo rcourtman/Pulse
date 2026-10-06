@@ -180,6 +180,10 @@ func (m *Manager) snapshotActiveAlerts() []*Alert {
 		clone := alert.Clone()
 		backfillCanonicalIdentity(clone)
 		clone.ID = exportedAlertID(clone, clone.ID)
+		// The live status changes on every poll while a threshold alert
+		// holds; keeping it out of the checkpoint keeps an unchanged alert
+		// set byte-identical, so the recovery mirror is not rewritten.
+		clone.MetricStatus = nil
 		alerts = append(alerts, clone)
 	}
 	m.mu.RUnlock()
@@ -308,6 +312,7 @@ func (m *Manager) setActiveRecoveryAlert(alert *Alert, fallback string) {
 	clone := alert.Clone()
 	backfillCanonicalIdentity(clone)
 	clone.ID = exportedAlertID(clone, clone.ID)
+	clone.MetricStatus = nil
 	storageKey := activeAlertStorageKey(clone, fallback)
 	if storageKey == "" {
 		return

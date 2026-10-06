@@ -109,15 +109,31 @@ export type TemperatureDisplayMetric = Extract<
   'temperature' | 'diskTemperature'
 >;
 
+const TEMPERATURE_SEVERITY_RANK = { normal: 0, warning: 1, critical: 2 } as const;
+
+/**
+ * Colour for a temperature reading. An open alert on the reading sets a floor:
+ * the alert holds until the reading falls to its clear level, so a reading
+ * that has dipped under the trigger must not look healthy beside the alert.
+ */
 export const getTemperatureTextClass = (
   celsius: number | null | undefined,
   thresholds?: MetricDisplayThresholds | null,
   metric: TemperatureDisplayMetric = 'temperature',
+  openAlertSeverity?: 'warning' | 'critical' | null,
 ): string => {
   if (celsius === null || celsius === undefined || !Number.isFinite(celsius)) {
     return 'text-muted';
   }
-  return TEMPERATURE_TEXT_CLASSES[
-    getMetricSeverity(celsius, metric, thresholds ?? getDefaultDisplayMetricThresholds(metric))
-  ];
+  const readingSeverity = getMetricSeverity(
+    celsius,
+    metric,
+    thresholds ?? getDefaultDisplayMetricThresholds(metric),
+  );
+  const severity =
+    openAlertSeverity &&
+    TEMPERATURE_SEVERITY_RANK[openAlertSeverity] > TEMPERATURE_SEVERITY_RANK[readingSeverity]
+      ? openAlertSeverity
+      : readingSeverity;
+  return TEMPERATURE_TEXT_CLASSES[severity];
 };

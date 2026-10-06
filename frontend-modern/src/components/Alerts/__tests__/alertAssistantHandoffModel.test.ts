@@ -157,4 +157,35 @@ describe('alertAssistantHandoffModel', () => {
     const briefing = handoff.context.briefing as { detailLines: string[] };
     expect(briefing.detailLines).toContain('Current value 92.5% · threshold 80.0%');
   });
+
+  it('hands the assistant the live reading, not the breach an open alert still holds', () => {
+    const handoff = buildAlertAssistantHandoff({
+      alert: makeAlert({
+        type: 'temperature',
+        message: 'Node temperature at 80.0°C',
+        value: 80,
+        threshold: 80,
+        metricStatus: {
+          phase: 'recovering',
+          value: 72,
+          unit: '°C',
+          observedAt: '2026-05-07T10:04:50.000Z',
+          trigger: 80,
+          recovery: 75,
+          recoveryDelaySeconds: 300,
+          recoveryElapsedSeconds: 120,
+        },
+      }),
+      now: new Date('2026-05-07T10:05:00.000Z'),
+    });
+
+    const briefing = handoff.context.briefing as { detailLines: string[] };
+    expect(briefing.detailLines[0]).toContain('72.0°C');
+    expect(briefing.detailLines.join('\n')).not.toContain('Node temperature at 80.0°C');
+    expect(handoff.context.handoffContext).toContain('Current Value: 72.0°C');
+    expect(handoff.context.handoffContext).toContain('Alert Phase: recovering');
+    expect(handoff.context.handoffContext).toContain('Clears At: 75.0°C or lower for 300s');
+    expect(handoff.context.handoffContext).toContain('Recovery Progress: 120s of 300s');
+    expect(handoff.context.handoffContext).toContain('Last Reading At Or Above Threshold: 80.0°C');
+  });
 });

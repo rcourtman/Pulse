@@ -23,6 +23,14 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Proxmox node temperature cell follows its own open alert — issue #2068
+
+`ProxmoxNodesTable` finds the node's own temperature alert through
+`hostOverrideIdCandidates` and passes its severity (unless acknowledged) and
+the shared live-status copy to `TemperatureGauge`. Other node alerts never
+recolour the cell. The Mail Gateway drawer formats its attention rows through
+`getAlertAttentionCopy`.
+
 ### Canonical Discovery honours VM guest-read deferrals
 
 The canonical resource drawer uses the same fixed PVE VM lock, backup and

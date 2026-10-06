@@ -46,8 +46,18 @@ vi.mock('@/components/Workloads/MetricMiniSparkline', () => ({
 }));
 
 vi.mock('@/components/shared/TemperatureGauge', () => ({
-  TemperatureGauge: (props: { value: number; thresholds?: unknown }) => {
-    temperatureGaugeMock({ value: props.value, thresholds: props.thresholds });
+  TemperatureGauge: (props: {
+    value: number;
+    thresholds?: unknown;
+    alertSeverity?: string | null;
+    title?: string;
+  }) => {
+    temperatureGaugeMock({
+      value: props.value,
+      thresholds: props.thresholds,
+      alertSeverity: props.alertSeverity,
+      title: props.title,
+    });
     return <div data-testid="temperature-gauge" />;
   },
 }));
@@ -355,6 +365,86 @@ describe('ProxmoxNodesTable', () => {
         value: 76,
         thresholds: { warning: 80, critical: 85 },
       }),
+    );
+  });
+
+  it('keeps an open temperature alert visible on a reading that dipped under its trigger', () => {
+    // minipc on 2026-10-06: the row warned "80.0°C" while the cell read a green 72°C.
+    activeAlertsMock.value = {
+      'cpu-alert': {
+        id: 'cpu-alert',
+        resourceId: 'agent:pve-node-1',
+        type: 'cpu',
+        level: 'critical',
+        message: 'Node cpu at 97.0%',
+        value: 97,
+        acknowledged: false,
+      },
+      'temperature-alert': {
+        id: 'temperature-alert',
+        resourceId: 'agent:pve-node-1',
+        type: 'temperature',
+        level: 'warning',
+        message: 'Node temperature at 80.0°C',
+        value: 80,
+        acknowledged: false,
+        metricStatus: {
+          phase: 'recovering',
+          value: 72,
+          unit: '°C',
+          observedAt: new Date().toISOString(),
+          trigger: 80,
+          recovery: 75,
+          recoveryDelaySeconds: 300,
+        },
+      },
+    };
+
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[makeNodeResource({ temperature: 72 })]}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    // The node's own temperature alert sets the tone; its CPU alert does not.
+    expect(temperatureGaugeMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        value: 72,
+        alertSeverity: 'warning',
+        title: 'Temperature 72°C now, recovering. Clears after 5 minutes at 75°C or lower.',
+      }),
+    );
+  });
+
+  it('leaves the temperature tone to the reading once the alert is acknowledged', () => {
+    activeAlertsMock.value = {
+      'temperature-alert': {
+        id: 'temperature-alert',
+        resourceId: 'agent:pve-node-1',
+        type: 'temperature',
+        level: 'warning',
+        message: 'Node temperature at 80.0°C',
+        value: 80,
+        acknowledged: true,
+      },
+    };
+
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[makeNodeResource({ temperature: 72 })]}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    expect(temperatureGaugeMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ alertSeverity: null, title: 'Node temperature at 80.0°C' }),
     );
   });
 

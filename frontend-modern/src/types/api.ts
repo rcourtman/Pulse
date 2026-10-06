@@ -1380,6 +1380,32 @@ export interface Alert {
   latestTransition?: LifecycleTransition;
   transitions?: LifecycleTransition[];
   evidence?: EvidenceEnvelope[];
+  /**
+   * Live evaluation behind an open threshold alert. `value`, `message` and
+   * `lastSeen` keep the last reading that met the trigger; this is the
+   * reading being evaluated now and why the alert has not cleared.
+   */
+  metricStatus?: MetricAlertStatus;
+}
+
+export type MetricAlertPhase = 'breaching' | 'latched' | 'recovering';
+
+export interface MetricAlertStatus {
+  phase: MetricAlertPhase;
+  /** Value compared with the rule (the average for a rolling-average rule). */
+  value: number;
+  /** Latest sample when the rule evaluates a rolling average. */
+  rawValue?: number;
+  evaluationWindowSeconds?: number;
+  unit?: string;
+  observedAt: string;
+  /** Opens at or above this value. */
+  trigger: number;
+  /** Clears after staying at or below this value for recoveryDelaySeconds. */
+  recovery: number;
+  recoveryDelaySeconds?: number;
+  recoveryStartedAt?: string;
+  recoveryElapsedSeconds?: number;
 }
 
 export interface ResolvedAlert extends Alert {
