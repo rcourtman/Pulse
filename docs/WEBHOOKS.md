@@ -63,10 +63,19 @@ For generic webhooks, use Go templates to format the JSON payload.
 **Example Payload:**
 ```json
 {
-  "text": "Alert: {{.Level}} - {{.Message}}",
+  "text": "Alert: {{.Level | jsonString}} - {{.Message | jsonString}}",
   "value": {{.Value}}
 }
 ```
+
+Keep `jsonString` inside the JSON string's quotes. Leave numeric `.Value`
+unquoted. A simple test message can work without escaping while a real alert
+containing quotes, backslashes or newlines produces invalid or altered JSON.
+
+This minimal payload is a text summary, not a structured record of every
+group member or its firing/recovery identity. Use the [full PSA payload](#sample-psa-payloads)
+when a receiver needs those fields; do not use the summary alone to deduplicate
+incidents or close tickets.
 
 ## 📦 Delivery Contract
 

@@ -191,3 +191,53 @@ func TestWebhookGuideShortTemplateEscapesStrings(t *testing.T) {
 	require.Equal(t, "warning: "+alert.ResourceName+" "+alert.Message, payload["summary"])
 	require.Equal(t, alert.StartTime.Format(time.RFC3339), payload["startedAt"])
 }
+
+func webhookGuideExamplePayload(t *testing.T) string {
+	t.Helper()
+	sections := strings.SplitN(webhookGuide(t), "**Example Payload:**", 2)
+	require.Len(t, sections, 2)
+	block := regexp.MustCompile("(?s)```json\\n(.*?)\\n```").FindStringSubmatch(sections[1])
+	require.Len(t, block, 2)
+	return block[1]
+}
+
+func TestWebhookGuideExamplePayloadEscapesAlertText(t *testing.T) {
+	for _, message := range []struct {
+		name, text       string
+		value, wantValue float64
+	}{
+		{"simple-test", "A simple test notification", 0, 0},
+		{"quoted-name", `Resource "synthetic-host" is unavailable`, 95.25, 95.3},
+		{"backslash-path", `Synthetic path C:\backup\reports`, 12.5, 12.5},
+		{"multiline", "Synthetic first line\nsecond line\r\nthird\tcolumn", 1, 1},
+		{"unicode", "Synthetic é host — 警告", 0.0286, 0},
+		{"member-injection", `Synthetic text", "injected": true, "other": "value`, 99, 99},
+	} {
+		t.Run(message.name, func(t *testing.T) {
+			manager, webhook, requests := webhookGuideSender(t, webhookGuideExamplePayload(t))
+			alert := &alerts.Alert{ID: "synthetic-example", ResourceName: "synthetic-host",
+				Level: alerts.AlertLevelWarning, Message: message.text, Value: message.value}
+			require.NoError(t, manager.sendGroupedWebhook(webhook, []*alerts.Alert{alert}))
+			request, _ := webhookGuideRead(t, requests)
+			var payload map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(request.body), &payload))
+			require.Len(t, payload, 2, "alert text must not add JSON members")
+			require.Equal(t, "Alert: warning - "+message.text, payload["text"])
+			require.Equal(t, message.wantValue, payload["value"], "preserve the sender's one-decimal numeric value")
+		})
+	}
+}
+
+func TestWebhookGuideExamplePayloadEscapesRecoveryText(t *testing.T) {
+	manager, webhook, requests := webhookGuideSender(t, webhookGuideExamplePayload(t))
+	alert := &alerts.Alert{ID: "synthetic-example", ResourceName: "synthetic \"host\"\nwith \\ path",
+		Node: "synthetic-node", Level: alerts.AlertLevelWarning, Value: 0,
+		StartTime: time.Date(2026, 10, 6, 4, 0, 0, 0, time.UTC)}
+	require.NoError(t, manager.sendResolvedWebhook(webhook, []*alerts.Alert{alert}, alert.StartTime.Add(time.Minute)))
+	request, _ := webhookGuideRead(t, requests)
+	var payload map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(request.body), &payload))
+	require.Len(t, payload, 2)
+	require.Equal(t, "Alert: warning - "+alert.ResourceName+" on "+alert.Node+" is now healthy", payload["text"])
+	require.Equal(t, float64(0), payload["value"])
+}
