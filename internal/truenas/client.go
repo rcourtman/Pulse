@@ -2400,8 +2400,10 @@ type trueNASCollectionUpdate struct {
 }
 
 type trueNASAppStatsEvent struct {
-	AppName  string                   `json:"app_name"`
-	CPUUsage int64                    `json:"cpu_usage"`
+	AppName string `json:"app_name"`
+	// SCALE reports a percentage as a JSON number, including fractional and
+	// idle 0.0 values. Integer decoding rejects the whole event and session.
+	CPUUsage float64                  `json:"cpu_usage"`
 	Memory   int64                    `json:"memory"`
 	Networks []trueNASAppNetworkStats `json:"networks"`
 	BlkIO    trueNASAppBlkIOStats     `json:"blkio"`
@@ -2740,7 +2742,7 @@ func (c *trueNASRPCClient) readAppStatsEvent(ctx context.Context, intervalSecond
 			}
 
 			appStats := AppStats{
-				CPUPercent:      float64(field.CPUUsage),
+				CPUPercent:      field.CPUUsage,
 				MemoryBytes:     field.Memory,
 				BlockReadBytes:  field.BlkIO.Read,
 				BlockWriteBytes: field.BlkIO.Write,
