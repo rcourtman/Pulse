@@ -553,3 +553,31 @@ test("version-label removal tolerates an absent label but propagates access fail
     else await assert.rejects(run, { status: 403 });
   }
 });
+
+// Different software versions can coexist in the same upgrade report. Only
+// the affected server field may determine the affects-* label.
+test("stable-to-preview intake keeps baseline, agent and platform versions out of labels", async () => {
+  for (const [running, expected] of [
+    ["6.5.0-rc.1", "affects-6.5.0-rc.1"],
+    ["unknown", "needs-version-info"],
+  ]) {
+    const { github, calls } = createGithub({ latestVersion: "6.5.0" });
+    const issue = {
+      number: 2400,
+      title: "[v6 pre-release]: upgraded from 6.4.5",
+      body: [
+        "### Feedback type", "Bug / regression",
+        "### Pulse version", running,
+        "### Last known working Pulse version", "6.4.1",
+        "### Agent version", "6.4.5",
+        "### Install path", "Upgrade from a stable v6 release",
+        "### OS / environment", "Debian 12 / SCALE 26.0.0-BETA.3",
+        "### Additional actionable topics", "None",
+      ].join("\n\n"),
+      labels: [],
+    };
+    await triage.syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.flatMap((call) => call.labels).sort(), [expected, "bug"].sort());
+    assert.equal(calls.createComment.length, 0);
+  }
+});

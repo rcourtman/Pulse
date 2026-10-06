@@ -32,6 +32,15 @@ symptom: logs or sanitized diagnostics for connection and data failures, and
 screenshots or exact error text for visual failures. Do not make a reporter
 invent logs where none apply.
 
+For upgrades and regressions, keep the affected Pulse server version, agent
+version and monitored platform release separate. The pre-release form covers
+upgrades from stable v6 as well as earlier previews. Its optional **Last known
+working Pulse version** is a baseline only when the reporter observed the same
+behaviour working; an upgrade's starting version alone does not establish that.
+An API-only connection can have no agent. Accept "unknown" or an omitted optional
+field, and use existing evidence; do not ask for a downgrade, restart, reinstall
+or re-enrolment to obtain version context. Existing reports need no refile.
+
 Keep the Pulse server's installation separate from the affected target. A
 Docker-hosted Pulse server can monitor a VM, LXC or NAS; its installation type
 does not make Docker commands relevant to that target. Read later comments as
