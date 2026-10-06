@@ -24,6 +24,7 @@ import (
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 func TestNewMonitorRoutesStartupCustomSensorWarningBeforeStart(t *testing.T) {
@@ -6841,5 +6842,73 @@ func TestBroadcastProjectionListsRegistryOnceAndKeepsLiveChanges(t *testing.T) {
 	}
 	if !foundIgnored {
 		t.Fatal("removed host lifecycle surface disappeared")
+	}
+}
+
+// A host agent linked to a Proxmox node merges into one read-state row that
+// every PVE poll keeps online and fresh. Once the agent stops reporting, its
+// retained filesystem summary must stop standing in for the node's disk (and
+// through it disk alerts and history), and the projected agent must read as
+// offline with its own last report, so its connection shows the missed
+// heartbeat instead of the PVE poll time.
+func TestSilentLinkedAgentStopsFeedingNodeDisk(t *testing.T) {
+	state := models.NewState()
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	m := &Monitor{config: &config.Config{}, state: state, resourceStore: adapter}
+
+	node := models.Node{
+		ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online",
+		ConnectionHealth: "healthy", LinkedAgentID: "agent-1",
+	}
+	rootFS := &proxmox.NodeStatus{RootFS: &proxmox.RootFS{Total: 200, Used: 50, Free: 150}}
+	// poll records a PVE poll that just saw the node, with the agent as of its
+	// last report, and resolves the node's disk the way pollPVENode does.
+	poll := func(agentLastReport time.Time) (models.Disk, string, models.Host) {
+		t.Helper()
+		polledNode := node
+		polledNode.LastSeen = time.Now()
+		state.UpdateNodes([]models.Node{polledNode})
+		state.UpsertHost(models.Host{
+			ID: "agent-1", Hostname: "node1", Status: "online", LinkedNodeID: node.ID,
+			IntervalSeconds: 30, LastSeen: agentLastReport,
+			Disks: []models.Disk{{Mountpoint: "/", Type: "ext4", Total: 1000, Used: 900, Free: 100, Usage: 90}},
+		})
+		m.evaluateHostAgents(time.Now())
+		m.refreshUnifiedResourceStoreAfterAgentStateChange()
+
+		disk, source := m.resolveNodeDisk("pve1", node.ID, node.Name, proxmox.Node{Node: node.Name}, rootFS)
+		for _, host := range m.HostsSnapshot() {
+			if host.ID == "agent-1" {
+				return disk, source, host
+			}
+		}
+		t.Fatal("HostsSnapshot does not list agent-1")
+		return disk, source, models.Host{}
+	}
+
+	agentReport := time.Now().Add(-10 * time.Second)
+	disk, source, host := poll(agentReport)
+	if source != "agent" || disk.Used != 900 {
+		t.Fatalf("reporting agent: node disk = %+v from %q, want the agent's summary", disk, source)
+	}
+	if host.Status != "online" || !host.LastSeen.Equal(agentReport) {
+		t.Fatalf("reporting agent projected as %q last seen %s, want online at its report %s", host.Status, host.LastSeen, agentReport)
+	}
+
+	silentSince := time.Now().Add(-hostAgentHealthWindow(30) - time.Minute)
+	disk, source, host = poll(silentSince)
+	if source != "node-status-rootfs" || disk.Used != 50 {
+		t.Fatalf("silent agent: node disk = %+v from %q, want Proxmox rootfs", disk, source)
+	}
+	if linked := m.linkedHostForNode("pve1", node.ID, node.Name); linked != nil {
+		t.Fatalf("silent agent still linked to the node for disk and dataset data: %+v", linked)
+	}
+	if host.Status != "offline" || !host.LastSeen.Equal(silentSince) {
+		t.Fatalf("silent agent projected as %q last seen %s, want offline at its last report %s", host.Status, host.LastSeen, silentSince)
+	}
+
+	disk, source, host = poll(time.Now())
+	if source != "agent" || disk.Used != 900 || host.Status != "online" {
+		t.Fatalf("agent reporting again: node disk = %+v from %q, agent %q; want the agent's summary and online", disk, source, host.Status)
 	}
 }

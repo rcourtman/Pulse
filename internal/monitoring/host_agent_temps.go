@@ -86,44 +86,7 @@ func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.T
 		return nil
 	}
 
-	hosts := readState.Hosts()
-	if len(hosts) == 0 {
-		// No host agents at all — check cluster sensor cache as fallback
-		return m.getClusterSensorTemperature(nodeName)
-	}
-
-	var matchedHost *unifiedresources.HostView
-
-	// First, try to find a host agent that is explicitly linked to this node
-	// via LinkedNodeID. This is the most reliable method and handles duplicate
-	// hostnames correctly.
-	if nodeID != "" {
-		for i := range hosts {
-			if hosts[i].LinkedNodeID() == nodeID {
-				matchedHost = hosts[i]
-				log.Debug().
-					Str("nodeID", nodeID).
-					Str("hostAgentID", hosts[i].ID()).
-					Str("hostname", hosts[i].Hostname()).
-					Msg("Matched host agent to node via LinkedNodeID")
-				break
-			}
-		}
-	}
-
-	// Fallback: match by hostname if no linked host was found
-	// This maintains backwards compatibility for setups where linking hasn't occurred yet
-	if matchedHost == nil {
-		nodeLower := strings.ToLower(strings.TrimSpace(nodeName))
-		for i := range hosts {
-			hostnameLower := strings.ToLower(strings.TrimSpace(hosts[i].Hostname()))
-			if hostnameLower == nodeLower {
-				matchedHost = hosts[i]
-				break
-			}
-		}
-	}
-
+	matchedHost := hostAgentForNode(readState.Hosts(), nodeID, nodeName)
 	if matchedHost == nil {
 		// No directly-linked host agent found — check cluster sensor cache
 		return m.getClusterSensorTemperature(nodeName)
@@ -138,8 +101,81 @@ func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.T
 		return m.getClusterSensorTemperature(nodeName)
 	}
 
-	// Convert host agent sensor data to Temperature model
-	return convertUnifiedHostSensorsToTemperature(sensors, matchedHost.LastSeen())
+	// An agent that stopped reporting keeps its last sensors in state. Those
+	// describe the machine as it was, so they must not keep feeding the node
+	// (and through it alerts and history) as a live reading. The row's own
+	// LastSeen cannot tell: a row merged with the Proxmox node stays fresh from
+	// every PVE poll, so read the agent source's sighting.
+	agentStatus, ok := matchedHost.SourceStatus(unifiedresources.SourceAgent)
+	if !ok || !hostAgentReportCurrent(agentStatus.LastSeen, matchedHost.IntervalSeconds(), time.Now()) {
+		return m.getClusterSensorTemperature(nodeName)
+	}
+
+	// Convert host agent sensor data to Temperature model, stamped with the
+	// agent's report time rather than the merged row's.
+	return convertUnifiedHostSensorsToTemperature(sensors, agentStatus.LastSeen)
+}
+
+// carriedTemperatureOutlivesAgentLease reports whether a temperature a node
+// carries over from an earlier poll may have come from the node's host agent
+// after that agent stopped reporting. Agent readings are stamped with the
+// agent's report time and only count inside its reporting lease, so a reading
+// stamped no later than a lapsed agent's last report is treated as the agent's
+// and is not carried. Readings carry no source, so an SSH or cluster-cache
+// reading of that age is dropped too; it is already older than the lease, and
+// the bound errs toward a gap rather than a stale value. A reading stamped
+// after that report keeps the ordinary carry window.
+func (m *Monitor) carriedTemperatureOutlivesAgentLease(nodeID, nodeName string, temp *models.Temperature, now time.Time) bool {
+	if temp == nil {
+		return false
+	}
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return false
+	}
+	matchedHost := hostAgentForNode(readState.Hosts(), nodeID, nodeName)
+	if matchedHost == nil {
+		return false
+	}
+	agentStatus, ok := matchedHost.SourceStatus(unifiedresources.SourceAgent)
+	if !ok || agentStatus.LastSeen.IsZero() ||
+		hostAgentReportCurrent(agentStatus.LastSeen, matchedHost.IntervalSeconds(), now) {
+		return false
+	}
+	return !temp.LastUpdate.After(agentStatus.LastSeen)
+}
+
+// hostAgentForNode returns the host agent for a Proxmox node: the agent linked
+// to the node ID, else one whose hostname matches. This correctly handles
+// clusters where multiple nodes may have the same hostname (e.g., "px1" on
+// different IPs).
+func hostAgentForNode(hosts []*unifiedresources.HostView, nodeID, nodeName string) *unifiedresources.HostView {
+	// First, try to find a host agent that is explicitly linked to this node
+	// via LinkedNodeID. This is the most reliable method and handles duplicate
+	// hostnames correctly.
+	if nodeID != "" {
+		for i := range hosts {
+			if hosts[i].LinkedNodeID() == nodeID {
+				log.Debug().
+					Str("nodeID", nodeID).
+					Str("hostAgentID", hosts[i].ID()).
+					Str("hostname", hosts[i].Hostname()).
+					Msg("Matched host agent to node via LinkedNodeID")
+				return hosts[i]
+			}
+		}
+	}
+
+	// Fallback: match by hostname if no linked host was found
+	// This maintains backwards compatibility for setups where linking hasn't occurred yet
+	nodeLower := strings.ToLower(strings.TrimSpace(nodeName))
+	for i := range hosts {
+		hostnameLower := strings.ToLower(strings.TrimSpace(hosts[i].Hostname()))
+		if hostnameLower == nodeLower {
+			return hosts[i]
+		}
+	}
+	return nil
 }
 
 func convertUnifiedHostSensorsToTemperature(sensors *unifiedresources.HostSensorMeta, lastSeen time.Time) *models.Temperature {
@@ -411,6 +447,13 @@ func canonicalSMARTDevicePath(device string) string {
 
 // isHostAgentTemperatureRecent checks if the host agent temperature data is recent enough to use.
 // We consider data stale if the host hasn't reported in more than 2 minutes.
+// hostAgentReportCurrent reports whether an agent's last report is still inside
+// the reporting lease that keeps the agent online (evaluateHostAgents uses the
+// same window), so its sensor readings still describe the machine.
+func hostAgentReportCurrent(lastSeen time.Time, intervalSeconds int, now time.Time) bool {
+	return !lastSeen.IsZero() && now.Sub(lastSeen) <= hostAgentHealthWindow(intervalSeconds)
+}
+
 func isHostAgentTemperatureRecent(lastSeen time.Time) bool {
 	const staleDuration = 2 * time.Minute
 	return time.Since(lastSeen) < staleDuration

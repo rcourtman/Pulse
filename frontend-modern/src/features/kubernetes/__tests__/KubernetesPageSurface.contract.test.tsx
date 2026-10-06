@@ -1,12 +1,15 @@
 import { Route, Router } from '@solidjs/router';
 import { cleanup, render, screen } from '@solidjs/testing-library';
+import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { KubernetesPageSurface } from '../KubernetesPageSurface';
 
 const mockUseUnifiedResources = vi.fn();
 const mockPathname = vi.hoisted(() => vi.fn(() => '/'));
 const mockVersionInfo = vi.hoisted(() => vi.fn());
+const activeAlertsRef = vi.hoisted(() => ({ current: {} as Record<string, Alert> }));
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource => ({
   name: resource.id,
@@ -38,6 +41,14 @@ const renderSurface = () =>
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
   useUnifiedResources: (...args: unknown[]) => mockUseUnifiedResources(...args),
+}));
+
+vi.mock('@/contexts/appRuntime', () => ({
+  useWebSocket: () => ({ activeAlerts: activeAlertsRef.current }),
+}));
+
+vi.mock('@/stores/alertsActivation', () => ({
+  useAlertsActivation: () => ({ detectionEnabled: () => true }),
 }));
 
 vi.mock('@/stores/updates', () => ({
@@ -129,6 +140,7 @@ vi.mock('../KubernetesNodesTable', () => ({
     <div
       data-testid="nodes-table"
       data-rows={props.resources.length}
+      data-ids={props.resources.map((resource) => resource.id).join(',')}
       data-title={props.title}
       data-sort-key={props.sortStorageKey}
     />
@@ -159,6 +171,9 @@ vi.mock('../KubernetesStorageTable', () => ({
   ),
 }));
 
+const [activeAlerts, setActiveAlerts] = createStore<Record<string, Alert>>({});
+activeAlertsRef.current = activeAlerts;
+
 describe('KubernetesPageSurface contract', () => {
   beforeEach(() => {
     mockPathname.mockReturnValue('/');
@@ -167,6 +182,7 @@ describe('KubernetesPageSurface contract', () => {
 
   afterEach(() => {
     cleanup();
+    setActiveAlerts(reconcile({}));
     vi.clearAllMocks();
   });
 
@@ -205,6 +221,58 @@ describe('KubernetesPageSurface contract', () => {
     expect(
       attention.compareDocumentPosition(clusters) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  it('names a Ready node with an open alert among the nodes needing attention', () => {
+    setResources([
+      makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
+      makeResource({
+        id: 'node-memory',
+        type: 'agent',
+        sources: ['agent', 'kubernetes'],
+        agent: { agentId: 'host-k8s-02' },
+        kubernetes: { ready: true } as Resource['kubernetes'],
+      } as Partial<Resource> & Pick<Resource, 'id' | 'type'>),
+      makeResource({
+        id: 'node-ok',
+        type: 'k8s-node',
+        kubernetes: { ready: true } as Resource['kubernetes'],
+      }),
+    ]);
+    renderSurface();
+    // Every node is Ready, so nothing needs attention until an alert opens.
+    expect(screen.queryByTestId('nodes-table')).toBeNull();
+
+    // The node's agent raises it: keyed on the agent, labelled with the hostname.
+    setActiveAlerts({
+      memory: {
+        id: 'memory',
+        type: 'memory',
+        level: 'critical',
+        resourceId: 'agent:host-k8s-02',
+        resourceName: 'Prod Euw1 K8s 02',
+        node: 'prod-euw1-k8s-02',
+        instance: '',
+        message: 'Agent memory at 100.0%',
+        value: 100,
+        threshold: 90,
+        startTime: '2026-10-06T10:00:00Z',
+        acknowledged: false,
+      },
+    });
+
+    const attention = screen.getByTestId('nodes-table');
+    expect(attention).toHaveAttribute('data-title', 'Nodes needing attention');
+    expect(attention).toHaveAttribute('data-ids', 'node-memory');
+
+    // Acknowledged: someone owns it, and the row is no longer tinted either.
+    setActiveAlerts('memory', 'acknowledged', true);
+    expect(screen.queryByTestId('nodes-table')).toBeNull();
+    setActiveAlerts('memory', 'acknowledged', false);
+    expect(screen.getByTestId('nodes-table')).toHaveAttribute('data-ids', 'node-memory');
+    // Resolved: the alert leaves the store and the node leaves the list.
+    setActiveAlerts(reconcile({}));
+    expect(screen.queryByTestId('nodes-table')).toBeNull();
   });
 
   it('shows no attention table when every node is Ready', () => {

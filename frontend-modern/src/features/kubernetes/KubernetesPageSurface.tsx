@@ -9,8 +9,10 @@ import {
   collectOutdatedAgentHosts,
   formatAgentVersionDisplay,
 } from '@/features/platformPage/agentVersion';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { useUnifiedResources, type UnifiedResourceFacets } from '@/hooks/useUnifiedResources';
 import { buildKubernetesPath, KUBERNETES_QUERY_PARAMS } from '@/routing/resourceLinks';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import { updateStore } from '@/stores/updates';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
@@ -710,14 +712,22 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
     return posture.podAttention + posture.deploymentAttention;
   });
 
-  const nodesNeedingAttention = createMemo(() => getKubernetesNodesNeedingAttention(props.model()));
+  const { activeAlerts } = useWebSocket();
+  const alertsActivation = useAlertsActivation();
+  const nodesNeedingAttention = createMemo(() =>
+    getKubernetesNodesNeedingAttention(
+      props.model(),
+      activeAlerts,
+      alertsActivation.detectionEnabled(),
+    ),
+  );
 
   return (
     <div class="space-y-4">
       {/*
         Problems lead, inventory follows: active health signals, then the
-        nodes that are not Ready, before the cluster summary and workloads.
-        Filtering stays on the Nodes and Events tabs.
+        nodes that are not Ready or have an open alert, before the cluster
+        summary and workloads. Filtering stays on the Nodes and Events tabs.
       */}
       <Show when={props.model().incidents.length > 0}>
         <div id="kubernetes-health-signals">
@@ -738,7 +748,7 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
             sortStorageKey="kubernetesNodesNeedingAttention"
             emptyIcon={k8sIcon()}
             emptyTitle="All nodes are Ready"
-            emptyDescription="Nodes appear here when they are not Ready, cordoned or degraded."
+            emptyDescription="Nodes appear here when they are not Ready, cordoned, degraded or alerting."
             showToolbar={false}
           />
         </div>

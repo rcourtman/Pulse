@@ -366,6 +366,11 @@ func TestPollPVEInstanceMarksStaleNodesOfflineWhenGetNodesReturnsEmpty(t *testin
 	staleNode := first.Nodes[0]
 	staleNode.LastSeen = time.Now().Add(-nodeOfflineGracePeriod - 2*time.Second)
 	mon.state.UpdateNodesForInstance("test", []models.Node{staleNode})
+	// The grace policy also counts this process's own online sighting, keyed
+	// by the node's source ID, so age that too.
+	mon.mu.Lock()
+	mon.nodeLastOnline[staleNode.ID] = staleNode.LastSeen
+	mon.mu.Unlock()
 
 	client.nodes = nil
 	mon.pollPVEInstance(context.Background(), "test", client)

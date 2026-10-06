@@ -1043,6 +1043,15 @@ join another container's history. The real alert-manager callback path is
 covered by `TestDockerAlertTimelineUsesCanonicalHistoryIdentity` in
 `internal/monitoring/monitor_alert_handling_test.go`.
 
+Proxmox node, guest and storage alert lifecycle events carry source-native IDs
+and pass through the same writer, which resolves them to the canonical
+resource. Resource facets, resource intelligence and Assistant resource context
+therefore include their alert history, including events emitted after the
+resource left inventory. Event IDs still hash the alert's source reference, so
+replay stays idempotent. The real alert-manager callback path is covered by
+`TestProxmoxAlertTimelineUsesCanonicalHistoryIdentity` in
+`internal/monitoring/monitor_alert_handling_test.go`.
+
 TrueNAS native alert projection preserves the trimmed, uppercase provider level in ResourceIncident.NativeSeverity. INFO and NOTICE retain the same canonical monitor risk; consumers must not lose their distinct actionability when projecting provider evidence. Native CRITICAL, ALERT, and EMERGENCY all project to canonical critical severity; EMERGENCY must not be discarded as unknown or make a still-active condition appear recovered. WARNING remains warning, and INFO and NOTICE remain informational at this projection boundary.
 
 Verification: `TestIncidentProjectionPreservesNativeSeverity` in `internal/truenas/provider_pool_health_contract_test.go` covers all seven native levels and case/whitespace normalization. `TestTrueNASNativeSeverityDispatch` in `internal/alerts/truenas_native_dispatch_test.go` verifies downstream INFO suppression, NOTICE preservation, notification severity, duplicate-poll retention, and confirmed recovery callback identity. The TrueNAS lifecycle tests in `internal/alerts/unified_incidents_test.go` require repeated EMERGENCY evidence to interrupt recovery confirmation. These are fixture-based projection and manager checks, not appliance ingestion or external notification-provider receipt proof.
@@ -1595,6 +1604,58 @@ the fresh-report `CheckDockerHost` path. Its last container states are unknown
 supporting inventory rather than a new batch of independent exits, so the
 confirmed host incident clears child alerts instead of producing one alert per
 container.
+
+Mock alert evaluation covers host agents the same way. Live agents are
+evaluated by `CheckHost` as each report lands. Mock mode discards reports, and
+the `evaluateHostAgents` health sweep reads monitor state, which never holds
+fixture agents, so `checkMockAlerts` evaluates every fixture agent itself
+through `evaluateMockHostAgents`. Without that pass no agent CPU, memory, disk,
+temperature or offline alert could open against mock data, while the same
+reading on a real agent would alert. The pass keeps the live lifecycle
+boundaries:
+
+- An offline fixture goes through `HandleHostOfflineWithCorrelation`, as a
+  lapsed live report does, because `CheckHost` treats its input as a fresh
+  report and would mark the host online.
+- Agents are evaluated before nodes, so a node with an online linked agent
+  hands its CPU, memory and disk alerts to the agent on the first tick, as
+  host-agent hostname deduplication does in production.
+- A runtime mock config change rebuilds the estate. An agent that leaves it
+  goes through `HandleHostRemoved`, as a deleted live agent does, so its alerts
+  and hostname deduplication do not outlive it.
+- Leaving mock mode routes the fixture agents through `HandleHostRemoved`.
+  `ClearActiveAlerts` drops their alerts but not their hostname registrations,
+  and a real node named like a fixture agent (`pve1`) would otherwise keep its
+  metric alerts suppressed with no agent to own them. A pass whose snapshot
+  predates the switch finds mock mode off under the same lock and evaluates
+  nothing. Two overlapping passes can still evaluate an older snapshot after
+  a newer one; the next pass reconciles the set again.
+
+Fixture agents must carry readings a real agent could report. Mock Kubernetes
+pods share 0.7 single-pod memory footprints per node, which keeps a node's pods
+at or below 58% of allocatable memory in steady state, and a 60% per-node
+ceiling clips the transient while rescheduled pods' readings settle. A dense
+node and its linked agent therefore no longer read a constant 100% and raise a
+critical alert no real cluster would. Whether a demo agent alerts at default thresholds depends on
+the readings each boot draws. On 2026-10-06, private stacks with the public
+demo's estate (8 nodes, 2 standalone agents and 3 Kubernetes node agents)
+opened none on one boot and one (a standalone agent at 91% memory) on another.
+With the agent memory trigger lowered to 60%, exactly the agents above it
+alerted and their linked Proxmox nodes raised none, and shrinking the estate
+through the mock settings API cleared the departed agents' alerts on the next
+pass. Those are measurements, not test guarantees. The tests pin the
+boundaries:
+`TestCheckMockAlertsEvaluatesHostAgentsBeforeLinkedNodes`,
+`TestCheckMockHostAlertsUsesHostLifecycleForOfflineFixtures`,
+`TestLeavingMockModeReleasesFixtureAgentHostnames` and
+`TestMockHostAgentPassAfterLeavingMockModeRegistersNothing` in
+`internal/monitoring/monitor_mock_alerts_test.go`,
+`TestMockHostAgentLeavingFixtureUsesRemovalLifecycle` in
+`internal/monitoring/monitor_host_agent_removal_lifecycle_test.go`, and
+`TestMockKubernetesDenseNodesStayBelowAllocatableMemory`,
+`TestMockKubernetesRescheduledPodsDoNotSaturateReceivingNode` and
+`TestMockKubernetesLoneHeavyPodStaysUnderNodeCeiling` in
+`internal/mock/generator_test.go`.
 
 Host and container-runtime disk collection supports an explicit include list
 for filesystems hidden by Pulse's automatic virtual/container filtering. The
@@ -2585,6 +2646,25 @@ online/running/healthy vocabulary. The diagnostics subject set is unchanged:
 `GetAgentFleetDiagnosticsForTarget` still derives subjects from the state
 snapshot (real agents), which now matches what agent-only surfaces show once
 integration-backed ledger rows are excluded.
+
+A host produced by `hostFromReadStateView` describes the agent, so its
+`Status` and `LastSeen` are the agent's own. A host agent linked to a Proxmox
+node merges into one row whose `LastSeen` follows its freshest source and
+whose status stays online while PVE polling continues, so the row's values
+would present a silent agent as online and current. The projection reads the
+agent source's sighting from `HostView.SourceStatus(SourceAgent)`: the host
+carries that report time and reads `offline` once it is past the reporting
+lease (`hostAgentReportCurrent`, the `hostAgentHealthWindow` that
+`evaluateHostAgents` applies to the host in state). Rows without an agent
+sighting, such as vSphere and TrueNAS integration hosts, keep the row's
+values. `linkedHostForNode` therefore stops handing a silent agent's retained
+filesystem summary and ZFS datasets to its node, whose disk falls back to the
+Proxmox rootfs or `/nodes` reading before disk alerts and history read it, and
+agent connections built from `HostsSnapshot()` (the Connections list and the
+update-readiness agent-continuity check) age the agent from its last report
+rather than the PVE poll time, applying their own heartbeat cutoff.
+`TestSilentLinkedAgentStopsFeedingNodeDisk` drives the disk and projection
+path through `evaluateHostAgents` and the registry-backed store refresh.
 
 Unified Agent host reports now make module readiness and updater/config
 lifecycle evidence monitoring-owned observed state. Monitoring preserves the
@@ -3587,6 +3667,15 @@ truth. Monitoring APIs that still serve `StateSnapshot` must project
 instead of trusting the cached snapshot fields, so externally served alert
 counts and recently resolved incidents do not lag behind acknowledgement,
 resolve, or clear operations between explicit sync points.
+A recently resolved alert that closed without recovering keeps that on the
+projection: `models.Alert.Resolution` (reason, successor resource ID and name,
+and the alert engine's summary) is set only for such a close, `cloneAlert`
+copies it into every snapshot, and `recordAlertTimelineChange` passes it into
+the `alert_resolved` resource change so the incident timeline says the alert
+moved. `TestAlertResolutionWireContract` in
+`internal/models/metrics_types_test.go` and
+`TestMonitor_HandleAlertLifecycle_HandoverCloseIsNotARecovery` in
+`internal/monitoring/monitor_alert_handling_test.go` pin it.
 The container entrypoint in `docker-entrypoint.sh` now also lives under this
 boundary. Hosted or managed tenant bootstrap changes must preserve safe startup
 when immutable read-only mounts are layered into `/etc/pulse`; the entrypoint
@@ -3684,7 +3773,21 @@ transiently `unavailable`, provider/controller `unsupported`, or unexpectedly
 `missing`. Normalization may retain the last known value when the current
 observation is not available, but it must preserve the current state and
 reason so API and UI consumers do not present retained evidence as freshly
-collected. Unified-resource physical-disk round trips must retain named
+collected. A host agent's SMART temperature and I/O counters follow its
+reporting lease: once `State.ExpireHostTelemetry` expires the agent, they stay
+as last-known values marked `unavailable` ("host agent stopped reporting"),
+and the linked Proxmox disk merge and the registry let the agent's own later
+state supersede the availability it supplied earlier
+(`diskinventory.MergeReportedStatus`), so neither a skipped disk poll nor a
+host that is never disk-polled again can carry it forward. Expiry is
+compare-and-set on the report time the evaluation judged stale, so a report
+accepted in between is never expired. Every SMART temperature history writer
+records a temperature only when its current collection state is available (or
+predates collection state), so a retained reading has to keep its non-available
+state to stay out of history; a path that relabels a carried reading as
+available, such as a node-temperature carry stamped `proxmox_node_smart`, is
+not covered by this rule.
+Unified-resource physical-disk round trips must retain named
 `StorageGroup` membership rather than degrading it to the generic `Used`
 filesystem label.
 That same host-agent temperature boundary must prefer a recent linked host-agent
@@ -3695,6 +3798,55 @@ exists or the agent payload has no usable positive reading. Identity-only or
 zero-temperature SMART rows do not count as usable by themselves, but the
 runtime must not keep probing legacy SSH solely to augment an otherwise healthy
 agent temperature payload with SMART data.
+A node temperature presented as available must describe the node now, because
+node alert evaluation, node history writes, reporting, and the UI all read it as
+a live measurement. A host agent linked to a Proxmox node merges into one host
+row whose `LastSeen` every PVE poll keeps fresh, while the agent's last sensors
+stay in state after it stops reporting, so the row's `LastSeen` cannot decide
+whether those sensors are current. `internal/monitoring/host_agent_temps.go`
+reads the agent's own sighting from the row's `SourceStatus(SourceAgent)`, feeds
+the agent's sensors into the node only while that sighting is inside the
+reporting lease that keeps the agent online (`hostAgentReportCurrent`, the same
+`hostAgentHealthWindow` that `evaluateHostAgents` applies, so a slow-interval
+agent's readings count exactly while the agent is shown online), and stamps the
+reading with that report time. Past the lease the lookup falls back to the
+cluster sensor cache, which keeps its own recency check. When every source
+returns nothing, `internal/monitoring/monitor_polling_node_helpers.go` may carry
+a previous reading, with its original `LastUpdate`, only inside the carry window
+(twice the PVE polling interval, never under five minutes); an older reading is
+dropped rather than re-presented as current. A carried reading also keeps a
+lapsed host agent's lease. Agent readings are stamped with the agent's report
+time, so `carriedTemperatureOutlivesAgentLease` drops a carried reading stamped
+no later than the last report of the node's matched agent (by link, then
+hostname, whether or not that report had sensors) once that agent has lapsed.
+Readings record no source, so the bound is conservative: an SSH, cluster-cache
+or agent-plus-SSH merged reading (stamped with the agent's time) of that age is
+dropped too, being already older than the lease, while a reading stamped after
+that report keeps the carry window. A carried reading (`carriedNodeTemperature`)
+keeps only the node's CPU and GPU temperatures: its SMART and NVMe rows would
+also stamp the node's physical disks, whose freshness and standby state a
+carried copy cannot follow (a disk that spun down would be stamped and recorded
+with its pre-sleep value), so they are left out, and nothing is carried when
+only they remain.
+The poller reads its previous poll's nodes back from the unified read state
+through `internal/monitoring/monitor_previous_state.go`. `nodeLastOnline` and
+the temperature carry with its CPU low/record tracking match them by node ID,
+which is the Proxmox source ID, so the projection must return
+`NodeView.SourceID()`, never the unified resource ID, and carry the stored
+`TemperatureDetails`. Nodes preserved through an instance outage
+(`preserveOrExpireNodes`) or authoritative membership reconciliation are written
+back into state from that projection, so it also restores the identity inputs
+the registry derives a node's canonical ID and cross-view merges from: cluster
+name, provider-scoped flag, native aliases, TLS fingerprint and linked agent ID,
+the config-derived ones stamped the way `pollPVENode` stamps them. With the
+unified ID a node re-keys on every failed poll, and without its cluster
+identity a cluster member changes canonical ID for the length of an outage.
+A preserved node keeps its
+temperature only under the same carry rules and loses it when it goes
+offline. Node memory carry-over after a failed status read uses the poller's own
+validated `NodeMemorySnapshot`, not the read state, which holds the agent's
+reading on a node merged with a host agent, and keeps used, cache and free
+summing to the total.
 Legacy SSH temperature collection must also use the Pulse sensor-wrapper
 contract before falling back to raw lm-sensors output. `internal/monitoring/temperature.go`
 must request `/usr/local/sbin/pulse-sensors` when it exists, parse the wrapper

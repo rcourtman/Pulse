@@ -100,6 +100,7 @@ import {
   buildProjectedOverrides,
   normalizeRawOverridesConfig,
 } from '@/features/alerts/alertOverridesModel';
+import { buildAlertHistoryItems } from '@/features/alerts/alertHistoryModel';
 import {
   getAlertIncidentAcknowledgedBadgeClass,
   getAlertIncidentEventFilterActionButtonClass,
@@ -1318,5 +1319,61 @@ describe('Unified selector parity', () => {
     ).toEqual(
       buildExpectedGuestOverride('lxc', 'ct-pve1-200', 'ct-200', 200, 'pve1', 'pve1/lxc/200'),
     );
+  });
+});
+
+describe('alert history close outcome', () => {
+  it('lists a node alert handed to its Pulse agent as moved, not resolved', () => {
+    const base = {
+      type: 'memory',
+      level: 'warning' as const,
+      resourceName: 'pve1',
+      node: 'pve1',
+      instance: 'pve1',
+      value: 95,
+      threshold: 85,
+      startTime: '2026-10-06T09:00:00Z',
+      lastSeen: '2026-10-06T11:00:00Z',
+      acknowledged: true,
+    };
+    const items = buildAlertHistoryItems({
+      activeAlerts: {},
+      alertHistory: [
+        {
+          ...base,
+          id: 'pve1-memory',
+          resourceId: 'pve1',
+          message: 'Memory usage at 95%',
+          resolution: {
+            reason: 'moved_to_agent',
+            successorResourceId: 'agent-pve1',
+            successorName: 'pve1 (Host Agent)',
+          },
+        },
+        {
+          ...base,
+          id: 'pve1-cpu',
+          resourceId: 'pve1',
+          message: 'CPU usage at 90%',
+          acknowledged: false,
+        },
+      ],
+      getResource: () => undefined,
+      allResources: [],
+      now: Date.parse('2026-10-06T12:00:00Z'),
+    });
+
+    const moved = items.find((item) => item.id === 'pve1-memory');
+    // Acknowledgement does not hide the outcome: the condition went to the agent.
+    expect(moved?.status).toBe('moved');
+    expect(moved?.description).toBe('Memory usage at 95%');
+    expect(moved?.closeDetail).toBe(
+      'Moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading.',
+    );
+    const recovered = items.find((item) => item.id === 'pve1-cpu');
+    expect(recovered?.status).toBe('resolved');
+    expect(recovered).not.toHaveProperty('closeDetail');
+
+    expect(alertHistoryTableAlertRowSource).toContain('title={props.alert.closeDetail}');
   });
 });

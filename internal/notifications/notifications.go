@@ -432,6 +432,47 @@ func annotateResolvedMetadata(alert *alerts.Alert, resolvedAt time.Time) {
 	alert.Metadata[metadataResolvedAt] = resolvedAt.Format(time.RFC3339)
 }
 
+// resolvedAlertMessage is the one-line account of a resolved alert. A close
+// that was not a recovery, such as a node alert that moved to the Pulse agent
+// now monitoring the machine, says what happened instead of "now healthy".
+func resolvedAlertMessage(alert *alerts.Alert) string {
+	if summary := resolvedAlertNotRecoveredSummary(alert); summary != "" {
+		return summary
+	}
+	return fmt.Sprintf("%s on %s is now healthy", alert.ResourceName, alert.Node)
+}
+
+// resolvedAlertNotRecoveredSummary names the alert in its resolution summary,
+// so one of several closes for a machine says which alert moved. It is empty
+// for an ordinary recovery.
+func resolvedAlertNotRecoveredSummary(alert *alerts.Alert) string {
+	label := alertTypeDisplay(alert.Type)
+	if label != "" {
+		label += " alert"
+	}
+	return alert.Resolution.Describe(label)
+}
+
+// resolvedAlertsIncludeNotRecovered reports whether any close in a resolved
+// notification was not a recovery, so recovery visuals must not be used.
+func resolvedAlertsIncludeNotRecovered(alertList []*alerts.Alert) bool {
+	for _, alert := range alertList {
+		if alert != nil && alert.Resolution.Outcome() != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// resolvedAlertListEntry names one alert in a grouped recovery list.
+func resolvedAlertListEntry(alert *alerts.Alert) string {
+	entry := fmt.Sprintf("%s on %s", alert.ResourceName, alert.Node)
+	if outcome := alert.Resolution.Outcome(); outcome != "" {
+		entry += ", " + outcome
+	}
+	return entry
+}
+
 func quietHoursReplayAtForAlert(alert *alerts.Alert, now time.Time) *time.Time {
 	if alert == nil || alert.Metadata == nil {
 		return nil
@@ -2267,6 +2308,9 @@ func buildResolvedNotificationContent(alertList []*alerts.Alert, resolvedAt time
 	resolvedLabel := resolvedAt.Format(time.RFC3339)
 
 	title := fmt.Sprintf("Pulse alert resolved: %s", primary.ResourceName)
+	if primary.Resolution.Outcome() != "" {
+		title = fmt.Sprintf("Pulse alert moved: %s", primary.ResourceName)
+	}
 	if len(validAlerts) > 1 {
 		title = fmt.Sprintf("Pulse alerts resolved (%d)", len(validAlerts))
 	}
@@ -2280,6 +2324,10 @@ func buildResolvedNotificationContent(alertList []*alerts.Alert, resolvedAt time
 		bodyBuilder.WriteString(fmt.Sprintf("[%s] %s\n", strings.ToUpper(string(alert.Level)), alert.ResourceName))
 		if alert.Message != "" {
 			bodyBuilder.WriteString(alert.Message)
+			bodyBuilder.WriteString("\n")
+		}
+		if summary := resolvedAlertNotRecoveredSummary(alert); summary != "" {
+			bodyBuilder.WriteString(summary)
 			bodyBuilder.WriteString("\n")
 		}
 		if !alert.StartTime.IsZero() {
@@ -2980,14 +3028,15 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 	data.ResolvedAt = resolvedAt.Format(time.RFC3339)
 	data.ResolvedAtISO = resolvedAt.Format(time.RFC3339)
 	data.Duration = formatWebhookDuration(resolvedAt.Sub(alert.StartTime))
-	data.Message = fmt.Sprintf("%s on %s is now healthy", alert.ResourceName, alert.Node)
+	data.Message = resolvedAlertMessage(alert)
+	data.NotRecovered = resolvedAlertsIncludeNotRecovered(alertList)
 	data.AlertCount = len(alertList)
 	data.Alerts = alertList
 	if len(alertList) > 1 {
 		names := make([]string, 0, len(alertList))
 		for _, a := range alertList {
 			if a != nil {
-				names = append(names, fmt.Sprintf("%s on %s", a.ResourceName, a.Node))
+				names = append(names, resolvedAlertListEntry(a))
 			}
 		}
 		data.Message = fmt.Sprintf("%d alerts resolved: %s", len(alertList), strings.Join(names, "; "))
@@ -3036,26 +3085,32 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 		return fmt.Errorf("rate limit exceeded for webhook %s", webhook.Name)
 	}
 
-	// Build plain-text body
+	// Build plain-text body and title. A single alert that moved rather than
+	// recovered says so in both, and no batch holding such a close carries
+	// the green check.
 	var body strings.Builder
+	title := "RESOLVED"
+	tags := "white_check_mark,pulse,resolved"
+	if resolvedAlertsIncludeNotRecovered(alertList) {
+		tags = "arrow_right,pulse,resolved"
+	}
 	if len(alertList) == 1 && alertList[0] != nil {
 		a := alertList[0]
-		fmt.Fprintf(&body, "Resolved: %s on %s is now healthy", a.ResourceName, a.Node)
+		title = fmt.Sprintf("RESOLVED: %s", a.ResourceName)
+		if summary := resolvedAlertNotRecoveredSummary(a); summary != "" {
+			title = fmt.Sprintf("MOVED: %s", a.ResourceName)
+			body.WriteString(summary)
+		} else {
+			fmt.Fprintf(&body, "Resolved: %s", resolvedAlertMessage(a))
+		}
 	} else {
+		title = fmt.Sprintf("RESOLVED: %d alerts", len(alertList))
 		fmt.Fprintf(&body, "%d alerts resolved at %s:\n", len(alertList), resolvedAt.Format(time.RFC822))
 		for _, a := range alertList {
 			if a != nil {
-				fmt.Fprintf(&body, "- %s on %s\n", a.ResourceName, a.Node)
+				fmt.Fprintf(&body, "- %s\n", resolvedAlertListEntry(a))
 			}
 		}
-	}
-
-	// Build title
-	title := "RESOLVED"
-	if len(alertList) == 1 && alertList[0] != nil {
-		title = fmt.Sprintf("RESOLVED: %s", alertList[0].ResourceName)
-	} else {
-		title = fmt.Sprintf("RESOLVED: %d alerts", len(alertList))
 	}
 
 	method := webhook.Method
@@ -3071,7 +3126,7 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 	req.Header.Set("Content-Type", "text/plain")
 	req.Header.Set("Title", title)
 	req.Header.Set("Priority", "default")
-	req.Header.Set("Tags", "white_check_mark,pulse,resolved")
+	req.Header.Set("Tags", tags)
 	req.Header.Set("User-Agent", "Pulse-Monitoring/2.0")
 
 	// Apply any custom headers from webhook config

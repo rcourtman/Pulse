@@ -431,6 +431,16 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				continue
 			}
 			threshold = getThresholdForMetric(thresholds, metricType)
+			// Agent policy is the only policy for agent alerts. Falling
+			// through would let the storage or guest switches resolve a
+			// SMART, RAID or sensor alert that CheckHost re-raises on the
+			// next report.
+			if threshold == nil {
+				if isMetricThresholdAlertType(metricType) {
+					alertsToResolve = append(alertsToResolve, alertID)
+				}
+				continue
+			}
 		}
 
 		if alert.Type == "docker-host-offline" ||
@@ -579,12 +589,14 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			continue
 		}
 
+		// buildCanonicalMetricSpec keeps a clear level only below the trigger,
+		// and without one the evaluator keeps firing at the trigger itself.
+		// A clear level at or above the trigger must not resolve a reading
+		// the next evaluation raises again.
 		clearThreshold := threshold.Clear
-		if clearThreshold <= 0 {
-			clearThreshold = threshold.Trigger
-		}
+		hasRecoveryBand := clearThreshold > 0 && clearThreshold < threshold.Trigger
 
-		if alert.Value <= clearThreshold {
+		if hasRecoveryBand && alert.Value <= clearThreshold {
 			alertsToResolve = append(alertsToResolve, alertID)
 			log.Info().
 				Str("alertID", alertID).

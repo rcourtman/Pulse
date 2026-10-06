@@ -7,7 +7,7 @@ import (
 )
 
 func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
-	agent := models.Host{ID: "host-pi", Hostname: "pi", LinkedNodeID: "node/pi"}
+	agent := hostAgentNodeLink{agentID: "host-pi", nodeID: "node/pi", cpu: true, memory: true, disk: true}
 
 	// Test 1: Without a linked host agent, node metrics ARE checked
 	t.Run("node_metrics_checked_without_agent", func(t *testing.T) {
@@ -81,7 +81,7 @@ func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 
 		// Register and then unregister
 		m.registerHostAgentNodeLink(agent)
-		m.unregisterHostAgentNodeLink(agent.ID)
+		m.unregisterHostAgentNodeLink(agent.agentID)
 
 		// Verify host agent is NOT linked
 		if m.hasHostAgentForNode("node/pi") {
@@ -112,8 +112,9 @@ func TestHostAgentDeduplicatesNodeAlerts(t *testing.T) {
 // instances can both have a node named "pve", and an agent can report an FQDN.
 func TestHostAgentDeduplicationFollowsNodeLink(t *testing.T) {
 	m := NewManager()
+	m.config.Enabled = true
 
-	m.registerHostAgentNodeLink(models.Host{ID: "host-a", Hostname: "pve.example.com", LinkedNodeID: "site-a-pve"})
+	m.CheckHost(models.Host{ID: "host-a", Hostname: "pve.example.com", LinkedNodeID: "site-a-pve", CPUUsage: 10})
 	if !m.hasHostAgentForNode("site-a-pve") {
 		t.Error("Expected the linked node to dedup even though the agent hostname is an FQDN")
 	}
@@ -121,13 +122,13 @@ func TestHostAgentDeduplicationFollowsNodeLink(t *testing.T) {
 		t.Error("Expected a same-named node in another instance to keep its own alerts")
 	}
 
-	m.registerHostAgentNodeLink(models.Host{ID: "host-b", Hostname: "pve"})
+	m.CheckHost(models.Host{ID: "host-b", Hostname: "pve", CPUUsage: 10})
 	if m.hasHostAgentForNode("site-b-pve") {
 		t.Error("Expected an unlinked agent with a matching hostname not to suppress node alerts")
 	}
 
 	// An operator unlinking the agent hands the node's alerts back.
-	m.registerHostAgentNodeLink(models.Host{ID: "host-a", Hostname: "pve.example.com"})
+	m.CheckHost(models.Host{ID: "host-a", Hostname: "pve.example.com", CPUUsage: 10})
 	if m.hasHostAgentForNode("site-a-pve") {
 		t.Error("Expected an unlinked agent to stop deduplicating its former node")
 	}
@@ -168,7 +169,7 @@ func TestHandleHostOfflineUnregistersNodeLink(t *testing.T) {
 	}
 
 	// Register the node link
-	m.registerHostAgentNodeLink(host)
+	m.registerHostAgentNodeLink(hostAgentNodeLink{agentID: host.ID, nodeID: host.LinkedNodeID, cpu: true})
 
 	if !m.hasHostAgentForNode("pve-offlinehost") {
 		t.Error("Expected host agent registered")

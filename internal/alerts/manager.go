@@ -78,6 +78,7 @@ type Manager struct {
 	unifiedIncidentConfirmations map[string]int                  // Track consecutive provider-incident observations before activation
 	unifiedIncidentFirstSeen     map[string]time.Time            // Preserve the first confirmed observation as lifecycle start
 	unifiedIncidentRecoveries    map[string]int                  // Track consecutive healthy observations before provider-incident recovery
+	hostDiskTempAbsences         map[string]int                  // Track consecutive SMART reports missing a disk that holds temperature alert state
 	dockerRestartTracking        map[string]*dockerRestartRecord // Track restart counts and times for restart loop detection
 	dockerUpdateFirstSeen        map[string]time.Time            // Track when image updates were first detected for alert delay
 	// Stable identity tracking prevents update-delay resets when host IDs churn.
@@ -102,9 +103,9 @@ type Manager struct {
 	// Cleanup control
 	cleanupStop chan struct{} // Signal to stop cleanup goroutine
 	// Host agent deduplication: the Proxmox node each reporting host agent is
-	// linked to. While a link holds, the agent resource owns that machine's
-	// CPU, memory and disk usage alerts and the node releases its own copies.
-	hostAgentNodeLinks map[string]string // Host agent ID -> linked node ID
+	// linked to and the usage metrics the agent evaluates for it. The node
+	// releases only those metrics and keeps evaluating the rest itself.
+	hostAgentNodeLinks map[string]hostAgentNodeLink // Host agent ID -> node link
 	// Node display name caches. Proxmox nodes can share the same raw node name
 	// across multiple configured instances, so keep instance-scoped entries in
 	// addition to the legacy raw-name cache used by instance-less resources.
@@ -233,6 +234,7 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		unifiedIncidentConfirmations:    make(map[string]int),
 		unifiedIncidentFirstSeen:        make(map[string]time.Time),
 		unifiedIncidentRecoveries:       make(map[string]int),
+		hostDiskTempAbsences:            make(map[string]int),
 		dockerRestartTracking:           make(map[string]*dockerRestartRecord),
 		dockerUpdateFirstSeen:           make(map[string]time.Time),
 		dockerUpdateFirstSeenByIdentity: make(map[string]time.Time),
@@ -245,7 +247,7 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		flappingHistory:                 make(map[string][]time.Time),
 		flappingActive:                  make(map[string]bool),
 		cleanupStop:                     make(chan struct{}),
-		hostAgentNodeLinks:              make(map[string]string),
+		hostAgentNodeLinks:              make(map[string]hostAgentNodeLink),
 		nodeDisplayNames:                make(map[string]string),
 		instanceNodeDisplayNames:        make(map[string]string),
 		now:                             time.Now,

@@ -431,11 +431,13 @@ func (m *Monitor) reconcilePVENodeInventory(
 			node.ConnectionHealth = "error"
 			node.CPU = 0
 			node.Uptime = 0
+			node.Temperature = nil
 		} else if _, observed := currentByName[key]; !observed {
 			node.Status = "unknown"
 			node.ConnectionHealth = "degraded"
 			node.CPU = 0
 			node.Uptime = 0
+			m.boundCarriedNodeTemperature(&node, time.Now())
 		}
 		reconciled[key] = node
 	}
