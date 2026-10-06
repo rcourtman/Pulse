@@ -282,12 +282,12 @@ export const AvailabilityChecksTable: Component<{
                     Check
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[12%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} platform-table-phone-hidden platform-table-mobile-w-15 md:w-[12%]`}
                   >
                     Method
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-25 md:w-[22%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} platform-table-phone-hidden platform-table-mobile-w-25 md:w-[22%]`}
                   >
                     Target
                   </TableHead>
@@ -336,7 +336,7 @@ export const AvailabilityChecksTable: Component<{
                     const target = () => formatTarget(check);
                     const probeSource = () =>
                       (availability()?.locations?.length ?? 0) > 1
-                        ? `${availability()?.locations?.length} locations · ${availability()?.reportingLocations ?? 0}/${availability()?.expectedLocations ?? availability()?.locations?.length ?? 0} reporting`
+                        ? `${availability()?.reportingLocations ?? 0}/${availability()?.expectedLocations ?? availability()?.locations?.length ?? 0} locations reporting`
                         : getProbeSourceChipLabel(
                             props.probeAgentOptions ?? [],
                             availability()?.probeAgentId,
@@ -373,13 +373,17 @@ export const AvailabilityChecksTable: Component<{
                               </span>
                             </div>
                           </TableCell>
+                          {/* On a phone the check name needs the room; the method
+                              and target stay in the row drawer. */}
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
-                            {method()}
+                            <span class="block truncate" title={method()}>
+                              {method()}
+                            </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             <span class="block truncate" title={target()}>
                               {target()}
@@ -388,22 +392,32 @@ export const AvailabilityChecksTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            <span class={probe()?.toneClassName ?? ''} title={probe()?.detailLabel}>
-                              {result()}
-                            </span>
-                            <Show when={probeSource()}>
-                              {(sourceLabel) => (
-                                <MetadataBadge
-                                  tone="muted"
-                                  size="xs"
-                                  appearance="outline"
-                                  class="mt-0.5 flex"
-                                  data-availability-probe-source={availability()?.probeAgentId}
-                                >
-                                  {sourceLabel()}
-                                </MetadataBadge>
-                              )}
-                            </Show>
+                            {/* One line, as the table windows rows at a single
+                                height: the result stays whole at the right edge
+                                and the probe source takes what room is left,
+                                truncating with its full text on hover. */}
+                            <div class="flex min-w-0 items-center justify-end gap-1">
+                              <Show when={probeSource()}>
+                                {(sourceLabel) => (
+                                  <MetadataBadge
+                                    tone="muted"
+                                    size="xs"
+                                    appearance="outline"
+                                    class="min-w-0"
+                                    title={sourceLabel()}
+                                    data-availability-probe-source={availability()?.probeAgentId}
+                                  >
+                                    <span class="truncate">{sourceLabel()}</span>
+                                  </MetadataBadge>
+                                )}
+                              </Show>
+                              <span
+                                class={`shrink-0 ${probe()?.toneClassName ?? ''}`}
+                                title={probe()?.detailLabel}
+                              >
+                                {result()}
+                              </span>
+                            </div>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden tabular-nums lg:table-cell`}

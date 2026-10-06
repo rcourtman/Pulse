@@ -129,6 +129,18 @@ func (m *Monitor) pveNodeUsesProviderScopedIdentity(instanceName string, instanc
 	)
 }
 
+// nodeTemperatureCarryFloor is the shortest time a node may keep showing its
+// last temperature after collection stops returning one, sized to ride out the
+// SSH collector's early failure backoff steps (30s, 1m, 2m).
+const nodeTemperatureCarryFloor = 5 * time.Minute
+
+// nodeTemperatureCarryWindow bounds how old a carried-over node temperature may
+// be. Beyond it the reading no longer describes the node, so it stops being
+// presented as available.
+func (m *Monitor) nodeTemperatureCarryWindow() time.Duration {
+	return resourceStaleThresholdForPollInterval(effectivePVEPollingIntervalForConfig(m.config), nodeTemperatureCarryFloor)
+}
+
 func (m *Monitor) collectNodeTemperatureData(
 	ctx context.Context,
 	instanceName string,
@@ -319,7 +331,16 @@ func (m *Monitor) collectNodeTemperatureData(
 				}
 			}
 
-			if prevTemp != nil {
+			if prevTemp != nil && time.Since(prevTemp.LastUpdate) > m.nodeTemperatureCarryWindow() {
+				// Collection has stayed broken past the carry window. Re-presenting
+				// the old reading would let alerts, history and the UI treat it as
+				// a live measurement forever, so the node has no reading now.
+				log.Debug().
+					Str("node", node.Node).
+					Bool("isCluster", modelNode.IsClusterMember).
+					Time("lastUpdate", prevTemp.LastUpdate).
+					Msg("Dropped stale temperature data (collection has not returned a reading within the carry window)")
+			} else if prevTemp != nil {
 				// Clone the previous temperature to avoid modifying historical data
 				preserved := *prevTemp
 				preserved.LastUpdate = prevTemp.LastUpdate // Keep original update time to indicate staleness

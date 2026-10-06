@@ -8210,6 +8210,21 @@ or create agent continuity evidence. The removal lifecycle proof keeps a
 removed host blocked across a PBS storage sync so metric timestamp maintenance
 cannot become an accidental re-enrollment transition.
 
+### Mock fixture agents reuse only the removal alert boundary
+
+`internal/monitoring/monitor.go` now holds the set of fixture agents the last
+mock alert pass evaluated. When a runtime mock config change drops an agent
+from the estate, `evaluateMockHostAgents` routes it through the alert
+manager's `HandleHostRemoved`, the same alert boundary a deleted live agent
+crosses. Leaving mock mode routes every fixture agent through the same call,
+which also releases their hostname deduplication. Neither path writes a
+removal tombstone, revokes a token, touches continuity evidence or admits a
+report: fixture agents have no credentials or durable identity, and real
+reports stay discarded while mock mode is on.
+`TestMockHostAgentLeavingFixtureUsesRemovalLifecycle` in
+`internal/monitoring/monitor_host_agent_removal_lifecycle_test.go` pins the
+alert cleanup.
+
 ### Deploy enrollment swaps credentials as one durable transition
 
 A deploy bootstrap token remains the live credential until Pulse can durably

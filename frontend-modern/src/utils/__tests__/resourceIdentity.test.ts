@@ -187,7 +187,32 @@ describe('resourceIdentity', () => {
       { label: 'Cluster', value: 'cluster-a' },
       { label: 'Parent', value: 'parent-1' },
       { label: 'Discovery', value: 'agent:agent-1' },
-      { label: 'Metrics Target', value: 'docker-host:docker-host-1' },
+      // The metrics target is the Primary ID shown above, so it is not repeated.
+    ]);
+  });
+
+  it('keeps a discovery target that matches only a name the drawer never shows', () => {
+    const rows = getPrimaryResourceIdentityRows(
+      makeResource({
+        displayName: 'Friendly host',
+        canonicalIdentity: { displayName: 'agent:other' },
+        discoveryTarget: { resourceType: 'agent', agentId: 'other', resourceId: 'other' },
+        metricsTarget: { resourceType: 'node', resourceId: 'self' },
+      } as Parameters<typeof makeResource>[0]),
+    );
+    expect(rows.find((row) => row.label === 'Discovery')?.value).toBe('agent:other');
+  });
+
+  it('shows an identity once when discovery and metrics targets name the resource itself', () => {
+    const rows = getPrimaryResourceIdentityRows(
+      makeResource({
+        identity: { hostname: 'tower.local' },
+        discoveryTarget: { resourceType: 'agent', agentId: 'agent-1', resourceId: 'agent-1' },
+        metricsTarget: { resourceType: 'agent', resourceId: 'agent-1' },
+      }),
+    );
+    expect(rows.filter((row) => row.value === 'agent:agent-1').map((row) => row.label)).toEqual([
+      'Primary ID',
     ]);
   });
 

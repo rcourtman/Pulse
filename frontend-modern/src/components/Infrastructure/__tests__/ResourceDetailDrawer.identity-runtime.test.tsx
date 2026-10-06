@@ -799,7 +799,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('Primary ID').parentElement?.textContent).toContain('node:homelab-delly');
   });
 
-  it('shows canonical metrics target identity for docker-backed host resources', () => {
+  it('shows the canonical metrics target once, as the Primary ID', () => {
     const resource = baseResource({
       id: 'hash-docker-resource',
       type: 'docker-host',
@@ -824,12 +824,14 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
     });
 
-    const { container, getByText, getAllByText } = render(() => (
+    const { container, getByText, getAllByText, queryByText } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
 
-    expect(getByText('Metrics Target')).toBeInTheDocument();
-    expect(getAllByText('docker-host:docker-host-1').length).toBeGreaterThan(1);
+    // The metrics target is the Primary ID, so neither its row nor an alias
+    // repeats it.
+    expect(queryByText('Metrics Target')).toBeNull();
+    expect(getAllByText('docker-host:docker-host-1')).toHaveLength(1);
     expect(getByText('Aliases')).toBeInTheDocument();
     expect(getAllByText('docker-host-1').length).toBeGreaterThan(0);
     expect(container.querySelector('.text-\\[11px\\].text-muted.truncate')).toBeNull();

@@ -342,7 +342,7 @@ export function StandalonePageSurface() {
                 <PlatformOutdatedAgentNotice
                   hosts={outdatedAgentHosts()}
                   targetVersion={serverVersionDisplay()}
-                  missingLabel="agent command support and agent-managed platform detail"
+                  missingLabel="fixes and machine details"
                   copyVariant="latest-detail"
                   actionHref={outdatedAgentUpdatePath()}
                   actionLabel="Open agent upgrade commands"

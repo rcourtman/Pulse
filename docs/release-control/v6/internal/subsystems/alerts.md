@@ -780,6 +780,25 @@ must migrate through `internal/alerts/operational_contract.go` and name their
 limited provenance honestly rather than inventing confirmed provider evidence.
 Acknowledgement remains distinct from resolution, and every resolution
 transition references recovery evidence separate from its trigger evidence.
+A resolved alert may carry a typed `AlertResolution`
+(`internal/alerts/resolution.go`) when it closed without its condition being
+observed to clear. The one reason so far, `moved_to_agent`, describes a metric
+alert whose resource's linked Pulse agent now owns the metric.
+`releaseCanonicalMetricAlert` is the disabled-threshold release extracted from
+`evaluateCanonicalMetricAlert`: a caller releasing a metric for any other
+reason passes a resolution, and `clearAlertWithResolution` stamps a copy on the
+removed alert before it is resolved. The resolved callback snapshot, the
+history row, the resolved event-log entry (the reason code, with `Summary()` as
+its message) and the Alert JSON then carry it. Resolved consumers still receive
+the close, because integrations close their incident by alert ID. The
+synthesized closing evidence carries the resolution reason and summary instead
+of `legacy_alert_recovery_projection`, and the resolve transition carries the
+summary as its `reason`. The cause stays `recovery_evidence`, the only cause
+operational trust lets enter `resolved`. A nil resolution leaves the
+disabled-threshold path and every recovery unchanged.
+`TestReleasedMetricAlertCarriesResolutionInsteadOfRecovery` and
+`TestResolvedHistoryRowKeepsResolutionWithoutEventLog` in
+`internal/alerts/operational_contract_test.go` pin this.
 
 ## Extension Points
 
@@ -1592,6 +1611,75 @@ per-alert rate limiting; future notification-gating changes should extend that
 policy owner rather than burying new checks inside metric or resource-specific
 evaluators.
 
+### Agent disk temperature alerts clear when their threshold is off
+
+Host-agent SMART disk temperature alerts (`diskTemperature`, resource
+`agent:<host>/disk_temp:<device>`) follow one effective threshold: the
+resolved agent `DiskTemperature`, refined by the disk type's `DiskTempByType`
+entry unless an explicit host or linked-resource override set it
+(`hostDiskTemperatureThresholdNoLock` in `internal/alerts/host.go`). When the
+host's resolved `DiskTemperature` is off, `CheckHost` clears every disk
+temperature alert on the host. A disabled `DiskTempByType` entry clears only
+the alerts of disks of that type, through the disabled metric spec. The
+all-agents switch, a disabled host override, agent removal and confirmed
+agent offline clear them with the host's other disk alerts. Before this,
+nothing cleared them once the agent-level threshold was off.
+
+A config save judges an open disk temperature alert against the same
+threshold (`resolveHostAlertThresholdsNoLock` refines it by the alert's
+`diskType` metadata, and `metric_runtime.go` classifies `diskTemperature` as a
+threshold metric), so turning the host's `DiskTemperature` off resolves the
+alert immediately. An alert persisted before `CheckHost` recorded `diskType` (May
+2026) carries no disk type until its next firing evaluation, so a save judges
+it against the lowest enabled trigger any of the host's disks can use: the
+agent threshold or a `DiskTempByType` entry
+(`lowestHostDiskTemperatureThresholdNoLock`). A save therefore cannot resolve
+an alert its disk type would still fire.
+
+For a metric alert that reaches the threshold comparison in
+`reevaluateActiveAlertsLocked` (docker-host alerts return before it), a config
+save resolves an alert whose reading is
+below the new trigger. That includes readings inside a valid recovery band,
+which the evaluator would hold. A clear level at or above the trigger is no
+recovery band (`buildCanonicalMetricSpec` drops it), and a reading at the
+trigger stays firing, as it does in the reducer, so a save no longer resolves
+an alert the next evaluation raises again.
+`TestCheckHostClearsDiskTemperatureAlertsWhenThresholdTurnsOff`,
+`TestHostDiskTemperatureAlertsClearWhenAgentLeaves`,
+`TestConfigSaveResolvesDiskTemperatureAlertAgainstItsDiskTypeThreshold`,
+`TestConfigSaveKeepsDiskTemperatureAlertWithoutDiskType` and
+`TestConfigSaveKeepsAlertTheEvaluatorKeepsWithoutRecoveryBand` in
+`internal/alerts/host_unraid_lifecycle_test.go` pin these paths.
+
+### Agent disk temperature alerts clear when their disk leaves the report
+
+`CheckHost` also clears a disk temperature alert, and drops its pending
+threshold run, once its device is missing from three consecutive non-empty
+SMART lists (`cleanupHostDiskTemperatureAlerts`, a seen map keyed by resource
+ID like `cleanupHostCustomSensorAlerts`). A removed, replaced or renamed disk
+never sends the reading that would resolve its alert, and
+`shouldPreserveAlertOutsideNodeCleanup` exempts `agent:` alerts from node
+cleanup, so before this only the 24-hour stale-alert sweep in
+`cleanupStaleMaps` resolved it. One omission is not proof the disk left: the
+Windows, FreeBSD and controller-multiplexed Linux collectors drop a disk whose
+probe fails, so the count restarts whenever the disk is reported again. Three
+reports in a row of failed probes on such a disk still clear its alert.
+
+An empty SMART list skips this cleanup and does not count toward the three,
+because the agent omits the list when SMART collection fails or is
+unsupported. A listed disk in standby or without a temperature also holds its
+alert, since neither shows the disk cooled: standby reports avoid waking the
+disk, and most failed Linux probes still list the disk with identity only.
+SMART health alerts hold through standby the same way. A held alert resolves
+through the normal recovery path, including any configured recovery delay,
+once the disk reports cool readings again; with no evaluation for 24 hours,
+the stale-alert sweep resolves it. Turning the threshold off, or removing the
+agent, drops the host's pending disk temperature runs and absence counts as
+well as its alerts.
+`TestCheckHostClearsDiskTemperatureAlertWhenDiskLeavesSMARTReport` in
+`internal/alerts/host_unraid_lifecycle_test.go` pins the clear, the holds, the
+restarted count and the pending-run and count cleanup.
+
 ### Configured flapping thresholds remain reachable
 
 Every accepted positive `FlappingThreshold`, including values above ten, must
@@ -1803,11 +1891,21 @@ host-agent deduplication bookkeeping, and instance-scoped node display-name
 cache updates; future Proxmox node alert behavior should extend that resource
 checker owner rather than expanding the central Manager file.
 When a reporting host agent is linked to a node (`LinkedNodeID`, the monitor's
-automatic or operator-set identity decision), the agent resource owns that
-machine's CPU, memory and disk usage alerts, and `CheckNode` releases its own
-copies through the disabled-threshold path every cycle: the pending run is
-dropped and any node alert still open from before the link is resolved, never
-left frozen until the agent goes offline. Deduplication keys on that link,
+automatic or operator-set identity decision), the agent resource owns each
+CPU, memory or disk usage metric it actually evaluates, and `CheckNode` releases
+its own copy of those metrics through the disabled-threshold path every cycle:
+the pending run is dropped and any node alert still open from before the link is
+resolved, never left frozen until the agent goes offline. `CheckHost` registers
+the link only after evaluation, recording which metrics the agent is configured
+to evaluate (a live CPU or memory threshold; for disk, a live threshold on the
+summary filesystem `models.SummaryDisk` picks, which is also what the linked
+node's disk metric reports), and removes it while agent alerts are disabled.
+Ownership follows configuration, not one report's data, so a missing agent
+reading keeps the agent's alert open instead of handing the metric back to the
+node for a cycle. With several agents linked to one node, a metric is owned when
+any of them evaluates it. A metric no agent evaluates stays with the node, so
+deduplication never leaves a machine unmonitored.
+Deduplication keys on that link,
 never on a hostname match, so a same-named node in another instance keeps its
 alerts, an agent reporting an FQDN still dedups its node, and an operator unlink
 hands the alerts back. CPU temperature has no host-agent metric, so the node
@@ -1826,7 +1924,9 @@ instance name in `Instance`.
 `TestCheckNodeReleasesOpenMetricAlertWhenHostAgentRegisters`,
 `TestCheckNodeMissingTemperatureDoesNotResolveOpenAlert`,
 `TestCheckNodeMissingTemperatureInterruptsTimingRuns` and
-`TestConfigSaveKeepsNodeTemperatureAlertOverTrigger` in
+`TestConfigSaveKeepsNodeTemperatureAlertOverTrigger` and
+`TestCheckNodeKeepsUsageMetricsTheAgentDoesNotEvaluate`,
+`TestCheckNodeUsageOwnershipFollowsWhatAgentsEvaluate` in
 `internal/alerts/threshold_resolution_shared_test.go`, and
 `TestHostAgentDeduplicationFollowsNodeLink` in
 `internal/alerts/host_dedup_test.go`, pin these rules.
@@ -2489,13 +2589,23 @@ reads that ahead of every fallback. The menu's owner copy comes from
 `frontend-modern/src/utils/resourceMonitoringPolicy.ts`, where an explicit
 platform outranks the resource-type guess and the agent-removal copy is kept
 to the agent's own machine: libvirt VMs and Unraid arrays in resource drawers
-get the neutral source-system copy. Agent disk-usage, SMART disk and Unraid
-array alerts still carry their host's `agent` metadata, so their menu names
-the Pulse agent until those producers emit child-resource metadata. Alerts
-restored from before `platformType` existed gain it at their next full
-evaluation; a metric alert held between its clear and trigger thresholds keeps
-the earlier fallback until then. Menu sentences open with the owner
-label capitalised.
+get the neutral source-system copy. Host-agent alerts
+(`internal/alerts/host.go`) stamp `platformType` `agent`, and only the
+machine's own alerts keep `resourceType` `agent`: filesystem,
+disk-temperature and SMART alerts carry `agent-disk`, RAID and Unraid array
+alerts `agent-storage`, and custom-sensor alerts `agent-sensor`, because the
+menu writes policy to their child resource id, never to the machine. Each
+child type keeps `agent` among its `CanonicalResourceTypeKeys`, and
+configuration re-evaluation treats agent policy as final for host-agent
+alerts (TrueNAS systems and vSphere hosts keep their platform policy), so the
+storage and guest switches cannot resolve a SMART, RAID or sensor alert that
+the next agent report would re-raise. A metric alert held between its clear
+and trigger thresholds still refreshes `resourceType` and `platformType` from
+its producer while its value, message and last-seen time stay at the last
+breach, so a restored alert that is still firing or held picks up the current
+classification at its next evaluation; one that resolves on that evaluation
+keeps the stored classification in its resolved record. Menu sentences open
+with the owner label capitalised.
 The retired dashboard recent-alert panel must not be reintroduced as a
 parallel alert surface. Alert summary/tone copy belongs to the alert overview
 presentation owner, and any future compact alert surface must compose the

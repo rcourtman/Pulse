@@ -485,6 +485,18 @@ layer consumes it only as a fallback replacement for Proxmox LXC memory, so
 platform metric priority for a healthy agent is unchanged.
 `TestContainerViewLinkedAgentMemory` pins those boundaries.
 
+**Host-row agent source freshness (6 October 2026)**
+
+`HostView.SourceStatus(source)` exposes the per-source delivery freshness the
+registry already records, matching the VM, container, and physical-disk views.
+A host agent linked to a Proxmox node merges into one row whose `LastSeen`
+follows the freshest source, so consumers of agent-owned samples (monitoring's
+linked-agent node temperature lookup) must read the agent source's own sighting
+here instead of the row's `LastSeen`. The accessor returns a copy of the recorded
+status and adds no freshness policy of its own.
+`TestView_HostViewSourceStatusSeparatesAgentFromMergedRow` pins the merged-row
+split.
+
 ### Bounded incident-history selection
 
 Canonical history queries filter exact alert identifiers and observation windows
@@ -2405,6 +2417,9 @@ for the column when evidence later appears. The
 compact row action trigger chrome stays under the frontend-primitives
 `ActionIconButton` boundary rather than becoming a unified-resource-local
 button shell.
+The Machines outdated-agent notice names what an update brings in plain
+words, the latest fixes and machine details, and stays maintenance guidance
+rather than a membership or health signal.
 Machines list search and online-state narrowing are frontend route state,
 not new unified-resource membership fields. `StandalonePageSurface.tsx`
 owns the `STANDALONE_QUERY_PARAMS` query/status projection and one composite
@@ -3495,6 +3510,14 @@ with the offline threshold on hover, not an "N/M" fraction.
 Recent check timing and fuller failure context may stay in tooltip or drawer
 detail, but the table row must not duplicate the same probe protocol and
 result text across both identity and metric cells.
+The probe source chip ("via Edge 01", or "2/2 locations reporting" for a
+multi-location check, the same wording Settings uses) shares the result's
+single line: the result keeps its full width at the cell's right edge and the
+chip takes the room left, truncating with its full text on hover. Before, the
+chip pushed "failed" out of its column at every width up to 1440px. Rows stay
+one line because the table windows them at a single measured height. On
+phones the method and target columns hide so the check name reads, and both
+stay in the row drawer.
 That same frontend-owned compatibility boundary must remain intentionally
 narrow. Shared resource adapters may admit explicit aliases such as `host`,
 `truenas`, and `ceph`, and VMware detail mappers may project typed metadata
@@ -4366,7 +4389,13 @@ must render from that shared projection instead of rescanning raw job arrays or
 inventing local PBS status heuristics,
 `resourceDetailDrawerIdentityModel.ts` owns the pure identity-card,
 discovery-summary, source-debug, and debug-bundle derivations that feed the
-overview and debug drawer surfaces,
+overview and debug drawer surfaces (the `Identity` card shows each identifier
+once: Discovery and Metrics Target rows appear only when they name something
+not already on screen, meaning the header's `getPreferredInfrastructureDisplayName`,
+the rows above, or the Platform ID row, and Aliases omits the same displayed
+values; candidate names the drawer never shows do not count, a shown Platform
+ID counts as identity data for the empty state, and a Machines agent drawer
+used to list one ID four times),
 `useResourceDetailDrawerDockerActionsState.ts` owns Docker action runtime, and
 the overview/debug render-heavy surfaces live in dedicated drawer-local owners
 instead of staying inline in the shell.
