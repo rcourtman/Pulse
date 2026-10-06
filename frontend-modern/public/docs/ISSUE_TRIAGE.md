@@ -40,6 +40,17 @@ triage. Where the installed state is uncertain, check it before suggesting
 another action. A diagnostics export is useful only when Pulse is running and
 collecting it is safe.
 
+For performance reports, retain what a reading measures before comparing it:
+Pulse process, container or whole host; units, measurement window and uptime;
+and the relevant CPU allocation or memory limit, fleet, polling and open
+dashboards. A process-start CPU average is not a recent window, and database
+size is not a write rate. The evidence field asks for these distinctions only
+where known, without making new collection a condition of reporting. Existing
+screenshots or an unavailable reading are valid evidence. Do not request raw
+profiles, heap dumps, databases or full process command lines in a public
+thread; use locally reviewed counter summaries, without restarting, creating
+load or changing polling or retention just to measure.
+
 ## Required disposition
 
 Before removing `needs-decomposition` or declaring a mixed report triaged:
