@@ -1229,16 +1229,22 @@ receives `resolve` for the alert's dedup key. Only the wording changes.
 agent for the current reading.") in place of "<resource> on <node> is now
 healthy" for every templated webhook `.Message`. Grouped lists append the
 short outcome ("moved to pve1 (Host Agent)") to the moved entry. ntfy titles a
-single moved alert `MOVED: <resource>` and swaps the green check tag for
-`arrow_right`. Email and Apprise title it `Pulse alert moved: <resource>` and
-add the summary after the breach message. The resolution rides the Alert JSON,
-so it survives the delivery queue round trip and appears in the default JSON
-payload's `alerts` array. Built-in template titles still say Resolved, which is
-accurate for the closed alert, and a custom template that hard-codes recovery
-text keeps it. Issue #1682 is the precedent: a recipient called "is now
-healthy" a false factual claim when an alert closed without recovering.
+single moved alert `MOVED: <resource>`. Email and Apprise title it `Pulse alert
+moved: <resource>` and add the summary after the breach message. Recovery
+visuals follow the same rule: when any close in a resolved delivery was not a
+recovery, `WebhookPayloadData.NotRecovered` is set and the built-in templates
+drop them (Discord's green embed becomes the neutral blue, both Teams cards
+lose recovery green, Mattermost's check emoji becomes `:arrow_right:`), and
+ntfy swaps its green check tag for `arrow_right`, for a single alert or a batch.
+Built-in titles still say Resolved, which is accurate for the closed alert;
+custom templates can read `.NotRecovered`, and one that hard-codes recovery
+text keeps it. The resolution rides the Alert JSON, so it survives the delivery
+queue round trip and appears in the default JSON payload's `alerts` array.
+Issue #1682 is the precedent: a recipient called "is now healthy" a false
+factual claim when an alert closed without recovering.
 
 Verification: `resolved_handover_test.go` drives the firing, its receipt and
 the queued close through the normal entry points for ntfy, and renders Discord,
-PagerDuty, a grouped Slack list and email/Apprise content, plus the unchanged
-ordinary recovery wording.
+both Teams cards, Mattermost, PagerDuty, a grouped Slack list, a grouped ntfy
+batch and email/Apprise content, plus the unchanged ordinary recovery wording
+and visuals.
