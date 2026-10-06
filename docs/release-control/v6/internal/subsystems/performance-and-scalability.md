@@ -1932,9 +1932,17 @@ internal persistent signal so the toggle and the hosts-table render
 stay in lockstep. The history range remains inline in both display modes because
 the default bars mode uses it for the intent-driven guest-row history lens.
 Embedded sibling tables that opt into sparklines
-re-instantiate `useWorkloadTableMetricHistory`; the cache key matches
-the workloads-table reader so both readers dedupe their fetches and
-the canonical Workloads hot-path budget is preserved. Standalone
+re-instantiate `useWorkloadTableMetricHistory` and name the rows they draw
+through its required `series` option. The Proxmox nodes table passes
+`'nodes'` and polls only the infrastructure summary; the WorkloadsSurface
+reader passes `'guests'` and polls only the workloads history. Two readers
+on one page do not share reads: each forwards its own abort signal, which
+bypasses the summary caches' in-flight dedupe, and retained query values
+seed matching mounts and source changes without deduplicating requests. A
+reader therefore must not poll a summary its rows do not render. In Trends
+the vSphere overview polls only the workloads history, and the Proxmox
+overview polls the workloads history and the infrastructure summary once
+each. Standalone
 WorkloadsSurface callers (no override props) keep the original
 persistent-signal-backed behavior.
 Every toolbar that controls a `WorkloadsSurface` consumes
@@ -2008,14 +2016,20 @@ The Workloads table metric display mode is part of the protected Workloads
 hot path. Default bar mode keeps compact current-value bars at rest and swaps
 only the active fine-pointer or keyboard-focused guest row to the original
 sparklines; persistent Trends mode keeps sparklines visible for every rendered
-row. Bar mode does not hydrate estate history at rest: the selected range is
-local state until a row is active, then one centralized query reads only that
-guest's canonical metrics target from `/api/metrics-store/history`, capped at
-36 points. Equivalent live guest snapshots must not restart that request, and
-leaving the row disables it; per-row query owners, fan-out, and polling remain
-forbidden. Persistent Trends retains the shared, cache-keyed
-`fetchWorkloadsSummaryAndCache` / `fetchInfrastructureSummaryAndCache` reader
-for all rendered rows. Range-sensitive readers clear prior-range data when no
+row. Bar mode does not hydrate estate history at rest. With the history lens
+on, one centralized queue warms a bounded window instead: up to the first six
+guests of the mounted table window at rest, then the active guest first plus
+its next four and previous one, with at most four reads in flight and 18 cached rows. Each read
+targets one guest's canonical metrics target on `/api/metrics-store/history`,
+is capped at 36 points, and is never polled. Equivalent live guest snapshots
+must not restart a read. A range change or leaving the lens mode cancels
+pending and in-flight reads, while leaving a row lets its read settle into the
+bounded cache. Per-row query owners, estate-wide fan-out, and polling remain
+forbidden. Persistent Trends retains one cache-keyed
+`fetchWorkloadsSummaryAndCache` reader for all rendered guest rows. Grouped
+host rows render no metric cells, so the WorkloadsSurface reader never polls
+`fetchInfrastructureSummaryAndCache`; node series belong to the page's hosts
+table reader. Range-sensitive readers clear prior-range data when no
 exact cache entry exists and forward cancellation so superseded range work
 does not continue occupying browser connections. Sparkline ranges must stay
 bounded to the governed compact table windows. Expanded history belongs in the existing guest drawer chart

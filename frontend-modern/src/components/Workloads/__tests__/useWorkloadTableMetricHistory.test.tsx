@@ -4,10 +4,15 @@ import { createSignal, type Accessor } from 'solid-js';
 
 import { ChartsAPI, type AllMetricsHistoryResponse } from '@/api/charts';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
+import type { Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
+import { __resetInfrastructureSummaryFetchesForTests } from '@/utils/infrastructureSummaryCache';
 
 import { useWorkloadTableMetricHistory } from '../useWorkloadTableMetricHistory';
-import type { WorkloadTableMetricHistoryRange } from '../workloadMetricHistoryModel';
+import {
+  WORKLOAD_TABLE_HISTORY_POLL_MS,
+  type WorkloadTableMetricHistoryRange,
+} from '../workloadMetricHistoryModel';
 
 const guest = {
   id: 'cluster-a:pve1:101',
@@ -47,6 +52,7 @@ function HistoryProbe(props: {
     prefetchGuests: props.prefetchGuests,
     range: props.range,
     selectedNode: () => null,
+    series: 'guests',
   });
 
   const activeHistoryValue = () => {
@@ -57,13 +63,75 @@ function HistoryProbe(props: {
   return <div data-testid="active-history-value">{activeHistoryValue()}</div>;
 }
 
+const node = { id: 'cluster-a-pve1', name: 'pve1', instance: 'cluster-a' } as Node;
+const point = (value: number) => [{ timestamp: 2, value, min: value, max: value }];
+
+function SeriesProbe(props: { series: 'guests' | 'nodes' }) {
+  const reader = useWorkloadTableMetricHistory({
+    enabled: () => true,
+    range: () => '1h',
+    series: props.series,
+  });
+  const latest = (series: ReturnType<typeof reader.getGuestMetricSeries>) =>
+    series[0]?.points.at(-1)?.value ?? 'none';
+
+  return (
+    <div data-testid="series-values">
+      {`guest=${latest(reader.getGuestMetricSeries(guest, 'cpu'))} node=${latest(
+        reader.getNodeMetricSeries(node, 'cpu'),
+      )}`}
+    </div>
+  );
+}
+
 afterEach(() => {
   cleanup();
   resetCreateNonSuspendingQueryCacheForTest();
+  __resetInfrastructureSummaryFetchesForTests();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe('useWorkloadTableMetricHistory', () => {
+  it.each([
+    ['guests', 'guest=11 node=none', 'workloads'],
+    ['nodes', 'guest=none node=22', 'infrastructure'],
+  ] as const)(
+    'polls only the summary its %s rows read',
+    async (series, expectedValues, polledRoute) => {
+      vi.useFakeTimers();
+      const workloadSpy = vi.spyOn(ChartsAPI, 'getWorkloadCharts').mockResolvedValue({
+        data: { [guest.id]: { cpu: point(11) } },
+        dockerData: {},
+        guestTypes: {},
+        timestamp: 2,
+        stats: { oldestDataTimestamp: 1 },
+      });
+      const infrastructureSpy = vi
+        .spyOn(ChartsAPI, 'getInfrastructureSummaryCharts')
+        .mockResolvedValue({
+          nodeData: { [node.id]: { cpu: point(22) } },
+          timestamp: 2,
+          stats: { oldestDataTimestamp: 1 },
+        });
+      const [polledSpy, idleSpy] =
+        polledRoute === 'workloads'
+          ? [workloadSpy, infrastructureSpy]
+          : [infrastructureSpy, workloadSpy];
+
+      render(() => <SeriesProbe series={series} />);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(screen.getByTestId('series-values')).toHaveTextContent(expectedValues);
+      expect(polledSpy).toHaveBeenCalledTimes(1);
+      expect(idleSpy).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(WORKLOAD_TABLE_HISTORY_POLL_MS * 2);
+      expect(polledSpy).toHaveBeenCalledTimes(3);
+      expect(idleSpy).not.toHaveBeenCalled();
+    },
+  );
+
   it('bounds slow-estate warming and prioritizes a distant active guest', async () => {
     const guests = Array.from({ length: 500 }, (_, index) => ({
       ...guest,

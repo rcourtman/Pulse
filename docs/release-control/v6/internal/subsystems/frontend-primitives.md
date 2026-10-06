@@ -693,11 +693,13 @@ same relative point in the selected history range. Leaving the row clears the
 cursor and restores the bars and I/O readouts together. The lens mounts with a short
 reduced-motion-safe fade and must not leave both bar and chart semantics in the
 accessibility tree simultaneously.
-Bar mode resolves history only for that active guest through its canonical
-metrics target and the selected compact range; it must not start an
-estate-wide chart request merely because the range changes. The active request
-key is stable across equivalent live guest snapshots, and leaving the row or
-selecting another range aborts superseded browser work. Persistent Trends may
+Bar mode resolves history per guest through each guest's canonical metrics
+target and the selected compact range, warming only a bounded window of
+mounted and adjacent rows with the active guest first; it must not start an
+estate-wide chart request merely because the range changes. The request key is
+stable across equivalent live guest snapshots, and selecting another range
+aborts superseded browser work. Leaving a row does not cancel its read, which
+settles into the bounded row cache. Persistent Trends may
 retain the shared estate reader, but range changes must clear prior-range data
 unless an exact-key cache entry exists.
 
@@ -7987,6 +7989,15 @@ Rendered table proof belongs in
 `frontend-modern/src/features/standalone/__tests__/AgentsMachinesTable.test.tsx`;
 drawer grouping and fallback proof belongs in
 `frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerMetricsHistoryModel.branchcov0712.test.ts`.
+
+### The Proxmox nodes table reads node history only
+
+`frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx` draws its Trends
+sparklines through `useWorkloadTableMetricHistory` with `series: 'nodes'`, so
+it polls the infrastructure summary and no guest history. The embedded
+workloads table below it owns guest history and passes `series: 'guests'`.
+`ProxmoxNodesTable.test.tsx` pins the option; the per-page polling budget
+belongs to performance-and-scalability.
 
 ### Proxmox Storage reuses the shared product-family source scope
 

@@ -1535,7 +1535,10 @@ When every node shares one cluster and none is standalone, the model drops
 the `cluster` column (it would repeat one value on every row) and
 `ProxmoxNodesTable` names that cluster in the table header instead, visible
 during search and independent of the inventory-count preference, so the
-cluster identity is never lost. Workload status buckets read the canonical
+cluster identity is never lost. Its Trends sparklines read node history
+through `useWorkloadTableMetricHistory` with `series: 'nodes'`; guest history
+stays with the embedded workloads table below it, so the nodes table adds no
+guest-history poll to the page. Workload status buckets read the canonical
 health too: a running workload whose unified health names an open
 `warning_alert` or `critical_alert` reason counts under Attention, while
 `backup_stale` and other non-alert reasons do not.
