@@ -2226,6 +2226,26 @@ describe('backup column', () => {
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
 
+  it('keeps a guest with no recorded backup at None while the clock moves', () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+      now: Date.parse('2026-05-26T12:00:00Z'),
+    });
+
+    const { container } = renderGuestRow({
+      guest: makeGuest({ type: 'qemu', workloadType: 'vm', lastBackup: 0 }),
+      visibleColumnIds: ['name', 'backup'],
+    });
+    const badge = () => container.querySelector('[aria-label="Backup status: no backup found"]');
+
+    expect(badge()?.textContent?.trim()).toBe('None');
+
+    // A guest without a backup has no age to move, so ticks change nothing.
+    vi.advanceTimersByTime(2 * 24 * 60 * 60 * 1000);
+
+    expect(badge()?.textContent?.trim()).toBe('None');
+  });
+
   it('keeps a mounted backup badge aging through its bands without new data', () => {
     const start = Date.parse('2026-05-26T12:00:00Z');
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });

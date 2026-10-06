@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AvailabilityTargetsAPI, type AvailabilityTarget } from '@/api/availabilityTargets';
 import availabilitySettingsPanelSource from '../AvailabilitySettingsPanel.tsx?raw';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 import { AvailabilitySettingsPanel } from '../AvailabilitySettingsPanel';
 
 const routeState = vi.hoisted(() => ({
@@ -223,6 +224,52 @@ describe('AvailabilitySettingsPanel', () => {
       '1 failed check in a row. It counts as offline after 2.',
     );
     expect(screen.getByText('icmp probe timed out').className).toContain('bg-rose-100');
+  });
+
+  it('turns a stalled loaded check into needing attention on the clock alone', async () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+      now: Date.parse('2026-10-05T12:00:20Z'),
+    });
+    resourceMocks.resources = [
+      {
+        id: 'availability:mqtt-broker',
+        name: 'MQTT broker',
+        displayName: 'MQTT broker',
+        type: 'network-endpoint',
+        platformId: 'mqtt-broker',
+        platformType: 'availability',
+        sourceType: 'api',
+        sources: ['availability'],
+        status: 'online',
+        lastSeen: Date.parse('2026-10-05T12:00:00Z'),
+        availability: {
+          targetId: 'mqtt-broker',
+          protocol: 'tcp',
+          port: 1883,
+          available: true,
+          latencyMillis: 8,
+          lastChecked: '2026-10-05T12:00:00Z',
+          pollIntervalSeconds: 60,
+        },
+      },
+    ];
+    vi.mocked(AvailabilityTargetsAPI.list).mockResolvedValue([targets[0]]);
+
+    try {
+      render(() => <AvailabilitySettingsPanel />);
+      await waitFor(() => expect(screen.getByText('1 enabled · 1 total')).toBeInTheDocument());
+      expect(screen.getByText('Online · 8 ms').className).toContain('bg-emerald-100');
+
+      // The probe stalls: the loaded resource and the target list never change
+      // and only the clock moves.
+      vi.advanceTimersByTime(20 * RELATIVE_TIME_TICK_MS);
+
+      expect(screen.getByText('1 needs attention · 1 enabled')).toBeInTheDocument();
+      expect(screen.getByText('Online · 8 ms').className).toContain('bg-amber-100');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('opens add and edit dialogs from the canonical availability route', async () => {

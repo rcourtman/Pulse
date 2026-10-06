@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "af8e129ce2a7c14abe97eb01c4d57fc83429eb29",
+  "verified_at": "2026-10-06T19:47:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/APITokenManager.tsx",
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx",
+    "frontend-modern/src/components/Settings/SuggestProfileModal.tsx",
+    "frontend-modern/src/components/Settings/availabilitySettingsModel.ts",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts",
+    "frontend-modern/src/features/standalone/standalonePageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "d04f592f0716bca788e3dabfbf57bff8887d829ed4bce46eeeda257166f45ab6",
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx": "2845b7e5607ef93963815eaf09f9c79539552e98d7c22ce90d0654e381c5b86b",
+    "frontend-modern/src/components/Settings/SuggestProfileModal.tsx": "926d95325615e2f74b8c9b6ff1a532ed7e6d93e0066a235809e0510ccd1e91b1",
+    "frontend-modern/src/components/Settings/availabilitySettingsModel.ts": "5a2fd46c9180f86931784a3a1b59382870756434a4026329bbc4ba62dfcc83d8",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "f8a52bb0d837deed4833fe8c2d38011d45e9cb5c54bd5c4228f0c7c6ca876bd3",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts": "695c60ab8c9b46c75bfdc5a4629e4a224e71a3165488d01a43e8876bee7cdc25",
+    "frontend-modern/src/features/standalone/standalonePageModel.ts": "67380f040f06957d40b3ca3432225598bcde97d112e09507066477550a55204e"
+  },
+  "routes": [
+    "/settings/monitoring/availability",
+    "/settings/security/api",
+    "/settings/infrastructure",
+    "/standalone/availability",
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (backend :7731, Vite :5251 serving this branch merged with the watchdog/Patrol branch and origin/main 9aaac4d3e5) with Playwright page.clock installed before load; /ws data frames held with a data-free keep-alive per fake minute (one live socket), GETs replayed, collection refetches stalled; ten one-minute steps per surface",
+    "Settings > Monitoring > Availability at 1440 and 390: summary '3 need attention \u00b7 1 offline \u00b7 7 enabled' -> '7 need attention \u00b7 1 offline \u00b7 7 enabled' and the Online pills healthy (emerald) -> attention (amber) for stalled loaded checks",
+    "Settings > Security > API access with an injected token (created 5 minutes, last used 2 minutes before load) at 1440 and 390: Created 5 mins ago -> 15 mins ago, Last used stays 2 mins ago (read-time by design)",
+    "Settings > Infrastructure > Manage agent profiles > Ideas (assistant and agent_profiles capability intercepted, suggestions answered locally): the earlier draft read 1 min ago -> 11 mins ago",
+    "Same-session control with the pre-change Settings files under the running Vite: availability summary and pills, token Created and draft ages all stayed frozen",
+    "Availability checks table at 1440 and 390 with the precomputed attention sort: stalled checks sort first and every row reads stale, 'checked 10 mins ago', after ten held minutes",
+    "After the pass, a GuestRowCells.tsx code comment was reworded (no behavior change); its no-backup sentinel path is covered by GuestRow.test.tsx",
+    "No page errors at either viewport"
+  ],
+  "interactions": [
+    "Loaded each route, held the stream and advanced the page clock ten one-minute steps, reading the same elements before and after",
+    "Opened Install Pulse Agent > Manage agent profiles > Ideas, generated two drafts, then held and advanced",
+    "Repeated the Settings scenarios with the pre-change files as the control"
+  ]
+}

@@ -5231,6 +5231,11 @@ passes rather than reading the wall clock itself, so the caller's
 `getAvailabilityProbePresentation(resource, now)` measures its checked and
 last-success ages from the same `now` as its fresh or stale band, and
 `getUpdateCheckedLabel(lastCheckedMs, now)` takes the Updates panel's clock.
+The Availability settings helpers (`getAvailabilityTargetHealth`, its status
+class and title helpers, `getAvailabilityTargetsSummary`) take the settings
+panel's clock as `nowMs` the same way, and a creation time in a settings list
+or dialog (API token Created, an earlier profile-suggestion draft) is a fixed
+event, so its age reads the clock.
 Read-only metadata badges follow the same primitive-owned shell rule.
 `frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
 outlined appearances, compact sizing, shape, typed tone vocabulary, fit

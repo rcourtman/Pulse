@@ -149,13 +149,16 @@ const availabilityFailureThreshold = (target: AvailabilityTarget): number => {
     : DEFAULT_AVAILABILITY_FAILURE_THRESHOLD;
 };
 
+// `nowMs` is the caller's shared relative-time clock: a loaded check turns
+// stale by time alone, so the classification must not freeze at render.
 export function getAvailabilityTargetHealth(
   target: AvailabilityTarget,
   resource?: Resource,
+  nowMs: number = Date.now(),
 ): AvailabilityTargetHealth {
   if (!target.enabled) return 'paused';
   if (resource) {
-    const variant = getStandaloneResourceStatusIndicator(resource).variant;
+    const variant = getStandaloneResourceStatusIndicator(resource, nowMs).variant;
     if (variant === 'success') return 'healthy';
     if (variant === 'warning') return 'attention';
     if (variant === 'danger') return 'offline';
@@ -184,8 +187,9 @@ export function getAvailabilityTargetHealth(
 export function getAvailabilityTargetStatusTitle(
   target: AvailabilityTarget,
   resource?: Resource,
+  nowMs: number = Date.now(),
 ): string | undefined {
-  if (getAvailabilityTargetHealth(target, resource) !== 'attention') return undefined;
+  if (getAvailabilityTargetHealth(target, resource, nowMs) !== 'attention') return undefined;
   const status = target.status;
   const failures = status?.consecutiveFailures;
   if (status?.available !== false || typeof failures !== 'number' || failures <= 0) {
@@ -206,8 +210,9 @@ const AVAILABILITY_HEALTH_CLASS: Record<AvailabilityTargetHealth, string> = {
 export function getAvailabilityTargetStatusClass(
   target: AvailabilityTarget,
   resource?: Resource,
+  nowMs: number = Date.now(),
 ): string {
-  return AVAILABILITY_HEALTH_CLASS[getAvailabilityTargetHealth(target, resource)];
+  return AVAILABILITY_HEALTH_CLASS[getAvailabilityTargetHealth(target, resource, nowMs)];
 }
 
 /**
@@ -230,10 +235,13 @@ export function getAvailabilityTargetProbeSourceLabel(
 export function getAvailabilityTargetsSummary(
   targets: readonly AvailabilityTarget[],
   resourceFor: (target: AvailabilityTarget) => Resource | undefined = () => undefined,
+  nowMs: number = Date.now(),
 ): string {
   if (targets.length === 0) return 'No availability checks configured';
   const enabled = targets.filter((target) => target.enabled).length;
-  const health = targets.map((target) => getAvailabilityTargetHealth(target, resourceFor(target)));
+  const health = targets.map((target) =>
+    getAvailabilityTargetHealth(target, resourceFor(target), nowMs),
+  );
   const offline = health.filter((state) => state === 'offline').length;
   const attention = health.filter((state) => state === 'attention' || state === 'offline').length;
   if (attention === 0) return `${enabled} enabled · ${targets.length} total`;

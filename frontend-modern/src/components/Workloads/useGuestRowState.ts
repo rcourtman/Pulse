@@ -296,8 +296,8 @@ export function useGuestRowState(props: GuestRowProps) {
   );
 
   // A probe's checked age and stale band keep moving on the shared clock while
-  // the row stays mounted. Only guests that carry a probe read the clock, so
-  // the rest of the table never re-runs on its tick.
+  // the row stays mounted. Only guests that carry a probe read the clock here,
+  // so probe-free rows never re-run this presentation on its tick.
   const now = useRelativeTimeNow();
   const availabilityPresentation = createMemo(() => {
     const availability = props.guest.availability;

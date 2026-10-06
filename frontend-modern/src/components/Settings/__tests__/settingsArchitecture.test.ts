@@ -1301,6 +1301,15 @@ describe('settings architecture guardrails', () => {
     expect(apiTokenManagerSource).not.toContain('rel="noreferrer"');
     expect(apiTokenManagerSource).toContain('getAPITokenDockerPodmanUsageSummary');
     expect(apiTokenManagerSource).toContain('getAPITokenDockerPodmanUsageTitle');
+    // Created is a fixed event and ages on the shared clock; Last used is a
+    // latest reading from a list read once, so it stays the read-time age.
+    expect(apiTokenManagerSource).toContain('const now = useRelativeTimeNow();');
+    expect(apiTokenManagerSource).toContain(
+      'formatRelativeTime(new Date(token.createdAt).getTime(), { now: now() })',
+    );
+    expect(apiTokenManagerSource).toContain(
+      'formatRelativeTime(new Date(token.lastUsedAt).getTime())',
+    );
     expect(apiTokenManagerStateSource).toContain('getAPITokenDockerPodmanUsageCountLabel');
 
     for (const source of [

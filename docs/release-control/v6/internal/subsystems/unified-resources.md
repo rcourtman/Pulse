@@ -1292,6 +1292,9 @@ and review times and debug source last-seen ages read it as well. The drawer's
 correlation last-seen and action-audit updated ages stay read-time: those
 facets are read once per drawer and describe latest readings of records that
 may have moved since.
+`sortStandaloneResourcesByAttention` re-sorts on every clock tick, so it
+classifies each resource once per sort rather than twice per comparison, and
+the Settings availability page classifies loaded checks on the same clock.
 Kubernetes name columns hold the chevron, status dot and name inside one
 track, so their md widths leave the name room for a typical node or service
 name at a 768px viewport: Nodes 20 percent (with Capacity at 16 so its

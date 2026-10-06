@@ -2648,8 +2648,11 @@ render froze there. The guest backup cell in `GuestRowCells.tsx` therefore
 reads the frontend-primitives shared relative-time clock for its age badge and
 its fresh, stale or overdue band (measured from the later of the clock and the
 wall clock), and `useGuestRowState.ts` passes the clock to the availability
-probe presentation only for guests that carry a probe, so the rest of the
-table never re-runs on the 30-second tick.
+probe presentation only for guests that carry a probe. On each 30-second tick
+the backup cell of every guest with a recorded backup re-derives its badge
+(one shared timer, no per-row interval); guests without a probe skip the probe
+presentation, and a guest's backup cell does not depend on the clock's ticks
+while it has no recorded backup time.
 That per-row link state now also consumes the shared
 `frontend-modern/src/routing/resourceLinks.ts` workload-to-infrastructure
 helper instead of a workload-local routing shim. Future infrastructure-link
