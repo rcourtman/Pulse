@@ -700,7 +700,11 @@ but registry IDs, merge keys, parent links, metrics targets, source-native
 guest IDs, external URLs, discovery targets, and actions must not. Children
 such as VMs, containers, and storage inherit the parent's presentation and
 native aliases so Overview, search, API/websocket/mobile, storage, backups,
-and filters agree. A linked agent may enrich the canonical node but cannot
+and filters agree. That inheritance stays in the child's `ProxmoxData`: only
+the node itself lists its node identity, native name, and native-name aliases
+as canonical aliases, because a child carrying them would answer to the node's
+alert resource ID and every guest would show each node alert as its own.
+A linked agent may enrich the canonical node but cannot
 replace a configured override with its hostname; same-name cluster identity
 remains provider scoped even after a native rename.
 Physical-disk resources own cross-source disk identity. When Proxmox inventory
