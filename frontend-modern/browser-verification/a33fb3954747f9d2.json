@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "base_sha": "13d604e1c71a4b8388ecaf04ea4dbdcd731f7e0b",
+  "verified_at": "2026-10-06T13:10:03Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerAlertsTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesAlertsTable.tsx",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
+    "frontend-modern/src/features/truenas/TrueNASAlertsTable.tsx",
+    "frontend-modern/src/features/vmware/VsphereAlertsTable.tsx",
+    "frontend-modern/src/utils/alertDetailPresentation.ts",
+    "frontend-modern/src/utils/format.ts",
+    "frontend-modern/src/utils/relativeTimeClock.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerAlertsTable.tsx": "752554fff4c5091823aed3b5f12434fa45a8c0ca43d5ad4367280dea938c8b4d",
+    "frontend-modern/src/features/kubernetes/KubernetesAlertsTable.tsx": "7af91f77431771b4691a7b4b7e1ebd92656c38dc5aa4ecc72cd0e40f47df7664",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "6315591667690bdf7b588524b5c2506643a3a24d2269b8cf050d83e1e274fa97",
+    "frontend-modern/src/features/truenas/TrueNASAlertsTable.tsx": "7361527eedafc6a3e5ef9fbea8689fd802c4bcc487f4741e3c5a10649ea64d03",
+    "frontend-modern/src/features/vmware/VsphereAlertsTable.tsx": "e8154ec75bcbb6daa6f3bf32fd8bc0749d6649bae8e31ac7e3c7be345feebcae",
+    "frontend-modern/src/utils/alertDetailPresentation.ts": "5c3e6beb5df3d255c01b38e566163e630dd93ed1eebb82539c68110c3bf027ea",
+    "frontend-modern/src/utils/format.ts": "7757da44a87231405223b7a88bbf820ed905b4823f7f2955b9c9f7f488672a57",
+    "frontend-modern/src/utils/relativeTimeClock.ts": "877686e957292e07dc233be81b52d97bccfa1fb8aeddc63a82b0abf4d5c5e41f"
+  },
+  "routes": [
+    "/vmware/overview",
+    "/vmware/activity",
+    "/truenas/overview",
+    "/docker/overview",
+    "/kubernetes/overview"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 600,
+      "height": 844
+    },
+    {
+      "width": 768,
+      "height": 1000
+    },
+    {
+      "width": 1024,
+      "height": 1000
+    },
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 1920,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Private mock stack on main 92d946d057 plus this change (rebased onto main 13d604e1c7, whose node-temperature alert and release-preflight changes touch no frontend file here)",
+    "Before: alert-table Started read 'Oct 6, 10:34 AM' and clipped on 2-3 rows at 390 and 768 on TrueNAS and vSphere (by 13-31px)",
+    "After: Started reads as an age ('9m ago', '2h ago') and clips at no width from 390 to 1920 on TrueNAS and vSphere; the cell's hover title is the exact time ('Oct 6, 2026, 11:52 AM') and the drawer's Started row keeps it",
+    "Docker and Kubernetes overviews have no provider incidents in the mock, so an incident started two hours earlier was injected into the API responses (websocket held): both read '2h ago' with the exact time on hover, right-aligned, unclipped at 390, 768 and 1440; Docker's Started column now uses the numeric-value alignment kind like the other three",
+    "Shared clock: with Playwright's page clock installed and the websocket held so no data changed, vSphere Started ages went from '9m ago' to '3h ago' after a 3-hour fast-forward and vSphere Activity from '1d ago' to '2d ago' after 24 hours; before this change the ages stayed frozen (unit test fails without the clock)"
+  ],
+  "interactions": [
+    "Measured the Started column and every other column for clipping at six widths",
+    "Read the Started cell's hover title",
+    "Fast-forwarded the page clock with live data held and re-read the ages"
+  ]
+}

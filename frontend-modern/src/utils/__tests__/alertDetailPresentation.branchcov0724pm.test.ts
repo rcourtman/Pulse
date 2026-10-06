@@ -11,7 +11,7 @@
  *     the provider's presentation table does not cover).
  * - formatPlatformAlertEntityType: the `normalized === 'host'` arm (line 92)
  *     existing tests cover 'vm' / 'datastore' but never 'host'.
- * - formatPlatformAlertStartedAt: the valid-date fall-through to toLocaleString
+ * - formatPlatformAlertStartedAt: the valid-date fall-through to a compact age
  *     (line 102 -> 110); existing tests only feed absent / pre-2000 values.
  * - formatPlatformAlertDetailDateTime: the valid-date fall-through to
  *     toLocaleString (line 117 -> 126); existing tests only feed absent /
@@ -98,25 +98,14 @@ describe('platform alert date formatting - present, post-2000 timestamps', () =>
     else process.env.TZ = previousTz;
   });
 
-  it('formatPlatformAlertStartedAt renders a valid timestamp, omitting the year (table format)', () => {
-    const value = '2024-03-15T14:30:00Z';
-    const result = formatPlatformAlertStartedAt(value);
+  it('formatPlatformAlertStartedAt renders a valid timestamp as an age (table format)', () => {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const result = formatPlatformAlertStartedAt(twoHoursAgo);
 
-    // Happy path, not the placeholder and not a raw passthrough.
-    expect(result).not.toBe('-');
-    expect(result).not.toBe(value);
-
-    // The compact table format has no year — the structural difference
-    // from the detail format and from the raw ISO string.
-    expect(result).not.toMatch(/2024/);
-
-    // Under TZ=UTC the day-of-month renders as 15 in every locale.
-    expect(result).toMatch(/15/);
-
-    // Mirrors the exact option set the function hardcodes; pinned to the
-    // concrete en-US rendering under TZ=UTC (the structural regex checks
-    // above carry the locale-independent verification).
-    expect(result).toBe('Mar 15, 02:30 PM');
+    // An open alert's table cell answers how long it has been going on; the
+    // exact time is the hover text and the drawer row.
+    expect(result).toBe('2h ago');
+    expect(result).not.toBe(twoHoursAgo);
   });
 
   it('formatPlatformAlertDetailDateTime renders a valid timestamp, including the year (detail format)', () => {
