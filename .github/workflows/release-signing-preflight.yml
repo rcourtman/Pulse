@@ -166,3 +166,52 @@ jobs:
             exit 1
           fi
           echo "Release signing credentials are ready."
+
+  # Scheduled runs have no caller watching them, and GitHub only emails
+  # whoever last edited the cron line. Keep one open issue while the weekly
+  # check fails and close it when the check passes again.
+  report-scheduled-result:
+    name: Report scheduled result
+    needs: apple-signing-preflight
+    if: ${{ always() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open, update or close the signing preflight issue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RESULT: ${{ needs.apple-signing-preflight.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Release signing preflight is failing"
+          # Search by title on the server, then keep only an exact match, so
+          # the alert is found however many newer issues are open.
+          number="$(gh issue list --state open --search "\"${title}\" in:title" \
+            --limit 100 --json number,title \
+            --jq "map(select(.title == \"${title}\")) | first | .number // empty")"
+          case "${RESULT}" in
+            success)
+              if [[ -n "${number}" ]]; then
+                gh issue close "${number}" --comment "The weekly signing preflight passed again: ${RUN_URL}"
+              fi
+              ;;
+            failure)
+              if [[ -n "${number}" ]]; then
+                gh issue comment "${number}" --body "It failed again: ${RUN_URL}"
+              else
+                gh issue create --title "${title}" --body "The weekly release signing preflight failed: ${RUN_URL}
+
+          The run's annotations name each failing check: Developer ID identity, certificate expiry, signing, or Apple notary access. Renew or replace that credential before the next release is cut, or the release will fail at signing or notarization.
+
+          This issue closes itself when the weekly check passes again."
+              fi
+              ;;
+            *)
+              echo "The preflight ended as ${RESULT}; nothing to report."
+              ;;
+          esac
