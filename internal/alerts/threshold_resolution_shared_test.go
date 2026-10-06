@@ -265,8 +265,8 @@ func TestCheckNodeKeepsTemperatureAlertWhenHostAgentMonitorsNode(t *testing.T) {
 
 	node, host := testNodeWithHostAgent()
 	m.CheckHost(host)
-	if !m.hasHostAgentForNode(node.Name) {
-		t.Fatalf("expected CheckHost to register %q for node deduplication", host.Hostname)
+	if !m.hasHostAgentForNode(node.ID) {
+		t.Fatalf("expected CheckHost to link %q to node %q for deduplication", host.ID, node.ID)
 	}
 
 	node.Temperature = &models.Temperature{Available: true, CPUPackage: 90}
@@ -356,6 +356,104 @@ func TestCheckNodeMissingTemperatureDoesNotResolveOpenAlert(t *testing.T) {
 	m.CheckNode(node)
 	if testHasActiveAlert(t, m, tempAlertID) {
 		t.Fatalf("expected disabled temperature threshold to clear %q without a reading", tempAlertID)
+	}
+}
+
+// A missing reading keeps the incident but must not let a sustained-for or
+// recovery delay complete across the gap in evidence.
+func TestCheckNodeMissingTemperatureInterruptsTimingRuns(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.MetricTimeThresholds = map[string]map[string]int{"node": {"temperature": 300}}
+	m.config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.mu.Unlock()
+
+	node, _ := testNodeWithHostAgent()
+	tempAlertID := canonicalMetricStateID(node.ID, "temperature")
+	specID := canonicalMetricSpecID(node.ID, "temperature")
+	hot := &models.Temperature{Available: true, CPUPackage: 85}
+
+	node.Temperature = hot
+	m.CheckNode(node)
+	m.mu.Lock()
+	pending := testCoreIsPending(m, node.ID, specID)
+	m.core.ShiftPending(-10 * time.Minute)
+	m.mu.Unlock()
+	if !pending {
+		t.Fatalf("expected a pending temperature run before the reading went missing")
+	}
+
+	node.Temperature = nil
+	m.CheckNode(node)
+	node.Temperature = hot
+	m.CheckNode(node)
+	if testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected the sustained-for delay to restart after a missing reading, not fire on the first sample back")
+	}
+
+	m.mu.Lock()
+	m.core.ShiftPending(-10 * time.Minute)
+	m.mu.Unlock()
+	m.CheckNode(node)
+	if !testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected the temperature alert to fire after a sustained run")
+	}
+
+	node.Temperature = &models.Temperature{Available: true, CPUPackage: 60}
+	m.CheckNode(node)
+	m.mu.RLock()
+	incident, _ := m.core.Incident(node.ID, specID)
+	m.mu.RUnlock()
+	if incident.RecoverySince.IsZero() {
+		t.Fatalf("expected a recovery run to start below the clear threshold")
+	}
+
+	node.Temperature = nil
+	m.CheckNode(node)
+	m.mu.RLock()
+	incident, _ = m.core.Incident(node.ID, specID)
+	m.mu.RUnlock()
+	if !incident.RecoverySince.IsZero() {
+		t.Fatalf("expected a missing reading to restart the recovery run")
+	}
+	if !testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected the temperature alert to stay open without a reading")
+	}
+}
+
+// Node alerts keep the PVE instance name in Instance. A config save must judge
+// them against node thresholds, not fall through to guest thresholds, which
+// have no temperature threshold and used to resolve a live temperature alert.
+func TestConfigSaveKeepsNodeTemperatureAlertOverTrigger(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.mu.Unlock()
+
+	node, _ := testNodeWithHostAgent()
+	node.Temperature = &models.Temperature{Available: true, CPUPackage: 90}
+	m.CheckNode(node)
+	tempAlertID := canonicalMetricStateID(node.ID, "temperature")
+	if !testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected node temperature alert %q", tempAlertID)
+	}
+
+	m.UpdateConfig(m.GetConfig())
+	if !testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected a config save to keep a node temperature alert still over its trigger")
+	}
+
+	config := m.GetConfig()
+	config.Overrides = map[string]ThresholdConfig{
+		node.ID: {Temperature: &HysteresisThreshold{Trigger: 95, Clear: 92}},
+	}
+	m.UpdateConfig(config)
+	if testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected a node override raising the trigger above the reading to resolve the alert")
 	}
 }
 

@@ -101,10 +101,10 @@ type Manager struct {
 	flappingActive  map[string]bool        // Track which alerts are currently in flapping state
 	// Cleanup control
 	cleanupStop chan struct{} // Signal to stop cleanup goroutine
-	// Host agent deduplication: track hostnames of active host agents
-	// When a host agent is running on a Proxmox node, we prefer the host agent
-	// alerts and suppress the node alerts to avoid duplicate monitoring.
-	hostAgentHostnames map[string]struct{} // Normalized hostnames (lowercase)
+	// Host agent deduplication: the Proxmox node each reporting host agent is
+	// linked to. While a link holds, the agent resource owns that machine's
+	// CPU, memory and disk usage alerts and the node releases its own copies.
+	hostAgentNodeLinks map[string]string // Host agent ID -> linked node ID
 	// Node display name caches. Proxmox nodes can share the same raw node name
 	// across multiple configured instances, so keep instance-scoped entries in
 	// addition to the legacy raw-name cache used by instance-less resources.
@@ -133,6 +133,9 @@ type Manager struct {
 	activeRecoveryReadable   atomic.Bool
 	activeRecoveryWriteBlock atomic.Bool
 	restoredAlertEpoch       atomic.Uint64
+	// Restored backup occurrences stay visible, but cannot notify until a
+	// successful backup evaluation confirms they are still overdue. Under mu.
+	restoredBackupNotifications map[string]time.Time
 
 	// Shadow-mode reducer feed (Phase 1 capstone). Nil until
 	// EnableShadowFeed; all access is under m.mu.
@@ -242,7 +245,7 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		flappingHistory:                 make(map[string][]time.Time),
 		flappingActive:                  make(map[string]bool),
 		cleanupStop:                     make(chan struct{}),
-		hostAgentHostnames:              make(map[string]struct{}),
+		hostAgentNodeLinks:              make(map[string]string),
 		nodeDisplayNames:                make(map[string]string),
 		instanceNodeDisplayNames:        make(map[string]string),
 		now:                             time.Now,
