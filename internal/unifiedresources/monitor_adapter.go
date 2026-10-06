@@ -198,7 +198,8 @@ func (a *MonitorAdapter) currentRegistry() *ResourceRegistry {
 // RecordChange forwards canonical resource-history events into the underlying
 // resource store when monitoring has a durable store attached. Alert lifecycle
 // events carry source-native references (Proxmox node and guest IDs, agent
-// IDs); they resolve here so history reads by canonical ID include them.
+// IDs, Docker host and Swarm service IDs, sub-resource references); they
+// resolve here so history reads by canonical ID include them.
 func (a *MonitorAdapter) RecordChange(change ResourceChange) error {
 	registry := a.currentRegistry()
 	if registry == nil || registry.store == nil {
@@ -229,16 +230,19 @@ func (a *MonitorAdapter) RecordChange(change ResourceChange) error {
 		}
 	} else if resolvedID, claimed := registry.resolveHistoryReference(sourceRef); resolvedID != "" {
 		change.ResourceID = resolvedID
-	} else if hasHistory && !claimed && !isDockerHistoryReference(sourceRef) {
-		// No resource answers to it: keep the binding an earlier event recorded.
-		id, found, err := history.ResolveHistorySourceIdentity(CanonicalResourceID(sourceRef))
-		if err != nil {
-			return err
-		}
-		if found {
-			change.ResourceID = id
-		} else {
-			unbound = true
+	} else if hasHistory && !isDockerNameHistoryReference(sourceRef) {
+		// A later generation may name the resource or settle a conflict.
+		unbound = true
+		if !claimed {
+			// No resource answers to it: keep the binding an earlier event recorded.
+			id, found, err := history.ResolveHistorySourceIdentity(CanonicalResourceID(sourceRef))
+			if err != nil {
+				return err
+			}
+			if found {
+				change.ResourceID = id
+				unbound = false
+			}
 		}
 	}
 	if hasHistory && CanonicalResourceID(sourceRef) != CanonicalResourceID(change.ResourceID) {

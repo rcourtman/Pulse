@@ -5846,10 +5846,12 @@ and storage IDs), a node-scoped Proxmox guest reference after migration, or
 `ResolveReferenceID` used by alert policy, so a resource named like a system
 reference cannot capture its events. A reference two resources answer to binds
 to neither: its event keeps its own reference and creates or changes no
-binding, though an earlier binding still covers that reference on read. A
+binding, though an earlier binding still covers that reference on read. Like
+any unbound reference it is retried, and once a later generation resolves it
+to one resource it binds there, replacing an earlier binding. A
 reference no resource
 answers to follows its retained binding after inventory removal, or keeps its
-own history. Docker references never take this path. Alert journal references
+own history. Docker container references never take this path. Alert journal references
 without a binding (read once per process, plus any written before inventory
 named their resource) are retried on each published registry generation for
 `legacyHistoryBindWindow`. Bound rows keep their recorded resource ID, so a
@@ -5861,6 +5863,46 @@ Assistant and Patrol resource contexts read it from the store. Proof:
 `TestHistoryIdentityMonitorAdapterResolvesProxmoxAlertReferences` and
 `TestHistoryIdentityBindsLegacyAlertRowsFromRegistryGenerations` in
 `internal/unifiedresources/history_identity_test.go`.
+Docker host alerts (`docker:<host ID>`) and Swarm service alerts
+(`docker:<host ID>/service/<service ID>`) resolve only through the registry's
+Docker source identities: the host ID is the Docker host's source ID, and a
+service reference names the service with that exact ID in the host's Swarm
+cluster, whichever manager reported it. A hostname in the host position is
+only ever looked up as a Docker host source ID. A service without an ID is
+referenced by its normalized name in the same place, so while its cluster has
+such a service every service reference there is a conflict. Alert references
+do not record whether they came from an ID, so a row journaled by an ID-less
+service can still join another service's history if a later generation or
+event binds the same reference; Swarm always reports service IDs, so that needs a malformed
+report naming a service exactly like another service's ID. Hostless
+`docker-service:<name>` references, container names and shortened container
+IDs never bind and are never retried against later inventory. A container
+without an ID alerts under its host's reference (`alerts.DockerResourceID`), so
+its events join that host's history, never another container's.
+Sub-resource alert references name no resource of their own and bind to the
+owner whose durable ID they carry (`historySubResourceOwner`): ZFS pool and
+device alerts (`<storage ID>/zfs-pool:<pool>[/device:<device>]`) to the
+storage, the Unraid array alert (`agent:<host ID>/storage:unraid-array`) to
+the array storage with that agent source ID, and host filesystem, SMART disk,
+disk temperature, RAID and custom-sensor alerts (`agent:<host ID>/disk:`,
+`/disk_temp:`, `/raid:`, `/custom:`) to the host. The owner reference must
+resolve to exactly one resource of the expected type; an ambiguous or
+incompatible owner is a conflict, so the event keeps its own reference,
+follows no retained binding and is retried. Pool, mount and kernel device labels are names,
+and a device name can denote a different disk after a reboot, so these alerts
+never bind a physical disk. Any other sub-resource shape stays unbound until
+its producer and this list change together. The Docker, storage and platform
+host-row drawers do not request per-resource history, so these bindings reach
+the facets, timeline and intelligence APIs and Assistant resource context, not
+a drawer. Patrol's scoped change feed matches the stored resource ID without
+expanding bindings, so it includes events recorded under the owner's
+canonical ID but not rows journaled before their binding.
+Proof: `TestHistoryIdentityMonitorAdapterResolvesDockerHostAndServiceReferences`
+and `TestHistoryIdentityMonitorAdapterResolvesSubResourceReferences` in
+`internal/unifiedresources/history_identity_test.go`, and
+`TestOwnerAlertTimelinesUseCanonicalHistoryIdentity` in
+`internal/monitoring/monitor_alert_handling_test.go` against the real alert
+producers.
 That same shared timeline vocabulary now includes the `activity` change kind
 for provider-read breadcrumbs such as VMware tasks and events, plus the
 `vmware_adapter` source-adapter token for canonical provenance drill-down.
