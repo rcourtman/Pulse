@@ -1019,7 +1019,7 @@ func TestReplicationStatusBindsOutcomeToSourceJob(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				switch r.URL.Path {
 				case "/api2/json/cluster/replication":
-					fmt.Fprint(w, `{"data":[{"id":"100-0","guest":100,"source":"pve1","target":"pve2","schedule":"*/5"}]}`)
+					fmt.Fprint(w, `{"data":[{"id":"100-0","guest":100,"source":"pve1","target":"pve2","schedule":"*/5","last_sync_status":"ok"}]}`)
 				case "/api2/json/nodes/pve1/replication/100-0/status":
 					w.WriteHeader(tc.httpStatus)
 					fmt.Fprint(w, tc.body)

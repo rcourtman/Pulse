@@ -79,6 +79,8 @@ func (c *Client) GetReplicationStatus(ctx context.Context) ([]ReplicationJob, er
 // enrichReplicationJobStatus fetches status data for a replication job from
 // /nodes/{node}/replication/{id}/status and merges it into the job struct.
 func (c *Client) enrichReplicationJobStatus(ctx context.Context, job *ReplicationJob) {
+	// The cluster endpoint is configuration, not a fresh status observation.
+	job.LastSyncStatus = ""
 	// Status is stored on the source node
 	sourceNode := job.Source
 	if sourceNode == "" {
