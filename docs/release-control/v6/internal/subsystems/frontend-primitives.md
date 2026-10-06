@@ -5427,18 +5427,24 @@ Compact platform table timestamps follow the same rule.
 `PlatformTableDateTimeValue` and `formatPlatformTableDateTimeValue` own compact
 date-time parsing, invalid/empty markers, optional minimum-year filtering, Intl
 format options, and tabular-number styling for dense timestamp cells. TrueNAS
-protection completed-time cells and vSphere activity "When" cells must compose
-that primitive instead of declaring local compact `toLocaleString` helpers, and
-timestamp columns use the canonical `numeric-value` alignment kind because they
-are scannable scalar values.
+protection completed-time cells must compose that primitive instead of
+declaring local compact `toLocaleString` helpers, and timestamp columns use the
+canonical `numeric-value` alignment kind because they are scannable scalar
+values. vSphere activity "When" cells read as an age instead: the absolute
+"Oct 4, 11:22 PM" clipped in its column at most widths, and recent vCenter
+activity is scanned by how long ago it happened, as Kubernetes events are. They
+compose `PlatformTableRelativeTimeValue` with the exact time in the cell's
+hover title and in the row drawer, and a vCenter time before 2000 (its unset
+marker) stays an empty marker rather than a decades-old age.
 Relative timestamp-age cells follow the same rule.
 `PlatformTableRelativeTimeValue` and `formatPlatformTableRelativeTimeValue` own
 the repeated `formatRelativeTime` composition, compact-label default,
 invalid/empty markers, and tabular-number styling for dense platform table
 cells. Docker / Podman volume created-at cells, Kubernetes deployment age
 cells, Kubernetes event observed-time cells, Proxmox backup created-age cells,
-Proxmox replication last-sync cells, Standalone machine last-seen cells, and
-Standalone availability-check checked-at cells must compose that primitive
+Proxmox replication last-sync cells, Standalone machine last-seen cells,
+Standalone availability-check checked-at cells, and vSphere activity "When"
+cells must compose that primitive
 instead of importing `formatRelativeTime` directly or declaring local
 timestamp-age helpers in table files.
 Duration and interval cells follow the same rule.

@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "base_sha": "af4e6a493cbca1e6c7d4397964efb146e950fca2",
+  "verified_at": "2026-10-06T10:34:56Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/vmware/VsphereActivityTable.tsx",
+    "frontend-modern/src/features/vmware/vmwarePageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/vmware/VsphereActivityTable.tsx": "389e3884c3a14f608d024661cd02b5f5a10e8bb2f0c331fe3ba519f09c769078",
+    "frontend-modern/src/features/vmware/vmwarePageModel.ts": "df4ae1bc1d02ec68471f78500942e1d0176ebfebf59038ffeb0b2f3c89cc42b2"
+  },
+  "routes": [
+    "/vmware/activity",
+    "/vmware/health"
+  ],
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 600,
+      "height": 844
+    },
+    {
+      "width": 768,
+      "height": 1000
+    },
+    {
+      "width": 1024,
+      "height": 1000
+    },
+    {
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 1920,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Private mock stack on main af4e6a493c (which now carries the vSphere Health column, #2559, and the ownership fix, #2560) plus this change, backend rebuilt from the tree; mock vCenter with three tasks and two events whose change records were stored before the change (event class as their title)",
+    "Before (main): event rows read 'HostConnectedEvent' and 'HostProfileAppliedEvent'; the When column clipped 'Oct 4, 11:22 PM' on every row at 390, 768, 1024, 1280 and 1440",
+    "After: event rows read vCenter's own sentence ('Host reconnected to vCenter and is reporting healthy telemetry') including the records stored before the change; tasks keep their task names",
+    "When reads '1d ago' and clips at no width; its hover title is the exact time ('Oct 4, 2026, 11:22 PM'); a vCenter time before 2000 renders '-' (unit test)",
+    "Row drawer: Activity row carries the sentence, a new Event type row carries the class (HostConnectedEvent), and the Message row no longer repeats the title",
+    "Longer event sentences truncate in the Activity column on phones and tablets (390-768) with the full sentence on hover and in the drawer; none clip from 1280",
+    "Light and dark mode at 1440 checked",
+    "After rebasing onto that main: the Activity sweep is identical to the pre-rebase run, and the Datastores and Networks Health columns measure exactly as verified for #2559 (no names clip; only the longest alarm name truncates at 768)"
+  ],
+  "interactions": [
+    "Measured every visible header and cell for clipping at seven widths before and after",
+    "Opened an event row's drawer in light and dark mode and read every row",
+    "Read the When cell hover titles",
+    "Searched by event class in the model (unit test): the row it no longer titles is still found"
+  ]
+}
