@@ -1474,7 +1474,14 @@ func TestWebhookEditPreservesOnlyMaskedValues(t *testing.T) {
 			if !tc.invalid {
 				var response notifications.WebhookConfig
 				assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-				assert.Equal(t, maskedWebhookResponse(notifications.NormalizeWebhookConfig(incoming)).CustomFields, response.CustomFields)
+				var expectedFields map[string]string
+				if len(incoming.CustomFields) > 0 {
+					expectedFields = make(map[string]string, len(incoming.CustomFields))
+					for key := range incoming.CustomFields {
+						expectedFields[key] = maskedWebhookSecret
+					}
+				}
+				assert.Equal(t, expectedFields, response.CustomFields)
 			}
 			assert.Equal(t, "old", stored.CustomFields["channel"], "edit mutated the previous map")
 			assert.Equal(t, "text/plain", stored.Headers["Content-Type"], "edit mutated the previous map")
