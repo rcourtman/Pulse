@@ -587,7 +587,7 @@ func (m *Monitor) updatePVEConnectionHealth(ctx context.Context, instanceName st
 	return connectionHealthStr
 }
 
-func (m *Monitor) snapshotPrevNodes(instanceName string) (map[string]models.Memory, []models.Node) {
+func (m *Monitor) snapshotPrevNodes(instanceName string) []models.Node {
 	return m.previousNodesForInstance(instanceName)
 }
 
@@ -598,7 +598,6 @@ func (m *Monitor) pollPVENodesParallel(
 	client PVEClientInterface,
 	nodes []proxmox.Node,
 	connectionHealthStr string,
-	prevNodeMemory map[string]models.Memory,
 	prevInstanceNodes []models.Node,
 	debugEnabled bool,
 ) ([]models.Node, map[string]string, map[string]string) {
@@ -627,7 +626,7 @@ func (m *Monitor) pollPVENodesParallel(
 		go func(node proxmox.Node) {
 			defer wg.Done()
 
-			modelNode, effectiveStatus, diskSource, _ := m.pollPVENode(ctx, instanceName, instanceCfg, client, node, connectionHealthStr, prevNodeMemory, prevInstanceNodes)
+			modelNode, effectiveStatus, diskSource, _ := m.pollPVENode(ctx, instanceName, instanceCfg, client, node, connectionHealthStr, prevInstanceNodes)
 
 			resultChan <- nodePollResult{
 				node:            modelNode,
@@ -655,7 +654,7 @@ func (m *Monitor) pollPVENodesParallel(
 // leaves the last successful snapshot in state forever, so a shut-down host
 // keeps showing its final online status (#1441).
 func (m *Monitor) markPVEInstanceNodesUnreachable(instanceName string) {
-	_, prevInstanceNodes := m.snapshotPrevNodes(instanceName)
+	prevInstanceNodes := m.snapshotPrevNodes(instanceName)
 	if len(prevInstanceNodes) == 0 {
 		// Never polled successfully this process lifetime (e.g. Pulse
 		// started while the host was already down). Synthesize offline
@@ -762,6 +761,7 @@ func (m *Monitor) preserveOrExpireNodes(prevInstanceNodes []models.Node) []model
 			if nodeCopy.ConnectionHealth == "" || strings.EqualFold(nodeCopy.ConnectionHealth, "error") {
 				nodeCopy.ConnectionHealth = "degraded"
 			}
+			m.boundCarriedNodeTemperature(&nodeCopy, now)
 			preserved = append(preserved, nodeCopy)
 			continue
 		}
@@ -770,9 +770,26 @@ func (m *Monitor) preserveOrExpireNodes(prevInstanceNodes []models.Node) []model
 		nodeCopy.ConnectionHealth = "error"
 		nodeCopy.Uptime = 0
 		nodeCopy.CPU = 0
+		nodeCopy.Temperature = nil
 		preserved = append(preserved, nodeCopy)
 	}
 	return preserved
+}
+
+// boundCarriedNodeTemperature applies the rules a failed live collection's
+// carry follows to a temperature a node keeps from an earlier poll: the carry
+// window, a lapsed host agent's lease for a reading that agent supplied, and
+// no disk temperatures (carriedNodeTemperature).
+func (m *Monitor) boundCarriedNodeTemperature(node *models.Node, now time.Time) {
+	if node.Temperature == nil {
+		return
+	}
+	if now.Sub(node.Temperature.LastUpdate) > m.nodeTemperatureCarryWindow() ||
+		m.carriedTemperatureOutlivesAgentLease(node.ID, node.Name, node.Temperature, now) {
+		node.Temperature = nil
+		return
+	}
+	node.Temperature = carriedNodeTemperature(node.Temperature)
 }
 
 func (m *Monitor) seedNodeDisplayNames(modelNodes []models.Node) {
@@ -1466,8 +1483,9 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	// Check if client is a ClusterClient to determine health status
 	connectionHealthStr := m.updatePVEConnectionHealth(ctx, instanceName, client)
 
-	// Capture previous memory metrics so we can preserve them if detailed status fails
-	prevNodeMemory, prevInstanceNodes := m.snapshotPrevNodes(instanceName)
+	// Capture the previous poll's nodes for network, temperature and
+	// inventory continuity when this poll cannot read them.
+	prevInstanceNodes := m.snapshotPrevNodes(instanceName)
 
 	// Convert to models
 	modelNodes, nodeEffectiveStatus, nodeDiskSources := m.pollPVENodesParallel(
@@ -1477,7 +1495,6 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		client,
 		nodes,
 		connectionHealthStr,
-		prevNodeMemory,
 		prevInstanceNodes,
 		debugEnabled,
 	)

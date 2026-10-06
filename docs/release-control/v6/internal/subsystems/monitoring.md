@@ -3988,7 +3988,39 @@ cluster sensor cache, which keeps its own recency check. When every source
 returns nothing, `internal/monitoring/monitor_polling_node_helpers.go` may carry
 a previous reading, with its original `LastUpdate`, only inside the carry window
 (twice the PVE polling interval, never under five minutes); an older reading is
-dropped rather than re-presented as current.
+dropped rather than re-presented as current. A carried reading also keeps a
+lapsed host agent's lease. Agent readings are stamped with the agent's report
+time, so `carriedTemperatureOutlivesAgentLease` drops a carried reading stamped
+no later than the last report of the node's matched agent (by link, then
+hostname, whether or not that report had sensors) once that agent has lapsed.
+Readings record no source, so the bound is conservative: an SSH, cluster-cache
+or agent-plus-SSH merged reading (stamped with the agent's time) of that age is
+dropped too, being already older than the lease, while a reading stamped after
+that report keeps the carry window. A carried reading (`carriedNodeTemperature`)
+keeps only the node's CPU and GPU temperatures: its SMART and NVMe rows would
+also stamp the node's physical disks, whose freshness and standby state a
+carried copy cannot follow (a disk that spun down would be stamped and recorded
+with its pre-sleep value), so they are left out, and nothing is carried when
+only they remain.
+The poller reads its previous poll's nodes back from the unified read state
+through `internal/monitoring/monitor_previous_state.go`. `nodeLastOnline` and
+the temperature carry with its CPU low/record tracking match them by node ID,
+which is the Proxmox source ID, so the projection must return
+`NodeView.SourceID()`, never the unified resource ID, and carry the stored
+`TemperatureDetails`. Nodes preserved through an instance outage
+(`preserveOrExpireNodes`) or authoritative membership reconciliation are written
+back into state from that projection, so it also restores the identity inputs
+the registry derives a node's canonical ID and cross-view merges from: cluster
+name, provider-scoped flag, native aliases, TLS fingerprint and linked agent ID,
+the config-derived ones stamped the way `pollPVENode` stamps them. With the
+unified ID a node re-keys on every failed poll, and without its cluster
+identity a cluster member changes canonical ID for the length of an outage.
+A preserved node keeps its
+temperature only under the same carry rules and loses it when it goes
+offline. Node memory carry-over after a failed status read uses the poller's own
+validated `NodeMemorySnapshot`, not the read state, which holds the agent's
+reading on a node merged with a host agent, and keeps used, cache and free
+summing to the total.
 Legacy SSH temperature collection must also use the Pulse sensor-wrapper
 contract before falling back to raw lm-sensors output. `internal/monitoring/temperature.go`
 must request `/usr/local/sbin/pulse-sensors` when it exists, parse the wrapper
