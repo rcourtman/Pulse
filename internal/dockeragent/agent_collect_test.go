@@ -805,6 +805,97 @@ func TestAgentClose(t *testing.T) {
 	}
 }
 
+// A failed image inspect leaves the local digest unknown. Comparing an empty
+// digest reported "no update available", which the server treats as an
+// affirmative clear, so a pending update alert resolved and re-fired a whole
+// delay later (#2353). The last good inspect of the same image ID stands in;
+// without one the status stays unknown.
+func TestCollectContainerKeepsUpdateStatusWhenImageInspectFails(t *testing.T) {
+	const imageID = "sha256:mongo7local"
+	inspect := baseInspect()
+	inspect.State = &containertypes.State{Running: false, Status: "exited"}
+	inspect.Config.Image = "mongo:7"
+	summary := containertypes.Summary{
+		ID:      "container-mongo",
+		Names:   []string{"/unifi-db"},
+		Image:   "mongo:7",
+		ImageID: imageID,
+		State:   "exited",
+		Status:  "Exited (0) 1 minute ago",
+	}
+
+	newChecker := func(t *testing.T) *RegistryChecker {
+		checker := NewRegistryChecker(zerolog.Nop())
+		checker.httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			t.Errorf("unexpected registry request to %s", req.URL)
+			return nil, errors.New("offline")
+		})}
+		registry, repository, tag := parseImageReference("mongo:7")
+		checker.cacheDigestResult(registry+"/"+repository+":"+tag+"|amd64/linux/", "sha256:new", "sha256:new")
+		// A failed inspect also loses the platform; seed that lookup too so the
+		// registry answer is available offline, as it would be in production.
+		checker.cacheDigestResult(registry+"/"+repository+":"+tag+"|//", "sha256:new", "sha256:new")
+		return checker
+	}
+	inspectFails := false
+	newAgent := func(checker *RegistryChecker) *Agent {
+		return &Agent{
+			logger:           zerolog.Nop(),
+			prevContainerCPU: make(map[string]cpuSample),
+			registryChecker:  checker,
+			docker: &fakeDockerClient{
+				containerInspectWithRawFn: func(context.Context, string, bool) (containertypes.InspectResponse, []byte, error) {
+					return inspect, nil, nil
+				},
+				imageInspectWithRawFn: func(context.Context, string) (imagetypes.InspectResponse, []byte, error) {
+					if inspectFails {
+						return imagetypes.InspectResponse{}, nil, context.DeadlineExceeded
+					}
+					return imagetypes.InspectResponse{
+						RepoDigests:  []string{"docker.io/library/mongo@sha256:old"},
+						Architecture: "amd64",
+						Os:           "linux",
+					}, nil, nil
+				},
+			},
+		}
+	}
+
+	checker := newChecker(t)
+	agent := newAgent(checker)
+	container, err := agent.collectContainer(context.Background(), summary)
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+	if status := container.UpdateStatus; status == nil || !status.UpdateAvailable || status.CurrentDigest != "sha256:old" {
+		t.Fatalf("baseline update status = %+v, want an available update from sha256:old", status)
+	}
+
+	inspectFails = true
+	container, err = agent.collectContainer(context.Background(), summary)
+	if err != nil {
+		t.Fatalf("collect with failed image inspect: %v", err)
+	}
+	if status := container.UpdateStatus; status == nil || !status.UpdateAvailable || status.Error != "" || status.CurrentDigest != "sha256:old" {
+		t.Fatalf("failed image inspect reported %+v, want the same available update", status)
+	}
+
+	// A fresh agent has no earlier inspect to fall back on.
+	container, err = newAgent(newChecker(t)).collectContainer(context.Background(), summary)
+	if err != nil {
+		t.Fatalf("collect without a remembered image: %v", err)
+	}
+	if container.UpdateStatus != nil {
+		t.Fatalf("unknown local digest reported %+v, want no update status", container.UpdateStatus)
+	}
+
+	// Images no longer used by a collected container are forgotten.
+	checker.pruneLocalImages(map[string]struct{}{"sha256:other": {}})
+	if _, ok := checker.lastLocalImage(imageID); ok {
+		t.Fatal("pruned image digests are still remembered")
+	}
+}
+
 func TestAgentCollectImageRepoDigestsIncludesEveryLocalDigest(t *testing.T) {
 	agent := &Agent{
 		docker: &fakeDockerClient{
