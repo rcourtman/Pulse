@@ -166,7 +166,7 @@ A green connection badge, recent **Last seen** or successful **Test Connection**
 does not prove that every reading is fresh. Missing or unavailable is not zero.
 Use the relevant checks for [stale TrueNAS data](TRUENAS.md#stale-truenas-data),
 [empty PBS History](PBS.md#pbs-is-connected-but-history-stays-empty) or
-[missing VM disk usage](VM_DISK_MONITORING.md#troubleshooting). Check Proxmox
+[missing VM disk usage](VM_DISK_MONITORING.md#a-missing-reading-is-not-an-installation-diagnosis). Check Proxmox
 [effective permissions](TROUBLESHOOTING.md#check-permissions-proxmox) only when
 the affected operation reports an access error, not on a missing chart alone.
 
