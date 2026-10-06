@@ -6315,3 +6315,17 @@ above the hosts table without its filter toolbar. Nothing renders when
 vCenter reports no signals. The Overview's own model, workload snapshot and
 navigation facets still come from the Overview query; the Health tab keeps
 the filterable table.
+
+### Correlated guest disks retain the independent agent source
+
+`VMView.LinkedAgentDisks`, `ContainerView.LinkedAgentDisks` and
+`HostView.CurrentAgentDisks` expose detached agent-owned filesystem inventory
+with the agent source's own receipt time, independently of agent memory.
+Missing, non-online, expired, stale, undated or future agent sources cannot
+supply current disks just because the platform row keeps reporting. The
+registry's configured source lease remains authoritative; this adds no new
+expiry duration. Existing `HostView.Disks` retains last-known presentation.
+
+`linked_agent_disks_test.go` covers selection, source timestamps, nil views
+and detached inventory across all three views. No public model field, inferred
+link, guest command or safety-pause clearance is introduced.

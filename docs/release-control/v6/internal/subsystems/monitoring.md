@@ -5637,3 +5637,22 @@ client through four normal fourteen-job/five-node polls into model/wire state,
 with zero-count error, denied status, recovery and another-instance isolation.
 The unchanged replication table consumes those explicit outcomes. These local
 HTTP controls are not native restart recovery; issue #2606 remains separate.
+
+### Next guest polls preserve correlated agent filesystem inventory
+
+The previous-guest context carries disks and their original agent source time
+from a manually correlated VM/container even when the standalone host row was
+removed, and even if agent memory is unavailable. Standalone linked hosts use
+the same source-owned eligibility; a current platform row cannot renew agent
+disk evidence. The existing VM disk preference consumes this inventory without
+issuing another guest-agent read. Empty replacements, expiry and withdrawal
+remove eligibility; a new ordinary report restores it. Guest-read safety and
+backup deferrals remain independent of usable Pulse-agent filesystem data.
+
+`guest_linked_agent_disks_test.go` carries actual registry correlation, retained
+links and automatic link hints through ordinary VM construction and canonical
+projection. It covers disk-only evidence, source time, missing links, identical
+VMIDs in separate instances, expiry/offline/empty/withdrawal/recovery and a
+backup lock with zero filesystem calls. Sequential snapshot replacement pins
+inventory removal/recovery without restarting the monitor. These are synthetic
+source controls, not a native cause, thaw or installed recovery for #2616/#2619.

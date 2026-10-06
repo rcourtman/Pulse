@@ -81,6 +81,25 @@ func (v VMView) LinkedAgentMemory() (models.Memory, bool) {
 	return linkedAgentMemoryFromResource(v.r)
 }
 
+// LinkedAgentDisks reads the agent-owned inventory after host/guest correlation.
+// The platform row's LastSeen must never renew the agent's reporting lease.
+func (v VMView) LinkedAgentDisks() ([]DiskInfo, time.Time, bool) {
+	return linkedAgentDisksFromResource(v.r)
+}
+
+func linkedAgentDisksFromResource(r *Resource) ([]DiskInfo, time.Time, bool) {
+	if r == nil || r.Agent == nil || r.Agent.Stale || len(r.Agent.Disks) == 0 {
+		return nil, time.Time{}, false
+	}
+	status, ok := r.SourceStatus[SourceAgent]
+	// The registry owns configured lease expiry. A live platform source alone
+	// cannot make old, undated or future agent evidence current.
+	if !ok || status.Status != "online" || status.LastSeen.IsZero() || status.LastSeen.After(time.Now()) {
+		return nil, time.Time{}, false
+	}
+	return cloneDiskInfos(r.Agent.Disks), status.LastSeen, true
+}
+
 // linkedAgentMemoryFromResource reads the agent-owned memory sample attached to
 // a merged guest resource. Correlation removes the standalone host row, so the
 // guest view is the only place the agent sample survives (#1962, #2148).
@@ -418,6 +437,10 @@ func NewContainerView(r *Resource) ContainerView { return ContainerView{r: r} }
 // container's real footprint, so the linked agent sample is preferred (#2148).
 func (v ContainerView) LinkedAgentMemory() (models.Memory, bool) {
 	return linkedAgentMemoryFromResource(v.r)
+}
+
+func (v ContainerView) LinkedAgentDisks() ([]DiskInfo, time.Time, bool) {
+	return linkedAgentDisksFromResource(v.r)
 }
 
 func (v ContainerView) String() string { return fmt.Sprintf("ContainerView(%s, %q)", v.ID(), v.Name()) }
@@ -1199,6 +1222,12 @@ func (v HostView) Disks() []DiskInfo {
 		return nil
 	}
 	return cloneDiskInfos(v.r.Agent.Disks)
+}
+
+// CurrentAgentDisks excludes retained inventory whose source stopped reporting;
+// Disks still exposes that inventory for last-known presentation.
+func (v HostView) CurrentAgentDisks() ([]DiskInfo, time.Time, bool) {
+	return linkedAgentDisksFromResource(v.r)
 }
 
 func (v HostView) LinkedNodeID() string {
