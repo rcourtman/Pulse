@@ -111,7 +111,7 @@ jobs:
             code=false
           fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
-          # A full race-test compilation cost 386 seconds in a cold offline
+          # A full race-test compilation cost 386 seconds in a fresh offline
           # guest. Reserve that admission for Go source/graph/backend embeds
           # and its own control path, not the much more frequent UI changes.
           go_compile=false

@@ -6800,7 +6800,7 @@ acceptance verdict. Full required race-test shards retain those responsibilities
 The diff classifier reserves this admission for Go source/manifests, backend
 embedded files and its own workflow/scripts. Unavailable diffs fail open into
 full compilation. Frontend-only changes do not pay for this Go-only preflight
-(the measured cold VM pass took 386 seconds); their existing backend runtime
+(the measured VM pass took 386 seconds); their existing backend runtime
 checks still run. `scripts/go-test-compile-required.sh` consumes the complete
 file list without an early-close/SIGPIPE path.
 
