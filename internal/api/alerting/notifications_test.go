@@ -1474,9 +1474,21 @@ func TestWebhookEditRejectsUnrecoverableMasks(t *testing.T) {
 		{"Authorization": "***REDACTED***"},
 		{"AUTHORIZATION": "synthetic-first", "authorization": "synthetic-second"},
 	} {
-		if _, err := restoreMaskedWebhookValues(map[string]string{"Authorization": "***REDACTED***"}, stored, true); err == nil {
-			t.Fatal("unrecoverable or ambiguous saved mask must not become a credential")
-		}
+		manager := new(MockNotificationManager)
+		persistence := new(MockNotificationConfigPersistence)
+		monitor := new(MockNotificationMonitor)
+		monitor.On("GetNotificationManager").Return(manager)
+		monitor.On("GetConfigPersistence").Return(persistence)
+		manager.On("GetWebhooks").Return([]notifications.WebhookConfig{{ID: "edit", Headers: stored}}).Once()
+		rec := httptest.NewRecorder()
+		NewNotificationHandlers(nil, monitor).UpdateWebhook(rec, httptest.NewRequest(http.MethodPut,
+			"/api/notifications/webhooks/edit", strings.NewReader(`{"headers":{"Authorization":"***REDACTED***"}}`)))
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.NotContains(t, rec.Body.String(), "synthetic-first")
+		assert.NotContains(t, rec.Body.String(), "synthetic-second")
+		manager.AssertNotCalled(t, "UpdateWebhook", mock.Anything, mock.Anything)
+		persistence.AssertNotCalled(t, "SaveWebhooks", mock.Anything)
+		manager.AssertExpectations(t)
 	}
 }
 
@@ -1579,8 +1591,11 @@ func TestWebhookMaskedEditPersistsAndDelivers(t *testing.T) {
 				}
 				updated := httptest.NewRecorder()
 				handler.UpdateWebhook(updated, httptest.NewRequest(http.MethodPut, "/api/notifications/webhooks/edit", bytes.NewReader(body)))
-				if updated.Code != http.StatusOK || strings.Contains(updated.Body.String(), "synthetic-token") {
-					t.Fatal("masked update failed or exposed a credential")
+				if updated.Code != http.StatusOK {
+					t.Fatal("masked update failed")
+				}
+				if strings.Contains(updated.Body.String(), "synthetic-token") {
+					t.Error("masked update exposed a stored credential")
 				}
 				m.Stop()
 				m = open()
