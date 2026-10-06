@@ -19,7 +19,9 @@ body:
     id: bug_description
     attributes:
       label: Describe the bug
-      description: What is broken, and what is the impact?
+      description: |
+        What is broken, where do you see it, and what is the impact? Distinguish the affected target (for example, a VM, LXC, Docker container, NAS or Pulse itself) from how the Pulse server is installed.
+        For missing readings, say whether the affected workload's usual UI was still responsive when the problem occurred. Use existing observations; write "unknown" if you cannot safely tell. Do not run another update, backup or guest-agent probe just to answer.
       placeholder: A clear and concise description of the problem.
     validations:
       required: true
@@ -84,6 +86,7 @@ body:
     id: install_type
     attributes:
       label: Installation type
+      description: How the Pulse server is installed, not the kind of workload being monitored.
       options:
         - Docker
         - Docker Compose

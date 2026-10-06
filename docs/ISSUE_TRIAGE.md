@@ -32,6 +32,21 @@ symptom: logs or sanitized diagnostics for connection and data failures, and
 screenshots or exact error text for visual failures. Do not make a reporter
 invent logs where none apply.
 
+Keep the Pulse server's installation separate from the affected target. A
+Docker-hosted Pulse server can monitor a VM, LXC or NAS; its installation type
+does not make Docker commands relevant to that target. Read later comments as
+well as the original title and screenshots before choosing diagnostics. When a
+report shifts to a different target, retain both topics rather than assuming
+the new symptom is the original defect or a duplicate.
+
+Missing readings and an unresponsive workload need different investigation and
+recovery paths. Use the reporter's existing observations of the workload's usual
+UI, not Pulse's displayed connection status, to distinguish them where possible.
+Responsiveness is not proof that every filesystem is writable or the workload
+is healthy. Accept "unknown" when it cannot safely be determined; do not ask for
+another update, backup or guest-agent probe to fill the gap. Existing reports
+need no refile: ask only for a consequential distinction not already supplied.
+
 Some failures cannot safely be reproduced: an update may have changed a
 container despite a failed banner, an alert storm may send more notifications,
 or another run may bring down a host. Accept the original sequence, observed
