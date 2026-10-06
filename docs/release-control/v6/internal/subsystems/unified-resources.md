@@ -4293,7 +4293,8 @@ and platform alert detail fields must use
 `formatPlatformAlertDetailDateTime` from
 `frontend-modern/src/utils/alertDetailPresentation.ts` instead of restoring
 table-local provider code, resource-type, entity-type, or timestamp formatter
-helpers,
+helpers (the Started cell reads as an age with the exact time as its hover
+title, the drawer keeps the exact time),
 and local operator identity labels now split from governed detail summaries:
 infrastructure tables, selectors, links, and drawer headings must preserve the
 canonical local instance identity (`displayName`, canonical display name,

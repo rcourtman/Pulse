@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { VsphereAlertsTable } from '@/features/vmware/VsphereAlertsTable';
 import { buildVmwareIncidentRows } from '@/features/vmware/vmwarePageModel';
@@ -39,6 +39,7 @@ const makeHost = (overrides: Partial<Resource> = {}): Resource =>
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
 });
 
 describe('VsphereAlertsTable', () => {
@@ -170,5 +171,43 @@ describe('VsphereAlertsTable', () => {
 
     await fireEvent.click(row);
     expect(screen.getByText('lab-vcenter')).toBeInTheDocument();
+  });
+  it('reads Started as an age with the exact time on hover', () => {
+    const startedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const host = makeHost();
+    host.incidents = [{ ...host.incidents![0]!, startedAt }];
+
+    render(() => (
+      <VsphereAlertsTable
+        incidents={buildVmwareIncidentRows([host])}
+        emptyIcon={<span />}
+        emptyTitle="No signals"
+        emptyDescription="No signals"
+        showToolbar={false}
+      />
+    ));
+
+    const age = screen.getByText('2h ago');
+    expect(age).toHaveAttribute('title', expect.stringMatching(/\d{4}/));
+  });
+  it('keeps the Started age moving while the row stays mounted', () => {
+    vi.useFakeTimers({ now: new Date('2026-10-06T12:00:00Z') });
+    const host = makeHost();
+    host.incidents = [{ ...host.incidents![0]!, startedAt: '2026-10-06T10:00:00Z' }];
+
+    render(() => (
+      <VsphereAlertsTable
+        incidents={buildVmwareIncidentRows([host])}
+        emptyIcon={<span />}
+        emptyTitle="No signals"
+        emptyDescription="No signals"
+        showToolbar={false}
+      />
+    ));
+    expect(screen.getByText('2h ago')).toBeInTheDocument();
+
+    // No data change: only the clock moves.
+    vi.advanceTimersByTime(3 * 60 * 60 * 1000);
+    expect(screen.getByText('5h ago')).toBeInTheDocument();
   });
 });
