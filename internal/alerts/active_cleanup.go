@@ -343,7 +343,9 @@ func (m *Manager) ClearActiveAlerts() {
 	m.activeAlerts = make(map[string]*Alert)
 	m.restoredBackupNotifications = nil
 	m.activeAlertAlias = make(map[string]string)
-	m.core.Reset()
+	for _, state := range m.mirrorStatesNoLock() {
+		state.Reset()
+	}
 	m.hostDiskTempPendingContexts = nil
 	m.intentPending = make(map[string]IntentPendingState)
 	m.intentRuntimeTicks = make(map[string]time.Duration)

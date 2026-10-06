@@ -1043,9 +1043,6 @@ func TestDiskTemperaturePendingContextCleanup(t *testing.T) {
 	for _, removal := range []bool{false, true} {
 		t.Run(fmt.Sprintf("removed=%v", removal), func(t *testing.T) {
 			m, _ := continuityManager(t, false)
-			m.mu.Lock()
-			m.shadow = nil
-			m.mu.Unlock()
 			host := hostWithSMARTDiskTemp("pending-cleanup", "custom", 85)
 			m.CheckHost(host)
 			m.mu.RLock()
