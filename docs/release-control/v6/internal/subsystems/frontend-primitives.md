@@ -20,6 +20,23 @@
 
 ## Purpose
 
+### Systemd backup-pause help separates shutdown from remote completion
+
+The existing systemd precaution reads the stop result as well as the inactive
+service state. A newly stopped server requires a normal zero process exit;
+timeout, signal, non-zero or unknown results do not permit a planned backup.
+Previously inactive servers stay inactive, and failures must not be cleared
+to make the check pass. Even a successful shutdown does not cancel or prove
+completion of an already-issued guest-agent request. Existing guest/backup
+operations must finish normally, without new probes; unknown state, a disk
+dash, a cooldown or a waiting period is not completion evidence.
+
+`backupSafetyHelp.test.ts` verifies the rendered bounded state command, failure
+and in-flight gates, prior-state restoration and shipped mirror. This changes
+existing help, not service configuration, native shutdown/QGA recovery or
+release availability. The independent post-backup thaw/write/liveness and
+only-prior-active restoration boundary remains unchanged.
+
 ### Container backup-pause help preserves identity and prior state
 
 The existing VM Disk Monitoring guide also covers a standalone Docker or plain

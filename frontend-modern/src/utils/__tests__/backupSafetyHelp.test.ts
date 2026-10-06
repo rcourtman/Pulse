@@ -168,7 +168,7 @@ describe('manual backup safety help', () => {
       'systemctl show pulse.service --property=LoadState,ActiveState,MainPID',
       'systemctl show pulse-update.timer --property=LoadState,ActiveState',
       'sudo systemctl stop pulse-update.timer\nsystemctl show pulse-update.timer pulse-update.service \\\n  --property=Id,LoadState,ActiveState,MainPID',
-      'sudo systemctl stop pulse.service\nsystemctl show pulse.service --property=LoadState,ActiveState,MainPID',
+      'sudo systemctl stop pulse.service\nsystemctl show pulse.service \\\n  --property=LoadState,ActiveState,MainPID,Result,ExecMainCode,ExecMainStatus',
       'sudo systemctl start pulse.service\nsystemctl is-active pulse.service',
       'sudo systemctl start pulse-update.timer\nsystemctl is-active pulse-update.timer',
     ]);
@@ -189,6 +189,29 @@ describe('manual backup safety help', () => {
     expect(words).toContain('Pulse monitoring and alerts are unavailable');
     expect(words).toContain('Do not run an update, start another Pulse instance');
     expect(words).toContain('repeat the precaution for each affected backup window');
+  });
+
+  it('checks the new shutdown result without clearing failure or starting a previously inactive server', () => {
+    const text = render(section, 'VM_DISK_MONITORING').textContent?.replace(/\s+/g, ' ');
+    expect(read('frontend-modern/public/docs/VM_DISK_MONITORING.md')).toBe(guide);
+    expect(text).toContain('For a server stopped in this step');
+    expect(text).toContain('Result=success');
+    expect(text).toContain('ExecMainCode=1 (normal process exit)');
+    expect(text).toContain('ExecMainStatus=0');
+    expect(text).toContain('signal termination, non-zero exit or unavailable shutdown result');
+    expect(text).toContain('Do not force-kill Pulse or clear its failed state');
+    expect(text).toContain('an old exit result is not evidence of a new shutdown');
+  });
+
+  it('does not equate a stopped service or waiting period with completion of an issued guest request', () => {
+    const text = render(section, 'VM_DISK_MONITORING').textContent?.replace(/\s+/g, ' ');
+    expect(text).toContain('Stopping Pulse does not cancel a guest-agent request already issued');
+    expect(text).toContain('Even a successful process exit does not prove');
+    expect(text).toContain('Let existing guest/backup operations finish normally before the planned backup');
+    expect(text).toContain('not new guest-agent probes');
+    expect(text).toContain('If their state is unknown, do not start the backup');
+    expect(text).toContain('a stopped service or an arbitrary waiting period');
+    expect(text).toContain('A disk dash or cooldown is not evidence of completion');
   });
 
   it('requires independent workload writes before restart, never merely an OK task or an open console', () => {
