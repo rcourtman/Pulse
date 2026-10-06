@@ -71,14 +71,14 @@ describe('DiskList', () => {
       render(() => <DiskList disks={[]} />);
       expect(screen.getByText('-')).toHaveAttribute(
         'title',
-        'Disk stats unavailable. Guest agent may not be installed.',
+        'Guest filesystem usage is unavailable. The cause is unknown. Use guest-local filesystem tools. Defer setup and live probes during backups or a guest incident.',
       );
     });
 
     it.each([
       [
         'agent-not-running',
-        'Guest agent not running. Install and start qemu-guest-agent in the VM.',
+        'Proxmox could not query the guest agent. This does not prove it is absent or stopped. Defer setup and live probes during backups or a guest incident.',
       ],
       [
         'agent-timeout',
@@ -88,7 +88,10 @@ describe('DiskList', () => {
         'permission-denied',
         'Permission denied. Check that your Pulse user/token has VM.Monitor permission (PVE 8) or VM.GuestAgent.Audit permission (PVE 9).',
       ],
-      ['agent-disabled', 'Guest agent is disabled in VM configuration. Enable it in VM Options.'],
+      [
+        'agent-disabled',
+        'Proxmox reports the guest agent disabled in VM configuration. Review guest-OS-specific setup outside backups or guest incidents.',
+      ],
       ['no-filesystems', 'No filesystems found. VM may be booting or using a Live ISO.'],
       [
         'special-filesystems-only',
@@ -114,7 +117,7 @@ describe('DiskList', () => {
       render(() => <DiskList disks={[]} diskStatusReason="some-unknown-reason" />);
       expect(screen.getByText('-')).toHaveAttribute(
         'title',
-        'Disk stats unavailable. Guest agent may not be installed.',
+        'Guest filesystem usage is unavailable. The cause is unknown. Use guest-local filesystem tools. Defer setup and live probes during backups or a guest incident.',
       );
     });
   });

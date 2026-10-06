@@ -12,6 +12,7 @@ import type { Alert } from '@/types/api';
 import { AvailabilityProbeStatusCards } from '@/components/Infrastructure/AvailabilityProbeStatusCard';
 import type { DiscoveryIdentifiedSummary } from '@/utils/discoveryPresentation';
 import { formatBytes } from '@/utils/format';
+import { getShippedDocUrl } from '@/utils/docsLinks';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import {
   getWorkloadGuestDiskStatusMessage,
@@ -226,6 +227,15 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       (props.hasFilesystemDetails && diskRows.length > 0) || diskStatusMessage
         ? {
             label: 'Filesystems',
+            footerContent:
+              diskStatusMessage && isGuestDrawerVM(props.guest) ? (
+                <a
+                  class="text-xs font-semibold underline underline-offset-2"
+                  href={`${getShippedDocUrl('VM_DISK_MONITORING.md')}#a-missing-reading-is-not-an-installation-diagnosis`}
+                >
+                  Filesystem reading guidance
+                </a>
+              ) : undefined,
             rows: compactDetailRows([
               makeDetailRow('Status', diskStatusMessage, { layout: 'stacked', wrap: true }),
               ...diskRows.map((disk) =>

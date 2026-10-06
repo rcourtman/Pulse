@@ -259,3 +259,59 @@ describe('backup activity is not a confirmed VM lock', () => {
     expect((value as VM).guestAgentStatus).toBe('available');
   });
 });
+
+describe('existing filesystem guidance follows reading uncertainty, not an install diagnosis', () => {
+  it.each([
+    ['agent-not-running', 'Windows 11'],
+    ['agent-disabled', 'Windows 11'],
+    ['future-private-error', 'Android'],
+  ])('keeps %s readings on %s truthful with a safe help destination', (reason, os) => {
+    const [value, setValue] = createSignal(guest({ diskStatusReason: reason }));
+    render(() => <GuestDrawerOverview {...overviewProps(value())} guestOsSummary={os} />);
+    expect(screen.getByRole('link', { name: 'Filesystem reading guidance' })).toHaveAttribute(
+      'href',
+      '/docs/VM_DISK_MONITORING#a-missing-reading-is-not-an-installation-diagnosis',
+    );
+    expect(screen.getByTestId('guest-technical-details').textContent).not.toMatch(
+      /Install and start|Enable it in VM Options|qemu-guest-agent|future-private-error/,
+    );
+    setValue({
+      ...value(),
+      diskStatusReason: `prev-${reason}`,
+      disks: [{ mountpoint: '/data', total: 1024, used: 512, usage: 50 }],
+    });
+    expect(screen.getByText(/Using last known disk stats/)).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Filesystem reading guidance' })).toBeVisible();
+    setValue({
+      ...value(),
+      diskStatusReason: '',
+      disks: [{ mountpoint: '/data', total: 1024, used: 256, usage: 25 }],
+    });
+    expect(
+      screen.queryByRole('link', { name: 'Filesystem reading guidance' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not direct an independent LXC read to QEMU setup', () => {
+    render(() => (
+      <GuestDrawerOverview
+        {...overviewProps(
+          guest({
+            type: 'lxc',
+            telemetryAvailability: {
+              cpu: true,
+              memory: true,
+              disk: false,
+              networkIO: true,
+              diskIO: true,
+              uptime: true,
+            },
+          }),
+        )}
+      />
+    ));
+    expect(
+      screen.queryByRole('link', { name: 'Filesystem reading guidance' }),
+    ).not.toBeInTheDocument();
+  });
+});
