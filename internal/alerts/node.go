@@ -123,7 +123,7 @@ func (m *Manager) CheckNode(node models.Node) {
 				input.Disk = &UnifiedResourceMetric{Percent: node.Disk.Usage}
 			}
 			m.releaseNodeMetricAlerts(node, released...)
-			m.evaluateUnifiedMetrics(input, thresholds, nil)
+			m.evaluateUnifiedMetrics(input, thresholds, nil, "temperature") // checkNodeTemperature owns its observation gaps.
 
 			// CPU temperature stays with the node even when a host agent runs on it:
 			// CheckHost has no CPU temperature metric, and the node poll already
@@ -161,22 +161,6 @@ func (m *Manager) checkNodeTemperature(node models.Node, threshold *HysteresisTh
 		return
 	}
 	m.checkMetricWithCanonicalSpec(spec, node.Name, node.Name, node.Instance, "node", temp, threshold, nil)
-}
-
-// interruptMetricRun records a missing observation for a metric spec. The
-// incident and any open alert are kept, but a pending activation run is
-// dropped and a recovery run restarts, so a sustained-for or recovery delay
-// never completes across a gap in evidence.
-func (m *Manager) interruptMetricRun(spec alertspecs.ResourceAlertSpec) {
-	m.mu.Lock()
-	for _, state := range m.mirrorStatesNoLock() {
-		state.InterruptMetricRun(spec.ResourceID, spec.ID)
-	}
-	intentChanged := m.clearIntentPendingNoLock(canonicalTrackingKeyForSpec(spec, spec.ID))
-	m.mu.Unlock()
-	if intentChanged {
-		m.saveActiveAlertsAsync("canonical metric intent pending state")
-	}
 }
 
 // releaseNodeMetricAlerts stops node-side evaluation of the given metrics the

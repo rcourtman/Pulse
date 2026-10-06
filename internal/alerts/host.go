@@ -339,7 +339,7 @@ func (m *Manager) CheckHost(host models.Host) {
 		m.clearHostMetricAlerts(host.ID, "cpu")
 	}
 
-	if thresholds.Memory != nil && host.Memory.HasKnownUsage() {
+	if thresholds.Memory != nil {
 		memMetadata := cloneMetadata(baseMetadata)
 		memMetadata["metric"] = "memory"
 		memMetadata["memoryUsagePercent"] = host.Memory.Usage
@@ -355,6 +355,8 @@ func (m *Manager) CheckHost(host models.Host) {
 				Str("resourceID", resourceID).
 				Str("host", resourceName).
 				Msg("Skipping invalid canonical host memory metric spec")
+		} else if !host.Memory.HasKnownUsage() && !spec.Disabled {
+			m.interruptMetricRun(spec)
 		} else {
 			m.checkMetricWithCanonicalSpec(spec, resourceName, nodeName, instanceName, "agent", host.Memory.Usage, thresholds.Memory, &metricOptions{Metadata: memMetadata})
 		}

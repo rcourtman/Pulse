@@ -105,6 +105,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	observedAt := m.policyNow()
 	windowed := m.evaluateMetricWindow(spec.ResourceID, resourceType, metricType, value, observedAt)
 	if !windowed.Ready {
+		m.interruptMetricRun(spec)
 		return
 	}
 	value = windowed.Value

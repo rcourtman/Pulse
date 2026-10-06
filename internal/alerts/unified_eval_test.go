@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -1591,5 +1592,39 @@ func TestUnifiedMetricNoisyWarningWaitsButCriticalFiresImmediately(t *testing.T)
 	}
 	if got := alert.Metadata["stabilityWindowSeconds"]; got != defaultNoisyGaugeStabilitySeconds {
 		t.Fatalf("stabilityWindowSeconds = %v, want %d", got, defaultNoisyGaugeStabilitySeconds)
+	}
+}
+
+func TestNodeUsageDispatchPreservesSeparatelyEvaluatedTemperature(t *testing.T) {
+	m, elapsed := continuityManager(t, false)
+	m.mu.Lock()
+	m.config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 80, Clear: 70}
+	m.mu.Unlock()
+	node, _ := testNodeWithHostAgent()
+	node.Temperature = &models.Temperature{Available: true, CPUPackage: 85}
+	m.CheckNode(node)
+	elapsed.Store(int64(40 * time.Second))
+	m.CheckNode(node)
+	incident, ok := continuityIncident(m, node.ID, "temperature")
+	if !ok || incident.State != reducer.StatePending {
+		t.Fatal("temperature control did not remain pending")
+	}
+	originalStart := incident.PendingSince
+	elapsed.Store(int64(59 * time.Second))
+	m.CheckNode(node)
+	incident, _ = continuityIncident(m, node.ID, "temperature")
+	if !incident.PendingSince.Equal(originalStart) {
+		t.Fatal("usage dispatch interrupted a separately observed temperature")
+	}
+	elapsed.Store(int64(time.Minute))
+	m.CheckNode(node)
+	if !testHasActiveAlert(t, m, canonicalMetricStateID(node.ID, "temperature")) {
+		t.Fatal("continuous node temperature did not complete its delay")
+	}
+	node.Temperature = nil
+	elapsed.Store(int64(2 * time.Minute))
+	m.CheckNode(node)
+	if !testHasActiveAlert(t, m, canonicalMetricStateID(node.ID, "temperature")) {
+		t.Fatal("actual missing temperature became recovery")
 	}
 }
