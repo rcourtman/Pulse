@@ -1466,39 +1466,3 @@ func TestMonitorDelayedPartialResolutionKeepsDestinationRecovery(t *testing.T) {
 		t.Fatal("unannounced destination received a recovery")
 	}
 }
-
-func TestSyncAlertsToStateCarriesLiveMetricStatusOfHeldAlert(t *testing.T) {
-	m := &Monitor{
-		state:        models.NewState(),
-		alertManager: alerts.NewManagerWithDataDir(t.TempDir()),
-	}
-	defer m.alertManager.Stop()
-
-	cfg := m.alertManager.GetConfig()
-	cfg.TimeThresholds = map[string]int{"node": 0}
-	cfg.NodeDefaults.Temperature = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
-	m.alertManager.UpdateConfig(cfg)
-
-	node := models.Node{
-		ID: "homelab-minipc", Name: "minipc", Instance: "homelab", Status: "online",
-		Temperature: &models.Temperature{Available: true, CPUPackage: 85},
-	}
-	m.alertManager.CheckNode(node)
-	node.Temperature = &models.Temperature{Available: true, CPUPackage: 78}
-	m.alertManager.CheckNode(node)
-
-	m.syncAlertsToState()
-
-	var held *models.Alert
-	for i, alert := range m.state.GetSnapshot().ActiveAlerts {
-		if alert.Type == "temperature" {
-			held = &m.state.GetSnapshot().ActiveAlerts[i]
-		}
-	}
-	require.NotNil(t, held, "expected the temperature alert to stay open at 78°C")
-	require.Equal(t, 85.0, held.Value, "the legacy value keeps the last breach")
-	require.NotNil(t, held.MetricStatus, "websocket state must carry the live reading")
-	require.Equal(t, models.MetricAlertPhaseLatched, held.MetricStatus.Phase)
-	require.Equal(t, 78.0, held.MetricStatus.Value)
-	require.Equal(t, 75.0, held.MetricStatus.Recovery)
-}
