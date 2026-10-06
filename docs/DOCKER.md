@@ -293,6 +293,52 @@ or volumes to clear a warning. Recover through the application's and deployment
 manager's procedures using a verified matching data backup where required;
 returning to the old image alone does not undo a data migration.
 
+### Check a failed or pending workload update
+
+A failed banner or missing receipt does not tell you whether the update ran.
+Use your normal Docker administration shell **on the host running the affected
+container**, not a shell inside Pulse or on an unrelated Proxmox host. Use the
+same Docker context as that workload; do not change socket permissions or enable
+agent commands just to inspect it.
+
+List container names, including stopped containers, without dumping their
+configuration:
+
+```bash
+docker ps -a --format '{{.Names}}'
+```
+
+Replace `affected-container` with the original workload name (not `pulse` unless
+Pulse itself was the target), then read only its state and image identity:
+
+```bash
+container='affected-container'
+docker inspect --type container --format 'State={{.State.Status}} ImageRef={{.Config.Image}} ImageID={{.Image}} Started={{.State.StartedAt}}' "$container"
+```
+
+`State` says whether the container is running, stopped or restarting. `ImageRef`
+is its configured image reference; a tag such as `latest` can stay unchanged
+after an update. `ImageID` identifies the actual local image used by this
+container: compare it with your privately recorded pre-update image or the
+intended image in your deployment manager. It is not a registry manifest digest,
+so do not compare it directly with Pulse's latest-registry digest. `Started` is
+only a start time, not proof of an image update or application readiness. If the
+old identity was not recorded, these readings alone cannot establish whether
+the image changed.
+
+If inspection fails or the original name is missing, retain that error and the
+name listing locally; the workload may have been renamed during the attempt.
+Do not start, rename, delete or update anything to make the check succeed.
+Check the application's ordinary UI or health endpoint separately; a running
+container is not proof that its application or data is healthy.
+
+In Pulse, reopen that container's **Review action** and use **Check for receipt**
+when available. This re-reads the existing action; it does not send another
+container update. If the receipt is still missing, leave the update alone until
+the actual workload state and recovery path are reconciled. For help, share only
+the relevant state, receipt status and a redacted error, not the full inspection,
+other container names, environments or registry credentials.
+
 ### Requirements
 
 - **Unified agent** running on the Docker host with Docker monitoring enabled
