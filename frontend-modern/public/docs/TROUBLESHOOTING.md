@@ -338,7 +338,7 @@ repair an older generated unit rather than adding a JSON-parsing wrapper.
 #### Backup health disagrees with PBS
 
 A visible or Verified PBS backup is not the same reading as a workload's
-Coverage posture. Use the [backup health checks](PBS.md#backup-health-disagrees-with-visible-pbs-backups)
+Coverage posture. Use the [backup health checks](PBS.md#backups-are-visible-but-coverage-says-unprotected)
 to compare one affected row's explanation, Job, History and Access with the
 matching native PBS record. Do not run a new backup, restart or clear history
 just to diagnose the disagreement.
