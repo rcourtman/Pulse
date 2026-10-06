@@ -36,7 +36,7 @@ func TestPBSOrdinaryPollCancellationDoesNotRenewUnpublishedCache(t *testing.T) {
 				}
 				if strings.HasSuffix(r.URL.Path, "/groups") {
 					groups := []map[string]any{}
-					if !isOther {
+					if strings.Contains(r.URL.Path, "/archive/") && r.URL.Query().Get("ns") == "" {
 						groups = append(groups, map[string]any{"backup-type": "vm", "backup-id": "100", "last-backup": f.backupAt, "backup-count": 1})
 					}
 					_ = json.NewEncoder(w).Encode(map[string]any{"data": groups})
@@ -124,6 +124,9 @@ func TestPBSOrdinaryPollCancellationDoesNotRenewUnpublishedCache(t *testing.T) {
 			postures := f.postures(t)
 			if snapshotReads.Load() != 3 || len(raw) != 1 || raw[0].Verified || raw[0].InProgress || err != nil || len(mapped) != 1 || mapped[0].Verified == nil || *mapped[0].Verified || len(points) != 1 || points[0].Verified == nil || *points[0].Verified || postures[0].State != recovery.ProtectionStateAttention || postures[0].Verification != recovery.ProtectionVerificationUnverified {
 				t.Errorf("recovery reads=%d raw=%+v mapped=%+v err=%v persisted=%+v posture=%+v", snapshotReads.Load(), raw, mapped, err, points, postures)
+			}
+			if len(mapped) != 1 || len(points) != 1 {
+				t.Fatal("recovery did not retain exactly one mapped and persisted point")
 			}
 			if mapped[0].SubjectResourceID != f.ids[0] || points[0].SubjectResourceID != f.ids[0] {
 				t.Errorf("recovery changed subject identity: mapped=%s persisted=%s want=%s", mapped[0].SubjectResourceID, points[0].SubjectResourceID, f.ids[0])
