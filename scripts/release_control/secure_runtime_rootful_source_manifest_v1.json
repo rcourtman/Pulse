@@ -32,6 +32,7 @@
     "scripts/installtests/install_sh_test.go",
     "scripts/installtests/integration_container_test.go",
     "scripts/installtests/msp_diagnostic_guidance_test.go",
+    "scripts/installtests/native_agent_frontend_test.go",
     "scripts/installtests/native_guidance_tools_test.go",
     "scripts/installtests/native_pve_action_qualification_test.go",
     "scripts/installtests/pbs_api_guidance_test.go",
