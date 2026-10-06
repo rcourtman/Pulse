@@ -687,11 +687,10 @@ func TestSilentUnraidAgentDiskTemperatureIsRetainedButNotCollected(t *testing.T)
 		return got
 	}
 
-	// A reporting agent's readings are collected. The inventory-only disk
-	// keeps no state of its own (it counts as collected); the SMART rows that
-	// borrow the inventory reading take its provenance.
+	// A reporting agent's inventory readings are collected, including where
+	// a SMART row borrows them.
 	collected := map[string]diskinventory.FieldStatus{
-		"UNRAID-ONLY1":  {},
+		"UNRAID-ONLY1":  diskinventory.Available("unraid"),
 		"UNRAID-SMART2": diskinventory.Available("unraid"),
 		"UNRAID-SAS3":   diskinventory.Available("unraid"),
 	}

@@ -970,6 +970,11 @@ the page supplies it through the Workloads `tableTitle` slot and the shared
 states. This heading alignment changes neither workload backup scope nor the
 storage/recovery evidence carried by the adjacent Backup column and Backups
 tab.
+The guest table's grouped node rows are identity-only dividers. Node stats and
+the node drawer stay with the Proxmox nodes table above it, so `ProxmoxPageSurface`
+passes `groupNodeDrawerMode: 'disabled'` and no host-metric option to the
+embedded Workloads state. Those dividers carry no backup or recovery evidence;
+the per-guest Backup column remains the overview's protection signal.
 The overview's node-row action selects the shared workload node scope and
 reveals the guest section. The title names the selected node and reports the
 filtered guest count, including zero. Activating the selected node again or
