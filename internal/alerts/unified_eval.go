@@ -155,6 +155,26 @@ func isUnifiedModernPlatformAlertType(typeKey string) bool {
 	return isUnifiedKubernetesAlertType(typeKey) || isUnifiedTrueNASAlertType(typeKey) || isUnifiedVMwareAlertType(typeKey)
 }
 
+// alertPlatformTypeKey carries the canonical platform id of the resource an
+// alert is about. Metric alerts put a display label such as "vSphere VM" in
+// resourceType, so consumers that link or name the owning platform read this.
+const alertPlatformTypeKey = "platformType"
+
+// unifiedAlertPlatformType returns the canonical platform id for a unified
+// alert type key, or "" when the key does not name one.
+func unifiedAlertPlatformType(typeKey string) string {
+	switch {
+	case isUnifiedKubernetesAlertType(typeKey):
+		return "kubernetes"
+	case strings.HasPrefix(typeKey, "truenas-"):
+		return "truenas"
+	case strings.HasPrefix(typeKey, "vmware-"):
+		return "vmware-vsphere"
+	default:
+		return ""
+	}
+}
+
 func (m *Manager) unifiedPlatformAlertsDisabledNoLock(typeKey string) bool {
 	switch {
 	case isUnifiedKubernetesAlertType(typeKey):
@@ -261,16 +281,22 @@ func (m *Manager) evaluateUnifiedMetrics(input *UnifiedResourceInput, thresholds
 	}
 
 	opts = metricOptionsWithTags(opts, input.Tags)
-	if len(input.StorageAliases) > 0 {
+	platformType := unifiedAlertPlatformType(input.Type)
+	if len(input.StorageAliases) > 0 || platformType != "" {
 		merged := metricOptions{}
 		if opts != nil {
 			merged = *opts
 		}
-		metadata := make(map[string]interface{}, len(merged.Metadata)+1)
+		metadata := make(map[string]interface{}, len(merged.Metadata)+2)
 		for k, v := range merged.Metadata {
 			metadata[k] = v
 		}
-		metadata[storagePolicyAliasesKey] = append([]string(nil), input.StorageAliases...)
+		if len(input.StorageAliases) > 0 {
+			metadata[storagePolicyAliasesKey] = append([]string(nil), input.StorageAliases...)
+		}
+		if platformType != "" {
+			metadata[alertPlatformTypeKey] = platformType
+		}
 		merged.Metadata = metadata
 		opts = &merged
 	}
