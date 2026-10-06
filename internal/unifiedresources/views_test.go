@@ -972,6 +972,84 @@ func TestView_HostViewSourceStatusSeparatesAgentFromMergedRow(t *testing.T) {
 	}
 }
 
+// A node merged with a linked host agent takes the agent's status, so a
+// consumer judging whether the node's readings are current needs each
+// source's own sighting.
+func TestView_NodeViewSourceStatusSeparatesMergedSources(t *testing.T) {
+	now := time.Now().UTC()
+	agentLastReport := now.Add(-30 * time.Minute)
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online",
+			LastSeen: now, LinkedAgentID: "agent-1",
+		}},
+		Hosts: []models.Host{{
+			ID: "agent-1", Hostname: "node1", Status: "offline", LinkedNodeID: "pve1-node1",
+			IntervalSeconds: 30, LastSeen: agentLastReport,
+		}},
+	})
+
+	nodes := registry.Nodes()
+	if len(nodes) != 1 {
+		t.Fatalf("expected the agent and node to merge into one node row, got %d", len(nodes))
+	}
+	node := nodes[0]
+	if sighting, ok := node.SourceStatus(SourceProxmox); !ok || sighting.Status != "online" || !sighting.LastSeen.Equal(now) {
+		t.Fatalf("Proxmox sighting = %+v (ok=%v), want online at %v", sighting, ok, now)
+	}
+	if sighting, ok := node.SourceStatus(SourceAgent); !ok || sighting.Status != "stale" || !sighting.LastSeen.Equal(agentLastReport) {
+		t.Fatalf("agent sighting = %+v (ok=%v), want stale at %v", sighting, ok, agentLastReport)
+	}
+	if _, ok := node.SourceStatus(SourceDocker); ok {
+		t.Fatal("a source that never reported must not have a status")
+	}
+
+	var nilView NodeView
+	if _, ok := nilView.SourceStatus(SourceProxmox); ok {
+		t.Fatal("nil-backed view must report no source status")
+	}
+}
+
+// A Docker host whose report is overdue keeps its last report, and the stale
+// pass shows it as warning, the same status a degraded host that is still
+// reporting carries. Only the Docker source's sighting tells them apart.
+func TestView_DockerHostViewSourceStatusSeparatesSilentFromDegraded(t *testing.T) {
+	now := time.Now().UTC()
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{
+			{ID: "docker-silent", AgentID: "agent-silent", Hostname: "silent", Status: "offline", IntervalSeconds: 30, LastSeen: now.Add(-time.Hour), CPUUsage: 20},
+			{ID: "docker-degraded", AgentID: "agent-degraded", Hostname: "degraded", Status: "degraded", IntervalSeconds: 30, LastSeen: now, CPUUsage: 33},
+		},
+	})
+
+	views := make(map[string]*DockerHostView)
+	for _, view := range registry.DockerHosts() {
+		views[view.HostSourceID()] = view
+	}
+	for id, want := range map[string]string{"docker-silent": "stale", "docker-degraded": "online"} {
+		view := views[id]
+		if view == nil {
+			t.Fatalf("missing Docker host view %s", id)
+		}
+		if view.Status() != StatusWarning {
+			t.Fatalf("%s status = %q, want warning", id, view.Status())
+		}
+		if sighting, ok := view.SourceStatus(SourceDocker); !ok || sighting.Status != want {
+			t.Fatalf("%s Docker sighting = %+v (ok=%v), want %s", id, sighting, ok, want)
+		}
+	}
+	if _, ok := views["docker-degraded"].SourceStatus(SourceProxmox); ok {
+		t.Fatal("a source that never reported must not have a status")
+	}
+
+	var nilView DockerHostView
+	if _, ok := nilView.SourceStatus(SourceDocker); ok {
+		t.Fatal("nil-backed view must report no source status")
+	}
+}
+
 func TestView_HostViewMetricsTargetAccessor(t *testing.T) {
 	r := &Resource{
 		ID:   "host-metrics",

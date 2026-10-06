@@ -504,6 +504,18 @@ here instead of the row's `LastSeen`. The accessor returns a copy of the recorde
 status and adds no freshness policy of its own.
 `TestView_HostViewSourceStatusSeparatesAgentFromMergedRow` pins the merged-row
 split.
+`NodeView.SourceStatus(source)` and `DockerHostView.SourceStatus(source)` do
+the same for node and Docker host rows. A merged node row takes its linked
+agent's status when the sources merge, and once any sighting goes stale the
+stale pass recomputes the status from the sightings: `online` while one is
+current, `warning` when every one is stale. `warning` is also a status a row
+that still reports can carry (a degraded Docker host, a node whose linked agent
+reports storage risk). The metrics-history live
+fallback therefore reads these sightings alongside the row's `offline` and
+`unknown` status to decide whether a row's readings are current. The accessors
+return a copy of the recorded status and add no freshness policy.
+`TestView_NodeViewSourceStatusSeparatesMergedSources` and
+`TestView_DockerHostViewSourceStatusSeparatesSilentFromDegraded` pin them.
 
 ### Bounded incident-history selection
 

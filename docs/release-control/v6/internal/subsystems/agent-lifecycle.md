@@ -760,6 +760,14 @@ offline the unified-resources adapter reports them `unavailable` with the same
 reason (`models.HostAgentStoppedReportingReason`) and leaves them out of the
 disk's risk, and the metrics-history API does not return any such retained
 disk temperature as a live point.
+The same lease bounds the host row's other readings in that API: once the
+host reads `offline`, an empty `agent` range returns no live CPU, memory, disk
+or sensor temperature point from the host row the expiry kept. An agent linked
+to a Proxmox node answers from that node row instead, under the node row's own
+checks. A Docker host that `evaluateDockerAgents` marks offline likewise stops
+answering with live points for itself and its containers, except that a Docker
+row merged with a reporting host agent shows the agent's status until its
+Docker sighting goes stale. The retained values stay last-known context.
 
 An enabled availability target assigned to a host agent creates an
 agent-lifecycle lease for that exact target/agent pairing. First assignment

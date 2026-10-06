@@ -6332,6 +6332,36 @@ stored one out to `now`, only from a temperature collected now; without one the
 stored samples are returned as they are. An empty mock range can still fall
 through to the monitor's generic demo chart series for that disk ID, which is
 not derived from the disk's reading.
+The live fallback for the other row types withholds the point when the
+snapshot row's source has stopped reporting. A host agent row gets none once
+`HostsSnapshot` reports it `offline` (the reporting lease
+`State.ExpireHostTelemetry` enforces); an agent linked to a Proxmox node then
+answers from the node row its `LinkedNodeID` names, under the node rule, and
+gets none when no node row has that ID. A Proxmox node row, also reached
+through the `agent` type, gets none when its projected status is `offline` or
+`unknown`. A VM, system container, node, or integration host row without an
+agent sighting gets none once the registry has marked stale every sighting it
+records from Proxmox, an agent, Docker, vSphere or TrueNAS; a `warning` status
+alone is not a lapse, since a linked agent's storage risk sets it on a row that
+still reports. A Docker host, and an app container through its host, gets none
+once its projected status is `offline` or its Docker sighting is stale. Power
+state and health are not a lapse: a stopped VM keeps its zero CPU point and a
+degraded Docker host that still reports keeps its point. Inside the PVE offline
+grace a node keeps its carried readings and its live point, as on other
+surfaces.
+These checks read row status and sightings, not the source each merged metric
+came from, so rows merged across sources keep the registry's merge decisions.
+A Docker row merged with a reporting host agent shows the agent's status until
+its Docker sighting goes stale. A node merged with a silent linked agent
+projects `online` while its Proxmox sighting is current, even after the poller
+reports the node offline. A hypervisor-managed guest merged with another
+source keeps its platform CPU after the platform stops reporting.
+With the metrics store available a withheld range stays empty; without a
+store, a request with no other fallback still answers 503, as one for a
+resource with no data does.
+`TestContract_MetricsHistoryLivePointOnlyWhileSourceReports` drives each lapse
+from the state transition that records it, and
+`TestContract_MetricsHistoryLiveReadingSightingsLapsed` pins the sighting rule.
 That same metrics-history contract also owns Kubernetes pod identity
 normalization. `/api/metrics-store/history` must accept legacy bare pod IDs
 such as `cluster-1:pod:pod-1`, canonicalize them onto the unified pod metrics

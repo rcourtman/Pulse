@@ -6779,3 +6779,8 @@ and the Unraid physical-disk adapter marks an inventory temperature kept past
 the host agent's lease as no longer collected. Both change presentation of
 values Pulse already holds: no metrics write, retention window, backup,
 migration or recovery authority is added or moved.
+The handler likewise withholds the live point for host agent, Proxmox node,
+guest, integration host, Docker host and app container rows it judges to have
+stopped reporting, or answers a lapsed linked agent from its node row. It reads
+only snapshot status and the registry's per-source sightings, and writes
+nothing.

@@ -2688,6 +2688,20 @@ rather than the PVE poll time, applying their own heartbeat cutoff.
 `TestSilentLinkedAgentStopsFeedingNodeDisk` drives the disk and projection
 path through `evaluateHostAgents` and the registry-backed store refresh.
 
+The metrics-history API's live fallback relies on the same projection: it
+treats a host row reading `offline` as past its lease, and an agent linked to
+a Proxmox node then answers from the node row. For node rows it takes a
+projected `offline` or `unknown` as the lapse and otherwise reads the
+registry's sightings (`NodeView.SourceStatus`), because a projected `warning`
+is ambiguous: the stale pass shows an unreachable node that way, and so does a
+reporting linked agent's storage risk. The projection does not always carry
+the poller's verdict: a node merged with a silent linked agent projects
+`online` while its Proxmox sighting is current, even after the poller reports
+it offline. Docker host rows likewise lose the `offline` that
+`evaluateDockerAgents` set, to the stale pass's `warning` or to a merged
+agent's status, so that consumer also reads the Docker source's own sighting
+from `DockerHostView.SourceStatus(SourceDocker)`.
+
 Unified Agent host reports now make module readiness and updater/config
 lifecycle evidence monitoring-owned observed state. Monitoring preserves the
 last successful one-shot update transition across subsequent reports, forwards
