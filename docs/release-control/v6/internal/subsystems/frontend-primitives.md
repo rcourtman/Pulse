@@ -2438,6 +2438,17 @@ not a replacement status card, CTA band, or page-local nested card.
    shared owner must also cap concurrent numeric animations and snap overflow
    readouts to their current target so a realtime estate update cannot make
    animation cost grow with the number of visible resources.
+   Background colours come from the `@theme inline` surface tokens in
+   `frontend-modern/src/index.css` and the `bg-page` utility beside them.
+   `bg-page` paints the page backdrop (`--color-bg-base`) for a well that
+   should read as the page behind a surface card: command and JSON blocks,
+   the branding header preview, and the segmented filter track. A block that
+   sits directly on a `bg-surface-alt` body, such as resource drawer content,
+   uses `bg-surface` instead. No theme colour may be named `base`: it also
+   colours the `text-base` font-size utility, and without it Tailwind 4
+   renders `bg-base` as nothing, which left those wells and the alert
+   selection bar transparent. `src/__tests__/App.architecture.test.ts` fails
+   if either comes back.
    Shared primitives must not reintroduce app-shell monitored-system capacity
    banners. Monitored-system grouping and ledger presentation belongs in the
    owned settings surfaces, while commercial plan explanation belongs in
@@ -6472,6 +6483,9 @@ must not hand-code raw `<a target="_blank">` anchors for documentation links.
 The `settings-external-text-link-shell` and
 `settings-external-text-link-local-anchor` registry entries enforce that split,
 and the Button registry owns the `info` variant for blue documentation CTAs.
+A documentation link inside a tinted callout sentence (the backup export and
+import warnings) uses the `inlineInherit` variant, which keeps the callout's
+text colour and underline instead of switching to link blue.
 
 Platform inline notices that sit inside platform pages but are not settings
 callouts must route through the shared `InlineNotice` primitive. Platform owners

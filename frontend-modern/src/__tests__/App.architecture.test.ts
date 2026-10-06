@@ -1019,29 +1019,29 @@ describe('App architecture', () => {
   });
 });
 
+function collectFrontendSources(dir: string): Array<{ path: string; source: string }> {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      return collectFrontendSources(entryPath);
+    }
+    // Only runtime sources matter; a test may quote an old shape in order to
+    // assert against it, as the guards below do.
+    if (!/\.(css|ts|tsx)$/.test(entry.name)) {
+      return [];
+    }
+    if (entryPath.includes('__tests__') || /\.(test|spec)\./.test(entry.name)) {
+      return [];
+    }
+    return [{ path: entryPath, source: readFileSync(entryPath, 'utf8') }];
+  });
+}
+
 describe('mobile bottom navigation clearance', () => {
   const NAV_HEIGHT_VARIABLE = '--pulse-mobile-nav-height';
   // Matches the shape every drifted copy used, spaced or not. The lookbehind
   // keeps the declared 2.5rem fallback from matching its own guard.
   const HARDCODED_BAR_HEIGHT = /(?<![\d.])5rem\s*\+\s*env\(\s*safe-area-inset-bottom/;
-
-  function collectFrontendSources(dir: string): Array<{ path: string; source: string }> {
-    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-      const entryPath = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        return collectFrontendSources(entryPath);
-      }
-      // Only runtime sources matter; a test may quote the old shape in order
-      // to assert against it, as this one does.
-      if (!/\.(css|ts|tsx)$/.test(entry.name)) {
-        return [];
-      }
-      if (entryPath.includes('__tests__') || /\.(test|spec)\./.test(entry.name)) {
-        return [];
-      }
-      return [{ path: entryPath, source: readFileSync(entryPath, 'utf8') }];
-    });
-  }
 
   it('declares the bar height as a single custom property', () => {
     expect(appStylesSource).toContain(NAV_HEIGHT_VARIABLE);
@@ -1056,6 +1056,33 @@ describe('mobile bottom navigation clearance', () => {
     // open modal. Read the published height rather than adding a sixth copy.
     const offenders = collectFrontendSources(join(process.cwd(), 'src'))
       .filter(({ source }) => HARDCODED_BAR_HEIGHT.test(source))
+      .map(({ path }) => path.slice(process.cwd().length + 1));
+
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('page background utility', () => {
+  // Tailwind 4 emits nothing for a colour it does not know, so `bg-base`
+  // rendered transparent without any error: command blocks, the alert
+  // selection bar and segmented-control tracks all lost their backgrounds.
+  // A theme colour named `base` is not the fix either, because it also gives
+  // the `text-base` font-size utility a colour and paints text in the page
+  // colour. The page backdrop is the bg-page utility.
+  const DEAD_BASE_BACKGROUND = /(?<![\w-])bg-base(?![\w-])/;
+  // A comment may name the old class to explain a fix, as toggleModel does.
+  const COMMENTS = /\/\*[\s\S]*?\*\/|(^|[^:])\/\/.*$/gm;
+
+  it('declares the page backdrop as a utility, never as a colour named base', () => {
+    expect(appStylesSource).toMatch(
+      /@utility bg-page \{\s*background-color: var\(--color-bg-base\);\s*\}/,
+    );
+    expect(appStylesSource).not.toMatch(/--color-base\s*:/);
+  });
+
+  it('keeps every runtime class off the bg-base utility that renders nothing', () => {
+    const offenders = collectFrontendSources(join(process.cwd(), 'src'))
+      .filter(({ source }) => DEAD_BASE_BACKGROUND.test(source.replace(COMMENTS, '$1')))
       .map(({ path }) => path.slice(process.cwd().length + 1));
 
     expect(offenders).toEqual([]);

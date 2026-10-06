@@ -57,7 +57,7 @@ function InstallStep(props: { step: UpdateInstallStep; index: number }) {
           containerClass="ml-0 sm:ml-8 relative group"
           codeClass={
             props.step.commandCodeClass ??
-            'block rounded-md border border-border bg-base p-3 font-mono text-sm text-green-400'
+            'block rounded-md border border-border bg-page p-3 font-mono text-sm text-green-700 dark:text-green-400'
           }
         />
       </Show>
@@ -181,7 +181,7 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
             <div class="space-y-2">
               <CopyCommandBlock
                 command={buildIdleDockerComposeCommand()}
-                codeClass="block rounded-md border border-border bg-base p-2.5 font-mono text-xs text-blue-400"
+                codeClass="block rounded-md border border-border bg-page p-2.5 font-mono text-xs text-blue-700 dark:text-blue-400"
               />
               <p class="text-[10px] text-blue-600 dark:text-blue-400">
                 Not using Compose?{' '}

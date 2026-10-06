@@ -527,7 +527,7 @@ function App() {
                 <Show
                   when={runtime.enhancedStore()}
                   fallback={
-                    <div class="min-h-screen flex items-center justify-center bg-base">
+                    <div class="min-h-screen flex items-center justify-center">
                       <div class="text-muted">Initializing...</div>
                     </div>
                   }
@@ -559,7 +559,7 @@ function App() {
                         {/* Main content area - shrinks when AI panel is open, scrolls independently */}
                         <div
                           ref={setAppScrollShellRef}
-                          class={`app-scroll-shell isolate flex-1 min-w-0 overflow-y-scroll bg-base text-base-content font-sans py-1 sm:py-6 transition-all duration-300`}
+                          class={`app-scroll-shell isolate flex-1 min-w-0 overflow-y-scroll text-base-content font-sans py-1 sm:py-6 transition-all duration-300`}
                         >
                           <AppLayout
                             connectionStatus={runtime.connectionStatus}
@@ -615,7 +615,7 @@ function App() {
             </Show>
           }
         >
-          <div class="min-h-screen bg-base text-base-content font-sans">
+          <div class="min-h-screen text-base-content font-sans">
             <div class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">{props.children}</div>
           </div>
         </Show>

@@ -6497,6 +6497,17 @@ write never leaves a half-moved token. This adds no backup, restore, retention, 
 recovery authority. `internal/api/security_regression_test.go` pins the
 persisted binding.
 
+### Reported agent identity is one persisted token transition
+
+Recording a report's agent identity on a hostname-bound token writes
+`bound_agent_id`, `bound_at`, and the binding version through the existing
+API-token persistence, under the token lock, in one save. When that save
+fails, the previous metadata is restored, the report itself is still
+acknowledged, and the next report retries, so a failed write never leaves a
+half-bound token. This adds no backup, restore, retention, snapshot, or
+recovery authority. `TestReportedIdentityRestoresTheTokenWhenTheSaveFails` in
+`internal/api/security_regression_test.go` pins the restore and the retry.
+
 ### Destination severity policy preserves notification recovery identity
 
 Email, webhook, Apprise, and Relay minimum-severity floors persist through

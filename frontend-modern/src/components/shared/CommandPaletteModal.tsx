@@ -39,7 +39,6 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
           onKeyDown={commandPalette.handleInputKeyDown}
           placeholder="Type a command or search..."
           class="w-full"
-          inputClass="bg-base"
           clearOnFocusedEscape={false}
           shortcutHint="Cmd+K"
           role="combobox"
@@ -84,7 +83,7 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
                       </Show>
                     </div>
                     <Show when={command.shortcut}>
-                      <span class="rounded-sm border border-border-subtle bg-base px-2 py-1 text-[10px] font-medium text-base-content">
+                      <span class="rounded-sm border border-border-subtle bg-page px-2 py-1 text-[10px] font-medium text-base-content">
                         {command.shortcut}
                       </span>
                     </Show>

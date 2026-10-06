@@ -347,6 +347,88 @@ func (r *Router) admitAgentExecToken(token string, agentID string, hostname stri
 	return agentexec.AgentAdmission{}, false
 }
 
+// recordReportedAgentIdentity is the reporting-side identity binding. After an
+// authenticated report is applied, a token bound to the report's hostname but
+// to no agent ID records the server-resolved host ID when the agent presented
+// that same ID (agentbinding.EvaluateReportedIdentity). Without it, a token
+// that lacks agent:exec, or whose agent never connects the command channel,
+// never names its agent, and the collector-authority reduction, which needs
+// that name, can never run for it.
+//
+// Only bound_agent_id, bound_at and the binding version are written, the
+// binding version so the recorded ID is immutable to every later
+// registration. Scopes, runtime role and command policy are left alone: a
+// recorded identity grants no execution authority, and a command registration
+// still needs agent:exec and the same identity. It runs under the token lock
+// that command admission holds, against the live record, so the two paths
+// cannot race each other into different identities. A failed save restores
+// the previous metadata and the next report retries.
+func (r *Router) recordReportedAgentIdentity(organizationID, tokenID, presentedID, hostID, hostname string) {
+	if r == nil || r.config == nil {
+		return
+	}
+	organizationID = strings.TrimSpace(organizationID)
+	if organizationID == "" {
+		organizationID = "default"
+	}
+	tokenID = strings.TrimSpace(tokenID)
+	hostID = strings.TrimSpace(hostID)
+	if tokenID == "" || hostID == "" {
+		return
+	}
+
+	config.Mu.Lock()
+	defer config.Mu.Unlock()
+	for index := range r.config.APITokens {
+		record := &r.config.APITokens[index]
+		if record.ID != tokenID {
+			continue
+		}
+		if record.IsExpired() {
+			return
+		}
+		// The host ID was resolved in the request's organization. Record it only
+		// on a token whose command sessions would run in that same organization,
+		// derived exactly as command admission derives it.
+		tokenOrganizationID := "default"
+		if orgs := record.GetBoundOrgs(); len(orgs) == 1 && strings.TrimSpace(orgs[0]) != "" {
+			tokenOrganizationID = strings.TrimSpace(orgs[0])
+		}
+		if tokenOrganizationID != organizationID {
+			return
+		}
+		if !agentbinding.EvaluateReportedIdentity(record, presentedID, hostID, hostname) {
+			return
+		}
+		previousMetadata := snapshotAgentExecMetadata(
+			record.Metadata,
+			"bound_agent_id",
+			"bound_at",
+			agentExecBindingVersionKey,
+		)
+		record.Metadata["bound_agent_id"] = hostID
+		record.Metadata["bound_at"] = time.Now().UTC().Format(time.RFC3339)
+		record.Metadata[agentExecBindingVersionKey] = agentExecBindingVersion
+		if r.persistence != nil {
+			if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
+				restoreAgentExecMetadata(record.Metadata, previousMetadata)
+				log.Warn().
+					Err(err).
+					Str("token_id", tokenID).
+					Str("agent_id", hostID).
+					Msg("Failed to persist reported agent identity on its token; the next report retries")
+				return
+			}
+		}
+		log.Info().
+			Str("token_id", tokenID).
+			Str("agent_id", hostID).
+			Str("hostname", strings.TrimSpace(record.Metadata["bound_hostname"])).
+			Msg("Bound hostname-bound agent token to the agent identity its reports resolve to")
+		return
+	}
+}
+
 func (r *Router) validateAgentExecSession(admission agentexec.AgentAdmission) bool {
 	if r == nil || r.config == nil {
 		return false

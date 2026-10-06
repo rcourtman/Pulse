@@ -940,7 +940,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   <span>Copy</span>
                 </CopyValueButton>
               </div>
-              <pre class="text-xs bg-base text-base-content p-4 rounded-md overflow-x-auto whitespace-pre-wrap break-all font-mono">
+              <pre class="text-xs bg-page text-base-content p-4 rounded-md overflow-x-auto whitespace-pre-wrap break-all font-mono">
                 {metadataPreview()?.xml}
               </pre>
             </div>
