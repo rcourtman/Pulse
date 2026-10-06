@@ -1738,14 +1738,95 @@ func initializeMockKubernetesClusterUsage(cluster *models.KubernetesCluster, now
 		}
 	}
 
+	activePodsByNode := make(map[string]int, len(cluster.Nodes))
+	for i := range cluster.Pods {
+		pod := &cluster.Pods[i]
+		nodeName := strings.TrimSpace(pod.NodeName)
+		if mockKubernetesPodIsActive(pod, nodeByName[nodeName]) {
+			activePodsByNode[nodeName]++
+		}
+	}
+
 	clusterOffline := strings.EqualFold(strings.TrimSpace(cluster.Status), "offline")
 	for i := range cluster.Pods {
 		pod := &cluster.Pods[i]
-		node := nodeByName[strings.TrimSpace(pod.NodeName)]
-		updateMockKubernetesPodUsage(pod, node, now, randomize, clusterOffline)
+		nodeName := strings.TrimSpace(pod.NodeName)
+		updateMockKubernetesPodUsage(pod, nodeByName[nodeName], activePodsByNode[nodeName], now, randomize, clusterOffline)
 	}
+	capMockKubernetesNodePodMemory(cluster, nodeByName)
 
 	recomputeMockKubernetesNodeUsage(cluster, now)
+}
+
+// mockKubernetesNodePodMemoryBudget is how many single-pod memory footprints
+// the active pods on one node share. A pod's memory percent is measured
+// against its node's allocatable memory, as the live agent reports it, so
+// giving every pod a whole footprint (roughly 10-83%) committed any node
+// running four or more pods past its allocatable memory. The node, and the
+// host agent linked to it, then read a constant 100%. The largest footprint
+// is about 83% (a Guaranteed StatefulSet pod at full burst), so a budget of
+// 0.7 footprints keeps a node's pods at or below 58% in steady state, under
+// mockKubernetesNodePodMemoryCeiling.
+const mockKubernetesNodePodMemoryBudget = 0.7
+
+// mockKubernetesPodMemoryShare scales one pod's memory target by the number
+// of active pods on its node, so the node total stays within the budget plus
+// system overhead however many pods are scheduled there.
+func mockKubernetesPodMemoryShare(activePodsOnNode int) float64 {
+	if activePodsOnNode < 1 {
+		activePodsOnNode = 1
+	}
+	return mockKubernetesNodePodMemoryBudget / float64(activePodsOnNode)
+}
+
+// mockKubernetesNodePodMemoryCeiling bounds the fraction of a node's
+// allocatable memory its active pods may hold together. Pod readings smooth
+// toward their share of the budget, so they lag a change in the node's pod
+// count: a pod rescheduled off a failed node arrives with a reading sized for
+// its old node. Share-scaled targets stay under the ceiling, so it binds only
+// on that transient, keeping the node, with its system overhead of up to 26%,
+// below allocatable memory while readings settle.
+const mockKubernetesNodePodMemoryCeiling = 0.6
+
+// capMockKubernetesNodePodMemory applies the ceiling and reports how many
+// nodes it clipped.
+func capMockKubernetesNodePodMemory(cluster *models.KubernetesCluster, nodeByName map[string]*models.KubernetesNode) int {
+	usedByNode := make(map[string]int64, len(cluster.Nodes))
+	for i := range cluster.Pods {
+		pod := &cluster.Pods[i]
+		nodeName := strings.TrimSpace(pod.NodeName)
+		if nodeByName[nodeName] != nil && mockKubernetesPodIsActive(pod, nodeByName[nodeName]) {
+			usedByNode[nodeName] += pod.UsageMemoryBytes
+		}
+	}
+
+	scaleByNode := make(map[string]float64, len(usedByNode))
+	for nodeName, used := range usedByNode {
+		node := nodeByName[nodeName]
+		allocMemory := node.AllocMemoryBytes
+		if allocMemory <= 0 {
+			allocMemory = node.CapacityMemoryBytes
+		}
+		ceiling := float64(allocMemory) * mockKubernetesNodePodMemoryCeiling
+		if allocMemory > 0 && float64(used) > ceiling {
+			scaleByNode[nodeName] = ceiling / float64(used)
+		}
+	}
+	if len(scaleByNode) == 0 {
+		return 0
+	}
+
+	for i := range cluster.Pods {
+		pod := &cluster.Pods[i]
+		nodeName := strings.TrimSpace(pod.NodeName)
+		scale, ok := scaleByNode[nodeName]
+		if !ok || !mockKubernetesPodIsActive(pod, nodeByName[nodeName]) {
+			continue
+		}
+		pod.UsageMemoryPercent *= scale
+		pod.UsageMemoryBytes = int64(float64(pod.UsageMemoryBytes) * scale)
+	}
+	return len(scaleByNode)
 }
 
 // reconcileMockKubernetesPodScheduling keeps pod placement coherent with
@@ -1916,6 +1997,7 @@ func normalizeMockKubernetesNodeCapacity(node *models.KubernetesNode) {
 func updateMockKubernetesPodUsage(
 	pod *models.KubernetesPod,
 	node *models.KubernetesNode,
+	activePodsOnNode int,
 	now time.Time,
 	randomize bool,
 	clusterOffline bool,
@@ -2002,8 +2084,9 @@ func updateMockKubernetesPodUsage(
 
 	baseMemory := 9.0 + float64(mockStableHash64(seedID, "mem-base")%20)
 	burstMemory := 14.0 + float64(mockStableHash64(seedID, "mem-burst")%36)
-	targetMemory := (baseMemory + activity*burstMemory) * (0.92 + ownerScale*0.12)
-	pod.UsageMemoryPercent = clampFloat(smoothMetricToward(pod.UsageMemoryPercent, targetMemory, 0.08), 3, 97)
+	memoryShare := mockKubernetesPodMemoryShare(activePodsOnNode)
+	targetMemory := (baseMemory + activity*burstMemory) * (0.92 + ownerScale*0.12) * memoryShare
+	pod.UsageMemoryPercent = clampFloat(smoothMetricToward(pod.UsageMemoryPercent, targetMemory, 0.08), 3*memoryShare, 97)
 	pod.UsageMemoryBytes = int64(float64(allocMemory) * (pod.UsageMemoryPercent / 100.0))
 
 	baseNetIn := float64((24 + int(mockStableHash64(seedID, "netin-base")%180)) * 1024)

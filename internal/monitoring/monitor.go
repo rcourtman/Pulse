@@ -1263,6 +1263,8 @@ type Monitor struct {
 	recoveryIngestPending     []recoveryIngestBatch
 	mockMetricsCancel         context.CancelFunc
 	mockMetricsWg             sync.WaitGroup
+	mockHostAgentsMu          sync.Mutex
+	mockHostAgents            map[string]models.Host   // Fixture agents evaluated by the last mock alert pass
 	dockerChecker             DockerChecker            // Optional Docker checker for LXC containers
 	dockerCheckerConfiguredAt time.Time                // Last time the Docker checker was configured
 	dockerCheckAllowedVMIDs   map[int]struct{}         // Optional VMID allowlist gating the LXC Docker socket probe; empty means all guests
@@ -4567,6 +4569,7 @@ func (m *Monitor) SetMockMode(enable bool) error {
 			return err
 		}
 		m.alertManager.ClearActiveAlerts()
+		m.forgetMockHostAgents()
 		m.mu.Lock()
 		m.resetStateLocked()
 		m.metricsHistory.Reset()
