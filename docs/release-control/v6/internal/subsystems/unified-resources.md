@@ -2241,7 +2241,12 @@ storage); agent and Docker hosts also answer to `agent:<id>` and
 stated when it is a whole sentence of an open alert's text, because a unified
 incident alert on storage with consumers joins the incident summary and its
 impact ("... above threshold. Affects 2 dependent resources: ...") and neither
-may repeat beside it.
+may repeat beside it. The Docker hosts (`DockerHostsTable.tsx`) and Machines
+(`AgentsMachinesTable.tsx`) table rows tint from the same set through
+`getUnifiedResourceAlertStyles`, so a collapsed row never looks healthy while
+its drawer lists an unacknowledged alert (an expanded row drops the tint while
+its drawer shows the alerts); acknowledged alerts stay in the drawer without
+tinting the row.
 Machine and host overview cards that render compact system, hardware, disk,
 and temperature facts must also compose the frontend-primitives
 `InfoCardKeyValueRow`. Mobile rows retain their condensed endpoint layout;

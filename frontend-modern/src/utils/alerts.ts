@@ -32,13 +32,36 @@ export const getAlertStyles = (
     return noAlertStyles;
   }
 
-  const alertsForResource = getAlertsForResource(
-    Array.isArray(resourceId) ? resourceId : [resourceId],
-    activeAlerts,
-    alertsEnabled,
-    nodeMatch,
+  return getAlertStylesForAlerts(
+    getAlertsForResource(
+      Array.isArray(resourceId) ? resourceId : [resourceId],
+      activeAlerts,
+      alertsEnabled,
+      nodeMatch,
+    ),
   );
+};
 
+// Alert highlighting for a unified resource's row, from the open alerts its
+// drawer lists under "Needs attention" (getAlertsForUnifiedResource). Matching
+// by display name misses machines whose alerts are keyed on the agent or
+// Docker host id, and a row that disagrees with its own drawer hides the
+// problem until someone opens it.
+export const getUnifiedResourceAlertStyles = (
+  resource: Resource,
+  activeAlerts: Record<string, Alert>,
+  alertsEnabled: boolean | undefined = isAlertsDetectionEnabled(),
+) => {
+  if (!alertsEnabled) {
+    return noAlertStyles;
+  }
+
+  return getAlertStylesForAlerts(
+    getAlertsForUnifiedResource(resource, activeAlerts, alertsEnabled),
+  );
+};
+
+function getAlertStylesForAlerts(alertsForResource: Alert[]) {
   const unacknowledgedAlerts = alertsForResource.filter((alert) => !alert.acknowledged);
   const acknowledgedAlerts = alertsForResource.filter((alert) => alert.acknowledged);
 
@@ -134,7 +157,7 @@ export const getAlertStyles = (
     acknowledgedCount,
     hasAcknowledgedOnlyAlert: !hasUnacknowledgedAlert && acknowledgedCount > 0,
   };
-};
+}
 
 export function getAlertsForResource(
   resourceIds: string[],

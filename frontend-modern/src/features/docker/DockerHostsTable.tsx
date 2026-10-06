@@ -10,7 +10,7 @@ import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
-import { getAlertStyles } from '@/utils/alerts';
+import { getUnifiedResourceAlertStyles } from '@/utils/alerts';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
@@ -374,8 +374,11 @@ export const DockerHostsTable: Component<{
                     const isSelected = () => selectedHostId() === host.id;
                     const toggleDrawer = () =>
                       setSelectedHostId((current) => (current === host.id ? null : host.id));
+                    // The same open alerts the host's drawer lists: Docker alerts
+                    // are keyed on the Docker host id and carry the hostname, so
+                    // matching the row's id or display name finds none of them.
                     const hostAlertStyles = createMemo(() =>
-                      getAlertStyles(host.id, activeAlerts, alertsEnabled(), name()),
+                      getUnifiedResourceAlertStyles(host, activeAlerts, alertsEnabled()),
                     );
                     // Metrics from a host that stopped reporting are its last
                     // values, not live readings; say so instead of showing them
