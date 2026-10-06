@@ -63,8 +63,24 @@ Pushover destination under **Alerts** and open Pulse in your phone's browser.
 See [Relay / Pulse Mobile](RELAY.md) for the existing pairing and security details.
 
 ### Why do VMs show "-" for disk usage?
-Proxmox API returns `0` for VM disk usage by default. You must install the **QEMU Guest Agent** inside the VM and enable it in Proxmox (VM → Options → QEMU Guest Agent).
-See [VM Disk Monitoring](VM_DISK_MONITORING.md) for details.
+
+A dash means filesystem usage is unavailable, **not zero**. Allocated virtual-disk
+size is not used space inside the guest. Pulse can read that usage through a
+supported QEMU Guest Agent, but a failed read does not establish that the agent
+is absent or stopped. Read the explanation and observation time; use the guest's
+own filesystem readings rather than treating a retained Pulse value as current.
+
+Do not install, enable or restart an agent solely to clear a disk dash. During a
+backup, freeze/thaw or an unresponsive-guest incident, defer setup and live probes.
+Follow [Backup safety](VM_DISK_MONITORING.md#backup-safety); an OK backup does not
+prove thaw. Keep the monitoring-outage precaution until independent checks confirm
+thaw, fresh writes to every covered filesystem and workload liveness. Restore only
+services and timers that were previously active.
+
+Outside those conditions, review the existing configuration and supported setup
+for the guest OS. The Linux package name is not a Windows or Android installation
+instruction; if no supported agent is available, use guest-local filesystem tools.
+See [Missing-reading and setup guidance](VM_DISK_MONITORING.md#a-missing-reading-is-not-an-installation-diagnosis).
 
 ### Does Pulse monitor Ceph?
 Yes! If Pulse detects Ceph storage, it automatically queries cluster health, OSD status, and pool usage. No extra config needed.
