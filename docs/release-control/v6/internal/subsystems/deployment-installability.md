@@ -4121,6 +4121,22 @@ Vitest migration must preserve test assertions while using constructable
 constructor mocks and explicit standalone mock-history cleanup. Dependency
 updates must retain the required full-graph audit rather than suppressing it.
 
+The October deserialization/parsing advisory floors are Seroval `1.6.3`
+(GHSA-p6vx-979v-rg4c and GHSA-jp82-f5mq-hwhp), postcss-selector-parser `7.1.6`
+(GHSA-rj75-hqrm-r3gf), and source-map-js `1.2.2` (GHSA-68fv-2mgg-jv7q).
+Maintained-major overrides apply to every copy, without downgrading Solid,
+typography, Tailwind, or the other reviewed dependency floors. The Seroval
+override intentionally supersedes Solid's `~1.5.4` requirement; the unchanged
+seroval-plugins `1.5.5` peer accepts Seroval `^1.0`. The selector-parser override
+intentionally supersedes typography's exact `6.0.10` dependency. Such overrides
+require actual consumer compatibility, not just a version assertion:
+`dependencyTooling.test.ts` checks shared consumer resolution, cyclic/plugin
+serialization, typography pseudo placement, named maps and PostCSS source
+content. `dependencySecurity.test.ts` checks all three manifest/lock floors,
+including nested copies. Exact acquired-graph source/build/browser validation
+and the complete hosted audit remain distinct obligations; official patch
+metadata and a lockfile do not by themselves clear an audit failure.
+
 That same dev-runtime dependency-manifest boundary now also owns the maintained
 Docker engine module floor. `go.mod`, `go.sum`, and
 `internal/cloudcp/docker/manager.go` must route hosted runtime orchestration

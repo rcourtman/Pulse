@@ -44,9 +44,8 @@ describe('guest observation API help', () => {
     expect(text()).toContain('An absent reason alone does not prove freshness');
     const collector = read('internal/monitoring/guest_disk_stability.go');
     expect(collector).toContain('"prev-" + diskStatusReason');
-    expect(collector).toMatch(
-      /case strings.Contains\(errStr, "500"\):\s+return "agent-not-running"/,
-    );
+    // The warning also covers older/retained payloads. Requiring the old
+    // HTTP-500 classifier here would forbid Core's typed-error safety repair.
   });
 
   it('renders selected-source memory states without renewing old or missing observations', () => {

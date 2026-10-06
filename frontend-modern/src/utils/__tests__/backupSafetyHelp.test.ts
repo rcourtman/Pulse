@@ -79,12 +79,9 @@ describe('manual backup safety help', () => {
       expect(link).not.toBeNull();
       expect(rendered.querySelector(`#${fragment}`)).not.toBeNull();
     }
-    // This broad status comes from the current collector, not a reproduced
-    // native failure or a new diagnosis of the guest's service state.
-    const classifier = read('internal/monitoring/guest_disk_stability.go');
-    expect(classifier).toMatch(
-      /case strings.Contains\(errStr, "500"\):\s+return "agent-not-running"/,
-    );
+    // Keep this conservative for older or retained explanations too. The
+    // current collector uses typed errors; safe help must not require the
+    // retired HTTP-500 misclassification to remain in the implementation.
   });
 
   it('ships the complete precaution and makes it reachable from troubleshooting', () => {
