@@ -15,6 +15,21 @@
 
 ## Purpose
 
+### Native helper verification follows helper-only changes
+
+Unified Agent Native Verification admits helper command, protocol, shared
+filesystem-prober and update-signature changes on both PRs and main, alongside
+the existing host wire paths. Its x64 and ARM64 Linux jobs run the full five
+helper-boundary packages with race detection and uncached, bounded tests, then
+build the actual helper command. A failing test or build is not advisory.
+`TestNativeHelperWorkflowCoversChangedSourceAndLinuxBoundaries` rejects each
+missing trigger, platform, package, build and concealed failure.
+
+These are ordinary-user native source tests. They do not install or launch a
+root helper, relax `PrivateNetwork`, qualify a release, establish signed
+old-helper migration/rollback or reproduce PVE/QGA workload recovery. Those
+installed acceptance obligations remain separate.
+
 ### Report intake remains safe without unreleased documentation
 
 The bug and prerelease report forms carry their collection and attachment
