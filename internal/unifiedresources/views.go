@@ -1372,6 +1372,18 @@ func (v HostView) LastSeen() time.Time {
 	return v.r.LastSeen
 }
 
+// SourceStatus returns the canonical delivery freshness recorded for one
+// source. On a merged row (a host agent linked to a Proxmox node) LastSeen
+// follows the freshest source, so consumers of agent-owned samples such as
+// sensors must read the agent source's own sighting here instead.
+func (v HostView) SourceStatus(source DataSource) (SourceStatus, bool) {
+	if v.r == nil {
+		return SourceStatus{}, false
+	}
+	status, ok := v.r.SourceStatus[source]
+	return status, ok
+}
+
 func (v HostView) CPUPercent() float64 {
 	if v.r == nil {
 		return 0

@@ -1,11 +1,14 @@
 package monitoring
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -459,6 +462,7 @@ func TestGetHostAgentTemperature(t *testing.T) {
 			Sensors: models.HostSensorSummary{
 				TemperatureCelsius: map[string]float64{"cpu_package": 60.0},
 			},
+			LastSeen: time.Now(),
 		}
 		m.state.UpsertHost(host)
 
@@ -497,6 +501,7 @@ func TestGetHostAgentTemperature(t *testing.T) {
 			Sensors: models.HostSensorSummary{
 				TemperatureCelsius: map[string]float64{"cpu_package": 65.0},
 			},
+			LastSeen: time.Now(),
 		}
 		m.state.UpsertHost(host)
 
@@ -663,6 +668,7 @@ func TestGetHostAgentTemperatureByID_LocalAgentTakesPriority(t *testing.T) {
 				"cpu_package": 70.0, // local agent reports 70
 			},
 		},
+		LastSeen: time.Now(),
 	})
 	m.clusterSensorsCache["shared-node"] = clusterSensorsCacheEntry{
 		sensors: models.HostSensorSummary{
@@ -676,6 +682,98 @@ func TestGetHostAgentTemperatureByID_LocalAgentTakesPriority(t *testing.T) {
 	result := m.getHostAgentTemperatureByID("", "shared-node")
 	assert.NotNil(t, result)
 	assert.Equal(t, 70.0, result.CPUPackage, "local agent data should take priority over cluster cache")
+}
+
+// An agent that stops reporting keeps its last sensors in state. Past the
+// reporting lease that marks it offline, those sensors must not keep feeding the
+// linked node as a live reading; the cluster cache (with its own recency) is
+// still consulted.
+func TestGetHostAgentTemperatureByID_IgnoresAgentPastReportingLease(t *testing.T) {
+	m := &Monitor{
+		state:               models.NewState(),
+		clusterSensorsCache: make(map[string]clusterSensorsCacheEntry),
+	}
+	m.state.UpsertHost(models.Host{
+		ID:              "host-silent",
+		Hostname:        "silent-node",
+		LinkedNodeID:    "node-silent",
+		IntervalSeconds: 30,
+		Sensors: models.HostSensorSummary{
+			TemperatureCelsius: map[string]float64{"cpu_package": 95.0},
+		},
+		LastSeen: time.Now().Add(-hostAgentHealthWindow(30) - time.Minute),
+	})
+
+	assert.Nil(t, m.getHostAgentTemperatureByID("node-silent", "silent-node"),
+		"a silent agent's retained sensors must not be presented as a current reading")
+
+	m.clusterSensorsCache["silent-node"] = clusterSensorsCacheEntry{
+		sensors: models.HostSensorSummary{
+			TemperatureCelsius: map[string]float64{"cpu_package": 58.0},
+		},
+		updatedAt: time.Now(),
+	}
+	if result := m.getHostAgentTemperatureByID("node-silent", "silent-node"); assert.NotNil(t, result) {
+		assert.Equal(t, 58.0, result.CPUPackage, "a recent cluster-cache reading still serves the node")
+	}
+
+	m.state.UpsertHost(models.Host{
+		ID:              "host-silent",
+		Hostname:        "silent-node",
+		LinkedNodeID:    "node-silent",
+		IntervalSeconds: 30,
+		Sensors: models.HostSensorSummary{
+			TemperatureCelsius: map[string]float64{"cpu_package": 71.0},
+		},
+		LastSeen: time.Now(),
+	})
+	if result := m.getHostAgentTemperatureByID("node-silent", "silent-node"); assert.NotNil(t, result) {
+		assert.Equal(t, 71.0, result.CPUPackage, "a reporting agent's reading is used again")
+	}
+}
+
+// When every temperature source returns nothing, a previous reading may be
+// carried only inside the carry window and keeps its original timestamp; an
+// older one is dropped rather than re-presented as current.
+func TestCollectNodeTemperatureCarryIsBoundedByCarryWindow(t *testing.T) {
+	m := &Monitor{
+		config: &config.Config{TemperatureMonitoringEnabled: true, PVEPollingInterval: 10 * time.Second},
+		state:  models.NewState(),
+	}
+	collectWithPrevious := func(prev *models.Temperature) *models.Temperature {
+		node := models.Node{ID: "pve1-node1", Name: "node1", Instance: "pve1"}
+		m.collectNodeTemperatureData(
+			context.Background(), "pve1", &config.PVEInstance{Name: "pve1"}, proxmox.Node{Node: "node1"},
+			&node, []models.Node{{ID: node.ID, Temperature: prev}}, "online",
+		)
+		return node.Temperature
+	}
+
+	assert.Equal(t, 5*time.Minute, m.nodeTemperatureCarryWindow(), "the floor applies at the default polling interval")
+	m.config.PVEPollingInterval = 10 * time.Minute
+	assert.Equal(t, 20*time.Minute, m.nodeTemperatureCarryWindow(), "the window scales with a slow polling interval")
+	m.config.PVEPollingInterval = 10 * time.Second
+
+	recent := time.Now().Add(-time.Minute)
+	if carried := collectWithPrevious(&models.Temperature{Available: true, CPUPackage: 92, LastUpdate: recent}); assert.NotNil(t, carried) {
+		assert.True(t, carried.Available)
+		assert.True(t, carried.LastUpdate.Equal(recent), "a carried reading keeps its original timestamp")
+	}
+
+	stale := time.Now().Add(-m.nodeTemperatureCarryWindow() - time.Minute)
+	assert.Nil(t, collectWithPrevious(&models.Temperature{Available: true, CPUPackage: 92, LastUpdate: stale}),
+		"a reading older than the carry window must not be presented as current")
+	assert.Nil(t, collectWithPrevious(&models.Temperature{Available: true, CPUPackage: 92}),
+		"a reading with no timestamp cannot be shown to be recent")
+}
+
+func TestHostAgentReportCurrent(t *testing.T) {
+	now := time.Now()
+	assert.False(t, hostAgentReportCurrent(time.Time{}, 30, now), "an agent that never reported has no current reading")
+	assert.True(t, hostAgentReportCurrent(now.Add(-hostAgentHealthWindow(30)), 30, now))
+	assert.False(t, hostAgentReportCurrent(now.Add(-hostAgentHealthWindow(30)-time.Second), 30, now))
+	// A slow agent's lease scales with its declared interval.
+	assert.True(t, hostAgentReportCurrent(now.Add(-8*time.Minute), 120, now))
 }
 
 func TestGetHostAgentTemperatureByID_UsesUnifiedReadState(t *testing.T) {
