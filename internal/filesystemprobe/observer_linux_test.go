@@ -81,3 +81,68 @@ func TestWrongProcessCannotSupplyContainerCapacity(t *testing.T) {
 		t.Fatalf("unrelated process supplied capacity: %+v %v", got, err)
 	}
 }
+
+// A configured mountpoint that shares its parent's device is not mounted in
+// the guest; reporting it would copy the parent filesystem's counters.
+func TestMountsOnlyDetectsUnmountedPathsWithinRoot(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "data"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	fd, err := unix.Open(dir, unix.O_PATH|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unix.Close(fd)
+	if mounted, err := mountedWithinRoot(fd, "/"); err != nil || !mounted {
+		t.Fatalf("root reported unmounted: %v %v", mounted, err)
+	}
+	if mounted, err := mountedWithinRoot(fd, "/data"); err != nil || mounted {
+		t.Fatalf("plain directory reported as a mount: %v %v", mounted, err)
+	}
+	if _, err := mountedWithinRoot(fd, "/missing"); err == nil {
+		t.Fatal("missing path reported a mount state")
+	}
+}
+
+// The test process is not PID 1 of a namespace, so it cannot supply a Proxmox
+// guest's filesystems even if a request names it.
+func TestNonInitProcessCannotSupplyProxmoxGuestCapacity(t *testing.T) {
+	r := ContainerRequest{PID: os.Getpid(), ContainerID: "126", Runtime: "lxc", Mountpoints: []string{"/"}, MountsOnly: true}
+	if got, err := observeContainer(context.Background(), r); err == nil || got != nil {
+		t.Fatalf("non-init process supplied capacity: %+v %v", got, err)
+	}
+}
+
+// Inside the typed helper systemd blocks openat2 (RestrictSUIDSGID), so mounts
+// are resolved component by component. That walk must stay beneath the root
+// by refusing every symbolic link, including ones that would stay inside.
+func TestComponentWalkRefusesSymlinksAndStaysBeneathRoot(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "srv", "data"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for name, target := range map[string]string{"inside-link": "/srv", "outside": "/etc", "relative-up": "../../.."} {
+		if err := os.Symlink(target, filepath.Join(dir, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	root, err := unix.Open(dir, unix.O_PATH|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unix.Close(root)
+	for _, mount := range []string{"/", "/srv", "/srv/data"} {
+		fd, err := openBeneathWithoutSymlinks(root, mount)
+		if err != nil {
+			t.Fatalf("plain path %s refused: %v", mount, err)
+		}
+		unix.Close(fd)
+	}
+	for _, mount := range []string{"/inside-link", "/inside-link/data", "/outside", "/outside/passwd", "/relative-up", "/srv/../etc", "srv", "/proc/self/root"} {
+		if fd, err := openBeneathWithoutSymlinks(root, mount); err == nil {
+			unix.Close(fd)
+			t.Fatalf("%s resolved through the component walk", mount)
+		}
+	}
+}

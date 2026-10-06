@@ -7,8 +7,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/filesystemprobe"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	gohost "github.com/shirou/gopsutil/v4/host"
 )
@@ -44,15 +46,27 @@ type mockCollector struct {
 		name string,
 		arg ...string,
 	) (string, error)
-	lookPathFn        func(file string) (string, error)
-	filesystemUsageFn func(path string) (hostFilesystemUsage, error)
+	lookPathFn   func(file string) (string, error)
+	observeLXCFn func(ctx context.Context, req filesystemprobe.ContainerRequest) ([]filesystem.Observation, error)
+	readDirFn    func(name string) ([]os.DirEntry, error)
 }
 
-func (m *mockCollector) FilesystemUsage(path string) (hostFilesystemUsage, error) {
-	if m.filesystemUsageFn != nil {
-		return m.filesystemUsageFn(path)
+// ReadDir satisfies proxmoxLXCDirLister. Without readDirFn it reports the
+// directory missing, so collectors keep their pct path unless a test opts in.
+func (m *mockCollector) ReadDir(name string) ([]os.DirEntry, error) {
+	if m.readDirFn != nil {
+		return m.readDirFn(name)
 	}
-	return hostFilesystemUsage{}, os.ErrNotExist
+	return nil, os.ErrNotExist
+}
+
+// ObserveProxmoxLXC satisfies proxmoxLXCObserver. Without observeLXCFn the
+// probe fails, as it does off Linux, so collectors fall back to pct df.
+func (m *mockCollector) ObserveProxmoxLXC(ctx context.Context, req filesystemprobe.ContainerRequest) ([]filesystem.Observation, error) {
+	if m.observeLXCFn != nil {
+		return m.observeLXCFn(ctx, req)
+	}
+	return nil, os.ErrNotExist
 }
 
 func (m *mockCollector) HostInfo(ctx context.Context) (*gohost.InfoStat, error) {
