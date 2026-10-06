@@ -2,7 +2,7 @@ package alerts
 
 import (
 	"sort"
-	"sync/atomic"
+	"strings"
 	"testing"
 	"time"
 
@@ -424,6 +424,15 @@ func TestCheckUnifiedResourceSupportsKubernetesTrueNASAndVMwareMetricTargets(t *
 			alert := activeAlert(t, m, tt.alertID)
 			if got := alert.Metadata["resourceType"]; got != tt.wantResourceType {
 				t.Fatalf("resourceType metadata = %v, want %s", got, tt.wantResourceType)
+			}
+			// resourceType is a display label, so the owning platform travels separately.
+			wantPlatform := map[string]string{
+				"Kubernetes": "kubernetes",
+				"TrueNAS":    "truenas",
+				"vSphere":    "vmware-vsphere",
+			}[strings.Fields(tt.wantResourceType)[0]]
+			if got := alert.Metadata["platformType"]; got != wantPlatform {
+				t.Fatalf("platformType metadata = %v, want %s", got, wantPlatform)
 			}
 		})
 	}
@@ -1655,8 +1664,9 @@ func activeNodeTemperatureAlert(t *testing.T, m *Manager) *Alert {
 
 func TestOpenTemperatureAlertReportsLiveReadingWhileItHolds(t *testing.T) {
 	m, clock := newMetricStatusTestManager(t)
-	var notified atomic.Int32
-	m.SetAlertCallback(func(*Alert) { notified.Add(1) })
+	// Buffered so a dispatch never blocks the evaluator; len() counts sends.
+	notified := make(chan struct{}, 64)
+	m.SetAlertCallback(func(*Alert) { notified <- struct{}{} })
 
 	fired := fireNodeTemperatureAlert(t, m, clock, 85)
 	status := fired.MetricStatus
@@ -1668,7 +1678,7 @@ func TestOpenTemperatureAlertReportsLiveReadingWhileItHolds(t *testing.T) {
 		t.Fatalf("temperature alerts carry a recovery delay, got %+v", status)
 	}
 	delay := time.Duration(status.RecoveryDelaySeconds) * time.Second
-	firedMessage, firedLastSeen, notifications := fired.Message, fired.LastSeen, notified.Load()
+	firedMessage, firedLastSeen, notifications := fired.Message, fired.LastSeen, len(notified)
 
 	// Between the clear and trigger levels the alert holds. The legacy
 	// snapshot keeps the breach; only the live status moves.
@@ -1709,7 +1719,7 @@ func TestOpenTemperatureAlertReportsLiveReadingWhileItHolds(t *testing.T) {
 		got.Phase != models.MetricAlertPhaseLatched || got.RecoveryStartedAt != nil || got.RecoveryElapsedSeconds != 0 {
 		t.Fatalf("status after recovery reset = %+v", got)
 	}
-	if got := notified.Load(); got != notifications {
+	if got := len(notified); got != notifications {
 		t.Fatalf("holding and recovering sent %d notifications", got-notifications)
 	}
 
