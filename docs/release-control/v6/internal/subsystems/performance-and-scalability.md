@@ -1122,6 +1122,11 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     hover tooltips from synthesized mouse events; a row tap remains the primary
     drawer action. Tooltip suppression belongs to the shared hover-capability
     boundary rather than per-row viewport branches or listeners.
+    The shared `EnhancedCPUBar` hover panel names the CPU count that the bar
+    shows in parentheses beside the percentage ("22% (18)") as "CPUs": logical
+    CPUs on a host, configured vCPUs on a guest, so "Cores" would be wrong on
+    hyperthreaded hosts. It reads the `cores` prop the row already passes and
+    adds no per-row work.
     Ultra-narrow workload presentation belongs in the existing layout and
     column model: below 360 pixels it keeps five identity/health columns with a
     40-percent identity track. It must not add per-row measurement, viewport

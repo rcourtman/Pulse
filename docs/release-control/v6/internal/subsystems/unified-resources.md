@@ -2390,6 +2390,9 @@ for the column when evidence later appears. The
 compact row action trigger chrome stays under the frontend-primitives
 `ActionIconButton` boundary rather than becoming a unified-resource-local
 button shell.
+The Machines outdated-agent notice names what an update brings in plain
+words, the latest fixes and machine details, and stays maintenance guidance
+rather than a membership or health signal.
 Machines list search and online-state narrowing are frontend route state,
 not new unified-resource membership fields. `StandalonePageSurface.tsx`
 owns the `STANDALONE_QUERY_PARAMS` query/status projection and one composite

@@ -352,7 +352,7 @@ export function VmwarePageSurface() {
             <PlatformOutdatedAgentNotice
               hosts={outdatedAgentVMs()}
               targetVersion={serverVersionDisplay()}
-              missingLabel="in-guest telemetry and command support"
+              missingLabel="fixes and VM details"
               copyVariant="latest-detail"
               actionHref={outdatedAgentUpdatePath()}
               actionLabel="Open agent upgrade commands"
