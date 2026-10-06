@@ -163,7 +163,7 @@ describe('GuestDrawerHistory filesystem provenance', () => {
     }
     const value = guest('private transport error');
     expect(getGuestDrawerDeferredMetrics(value).disk.message).toBe(
-      'Guest filesystem usage is unavailable; the cause is unknown. Use guest-local filesystem tools. Defer setup and live probes during backups or a guest incident.',
+      'Guest filesystem usage is unavailable. The cause is unknown. Use guest-local filesystem tools. Defer setup and live probes during backups or a guest incident.',
     );
     expect(getGuestDrawerCurrentMetrics(value).disk).toBeUndefined();
   });

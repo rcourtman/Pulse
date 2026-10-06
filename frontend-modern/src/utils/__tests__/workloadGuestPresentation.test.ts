@@ -113,7 +113,7 @@ describe('workloadGuestPresentation', () => {
       'No filesystems found. VM may be booting or using a Live ISO.',
     );
     expect(getWorkloadGuestDiskStatusMessage()).toBe(
-      'Guest filesystem usage is unavailable; the cause is unknown. Use guest-local filesystem tools. Defer setup and live probes during backups or a guest incident.',
+      'Guest filesystem usage is unavailable. The cause is unknown. Use guest-local filesystem tools. Defer setup and live probes during backups or a guest incident.',
     );
     expect(getWorkloadGuestDiskStatusMessage('prev-no-filesystems')).toBe(
       'Using last known disk stats. No filesystems found. VM may be booting or using a Live ISO.',

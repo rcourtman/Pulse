@@ -140,7 +140,7 @@ export function getWorkloadGuestDiskStatusMessage(reason?: string): string {
       case 'no-status':
         return 'Guest filesystem stats unavailable because Pulse could not read the VM status from Proxmox.';
       default:
-        return 'Guest filesystem usage is unavailable; the cause is unknown. Use guest-local filesystem tools. Defer setup and live probes during backups or a guest incident.';
+        return 'Guest filesystem usage is unavailable. The cause is unknown. Use guest-local filesystem tools. Defer setup and live probes during backups or a guest incident.';
     }
   })();
 

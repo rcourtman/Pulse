@@ -71,7 +71,7 @@ describe('DiskList', () => {
       render(() => <DiskList disks={[]} />);
       expect(screen.getByText('-')).toHaveAttribute(
         'title',
-        'Guest filesystem usage is unavailable; the cause is unknown. Use guest-local filesystem tools. Defer setup and live probes during backups or a guest incident.',
+        'Guest filesystem usage is unavailable. The cause is unknown. Use guest-local filesystem tools. Defer setup and live probes during backups or a guest incident.',
       );
     });
 
@@ -117,7 +117,7 @@ describe('DiskList', () => {
       render(() => <DiskList disks={[]} diskStatusReason="some-unknown-reason" />);
       expect(screen.getByText('-')).toHaveAttribute(
         'title',
-        'Guest filesystem usage is unavailable; the cause is unknown. Use guest-local filesystem tools. Defer setup and live probes during backups or a guest incident.',
+        'Guest filesystem usage is unavailable. The cause is unknown. Use guest-local filesystem tools. Defer setup and live probes during backups or a guest incident.',
       );
     });
   });
