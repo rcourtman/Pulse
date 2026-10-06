@@ -67,6 +67,35 @@ export function formatSpeed(bytesPerSecond: number, decimals: number | 'auto' = 
   return `${formatBytes(bytesPerSecond, decimals)}/s`;
 }
 
+const COMPACT_SPEED_UNITS = ['K', 'M', 'G', 'T', 'P', 'E'];
+
+/**
+ * Transfer rate for a dense cell that shares its width with a chart: binary
+ * unit letter, no "/s", one decimal below 10 ("3.3M", "512K"). Sub-kilobyte
+ * rates read "<1K" so idle chatter is not dressed up as a measurement.
+ */
+export function formatCompactSpeed(bytesPerSecond: number): string {
+  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return '0';
+  if (bytesPerSecond < 1024) return '<1K';
+
+  let value = bytesPerSecond / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < COMPACT_SPEED_UNITS.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  // Exabytes per second is already a wrapped counter, not a measurement; keep
+  // anything beyond it to the slot's width rather than printing an exponent.
+  if (unit === COMPACT_SPEED_UNITS.length - 1 && value >= 1023.5) return '>1023E';
+  if (value < 9.95) return `${value.toFixed(1)}${COMPACT_SPEED_UNITS[unit]}`;
+
+  const rounded = Math.round(value);
+  if (rounded >= 1024 && unit < COMPACT_SPEED_UNITS.length - 1) {
+    return `1.0${COMPACT_SPEED_UNITS[unit + 1]}`;
+  }
+  return `${rounded}${COMPACT_SPEED_UNITS[unit]}`;
+}
+
 export function formatObservedSpeed(bytesPerSecond: number | null | undefined): string {
   return typeof bytesPerSecond === 'number' &&
     Number.isFinite(bytesPerSecond) &&

@@ -541,9 +541,15 @@ describe('GuestRow', () => {
       expect(screen.queryByTestId('disk-bar')).not.toBeInTheDocument();
     });
 
-    it('keeps Net I/O and Disk I/O live labels out of sparkline table cells', () => {
+    it('pairs Net I/O and Disk I/O sparklines with compact current rates', () => {
       renderGuestRow({
-        guest: makeGuest({ name: 'spark-io-vm', networkIn: 1024, networkOut: 2048 }),
+        guest: makeGuest({
+          name: 'spark-io-vm',
+          networkIn: 3.32 * 1024 * 1024,
+          networkOut: 512 * 1024,
+          diskRead: 0,
+          diskWrite: 2048,
+        }),
         visibleColumnIds: ['name', 'netIo', 'diskIo'],
         metricDisplayMode: 'sparklines',
         metricHistory: {
@@ -565,10 +571,160 @@ describe('GuestRow', () => {
       const sparklines = screen.getAllByTestId('metric-mini-sparkline');
       expect(sparklines).toHaveLength(2);
       expect(sparklines.map((sparkline) => sparkline.dataset.valueLabelMode)).toEqual([
-        'tooltip',
-        'tooltip',
+        'inline',
+        'inline',
       ]);
-      expect(screen.queryByText('1.00 KB/s / 2.00 KB/s')).toBeNull();
+      // The full pair does not fit beside a chart; the compact pair does, and
+      // its glyphs double as the legend for the two lines.
+      expect(sparklines.map((sparkline) => sparkline.textContent)).toEqual([
+        '↓3.3M↑512K',
+        'R0W2.0K',
+      ]);
+      expect(screen.queryByText('3.32 MB/s / 512 KB/s')).toBeNull();
+      expect(
+        sparklines.map((sparkline) => sparkline.querySelector('svg')?.getAttribute('aria-label')),
+      ).toEqual([
+        'spark-io-vm network I/O history, current 3.32 MB/s / 512 KB/s',
+        'spark-io-vm disk I/O history, current 0 B/s / 2.00 KB/s',
+      ]);
+    });
+
+    it('swaps Net I/O and Disk I/O readouts into the row history lens', () => {
+      renderGuestRow({
+        guest: makeGuest({ name: 'io-lens-vm', networkIn: 2048, networkOut: 4096 }),
+        visibleColumnIds: ['name', 'cpu', 'netIo', 'diskIo'],
+        metricDisplayMode: 'bars',
+        metricHistory: {
+          getGuestMetricSeries: (_guest, metric) => [
+            {
+              id: metric,
+              label: metric,
+              color: '#8b5cf6',
+              points: [
+                { timestamp: 1, value: 10 },
+                { timestamp: 2, value: 25 },
+              ],
+            },
+          ],
+          getNodeMetricSeries: () => [],
+        },
+      });
+
+      expect(screen.getByText('2.00 KB/s')).toBeInTheDocument();
+      expect(screen.getByText('4.00 KB/s')).toBeInTheDocument();
+
+      const row = screen.getByText('io-lens-vm').closest('tr')!;
+      fireEvent.pointerEnter(row, { pointerType: 'mouse' });
+
+      const lensCharts = screen.getAllByTestId('metric-mini-sparkline');
+      expect(
+        lensCharts.map((chart) => chart.querySelector('svg')?.getAttribute('aria-label')),
+      ).toEqual([
+        'io-lens-vm CPU history, current 25%',
+        'io-lens-vm network I/O history, current 2.00 KB/s / 4.00 KB/s',
+        'io-lens-vm disk I/O history, current 500 B/s / 600 B/s',
+      ]);
+      expect(screen.queryByText('2.00 KB/s')).toBeNull();
+      expect(lensCharts[1].textContent).toBe('↓2.0K↑4.0K');
+      expect(lensCharts[1].parentElement).toHaveClass('h-4', 'motion-reduce:animate-none');
+
+      const cpuSvg = lensCharts[0].querySelector('svg') as SVGSVGElement;
+      cpuSvg.getBoundingClientRect = () =>
+        ({
+          bottom: 18,
+          height: 18,
+          left: 0,
+          right: 96,
+          top: 0,
+          width: 96,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        }) as DOMRect;
+      fireEvent.mouseMove(cpuSvg, { clientX: 48, clientY: 8 });
+      expect(lensCharts.every((chart) => chart.querySelector('[data-metric-history-cursor]'))).toBe(
+        true,
+      );
+
+      fireEvent.pointerLeave(row, { pointerType: 'mouse' });
+      expect(screen.queryByTestId('metric-mini-sparkline')).not.toBeInTheDocument();
+      expect(screen.getByText('2.00 KB/s')).toBeInTheDocument();
+    });
+
+    it('keeps lens charts mounted across live updates so scrub state survives', () => {
+      const [guest, setGuest] = createSignal(
+        makeGuest({ name: 'live-lens-vm', cpu: 0.2, networkIn: 2048, networkOut: 4096 }),
+      );
+      renderGuestRow({
+        get guest() {
+          return guest();
+        },
+        visibleColumnIds: ['name', 'cpu', 'netIo'],
+        metricDisplayMode: 'bars',
+        metricHistory: {
+          getGuestMetricSeries: (_guest, metric) => [
+            {
+              id: metric,
+              label: metric,
+              color: '#8b5cf6',
+              points: [
+                { timestamp: 1, value: 10 },
+                { timestamp: 2, value: 25 },
+              ],
+            },
+          ],
+          getNodeMetricSeries: () => [],
+        },
+      });
+
+      const row = screen.getByText('live-lens-vm').closest('tr')!;
+      fireEvent.pointerEnter(row, { pointerType: 'mouse' });
+      const [cpuChart, netChart] = screen.getAllByTestId('metric-mini-sparkline');
+
+      setGuest(makeGuest({ name: 'live-lens-vm', cpu: 0.4, networkIn: 8192, networkOut: 1024 }));
+
+      // A websocket snapshot while the operator is reading a chart must update
+      // its values in place: a remount drops the chart's open scrub tooltip.
+      const [nextCpuChart, nextNetChart] = screen.getAllByTestId('metric-mini-sparkline');
+      expect(nextCpuChart).toBe(cpuChart);
+      expect(nextNetChart).toBe(netChart);
+      expect(nextNetChart.textContent).toBe('↓8.0K↑1.0K');
+      expect(nextCpuChart.querySelector('svg')).toHaveAttribute(
+        'aria-label',
+        'live-lens-vm CPU history, current 40%',
+      );
+      expect(nextNetChart.querySelector('svg')).toHaveAttribute(
+        'aria-label',
+        'live-lens-vm network I/O history, current 8.00 KB/s / 1.00 KB/s',
+      );
+    });
+
+    it('leaves stopped guests on the I/O dash while the lens charts the rest of the row', () => {
+      renderGuestRow({
+        guest: makeGuest({ name: 'io-stopped-vm', status: 'stopped' }),
+        visibleColumnIds: ['name', 'cpu', 'netIo', 'diskIo'],
+        metricDisplayMode: 'bars',
+        metricHistory: {
+          getGuestMetricSeries: (_guest, metric) => [
+            {
+              id: metric,
+              label: metric,
+              color: '#8b5cf6',
+              points: [
+                { timestamp: 1, value: 10 },
+                { timestamp: 2, value: 25 },
+              ],
+            },
+          ],
+          getNodeMetricSeries: () => [],
+        },
+      });
+
+      const row = screen.getByText('io-stopped-vm').closest('tr')!;
+      fireEvent.pointerEnter(row, { pointerType: 'mouse' });
+
+      expect(screen.getAllByTestId('metric-mini-sparkline')).toHaveLength(1);
+      expect(row.querySelector('[data-metric-rate-pair]')).toBeNull();
     });
 
     it('shows dash when disk data is unavailable', () => {

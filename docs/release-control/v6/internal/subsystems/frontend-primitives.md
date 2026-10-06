@@ -666,13 +666,18 @@ existing picker unchanged.
 
 The default Workloads metric presentation keeps compact progress bars at rest.
 A fine-pointer preview or keyboard focus on one guest row replaces CPU, memory,
-and disk together with the existing `MetricMiniSparkline` presentation without
-changing row height; touch pointer entry does not trigger this transient lens,
-and the persistent Trends View choice remains the touch-accessible fallback.
+disk, Net I/O, and Disk I/O together with the existing `MetricMiniSparkline`
+presentation without changing row height; touch pointer entry does not trigger
+this transient lens, and the persistent Trends View choice remains the
+touch-accessible fallback. Both I/O cells render through one rate renderer in
+the lens and in Trends: the chart keeps a compact current pair beside it
+(`MetricMiniSparklineRatePair`, the at-rest ↓/↑ and R/W glyphs coloured like
+the series they label) while the full rates stay in the chart's accessible
+label, and a stopped guest or unavailable I/O keeps its dash.
 The active chart owns its local tooltip while its normalized cursor position is
 shared across sibling charts in that guest row, so every guide represents the
 same relative point in the selected history range. Leaving the row clears the
-cursor and restores all three bars together. The lens mounts with a short
+cursor and restores the bars and I/O readouts together. The lens mounts with a short
 reduced-motion-safe fade and must not leave both bar and chart semantics in the
 accessibility tree simultaneously.
 Bar mode resolves history only for that active guest through its canonical
