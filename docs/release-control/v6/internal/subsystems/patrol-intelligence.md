@@ -1388,6 +1388,12 @@ condition went, and that it is not a recovery) sits directly under the summary
 rather than only inside Evidence and history (`getAttentionHandoverClose` in
 `patrolHomePresentation.ts`). The timeline names that cause `Ownership
 transferred`, never `Recovery evidence`.
+The assessment handoff tells the same close the same way: a recent
+`alert_resolved` change carrying `alert_resolution` metadata enters the
+handoff context and briefing evidence as the alert engine's summary through
+the shared `formatResourceChangeHeadline`, never as `Alert resolved: ...`
+(`patrolInvestigationContextModel.ts`, pinned by
+`patrolInvestigationContextModel.test.ts`).
 
 The active Patrol queue now uses compact severity-accented rows for
 prioritisation and a single focused review panel for the selected issue. The

@@ -1470,6 +1470,10 @@ recovery scope, or a storage/recovery-owned secret source.
    generated report output when a separate reporting surface exposes it, but
    workspace logo settings are not backup artifacts, recovery-point metadata,
    restore evidence, or storage-provider credentials.
+   The alert rows that request assembly builds now keep an alert's
+   handover resolution (moved to a Pulse agent, not recovered). That changes
+   how a report states alert health only; it opens no storage, backup or
+   recovery path, and report backups still come from the recovery store.
    Update-plan readiness payloads and apply-route readiness enforcement are
    adjacent shared API context only. Storage and recovery surfaces may observe
    the resulting update state if a future settings flow links to recovery

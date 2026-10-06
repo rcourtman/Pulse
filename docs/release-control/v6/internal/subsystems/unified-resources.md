@@ -4228,10 +4228,22 @@ An `alert_resolved` change for a close that was not a recovery carries the
 alert engine's summary as its reason and the reason code as `alert_resolution`
 metadata (`AlertTimelineChange.ResolutionReason` and `ResolutionSummary`), so
 incident projection titles the close with where the alert went instead of
-"Alert resolved: <breach message>". The resource drawer still labels the change
-by kind (`Alert resolved`) and prefixes its headline with that label; only the
-reason after it says the alert moved. Ordinary recoveries omit the key, and
-every other lifecycle kind ignores the fields.
+"Alert resolved: <breach message>". Frontend readers label the change through
+`getResourceChangePresentation(change)` rather than by kind alone: with the
+metadata set, the drawer's change history titles the entry `Alert moved` and
+the `ResourceChangeSummary` badge reads `Alert moved` in the neutral blue of
+the alert history's "moved to agent" badge (`Alert closed` for a reason code
+the build does not know), and
+`formatResourceChangeHeadline` uses the summary as the whole headline instead
+of prefixing `Alert resolved:`; Patrol's assessment context reuses that
+headline. A node's own drawer does not list the move yet: node and guest
+alert changes are still recorded under their legacy alert resource IDs
+(`MonitorAdapter.RecordChange` maps only Docker IDs), and Proxmox platform
+rows open the drawer in the `table-row` presentation, which fetches no
+remote history. The facet badges
+still count these changes under `alert_resolved`, because the counts carry no
+metadata. Ordinary recoveries omit the key, and every other lifecycle kind
+ignores the fields.
 Alert-scoped
 incident memory may still project those events for one investigation thread,
 but the durable source of truth for resource-affecting alert lifecycle and
