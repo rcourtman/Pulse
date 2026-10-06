@@ -299,6 +299,34 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expect(bare?.temperature?.cpuMin).toBeUndefined();
     expect(bare?.temperature?.cpuMaxRecord).toBeUndefined();
 
+    // Details without a CPU reading do not displace a valid scalar CPU reading.
+    const sensorsOnly = nodeFromResource({
+      ...createNodeResource({
+        proxmox: {
+          nodeName: 'pve-node-2',
+          temperatureDetails: {
+            available: true,
+            hasCPU: false,
+            nvme: [{ device: 'nvme0', temp: 44 }],
+          },
+        },
+      }),
+      temperature: 58,
+    } as unknown as Resource);
+    expect(sensorsOnly?.temperature?.cpuPackage).toBe(58);
+    expect(sensorsOnly?.temperature?.available).toBe(true);
+
+    // An unusable earlier record still falls back to the scalar reading.
+    const legacyUnavailable = nodeFromResource({
+      ...createNodeResource({
+        temperature: { available: false },
+        proxmox: { nodeName: 'pve-node-2', temperature: { available: false, cpuPackage: 58 } },
+      }),
+      temperature: 58,
+    } as unknown as Resource);
+    expect(legacyUnavailable?.temperature?.cpuPackage).toBe(58);
+    expect(legacyUnavailable?.temperature?.available).toBe(true);
+
     // A node with a host agent keeps reading the agent facet first.
     const agentLinked = nodeFromResource({
       ...createNodeResource({ proxmox, agent: { agentId: 'pve-agent', temperature: 61 } }),

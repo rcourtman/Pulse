@@ -161,8 +161,10 @@ QGA/thaw, installed recovery, fleet-performance or release-availability claim.
 
 Choosing a node's temperature source in `resourceStateAdapters.ts` reads one
 more field of the facet already in the canonical payload
-(`proxmox.temperatureDetails`) when earlier sources have no usable reading. It
-adds no resource read, merge pass, timer or subscription.
+(`proxmox.temperatureDetails`), only when the existing record selection yields
+no usable reading, and keeps it only when it holds a CPU reading. That is one
+extra record mapping per such node per adapter call. It adds no resource read,
+merge pass, timer or subscription.
 
 ### Unavailable filesystem values share the existing disk model
 

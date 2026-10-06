@@ -1373,77 +1373,90 @@ const buildDisk = (metric: Resource['disk'], fallback?: Record<string, unknown>)
   };
 };
 
+const temperatureFromRecord = (
+  raw: Record<string, unknown>,
+  resource: Resource,
+): Temperature | undefined => {
+  const available = asBoolean(raw.available);
+  const cpuPackage = asNumber(raw.cpuPackage) ?? asNumber(raw.temperature) ?? asNumber(raw.cpu);
+  const lastUpdate = toISOTime(raw.lastUpdate, resource.lastSeen);
+  if (available || typeof cpuPackage === 'number') {
+    return {
+      cpuPackage,
+      cpuMax: asNumber(raw.cpuMax),
+      cpuMin: asNumber(raw.cpuMin),
+      cpuMaxRecord: asNumber(raw.cpuMaxRecord),
+      minRecorded: asString(raw.minRecorded),
+      maxRecorded: asString(raw.maxRecorded),
+      cores: asArray(raw.cores)
+        .map((entry) => {
+          const rec = asRecord(entry);
+          if (!rec) return null;
+          const core = asNumber(rec.core);
+          const temp = asNumber(rec.temp);
+          if (typeof core !== 'number' || typeof temp !== 'number') return null;
+          return { core, temp };
+        })
+        .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry)),
+      gpu: asArray(raw.gpu)
+        .map((entry) => {
+          const rec = asRecord(entry);
+          if (!rec) return null;
+          const device = asString(rec.device);
+          if (!device) return null;
+          return {
+            device,
+            edge: asNumber(rec.edge),
+            junction: asNumber(rec.junction),
+            mem: asNumber(rec.mem),
+          };
+        })
+        .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry)),
+      nvme: asArray(raw.nvme)
+        .map((entry) => {
+          const rec = asRecord(entry);
+          if (!rec) return null;
+          const device = asString(rec.device);
+          const temp = asNumber(rec.temp);
+          if (!device || typeof temp !== 'number') return null;
+          return { device, temp };
+        })
+        .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry)),
+      available: available ?? true,
+      hasCPU: asBoolean(raw.hasCPU) ?? (typeof cpuPackage === 'number' ? true : undefined),
+      hasGPU: asBoolean(raw.hasGPU),
+      hasNVMe: asBoolean(raw.hasNVMe),
+      lastUpdate,
+    };
+  }
+  return undefined;
+};
+
+const hasCPUTemperatureReading = (temperature: Temperature): boolean =>
+  (temperature.cpuPackage ?? 0) > 0 ||
+  (temperature.cpuMax ?? 0) > 0 ||
+  (temperature.cores ?? []).some((core) => core.temp > 0);
+
 const buildTemperature = (
   resource: Resource,
   nodeMeta?: Record<string, unknown>,
 ): Temperature | undefined => {
   const platform = resourcePlatformData(resource);
-  // Take the first source with a usable reading. A Proxmox node without a host
-  // agent publishes its full reading, including the CPU low and record values
-  // the poller tracks, only as proxmox.temperatureDetails (proxmox.temperature
-  // is the scalar maximum), so it comes before the bare-reading fallback.
-  const candidates = [
-    platform?.temperature,
-    nodeMeta?.temperature,
-    platform?.agent,
-    nodeMeta?.temperatureDetails,
-  ];
-  for (const candidate of candidates) {
-    const raw = asRecord(candidate);
-    if (!raw) continue;
-    const available = asBoolean(raw.available);
-    const cpuPackage = asNumber(raw.cpuPackage) ?? asNumber(raw.temperature) ?? asNumber(raw.cpu);
-    const lastUpdate = toISOTime(raw.lastUpdate, resource.lastSeen);
-    if (available || typeof cpuPackage === 'number') {
-      return {
-        cpuPackage,
-        cpuMax: asNumber(raw.cpuMax),
-        cpuMin: asNumber(raw.cpuMin),
-        cpuMaxRecord: asNumber(raw.cpuMaxRecord),
-        minRecorded: asString(raw.minRecorded),
-        maxRecorded: asString(raw.maxRecorded),
-        cores: asArray(raw.cores)
-          .map((entry) => {
-            const rec = asRecord(entry);
-            if (!rec) return null;
-            const core = asNumber(rec.core);
-            const temp = asNumber(rec.temp);
-            if (typeof core !== 'number' || typeof temp !== 'number') return null;
-            return { core, temp };
-          })
-          .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry)),
-        gpu: asArray(raw.gpu)
-          .map((entry) => {
-            const rec = asRecord(entry);
-            if (!rec) return null;
-            const device = asString(rec.device);
-            if (!device) return null;
-            return {
-              device,
-              edge: asNumber(rec.edge),
-              junction: asNumber(rec.junction),
-              mem: asNumber(rec.mem),
-            };
-          })
-          .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry)),
-        nvme: asArray(raw.nvme)
-          .map((entry) => {
-            const rec = asRecord(entry);
-            if (!rec) return null;
-            const device = asString(rec.device);
-            const temp = asNumber(rec.temp);
-            if (!device || typeof temp !== 'number') return null;
-            return { device, temp };
-          })
-          .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry)),
-        available: available ?? true,
-        hasCPU: asBoolean(raw.hasCPU) ?? (typeof cpuPackage === 'number' ? true : undefined),
-        hasGPU: asBoolean(raw.hasGPU),
-        hasNVMe: asBoolean(raw.hasNVMe),
-        lastUpdate,
-      };
-    }
-  }
+  const raw =
+    asRecord(platform?.temperature) ||
+    asRecord(nodeMeta?.temperature) ||
+    asRecord(platform?.agent) ||
+    undefined;
+  const fromRecord = raw ? temperatureFromRecord(raw, resource) : undefined;
+  if (fromRecord) return fromRecord;
+
+  // A Proxmox node without a host agent publishes its full reading, including
+  // the CPU low and record values the poller tracks, only as
+  // proxmox.temperatureDetails (proxmox.temperature is the scalar maximum). Use
+  // it ahead of the bare-reading fallback when it holds a current CPU reading.
+  const details = asRecord(nodeMeta?.temperatureDetails);
+  const fromDetails = details ? temperatureFromRecord(details, resource) : undefined;
+  if (fromDetails?.available && hasCPUTemperatureReading(fromDetails)) return fromDetails;
 
   if (typeof resource.temperature === 'number' && Number.isFinite(resource.temperature)) {
     const temp = resource.temperature;
