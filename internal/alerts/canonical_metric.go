@@ -330,6 +330,15 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			return
 		}
 
+		// A hold keeps the last breach's value and message, but what the
+		// alert is about is current: one restored from an older checkpoint,
+		// or raised before its producer named a child type or platform,
+		// must not link to the wrong page until it re-fires or clears.
+		if refreshMetricAlertClassification(existingAlert, alertMetadata) {
+			m.setActiveRecoveryAlert(existingAlert, storageKey)
+			m.saveActiveAlertsAsync("canonical metric classification")
+		}
+
 		if !triggered && primary == "" {
 			// Hysteresis latch: below trigger but above recovery — hold
 			// without refreshing, as the pre-cutover engine did.
@@ -423,4 +432,32 @@ func alertspecsMetricTriggered(spec *alertspecs.MetricThresholdSpec, observed fl
 	default:
 		return false
 	}
+}
+
+// metricAlertClassificationKeys name what a metric alert is about and which
+// platform owns it. They describe the resource, not the reading.
+var metricAlertClassificationKeys = []string{"resourceType", alertPlatformTypeKey}
+
+// refreshMetricAlertClassification copies the producer's current
+// classification onto an open alert and reports whether anything changed.
+func refreshMetricAlertClassification(alert *Alert, metadata map[string]interface{}) bool {
+	if alert == nil {
+		return false
+	}
+	changed := false
+	for _, key := range metricAlertClassificationKeys {
+		value, _ := metadata[key].(string)
+		if value == "" {
+			continue
+		}
+		if current, _ := alert.Metadata[key].(string); current == value {
+			continue
+		}
+		if alert.Metadata == nil {
+			alert.Metadata = make(map[string]interface{}, len(metricAlertClassificationKeys))
+		}
+		alert.Metadata[key] = value
+		changed = true
+	}
+	return changed
 }

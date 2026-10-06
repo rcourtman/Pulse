@@ -2489,13 +2489,23 @@ reads that ahead of every fallback. The menu's owner copy comes from
 `frontend-modern/src/utils/resourceMonitoringPolicy.ts`, where an explicit
 platform outranks the resource-type guess and the agent-removal copy is kept
 to the agent's own machine: libvirt VMs and Unraid arrays in resource drawers
-get the neutral source-system copy. Agent disk-usage, SMART disk and Unraid
-array alerts still carry their host's `agent` metadata, so their menu names
-the Pulse agent until those producers emit child-resource metadata. Alerts
-restored from before `platformType` existed gain it at their next full
-evaluation; a metric alert held between its clear and trigger thresholds keeps
-the earlier fallback until then. Menu sentences open with the owner
-label capitalised.
+get the neutral source-system copy. Host-agent alerts
+(`internal/alerts/host.go`) stamp `platformType` `agent`, and only the
+machine's own alerts keep `resourceType` `agent`: filesystem,
+disk-temperature and SMART alerts carry `agent-disk`, RAID and Unraid array
+alerts `agent-storage`, and custom-sensor alerts `agent-sensor`, because the
+menu writes policy to their child resource id, never to the machine. Each
+child type keeps `agent` among its `CanonicalResourceTypeKeys`, and
+configuration re-evaluation treats agent policy as final for host-agent
+alerts (TrueNAS systems and vSphere hosts keep their platform policy), so the
+storage and guest switches cannot resolve a SMART, RAID or sensor alert that
+the next agent report would re-raise. A metric alert held between its clear
+and trigger thresholds still refreshes `resourceType` and `platformType` from
+its producer while its value, message and last-seen time stay at the last
+breach, so a restored alert that is still firing or held picks up the current
+classification at its next evaluation; one that resolves on that evaluation
+keeps the stored classification in its resolved record. Menu sentences open
+with the owner label capitalised.
 The retired dashboard recent-alert panel must not be reintroduced as a
 parallel alert surface. Alert summary/tone copy belongs to the alert overview
 presentation owner, and any future compact alert surface must compose the

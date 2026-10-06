@@ -28,6 +28,27 @@ func hostResourceID(hostID string) string {
 	return fmt.Sprintf("agent:%s", trimmed)
 }
 
+// Every alert CheckHost raises about something other than the machine itself
+// (a filesystem, disk, array or custom sensor) targets a child resource ID,
+// and the alert card's monitoring policy writes to that ID. These alerts
+// name their own type so the card does not describe retiring the machine.
+// Each type keeps "agent" among its alert policy keys
+// (config.CanonicalResourceTypeKeys), so agent thresholds and switches still
+// govern them.
+const (
+	hostDiskAlertResourceType    = "agent-disk"    // filesystems, disk temperatures, SMART disks
+	hostStorageAlertResourceType = "agent-storage" // RAID and Unraid arrays
+	hostSensorAlertResourceType  = "agent-sensor"  // custom sensors
+)
+
+// hostChildAlertMetadata clones a host's base alert metadata for an alert
+// about something the agent reports rather than the machine itself.
+func hostChildAlertMetadata(base map[string]interface{}, resourceType string) map[string]interface{} {
+	metadata := cloneMetadata(base)
+	metadata["resourceType"] = resourceType
+	return metadata
+}
+
 func stripHostResourcePrefix(resourceID string) string {
 	trimmed := strings.TrimSpace(resourceID)
 	trimmed = strings.TrimPrefix(trimmed, "agent:")
@@ -271,15 +292,16 @@ func (m *Manager) CheckHost(host models.Host) {
 	instanceName := hostInstanceName(host)
 
 	baseMetadata := map[string]interface{}{
-		"resourceType": "agent",
-		"hostId":       host.ID,
-		"hostname":     host.Hostname,
-		"displayName":  host.DisplayName,
-		"platform":     host.Platform,
-		"osName":       host.OSName,
-		"osVersion":    host.OSVersion,
-		"agentVersion": host.AgentVersion,
-		"architecture": host.Architecture,
+		"resourceType":       "agent",
+		alertPlatformTypeKey: string(unifiedresources.SourceAgent),
+		"hostId":             host.ID,
+		"hostname":           host.Hostname,
+		"displayName":        host.DisplayName,
+		"platform":           host.Platform,
+		"osName":             host.OSName,
+		"osVersion":          host.OSVersion,
+		"agentVersion":       host.AgentVersion,
+		"architecture":       host.Architecture,
 	}
 	if linkedNodeID := strings.TrimSpace(host.LinkedNodeID); linkedNodeID != "" {
 		baseMetadata["linkedNodeId"] = linkedNodeID
@@ -357,7 +379,7 @@ func (m *Manager) CheckHost(host models.Host) {
 					tempResourceID := fmt.Sprintf("%s/disk_temp:%s", hostResourceID(host.ID), sanitizeHostComponent(disk.Device))
 					tempResourceName := fmt.Sprintf("%s (%s Temp)", hostDisplayName(host), disk.Device)
 
-					diskTempMetadata := cloneMetadata(baseMetadata)
+					diskTempMetadata := hostChildAlertMetadata(baseMetadata, hostDiskAlertResourceType)
 					diskTempMetadata["metric"] = "diskTemperature"
 					diskTempMetadata["device"] = disk.Device
 					diskTempMetadata["temperature"] = disk.Temperature
@@ -444,7 +466,7 @@ func (m *Manager) CheckHost(host models.Host) {
 			continue
 		}
 
-		diskMetadata := cloneMetadata(baseMetadata)
+		diskMetadata := hostChildAlertMetadata(baseMetadata, hostDiskAlertResourceType)
 		diskMetadata["metric"] = "disk"
 		diskMetadata["mountpoint"] = disk.Mountpoint
 		diskMetadata["device"] = disk.Device
@@ -515,7 +537,7 @@ func (m *Manager) CheckHost(host models.Host) {
 			raidName := fmt.Sprintf("%s - %s (%s)", resourceName, array.Device, array.Level)
 			raidSpecResourceID := fmt.Sprintf("%s/raid:%s", hostResourceID(host.ID), sanitizeRAIDDevice(array.Device))
 
-			raidMetadata := cloneMetadata(baseMetadata)
+			raidMetadata := hostChildAlertMetadata(baseMetadata, hostStorageAlertResourceType)
 			raidMetadata["metric"] = "raid"
 			raidMetadata["raidDevice"] = array.Device
 			raidMetadata["raidLevel"] = array.Level
@@ -667,15 +689,16 @@ func (m *Manager) HandleHostTelemetryExpired(host models.Host) {
 		m.clearHostUnraidAlerts(host.ID)
 	} else {
 		baseMetadata := map[string]interface{}{
-			"resourceType": "agent",
-			"hostId":       host.ID,
-			"hostname":     host.Hostname,
-			"displayName":  host.DisplayName,
-			"platform":     host.Platform,
-			"osName":       host.OSName,
-			"osVersion":    host.OSVersion,
-			"agentVersion": host.AgentVersion,
-			"architecture": host.Architecture,
+			"resourceType":       "agent",
+			alertPlatformTypeKey: string(unifiedresources.SourceAgent),
+			"hostId":             host.ID,
+			"hostname":           host.Hostname,
+			"displayName":        host.DisplayName,
+			"platform":           host.Platform,
+			"osName":             host.OSName,
+			"osVersion":          host.OSVersion,
+			"agentVersion":       host.AgentVersion,
+			"architecture":       host.Architecture,
 		}
 		if linkedNodeID := strings.TrimSpace(host.LinkedNodeID); linkedNodeID != "" {
 			baseMetadata["linkedNodeId"] = linkedNodeID
@@ -787,16 +810,17 @@ func (m *Manager) HandleHostOfflineWithCorrelation(host models.Host, correlation
 		Message:      fmt.Sprintf("Host '%s' is offline", resourceName),
 		Correlation:  correlation,
 		Metadata: map[string]interface{}{
-			"resourceType":      "agent",
-			"hostId":            host.ID,
-			"hostname":          host.Hostname,
-			"displayName":       host.DisplayName,
-			"platform":          host.Platform,
-			"osName":            host.OSName,
-			"osVersion":         host.OSVersion,
-			"linkedNodeId":      strings.TrimSpace(host.LinkedNodeID),
-			"linkedVmId":        strings.TrimSpace(host.LinkedVMID),
-			"linkedContainerId": strings.TrimSpace(host.LinkedContainerID),
+			"resourceType":       "agent",
+			alertPlatformTypeKey: string(unifiedresources.SourceAgent),
+			"hostId":             host.ID,
+			"hostname":           host.Hostname,
+			"displayName":        host.DisplayName,
+			"platform":           host.Platform,
+			"osName":             host.OSName,
+			"osVersion":          host.OSVersion,
+			"linkedNodeId":       strings.TrimSpace(host.LinkedNodeID),
+			"linkedVmId":         strings.TrimSpace(host.LinkedVMID),
+			"linkedContainerId":  strings.TrimSpace(host.LinkedContainerID),
 		},
 		AddToRecent:   true,
 		AddToHistory:  true,
@@ -959,7 +983,7 @@ func (m *Manager) syncHostCustomSensorAlerts(host models.Host, nodeName, instanc
 			}
 		}
 
-		metadata := cloneMetadata(baseMetadata)
+		metadata := hostChildAlertMetadata(baseMetadata, hostSensorAlertResourceType)
 		metadata["metric"] = "customSensor"
 		metadata["customSensorId"] = metric.ID
 		metadata["customSensorName"] = metric.Name
@@ -1387,7 +1411,7 @@ func (m *Manager) syncHostSMARTDiskAlert(host models.Host, disk models.HostDiskS
 	reasonCodes := storageHealthReasonCodes(reasons)
 	reasonSummaries := storageHealthReasonSummaries(reasons)
 
-	metadata := cloneMetadata(baseMetadata)
+	metadata := hostChildAlertMetadata(baseMetadata, hostDiskAlertResourceType)
 	metadata["metric"] = alertType
 	metadata["device"] = disk.Device
 	metadata["model"] = disk.Model
@@ -1468,7 +1492,7 @@ func (m *Manager) syncHostUnraidStorageAlert(host models.Host, nodeName, instanc
 	reasonCodes := storageHealthReasonCodes(reasons)
 	reasonSummaries := storageHealthReasonSummaries(reasons)
 
-	metadata := cloneMetadata(baseMetadata)
+	metadata := hostChildAlertMetadata(baseMetadata, hostStorageAlertResourceType)
 	metadata["metric"] = "storageTopology"
 	metadata["storagePlatform"] = "unraid"
 	metadata["storageTopology"] = "array"
