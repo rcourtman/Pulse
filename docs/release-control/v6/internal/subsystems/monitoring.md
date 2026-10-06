@@ -2638,6 +2638,25 @@ online/running/healthy vocabulary. The diagnostics subject set is unchanged:
 snapshot (real agents), which now matches what agent-only surfaces show once
 integration-backed ledger rows are excluded.
 
+A host produced by `hostFromReadStateView` describes the agent, so its
+`Status` and `LastSeen` are the agent's own. A host agent linked to a Proxmox
+node merges into one row whose `LastSeen` follows its freshest source and
+whose status stays online while PVE polling continues, so the row's values
+would present a silent agent as online and current. The projection reads the
+agent source's sighting from `HostView.SourceStatus(SourceAgent)`: the host
+carries that report time and reads `offline` once it is past the reporting
+lease (`hostAgentReportCurrent`, the `hostAgentHealthWindow` that
+`evaluateHostAgents` applies to the host in state). Rows without an agent
+sighting, such as vSphere and TrueNAS integration hosts, keep the row's
+values. `linkedHostForNode` therefore stops handing a silent agent's retained
+filesystem summary and ZFS datasets to its node, whose disk falls back to the
+Proxmox rootfs or `/nodes` reading before disk alerts and history read it, and
+agent connections built from `HostsSnapshot()` (the Connections list and the
+update-readiness agent-continuity check) age the agent from its last report
+rather than the PVE poll time, applying their own heartbeat cutoff.
+`TestSilentLinkedAgentStopsFeedingNodeDisk` drives the disk and projection
+path through `evaluateHostAgents` and the registry-backed store refresh.
+
 Unified Agent host reports now make module readiness and updater/config
 lifecycle evidence monitoring-owned observed state. Monitoring preserves the
 last successful one-shot update transition across subsequent reports, forwards

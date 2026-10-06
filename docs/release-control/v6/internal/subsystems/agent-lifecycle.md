@@ -8807,3 +8807,15 @@ no update status, instead of reporting "no update available" (#2353). Agent
 registration, enrolment, install, update, removal and report identity are
 unchanged; the per-image memo lives in the registry checker and is pruned
 each collection cycle to the images in use.
+
+### Host snapshots report a linked agent's own heartbeat
+
+`internal/monitoring/monitor.go` changed only so a host produced from the read
+state carries the agent source's own last report and reads offline past the
+agent's reporting lease, even when the agent's row is merged with a Proxmox
+node that PVE polling keeps fresh. The agent connection on the Connections
+list and the update-readiness agent-continuity check therefore age a silent
+agent from its last report instead of from the PVE poll, and mark it stale at
+their own heartbeat cutoff (`fleethealth.AgentStaleThreshold`, which is
+separate from the monitoring reporting lease). Agent registration, enrolment,
+install, update, removal and report identity are unchanged.
