@@ -4,11 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/filesystemprobe"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	"github.com/rs/zerolog"
 )
 
@@ -153,16 +158,15 @@ mp2: tank:snap-only,mp=/snap-only,size=5G
 `,
 		"/etc/pve/lxc/101.conf": "rootfs: local-lvm:vm-101-disk-0,size=4G\n",
 	}
-	usageByPath := map[string]hostFilesystemUsage{
-		"/proc/4242/root":          {TotalBytes: 8 << 30, UsedBytes: 2 << 30, AvailBytes: 6 << 30, Device: 11},
-		"/proc/4242/root/srv":      {TotalBytes: 8 << 30, UsedBytes: 2 << 30, AvailBytes: 6 << 30, Device: 11},
-		"/proc/4242/root/srv/data": {TotalBytes: 1 << 40, UsedBytes: 512 << 30, AvailBytes: 512 << 30, Device: 12},
-		// mp1 is configured but not mounted in the running container, so the
-		// path resolves to the rootfs device and must be dropped, not reported
-		// with the parent's numbers.
-		"/proc/4242/root/mnt":         {TotalBytes: 8 << 30, UsedBytes: 2 << 30, AvailBytes: 6 << 30, Device: 11},
-		"/proc/4242/root/mnt/missing": {TotalBytes: 8 << 30, UsedBytes: 2 << 30, AvailBytes: 6 << 30, Device: 11},
-		"/proc/5252/root":             {TotalBytes: 4 << 30, UsedBytes: 1 << 30, AvailBytes: 3 << 30, Device: 21},
+	observations := map[int]map[string]lxcObservation{
+		4242: {
+			"/":         lxcUsage(8<<30, 2<<30, 6<<30),
+			"/srv/data": lxcUsage(1<<40, 512<<30, 512<<30),
+			// mp1 is configured but not mounted in the running container, so
+			// the prober rejects it instead of reporting the parent's numbers.
+			"/mnt/missing": {notMounted: true},
+		},
+		5252: {"/": lxcUsage(4<<30, 1<<30, 3<<30)},
 	}
 	collector := &mockCollector{
 		goos: "linux",
@@ -182,13 +186,7 @@ mp2: tank:snap-only,mp=/snap-only,size=5G
 			}
 			return []byte(config), nil
 		},
-		filesystemUsageFn: func(path string) (hostFilesystemUsage, error) {
-			usage, ok := usageByPath[path]
-			if !ok {
-				t.Fatalf("unexpected statfs path %q", path)
-			}
-			return usage, nil
-		},
+		observeLXCFn: fakeLXCObserve(t, observations),
 		commandCombinedOutputLimitedFn: func(
 			_ context.Context,
 			_ int,
@@ -267,12 +265,9 @@ func TestCollectProxmoxLXCFilesystemsFallsBackToPctDFPerContainer(t *testing.T) 
 			// back to pct df.
 			return nil, os.ErrPermission
 		},
-		filesystemUsageFn: func(path string) (hostFilesystemUsage, error) {
-			if path != "/proc/4242/root" {
-				t.Fatalf("unexpected statfs path %q", path)
-			}
-			return hostFilesystemUsage{TotalBytes: 8 << 30, UsedBytes: 2 << 30, AvailBytes: 6 << 30, Device: 11}, nil
-		},
+		observeLXCFn: fakeLXCObserve(t, map[int]map[string]lxcObservation{
+			4242: {"/": lxcUsage(8<<30, 2<<30, 6<<30)},
+		}),
 		commandCombinedOutputLimitedFn: func(
 			_ context.Context,
 			_ int,
@@ -345,17 +340,12 @@ mp0    tank:subvol-100-disk-0        1.0T 512.0G 512.0G 50.0 /srv/data
 				readFileFn: func(string) ([]byte, error) {
 					return []byte("rootfs: local-lvm:vm-100-disk-0,size=8G\nmp0: tank:subvol-100-disk-0,mp=/srv/data,size=1T\n"), nil
 				},
-				filesystemUsageFn: func(target string) (hostFilesystemUsage, error) {
-					switch target {
-					case "/proc/4242/root":
-						return hostFilesystemUsage{TotalBytes: 8 << 30, UsedBytes: 2 << 30, AvailBytes: 6 << 30, Device: 11}, nil
-					case "/proc/4242/root/srv/data":
-						return hostFilesystemUsage{}, errors.New("statfs access failed")
-					default:
-						t.Fatalf("unexpected statfs path %q", target)
-						return hostFilesystemUsage{}, nil
-					}
-				},
+				observeLXCFn: fakeLXCObserve(t, map[int]map[string]lxcObservation{
+					4242: {
+						"/":         lxcUsage(8<<30, 2<<30, 6<<30),
+						"/srv/data": {err: "read filesystem counters: permission denied"},
+					},
+				}),
 				commandCombinedOutputLimitedFn: func(_ context.Context, _ int, name string, args ...string) (string, error) {
 					joined := strings.Join(args, " ")
 					switch {
@@ -467,5 +457,283 @@ mp5 pool:hot 10.0G 1.0G 9.0G 101.0 /hot
 		strings.Repeat("x", proxmoxLXCMaxDFOutputBytes+1),
 	); err == nil {
 		t.Fatal("expected oversized pct df error")
+	}
+}
+
+type fakeLXCDirEntry struct {
+	name string
+	dir  bool
+}
+
+func (e fakeLXCDirEntry) Name() string { return e.name }
+func (e fakeLXCDirEntry) IsDir() bool  { return e.dir }
+func (e fakeLXCDirEntry) Type() fs.FileMode {
+	if e.dir {
+		return fs.ModeDir
+	}
+	return 0
+}
+func (e fakeLXCDirEntry) Info() (fs.FileInfo, error) { return nil, fs.ErrNotExist }
+
+// fakeProxmoxLXCHost models what socket-free discovery reads on a cgroup v2
+// Proxmox node. The layout follows a real PVE 9.2 node: configs under
+// /etc/pve/lxc, the payload under /sys/fs/cgroup/lxc/<vmid>/ns, and the
+// container init identified by an NSpid ending in 1.
+type fakeProxmoxLXCHost struct {
+	files        map[string]string
+	dirs         map[string]map[string]bool
+	observations map[int]map[string]lxcObservation
+}
+
+func newFakeProxmoxLXCHost() *fakeProxmoxLXCHost {
+	h := &fakeProxmoxLXCHost{
+		files:        map[string]string{proxmoxLXCCgroupV2Marker: "cpuset cpu io memory pids\n"},
+		dirs:         map[string]map[string]bool{},
+		observations: map[int]map[string]lxcObservation{},
+	}
+	h.dir(proxmoxLXCConfigDir)
+	return h
+}
+
+func (h *fakeProxmoxLXCHost) dir(name string) {
+	if _, ok := h.dirs[name]; !ok {
+		h.dirs[name] = map[string]bool{}
+	}
+}
+
+func (h *fakeProxmoxLXCHost) config(vmid int, content string) {
+	h.dirs[proxmoxLXCConfigDir][strconv.Itoa(vmid)+".conf"] = false
+	h.files[proxmoxLXCConfigPath(vmid)] = content
+}
+
+// cgroup registers a cgroup directory (relative to lxc/) and its processes.
+func (h *fakeProxmoxLXCHost) cgroup(rel string, pids ...int) {
+	full := path.Join(proxmoxLXCCgroupRoot, rel)
+	for child := full; child != proxmoxLXCCgroupRoot; child = path.Dir(child) {
+		h.dir(child)
+		// Every cgroup directory has a cgroup.procs, empty when its
+		// processes live in child cgroups.
+		if _, ok := h.files[path.Join(child, "cgroup.procs")]; !ok {
+			h.files[path.Join(child, "cgroup.procs")] = ""
+		}
+		parent := path.Dir(child)
+		h.dir(parent)
+		h.dirs[parent][path.Base(child)] = true
+	}
+	fields := make([]string, 0, len(pids))
+	for _, pid := range pids {
+		fields = append(fields, strconv.Itoa(pid))
+	}
+	h.files[path.Join(full, "cgroup.procs")] = strings.Join(fields, "\n") + "\n"
+}
+
+func (h *fakeProxmoxLXCHost) proc(pid int, nspid, cgroup string) {
+	h.files["/proc/"+strconv.Itoa(pid)+"/status"] = "Name:\tinit\nNSpid:\t" + nspid + "\n"
+	h.files["/proc/"+strconv.Itoa(pid)+"/cgroup"] = "0::" + cgroup + "\n"
+}
+
+// collector serves the fake host. pct and lxc-info exist but every call fails
+// the way they fail inside the PrivateNetwork helper.
+func (h *fakeProxmoxLXCHost) collector(t *testing.T) (*mockCollector, *int) {
+	t.Helper()
+	commands := 0
+	return &mockCollector{
+		goos: "linux",
+		lookPathFn: func(file string) (string, error) {
+			switch file {
+			case "pct":
+				return "/usr/sbin/pct", nil
+			case "lxc-info":
+				return "/usr/bin/lxc-info", nil
+			}
+			return "", os.ErrNotExist
+		},
+		statFn: func(name string) (os.FileInfo, error) {
+			if _, ok := h.files[name]; ok {
+				return nil, nil
+			}
+			if _, ok := h.dirs[name]; ok {
+				return nil, nil
+			}
+			return nil, os.ErrNotExist
+		},
+		readFileFn: func(name string) ([]byte, error) {
+			content, ok := h.files[name]
+			if !ok {
+				return nil, os.ErrNotExist
+			}
+			return []byte(content), nil
+		},
+		readDirFn: func(name string) ([]os.DirEntry, error) {
+			children, ok := h.dirs[name]
+			if !ok {
+				return nil, os.ErrNotExist
+			}
+			entries := make([]os.DirEntry, 0, len(children))
+			for child, isDir := range children {
+				entries = append(entries, fakeLXCDirEntry{name: child, dir: isDir})
+			}
+			return entries, nil
+		},
+		observeLXCFn: fakeLXCObserve(t, h.observations),
+		commandCombinedOutputLimitedFn: func(_ context.Context, _ int, name string, args ...string) (string, error) {
+			commands++
+			return "ipcc_send_rec[1] failed: Connection refused", errors.New("exit status 2")
+		},
+	}, &commands
+}
+
+func TestProxmoxLXCConfigNameMatchesPctList(t *testing.T) {
+	cases := []struct {
+		config string
+		want   string
+	}{
+		{"#managed\narch: amd64\nhostname: web\nrootfs: x,size=1G\n", "web"},
+		{"arch: amd64\nrootfs: x,size=1G\n", "CT126"},
+		{"hostname: \n", "CT126"},
+		{"arch: amd64\n\n[snap]\nhostname: old\n", "CT126"},
+	}
+	for _, tc := range cases {
+		if got := proxmoxLXCConfigName(tc.config, 126); got != tc.want {
+			t.Errorf("proxmoxLXCConfigName(%q) = %q, want %q", tc.config, got, tc.want)
+		}
+	}
+}
+
+func TestDiscoverRunningProxmoxLXCContainersFindsInitWithoutSockets(t *testing.T) {
+	h := newFakeProxmoxLXCHost()
+	// Alpine guest running Docker: a nested container's PID 1 shares the
+	// guest's cgroup listing and comes first, but is not the guest's init.
+	h.config(126, "hostname: qual2511\nrootfs: lvm:vm-126-disk-0,size=1G\n")
+	h.cgroup("126")
+	h.cgroup("126/ns", 3019900, 3019673, 3019253)
+	h.cgroup("126/ns/openrc.syslog", 3019638)
+	h.proc(3019900, "3019900\t420\t1", "/lxc/126/ns")
+	h.proc(3019673, "3019673\t413", "/lxc/126/ns")
+	h.proc(3019253, "3019253\t1", "/lxc/126/ns")
+	// systemd guest: init in ns/init.scope, services elsewhere.
+	h.config(127, "rootfs: lvm:vm-127-disk-0,size=1G\n")
+	h.cgroup("127/ns/system.slice/cron.service", 4100)
+	h.cgroup("127/ns/init.scope", 4000)
+	h.proc(4100, "4100\t88", "/lxc/127/ns/system.slice/cron.service")
+	h.proc(4000, "4000\t1", "/lxc/127/ns/init.scope")
+	// Stopped: config only, no cgroup.
+	h.config(128, "hostname: stopped\nrootfs: lvm:vm-128-disk-0,size=1G\n")
+
+	collector, commands := h.collector(t)
+	agent := &Agent{logger: zerolog.Nop(), collector: collector}
+	got, ok := agent.discoverRunningProxmoxLXCContainers(context.Background())
+	if !ok {
+		t.Fatal("discovery was not applicable on a cgroup v2 Proxmox host")
+	}
+	want := []proxmoxLXCRunningContainer{
+		{VMID: 126, Name: "qual2511", PID: 3019253},
+		{VMID: 127, Name: "CT127", PID: 4000},
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("discovered %+v, want %+v", got, want)
+	}
+	if *commands != 0 {
+		t.Fatalf("discovery ran %d commands, want none", *commands)
+	}
+}
+
+// Discovery must never turn a running guest it could not read into a smaller,
+// healthy-looking inventory. Whenever a guest's state is not established it
+// hands the whole node back to pct, which works for root installs and is
+// reported as degraded inside the helper.
+func TestDiscoverRunningProxmoxLXCContainersLeavesUnestablishedStateToPct(t *testing.T) {
+	running := func() *fakeProxmoxLXCHost {
+		h := newFakeProxmoxLXCHost()
+		h.config(126, "hostname: web\n")
+		h.cgroup("126/ns", 10)
+		h.proc(10, "10\t1", "/lxc/126/ns")
+		return h
+	}
+	cases := map[string]func(h *fakeProxmoxLXCHost) context.Context{
+		"cgroup v1 host": func(h *fakeProxmoxLXCHost) context.Context {
+			delete(h.files, proxmoxLXCCgroupV2Marker)
+			return context.Background()
+		},
+		"unreadable config of a running guest": func(h *fakeProxmoxLXCHost) context.Context {
+			delete(h.files, proxmoxLXCConfigPath(126))
+			return context.Background()
+		},
+		"guest cgroup without an init (a reused PID from another guest)": func(h *fakeProxmoxLXCHost) context.Context {
+			h.proc(10, "10\t1", "/lxc/130/ns")
+			return context.Background()
+		},
+		"unreadable cgroup.procs": func(h *fakeProxmoxLXCHost) context.Context {
+			delete(h.files, path.Join(proxmoxLXCCgroupRoot, "126/ns/cgroup.procs"))
+			return context.Background()
+		},
+		"guest-created cgroup tree beyond the search limit": func(h *fakeProxmoxLXCHost) context.Context {
+			h.proc(10, "10\t2", "/lxc/126/ns")
+			for i := 0; i < proxmoxLXCMaxCgroupDirs; i++ {
+				h.cgroup("126/ns/c" + strconv.Itoa(i))
+			}
+			return context.Background()
+		},
+		"cancelled collection": func(*fakeProxmoxLXCHost) context.Context {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			return ctx
+		},
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			h := running()
+			ctx := mutate(h)
+			collector, _ := h.collector(t)
+			got, ok := (&Agent{logger: zerolog.Nop(), collector: collector}).discoverRunningProxmoxLXCContainers(ctx)
+			if ok {
+				t.Fatalf("discovery reported %+v as complete", got)
+			}
+		})
+	}
+}
+
+// lxcObservation is one mount's answer from the fake filesystem prober.
+type lxcObservation struct {
+	usage      *filesystem.Usage
+	notMounted bool
+	err        string
+}
+
+func lxcUsage(total, used, avail uint64) lxcObservation {
+	return lxcObservation{usage: &filesystem.Usage{CapacityBytes: total, FreeBytes: total - used, AvailableBytes: avail}}
+}
+
+// fakeLXCObserve answers prober requests from per-PID mount tables. A PID the
+// table does not know is not the guest's init, as the real prober would find.
+func fakeLXCObserve(t *testing.T, byPID map[int]map[string]lxcObservation) func(context.Context, filesystemprobe.ContainerRequest) ([]filesystem.Observation, error) {
+	t.Helper()
+	return func(_ context.Context, req filesystemprobe.ContainerRequest) ([]filesystem.Observation, error) {
+		if req.Runtime != "lxc" || !req.MountsOnly || req.ContainerID == "" {
+			t.Errorf("prober request = %+v, want an exact lxc request with MountsOnly", req)
+		}
+		mounts, ok := byPID[req.PID]
+		if !ok {
+			return nil, errors.New("process is not the container's init")
+		}
+		out := make([]filesystem.Observation, 0, len(req.Mountpoints))
+		for _, mountpoint := range req.Mountpoints {
+			answer, known := mounts[mountpoint]
+			if !known {
+				t.Errorf("unexpected mount %q for pid %d", mountpoint, req.PID)
+				continue
+			}
+			observation := filesystem.Observation{Mountpoint: mountpoint, Source: filesystemprobe.Source}
+			switch {
+			case answer.notMounted:
+				observation.Error = filesystemprobe.ErrNotMounted.Error()
+			case answer.err != "":
+				observation.Error = answer.err
+			default:
+				observation.Usage = answer.usage
+			}
+			out = append(out, observation)
+		}
+		return out, nil
 	}
 }

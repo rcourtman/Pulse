@@ -844,6 +844,27 @@ tests, container collection boundary tests, ingestion regression and the
 opt-in owned tmpfs collector fixture. Installed-agent and model qualification
 are tracked separately in PATROL_ASSISTANT_CUSTOMER_JOURNEY.md.
 
+The same observer reads Proxmox LXC guests for the host agent and its typed
+helper (#2511). An `lxc` request names the decimal VMID; the pinned process
+must sit in that guest's exact `lxc/<vmid>` cgroup and be its init (`NSpid` is
+exactly `<pid> 1`, so the PID 1 of a namespace nested inside the guest, such
+as Docker in LXC, cannot stand in for it), checked before and after the read.
+With `MountsOnly`, a configured mountpoint sharing its parent's device reports
+`ErrNotMounted` instead of the parent's counters. Docker and Podman identity
+rules are unchanged. Confined resolution prefers openat2 with `RESOLVE_IN_ROOT`;
+when the kernel or a systemd seccomp filter answers ENOSYS (the typed helper's
+`RestrictSUIDSGID=true` blocks openat2 because its flags cannot be inspected),
+the clean path is walked component by component with `O_NOFOLLOW` and any
+symbolic link is refused, so neither path resolves outside the guest root.
+Docker and Podman reads take the same fallback, so a collector under such a
+filter now gets confined counters instead of unavailable evidence.
+`TestComponentWalkRefusesSymlinksAndStaysBeneathRoot`,
+`TestMountsOnlyDetectsUnmountedPathsWithinRoot`,
+`TestNonInitProcessCannotSupplyProxmoxGuestCapacity` and
+`TestProxmoxLXCIdentityIsExact` pin these rules; the Linux tests also passed
+as root on a disposable PVE 9.2.18 node, where the helper-sandboxed collector
+returned readings matching `pct df` through the component walk.
+
 Docker mount collection preserves both native `Mounts` records and entries
 reported only in `HostConfig.Tmpfs`. Existing reported destinations remain
 authoritative. Additional tmpfs destinations are ordered deterministically,

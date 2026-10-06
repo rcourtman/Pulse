@@ -572,11 +572,32 @@ standby evidence. Enumeration and each device probe have independent bounded
 deadlines so one slow disk cannot consume the complete SMART pass, while
 command errors retain bounded stderr for compatibility diagnosis.
 On a PVE node, the Unified Agent may also report the mounted filesystem
-capacity of running LXCs. The collector uses the fixed local `pct list` command
-to admit only node-local running guests, reads each admitted guest's main
-`/etc/pve/lxc/<vmid>.conf` mount declarations, resolves its init PID through
-the fixed `lxc-info -n <vmid> -p` shape, and probes usage through the Linux
-`/proc/<pid>/root` namespace. A configured path that resolves to the same
+capacity of running LXCs. On a cgroup v2 node the collector admits node-local
+guests from the `/etc/pve/lxc/*.conf` listing and admits only those with a live
+init process: a PID in `/sys/fs/cgroup/lxc/<vmid>`'s tree that is PID 1 of the
+namespace directly below the host's (`NSpid` exactly `<pid> 1`) and whose own
+cgroup is inside `lxc/<vmid>`. It names each by its configured hostname or
+`CT<vmid>`, as `pct list` does, reads its main mount declarations, and reads
+usage through the shared `internal/filesystemprobe` observer, which pins the
+process, re-checks that identity, resolves each mount inside the guest root
+and holds one bounded in-flight probe per guest across the process. No command
+runs on this path. `pct list`, `pct df` and `lxc-info` reach pmxcfs and the
+LXC monitor through abstract Unix sockets scoped to the host network
+namespace, so inside the `PrivateNetwork` typed helper they always fail, and
+least-privilege installs using that helper reported `provider_unavailable`
+on every report (#2511). Discovery hands the whole node back to `pct list`
+whenever it cannot establish a guest's state (no cgroup v2, an unreadable
+listing, config, cgroup or process, a search limit, or cancellation); only a
+guest without a cgroup counts as stopped. The fixed `lxc-info -n <vmid> -p`
+PID lookup remains for that path, and `pct df` remains the per-container
+fallback, including through the `--grant-pct` wrapper.
+`TestHelperProxmoxLXCFilesystemsNeedNoPctOrLXCSockets` drives the collector
+the helper's provider runs with every command failing and requires a complete
+inventory; `TestDiscoverRunningProxmoxLXCContainersLeavesUnestablishedStateToPct`
+pins the fallbacks. On a disposable PVE 9.2.18 node, under the helper unit's
+sandbox properties, it returned unprivileged (rootfs plus mount point) and
+privileged guests matching `pct df` and omitted a stopped one; a nested PID
+namespace was not reproduced there and is covered by tests only. A configured path that resolves to the same
 device as its parent is not a live mount and must be omitted instead of
 borrowing the parent's capacity. Least-privilege installs that cannot read the
 config, resolve the PID, or traverse `/proc` may fall back to the fixed
