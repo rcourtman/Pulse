@@ -65,15 +65,20 @@ set -uo pipefail
 
 SCOPE="${1:-}"
 case "${SCOPE}" in
-  all)        SCOPE_ARGS=() ;;
-  production) SCOPE_ARGS=(--omit=dev) ;;
+  all|production) ;;
   *)
     echo "Usage: $0 <all|production> [npm-audit-args...]" >&2
     exit 2
     ;;
 esac
 shift
-AUDIT_ARGS=("$@")
+# Bash 3.2 (the native macOS shell) treats even a declared empty array as
+# unbound under nounset. Keep one nonempty argv vector, including npm's fixed
+# arguments, so an argument-free audit still runs and retains its findings.
+AUDIT_ARGS=(audit --json "$@")
+if [ "${SCOPE}" = production ]; then
+  AUDIT_ARGS+=(--omit=dev)
+fi
 
 ATTEMPTS="${NPM_AUDIT_ATTEMPTS:-3}"
 DELAY="${NPM_AUDIT_RETRY_DELAY:-15}"
@@ -105,7 +110,7 @@ run_audit() {
   local limit="$1" out="$2"
 
   : >"${out}"
-  "${NPM_BIN}" audit --json "${AUDIT_ARGS[@]}" "${SCOPE_ARGS[@]}" >"${out}" 2>/dev/null &
+  "${NPM_BIN}" "${AUDIT_ARGS[@]}" >"${out}" 2>/dev/null &
   local npm_pid=$!
 
   (
