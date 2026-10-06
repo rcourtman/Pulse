@@ -1866,9 +1866,12 @@ passes the link's agent (its alert resource ID and `hostDisplayName` name) as
 an `AlertResolution` with reason `moved_to_agent` to
 `releaseCanonicalMetricAlert`, so the close still reaches resolved consumers
 while notifications say the alert moved to that agent. A metric is released
-only while a linked agent evaluates it, so the close never claims a node-side
-recovery. With several agents linked to one node, the lowest agent ID names the
-move even when a sibling agent is the one evaluating that metric.
+only while the node's agent link records a linked agent evaluating it. The
+link refreshes on every agent report and not on a configuration save, so for up
+to one report interval after an agent threshold is turned off, a close can
+still be stamped as moved. With several agents linked to one node, the lowest
+agent ID names the move even when a sibling agent is the one evaluating that
+metric.
 `TestCheckNodeReleasesOpenMetricAlertWhenHostAgentRegisters` pins the
 resolution on the close.
 Host-agent alert evaluation now lives in `internal/alerts/host.go`. That file
