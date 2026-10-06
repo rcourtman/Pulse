@@ -1216,3 +1216,29 @@ The live monitor does not interpret pending-only cancellation counts as
 recipient acceptance. Per-occurrence/per-destination receipts remain the sole
 recovery admission proof, including partial delivery and lost RAM markers after
 restart; an unannounced destination receives no recovery.
+
+### A close that was not a recovery says what happened
+
+A resolved alert can carry an `alerts.AlertResolution` when it closed without
+recovering. The one reason so far, `moved_to_agent`, means the metric now
+belongs to the resource's linked Pulse agent. Delivery is unchanged: the close
+is still queued, gated on the firing receipt and sent, and PagerDuty still
+receives `resolve` for the alert's dedup key. Only the wording changes.
+`resolvedAlertMessage` gives the resolution's summary with the alert named
+("Memory alert moved to pve1 (Host Agent). This is not a recovery: check the
+agent for the current reading.") in place of "<resource> on <node> is now
+healthy" for every templated webhook `.Message`. Grouped lists append the
+short outcome ("moved to pve1 (Host Agent)") to the moved entry. ntfy titles a
+single moved alert `MOVED: <resource>` and swaps the green check tag for
+`arrow_right`. Email and Apprise title it `Pulse alert moved: <resource>` and
+add the summary after the breach message. The resolution rides the Alert JSON,
+so it survives the delivery queue round trip and appears in the default JSON
+payload's `alerts` array. Built-in template titles still say Resolved, which is
+accurate for the closed alert, and a custom template that hard-codes recovery
+text keeps it. Issue #1682 is the precedent: a recipient called "is now
+healthy" a false factual claim when an alert closed without recovering.
+
+Verification: `resolved_handover_test.go` drives the firing, its receipt and
+the queued close through the normal entry points for ntfy, and renders Discord,
+PagerDuty, a grouped Slack list and email/Apprise content, plus the unchanged
+ordinary recovery wording.
