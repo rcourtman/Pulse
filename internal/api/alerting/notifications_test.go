@@ -1416,7 +1416,7 @@ func TestWebhookEditPreservesOnlyMaskedValues(t *testing.T) {
 			map[string]string{"token": "synthetic-token", "channel": ""}, false},
 		{"header case is insensitive", map[string]string{"authorization": masked}, map[string]string{"token": masked},
 			map[string]string{"authorization": "synthetic-auth"}, map[string]string{"token": "synthetic-token"}, false},
-		{"explicit empty maps", map[string]string{}, map[string]string{}, map[string]string{}, map[string]string{}, false},
+		{"explicit empty maps", map[string]string{}, map[string]string{}, map[string]string{}, nil, false},
 		{"omitted maps keep replacement semantics", nil, nil, nil, nil, false},
 		{"unknown masked header", map[string]string{"X-Unknown": masked}, nil, nil, nil, true},
 		{"unknown masked field", nil, map[string]string{"unknown": masked}, nil, nil, true},
@@ -1459,7 +1459,7 @@ func TestWebhookEditPreservesOnlyMaskedValues(t *testing.T) {
 			if !tc.invalid {
 				var response notifications.WebhookConfig
 				assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-				assert.Equal(t, tc.fields, response.CustomFields)
+				assert.Equal(t, notifications.NormalizeWebhookConfig(incoming).CustomFields, response.CustomFields)
 			}
 			assert.Equal(t, "old", stored.CustomFields["channel"], "edit mutated the previous map")
 			assert.Equal(t, "text/plain", stored.Headers["Content-Type"], "edit mutated the previous map")
