@@ -522,10 +522,13 @@ describe('vmwarePageModel', () => {
 
     expect(mapVmwareActivityStateBucket('error')).toBe('failed');
     expect(mapVmwareActivityStateBucket('success')).toBe('success');
+    // An event reads as vCenter's message even when its stored title is the
+    // event class; the class stays on the row for search and the drawer.
     expect(rows.map((row) => row.title)).toEqual([
       'Reconfigure virtual machine',
-      'VmPoweredOnEvent',
+      'Virtual machine warehouse-api-01 was powered on',
     ]);
+    expect(rows[1]?.eventType).toBe('VmPoweredOnEvent');
     expect(rows[0]).toMatchObject({
       resourceName: 'warehouse-api-01',
       activityKind: 'task',

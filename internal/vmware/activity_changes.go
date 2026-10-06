@@ -88,10 +88,13 @@ func entityActivityChanges(resourceID, connectionID, entityType, managedObjectID
 			SourceAdapter: unifiedresources.AdapterVMware,
 			ActivityType:  "vmware_event",
 			NativeID:      strings.TrimSpace(event.Event),
-			Title:         firstNonEmptyTrimmed(event.Type),
-			Message:       strings.TrimSpace(event.Message),
-			Actor:         strings.TrimSpace(event.User),
-			OccurredAt:    event.CreatedAt,
+			// vCenter's own sentence ("Host esxi-01 in Primary DC is connected")
+			// reads where the event class (HostConnectedEvent) does not; the
+			// class stays in vmwareEventType for search and the drawer.
+			Title:      firstNonEmptyTrimmed(event.Message, event.Type),
+			Message:    strings.TrimSpace(event.Message),
+			Actor:      strings.TrimSpace(event.User),
+			OccurredAt: event.CreatedAt,
 			Metadata: map[string]any{
 				"vmwareConnectionId":    strings.TrimSpace(connectionID),
 				"vmwareEntityType":      strings.TrimSpace(entityType),

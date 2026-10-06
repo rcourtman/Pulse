@@ -568,3 +568,44 @@ func TestCollectProxmoxInvalidListCannotBecomeCompleteEmpty(t *testing.T) {
 		})
 	}
 }
+
+// The typed helper runs with PrivateNetwork=true, where pct and lxc-info cannot
+// reach pmxcfs or the LXC monitor: their abstract Unix sockets belong to the
+// host network namespace (#2511). This drives the collector the helper's
+// provider runs, with every command failing as it does there: it must still
+// return a complete inventory from configs, cgroups and /proc alone. A
+// degraded result is what the provider turns into provider_unavailable.
+func TestHelperProxmoxLXCFilesystemsNeedNoPctOrLXCSockets(t *testing.T) {
+	h := newFakeProxmoxLXCHost()
+	h.config(126, "hostname: qual2511\nrootfs: delly2-lvm:vm-126-disk-0,size=1G\nmp0: delly2-lvm:vm-126-disk-1,mp=/srv/data,size=1G\n")
+	h.cgroup("126/ns", 3019253)
+	h.proc(3019253, "3019253\t1", "/lxc/126/ns")
+	h.config(127, "hostname: qual2511-priv\nrootfs: delly2-lvm:vm-127-disk-0,size=1G\n")
+	h.cgroup("127/ns", 3021000)
+	h.proc(3021000, "3021000\t1", "/lxc/127/ns")
+	h.config(128, "hostname: stopped\nrootfs: delly2-lvm:vm-128-disk-0,size=1G\n")
+	// Counters observed on a real PVE 9.2 node for the same layout.
+	h.observations[3019253] = map[string]lxcObservation{
+		"/":         lxcUsage(1020702720, 12021760, 938217472),
+		"/srv/data": lxcUsage(1020702720, 290816, 949948416),
+	}
+	h.observations[3021000] = map[string]lxcObservation{"/": lxcUsage(1020702720, 12017664, 938221568)}
+
+	collector, commands := h.collector(t)
+	agent := &Agent{logger: zerolog.Nop(), collector: collector}
+	result := agent.collectProxmoxLXCFilesystemsResult(context.Background())
+
+	if !result.Applicable || result.Degraded || result.FailedContainers != 0 {
+		t.Fatalf("collection = applicable %v, degraded %v, failed %d; want a complete inventory", result.Applicable, result.Degraded, result.FailedContainers)
+	}
+	if *commands != 0 {
+		t.Fatalf("collection ran %d pct/lxc-info commands; none can work inside the helper", *commands)
+	}
+	got := result.Inventory.Containers
+	if len(got) != 2 || got[0].VMID != 126 || got[0].Name != "qual2511" || got[1].VMID != 127 || got[1].Name != "qual2511-priv" {
+		t.Fatalf("containers = %+v, want the two running ones by their pct names", got)
+	}
+	if len(got[0].Disks) != 2 || got[0].Disks[1].Mountpoint != "/srv/data" || got[0].Disks[1].UsedBytes != 290816 {
+		t.Fatalf("126 disks = %+v, want rootfs and the mp0 mount with its own usage", got[0].Disks)
+	}
+}

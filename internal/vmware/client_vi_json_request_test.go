@@ -96,6 +96,8 @@ func TestQueryEventsRequestCarriesTypeNameDiscriminators(t *testing.T) {
 		`"_typeName":"EventFilterSpec"`,
 		`"_typeName":"EventFilterSpecByEntity"`,
 		`"_typeName":"ManagedObjectReference"`,
+		// Unset, vCenter leaves out every event's readable message.
+		`"disableFullMessage":false`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("QueryEvents request %s missing %s", body, want)

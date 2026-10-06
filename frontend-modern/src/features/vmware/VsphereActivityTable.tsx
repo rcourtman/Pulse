@@ -14,7 +14,7 @@ import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import {
   PlatformWindowedRows,
   PlatformSortableTableHead,
-  PlatformTableDateTimeValue,
+  PlatformTableRelativeTimeValue,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
@@ -145,6 +145,20 @@ const activityTone = (bucket: VmwareActivityStateBucket): ActivityDetailTone => 
   return 'muted';
 };
 
+// An event's title is vCenter's own message when it sent one, so the message
+// and description rows would only repeat it.
+const distinctFromTitle = (activity: VmwareActivityRow, value: string): string =>
+  value.trim() && value.trim() !== activity.title.trim() ? value : '';
+
+// Recent activity reads as an age ("3h ago"); the exact time is on hover and
+// in the drawer. vCenter reports unset times as dates before 2000.
+const activityTimestamp = (activity: VmwareActivityRow): string | undefined => {
+  const value = activity.occurredAt || activity.observedAt;
+  if (!value) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) || parsed.getUTCFullYear() < 2000 ? undefined : value;
+};
+
 const buildActivityDetailSections = (activity: VmwareActivityRow): ActivityDetailSection[] => {
   const meta = activity.resource.vmware;
   return compactDetailSections([
@@ -156,8 +170,9 @@ const buildActivityDetailSections = (activity: VmwareActivityRow): ActivityDetai
           tone: activityTone(activity.stateBucket),
         }),
         detailRow('Activity', activity.title),
-        detailRow('Message', activity.message),
-        detailRow('Description', activity.description),
+        detailRow('Event type', activity.eventType),
+        detailRow('Message', distinctFromTitle(activity, activity.message)),
+        detailRow('Description', distinctFromTitle(activity, activity.description)),
       ]),
     },
     {
@@ -421,7 +436,9 @@ export const VsphereActivityTable: Component<{
                               class="block truncate text-base-content"
                               title={[
                                 activity.title,
-                                activity.message || activity.description || activity.nativeId,
+                                distinctFromTitle(activity, activity.message) ||
+                                  distinctFromTitle(activity, activity.description) ||
+                                  activity.nativeId,
                               ]
                                 .filter(Boolean)
                                 .join(' · ')}
@@ -461,11 +478,12 @@ export const VsphereActivityTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            <PlatformTableDateTimeValue
-                              value={activity.occurredAt || activity.observedAt}
-                              emptyText="-"
-                              minYear={2000}
-                            />
+                            <span title={detailDateTime(activityTimestamp(activity))}>
+                              <PlatformTableRelativeTimeValue
+                                value={activityTimestamp(activity)}
+                                emptyText="-"
+                              />
+                            </span>
                           </TableCell>
                         </TableRow>
                         <Show when={isExpanded()}>
