@@ -44,8 +44,13 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 		guestID := makeGuestID(modelVM.Instance, modelVM.Node, modelVM.VMID)
 		if guestID != "" {
 			ctx.vmsByID[guestID] = modelVM
-			if memory, ok := vm.LinkedAgentMemory(); ok {
-				ctx.hostAgentsByVMID[guestID] = models.Host{LinkedVMID: guestID, Status: "online", Memory: memory}
+			agent := models.Host{LinkedVMID: guestID, Status: "online"}
+			memory, hasMemory := vm.LinkedAgentMemory()
+			agent.Memory = memory
+			disks, observedAt, hasDisks := vm.LinkedAgentDisks()
+			agent.Disks, agent.LastSeen = guestDisksFromReadStateView(disks), observedAt
+			if hasMemory || hasDisks {
+				ctx.hostAgentsByVMID[guestID] = agent
 			}
 		}
 	}
@@ -62,8 +67,13 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 		guestID := makeGuestID(container.Instance, container.Node, container.VMID)
 		if guestID != "" {
 			ctx.containersByID[guestID] = container
-			if memory, ok := ct.LinkedAgentMemory(); ok {
-				ctx.hostAgentsByVMID[guestID] = models.Host{LinkedVMID: guestID, Status: "online", Memory: memory}
+			agent := models.Host{LinkedContainerID: guestID, Status: "online"}
+			memory, hasMemory := ct.LinkedAgentMemory()
+			agent.Memory = memory
+			disks, observedAt, hasDisks := ct.LinkedAgentDisks()
+			agent.Disks, agent.LastSeen = guestDisksFromReadStateView(disks), observedAt
+			if hasMemory || hasDisks {
+				ctx.hostAgentsByVMID[guestID] = agent
 			}
 		}
 		if container.VMID > 0 && (strings.EqualFold(strings.TrimSpace(container.Type), "oci") || container.IsOCI) {
@@ -187,14 +197,19 @@ func previousHostFromView(host *unifiedresources.HostView) models.Host {
 	if host == nil {
 		return models.Host{}
 	}
+	disks, _, _ := host.CurrentAgentDisks()
+	observedAt := host.LastSeen()
+	if status, ok := host.SourceStatus(unifiedresources.SourceAgent); ok {
+		observedAt = status.LastSeen
+	}
 	return models.Host{
 		ID:                host.ID(),
 		Hostname:          host.Hostname(),
 		Status:            string(host.Status()),
 		LinkedVMID:        host.LinkedVMID(),
 		LinkedContainerID: host.LinkedContainerID(),
-		LastSeen:          host.LastSeen(),
-		Disks:             guestDisksFromReadStateView(host.Disks()),
+		LastSeen:          observedAt,
+		Disks:             guestDisksFromReadStateView(disks),
 		Memory: models.Memory{
 			Used:  host.MemoryUsed(),
 			Total: host.MemoryTotal(),
