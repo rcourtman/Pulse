@@ -62,17 +62,17 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
   const [unavailable, setUnavailable] = createSignal(false);
   const [showUrl, setShowUrl] = createSignal(false);
 
-  // The status read has no timeout. Every read gets a sequence number and an
-  // answer applies only when it is newer than the last one applied, so a slow
-  // or hung read can neither overwrite a newer status nor block later reads,
-  // and reads slower than the poll interval still land in order. A background
-  // read waits while the newest read is younger than one poll interval; a
-  // Refresh still pending at such a poll counts as stalled and frees the
-  // button. Only
-  // the newest read's failure marks the status unavailable, and nothing
-  // applies after the panel unmounts.
+  // The status read has no timeout. Every read gets a sequence number, and a
+  // read's outcome applies only when it is newer than the last read that
+  // settled: a success shows its status and clears the unavailable mark, a
+  // failure sets it. A slow or hung read therefore cannot overwrite a newer
+  // outcome or block later reads, and reads slower than the poll interval
+  // still land in order. A background read waits while the newest read is
+  // younger than one poll interval (less a second of timer slack); a Refresh
+  // still pending at such a poll counts as stalled and frees the button.
+  // Nothing applies after the panel unmounts.
   let latestStarted = 0;
-  let latestApplied = 0;
+  let latestSettled = 0;
   let pendingSince: number | undefined;
   let foregroundRequest = 0;
   let foregroundSince = 0;
@@ -101,19 +101,20 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
     }
     try {
       const next = await AlertsAPI.getDeadManStatus();
-      if (disposed || request < latestApplied) return;
-      latestApplied = request;
+      if (disposed || request < latestSettled) return;
+      latestSettled = request;
       setStatus(next);
       setUnavailable(false);
-      if (request >= foregroundRequest) setLoading(false);
     } catch (error) {
-      if (disposed || request !== latestStarted) return;
+      if (disposed || request < latestSettled) return;
+      latestSettled = request;
       logger.error('Failed to load external watchdog status', error);
       setUnavailable(true);
     } finally {
       if (!disposed) {
         if (request === latestStarted) pendingSince = undefined;
-        if (request === foregroundRequest) setLoading(false);
+        // A Refresh is answered by its own read or by any newer one.
+        if (request >= foregroundRequest) setLoading(false);
       }
     }
   };

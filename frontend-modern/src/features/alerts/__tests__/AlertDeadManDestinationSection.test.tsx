@@ -300,4 +300,61 @@ describe('AlertDeadManDestinationSection', () => {
       vi.useRealTimers();
     }
   });
+
+  it('lets the newest settled read decide availability, even when reads outlast the poll', async () => {
+    const start = Date.parse('2026-08-27T12:10:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+    const base = await AlertsAPI.getDeadManStatus();
+    vi.mocked(AlertsAPI.getDeadManStatus).mockReset();
+    const pending: Array<{
+      resolve: (value: typeof base) => void;
+      reject: (error: Error) => void;
+    }> = [];
+    vi.mocked(AlertsAPI.getDeadManStatus).mockImplementation(
+      () =>
+        new Promise((resolve, reject) => {
+          pending.push({ resolve, reject });
+        }),
+    );
+    const [pingUrl, setPingUrl] = createSignal('***REDACTED***');
+    const badge = () => screen.getByText(/^(Status unavailable|Heartbeat healthy|Not configured)$/);
+    const settle = async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    };
+
+    try {
+      render(() => (
+        <AlertDeadManDestinationSection
+          pingUrl={pingUrl}
+          setPingUrl={setPingUrl}
+          setHasUnsavedChanges={vi.fn()}
+        />
+      ));
+      await waitFor(() => expect(pending).toHaveLength(1));
+      pending[0].resolve(base);
+      await waitFor(() => expect(badge()).toHaveTextContent('Heartbeat healthy'));
+
+      // Every read now fails, and each failure arrives after the next poll has
+      // already started a newer read. The failures still mark the status.
+      vi.advanceTimersByTime(DEAD_MAN_STATUS_POLL_MS);
+      await waitFor(() => expect(pending).toHaveLength(2));
+      vi.advanceTimersByTime(DEAD_MAN_STATUS_POLL_MS);
+      await waitFor(() => expect(pending).toHaveLength(3));
+      pending[1].reject(new Error('timeout'));
+      await waitFor(() => expect(badge()).toHaveTextContent('Status unavailable'));
+
+      // The newest read fails; an older read then succeeds late. The older
+      // success must not report a recovery.
+      vi.advanceTimersByTime(DEAD_MAN_STATUS_POLL_MS);
+      await waitFor(() => expect(pending).toHaveLength(4));
+      pending[3].reject(new Error('timeout'));
+      await settle();
+      pending[2].resolve(base);
+      await settle();
+      expect(badge()).toHaveTextContent('Status unavailable');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
