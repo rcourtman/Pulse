@@ -237,18 +237,21 @@ assert.equal(
       assert(backupBounds.height >= 44 || width > 768, 'phone backup target retains 44 px height');
       assert(backupBounds.x >= g.cell.x && backupBounds.x + backupBounds.width <= g.cell.right + 1);
       if (width <= 768) await backupControl.tap();
-      else await backupControl.click();
+      else {
+        await backupControl.focus();
+        await page.keyboard.press('Enter');
+      }
       const backupDialog = page.getByRole('dialog', {
         name: 'Backup status details for backup-guest',
         exact: true,
       });
       await backupDialog.waitFor();
-      assert((await backupDialog.textContent()).includes('No completed backup found'));
+      assert((await backupDialog.textContent()).includes('No backup has ever been recorded'));
       assert.equal(await page.getByRole('region', { name: 'Guest details' }).count(), 0);
       if (name === 'narrow-light') await capture('backup-evidence-dialog');
       await backupDialog.getByRole('button', { name: 'Close backup details', exact: true }).click();
       record.checks.push(
-        'backup control retains its touch target and opens only same-guest completion evidence',
+        'backup control retains its touch target; touch or keyboard Enter opens only same-guest completion evidence',
       );
       if (width <= 768) await cell.getByText('backup-guest', { exact: true }).tap();
       else {

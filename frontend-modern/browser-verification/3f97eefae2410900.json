@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "aff24f6dbc7dc0e3cbad01d894df39814fabc08b",
+  "verified_at": "2026-10-06T14:52:32Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRow.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "8c09ce2584cb9eabd60aed3c8c7353c47ec87e9b7ec20c266e7e4b9c4c89048a"
+  },
+  "routes": [
+    "/final/browser-tests/guest-row-memory-provenance.html",
+    "/parent/browser-tests/guest-row-memory-provenance.html"
+  ],
+  "viewports": [
+    {
+      "width": 320,
+      "height": 844
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 1365,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Precompiled synthetic fixture imports the actual production GuestRow, stylesheet, drawer and History. Source proof source-z3f7fqsu at aff24f6dbc7dc0e3cbad01d894df39814fabc08b binds all 339 imported source files and four artifacts per variant; browser independently verifies every byte against the final workspace. Parent row is read from exact 4ebaccd1e122705de3f8cc85340180c24c95c6b9. Full App, native guest recovery, installed or physical-device acceptance are not claimed.",
+    "WebKit 320 light and 390 dark; Chromium 320 dark, 390 light and 1365 light/dark. Playwright 1.56.1 matches integration lock. Six final cases pass with no page/HTTP errors, all browser contexts closed, browser and local static server closed; no compiler runs in the browser tree.",
+    "Same 320px parent fixture loses the ordinary guest name (0px of 64px); final gives it 64px of 64px, full backup lock and original memory cue. Phone row height increases from 48px to 83px; no density or performance saving is claimed. All eleven captures visually inspected.",
+    "Bars and sparklines preserve identity, lock and prior memory value/source/time. Long names remain visible with full titles; snapshot-delete lock wraps inside phone identity cell without overflow. Wider identity remains inline. Same mounted row removes lock without renewing original 2026-09-30 memory observation.",
+    "Earlier browser assertion wrongly used drawer copy in the separate backup evidence dialog and returned 1; failure retained. Corrected assertion uses the unchanged actual backup-dialog wording. No runtime change was made after the source proof."
+  ],
+  "interactions": [
+    "First touch on name at phone widths or actual keyboard Tab/Enter on desktop disclosure opens the same guest drawer; unchanged backup/thaw precaution and original last-known memory stay visible. Collapse works.",
+    "Backup evidence control retains at least 44px by 44px on phones. Touch or desktop keyboard Enter opens same-guest backup evidence, never the row drawer; close works.",
+    "Toggle bars/sparklines; update long name/lock and then remove lock on the same mounted row. Only mocked local GETs are admitted, never guest-agent probes, diagnostics, writes or external access."
+  ],
+  "evidence_sha256": {
+    "browser_result": "c651183c9e7ce11b94941496b10705cb44a2bc489bfdd853665c73cf2a1e8ad4",
+    "script": "cc895961b62e7e646b97a6c10884d39ff96a11a591915aef5a1a06ed2a279a3f",
+    "source_output": "c701949867da91db5d87de07c64840cec3690a7e0e1fd721be959fcee0f2ca24"
+  }
+}
