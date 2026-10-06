@@ -656,7 +656,9 @@ func TestTrueNASFractionalAppStatsPollAndHistory(t *testing.T) {
 	t.Cleanup(server.Close)
 	client, err := truenas.NewClient(truenas.ClientConfig{
 		Host: server.URL, APIKey: "fixture-key", Username: "fixture-user", Timeout: 2 * time.Second,
-		Fingerprint: fmt.Sprintf("%x", sha256.Sum256(server.Certificate().Raw)),
+		// The fixture certificate is self-signed; authenticate its exact leaf
+		// with the client's normal pin verifier rather than the system CA set.
+		InsecureSkipVerify: true, Fingerprint: fmt.Sprintf("%x", sha256.Sum256(server.Certificate().Raw)),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -668,7 +670,12 @@ func TestTrueNASFractionalAppStatsPollAndHistory(t *testing.T) {
 	poller.providersByOrg["default"] = map[string]*truenas.Provider{instance.ID: provider}
 	poller.configsByOrg["default"] = map[string]config.TrueNASInstance{instance.ID: instance}
 	resourceStore := unifiedresources.NewMonitorAdapter(nil)
-	monitor := &Monitor{resourceStore: resourceStore, metricsHistory: NewMetricsHistory(1024, 24*time.Hour)}
+	metricsStore, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = metricsStore.Close() })
+	monitor := &Monitor{resourceStore: resourceStore, metricsHistory: NewMetricsHistory(1024, 24*time.Hour), metricsStore: metricsStore}
 	var lastSuccess, lastStats time.Time
 	var firstIDs = make(map[string]string)
 	for currentPoll := range cpus {
@@ -695,6 +702,7 @@ func TestTrueNASFractionalAppStatsPollAndHistory(t *testing.T) {
 			unifiedresources.SourceTrueNAS: poller.GetCurrentRecordsForOrg("default"),
 		})
 		monitor.syncUnifiedAppContainerMetrics(resourceStore)
+		metricsStore.Flush()
 		appResources := 0
 		for _, resource := range resourceStore.GetAll() {
 			if resource.Type != unifiedresources.ResourceTypeAppContainer {
@@ -727,6 +735,18 @@ func TestTrueNASFractionalAppStatsPollAndHistory(t *testing.T) {
 				t.Fatalf("unexpected connection-scoped History target: %+v", target)
 			}
 			history := monitor.GetGuestMetrics("docker:"+target.ResourceID, time.Hour)
+			// The first poll also crosses the real persistent/chart read path.
+			// Later short polls may share a persisted time bucket; do not treat
+			// its aggregation as three native sixty-second observations.
+			if currentPoll == 0 {
+				chart := monitor.GetGuestMetricsForChart("docker:"+target.ResourceID, "dockerContainer", target.ResourceID, 7*24*time.Hour)
+				for metric, value := range want {
+					points := chart[metric]
+					if len(points) != 1 || math.Abs(points[0].Value-value) > 1e-12 {
+						t.Fatalf("app %d %s persisted/chart History lost the live sample: %+v, want %v", i, metric, points, value)
+					}
+				}
+			}
 			for metric, value := range want {
 				points := history[metric]
 				if len(points) != currentPoll+1 || math.Abs(points[len(points)-1].Value-value) > 1e-12 || !points[len(points)-1].Timestamp.Equal(resource.LastSeen) {
@@ -740,6 +760,12 @@ func TestTrueNASFractionalAppStatsPollAndHistory(t *testing.T) {
 		}
 		// Rendering/History without a new observation must not renew samples.
 		monitor.syncUnifiedAppContainerMetrics(resourceStore)
+		history := monitor.GetGuestMetrics("docker:system:fractional-connection/app:fixture-app-0", time.Hour)
+		for _, metric := range []string{"cpu", "memory", "netin", "netout"} {
+			if len(history[metric]) != currentPoll+1 {
+				t.Fatalf("rereading the same poll renewed %s History", metric)
+			}
+		}
 	}
 	client.Close()
 	if client.TransportStatus().Connected {

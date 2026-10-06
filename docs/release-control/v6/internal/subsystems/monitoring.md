@@ -614,7 +614,8 @@ reused login, numeric compatibility and malformed-event disposal/recovery.
 `TestTrueNASFractionalAppStatsPollAndHistory` in
 `internal/monitoring/monitor_polling_test.go` connects TLS/RPC, thirteen-app
 inventory, repeated actual provider polls, canonical resources and all four
-CPU/memory/network History series with stable connection/tenant identity.
+CPU/memory/network History series with stable connection/tenant identity. Its
+first poll also crosses the real persisted/chart History read path.
 These short local polls are source regressions, not native SCALE/Traefik
 sixty-second session acceptance, installed restart or containing publication.
 
