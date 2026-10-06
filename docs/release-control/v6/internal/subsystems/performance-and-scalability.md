@@ -610,6 +610,14 @@ count times the number of shared storages.
 Demo Docker container names stay unique per host (numbered suffixes on reused
 profiles), so image "used by" lists and container rows never collapse two
 distinct containers into what reads as a duplicated row.
+Mock Kubernetes pods share their node's allocatable memory: each active pod's
+memory target is scaled by `mockKubernetesPodMemoryShare` over the active pods
+on its node, which keeps a node's pods at or below 58% of allocatable memory in
+steady state, and `capMockKubernetesNodePodMemory` clips them to 60% only while
+rescheduled pods' smoothed readings settle, so a dense node does not pin itself
+and its linked agent at 100%. The count and the clip are linear passes over the
+cluster's pods in each usage update, keyed by node name, with no per-pod scan
+of other pods or nodes.
 
 The browser applies resource deltas to its connection-scoped raw baseline, but
 canonicalizes and reconciles only changed resources plus the host-merge groups
