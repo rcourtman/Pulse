@@ -1378,13 +1378,19 @@ const buildTemperature = (
   nodeMeta?: Record<string, unknown>,
 ): Temperature | undefined => {
   const platform = resourcePlatformData(resource);
-  const raw =
-    asRecord(platform?.temperature) ||
-    asRecord(nodeMeta?.temperature) ||
-    asRecord(platform?.agent) ||
-    undefined;
-
-  if (raw) {
+  // Take the first source with a usable reading. A Proxmox node without a host
+  // agent publishes its full reading, including the CPU low and record values
+  // the poller tracks, only as proxmox.temperatureDetails (proxmox.temperature
+  // is the scalar maximum), so it comes before the bare-reading fallback.
+  const candidates = [
+    platform?.temperature,
+    nodeMeta?.temperature,
+    platform?.agent,
+    nodeMeta?.temperatureDetails,
+  ];
+  for (const candidate of candidates) {
+    const raw = asRecord(candidate);
+    if (!raw) continue;
     const available = asBoolean(raw.available);
     const cpuPackage = asNumber(raw.cpuPackage) ?? asNumber(raw.temperature) ?? asNumber(raw.cpu);
     const lastUpdate = toISOTime(raw.lastUpdate, resource.lastSeen);
@@ -1441,11 +1447,11 @@ const buildTemperature = (
 
   if (typeof resource.temperature === 'number' && Number.isFinite(resource.temperature)) {
     const temp = resource.temperature;
+    // A bare reading carries no low or record history. Leave them unset so the
+    // drawer omits those rows instead of repeating the current value as a record.
     return {
       cpuPackage: temp,
       cpuMax: temp,
-      cpuMin: temp,
-      cpuMaxRecord: temp,
       available: true,
       hasCPU: true,
       lastUpdate: toISOTime(undefined, resource.lastSeen),

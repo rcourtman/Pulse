@@ -254,6 +254,61 @@ describe('resourceStateAdapters nodeFromResource', () => {
     ]);
   });
 
+  it("reads a Proxmox node's CPU low and record from the poller's temperature details", () => {
+    // The unified resource API publishes the scalar maximum as
+    // proxmox.temperature and the full reading as proxmox.temperatureDetails.
+    const proxmox = {
+      nodeName: 'pve-node-2',
+      temperature: 58,
+      temperatureDetails: {
+        available: true,
+        hasCPU: true,
+        cpuPackage: 52,
+        cpuMax: 58,
+        cpuMin: 41,
+        cpuMaxRecord: 76,
+        minRecorded: '2026-10-06T08:00:00Z',
+        maxRecorded: '2026-10-06T12:00:00Z',
+        cores: [{ core: 0, temp: 58 }],
+        lastUpdate: '2026-10-06T15:00:00Z',
+      },
+    };
+    const node = nodeFromResource({
+      ...createNodeResource({ proxmox }),
+      temperature: 58,
+      proxmox,
+    } as unknown as Resource);
+
+    expect(node?.temperature).toMatchObject({
+      available: true,
+      cpuPackage: 52,
+      cpuMax: 58,
+      cpuMin: 41,
+      cpuMaxRecord: 76,
+      lastUpdate: '2026-10-06T15:00:00Z',
+    });
+    expect(node?.temperature?.cores).toEqual([{ core: 0, temp: 58 }]);
+
+    // Without details there is no history: the current reading must not be
+    // reported as the node's low or record.
+    const bare = nodeFromResource({
+      ...createNodeResource({ proxmox: { nodeName: 'pve-node-2', temperature: 58 } }),
+      temperature: 58,
+    } as unknown as Resource);
+    expect(bare?.temperature?.cpuPackage).toBe(58);
+    expect(bare?.temperature?.cpuMin).toBeUndefined();
+    expect(bare?.temperature?.cpuMaxRecord).toBeUndefined();
+
+    // A node with a host agent keeps reading the agent facet first.
+    const agentLinked = nodeFromResource({
+      ...createNodeResource({ proxmox, agent: { agentId: 'pve-agent', temperature: 61 } }),
+      temperature: 61,
+      proxmox,
+    } as unknown as Resource);
+    expect(agentLinked?.temperature?.cpuPackage).toBe(61);
+    expect(agentLinked?.temperature?.cpuMin).toBeUndefined();
+  });
+
   it('preserves linked-agent GPU telemetry for the Proxmox node drawer', () => {
     const gpu = {
       id: '0',

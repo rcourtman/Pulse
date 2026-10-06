@@ -3182,6 +3182,15 @@ footer after the visible rows. The footer may dim the final row edge and expose
 the remaining-row count, but expanding or collapsing it only changes the
 client-side visible slice; it must not refetch, reorder, or redefine the
 canonical resource collection.
+The shared `nodeFromResource` adapter takes a node's temperature from the first
+source with a usable reading: a platform or Proxmox temperature record, the
+agent facet, then `proxmox.temperatureDetails`. That last field is the Proxmox
+poller's full reading for a node without a host agent, including the CPU low
+and record values it tracks; `proxmox.temperature` is only the scalar maximum.
+A bare scalar reading carries no history, so the adapter leaves the CPU low and
+record unset rather than repeating the current value, and the node drawer omits
+those rows. `resourceStateAdapters.test.ts` pins both with the API's payload
+shape.
 The registry and presentation coalescer also own metric-source freshness. When
 two source facets contribute the same metric, source priority decides only if
 both sources have equivalent freshness. A stale source must not hold CPU,
