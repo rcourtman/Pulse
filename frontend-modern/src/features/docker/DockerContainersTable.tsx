@@ -82,6 +82,7 @@ import {
   getDockerContainerSortKey,
   getDockerContainerTableMinWidthClass,
   getDockerContainerVisibleColumnsForLayout,
+  isDockerContainerColumnInLayout,
   type DockerContainerSortKey,
   type DockerContainerTableColumn,
 } from './dockerContainerTableModel';
@@ -91,6 +92,7 @@ import { DockerContainerLifecycleControls } from './DockerContainerLifecycleCont
 import { CONTAINER_CPU_CAPACITY_DESCRIPTION } from './dockerCpuPresentation';
 import { DockerImageReferenceText } from './DockerImageReferenceText';
 import {
+  DOCKER_RESTART_ATTENTION_THRESHOLD,
   getDockerContainerStatePresentation,
   getDockerContainerUptimeSeconds,
   type DockerContainerStateTone,
@@ -187,10 +189,6 @@ const DOCKER_CONTAINER_STATE_TONE_CLASS: Record<DockerContainerStateTone | 'none
   muted: 'text-muted',
   none: '',
 };
-
-// v5 flagged crash-loopers in the restarts column; a container that restarted
-// more than this many times needs an operator's eye even while "running".
-const RESTART_ATTENTION_THRESHOLD = 5;
 
 const updateStatusLabel = (resource: Resource): string => {
   const update = resource.docker?.updateStatus;
@@ -424,6 +422,13 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   // User-controlled sorting layered over the attention-first default: rows
   // are pre-sorted by the status compare, so a user sort keeps that order for
   // ties and the table falls straight back to it when the sort is cleared.
+  // Where the layout has no Restarts column, a crash-looping container says
+  // so in its State cell instead.
+  const flagRestartsInState = createMemo(
+    () => !isDockerContainerColumnInLayout('restarts', layoutMode()),
+  );
+  const stateFor = (resource: Resource) =>
+    getDockerContainerStatePresentation(resource, { flagRestarts: flagRestartsInState() });
   // Sorting reorders rows only; grouped mode re-buckets the sorted rows, so
   // the sort applies within each host group and stays orthogonal to grouping.
   const sort = createPlatformTableSortState({
@@ -432,7 +437,10 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     descendingFirst: ['cpu', 'memory', 'restarts', 'uptime'],
   });
   const sortedRows = createMemo(() =>
-    sort.sortRows([...scopedRows()].sort(compareDockerContainers), getDockerContainerSortValue),
+    sort.sortRows([...scopedRows()].sort(compareDockerContainers), (resource, key) =>
+      // State sorts by the words the row shows, restart warning included.
+      key === 'state' ? stateFor(resource).label : getDockerContainerSortValue(resource, key),
+    ),
   );
   // Grouped-by-host view, mirroring the workloads table: preference persists
   // locally (not in the URL) and only applies once the fleet spans more than
@@ -510,7 +518,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   // A running container with a failing or starting health check needs the
   // State column as much as a stopped one does.
   const showStateColumn = createMemo(() =>
-    scopedRows().some((resource) => getDockerContainerStatePresentation(resource).tone !== null),
+    scopedRows().some((resource) => stateFor(resource).tone !== null),
   );
   const showUptimeColumn = createMemo(() =>
     scopedRows().some((resource) => getDockerContainerUptimeSeconds(resource) !== undefined),
@@ -536,7 +544,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   const renderContainerRow = (resource: Resource): JSX.Element => {
     const indicator = mapDockerContainerStatus(resource);
     const image = () => dockerTextValue(resource.docker?.image);
-    const state = () => getDockerContainerStatePresentation(resource);
+    const state = () => stateFor(resource);
     const runtime = () => runtimeSummary(resource);
     const host = () => dockerHostName(resource);
     const running = () => isContainerRunning(resource);
@@ -659,7 +667,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
               >
                 <span
                   class={`tabular-nums ${
-                    restartCount() > RESTART_ATTENTION_THRESHOLD
+                    restartCount() > DOCKER_RESTART_ATTENTION_THRESHOLD
                       ? 'font-medium text-red-600 dark:text-red-400'
                       : ''
                   }`}

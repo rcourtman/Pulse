@@ -302,6 +302,18 @@ describe('App architecture', () => {
     expect(band).toMatch(
       /width: 30%;\s*\}[\s\S]*?th\[style\*='--platform-table-band-width'\] \{\s*width: var\(--platform-table-band-width\);/,
     );
+    // A header whose full label outgrows its band column keeps its compact
+    // label there; these rules sit after the 34rem label switch so they win.
+    expect(band).toMatch(
+      /--platform-table-band-width\);\s*\}[\s\S]*?\.platform-table-label-compact\.platform-table-label-band-compact \{\s*display: inline;\s*\}\s*\.platform-table-label-full\.platform-table-label-band-compact \{\s*display: none;/,
+    );
+    const labelSwitch = appStylesSource.indexOf(
+      '@container (min-width: 34rem) {\n    .platform-table-label-compact',
+    );
+    expect(labelSwitch).toBeGreaterThan(0);
+    expect(appStylesSource.indexOf('.platform-table-label-band-compact')).toBeGreaterThan(
+      labelSwitch,
+    );
   });
 
   it('draws the shared select arrow that appearance-none removes', () => {

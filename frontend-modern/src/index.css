@@ -1553,6 +1553,16 @@
       .table-scroll-shell > .table-fixed.platform-table th[style*='--platform-table-band-width'] {
         width: var(--platform-table-band-width);
       }
+
+      /* A header whose full label is longer than its band column keeps the
+         compact label it already shows on phones (compactInBand). */
+      .platform-table-label-compact.platform-table-label-band-compact {
+        display: inline;
+      }
+
+      .platform-table-label-full.platform-table-label-band-compact {
+        display: none;
+      }
     }
   }
 
