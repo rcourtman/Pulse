@@ -272,7 +272,45 @@ canonical `verdict` and stable `reasons` (`code` plus optional compact
 `detail`). Consumers should use this envelope for cross-platform posture
 instead of deriving health from provider-specific status strings.
 
-Note: guest disk usage percentages use `-1` as an "unknown" sentinel — reported when a VM is stopped or its guest agent is unavailable, so there is no filesystem view to measure. Consumers should treat negative values as "no data", not as a percentage; the accompanying `diskStatusReason` field (e.g. `vm-stopped`, `agent-disabled`) says why.
+#### Guest readings: availability and age
+
+In legacy VM payloads, `disk.usage: -1` means unavailable, not negative usage.
+In `GET /api/resources` and `GET /api/resources/{id}`, an unavailable disk
+reading is omitted as `metrics.disk`. **Do not replace an absent metric with
+zero**; a genuinely observed zero is valid. Allocated virtual-disk capacity
+alone does not establish used space inside the guest.
+
+Read `proxmox.diskStatusReason` alongside the value. A `prev-` reason means
+retained disk evidence, not a fresh reading. `agent-not-running` can also
+represent a general guest-agent HTTP 500 error: it does not establish that the
+guest's service is absent or stopped. An absent reason alone does not prove
+freshness either.
+
+For memory, use `metrics.memory.observation` for the **selected metric's**
+source and age, not a different source's retained `proxmox.memory` facet:
+
+| Observation `state` | Meaning for the consumer |
+| --- | --- |
+| `current` | Accepted source observation; a normal cache hit can keep the original `observedAt`. Check its age for your use. |
+| `last-known` | Retained evidence, not a new measurement. Keep its original age visible; do not record it as a fresh sample. |
+| `unavailable` | No usable usage observation; do not treat retained numbers or zero-valued fields as a measurement. |
+| Missing or unrecognised | Freshness is unknown, including older payloads without an observation. Do not infer `current`. |
+
+`observedAt` belongs to that source observation. If it is absent or in the
+future, its age is unknown; do not substitute the resource's `lastSeen` or
+`updatedAt`. In the raw `proxmox.memory` facet, `usageUnavailable: true` can
+preserve known capacity without measured usage. An absent `metrics.memory`
+is not 0% usage. Conversely, an independently observed PVE or Pulse-agent
+memory reading can remain current while QEMU disk collection is deferred;
+disk state is not memory provenance.
+
+A running VM, an advancing row timestamp or an OK backup does not prove fresh
+guest readings or successful thaw. Do not install or restart an agent or send
+live guest-agent probes merely to fill these gaps, especially during a backup,
+freeze/thaw or an unresponsive-guest incident. Follow [Backup safety](VM_DISK_MONITORING.md#backup-safety)
+and [missing-reading guidance](VM_DISK_MONITORING.md#a-missing-reading-is-not-an-installation-diagnosis).
+Recovery needs independent thaw, fresh successful writes to every covered
+filesystem and workload liveness; retained API values cannot establish it.
 
 Availability is an additive resource facet. `availability` is the compatibility
 summary used by existing clients; `availabilityChecks` contains every check
