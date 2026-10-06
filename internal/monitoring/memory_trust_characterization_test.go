@@ -1184,7 +1184,7 @@ func TestBackupLockMemoryTrustKeepsNativeEvidenceWithoutAgentReads(t *testing.T)
 			if native {
 				status.MemInfo = &proxmox.VMMemInfo{Total: 8 * gib, Available: 5 * gib}
 			}
-			_, used, source := m.resolveGuestStatusMemory(context.Background(), client, "fixture", "guest", "node", 105, "fixture:node:105", status, nil, 8*gib, "", &VMMemoryRaw{})
+			_, used, source, _ := m.resolveGuestStatusMemory(context.Background(), client, "fixture", "guest", "node", 105, "fixture:node:105", status, nil, 8*gib, "", &VMMemoryRaw{})
 			if client.vmAgentMemCalls != 0 || strings.HasPrefix(source, "guest-agent-meminfo") {
 				t.Fatalf("backup used fresh/cached guest-agent evidence: calls=%d source=%s", client.vmAgentMemCalls, source)
 			}
@@ -1193,7 +1193,7 @@ func TestBackupLockMemoryTrustKeepsNativeEvidenceWithoutAgentReads(t *testing.T)
 			}
 			status.Lock = ""
 			status.MemInfo = nil
-			_, _, source = m.resolveGuestStatusMemory(context.Background(), client, "fixture", "guest", "node", 105, "fixture:node:105", status, nil, 8*gib, "", &VMMemoryRaw{})
+			_, _, source, _ = m.resolveGuestStatusMemory(context.Background(), client, "fixture", "guest", "node", 105, "fixture:node:105", status, nil, 8*gib, "", &VMMemoryRaw{})
 			if client.vmAgentMemCalls != 1 || source != "guest-agent-meminfo" {
 				t.Fatalf("unlocked memory did not resume: %d %s", client.vmAgentMemCalls, source)
 			}

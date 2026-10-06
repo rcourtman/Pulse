@@ -913,7 +913,7 @@ func TestProxmoxGuestMemoryFallbackUsesInstanceScopedCachesAndAgentMeminfo(t *te
 			// the resolver must not consult guest RRD between the preferred
 			// guest-agent pass and the retry pass.
 			"// No RRD fallback here: PVE guest rrddata carries only cache-inclusive",
-			"if agentAvailable, agentSource, ok := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw); ok {",
+			"agentAvailable, agentSource, ok, deferred := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw)",
 			"memorySource = agentSource",
 			"guestRaw.GuestAgentMemAvailable = agentAvailable",
 			`memorySource = "unavailable"`,
@@ -2979,6 +2979,11 @@ func TestBroadcastProjectionMatchesPreviousPipeline(t *testing.T) {
 // The runtime contract includes both poll builders, protocol admission and truthful History.
 func TestGuestAgentBackupMonitoringContract(t *testing.T) {
 	testGuestAgentBackupMonitoringLifecycle(t)
+}
+
+func TestGuestAgentOptionalReadOrderingContract(t *testing.T) {
+	t.Run("current-status", func(t *testing.T) { testGuestAgentOptionalReadOrdering(t, false) })
+	t.Run("recent-evidence-without-status", func(t *testing.T) { testGuestAgentOptionalReadOrdering(t, true) })
 }
 
 func TestGuestMemoryObservationContract(t *testing.T) {

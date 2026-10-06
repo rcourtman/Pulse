@@ -202,6 +202,33 @@ and units on 8- and 4-CPU hosts. Genuine high usage still breaches its configure
 threshold; no clipping or smoothing masks spikes. These source controls do not
 establish the reporter's native payload, installed cause or containing release.
 
+### Filesystem collection precedes optional guest reads — discussion #2538
+
+Both the detailed-status and recent-evidence/no-status QEMU builders collect
+filesystem usage before optional Linux `/proc/meminfo` and guest metadata.
+Windows/Android guests may answer filesystem queries without supporting every
+optional command. A completed, verified filesystem response can therefore reach
+the read projection and History even if a subsequent optional command starts a
+shared pause. Memory and metadata helpers return admission deferral separately
+from observations: a successful disk must not hide later uncertainty.
+
+No completion-error exemption, operation-lock requirement, timeout, retry,
+failover or process-local coordination rule changes. An unknown optional reply
+still blocks every later command, including newly constructed clients and cold
+collectors in the same process. Subsequent paused polls retain old values without
+adding disk/memory History or renewing original memory evidence. Explicit
+unsupported replies retain their existing terminal/error and negative-cache
+semantics. Independent current provider counters remain usable. This does not
+establish the reporter's original failed command, supported native filesystem
+response, process-restart safety, thaw or installed/released repair.
+
+`TestGuestAgentOptionalReadOrderingContract` drives actual single/cluster clients,
+normal and recent-evidence/no-status builders, unified JSON readback and memory,
+persistent and chart History for NTFS/ext4 success, terminal unsupported memory/OS
+and uncertain memory/network/OS/version replies across repeated polls and cold
+collectors. Existing backup, lock, transport and observation contracts remain
+required; all responses in this fixture are synthetic.
+
 ### Guest-agent coordination around backups — issue #2439
 
 All PVE QEMU guest-agent reads, including disk diagnostics and legacy meminfo

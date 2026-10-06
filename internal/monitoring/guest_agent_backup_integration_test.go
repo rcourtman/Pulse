@@ -229,7 +229,7 @@ func TestGuestAgentDeferralPreservesMetadataAndMemoryCache(t *testing.T) {
 	memory := agentMemCacheEntry{available: 1024, fetchedAt: now, info: proxmox.LinuxMemoryAvailability{Source: "meminfo-available", EffectiveAvailable: 1024}}
 	mk, gk := guestMemoryCacheKey("fixture", "node", 105), guestMetadataCacheKey("fixture", "node", 105)
 	m := &Monitor{guestMetadataCache: map[string]guestMetadataCacheEntry{gk: metadata}, vmAgentMemCache: map[string]agentMemCacheEntry{mk: memory}, guestMetadataLimiter: make(map[string]time.Time)}
-	ips, _, os, _, version := m.fetchGuestAgentMetadata(context.Background(), client, "fixture", "node", "guest", 105, &proxmox.VMStatus{Agent: proxmox.VMAgentField{Value: 1}}, false)
+	ips, _, os, _, version, _ := m.fetchGuestAgentMetadata(context.Background(), client, "fixture", "node", "guest", 105, &proxmox.VMStatus{Agent: proxmox.VMAgentField{Value: 1}}, false)
 	if len(ips) != 1 || os != "Linux" || version != "1.0" {
 		t.Fatal("deferral lost last known metadata")
 	}

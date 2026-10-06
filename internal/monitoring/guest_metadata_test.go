@@ -1004,7 +1004,7 @@ func TestFetchGuestAgentMetadataPreservesCachedValuesOnEmptyResponses(t *testing
 		guestMetadataLimiter: make(map[string]time.Time),
 	}
 
-	gotIPs, gotIfaces, gotOSName, gotOSVersion, gotAgentVersion := monitor.fetchGuestAgentMetadata(
+	gotIPs, gotIfaces, gotOSName, gotOSVersion, gotAgentVersion, _ := monitor.fetchGuestAgentMetadata(
 		context.Background(),
 		&emptyGuestMetadataClient{},
 		"pve",
@@ -1093,7 +1093,7 @@ func TestFetchGuestAgentMetadataPreservesFreshCacheWhenAgentTemporarilyUnavailab
 		t.Parallel()
 
 		monitor := newMonitor()
-		gotIPs, gotIfaces, gotOSName, gotOSVersion, gotAgentVersion := monitor.fetchGuestAgentMetadata(
+		gotIPs, gotIfaces, gotOSName, gotOSVersion, gotAgentVersion, _ := monitor.fetchGuestAgentMetadata(
 			context.Background(),
 			&emptyGuestMetadataClient{},
 			"pve",
@@ -1111,7 +1111,7 @@ func TestFetchGuestAgentMetadataPreservesFreshCacheWhenAgentTemporarilyUnavailab
 		t.Parallel()
 
 		monitor := newMonitor()
-		gotIPs, gotIfaces, gotOSName, gotOSVersion, gotAgentVersion := monitor.fetchGuestAgentMetadata(
+		gotIPs, gotIfaces, gotOSName, gotOSVersion, gotAgentVersion, _ := monitor.fetchGuestAgentMetadata(
 			context.Background(),
 			&emptyGuestMetadataClient{},
 			"pve",
@@ -1137,7 +1137,7 @@ func TestFetchGuestAgentMetadataRetriesIdentityOnlyCacheSooner(t *testing.T) {
 
 	status := &proxmox.VMStatus{Agent: proxmox.VMAgentField{Value: 1}}
 
-	firstIPs, firstIfaces, firstOSName, firstOSVersion, firstAgentVersion := monitor.fetchGuestAgentMetadata(
+	firstIPs, firstIfaces, firstOSName, firstOSVersion, firstAgentVersion, _ := monitor.fetchGuestAgentMetadata(
 		context.Background(),
 		client,
 		"pve",
@@ -1163,7 +1163,7 @@ func TestFetchGuestAgentMetadataRetriesIdentityOnlyCacheSooner(t *testing.T) {
 	monitor.guestMetadataCache[key] = entry
 	monitor.guestMetadataLimiter[key] = time.Now().Add(-time.Second)
 
-	secondIPs, secondIfaces, secondOSName, secondOSVersion, secondAgentVersion := monitor.fetchGuestAgentMetadata(
+	secondIPs, secondIfaces, secondOSName, secondOSVersion, secondAgentVersion, _ := monitor.fetchGuestAgentMetadata(
 		context.Background(),
 		client,
 		"pve",
@@ -1194,7 +1194,7 @@ func TestFetchGuestAgentMetadataRetriesIPOnlyCacheSooner(t *testing.T) {
 
 	status := &proxmox.VMStatus{Agent: proxmox.VMAgentField{Value: 1}}
 
-	firstIPs, firstIfaces, _, _, _ := monitor.fetchGuestAgentMetadata(
+	firstIPs, firstIfaces, _, _, _, _ := monitor.fetchGuestAgentMetadata(
 		context.Background(),
 		client,
 		"pve",
@@ -1220,7 +1220,7 @@ func TestFetchGuestAgentMetadataRetriesIPOnlyCacheSooner(t *testing.T) {
 	monitor.guestMetadataCache[key] = entry
 	monitor.guestMetadataLimiter[key] = time.Now().Add(-time.Second)
 
-	secondIPs, secondIfaces, _, _, _ := monitor.fetchGuestAgentMetadata(
+	secondIPs, secondIfaces, _, _, _, _ := monitor.fetchGuestAgentMetadata(
 		context.Background(),
 		client,
 		"pve",
@@ -1252,7 +1252,7 @@ func TestFetchGuestAgentMetadataRetriesEmptyCacheSooner(t *testing.T) {
 
 	status := &proxmox.VMStatus{Agent: proxmox.VMAgentField{Value: 1}}
 
-	firstIPs, firstIfaces, _, _, _ := monitor.fetchGuestAgentMetadata(
+	firstIPs, firstIfaces, _, _, _, _ := monitor.fetchGuestAgentMetadata(
 		context.Background(),
 		client,
 		"pve",
@@ -1272,7 +1272,7 @@ func TestFetchGuestAgentMetadataRetriesEmptyCacheSooner(t *testing.T) {
 	monitor.guestMetadataCache[key] = entry
 	monitor.guestMetadataLimiter[key] = time.Now().Add(-time.Second)
 
-	secondIPs, secondIfaces, _, _, _ := monitor.fetchGuestAgentMetadata(
+	secondIPs, secondIfaces, _, _, _, _ := monitor.fetchGuestAgentMetadata(
 		context.Background(),
 		client,
 		"pve",

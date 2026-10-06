@@ -3870,6 +3870,13 @@ func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData
 	}
 	if incoming.VMID != 0 {
 		merged.VMID = incoming.VMID
+		// A native guest facet is a complete observation of admission state.
+		// Retaining the previous reason/status can hide a newly paused read or
+		// leave a recovered guest paused forever. Non-guest partial facets do
+		// not own these fields.
+		merged.DiskStatusReason = incoming.DiskStatusReason
+		merged.GuestAgentStatus = incoming.GuestAgentStatus
+		merged.GuestAgentExpected = incoming.GuestAgentExpected
 	}
 	if incoming.CPUs != 0 {
 		merged.CPUs = incoming.CPUs

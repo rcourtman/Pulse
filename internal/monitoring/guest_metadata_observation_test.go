@@ -71,7 +71,7 @@ func TestGuestMetadataFailedRefreshPreservesObservation(t *testing.T) {
 			for attempt := 0; attempt < 2; attempt++ {
 				m.guestMetadataLimiter[key] = time.Now().Add(-time.Second)
 				start := time.Now()
-				ips, ifaces, name, version, agent := m.fetchGuestAgentMetadata(context.Background(), &client, "metadata", "node", "guest", 105, status, false)
+				ips, ifaces, name, version, agent, _ := m.fetchGuestAgentMetadata(context.Background(), &client, "metadata", "node", "guest", 105, status, false)
 				end := time.Now()
 				if !reflect.DeepEqual(ips, original.ipAddresses) || !reflect.DeepEqual(ifaces, original.networkInterfaces) || name != original.osName || version != original.osVersion || agent != original.agentVersion {
 					t.Error("unsuccessful refresh lost last-known identity")
@@ -223,7 +223,7 @@ func TestGuestMetadataObservationHTTPPollLifecycle(t *testing.T) {
 			m.guestMetadataCache[key] = original
 			m.guestMetadataLimiter[key] = time.Now().Add(-time.Second)
 			phase.Store(1)
-			ips, ifaces, name, version, agent := m.fetchGuestAgentMetadata(context.Background(), client, "metadata", "node", "guest", 105, &proxmox.VMStatus{Agent: proxmox.VMAgentField{Value: 1}}, false)
+			ips, ifaces, name, version, agent, _ := m.fetchGuestAgentMetadata(context.Background(), client, "metadata", "node", "guest", 105, &proxmox.VMStatus{Agent: proxmox.VMAgentField{Value: 1}}, false)
 			if !reflect.DeepEqual(ips, first.IPAddresses) || !reflect.DeepEqual(ifaces, first.NetworkInterfaces) || name != first.OSName || version != first.OSVersion || agent != first.AgentVersion {
 				t.Error("failed HTTP refresh lost last-known metadata")
 			}

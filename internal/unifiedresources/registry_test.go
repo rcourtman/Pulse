@@ -12,6 +12,43 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
+func TestProxmoxGuestReadAdmissionReplacesPreviousFacet(t *testing.T) {
+	rr := NewRegistry(nil)
+	vm := models.VM{ID: "pve:node:105", Instance: "pve", Node: "node", VMID: 105, Type: "qemu", Status: "running", Name: "guest", LastSeen: time.Now(), Disk: models.Disk{Total: 100, Used: 30, Usage: 30}}
+	for _, tc := range []struct {
+		status, reason string
+		expected       bool
+	}{
+		{"available", "", true},
+		{"deferred", "prev-agent-cooldown", true},
+		{"available", "", true},
+		{"not-running", "agent-not-running", false},
+		{"disabled", "agent-disabled", false},
+	} {
+		vm.GuestAgentStatus, vm.DiskStatusReason, vm.GuestAgentExpected = tc.status, tc.reason, tc.expected
+		rr.IngestSnapshot(models.StateSnapshot{VMs: []models.VM{vm}})
+		views := rr.VMs()
+		if len(views) != 1 || views[0].DiskStatusReason() != tc.reason {
+			t.Fatalf("current disk admission missing from typed view: %q", tc.reason)
+		}
+		resource, ok := rr.Get(views[0].ID())
+		if !ok || resource.Proxmox == nil || resource.Proxmox.GuestAgentStatus != tc.status || resource.Proxmox.GuestAgentExpected != tc.expected {
+			t.Fatalf("current guest admission missing from resource: %+v", resource)
+		}
+		// A detached read and JSON retain the current state, including a cleared
+		// reason/false expectation. Non-guest partial facets cannot erase it.
+		encoded, err := json.Marshal(resource)
+		var served Resource
+		if err != nil || json.Unmarshal(encoded, &served) != nil || served.Proxmox.DiskStatusReason != tc.reason || served.Proxmox.GuestAgentStatus != tc.status || served.Proxmox.GuestAgentExpected != tc.expected {
+			t.Fatal("read JSON changed guest admission")
+		}
+		partial := mergeProxmoxData(resource.Proxmox, &ProxmoxData{NodeName: "node"})
+		if partial.DiskStatusReason != tc.reason || partial.GuestAgentStatus != tc.status || partial.GuestAgentExpected != tc.expected {
+			t.Fatal("partial non-guest facet erased guest-owned admission")
+		}
+	}
+}
+
 func TestRegistry_CachedReadsUseSharedLock(t *testing.T) {
 	rr := NewRegistry(nil)
 	// A clean, empty registry already has a valid empty cache. Holding another

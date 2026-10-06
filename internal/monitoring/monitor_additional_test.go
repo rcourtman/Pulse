@@ -949,7 +949,7 @@ func TestCorrelatedGuestMemoryNextPoll(t *testing.T) {
 			mon := &Monitor{state: models.NewState(), rateTracker: NewRateTracker(), config: &config.Config{}, resourceStore: unifiedresources.NewMonitorAdapter(registry)}
 			prev := mon.previousGuestContextForInstance("pve-a")
 			raw := VMMemoryRaw{}
-			_, got, source := mon.resolveGuestStatusMemory(context.Background(), &stubPVEClient{}, "pve-a", "firewall", "node1", 111, guestID, &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, prev.hostAgentsByVMID, 8000, "", &raw)
+			_, got, source, _ := mon.resolveGuestStatusMemory(context.Background(), &stubPVEClient{}, "pve-a", "firewall", "node1", 111, guestID, &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, prev.hostAgentsByVMID, 8000, "", &raw)
 			if got != tc.want {
 				t.Fatalf("used=%d source=%s want=%d", got, source, tc.want)
 			}
@@ -1001,7 +1001,7 @@ func TestCorrelatedGuestMemoryNextPoll(t *testing.T) {
 				t.Fatal("correlated agent crossed instance boundary")
 			}
 			otherID := makeGuestID("pve-b", "node1", 111)
-			_, otherUsed, otherSource := mon.resolveGuestStatusMemory(context.Background(), &stubPVEClient{}, "pve-b", "other-firewall", "node1", 111, otherID, &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, other.hostAgentsByVMID, 8000, "", &VMMemoryRaw{})
+			_, otherUsed, otherSource, _ := mon.resolveGuestStatusMemory(context.Background(), &stubPVEClient{}, "pve-b", "other-firewall", "node1", 111, otherID, &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, other.hostAgentsByVMID, 8000, "", &VMMemoryRaw{})
 			if otherUsed != 8000 || otherSource != "status-mem" {
 				t.Fatalf("other instance inherited agent memory: used=%d source=%s", otherUsed, otherSource)
 			}
@@ -1087,7 +1087,7 @@ func TestAutomaticGuestMemoryLinkNextPoll(t *testing.T) {
 		{"pve-a", guestID, 2800, "agent"}, {"pve-b", otherID, 8000, "status-mem"},
 	} {
 		prev := mon.previousGuestContextForInstance(tc.instance)
-		_, used, source := mon.resolveGuestStatusMemory(context.Background(), &stubPVEClient{}, tc.instance, "firewall", "node1", 111, tc.id, &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, prev.hostAgentsByVMID, 8000, "", &VMMemoryRaw{})
+		_, used, source, _ := mon.resolveGuestStatusMemory(context.Background(), &stubPVEClient{}, tc.instance, "firewall", "node1", 111, tc.id, &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, prev.hostAgentsByVMID, 8000, "", &VMMemoryRaw{})
 		if used != tc.used || source != tc.source {
 			t.Fatalf("%s used=%d source=%s", tc.instance, used, source)
 		}

@@ -23,6 +23,22 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Native guest admission replaces the previous canonical facet
+
+A complete native Proxmox guest observation (non-zero VMID) owns its filesystem
+read reason, guest-agent state and expectation in both directions. Repeated
+ingestion must publish a new cooldown even when the retained disk number is
+unchanged, and clear the reason/expectation when the native guest recovers or is
+disabled. Non-guest partial Proxmox facets do not own these fields. Numeric
+source selection, original memory observation times and identity stay unchanged.
+
+`TestProxmoxGuestReadAdmissionReplacesPreviousFacet` covers available, paused,
+recovered, offline and disabled transitions through repeated registry ingestion,
+typed/detached reads and JSON. Monitoring's connected optional-command proof
+also consumes that same live registry and production broadcast JSON while
+checking History withholding. Source clearance is not independent guest thaw,
+covered-filesystem writes or native monitoring recovery.
+
 ### Canonical Discovery honours VM guest-read deferrals
 
 The canonical resource drawer uses the same fixed PVE VM lock, backup and

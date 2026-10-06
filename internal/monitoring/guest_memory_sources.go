@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"math"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -198,6 +199,7 @@ func guestMemoryFallbackReason(source string) string {
 	return MemorySourceFallbackReason(source)
 }
 
+// The final result is admission deferral, not a failed or successful sample.
 func (m *Monitor) tryGuestAgentMemAvailable(
 	ctx context.Context,
 	client PVEClientInterface,
@@ -207,10 +209,10 @@ func (m *Monitor) tryGuestAgentMemAvailable(
 	vmid int,
 	memTotal uint64,
 	guestRaw *VMMemoryRaw,
-) (uint64, string, bool) {
+) (uint64, string, bool, bool) {
 	availability, agentErr := m.getVMAgentMemoryAvailability(ctx, client, instanceName, node, vmid)
 	if agentErr != nil || availability.Source == "" {
-		return 0, "", false
+		return 0, "", false, errors.Is(agentErr, proxmox.ErrGuestAgentDeferred)
 	}
 	agentAvailable := availability.EffectiveAvailable
 	if guestRaw != nil {
@@ -223,7 +225,7 @@ func (m *Monitor) tryGuestAgentMemAvailable(
 		guestRaw.GuestAgentDerived = availability.Source == "meminfo-derived"
 	}
 	if memTotal == 0 || agentAvailable > memTotal {
-		return 0, "", false
+		return 0, "", false, false
 	}
 	source := "guest-agent-meminfo"
 	if availability.Source == "meminfo-derived" {
@@ -237,9 +239,10 @@ func (m *Monitor) tryGuestAgentMemAvailable(
 		Uint64("available", agentAvailable).
 		Str("source", source).
 		Msg("QEMU memory: using guest agent /proc/meminfo fallback (excludes reclaimable cache)")
-	return agentAvailable, source, true
+	return agentAvailable, source, true, false
 }
 
+// Return shared guest-command deferral even when independent memory is usable.
 func (m *Monitor) resolveGuestStatusMemory(
 	ctx context.Context,
 	client PVEClientInterface,
@@ -253,9 +256,9 @@ func (m *Monitor) resolveGuestStatusMemory(
 	memTotal uint64,
 	memorySource string,
 	guestRaw *VMMemoryRaw,
-) (uint64, uint64, string) {
+) (uint64, uint64, string, bool) {
 	if status == nil {
-		return memTotal, 0, memorySource
+		return memTotal, 0, memorySource, false
 	}
 
 	if guestRaw != nil {
@@ -297,9 +300,12 @@ func (m *Monitor) resolveGuestStatusMemory(
 	}
 
 	triedGuestAgentMemAvailable := false
+	guestReadDeferred := false
 	if !hasMemAvailable && shouldPreferGuestAgentMemAvailable(status, memTotal) {
 		triedGuestAgentMemAvailable = true
-		if agentAvailable, agentSource, ok := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw); ok {
+		agentAvailable, agentSource, ok, deferred := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw)
+		guestReadDeferred = guestReadDeferred || deferred
+		if ok {
 			memAvailable = agentAvailable
 			hasMemAvailable = true
 			memorySource = agentSource
@@ -312,7 +318,9 @@ func (m *Monitor) resolveGuestStatusMemory(
 	// (#1634).
 
 	if !hasMemAvailable && !hasSelectedUsed && status.Lock == "" && status.Agent.IsAvailable() && !triedGuestAgentMemAvailable {
-		if agentAvailable, agentSource, ok := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw); ok {
+		agentAvailable, agentSource, ok, deferred := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw)
+		guestReadDeferred = guestReadDeferred || deferred
+		if ok {
 			memAvailable = agentAvailable
 			hasMemAvailable = true
 			memorySource = agentSource
@@ -380,7 +388,7 @@ func (m *Monitor) resolveGuestStatusMemory(
 		memUsed = memTotal
 	}
 
-	return memTotal, memUsed, memorySource
+	return memTotal, memUsed, memorySource, guestReadDeferred
 }
 
 // preferLinkedAgentLXCMemory replaces a low-trust Proxmox LXC memory reading

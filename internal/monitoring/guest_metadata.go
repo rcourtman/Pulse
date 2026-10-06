@@ -222,7 +222,9 @@ func (m *Monitor) retryGuestAgentCall(ctx context.Context, timeout time.Duration
 	return nil, lastErr
 }
 
-func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName, vmName string, vmid int, vmStatus *proxmox.VMStatus, allowWithoutStatus bool) ([]string, []models.GuestNetworkInterface, string, string, string) {
+// The final result reports command deferral separately from retained metadata.
+// A previously successful filesystem must not conceal a later shared pause.
+func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName, vmName string, vmid int, vmStatus *proxmox.VMStatus, allowWithoutStatus bool) ([]string, []models.GuestNetworkInterface, string, string, string, bool) {
 	key := guestMetadataCacheKey(instanceName, nodeName, vmid)
 	now := time.Now()
 
@@ -232,30 +234,30 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 
 	if vmStatus != nil && vmStatus.Lock != "" {
 		// Deliberately retained identity, not a newly fetched observation.
-		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, false
 	}
 
 	agentAvailable := client != nil && ((vmStatus != nil && vmStatus.Agent.IsAvailable()) || allowWithoutStatus)
 	if !agentAvailable {
 		if ok && now.Sub(cached.fetchedAt) < guestMetadataCacheEntryTTL(cached) {
-			return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+			return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, false
 		}
 		m.clearGuestMetadataCache(instanceName, nodeName, vmid)
-		return nil, nil, "", "", ""
+		return nil, nil, "", "", "", false
 	}
 
 	if ok && now.Sub(cached.fetchedAt) < guestMetadataCacheEntryTTL(cached) {
-		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, false
 	}
 
 	needsFetch := !ok || now.Sub(cached.fetchedAt) >= guestMetadataCacheEntryTTL(cached)
 	if !needsFetch {
-		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, false
 	}
 
 	reserved := m.tryReserveGuestMetadataFetch(key, now)
 	if !reserved && ok {
-		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, false
 	}
 	if !reserved && !ok {
 		reserved = true
@@ -272,7 +274,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	if reserved {
 		if !m.acquireGuestMetadataSlot(ctx) {
 			m.deferGuestMetadataRetry(key, time.Now())
-			return ipAddresses, networkIfaces, osName, osVersion, agentVersion
+			return ipAddresses, networkIfaces, osName, osVersion, agentVersion, false
 		}
 		defer m.releaseGuestMetadataSlot()
 	}
@@ -283,7 +285,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	})
 	if errors.Is(err, proxmox.ErrGuestAgentDeferred) {
 		m.deferGuestMetadataRetry(key, time.Now())
-		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, true
 	}
 	if err != nil {
 		log.Debug().
@@ -325,7 +327,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 		})
 		if errors.Is(err, proxmox.ErrGuestAgentDeferred) {
 			m.deferGuestMetadataRetry(key, time.Now())
-			return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+			return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, true
 		}
 		if err != nil {
 			if isGuestAgentOSInfoUnsupportedError(err) {
@@ -384,7 +386,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	})
 	if errors.Is(err, proxmox.ErrGuestAgentDeferred) {
 		m.deferGuestMetadataRetry(key, time.Now())
-		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, true
 	}
 	if err != nil {
 		log.Debug().
@@ -432,7 +434,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 		}
 	}
 
-	return ipAddresses, networkIfaces, osName, osVersion, agentVersion
+	return ipAddresses, networkIfaces, osName, osVersion, agentVersion, false
 }
 
 func guestMetadataCacheKey(instanceName, nodeName string, vmid int) string {
