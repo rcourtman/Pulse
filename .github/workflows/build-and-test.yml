@@ -79,6 +79,11 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      # Reject deterministic docs drift before queuing builds/tests. Keep the
+      # independent per-push secret scan and Public docs check unchanged.
+      - name: Check shipped docs before dependency work
+        run: python3 scripts/check_docs_mirror.py
+
       - name: Classify changed files
         id: filter
         run: |
