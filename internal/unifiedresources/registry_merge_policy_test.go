@@ -634,3 +634,120 @@ func TestPhysicalDiskMergeFollowsAgentWithdrawalOfItsOwnReadings(t *testing.T) {
 		})
 	}
 }
+
+// A merged disk must never present its temperature under a state the
+// reading's own row does not claim. A silent agent's retained reading stays as
+// last-known context under the agent's own state, whatever the Proxmox row
+// collected or copied; a resumed agent's fresh reading stays collected over a
+// Proxmox copy of its earlier withdrawal; a standby withdrawal keeps the
+// pre-sleep reading as last-known.
+func TestPhysicalDiskMergePairsTemperatureWithItsCollectionState(t *testing.T) {
+	disk := func(temperature int, status diskinventory.FieldStatus) Resource {
+		return Resource{
+			Type: ResourceTypePhysicalDisk, Name: "WDC", Status: StatusOnline,
+			PhysicalDisk: &PhysicalDiskMeta{
+				DevPath: "/dev/sdb", Serial: "WD-PAIR1", Temperature: temperature,
+				Collection: &diskinventory.CollectionStatus{Temperature: status},
+			},
+		}
+	}
+	// The Proxmox row can also carry the SMART attributes copied from the
+	// agent's earlier report, which changes whose value the merge shows.
+	withSMART := func(r Resource) Resource {
+		powerOnHours := int64(1000)
+		r.PhysicalDisk.SMART = &SMARTMeta{PowerOnHours: &powerOnHours}
+		return r
+	}
+	identity := ResourceIdentity{MachineID: "WD-PAIR1", Hostnames: []string{"node1"}}
+	retained := diskinventory.Unavailable("host_agent", "host agent stopped reporting")
+	nodeSMART := diskinventory.Available("proxmox_node_smart")
+	smartctl := diskinventory.Available("smartctl")
+	withdrawn := diskinventory.Unavailable("smartctl", "host agent stopped reporting")
+	standby := diskinventory.Unavailable("smartctl", "disk is in standby")
+	noProxmoxTemp := diskinventory.Unsupported("proxmox_disks", "Proxmox disk inventory does not expose temperature")
+
+	for _, tc := range []struct {
+		name           string
+		agent, proxmox Resource
+		// wantTemperature 0 accepts either row's value: source preference,
+		// not this rule, decides which one is shown.
+		wantTemperature int
+		wantState       diskinventory.FieldStatus
+	}{
+		{"silent agent, Proxmox collected", disk(72, retained), disk(40, nodeSMART), 72, retained},
+		{"silent agent, no Proxmox reading", disk(72, retained), disk(0, noProxmoxTemp), 72, retained},
+		{"reporting agent, Proxmox collected", disk(41, smartctl), disk(40, nodeSMART), 41, smartctl},
+		{"silent agent, Proxmox copy of its earlier reading", disk(72, withdrawn), disk(41, smartctl), 72, withdrawn},
+		{"silent agent, Proxmox copy with SMART attributes", disk(72, withdrawn), withSMART(disk(41, smartctl)), 0, withdrawn},
+		{"resumed agent, Proxmox copy of its withdrawal", disk(50, smartctl), disk(41, withdrawn), 50, smartctl},
+		{"standby agent, Proxmox copy of its pre-sleep reading", disk(0, standby), disk(41, smartctl), 41, standby},
+	} {
+		for _, proxmoxFirst := range []bool{true, false} {
+			registry := NewRegistry(nil)
+			ingestProxmox := func() { registry.ingest(SourceProxmox, "pve1-node1-sdb", tc.proxmox, identity) }
+			ingestAgent := func() { registry.ingest(SourceAgent, "agent-1-sdb", tc.agent, identity) }
+			if proxmoxFirst {
+				ingestProxmox()
+				ingestAgent()
+			} else {
+				ingestAgent()
+				ingestProxmox()
+			}
+			disks := registry.ListByType(ResourceTypePhysicalDisk)
+			if len(disks) != 1 || disks[0].PhysicalDisk == nil {
+				t.Fatalf("%s (proxmox first=%v): expected one merged disk, got %+v", tc.name, proxmoxFirst, disks)
+			}
+			got := disks[0].PhysicalDisk
+			var state diskinventory.FieldStatus
+			if got.Collection != nil {
+				state = got.Collection.Temperature
+			}
+			valueOK := got.Temperature == tc.wantTemperature ||
+				(tc.wantTemperature == 0 && (got.Temperature == tc.agent.PhysicalDisk.Temperature || got.Temperature == tc.proxmox.PhysicalDisk.Temperature))
+			if !valueOK || state != tc.wantState {
+				t.Errorf("%s (proxmox first=%v): temperature=%d state=%+v, want %d with %+v",
+					tc.name, proxmoxFirst, got.Temperature, state, tc.wantTemperature, tc.wantState)
+			}
+		}
+	}
+}
+
+// Three rows for one disk with different values, none collected now: the
+// agent's SMART row withdrew its reading, the Unraid inventory row is past the
+// same lease, and the Proxmox row still carries a copy of the agent's earlier
+// "available" state. Whatever the ingest order, the merged disk must not
+// present a reading as collected.
+func TestPhysicalDiskMergeNeverPresentsAWithdrawnTemperatureAsCollected(t *testing.T) {
+	disk := func(temperature int, status diskinventory.FieldStatus) Resource {
+		return Resource{
+			Type: ResourceTypePhysicalDisk, Name: "WDC", Status: StatusOnline,
+			PhysicalDisk: &PhysicalDiskMeta{
+				DevPath: "/dev/sdb", Serial: "WD-THREE1", Temperature: temperature,
+				Collection: &diskinventory.CollectionStatus{Temperature: status},
+			},
+		}
+	}
+	identity := ResourceIdentity{MachineID: "WD-THREE1", Hostnames: []string{"tower"}}
+	rows := []struct {
+		source   DataSource
+		sourceID string
+		resource Resource
+	}{
+		{SourceAgent, "agent-1-sdb", disk(72, diskinventory.Unavailable("smartctl", "host agent stopped reporting"))},
+		{SourceAgent, "agent-1-unraid-sdb", disk(37, diskinventory.Unavailable("unraid", "host agent stopped reporting"))},
+		{SourceProxmox, "pve1-node1-sdb", disk(41, diskinventory.Available("smartctl"))},
+	}
+	for _, order := range [][]int{{0, 1, 2}, {0, 2, 1}, {1, 0, 2}, {1, 2, 0}, {2, 0, 1}, {2, 1, 0}} {
+		registry := NewRegistry(nil)
+		for _, i := range order {
+			registry.ingest(rows[i].source, rows[i].sourceID, rows[i].resource, identity)
+		}
+		disks := registry.ListByType(ResourceTypePhysicalDisk)
+		if len(disks) != 1 || disks[0].PhysicalDisk == nil {
+			t.Fatalf("order %v: expected one merged disk, got %d", order, len(disks))
+		}
+		if got := disks[0].PhysicalDisk; diskinventory.TemperatureCollected(got.Temperature, got.Collection) {
+			t.Errorf("order %v: withdrawn temperature presented as collected: temperature=%d collection=%+v", order, got.Temperature, got.Collection)
+		}
+	}
+}
