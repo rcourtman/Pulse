@@ -122,7 +122,13 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 				id := makeGuestID("optional", "node", 105)
 				var previous *models.VM
 				if withoutStatus {
-					previous = &models.VM{ID: id, GuestAgentStatus: "available", Status: "running", LastSeen: time.Now()}
+					previous = &models.VM{ID: id, Type: "qemu", GuestAgentStatus: "available", Status: "running", LastSeen: time.Now()}
+					// Prior useful identity admits the bounded no-status path.
+					// Expired metadata is retained on uncertainty, not renewed by
+					// the new request. It must not suppress the optional control.
+					m.guestMetadataCache = map[string]guestMetadataCacheEntry{
+						guestMetadataCacheKey("optional", "node", 105): {agentVersion: "prior", fetchedAt: time.Now().Add(-2 * guestMetadataCacheTTL)},
+					}
 				}
 				build := func() models.VM {
 					vm, raw, source, notes, at, ok := m.buildVMFromClusterResource(context.Background(), "optional", res, client, id, nil, previous)
@@ -140,6 +146,14 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 					encoded, err := json.Marshal(m.buildBroadcastFrontendStateFromSnapshot(models.StateSnapshot{VMs: []models.VM{vm}}).Resources)
 					if err != nil || !strings.Contains(string(encoded), canonicalID) {
 						t.Fatal("guest identity missing from JSON read projection")
+					}
+					var served []models.ResourceFrontend
+					if err := json.Unmarshal(encoded, &served); err != nil || len(served) != 1 {
+						t.Fatal("guest missing from production JSON")
+					}
+					var facet unifiedresources.ProxmoxData
+					if err := json.Unmarshal(served[0].Proxmox, &facet); err != nil || facet.DiskStatusReason != vm.DiskStatusReason || facet.GuestAgentStatus != vm.GuestAgentStatus || facet.GuestAgentExpected != vm.GuestAgentExpected {
+						t.Fatal("guest admission state changed in production JSON")
 					}
 					next := previousVMFromView(view)
 					previous = &next
@@ -164,6 +178,7 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 				}
 				memoryKey := guestMemoryCacheKey("optional", "node", 105)
 				originalMemory := m.vmAgentMemCache[memoryKey]
+				originalMetadata := m.guestMetadataCache[guestMetadataCacheKey("optional", "node", 105)]
 				originalDisk := guestHistoryStoredPoints(t, m, "vm", id, "disk")
 				if len(originalDisk) != 1 || originalDisk[0].Value != 30 {
 					t.Fatal("initial filesystem did not reach persistent History")
@@ -185,6 +200,9 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 						}
 						if !reflect.DeepEqual(m.vmAgentMemCache[memoryKey], originalMemory) || (originalMemory.info.Source != "" && !vm.Memory.Observation.ObservedAt.Equal(initial.Memory.Observation.ObservedAt)) {
 							t.Fatal("cooldown renewed original memory evidence")
+						}
+						if !reflect.DeepEqual(m.guestMetadataCache[guestMetadataCacheKey("optional", "node", 105)], originalMetadata) {
+							t.Fatal("cooldown renewed original metadata evidence")
 						}
 					}
 				}
