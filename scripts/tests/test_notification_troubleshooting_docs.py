@@ -150,6 +150,32 @@ class NotificationTroubleshootingDocsTest(unittest.TestCase):
             self.assertIn("#recover-retained-delivery-failures", section(heading, 4))
             self.assertIn("#inspect-notification-logs", section(heading, 4))
 
+    def test_recovery_distinguishes_new_settings_from_retained_work(self):
+        recovery = " ".join(section("Recover retained delivery failures", 4).split())
+        for boundary in ("settings saved when they were queued", "does not replace that saved configuration",
+                         "all retained terminal failures", "not just the destination you tested",
+                         "old endpoint or credential", "disable it", "original settings remain appropriate",
+                         "leave the failures retained", "do not use a batch retry to test a settings edit"):
+            self.assertIn(boundary, recovery)
+        # The connected queue regression exercises these distinctions with real
+        # retained HTTP failures/restart/retry, not a source-text mock.
+        guide = (ROOT / "docs/WEBHOOKS.md").read_text()
+        self.assertIn("TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing", guide)
+        self.assertIn("original URL and credentials", guide)
+
+    def test_telegram_workaround_is_static_passive_and_private(self):
+        heading = 'Telegram Test works but real alerts say "message text is empty"'
+        telegram = " ".join(section(heading, 4).split())
+        for boundary in ("no custom template", "ignore the JSON body", "does not by itself prove",
+                         "one static `Content-Type` header to `application/json`", "conflicting duplicate",
+                         "leaving the bot URL, `chat_id`, template and grouping settings unchanged",
+                         "next normally occurring alert", "do not induce an alert or retry",
+                         "#recover-retained-delivery-failures", "custom template", "private"):
+            self.assertIn(boundary, telegram)
+        self.assertNotRegex(telegram, r"https://api\.telegram\.org|curl|--token|Debug")
+        guide = (ROOT / "docs/WEBHOOKS.md").read_text()
+        self.assertIn("TROUBLESHOOTING.md#telegram-test-works-but-real-alerts-say-message-text-is-empty", guide)
+
 
 if __name__ == "__main__":
     unittest.main()

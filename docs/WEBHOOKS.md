@@ -8,6 +8,13 @@ Pulse includes built-in templates for popular services and a generic JSON templa
 2. Click **Add Webhook**.
 3. Click the current service label (Generic by default) to open the service picker, choose the destination type, and paste the URL.
 
+A successful **Test** is not proof of queued alert delivery. For missing alerts
+or rejected requests, follow the [notification troubleshooting guide](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing)
+before retrying retained failures. In particular, a destination edit does not
+replace the settings saved in an old queued delivery; a retry can still use its
+original URL and credentials. For built-in Telegram's "message text is empty"
+error despite a successful Test, see the [static-header check](TROUBLESHOOTING.md#telegram-test-works-but-real-alerts-say-message-text-is-empty).
+
 ## 📝 Service URLs
 
 | Service | URL Format |
