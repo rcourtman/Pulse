@@ -2954,6 +2954,14 @@ vdev layout is reported` in
 
 ## Current State
 
+Webhook destination edits restore submitted masks per key while preserving
+explicit map edits/removals. They retain encrypted persistence, serialized
+save-before-publish and owned rollback on live publication failure; invalid
+masks fail before either write. Restored secrets do not reach the response.
+The connected notification edit/reopen test verifies durable new settings;
+already admitted queue work remains a snapshot, not an implied retry or rewrite.
+No storage schema, retention, database internals or recovery mechanism changes.
+
 ### Stored disk I/O cannot suppress native thermal History
 
 The existing disk History response can supplement only its absent/shallow

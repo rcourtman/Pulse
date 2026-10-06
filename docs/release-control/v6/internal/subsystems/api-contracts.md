@@ -4782,6 +4782,26 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Masked webhook updates preserve edits without disclosing saved fields
+
+The existing webhook PUT replacement-map contract resolves masks per submitted
+key, not per entire map. A masked header may match a saved name under HTTP's
+case-insensitive spelling; custom-field names remain exact after existing
+service alias normalisation. Explicit edits/additions/blanks/removals beside
+unchanged credentials are honoured. Omitted maps retain replacement semantics.
+Unknown, already-masked or ambiguous preserved values return HTTP 400 before
+persistence or manager mutation. Saved custom fields restored from a mask stay
+masked in the update response; explicitly submitted values still round-trip.
+No endpoint, permission, payload shape, routing, signing, SSRF or queue retry
+policy changes. The existing config-write mutex and save-before-publish rollback
+remain authoritative.
+
+`internal/api/alerting/notifications_test.go` verifies exact request/response
+values and no-write failure cases, then traverses masked reads/PUT, encrypted
+reload, grouped and individual firing/recovery, persistent receipts and HTTP
+payloads for built-in Telegram and custom Generic destinations. Existing signing,
+Pushover aliases, routing and persistence failure controls remain required.
+
 ### Credential-safe container diagnostics response (1 October 2026)
 
 `POST /api/diagnostics/docker/prepare-token` retains its fields and durable,

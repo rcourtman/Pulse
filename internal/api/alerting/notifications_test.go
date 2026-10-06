@@ -8,11 +8,16 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -1383,4 +1388,308 @@ func TestNotificationHandlersWebhookSigningSecretLifecycle(t *testing.T) {
 		assert.Equal(t, 200, w.Code)
 		mockManager.AssertExpectations(t)
 	})
+}
+
+// A masked value means keep that value, not ignore the rest of the edit.
+// All values here are synthetic; neither the response nor errors may reveal
+// a preserved credential the editor did not submit.
+func TestWebhookEditPreservesOnlyMaskedValues(t *testing.T) {
+	const masked = "***REDACTED***"
+	stored := notifications.WebhookConfig{ID: "edit", URL: "https://example.test/hook", Enabled: true,
+		Headers:      map[string]string{"Authorization": "synthetic-auth", "Content-Type": "text/plain", "X-Remove": "old"},
+		CustomFields: map[string]string{"token": "synthetic-token", "channel": "old", "remove": "old"}}
+	cases := []struct {
+		name        string
+		headers     map[string]string
+		fields      map[string]string
+		wantHeaders map[string]string
+		wantFields  map[string]string
+		invalid     bool
+	}{
+		{"edit and remove beside masks", map[string]string{"Authorization": masked, "Content-Type": "application/json", "X-New": "new"},
+			map[string]string{"token": masked, "channel": "new", "added": "new"},
+			map[string]string{"Authorization": "synthetic-auth", "Content-Type": "application/json", "X-New": "new"},
+			map[string]string{"token": "synthetic-token", "channel": "new", "added": "new"}, false},
+		{"clear beside masks", map[string]string{"Authorization": masked, "Content-Type": ""},
+			map[string]string{"token": masked, "channel": ""},
+			map[string]string{"Authorization": "synthetic-auth", "Content-Type": ""},
+			map[string]string{"token": "synthetic-token", "channel": ""}, false},
+		{"header case is insensitive", map[string]string{"authorization": masked}, map[string]string{"token": masked},
+			map[string]string{"authorization": "synthetic-auth"}, map[string]string{"token": "synthetic-token"}, false},
+		{"explicit empty maps", map[string]string{}, map[string]string{}, map[string]string{}, map[string]string{}, false},
+		{"omitted maps keep replacement semantics", nil, nil, nil, nil, false},
+		{"unknown masked header", map[string]string{"X-Unknown": masked}, nil, nil, nil, true},
+		{"unknown masked field", nil, map[string]string{"unknown": masked}, nil, nil, true},
+		{"custom field case is significant", nil, map[string]string{"Token": masked}, nil, nil, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			manager := new(MockNotificationManager)
+			persistence := new(MockNotificationConfigPersistence)
+			monitor := new(MockNotificationMonitor)
+			monitor.On("GetNotificationManager").Return(manager)
+			monitor.On("GetConfigPersistence").Return(persistence)
+			manager.On("GetWebhooks").Return([]notifications.WebhookConfig{stored}).Once()
+			if !tc.invalid {
+				manager.On("ValidateWebhookURL", stored.URL).Return(nil).Once()
+				matches := func(got notifications.WebhookConfig) bool {
+					return reflect.DeepEqual(got.Headers, tc.wantHeaders) && reflect.DeepEqual(got.CustomFields, tc.wantFields)
+				}
+				persistence.On("SaveWebhooks", mock.MatchedBy(func(got []notifications.WebhookConfig) bool {
+					return len(got) == 1 && matches(got[0])
+				})).Return(nil).Once()
+				manager.On("UpdateWebhook", stored.ID, mock.MatchedBy(matches)).Return(nil).Once()
+			}
+			incoming := stored
+			incoming.Headers, incoming.CustomFields = tc.headers, tc.fields
+			body, err := json.Marshal(incoming)
+			assert.NoError(t, err)
+			rec := httptest.NewRecorder()
+			NewNotificationHandlers(nil, monitor).UpdateWebhook(rec, httptest.NewRequest(http.MethodPut,
+				"/api/notifications/webhooks/"+stored.ID, bytes.NewReader(body)))
+			wantStatus := http.StatusOK
+			if tc.invalid {
+				wantStatus = http.StatusBadRequest
+				manager.AssertNotCalled(t, "UpdateWebhook", mock.Anything, mock.Anything)
+				persistence.AssertNotCalled(t, "SaveWebhooks", mock.Anything)
+			}
+			assert.Equal(t, wantStatus, rec.Code, rec.Body.String())
+			assert.NotContains(t, rec.Body.String(), "synthetic-auth")
+			assert.NotContains(t, rec.Body.String(), "synthetic-token")
+			if !tc.invalid {
+				var response notifications.WebhookConfig
+				assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+				assert.Equal(t, tc.fields, response.CustomFields)
+			}
+			assert.Equal(t, "old", stored.CustomFields["channel"], "edit mutated the previous map")
+			assert.Equal(t, "text/plain", stored.Headers["Content-Type"], "edit mutated the previous map")
+			manager.AssertExpectations(t)
+			persistence.AssertExpectations(t)
+		})
+	}
+}
+
+func TestWebhookEditRejectsUnrecoverableMasks(t *testing.T) {
+	for _, stored := range []map[string]string{
+		{"Authorization": "***REDACTED***"},
+		{"AUTHORIZATION": "synthetic-first", "authorization": "synthetic-second"},
+	} {
+		if _, err := restoreMaskedWebhookValues(map[string]string{"Authorization": "***REDACTED***"}, stored, true); err == nil {
+			t.Fatal("unrecoverable or ambiguous saved mask must not become a credential")
+		}
+	}
+}
+
+type webhookEditMonitor struct {
+	manager     *notifications.NotificationManager
+	persistence *config.ConfigPersistence
+}
+
+func (m *webhookEditMonitor) GetNotificationManager() NotificationManager { return m.manager }
+func (m *webhookEditMonitor) GetConfigPersistence() NotificationConfigPersistence {
+	return m.persistence
+}
+
+// This complements the #2540 single/static-header control: a real masked form
+// edit with another saved credential, grouped firing/recovery, disable-grouping
+// flush and the persistent autonomous sender. No native Telegram is contacted.
+func TestWebhookMaskedEditPersistsAndDelivers(t *testing.T) {
+	for _, service := range []string{"telegram", "generic"} {
+		for _, mode := range []string{"grouped", "disable-pending-group"} {
+			t.Run(service+"/"+mode, func(t *testing.T) {
+				type delivery struct {
+					header                     http.Header
+					text, channel, chat, event string
+				}
+				var mu sync.Mutex
+				var received []delivery
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					var payload struct {
+						Text    string `json:"text"`
+						Channel string `json:"channel"`
+						Chat    string `json:"chat_id"`
+						Event   string `json:"event"`
+					}
+					if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+						t.Error(err)
+						w.WriteHeader(http.StatusBadRequest)
+						return
+					}
+					if r.Header.Get("Content-Type") != "application/json" || payload.Text == "" {
+						w.WriteHeader(http.StatusBadRequest)
+						return
+					}
+					mu.Lock()
+					received = append(received, delivery{r.Header.Clone(), payload.Text, payload.Channel, payload.Chat, payload.Event})
+					mu.Unlock()
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer server.Close()
+				dir := t.TempDir()
+				persistence := config.NewConfigPersistence(dir)
+				if !persistence.IsEncryptionEnabled() {
+					t.Fatal("connected control requires encrypted save/load")
+				}
+				hook := notifications.WebhookConfig{ID: "edit", Name: "edit", Enabled: true, Method: "POST", Service: service,
+					URL:          server.URL + "/hook?chat_id=-1001234",
+					Headers:      map[string]string{"Authorization": "synthetic-auth", "Content-Type": "text/plain", "X-Route": "old", "X-Remove": "old"},
+					CustomFields: map[string]string{"token": "synthetic-token", "channel": "old", "remove": "old"}}
+				if service == "generic" {
+					hook.Template = `{"text":"{{.Message | jsonString}}","channel":"{{.CustomFields.channel | jsonString}}","event":"{{.Event}}"}`
+				}
+				if err := persistence.SaveWebhooks([]notifications.WebhookConfig{hook}); err != nil {
+					t.Fatal(err)
+				}
+				open := func() *notifications.NotificationManager {
+					t.Helper()
+					loaded, err := config.NewConfigPersistence(dir).LoadWebhooks()
+					if err != nil || len(loaded) != 1 {
+						t.Fatalf("saved destination unavailable: %v", err)
+					}
+					m := notifications.NewNotificationManagerWithDeferredQueue("", dir)
+					if err := m.UpdateAllowedPrivateCIDRs("127.0.0.1/32,::1/128"); err != nil {
+						t.Fatal(err)
+					}
+					m.AddWebhook(loaded[0])
+					m.SetNotifyOnResolve(true)
+					m.SetGroupingConfig(true, 1, true, false)
+					t.Cleanup(m.Stop)
+					return m
+				}
+				m := open()
+				monitor := &webhookEditMonitor{m, persistence}
+				handler := NewNotificationHandlers(nil, monitor)
+				listed := httptest.NewRecorder()
+				handler.GetWebhooks(listed, httptest.NewRequest(http.MethodGet, "/api/notifications/webhooks", nil))
+				var editable []notifications.WebhookConfig
+				if err := json.Unmarshal(listed.Body.Bytes(), &editable); err != nil || len(editable) != 1 {
+					t.Fatal("cannot read masked destination")
+				}
+				edit := editable[0]
+				if edit.Headers["Authorization"] != "***REDACTED***" || edit.CustomFields["token"] != "***REDACTED***" {
+					t.Fatal("list disclosed credentials")
+				}
+				edit.Headers["Content-Type"], edit.Headers["X-Route"] = "application/json", "new"
+				delete(edit.Headers, "X-Remove")
+				edit.CustomFields["channel"] = "new"
+				delete(edit.CustomFields, "remove")
+				body, err := json.Marshal(edit)
+				if err != nil {
+					t.Fatal(err)
+				}
+				updated := httptest.NewRecorder()
+				handler.UpdateWebhook(updated, httptest.NewRequest(http.MethodPut, "/api/notifications/webhooks/edit", bytes.NewReader(body)))
+				if updated.Code != http.StatusOK || strings.Contains(updated.Body.String(), "synthetic-token") {
+					t.Fatal("masked update failed or exposed a credential")
+				}
+				m.Stop()
+				m = open()
+				monitor.manager = m
+				saved := m.GetWebhooks()[0]
+				if saved.Service != service || saved.Template != hook.Template || saved.URL != hook.URL ||
+					saved.Headers["Authorization"] != "synthetic-auth" || saved.Headers["Content-Type"] != "application/json" ||
+					saved.Headers["X-Route"] != "new" || len(saved.Headers) != 3 ||
+					saved.CustomFields["token"] != "synthetic-token" || saved.CustomFields["channel"] != "new" || len(saved.CustomFields) != 2 {
+					t.Fatal("masked edit did not survive encrypted reload with explicit edits/removals intact")
+				}
+				encrypted, err := os.ReadFile(filepath.Join(dir, "webhooks.enc"))
+				if err != nil || bytes.Contains(encrypted, []byte("synthetic-token")) || bytes.Contains(encrypted, []byte("synthetic-auth")) {
+					t.Fatal("saved credentials were not encrypted")
+				}
+				wait := func(done func() bool) {
+					t.Helper()
+					deadline := time.Now().Add(15 * time.Second)
+					for !done() {
+						if time.Now().After(deadline) {
+							t.Fatal("connected delivery did not complete")
+						}
+						time.Sleep(5 * time.Millisecond)
+					}
+				}
+				batch := []*alerts.Alert{
+					{ID: "edit-alpha", ResourceName: "edit-alpha", Node: "node", Type: "cpu", Message: "edit-alpha CPU above threshold", Level: alerts.AlertLevelWarning, StartTime: time.Now().Add(-time.Minute)},
+					{ID: "edit-bravo", ResourceName: "edit-bravo", Node: "node", Type: "cpu", Message: "edit-bravo CPU above threshold", Level: alerts.AlertLevelWarning, StartTime: time.Now().Add(-time.Minute)},
+				}
+				for _, a := range batch {
+					m.SendAlert(a)
+				}
+				wantFiring := 1
+				if mode == "disable-pending-group" {
+					m.SetGroupingConfig(false, 600, true, false)
+					wantFiring = 2
+				}
+				wait(func() bool { stats, err := m.GetQueueStats(); return err == nil && stats["pending"] == wantFiring })
+				pending, err := m.GetQueue().GetPending(10)
+				if err != nil || len(pending) != wantFiring {
+					t.Fatal("ordinary grouping/disable policy produced the wrong number of jobs")
+				}
+				for _, row := range pending {
+					var queued notifications.WebhookConfig
+					if err := json.Unmarshal(row.Config, &queued); err != nil || queued.Headers["X-Route"] != "new" || queued.CustomFields["channel"] != "new" {
+						t.Fatal("new admission did not snapshot the edited destination")
+					}
+					if len(row.Alerts) != 3-wantFiring {
+						t.Fatal("grouped log did not match actual group membership")
+					}
+				}
+				m.StartQueueProcessing()
+				wait(func() bool { stats, err := m.GetQueueStats(); return err == nil && stats["sent"] == wantFiring })
+				// Reopen after firing so recovery relies on durable receipts.
+				m.Stop()
+				m = open()
+				if mode == "disable-pending-group" {
+					m.SetGroupingConfig(false, 600, true, false)
+				}
+				for _, a := range batch {
+					m.SendResolvedAlert(&alerts.ResolvedAlert{Alert: a, ResolvedTime: time.Now()})
+				}
+				m.StartQueueProcessing()
+				wantTotal := wantFiring * 2
+				wait(func() bool { stats, err := m.GetQueueStats(); return err == nil && stats["sent"] == wantTotal })
+				wait(func() bool {
+					entries, err := m.GetDeliveryLog(time.Now().Add(-time.Hour), 20)
+					return err == nil && len(entries) == wantTotal
+				})
+				entries, err := m.GetDeliveryLog(time.Now().Add(-time.Hour), 20)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, e := range entries {
+					if !e.Success || e.Outcome != notifications.DeliveryOutcomeSent || e.Attempts != 1 || e.AlertCount != 3-wantFiring {
+						t.Fatal("delivery audit lost exact attempt or group membership")
+					}
+				}
+				m.Stop()
+				mu.Lock()
+				got := append([]delivery(nil), received...)
+				mu.Unlock()
+				if len(got) != wantTotal {
+					t.Fatalf("received %d payloads, want %d", len(got), wantTotal)
+				}
+				for phase := 0; phase < 2; phase++ {
+					combined := ""
+					for _, d := range got[phase*wantFiring : (phase+1)*wantFiring] {
+						if d.header.Get("Authorization") != "synthetic-auth" || d.header.Get("X-Route") != "new" || d.header.Get("X-Remove") != "" {
+							t.Fatal("delivery lost an explicit edit or masked credential")
+						}
+						if service == "telegram" && d.chat != "-1001234" {
+							t.Fatal("saved Telegram service/chat did not reach delivery")
+						}
+						if service == "generic" && d.channel != "new" {
+							t.Fatal("custom field edit did not reach the custom payload")
+						}
+						if phase == 1 && ((service == "telegram" && !strings.Contains(strings.ToLower(d.text), "resolved")) || (service == "generic" && d.event != "resolved")) {
+							t.Fatal("recovery rendered as a firing")
+						}
+						combined += d.text
+					}
+					for _, a := range batch {
+						if !strings.Contains(combined, a.ResourceName) {
+							t.Fatal("grouped/individual payload lost an alert")
+						}
+					}
+				}
+			})
+		}
+	}
 }

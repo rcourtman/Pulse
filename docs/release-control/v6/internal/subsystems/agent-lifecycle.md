@@ -3592,6 +3592,14 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+Notification destination edits in the shared `internal/api/` subtree preserve
+only submitted masked values, honour neighbouring explicit map edits/removals
+and reject unrecoverable masks before publication. Restored custom-field
+credentials remain masked in the response. This is not an agent token rotation,
+identity change, installer permission or enrollment operation; those boundaries
+remain unchanged. The notification API's encrypted edit/reload and delivery
+controls cover this shared configuration-write boundary.
+
 ### Disk History supplementation does not change agent lifecycle
 
 The disk History handler can replace a shallow API-backed thermal series with
