@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -657,6 +658,140 @@ func TestSocketFreeProxmoxLXCDiscoveryCannotTruncateCompleteInventory(t *testing
 			} else if !result.Applicable || !result.Degraded || result.Inventory != nil || *commands != 1 {
 				t.Fatalf("unestablished node appeared complete instead of one failed pct fallback: %+v commands=%d", result, *commands)
 			}
+		})
+	}
+}
+
+// A wide delegated cgroup tree must not prevent the helper from inspecting
+// the exact init it already prioritises. All observations here are synthetic;
+// the collector's real identity/prober contract and PrivateNetwork stay intact.
+func TestHelperProxmoxLXCInitSearchPrioritizesBoundedReads(t *testing.T) {
+	for _, wideHost := range []bool{false, true} {
+		name := "wide_payload"
+		if wideHost {
+			name = "wide_host_and_payload"
+		}
+		t.Run(name, func(t *testing.T) {
+			h := newFakeProxmoxLXCHost()
+			h.config(126, "hostname: busy-host\nrootfs: local:vm-126-disk-0,size=1G\n")
+			h.cgroup("126/ns/init.scope", 4000)
+			h.proc(4000, "4000\t1", "/lxc/126/ns/init.scope")
+			for n := 0; n < 4*proxmoxLXCMaxCgroupDirs; n++ {
+				h.cgroup(fmt.Sprintf("126/ns/workload%03d", n))
+				if wideHost {
+					h.cgroup(fmt.Sprintf("126/auxiliary%03d", n))
+				}
+			}
+			h.observations[4000] = map[string]lxcObservation{"/": lxcUsage(4096, 1024, 3072)}
+			collector, commands := h.collector(t)
+			readFile := collector.readFileFn
+			var examined []string
+			collector.readFileFn = func(name string) ([]byte, error) {
+				if strings.HasPrefix(name, proxmoxLXCCgroupRoot+"/") && strings.HasSuffix(name, "/cgroup.procs") {
+					examined = append(examined, name)
+				}
+				return readFile(name)
+			}
+			result := (&Agent{logger: zerolog.Nop(), collector: collector}).collectProxmoxLXCFilesystemsResult(t.Context())
+			if !result.Applicable || result.Degraded || result.Inventory == nil || result.Inventory.Status != "complete" || result.Inventory.ValidateCollection() != nil || *commands != 0 {
+				t.Fatalf("wide-tree helper collection = %+v; command attempts=%d", result, *commands)
+			}
+			rows := result.Inventory.Containers
+			if len(rows) != 1 || rows[0].VMID != 126 || rows[0].Name != "busy-host" || len(rows[0].Disks) != 1 || rows[0].Disks[0].UsedBytes != 1024 {
+				t.Fatalf("wide-tree source/name/capacity lost: %+v", rows)
+			}
+			want := []string{
+				path.Join(proxmoxLXCCgroupRoot, "126/cgroup.procs"),
+				path.Join(proxmoxLXCCgroupRoot, "126/ns/cgroup.procs"),
+				path.Join(proxmoxLXCCgroupRoot, "126/ns/init.scope/cgroup.procs"),
+			}
+			if fmt.Sprint(examined) != fmt.Sprint(want) {
+				t.Fatalf("examined cgroups=%v, want only %v", examined, want)
+			}
+			t.Logf("%d payload siblings: complete measured inventory, three cgroup process reads, no pct/lxc-info", 4*proxmoxLXCMaxCgroupDirs)
+		})
+	}
+}
+
+func TestProxmoxLXCInitSearchKeepsBoundsAndIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		depth int
+		state proxmoxLXCInitState
+	}{
+		{"last_permitted_directory", proxmoxLXCMaxCgroupDirs, proxmoxLXCRunning},
+		{"beyond_directory_budget", proxmoxLXCMaxCgroupDirs + 1, proxmoxLXCUnknown},
+		{"foreign_vm", 3, proxmoxLXCUnknown},
+		{"nested_namespace", 3, proxmoxLXCUnknown},
+		{"unreadable_preferred", 3, proxmoxLXCUnknown},
+		{"cancelled_before_init", 3, proxmoxLXCUnknown},
+		{"wide_tree_without_init", 2, proxmoxLXCUnknown},
+		{"last_permitted_pid", 3, proxmoxLXCRunning},
+		{"beyond_pid_budget", 3, proxmoxLXCUnknown},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newFakeProxmoxLXCHost()
+			rel := "126"
+			for n := 1; n < tc.depth; n++ {
+				rel += "/step"
+			}
+			h.cgroup(rel, 4000)
+			h.proc(4000, "4000\t1", "/lxc/"+rel)
+			switch tc.name {
+			case "foreign_vm":
+				h.proc(4000, "4000\t1", "/lxc/127/ns")
+			case "nested_namespace":
+				h.proc(4000, "4000\t2\t1", "/lxc/"+rel)
+			case "unreadable_preferred":
+				delete(h.files, path.Join(proxmoxLXCCgroupRoot, rel, "cgroup.procs"))
+			case "wide_tree_without_init":
+				h.proc(4000, "4000\t2", "/lxc/"+rel)
+				for n := 0; n < 4*proxmoxLXCMaxCgroupDirs; n++ {
+					h.cgroup(fmt.Sprintf("126/workload%03d", n))
+				}
+			case "last_permitted_pid", "beyond_pid_budget":
+				count := proxmoxLXCMaxCgroupPIDs
+				if tc.name == "beyond_pid_budget" {
+					count++
+				}
+				pids := make([]int, count)
+				for n := range pids {
+					pids[n] = 10000 + n // absent /proc entries cannot establish init
+				}
+				pids[count-1] = 4000
+				h.cgroup(rel, pids...)
+			}
+			collector, commands := h.collector(t)
+			readFile := collector.readFileFn
+			directories, processes := 0, 0
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			collector.readFileFn = func(name string) ([]byte, error) {
+				if strings.HasPrefix(name, proxmoxLXCCgroupRoot+"/") && strings.HasSuffix(name, "/cgroup.procs") {
+					directories++
+					if tc.name == "cancelled_before_init" && directories == 2 {
+						cancel()
+					}
+				}
+				if strings.HasPrefix(name, "/proc/") && strings.HasSuffix(name, "/status") {
+					processes++
+				}
+				return readFile(name)
+			}
+			pid, state := (&Agent{logger: zerolog.Nop(), collector: collector}).proxmoxLXCInitPID(ctx, collector, 126)
+			if state != tc.state || (state == proxmoxLXCRunning && pid != 4000) || (state != proxmoxLXCRunning && pid != 0) || *commands != 0 {
+				t.Fatalf("pid/state=%d/%d want state=%d; commands=%d", pid, state, tc.state, *commands)
+			}
+			if directories > proxmoxLXCMaxCgroupDirs || processes > proxmoxLXCMaxCgroupPIDs {
+				t.Fatalf("search exceeded bounds: dirs=%d pids=%d", directories, processes)
+			}
+			if (tc.name == "last_permitted_directory" || tc.name == "beyond_directory_budget" || tc.name == "wide_tree_without_init") && directories != proxmoxLXCMaxCgroupDirs {
+				t.Fatalf("directory budget exercised only %d reads", directories)
+			}
+			if (tc.name == "last_permitted_pid" || tc.name == "beyond_pid_budget") && processes != proxmoxLXCMaxCgroupPIDs {
+				t.Fatalf("PID budget exercised only %d reads", processes)
+			}
+			t.Logf("cgroup process reads=%d; checked processes=%d; state=%d", directories, processes, state)
 		})
 	}
 }

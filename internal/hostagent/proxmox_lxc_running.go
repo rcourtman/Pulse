@@ -154,7 +154,7 @@ func (a *Agent) proxmoxLXCInitPID(ctx context.Context, lister proxmoxLXCDirListe
 	}
 
 	queue := []string{root}
-	queued := 1
+	visited := 0
 	checked := 0
 	for len(queue) > 0 {
 		if ctx.Err() != nil {
@@ -162,6 +162,7 @@ func (a *Agent) proxmoxLXCInitPID(ctx context.Context, lister proxmoxLXCDirListe
 		}
 		dir := queue[0]
 		queue = queue[1:]
+		visited++
 
 		raw, err := a.collector.ReadFile(path.Join(dir, "cgroup.procs"))
 		if err != nil || len(raw) > proxmoxLXCMaxCgroupProcsBytes {
@@ -191,19 +192,45 @@ func (a *Agent) proxmoxLXCInitPID(ctx context.Context, lister proxmoxLXCDirListe
 				children = append(children, entry.Name())
 			}
 		}
-		// systemd guests run init in init.scope; look there first.
-		sort.SliceStable(children, func(i, j int) bool {
-			return children[i] == "init.scope" && children[j] != "init.scope"
-		})
-		for _, child := range children {
-			if queued == proxmoxLXCMaxCgroupDirs {
-				// A guest can create cgroups in its delegated subtree; give up
-				// rather than walk an unbounded tree.
-				return 0, proxmoxLXCUnknown
+		// PVE puts the payload under ns/; systemd puts its init in
+		// init.scope. Inspect those before unrelated workloads, regardless of
+		// directory-list ordering. The limit bounds reads, not the number of
+		// siblings that can exist alongside a verified init.
+		priority := func(name string) int {
+			switch name {
+			case "init.scope":
+				return 0
+			case "ns":
+				return 1
+			default:
+				return 2
 			}
-			queued++
-			queue = append(queue, path.Join(dir, child))
 		}
+		sort.Slice(children, func(i, j int) bool {
+			if a, b := priority(children[i]), priority(children[j]); a != b {
+				return a < b
+			}
+			return children[i] < children[j]
+		})
+		// Depth-first priority must survive a wide parent too: queued siblings
+		// cannot crowd out ns/init.scope before it is inspected. Keep at most
+		// the remaining read budget in the frontier. If no exact init is found
+		// within that budget, the result below stays unknown, never stopped.
+		remaining := proxmoxLXCMaxCgroupDirs - visited
+		next := make([]string, 0, remaining)
+		for _, child := range children {
+			if len(next) == remaining {
+				break
+			}
+			next = append(next, path.Join(dir, child))
+		}
+		for _, pending := range queue {
+			if len(next) == remaining {
+				break
+			}
+			next = append(next, pending)
+		}
+		queue = next
 	}
 	// A cgroup without an init is a guest starting or stopping.
 	return 0, proxmoxLXCUnknown

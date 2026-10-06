@@ -973,7 +973,15 @@ the existing bounded fallback; a stopped later guest does not invalidate 128
 established guests. This preserves the consumer's distinction between complete
 inventory replacement and explicit partial omissions. The producer boundary is
 covered by `TestSocketFreeProxmoxLXCDiscoveryCannotTruncateCompleteInventory`;
-partial-wire, omitted-reading and complete-empty cache tests remain authoritative. An `lxc` request names the decimal VMID; the pinned process
+partial-wire, omitted-reading and complete-empty cache tests remain authoritative.
+Wide cgroup trees do not by themselves disqualify a verified init: the producer
+inspects `ns/init.scope` before unrelated workload siblings using at most 64
+cgroup process reads and 4,096 candidate PIDs. Exhausted, unreadable, cancelled
+or identity-invalid searches remain unknown/degraded; no omitted guest becomes
+healthy empty telemetry. The wide-tree helper collection and search-boundary
+controls in `internal/hostagent/privilege_helper_client_test.go` preserve measured
+capacity and exact identity without IPC commands. They are not native recovery.
+An `lxc` request names the decimal VMID; the pinned process
 must sit in that guest's exact `lxc/<vmid>` cgroup and be its init (`NSpid` is
 exactly `<pid> 1`, so the PID 1 of a namespace nested inside the guest, such
 as Docker in LXC, cannot stand in for it), checked before and after the read.
