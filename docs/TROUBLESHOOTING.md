@@ -441,10 +441,22 @@ and dead-letter attempts for 30 days. Start with the failure class and timestamp
 | Server error / unknown | Destination service status and a relevant, bounded local error excerpt. |
 
 Save the corrected destination settings and send one test; check receipt at the
-intended destination. **Retry retained deliveries** gives terminal failures a
-fresh retry budget, but a destination that accepted an earlier attempt may
-receive a duplicate. Review the confirmation's delivery count and provider
-limits before retrying. A successful test does not itself retry retained items.
+intended destination. **Retained deliveries keep the destination settings saved
+when they were queued.** Editing a URL, recipient, credential, header or template
+does not replace that saved configuration. A test uses the edited settings;
+retrying an old delivery can still use the old endpoint or credential and fail
+again. If the old destination must no longer receive data, disable it rather
+than relying on a URL edit to redirect queued work.
+
+**Retry retained deliveries** gives all retained terminal failures a fresh retry
+budget, not just the destination you tested. Use it only when sending those
+original deliveries is still intended and their original settings remain
+appropriate, for example after a temporary provider outage. A destination that
+accepted an earlier attempt may receive a duplicate. Review the confirmation's
+delivery count and provider limits before retrying. A successful test does not
+itself retry retained items or prove that their saved settings now work. If
+uncertain, leave the failures retained and check the next normally occurring
+alert instead; do not use a batch retry to test a settings edit.
 
 Use **Dismiss retained failures** only when those deliveries should not be sent.
 Dismissal clears the warning without retrying them; delivery history remains.
@@ -473,6 +485,28 @@ can echo credentials or private content in its response; do not post it wholesal
 or enable debug logging just to collect it. If needed, inspect
 [bounded notification logs](#inspect-notification-logs) and share only the
 consequential, manually redacted error.
+
+#### Telegram Test works but real alerts say "message text is empty"
+
+With the built-in Telegram template (no custom template), a blank or incorrect
+saved `Content-Type` can make Telegram ignore the JSON body. The HTTP 400 error
+does not by itself prove that Pulse omitted the `text` field. Test can supply
+the correct header even when real delivery uses the saved one.
+
+In **Alerts → Notifications**, edit that Telegram destination's **Custom
+headers**: set one static `Content-Type` header to `application/json` and remove
+any conflicting duplicate, including differently capitalised names. Save,
+leaving the bot URL, `chat_id`, template and grouping settings unchanged. Check
+whether the next normally occurring alert reaches the intended chat and compare
+its timestamp with **Recent delivery activity**; do not induce an alert or retry
+the old rejected batch to test this edit. Retained jobs keep their original
+settings as explained [above](#recover-retained-delivery-failures).
+
+For a custom template, check its JSON and required Telegram fields locally
+instead of assuming this built-in-template workaround applies. If reporting a
+continuing failure, share only the version, redacted delivery error, timestamp
+and whether a custom template is used. Keep the bot URL/token, chat ID and full
+notification configuration private.
 
 ### TrueNAS
 
