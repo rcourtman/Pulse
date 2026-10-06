@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 type noExecutorChatService struct{}
@@ -1051,6 +1052,71 @@ func TestPatrolPhysicalDiskHealthIssueDistinguishesKnownZeroWearout(t *testing.T
 		wearout:  0,
 	}) {
 		t.Fatal("unreported SATA wearout should remain neutral")
+	}
+}
+
+// A retained last-known temperature (a disk in standby, a host agent past its
+// reporting lease) is context, not heat. Patrol's disk issue gate, triage flags
+// and finding verification judge only a collected reading, and both seed
+// tables label the retained value as last known.
+func TestPatrolPhysicalDiskRowsJudgeHeatOnCollectedTemperature(t *testing.T) {
+	standby := &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("smartctl", "disk is in standby")}
+	collected := &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")}
+	unified := newPatrolRuntimeState(models.StateSnapshot{})
+	unified.unifiedResourceProvider = &mockUnifiedResourceProvider{
+		getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+			if t != unifiedresources.ResourceTypePhysicalDisk {
+				return nil
+			}
+			return []unifiedresources.Resource{
+				{ID: "disk-standby", Name: "standby", Type: unifiedresources.ResourceTypePhysicalDisk, Status: unifiedresources.StatusOnline, ParentName: "tower",
+					PhysicalDisk: &unifiedresources.PhysicalDiskMeta{DevPath: "/dev/sda", Model: "WDC WD80EFAX", DiskType: "sata", Health: "PASSED", Wearout: -1, Temperature: 61, Collection: standby}},
+				{ID: "disk-hot", Name: "hot", Type: unifiedresources.ResourceTypePhysicalDisk, Status: unifiedresources.StatusOnline, ParentName: "tower",
+					PhysicalDisk: &unifiedresources.PhysicalDiskMeta{DevPath: "/dev/sdb", Model: "WDC WD80EFAX", DiskType: "sata", Health: "PASSED", Wearout: -1, Temperature: 58, Collection: collected}},
+			}
+		},
+	}
+	legacy := newPatrolRuntimeState(models.StateSnapshot{PhysicalDisks: []models.PhysicalDisk{
+		{ID: "disk-standby", Node: "tower", DevPath: "/dev/sda", Model: "WDC WD80EFAX", Type: "sata", Health: "PASSED", Wearout: -1, Temperature: 61, Collection: standby},
+		{ID: "disk-hot", Node: "tower", DevPath: "/dev/sdb", Model: "WDC WD80EFAX", Type: "sata", Health: "PASSED", Wearout: -1, Temperature: 58, Collection: collected},
+	}})
+
+	for name, snap := range map[string]patrolRuntimeState{"unified": unified, "state": legacy} {
+		t.Run(name, func(t *testing.T) {
+			byID := map[string]patrolPhysicalDiskRow{}
+			for _, row := range patrolPhysicalDiskRows(snap, nil) {
+				byID[row.id] = row
+			}
+			if patrolPhysicalDiskHealthIssue(byID["disk-standby"]) {
+				t.Fatalf("a standby disk's retained 61C is not a health issue: %+v", byID["disk-standby"])
+			}
+			if !patrolPhysicalDiskHealthIssue(byID["disk-hot"]) {
+				t.Fatalf("a collected 58C is a health issue: %+v", byID["disk-hot"])
+			}
+			flags := triageDiskHealthChecksState(snap, nil)
+			if len(flags) != 1 || !strings.Contains(flags[0].Reason, "Disk temperature 58") {
+				t.Fatalf("triage flags = %+v, want only the collected 58C disk", flags)
+			}
+			if verification, ok := patrolLookupPhysicalDiskVerificationState(snap, "disk-standby"); !ok || verification.temperature != 0 {
+				t.Fatalf("standby disk verification = %+v (found %v), want no temperature", verification, ok)
+			}
+		})
+	}
+
+	ps := NewPatrolService(nil, nil)
+	cfg := DefaultPatrolConfig()
+	now := time.Now()
+	health := ps.seedHealthAndAlertsState(unified, nil, cfg, now)
+	for _, part := range []string{"| last known 61°C (disk is in standby) |", "| 58°C |"} {
+		if !strings.Contains(health, part) {
+			t.Fatalf("disk health table missing %q:\n%s", part, health)
+		}
+	}
+	inventory := ps.seedResourceInventoryState(unified, nil, cfg, now, false, nil)
+	for _, part := range []string{"| last known 61C (disk is in standby) |", "| 58C |"} {
+		if !strings.Contains(inventory, part) {
+			t.Fatalf("physical disk inventory missing %q:\n%s", part, inventory)
+		}
 	}
 }
 

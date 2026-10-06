@@ -1927,8 +1927,11 @@ type patrolPhysicalDiskRow struct {
 	sizeBytes                int64
 	devPath, model           string
 	health, status           string
-	wearout, temperature     int
-	smartEvidence            []string
+	wearout                  int
+	// temperature.Collected is the only temperature Patrol may judge as
+	// heat; a retained last-known value is shown as context.
+	temperature   tools.DiskTemperature
+	smartEvidence []string
 }
 
 type patrolPrecomputeNodeSource struct {
@@ -2472,7 +2475,7 @@ func patrolPhysicalDiskRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 				health:        health,
 				status:        status,
 				wearout:       r.PhysicalDisk.Wearout,
-				temperature:   r.PhysicalDisk.Temperature,
+				temperature:   tools.SplitDiskTemperature(r.PhysicalDisk.Temperature, r.PhysicalDisk.Collection),
 				smartEvidence: unifiedPhysicalDiskSMARTIssueParts(r.PhysicalDisk.SMART),
 			})
 		}
@@ -2513,7 +2516,7 @@ func patrolPhysicalDiskRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 			health:        health,
 			status:        status,
 			wearout:       d.Wearout,
-			temperature:   d.Temperature,
+			temperature:   tools.SplitDiskTemperature(d.Temperature, d.Collection),
 			smartEvidence: modelPhysicalDiskSMARTIssueParts(d.SmartAttributes),
 		})
 	}
@@ -2531,7 +2534,7 @@ func patrolPhysicalDiskHealthIssue(row patrolPhysicalDiskRow) bool {
 			(row.wearout == 0 &&
 				(strings.EqualFold(row.diskType, "ssd") || strings.EqualFold(row.diskType, "nvme")))) &&
 			row.wearout < 20) ||
-		row.temperature > 55 ||
+		row.temperature.Collected > 55 ||
 		len(row.smartEvidence) > 0
 }
 
@@ -2959,8 +2962,8 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 							wear = fmt.Sprintf("%d%%", row.wearout)
 						}
 						temp := "—"
-						if row.temperature > 0 {
-							temp = fmt.Sprintf("%dC", row.temperature)
+						if text := row.temperature.Format("C"); text != "" {
+							temp = text
 						}
 						sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s | %s |\n",
 							diskName, node, diskType, size, row.health, wear, temp, row.status))
@@ -3470,8 +3473,8 @@ func (p *PatrolService) seedHealthAndAlertsState(snap patrolRuntimeState, scoped
 					wearout = fmt.Sprintf("%d%%", row.wearout)
 				}
 				temp := "—"
-				if row.temperature > 0 {
-					temp = fmt.Sprintf("%d°C", row.temperature)
+				if text := row.temperature.Format("°C"); text != "" {
+					temp = text
 				}
 				smartEvidence := "—"
 				if len(row.smartEvidence) > 0 {

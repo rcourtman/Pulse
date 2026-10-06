@@ -6332,6 +6332,14 @@ stored one out to `now`, only from a temperature collected now; without one the
 stored samples are returned as they are. An empty mock range can still fall
 through to the monitor's generic demo chart series for that disk ID, which is
 not derived from the disk's reading.
+Reports follow the same rule. A performance report's disk table
+(`enrichNodeReport` in `internal/api/metrics_reporting_handlers.go`) and the
+reporting runtime snapshot's disks (`internal/api/reporting_runtime_snapshot.go`)
+take a disk temperature through `reportDiskTemperature`. It keeps a reading only
+when `diskinventory.TemperatureCollected` holds, so a retained value is reported
+as 0 (no reading) rather than tabulated as measured. Proof:
+`TestContract_ReportsOmitRetainedDiskTemperatures` in
+`internal/api/contract_test.go`.
 That same metrics-history contract also owns Kubernetes pod identity
 normalization. `/api/metrics-store/history` must accept legacy bare pod IDs
 such as `cluster-1:pod:pod-1`, canonicalize them onto the unified pod metrics

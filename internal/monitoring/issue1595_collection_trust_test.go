@@ -319,8 +319,9 @@ func hasIssue1595Source(sources []unifiedresources.DataSource, want unifiedresou
 }
 
 // An agent report's SMART row may carry a temperature its collector did not
-// collect this time (retained across a standby or failed probe). Only a
-// collected temperature becomes a history sample.
+// collect this time (retained across a standby or failed probe, or kept after
+// the agent's reporting lease expired). Only a temperature
+// diskinventory.TemperatureCollected accepts becomes a history sample.
 func TestWriteHostSMARTMetricsRecordsOnlyCollectedTemperatures(t *testing.T) {
 	storeConfig := metrics.DefaultConfig(t.TempDir())
 	storeConfig.FlushInterval = time.Hour
@@ -337,6 +338,10 @@ func TestWriteHostSMARTMetricsRecordsOnlyCollectedTemperatures(t *testing.T) {
 		{Device: "sdb", Serial: "LEGACY1", Temperature: 38},
 		{Device: "sdc", Serial: "RETAINED1", Temperature: 36,
 			Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("smartctl", "disk is in standby")}},
+		{Device: "sdd", Serial: "SILENT1", Temperature: 44,
+			Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("smartctl", models.HostAgentStoppedReportingReason)}},
+		{Device: "sde", Serial: "MISSING1", Temperature: 39,
+			Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Missing("smartctl", "temperature attribute absent")}},
 	}}}
 	now := time.Now()
 	m.writeHostSMARTMetrics(host, now)
@@ -349,6 +354,8 @@ func TestWriteHostSMARTMetricsRecordsOnlyCollectedTemperatures(t *testing.T) {
 		{host.Sensors.SMART[0], 1},
 		{host.Sensors.SMART[1], 1},
 		{host.Sensors.SMART[2], 0},
+		{host.Sensors.SMART[3], 0},
+		{host.Sensors.SMART[4], 0},
 	} {
 		id := unifiedresources.HostSMARTDiskSourceID(host, tc.disk)
 		points, err := store.Query("disk", id, "smart_temp", now.Add(-time.Minute), now.Add(time.Minute), 0)

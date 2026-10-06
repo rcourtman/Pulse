@@ -2463,7 +2463,7 @@ func patrolVisitPhysicalDiskVerification(snap patrolRuntimeState, visit patrolPh
 		if !visit([]string{disk.id, disk.name, disk.devPath, disk.model}, patrolPhysicalDiskVerification{
 			health:      strings.TrimSpace(disk.health),
 			wearout:     disk.wearout,
-			temperature: disk.temperature,
+			temperature: disk.temperature.Collected,
 		}) {
 			return true
 		}

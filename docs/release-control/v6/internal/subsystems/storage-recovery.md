@@ -6779,3 +6779,6 @@ and the Unraid physical-disk adapter marks an inventory temperature kept past
 the host agent's lease as no longer collected. Both change presentation of
 values Pulse already holds: no metrics write, retention window, backup,
 migration or recovery authority is added or moved.
+The performance report and reporting runtime snapshot handlers apply the same
+test before tabulating a disk temperature. That changes only which held value a
+report shows, not any storage or recovery path.
