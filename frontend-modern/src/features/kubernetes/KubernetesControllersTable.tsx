@@ -30,6 +30,7 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   compareKubernetesControllers,
   filterKubernetesResources,
@@ -137,9 +138,10 @@ const plainDetail = (text: string): ControllerDetail => ({ text, title: text });
 
 // Kubernetes reports job timestamps as RFC 3339 strings with microseconds,
 // which never fit the Detail column. The cell says how long ago the event
-// happened and keeps the absolute time on hover.
-const timeDetail = (label: string, timestamp: string): ControllerDetail => {
-  const relative = formatPlatformTableRelativeTimeValue(timestamp, { emptyText: '' });
+// happened, measured from the shared clock so it keeps moving while the row
+// stays mounted, and keeps the absolute time on hover.
+const timeDetail = (label: string, timestamp: string, now: number): ControllerDetail => {
+  const relative = formatPlatformTableRelativeTimeValue(timestamp, { emptyText: '', now });
   if (!relative) return plainDetail(`${label}: ${timestamp}`);
   const absolute = formatPlatformTableDateTimeValue(timestamp, {
     dateTimeFormat: { year: 'numeric' },
@@ -147,7 +149,7 @@ const timeDetail = (label: string, timestamp: string): ControllerDetail => {
   return { text: `${label} ${relative}`, title: `${label}: ${absolute}` };
 };
 
-const apiDetail = (resource: Resource): ControllerDetail => {
+const apiDetail = (resource: Resource, now: number): ControllerDetail => {
   switch (resource.type) {
     case 'k8s-replicaset': {
       if (typeof resource.kubernetes?.fullyLabeledReplicas === 'number') {
@@ -171,17 +173,17 @@ const apiDetail = (resource: Resource): ControllerDetail => {
       );
     case 'k8s-job':
       if (resource.kubernetes?.completionTime) {
-        return timeDetail('Completed', resource.kubernetes.completionTime);
+        return timeDetail('Completed', resource.kubernetes.completionTime, now);
       }
       return resource.kubernetes?.startTime
-        ? timeDetail('Started', resource.kubernetes.startTime)
+        ? timeDetail('Started', resource.kubernetes.startTime, now)
         : plainDetail('—');
     case 'k8s-cronjob':
       if (resource.kubernetes?.lastSuccessfulTime) {
-        return timeDetail('Last success', resource.kubernetes.lastSuccessfulTime);
+        return timeDetail('Last success', resource.kubernetes.lastSuccessfulTime, now);
       }
       return resource.kubernetes?.lastScheduleTime
-        ? timeDetail('Last run', resource.kubernetes.lastScheduleTime)
+        ? timeDetail('Last run', resource.kubernetes.lastScheduleTime, now)
         : plainDetail('—');
     default:
       return plainDetail('—');
@@ -245,6 +247,7 @@ export const KubernetesControllersTable: Component<{
   externalSearch?: () => string;
   externalStatus?: () => KubernetesResourceStatusFilter;
 }> = (props) => {
+  const now = useRelativeTimeNow();
   const singleCluster = createMemo(() => isSingleKubernetesCluster(props.resources));
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
@@ -402,7 +405,7 @@ export const KubernetesControllersTable: Component<{
                     const kind = () => controllerKind(resource);
                     const target = () => targetValue(resource);
                     const exceptions = () => exceptionSummary(resource);
-                    const detail = () => apiDetail(resource);
+                    const detail = () => apiDetail(resource, now());
                     const detailRowId = () => drawer.detailRowId(resource);
                     const isExpanded = () => drawer.isExpanded(resource);
 

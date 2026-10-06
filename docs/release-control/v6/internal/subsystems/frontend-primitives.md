@@ -5256,6 +5256,15 @@ and the platform alert tables pass it as `now` to `formatRelativeTime` /
 data refreshes, so an age computed only at render froze ("2h ago" three hours
 later) whenever its timestamp did not change. A relative-age cell must read the
 shared clock rather than `Date.now()` at render or a table-local interval.
+That rule covers every relative age, not only `PlatformTableRelativeTimeValue`
+cells: a value formatted through `formatPlatformTableRelativeTimeValue` or
+`formatRelativeTime` (compact phone ages, labelled Detail ages, row subtitles
+and tooltips, an open drawer's summary rows and annotations) passes `now` from
+the owning component's `useRelativeTimeNow`, and a countdown or freshness band
+derived from the same time (replication Next sync, backup age bands) reads it
+too. The clock can trail the wall clock by up to one tick, so a check that
+treats a future time as invalid (the backup age band) measures from the later
+of the two.
 Read-only metadata badges follow the same primitive-owned shell rule.
 `frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
 outlined appearances, compact sizing, shape, typed tone vocabulary, fit

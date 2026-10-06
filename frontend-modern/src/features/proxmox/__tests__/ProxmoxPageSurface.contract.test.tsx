@@ -21,6 +21,7 @@ const mockWorkloadSearch = vi.hoisted(() => vi.fn(() => ''));
 const mockSelectedNode = vi.hoisted(() => vi.fn<() => string | null>(() => null));
 const mockHandleNodeSelect = vi.hoisted(() => vi.fn());
 const mockWorkloadsOptions = vi.hoisted(() => vi.fn());
+const mockFetchReplicationJobs = vi.hoisted(() => vi.fn(() => Promise.resolve([] as unknown[])));
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource =>
   ({
@@ -152,8 +153,14 @@ vi.mock('../ProxmoxNodesTable', () => ({
 }));
 
 vi.mock('../ProxmoxReplicationTable', () => ({
-  ProxmoxReplicationTable: () => <div data-testid="replication-table" />,
-  fetchReplicationJobs: () => Promise.resolve([]),
+  ProxmoxReplicationTable: (props: { jobs?: unknown[]; error?: unknown }) => (
+    <div
+      data-testid="replication-table"
+      data-jobs={props.jobs === undefined ? 'loading' : props.jobs.length}
+      data-error={props.error ? 'yes' : 'no'}
+    />
+  ),
+  fetchReplicationJobs: () => mockFetchReplicationJobs(),
 }));
 
 const renderSurface = () =>
@@ -628,6 +635,69 @@ describe('ProxmoxPageSurface contract', () => {
       expect(tabs).toHaveAttribute('data-tabs', 'overview,backups');
       expect(tabs).toHaveAttribute('data-active', 'overview');
     });
+  });
+
+  it('re-reads replication jobs in the background and keeps the tab through a failed read', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    mockPathname.mockReturnValue('/proxmox/replication');
+    const node = makeResource({ id: 'node:pve1', type: 'agent', name: 'pve1' });
+    mockUseUnifiedResources.mockReturnValue({
+      resources: () => [node],
+      facets: () => ({ incidentCount: 0, byType: {} }),
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(async () => []),
+    });
+    let resolveFirstRead: (jobs: unknown[]) => void = () => undefined;
+    mockFetchReplicationJobs.mockReset();
+    mockFetchReplicationJobs.mockReturnValueOnce(
+      new Promise<unknown[]>((resolve) => {
+        resolveFirstRead = resolve;
+      }),
+    );
+
+    try {
+      renderSurface();
+      const tabs = screen.getByTestId('platform-section-tabs');
+      // Counts are known but the first read is pending: a direct link stays put.
+      expect(tabs).toHaveAttribute('data-active', 'replication');
+      expect(screen.getByTestId('replication-table')).toHaveAttribute('data-jobs', 'loading');
+
+      resolveFirstRead([{ id: 'job-1' }]);
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-jobs', '1'),
+      );
+      expect(tabs).toHaveAttribute('data-tabs', 'overview,replication');
+
+      // The table's ages move on the shared clock, so its jobs are re-read in
+      // the background rather than aging a snapshot taken at mount.
+      mockFetchReplicationJobs.mockResolvedValueOnce([{ id: 'job-1' }, { id: 'job-2' }]);
+      vi.advanceTimersByTime(30_000);
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-jobs', '2'),
+      );
+
+      // A failed read reports the error but keeps the tab and the user on it.
+      mockFetchReplicationJobs.mockRejectedValueOnce(new Error('replication read failed'));
+      vi.advanceTimersByTime(30_000);
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-error', 'yes'),
+      );
+      expect(tabs).toHaveAttribute('data-tabs', 'overview,replication');
+      expect(tabs).toHaveAttribute('data-active', 'replication');
+
+      mockFetchReplicationJobs.mockResolvedValueOnce([{ id: 'job-1' }]);
+      vi.advanceTimersByTime(30_000);
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-error', 'no'),
+      );
+      expect(screen.getByTestId('replication-table')).toHaveAttribute('data-jobs', '1');
+      expect(mockFetchReplicationJobs).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+      mockFetchReplicationJobs.mockReset();
+      mockFetchReplicationJobs.mockImplementation(() => Promise.resolve([]));
+    }
   });
 
   it('does not surface stale-agent notices for development builds without an agent target', () => {
