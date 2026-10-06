@@ -78,6 +78,25 @@ const prettierPinIsReviewed = (version: string): boolean =>
   /^3\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(version) && atLeast(version, [3, 9, 9]);
 
 describe('frontend dependency security floors', () => {
+  it.each<[string, [number, number, number]]>([
+    // GHSA-p6vx-979v-rg4c and GHSA-jp82-f5mq-hwhp: both Seroval fixes
+    // are required, including the TypedArray fix after the first 1.6.x patch.
+    ['seroval', [1, 6, 3]],
+    // GHSA-rj75-hqrm-r3gf: typography's exact 6.0.10 needs a 7.x override.
+    ['postcss-selector-parser', [7, 1, 6]],
+    // GHSA-68fv-2mgg-jv7q: all PostCSS/source-map consumers need the fix.
+    ['source-map-js', [1, 2, 2]],
+  ])('keeps every %s copy above the October deserialization and parsing floors', (name, floor) => {
+    expect(manifest.overrides[name]).toBe(`^${floor.join('.')}`);
+    const versions = lockedVersions(name);
+    expect(versions, `${name} must be locked`).not.toHaveLength(0);
+    for (const version of versions) {
+      expect(version).not.toContain('-');
+      expect(parseVersion(version)[0], `${name} must stay on the reviewed major`).toBe(floor[0]);
+      expect(atLeast(version, floor), `${name} ${version} is vulnerable`).toBe(true);
+    }
+  });
+
   it('keeps Vitest and its mocker above the redirect-mock file-read floor', () => {
     // GHSA-82fw-gwwq-j7x9: the maintained 4.x fix starts at 4.1.11.
     expect(manifest.devDependencies.vitest).toBe('^4.1.11');
