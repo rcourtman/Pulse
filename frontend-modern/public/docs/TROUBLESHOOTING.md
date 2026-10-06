@@ -581,13 +581,17 @@ notification configuration private.
 ### TrueNAS
 
 #### "TrueNAS service unavailable"
-- Ensure TrueNAS was added in **Settings → Infrastructure → Platform connections** with a valid HTTPS URL,
-  API key, and the username that owns the key.
-- Check that the TrueNAS system is reachable from the Pulse server (default
-  HTTPS port).
-- Verify the API-key owner has read access, then use **Test Connection** in
-  Pulse. TrueNAS 25.04 and later should report the `jsonrpc-websocket`
-  transport; TrueNAS 26 removed the former `/api/v2.0` REST endpoints.
+
+The exact `truenas_unavailable` error (HTTP **500** or **503**) concerns Pulse's
+connection-management handler or configuration persistence, not proof of an
+appliance outage or an invalid TrueNAS API key. Keep the existing request's
+status/code and time, then inspect a bounded Pulse log excerpt locally. Do not
+rotate the key, recreate the connection or weaken TLS verification to clear it.
+
+Follow [TrueNAS error diagnosis](TRUENAS.md#truenas-service-unavailable) to
+separate this from an explicitly disabled integration or a failed live test.
+For missing or stale readings, use the [polling checks](TRUENAS.md#stale-truenas-data);
+a successful **Test Connection** does not prove collection has recovered.
 
 #### TrueNAS pools/datasets not appearing
 - TrueNAS data appears in the unified resource model and may take one configured

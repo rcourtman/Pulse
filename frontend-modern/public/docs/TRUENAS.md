@@ -214,14 +214,34 @@ HTTP status and a manually redacted error, never the full response or headers.
 
 ### "TrueNAS service unavailable"
 
-- Check that the TrueNAS system is reachable from the Pulse server.
-- Verify the URL uses `https://`. Current TrueNAS releases require TLS for
-  remote API-key authentication.
-- Verify that the configured username owns the API key and has permission to
-  read the monitored methods.
-- Use **Test Connection** in Pulse. The connection's transport diagnostics
-  should report `jsonrpc-websocket` for TrueNAS 25.04 and later; do not test a
-  current appliance through the removed `/api/v2.0` REST endpoints.
+This exact Pulse error (`truenas_unavailable`, HTTP **500** or **503**) means
+Pulse's connection-management handler or configuration persistence is unavailable
+for that request. It does **not** establish that the TrueNAS appliance is down,
+that its API key is invalid, or that an ordinary poll failed.
+
+Keep the existing failed request's path, HTTP status, error code and time from
+your signed-in browser's **Developer tools → Network** panel; do not repeat a
+save, delete or test to collect them. Inspect a bounded Pulse startup/service
+log excerpt locally, using the readers below. Do not rotate the TrueNAS key,
+recreate the saved connection or weaken TLS verification to clear this error.
+Share only the Pulse version, request path, status/code and a manually redacted
+error, not the full response, configuration, key or session cookie.
+
+Distinguish these other results before choosing an action:
+
+- **`truenas_disabled` / HTTP 404**: Pulse's TrueNAS integration is explicitly
+  disabled. Check the intended `PULSE_ENABLE_TRUENAS` setting privately; this is
+  not an appliance outage or an instruction to override an intentional opt-out.
+- **`truenas_connection_failed` / HTTP 400**: a live connection test failed.
+  Use its retained error to distinguish reachability, TLS, API-key ownership or
+  read-permission problems. Keep HTTPS and certificate verification enabled;
+  TrueNAS 25.04 and later use `jsonrpc-websocket`, while recognized CORE 13
+  systems use legacy REST. Do not probe current TrueNAS through removed
+  `/api/v2.0` endpoints or repeatedly test to diagnose ordinary collection.
+- **Test succeeds but data is missing or stale**: Test reads system information
+  on a separate connection, not inventory or metric collection. Use the
+  [polling checks](#stale-truenas-data) and existing observation times instead
+  of changing credentials or treating the test time as recovered freshness.
 
 ### No data appearing after adding connection
 - Allow one configured polling cycle (60 seconds by default), not a fixed
