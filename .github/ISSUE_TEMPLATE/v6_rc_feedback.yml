@@ -60,6 +60,7 @@ body:
     id: installation_type
     attributes:
       label: Installation type
+      description: How the Pulse server is installed, not the kind of workload being monitored.
       options:
         - Docker
         - Docker Compose
@@ -108,7 +109,9 @@ body:
     id: summary
     attributes:
       label: What happened?
-      description: Describe the problem, friction, or feedback clearly and directly.
+      description: |
+        Describe the problem, friction, or feedback and where you see it. Distinguish the affected target (for example, a VM, LXC, Docker container, NAS or Pulse itself) from how the Pulse server is installed.
+        For missing readings, say whether the affected workload's usual UI was still responsive when the problem occurred. Use existing observations; write "unknown" if you cannot safely tell. Do not run another update, backup or guest-agent probe just to answer.
       placeholder: Pulse upgraded cleanly, but the new storage filters are hard to understand and I could not find the previous view quickly.
     validations:
       required: true

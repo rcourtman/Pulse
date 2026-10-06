@@ -1791,6 +1791,44 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 self.assertEqual(evidence["attributes"]["label"], "Logs, screenshots, or diagnostics")
                 self.assertFalse(evidence.get("validations", {}).get("required", False))
 
+    def test_report_intake_distinguishes_server_install_from_affected_target(self) -> None:
+        for name, summary_id, install_id in (
+            ("bug_report.yml", "bug_description", "install_type"),
+            ("v6_rc_feedback.yml", "summary", "installation_type"),
+        ):
+            with self.subTest(form=name):
+                form = yaml.load(read(f".github/ISSUE_TEMPLATE/{name}"), Loader=UniqueKeyLoader)
+                fields = {field["id"]: field for field in form["body"] if "id" in field}
+                self.assertEqual(len(fields), sum("id" in field for field in form["body"]))
+                install = fields[install_id]
+                self.assertEqual(install["type"], "dropdown")
+                self.assertEqual(install["attributes"]["label"], "Installation type")
+                self.assertIn("Pulse server", install["attributes"]["description"])
+                self.assertIn("not the kind of workload", install["attributes"]["description"])
+                summary = fields[summary_id]
+                self.assertEqual(summary["type"], "textarea")
+                self.assertTrue(summary["validations"]["required"])
+                prose = normalize_ws(summary["attributes"]["description"])
+                for distinction in (
+                    "affected target", "VM, LXC, Docker container, NAS or Pulse itself",
+                    "from how the Pulse server is installed", "For missing readings",
+                    "workload's usual UI", "when the problem occurred",
+                    "Use existing observations", 'write "unknown" if you cannot safely tell',
+                    "Do not run another update, backup or guest-agent probe just to answer",
+                ):
+                    self.assertIn(distinction, prose)
+                self.assertNotIn("render", summary["attributes"])
+
+        triage = normalize_ws(read("docs/ISSUE_TRIAGE.md"))
+        for precaution in (
+            "installation type does not make Docker commands relevant",
+            "Read later comments", "retain both topics",
+            "not Pulse's displayed connection status",
+            "Responsiveness is not proof that every filesystem is writable",
+            'Accept "unknown"', "Existing reports need no refile",
+        ):
+            self.assertIn(precaution, triage)
+
     def test_demo_site_copy_points_at_current_release_packet_index(self) -> None:
         demo_copy = read("docs/releases/V6_RC_DEMO_SITE_COPY.md")
         self.assertIn("docs/RELEASE_NOTES.md", demo_copy)
