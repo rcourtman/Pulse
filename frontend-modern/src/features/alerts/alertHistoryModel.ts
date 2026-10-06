@@ -1,5 +1,9 @@
 import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import {
+  ALERT_HISTORY_MOVED_STATUS,
+  getAlertResolutionDetail,
+} from '@/utils/alertIncidentPresentation';
 import { isPulseSystemAlert } from '@/utils/alertScope';
 
 import { alertTypeDisplayLabel, unifiedTypeToAlertDisplayType } from './helpers';
@@ -25,6 +29,8 @@ export interface HistoryItem {
   title: string;
   rawAlertType?: string;
   description?: string;
+  // Set when the alert closed without recovering: what happened instead.
+  closeDetail?: string;
   acknowledged?: boolean;
   systemAlert?: boolean;
 }
@@ -206,11 +212,17 @@ export function buildAlertHistoryItems({
   alertHistory.forEach((alert) => {
     if (activeAlertIds.has(alert.id)) return;
     const systemScoped = isPulseSystemAlert(alert);
+    // A close that was not a recovery must not read as "resolved".
+    const closeDetail = getAlertResolutionDetail(alert.resolution);
 
     items.push({
       id: alert.id,
       source: 'alert',
-      status: alert.acknowledged ? 'acknowledged' : 'resolved',
+      status: closeDetail
+        ? ALERT_HISTORY_MOVED_STATUS
+        : alert.acknowledged
+          ? 'acknowledged'
+          : 'resolved',
       startTime: alert.startTime,
       endTime: alert.lastSeen,
       duration: formatAlertHistoryDuration(alert.startTime, alert.lastSeen, now),
@@ -231,6 +243,7 @@ export function buildAlertHistoryItems({
       title: alertTypeDisplayLabel(alert.type),
       rawAlertType: alert.type,
       description: alert.message,
+      ...(closeDetail ? { closeDetail } : {}),
       acknowledged: alert.acknowledged,
     });
   });

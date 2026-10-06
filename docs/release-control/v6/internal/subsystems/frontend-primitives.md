@@ -7113,6 +7113,13 @@ should extend the model, and section rendering should extend those owners
 rather than rebuilding any of those concerns in the tab shell.
 The resource-resolution handoff into the resource-incident panel now belongs to
 the history state rather than the tab shell.
+The history model also owns the close outcome: an alert that closed with a
+typed `resolution` is status `moved` (badge `moved to agent`, its account in
+`HistoryItem.closeDetail`) rather than `resolved` or `acknowledged`. The table
+row carries the account in the badge title and the phone card renders it under
+the message, while `getAlertHistoryStatusPresentation` and
+`getAlertResolutionDetail` in `utils/alertIncidentPresentation.ts` own the
+wording.
 `frontend-modern/src/features/alerts/useAlertHistoryState.ts` re-exposes the
 `getResource` resolver it is already given, and
 `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx` reads it

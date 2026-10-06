@@ -229,6 +229,9 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
                 </div>
 
                 <p class="mt-2 text-xs leading-relaxed text-base-content">{alert.description}</p>
+                <Show when={alert.closeDetail}>
+                  {(detail) => <p class="mt-1 text-xs leading-relaxed text-muted">{detail()}</p>}
+                </Show>
 
                 <dl class="mt-3 grid grid-cols-3 gap-2 text-[10px] text-muted">
                   <div>

@@ -3639,6 +3639,15 @@ truth. Monitoring APIs that still serve `StateSnapshot` must project
 instead of trusting the cached snapshot fields, so externally served alert
 counts and recently resolved incidents do not lag behind acknowledgement,
 resolve, or clear operations between explicit sync points.
+A recently resolved alert that closed without recovering keeps that on the
+projection: `models.Alert.Resolution` (reason, successor resource ID and name,
+and the alert engine's summary) is set only for such a close, `cloneAlert`
+copies it into every snapshot, and `recordAlertTimelineChange` passes it into
+the `alert_resolved` resource change so the incident timeline says the alert
+moved. `TestAlertResolutionWireContract` in
+`internal/models/metrics_types_test.go` and
+`TestMonitor_HandleAlertLifecycle_HandoverCloseIsNotARecovery` in
+`internal/monitoring/monitor_alert_handling_test.go` pin it.
 The container entrypoint in `docker-entrypoint.sh` now also lives under this
 boundary. Hosted or managed tenant bootstrap changes must preserve safe startup
 when immutable read-only mounts are layered into `/etc/pulse`; the entrypoint

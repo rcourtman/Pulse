@@ -235,6 +235,48 @@ func TestLifecycleTransitionEnforcesOperationalSemantics(t *testing.T) {
 	}
 }
 
+// A close that hands the condition to another record is not a recovery, so it
+// has its own cause. It may only close the record, and only with the evidence
+// that recorded the handover.
+func TestOwnershipTransferOnlyClosesWithEvidence(t *testing.T) {
+	at := time.Date(2026, 10, 6, 15, 0, 0, 0, time.UTC)
+	if _, err := NewTransitionID(
+		"record-1",
+		OperationalOpen,
+		OperationalResolved,
+		at,
+		TransitionOwnershipTransferred,
+		"memory-high",
+		[]string{"evidence-handover"},
+	); err != nil {
+		t.Fatalf("open-to-resolved ownership transfer error = %v", err)
+	}
+	if _, err := NewTransitionID(
+		"record-1",
+		OperationalAcknowledged,
+		OperationalResolved,
+		at,
+		TransitionOwnershipTransferred,
+		"memory-high",
+		nil,
+	); err == nil || !strings.Contains(err.Error(), "requires evidence") {
+		t.Fatalf("evidenceless ownership transfer error = %v", err)
+	}
+	for _, to := range []OperationalState{OperationalResolving, OperationalOpen, OperationalStale} {
+		if _, err := NewTransitionID(
+			"record-1",
+			OperationalAcknowledged,
+			to,
+			at,
+			TransitionOwnershipTransferred,
+			"memory-high",
+			[]string{"evidence-handover"},
+		); err == nil || !strings.Contains(err.Error(), "must enter resolved") {
+			t.Fatalf("ownership transfer into %q error = %v", to, err)
+		}
+	}
+}
+
 func TestOperationalRecordRequiresResolutionEvidence(t *testing.T) {
 	firstObserved := time.Date(2026, 7, 18, 20, 0, 0, 0, time.UTC)
 	resolvedAt := firstObserved.Add(5 * time.Minute)

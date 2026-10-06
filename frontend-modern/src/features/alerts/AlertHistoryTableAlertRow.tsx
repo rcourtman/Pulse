@@ -74,7 +74,7 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
         </TableCell>
 
         <TableCell class={getPlatformTableCellClassForKind('badge')}>
-          <span class={historyStatusPresentation().className}>
+          <span class={historyStatusPresentation().className} title={props.alert.closeDetail}>
             {historyStatusPresentation().label}
           </span>
         </TableCell>

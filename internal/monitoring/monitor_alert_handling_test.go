@@ -241,6 +241,68 @@ func TestMonitor_HandleAlertLifecycle_WritesCanonicalChanges(t *testing.T) {
 	}
 }
 
+// A node alert handed to its Pulse agent closes without recovering. The
+// resource history and the alert's incident timeline (the Alerts history row
+// expansion) must say where it went, not "Alert resolved: Memory usage at 95%".
+func TestMonitor_HandleAlertLifecycle_HandoverCloseIsNotARecovery(t *testing.T) {
+	resourceStore := unifiedresources.NewMemoryStore()
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	m := &Monitor{
+		incidentStore: incidentStore,
+		resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(resourceStore)),
+	}
+	incidentStore.SetResourceTimelineStore(m.resourceStore.(memory.IncidentTimelineStore))
+
+	startedAt := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
+	movedAt := startedAt.Add(2 * time.Hour)
+	alert := &alerts.Alert{
+		ID:         "pve1-memory",
+		Type:       "memory",
+		Level:      alerts.AlertLevelWarning,
+		ResourceID: "pve1",
+		Message:    "Memory usage at 95%",
+		Value:      95,
+		Threshold:  85,
+		StartTime:  startedAt,
+	}
+	m.handleAlertLifecycleEvent(alerts.LifecycleEvent{Type: eventlog.TypeFired, OccurredAt: startedAt, Alert: alert})
+	closed := alert.Clone()
+	closed.Resolution = &alerts.AlertResolution{
+		Reason:              alerts.AlertResolutionMovedToAgent,
+		SuccessorResourceID: "agent-pve1",
+		SuccessorName:       "pve1 (Host Agent)",
+	}
+	m.handleAlertLifecycleEvent(alerts.LifecycleEvent{Type: eventlog.TypeResolved, OccurredAt: movedAt, Alert: closed})
+
+	summary := "Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading."
+	changes, err := resourceStore.GetRecentChanges("pve1", time.Time{}, 10)
+	require.NoError(t, err)
+	require.Len(t, changes, 2)
+	require.Equal(t, unifiedresources.ChangeAlertResolved, changes[0].Kind)
+	require.Equal(t, summary, changes[0].Reason)
+	require.Equal(t, "moved_to_agent", changes[0].Metadata[unifiedresources.MetadataAlertResolution])
+	require.Equal(t, unifiedresources.ChangeAlertFired, changes[1].Kind)
+	require.NotContains(t, changes[1].Metadata, unifiedresources.MetadataAlertResolution)
+
+	timeline := incidentStore.GetTimelineByAlertAt(alert.ID, startedAt)
+	require.NotNil(t, timeline)
+	require.Len(t, timeline.Events, 2)
+	require.Equal(t, memory.IncidentEventAlertResolved, timeline.Events[1].Type)
+	require.Equal(t, summary, timeline.Events[1].Summary)
+
+	// An ordinary recovery keeps its existing wording.
+	recovered := alert.Clone()
+	recovered.ID = "pve1-cpu"
+	recovered.Type = "cpu"
+	recovered.Message = "CPU usage at 90%"
+	m.handleAlertLifecycleEvent(alerts.LifecycleEvent{Type: eventlog.TypeFired, OccurredAt: startedAt, Alert: recovered})
+	m.handleAlertLifecycleEvent(alerts.LifecycleEvent{Type: eventlog.TypeResolved, OccurredAt: movedAt.Add(time.Minute), Alert: recovered})
+	recoveredTimeline := incidentStore.GetTimelineByAlertAt(recovered.ID, startedAt)
+	require.NotNil(t, recoveredTimeline)
+	require.Len(t, recoveredTimeline.Events, 2)
+	require.Equal(t, "Alert resolved", recoveredTimeline.Events[1].Summary)
+}
+
 func TestPausedDeliveryStillBuildsTimelineThroughRealAlertLifecycle(t *testing.T) {
 	manager := alerts.NewManagerWithDataDir(t.TempDir())
 	t.Cleanup(manager.Stop)

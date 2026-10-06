@@ -4224,6 +4224,14 @@ such as `alert_fired`, `alert_acknowledged`, `alert_unacknowledged`,
 AI-local annotations. Snooze and resume projections must preserve the actor
 and exact suppression expiry when present; they pause delivery and escalation
 without acknowledging, resolving, or replacing the underlying incident.
+An `alert_resolved` change for a close that was not a recovery carries the
+alert engine's summary as its reason and the reason code as `alert_resolution`
+metadata (`AlertTimelineChange.ResolutionReason` and `ResolutionSummary`), so
+incident projection titles the close with where the alert went instead of
+"Alert resolved: <breach message>". The resource drawer still labels the change
+by kind (`Alert resolved`) and prefixes its headline with that label; only the
+reason after it says the alert moved. Ordinary recoveries omit the key, and
+every other lifecycle kind ignores the fields.
 Alert-scoped
 incident memory may still project those events for one investigation thread,
 but the durable source of truth for resource-affecting alert lifecycle and
