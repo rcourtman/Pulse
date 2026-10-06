@@ -170,6 +170,9 @@ INSTALLER
   # never comes back up; start also fails -> perform_update must restore + fail.
   local is_active_calls=0
   systemctl() {
+    # The rollback must stop the service before replacing its executable.
+    # Stopping succeeds; only activation/liveness is the injected failure.
+    if [[ "$1" == "stop" ]]; then return 0; fi
     if [[ "$1" == "is-active" ]]; then
       ((is_active_calls += 1))
       if (( is_active_calls == 1 )); then
@@ -323,6 +326,7 @@ INSTALLER
         AUTOUPDATE_TEST_UP="yes"
         return 0
         ;;
+      stop) AUTOUPDATE_TEST_UP="no"; return 0 ;;
     esac
     return 1
   }

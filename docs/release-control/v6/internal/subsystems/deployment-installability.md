@@ -6407,6 +6407,51 @@ covers the recorded snapshot and its removal. Local shell suites
 `test-script-reference-integrity.sh`) pass; hosted Go installtest execution
 remains required and is not claimed here.
 
+### Verified unattended-update backup and owned rollback
+
+`scripts/pulse-auto-update.sh` runs `perform_update` as a conditional, so Bash
+`errexit` is not a substitute for explicit snapshot and restore checks. Before
+executing the signed installer it must have a private unique rollback directory
+and successful, byte-compared copies of every existing regular binary at both
+supported install paths and the optional `VERSION` file. Missing binaries,
+symlinks/non-regular snapshot sources, allocation/copy/comparison failures and
+failed download/signature verification stop before installer mutation. An
+unneeded pre-mutation snapshot and verification files are removed on return.
+
+Installer failure, mismatched version and failure to restore a previously active
+service share one rollback path. It stops the service, stages and compares all
+saved files before any replacement, and renames each into its recorded original
+path without following a new symlink or treating a directory as a destination.
+Every restored destination must itself be regular and byte-equal to its saved
+copy before recovery may activate the service or discard the backup.
+Files absent before the attempt remain absent after recovery, including the
+legacy/current binary alternative and `VERSION`. Archive copies preserve modes,
+ownership, timestamps and extended attributes supported by the filesystem; a
+content-only copy is not the metadata recovery contract. A
+partial restore must not invoke the RETURN restart backstop. The backup remains
+with a manual-recovery diagnostic if stop, staging, replacement, absence restore
+or prior-active service recovery fails. It is discarded only after complete
+recovery, or after the replacement version and required liveness are verified.
+Previously inactive services are not started by rollback. The RETURN trap still
+disarms itself and cannot leak locals into a later caller's return.
+
+This strengthens the existing binary/version recovery guarantee, not full
+configuration, database, power-loss or authenticated/native acceptance. Stable
+selection, Pro exclusion, signature identity/key/namespace, opt-in policy and
+the installer's own configuration backup remain unchanged.
+
+Verification: `scripts/installtests/pulse_auto_update_test.go`
+`TestAutoUpdateBackupTransaction` executes the complete updater under the real
+conditional caller with locally signed installers, real executable version reads
+and file operations, and bounded fake download/systemd boundaries. It covers
+snapshot admission, all three original failure paths, both binary layouts and
+absence, retained recovery failures, symlink/directory/non-regular replacement,
+file modes and an explicit extended-attribute fixture (unavailability is a skip),
+prior-active-only restoration, configuration/identity preservation and trap
+cleanup. Exact-parent negative controls must reject ignored snapshot failures
+and loss of the backup after a failed restore. Synthetic proof is not a deployed
+update, native systemd migration or reporter confirmation.
+
 ### Governed dependency floors for the go-minor-patch group
 
 The managed `go-minor-patch` group advances three direct modules together with
