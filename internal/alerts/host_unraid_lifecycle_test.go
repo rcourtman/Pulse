@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -197,6 +198,164 @@ func TestHandleHostTelemetryExpiredPreservesStaticStorageRisk(t *testing.T) {
 			t.Fatal("static degraded RAID risk was cleared with transient rebuild state")
 		}
 	})
+}
+
+func TestCheckHostClearsDiskTemperatureAlertsWhenThresholdTurnsOff(t *testing.T) {
+	cases := []struct {
+		name    string
+		turnOff func(m *Manager, hostID string)
+	}{
+		{
+			name: "agent default disabled",
+			turnOff: func(m *Manager, hostID string) {
+				m.config.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 0, Clear: 0}
+			},
+		},
+		{
+			name: "host override disables disk temperature",
+			turnOff: func(m *Manager, hostID string) {
+				m.config.Overrides[hostID] = ThresholdConfig{DiskTemperature: &HysteresisThreshold{Trigger: 0, Clear: 0}}
+			},
+		},
+		{
+			name: "host override disables the agent",
+			turnOff: func(m *Manager, hostID string) {
+				m.config.Overrides[hostID] = ThresholdConfig{Disabled: true}
+			},
+		},
+		{
+			name: "all agent alerts disabled",
+			turnOff: func(m *Manager, hostID string) {
+				m.config.DisableAllAgents = true
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := configureDiskTempTypeHostManager(t)
+			host := hostWithSMARTDiskTemp("host-temp-off", "sata", 60)
+			alertID := hostDiskTempAlertID(host)
+
+			m.CheckHost(host)
+			alert, exists := testLookupActiveAlert(t, m, alertID)
+			if !exists {
+				t.Fatalf("expected disk temperature alert at 60C (sata trigger 55), active: %v", alertKeys(m))
+			}
+			if alert.Type != "diskTemperature" || !strings.HasPrefix(alert.ResourceID, hostDiskTemperatureResourcePrefix(host.ID)) {
+				t.Fatalf("disk temperature alert type/resource = %q/%q", alert.Type, alert.ResourceID)
+			}
+
+			// Change config directly so only CheckHost can resolve the alert.
+			m.mu.Lock()
+			tc.turnOff(m, host.ID)
+			m.mu.Unlock()
+
+			m.CheckHost(host)
+			if _, exists := testLookupActiveAlert(t, m, alertID); exists {
+				t.Fatalf("disk temperature alert stayed active after its threshold was turned off, active: %v", alertKeys(m))
+			}
+		})
+	}
+}
+
+func TestHostDiskTemperatureAlertsClearWhenAgentLeaves(t *testing.T) {
+	t.Run("agent removed", func(t *testing.T) {
+		m := configureDiskTempTypeHostManager(t)
+		host := hostWithSMARTDiskTemp("host-temp-removed", "sata", 60)
+		m.CheckHost(host)
+		if _, exists := testLookupActiveAlert(t, m, hostDiskTempAlertID(host)); !exists {
+			t.Fatalf("expected disk temperature alert, active: %v", alertKeys(m))
+		}
+
+		m.HandleHostRemoved(host)
+		if _, exists := testLookupActiveAlert(t, m, hostDiskTempAlertID(host)); exists {
+			t.Fatalf("disk temperature alert outlived its removed agent, active: %v", alertKeys(m))
+		}
+	})
+
+	t.Run("agent confirmed offline", func(t *testing.T) {
+		m := configureDiskTempTypeHostManager(t)
+		host := hostWithSMARTDiskTemp("host-temp-offline", "sata", 60)
+		m.CheckHost(host)
+		if _, exists := testLookupActiveAlert(t, m, hostDiskTempAlertID(host)); !exists {
+			t.Fatalf("expected disk temperature alert, active: %v", alertKeys(m))
+		}
+
+		for i := 0; i < 3; i++ {
+			m.HandleHostOffline(host)
+		}
+		if _, exists := testLookupActiveAlert(t, m, canonicalConnectivityStateID(hostResourceID(host.ID))); !exists {
+			t.Fatalf("expected confirmed offline alert, active: %v", alertKeys(m))
+		}
+		if _, exists := testLookupActiveAlert(t, m, hostDiskTempAlertID(host)); exists {
+			t.Fatalf("disk temperature alert stayed beside the offline alert, active: %v", alertKeys(m))
+		}
+	})
+}
+
+func TestConfigSaveResolvesDiskTemperatureAlertAgainstItsDiskTypeThreshold(t *testing.T) {
+	m := configureDiskTempTypeHostManager(t)
+
+	m.mu.Lock()
+	m.config.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 75, Clear: 70}
+	m.mu.Unlock()
+
+	// 72C is above the nvme trigger (70) but below the agent default (75).
+	host := hostWithSMARTDiskTemp("host-temp-save", "nvme", 72)
+	alertID := hostDiskTempAlertID(host)
+	m.CheckHost(host)
+	if _, exists := testLookupActiveAlert(t, m, alertID); !exists {
+		t.Fatalf("expected nvme disk temperature alert at 72C, active: %v", alertKeys(m))
+	}
+
+	// An unrelated save keeps the alert CheckHost would raise again.
+	cfg := m.GetConfig()
+	cfg.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 85, Clear: 80}
+	m.UpdateConfig(cfg)
+	if _, exists := testLookupActiveAlert(t, m, alertID); !exists {
+		t.Fatalf("unrelated config save resolved a disk temperature alert above its nvme trigger, active: %v", alertKeys(m))
+	}
+
+	// Turning disk temperature off resolves it on save, before any report.
+	cfg = m.GetConfig()
+	cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 0, Clear: 0}
+	m.UpdateConfig(cfg)
+	if _, exists := testLookupActiveAlert(t, m, alertID); exists {
+		t.Fatalf("disk temperature alert stayed active after the threshold was turned off, active: %v", alertKeys(m))
+	}
+}
+
+func TestConfigSaveKeepsAlertTheEvaluatorKeepsWithoutRecoveryBand(t *testing.T) {
+	// Normalization keeps a 70/75 entry, and the evaluator treats a clear
+	// level at or above the trigger as no recovery band, firing from 70C.
+	for _, reading := range []int{72, 70} {
+		t.Run(fmt.Sprintf("%dC", reading), func(t *testing.T) {
+			m := configureDiskTempTypeHostManager(t)
+			m.mu.Lock()
+			m.config.DiskTempByType["nvme"] = HysteresisThreshold{Trigger: 70, Clear: 75}
+			m.mu.Unlock()
+
+			host := hostWithSMARTDiskTemp("host-temp-no-band", "nvme", reading)
+			alertID := hostDiskTempAlertID(host)
+			m.CheckHost(host)
+			if _, exists := testLookupActiveAlert(t, m, alertID); !exists {
+				t.Fatalf("expected nvme disk temperature alert at %dC, active: %v", reading, alertKeys(m))
+			}
+
+			cfg := m.GetConfig()
+			cfg.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 85, Clear: 80}
+			m.UpdateConfig(cfg)
+			if _, exists := testLookupActiveAlert(t, m, alertID); !exists {
+				t.Fatalf("config save resolved an alert the evaluator keeps firing at %dC, active: %v", reading, alertKeys(m))
+			}
+
+			m.CheckHost(host)
+			if _, exists := testLookupActiveAlert(t, m, alertID); !exists {
+				t.Fatalf("expected the next report to keep the alert, active: %v", alertKeys(m))
+			}
+		})
+	}
 }
 
 func hasAlertType(alerts []Alert, alertType string) bool {
