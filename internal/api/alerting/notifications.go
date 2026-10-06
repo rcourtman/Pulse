@@ -510,7 +510,7 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// restoreMaskedWebhookValues resolves only submitted placeholders. The editor
+// restoreStrictMaskedWebhookValues resolves only submitted placeholders. The editor
 // sends a replacement map: explicit edits and omitted keys must not be undone
 // just because another value is still masked. Header names are case-insensitive;
 // custom-field names are not. Never store a placeholder without a saved value.

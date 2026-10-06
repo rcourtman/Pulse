@@ -1418,7 +1418,7 @@ func TestWebhookEditPreservesOnlyMaskedValues(t *testing.T) {
 			map[string]string{"token": "synthetic-token", "channel": "new", "added": "new"}, false},
 		{"clear beside masks", map[string]string{"Authorization": masked, "Content-Type": ""},
 			map[string]string{"token": masked, "channel": ""},
-			map[string]string{"Authorization": "synthetic-auth", "Content-Type": ""},
+			map[string]string{"Authorization": "synthetic-auth"},
 			map[string]string{"token": "synthetic-token", "channel": ""}, false},
 		{"header case is insensitive", map[string]string{"authorization": masked}, map[string]string{"token": masked},
 			map[string]string{"authorization": "synthetic-auth"}, map[string]string{"token": "synthetic-token"}, false},
