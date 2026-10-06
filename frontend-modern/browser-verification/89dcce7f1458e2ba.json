@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "942f6b257af1058727da2b6e2e8007c8202af677",
+  "verified_at": "2026-10-06T13:13:48Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxPageModel.ts",
+    "frontend-modern/src/hooks/useResources.ts",
+    "frontend-modern/src/types/resource.ts",
+    "frontend-modern/src/utils/alerts.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "6e024f572aa0c914e241c3050339cb1000c4caedc7910b405e62f00351bee733",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx": "d59779e1651c973e9ce076ccea5cdb049abf48c30ad1f151c7ac229bcfbcb8a1",
+    "frontend-modern/src/features/proxmox/proxmoxPageModel.ts": "8e509651270f4bfd9a018dcd7a74a8cebe6b778f8c22661cd399c0be26bd7353",
+    "frontend-modern/src/hooks/useResources.ts": "b294d468567099c25ce5bf6ee68d14b36ce353dff8b36310de990fbf87a551cb",
+    "frontend-modern/src/types/resource.ts": "09c242b4ad770623d402a5687ee69bc0fe67da8989ae4172b7833a9a373e1bde",
+    "frontend-modern/src/utils/alerts.ts": "acc29b3d358fc1909255e1fe015da9587c627b69f76b74c8eb37bce52b8f5ca8"
+  },
+  "routes": [
+    "/standalone/machines",
+    "/docker",
+    "/vmware/storage",
+    "/vmware/networks"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (embedded build of this tree, base 13d604e1c7) with a real backend-raised open host-agent memory alert on Apollo-114 (agent:host-linux-1, agent memory trigger set to 60% on the private stack; mock mode skips CheckHost, so the private binary added that call through a go build overlay that is not part of this commit)",
+    "Machines drawer for Apollo-114: Needs attention lists \"Agent memory at 70.7%\" with subject Apollo-114, metric Memory and CRITICAL severity (previously empty because resources never carried alerts)",
+    "Machines drawer for Meridian-848 with no open alert: no Needs attention section",
+    "Docker host drawer for Ops Services 01: lists its three nested service alerts (docker:orion-2-mock/service/...) with service names as subjects, most severe first",
+    "Docker host drawer for auth-service-01 (earlier pass on the same code): lists its two nested container-state alerts; edge-proxy-01 lists its docker-host-offline alert",
+    "vSphere datastore archive-tier drawer: one row for the storage-incident alert whose text joins the incident summary and its impact; neither health reason repeats beside it",
+    "vSphere network Edge Stateful drawer: one alert row, the matching health reason deduped",
+    "No page errors at either viewport"
+  ],
+  "interactions": [
+    "Open Machines tab and expand the Apollo-114 row drawer (Overview tab)",
+    "Expand the Meridian-848 row drawer and confirm no attention section",
+    "Open Docker hosts and expand the Ops Services 01 row drawer",
+    "Open vSphere storage and expand the archive-tier row drawer",
+    "Open vSphere networks and expand the Edge Stateful row drawer",
+    "Repeat the Machines and Docker drawer checks at the 390px viewport"
+  ]
+}

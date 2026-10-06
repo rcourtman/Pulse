@@ -5,6 +5,11 @@ import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '../ResourceDetailDrawer';
 import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
 
+vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
+  useWebSocket: () => ({ activeAlerts: {} }),
+}));
+
 const expandPlatformDetails = (): void => {
   const details = screen.getByTestId('resource-platform-details') as HTMLDetailsElement;
   details.open = true;

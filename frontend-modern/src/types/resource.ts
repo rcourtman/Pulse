@@ -139,17 +139,6 @@ export interface ResourceDiskIO {
   writeRate?: number; // Absent directions remain unavailable.
 }
 
-// Alert associated with a resource
-export interface ResourceAlert {
-  id: string;
-  type: string; // cpu, memory, disk, temperature, etc.
-  level: string; // warning, critical
-  message: string;
-  value: number;
-  threshold: number;
-  startTime: number; // Unix milliseconds
-}
-
 // Provider-native incident associated with a unified resource.
 export interface ResourceIncident {
   provider?: string;
@@ -1659,7 +1648,6 @@ export interface Resource {
   customUrl?: string;
   lastSeen: number; // Unix milliseconds
   health?: ResourceHealth;
-  alerts?: ResourceAlert[];
   incidents?: ResourceIncident[];
   incidentCount?: number;
   incidentCode?: string;
@@ -1764,7 +1752,6 @@ export interface ResourceFilter {
   statuses?: ResourceStatus[];
   parentId?: string;
   clusterId?: string;
-  hasAlerts?: boolean;
   search?: string;
 }
 

@@ -6,6 +6,11 @@ import type { ProbeAgentOption } from '@/utils/availabilityProbeAgents';
 import { AvailabilityHistoryAPI } from '@/api/availabilityHistory';
 import { AvailabilityChecksTable, resolveAvailabilityChecksView } from '../AvailabilityChecksTable';
 
+vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
+  useWebSocket: () => ({ activeAlerts: {} }),
+}));
+
 vi.mock('@/api/availabilityHistory', () => ({
   AvailabilityHistoryAPI: { batch: vi.fn(async () => ({ targets: [] })) },
 }));

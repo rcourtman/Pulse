@@ -3108,6 +3108,10 @@ canonical unified-resource metrics include `diskRead` or `diskWrite`,
 `ResourceFrontend.diskIO` through the shared resource converter, so
 `/api/state` and websocket consumers read disk throughput from the same
 freshness-gated resource metrics contract as CPU, memory, disk, and network.
+That broadcast projection carries no per-resource alert copy:
+`ResourceFrontend` has no `alerts` field and `ResourceConvertInput` no alert
+input, because open alerts reach clients once, through the state-level
+`activeAlerts` map, and nothing ever populated the embedded list.
 That same broadcast projection owns client-payload static-metadata slimming
 (governed gap `resource-payload-static-metadata`): identical resource
 capability blobs are deduped into the state-level `capabilityCatalog` under
