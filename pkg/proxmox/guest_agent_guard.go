@@ -233,6 +233,13 @@ func (c *Client) getGuestAgent(ctx context.Context, path, node string, vmid int)
 		uncertain = true
 		return nil, &guestAgentDeferredError{reason: "agent-redirect"}
 	}
+	// A completed HTTP body is not a completed QGA reply if it is malformed,
+	// ambiguous, or only a JSON prefix. Validate before releasing admission,
+	// not in the method decoder after another guest command can be queued.
+	if resp.StatusCode != http.StatusOK || !guestAgentSuccessResponse(body) {
+		uncertain = true
+		return nil, &guestAgentDeferredError{reason: "agent-completion-unverified"}
+	}
 	// A backup may have started while the command was in flight. Do not publish
 	// its payload as fresh telemetry if lock clearance cannot still be verified.
 	if err := c.verifyGuestAgentUnlocked(ctx, node, vmid); err != nil {

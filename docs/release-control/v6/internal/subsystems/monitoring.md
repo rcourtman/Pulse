@@ -296,6 +296,29 @@ replay through another cluster endpoint. Coordination retains at most 4,096
 active/cooling endpoint-guest entries and expires cooldowns. Explicit API
 permission refusals and unsupported commands remain errors, not successes.
 
+A successful guest reply also needs direct HTTP 200 and exactly one complete
+UTF-8 JSON envelope with one canonical `data` dictionary. Malformed, missing,
+null/scalar data, extra values, duplicate/escaped-duplicate envelope or data
+fields, competing error envelopes, or differently cased `data`, `result`,
+`content` or `truncated` fields cannot establish a completed reply. The check
+runs while admission is held, before method decoding or postflight lock reads;
+failure retains `agent-completion-unverified` and the existing one-minute
+VM-wide uncertainty pause. Other methods, fresh clients and configured cluster
+aliases cannot immediately follow it with QGA work. Unexpected 2xx statuses
+(including accepted/no-content/partial responses) have the same boundary.
+
+Valid empty dictionaries, null/empty results, object-style rows, Unicode and
+trailing whitespace retain existing method semantics, including partial row
+admission and known truncated-file rejection. Ordinary API reads, permissions,
+budgets, trust and backup settings are unchanged. The six-reader wire controls
+pin no immediate redispatch, independent live counters, alias/VM/source isolation
+and fresh admission after cooldown. `TestGuestAgentSuccessEnvelopeMonitoringContract`
+connects malformed, duplicate and prefix-only replies to real polling builders:
+original metadata/memory timestamps and guest History are not renewed, labelled
+last-known values remain and current CPU advances. These checks establish reply
+consistency, not native payload-to-command provenance, thaw, cross-process
+coordination or restart safety. The native recovery precaution below remains.
+
 The completed-error boundary uses the actual HTTP status retained by the request
 layer, not an `API error` phrase in provider or proxy text. HTTP 408 and
 unexplained server/proxy failures (including PVE 595) retain the same per-VM
