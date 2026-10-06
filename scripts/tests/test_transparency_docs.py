@@ -27,6 +27,8 @@ class TransparencyDocsTest(unittest.TestCase):
                 self.assertIn("next minor release candidate from the head of `main`", text)
                 self.assertIn("everything on `main` at that cut", text)
                 self.assertIn("Repairs go on `main`, not onto an older release line", text)
+                self.assertIn("An early cut can bring the next minor release forward", text)
+                self.assertIn("Patch releases are not scheduled", text)
                 self.assertNotIn("takes only backports", text)
 
     def test_blockers_need_a_fresh_candidate_not_a_changed_soak(self):
@@ -46,6 +48,7 @@ class TransparencyDocsTest(unittest.TestCase):
                 self.assertIn("not proof that stable users have it", text)
                 self.assertIn("checking its actual released source", text)
                 self.assertIn("https://github.com/rcourtman/Pulse/releases", text)
+                self.assertIn("[Releases and update channels](RELEASE_PROCESS.md)", text)
                 self.assertIn("passing test alone does not establish availability", text)
 
     def test_private_support_is_not_automated_or_public_diagnostics(self):

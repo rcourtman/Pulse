@@ -60,13 +60,17 @@ validation was used, so the record on GitHub is the record of the decision.
 Every 14 days after the last stable release, the train cuts the next minor
 release candidate from the head of `main`. It carries everything on `main` at
 that cut, not a selected set of fixes. Repairs go on `main`, not onto an older
-release line.
+release line. An early cut can bring the next minor release forward when an
+important fix should not wait. Patch releases are not scheduled.
 
 The candidate soaks for 24 hours on the opt-in preview channel, then is promoted
 unchanged to stable unless an open issue labelled `release-blocker` stops
 promotion. A candidate regression from the previous stable release or a release
 failure is repaired on `main`; once the blockers are closed, the train cuts a
 fresh candidate that carries the repair. Product changes are not inserted into the frozen candidate.
+The promotion resolver in the release pipeline enforces the soak and the
+exact-content rule. [Releases and update channels](RELEASE_PROCESS.md) describes
+the train for users.
 
 A fix merged to `main` is not yet a published fix. A published beta or release
 candidate is available to preview users, not proof that stable users have it.
