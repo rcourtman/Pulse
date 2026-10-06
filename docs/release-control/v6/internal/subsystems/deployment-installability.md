@@ -6264,6 +6264,8 @@ and runs the real embedded-asset build before Go tests. Connected Docker-agent
 tests import the API package, whose embed is a compile-time prerequisite; an
 empty directory or placeholder page is not a substitute. Windows reuses that
 same dependency installation for its generated PowerShell command proof.
+The embedded build invokes the installed Vite CLI with the current Node
+executable, rather than spawning a Windows `.cmd` shim or resolving via npx.
 `TestNativeAgentWorkflowBuildsRealFrontendBeforeRuntime` checks ordering and
 all-platform coverage, with missing, conditional, late and stub-build controls.
 Linux source checks and Windows cross-compilation do not establish hosted
