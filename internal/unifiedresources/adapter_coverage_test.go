@@ -1049,10 +1049,9 @@ func TestMetricPercent(t *testing.T) {
 
 // Unraid inventory temperatures have no agent provenance, so the adapter
 // derives their state from the host's reporting lease and the disk's spin
-// state. A native row records only a state that withdraws its reading, a SMART
-// row that borrows the inventory reading takes the inventory's state, and a
-// SMART row with its own reading keeps the agent's state. A withdrawn reading
-// never counts as heat in the disk's risk.
+// state. The native row and a SMART row that borrows the inventory reading
+// both carry it, and a SMART row with its own reading keeps the agent's state.
+// A withdrawn reading never counts as heat in the disk's risk.
 func TestUnraidDiskTemperatureFollowsTheHostLease(t *testing.T) {
 	smartWithout := models.HostDiskSMART{Device: "/dev/sdc", Serial: "UNRAID-1", Collection: &diskinventory.CollectionStatus{
 		Serial:      diskinventory.Available("smartctl"),
@@ -1081,7 +1080,7 @@ func TestUnraidDiskTemperatureFollowsTheHostLease(t *testing.T) {
 		native   diskinventory.FieldStatus
 		borrowed diskinventory.FieldStatus
 	}{
-		{"reporting", "online", false, diskinventory.FieldStatus{}, diskinventory.Available("unraid")},
+		{"reporting", "online", false, diskinventory.Available("unraid"), diskinventory.Available("unraid")},
 		{"silent agent", "offline", false, stopped, stopped},
 		{"spun down", "online", true, spunDown, spunDown},
 	} {
@@ -1131,10 +1130,8 @@ func TestUnraidDiskTemperatureFollowsTheHostLease(t *testing.T) {
 }
 
 // The registry merges an Unraid inventory row and the agent's SMART row for the
-// same disk, choosing the temperature and the collection state separately. A
-// reporting host's inventory row must not lend the merged disk an "available"
-// state when the reading it shows is the SMART row's, and that row says it was
-// not collected.
+// same disk. When they disagree, the inventory's "available" never lends
+// itself to the SMART row's uncollected reading.
 func TestUnraidInventoryRowDoesNotMaskTheSMARTRowState(t *testing.T) {
 	state := models.NewState()
 	state.UpsertHost(models.Host{
@@ -1158,7 +1155,8 @@ func TestUnraidInventoryRowDoesNotMaskTheSMARTRowState(t *testing.T) {
 	if len(disks) != 1 {
 		t.Fatalf("physical disks = %d, want the inventory and SMART rows merged into one", len(disks))
 	}
-	if got := disks[0]; got.Temperature != 40 || diskinventory.TemperatureCollected(got.Temperature, got.Collection) {
-		t.Fatalf("merged disk presents the SMART row's uncollected reading as collected: temperature=%d collection=%+v", got.Temperature, got.Collection)
+	if got := disks[0]; got.Temperature != 40 || got.Collection == nil ||
+		got.Collection.Temperature != diskinventory.Unavailable("smartctl", "disk is in standby") {
+		t.Fatalf("merged disk presents the SMART row's uncollected reading under another state: temperature=%d collection=%+v", got.Temperature, got.Collection)
 	}
 }

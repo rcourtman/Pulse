@@ -3576,20 +3576,30 @@ state the Proxmox row still carries from the same source
 past its reporting lease must not stay "collected" through the Proxmox row's
 copy of the agent's own state, including when its host is down and no disk
 poll refreshes that copy.
+Each merge step also stops the shown temperature borrowing another row's
+availability (`pairPhysicalDiskTemperatureState`). The value is still chosen
+by source preference and the states merged as above, so when the two rows of a
+step carry different temperatures the shown value could sit under the other
+row's `available` state, for example a silent agent's retained reading carried
+over a Proxmox row that collected its own reading now. When the merged state
+says collected but the row the shown value came from says it was not, the
+merged state becomes that row's own. The rule never changes a value and never
+grants availability; rows with the same value keep the merged state. It sees
+only the two rows of one step: the merged disk keeps one state per field, so
+with three or more rows for one disk a withdrawal an earlier step replaced is
+not visible to a later step, and the earlier step's merged state stands in for
+its row. Tracking each reading's own state across merges would close that.
 Unraid array-inventory rows carry no per-field provenance, so the adapter
-derives the state of a temperature taken from one: `unavailable` from `unraid`
+derives the state of a positive temperature taken from one (a row without a
+temperature claims no state): `unavailable` from `unraid`
 with "host agent stopped reporting" once `State.ExpireHostTelemetry` has marked
 the host offline, or with "disk is reported spun down" for a spun-down disk,
 and otherwise `available`. The value is kept as last-known context; it is
 collected again only when a reporting host sends a positive reading for a disk
-that is no longer spun down. A SMART row that falls back to
-the inventory reading because it has none of its own takes that state with it.
-The Unraid-native disk row records only the withdrawing states, never
-`available`: the registry chooses a merged disk's temperature and its state
-separately, and an `available` claim from the provenance-less row would
-outrank the SMART row's explicit state for the same disk when the SMART
-reading is the one shown. A withdrawn inventory temperature also stops
-counting as heat in the disk's risk assessment.
+that is no longer spun down. The Unraid-native disk row carries that state, and
+so does a SMART row that falls back to the inventory reading because it has
+none of its own. The adapter's risk assessment of an Unraid row no longer counts
+a withdrawn inventory temperature as heat.
 
 Cross-source correlation compares normalized serial and WWN values across
 fields without truncation, allowing a PVE bare-hex array-volume serial to join
