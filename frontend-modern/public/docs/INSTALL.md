@@ -275,6 +275,15 @@ The Proxmox path must be absolute. `pct exec` runs with `PATH=/sbin:/bin:/usr/sb
    ZFS/Ceph/mdadm detail, or other telemetry that requires local host access.
    See [Agent Security](AGENT_SECURITY.md).
 
+**API-only does not mean guest-agent-free.** VM filesystem and memory requests
+through QEMU Guest Agent can share the channel used by freeze-enabled backups.
+Read-only permissions do not prove backup safety. Do not add permissions,
+enable or restart an agent, or send manual guest-agent probes during a backup,
+freeze or thaw. Use the existing
+[backup safety precaution](VM_DISK_MONITORING.md#backup-safety). Stopping Pulse
+also stops its monitoring and alerts. An OK backup task does not prove
+successful thaw.
+
 > **Note**: If you configure authentication via environment variables (`PULSE_AUTH_USER`/`PULSE_AUTH_PASS`), the bootstrap token is automatically removed and this step is skipped.
 
 ---
