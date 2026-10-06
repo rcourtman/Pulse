@@ -380,6 +380,14 @@ perform_update() {
     local service_name=$(detect_service_name)
     local installer_tmp=""
     local signature_tmp=""
+    local backup_dir=""
+    local retain_backup="false"
+    local restart_allowed="true"
+    local -a file_paths=("$INSTALL_DIR/bin/pulse" "$INSTALL_DIR/pulse" "$INSTALL_DIR/VERSION")
+    local -a backup_names=(pulse-bin pulse-legacy VERSION)
+    local -a file_present=(false false false)
+    local -a restore_files=("" "" "")
+    local i
 
     # Capture whether Pulse was running before the update so we can guarantee it
     # comes back up afterwards (#1323: auto-update could leave it stopped on
@@ -395,7 +403,7 @@ perform_update() {
     # trap is not scoped to the function that set it, so leaving it installed
     # makes it re-run when any later function returns — with these locals gone
     # that aborted the updater under set -u after a successful update (#2128).
-    trap 'ensure_service_restarted "$service_name" "$service_was_active"; trap - RETURN' RETURN
+    trap 'trap - RETURN; rm -f -- "${installer_tmp:-}" "${signature_tmp:-}" "${restore_files[@]}"; if [[ -n "$backup_dir" && "$retain_backup" == "false" ]]; then rm -rf -- "$backup_dir"; fi; if [[ "$restart_allowed" == "true" ]]; then ensure_service_restarted "$service_name" "$service_was_active"; fi' RETURN
 
     # Refuse to install a prerelease via the unattended updater. The stable
     # channel must never cross onto a tag like v6.0.0-rc.2, even if every
@@ -407,22 +415,33 @@ perform_update() {
 
     log info "Starting update to $new_version"
     
-    # Create backup of current installation
-    local backup_dir="/tmp/pulse-backup-$(date +%Y%m%d-%H%M%S)"
+    # main calls this function in an if condition, which disables errexit
+    # throughout it. Check every prerequisite explicitly before the installer
+    # can mutate anything. A private, unique directory also avoids collisions
+    # with another attempt or a pre-created path in the shared /tmp directory.
+    if [[ ! -f "${file_paths[0]}" && ! -f "${file_paths[1]}" ]]; then
+        log error "No installed Pulse binary to back up; refusing update"
+        return 1
+    fi
+    if ! backup_dir=$(mktemp -d /tmp/pulse-backup.XXXXXX); then
+        log error "Could not create rollback backup; refusing update"
+        return 1
+    fi
     log info "Creating backup in $backup_dir"
-    mkdir -p "$backup_dir"
-    
-    # Backup binary
-    if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
-        cp -a "$INSTALL_DIR/bin/pulse" "$backup_dir/" || true
-    elif [[ -f "$INSTALL_DIR/pulse" ]]; then
-        cp -a "$INSTALL_DIR/pulse" "$backup_dir/" || true
-    fi
-    
-    # Backup VERSION file
-    if [[ -f "$INSTALL_DIR/VERSION" ]]; then
-        cp -a "$INSTALL_DIR/VERSION" "$backup_dir/" || true
-    fi
+    for i in "${!file_paths[@]}"; do
+        if [[ -e "${file_paths[i]}" || -L "${file_paths[i]}" ]]; then
+            if [[ ! -f "${file_paths[i]}" || -L "${file_paths[i]}" ]]; then
+                log error "Unsupported rollback source ${file_paths[i]}; refusing update"
+                return 1
+            fi
+            if ! cp -p -- "${file_paths[i]}" "$backup_dir/${backup_names[i]}" ||
+               ! cmp -s -- "${file_paths[i]}" "$backup_dir/${backup_names[i]}"; then
+                log error "Could not verify rollback backup for ${file_paths[i]}; refusing update"
+                return 1
+            fi
+            file_present[i]=true
+        fi
+    done
     
     # Download update using install script (safest method)
     log info "Downloading and installing update"
@@ -441,9 +460,11 @@ perform_update() {
         fi
     fi
 
-    installer_tmp=$(mktemp /tmp/pulse-update-installer.XXXXXX)
-    signature_tmp=$(mktemp /tmp/pulse-update-installer.sig.XXXXXX)
-    trap 'rm -f "${installer_tmp:-}" "${signature_tmp:-}"; ensure_service_restarted "$service_name" "$service_was_active"; trap - RETURN' RETURN
+    if ! installer_tmp=$(mktemp /tmp/pulse-update-installer.XXXXXX) ||
+       ! signature_tmp=$(mktemp /tmp/pulse-update-installer.sig.XXXXXX); then
+        log error "Could not create installer verification files; refusing update"
+        return 1
+    fi
 
     if ! curl -fsSL "$install_script_url" -o "$installer_tmp"; then
         log error "Failed to download installer from $install_script_url"
@@ -458,6 +479,7 @@ perform_update() {
     fi
     log info "Installer signature verified"
 
+    local update_accepted="false"
     if env \
            "PULSE_SERVICE_NAME=$service_name" \
            "PULSE_INSTALL_DIR=$INSTALL_DIR" \
@@ -467,10 +489,11 @@ perform_update() {
            log info "installer: $line"
        done; then
         
-        log info "Update successfully installed"
+        log info "Installer completed; verifying update"
         
         # Verify new version
-        local installed_version=$(get_current_version)
+        local installed_version
+        installed_version=$(get_current_version)
         if [[ "$installed_version" == "$new_version" ]]; then
             log info "Version verified: $installed_version"
 
@@ -485,82 +508,69 @@ perform_update() {
 
                 if ! wait_for_service_active "$service_name" 20; then
                     log error "Pulse service did not come back up after update"
-
-                    log info "Restoring from backup"
-                    if [[ -f "$backup_dir/pulse" ]]; then
-                        if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
-                            cp -f "$backup_dir/pulse" "$INSTALL_DIR/bin/pulse"
-                        else
-                            cp -f "$backup_dir/pulse" "$INSTALL_DIR/pulse"
-                        fi
-                    fi
-                    if [[ -f "$backup_dir/VERSION" ]]; then
-                        cp -f "$backup_dir/VERSION" "$INSTALL_DIR/VERSION"
-                    fi
-
-                    systemctl restart "$service_name" || true
-                    rm -rf "$backup_dir"
-                    return 1
+                else
+                    update_accepted="true"
                 fi
+            else
+                update_accepted="true"
             fi
-
-            # Clean up backup
-            rm -rf "$backup_dir"
-
-            return 0
         else
             log error "Version mismatch after update. Expected: $new_version, Got: $installed_version"
-            
-            # Restore from backup
-            log info "Restoring from backup"
-            if [[ -f "$backup_dir/pulse" ]]; then
-                if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
-                    cp -f "$backup_dir/pulse" "$INSTALL_DIR/bin/pulse"
-                else
-                    cp -f "$backup_dir/pulse" "$INSTALL_DIR/pulse"
-                fi
-            fi
-            if [[ -f "$backup_dir/VERSION" ]]; then
-                cp -f "$backup_dir/VERSION" "$INSTALL_DIR/VERSION"
-            fi
-            
-            # Restart service with old version
-            systemctl restart "$service_name" || true
-            
-            # Clean up backup
-            rm -rf "$backup_dir"
-            
-            return 1
         fi
     else
         log error "Update installation failed"
-        
-        # Restore from backup
-        log info "Restoring from backup"
-        if [[ -f "$backup_dir/pulse" ]]; then
-            if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
-                cp -f "$backup_dir/pulse" "$INSTALL_DIR/bin/pulse"
-            else
-                cp -f "$backup_dir/pulse" "$INSTALL_DIR/pulse"
-            fi
-        fi
-        if [[ -f "$backup_dir/VERSION" ]]; then
-            cp -f "$backup_dir/VERSION" "$INSTALL_DIR/VERSION"
-        fi
+    fi
 
-        # Restart the restored binary if Pulse was running before the update.
-        # The installer stops the service before it can fail, so skipping this
-        # left Pulse down indefinitely (#1630); the RETURN trap above is the
-        # backstop if this path ever changes.
-        if [[ "$service_was_active" == "true" ]]; then
-            systemctl restart "$service_name" || true
-        fi
+    if [[ "$update_accepted" == "true" ]]; then
+        log info "Update successfully installed and verified"
+        return 0
+    fi
 
-        # Clean up backup
-        rm -rf "$backup_dir"
-
+    # One rollback path for installer, version and liveness failures. Keep the
+    # backup and suppress the RETURN-trap restart until every file is restored;
+    # starting a partially restored executable would hide the recovery failure.
+    retain_backup="true"
+    restart_allowed="false"
+    log info "Restoring from backup"
+    if ! systemctl stop "$service_name"; then
+        log error "Could not stop Pulse for rollback; backup retained at $backup_dir; manual recovery required"
         return 1
     fi
+
+    # Stage and compare all saved files before replacing any destination. Each
+    # replacement is a same-directory rename, not a truncating copy into a
+    # running executable or a symlink created by the failed installer.
+    for i in "${!file_paths[@]}"; do
+        if [[ "${file_present[i]}" == "true" ]]; then
+            if ! restore_files[i]=$(mktemp "${file_paths[i]}.rollback.XXXXXX") ||
+               ! cp -p -- "$backup_dir/${backup_names[i]}" "${restore_files[i]}" ||
+               ! cmp -s -- "$backup_dir/${backup_names[i]}" "${restore_files[i]}"; then
+                log error "Could not stage rollback for ${file_paths[i]}; backup retained at $backup_dir; manual recovery required"
+                return 1
+            fi
+        fi
+    done
+    for i in "${!file_paths[@]}"; do
+        if [[ "${file_present[i]}" == "true" ]]; then
+            if ! mv -fT -- "${restore_files[i]}" "${file_paths[i]}"; then
+                log error "Could not restore ${file_paths[i]}; backup retained at $backup_dir; manual recovery required"
+                return 1
+            fi
+        elif ! rm -f -- "${file_paths[i]}"; then
+            log error "Could not restore absence of ${file_paths[i]}; backup retained at $backup_dir; manual recovery required"
+            return 1
+        fi
+    done
+
+    if [[ "$service_was_active" == "true" ]]; then
+        if ! systemctl start "$service_name" || ! wait_for_service_active "$service_name" 20; then
+            log error "Restored Pulse could not be started; backup retained at $backup_dir; manual recovery required"
+            return 1
+        fi
+    fi
+    retain_backup="false"
+    log info "Previous installation restored"
+    return 1
 }
 
 # Main update check

@@ -610,3 +610,280 @@ echo "AFTER_CALLER"
 		t.Fatalf("perform_update leaked its RETURN trap; a later function return aborted under set -u:\n%s", got)
 	}
 }
+
+// Exercise the complete sourced updater in its real conditional-call context.
+// Only downloads and systemd are replaced; file copies, comparisons, renames,
+// executable version reads and SSH signature verification are real and local.
+func TestAutoUpdateBackupTransaction(t *testing.T) {
+	if _, err := exec.LookPath("ssh-keygen"); err != nil {
+		t.Skip("ssh-keygen unavailable for signed offline installer fixture")
+	}
+	type scenario struct {
+		name, fault, outcome, layout            string
+		noVersion, retained, success, preflight bool
+	}
+	cases := []scenario{
+		{name: "backup_directory_failure", fault: "backup_dir", preflight: true},
+		{name: "binary_snapshot_failure", fault: "backup_binary", preflight: true},
+		{name: "version_snapshot_failure", fault: "backup_version", preflight: true},
+		{name: "corrupt_snapshot", fault: "backup_corrupt", preflight: true},
+		{name: "installer_file_failure", fault: "installer_tmp", preflight: true},
+		{name: "signature_file_failure", fault: "signature_tmp", preflight: true},
+		{name: "missing_binary", fault: "no_binary", preflight: true},
+		{name: "symlink_binary", fault: "binary_symlink", preflight: true},
+		{name: "symlink_version", fault: "version_symlink", preflight: true},
+		{name: "installer_download_failure", fault: "download_installer", preflight: true},
+		{name: "signature_download_failure", fault: "download_signature", preflight: true},
+		{name: "invalid_signature", fault: "invalid_signature", preflight: true},
+		{name: "installer_failure", outcome: "failure"},
+		{name: "wrong_version", outcome: "mismatch"},
+		{name: "original_version_absent", outcome: "failure", noVersion: true},
+		{name: "legacy_layout_migration", outcome: "failure", layout: "legacy"},
+		{name: "both_binary_paths", outcome: "failure", layout: "both"},
+		{name: "new_destination_symlink", outcome: "symlink"},
+		{name: "rollback_stop_failure", fault: "stop", outcome: "failure", retained: true},
+		{name: "rollback_allocation_failure", fault: "restore_tmp", outcome: "failure", retained: true},
+		{name: "rollback_copy_failure", fault: "restore_copy", outcome: "failure", retained: true},
+		{name: "corrupt_rollback_copy", fault: "restore_corrupt", outcome: "failure", retained: true},
+		{name: "rollback_rename_failure", fault: "restore_rename", outcome: "failure", retained: true},
+		{name: "version_restore_failure", fault: "version_rename", outcome: "failure", retained: true},
+		{name: "new_destination_directory", outcome: "directory", retained: true},
+		{name: "successful_update", success: true},
+	}
+	t.Run("new_service_failure", func(t *testing.T) {
+		runAutoUpdateTransactionScenario(t, "", "service_failure", "", "true", false, false, false, false)
+	})
+	for _, tc := range cases {
+		for _, active := range []string{"true", "false"} {
+			t.Run(tc.name+"/prior_active_"+active, func(t *testing.T) {
+				runAutoUpdateTransactionScenario(t, tc.fault, tc.outcome, tc.layout, active, tc.noVersion, tc.preflight, tc.retained, tc.success)
+			})
+		}
+	}
+	t.Run("restored_service_start_failure", func(t *testing.T) {
+		runAutoUpdateTransactionScenario(t, "restart", "failure", "", "true", false, false, true, false)
+	})
+	t.Run("restored_service_liveness_failure", func(t *testing.T) {
+		runAutoUpdateTransactionScenario(t, "restart_liveness", "failure", "", "true", false, false, true, false)
+	})
+}
+
+func runAutoUpdateTransactionScenario(t *testing.T, fault, outcome, layout, active string, noVersion, preflight, retained, success bool) {
+	t.Helper()
+	updater, err := filepath.Abs(repoFile("scripts", "pulse-auto-update.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	script := `
+set -euo pipefail
+source "$UPDATER_UNDER_TEST"
+INSTALL_DIR="$FIXTURE_DIR/install"
+CONFIG_DIR="$FIXTURE_DIR/config"
+mkdir -p "$INSTALL_DIR/bin" "$CONFIG_DIR" "$FIXTURE_DIR/tmp" "$FIXTURE_DIR/original"
+printf 'operator settings unchanged\n' > "$CONFIG_DIR/system.json"
+printf 'local identity unchanged\n' > "$CONFIG_DIR/agent-id"
+printf 'victim unchanged\n' > "$FIXTURE_DIR/victim"
+printf '#!/usr/bin/env bash\nprintf "Pulse v6.4.5\\n"\n' > "$FIXTURE_DIR/original/pulse-bin"
+printf '#!/usr/bin/env bash\nprintf "Pulse v6.4.4\\n"\n' > "$FIXTURE_DIR/original/pulse-legacy"
+printf 'v6.4.5\n' > "$FIXTURE_DIR/original/VERSION"
+chmod 751 "$FIXTURE_DIR/original/pulse-bin" "$FIXTURE_DIR/original/pulse-legacy"
+chmod 640 "$FIXTURE_DIR/original/VERSION"
+case "$LAYOUT" in
+ legacy) cp -p "$FIXTURE_DIR/original/pulse-bin" "$INSTALL_DIR/pulse" ;;
+ both) cp -p "$FIXTURE_DIR/original/pulse-bin" "$INSTALL_DIR/bin/pulse"; cp -p "$FIXTURE_DIR/original/pulse-legacy" "$INSTALL_DIR/pulse" ;;
+ *) cp -p "$FIXTURE_DIR/original/pulse-bin" "$INSTALL_DIR/bin/pulse" ;;
+esac
+if [[ "$NO_VERSION" == false ]]; then cp -p "$FIXTURE_DIR/original/VERSION" "$INSTALL_DIR/VERSION"; fi
+case "$FAULT" in
+ no_binary) rm -f "$INSTALL_DIR/bin/pulse" ;;
+ binary_symlink) mv "$INSTALL_DIR/bin/pulse" "$FIXTURE_DIR/original/linked-binary"; ln -s "$FIXTURE_DIR/original/linked-binary" "$INSTALL_DIR/bin/pulse" ;;
+ version_symlink) rm "$INSTALL_DIR/VERSION"; ln -s "$FIXTURE_DIR/original/VERSION" "$INSTALL_DIR/VERSION" ;;
+esac
+printf '%s\n' "$PRIOR_ACTIVE" > "$FIXTURE_DIR/active"
+export FIXTURE_DIR OUTCOME FAULT
+cat > "$FIXTURE_DIR/installer" <<'INSTALLER'
+set -euo pipefail
+printf 'executed\n' > "$FIXTURE_DIR/installer-executed"
+printf 'false\n' > "$FIXTURE_DIR/active"
+mkdir -p "$PULSE_INSTALL_DIR/bin"
+new_version=v6.5.0
+[[ "$OUTCOME" != mismatch ]] || new_version=v6.4.6
+printf '#!/usr/bin/env bash\nprintf "Pulse %s\\n"\n' "$new_version" > "$PULSE_INSTALL_DIR/bin/pulse"
+chmod 700 "$PULSE_INSTALL_DIR/bin/pulse"
+if [[ -f "$PULSE_INSTALL_DIR/pulse" ]]; then printf 'changed legacy binary\n' > "$PULSE_INSTALL_DIR/pulse"; fi
+printf '%s\n' "$new_version" > "$PULSE_INSTALL_DIR/VERSION"
+chmod 600 "$PULSE_INSTALL_DIR/VERSION"
+if [[ "$OUTCOME" == symlink ]]; then
+ rm "$PULSE_INSTALL_DIR/bin/pulse"
+ ln -s "$FIXTURE_DIR/victim" "$PULSE_INSTALL_DIR/bin/pulse"
+fi
+if [[ "$OUTCOME" == directory ]]; then
+ rm "$PULSE_INSTALL_DIR/bin/pulse"
+ mkdir "$PULSE_INSTALL_DIR/bin/pulse"
+ printf 'unexpected directory\n' > "$PULSE_INSTALL_DIR/bin/pulse/keep"
+fi
+case "$OUTCOME" in failure|symlink|directory) exit 23 ;; esac
+exit 0
+INSTALLER
+command ssh-keygen -q -t ed25519 -N '' -f "$FIXTURE_DIR/fixture-key"
+PINNED_RELEASE_SSH_PUBLIC_KEY=$(cat "$FIXTURE_DIR/fixture-key.pub")
+command ssh-keygen -Y sign -f "$FIXTURE_DIR/fixture-key" -n pulse-install "$FIXTURE_DIR/installer" >/dev/null 2>&1
+[[ "$FAULT" != invalid_signature ]] || printf 'tampered\n' >> "$FIXTURE_DIR/installer"
+log() { printf '[%s] %s\n' "$1" "${*:2}"; }
+detect_service_name() { printf 'pulse\n'; }
+sleep() { :; }
+# Keep real crypto but place all temporary files inside this disposable fixture.
+mktemp() {
+ local -a args=("$@")
+ local template="${args[${#args[@]}-1]}" result
+ case "$template:$FAULT" in
+  /tmp/pulse-backup.*:backup_dir|/tmp/pulse-update-installer.XXXXXX:installer_tmp|/tmp/pulse-update-installer.sig.*:signature_tmp|*.rollback.*:restore_tmp) return 1 ;;
+ esac
+ if [[ "$template" == /tmp/* ]]; then args[${#args[@]}-1]="$FIXTURE_DIR/tmp/${template##*/}"; fi
+ result=$(command mktemp "${args[@]}") || return
+ if [[ "$template" == /tmp/pulse-backup.* ]]; then printf '%s\n' "$result" > "$FIXTURE_DIR/backup-path"; fi
+ printf '%s\n' "$result"
+}
+# Record/clean the parent's timestamp backup as well, for the negative control.
+date() { printf 'transaction-%s\n' "${FIXTURE_DIR##*/}"; }
+mkdir() {
+ if [[ "${*: -1}" == /tmp/pulse-backup-* ]]; then printf '%s\n' "${*: -1}" > "$FIXTURE_DIR/backup-path"; fi
+ command mkdir "$@"
+}
+cp() {
+ local src="${@: -2:1}" dest="${@: -1}"
+ if [[ "$dest" == *pulse-backup* ]]; then
+  case "$FAULT:${src##*/}" in backup_binary:pulse|backup_version:VERSION) return 1 ;; esac
+  command cp "$@" || return
+  if [[ "$FAULT" == backup_corrupt ]]; then
+   [[ -d "$dest" ]] && dest="$dest/${src##*/}"
+   printf 'corrupt\n' > "$dest"
+  fi
+ elif [[ "$src" == *pulse-backup*/* ]]; then
+  [[ "$FAULT" != restore_copy ]] || return 1
+  command cp "$@" || return
+  [[ "$FAULT" != restore_corrupt ]] || printf 'corrupt\n' > "$dest"
+ else
+  command cp "$@"
+ fi
+}
+mv() {
+ local dest="${*: -1}"
+ if [[ "$FAULT" == restore_rename && "$dest" == "$INSTALL_DIR/bin/pulse" ]]; then return 1; fi
+ if [[ "$FAULT" == version_rename && "$dest" == "$INSTALL_DIR/VERSION" ]]; then return 1; fi
+ command mv "$@"
+}
+curl() {
+ local out="" url="" arg
+ while (( $# )); do
+  arg="$1"; shift
+  case "$arg" in -o) out="$1"; shift ;; https://*) url="$arg" ;; esac
+ done
+ printf '%s\n' "$url" >> "$FIXTURE_DIR/downloads"
+ if [[ "$url" == *.sshsig ]]; then
+  [[ "$FAULT" != download_signature ]] || return 1
+  command cp "$FIXTURE_DIR/installer.sshsig" "$out"
+ else
+  [[ "$FAULT" != download_installer ]] || return 1
+  command cp "$FIXTURE_DIR/installer" "$out"
+ fi
+}
+systemctl() {
+ case "$1" in
+  is-active) [[ "$(cat "$FIXTURE_DIR/active")" == true ]] ;;
+  stop)
+   printf 'stop\n' >> "$FIXTURE_DIR/service-operations"
+   [[ "$FAULT" != stop ]] || return 1
+   printf 'false\n' > "$FIXTURE_DIR/active"
+   ;;
+  start|restart)
+   printf '%s:%s\n' "$1" "$(get_current_version)" >> "$FIXTURE_DIR/service-operations"
+   [[ "$FAULT" != restart ]] || return 1
+   if [[ "$OUTCOME" == service_failure && "$(get_current_version)" != v6.4.5 ]]; then return 1; fi
+   [[ "$FAULT" == restart_liveness ]] || printf 'true\n' > "$FIXTURE_DIR/active"
+   ;;
+  *) return 1 ;;
+ esac
+}
+cleanup_fixture() {
+ if [[ -f "$FIXTURE_DIR/backup-path" ]]; then
+  local old_backup; old_backup=$(cat "$FIXTURE_DIR/backup-path")
+  case "$old_backup" in /tmp/pulse-backup-transaction-*) command rm -rf -- "$old_backup" ;; esac
+ fi
+}
+trap cleanup_fixture EXIT
+result=failure
+if perform_update v6.5.0; then result=success; fi
+[[ "$result" == "$EXPECTED_RESULT" ]] || { echo "unexpected result: $result"; exit 1; }
+[[ -z "$(trap -p RETURN)" ]] || { echo 'leaked RETURN trap'; exit 1; }
+caller() { :; }; caller
+[[ "$(cat "$CONFIG_DIR/system.json")" == 'operator settings unchanged' ]]
+[[ "$(cat "$CONFIG_DIR/agent-id")" == 'local identity unchanged' ]]
+[[ "$(cat "$FIXTURE_DIR/victim")" == 'victim unchanged' ]]
+if [[ "$PREFLIGHT" == true ]]; then
+ [[ ! -f "$FIXTURE_DIR/installer-executed" ]] || { echo 'installer executed without a usable backup/admission'; exit 1; }
+ [[ ! -s "$FIXTURE_DIR/service-operations" ]] || { echo 'service mutated on rejected preflight'; exit 1; }
+ [[ "$(cat "$FIXTURE_DIR/active")" == "$PRIOR_ACTIVE" ]]
+else
+ [[ -f "$FIXTURE_DIR/installer-executed" ]]
+fi
+backup=""; [[ ! -f "$FIXTURE_DIR/backup-path" ]] || backup=$(cat "$FIXTURE_DIR/backup-path")
+if [[ "$RETAINED" == true ]]; then
+ [[ -d "$backup" ]] || { echo 'rollback backup lost after failed recovery'; exit 1; }
+ [[ "$(stat -c '%a' "$backup")" == 700 ]]
+ cmp "$FIXTURE_DIR/original/pulse-bin" "$backup/pulse-bin"
+ cmp "$FIXTURE_DIR/original/VERSION" "$backup/VERSION"
+else
+ [[ -z "$backup" || ! -e "$backup" ]] || { echo 'unneeded backup leaked'; exit 1; }
+fi
+# Incomplete file restoration must not activate an unverified executable.
+case "$FAULT" in restore_tmp|restore_copy|restore_corrupt|restore_rename|version_rename|stop)
+ if [[ -f "$FIXTURE_DIR/service-operations" ]]; then
+  ! grep -Eq '^(start|restart):' "$FIXTURE_DIR/service-operations"
+ fi
+ ;;
+esac
+if [[ "$PREFLIGHT" != true && "$RETAINED" != true && "$EXPECTED_RESULT" != success ]]; then
+ case "$LAYOUT" in
+  legacy) [[ ! -e "$INSTALL_DIR/bin/pulse" ]]; cmp "$FIXTURE_DIR/original/pulse-bin" "$INSTALL_DIR/pulse" ;;
+  both) cmp "$FIXTURE_DIR/original/pulse-bin" "$INSTALL_DIR/bin/pulse"; cmp "$FIXTURE_DIR/original/pulse-legacy" "$INSTALL_DIR/pulse" ;;
+  *) cmp "$FIXTURE_DIR/original/pulse-bin" "$INSTALL_DIR/bin/pulse"; [[ ! -e "$INSTALL_DIR/pulse" ]] ;;
+ esac
+ if [[ "$NO_VERSION" == true ]]; then
+  [[ ! -e "$INSTALL_DIR/VERSION" ]]
+ else
+  cmp "$FIXTURE_DIR/original/VERSION" "$INSTALL_DIR/VERSION"
+  [[ "$(stat -c '%a' "$INSTALL_DIR/VERSION")" == 640 ]]
+ fi
+ [[ "$(get_current_version)" == v6.4.5 ]]
+ binary="$INSTALL_DIR/bin/pulse"; [[ "$LAYOUT" != legacy ]] || binary="$INSTALL_DIR/pulse"
+ [[ "$(stat -c '%a' "$binary")" == 751 ]]
+ [[ "$(cat "$FIXTURE_DIR/active")" == "$PRIOR_ACTIVE" ]]
+fi
+if [[ "$EXPECTED_RESULT" == success ]]; then [[ "$(get_current_version)" == v6.5.0 ]]; fi
+printf 'TRANSACTION_ASSERTIONS_PASSED\n'
+`
+	cmd := exec.Command("bash", "-c", script)
+	boolString := func(v bool) string {
+		if v {
+			return "true"
+		}
+		return "false"
+	}
+	want := "failure"
+	if success {
+		want = "success"
+	}
+	cmd.Env = append(os.Environ(), "UPDATER_UNDER_TEST="+updater, "FIXTURE_DIR="+dir,
+		"FAULT="+fault, "OUTCOME="+outcome, "LAYOUT="+layout, "PRIOR_ACTIVE="+active,
+		"NO_VERSION="+boolString(noVersion), "PREFLIGHT="+boolString(preflight),
+		"RETAINED="+boolString(retained), "EXPECTED_RESULT="+want)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("complete updater transaction: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "TRANSACTION_ASSERTIONS_PASSED") {
+		t.Fatalf("transaction assertions did not finish:\n%s", out)
+	}
+}
