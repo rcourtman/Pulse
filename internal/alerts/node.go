@@ -271,9 +271,11 @@ func (m *Manager) unregisterHostAgentNodeLink(hostID string) {
 	}
 }
 
-// linkedHostAgentForNode returns the host agent link that owns usage metrics
-// for the given Proxmox node. If several agents are linked to one node, the
-// lowest agent ID wins so the choice is stable.
+// linkedHostAgentForNode returns the host agent coverage for the given Proxmox
+// node. A usage metric counts as owned when any agent linked to the node
+// evaluates it, so a second linked agent covering a metric the first does not
+// still keeps the node from alerting twice. The agent identity reported is the
+// lowest agent ID among the linked agents, so the choice is stable.
 func (m *Manager) linkedHostAgentForNode(nodeID string) (hostAgentNodeLink, bool) {
 	nodeID = strings.TrimSpace(nodeID)
 	if nodeID == "" {
@@ -288,9 +290,14 @@ func (m *Manager) linkedHostAgentForNode(nodeID string) (hostAgentNodeLink, bool
 			continue
 		}
 		if !ok || link.agentID < found.agentID {
-			found = link
-			ok = true
+			found.agentID = link.agentID
+			found.agentName = link.agentName
 		}
+		found.nodeID = nodeID
+		found.cpu = found.cpu || link.cpu
+		found.memory = found.memory || link.memory
+		found.disk = found.disk || link.disk
+		ok = true
 	}
 	return found, ok
 }

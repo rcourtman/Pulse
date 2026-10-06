@@ -439,6 +439,97 @@ func TestCheckNodeKeepsUsageMetricsTheAgentDoesNotEvaluate(t *testing.T) {
 	})
 }
 
+// Ownership follows what the linked agents are configured to evaluate, not one
+// report's data: a missing agent memory reading must not hand memory back to
+// the node, a second linked agent's metrics count, and the node's disk metric
+// belongs to the agent only when the agent evaluates that same filesystem.
+func TestCheckNodeUsageOwnershipFollowsWhatAgentsEvaluate(t *testing.T) {
+	setup := func(t *testing.T) (*Manager, models.Node, models.Host) {
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.config.TimeThresholds = map[string]int{}
+		m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+		m.config.NodeDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+		m.config.NodeDefaults.Disk = &HysteresisThreshold{Trigger: 90, Clear: 85}
+		m.config.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+		m.config.AgentDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+		m.config.AgentDefaults.Disk = &HysteresisThreshold{Trigger: 90, Clear: 85}
+		m.mu.Unlock()
+		node, host := testNodeWithHostAgent()
+		return m, node, host
+	}
+
+	t.Run("missing_agent_memory_reading", func(t *testing.T) {
+		m, node, host := setup(t)
+		node.Memory = models.Memory{Total: 100, Used: 95, Free: 5, Usage: 95}
+		host.Memory = node.Memory
+		m.CheckHost(host)
+		m.CheckNode(node)
+
+		host.Memory = models.Memory{Total: 100, UsageUnavailable: true}
+		m.CheckHost(host)
+		m.CheckNode(node)
+		agentAlertID := canonicalMetricStateID(hostResourceID(host.ID), "memory")
+		if got := testActiveAlertIDsOfType(m, "memory"); len(got) != 1 || got[0] != agentAlertID {
+			t.Fatalf("expected only the agent memory alert while its reading is missing, got %v", got)
+		}
+	})
+
+	t.Run("second_linked_agent", func(t *testing.T) {
+		m, node, host := setup(t)
+		node.CPU = 0.95
+		m.mu.Lock()
+		m.config.Overrides = map[string]ThresholdConfig{
+			"agent-a": {CPU: &HysteresisThreshold{Trigger: 0, Clear: 0}},
+		}
+		m.mu.Unlock()
+		agentA := host
+		agentA.ID = "agent-a"
+		agentB := host
+		agentB.ID = "agent-b"
+		agentB.CPUUsage = 95
+		m.CheckHost(agentA)
+		m.CheckHost(agentB)
+		m.CheckNode(node)
+		agentBAlertID := canonicalMetricStateID(hostResourceID(agentB.ID), "cpu")
+		if got := testActiveAlertIDsOfType(m, "cpu"); len(got) != 1 || got[0] != agentBAlertID {
+			t.Fatalf("expected only agent-b's CPU alert when it covers CPU for the node, got %v", got)
+		}
+	})
+
+	t.Run("summary_disk", func(t *testing.T) {
+		m, node, host := setup(t)
+		root := models.Disk{Mountpoint: "/", Device: "/dev/sda1", Total: 100, Used: 95, Free: 5, Usage: 95}
+		data := models.Disk{Mountpoint: "/data", Device: "/dev/sdb1", Total: 100, Used: 10, Free: 90, Usage: 10}
+		host.Disks = []models.Disk{root, data}
+		node.Disk = models.Disk{Total: 100, Used: 95, Free: 5, Usage: 95}
+		rootResourceID, _ := hostDiskResourceID(host, root)
+		nodeDiskAlertID := canonicalMetricStateID(node.ID, "disk")
+
+		m.mu.Lock()
+		m.config.Overrides = map[string]ThresholdConfig{rootResourceID: {Disabled: true}}
+		m.mu.Unlock()
+		m.CheckHost(host)
+		m.CheckNode(node)
+		if !testHasActiveAlert(t, m, nodeDiskAlertID) {
+			t.Fatalf("expected the node to keep its root disk alert while the agent skips that filesystem")
+		}
+
+		m.mu.Lock()
+		m.config.Overrides = nil
+		m.mu.Unlock()
+		m.CheckHost(host)
+		m.CheckNode(node)
+		if testHasActiveAlert(t, m, nodeDiskAlertID) {
+			t.Fatalf("expected the node to release its disk alert once the agent evaluates the same filesystem")
+		}
+		if !testHasActiveAlert(t, m, canonicalMetricStateID(rootResourceID, "disk")) {
+			t.Fatalf("expected the agent's root filesystem alert")
+		}
+	})
+}
+
 // A missing reading keeps the incident but must not let a sustained-for or
 // recovery delay complete across the gap in evidence.
 func TestCheckNodeMissingTemperatureInterruptsTimingRuns(t *testing.T) {
