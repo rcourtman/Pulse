@@ -48,11 +48,31 @@ const runStateTitle = (resource: Resource): string | undefined => {
   return undefined;
 };
 
+// v5 flagged crash-loopers in the restarts column; a container that restarted
+// more than this many times needs an operator's eye even while "running".
+export const DOCKER_RESTART_ATTENTION_THRESHOLD = 5;
+
+// flagRestarts: the row shows no Restarts column (narrow layouts), so a
+// running container past the restart threshold says so in its State cell.
 export const getDockerContainerStatePresentation = (
   resource: Resource,
+  options: { flagRestarts?: boolean } = {},
 ): DockerContainerStatePresentation => {
   const status = mapDockerContainerStatus(resource);
   const tone = presentationTone(status.variant);
+  const restarts = resource.docker?.restartCount;
+  if (
+    options.flagRestarts &&
+    tone === null &&
+    typeof restarts === 'number' &&
+    restarts > DOCKER_RESTART_ATTENTION_THRESHOLD
+  ) {
+    return {
+      label: `${restarts} restarts`,
+      title: `Running, but Docker has restarted it ${restarts} times`,
+      tone: 'warning',
+    };
+  }
   return { label: status.label, title: containerStateTitle(resource, status.label), tone };
 };
 

@@ -6733,3 +6733,15 @@ Pulse already writes, with `omitempty` encoding so existing records load
 unchanged and older builds ignore the fields. `internal/api/ai_handlers.go`
 reads them for the usage export only. No new file, directory, retention
 window, backup, migration or recovery authority is introduced.
+
+### Webhook configuration never persists the API mask
+
+`internal/api/alerting/notifications.go` resolves each `***REDACTED***`
+value the webhook editor sends back to the saved value of the same key, or
+drops it, before the encrypted webhook file is written, so the mask is never
+persisted as a header, custom field or signing secret. Webhook normalization
+also drops blank header entries when the file is loaded or saved; a stored
+blank header is removed on the next save. Export and import pass through the
+same normalization. No new file, retention window, backup, migration or
+recovery authority is introduced; `TestWebhookMaskedValuesResolvePerKey` in
+`internal/api/alerting/notifications_test.go` covers the write path.

@@ -352,62 +352,111 @@ func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *htt
 func (h *NotificationHandlers) GetWebhooks(w http.ResponseWriter, r *http.Request) {
 	webhooks := h.getMonitor(r.Context()).GetNotificationManager().GetWebhooks()
 
-	// Mask sensitive fields in headers and customFields
 	maskedWebhooks := make([]map[string]interface{}, len(webhooks))
 	for i, webhook := range webhooks {
-		whMap := map[string]interface{}{
-			"id":      webhook.ID,
-			"name":    webhook.Name,
-			"url":     webhook.URL,
-			"method":  webhook.Method,
-			"enabled": webhook.Enabled,
-			"service": webhook.Service,
-		}
-
-		// Mask headers - only show keys, not values
-		if len(webhook.Headers) > 0 {
-			maskedHeaders := make(map[string]string)
-			for key := range webhook.Headers {
-				maskedHeaders[key] = "***REDACTED***"
-			}
-			whMap["headers"] = maskedHeaders
-		}
-
-		// Mask custom fields - only show keys, not values
-		if len(webhook.CustomFields) > 0 {
-			maskedFields := make(map[string]string)
-			for key := range webhook.CustomFields {
-				maskedFields[key] = "***REDACTED***"
-			}
-			whMap["customFields"] = maskedFields
-		}
-
-		// Include template if present
-		if webhook.Template != "" {
-			whMap["template"] = webhook.Template
-		}
-
-		// Include the configured mention so the UI can render it after reload (#1118)
-		if webhook.Mention != "" {
-			whMap["mention"] = webhook.Mention
-		}
-
-		if len(webhook.TagFilter) > 0 {
-			whMap["tagFilter"] = append([]string(nil), webhook.TagFilter...)
-			whMap["tagFilterMode"] = webhook.TagMode
-		}
-		whMap["minimumSeverity"] = webhook.MinimumSeverity
-
-		// Signal that a signing secret is configured without revealing it
-		if webhook.SigningSecret != "" {
-			whMap["signingSecret"] = "***REDACTED***"
-		}
-
-		maskedWebhooks[i] = whMap
+		maskedWebhooks[i] = maskedWebhookResponse(webhook)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(maskedWebhooks)
+}
+
+// maskedWebhookSecret stands in for every stored header, custom field and
+// signing secret value the webhook API returns. A request that sends it back
+// for a saved webhook means "keep the saved value"; see
+// restoreMaskedWebhookSecrets.
+const maskedWebhookSecret = "***REDACTED***"
+
+// maskedWebhookResponse is the single response shape for webhook list, create
+// and update: header and custom field values and the signing secret are
+// masked, so no response returns a stored secret.
+func maskedWebhookResponse(webhook notifications.WebhookConfig) map[string]interface{} {
+	whMap := map[string]interface{}{
+		"id":      webhook.ID,
+		"name":    webhook.Name,
+		"url":     webhook.URL,
+		"method":  webhook.Method,
+		"enabled": webhook.Enabled,
+		"service": webhook.Service,
+	}
+
+	// Mask headers - only show keys, not values
+	if len(webhook.Headers) > 0 {
+		maskedHeaders := make(map[string]string)
+		for key := range webhook.Headers {
+			maskedHeaders[key] = maskedWebhookSecret
+		}
+		whMap["headers"] = maskedHeaders
+	}
+
+	// Mask custom fields - only show keys, not values
+	if len(webhook.CustomFields) > 0 {
+		maskedFields := make(map[string]string)
+		for key := range webhook.CustomFields {
+			maskedFields[key] = maskedWebhookSecret
+		}
+		whMap["customFields"] = maskedFields
+	}
+
+	// Include template if present
+	if webhook.Template != "" {
+		whMap["template"] = webhook.Template
+	}
+
+	// Include the configured mention so the UI can render it after reload (#1118)
+	if webhook.Mention != "" {
+		whMap["mention"] = webhook.Mention
+	}
+
+	if len(webhook.TagFilter) > 0 {
+		whMap["tagFilter"] = append([]string(nil), webhook.TagFilter...)
+		whMap["tagFilterMode"] = webhook.TagMode
+	}
+	whMap["minimumSeverity"] = webhook.MinimumSeverity
+
+	// Signal that a signing secret is configured without revealing it
+	if webhook.SigningSecret != "" {
+		whMap["signingSecret"] = maskedWebhookSecret
+	}
+
+	return whMap
+}
+
+// restoreMaskedWebhookSecrets replaces each masked value in an incoming
+// webhook with the saved value of the same header, custom field or signing
+// secret. Restoring per key keeps any value the user typed in the same edit;
+// a masked key with no saved value is dropped, so the mask is never stored or
+// sent as a real value.
+func restoreMaskedWebhookSecrets(incoming, saved notifications.WebhookConfig) notifications.WebhookConfig {
+	incoming.Headers = restoreMaskedWebhookValues(incoming.Headers, saved.Headers)
+	incoming.CustomFields = restoreMaskedWebhookValues(incoming.CustomFields, saved.CustomFields)
+	if incoming.SigningSecret == maskedWebhookSecret {
+		incoming.SigningSecret = saved.SigningSecret
+	}
+	return incoming
+}
+
+func restoreMaskedWebhookValues(incoming, saved map[string]string) map[string]string {
+	if len(incoming) == 0 {
+		return incoming
+	}
+	restored := make(map[string]string, len(incoming))
+	for key, value := range incoming {
+		if value != maskedWebhookSecret {
+			restored[key] = value
+			continue
+		}
+		if savedValue, ok := saved[key]; ok {
+			restored[key] = savedValue
+		}
+	}
+	return restored
+}
+
+// stripMaskedWebhookSecrets drops masked values from a webhook that has no
+// saved counterpart, such as a create or an unsaved form test.
+func stripMaskedWebhookSecrets(webhook notifications.WebhookConfig) notifications.WebhookConfig {
+	return restoreMaskedWebhookSecrets(webhook, notifications.WebhookConfig{})
 }
 
 // CreateWebhook creates a new webhook
@@ -430,7 +479,7 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	webhook = notifications.NormalizeWebhookConfig(webhook)
+	webhook = notifications.NormalizeWebhookConfig(stripMaskedWebhookSecrets(webhook))
 
 	monitor := h.getMonitor(r.Context())
 	manager := monitor.GetNotificationManager()
@@ -456,19 +505,7 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 	}
 	manager.AddWebhook(webhook)
 
-	// Return the full webhook data including any extra fields like 'service'
-	var responseData map[string]interface{}
-	if err := json.Unmarshal(bodyBytes, &responseData); err != nil {
-		log.Warn().Err(err).Msg("Failed to unmarshal webhook response data")
-		responseData = make(map[string]interface{})
-	}
-	responseData["id"] = webhook.ID
-	responseData["customFields"] = webhook.CustomFields
-	responseData["tagFilter"] = webhook.TagFilter
-	responseData["tagFilterMode"] = webhook.TagMode
-	responseData["minimumSeverity"] = webhook.MinimumSeverity
-
-	if err := utils.WriteJSONResponse(w, responseData); err != nil {
+	if err := utils.WriteJSONResponse(w, maskedWebhookResponse(webhook)); err != nil {
 		log.Error().Err(err).Msg("Failed to write webhook creation response")
 	}
 }
@@ -542,9 +579,6 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 	}
 	_ = json.Unmarshal(bodyBytes, &routingPresence)
 	webhook = notifications.NormalizeWebhookConfig(webhook)
-	// Keep the canonical submitted fields for the response. Resolving a mask
-	// must not expose an unchanged stored credential to the caller.
-	responseCustomFields := webhook.CustomFields
 
 	monitor := h.getMonitor(r.Context())
 	manager := monitor.GetNotificationManager()
@@ -585,6 +619,7 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 		http.Error(w, fmt.Sprintf("webhook not found: %s", webhookID), http.StatusNotFound)
 		return
 	}
+	webhook = notifications.NormalizeWebhookConfig(webhook)
 
 	// Validate webhook URL
 	if err := manager.ValidateWebhookURL(webhook.URL); err != nil {
@@ -617,19 +652,7 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Return the full webhook data including any extra fields like 'service'
-	var responseData map[string]interface{}
-	if err := json.Unmarshal(bodyBytes, &responseData); err != nil {
-		log.Warn().Err(err).Msg("Failed to unmarshal webhook response data")
-		responseData = make(map[string]interface{})
-	}
-	responseData["id"] = webhookID
-	responseData["customFields"] = responseCustomFields
-	responseData["tagFilter"] = webhook.TagFilter
-	responseData["tagFilterMode"] = webhook.TagMode
-	responseData["minimumSeverity"] = webhook.MinimumSeverity
-
-	if err := utils.WriteJSONResponse(w, responseData); err != nil {
+	if err := utils.WriteJSONResponse(w, maskedWebhookResponse(webhook)); err != nil {
 		log.Error().Err(err).Str("webhookID", webhookID).Msg("Failed to write webhook update response")
 	}
 }
@@ -926,7 +949,20 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	basicWebhook = notifications.NormalizeWebhookConfig(basicWebhook)
+	// Testing an edit of a saved webhook sends the form, whose untouched
+	// secrets are the masked values from GetWebhooks. Test with the saved
+	// values, as the saved webhook would send; this route requires the same
+	// settings:write scope as UpdateWebhook, which keeps them the same way.
+	saved := notifications.WebhookConfig{}
+	if basicWebhook.ID != "" {
+		for _, candidate := range h.getMonitor(r.Context()).GetNotificationManager().GetWebhooks() {
+			if candidate.ID == basicWebhook.ID {
+				saved = candidate
+				break
+			}
+		}
+	}
+	basicWebhook = notifications.NormalizeWebhookConfig(restoreMaskedWebhookSecrets(basicWebhook, saved))
 
 	// Try to extract service from body if present
 	var serviceCheck struct {

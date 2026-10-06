@@ -462,11 +462,18 @@ export const getPlatformTableCellClassForKind = (kind: PlatformTableColumnKind):
 // can expand without weakening the overview-table contract.
 export const getPlatformTableRowClass = (): string => PLATFORM_TABLE_SUMMARY_ROW_CLASS;
 
-export function PlatformResponsiveTableLabel(props: { compact: string; full: string }) {
+// compactInBand keeps the compact label through the tablet band (a 34rem
+// container below a 768px viewport) for a full label longer than its column.
+export function PlatformResponsiveTableLabel(props: {
+  compact: string;
+  full: string;
+  compactInBand?: boolean;
+}) {
+  const band = () => (props.compactInBand ? ' platform-table-label-band-compact' : '');
   return (
     <>
-      <span class="platform-table-label-compact">{props.compact}</span>
-      <span class="platform-table-label-full">{props.full}</span>
+      <span class={`platform-table-label-compact${band()}`}>{props.compact}</span>
+      <span class={`platform-table-label-full${band()}`}>{props.full}</span>
     </>
   );
 }

@@ -7756,6 +7756,20 @@ routing. Webhook list/create/update responses must return the normalized
 routing state without exposing masked headers, custom fields, or signing
 secrets, and the frontend client must retain the old payload shape when older
 servers omit these optional fields.
+All three responses come from `maskedWebhookResponse`, so create and update
+mask header values, custom field values and the signing secret exactly as
+the list does; they no longer echo the request or the restored saved values.
+A `***REDACTED***` value sent back resolves per key: `PUT
+/api/notifications/webhooks/{id}` and a `POST /api/notifications/webhooks/test`
+whose body carries a saved webhook's `id` take the saved value for that one
+header, custom field or signing secret, keep every value typed in the same
+request, and drop a masked key that has no saved value. Create drops masked
+values. The mask is never stored or sent. Both write routes require
+`settings:write`, so the test route reaches no secret an editor cannot
+already keep. Header entries with a blank name or value are dropped at
+normalization, so a cleared header is removed rather than sent empty.
+`TestWebhookMaskedValuesResolvePerKey` in
+`internal/api/alerting/notifications_test.go` pins these rules.
 `GET /api/notifications/health` must fail closed around the persistent queue.
 Its queue object reports `healthy`, `degraded`, or `unavailable`; includes
 retained status counts, `attention_required`, fixed `reason_codes`, and the

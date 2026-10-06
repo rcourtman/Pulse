@@ -773,6 +773,16 @@ plain-text request and are outside this rule.
 queued Telegram alert with damaged stored Content-Type values, and compares
 Test, grouped and resolved requests for every built-in service.
 
+`NormalizeWebhookConfig` drops header entries with a blank name or value at
+every ingress and on load, so a header cleared in the editor is removed
+rather than sent empty. An empty Content-Type would otherwise replace the
+default `application/json` on generic webhooks, which have no template
+headers to restore it. The webhook API resolves the editor's masked values
+per key before normalization, so the `***REDACTED***` mask is never stored or
+sent (see the api-contracts webhook clause).
+`TestGenericWebhookBlankStoredHeaderKeepsDefaultContentType` pins the
+delivery side.
+
 ### Occurrence-bound delivery receipts
 
 The notification owner records successful firing delivery by exact alert ID,

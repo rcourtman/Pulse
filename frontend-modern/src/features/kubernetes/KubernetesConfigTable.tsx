@@ -297,7 +297,11 @@ export const KubernetesConfigTable: Component<{
                   class="platform-table-phone-hidden md:w-[17%]"
                   bandWidth={16}
                 >
-                  <PlatformResponsiveTableLabel compact="Status" full="Lifecycle / trust" />
+                  <PlatformResponsiveTableLabel
+                    compact="Status"
+                    full="Lifecycle / trust"
+                    compactInBand
+                  />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"

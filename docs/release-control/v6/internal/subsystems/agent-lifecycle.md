@@ -8800,3 +8800,10 @@ not claim host re-enrolment or installed-agent acceptance.
 changed only to carry prompt-cache token buckets through the AI usage export
 and the Patrol stream response. No agent registration, enrolment, install,
 update or removal path changed.
+
+### Webhook masked-value resolution only
+
+`internal/api/alerting/notifications.go` changed only to resolve masked
+webhook header, custom field and signing secret values per key on update and
+form test, and to mask create and update responses. No agent registration,
+enrolment, install, update or removal path changed.
