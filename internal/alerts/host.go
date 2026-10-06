@@ -387,7 +387,13 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	seenDisks := make(map[string]struct{}, len(host.Disks))
-	evaluatesDiskUsage := false
+	// A linked node's disk metric is this agent's summary filesystem (root when
+	// reported), so the agent owns it only while it evaluates that filesystem.
+	summaryDiskResourceID := ""
+	if summary, ok := models.SummaryDisk(host.Disks); ok {
+		summaryDiskResourceID, _ = hostDiskResourceID(host, summary)
+	}
+	evaluatesSummaryDisk := false
 	if len(host.Sensors.SMART) > 0 {
 		for _, disk := range host.Sensors.SMART {
 			diskResourceID, diskName := hostSMARTDiskResourceID(host, disk)
@@ -445,7 +451,7 @@ func (m *Manager) CheckHost(host models.Host) {
 		if effectiveDiskThreshold == nil {
 			continue
 		}
-		evaluatesDiskUsage = evaluatesDiskUsage || effectiveDiskThreshold.Trigger > 0
+		evaluatesSummaryDisk = evaluatesSummaryDisk || (diskResourceID == summaryDiskResourceID && effectiveDiskThreshold.Trigger > 0)
 
 		diskMetadata := cloneMetadata(baseMetadata)
 		diskMetadata["metric"] = "disk"
@@ -493,15 +499,18 @@ func (m *Manager) CheckHost(host models.Host) {
 
 	m.cleanupHostDiskAlerts(host, seenDisks)
 
-	// The linked node releases exactly the usage metrics evaluated above and
-	// keeps the rest, so deduplication never leaves the machine unmonitored.
+	// The linked node releases exactly the usage metrics this agent is set up
+	// to evaluate and keeps the rest, so deduplication never leaves the machine
+	// unmonitored. Ownership follows configuration, not one report's data: a
+	// missing memory reading keeps the agent's alert open rather than handing
+	// memory back to the node for a cycle.
 	m.registerHostAgentNodeLink(hostAgentNodeLink{
 		agentID:   host.ID,
 		agentName: resourceName,
 		nodeID:    host.LinkedNodeID,
 		cpu:       thresholds.CPU != nil && thresholds.CPU.Trigger > 0,
-		memory:    thresholds.Memory != nil && thresholds.Memory.Trigger > 0 && host.Memory.HasKnownUsage(),
-		disk:      evaluatesDiskUsage,
+		memory:    thresholds.Memory != nil && thresholds.Memory.Trigger > 0,
+		disk:      evaluatesSummaryDisk,
 	})
 
 	if host.Unraid != nil {

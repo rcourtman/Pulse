@@ -1808,10 +1808,15 @@ CPU, memory or disk usage metric it actually evaluates, and `CheckNode` releases
 its own copy of those metrics through the disabled-threshold path every cycle:
 the pending run is dropped and any node alert still open from before the link is
 resolved, never left frozen until the agent goes offline. `CheckHost` registers
-the link only after evaluation, recording which metrics had a live threshold
-(memory also needs a known reading, disk at least one evaluated filesystem), and
-removes it while agent alerts are disabled; a metric the agent does not evaluate
-stays with the node, so deduplication never leaves a machine unmonitored.
+the link only after evaluation, recording which metrics the agent is configured
+to evaluate (a live CPU or memory threshold; for disk, a live threshold on the
+summary filesystem `models.SummaryDisk` picks, which is also what the linked
+node's disk metric reports), and removes it while agent alerts are disabled.
+Ownership follows configuration, not one report's data, so a missing agent
+reading keeps the agent's alert open instead of handing the metric back to the
+node for a cycle. With several agents linked to one node, a metric is owned when
+any of them evaluates it. A metric no agent evaluates stays with the node, so
+deduplication never leaves a machine unmonitored.
 Deduplication keys on that link,
 never on a hostname match, so a same-named node in another instance keeps its
 alerts, an agent reporting an FQDN still dedups its node, and an operator unlink
@@ -1832,7 +1837,8 @@ instance name in `Instance`.
 `TestCheckNodeMissingTemperatureDoesNotResolveOpenAlert`,
 `TestCheckNodeMissingTemperatureInterruptsTimingRuns` and
 `TestConfigSaveKeepsNodeTemperatureAlertOverTrigger` and
-`TestCheckNodeKeepsUsageMetricsTheAgentDoesNotEvaluate` in
+`TestCheckNodeKeepsUsageMetricsTheAgentDoesNotEvaluate`,
+`TestCheckNodeUsageOwnershipFollowsWhatAgentsEvaluate` in
 `internal/alerts/threshold_resolution_shared_test.go`, and
 `TestHostAgentDeduplicationFollowsNodeLink` in
 `internal/alerts/host_dedup_test.go`, pin these rules.
