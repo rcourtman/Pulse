@@ -6508,6 +6508,18 @@ half-bound token. This adds no backup, restore, retention, snapshot, or
 recovery authority. `TestReportedIdentityRestoresTheTokenWhenTheSaveFails` in
 `internal/api/security_regression_test.go` pins the restore and the retry.
 
+### Naming a command identity persists nothing
+
+Naming `commandAgentId` on a report acknowledgement reads the request's token
+snapshot and writes nothing: the command binding is still persisted only by
+command admission and by the report-side identity recording, each in its one
+existing save. The agent keeps the named identity in memory for the process and
+asks again after every restart. This adds no backup, restore, retention,
+snapshot, or recovery authority.
+`TestHostAgentCommandChannelBindsTheIdentityPulseAcknowledges` in
+`internal/api/host_agent_removal_lifecycle_integration_test.go` pins the
+binding the command registration persists.
+
 ### Destination severity policy preserves notification recovery identity
 
 Email, webhook, Apprise, and Relay minimum-severity floors persist through

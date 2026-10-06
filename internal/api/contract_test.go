@@ -24560,6 +24560,91 @@ func TestUnifiedAgentHandlers_HandleReportAckOmitsEmptyServerVersion(t *testing.
 	}
 }
 
+// The report acknowledgement names the command identity only as the identity
+// the token's binding admits: equal to agentId when present, and absent for a
+// token bound elsewhere, without agent:exec, or one command admission refuses
+// outright (a collector role, more than one organization), which agents read
+// as "keep the identity you have".
+func TestContract_UnifiedAgentReportAckNamesCommandIdentityOnlyWhenTheBindingAdmitsIt(t *testing.T) {
+	cases := []struct {
+		name     string
+		scopes   []string
+		metadata map[string]string
+		orgs     []string
+		wantName bool
+	}{
+		{
+			name:     "unbound install token",
+			scopes:   []string{config.ScopeAgentReport, config.ScopeAgentExec},
+			metadata: map[string]string{"issued_via": agentInstallIssuedViaConfig, "install_type": "host"},
+			wantName: true,
+		},
+		{
+			name:   "bound to another identity",
+			scopes: []string{config.ScopeAgentReport, config.ScopeAgentExec},
+			metadata: map[string]string{
+				"issued_via": agentInstallIssuedViaConfig, "install_type": "host",
+				"bound_agent_id": "configured-id", "bound_hostname": "contract-host",
+				agentExecBindingVersionKey: agentExecBindingVersion,
+			},
+		},
+		{
+			name:     "no agent:exec",
+			scopes:   []string{config.ScopeAgentReport},
+			metadata: map[string]string{"issued_via": agentInstallIssuedViaConfig, "install_type": "host"},
+		},
+		{
+			name:   "monitoring collector",
+			scopes: []string{config.ScopeAgentReport, config.ScopeAgentExec},
+			metadata: map[string]string{
+				"issued_via": agentInstallIssuedViaConfig, "install_type": "host",
+				agenttokens.RuntimeRoleMetadataKey: agenttokens.CredentialKindMonitoringCollector,
+			},
+		},
+		{
+			name:     "bound to two organizations",
+			scopes:   []string{config.ScopeAgentReport, config.ScopeAgentExec},
+			metadata: map[string]string{"issued_via": agentInstallIssuedViaConfig, "install_type": "host"},
+			orgs:     []string{"default", "tenant-b"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			record := newTokenRecord(t, "contract-command-identity-token.12345678", tc.scopes, tc.metadata)
+			record.OrgIDs = tc.orgs
+			cfg := newTestConfigWithTokens(t, record)
+			handler, _ := newUnifiedAgentHandlers(t, cfg)
+
+			body, err := json.Marshal(agentshost.Report{
+				Agent:     agentshost.AgentInfo{ID: "configured-id", Version: "6.5.0"},
+				Host:      agentshost.HostInfo{ID: "machine-contract", MachineID: "machine-contract", Hostname: "contract-host", Platform: "linux"},
+				Timestamp: time.Now().UTC(),
+			})
+			if err != nil {
+				t.Fatalf("marshal report: %v", err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(body))
+			attachAPITokenRecord(req, &cfg.APITokens[0])
+			rec := httptest.NewRecorder()
+			handler.HandleReport(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+			}
+			var ack map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &ack); err != nil {
+				t.Fatalf("decode ack: %v", err)
+			}
+			named, present := ack["commandAgentId"]
+			if present != tc.wantName {
+				t.Fatalf("commandAgentId present = %v (%v), want %v", present, named, tc.wantName)
+			}
+			if present && named != ack["agentId"] {
+				t.Fatalf("commandAgentId = %v, want it equal to agentId %v", named, ack["agentId"])
+			}
+		})
+	}
+}
+
 // App bootstrap requires presentation defaults for every authenticated role.
 // Pin both sides of the privilege boundary: the narrow runtime projection is
 // readable by a viewer, while the complete system settings payload remains

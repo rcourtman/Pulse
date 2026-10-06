@@ -159,6 +159,17 @@ func (h *UnifiedAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reque
 	if h.serverVersion != "" {
 		resp["serverVersion"] = h.serverVersion
 	}
+	// Name the identity this agent's command channel must register under, for
+	// a host the monitor resolved and holds under this token, judged for the
+	// hostname this report presents, as its registration will. Mock mode's
+	// discard acknowledgement carries no token ID, so it names nothing.
+	if tokenRecord != nil && host.TokenID == tokenRecord.ID {
+		commandHost := host
+		commandHost.Hostname = reportedHostname
+		if commandAgentID := commandIdentityForToken(tokenRecord, commandHost); commandAgentID != "" {
+			resp["commandAgentId"] = commandAgentID
+		}
+	}
 
 	// Only include config if there are actual overrides
 	if serverConfig.CommandsEnabled != nil {
@@ -688,7 +699,7 @@ func commandConfigAllowedForToken(record *config.APITokenRecord, host models.Hos
 	// commands are enabled when its channel registration would be rejected
 	// strands the host on "Remote control blocked" (the agent reports
 	// CommandsEnabled=true forever while no channel can be admitted).
-	if !evaluateAgentExecBinding(record, host.ID, host.Hostname).admit {
+	if commandIdentityForToken(record, host) == "" {
 		// This gate runs before the agent ever attempts command-channel
 		// registration, so without a log here a refused binding leaves no
 		// trace anywhere: the agent never learns commands were requested and
@@ -705,6 +716,42 @@ func commandConfigAllowedForToken(record *config.APITokenRecord, host models.Hos
 		return false
 	}
 	return true
+}
+
+// commandIdentityForToken names the identity a host agent's command channel
+// must register under for its token to admit it: the host ID Pulse resolved
+// for the agent's report, which the ack returns as agentId and the agent
+// persists and presents after a restart. A token binds the first ID its
+// channel presents, so an agent that registered a configured --agent-id, or
+// an ID Pulse forked or kept from an earlier enrollment, was refused on every
+// restart while the config gate judged the resolved ID.
+//
+// The ID is named only for a credential that command admission would take on
+// its legacy path (agent:exec, at most one organization, no runner,
+// collector, or unsupported runtime role), and only when the shared binding
+// decision admits it: the token already holds it, or a registration
+// presenting it would take the first bind, backfill, legacy migration,
+// hostname rebind, or one-time deploy repair it would get anyway. Naming it
+// grants nothing beyond that registration. An established binding to any
+// other ID is never moved by report contents, which can be steered onto
+// another host's continuity record; the result is empty and the agent keeps
+// registering under the ID it presents. The config gate consumes the same
+// decision, so commands are never reported enabled for an identity the
+// channel would refuse.
+func commandIdentityForToken(record *config.APITokenRecord, host models.Host) string {
+	hostID := strings.TrimSpace(host.ID)
+	if record == nil || hostID == "" || !record.HasScope(config.ScopeAgentExec) || len(record.GetBoundOrgs()) > 1 {
+		return ""
+	}
+	switch strings.TrimSpace(record.Metadata[agenttokens.RuntimeRoleMetadataKey]) {
+	case "", agenttokens.CredentialKindLegacyFullTrust:
+	default:
+		return ""
+	}
+	if !evaluateAgentExecBinding(record, hostID, host.Hostname).admit {
+		return ""
+	}
+	return hostID
 }
 
 func (h *UnifiedAgentHandlers) ensureAgentTokenMatch(w http.ResponseWriter, r *http.Request, agentID string) bool {

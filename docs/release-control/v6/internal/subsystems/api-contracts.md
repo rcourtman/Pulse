@@ -10646,6 +10646,19 @@ router echoes it end-to-end on enrollment acks
 (`TestHostAgentRemovalLifecycleThroughAuthenticatedRouterAndRestart`). Agents
 use it to trigger an immediate self-update check after a server upgrade. The
 field is additive: agents that predate it ignore it.
+### Unified-agent report ack names the command identity
+
+The `POST /api/agents/agent/report` acknowledgement may also carry
+`commandAgentId`: the identity the agent's command channel must register under.
+When present it equals `agentId`, and it is present only when the reporting
+token's command binding holds that ID or would take it on registration, under
+the rule in the security-privacy contract. It is omitted otherwise, including
+for tokens without `agent:exec`, tokens command admission refuses outright, and
+mock mode's unresolved acknowledgements, and agents read its absence as "keep
+the command identity you have". The field is additive: agents that predate it
+ignore it and keep registering under their own ID.
+`TestContract_UnifiedAgentReportAckNamesCommandIdentityOnlyWhenTheBindingAdmitsIt`
+in `internal/api/contract_test.go` pins the field.
 ### Security status serves an infrastructureRead settings capability
 
 `GET /api/security/status` adds `settingsCapabilities.infrastructureRead` to the

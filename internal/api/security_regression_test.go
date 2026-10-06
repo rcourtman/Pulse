@@ -6046,3 +6046,164 @@ func TestReportHandlerOffersOnlyQualifyingLiveReportsToTheRecorder(t *testing.T)
 		t.Fatalf("recorder calls in mock mode = %+v, want none beyond the live report", calls[1:])
 	}
 }
+
+// postReportIdentityAck posts an authenticated report through the router and
+// returns the whole acknowledgement.
+func postReportIdentityAck(t *testing.T, router *Router, token string, report agentshost.Report) map[string]any {
+	t.Helper()
+	code, payload := issue1753PostReport(t, router, token, report)
+	if code != http.StatusOK {
+		t.Fatalf("report rejected with %d (%v)", code, payload)
+	}
+	return payload
+}
+
+// A token already bound to one identity is never moved by report contents.
+// Identity resolution can map a report onto another host's continuity record
+// by machine ID without a token check, so a report resolving elsewhere names
+// no command identity, leaves the binding as it was, and the agent keeps
+// registering under the ID it presents.
+func TestReportAckNeverMovesAnEstablishedCommandBinding(t *testing.T) {
+	const raw = "command-identity-established-token.12345678"
+	record := newTokenRecord(t, raw, agenttokens.HostScopes(true), map[string]string{
+		"issued_via":                       agentbinding.IssuedViaConfig,
+		"install_type":                     "host",
+		"bound_agent_id":                   "configured-id",
+		"bound_hostname":                   "host-established",
+		agentExecBindingVersionKey:         agentExecBindingVersion,
+		agenttokens.RuntimeRoleMetadataKey: agenttokens.CredentialKindLegacyFullTrust,
+	})
+	record.OrgID = "default"
+	cfg := newTestConfigWithTokens(t, record)
+	router := newReportIdentityRouter(t, cfg)
+
+	ack := postReportIdentityAck(t, router, raw, reportIdentityReport("configured-id", reportIdentityMachineID, "host-established"))
+	if ack["agentId"] != reportIdentityMachineID {
+		t.Fatalf("precondition: acknowledged agentId = %v, want the machine ID", ack["agentId"])
+	}
+	if named, present := ack["commandAgentId"]; present {
+		t.Fatalf("ack named command identity %v for a token bound to another identity", named)
+	}
+	if got := reportIdentityToken(t, cfg, record.ID).Metadata["bound_agent_id"]; got != "configured-id" {
+		t.Fatalf("bound_agent_id = %q after the report, want it unchanged", got)
+	}
+	if _, ok := router.admitAgentExecToken(raw, reportIdentityMachineID, "host-established"); ok {
+		t.Fatal("the established binding moved to the resolved identity")
+	}
+	if _, ok := router.admitAgentExecToken(raw, "configured-id", "host-established"); !ok {
+		t.Fatal("the agent lost its established command identity")
+	}
+}
+
+// Deploy enrollment binds the runtime token to the node's hostname only. When
+// the agent presents another ID than Pulse resolves (a configured --agent-id),
+// the report path records nothing, and the acknowledgement names the resolved
+// ID so the agent's command channel backfills that one instead.
+func TestReportAckNamesTheResolvedIdentityForAHostnameBoundDeployToken(t *testing.T) {
+	const raw = "command-identity-deploy-token.12345678"
+	record := newTokenRecord(t, raw, agenttokens.HostScopes(true), map[string]string{
+		"bound_hostname":               "pve-node5",
+		"deploy_job_id":                "dep_5",
+		agentExecBindingVersionKey:     agentExecBindingVersion,
+		agentbinding.DeployIdentityKey: agentbinding.DeployIdentityAgent,
+	})
+	record.OrgID = "default"
+	cfg := newTestConfigWithTokens(t, record)
+	router := newReportIdentityRouter(t, cfg)
+
+	ack := postReportIdentityAck(t, router, raw, reportIdentityReport("configured-id", reportIdentityMachineID, "pve-node5"))
+	if ack["commandAgentId"] != reportIdentityMachineID || ack["agentId"] != reportIdentityMachineID {
+		t.Fatalf("ack agentId=%v commandAgentId=%v, want both the resolved %q", ack["agentId"], ack["commandAgentId"], reportIdentityMachineID)
+	}
+	if _, ok := router.admitAgentExecToken(raw, reportIdentityMachineID, "pve-node5"); !ok {
+		t.Fatal("the command channel could not backfill the named identity")
+	}
+	if _, ok := router.admitAgentExecToken(raw, "configured-id", "pve-node5"); ok {
+		t.Fatal("the backfilled token admitted the presented identity too")
+	}
+	bound := reportIdentityToken(t, cfg, record.ID)
+	if !commandConfigAllowedForToken(&bound, models.Host{ID: reportIdentityMachineID, Hostname: "pve-node5"}) {
+		t.Fatal("the config gate refused the identity the command channel admits")
+	}
+}
+
+// A historical deploy token still bound to the invented agent-<hostname> may
+// move once, on exactly its hostname, to the identity that registers. Naming
+// the resolved ID lands that one move on the identity the agent's reports and
+// restarts use, not on whatever ID the agent happened to present.
+func TestReportAckLandsTheDeployPlaceholderRepairOnTheResolvedIdentity(t *testing.T) {
+	const raw = "command-identity-placeholder-token.12345678"
+	record := newTokenRecord(t, raw, agenttokens.HostScopes(true), map[string]string{
+		"bound_agent_id":           "agent-pve-node6",
+		"bound_hostname":           "pve-node6",
+		"deploy_job_id":            "dep_6",
+		agentExecBindingVersionKey: agentExecBindingVersion,
+	})
+	record.OrgID = "default"
+	cfg := newTestConfigWithTokens(t, record)
+	router := newReportIdentityRouter(t, cfg)
+
+	ack := postReportIdentityAck(t, router, raw, reportIdentityReport("configured-id", reportIdentityMachineID, "pve-node6"))
+	if ack["commandAgentId"] != reportIdentityMachineID {
+		t.Fatalf("ack commandAgentId = %v, want the resolved %q", ack["commandAgentId"], reportIdentityMachineID)
+	}
+	if _, ok := router.admitAgentExecToken(raw, reportIdentityMachineID, "pve-node6"); !ok {
+		t.Fatal("the placeholder token did not take its one-time repair to the named identity")
+	}
+	if got := reportIdentityToken(t, cfg, record.ID).Metadata; got["bound_agent_id"] != reportIdentityMachineID ||
+		got[agentbinding.DeployIdentityKey] != agentbinding.DeployIdentityRepaired {
+		t.Fatalf("binding after repair = %v, want %q marked repaired", got, reportIdentityMachineID)
+	}
+	if _, ok := router.admitAgentExecToken(raw, "configured-id", "pve-node6"); ok {
+		t.Fatal("the repaired token moved a second time")
+	}
+}
+
+// The report path records the first identity an agent reports under, and it
+// is final. An agent later restarted under a different --agent-id is refused
+// under that ID, so the acknowledgement names the recorded identity and the
+// agent's command channel registers under it instead.
+func TestReportAckNamesTheRecordedIdentityToALaterReconfiguredAgent(t *testing.T) {
+	const raw = "command-identity-reconfigured-token.12345678"
+	record := autoRegisteredInstallToken(t, raw, "pve10", true)
+	cfg := newTestConfigWithTokens(t, record)
+	router := newReportIdentityRouter(t, cfg)
+
+	postReportIdentityReport(t, router, raw, reportIdentityReport(reportIdentityMachineID, reportIdentityMachineID, "pve10"))
+	ack := postReportIdentityAck(t, router, raw, reportIdentityReport("configured-id", reportIdentityMachineID, "pve10"))
+	if ack["commandAgentId"] != reportIdentityMachineID {
+		t.Fatalf("ack commandAgentId = %v, want the recorded %q", ack["commandAgentId"], reportIdentityMachineID)
+	}
+	if _, ok := router.admitAgentExecToken(raw, reportIdentityMachineID, "pve10"); !ok {
+		t.Fatal("the reconfigured agent's registration under the named identity was refused")
+	}
+}
+
+// Mock mode discards reports and acknowledges the presented ID unresolved, on
+// a host held under no token. Naming that ID would steer a fresh token's first
+// command registration onto an identity Pulse never resolved, so a mock ack
+// names no command identity.
+func TestReportAckNamesNoCommandIdentityInMockMode(t *testing.T) {
+	const raw = "command-identity-mock-token.12345678"
+	record := newTokenRecord(t, raw, agenttokens.HostScopes(true), map[string]string{
+		"issued_via":   agentbinding.IssuedViaConfig,
+		"install_type": "host",
+	})
+	record.OrgID = "default"
+	cfg := newTestConfigWithTokens(t, record)
+	router := newReportIdentityRouter(t, cfg)
+
+	previous := mock.IsMockEnabled()
+	if err := mock.SetEnabled(true); err != nil {
+		t.Fatalf("enable mock mode: %v", err)
+	}
+	t.Cleanup(func() { _ = mock.SetEnabled(previous) })
+
+	ack := postReportIdentityAck(t, router, raw, reportIdentityReport("configured-id", reportIdentityMachineID, "host-mock"))
+	if ack["agentId"] != "configured-id" {
+		t.Fatalf("precondition: mock ack agentId = %v, want the presented ID echoed", ack["agentId"])
+	}
+	if named, present := ack["commandAgentId"]; present {
+		t.Fatalf("mock ack named command identity %v", named)
+	}
+}
