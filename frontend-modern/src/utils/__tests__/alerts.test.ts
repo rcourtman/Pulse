@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { getAlertsForResource, getAlertStyles } from '@/utils/alerts';
+import { getAlertsForResource, getAlertsForUnifiedResource, getAlertStyles } from '@/utils/alerts';
 import type { Alert } from '@/types/api';
+import type { Resource } from '@/types/resource';
 
 describe('getAlertStyles', () => {
   const createAlert = (overrides: Partial<Alert> = {}): Alert => ({
@@ -221,5 +222,157 @@ describe('getAlertStyles', () => {
       expect(result.alertCount).toBe(0);
       expect(result.severity).toBeNull();
     });
+  });
+});
+
+describe('getAlertsForUnifiedResource', () => {
+  // Identity shapes below are copied from a mock-mode /api/state payload.
+  const alert = (id: string, resourceId: string, overrides: Partial<Alert> = {}): Alert => ({
+    id,
+    type: 'cpu',
+    level: 'warning',
+    resourceId,
+    resourceName: resourceId,
+    node: '',
+    instance: '',
+    message: id,
+    value: 0,
+    threshold: 0,
+    startTime: '2026-10-06T10:00:00Z',
+    acknowledged: false,
+    ...overrides,
+  });
+  const byId = (...alerts: Alert[]): Record<string, Alert> =>
+    Object.fromEntries(alerts.map((entry) => [entry.id, entry]));
+  const resource = (overrides: Partial<Resource>): Resource =>
+    ({
+      id: 'resource-1',
+      type: 'agent',
+      name: 'resource-1',
+      displayName: 'resource-1',
+      platformId: 'resource-1',
+      platformType: 'agent',
+      sourceType: 'agent',
+      status: 'online',
+      lastSeen: 0,
+      ...overrides,
+    }) as Resource;
+  const ids = (alerts: Alert[]) => alerts.map((entry) => entry.id);
+
+  it('matches a standalone agent and the components nested under its agent key', () => {
+    const host = resource({
+      id: 'agent-acdfdee2953587fb',
+      agent: { agentId: 'host-linux-1' },
+      metricsTarget: { resourceType: 'agent', resourceId: 'host-linux-1' },
+      canonicalIdentity: {
+        displayName: 'Apollo-114',
+        primaryId: 'agent:host-linux-1',
+        aliases: ['agent:host-linux-1', 'host-linux-1', 'apollo-114'],
+      },
+    } as Partial<Resource>);
+    const active = byId(
+      alert('cpu', 'agent:host-linux-1'),
+      alert('disk', 'agent:host-linux-1/disk:data', { level: 'critical' }),
+      alert('raid', 'agent:host-linux-1/raid:md0'),
+      alert('sibling', 'agent:host-linux-10'),
+      alert('sibling-disk', 'agent:host-linux-10/disk:data'),
+      alert('hostname', 'apollo-114'),
+    );
+
+    expect(ids(getAlertsForUnifiedResource(host, active, true))).toEqual(['disk', 'cpu', 'raid']);
+    expect(getAlertsForUnifiedResource(host, active, false)).toEqual([]);
+  });
+
+  it('matches a Proxmox node agent by node id and by its linked agent key', () => {
+    const node = resource({
+      id: 'agent-85d79ff9b7a2cc0e',
+      platformType: 'proxmox-pve',
+      agent: { agentId: 'host-node-mock-cluster-1-pve2' },
+      proxmox: { sourceId: 'mock-cluster-1-pve2', nodeName: 'pve2' },
+      canonicalIdentity: {
+        displayName: 'West Production B',
+        primaryId: 'node:mock-cluster-1-pve2',
+        aliases: ['node:mock-cluster-1-pve2', 'pve2', 'agent:host-node-mock-cluster-1-pve2'],
+      },
+    } as Partial<Resource>);
+    const active = byId(
+      alert('node-memory', 'mock-cluster-1-pve2'),
+      alert('agent-temp', 'agent:host-node-mock-cluster-1-pve2'),
+      alert('pool', 'mock-cluster-1-pve2-local-zfs/zfs-pool:local-zfs', { node: 'pve2' }),
+      alert('bare-node-name', 'pve2'),
+    );
+
+    expect(ids(getAlertsForUnifiedResource(node, active, true))).toEqual([
+      'node-memory',
+      'agent-temp',
+    ]);
+  });
+
+  it('matches a Docker host, its containers and services, and its reporting agent', () => {
+    const dockerHost = resource({
+      id: 'agent-aa22ff2b2bc3257d',
+      type: 'docker-host',
+      platformType: 'docker',
+      docker: { hostSourceId: 'orion-2-mock' },
+      metricsTarget: { resourceType: 'docker-host', resourceId: 'orion-2-mock' },
+      canonicalIdentity: {
+        displayName: 'Ops Services 01',
+        primaryId: 'docker-host:orion-2-mock',
+        aliases: ['docker-host:orion-2-mock', 'orion-2-mock', 'agent:agent-5d2100295642fccc'],
+      },
+    } as Partial<Resource>);
+    const active = byId(
+      alert('offline', 'docker:orion-2-mock', { level: 'critical' }),
+      alert('service', 'docker:orion-2-mock/service/svc-backend-1'),
+      alert('agent-cpu', 'agent:agent-5d2100295642fccc'),
+      alert('other-host', 'docker:orion-20-mock/abc'),
+    );
+
+    expect(ids(getAlertsForUnifiedResource(dockerHost, active, true))).toEqual([
+      'offline',
+      'service',
+      'agent-cpu',
+    ]);
+  });
+
+  it('matches PBS and PMG instances by their metrics target', () => {
+    const pbs = resource({
+      id: 'pbs-4fcc01f0e6db7b83',
+      type: 'pbs',
+      metricsTarget: { resourceType: 'agent', resourceId: 'pbs-pbs-docker' },
+      canonicalIdentity: { displayName: 'pbs-docker', primaryId: 'agent:pbs-pbs-docker' },
+    } as Partial<Resource>);
+    const pmg = resource({
+      id: 'pmg-abe41cf2c6a8ff47',
+      type: 'pmg',
+      metricsTarget: { resourceType: 'agent', resourceId: 'pmg-main' },
+      canonicalIdentity: { displayName: 'mail-gateway-eu', primaryId: 'agent:pmg-main' },
+    } as Partial<Resource>);
+    const active = byId(
+      alert('pbs-memory', 'pbs-pbs-docker'),
+      alert('pmg-queue', 'pmg-main'),
+      alert('pbs-datastore', 'pbs-pbs-docker-arr-secondary'),
+    );
+
+    expect(ids(getAlertsForUnifiedResource(pbs, active, true))).toEqual(['pbs-memory']);
+    expect(ids(getAlertsForUnifiedResource(pmg, active, true))).toEqual(['pmg-queue']);
+  });
+
+  it('matches provider incidents on the unified id without borrowing a parent agent key', () => {
+    const pod = resource({
+      id: 'pod-9bd9679901d26654',
+      type: 'pod',
+      canonicalIdentity: {
+        displayName: 'checkout-api',
+        primaryId: 'pod:k8s:k8s-production-1:pod:nginx',
+        aliases: ['k8s-production-1', 'agent:k8s-production-1-agent'],
+      },
+    } as Partial<Resource>);
+    const active = byId(
+      alert('pod-incident', 'pod-9bd9679901d26654'),
+      alert('cluster-agent', 'agent:k8s-production-1-agent'),
+    );
+
+    expect(ids(getAlertsForUnifiedResource(pod, active, true))).toEqual(['pod-incident']);
   });
 });

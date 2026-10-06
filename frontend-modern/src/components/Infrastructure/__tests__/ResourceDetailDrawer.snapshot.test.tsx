@@ -15,7 +15,7 @@ const requests = vi.hoisted(() => ({
 }));
 
 vi.mock('@/contexts/appRuntime', () => ({
-  useWebSocket: () => ({ state: { pmg: [] }, connected: () => true }),
+  useWebSocket: () => ({ state: { pmg: [] }, activeAlerts: {}, connected: () => true }),
   useDarkMode: () => () => false,
 }));
 vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({

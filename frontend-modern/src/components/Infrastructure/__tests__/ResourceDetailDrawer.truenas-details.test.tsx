@@ -6,6 +6,7 @@ import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetail
 
 vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
+    activeAlerts: {},
     state: { pmg: [] as any[] },
     connected: () => true,
     initialDataReceived: () => true,

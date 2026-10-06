@@ -4985,7 +4985,12 @@ across the gateway's identity aliases, and its header status follows them, so
 it never shows "Healthy" beside an active warning; its inline detail row sets
 `whitespace-normal` because platform table cells do not wrap. The row itself
 marks the metric an alert is about instead of stacking a reason under the
-name, so it keeps the shared single-line rhythm. The remaining Overview rows are additive
+name, so it keeps the shared single-line rhythm. Drawers for unified resources
+(Machines/Infrastructure, Docker hosts) read their open alerts from the
+websocket `activeAlerts` map through `getAlertsForUnifiedResource`
+(`frontend-modern/src/utils/alerts.ts`), most severe first, never from a
+resource-embedded list, and show each alert's resource name and metric beside
+its text like the other drawers. The remaining Overview rows are additive
 operator context that the parent table row cannot carry, such as OS/runtime,
 Pulse observation or action coverage, primary reachability, protection gaps,
 pending updates, or an identified service. Routine health, placement, and

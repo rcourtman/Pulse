@@ -4,6 +4,11 @@ import { ResourceActionsAPI } from '@/api/resourceActions';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '../ResourceDetailDrawer';
 
+vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
+  useWebSocket: () => ({ activeAlerts: {} }),
+}));
+
 vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
   GuestDrawerHistory: (props: {
     target: { resourceType: string; resourceId: string } | null;

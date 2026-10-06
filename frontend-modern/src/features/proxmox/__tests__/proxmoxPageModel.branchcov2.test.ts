@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type {
-  PlatformType,
-  Resource,
-  ResourceAlert,
-  ResourceMetric,
-  ResourceType,
-} from '@/types/resource';
+import type { PlatformType, Resource, ResourceMetric, ResourceType } from '@/types/resource';
 
 import {
   buildProxmoxPageModel,
@@ -33,17 +27,6 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
   status: 'online',
   lastSeen: 1_700_000_000_000,
   ...resource,
-});
-
-const alert = (overrides: Partial<ResourceAlert> = {}): ResourceAlert => ({
-  id: 'alert-1',
-  type: 'cpu',
-  level: 'warning',
-  message: 'high load',
-  value: 95,
-  threshold: 90,
-  startTime: 1_700_000_000_000,
-  ...overrides,
 });
 
 // ===========================================================================
@@ -599,19 +582,16 @@ describe('buildProxmoxPageModel empty input', () => {
         pbsCount: 0,
         pmgCount: 0,
         cephCount: 0,
-        alertCount: 0,
       },
     });
   });
 });
 
-describe('buildProxmoxPageModel estate classification, status counts, and alert sum', () => {
+describe('buildProxmoxPageModel estate classification and status counts', () => {
   const nodeA = makeResource({
     id: 'node-a',
     type: 'agent',
     proxmox: { nodeName: 'node-a', clusterName: 'cluster-x' },
-    alerts: [alert()],
-    incidentCount: 2,
   });
 
   const guests = [
@@ -653,7 +633,7 @@ describe('buildProxmoxPageModel estate classification, status counts, and alert 
     }),
   ];
 
-  it('classifies resources, excludes non-proxmox, and aggregates summary + alerts', () => {
+  it('classifies resources, excludes non-proxmox, and aggregates the summary', () => {
     const model = buildProxmoxPageModel([
       makeResource({ id: 'dh', type: 'docker-host', platformType: 'docker' }),
       nodeA,
@@ -677,7 +657,6 @@ describe('buildProxmoxPageModel estate classification, status counts, and alert 
       stoppedGuestCount: 2,
       nodeCount: 1,
       clusterCount: 1,
-      alertCount: 3,
     });
   });
 });

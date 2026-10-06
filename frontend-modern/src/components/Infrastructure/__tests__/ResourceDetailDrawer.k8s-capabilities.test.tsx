@@ -4,6 +4,11 @@ import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 
+vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
+  useWebSocket: () => ({ activeAlerts: {} }),
+}));
+
 const navigateSpy = vi.hoisted(() => vi.fn());
 
 vi.mock('@solidjs/router', async () => {
