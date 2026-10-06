@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -15,13 +16,13 @@ func assertRawMergeMatchesReference(t testing.TB, previous, current []byte) {
 	if (wantErr == nil) != (gotErr == nil) {
 		t.Fatalf("error mismatch: before=%q after=%q reference=%v raw=%v", previous, current, wantErr, gotErr)
 	}
-	if wantErr == nil && !reflect.DeepEqual(decodeExactDeltaJSON(t, want), decodeExactDeltaJSON(t, got)) {
+	if wantErr == nil && (!reflect.DeepEqual(decodeExactDeltaJSON(t, want), decodeExactDeltaJSON(t, got)) || !bytes.Equal(want, got)) {
 		t.Fatalf("patch mismatch: before=%s after=%s reference=%s raw=%s", previous, current, want, got)
 	}
 }
 
 func TestRawMergePatchSemanticEquivalence(t *testing.T) {
-	cases := []string{`null`, `true`, `false`, `0`, `1.0`, `1e0`, `9007199254740993`, `18446744073709551615`, `"<&>"`, `"\u003c\u0026\u003e"`, `[]`, `[null,1.0,{"z":2,"a":1}]`, `[null,1.0,{"a":1,"z":2}]`, `{}`, `{"id":"r","nested":{"id":"child","n":9007199254740993}}`, `{"nested":{"n":9007199254740993,"id":"child"},"id":"r"}`, `{"id":"r","nested":{"id":"changed","n":9007199254740994}}`, `{"id":"old","id":"r","nested":{"a":1,"a":2}}`, `{"id":"r","nested":{"a":2}}`, `{"id":null,"optional":null}`, `{"id":"r","optional":[]}`, `{"id":"r","optional":{}}`}
+	cases := []string{`{"id":"\ud800","addition":{"invalid":"\ud800","duplicate":1,"duplicate":2}}`, string([]byte{'{', '"', 'x', '"', ':', '"', 0xff, '"', '}'}), `null`, `true`, `false`, `0`, `1.0`, `1e0`, `9007199254740993`, `18446744073709551615`, `"<&>"`, `"\u003c\u0026\u003e"`, `[]`, `[null,1.0,{"z":2,"a":1}]`, `[null,1.0,{"a":1,"z":2}]`, `{}`, `{"id":"r","nested":{"id":"child","n":9007199254740993}}`, `{"nested":{"n":9007199254740993,"id":"child"},"id":"r"}`, `{"id":"r","nested":{"id":"changed","n":9007199254740994}}`, `{"id":"old","id":"r","nested":{"a":1,"a":2}}`, `{"id":"r","nested":{"a":2}}`, `{"id":null,"optional":null}`, `{"id":"r","optional":[]}`, `{"id":"r","optional":{}}`}
 	for i, a := range cases {
 		for j, b := range cases {
 			t.Run(fmt.Sprintf("%d-%d", i, j), func(t *testing.T) { assertRawMergeMatchesReference(t, []byte(a), []byte(b)) })

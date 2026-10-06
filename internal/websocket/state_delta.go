@@ -372,7 +372,18 @@ func diffRawJSONMergeValue(previous, current json.RawMessage, anchorIdentity boo
 	for key, value := range after {
 		old, exists := before[key]
 		if !exists {
-			patch[key] = value
+			// Preserve the old decoder/encoder semantics for additions too:
+			// duplicate keys and invalid Unicode escapes are normalised, not
+			// copied as a new browser-visible representation.
+			decoded, err := decodeJSONMergeValue(value)
+			if err != nil {
+				return nil, false, err
+			}
+			encoded, err := json.Marshal(decoded)
+			if err != nil {
+				return nil, false, err
+			}
+			patch[key] = encoded
 			continue
 		}
 		nested, changed, err := diffRawJSONMergeValue(old, value, false)
@@ -389,7 +400,15 @@ func diffRawJSONMergeValue(previous, current json.RawMessage, anchorIdentity boo
 	// Preserve the existing identity anchor without decoding current twice.
 	if anchorIdentity {
 		if id, ok := after["id"]; ok {
-			patch["id"] = id
+			decoded, err := decodeJSONMergeValue(id)
+			if err != nil {
+				return nil, false, err
+			}
+			encoded, err := json.Marshal(decoded)
+			if err != nil {
+				return nil, false, err
+			}
+			patch["id"] = encoded
 		}
 	}
 	encoded, err := json.Marshal(patch)
