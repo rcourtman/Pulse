@@ -5286,6 +5286,70 @@ func TestContract_ReportsOmitRetainedDiskTemperatures(t *testing.T) {
 	}
 }
 
+// Report disk tables colour a reading by the disk's alert disk temperature
+// thresholds (the tenant's per-type policy), not a fixed 50/60C: amber from the
+// clear value, red from the trigger, as the Physical Disks Temp column does.
+func TestContract_ReportsCarryDiskTemperatureAlertThresholds(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	state := models.NewState()
+	state.Nodes = []models.Node{{ID: "node-1", Name: "node-a", Status: "online"}}
+	disk := func(id, devPath, diskType string, temperature int) unifiedresources.Resource {
+		return unifiedresources.Resource{
+			ID: id, Type: unifiedresources.ResourceTypePhysicalDisk, Name: id, ParentName: "node-a",
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"node-a"}},
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+				DevPath: devPath, DiskType: diskType, Health: "PASSED", Wearout: -1, Temperature: temperature,
+				Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")},
+			},
+		}
+	}
+	monitor := newReportingMonitorForTest(t, state, []unifiedresources.Resource{
+		disk("disk-nvme", "/dev/nvme0n1", "nvme", 63),
+		disk("disk-sata", "/dev/sda", "sata", 56),
+	})
+	handler := NewReportingHandlers(newReportingMTMForTest(t, monitor), nil)
+	thresholdsByDevice := func() map[string][2]float64 {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/reporting?format=pdf&resourceType=node&resourceId=node-1", nil)
+		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "default"))
+		rec := httptest.NewRecorder()
+		handler.HandleGenerateReport(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+		}
+		got := map[string][2]float64{}
+		for _, d := range engine.lastReq.Disks {
+			got[d.Device] = [2]float64{d.TemperatureWarning, d.TemperatureCritical}
+		}
+		return got
+	}
+
+	// No alert manager: the factory per-type policy.
+	if got, want := thresholdsByDevice(), map[string][2]float64{"/dev/nvme0n1": {65, 70}, "/dev/sda": {50, 55}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("factory report disk thresholds = %v, want %v", got, want)
+	}
+
+	manager := alerts.NewManager()
+	cfg := manager.GetConfig()
+	cfg.DiskTempByType["nvme"] = alerts.HysteresisThreshold{Trigger: 75, Clear: 70}
+	manager.UpdateConfig(cfg)
+	setUnexportedField(t, monitor, "alertManager", manager)
+	if got, want := thresholdsByDevice(), map[string][2]float64{"/dev/nvme0n1": {70, 75}, "/dev/sda": {50, 55}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("configured report disk thresholds = %v, want %v", got, want)
+	}
+
+	cfg = manager.GetConfig()
+	cfg.AgentDefaults.DiskTemperature = &alerts.HysteresisThreshold{Trigger: 0, Clear: 0}
+	manager.UpdateConfig(cfg)
+	if got, want := thresholdsByDevice(), map[string][2]float64{"/dev/nvme0n1": {0, 0}, "/dev/sda": {0, 0}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("report disk thresholds with disk temperature alerting off = %v, want %v", got, want)
+	}
+}
+
 func TestContract_ReportingRequestCarriesEntitledReportBranding(t *testing.T) {
 	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
 	original := reporting.GetEngine()

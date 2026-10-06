@@ -6349,6 +6349,15 @@ when `diskinventory.TemperatureCollected` holds, so a retained value is reported
 as 0 (no reading) rather than tabulated as measured. Proof:
 `TestContract_ReportsOmitRetainedDiskTemperatures` in
 `internal/api/contract_test.go`.
+Each reported disk also carries its alert disk temperature thresholds
+(`reporting.DiskInfo.TemperatureWarning` / `TemperatureCritical`, the clear
+value and the trigger). `reportDiskTemperatureThresholds` resolves them from
+the tenant's alert manager (`alerts.Manager.DiskTemperatureThreshold`, the
+factory policy when there is none). The PDF disk table colours a reading amber
+from the clear value and red from the trigger, as the Physical Disks Temp
+column does, and leaves it plain when disk temperature alerting is off. It no
+longer uses a fixed 50/60C. Proof:
+`TestContract_ReportsCarryDiskTemperatureAlertThresholds`.
 That same metrics-history contract also owns Kubernetes pod identity
 normalization. `/api/metrics-store/history` must accept legacy bare pod IDs
 such as `cluster-1:pod:pod-1`, canonicalize them onto the unified pod metrics

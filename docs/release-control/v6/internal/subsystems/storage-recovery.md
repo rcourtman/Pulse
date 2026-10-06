@@ -6779,7 +6779,9 @@ judges the current reading, with no memory of an alert. A disk temperature
 alert held between its clear value and trigger shows an amber Temp cell, not
 `Running Hot`. A switched-off agent Disk Temp default resolves to null, which
 leaves the reading uncoloured and never hot, as alerting is off for it.
-Per-host Disk Temp overrides do not yet reach Physical Disks.
+Per-host Disk Temp overrides do not yet reach Physical Disks. PDF performance
+reports colour a disk reading by the same per-type thresholds, which
+`reporting.DiskInfo` carries.
 `frontend-modern/src/features/storageBackups/__tests__/diskPresentation.test.ts`
 pins cell-and-verdict agreement for every type from 40C to 80C under factory and
 raised triggers, plus retained readings, failure evidence, sorting and

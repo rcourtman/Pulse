@@ -1702,10 +1702,10 @@ normalization restores a non-positive entry to its default.
 A disk is hot from its trigger. Alerts and Patrol findings stay open until the
 reading falls to the clear value, or under the trigger when there is no band
 below it. The Physical Disks verdict and the TrueNAS Health cell judge only the
-current reading against the trigger. Judges that still differ: TrueNAS disk
-temperature alerts use `TrueNASDiskDefaults.Temperature` (a flat 55/50), the
-TrueNAS disk drawer tones the reading from a fixed 55C, and PDF reports colour
-disk temperatures at a fixed 50/60C.
+current reading against the trigger. PDF reports colour disk temperatures by
+the same thresholds. Judges that still differ: TrueNAS disk temperature alerts
+use `TrueNASDiskDefaults.Temperature` (a flat 55/50), and the TrueNAS disk
+drawer tones the reading from a fixed 55C.
 `TestDiskTemperatureThresholdMatchesCheckHostPolicy` in
 `internal/alerts/threshold_resolution_shared_test.go` pins per-type resolution, a raised
 NVMe trigger that `CheckHost` also honours, the copy, the disabled default and
