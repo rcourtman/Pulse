@@ -68,7 +68,10 @@ func registerGuestAgentEndpoints(host string, endpoints []string) {
 		if err != nil {
 			continue
 		}
-		key := securityutil.AppendURLPath(u, "api2", "json").String()
+		key, valid := guestAgentEndpointKey(securityutil.AppendURLPath(u, "api2", "json").String())
+		if !valid {
+			continue
+		}
 		group[key] = true
 		for _, alias := range guestAgentGuards.aliases[key] {
 			group[alias] = true
@@ -84,6 +87,10 @@ func registerGuestAgentEndpoints(host string, endpoints []string) {
 }
 
 func acquireGuestAgent(endpoint string, vmid int) (func(bool), error) {
+	endpoint, valid := guestAgentEndpointKey(endpoint)
+	if !valid || vmid <= 0 {
+		return nil, &guestAgentDeferredError{reason: "invalid-guest-key"}
+	}
 	guestAgentGuards.Lock()
 	defer guestAgentGuards.Unlock()
 	now := time.Now()
