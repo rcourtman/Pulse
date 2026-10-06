@@ -36,6 +36,9 @@ func BenchmarkConnectedDashboardCost(b *testing.B) {
 		for _, viewers := range []int{0, 1, 4, 17} {
 			b.Run(fmt.Sprintf("%s/viewers-%d", mode, viewers), func(b *testing.B) {
 				monitor := connectedCostMonitor()
+				if count := len(monitor.BuildBroadcastFrontendState().Resources); count != 1236 {
+					b.Fatalf("resources=%d, want1236", count)
+				}
 				sequence := int64(0)
 				getter := func(string) interface{} {
 					state := monitor.BuildBroadcastFrontendState()
