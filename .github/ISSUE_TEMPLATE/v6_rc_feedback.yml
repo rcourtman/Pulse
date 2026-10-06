@@ -151,6 +151,9 @@ body:
         Attach screenshots or paste relevant redacted logs if useful. For connection or data failures, a reviewed GitHub diagnostics export can help; prefer existing evidence when new collection is unsafe.
         Review files and screenshots locally; remove secrets and identifying details, including those echoed in errors, before attaching them here.
 
+        For CPU, memory or disk-write reports, use existing readings or safe, passive observations. Say whether the reading covers the Pulse process, its container or the whole host, and give its units, measurement window and uptime. Include allocated CPUs or memory limit, fleet size, polling interval and open dashboards where relevant and known. A process-start CPU average is not a recent sampling window; database size is not a write rate.
+        Existing screenshots are useful; write "unavailable" when safe collection is not possible. Do not restart, create load or change polling or retention just to measure. Do not attach raw profiles, heap dumps, databases or full process command lines; summarise only relevant counters after local review.
+
   - type: checkboxes
     id: confirmations
     attributes:

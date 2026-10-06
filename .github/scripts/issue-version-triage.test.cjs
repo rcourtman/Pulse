@@ -344,6 +344,48 @@ for (const [name, field] of [
   });
 }
 
+for (const [name, field] of [
+  ["bug_report.yml", "logs"],
+  ["v6_rc_feedback.yml", "evidence"],
+]) {
+  const evidenceField = () => {
+    const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
+    return form.split(`    id: ${field}\n`)[1].split("  - type: ")[0];
+  };
+
+  test(`performance report measurement context stays optional: ${name}`, () => {
+    const attachment = evidenceField();
+    assert.match(attachment, /For CPU, memory or disk-write reports/);
+    assert.match(attachment, /existing readings or safe, passive observations/);
+    assert.match(attachment, /Pulse process, its container or the whole host/);
+    for (const context of ["units", "measurement window", "uptime", "allocated CPUs", "memory limit", "fleet size", "polling interval", "open dashboards"]) {
+      assert.ok(attachment.includes(context), `${name} must distinguish ${context}`);
+    }
+    assert.match(attachment, /where relevant and known/);
+    assert.match(attachment, /process-start CPU average is not a recent sampling window/);
+    assert.match(attachment, /database size is not a write rate/);
+    assert.match(attachment, /Existing screenshots are useful/);
+    assert.match(attachment, /write "unavailable" when safe collection is not possible/);
+    assert.doesNotMatch(attachment, /required: true|render:/);
+  });
+
+  test(`performance report attachment safety: ${name}`, () => {
+    const attachment = evidenceField();
+    assert.match(attachment, /Do not restart, create load or change polling or retention just to measure/);
+    assert.match(attachment, /Do not attach raw profiles, heap dumps, databases or full process command lines/);
+    assert.match(attachment, /summarise only relevant counters after local review/);
+  });
+}
+
+test("performance report triage retains measurement boundaries without demanding unsafe evidence", () => {
+  const guide = fs.readFileSync(path.resolve(__dirname, "../../docs/ISSUE_TRIAGE.md"), "utf8");
+  assert.match(guide, /Pulse process, container or whole host/);
+  assert.match(guide, /process-start CPU average is not a recent window/);
+  assert.match(guide, /database\nsize is not a write rate/);
+  assert.match(guide, /without making new collection a condition of reporting/);
+  assert.match(guide, /Do not request raw\nprofiles, heap dumps, databases or full process command lines/);
+});
+
 test("older-version reports cannot trigger event or scheduled retest posting", async () => {
   const issue = {
     number: 1200,
