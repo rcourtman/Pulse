@@ -122,17 +122,15 @@ run_audit() {
   kill -TERM "${killer_pid}" 2>/dev/null
   wait "${killer_pid}" 2>/dev/null
 
-  # 143 = SIGTERM, 137 = SIGKILL: the watchdog fired. The report is then
-  # empty or truncated, which classify_report already reads as unreachable.
-  if [ "${status}" -eq 143 ] || [ "${status}" -eq 137 ]; then
-    return 124
-  fi
-  return 0
+  # Keep the observed command status. Even a complete-looking zero summary
+  # cannot establish a clean audit when npm failed or was stopped afterwards.
+  # Positive findings in that same response still take precedence.
+  return "${status}"
 }
 
 # Classify one audit run. Prints a verdict word, summary and (for a finding)
 # allowlisted, JSON-escaped package/advisory details from that same response:
-#   clean          — audit completed, no vulnerabilities
+#   clean          — audit exited zero, complete report, no vulnerabilities
 #   vulnerable     — audit completed, vulnerabilities present
 #   unreachable    — npm could not get an answer from the advisory endpoint
 classify_report() {
@@ -210,18 +208,20 @@ if has_findings or any(count > 0 for count in counts.values()):
     sys.exit(0)
 
 if (
-    isinstance(report, dict) and not report.get("error")
+    sys.argv[1] == "0"
+    and isinstance(report, dict) and not report.get("error")
     and len(counts) == len(count_names) and all(count == 0 for count in counts.values())
     and ("vulnerabilities" not in report or isinstance(findings, dict))
 ):
     print("clean")
     print(" ".join(f"{name}=0" for name in count_names))
 else:
-    # A malformed/partial zero summary or endpoint error is not a clean verdict.
+    # A failed/stopped command, partial zero summary or endpoint error is not
+    # a clean verdict, even if npm wrote zero counts before it ended.
     # With no positive finding, retain the existing bounded outage policy.
     print("unreachable")
 
-'
+' "$1"
 }
 
 report_file="$(mktemp)"
@@ -245,10 +245,18 @@ while [ "${attempt}" -le "${ATTEMPTS}" ]; do
   fi
 
   echo "npm audit (${SCOPE}) attempt ${attempt}/${ATTEMPTS} (limit ${attempt_limit}s, ${remaining}s of budget left)"
-  if ! run_audit "${attempt_limit}" "${report_file}"; then
-    echo "npm audit (${SCOPE}): attempt ${attempt} exceeded ${attempt_limit}s and was stopped"
-  fi
-  verdict_output="$(classify_report <"${report_file}")"
+  audit_status=0
+  run_audit "${attempt_limit}" "${report_file}" || audit_status=$?
+  case "${audit_status}" in
+    0) ;;
+    143|137)
+      echo "npm audit (${SCOPE}): command was stopped (status ${audit_status}, attempt limit ${attempt_limit}s)"
+      ;;
+    *)
+      echo "npm audit (${SCOPE}): command exited with status ${audit_status}"
+      ;;
+  esac
+  verdict_output="$(classify_report "${audit_status}" <"${report_file}")"
   verdict="$(printf '%s\n' "${verdict_output}" | head -1)"
   summary="$(printf '%s\n' "${verdict_output}" | sed -n '2p')"
 

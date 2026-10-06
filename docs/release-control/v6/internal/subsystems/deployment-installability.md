@@ -5033,8 +5033,13 @@ must never be introduced; only an unreachable endpoint is
 retried. A nonempty package-finding map or any positive integer
 summary count must fail immediately, even when the total is missing or
 contradicts that evidence; a later response must not replace a known finding.
-A clean verdict requires all six known summary counts to be integer zero,
-no endpoint error and an absent or empty package-finding map. Booleans,
+A clean verdict requires the same audit command to exit zero, all six known
+summary counts to be integer zero, no endpoint error and an absent or empty
+package-finding map. A zero summary written before a nonzero exit or signal
+is unavailable evidence, not a clean audit. Positive findings still take
+precedence even when the command exits zero or is stopped; they must not be
+retried in search of a different verdict. Diagnostics retain the observed
+command status without attributing an unknown signal initiator. Booleans,
 strings, nulls, negative counts and partial summaries are not zero-finding
 evidence. Without positive evidence, malformed reports retain the existing
 bounded outage policy, never a clean verdict. Summary diagnostics may print
@@ -5050,8 +5055,11 @@ it must not trigger another request. `scripts/tests/test_npm_audit_retry.py`
 executes changed-second-response, missing-detail, escaping and single-request
 fixtures, including production argument forwarding and findings accompanied by
 transport errors, positive package/severity evidence with missing or zero
-totals, malformed zero summaries under both outage modes, and metadata
-annotation injection. Retrying is bounded by wall clock and not by attempt count alone,
+totals, malformed zero summaries under both outage modes, failed/signalled
+zero summaries, zero and positive reports written before a real watchdog stop,
+and metadata annotation injection. The shell smoke provider models a clean
+report with exit zero and findings with exit one, like npm's terminal contract.
+Retrying is bounded by wall clock and not by attempt count alone,
 because npm's own `fetch-timeout` defaults to five minutes and it retries
 internally: on 2026-09-04 three attempts against a hanging endpoint ran for
 10m56s and cancelled the Frontend job at its own timeout with every test
