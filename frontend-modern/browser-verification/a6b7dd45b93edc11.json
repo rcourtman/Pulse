@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "d7ad0846bb4648305b61054d4d12e3e4eb7b0dc8",
+  "verified_at": "2026-10-06T19:56:45Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx": "677a113f78936e7737fc396eb1d53a1b679a50ed06c41ca946bdaf16414c4610",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "77a5d1e4f729784b51d82aa7971f71b70788321b2e767a8fe7b1abd4362693a8"
+  },
+  "routes": [
+    "/standalone/availability"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Combined content of AvailabilityChecksTable.tsx and StandalonePageSurface.tsx after merging origin/main (#2584's agent update copy and #2588's availability layout changes) into this branch (shared relative-time clock for row probe detail, status, filter bucket, attention sort and posture card)",
+    "Private mock stack (backend :7731, Vite :5251 serving the merged tree) with Playwright page.clock installed before load; /ws data frames held with a data-free keep-alive per fake minute (one live socket), GETs replayed, collection refetches stalled",
+    "Availability checks at 1440 and 390: rows went from fresh, 'checked 15s ago', Online/Degraded dots to stale, 'checked 10 mins ago', Stale dots, sorted attention first; posture card from '4 healthy \u00b7 3 need attention \u00b7 latest data just now' to '0 healthy \u00b7 7 need attention \u00b7 latest data 10m ago'; Degraded filter count 6 on desktop",
+    "No page errors at either viewport"
+  ],
+  "interactions": [
+    "Loaded /standalone/availability?view=table at both viewports, held the stream and advanced the page clock ten one-minute steps"
+  ]
+}
