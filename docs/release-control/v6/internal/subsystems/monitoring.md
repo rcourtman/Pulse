@@ -4374,6 +4374,17 @@ emit structured storage topology such as Unraid per-disk state, the shared
 assessment layer must derive canonical risk and alert severity from that
 richer disk topology instead of letting coarser aggregate counters override it
 and flap the operator-facing storage alert surface.
+That shared assessment judges only a disk temperature that was collected now.
+`storagehealth.CollectedTemperature` passes a reading through when its
+`collection.temperature` state is `available`, or when the source predates
+collection state, and otherwise drops it before `AssessPhysicalDisk` and
+`AssessHostSMARTDisk` build their sample. A last known value retained for a
+disk in standby or a host agent past its reporting lease therefore raises no
+`temperature_high` reason and cannot turn the disk's verdict or status into
+a warning, while the value itself stays on the resource as last-known
+history. Proof: `TestDiskAssessmentsIgnoreRetainedTemperature` and
+`TestCollectedTemperatureKeepsOnlyCurrentReadings` in
+`internal/storagehealth/risk_test.go`.
 That same monitoring-owned storage polling boundary also owns cluster-shared
 Proxmox storage status coherence. `internal/monitoring/monitor_polling_storage.go`
 must merge shared storage observations across nodes into one cluster-scoped

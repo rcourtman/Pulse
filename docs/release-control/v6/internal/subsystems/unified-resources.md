@@ -4137,6 +4137,14 @@ incidents during cross-source merges. A provider alert such as TrueNAS
 `truenas_smart` is not presentation-only context; it must become a canonical
 `physicalDisk.risk.reasons` entry so hybrid agent/API disk resources keep one
 shared disk-health truth after deduplication.
+That shared risk contract judges only a collected temperature. Both the
+adapter assessment and the registry's recompute from merged metadata
+(`physicalDiskAssessmentFromMeta`) pass the temperature through
+`storagehealth.CollectedTemperature`, so a retained `unavailable`,
+`unsupported` or `missing` temperature stays visible as last-known evidence
+but adds no `temperature_high` reason and leaves the disk `online` rather
+than `warning`. Proof: `TestPhysicalDiskRiskIgnoresRetainedTemperature` in
+`internal/unifiedresources/registry_test.go`.
 That same canonical disk contract now also owns recent aggregate temperature
 history. When a provider such as TrueNAS can supply `disk.temperature_agg`
 min/avg/max readings, it must project those onto
