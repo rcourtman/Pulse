@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "bffd21f47026ca2408ee1d0b5bb071c02e60c623",
+  "verified_at": "2026-10-06T15:48:24Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "db24691402c341a2ceec3135d6425c03c9706b6cb57630f9c0efc2e956179264"
+  },
+  "routes": [
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Combined AgentsMachinesTable.tsx on main after #2579 (row alert tint) and #2578 (shared relative-time clock) merged; private mock stack built from bffd21f470",
+    "A critical memory alert for Apollo-114 (resourceId agent-acdfdee2953587fb) injected into the websocket activeAlerts and /api/alerts/active; Spectrum-709 left without alerts",
+    "1600px light: Apollo-114 row bg-red-50 (rgb 254,242,242), Spectrum-709 untinted; with Last seen hidden the identity title read \"| seen just now\"",
+    "Playwright page.clock fast-forwarded 3h with /ws held and REST replayed: Apollo-114 title \"| seen 3h ago\" and the red tint unchanged, Spectrum-709 still untinted",
+    "390px dark: Apollo-114 row dark:bg-red-950/25, Seen cell \"just now\" -> \"3h ago\" after the same 3h jump with the tint unchanged",
+    "Apollo-114 drawer lists the injected \"Memory usage is 96%\" alert at both widths; no page errors"
+  ],
+  "interactions": [
+    "Opened View > Choose which columns to display and unchecked Last seen on Machines (1600px)",
+    "page.clock.fastForward 3h with data held",
+    "Clicked the Apollo-114 row to open its drawer"
+  ]
+}
