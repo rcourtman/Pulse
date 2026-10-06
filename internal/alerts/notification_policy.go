@@ -172,9 +172,37 @@ func (m *Manager) expireSuppressionNoLock(trackingKey string, now time.Time) boo
 	return true
 }
 
+const alertDeliveryReasonBackupRevalidation = "awaiting_backup_evaluation"
+
+// Caller holds mu. The occurrence check prevents a deferred startup snapshot
+// from suppressing a later alert that happens to reuse the same identity.
+func (m *Manager) awaitsBackupRevalidationNoLock(alert *Alert) bool {
+	if alert == nil || alert.Type != "backup-age" {
+		return false
+	}
+	startedAt, pending := m.restoredBackupNotifications[canonicalTrackingKeyForAlert(alert)]
+	return pending && startedAt.Equal(alert.StartTime)
+}
+
+// A valid, matched canonical evaluation releases the startup delivery hold.
+// Recovery/removal retires the hold through the active lifecycle owner instead.
+func (m *Manager) revalidateBackupNotificationNoLock(alert *Alert) bool {
+	if !m.awaitsBackupRevalidationNoLock(alert) {
+		return false
+	}
+	delete(m.restoredBackupNotifications, canonicalTrackingKeyForAlert(alert))
+	return true
+}
+
 func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 	callbacks := m.getAlertCallbacks()
 	if len(callbacks) == 0 || alert == nil {
+		return false
+	}
+	if m.awaitsBackupRevalidationNoLock(alert) {
+		m.recordAlertEvent(eventlog.TypeNotificationSuppressed, alert, "",
+			alertDeliveryReasonBackupRevalidation,
+			"Restored backup alert is awaiting a successful backup evaluation.", nil)
 		return false
 	}
 
@@ -640,6 +668,9 @@ func (m *Manager) ShouldSuppressNotification(alert *Alert) bool {
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	if m.awaitsBackupRevalidationNoLock(alert) {
+		return true
+	}
 	if _, snoozed := alertSnoozeUntil(alert, m.policyNow()); snoozed {
 		clearQuietHoursNotificationReplay(alert)
 		return true
@@ -858,6 +889,8 @@ func (m *Manager) diagnoseActiveAlertLocked(alert *Alert) AlertDeliveryDiagnosis
 	diagnosis.RecentAlertsInHour = m.rateLimitCountLocked(trackingKey, now)
 
 	switch {
+	case m.awaitsBackupRevalidationNoLock(alert):
+		diagnosis.setSuppressed(alertDeliveryReasonBackupRevalidation, "Restored backup alert is awaiting a successful backup evaluation.")
 	case alert.Acknowledged:
 		diagnosis.setSuppressed(AlertDeliveryReasonAcknowledged, "Alert is acknowledged, so firing notifications are suppressed.")
 	case isSupportedInfrastructureSymptom(alert):

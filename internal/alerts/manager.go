@@ -133,6 +133,9 @@ type Manager struct {
 	activeRecoveryReadable   atomic.Bool
 	activeRecoveryWriteBlock atomic.Bool
 	restoredAlertEpoch       atomic.Uint64
+	// Restored backup occurrences stay visible, but cannot notify until a
+	// successful backup evaluation confirms they are still overdue. Under mu.
+	restoredBackupNotifications map[string]time.Time
 
 	// Shadow-mode reducer feed (Phase 1 capstone). Nil until
 	// EnableShadowFeed; all access is under m.mu.
