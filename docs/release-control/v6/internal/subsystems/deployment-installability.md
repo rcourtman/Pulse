@@ -15,6 +15,23 @@
 
 ## Purpose
 
+### Shipped documentation is checked before CI dependency work
+
+Build and Test checks every shipped Markdown mirror immediately after the
+`changes` job's checkout, before classification can admit frontend, backend,
+script/build or benchmark work. Core E2E does the same before dependency setup
+in tier selection and both independent provisioning jobs; a failing tier check
+does not admit the eight browser shards. Existing check names, secret scanning,
+Public docs validation, test coverage and failure verdicts remain unchanged.
+
+The check is blocking and unconditional, including dispatches. It uses the
+whole-tree mode of `scripts/check_docs_mirror.py`, not staged-only tolerance.
+`TestCIDocsMirrorPreflight` parses all four actual workflow entrypoints and
+executes their command with the real checker: stale or orphaned shipped guides
+stop before a dependency-work marker, while identical copies allow it. This
+prevents deterministic documentation faults from consuming expensive CI work;
+local controls do not establish hosted queue-time improvement or publication.
+
 ### Native helper verification follows helper-only changes
 
 Unified Agent Native Verification admits helper command, protocol, shared

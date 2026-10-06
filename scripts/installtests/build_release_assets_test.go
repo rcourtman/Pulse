@@ -3786,6 +3786,106 @@ func TestReleaseTrainCITriggersIncludeBuildAndE2E(t *testing.T) {
 	}
 }
 
+// Documentation drift is deterministic and cheap to reject. It must not wait
+// behind dependency installation or fan out into builds that cannot land.
+func TestCIDocsMirrorPreflight(t *testing.T) {
+	type step struct {
+		Name            string `yaml:"name"`
+		Uses            string `yaml:"uses"`
+		Run             string `yaml:"run"`
+		If              string `yaml:"if"`
+		ContinueOnError bool   `yaml:"continue-on-error"`
+		Directory       string `yaml:"working-directory"`
+	}
+	type job struct {
+		Steps []step `yaml:"steps"`
+	}
+	for _, site := range []struct{ workflow, job string }{
+		{"build-and-test.yml", "changes"},
+		{"test-e2e.yml", "tier-selection"},
+		{"test-e2e.yml", "offline-org-provisioning"},
+		{"test-e2e.yml", "agent-registration"},
+	} {
+		t.Run(site.workflow+"/"+site.job, func(t *testing.T) {
+			content, err := os.ReadFile(repoFile(".github", "workflows", site.workflow))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var workflow struct {
+				Jobs map[string]job `yaml:"jobs"`
+			}
+			if err := yaml.Unmarshal(content, &workflow); err != nil {
+				t.Fatal(err)
+			}
+			steps := workflow.Jobs[site.job].Steps
+			if len(steps) < 2 || !strings.HasPrefix(steps[0].Uses, "actions/checkout@") {
+				t.Fatal("preflight must follow source checkout")
+			}
+			guard := steps[1]
+			if guard.Run != "python3 scripts/check_docs_mirror.py" || guard.If != "" ||
+				guard.ContinueOnError || guard.Directory != "" || guard.Uses != "" {
+				t.Fatal("whole-tree mirror check must be an unconditional blocking step immediately after checkout")
+			}
+			checker, err := os.ReadFile(repoFile("scripts", "check_docs_mirror.py"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, fixture := range []struct {
+				name, source, mirror, diagnostic string
+				wantExit                         int
+			}{
+				{"synced", "# Safe guidance\n", "# Safe guidance\n", "passed (1 shipped docs)", 0},
+				{"stale-shipped-guide", "# Safe guidance\nDo not repeat a guest probe.\n", "# Safe guidance\n", "docs/GUIDE.md and frontend-modern/public/docs/GUIDE.md differ", 1},
+				{"missing-source", "", "# Orphan guide\n", "shipped copy has no repo source docs/GUIDE.md", 1},
+			} {
+				t.Run(fixture.name, func(t *testing.T) {
+					root := t.TempDir()
+					write := func(path string, data []byte) {
+						t.Helper()
+						full := filepath.Join(root, path)
+						if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+							t.Fatal(err)
+						}
+						if err := os.WriteFile(full, data, 0600); err != nil {
+							t.Fatal(err)
+						}
+					}
+					write("scripts/check_docs_mirror.py", checker)
+					write("frontend-modern/public/docs/GUIDE.md", []byte(fixture.mirror))
+					if fixture.source != "" {
+						write("docs/GUIDE.md", []byte(fixture.source))
+					}
+					// Run the workflow's actual command and a harmless stand-in for
+					// the next dependency step under GitHub's fail-fast shell mode.
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					cmd := exec.CommandContext(ctx, "bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", guard.Run+"\nprintf started > dependency-work")
+					cmd.Dir = root
+					output, err := cmd.CombinedOutput()
+					exit := 0
+					if err != nil {
+						failure, ok := err.(*exec.ExitError)
+						if !ok {
+							t.Fatal(err)
+						}
+						exit = failure.ExitCode()
+					}
+					if exit != fixture.wantExit || !strings.Contains(string(output), fixture.diagnostic) {
+						t.Fatalf("exit=%d, want=%d, output=%s", exit, fixture.wantExit, output)
+					}
+					_, markerErr := os.Stat(filepath.Join(root, "dependency-work"))
+					if fixture.wantExit == 0 && markerErr != nil {
+						t.Fatal("synced documentation must allow later dependency work")
+					}
+					if fixture.wantExit != 0 && !os.IsNotExist(markerErr) {
+						t.Fatal("failed preflight must stop before dependency work")
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestProviderPairDockerProofRunsBeforeFreezeAndOnExactCandidate(t *testing.T) {
 	const testName = "TestIntegrationProviderPairNetworkIsolation"
 	const helperImage = "alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6"
