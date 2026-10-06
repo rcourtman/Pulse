@@ -69,6 +69,7 @@ import { copyToClipboard } from '@/utils/clipboard';
 import type { PatrolAutonomyLevel } from '@/api/patrol';
 import {
   getAttentionFlappingPresentation,
+  getAttentionHandoverClose,
   getLinkedPatrolFindings,
   getPatrolRememberedDecisionPresentation,
   partitionPatrolAttention,
@@ -972,7 +973,10 @@ function AttentionDetail(props: {
           <div class="space-y-5 px-4 py-4 sm:px-5">
             <section>
               <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-                <StateBadge item={loaded().item} />
+                <StateBadge
+                  item={loaded().item}
+                  movedClose={Boolean(getAttentionHandoverClose(loaded()))}
+                />
                 <span aria-hidden="true">·</span>
                 <EvidenceLabel item={loaded().item} detail />
                 <span aria-hidden="true">·</span>
@@ -985,6 +989,9 @@ function AttentionDetail(props: {
               <p class="mt-3 text-sm leading-6 text-base-content">
                 {loaded().item.plainLanguageSummary}
               </p>
+              <Show when={getAttentionHandoverClose(loaded())}>
+                {(handover) => <p class="mt-1 text-xs leading-5 text-muted">{handover()}</p>}
+              </Show>
               <Show when={getAttentionFlappingPresentation(loaded().item.flapping)}>
                 {(flapping) => (
                   <p class="mt-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs leading-5 text-amber-900 dark:border-amber-900/25 dark:bg-amber-950/30 dark:text-amber-200">
@@ -1803,10 +1810,17 @@ function severityTone(item: AttentionItem): MetadataBadgeTone {
   }
 }
 
-function StateBadge(props: { item: AttentionItem }) {
+// movedClose marks a resolved item whose condition moved to another owner: it
+// did not recover, so it must not wear the green "Resolved" badge.
+function StateBadge(props: { item: AttentionItem; movedClose?: boolean }) {
   return (
-    <MetadataBadge tone={stateTone(props.item)} size="xs" shape="rounded" appearance="outline">
-      {formatLabel(props.item.state)}
+    <MetadataBadge
+      tone={props.movedClose ? 'info' : stateTone(props.item)}
+      size="xs"
+      shape="rounded"
+      appearance="outline"
+    >
+      {props.movedClose ? 'Moved' : formatLabel(props.item.state)}
     </MetadataBadge>
   );
 }

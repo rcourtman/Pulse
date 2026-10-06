@@ -179,7 +179,7 @@ describe('VmwarePageSurface contract', () => {
     expect(screen.getByTestId('hosts-table')).toHaveAttribute('data-rows', '1');
     const notice = screen.getByTestId('platform-outdated-agent-notice');
     expect(notice).toHaveTextContent('app-01 runs an older Pulse agent (v5.1.34).');
-    expect(notice).toHaveTextContent('latest in-guest telemetry and command support.');
+    expect(notice).toHaveTextContent('latest fixes and VM details.');
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
       '/settings/infrastructure/agent-doctor?agents=agent%3Aagent-app-01',

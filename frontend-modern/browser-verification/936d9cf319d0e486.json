@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "b19c6aaf709637adedd46de9f61307252ab1131d",
+  "verified_at": "2026-10-06T14:18:34Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
+    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx": "7aad8eb3f5eb326aac32fb698e95b7fb76d3c2683a794dd104e0ed63e9080bf6",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "3daf35d191a8df3d47c37d1813763730c1849a5097e3e707ecc6b3faf10143a6",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "620c1ebcc9fea62047bea73c4505a21c7ed3fc3f28791e50f4d07b3b5203d6d2",
+    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx": "52aa6b488694cbeb3103e83abe98cb739953afdc734d9f26b5b3d595f47fbbd0",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "cd6bd1afc48a59908b7b0940e9c8e33a084f3f55c513815218e53072db534ce1"
+  },
+  "routes": [
+    "/standalone/machines",
+    "/proxmox/overview",
+    "/truenas/overview",
+    "/vmware/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack on main b19c6aaf70 plus this change; Machines has three older agents and Proxmox five, TrueNAS and vSphere none (their notice copy is covered by the page contract tests)",
+    "Before: the Machines notice read 'Update them to v4.26.0 for the latest agent command support and agent-managed platform detail', Proxmox 'agent-contributed Proxmox node detail and command support'",
+    "After: 'Update them to v4.26.0 for the latest fixes and machine details' on Machines and '...fixes and node details' on Proxmox; the notice no longer promises Patrol actions or command support, which is a separate setting the update keeps",
+    "Before: the CPU cell's '22% (18)' had nothing explaining the 18; its hover panel listed Usage and Load (1m) only. After: the hover panel's first row reads 'CPUs 18'"
+  ],
+  "interactions": [
+    "Hovered a machine's CPU bar and read the panel",
+    "Read the outdated-agent notice on each platform page"
+  ]
+}

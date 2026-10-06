@@ -96,6 +96,43 @@ func TestAlertLastSeenWireContract(t *testing.T) {
 	}
 }
 
+// A resolved alert that closed without recovering says so on the state and
+// websocket payloads; an ordinary recovery carries no resolution at all.
+func TestAlertResolutionWireContract(t *testing.T) {
+	recovered, err := json.Marshal(ResolvedAlert{Alert: Alert{ID: "alert-1"}})
+	if err != nil {
+		t.Fatalf("marshal recovered alert: %v", err)
+	}
+	if strings.Contains(string(recovered), "resolution") {
+		t.Fatalf("payload = %s, a recovery must not carry a resolution", recovered)
+	}
+
+	moved := ResolvedAlert{Alert: Alert{ID: "alert-1", Resolution: &AlertResolution{
+		Reason:              "moved_to_agent",
+		SuccessorResourceID: "agent-pve-1",
+		SuccessorName:       "pve-1 (Host Agent)",
+		Summary:             "Alert moved to pve-1 (Host Agent). This is not a recovery: check the agent for the current reading.",
+	}}}
+	payload, err := json.Marshal(moved)
+	if err != nil {
+		t.Fatalf("marshal moved alert: %v", err)
+	}
+	want := `"resolution":{"reason":"moved_to_agent","successorResourceId":"agent-pve-1","successorName":"pve-1 (Host Agent)","summary":"Alert moved to pve-1 (Host Agent). This is not a recovery: check the agent for the current reading."}`
+	if !strings.Contains(string(payload), want) {
+		t.Fatalf("payload = %s, want %s", payload, want)
+	}
+
+	// The state store keeps its own copy of each resolution.
+	state := NewState()
+	state.UpdateRecentlyResolved([]ResolvedAlert{moved})
+	moved.Resolution.SuccessorName = "changed"
+	snapshot := state.GetSnapshot().RecentlyResolved
+	if len(snapshot) != 1 || snapshot[0].Resolution == nil ||
+		snapshot[0].Resolution.SuccessorName != "pve-1 (Host Agent)" {
+		t.Fatalf("snapshot = %+v, want the resolution as it was recorded", snapshot)
+	}
+}
+
 func TestDockerHostCollectionModeWireContract(t *testing.T) {
 	payload, err := json.Marshal(DockerHost{
 		ID:             "docker-host-1",

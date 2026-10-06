@@ -57,6 +57,13 @@ func CanonicalResourceTypeKeys(resourceType string) []string {
 		keys = addUnique(keys, "agent-disk")
 		keys = addUnique(keys, "agent")
 		keys = addUnique(keys, "storage")
+	case "agent-storage":
+		keys = addUnique(keys, "agent-storage")
+		keys = addUnique(keys, "agent")
+		keys = addUnique(keys, "storage")
+	case "agent-sensor":
+		keys = addUnique(keys, "agent-sensor")
+		keys = addUnique(keys, "agent")
 	case "pbs":
 		keys = addUnique(keys, "pbs")
 		keys = addUnique(keys, "node")

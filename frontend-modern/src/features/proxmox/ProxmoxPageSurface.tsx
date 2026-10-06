@@ -354,7 +354,7 @@ export function ProxmoxPageSurface() {
             <PlatformOutdatedAgentNotice
               hosts={outdatedAgentHosts()}
               targetVersion={serverVersionDisplay()}
-              missingLabel="agent-contributed Proxmox node detail and command support"
+              missingLabel="fixes and node details"
               copyVariant="latest-detail"
               actionHref={outdatedAgentUpdatePath()}
               actionLabel="Open agent upgrade commands"

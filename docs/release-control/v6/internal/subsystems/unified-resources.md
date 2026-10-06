@@ -485,6 +485,18 @@ layer consumes it only as a fallback replacement for Proxmox LXC memory, so
 platform metric priority for a healthy agent is unchanged.
 `TestContainerViewLinkedAgentMemory` pins those boundaries.
 
+**Host-row agent source freshness (6 October 2026)**
+
+`HostView.SourceStatus(source)` exposes the per-source delivery freshness the
+registry already records, matching the VM, container, and physical-disk views.
+A host agent linked to a Proxmox node merges into one row whose `LastSeen`
+follows the freshest source, so consumers of agent-owned samples (monitoring's
+linked-agent node temperature lookup) must read the agent source's own sighting
+here instead of the row's `LastSeen`. The accessor returns a copy of the recorded
+status and adds no freshness policy of its own.
+`TestView_HostViewSourceStatusSeparatesAgentFromMergedRow` pins the merged-row
+split.
+
 ### Bounded incident-history selection
 
 Canonical history queries filter exact alert identifiers and observation windows
@@ -2245,7 +2257,17 @@ may repeat beside it. The Docker hosts (`DockerHostsTable.tsx`) and Machines
 `getUnifiedResourceAlertStyles`, so a collapsed row never looks healthy while
 its drawer lists an unacknowledged alert (an expanded row drops the tint while
 its drawer shows the alerts); acknowledged alerts stay in the drawer without
-tinting the row.
+tinting the row. Kubernetes node rows (`KubernetesNodesTable.tsx`) tint the
+same way: a node that runs a Pulse agent is an agent row whose alerts are keyed
+`agent:<id>` and carry the hostname, so the earlier id-and-display-name match
+left it untinted while its drawer listed a critical alert. The Kubernetes
+overview's "Nodes needing attention" and the nodes table's default order rank
+a node by the stronger of its readiness state and those unacknowledged alerts
+(`getKubernetesNodeAttentionRank`), so a Ready node at 100% memory is named
+beside the NotReady ones. vSphere host and TrueNAS system rows keep
+`getAlertStyles` with the host name: their VMs', pools' and apps' alerts carry
+that name as their node, and no producer keys alerts on those rows' `agent:`
+aliases (a Pulse agent on a TrueNAS box stays a separate resource).
 Machine and host overview cards that render compact system, hardware, disk,
 and temperature facts must also compose the frontend-primitives
 `InfoCardKeyValueRow`. Mobile rows retain their condensed endpoint layout;
@@ -2390,6 +2412,9 @@ for the column when evidence later appears. The
 compact row action trigger chrome stays under the frontend-primitives
 `ActionIconButton` boundary rather than becoming a unified-resource-local
 button shell.
+The Machines outdated-agent notice names what an update brings in plain
+words, the latest fixes and machine details, and stays maintenance guidance
+rather than a membership or health signal.
 Machines list search and online-state narrowing are frontend route state,
 not new unified-resource membership fields. `StandalonePageSurface.tsx`
 owns the `STANDALONE_QUERY_PARAMS` query/status projection and one composite
@@ -3480,6 +3505,14 @@ with the offline threshold on hover, not an "N/M" fraction.
 Recent check timing and fuller failure context may stay in tooltip or drawer
 detail, but the table row must not duplicate the same probe protocol and
 result text across both identity and metric cells.
+The probe source chip ("via Edge 01", or "2/2 locations reporting" for a
+multi-location check, the same wording Settings uses) shares the result's
+single line: the result keeps its full width at the cell's right edge and the
+chip takes the room left, truncating with its full text on hover. Before, the
+chip pushed "failed" out of its column at every width up to 1440px. Rows stay
+one line because the table windows them at a single measured height. On
+phones the method and target columns hide so the check name reads, and both
+stay in the row drawer.
 That same frontend-owned compatibility boundary must remain intentionally
 narrow. Shared resource adapters may admit explicit aliases such as `host`,
 `truenas`, and `ceph`, and VMware detail mappers may project typed metadata
@@ -3536,6 +3569,13 @@ the five field statuses for serial, temperature, I/O, controller, and pool.
 `unavailable`, `unsupported`, or `missing` state may retain a prior value for
 continuity, but the state and reason must survive so the consumer cannot claim
 fresh evidence or synthesize controller-level activity for one member.
+The one exception is a source withdrawing its own evidence: when the agent
+row reports a field as no longer available, that supersedes an `available`
+state the Proxmox row still carries from the same source
+(`diskinventory.MergeReportedStatus`), in either ingest order. A host agent
+past its reporting lease must not stay "collected" through the Proxmox row's
+copy of the agent's own state, including when its host is down and no disk
+poll refreshes that copy.
 
 Cross-source correlation compares normalized serial and WWN values across
 fields without truncation, allowing a PVE bare-hex array-volume serial to join
@@ -4191,6 +4231,14 @@ such as `alert_fired`, `alert_acknowledged`, `alert_unacknowledged`,
 AI-local annotations. Snooze and resume projections must preserve the actor
 and exact suppression expiry when present; they pause delivery and escalation
 without acknowledging, resolving, or replacing the underlying incident.
+An `alert_resolved` change for a close that was not a recovery carries the
+alert engine's summary as its reason and the reason code as `alert_resolution`
+metadata (`AlertTimelineChange.ResolutionReason` and `ResolutionSummary`), so
+incident projection titles the close with where the alert went instead of
+"Alert resolved: <breach message>". The resource drawer still labels the change
+by kind (`Alert resolved`) and prefixes its headline with that label; only the
+reason after it says the alert moved. Ordinary recoveries omit the key, and
+every other lifecycle kind ignores the fields.
 Alert-scoped
 incident memory may still project those events for one investigation thread,
 but the durable source of truth for resource-affecting alert lifecycle and
@@ -4351,7 +4399,13 @@ must render from that shared projection instead of rescanning raw job arrays or
 inventing local PBS status heuristics,
 `resourceDetailDrawerIdentityModel.ts` owns the pure identity-card,
 discovery-summary, source-debug, and debug-bundle derivations that feed the
-overview and debug drawer surfaces,
+overview and debug drawer surfaces (the `Identity` card shows each identifier
+once: Discovery and Metrics Target rows appear only when they name something
+not already on screen, meaning the header's `getPreferredInfrastructureDisplayName`,
+the rows above, or the Platform ID row, and Aliases omits the same displayed
+values; candidate names the drawer never shows do not count, a shown Platform
+ID counts as identity data for the empty state, and a Machines agent drawer
+used to list one ID four times),
 `useResourceDetailDrawerDockerActionsState.ts` owns Docker action runtime, and
 the overview/debug render-heavy surfaces live in dedicated drawer-local owners
 instead of staying inline in the shell.

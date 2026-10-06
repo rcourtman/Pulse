@@ -239,6 +239,39 @@ func TestIncidentStore_EqualTimestampLifecycleKeepsResolvedState(t *testing.T) {
 	}
 }
 
+// Without a canonical resource timeline the store writes its own close event,
+// which must say the alert moved rather than resolved.
+func TestIncidentStore_HandoverCloseIsNotARecovery(t *testing.T) {
+	store := NewIncidentStore(IncidentStoreConfig{MaxIncidents: 10, MaxEventsPerIncident: 10, MaxAgeDays: 30})
+	startedAt := time.Now().UTC().Truncate(time.Second).Add(-time.Hour)
+	movedAt := startedAt.Add(30 * time.Minute)
+	alert := &alerts.Alert{
+		ID:           "pve1-memory",
+		Type:         "memory",
+		ResourceID:   "pve1",
+		ResourceName: "pve1",
+		Message:      "Memory usage at 95%",
+		StartTime:    startedAt,
+		LastSeen:     startedAt,
+		Resolution:   &alerts.AlertResolution{Reason: alerts.AlertResolutionMovedToAgent, SuccessorName: "pve1 (Host Agent)"},
+	}
+	summary := "Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading."
+
+	store.RecordAlertFired(alert)
+	store.RecordAlertResolved(alert, movedAt)
+	timeline := store.GetTimelineByAlertAt(alert.ID, startedAt)
+	if timeline == nil || len(timeline.Events) != 2 || timeline.Events[1].Summary != summary {
+		t.Fatalf("recorded timeline = %#v, want the handover close", timeline)
+	}
+
+	snapshot := alert.Clone()
+	snapshot.ID = "pve1-memory-imported"
+	repaired := store.EnsureAlertOccurrence(snapshot, &movedAt)
+	if repaired == nil || len(repaired.Events) != 2 || repaired.Events[1].Summary != summary {
+		t.Fatalf("repaired timeline = %#v, want the handover close", repaired)
+	}
+}
+
 func TestIncidentStore_ProjectsCanonicalTimelineWhenAttached(t *testing.T) {
 	store := NewIncidentStore(IncidentStoreConfig{
 		MaxIncidents:         10,

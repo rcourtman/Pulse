@@ -98,6 +98,12 @@ func (m *Manager) addRecentlyResolvedWithPrimaryLock(resolved *ResolvedAlert) {
 
 // clearAlert removes an alert if it exists.
 func (m *Manager) clearAlert(alertID string) {
+	m.clearAlertWithResolution(alertID, nil)
+}
+
+// clearAlertWithResolution removes an alert if it exists. A non-nil
+// resolution marks the close as something other than a recovery.
+func (m *Manager) clearAlertWithResolution(alertID string, resolution *AlertResolution) {
 	m.mu.Lock()
 	alert, exists := m.getActiveAlertNoLock(alertID)
 	if exists {
@@ -111,6 +117,7 @@ func (m *Manager) clearAlert(alertID string) {
 	}
 
 	publicID := effectiveAlertID(alert, alertID)
+	alert.Resolution = resolution.Clone()
 	resolvedAlert := m.newResolvedAlert(alert, time.Now(), nil)
 
 	m.addRecentlyResolvedUnlocked(resolvedAlert)
