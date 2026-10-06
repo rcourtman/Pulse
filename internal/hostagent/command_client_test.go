@@ -2,14 +2,21 @@ package hostagent
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 )
 
@@ -530,4 +537,528 @@ func TestCommandClientGuestCompletionContract(t *testing.T) {
 func TestCommandClientGuestOutcomeContract(t *testing.T) {
 	t.Run("execution-and-admission", testGuestExecProjectsGuestOutcome)
 	t.Run("terminal-dictionary", TestGuestExecTerminalDictionary)
+}
+
+// commandIdentityHarness runs an agent with commands enabled against a fake
+// Pulse whose report acknowledgement the test scripts, and records the
+// identity of every command client that starts.
+type commandIdentityHarness struct {
+	agent   *Agent
+	server  *httptest.Server
+	started chan string
+
+	mu      sync.Mutex
+	reports int
+	built   int
+	// refuse makes every started client behave as if Pulse refused its
+	// registration; otherwise a started client counts as admitted.
+	refuse bool
+}
+
+func newCommandIdentityHarness(t *testing.T, presentedID string, interval time.Duration, respond func(report int, w http.ResponseWriter)) *commandIdentityHarness {
+	t.Helper()
+	h := &commandIdentityHarness{started: make(chan string, 8)}
+	h.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.mu.Lock()
+		h.reports++
+		report := h.reports
+		h.mu.Unlock()
+		respond(report, w)
+	}))
+	t.Cleanup(h.server.Close)
+
+	logger := zerolog.Nop()
+	agent, err := New(Config{
+		APIToken:       "token",
+		PulseURL:       "https://pulse",
+		AgentID:        presentedID,
+		EnableCommands: true,
+		Interval:       interval,
+		StateDir:       t.TempDir(),
+		Collector:      &mockCollector{},
+		Logger:         &logger,
+		newCommandClientFn: func(cfg Config, agentID, hostname, platform, version string) *CommandClient {
+			h.mu.Lock()
+			h.built++
+			h.mu.Unlock()
+			return NewCommandClient(cfg, agentID, hostname, platform, version)
+		},
+		runCommandClientFn: func(client *CommandClient, ctx context.Context) error {
+			h.mu.Lock()
+			refuse := h.refuse
+			h.mu.Unlock()
+			if !refuse {
+				client.markAdmitted()
+			}
+			h.started <- client.agentID
+			<-ctx.Done()
+			return ctx.Err()
+		},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	agent.httpClient = h.server.Client()
+	agent.trimmedPulseURL = h.server.URL
+	h.agent = agent
+	return h
+}
+
+func (h *commandIdentityHarness) run(t *testing.T) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = h.agent.Run(ctx)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+}
+
+func (h *commandIdentityHarness) waitForReports(t *testing.T, want int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		h.mu.Lock()
+		reports := h.reports
+		h.mu.Unlock()
+		if reports >= want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("only %d reports were sent, want %d", reports, want)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func (h *commandIdentityHarness) clientIdentity() string {
+	h.agent.commandClientMu.Lock()
+	defer h.agent.commandClientMu.Unlock()
+	if h.agent.commandClient == nil {
+		return ""
+	}
+	return h.agent.commandClient.agentID
+}
+
+func (h *commandIdentityHarness) expectStart(t *testing.T, want string) {
+	t.Helper()
+	select {
+	case got := <-h.started:
+		if got != want {
+			t.Fatalf("command channel registered as %q, want %q", got, want)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("command channel never started; want it registered as %q", want)
+	}
+}
+
+func (h *commandIdentityHarness) expectNoStart(t *testing.T, within time.Duration) {
+	t.Helper()
+	select {
+	case got := <-h.started:
+		t.Fatalf("command channel registered as %q before Pulse acknowledged a report", got)
+	case <-time.After(within):
+	}
+}
+
+func (h *commandIdentityHarness) expectNoRestart(t *testing.T) {
+	t.Helper()
+	select {
+	case got := <-h.started:
+		t.Fatalf("command channel registered again, as %q", got)
+	default:
+	}
+}
+
+func writeAck(w http.ResponseWriter, body string) {
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(body))
+}
+
+// A token binds the first identity its command channel presents and never
+// moves. An agent started with a configured ID (or an ID Pulse forked, or
+// kept from an earlier enrollment) used to register that ID before its first
+// report, while Pulse resolved its reports to another host ID that the agent
+// persisted and presented after the next restart: the channel was refused for
+// good. The channel now waits for the acknowledgement and registers under the
+// identity Pulse names for it.
+func TestCommandChannelRegistersUnderTheIdentityPulseAcknowledges(t *testing.T) {
+	release := make(chan struct{})
+	h := newCommandIdentityHarness(t, "configured-id", time.Hour, func(report int, w http.ResponseWriter) {
+		if report == 1 {
+			<-release
+		}
+		writeAck(w, `{"success":true,"agentId":"server-resolved","commandAgentId":"server-resolved"}`)
+	})
+	h.run(t)
+
+	h.expectNoStart(t, 300*time.Millisecond)
+	close(release)
+	h.expectStart(t, "server-resolved")
+}
+
+// An older Pulse names no command identity, and a current Pulse names none for
+// a token already bound to the ID this agent presents (for example a
+// configured --agent-id). The channel then registers under the agent's own ID
+// exactly as before, once a report is acknowledged.
+func TestCommandChannelKeepsItsOwnIdentityWhenPulseNamesNone(t *testing.T) {
+	h := newCommandIdentityHarness(t, "configured-id", time.Hour, func(_ int, w http.ResponseWriter) {
+		writeAck(w, `{"success":true,"agentId":"server-resolved"}`)
+	})
+	h.run(t)
+
+	h.expectStart(t, "configured-id")
+}
+
+// While Pulse is unreachable or refusing reports the agent has no answer, so
+// the channel stays staged and registers once a later report is acknowledged.
+func TestCommandChannelWaitsForAnAcknowledgedReport(t *testing.T) {
+	h := newCommandIdentityHarness(t, "configured-id", 50*time.Millisecond, func(report int, w http.ResponseWriter) {
+		if report < 3 {
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		writeAck(w, `{"success":true,"agentId":"server-resolved","commandAgentId":"server-resolved"}`)
+	})
+	h.run(t)
+
+	h.expectStart(t, "server-resolved")
+	h.mu.Lock()
+	reports := h.reports
+	h.mu.Unlock()
+	if reports < 3 {
+		t.Fatalf("command channel started after %d report attempts, want it to wait for the accepted third", reports)
+	}
+}
+
+// Once Pulse has named the channel's identity, a later acknowledgement that
+// names none (Pulse now resolves the host elsewhere, and the binding refuses
+// that ID) must not drop the channel back to a different ID: the token is
+// bound to the acknowledged one.
+func TestCommandChannelKeepsTheAcknowledgedIdentityWhenALaterAckNamesNone(t *testing.T) {
+	h := newCommandIdentityHarness(t, "configured-id", 50*time.Millisecond, func(report int, w http.ResponseWriter) {
+		if report == 1 {
+			writeAck(w, `{"success":true,"agentId":"server-resolved","commandAgentId":"server-resolved"}`)
+			return
+		}
+		writeAck(w, `{"success":true,"agentId":"healed-id"}`)
+	})
+	h.run(t)
+
+	h.expectStart(t, "server-resolved")
+	h.waitForReports(t, 4)
+	h.expectNoRestart(t)
+	if got := h.clientIdentity(); got != "server-resolved" {
+		t.Fatalf("command client identity = %q, want the acknowledged %q", got, "server-resolved")
+	}
+
+	// A client rebuilt later in this process (commands disabled, then enabled
+	// again) still registers under the acknowledged identity.
+	h.agent.applyRemoteConfig(false)
+	h.agent.applyRemoteConfig(true)
+	h.expectStart(t, "server-resolved")
+}
+
+// Commands enabled by Pulse after start-up (rather than by --enable-commands)
+// stage a client before any report is acknowledged. That client must register
+// under the acknowledged identity, not the presented one.
+func TestRemotelyEnabledCommandChannelRegistersUnderTheAcknowledgedIdentity(t *testing.T) {
+	h := newCommandIdentityHarness(t, "configured-id", time.Hour, func(_ int, w http.ResponseWriter) {
+		writeAck(w, `{"success":true,"agentId":"server-resolved","commandAgentId":"server-resolved","config":{"commandsEnabled":true}}`)
+	})
+	h.agent.stopCommandClient(true)
+	h.agent.configMu.Lock()
+	h.agent.cfg.EnableCommands = false
+	h.agent.configMu.Unlock()
+	h.run(t)
+
+	h.expectStart(t, "server-resolved")
+}
+
+// An unreadable acknowledgement is no answer. Registering on it could bind a
+// fresh token to the presented ID, which the next readable ack would not name,
+// so the channel waits for an ack it can read.
+func TestCommandChannelIgnoresAnUnreadableAck(t *testing.T) {
+	h := newCommandIdentityHarness(t, "configured-id", 50*time.Millisecond, func(report int, w http.ResponseWriter) {
+		if report == 1 {
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = w.Write([]byte("<html>proxy</html>"))
+			return
+		}
+		writeAck(w, `{"success":true,"agentId":"server-resolved","commandAgentId":"server-resolved"}`)
+	})
+	h.run(t)
+
+	h.expectStart(t, "server-resolved")
+}
+
+// A token Pulse refuses reports for (403: no report scope) can never be named
+// a command identity, and it may still run commands. Its channel registers
+// under the agent's own ID as it did before registration waited for an ack.
+func TestCommandChannelRegistersUnderItsOwnIdentityWhenReportsAreForbidden(t *testing.T) {
+	h := newCommandIdentityHarness(t, "configured-id", time.Hour, func(_ int, w http.ResponseWriter) {
+		http.Error(w, "missing scope", http.StatusForbidden)
+	})
+	h.run(t)
+
+	h.expectStart(t, "configured-id")
+}
+
+// A running channel was admitted by its token. A later ack naming another
+// identity must not tear it down and build a second client: that reopens the
+// operation receipt store and marks in-flight operations interrupted.
+func TestRunningCommandChannelIsNeverReplacedByALaterIdentity(t *testing.T) {
+	h := newCommandIdentityHarness(t, "configured-id", 50*time.Millisecond, func(report int, w http.ResponseWriter) {
+		if report == 1 {
+			writeAck(w, `{"success":true,"agentId":"server-resolved"}`)
+			return
+		}
+		writeAck(w, `{"success":true,"agentId":"server-resolved","commandAgentId":"server-resolved"}`)
+	})
+	h.run(t)
+
+	h.expectStart(t, "configured-id")
+	h.waitForReports(t, 3)
+	h.expectNoRestart(t)
+	if got := h.clientIdentity(); got != "configured-id" {
+		t.Fatalf("running command client identity = %q, want it left on %q", got, "configured-id")
+	}
+	h.mu.Lock()
+	built := h.built
+	h.mu.Unlock()
+	if built != 1 {
+		t.Fatalf("command clients built = %d, want only the one New staged", built)
+	}
+}
+
+// Observer destinations may run any Pulse version and never speak for this
+// agent's identity: their acknowledgements neither name the command identity
+// nor release the channel.
+func TestObserverAckNeverReleasesOrNamesTheCommandChannel(t *testing.T) {
+	server := newServerVersionAckServer(`{"success":true,"agentId":"observer-id","commandAgentId":"observer-id"}`)
+	defer server.Close()
+
+	h := newCommandIdentityHarness(t, "configured-id", time.Hour, func(_ int, w http.ResponseWriter) {
+		writeAck(w, `{"success":true,"agentId":"server-resolved"}`)
+	})
+	runCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h.agent.commandClientMu.Lock()
+	h.agent.commandClientRunCtx = runCtx
+	h.agent.commandClientMu.Unlock()
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "configured-id"},
+		Host:  agentshost.HostInfo{Hostname: "test-host"},
+	}
+	if err := h.agent.sendReportToDestination(context.Background(), report, server.URL, "observer-token", server.Client(), false); err != nil {
+		t.Fatalf("sendReportToDestination: %v", err)
+	}
+	h.agent.commandClientMu.Lock()
+	released := h.agent.commandClientParentCtx != nil
+	identity := h.agent.commandIdentity
+	h.agent.commandClientMu.Unlock()
+	if released || identity != "" {
+		t.Fatalf("observer ack released=%v identity=%q, want neither", released, identity)
+	}
+	h.expectNoStart(t, 100*time.Millisecond)
+}
+
+// A remote disable can close and clear a client another path is about to
+// start. Starting that superseded client must fail without occupying the run
+// slot, or the next enabled client never runs.
+func TestSupersededCommandClientCannotOccupyTheRunSlot(t *testing.T) {
+	h := newCommandIdentityHarness(t, "configured-id", time.Hour, func(_ int, w http.ResponseWriter) {
+		writeAck(w, `{"success":true,"agentId":"server-resolved"}`)
+	})
+	runCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h.agent.commandClientMu.Lock()
+	h.agent.commandClientParentCtx = runCtx
+	superseded := h.agent.commandClient
+	h.agent.commandClientMu.Unlock()
+
+	h.agent.applyRemoteConfig(false)
+	if h.agent.startCommandClient(superseded) {
+		t.Fatal("a cleared command client was started")
+	}
+	h.agent.commandClientMu.Lock()
+	occupied := h.agent.commandClientRunCancel != nil
+	h.agent.commandClientMu.Unlock()
+	if occupied {
+		t.Fatal("a cleared command client occupied the run slot")
+	}
+	h.expectNoStart(t, 100*time.Millisecond)
+
+	h.agent.applyRemoteConfig(true)
+	h.expectStart(t, "configured-id")
+}
+
+// A client whose registration Pulse keeps refusing (for example one released
+// by a mock-mode acknowledgement that named nothing, for a token bound to the
+// resolved identity) has accepted no operation. When a later acknowledgement
+// names the identity the token admits, it is retired and rebuilt under that
+// identity instead of retrying the refused one for the life of the process.
+func TestRefusedCommandChannelMovesToTheIdentityALaterAckNames(t *testing.T) {
+	h := newCommandIdentityHarness(t, "configured-id", 50*time.Millisecond, func(report int, w http.ResponseWriter) {
+		if report == 1 {
+			writeAck(w, `{"success":true,"agentId":"configured-id"}`)
+			return
+		}
+		writeAck(w, `{"success":true,"agentId":"server-resolved","commandAgentId":"server-resolved"}`)
+	})
+	h.refuse = true
+	h.run(t)
+
+	h.expectStart(t, "configured-id")
+	h.expectStart(t, "server-resolved")
+	if got := h.clientIdentity(); got != "server-resolved" {
+		t.Fatalf("command client identity = %q, want %q", got, "server-resolved")
+	}
+}
+
+// A decodable body that is not a Pulse acknowledgement (an empty object, or a
+// refusal) is no answer either: the channel keeps waiting for a real ack.
+func TestCommandChannelIgnoresAResponseThatIsNotAnAck(t *testing.T) {
+	h := newCommandIdentityHarness(t, "configured-id", 50*time.Millisecond, func(report int, w http.ResponseWriter) {
+		switch report {
+		case 1:
+			writeAck(w, `{}`)
+		case 2:
+			writeAck(w, `{"success":false}`)
+		default:
+			writeAck(w, `{"success":true,"agentId":"server-resolved","commandAgentId":"server-resolved"}`)
+		}
+	})
+	h.run(t)
+
+	h.expectStart(t, "server-resolved")
+}
+
+// A report buffered by an earlier run may present another agent ID or
+// hostname, and Pulse judges the command identity for the report it
+// acknowledges. Its acknowledgement must neither name nor release this
+// process's channel.
+func TestReplayedReportAckNeverNegotiatesTheCurrentChannel(t *testing.T) {
+	h := newCommandIdentityHarness(t, "configured-id", time.Hour, func(_ int, w http.ResponseWriter) {
+		writeAck(w, `{"success":true,"agentId":"server-resolved","commandAgentId":"server-resolved"}`)
+	})
+	runCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h.agent.commandClientMu.Lock()
+	h.agent.commandClientRunCtx = runCtx
+	h.agent.commandClientMu.Unlock()
+
+	for _, replayed := range []agentshost.Report{
+		{Agent: agentshost.AgentInfo{ID: "earlier-id"}, Host: agentshost.HostInfo{Hostname: h.agent.hostname}},
+		{Agent: agentshost.AgentInfo{ID: "configured-id"}, Host: agentshost.HostInfo{Hostname: "earlier-hostname"}},
+	} {
+		if err := h.agent.sendReport(context.Background(), replayed); err != nil {
+			t.Fatalf("sendReport: %v", err)
+		}
+	}
+	h.agent.commandClientMu.Lock()
+	released := h.agent.commandClientParentCtx != nil
+	identity := h.agent.commandIdentity
+	h.agent.commandClientMu.Unlock()
+	if released || identity != "" {
+		t.Fatalf("replayed acks released=%v identity=%q, want neither", released, identity)
+	}
+	h.expectNoStart(t, 100*time.Millisecond)
+
+	current := agentshost.Report{Agent: agentshost.AgentInfo{ID: "configured-id"}, Host: agentshost.HostInfo{Hostname: h.agent.hostname}}
+	if err := h.agent.sendReport(context.Background(), current); err != nil {
+		t.Fatalf("sendReport: %v", err)
+	}
+	h.expectStart(t, "server-resolved")
+}
+
+// Pulse admits a client's registration before sending it anything. A client
+// it admitted can no longer be retired, and one the agent retired can never be
+// admitted afterwards.
+func TestCommandClientAdmissionAndRetirementAreExclusive(t *testing.T) {
+	admitted := &CommandClient{}
+	if !admitted.markAdmitted() || !admitted.markAdmitted() {
+		t.Fatal("an admitted client did not stay admitted across reconnects")
+	}
+	if admitted.retireIfNeverAdmitted() {
+		t.Fatal("an admitted client was retired")
+	}
+	retired := &CommandClient{}
+	if !retired.retireIfNeverAdmitted() {
+		t.Fatal("a never-admitted client could not be retired")
+	}
+	if retired.markAdmitted() {
+		t.Fatal("a retired client was admitted")
+	}
+}
+
+// The admission state is set by the real registration handshake: a client
+// Pulse accepts becomes admitted, and a client the agent retired before that
+// stops right after registering instead of handling anything.
+func TestCommandClientRegistrationAdmitsOnlyAnUnretiredClient(t *testing.T) {
+	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		var registration wsMessage
+		if err := conn.ReadJSON(&registration); err != nil {
+			return
+		}
+		payload, _ := json.Marshal(registeredPayload{Success: true, Message: "Registered"})
+		if err := conn.WriteJSON(wsMessage{Type: msgTypeRegistered, Timestamp: time.Now(), Payload: payload}); err != nil {
+			return
+		}
+		_, _, _ = conn.ReadMessage()
+	}))
+	defer server.Close()
+
+	newClient := func() *CommandClient {
+		return &CommandClient{
+			pulseURL: strings.TrimRight(server.URL, "/"),
+			apiToken: "token",
+			agentID:  "agent-1",
+			hostname: "host-1",
+			platform: "linux",
+			version:  "1.2.3",
+			logger:   zerolog.Nop(),
+			done:     make(chan struct{}),
+		}
+	}
+
+	admitted := newClient()
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() { errCh <- admitted.connectAndHandle(ctx) }()
+	deadline := time.Now().Add(5 * time.Second)
+	for admitted.admission.Load() != commandClientAdmitted {
+		if time.Now().After(deadline) {
+			t.Fatal("an accepted registration did not admit the client")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	<-errCh
+
+	retired := newClient()
+	if !retired.retireIfNeverAdmitted() {
+		t.Fatal("precondition: a fresh client could not be retired")
+	}
+	done := make(chan error, 1)
+	go func() { done <- retired.connectAndHandle(context.Background()) }()
+	select {
+	case err := <-done:
+		if !errors.Is(err, errCommandClientSuperseded) {
+			t.Fatalf("retired client connectAndHandle = %v, want errCommandClientSuperseded", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a retired client kept running after its registration was accepted")
+	}
 }

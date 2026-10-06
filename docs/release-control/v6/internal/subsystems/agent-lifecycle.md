@@ -8278,6 +8278,52 @@ report path relies on: an applied report carries its token's ID, a report the
 ordering watermark rejects returns the stored host and hostname, and mock
 mode's discard acknowledgement carries no token.
 
+### The command channel registers under the identity Pulse acknowledges
+
+A token binds the first agent ID its command channel presents and never moves
+afterwards, while Pulse resolves the agent's reports to its own host ID, which
+the acknowledgement returns as `agentId` and the agent persists and presents
+after a restart. When the two differed (a configured `--agent-id`, an ID Pulse
+forked for a cloned machine ID, or one it kept from an earlier enrollment), the
+first registration bound the presented ID, the config gate, which judges the
+resolved ID, turned commands off, and the next restart was refused for good.
+The agent therefore keeps its command channel staged until Pulse acknowledges a
+report, then registers under the identity the acknowledgement names as
+`commandAgentId`. Only a real acknowledgement negotiates: one that reports
+success and names the host, for a report presenting the agent ID and hostname
+this process registers with, so a report buffered by an earlier run under
+another identity neither names nor releases the channel. Pulse names the
+identity under the rule in the security-privacy contract, only when the
+token's binding holds the resolved ID or would take it on that registration,
+which also lets an agent restarted under a different `--agent-id` register
+under the identity its token recorded. An acknowledgement
+without it (an older Pulse, or a token already bound to the ID the agent
+presents) leaves the channel on the identity it already uses, the agent's own
+ID by default. An unreadable acknowledgement is no answer and the channel keeps
+waiting; a 403, which means the token lacks report scope and Pulse can never
+answer, releases it under the agent's own ID as before. A client Pulse has
+admitted is never rebuilt under a newly named identity, because a second client
+would reopen the operation receipt store and mark in-flight operations
+interrupted; a client whose registration Pulse has never accepted has received
+no operation, and the agent retires and rebuilds it under the named identity,
+with a compare-and-swap on the client so a retired client can never be admitted
+afterwards. Observer acknowledgements neither name nor release the channel. A
+token bound to an ID its binding will not give up keeps it, since no report
+moves a binding: re-running the install command issues a fresh token that
+binds the resolved identity.
+`TestCommandChannelRegistersUnderTheIdentityPulseAcknowledges` and the other
+`TestCommandChannel*`, `TestRunningCommandChannelIsNeverReplacedByALaterIdentity`,
+`TestRefusedCommandChannelMovesToTheIdentityALaterAckNames`,
+`TestReplayedReportAckNeverNegotiatesTheCurrentChannel`,
+`TestObserverAckNeverReleasesOrNamesTheCommandChannel`,
+`TestSupersededCommandClientCannotOccupyTheRunSlot`, and
+`TestCommandClientRegistrationAdmitsOnlyAnUnretiredClient` tests in
+`internal/hostagent/command_client_test.go` pin the agent side, and
+`TestHostAgentCommandChannelBindsTheIdentityPulseAcknowledges` in
+`internal/api/host_agent_removal_lifecycle_integration_test.go` replays a
+configured-ID install through the router: report, registration, restart, and
+the gate.
+
 ### Alert push routing does not create an agent lifecycle channel
 
 The shared API router may classify an external-probe outage for specialized

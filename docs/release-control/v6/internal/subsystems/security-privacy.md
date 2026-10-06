@@ -1509,6 +1509,33 @@ admission holds, and a failed save restores the previous metadata.
 `internal/api/agentbinding/policy_test.go`, and the `TestReportedIdentity*`
 tests and `TestReportHandlerOffersOnlyQualifyingLiveReportsToTheRecorder` in
 `internal/api/security_regression_test.go`, pin that boundary.
+Command-channel identity converges by naming, never by moving a binding.
+`commandIdentityForToken` in `internal/api/agent_ingest.go` returns the
+server-resolved host ID, which `/api/agents/agent/report` acknowledges as
+`commandAgentId` for a host the monitor resolved and holds under the reporting
+token, judged for the hostname the report presents. It names that ID only for
+a credential command admission would take on its legacy path (`agent:exec`, at
+most one organization, no runner, collector, or unsupported runtime role), and
+only when the shared `evaluateAgentExecBinding` decision admits it: the token
+already holds it, or a registration presenting it would take the first bind,
+backfill, legacy migration, hostname rebind, or one-time deploy repair it would
+get anyway. The name grants nothing that registration would not, and it
+discloses no ID the acknowledgement's `agentId` does not already carry. A token
+whose binding would refuse the resolved ID gets no name and keeps its binding.
+Identity resolution can map a report onto another host's continuity record by
+machine ID without a token check, so a stale-ID report and a forged one are
+indistinguishable, and an established binding therefore moves only through the
+moves registration could already make (legacy migration, hostname rebind, and
+the one-time deploy placeholder repair, each still decided at admission), never
+from report contents alone. Mock mode's
+unresolved acknowledgements name nothing. The agent config gate consumes the
+same predicate, so it never enables commands for an identity the channel would
+refuse. `TestReportAckNeverMovesAnEstablishedCommandBinding`,
+`TestReportAckNamesTheResolvedIdentityForAHostnameBoundDeployToken`,
+`TestReportAckLandsTheDeployPlaceholderRepairOnTheResolvedIdentity`,
+`TestReportAckNamesTheRecordedIdentityToALaterReconfiguredAgent`, and
+`TestReportAckNamesNoCommandIdentityInMockMode` in
+`internal/api/security_regression_test.go` pin that boundary.
 Pulse-minted install tokens now carry a server-authored command-policy intent
 in addition to first-use binding metadata. That intent grants no independent
 authority: first-report convergence requires the same shared binding decision

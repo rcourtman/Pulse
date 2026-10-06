@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -146,6 +147,12 @@ type CommandClient struct {
 	healthCapabilities    []string
 	actionActivationNonce string
 	actionHealthWriter    func(bool) error
+	// admission is commandClientPending until Pulse first accepts this
+	// client's registration (commandClientAdmitted), or until the agent
+	// retires it unadmitted under a superseded identity
+	// (commandClientSuperseded). Only an unadmitted client may be retired:
+	// operations arrive only after registration, so it has accepted none.
+	admission atomic.Int32
 }
 
 const maxCancellableRequestsPerConnection = 256
@@ -452,6 +459,9 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 	if err := c.waitForRegistration(conn); err != nil {
 		return fmt.Errorf("registration failed: %w", err)
 	}
+	if !c.markAdmitted() {
+		return errCommandClientSuperseded
+	}
 	if c.actionRunnerOnly {
 		if err := c.persistActionRunnerHealth(false); err != nil {
 			return fmt.Errorf("write action-runner health: %w", err)
@@ -598,6 +608,31 @@ func (c *CommandClient) waitForRegistration(conn *websocket.Conn) error {
 	}
 
 	return nil
+}
+
+const (
+	commandClientPending int32 = iota
+	commandClientAdmitted
+	commandClientSuperseded
+)
+
+var errCommandClientSuperseded = errors.New("command client was retired under a superseded identity before Pulse admitted it")
+
+// markAdmitted records that Pulse accepted this client's registration. It
+// reports false for a client the agent already retired, which must then
+// handle nothing.
+func (c *CommandClient) markAdmitted() bool {
+	if c.admission.CompareAndSwap(commandClientPending, commandClientAdmitted) {
+		return true
+	}
+	return c.admission.Load() == commandClientAdmitted
+}
+
+// retireIfNeverAdmitted retires a client Pulse has never admitted, so a later
+// registration success cannot let it handle anything. It reports false once
+// the client has been admitted.
+func (c *CommandClient) retireIfNeverAdmitted() bool {
+	return c.admission.CompareAndSwap(commandClientPending, commandClientSuperseded)
 }
 
 func (c *CommandClient) pingLoop(ctx context.Context, conn *websocket.Conn, done chan struct{}) {
