@@ -1303,7 +1303,7 @@ describe('frontend resource type boundaries', () => {
     expect(storagePoolDetailSource).not.toContain("'text-yellow-500'");
     expect(storagePoolDetailSource).not.toContain("'text-yellow-600 dark:text-yellow-400 italic'");
     expect(storagePoolDetailSource).not.toContain("'text-red-600 dark:text-red-400 font-medium'");
-    expect(diskDetailSource).toContain('getDiskAttributeValueTextClass');
+    expect(diskDetailSource).toContain('getDiskAttributeCardValueTextClass');
     expect(diskDetailSource).toContain('attributeCards()');
     expect(diskDetailSource).toContain('historyCharts()');
     expect(diskDetailSource).toContain('getDiskDetailHistoryFallbackMessage');
