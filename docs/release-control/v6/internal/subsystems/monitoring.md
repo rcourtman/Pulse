@@ -589,6 +589,35 @@ previously observed-but-failing runtime states. A synthetic successful login
 with a required pool-method failure is not attribution of the native #2382
 regression; the failing appliance/session method remains field evidence.
 
+### TrueNAS app CPU JSON numbers preserve readings and sessions — issue #2400
+
+`app.stats` CPU usage is a percentage-valued JSON number, not an integer
+counter. Fractional values and idle `0.0` must decode without rejecting the
+whole event; legacy integer values remain supported. Preserve the emitted
+percentage without truncation or an additional ×100 conversion. Memory,
+network and block-I/O integer fields retain their existing units and decoding.
+
+Successful subscribe/read/unsubscribe must reuse the authenticated session
+across GetApps and provider polls. A fresh event advances its collected-at
+observation and the connection-scoped canonical CPU/memory/network readings
+and History; rereading the same observation must not renew History. Malformed
+CPU types and out-of-range JSON numbers still reject the complete event,
+discard its unusable session and return no partial sample, without retrying a
+non-transport decoding error. Existing permission/termination/deadline,
+transport retry, cleanup, authentication, identity and tenant boundaries stay.
+No session lifetime, keepalive, poll interval or freshness threshold changes.
+
+`TestJSONRPCAppStatsNumbersReuseSession` and
+`TestJSONRPCAppStatsRejectsMalformedCPUNumbers` in
+`internal/truenas/transport_test.go` exercise actual GetApps subscriptions,
+reused login, numeric compatibility and malformed-event disposal/recovery.
+`TestTrueNASFractionalAppStatsPollAndHistory` in
+`internal/monitoring/monitor_polling_test.go` connects TLS/RPC, thirteen-app
+inventory, repeated actual provider polls, canonical resources and all four
+CPU/memory/network History series with stable connection/tenant identity.
+These short local polls are source regressions, not native SCALE/Traefik
+sixty-second session acceptance, installed restart or containing publication.
+
 ### TrueNAS empty app inventories and session-disposal evidence
 
 An empty or null `app.query`/legacy `/app` result remains a successful empty

@@ -2,12 +2,20 @@ package monitoring
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"math"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
@@ -531,6 +539,211 @@ func TestBuildBroadcastFrontendStateIncludesUnifiedIncidentAlerts(t *testing.T) 
 	}
 	if frontend.ActiveAlerts[0].Type != "resource-incident" {
 		t.Fatalf("alert type = %q, want resource-incident", frontend.ActiveAlerts[0].Type)
+	}
+}
+
+// #2400: exercise the actual TLS/RPC -> GetApps -> APIFetcher -> provider
+// poll -> canonical resources -> History path, not only numeric unmarshalling.
+// Three short, explicitly due polls are a source regression, not a native
+// sixty-second/Traefik soak. Only the first two of thirteen apps' CPU shapes
+// come from the reporter; names and all remaining inventory are synthetic.
+func TestTrueNASFractionalAppStatsPollAndHistory(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+	const appCount = 13
+	const hostMemory = int64(8 * 1024 * 1024 * 1024)
+	cpus := [][2]string{{"0.0286", "0.0"}, {"0.0017857142857142859", "0.0"}, {"17", "0"}}
+	var poll atomic.Int32
+	var sessions, logins, statsSubscriptions, realtimeSubscriptions, unsubscribes atomic.Int32
+	upgrader := websocket.Upgrader{}
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/current" || !websocket.IsWebSocketUpgrade(r) {
+			t.Error("modern polling unexpectedly requested REST")
+			http.NotFound(w, r)
+			return
+		}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer conn.Close()
+		sessions.Add(1)
+		for {
+			var request struct {
+				ID     int64             `json:"id"`
+				Method string            `json:"method"`
+				Params []json.RawMessage `json:"params"`
+			}
+			if err := conn.ReadJSON(&request); err != nil {
+				return
+			}
+			currentPoll := int(poll.Load())
+			var result any = []any{}
+			var collection string
+			var fields any
+			switch request.Method {
+			case "auth.login_ex":
+				logins.Add(1)
+				result = map[string]any{"response_type": "SUCCESS"}
+			case "system.info":
+				result = map[string]any{"hostname": "fractional-nas", "version": "TrueNAS-SCALE-26.0.0-BETA.3", "system_serial": "FIXTURE", "physical_cores": 4, "physmem": hostMemory}
+			case "app.query":
+				apps := make([]any, appCount)
+				for i := range apps {
+					name := fmt.Sprintf("fixture-app-%d", i)
+					apps[i] = map[string]any{"id": name, "name": name, "state": "RUNNING"}
+				}
+				result = apps
+			case "core.subscribe":
+				if len(request.Params) != 1 || json.Unmarshal(request.Params[0], &collection) != nil {
+					t.Error("invalid subscription arguments")
+					return
+				}
+				switch collection {
+				case `reporting.realtime:{"interval":2}`:
+					realtimeSubscriptions.Add(1)
+					result = "realtime-sub"
+					fields = map[string]any{"cpu": map[string]any{"usage": 10}, "memory": map[string]any{"physical_memory_total": hostMemory, "physical_memory_available": hostMemory / 2}}
+				case `app.stats:{"interval":2}`:
+					statsSubscriptions.Add(1)
+					result = "app-sub"
+					apps := make([]any, appCount)
+					for i := range apps {
+						cpu := strconv.Itoa(i)
+						if i < 2 {
+							cpu = cpus[currentPoll][i]
+						}
+						apps[i] = map[string]any{
+							"app_name": fmt.Sprintf("fixture-app-%d", i), "cpu_usage": json.Number(cpu),
+							"memory": 1072459776 + currentPoll*1024 + i,
+							"blkio":  map[string]any{"read": 29720576 + currentPoll*4096, "write": currentPoll * 2048},
+							"networks": []any{
+								map[string]any{"interface_name": "eth0", "rx_bytes": 3671 + currentPoll, "tx_bytes": 284 + currentPoll},
+								map[string]any{"interface_name": "eth1", "rx_bytes": 2, "tx_bytes": 1},
+							},
+						}
+					}
+					fields = apps
+				default:
+					t.Errorf("unexpected subscription %s", collection)
+					return
+				}
+			case "core.unsubscribe":
+				var id string
+				if len(request.Params) != 1 || json.Unmarshal(request.Params[0], &id) != nil || (id != "app-sub" && id != "realtime-sub") {
+					t.Error("subscription cleanup used an unexpected ID")
+					return
+				}
+				unsubscribes.Add(1)
+				result = nil
+			case "reporting.get_data", "pool.query", "boot.get_state", "pool.dataset.query", "disk.query", "alert.list", "service.query", "vm.query", "sharing.smb.query", "sharing.nfs.query", "zfs.resource.snapshot.query", "replication.query":
+			default:
+				t.Errorf("unexpected or mutating RPC method %s", request.Method)
+				return
+			}
+			if conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": request.ID, "result": result}) != nil {
+				return
+			}
+			if collection != "" {
+				if conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "method": "collection_update", "params": map[string]any{"collection": collection, "fields": fields}}) != nil {
+					return
+				}
+			}
+		}
+	}))
+	t.Cleanup(server.Close)
+	client, err := truenas.NewClient(truenas.ClientConfig{
+		Host: server.URL, APIKey: "fixture-key", Username: "fixture-user", Timeout: 2 * time.Second,
+		Fingerprint: fmt.Sprintf("%x", sha256.Sum256(server.Certificate().Raw)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(client.Close)
+	instance := config.TrueNASInstance{ID: "fractional-connection", Host: server.URL, Enabled: true, PollIntervalSecs: 60}
+	provider := truenas.NewLiveProviderForConnection(&truenas.APIFetcher{Client: client}, instance.ID)
+	poller := NewTrueNASPoller(nil, 0, nil)
+	poller.providersByOrg["default"] = map[string]*truenas.Provider{instance.ID: provider}
+	poller.configsByOrg["default"] = map[string]config.TrueNASInstance{instance.ID: instance}
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	monitor := &Monitor{resourceStore: resourceStore, metricsHistory: NewMetricsHistory(1024, 24*time.Hour)}
+	var lastSuccess, lastStats time.Time
+	var firstIDs = make(map[string]string)
+	for currentPoll := range cpus {
+		poll.Store(int32(currentPoll))
+		poller.ensureConnectionRuntimeStatusLocked("default", instance.ID).nextPollAt = time.Now().Add(-time.Second)
+		poller.pollAll(context.Background())
+		summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{instance})[instance.ID]
+		if summary.Poll == nil || summary.Poll.LastSuccessAt == nil || summary.Poll.LastError != nil || !summary.Poll.LastSuccessAt.After(lastSuccess) {
+			t.Fatalf("poll %d did not complete with fresh success: %+v", currentPoll, summary)
+		}
+		lastSuccess = *summary.Poll.LastSuccessAt
+		if summary.Transport == nil || summary.Transport.AuthMechanism != "auth.login_ex" || !summary.Transport.Connected || summary.Transport.Reconnects != 0 {
+			t.Fatalf("fractional stats discarded/re-authenticated the session: %+v", summary.Transport)
+		}
+		snapshot := provider.Snapshot()
+		if snapshot == nil || len(snapshot.Apps) != appCount || snapshot.System.CPUPercent != 10 {
+			t.Fatalf("poll %d lost inventory or host telemetry", currentPoll)
+		}
+		if snapshot.Apps[0].Stats == nil || !snapshot.Apps[0].Stats.CollectedAt.After(lastStats) {
+			t.Fatalf("poll %d did not collect fresh app stats", currentPoll)
+		}
+		lastStats = snapshot.Apps[0].Stats.CollectedAt
+		resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+			unifiedresources.SourceTrueNAS: poller.GetCurrentRecordsForOrg("default"),
+		})
+		monitor.syncUnifiedAppContainerMetrics(resourceStore)
+		appResources := 0
+		for _, resource := range resourceStore.GetAll() {
+			if resource.Type != unifiedresources.ResourceTypeAppContainer {
+				continue
+			}
+			appResources++
+			var i int
+			if _, err := fmt.Sscanf(resource.Name, "fixture-app-%d", &i); err != nil || i < 0 || i >= appCount {
+				t.Fatalf("unexpected app identity %s", resource.Name)
+			}
+			cpu := float64(i)
+			if i < 2 {
+				cpu, _ = strconv.ParseFloat(cpus[currentPoll][i], 64)
+			}
+			memory := int64(1072459776 + currentPoll*1024 + i)
+			want := map[string]float64{"cpu": cpu, "memory": float64(memory) / float64(hostMemory) * 100, "netin": float64(3673 + currentPoll), "netout": float64(285 + currentPoll)}
+			if resource.Metrics == nil || resource.Metrics.CPU == nil || resource.Metrics.CPU.Percent != cpu ||
+				resource.Metrics.Memory == nil || resource.Metrics.Memory.Used == nil || *resource.Metrics.Memory.Used != memory ||
+				resource.Metrics.NetIn == nil || resource.Metrics.NetIn.Value != want["netin"] || resource.Metrics.NetOut == nil || resource.Metrics.NetOut.Value != want["netout"] ||
+				resource.TrueNAS == nil || resource.TrueNAS.App == nil || resource.TrueNAS.App.Stats == nil || !resource.TrueNAS.App.Stats.CollectedAt.Equal(lastStats) {
+				t.Fatalf("poll %d app %d lost precision, sibling readings or observation time: %+v", currentPoll, i, resource)
+			}
+			if currentPoll == 0 {
+				firstIDs[resource.Name] = resource.ID
+			} else if resource.ID != firstIDs[resource.Name] {
+				t.Fatalf("poll %d changed canonical app identity", currentPoll)
+			}
+			target := resourceStore.MetricsTargetForResource(resource.ID)
+			if target == nil || target.ResourceType != "app-container" || target.ResourceID != "system:fractional-connection/app:"+resource.Name {
+				t.Fatalf("unexpected connection-scoped History target: %+v", target)
+			}
+			history := monitor.GetGuestMetrics("docker:"+target.ResourceID, time.Hour)
+			for metric, value := range want {
+				points := history[metric]
+				if len(points) != currentPoll+1 || math.Abs(points[len(points)-1].Value-value) > 1e-12 || !points[len(points)-1].Timestamp.Equal(resource.LastSeen) {
+					t.Fatalf("poll %d app %d %s History lost value/freshness: %+v, want %v", currentPoll, i, metric, points, value)
+				}
+			}
+		}
+		if appResources != appCount || len(poller.GetCurrentRecordsForOrg("other-tenant")) != 0 || sessions.Load() != 1 || logins.Load() != 1 ||
+			statsSubscriptions.Load() != int32(currentPoll+1) || realtimeSubscriptions.Load() != int32(currentPoll+1) || unsubscribes.Load() != int32(2*(currentPoll+1)) {
+			t.Fatalf("poll %d crossed tenant scope, lost apps or churned session/subscriptions: apps=%d sessions=%d logins=%d stats=%d realtime=%d unsubscribe=%d", currentPoll, appResources, sessions.Load(), logins.Load(), statsSubscriptions.Load(), realtimeSubscriptions.Load(), unsubscribes.Load())
+		}
+		// Rendering/History without a new observation must not renew samples.
+		monitor.syncUnifiedAppContainerMetrics(resourceStore)
+	}
+	client.Close()
+	if client.TransportStatus().Connected {
+		t.Fatal("closing the client left its authenticated session active")
 	}
 }
 
