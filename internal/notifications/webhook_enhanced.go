@@ -65,6 +65,10 @@ type WebhookPayloadData struct {
 	Event         string // "alert" or "resolved"
 	ResolvedAt    string // RFC3339 timestamp when alert was resolved
 	ResolvedAtISO string // Same as ResolvedAt (alias for template consistency)
+	// NotRecovered marks a resolved notification in which at least one close
+	// was not a recovery (an alert that moved to a linked Pulse agent), so
+	// templates can drop recovery colours and check marks.
+	NotRecovered bool
 
 	// Tenant identity (multi-tenant orgs and MSP client runtimes).
 	// Empty on plain single-tenant installs.
