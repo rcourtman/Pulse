@@ -4,7 +4,9 @@ import type {
   ResourceKubernetesPodContainerStatus,
   ResourceType,
 } from '@/types/resource';
+import type { Alert } from '@/types/api';
 import type { StatusIndicator, StatusIndicatorVariant } from '@/utils/status';
+import { getUnifiedResourceAlertStyles } from '@/utils/alerts';
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQuery';
 
@@ -801,17 +803,44 @@ const countKubernetesDanger = (
   mapper: (resource: Resource) => StatusIndicator,
 ): number => resources.filter((resource) => mapper(resource).variant === 'danger').length;
 
-// Nodes the overview should name before any inventory: NotReady first, then
-// cordoned or degraded ones. "2/3 nodes" on the cluster row says something is
-// wrong but not which node; this list answers that.
-export function getKubernetesNodesNeedingAttention(model: KubernetesPageModel): Resource[] {
-  const rank = (node: Resource) => {
-    const variant = mapKubernetesNodeStatus(node).variant;
-    return variant === 'danger' ? 0 : variant === 'warning' ? 1 : 2;
-  };
+// Attention order shared by the overview's "Nodes needing attention" list and
+// the nodes table's default sort: 0 for a NotReady node or one with an
+// unacknowledged critical alert, 1 for a cordoned or degraded node or one with
+// another unacknowledged alert, 2 otherwise. The alerts are the ones the
+// node's row tint and drawer use, so a Ready node at 100% memory ranks with
+// the NotReady ones instead of below every degraded node.
+export function getKubernetesNodeAttentionRank(
+  node: Resource,
+  activeAlerts: Record<string, Alert>,
+  alertsEnabled: boolean,
+): 0 | 1 | 2 {
+  const variant = mapKubernetesNodeStatus(node).variant;
+  const statusRank = variant === 'danger' ? 0 : variant === 'warning' ? 1 : 2;
+  const alertStyles = getUnifiedResourceAlertStyles(node, activeAlerts, alertsEnabled);
+  const alertRank = !alertStyles.hasUnacknowledgedAlert
+    ? 2
+    : alertStyles.severity === 'critical'
+      ? 0
+      : 1;
+  return Math.min(statusRank, alertRank) as 0 | 1 | 2;
+}
+
+// Nodes the overview should name before any inventory, in attention order.
+// "2/3 nodes" on the cluster row says something is wrong but not which node;
+// this list answers that.
+export function getKubernetesNodesNeedingAttention(
+  model: KubernetesPageModel,
+  activeAlerts: Record<string, Alert> = {},
+  alertsEnabled = false,
+): Resource[] {
   return model.nodes
-    .filter((node) => rank(node) < 2)
-    .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+    .map((node) => ({
+      node,
+      rank: getKubernetesNodeAttentionRank(node, activeAlerts, alertsEnabled),
+    }))
+    .filter((entry) => entry.rank < 2)
+    .sort((a, b) => a.rank - b.rank || compareKubernetesNodes(a.node, b.node))
+    .map((entry) => entry.node);
 }
 
 export function buildKubernetesOverviewPosture(

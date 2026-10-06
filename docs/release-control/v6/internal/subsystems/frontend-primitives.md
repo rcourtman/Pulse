@@ -4995,7 +4995,8 @@ name, so it keeps the shared single-line rhythm. Drawers for unified resources
 websocket `activeAlerts` map through `getAlertsForUnifiedResource`
 (`frontend-modern/src/utils/alerts.ts`), most severe first, never from a
 resource-embedded list, and show each alert's resource name and metric beside
-its text like the other drawers. Their table rows take the platform host rows'
+its text like the other drawers. Their table rows (Docker hosts, Machines,
+Kubernetes nodes) take the platform host rows'
 red (critical) or yellow tint from the same set through
 `getUnifiedResourceAlertStyles`, only for unacknowledged alerts and never on
 an expanded row, so a row and its drawer agree. The remaining Overview rows are additive
