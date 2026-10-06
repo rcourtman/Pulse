@@ -12,6 +12,26 @@ package reducer
 
 import "time"
 
+// InterruptDiscreteRun ends the consecutive-observation evidence for one key
+// without treating missing evidence as healthy. Pending activation (including
+// intent grace) is dropped. Firing incidents keep their occurrence and
+// acknowledgement, but recovery must restart from zero. No event is emitted.
+// It reports whether a confirmation run was interrupted.
+func (s *State) InterruptDiscreteRun(resourceID, subKey string) bool {
+	key := incidentKey(resourceID, subKey)
+	incident := s.incidents[key]
+	if incident == nil {
+		return false
+	}
+	if incident.State == StatePending {
+		delete(s.incidents, key)
+		return true
+	}
+	interrupted := incident.RecoveryCount != 0
+	incident.RecoveryCount = 0
+	return interrupted
+}
+
 // DiscreteSignal is one observation of a discrete condition on a resource:
 // Matched reports whether the trigger condition was observed (offline,
 // powered-state mismatch, state in the trigger set).
