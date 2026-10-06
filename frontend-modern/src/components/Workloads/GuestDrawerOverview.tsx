@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { Show, Suspense, lazy } from 'solid-js';
 
 import { formatDiscoveryAge } from '@/api/discovery';
 import {
@@ -29,10 +29,18 @@ import {
 } from './guestDrawerModel';
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
 import { WORKLOAD_ACTION_AGENT_LABEL } from './workloadAgentReadiness';
-import { GuestPhysicalDisks } from './GuestPhysicalDisks';
 import { RaidCard } from '@/components/shared/cards/RaidCard';
 
 import type { GuestDrawerProps } from './guestDrawerModel';
+
+// Linked physical disks render only inside an open agent guest's drawer. Load
+// them on demand so the disk presentation module stays out of the
+// WorkloadsSurface table chunk.
+const GuestPhysicalDisks = lazy(() =>
+  import('./GuestPhysicalDisks').then(({ GuestPhysicalDisks }) => ({
+    default: GuestPhysicalDisks,
+  })),
+);
 
 interface GuestDrawerOverviewProps {
   guest: GuestDrawerProps['guest'];
@@ -317,7 +325,9 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
           props.guest.agentRaid?.length
         }
       >
-        <GuestPhysicalDisks parentId={props.guest.canonicalResourceId ?? props.guest.id} />
+        <Suspense fallback={null}>
+          <GuestPhysicalDisks parentId={props.guest.canonicalResourceId ?? props.guest.id} />
+        </Suspense>
       </Show>
       <Show when={props.guest.agentRaid?.length}>
         <RaidCard arrays={props.guest.agentRaid} title="Guest RAID" />

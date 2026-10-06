@@ -412,6 +412,11 @@ disk header and tooltips. Structured ZFS scan activity supplies a compact badge
 only during reported rebuild activity; its complete provider summary remains
 available. Stable disk History catalog/organisation/access ownership is unchanged.
 
+The physical-disk verdict words and their phone forms are `Needs Attention`
+(`Attention`), `Running Hot` (`Hot`) and `Replace Now` (`Replace`), all from
+`getPhysicalDiskHealthCompactLabel` in `diskPresentation.ts`. A hot disk keeps
+the same label at either tier; its tone carries the severity.
+
 Controller expansions carry the supplied kind-specific targets, absolute times,
 duration and cluster/namespace when the phone row omits those columns. Proxmox
 coverage distinguishes independent backups from guest-local snapshots; By date

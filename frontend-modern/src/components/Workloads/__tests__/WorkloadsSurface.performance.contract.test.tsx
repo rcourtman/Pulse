@@ -1641,6 +1641,12 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerManageSource).toContain('ResourceOperatorStateSection');
       expect(guestDrawerOverviewSource).toContain('buildWorkloadsDiskPresentation');
       expect(guestDrawerOverviewSource).toContain('Filesystems');
+      // Linked physical disks load with an open agent guest's drawer, so the
+      // disk presentation module stays out of the WorkloadsSurface chunk.
+      expect(guestDrawerOverviewSource).toContain("import('./GuestPhysicalDisks')");
+      expect(guestDrawerOverviewSource).not.toMatch(
+        /^import (?!type )[^;]*from '\.\/GuestPhysicalDisks';/m,
+      );
       // The shared DetailSectionTable gives the earlier of the last two sections
       // the wider span, so the longer filesystem list must be declared before the
       // short tag list for mount points to get the readable panel width.

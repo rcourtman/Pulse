@@ -6732,6 +6732,26 @@ disk/pool fixture `frontend-modern/browser-tests/history-touch.cjs` and mounted
 `HistoryChart.test.tsx` regressions verify presentation/input behaviour only,
 not live appliance collection or recovery success.
 
+### Physical-disk heat is not a replacement verdict
+
+The Physical Disks Health verdict names the action it asks for. Risk whose only
+reason is `temperature_high` reads `Running Hot` (compact `Hot`), red at the
+critical tier and amber at warning, with the temperature reason as its summary.
+`Replace Now` stays reserved for FAILED health, any other critical reason, and
+a critical level that no listed reason explains. `Needs Attention` keeps the
+remaining warning evidence. When heat and other evidence both apply, the more
+severe class names the verdict and failure evidence wins a tie, whatever order
+merged reasons arrive in. Sorting follows the verdict (replace, critical heat,
+attention, warning heat), and the health filter places a hot disk at its
+temperature tier, so `Needs attention` still lists it. This matches alerting,
+which raises disk heat as a Temperature metric and never as disk health.
+Thresholds are unchanged: the tier still comes from the server's disk risk
+(flat 60/70C), not the per-type alert thresholds that colour the Temp column.
+Reconciling those is separate work. `frontend-modern/src/features/storageBackups/__tests__/diskPresentation.test.ts`
+and `frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx` cover
+the split, merged reason order, the unexplained critical level, sorting and
+filtering.
+
 ### Pool-to-physical-disk ownership in Storage details
 
 `storagePoolDetailPresentation.ts` must scope inferred ZFS device and UnRAID

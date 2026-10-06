@@ -1189,6 +1189,11 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     Saves run one metadata write per changed link, then dispatch the
     metadata-changed events together so whole-snapshot listeners coalesce
     onto one in-flight refetch instead of refetching per link.
+    The drawer overview lazy-loads `GuestPhysicalDisks.tsx` under a local
+    `Suspense`, so the physical-disk presentation module
+    (`diskPresentation.ts`) loads with an open agent guest's drawer instead
+    of joining the WorkloadsSurface chunk.
+    `WorkloadsSurface.performance.contract.test.tsx` pins the dynamic import.
     Drawer history charts belong to `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`.
     A current metric may remain visible in a chart legend only when labelled
     `current`; it must never be expanded into synthetic timestamps or a flat
