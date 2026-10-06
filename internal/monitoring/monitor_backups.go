@@ -1558,8 +1558,9 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	retainedGroups := make(map[pbsBackupGroupKey]struct{}, len(existingGroups))
 	datastoreCount := len(datastores) // Number of datastores to query
 	datastoreFetches := 0             // Number of successful datastore fetches
-	datastoreErrors := 0              // Number of failed datastore fetches
+	datastoreErrors := 0              // Datastores with incomplete history
 	datastoreTerminalFailures := 0    // Number of datastores that failed only with terminal errors
+	collectionTerminalFailures := 0   // Datastores with any rejected namespace or snapshot request
 
 	// Process each datastore
 	for _, ds := range datastores {
@@ -1621,6 +1622,9 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 						Str("namespace", namespace).
 						Int("limit", pbsBackupLiveStateLimit).
 						Msg("PBS backup live-state limit reached; skipping remaining groups")
+					// Skipped groups are not a complete inventory, even when
+					// every request we did make succeeded.
+					datastoreNamespaceErrors++
 					break
 				}
 
@@ -1688,26 +1692,27 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 			groupsRequested += len(requests)
 			fetched := m.fetchPBSBackupSnapshots(ctx, client, instanceName, requests)
-			if len(fetched) > 0 {
-				allBackups = appendPBSBackupsWithinLimit(allBackups, fetched)
-			}
+			allBackups = appendPBSBackupsWithinLimit(allBackups, fetched.backups)
+			datastoreNamespaceErrors += fetched.errors
+			datastoreTerminalNamespaceErrors += fetched.terminalErrors
 
-			// Record fetch time for each requested group so the TTL tracks freshness.
-			// We record for all requested groups — on fetch failure, fetchPBSBackupSnapshots
-			// falls back to cached data, so the timestamp prevents hammering a failing
-			// endpoint. The TTL ensures we retry within a bounded window.
+			// Only a successful snapshot read renews cache freshness. Retrying a
+			// lost read on the next ordinary poll is preferable to treating its
+			// fallback row as a newly successful collection during the TTL.
 			fetchedAt := time.Now()
-			for _, req := range requests {
-				reqKey := pbsBackupGroupKey{
-					datastore:  req.datastore,
-					namespace:  req.namespace,
-					backupType: req.group.BackupType,
-					backupID:   req.group.BackupID,
-				}
-				m.setPBSBackupCacheTime(instanceName, reqKey, fetchedAt)
+			for _, key := range fetched.refreshed {
+				m.setPBSBackupCacheTime(instanceName, key, fetchedAt)
 			}
 		}
 
+		// Listing groups is not proof that their snapshots or every namespace
+		// were readable. Carry those losses into provider-wide evidence.
+		if datastoreNamespaceErrors > 0 {
+			datastoreErrors++
+		}
+		if datastoreTerminalNamespaceErrors > 0 {
+			collectionTerminalFailures++
+		}
 		if datastoreHadSuccess {
 			datastoreFetches++
 			log.Info().
@@ -1741,8 +1746,12 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 					retainedGroups[key] = struct{}{}
 				}
 			}
-			datastoreErrors++
 		}
+	}
+
+	if ctx.Err() != nil {
+		// An interrupted enumeration cannot authoritatively replace history.
+		return
 	}
 
 	log.Info().
@@ -1757,7 +1766,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			datastoreCount,
 			datastoreFetches,
 			datastoreErrors,
-			datastoreTerminalFailures,
+			collectionTerminalFailures,
 			protectionObservedAt,
 		)
 	if protectionObservationErr != nil {
@@ -1835,15 +1844,20 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	if protectionObservationErr == nil {
 		observations = append(observations, protectionObservation)
 	}
-	m.ingestAndReconcileRecoveryPointsWithObservationsAsync(
-		points,
-		observations,
-		recoveryReconcileScope{
+	batch := recoveryIngestBatch{points: points, observations: observations}
+	// Only an authoritative complete enumeration can delete absent points.
+	// Unreadable history remains historical evidence, qualified by this poll's
+	// partial/unavailable provider observation, until an ordinary complete poll
+	// recovers or confirms deletion. Never infer absence from a failed request.
+	if protectionObservationErr == nil &&
+		protectionObservation.HistoryCompleteness == recovery.ProtectionHistoryComplete {
+		batch.reconcile = &recoveryReconcileScope{
 			provider: string(recovery.ProviderProxmoxPBS),
 			idPrefix: "pbs-backup:",
 			instance: instanceName,
-		},
-	)
+		}
+	}
+	m.enqueueRecoveryIngest(batch)
 
 	// Sync backup times to VMs/Containers and republish them to canonical resources.
 	m.syncGuestBackupTimesAndResourceStore()
@@ -2012,9 +2026,18 @@ func namespacePathsForDatastore(ds models.PBSDatastore) []string {
 	return paths
 }
 
-func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Client, instanceName string, requests []pbsBackupFetchRequest) []models.PBSBackup {
+// pbsBackupSnapshotFetchResult retains request quality alongside the artifacts.
+// A cached row is not evidence that its snapshot request succeeded this poll.
+type pbsBackupSnapshotFetchResult struct {
+	backups        []models.PBSBackup
+	errors         int
+	terminalErrors int
+	refreshed      []pbsBackupGroupKey
+}
+
+func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Client, instanceName string, requests []pbsBackupFetchRequest) pbsBackupSnapshotFetchResult {
 	if len(requests) == 0 {
-		return nil
+		return pbsBackupSnapshotFetchResult{}
 	}
 
 	workerCount := pbsBackupSnapshotFetchWorkers
@@ -2023,7 +2046,7 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 	}
 
 	jobs := make(chan pbsBackupFetchRequest)
-	results := make(chan []models.PBSBackup, workerCount)
+	results := make(chan pbsBackupSnapshotFetchResult, workerCount)
 	var wg sync.WaitGroup
 
 	for i := 0; i < workerCount; i++ {
@@ -2051,18 +2074,26 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 						Str("id", req.group.BackupID).
 						Msg("Failed to list PBS backup snapshots")
 
-					if len(req.cached.snapshots) > 0 {
-						select {
-						case results <- req.cached.snapshots:
-						case <-ctx.Done():
-						}
+					result := pbsBackupSnapshotFetchResult{errors: 1}
+					if shouldReuseCachedPBSBackups(err) {
+						result.backups = req.cached.snapshots
+					} else {
+						// Access rejection cannot renew a cached raw row.
+						result.terminalErrors = 1
 					}
+					results <- result
 					continue
 				}
 
 				backups := convertPBSSnapshots(instanceName, req.datastore, req.namespace, snapshots)
 				select {
-				case results <- backups:
+				case results <- pbsBackupSnapshotFetchResult{
+					backups: backups,
+					refreshed: []pbsBackupGroupKey{{
+						datastore: req.datastore, namespace: req.namespace,
+						backupType: req.group.BackupType, backupID: req.group.BackupID,
+					}},
+				}:
 				case <-ctx.Done():
 					return
 				}
@@ -2086,12 +2117,12 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 		close(results)
 	}()
 
-	var combined []models.PBSBackup
-	for backups := range results {
-		if len(backups) == 0 {
-			continue
-		}
-		combined = appendPBSBackupsWithinLimit(combined, backups)
+	var combined pbsBackupSnapshotFetchResult
+	for result := range results {
+		combined.backups = appendPBSBackupsWithinLimit(combined.backups, result.backups)
+		combined.errors += result.errors
+		combined.terminalErrors += result.terminalErrors
+		combined.refreshed = append(combined.refreshed, result.refreshed...)
 	}
 
 	return combined
