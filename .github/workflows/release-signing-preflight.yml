@@ -3,16 +3,20 @@ name: Release Signing Preflight
 # the dispatch answer is lost.
 run-name: ${{ format('Release signing preflight (no release build or publication){0}', inputs.request_id && format(' [{0}]', inputs.request_id) || '') }}
 
-# Dispatch this from main to find a lapsed Apple developer agreement, a revoked
-# notary key or an expiring Developer ID certificate before a release candidate
-# fails on it. The maintainer's nightly release rehearsal (pulse-dev-infra
+# This finds a lapsed Apple developer agreement, a revoked notary key or an
+# expiring Developer ID certificate before a release candidate fails on it. It
+# runs every Monday and can be dispatched from main at any time. The
+# maintainer's nightly release rehearsal (pulse-dev-infra
 # pulse-maintainer-release-rehearsal) dispatched it until that rehearsal was
-# switched off with the release steward on 4 October 2026.
+# switched off with the release steward on 4 October 2026. The weekly schedule
+# replaces it, and the certificate check's 30-day margin leaves weeks to renew.
 # On 2 Oct 2026 v6.4.6-rc.1 failed notarization because the agreement was
 # unsigned. This signs only a throwaway probe binary on the runner; it builds,
 # notarizes, uploads and publishes nothing. The certificate and notary checks
 # are independent, so one run names every broken credential.
 on:
+  schedule:
+    - cron: '23 6 * * 1'
   workflow_dispatch:
     inputs:
       request_id:
