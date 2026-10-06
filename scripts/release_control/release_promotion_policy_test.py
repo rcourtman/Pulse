@@ -1774,6 +1774,41 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             self.assertIn(distinction, agent["attributes"]["description"])
         self.assertIn("affected monitored platform and its release", fields["environment"]["attributes"]["description"])
 
+    def test_report_environment_keeps_platform_and_collection_context_optional(self) -> None:
+        for name in ("bug_report.yml", "v6_rc_feedback.yml"):
+            with self.subTest(form=name):
+                form = yaml.load(read(f".github/ISSUE_TEMPLATE/{name}"), Loader=UniqueKeyLoader)
+                fields = {field["id"]: field for field in form["body"] if "id" in field}
+                self.assertEqual(len(fields), sum("id" in field for field in form["body"]))
+                environment = fields["environment"]
+                self.assertEqual(environment["type"], "input")
+                self.assertEqual(environment["attributes"]["label"], "OS / environment")
+                self.assertFalse(environment["validations"]["required"])
+                self.assertNotIn("render", environment["attributes"])
+                prose = normalize_ws(environment["attributes"]["description"])
+                for distinction in (
+                    "Pulse server OS", "affected monitored platform and its release",
+                    "TrueNAS SCALE", "CORE", "platform API, a Pulse agent, or both",
+                    "separate from the Pulse server's installation and version",
+                    "Use existing settings or observations", 'leave blank or write "unknown"',
+                    "Do not run diagnostics, probe, restart or change a connection",
+                ):
+                    self.assertIn(distinction, prose)
+                self.assertIn("via API, no Pulse agent", environment["attributes"]["placeholder"])
+                # Optional context must not relax the original report's core fields.
+                self.assertTrue(fields["pulse_version"]["validations"]["required"])
+                summary_id = "bug_description" if name == "bug_report.yml" else "summary"
+                self.assertTrue(fields[summary_id]["validations"]["required"])
+        for document in ("docs/ISSUE_TRIAGE.md", "frontend-modern/public/docs/ISSUE_TRIAGE.md"):
+            prose = normalize_ws(read(document))
+            for distinction in (
+                "optional **OS / environment**", "platform API, a Pulse agent, or both",
+                "TrueNAS SCALE versus CORE", "separately from the Pulse and agent versions",
+                "working agent view does not prove that the API view recovered",
+                'blank or "unknown" is valid', "Existing reports need no refile",
+            ):
+                self.assertIn(distinction, prose)
+
     def test_working_version_context_is_optional_and_never_requires_another_attempt(self) -> None:
         for name in ("bug_report.yml", "v6_rc_feedback.yml"):
             with self.subTest(form=name):

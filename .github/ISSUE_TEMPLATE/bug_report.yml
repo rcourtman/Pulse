@@ -107,6 +107,15 @@ body:
       required: true
 
   - type: input
+    id: environment
+    attributes:
+      label: OS / environment
+      description: Pulse server OS and, for platform-specific failures, the affected monitored platform and its release where known (for example, Proxmox VE 9.2 or TrueNAS SCALE 26 / CORE 13). Say whether the affected readings use the platform API, a Pulse agent, or both; keep this separate from the Pulse server's installation and version. Use existing settings or observations; leave blank or write "unknown" if unavailable. Do not run diagnostics, probe, restart or change a connection just to answer.
+      placeholder: Pulse on Debian 13; TrueNAS CORE 13.0-U6.1 via API, no Pulse agent
+    validations:
+      required: false
+
+  - type: input
     id: installer_source
     attributes:
       label: Installer or helper source
