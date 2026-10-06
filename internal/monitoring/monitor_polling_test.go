@@ -687,7 +687,7 @@ func TestTrueNASFractionalAppStatsPollAndHistory(t *testing.T) {
 			t.Fatalf("poll %d did not complete with fresh success: %+v", currentPoll, summary)
 		}
 		lastSuccess = *summary.Poll.LastSuccessAt
-		if summary.Transport == nil || summary.Transport.AuthMechanism != "auth.login_ex" || !summary.Transport.Connected || summary.Transport.Reconnects != 0 {
+		if summary.Transport == nil || summary.Transport.AuthMechanism != "api-key-plain" || !summary.Transport.Connected || summary.Transport.Reconnects != 0 {
 			t.Fatalf("fractional stats discarded/re-authenticated the session: %+v", summary.Transport)
 		}
 		snapshot := provider.Snapshot()
