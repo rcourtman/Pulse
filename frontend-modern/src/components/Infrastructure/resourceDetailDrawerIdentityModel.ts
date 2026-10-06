@@ -1,7 +1,9 @@
 import type { Resource } from '@/types/resource';
 import {
   getPrimaryResourceIdentityRows,
+  getPreferredInfrastructureDisplayName,
   getResourceIdentityAliases,
+  shouldShowResourcePlatformId,
   type ResourceIdentityRow,
 } from '@/utils/resourceIdentity';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
@@ -26,9 +28,24 @@ export type ResourceDetailDrawerIdentityView = {
 const ALIAS_COLLAPSE_THRESHOLD = 4;
 
 export const buildResourceIdentityView = (resource: Resource): ResourceDetailDrawerIdentityView => {
-  const identityAliasValues = getResourceIdentityAliases(resource);
   const identityIpValues = resource.identity?.ips ?? [];
   const primaryIdentityRows = getPrimaryResourceIdentityRows(resource);
+  // The drawer header already shows the resource's display name, and the rows
+  // above show these IDs and (when it differs from every name) the platform
+  // ID, so Aliases lists only the other names the resource goes by.
+  const platformIdShown = shouldShowResourcePlatformId(resource);
+  const shown = new Set(
+    [
+      getPreferredInfrastructureDisplayName(resource),
+      platformIdShown ? resource.platformId : undefined,
+      ...primaryIdentityRows.map((row) => row.value),
+    ]
+      .map((value) => value?.trim().toLowerCase())
+      .filter((value): value is string => Boolean(value)),
+  );
+  const identityAliasValues = getResourceIdentityAliases(resource).filter(
+    (alias) => !shown.has(alias.trim().toLowerCase()),
+  );
 
   return {
     identityAliasValues,
@@ -36,6 +53,7 @@ export const buildResourceIdentityView = (resource: Resource): ResourceDetailDra
     primaryIdentityRows,
     identityCardHasRichData:
       primaryIdentityRows.length > 0 ||
+      platformIdShown ||
       identityIpValues.length > 0 ||
       (resource.tags?.length || 0) > 0 ||
       identityAliasValues.length > 0,
