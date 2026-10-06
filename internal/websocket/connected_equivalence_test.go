@@ -53,6 +53,8 @@ func TestDashboardDispatchLifecycleEquivalence(t *testing.T) {
 			case 2:
 				state.Resources[0].Health = json.RawMessage(`{"status":"unhealthy","age":70}`)
 				state.ActiveAlerts[0].Level = "critical"
+				// Resource alerts have one canonical owner: ActiveAlerts, not
+				// an embedded resource copy. Preserve both arrival and update.
 				state.ActiveAlerts = append(state.ActiveAlerts, models.Alert{ID: "live", ResourceID: state.Resources[0].ID, Level: "critical"})
 			case 3:
 				state.Resources[0].Labels = map[string]string{"team": "changed"}
@@ -76,9 +78,10 @@ func TestDashboardDispatchLifecycleEquivalence(t *testing.T) {
 				state.Resources[0].PlatformData = nil
 				state.ConnectionHealth = nil
 			case 7: // Alert-only changes must reach both connected clients.
-				state.ActiveAlerts = []models.Alert{{ID: "recurrence", ResourceID: state.Resources[0].ID, Level: "warning", Value: 85}}
+				state.ActiveAlerts = []models.Alert{{ID: "recurrence", ResourceID: state.Resources[0].ID, Level: "warning", Message: "arrived", Value: 85}}
 			case 8:
 				state.ActiveAlerts[0].Level, state.ActiveAlerts[0].Value = "critical", 97
+				state.ActiveAlerts[0].Message = "changed"
 			case 9:
 				state.ActiveAlerts = nil
 			case 10: // unchanged evidence must not manufacture a heartbeat
@@ -115,8 +118,8 @@ func TestDashboardDispatchLifecycleEquivalence(t *testing.T) {
 					if err := json.Unmarshal(payload.Upserts[0], &patch); err != nil {
 						t.Fatal(err)
 					}
-					if patch.ID != "recurrence" || patch.Level != state.ActiveAlerts[0].Level || patch.Value != state.ActiveAlerts[0].Value || phase == 7 && patch.ResourceID != state.Resources[0].ID {
-						t.Fatalf("alert-only patch lost occurrence, target or changed values: %s", payload.Upserts[0])
+					if patch.ID != "recurrence" || patch.Level != state.ActiveAlerts[0].Level || patch.Value != state.ActiveAlerts[0].Value || patch.Message != state.ActiveAlerts[0].Message || phase == 7 && patch.ResourceID != state.Resources[0].ID {
+						t.Fatalf("alert-only patch lost occurrence, target, message or changed values: %s", payload.Upserts[0])
 					}
 				case 9:
 					if len(payload.Upserts) != 0 || !reflect.DeepEqual(payload.Removed, []string{"recurrence"}) {
