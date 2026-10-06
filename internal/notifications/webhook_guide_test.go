@@ -203,15 +203,15 @@ func webhookGuideExamplePayload(t *testing.T) string {
 
 func TestWebhookGuideExamplePayloadEscapesAlertText(t *testing.T) {
 	for _, message := range []struct {
-		name, text string
-		value      float64
+		name, text       string
+		value, wantValue float64
 	}{
-		{"simple-test", "A simple test notification", 0},
-		{"quoted-name", `Resource "synthetic-host" is unavailable`, 95.25},
-		{"backslash-path", `Synthetic path C:\backup\reports`, 12.5},
-		{"multiline", "Synthetic first line\nsecond line\r\nthird\tcolumn", 1},
-		{"unicode", "Synthetic é host — 警告", 0.0286},
-		{"member-injection", `Synthetic text", "injected": true, "other": "value`, 99},
+		{"simple-test", "A simple test notification", 0, 0},
+		{"quoted-name", `Resource "synthetic-host" is unavailable`, 95.25, 95.3},
+		{"backslash-path", `Synthetic path C:\backup\reports`, 12.5, 12.5},
+		{"multiline", "Synthetic first line\nsecond line\r\nthird\tcolumn", 1, 1},
+		{"unicode", "Synthetic é host — 警告", 0.0286, 0},
+		{"member-injection", `Synthetic text", "injected": true, "other": "value`, 99, 99},
 	} {
 		t.Run(message.name, func(t *testing.T) {
 			manager, webhook, requests := webhookGuideSender(t, webhookGuideExamplePayload(t))
@@ -223,7 +223,7 @@ func TestWebhookGuideExamplePayloadEscapesAlertText(t *testing.T) {
 			require.NoError(t, json.Unmarshal([]byte(request.body), &payload))
 			require.Len(t, payload, 2, "alert text must not add JSON members")
 			require.Equal(t, "Alert: warning - "+message.text, payload["text"])
-			require.Equal(t, message.value, payload["value"], "numbers must remain numeric")
+			require.Equal(t, message.wantValue, payload["value"], "preserve the sender's one-decimal numeric value")
 		})
 	}
 }
