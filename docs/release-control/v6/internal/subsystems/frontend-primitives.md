@@ -5212,6 +5212,15 @@ derived from the same time (replication Next sync, backup age bands) reads it
 too. The clock can trail the wall clock by up to one tick, so a check that
 treats a future time as invalid (the backup age band) measures from the later
 of the two.
+The rule has one deliberate exception. The age of a latest reading (last used,
+last seen, last success, last checked) on data the surface reads once and does
+not re-read stays the age at read time, because a moving age over a snapshot
+that never refreshes claims the reading stopped when it may not have. Such a
+surface either re-reads the snapshot in the background, as Proxmox replication
+and the external watchdog panel do, or keeps the read-time age, as the Patrol
+attention detail does for Last seen. An immutable event time (when a delivery
+was attempted, a transition happened, a policy was set) ages correctly over any
+snapshot and reads the clock.
 Read-only metadata badges follow the same primitive-owned shell rule.
 `frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
 outlined appearances, compact sizing, shape, typed tone vocabulary, fit

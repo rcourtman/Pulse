@@ -12,6 +12,7 @@ import {
   isPatrolRuntimeFinding,
 } from '@/utils/aiFindingPresentation';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { formatTriggerReason } from '@/utils/patrolFormat';
 import {
   getPatrolRunRecordSummaryPresentation,
@@ -51,6 +52,9 @@ export function PatrolIntelligenceWorkspace(props: {
   findingResourceId?: string;
 }) {
   const state = props.state;
+  // The selected run stays as picked when run history is re-read, so its start
+  // age reads the shared clock instead of freezing at selection.
+  const now = useRelativeTimeNow();
   const queueDisplayGroups = createMemo(() =>
     buildPatrolFindingDisplayGroups(state.findingsTabBadgeFindings()),
   );
@@ -207,7 +211,7 @@ export function PatrolIntelligenceWorkspace(props: {
               <div class="min-w-0 space-y-1">
                 <div class="flex flex-wrap items-center gap-2 text-xs">
                   <span class="font-semibold text-blue-950 dark:text-blue-100">
-                    Patrol run {formatRelativeTime(run().started_at, { compact: true })}
+                    Patrol run {formatRelativeTime(run().started_at, { compact: true, now: now() })}
                   </span>
                   <span>{formatTriggerReason(run().trigger_reason)}</span>
                   <Show when={selectedRunStatus()}>

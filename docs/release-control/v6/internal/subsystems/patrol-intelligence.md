@@ -2647,6 +2647,17 @@ finding and carried onto the unified finding as `failureCause`, and a provider
 preflight success no longer clears a budget-exhausted runtime finding, so the
 setup card still routes to the budget after a restart clears the in-memory
 block state.
+The paused banner's `Blocked ...` age reads the frontend-primitives shared
+relative-time clock: each status re-read returns the same `blocked_at` while
+Patrol stays paused, so the banner kept the age it had when Patrol first
+paused. The selected run's `Patrol run ...` banner reads the clock for the same
+reason, since the selected run stays as picked when run history is re-read. The
+attention detail is read once per selection, so its fixed event times (the
+acknowledgement, each timeline transition, each evidence observation) read the
+clock while it stays open. Its `Last seen` and flapping window are latest
+readings of a record that may have moved since, so they stay the ages at
+read time, and the queue rows, summary, recent work, run history and digest
+re-derive on their own 30- or 60-second re-reads.
 
 ### This week card answers what Patrol did for the customer
 

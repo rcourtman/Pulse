@@ -1,4 +1,4 @@
-import { createSignal, createUniqueId, onMount, Show, type Accessor } from 'solid-js';
+import { createSignal, createUniqueId, onCleanup, onMount, Show, type Accessor } from 'solid-js';
 
 import { AlertsAPI } from '@/api/alerts';
 import { Button } from '@/components/shared/Button';
@@ -6,6 +6,7 @@ import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import type { DeadManStatus } from '@/types/alerts';
 import { formatRelativeTime } from '@/utils/format';
 import { logger } from '@/utils/logger';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 interface AlertDeadManDestinationSectionProps {
   pingUrl: Accessor<string>;
@@ -14,6 +15,9 @@ interface AlertDeadManDestinationSectionProps {
 }
 
 const REDACTED_PING_URL = '***REDACTED***';
+// Pulse pings the watchdog every minute, so a status read once at mount goes
+// stale while the panel stays open.
+export const DEAD_MAN_STATUS_POLL_MS = 30_000;
 
 const statusPresentation: Record<DeadManStatus['state'], { label: string; class: string }> = {
   disabled: {
@@ -54,9 +58,13 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
   const [unavailable, setUnavailable] = createSignal(false);
   const [showUrl, setShowUrl] = createSignal(false);
 
-  const loadStatus = async () => {
-    if (loading()) return;
-    setLoading(true);
+  let backgroundLoad = false;
+  const loadStatus = async (options: { background?: boolean } = {}) => {
+    if (loading() || backgroundLoad) return;
+    // A background re-read leaves the Refresh button alone; a failed one keeps
+    // the last status and marks it unavailable.
+    if (options.background) backgroundLoad = true;
+    else setLoading(true);
     try {
       setStatus(await AlertsAPI.getDeadManStatus());
       setUnavailable(false);
@@ -64,11 +72,20 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
       logger.error('Failed to load external watchdog status', error);
       setUnavailable(true);
     } finally {
-      setLoading(false);
+      if (options.background) backgroundLoad = false;
+      else setLoading(false);
     }
   };
 
-  onMount(() => void loadStatus());
+  // Last success and Monitor progress keep aging on the shared clock, and the
+  // status is re-read in the background so a moving age never describes a
+  // heartbeat that has since been sent.
+  const now = useRelativeTimeNow();
+  onMount(() => {
+    void loadStatus();
+    const timer = setInterval(() => void loadStatus({ background: true }), DEAD_MAN_STATUS_POLL_MS);
+    onCleanup(() => clearInterval(timer));
+  });
 
   const presentation = () => {
     const current = status();
@@ -162,7 +179,10 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
                 <div class="font-medium text-muted">Last success</div>
                 <div class="mt-1 text-base-content">
                   {current().lastSuccessAt
-                    ? formatRelativeTime(current().lastSuccessAt, { emptyText: 'Never' })
+                    ? formatRelativeTime(current().lastSuccessAt, {
+                        emptyText: 'Never',
+                        now: now(),
+                      })
                     : 'Never'}
                 </div>
               </div>
@@ -170,7 +190,10 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
                 <div class="font-medium text-muted">Monitor progress</div>
                 <div class="mt-1 text-base-content">
                   {current().lastMonitoringProgress
-                    ? formatRelativeTime(current().lastMonitoringProgress, { emptyText: 'Waiting' })
+                    ? formatRelativeTime(current().lastMonitoringProgress, {
+                        emptyText: 'Waiting',
+                        now: now(),
+                      })
                     : 'Waiting'}
                 </div>
               </div>

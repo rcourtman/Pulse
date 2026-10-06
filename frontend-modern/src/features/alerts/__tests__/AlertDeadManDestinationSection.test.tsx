@@ -4,7 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AlertsAPI } from '@/api/alerts';
 
-import { AlertDeadManDestinationSection } from '../AlertDeadManDestinationSection';
+import {
+  AlertDeadManDestinationSection,
+  DEAD_MAN_STATUS_POLL_MS,
+} from '../AlertDeadManDestinationSection';
 
 vi.mock('@/api/alerts', () => ({
   AlertsAPI: {
@@ -112,5 +115,43 @@ describe('AlertDeadManDestinationSection', () => {
     expect(
       screen.getByText('Saved external watchdog configuration could not be read'),
     ).toBeInTheDocument();
+  });
+
+  it('keeps Last success aging and re-reads the status while the panel stays open', async () => {
+    const start = Date.parse('2026-08-27T12:00:30Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
+    const [pingUrl, setPingUrl] = createSignal('***REDACTED***');
+
+    try {
+      render(() => (
+        <AlertDeadManDestinationSection
+          pingUrl={pingUrl}
+          setPingUrl={setPingUrl}
+          setHasUnsavedChanges={vi.fn()}
+        />
+      ));
+      const lastSuccess = () => screen.getByText('Last success').nextElementSibling;
+      await waitFor(() => expect(lastSuccess()).toHaveTextContent('30s ago'));
+      expect(AlertsAPI.getDeadManStatus).toHaveBeenCalledTimes(1);
+
+      // The watchdog stops being reached: every background re-read returns the
+      // same last success, and its age keeps moving on the clock.
+      for (let poll = 2; poll <= 5; poll += 1) {
+        vi.advanceTimersByTime(DEAD_MAN_STATUS_POLL_MS);
+        await waitFor(() => expect(AlertsAPI.getDeadManStatus).toHaveBeenCalledTimes(poll));
+      }
+      expect(lastSuccess()).toHaveTextContent('2 mins ago');
+      expect(screen.getByRole('button', { name: 'Refresh' })).not.toBeDisabled();
+
+      // A later heartbeat lands: the next background re-read picks it up.
+      vi.mocked(AlertsAPI.getDeadManStatus).mockResolvedValue({
+        ...(await AlertsAPI.getDeadManStatus()),
+        lastSuccessAt: '2026-08-27T12:02:30Z',
+      });
+      vi.advanceTimersByTime(DEAD_MAN_STATUS_POLL_MS);
+      await waitFor(() => expect(lastSuccess()).toHaveTextContent('30s ago'));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
