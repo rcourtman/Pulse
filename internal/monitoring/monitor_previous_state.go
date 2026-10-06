@@ -3,6 +3,7 @@ package monitoring
 import (
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -89,24 +90,31 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 	return ctx
 }
 
-func (m *Monitor) previousNodesForInstance(instanceName string) (map[string]models.Memory, []models.Node) {
-	prevNodeMemory := make(map[string]models.Memory)
+func (m *Monitor) previousNodesForInstance(instanceName string) []models.Node {
 	prevInstanceNodes := make([]models.Node, 0)
 
 	readState := m.GetUnifiedReadStateOrSnapshot()
 	if readState == nil {
-		return prevNodeMemory, prevInstanceNodes
+		return prevInstanceNodes
 	}
 
+	// The registry keeps no copy of the identity stamps pollPVENode derives
+	// from configuration, so restore them the same way. Nodes preserved through
+	// an instance outage are written back to state, and without these the
+	// registry would derive a different canonical identity for them.
+	instanceCfg := m.getInstanceConfig(instanceName)
+	providerScoped := m.pveNodeUsesProviderScopedIdentity(instanceName, instanceCfg)
 	for _, existingNode := range readState.Nodes() {
 		if existingNode == nil || existingNode.Instance() != instanceName {
 			continue
 		}
 		modelNode := previousNodeFromView(existingNode)
-		prevNodeMemory[modelNode.ID] = modelNode.Memory
+		modelNode.ProviderScopedIdentity = providerScoped
+		modelNode.NativeNameAliases = config.PVEClusterNodeNativeAliases(instanceCfg, modelNode.Name)
+		modelNode.TLSFingerprint = pveNodeTLSFingerprint(instanceCfg, modelNode.Name)
 		prevInstanceNodes = append(prevInstanceNodes, modelNode)
 	}
-	return prevNodeMemory, prevInstanceNodes
+	return prevInstanceNodes
 }
 
 func previousVMFromView(vm *unifiedresources.VMView) models.VM {
@@ -199,20 +207,33 @@ func previousNodeFromView(node *unifiedresources.NodeView) models.Node {
 	if node == nil {
 		return models.Node{}
 	}
+	// The poller keys nodes by their Proxmox source ID (nodeLastOnline, the
+	// temperature carry, state writes). The unified resource ID is a separate
+	// registry key, so returning it would match nothing, and writing it back
+	// during an outage would re-key the node on every failed poll.
+	id := node.SourceID()
+	if id == "" {
+		id = node.ID()
+	}
 	return models.Node{
-		ID:                node.ID(),
+		ID:                id,
+		NodeIdentity:      id,
 		Name:              node.NodeName(),
 		DisplayName:       node.Name(),
 		Instance:          node.Instance(),
 		Host:              node.HostURL(),
 		Status:            string(node.Status()),
+		Type:              "node",
 		Uptime:            node.Uptime(),
 		IsClusterMember:   node.IsClusterMember(),
+		ClusterName:       node.ClusterName(),
 		LastSeen:          node.LastSeen(),
 		LoadAverage:       node.LoadAverage(),
 		PVEVersion:        node.PVEVersion(),
 		KernelVersion:     node.KernelVersion(),
 		NetworkInterfaces: hostNetworkInterfacesFromReadStateView(node.NetworkInterfaces()),
+		Temperature:       node.TemperatureDetails(),
+		LinkedAgentID:     node.LinkedAgentID(),
 		Memory: models.Memory{
 			Used:  node.MemoryUsed(),
 			Total: node.MemoryTotal(),

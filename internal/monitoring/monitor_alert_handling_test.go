@@ -1547,22 +1547,24 @@ func TestSilentLinkedAgentStopsRefreshingNodeTemperatureAlert(t *testing.T) {
 	alertConfig.NodeDefaults.Temperature = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
 	manager.UpdateConfig(alertConfig)
 
-	registry := unifiedresources.NewRegistry(nil)
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
 	monitor := &Monitor{
 		config:        &config.Config{TemperatureMonitoringEnabled: true},
 		state:         models.NewState(),
-		resourceStore: unifiedresources.NewMonitorAdapter(registry),
+		resourceStore: adapter,
 	}
 	node := models.Node{
 		ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online",
 		ConnectionHealth: "healthy", LinkedAgentID: "agent-1",
 	}
-	// ingest records a PVE poll that just saw the node, plus the agent as of its
-	// last report.
+	// ingest rebuilds the store, as each monitor refresh does, from the last PVE
+	// poll's node (with the temperature it published, which the next poll reads
+	// back as its previous node) plus the agent as of its last report.
+	lastPolled := node
 	ingest := func(agentLastReport time.Time, agentStatus string) {
-		polledNode := node
+		polledNode := lastPolled
 		polledNode.LastSeen = time.Now()
-		registry.IngestSnapshot(models.StateSnapshot{
+		adapter.PopulateFromSnapshot(models.StateSnapshot{
 			Nodes: []models.Node{polledNode},
 			Hosts: []models.Host{{
 				ID: "agent-1", Hostname: "node1", Status: agentStatus, LinkedNodeID: node.ID,
@@ -1574,13 +1576,14 @@ func TestSilentLinkedAgentStopsRefreshingNodeTemperatureAlert(t *testing.T) {
 	// poll runs the node temperature step of a PVE poll (no SSH collector) and
 	// evaluates the node's alerts with the result.
 	poll := func() *models.Temperature {
-		_, prevNodes := monitor.snapshotPrevNodes("pve1")
+		prevNodes := monitor.snapshotPrevNodes("pve1")
 		polled := node
 		monitor.collectNodeTemperatureData(
 			context.Background(), "pve1", &config.PVEInstance{Name: "pve1"}, proxmox.Node{Node: node.Name},
 			&polled, prevNodes, "online",
 		)
 		manager.CheckNode(polled)
+		lastPolled = polled
 		return polled.Temperature
 	}
 	temperatureAlert := func() alerts.Alert {
@@ -1605,8 +1608,15 @@ func TestSilentLinkedAgentStopsRefreshingNodeTemperatureAlert(t *testing.T) {
 	opened := temperatureAlert()
 
 	// The agent goes silent while PVE polling continues: the merged row stays
-	// fresh, but the agent's retained sensors no longer count as a reading.
-	ingest(time.Now().Add(-hostAgentHealthWindow(30)-time.Minute), "offline")
+	// fresh, but the agent's retained sensors no longer count as a reading, and
+	// the poller does not carry the agent's last reading past its lease. With no
+	// clock to advance, age the agent's last report and the reading it produced
+	// by the same amount.
+	silence := hostAgentHealthWindow(30) + time.Minute
+	agedReading := *lastPolled.Temperature
+	agedReading.LastUpdate = agedReading.LastUpdate.Add(-silence)
+	lastPolled.Temperature = &agedReading
+	ingest(agentReport.Add(-silence), "offline")
 	time.Sleep(5 * time.Millisecond)
 	require.Nil(t, poll(), "a silent agent's retained sensors must not be presented as a current reading")
 	held := temperatureAlert()
