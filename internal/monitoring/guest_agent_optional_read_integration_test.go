@@ -140,7 +140,12 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 					registry.IngestSnapshot(models.StateSnapshot{VMs: []models.VM{vm}})
 					view := registry.VMs()[0]
 					canonicalID, resolved := registry.ResolveReferenceID(id)
-					if !resolved || view.ID() != canonicalID || view.DiskUsed() != vm.Disk.Used || view.DiskStatusReason() != vm.DiskStatusReason {
+					// Canonical metrics can retain a numeric carrier on an
+					// unavailable read. Only a current or explicitly last-known
+					// disk has byte-value parity; the native reason owns whether
+					// that carrier can be presented/recorded as an observation.
+					knownDisk := vm.DiskStatusReason == "" || strings.HasPrefix(vm.DiskStatusReason, "prev-")
+					if !resolved || view.ID() != canonicalID || (knownDisk && view.DiskUsed() != vm.Disk.Used) || view.DiskStatusReason() != vm.DiskStatusReason {
 						t.Fatalf("filesystem observation changed at the read boundary: id=%q resolved=%q ok=%v used=%d/%d reason=%q/%q", view.ID(), canonicalID, resolved, view.DiskUsed(), vm.Disk.Used, view.DiskStatusReason(), vm.DiskStatusReason)
 					}
 					// Publish the completed poll at the normal ingest boundary.
@@ -149,7 +154,7 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 					snapshot := models.StateSnapshot{VMs: []models.VM{vm}, LastUpdate: vm.LastSeen}
 					m.updateResourceStore(snapshot)
 					live := m.GetUnifiedReadState().VMs()[0]
-					if live.ID() != canonicalID || live.DiskUsed() != vm.Disk.Used || live.DiskStatusReason() != vm.DiskStatusReason {
+					if live.ID() != canonicalID || (knownDisk && live.DiskUsed() != vm.Disk.Used) || live.DiskStatusReason() != vm.DiskStatusReason {
 						t.Fatal("accepted poll did not replace the production read generation")
 					}
 					encoded, err := json.Marshal(m.buildBroadcastFrontendStateFromSnapshot(snapshot).Resources)
@@ -204,8 +209,18 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 							t.Fatal("completed unsupported reply prevented repeated fresh filesystem polls")
 						}
 					} else {
-						if vm.Disk.Used != initial.Disk.Used || vm.DiskStatusReason != "prev-agent-cooldown" || vm.GuestAgentStatus != "deferred" {
-							t.Fatalf("uncertainty lost truthful retained disk: %+v", vm.Disk)
+						if withoutStatus || i == 2 {
+							if vm.Disk.Used != initial.Disk.Used || vm.DiskStatusReason != "prev-agent-cooldown" {
+								t.Fatalf("uncertainty lost eligible retained disk: %+v", vm.Disk)
+							}
+						} else if vm.Disk.Usage >= 0 || vm.DiskStatusReason != "agent-cooldown" {
+							// With no useful prior identity, a retained disk alone
+							// cannot repeatedly renew the evidence gate. Losing its
+							// display number is truthful unavailability, not zero.
+							t.Fatal("retained filesystem alone manufactured continuing guest evidence")
+						}
+						if vm.GuestAgentStatus != "deferred" {
+							t.Fatal("unavailable/retained disk concealed active guest deferral")
 						}
 						if !reflect.DeepEqual(m.vmAgentMemCache[memoryKey], originalMemory) || (originalMemory.info.Source != "" && !vm.Memory.Observation.ObservedAt.Equal(initial.Memory.Observation.ObservedAt)) {
 							t.Fatal("cooldown renewed original memory evidence")
