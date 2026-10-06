@@ -1625,14 +1625,14 @@ boundaries:
   report and would mark the host online.
 - Agents are evaluated before nodes, so a node with an online linked agent
   hands its CPU, memory and disk alerts to the agent on the first tick, as
-  host-agent hostname deduplication does in production.
+  node-link deduplication does in production.
 - A runtime mock config change rebuilds the estate. An agent that leaves it
   goes through `HandleHostRemoved`, as a deleted live agent does, so its alerts
-  and hostname deduplication do not outlive it.
+  and node link do not outlive it.
 - Leaving mock mode routes the fixture agents through `HandleHostRemoved`.
-  `ClearActiveAlerts` drops their alerts but not their hostname registrations,
-  and a real node named like a fixture agent (`pve1`) would otherwise keep its
-  metric alerts suppressed with no agent to own them. The agent and Docker
+  `ClearActiveAlerts` drops their alerts but not their node links, and a
+  leftover link would keep suppressing CPU, memory and disk alerts on any node
+  that later carries the linked fixture node's ID. The agent and Docker
   steps of a pass whose snapshot predates the switch find mock mode off under
   the same lock and evaluate nothing.
 - Ticks start passes concurrently, so a pass whose snapshot predates an
@@ -1659,7 +1659,7 @@ pass. Those are measurements, not test guarantees. The tests pin the
 boundaries:
 `TestCheckMockAlertsEvaluatesHostAgentsBeforeLinkedNodes`,
 `TestCheckMockHostAlertsUsesHostLifecycleForOfflineFixtures`,
-`TestLeavingMockModeReleasesFixtureAgentHostnames` and
+`TestLeavingMockModeReleasesFixtureAgentNodeLinks` and
 `TestMockHostAgentPassAfterLeavingMockModeRegistersNothing` in
 `internal/monitoring/monitor_mock_alerts_test.go`,
 `TestMockHostAgentLeavingFixtureUsesRemovalLifecycle` in

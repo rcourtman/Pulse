@@ -692,8 +692,8 @@ func (m *Monitor) checkMockAlerts() {
 	// the monitor state the host health sweep reads, so without this pass no
 	// agent CPU, memory, disk, temperature or offline alert can open against
 	// mock data. Agents go before nodes so a linked node hands its CPU, memory
-	// and disk alerts to its agent on the first tick, as the host-agent
-	// hostname deduplication does in production.
+	// and disk alerts to its agent on the first tick, as node-link
+	// deduplication does in production.
 	log.Debug().Int("hostCount", len(state.Hosts)).Msg("checking host agent alerts")
 	m.evaluateMockHostAgents(state.Hosts, state.Nodes, fixtureRevision)
 
@@ -739,7 +739,7 @@ func (m *Monitor) checkMockAlerts() {
 // evaluateMockHostAgents evaluates every fixture agent and remembers the set.
 // A runtime mock config change rebuilds the estate, so an agent can leave it
 // between passes; it then goes through HandleHostRemoved, as a deleted live
-// agent does, or its alerts and hostname deduplication would outlive it.
+// agent does, or its alerts and node link would outlive it.
 func (m *Monitor) evaluateMockHostAgents(hosts []models.Host, nodes []models.Node, fixtureRevision uint64) {
 	m.mockHostAgentsMu.Lock()
 	defer m.mockHostAgentsMu.Unlock()
@@ -754,8 +754,6 @@ func (m *Monitor) evaluateMockHostAgents(hosts []models.Host, nodes []models.Nod
 			current[host.ID] = host
 		}
 	}
-	// Remove first so a departed agent cannot unregister a hostname that a
-	// remaining agent registers on this same pass.
 	for id, host := range m.mockHostAgents {
 		if _, ok := current[id]; !ok {
 			m.alertManager.HandleHostRemoved(host)
@@ -816,9 +814,9 @@ func (m *Monitor) acceptMockFixturePassLocked(fixtureRevision uint64) bool {
 
 // forgetMockFixtureHosts removes the fixture agents and Docker hosts when the
 // monitor leaves mock mode. ClearActiveAlerts drops their alerts but not the
-// agents' hostname deduplication, so a real node named like a fixture agent
-// (pve1) would keep its CPU, memory and disk alerts suppressed with no agent to
-// own them. The removal also clears anything a pass already in flight
+// agents' node links, and a leftover link would keep suppressing CPU, memory
+// and disk alerts on any node that later carries the linked fixture node's ID.
+// The removal also clears anything a pass already in flight
 // recreated; mock mode is off before this runs, so no later pass can evaluate
 // them again while it stays off. Disabling advanced the fixture revision, and
 // recording it here keeps a pass paused across a disable and re-enable from

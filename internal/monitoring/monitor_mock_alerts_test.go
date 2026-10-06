@@ -110,12 +110,12 @@ func TestCheckMockAlertsEvaluatesHostAgentsBeforeLinkedNodes(t *testing.T) {
 	}
 
 	// A node whose linked agent reported on the same pass must hand its
-	// memory alert to the agent on the first tick, as hostname
+	// memory alert to the agent on the first tick, as node-link
 	// deduplication does for live agents.
 	linkedNodes := 0
 	for _, node := range state.Nodes {
 		host, ok := onlineHosts[strings.TrimSpace(node.LinkedAgentID)]
-		if !ok || !strings.EqualFold(host.Hostname, node.Name) {
+		if !ok || strings.TrimSpace(host.LinkedNodeID) != node.ID {
 			continue
 		}
 		linkedNodes++
@@ -166,7 +166,7 @@ func TestCheckMockHostAlertsUsesHostLifecycleForOfflineFixtures(t *testing.T) {
 	}
 }
 
-func TestLeavingMockModeReleasesFixtureAgentHostnames(t *testing.T) {
+func TestLeavingMockModeReleasesFixtureAgentNodeLinks(t *testing.T) {
 	setMockSamplerTestEnv(t, time.Hour, 5*time.Minute)
 	manager := newMockHostAlertTestManager(t)
 	monitor := &Monitor{
@@ -178,21 +178,22 @@ func TestLeavingMockModeReleasesFixtureAgentHostnames(t *testing.T) {
 	t.Cleanup(func() { mustSetMockEnabled(t, false) })
 	monitor.checkMockAlerts()
 
-	registeredPVE1 := false
+	linkedNodeID := ""
 	for _, host := range mock.CurrentFixtureGraph().State.Hosts {
-		if host.Hostname == "pve1" && !strings.EqualFold(host.Status, "offline") {
-			registeredPVE1 = true
+		if host.LinkedNodeID != "" && !strings.EqualFold(host.Status, "offline") {
+			linkedNodeID = host.LinkedNodeID
+			break
 		}
 	}
-	if !registeredPVE1 {
-		t.Fatal("mock fixture has no online agent named pve1")
+	if linkedNodeID == "" {
+		t.Fatal("mock fixture has no online agent linked to a node")
 	}
 	mustSetMonitorMockMode(t, monitor, false)
 
-	// A real node named like a fixture agent, with no agent of its own,
+	// A node carrying the linked fixture node's ID, with no agent of its own,
 	// must own its metric alerts once the monitor shows live data again.
 	node := models.Node{
-		ID:       "real-pve1",
+		ID:       linkedNodeID,
 		Name:     "pve1",
 		Instance: "real",
 		Status:   "online",
@@ -204,7 +205,7 @@ func TestLeavingMockModeReleasesFixtureAgentHostnames(t *testing.T) {
 			return
 		}
 	}
-	t.Fatal("real node pve1 raised no memory alert: the fixture agent's hostname deduplication outlived mock mode")
+	t.Fatalf("node %s raised no memory alert: a fixture agent's node link outlived mock mode", node.ID)
 }
 
 func TestMockHostAgentPassAfterLeavingMockModeRegistersNothing(t *testing.T) {
@@ -215,10 +216,11 @@ func TestMockHostAgentPassAfterLeavingMockModeRegistersNothing(t *testing.T) {
 	// A pass whose snapshot predates leaving mock mode reaches the agent step
 	// after forgetMockFixtureHosts ran.
 	stale := models.Host{
-		ID:       "host-node-mock-cluster-1-pve1",
-		Hostname: "pve1",
-		Status:   "online",
-		Memory:   models.Memory{Total: 32 << 30, Used: 30 << 30, Free: 2 << 30, Usage: 93.75},
+		ID:           "host-node-mock-cluster-1-pve1",
+		Hostname:     "pve1",
+		LinkedNodeID: "real-pve1",
+		Status:       "online",
+		Memory:       models.Memory{Total: 32 << 30, Used: 30 << 30, Free: 2 << 30, Usage: 93.75},
 	}
 	monitor.evaluateMockHostAgents([]models.Host{stale}, nil, 1)
 
@@ -238,7 +240,7 @@ func TestMockHostAgentPassAfterLeavingMockModeRegistersNothing(t *testing.T) {
 			return
 		}
 	}
-	t.Fatal("stale mock pass registered fixture hostname pve1 and suppressed the real node's memory alert")
+	t.Fatal("stale mock pass linked a fixture agent to real-pve1 and suppressed its memory alert")
 }
 
 // newMockDockerHostWithExitedContainers returns a reporting Docker host whose

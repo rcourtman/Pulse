@@ -821,7 +821,7 @@ func TestMockHostAgentLeavingFixtureUsesRemovalLifecycle(t *testing.T) {
 
 	memory := models.Memory{Total: 32 << 30, Used: 30 << 30, Free: 2 << 30, Usage: 93.75}
 	kept := models.Host{ID: "host-linux-1", Hostname: "apollo-114", Status: "online", Memory: memory}
-	departed := models.Host{ID: "host-node-pve9", Hostname: "pve9", Status: "online", Memory: memory}
+	departed := models.Host{ID: "host-node-pve9", Hostname: "pve9", LinkedNodeID: "mock-cluster-1-pve9", Status: "online", Memory: memory}
 
 	monitor.evaluateMockHostAgents([]models.Host{kept, departed}, nil, 1)
 	// A runtime mock config change rebuilt the estate without pve9.
@@ -840,8 +840,8 @@ func TestMockHostAgentLeavingFixtureUsesRemovalLifecycle(t *testing.T) {
 		t.Fatal("agent still in the mock estate lost its memory alert")
 	}
 
-	// The departed agent's hostname deduplication is released too, so the
-	// node it was linked to owns its metric alerts again.
+	// The departed agent's node link is dropped too, so the node it was
+	// linked to owns its metric alerts again.
 	node := models.Node{
 		ID:       "mock-cluster-1-pve9",
 		Name:     "pve9",
