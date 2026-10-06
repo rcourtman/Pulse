@@ -143,7 +143,13 @@ func (m *Manager) resolveHostAlertThresholdsNoLock(alert *Alert, resourceID stri
 	if alert != nil && alert.Type == "diskTemperature" {
 		override, exists := m.hostThresholdOverrideNoLock(hostID, linkedNodeID, linkedVMID, linkedContainerID)
 		overridden := exists && override.DiskTemperature != nil
-		thresholds.DiskTemperature = m.hostDiskTemperatureThresholdNoLock(thresholds.DiskTemperature, overridden, metadataStringValue(alert.Metadata, "diskType"))
+		if diskType, known := alert.Metadata["diskType"].(string); known || overridden {
+			thresholds.DiskTemperature = m.hostDiskTemperatureThresholdNoLock(thresholds.DiskTemperature, overridden, diskType)
+		} else {
+			// Alerts persisted before CheckHost recorded diskType carry no
+			// disk type until their next firing evaluation.
+			thresholds.DiskTemperature = m.lowestHostDiskTemperatureThresholdNoLock(thresholds.DiskTemperature)
+		}
 	}
 	return thresholds
 }
@@ -932,6 +938,24 @@ func (m *Manager) hostDiskTemperatureThresholdNoLock(hostThreshold *HysteresisTh
 		}
 	}
 	return hostThreshold
+}
+
+// lowestHostDiskTemperatureThresholdNoLock returns the lowest enabled
+// threshold any SMART disk of the host can be evaluated against. An alert
+// whose disk type is unknown is judged against it, so a config save never
+// resolves an alert its disk type would still fire. Callers must hold m.mu.
+func (m *Manager) lowestHostDiskTemperatureThresholdNoLock(hostThreshold *HysteresisThreshold) *HysteresisThreshold {
+	if hostThreshold == nil || hostThreshold.Trigger <= 0 {
+		return hostThreshold
+	}
+	lowest := hostThreshold
+	for _, th := range m.config.DiskTempByType {
+		if th.Trigger > 0 && th.Trigger < lowest.Trigger {
+			t := th
+			lowest = &t
+		}
+	}
+	return lowest
 }
 
 // clearHostDiskTemperatureAlerts resolves every SMART disk temperature alert

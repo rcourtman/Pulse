@@ -326,6 +326,41 @@ func TestConfigSaveResolvesDiskTemperatureAlertAgainstItsDiskTypeThreshold(t *te
 	}
 }
 
+func TestConfigSaveKeepsDiskTemperatureAlertWithoutDiskType(t *testing.T) {
+	m := configureDiskTempTypeHostManager(t)
+
+	m.mu.Lock()
+	m.config.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 75, Clear: 70}
+	m.mu.Unlock()
+
+	host := hostWithSMARTDiskTemp("host-temp-legacy", "nvme", 72)
+	alertID := hostDiskTempAlertID(host)
+	m.CheckHost(host)
+	alert, exists := testLookupActiveAlert(t, m, alertID)
+	if !exists {
+		t.Fatalf("expected nvme disk temperature alert at 72C, active: %v", alertKeys(m))
+	}
+	// Restored from a release that did not record the disk type.
+	m.mu.Lock()
+	delete(alert.Metadata, "diskType")
+	m.mu.Unlock()
+
+	// 72C is above the nvme trigger (70) but below the agent default (75).
+	cfg := m.GetConfig()
+	cfg.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 85, Clear: 80}
+	m.UpdateConfig(cfg)
+	if _, exists := testLookupActiveAlert(t, m, alertID); !exists {
+		t.Fatalf("config save resolved a disk temperature alert of unknown disk type that its nvme trigger still fires, active: %v", alertKeys(m))
+	}
+
+	cfg = m.GetConfig()
+	cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 0, Clear: 0}
+	m.UpdateConfig(cfg)
+	if _, exists := testLookupActiveAlert(t, m, alertID); exists {
+		t.Fatalf("disk temperature alert of unknown disk type stayed active after the threshold was turned off, active: %v", alertKeys(m))
+	}
+}
+
 func TestConfigSaveKeepsAlertTheEvaluatorKeepsWithoutRecoveryBand(t *testing.T) {
 	// Normalization keeps a 70/75 entry, and the evaluator treats a clear
 	// level at or above the trigger as no recovery band, firing from 70C.

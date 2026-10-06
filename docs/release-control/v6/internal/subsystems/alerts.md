@@ -1598,8 +1598,10 @@ Host-agent SMART disk temperature alerts (`diskTemperature`, resource
 `agent:<host>/disk_temp:<device>`) follow one effective threshold: the
 resolved agent `DiskTemperature`, refined by the disk type's `DiskTempByType`
 entry unless an explicit host or linked-resource override set it
-(`hostDiskTemperatureThresholdNoLock` in `internal/alerts/host.go`). When that
-threshold is off, `CheckHost` clears the host's disk temperature alerts. The
+(`hostDiskTemperatureThresholdNoLock` in `internal/alerts/host.go`). When the
+host's resolved `DiskTemperature` is off, `CheckHost` clears every disk
+temperature alert on the host. A disabled `DiskTempByType` entry clears only
+the alerts of disks of that type, through the disabled metric spec. The
 all-agents switch, a disabled host override, agent removal and confirmed
 agent offline clear them with the host's other disk alerts. Before this,
 nothing cleared them once the agent-level threshold was off.
@@ -1607,15 +1609,17 @@ nothing cleared them once the agent-level threshold was off.
 A config save judges an open disk temperature alert against the same
 threshold (`resolveHostAlertThresholdsNoLock` refines it by the alert's
 `diskType` metadata, and `metric_runtime.go` classifies `diskTemperature` as a
-threshold metric), so turning the threshold off resolves the alert
-immediately. Every firing evaluation refreshes `diskType`, so an alert at or
-above its trigger always carries it. Only an alert held in its recovery band
-since before that metadata existed (May 2026) falls back to the agent
-threshold. Its reading is already below its trigger, so the fallback can
-resolve it early or leave it to the evaluator, but it cannot resolve an alert
-the next report raises again.
+threshold metric), so turning the host's `DiskTemperature` off resolves the
+alert immediately. An alert persisted before `CheckHost` recorded `diskType` (May
+2026) carries no disk type until its next firing evaluation, so a save judges
+it against the lowest enabled trigger any of the host's disks can use: the
+agent threshold or a `DiskTempByType` entry
+(`lowestHostDiskTemperatureThresholdNoLock`). A save therefore cannot resolve
+an alert its disk type would still fire.
 
-For every threshold metric, a config save resolves an alert whose reading is
+For a metric alert that reaches the threshold comparison in
+`reevaluateActiveAlertsLocked` (docker-host alerts return before it), a config
+save resolves an alert whose reading is
 below the new trigger. That includes readings inside a valid recovery band,
 which the evaluator would hold. A clear level at or above the trigger is no
 recovery band (`buildCanonicalMetricSpec` drops it), and a reading at the
@@ -1623,7 +1627,8 @@ trigger stays firing, as it does in the reducer, so a save no longer resolves
 an alert the next evaluation raises again.
 `TestCheckHostClearsDiskTemperatureAlertsWhenThresholdTurnsOff`,
 `TestHostDiskTemperatureAlertsClearWhenAgentLeaves`,
-`TestConfigSaveResolvesDiskTemperatureAlertAgainstItsDiskTypeThreshold` and
+`TestConfigSaveResolvesDiskTemperatureAlertAgainstItsDiskTypeThreshold`,
+`TestConfigSaveKeepsDiskTemperatureAlertWithoutDiskType` and
 `TestConfigSaveKeepsAlertTheEvaluatorKeepsWithoutRecoveryBand` in
 `internal/alerts/host_unraid_lifecycle_test.go` pin these paths.
 
