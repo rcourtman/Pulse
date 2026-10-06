@@ -8366,6 +8366,13 @@ inventory and Storage search below the fold at desktop and phone widths, and
 from competing with real warnings for attention, while preserving every
 affected name on demand. The component test pins collapsed, expanded and collapsed-again
 states; 1440px, 768px and 390px browser checks verify placement and overflow.
+Each platform page names what the update brings in the reader's words through
+`missingLabel`: the latest fixes and machine, node, system or VM details.
+The notice selects hosts by agent version alone, and command execution is a
+separate setting the update preserves, so the notice must not promise Patrol
+actions or command support. Internal phrasing such as "agent-contributed
+detail", "agent-managed platform detail" or "in-guest telemetry" does not
+belong in the notice.
 The shared `InlineNotice` action text uses opaque 800-level colors for its four
 tones. The current Tailwind configuration overrides several 900-level palette
 tokens with 25%-alpha colors for translucent backgrounds, so using those

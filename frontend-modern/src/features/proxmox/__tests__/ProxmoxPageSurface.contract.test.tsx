@@ -247,9 +247,7 @@ describe('ProxmoxPageSurface contract', () => {
     expect(screen.getByTestId('nodes-table')).toHaveAttribute('data-rows', '1');
     const notice = screen.getByTestId('platform-outdated-agent-notice');
     expect(notice).toHaveTextContent('delly runs an older Pulse agent (v5.1.34).');
-    expect(notice).toHaveTextContent(
-      'latest agent-contributed Proxmox node detail and command support',
-    );
+    expect(notice).toHaveTextContent('latest fixes and node details');
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
       '/settings/infrastructure/agent-doctor?agents=agent%3Aagent-delly',

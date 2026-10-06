@@ -923,8 +923,9 @@ coverage, restore capability, recovery-job proof, storage-health verification,
 or evidence that a specific resource was protected or recovered.
 Proxmox page stale-agent notices are adjacent frontend and agent-lifecycle
 plumbing even though `ProxmoxPageSurface` is a storage/recovery canonical file.
-Those notices may link an operator to scoped agent update commands for
-agent-contributed node detail and command support, but they must not be
+Those notices may link an operator to scoped agent update commands for the
+latest fixes and node details (the notice's own wording; command execution is
+a separate setting the update does not change), but they must not be
 interpreted as backup visibility, recovery readiness, restore capability, or a
 storage/recovery-owned command path. Suppressing those notices when the API has
 no deployable agent update target is likewise lifecycle/frontend behavior and
