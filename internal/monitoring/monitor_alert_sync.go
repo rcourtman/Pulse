@@ -71,8 +71,10 @@ func (m *Monitor) activeAlertsSnapshot() []models.Alert {
 			Acknowledged:    alert.Acknowledged,
 			AckTime:         alert.AckTime,
 			AckUser:         alert.AckUser,
-			// GetActiveAlerts returns deep clones, so the map is already private.
-			Metadata: alert.Metadata,
+			// GetActiveAlerts returns deep clones, so the map and the live
+			// metric status are already private.
+			Metadata:     alert.Metadata,
+			MetricStatus: alert.MetricStatus,
 		})
 	}
 	return modelAlerts

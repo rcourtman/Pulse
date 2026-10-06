@@ -15,6 +15,14 @@
 
 ## Purpose
 
+### Alert projections carry a volatile metric status — issue #2068
+
+`models.Alert` gains an optional `metricStatus` (`models.MetricAlertStatus`)
+beside the alert-engine metadata. It is a live evaluation snapshot owned by
+the alerts subsystem. Agent report admission, host continuity and
+re-enrollment never read or write it, and it is not persisted with agent or
+state records.
+
 ### Source-record lookup preserves report admission
 
 Host and Docker report admission still performs canonical host-view matching

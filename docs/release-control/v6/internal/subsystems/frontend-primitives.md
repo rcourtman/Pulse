@@ -22,6 +22,14 @@
 
 All drawer History fallbacks must distinguish current observations from retained, unavailable or freshness-unknown guest readings, using original memory evidence and filesystem read reasons.
 
+### Drawer attention detail line and temperature alert floor — issue #2068
+
+`DrawerAttentionSection` items accept an optional `detail` (a muted second
+line) and `title` (hover text). `TemperatureGauge` accepts `alertSeverity`
+and `title`, and `getTemperatureTextClass` treats an open alert's severity as
+a floor: a reading that has dipped under an open alert's trigger keeps the
+alert's tone, while the reading still wins when it is worse.
+
 ### Canonical drawer History preserves guest read provenance
 
 The shared resource drawer passes selected memory observation state/source/time

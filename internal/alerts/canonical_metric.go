@@ -273,6 +273,17 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 				alertMetadata[k] = v
 			}
 		}
+		metricStatus := buildMetricAlertStatus(metricStatusInput{
+			value:                value,
+			triggered:            triggered,
+			trigger:              spec.MetricThreshold.Trigger,
+			clear:                clearThreshold,
+			recoveryDelaySeconds: stability.RecoveryDelaySeconds,
+			unit:                 metricStatusUnit(metricType),
+			window:               windowed,
+			incident:             incident,
+			observedAt:           observedAt,
+		})
 
 		if !exists {
 			alert := &Alert{
@@ -290,6 +301,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 				StartTime:       alertStartTime,
 				LastSeen:        observedAt,
 				Metadata:        alertMetadata,
+				MetricStatus:    metricStatus,
 			}
 
 			applyCanonicalIdentity(alert, spec.ID, string(spec.Kind))
@@ -352,12 +364,16 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		}
 
 		if !triggered && primary == "" {
-			// Hysteresis latch: below trigger but above recovery — hold
-			// without refreshing, as the pre-cutover engine did.
+			// Hysteresis hold or recovery run: Value, Message and LastSeen
+			// keep the last breach, and nothing here may notify. Only the
+			// volatile live status moves, so surfaces can say what the
+			// reading is now and why the alert has not cleared.
+			existingAlert.MetricStatus = metricStatus
 			return
 		}
 
 		oldLevel := existingAlert.Level
+		existingAlert.MetricStatus = metricStatus
 		existingAlert.LastSeen = observedAt
 		existingAlert.Value = value
 		existingAlert.Threshold = spec.MetricThreshold.Trigger
@@ -411,6 +427,8 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		existingAlert = existingAlert.Clone()
 		existingAlert.Value = value
 		existingAlert.LastSeen = observedAt
+		// A resolved record is history; the live status describes open alerts only.
+		existingAlert.MetricStatus = nil
 		message, _ := metricAlertMessage(resourceType, metricType, value, opts)
 		existingAlert.Message = "Resolved: " + message
 

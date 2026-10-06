@@ -17,6 +17,13 @@
 
 Drawer observation labels derive locally from the selected snapshot without renewing timestamps, adding reads, remounting charts or changing stored metric coordinates.
 
+### Guest drawer alert copy formats backend status only
+
+Guest drawer attention rows format `alert.metricStatus` through
+`getGuestDrawerAlertAttention` and the shared `getAlertAttentionCopy`. No
+threshold comparison, recovery timing or resource-metric lookup runs in the
+drawer, and the host-capacity memory comparison stays a suffix on that copy.
+
 ### Drawer provenance stays local to snapshot presentation
 
 Guest and canonical resource drawer memory presentation share the same pure

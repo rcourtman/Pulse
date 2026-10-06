@@ -156,7 +156,9 @@ func (m *Manager) cleanupStaleMaps() {
 	staleAlerts := make([]string, 0)
 	for storageKey, alert := range m.activeAlerts {
 		alertID := effectiveAlertID(alert, storageKey)
-		if alert != nil && now.Sub(alert.LastSeen) > staleThreshold {
+		// A threshold alert holding below its trigger is still observed
+		// even though LastSeen stays at its last breach.
+		if alert != nil && now.Sub(alert.lastObservedAt()) > staleThreshold {
 			staleAlerts = append(staleAlerts, alertID)
 		}
 	}

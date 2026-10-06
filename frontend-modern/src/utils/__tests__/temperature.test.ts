@@ -138,6 +138,22 @@ describe('temperature', () => {
       expect(getTemperatureTextClass(85, thresholds)).toContain('text-red-600');
     });
 
+    it("keeps an open alert's tone while the reading holds under its trigger", () => {
+      const thresholds = { warning: 75, critical: 80 };
+      // minipc: alert open at 80°C, now reading 72°C on its way down.
+      expect(getTemperatureTextClass(72, thresholds)).toContain('text-green-600');
+      expect(getTemperatureTextClass(72, thresholds, 'temperature', 'warning')).toContain(
+        'text-amber-600',
+      );
+      expect(getTemperatureTextClass(72, thresholds, 'temperature', 'critical')).toContain(
+        'text-red-600',
+      );
+      // The reading still wins when it is worse than the alert.
+      expect(getTemperatureTextClass(86, thresholds, 'temperature', 'warning')).toContain(
+        'text-red-600',
+      );
+    });
+
     it('uses disk temperature defaults for disk temperature displays', () => {
       expect(getTemperatureTextClass(49, undefined, 'diskTemperature')).toContain('text-green-600');
       expect(getTemperatureTextClass(50, undefined, 'diskTemperature')).toContain('text-amber-600');

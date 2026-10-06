@@ -258,3 +258,47 @@ func TestResolveBackupIntentContextAcceptsSynthesizedJobGuestTask(t *testing.T) 
 		t.Fatalf("guest whose job section already finished should not carry intent: %+v", got)
 	}
 }
+
+func TestSyncAlertsToStateCarriesLiveMetricStatusOfHeldAlert(t *testing.T) {
+	m := &Monitor{
+		state:        models.NewState(),
+		alertManager: alerts.NewManagerWithDataDir(t.TempDir()),
+	}
+	defer m.alertManager.Stop()
+
+	cfg := m.alertManager.GetConfig()
+	cfg.TimeThresholds = map[string]int{"node": 0}
+	cfg.NodeDefaults.Temperature = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.alertManager.UpdateConfig(cfg)
+
+	node := models.Node{
+		ID: "homelab-minipc", Name: "minipc", Instance: "homelab", Status: "online",
+		Temperature: &models.Temperature{Available: true, CPUPackage: 85},
+	}
+	m.alertManager.CheckNode(node)
+	node.Temperature = &models.Temperature{Available: true, CPUPackage: 78}
+	m.alertManager.CheckNode(node)
+
+	m.syncAlertsToState()
+
+	var held *models.Alert
+	snapshot := m.state.GetSnapshot()
+	for i := range snapshot.ActiveAlerts {
+		if snapshot.ActiveAlerts[i].Type == "temperature" {
+			held = &snapshot.ActiveAlerts[i]
+		}
+	}
+	if held == nil {
+		t.Fatal("expected the temperature alert to stay open at 78°C")
+	}
+	if held.Value != 85 {
+		t.Fatalf("legacy value = %v, want the last breach 85", held.Value)
+	}
+	status := held.MetricStatus
+	if status == nil {
+		t.Fatal("websocket state must carry the live reading")
+	}
+	if status.Phase != models.MetricAlertPhaseLatched || status.Value != 78 || status.Recovery != 75 {
+		t.Fatalf("live status = %+v, want latched at 78 clearing at 75", status)
+	}
+}

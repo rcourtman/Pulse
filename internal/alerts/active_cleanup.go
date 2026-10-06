@@ -19,7 +19,7 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 		if alert == nil {
 			return true
 		}
-		lastSeen := alert.LastSeen
+		lastSeen := alert.lastObservedAt()
 		if lastSeen.IsZero() {
 			lastSeen = alert.StartTime
 		}

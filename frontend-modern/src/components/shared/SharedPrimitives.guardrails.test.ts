@@ -8747,6 +8747,21 @@ describe('shared primitive guardrails', () => {
     expect(drawerAttentionSectionSource).toContain('Show fewer alerts');
     expect(drawerAttentionSectionSource).toContain('aria-expanded={expanded()}');
     expect(drawerAttentionSectionSource).not.toContain('DetailSectionTable');
+    // A threshold alert held under its trigger leads with the live reading and
+    // a second line saying what clears it, never only its stale breach text.
+    expect(drawerAttentionSectionSource).toContain('item.detail');
+    expect(drawerAttentionSectionSource).toContain('item.title ?? item.message');
+    for (const liveAlertConsumer of [
+      'src/components/Workloads/NodeDrawerOverview.tsx',
+      'src/features/proxmox/ProxmoxMailGatewayDrawer.tsx',
+    ]) {
+      const source = readFrontendSource(liveAlertConsumer);
+      expect(source).toContain('...getAlertAttentionCopy(alert)');
+      expect(source).not.toContain('message: alert.message');
+    }
+    expect(readFrontendSource('src/components/Workloads/guestDrawerModel.ts')).toContain(
+      'getAlertAttentionCopy(alert)',
+    );
 
     const overviewConsumers = [
       'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',

@@ -21,6 +21,14 @@
 
 ## Purpose
 
+### Storage usage headline follows the alert phase — issue #2068
+
+`describeStorageAlertHeadline` says "Over N% usage limit" only while a usage
+alert is breaching. When `metricStatus.phase` is `latched` or `recovering`,
+the row says usage is under the limit and names the clear level, so the
+headline never contradicts the usage bar beside it. Fill-forecast headlines
+are unchanged.
+
 ### Guest-memory read state stays independent of backup disk state
 
 The existing guest drawer retains Core's selected memory provenance through

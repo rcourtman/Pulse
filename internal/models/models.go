@@ -107,6 +107,8 @@ type Alert struct {
 	Acknowledged    bool       `json:"acknowledged"`
 	AckTime         *time.Time `json:"ackTime,omitempty"`
 	AckUser         string     `json:"ackUser,omitempty"`
+	// MetricStatus is the live evaluation behind an open threshold alert.
+	MetricStatus *MetricAlertStatus `json:"metricStatus,omitempty"`
 	// Metadata carries alert-engine annotations (notably resourceType) so the
 	// frontend can classify an alert without re-deriving resource identity.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
@@ -130,6 +132,56 @@ type AlertResolution struct {
 type ResolvedAlert struct {
 	Alert
 	ResolvedTime time.Time `json:"resolvedTime"`
+}
+
+// Metric alert phases. A threshold alert stays open after its reading drops
+// below the trigger: it holds until the reading reaches the recovery level,
+// then must stay there for the recovery delay before it clears.
+const (
+	MetricAlertPhaseBreaching  = "breaching"
+	MetricAlertPhaseLatched    = "latched"
+	MetricAlertPhaseRecovering = "recovering"
+)
+
+// MetricAlertStatus describes the reading Pulse is evaluating now for an open
+// threshold alert and why the alert is still open. The alert's Value, Message
+// and LastSeen keep describing the last reading that met the trigger, which
+// can be minutes or days old while the alert holds, so surfaces lead with
+// this instead. It is volatile: rebuilt on every evaluation, never persisted.
+type MetricAlertStatus struct {
+	Phase string `json:"phase"`
+	// Value is the value compared with the rule. For a rolling-average rule
+	// that is the average; RawValue then carries the latest sample.
+	Value                   float64   `json:"value"`
+	RawValue                *float64  `json:"rawValue,omitempty"`
+	EvaluationWindowSeconds int       `json:"evaluationWindowSeconds,omitempty"`
+	Unit                    string    `json:"unit,omitempty"`
+	ObservedAt              time.Time `json:"observedAt"`
+	// Trigger opens the alert at or above this value; Recovery is the level
+	// the value must be at or below for RecoveryDelaySeconds to clear it.
+	Trigger              float64 `json:"trigger"`
+	Recovery             float64 `json:"recovery"`
+	RecoveryDelaySeconds int     `json:"recoveryDelaySeconds,omitempty"`
+	// Recovery progress, present only in the recovering phase.
+	RecoveryStartedAt      *time.Time `json:"recoveryStartedAt,omitempty"`
+	RecoveryElapsedSeconds int        `json:"recoveryElapsedSeconds,omitempty"`
+}
+
+// Clone returns a deep copy.
+func (s *MetricAlertStatus) Clone() *MetricAlertStatus {
+	if s == nil {
+		return nil
+	}
+	clone := *s
+	if s.RawValue != nil {
+		raw := *s.RawValue
+		clone.RawValue = &raw
+	}
+	if s.RecoveryStartedAt != nil {
+		startedAt := *s.RecoveryStartedAt
+		clone.RecoveryStartedAt = &startedAt
+	}
+	return &clone
 }
 
 // Node represents a Proxmox VE node
