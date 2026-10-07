@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "36d3f8c5571daa1e041abf41c4f7c394ca14111f",
+  "verified_at": "2026-10-07T17:01:28Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/charts.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/charts.ts": "58f127b93cf60ea648a6b4768e89acc13c16b764ed3f2da6dde5169e7e163fed"
+  },
+  "routes": [
+    "/proxmox/overview (Trends)",
+    "/proxmox/overview (guest drawer History tab)",
+    "/proxmox/storage",
+    "GET /api/charts/workloads-summary, GET /api/charts/storage-summary (direct API probe)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Two embedded production builds on private DEMO_MODE mock stacks with fresh data dirs and telemetry off: 'before' at 732bb6856a (port 7761) and 'after' with this change (port 7762). charts.ts and its two test files are byte-identical between 732bb6856a and this commit's parent 36d3f8c557, so the after build ran the chart client content committed here; the rest of its frontend is 732bb6856a's, not 36d3f8c557's.",
+    "Proxmox overview in Trends mode: 604 guest-table sparklines over 161 rows at 1440 px and 164 over 45 rows at 390 px, identical before and after; chart reads were /api/charts/infrastructure (metrics,range) and /api/charts/workloads (maxPoints,range), all 200.",
+    "Guest drawer History tab (artifact-cache-310): Utilization, Network I/O and Disk I/O charts rendered from /api/metrics-store/history 200, identical before and after at both widths.",
+    "Storage page: 73 rows and the pool summary charts from /api/storage-charts?range 200, identical before and after at both widths.",
+    "Neither build requested /api/charts/workloads-summary or /api/charts/storage-summary on any route. Direct probes with demo credentials: both routes 200 on before, 404 on after; /api/charts/workloads, /api/charts/infrastructure and /api/storage-charts 200 on both.",
+    "No console errors or page errors and no horizontal document overflow at either width on either build.",
+    "Dist proof: vite build before/after with identical file sets after hash normalisation; only assets/useUnifiedResources-*.js (the ChartsAPI chunk) differs in code, and after normalising hashes and 1-3 character identifiers its only residual is the removed getWorkloadsSummaryCharts and getStorageSummaryTrend static methods (326 B raw, 49 B zlib). index-*.js and index.html differ only in chunk-hash and SRI integrity values."
+  ],
+  "interactions": [
+    "Demo sign-in, then with workloadsMetricDisplayMode=sparklines navigate to /proxmox/overview and wait for the /api/charts/workloads read.",
+    "Click the first guest row to open its inline drawer, click the History tab, and wait for the /api/metrics-store/history read.",
+    "Navigate to /proxmox/storage and wait for the /api/storage-charts read.",
+    "Record every /api/charts*, /api/storage-charts and /api/metrics-store request with its status; same script in a 1440x900 desktop context and a 390x844 phone context against both builds; screenshots of overview, drawer and storage inspected."
+  ]
+}

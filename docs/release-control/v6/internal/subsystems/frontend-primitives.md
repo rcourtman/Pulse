@@ -5148,8 +5148,8 @@ That shell must also stay passive with respect to data ownership: future
 overview trend cards may render summary-range controls and operator-facing
 empty or error copy only after they have a governed owner, and they must not
 reintroduce route-local metrics-history fetch loops for CPU and memory
-sparklines; the infrastructure and workloads summary chart routes already own
-that chart contract.
+sparklines; the infrastructure summary and per-workload chart routes already
+own that chart contract.
 The shared trial banner is retired for self-hosted v6 GA. Future commercial
 notification work must start from the explicit Plans, hosted, activation,
 recovery, or support surfaces rather than reviving a global authenticated-shell

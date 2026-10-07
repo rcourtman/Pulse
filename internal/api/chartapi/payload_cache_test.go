@@ -69,13 +69,14 @@ func TestChartRoutesShareOnePayloadRetentionBudget(t *testing.T) {
 	service.chartPayloads = newBoundedChartPayloadCache(2, 10)
 
 	service.cacheInfrastructureChartsPayload("infra", []byte("aaaa"), now)
-	service.cacheWorkloadsSummaryChartsPayload("summary", []byte("bbbb"), now)
-	service.chartPayloads.put(
-		workloadChartsCachePrefix+"workloads",
-		[]byte("cccc"),
-		now.Add(workloadChartsCacheTTL),
-		now,
-	)
+	for _, key := range []string{"workloads-a", "workloads-b"} {
+		service.chartPayloads.put(
+			workloadChartsCachePrefix+key,
+			[]byte("bbbb"),
+			now.Add(workloadChartsCacheTTL),
+			now,
+		)
+	}
 
 	if got := len(service.chartPayloads.entries); got != 2 {
 		t.Fatalf("retained entries across chart routes = %d, want shared cap 2", got)

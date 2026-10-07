@@ -2881,46 +2881,6 @@ func TestContract_StorageChartsUseCanonicalMetricsTargetIDs(t *testing.T) {
 	}
 }
 
-func TestContract_StorageSummaryChartsStayAggregateOnly(t *testing.T) {
-	monitor, state, metricsHistory := newTestMonitor(t)
-	now := time.Now().UTC().Truncate(time.Second)
-	state.Storage = []models.Storage{
-		{ID: "store-1", Name: "Store One"},
-		{ID: "store-2", Name: "Store Two"},
-	}
-	metricsHistory.AddStorageMetric("store-1", "used", 400, now)
-	metricsHistory.AddStorageMetric("store-1", "avail", 600, now)
-	metricsHistory.AddStorageMetric("store-1", "total", 1000, now)
-	metricsHistory.AddStorageMetric("store-2", "used", 100, now)
-	metricsHistory.AddStorageMetric("store-2", "avail", 900, now)
-	metricsHistory.AddStorageMetric("store-2", "total", 1000, now)
-	syncTestResourceStore(t, monitor, state)
-
-	router := &Router{monitor: monitor}
-	req := httptest.NewRequest(http.MethodGet, "/api/charts/storage-summary?range=24h", nil)
-	rec := httptest.NewRecorder()
-
-	router.handleStorageSummaryCharts(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var decoded StorageSummaryTrendResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
-		t.Fatalf("unmarshal storage summary response: %v", err)
-	}
-	if len(decoded.Capacity) != 1 {
-		t.Fatalf("expected one aggregate capacity point, got %+v", decoded.Capacity)
-	}
-	if decoded.Capacity[0].Value != 25 {
-		t.Fatalf("expected aggregate capacity of 25%%, got %+v", decoded.Capacity[0])
-	}
-	if decoded.Stats.PointCounts.Total != 1 || decoded.Stats.PointCounts.Storage != 1 {
-		t.Fatalf("expected aggregate-only point counts, got %+v", decoded.Stats.PointCounts)
-	}
-}
-
 func TestContract_TrueNASConnectionsDisabledMessageIsExplicit(t *testing.T) {
 	setTrueNASFeatureForTest(t, false)
 	handler, _, _ := newTrueNASHandlersForTest(t, nil)
@@ -3535,136 +3495,6 @@ func TestContract_WorkloadChartsUseCanonicalWorkloadIDsForProviderBackedVMs(t *t
 	if workloadDecoded.GuestTypes[resourceID] != "vm" {
 		t.Fatalf("expected vm guest type for %q, got %q", resourceID, workloadDecoded.GuestTypes[resourceID])
 	}
-
-	summaryReq := httptest.NewRequest(http.MethodGet, "/api/charts/workloads-summary?range=1h", nil)
-	summaryRec := httptest.NewRecorder()
-	router.handleWorkloadsSummaryCharts(summaryRec, summaryReq)
-
-	if summaryRec.Code != http.StatusOK {
-		t.Fatalf("expected workloads summary 200, got %d: %s", summaryRec.Code, summaryRec.Body.String())
-	}
-
-	var summaryDecoded WorkloadsSummaryChartsResponse
-	if err := json.Unmarshal(summaryRec.Body.Bytes(), &summaryDecoded); err != nil {
-		t.Fatalf("unmarshal workloads summary response: %v", err)
-	}
-	if summaryDecoded.GuestCounts.Total != 1 || summaryDecoded.GuestCounts.Running != 1 {
-		t.Fatalf("expected stable provider-backed guest counts, got %+v", summaryDecoded.GuestCounts)
-	}
-	if len(summaryDecoded.TopContributors.CPU) == 0 {
-		t.Fatal("expected provider-backed cpu top contributor")
-	}
-	if summaryDecoded.TopContributors.CPU[0].ID != resourceID {
-		t.Fatalf("expected workloads summary contributor id %q, got %+v", resourceID, summaryDecoded.TopContributors.CPU[0])
-	}
-	if summaryDecoded.TopContributors.CPU[0].ID == metricID {
-		t.Fatalf("expected workloads summary contributor id to avoid raw metrics target %q", metricID)
-	}
-}
-
-func TestContract_WorkloadsSummaryChartsNormalizeLongRangeMixedCadence(t *testing.T) {
-	store := newTestMetricsStore(t)
-	monitor, state, _ := newTestMonitor(t)
-	setTestUnexportedField(t, monitor, "metricsStore", store)
-
-	state.Nodes = []models.Node{{
-		ID:       "node-contract-1",
-		Name:     "node-contract-1",
-		Instance: "pve1",
-		Status:   "online",
-	}}
-	state.VMs = []models.VM{{
-		ID:         "vm-contract-1",
-		VMID:       101,
-		Name:       "vm-contract-1",
-		Node:       "node-contract-1",
-		Instance:   "pve1",
-		Status:     "running",
-		CPU:        0.75,
-		Memory:     models.Memory{Usage: 42.0},
-		Disk:       models.Disk{Usage: 55.0},
-		NetworkIn:  128,
-		NetworkOut: 256,
-	}}
-	syncTestResourceStore(t, monitor, state)
-
-	readState := monitor.GetUnifiedReadStateOrSnapshot()
-	vms := readState.VMs()
-	if len(vms) != 1 {
-		t.Fatalf("expected 1 vm view, got %d", len(vms))
-	}
-	sourceID := strings.TrimSpace(vms[0].SourceID())
-	if sourceID == "" {
-		t.Fatal("expected vm source ID")
-	}
-
-	now := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Minute)
-	samples := mixedCadenceLongRangeMetricSamples(now)
-	seed := make([]metrics.WriteMetric, 0, len(samples)*5)
-	appendMetric := func(ts time.Time, percentValue, rateValue float64) {
-		for _, metricType := range []string{"cpu", "memory", "disk"} {
-			seed = append(seed, metrics.WriteMetric{
-				ResourceType: "vm",
-				ResourceID:   sourceID,
-				MetricType:   metricType,
-				Value:        percentValue,
-				Timestamp:    ts,
-				Tier:         metrics.TierMinute,
-			})
-		}
-		for _, metricType := range []string{"netin", "netout"} {
-			seed = append(seed, metrics.WriteMetric{
-				ResourceType: "vm",
-				ResourceID:   sourceID,
-				MetricType:   metricType,
-				Value:        rateValue,
-				Timestamp:    ts,
-				Tier:         metrics.TierMinute,
-			})
-		}
-	}
-	for _, sample := range samples {
-		appendMetric(sample.timestamp, sample.percentValue, sample.rateValue)
-	}
-	store.WriteBatchSync(seed)
-
-	router := &Router{monitor: monitor}
-	req := httptest.NewRequest(http.MethodGet, "/api/charts/workloads-summary?range=7d", nil)
-	rec := httptest.NewRecorder()
-	router.handleWorkloadsSummaryCharts(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var decoded WorkloadsSummaryChartsResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
-		t.Fatalf("unmarshal workloads summary charts response: %v", err)
-	}
-
-	if len(decoded.CPU.P50) == 0 {
-		t.Fatal("expected normalized workload summary p50 series")
-	}
-	if len(decoded.CPU.P50) > chartapi.WorkloadsSummaryMaxSeriesPoints {
-		t.Fatalf("expected workload summary p50 <= %d points, got %d", chartapi.WorkloadsSummaryMaxSeriesPoints, len(decoded.CPU.P50))
-	}
-	if len(decoded.CPU.P95) > chartapi.WorkloadsSummaryMaxSeriesPoints {
-		t.Fatalf("expected workload summary p95 <= %d points, got %d", chartapi.WorkloadsSummaryMaxSeriesPoints, len(decoded.CPU.P95))
-	}
-	if decoded.CPU.P50[len(decoded.CPU.P50)-1].Timestamp != now.UnixMilli() {
-		t.Fatalf("expected latest workload summary timestamp %d, got %d", now.UnixMilli(), decoded.CPU.P50[len(decoded.CPU.P50)-1].Timestamp)
-	}
-
-	recentWindowStart := now.Add(-24 * time.Hour).UnixMilli()
-	recentCount := 0
-	for _, point := range decoded.CPU.P50 {
-		if point.Timestamp >= recentWindowStart {
-			recentCount++
-		}
-	}
-	if recentCount > 20 {
-		t.Fatalf("expected day-proportional summary buckets, got %d recent p50 points", recentCount)
-	}
 }
 
 func TestContract_WorkloadChartMetricBudgetGuardrailsRemainCanonical(t *testing.T) {
@@ -3684,22 +3514,16 @@ func TestContract_WorkloadChartMetricBudgetGuardrailsRemainCanonical(t *testing.
 		`var workloadChartsBatchWG sync.WaitGroup`,
 		`workloadChartsBatchWG.Add(4)`,
 		`podBatchMetrics = monitor.GetGuestMetricsForChartBatch("k8s", podRequests, duration, workloadSummaryMetricOrder...)`,
-		`var workloadsSummaryBatchWG sync.WaitGroup`,
-		`workloadsSummaryBatchWG.Add(4)`,
-		`vmBatchMetrics = monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration, workloadSummaryMetricOrder...)`,
-		`containerBatchMetrics = monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration, workloadSummaryMetricOrder...)`,
-		`dockerContainerBatchMetrics = monitor.GetGuestMetricsForChartBatch("dockerContainer", dockerContainerRequests, duration, workloadSummaryMetricOrder...)`,
+		`vmBatchMetrics = monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration, guestSparklineMetricOrder...)`,
+		`containerBatchMetrics = monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration, guestSparklineMetricOrder...)`,
+		`dockerContainerBatchMetrics = monitor.GetGuestMetricsForChartBatch("dockerContainer", dockerContainerRequests, duration, infrastructureSummaryMetricOrder...)`,
 		`summaryChartsCacheTTL = 5 * time.Second`,
 		`infrastructureChartsCacheKey(req *http.Request, timeRange string, requestedMetricNames []string) string`,
 		`cachedInfrastructureChartsPayload`,
 		`cacheInfrastructureChartsPayload`,
-		`workloadsSummaryChartsCacheKey`,
-		`cachedWorkloadsSummaryChartsPayload`,
-		`cacheWorkloadsSummaryChartsPayload`,
 		`chartPayloadCacheMaxEntries = 64`,
 		`chartPayloadCacheMaxBytes   = 16 << 20`,
 		`chartPayloads              boundedChartPayloadCache`,
-		`type workloadSummaryMetricBucket struct`,
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {

@@ -3048,13 +3048,10 @@ agent inventory, registration state, or command-channel readiness.
     rehydration. Lifecycle surfaces must not reinterpret an attached check,
     its compatibility `availability` summary, or its evidence freshness as
     agent enrollment, heartbeat, command reachability, or fleet liveness.
-    The same presentation-only boundary now covers compact storage summary
-    chart reads as well. Shared `/api/charts/storage-summary` transport may
-    request only the canonical `used` and `avail` storage series needed for the
-    dashboard capacity sparkline, and lifecycle surfaces must not reinterpret
-    the omitted `usage` or `total` series as missing lifecycle telemetry or
-    enrollment-state evidence.
-    Dashboard storage trend consumers on that shared router boundary must now reuse the single `/api/storage-charts` summary response instead of fanning out per-pool `/api/metrics-store/history` reads, and lifecycle surfaces still must treat that batched storage summary transport as presentation context only rather than install, enrollment, or freshness truth.
+    The retired aggregate chart routes `/api/charts/storage-summary` and
+    `/api/charts/workloads-summary` must not return as compatibility reads for
+    lifecycle surfaces either.
+    Storage summary consumers on that shared router boundary (the storage page, through `useStorageSummaryCharts`) must reuse the single `/api/storage-charts` summary response instead of fanning out per-pool `/api/metrics-store/history` reads, and lifecycle surfaces still must treat that batched storage summary transport as presentation context only rather than install, enrollment, or freshness truth.
 15. Keep install-script serving fallback-free, and keep the lifecycle
     agent-download fallback pinned to published release lineage. The served
     install-script endpoints (/install.sh, /install.ps1) have no GitHub fallback:
@@ -4664,11 +4661,11 @@ grant from public runtime-capabilities or presentation-policy payloads.
 Shared workload-chart reads that lifecycle surfaces reuse must stay
 presentation-only on that same boundary:
 `internal/api/chartapi/service.go` may batch those reads in parallel, but it
-must request only the canonical rendered metric set for workload cards instead
+must request only the metric set it serializes for each workload type instead
 of widening the hot path back to fetch-all metrics on behalf of install or
 reporting callers.
-The same presentation-only rule applies when shared infrastructure-summary or
-workloads-summary chart routes serve a short cached response for repeated
+The same presentation-only rule applies when the shared infrastructure-summary
+or per-workload chart routes serve a short cached response for repeated
 org/range/scope requests: lifecycle-adjacent surfaces may render those charts
 as operator context, but agent registration, heartbeat, installer status,
 profile assignment, reporting freshness, and fleet-control readiness must not

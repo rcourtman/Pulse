@@ -82,61 +82,6 @@ export interface WorkloadChartsResponse {
   stats: ChartStats;
 }
 
-export interface WorkloadsSummaryMetricData {
-  p50: MetricPoint[];
-  p95: MetricPoint[];
-}
-
-export interface WorkloadsGuestCounts {
-  total: number;
-  running: number;
-  stopped: number;
-}
-
-export interface WorkloadsSummaryContributor {
-  id: string;
-  name: string;
-  value: number;
-}
-
-export interface WorkloadsSummaryContributors {
-  cpu: WorkloadsSummaryContributor[];
-  memory: WorkloadsSummaryContributor[];
-  disk: WorkloadsSummaryContributor[];
-  network: WorkloadsSummaryContributor[];
-}
-
-export interface WorkloadsSummaryBlastRadius {
-  scope: string;
-  top3Share: number;
-  activeWorkloads: number;
-}
-
-export interface WorkloadsSummaryBlastRadiusGroup {
-  cpu: WorkloadsSummaryBlastRadius;
-  memory: WorkloadsSummaryBlastRadius;
-  disk: WorkloadsSummaryBlastRadius;
-  network: WorkloadsSummaryBlastRadius;
-}
-
-export interface WorkloadsSummaryChartsResponse {
-  cpu: WorkloadsSummaryMetricData;
-  memory: WorkloadsSummaryMetricData;
-  disk: WorkloadsSummaryMetricData;
-  network: WorkloadsSummaryMetricData;
-  guestCounts: WorkloadsGuestCounts;
-  topContributors: WorkloadsSummaryContributors;
-  blastRadius: WorkloadsSummaryBlastRadiusGroup;
-  timestamp: number;
-  stats: ChartStats;
-}
-
-export interface StorageSummaryTrendResponse {
-  capacity: MetricPoint[];
-  timestamp: number;
-  stats: ChartStats;
-}
-
 // Persistent metrics history types (SQLite-backed, longer retention)
 export type HistoryTimeRange = '30m' | '1h' | '6h' | '12h' | '24h' | '7d' | '14d' | '30d' | '90d';
 type MetricsHistoryAPIResourceType =
@@ -400,23 +345,7 @@ export class ChartsAPI {
   }
 
   /**
-   * Fetch workloads aggregate chart data for Workloads top-card sparklines.
-   * Returns compact p50/p95 series, not per-workload lines.
-   */
-  static async getWorkloadsSummaryCharts(
-    range: TimeRange = '1h',
-    signal?: AbortSignal,
-    options?: { nodeId?: string | null },
-  ): Promise<WorkloadsSummaryChartsResponse> {
-    const url = this.buildChartsUrl('/charts/workloads-summary', {
-      range,
-      nodeId: options?.nodeId,
-    });
-    return apiFetchJSON(url, { signal });
-  }
-
-  /**
-   * Fetch workload-only chart data used by WorkloadsSummary sparklines.
+   * Fetch workload-only chart data for the workload table's Trends sparklines.
    * Excludes infrastructure/storage series to keep payloads bounded at scale.
    */
   static async getWorkloadCharts(
@@ -486,15 +415,6 @@ export class ChartsAPI {
       params.set('node', options.nodeId);
     }
     const url = `${this.baseUrl}/storage-charts?${params.toString()}`;
-    return apiFetchJSON(url, { signal });
-  }
-
-  static async getStorageSummaryTrend(
-    range_: TimeRange = '24h',
-    signal?: AbortSignal,
-  ): Promise<StorageSummaryTrendResponse> {
-    const params = new URLSearchParams({ range: range_ });
-    const url = `${this.baseUrl}/charts/storage-summary?${params.toString()}`;
     return apiFetchJSON(url, { signal });
   }
 }

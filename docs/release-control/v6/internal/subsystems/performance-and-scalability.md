@@ -2288,21 +2288,22 @@ queries. Compact route consumers that request only CPU/memory or only storage
 `pkg/metrics/store.go` instead of fetching every series for every resource and
 discarding the extra payload in higher layers.
 That same protected workload-chart hot path now also owns rendered-metric
-budgeting. `internal/api/router.go` may parallelize VM, container, pod, and
-docker-container workload batch reads, but `/api/charts/workloads` and
-`/api/charts/workloads-summary` must request only the canonical five workload
-metrics they actually render instead of widening back to disk read/write or
-fetch-all history queries.
+budgeting. `internal/api/chartapi/service.go` may parallelize VM, container,
+pod, and docker-container workload batch reads, but `/api/charts/workloads`
+must request only the metric set it serializes for each workload type (the
+guest sparkline set for VMs and system containers, the infrastructure set for
+app containers, the five-metric set for Kubernetes pods) instead of widening
+back to fetch-all history queries.
 That same chart-batch hot path now also owns long-range in-memory coverage.
 `internal/monitoring/monitor_metrics.go` may skip SQLite for guest and node
 chart batches when `metrics_history` can prove the requested window is
 already covered in memory, and performance work must preserve that
 coverage-gated fast path rather than treating every long-duration request as
 store-backed by default.
-That same hot path now also covers mock-mode cache warmth. The canonical
-24-hour `/api/charts/storage-summary` dashboard transport must stay prewarmed
-across live mock sampler ticks so the first dashboard request after a refresh
-does not pay the full aggregate-storage synthesis cost on the operator path.
+That same hot path now also covers mock-mode cache warmth: live mock sampler
+ticks prewarm only the Workloads guest-chart cache. The retired aggregate
+`/api/charts/storage-summary` trend is no longer synthesized or prewarmed, so
+no sampler tick pays for an aggregate nothing reads.
 That same chart-client hot path also owns canonical Kubernetes target typing.
 `frontend-modern/src/api/charts.ts` may normalize Kubernetes history requests
 onto the shared backend `resourceType=k8s` transport, but it must preserve the
@@ -2464,12 +2465,10 @@ workloads and 0.9 MB of infrastructure JSON per 30-second poll) only to write
 it to browser storage, or drop it when over the size cap, with nothing reading
 it.
 That same protected hot path keeps storage trend loading route-owned after the
-dashboard overview retirement. `internal/api/router.go` must continue serving
-the compact `/api/charts/storage-summary` request backed by
-`GetStorageMetricsForChartBatch(...)` for the surfaces that still own storage
-summary presentation, but no deleted dashboard trend hook may reopen the full
-storage-page `/api/storage-charts` payload or an N+1 per-pool
-`/api/metrics-store/history` fan-out.
+dashboard overview retirement. The compact `/api/charts/storage-summary` route
+is retired after its last reader was deleted, and no deleted dashboard trend hook may
+reopen it, the full storage-page `/api/storage-charts` payload, or an N+1
+per-pool `/api/metrics-store/history` fan-out.
 That same Workloads shell boundary also owns empty-state action routing in
 `frontend-modern/src/components/Workloads/WorkloadsStateCards.tsx`. When the
 Workloads route has no connected infrastructure sources, the CTA must hand
@@ -3013,19 +3012,15 @@ The unified-resource projection also uses that same helper for Kubernetes
 `clusterId`, so the shared store, dashboard grouping, and detail-navigation
 surfaces all see the same cluster-context prefix before any surface-specific
 fallback applies.
-The aggregate `/api/charts/workloads-summary` endpoint now also has its own
-explicit API p95 budget constant, aligned with the per-workload charts budget,
-and `internal/api/slo_bench_test.go` must fail if that aggregate budget or its
-store-backed mixed-workload benchmark coverage drifts.
-The infrastructure and workload-summary chart endpoints may keep a short
-backend response cache for identical org/range/metric-scope summary requests,
-but only as presentation hot-path protection for repeated summary polling and
-remounts. The cached payloads must still be built from the canonical
+The infrastructure summary and per-workload chart endpoints may keep a short
+backend response cache for identical org/range/metric-scope or
+org/range/node/point-count requests, but only as presentation hot-path
+protection for repeated polling and remounts. The cached payloads must still be built from the canonical
 store-backed/read-state sources, must remain isolated by organization and
 explicit chart scope, and must not become telemetry freshness, lifecycle,
 recovery, or persistence authority.
-Those summary caches and the per-workload chart cache share one process-local
-retention budget of 64 payloads and 16 MiB. Every insert sweeps expired query
+The infrastructure summary cache and the per-workload chart cache share one
+process-local retention budget of 64 payloads and 16 MiB. Every insert sweeps expired query
 variants and evicts oldest payloads at either bound, so raw range, node,
 metric-order, or point-count variants cannot turn a short TTL into unbounded
 steady-state memory. Responses larger than the byte budget remain uncached

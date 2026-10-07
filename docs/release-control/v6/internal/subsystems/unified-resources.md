@@ -2641,10 +2641,11 @@ application resource-provider or WebSocket lifecycle.
 18. Keep storage summary target selection on canonical unified-resource truth.
     Storage-summary consumers may detect storage presence from canonical
     `isStorage(...)` resources and their shared metrics-target IDs, but once
-    storage exists they must reuse the owned compact
-    `/api/charts/storage-summary` contract instead of rebuilding page-local
-    per-resource storage history fetches, storage-type aliases, or full
-    storage-page `/api/storage-charts` fetches.
+    storage exists they must reuse the shared `/api/storage-charts` summary
+    response through `frontend-modern/src/utils/storageSummaryCache.ts`
+    instead of rebuilding page-local per-resource storage history fetches or
+    storage-type aliases. The retired `/api/charts/storage-summary` route must
+    not return as a second storage summary transport.
 19. Keep infrastructure framing presentation-only on active product surfaces.
     Platform/runtime pages, shared infrastructure tables, and Settings
     infrastructure panels may render page or section headers, but canonical
@@ -4117,7 +4118,7 @@ That same registry/view boundary now also applies to provider-backed storage.
 `internal/unifiedresources/registry.go` must attach the resolved
 `MetricsTarget` onto cached view clones before `ReadState` exposes
 `StoragePoolView` or `PhysicalDiskView`, so `/api/resources`, storage summary
-selection, `/api/storage-charts`, and `/api/charts/storage-summary` all see
+selection, and `/api/storage-charts` all see
 the same canonical history
 identity instead of splitting between view-cache resource IDs and API
 serialization-time metric IDs.

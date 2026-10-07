@@ -48,42 +48,8 @@ func TestChartResponsesUseCanonicalEmptyCollections(t *testing.T) {
 	}
 }
 
-func TestWorkloadsSummaryAndStorageChartsNormalizeNestedCollections(t *testing.T) {
-	payload, err := json.Marshal(EmptyWorkloadsSummaryChartsResponse())
-	if err != nil {
-		t.Fatalf("marshal empty workloads summary: %v", err)
-	}
-
-	var decoded map[string]any
-	if err := json.Unmarshal(payload, &decoded); err != nil {
-		t.Fatalf("decode empty workloads summary: %v", err)
-	}
-
-	for _, key := range []string{"cpu", "memory", "disk", "network"} {
-		metric, ok := decoded[key].(map[string]any)
-		if !ok {
-			t.Fatalf("expected %s metric object, got %T", key, decoded[key])
-		}
-		for _, subkey := range []string{"p50", "p95"} {
-			values, ok := metric[subkey].([]any)
-			if !ok || len(values) != 0 {
-				t.Fatalf("expected %s.%s to be an empty array, got %T (%v)", key, subkey, metric[subkey], metric[subkey])
-			}
-		}
-	}
-
-	top, ok := decoded["topContributors"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected topContributors object, got %T", decoded["topContributors"])
-	}
-	for _, key := range []string{"cpu", "memory", "disk", "network"} {
-		values, ok := top[key].([]any)
-		if !ok || len(values) != 0 {
-			t.Fatalf("expected topContributors.%s to be an empty array, got %T (%v)", key, top[key], top[key])
-		}
-	}
-
-	payload, err = json.Marshal(StorageChartsResponse{
+func TestStorageChartsNormalizeNestedCollections(t *testing.T) {
+	payload, err := json.Marshal(StorageChartsResponse{
 		Pools: map[string]StoragePoolChartData{
 			"pool1": {Name: "pool1"},
 		},
@@ -95,6 +61,7 @@ func TestWorkloadsSummaryAndStorageChartsNormalizeNestedCollections(t *testing.T
 		t.Fatalf("marshal normalized storage charts: %v", err)
 	}
 
+	var decoded map[string]any
 	if err := json.Unmarshal(payload, &decoded); err != nil {
 		t.Fatalf("decode normalized storage charts: %v", err)
 	}

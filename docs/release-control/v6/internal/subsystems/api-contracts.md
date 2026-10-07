@@ -1286,12 +1286,16 @@ for a release, a diagnostic build, and a marker-declared source build.
 
 Summary-chart response caching is a shared API boundary:
 `internal/api/chartapi/service.go` may serve a short cached JSON payload for repeated
-infrastructure-summary and workloads-summary requests with the same
+infrastructure-summary and per-workload chart requests with the same
 organization, range, metric set, and workload scope, but that cache is
 transport-only. It may amortize polling and remount cost, but it must not
-change normalized response shape, bypass monitor or read-state availability
-checks, merge tenants, or become the source of truth for telemetry freshness.
-Infrastructure-summary, workloads-summary, and per-workload chart payloads
+change normalized response shape, answer for a tenant whose monitor is
+unavailable, merge tenants, or become the source of truth for telemetry
+freshness. The infrastructure route resolves read-state before it reads its
+cache; the per-workload route checks read-state only when it recomputes, so a
+cached workload payload can outlive a read-state outage by at most its
+3-second TTL.
+Infrastructure-summary and per-workload chart payloads
 must share one bounded retention budget across query variants: no more than 64
 entries or 16 MiB of encoded payloads. Inserts must purge expired variants and
 evict the oldest retained payloads as either bound is reached; a response larger
@@ -3597,7 +3601,7 @@ a new API state machine, queue contract, or verification-accounting field.
 23. Keep hosted AI settings bootstrap on the shared API contract as a retired path: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`, `internal/api/ai_handler.go`, and `internal/api/contract_test.go` must treat a missing `ai.enc` in hosted mode as an unconfigured BYOK/local-provider state, not as a machine-owned `quickstart:pulse-hosted` bootstrap condition. Hosted tenant reads may inherit billing state for commercial authorization, but they must not create quickstart-backed AI config or call the quickstart bootstrap upstream route.
 24. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface: `internal/api/ai_handler.go`, `internal/api/ai_handlers.go`, `internal/api/router.go`, `internal/api/router_routes_ai_relay.go`, and `internal/api/contract_test.go` must turn the governed approvals-list API into the canonical empty-list payload as soon as settings-driven AI enablement succeeds, rather than leaving that surface on `503 Approval store not initialized` until some separate startup-only side effect happens. The same post-boot lifecycle owns the investigation surface: a successful in-process chat start or restart must reapply the same live dependency wiring as cold startup, including the Enterprise investigation orchestrator and Patrol circuit breaker, so enabling Intelligence after boot cannot leave finding investigations on `503 Investigation orchestrator not initialized` until the server restarts.
 25. Keep infrastructure summary chart transport contract-backed on the shared API surface: `internal/api/chartapi/service.go`, `internal/api/contract_test.go`, and frontend infrastructure summary consumers must normalize long-range mixed-cadence history into equal-time summary buckets before shipping the infrastructure charts API payload, so 7-day and 30-day summary cards do not expose compressed right-edge tails just because recent samples arrive at a finer storage resolution.
-26. Keep long-range workload chart transport time-proportional on the shared API surface: `internal/api/chartapi/service.go`, `internal/api/contract_test.go`, and workload chart consumers must cap mixed-cadence workload history by equal-time buckets rather than raw point index for the per-workload and aggregate workload chart APIs, so 7-day and 30-day workload cards do not bunch recent samples at the right edge just because recent telemetry is stored more densely.
+26. Keep long-range workload chart transport time-proportional on the shared API surface: `internal/api/chartapi/service.go`, `internal/api/contract_test.go`, and workload chart consumers must cap mixed-cadence workload history by equal-time buckets rather than raw point index for the per-workload chart API, so 7-day and 30-day workload cards do not bunch recent samples at the right edge just because recent telemetry is stored more densely.
 27. Keep chart timestamp precision canonical on that same shared API surface: when `internal/api/chartapi/service.go` serializes monitoring history into infrastructure or workload chart payloads, it must preserve canonical millisecond timestamps from the shared monitoring timeline instead of rounding through whole-second conversion, so seeded mock history and live appends collapse onto one operator-visible timeline instead of appearing as duplicated tail samples.
 28. Keep Patrol remediation payload naming backward-compatible without leaking
     legacy automation-first wording into product copy. `frontend-modern/src/api/patrol.ts`,
@@ -3608,7 +3612,7 @@ a new API state machine, queue contract, or verification-accounting field.
     contract must describe the operator-visible capability as remediation or
     safe remediation workflows.
 29. Keep storage chart identity canonical on that same shared API surface: the shared storage charts endpoint must key pool and physical-disk series by the resolved unified-resource `MetricsTarget.ResourceID`, not by canonical resource IDs or page-local aliases, so storage rows, focused summary cards, sticky summary shells, and detail charts all address the same history series in live and mock mode.
-30. Keep synthetic summary-chart fallback identity canonical on that same shared API surface: when `internal/api/chartapi/service.go` has to synthesize mock summary history for infrastructure, workloads, or storage cards, it must derive the fallback from canonical `resourceType`, `resourceID`, and `metricType` ownership instead of raw min/max seed-prefix helpers, so range changes and runtime mock updates stay on one governed timeline.
+30. Keep synthetic chart-history fallback identity canonical on that same shared API surface: when `internal/api/chartapi/service.go` synthesizes mock history (through `BuildSyntheticMetricHistorySeries`, which the metrics-store history route uses), it must derive the fallback from canonical `resourceType`, `resourceID`, and `metricType` ownership instead of raw min/max seed-prefix helpers, so range changes and runtime mock updates stay on one governed timeline.
     Mock storage follows the same rule at `/api/metrics-store/history`: when a
     storage or Ceph resource has current capacity in canonical live state, the
     handler must return its in-memory or deterministic `usage` series for both
@@ -3616,16 +3620,7 @@ a new API state machine, queue contract, or verification-accounting field.
     demo store. This includes provider-derived targets with no legacy history
     row and legacy rows whose persistent series is still sparse while fleet
     backfill is running.
-    The same compact chart boundary also owns aggregate-only storage summary
-    transport. `/api/charts/storage-summary` may batch only the canonical
-    `used` and `avail` storage series required for the aggregate capacity
-    sparkline, and it must not regress into the full per-pool storage payload
-    or a fetch-all-metrics backend path just because the storage page carries a
-    broader chart surface.
-    When mock mode is active, that same endpoint must come from the
-    monitor-owned aggregate summary cache rather than rehydrating each pool
-    chart on request.
-31. Keep workload-chart response identity canonical on that same shared API surface: `internal/api/chartapi/service.go`, `internal/api/contract_test.go`, and workload summary consumers must emit provider-backed VM and system-container series under the same canonical workload IDs that workloads page rows use, while resolving history through the unified `MetricsTarget.ResourceID`, so hover and focus selection do not fall off for provider-backed rows.
+31. Keep workload-chart response identity canonical on that same shared API surface: `internal/api/chartapi/service.go`, `internal/api/contract_test.go`, and workload chart consumers must emit provider-backed VM and system-container series under the same canonical workload IDs that workloads page rows use, while resolving history through the unified `MetricsTarget.ResourceID`, so hover and focus selection do not fall off for provider-backed rows.
     Kubernetes pod workload rows follow that same contract through their
     metrics target. `/api/resources` may expose pod history only through the
     unified `MetricsTarget.ResourceID`, but that target must be the canonical
@@ -3690,8 +3685,9 @@ a new API state machine, queue contract, or verification-accounting field.
     hidden. Upgrade prompts, trial nudges, monitored-system migration guidance,
     usage counts, billing identity, and plan metadata must therefore not depend
     on hidden commercial routes surviving the public demo boundary.
-37. Keep the storage summary route in `internal/api/chartapi/service.go` as the
-    canonical storage summary contract across dashboard and storage consumers.
+37. Keep the storage charts route (`HandleStorageCharts` in
+    `internal/api/chartapi/service.go`) as the canonical storage summary
+    contract for the storage page's summary consumers.
     `internal/api/chartapi/service.go`,
     `internal/api/chartapi/service_test.go`, and shared frontend consumers must
     expose pooled storage history through one response keyed by canonical
@@ -3723,6 +3719,14 @@ a new API state machine, queue contract, or verification-accounting field.
     rows, governed resource labels, top-infrastructure identity, or metrics-
     target join keys. New summary payloads must be owned by their product
     route and pinned in the API contract there.
+    The aggregate `/api/charts/workloads-summary` and
+    `/api/charts/storage-summary` chart routes are retired the same way. No
+    first-party client ever called the workloads route, the storage route lost
+    its last reader when `storageSummaryTrendCache.ts` was deleted, and
+    neither appeared in `docs/API.md`. Their handlers, response types,
+    `ChartsAPI` methods, mock prewarm and SLO budget are gone, and they must
+    not return as compatibility reads; a new aggregate chart starts from a
+    live consumer and its own contract entry.
 40. Keep mock and demo chart reads on the same canonical unified snapshot as
     the rest of the API surface. `internal/api/chartapi/service.go`,
     `internal/api/chartapi/service_test.go`, and chart consumers must route
@@ -6322,12 +6326,12 @@ the first store-backed read-state when provider-owned inventories such as
 TrueNAS or VMware have not yet completed an initial baseline and been rebuilt
 into the canonical monitor store.
 That same workload-chart boundary now also owns the rendered-metric budget on
-the shared monitoring routes. `/api/charts/workloads` and
-`/api/charts/workloads-summary` may batch provider-backed reads in parallel,
-but they must request only the canonical workload metrics they actually
-serialize (`cpu`, `memory`, `disk`, `netin`, `netout`), with Kubernetes pods
-staying on that same five-metric set, instead of widening back to disk
-read/write or fetch-all backend batches that the browser never renders.
+the shared monitoring routes. `/api/charts/workloads` may batch
+provider-backed reads in parallel, but each workload type must request only
+the metric set the route serializes for it: the guest sparkline set for VMs
+and system containers, the infrastructure set for app containers, and the
+five-metric set (`cpu`, `memory`, `disk`, `netin`, `netout`) for Kubernetes
+pods, instead of fetch-all backend batches that the browser never renders.
 The shared metrics-history contract now also owns physical-disk live I/O
 windows. `/api/metrics-store/history` must accept `resourceType=disk`, keep
 `30m` as a valid compact live range, and resolve `disk`, `diskread`,
@@ -8603,17 +8607,12 @@ That same generated payload may not shorten the earlier auto-register failure
 branch back to plain "Pulse Settings" wording either; both the immediate
 failure guidance and the final manual footer must preserve the same Settings →
 Nodes completion destination.
-`/api/charts/workloads-summary` now also has a canonical hot-path invariant:
-aggregate workload charts must preserve stable guest counts while batching
-store-backed metric reads across workload types, with no payload shape change.
-That endpoint now also carries an explicit API p95 budget under the same
-store-backed mixed-workload fixture used to verify the batched hot path.
-That same summary-chart contract now also owns synthetic mock fallback
-identity. When `internal/api/chartapi/service.go` needs to synthesize summary
-history for workloads, infrastructure, or storage cards, it must key those
-series by canonical `resourceType`, `resourceID`, and `metricType` instead of
-ad hoc seed-prefix bounds, so all time ranges and runtime mock samples stay on
-one governed timeline.
+The chart contract also owns synthetic mock fallback identity. When
+`internal/api/chartapi/service.go` synthesizes mock history for
+`/api/metrics-store/history`, it must key those series by canonical
+`resourceType`, `resourceID`, and `metricType` instead of ad hoc seed-prefix
+bounds, so all time ranges and runtime mock samples stay on one governed
+timeline.
 Frontend AI API clients now also normalize `402 Payment Required` responses for
 optional paywalled collections into explicit empty states, so Pulse Pro gating
 does not become a transport error path during page bootstrap.

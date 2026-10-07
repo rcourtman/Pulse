@@ -3731,19 +3731,18 @@ sampler generation instead of regenerating or re-downsampling the same seeded
 timeline on every endpoint hit. When seeded mock history is rebuilt or a live
 mock tick advances, monitoring must invalidate that cache so preview charts
 stay current without paying repeated per-request synthesis cost.
-That same sampler-owned cache contract also covers compact summary reads after
-the dashboard overview retirement. When live mock ticks advance, monitoring
-must repopulate the canonical 24-hour aggregate `/api/charts/storage-summary`
-cache inside the sampler path instead of leaving the first operator request
-after each tick to rebuild per-pool mock storage charts on demand.
-The same mock sampler path must also prewarm the default Workloads guest-chart
+The mock sampler path must prewarm the default Workloads guest-chart
 cache through `GetGuestMetricsForChartBatch`, using canonical `ReadState`
 workload identities for VMs, system containers, Kubernetes pods, and app
-containers so `/api/charts/workloads` and `/api/charts/workloads-summary` do
-not rebuild every guest sparkline on the first post-tick request.
+containers so `/api/charts/workloads` does not rebuild every guest sparkline
+on the first post-tick request. The retired aggregate
+`/api/charts/storage-summary` trend is no longer prewarmed; its route,
+`GetStorageSummaryCapacityTrend` and the mock aggregate cache went with it,
+and sampler ticks must not regain an aggregate storage synthesis step
+without a live consumer.
 That same metrics-hot-path ownership also includes metric-type selection for
-compact summary reads. When infrastructure or storage summary routes request
-only a subset of canonical chart series,
+compact chart reads. When chart routes such as `/api/charts/infrastructure` or
+`/api/charts/workloads` request only a subset of canonical chart series,
 `internal/monitoring/monitor_metrics.go` must preserve that narrowed metric
 set through the batch store fallback path instead of querying every metric type
 for each resource and discarding most of the payload afterward.

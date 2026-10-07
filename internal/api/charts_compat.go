@@ -38,14 +38,6 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 	r.ensureChartService().HandleInfrastructureCharts(w, req)
 }
 
-func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.Request) {
-	r.ensureChartService().HandleWorkloadsSummaryCharts(w, req)
-}
-
 func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 	r.ensureChartService().HandleStorageCharts(w, req)
-}
-
-func (r *Router) handleStorageSummaryCharts(w http.ResponseWriter, req *http.Request) {
-	r.ensureChartService().HandleStorageSummaryCharts(w, req)
 }

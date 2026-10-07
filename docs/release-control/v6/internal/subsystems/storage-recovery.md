@@ -2290,21 +2290,15 @@ recovery scope, or a storage/recovery-owned secret source.
     signed command grant, or command result as restore authorization or
     recovery evidence; that authority remains action-governance and
     agent-lifecycle owned.
-32. Keep workload chart downsampling and short response caching presentation-only on that same adjacent shared API boundary. When `internal/api/chartapi/service.go` caps mixed-cadence workload history into equal-time buckets or serves a cached workload-summary payload for repeated operator-facing workload-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
-    The same adjacent chart boundary now covers compact storage capacity
-    transport. `internal/api/chartapi/service.go` may batch only the canonical
-    `used` and `avail` storage series for `/api/charts/storage-summary`, but
-    storage and recovery must not treat the omitted `usage` or `total` series
-    as lost recovery truth or widen that compact route back into the full
-    storage-page payload.
+32. Keep workload chart downsampling and short response caching presentation-only on that same adjacent shared API boundary. When `internal/api/chartapi/service.go` caps mixed-cadence workload history into equal-time buckets or serves a cached workload chart payload for repeated operator-facing workload requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
+    The compact `/api/charts/storage-summary` capacity route is retired, and
+    storage and recovery must not reopen it as a second storage-history
+    transport beside `/api/storage-charts`.
     That same adjacent API boundary also owns summary-request minimization:
     storage/recovery-adjacent consumers may rely on filtered infrastructure or
     guest summary payloads, but they must not widen a scoped chart request back
     into full guest metric fan-out just because adjacent pages carry richer
     detail charts elsewhere.
-    In mock mode, that same compact route must stay aggregate-only and
-    sampler-prewarmed; storage and recovery must not trigger per-pool chart
-    reconstruction on the first dashboard request after each mock refresh.
 33. Keep shared `frontend-modern/src/App.tsx` public-route ownership explicit by
     surface. Storage/recovery preview entrypoints such as
     `/preview/setup-complete` may remain public app-shell routes, but unrelated
@@ -2801,12 +2795,11 @@ canonical pre-handler authorization proof covering both transfer routes.
     `/api/storage-charts` summary payload, but it must not fan out row-local
     `/api/metrics-store/history` calls, invent a second storage-history cache,
     or drift onto storage-page-only metric identifiers.
-    Dashboard storage trends belong to that same owned summary contract: the
-    dashboard may derive a 24-hour storage capacity delta from
-    `/api/charts/storage-summary`, but it must not rebuild storage summary
-    behavior by fanning out per-pool `/api/metrics-store/history` reads, by
-    pulling the full storage-page `/api/storage-charts` payload, or by
-    inventing a dashboard-only storage history transport.
+    No dashboard storage trend survives the overview retirement, and its
+    `/api/charts/storage-summary` route is gone with it. A future aggregate
+    storage trend must not rebuild that behavior by fanning out per-pool
+    `/api/metrics-store/history` reads or by inventing a dashboard-only storage
+    history transport.
     15a. Keep shared diagnostics cache scope honest when storage/recovery-adjacent
     surfaces reuse `internal/api/diagnostics.go`. The shared diagnostics
     payload must not include local commercial funnel summaries or

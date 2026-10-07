@@ -1048,15 +1048,6 @@ func TestStartAndStopMockMetricsSampler_ClearStaleMockChartCaches(t *testing.T) 
 	}]; ok {
 		t.Fatalf("expected mock sampler start to clear stale guest chart caches, got %+v", monitor.mockChartMapCache)
 	}
-	summaryKey := mockChartMetricMapCacheKey{
-		kind:         "storage-summary",
-		resourceType: "storage",
-		resourceID:   "__aggregate__",
-		duration:     24 * time.Hour,
-	}
-	if _, ok := monitor.mockChartMapCache[summaryKey]; !ok {
-		t.Fatalf("expected mock sampler start to prewarm storage summary cache, got %+v", monitor.mockChartMapCache)
-	}
 
 	monitor.mockChartMapCache[mockChartMetricMapCacheKey{
 		kind:         "storage",
