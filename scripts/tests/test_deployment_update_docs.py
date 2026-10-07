@@ -72,6 +72,47 @@ class DeploymentUpdateDocsTest(unittest.TestCase):
                        "does not guarantee restoration of Pulse data"):
             self.assertIn(phrase, updates)
 
+    def test_install_entry_point_has_no_unscoped_update_shortcuts(self):
+        install = guide("INSTALL").split("#### Manual Update\n", 1)[1].split(
+            "\n### Pulse Agent updates", 1)[0]
+        for shortcut in ("docker compose pull &&", "docker compose up -d`",
+                         "helm repo update &&", "docker stop pulse && docker rm pulse",
+                         "re-run your original `docker run` command"):
+            with self.subTest(shortcut=shortcut):
+                self.assertNotIn(shortcut, install)
+        for link in ("DOCKER.md#-updates", "DEPLOYMENT_MODELS.md#kubernetes-helm",
+                     "DEPLOYMENT_MODELS.md#updates-by-model",
+                     "MIGRATION.md#full-state-recovery", "#rollback"):
+            with self.subTest(link=link):
+                self.assertIn(f"]({link})", install)
+        self.assertIn("`sudo /bin/update`", install)
+        self.assertIn("helper is absent or its owner is unknown", install)
+
+    def test_install_update_preserves_storage_edition_and_failure_evidence(self):
+        install = " ".join(guide("INSTALL").split("#### Manual Update\n", 1)[1].split(
+            "\n### Pulse Agent updates", 1)[0].split())
+        for phrase in ("interrupts monitoring and alert delivery",
+                       "running version and edition", "deployment definition privately",
+                       "every effective data path with its matching keys",
+                       "not a complete data backup", "only the Pulse service",
+                       "existing release, namespace, saved values and PVC",
+                       "chosen chart version and image edition",
+                       "pull it successfully before stopping",
+                       "same data mount, ports, credentials and other settings",
+                       "not a fresh example command", "container's writable layer",
+                       "anonymous volume", "`--rm`", "stop here until",
+                       "Do not delete or prune volumes", "start a second Pulse",
+                       "ordinary monitoring and alert delivery",
+                       "check the current state before retrying",
+                       "reverting an image restores data",
+                       "keep it on the private image or archive"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, install)
+
+    def test_install_shipped_copy_matches_the_checked_update_entry_point(self):
+        self.assertEqual(guide("INSTALL"),
+                         (ROOT / "frontend-modern/public/docs/INSTALL.md").read_text())
+
 
 if __name__ == "__main__":
     unittest.main()

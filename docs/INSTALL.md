@@ -301,10 +301,17 @@ Pulse can update the server runtime to the latest stable version.
 
 #### Manual Update
 
-| Platform | Command |
+An update briefly interrupts monitoring and alert delivery. Before changing the
+server, record its running version and edition, save the existing deployment
+definition privately, and keep a consistent [full-state backup](MIGRATION.md#full-state-recovery)
+of every effective data path with its matching keys. A configuration export or
+an updater snapshot alone is not a complete data backup. See
+[update preparation and recovery limits](DEPLOYMENT_MODELS.md#updates-by-model).
+
+| Platform | Procedure |
 |----------|---------|
-| **Docker** | `docker compose pull && docker compose up -d` |
-| **Kubernetes** | `helm repo update && helm upgrade pulse pulse/pulse -n pulse` |
+| **Docker / Compose** | Follow [Docker server updates](DOCKER.md#-updates) from the original deployment, selecting the exact image and updating only the Pulse service. |
+| **Kubernetes** | Follow [Helm update precautions](DEPLOYMENT_MODELS.md#kubernetes-helm) for the existing release, namespace, saved values and PVC; retain the chosen chart version and image edition. |
 | **Systemd / Proxmox LXC with the Pulse-owned helper** | `sudo /bin/update` |
 
 Use `/bin/update --version vX.Y.Z` for an exact target only when the helper was
@@ -315,7 +322,19 @@ containers, `/bin/update` can belong to a different updater that ignores
 to the exact target tag. The same ownership check applies to rollback. After
 the service restarts, verify the installed version with `GET /api/version`.
 
-Docker without Compose: `docker restart` keeps the old image running. Run `docker pull rcourtman/pulse:vX.Y.Z`, then `docker stop pulse && docker rm pulse` and re-run your original `docker run` command.
+For Docker without Compose, `docker restart` keeps the old image running.
+Select the target in the existing saved deployment and pull it successfully
+before stopping the current container. Recreate through that deployment with
+the same data mount, ports, credentials and other settings, not a fresh example
+command. If data is stored only in the container's writable layer, or an
+anonymous volume could be removed by `--rm`, stop here until it has a consistent
+backup and a checked persistent-data recovery path. Do not delete or prune
+volumes, or start a second Pulse against the same writable data.
+
+After rollout, check the running image, Pulse server version, service health
+and ordinary monitoring and alert delivery. If the update fails or its result
+is uncertain, check the current state before retrying; follow
+[Rollback](#rollback) without assuming that reverting an image restores data.
 
 The public image and commands above install the Community runtime. If the
 instance uses the private Pro runtime, keep it on the private image or archive
