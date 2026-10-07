@@ -302,6 +302,24 @@ exposing the source-specific ambiguous `wearout` name, and distinguishes it from
 `smart.percentageUsed` as consumed endurance. The regression proof is
 `internal/ai/tools/physical_disk_evidence_test.go`.
 
+Disk temperatures reach the model as current readings only when they were
+collected now. `tools.SplitDiskTemperature` classifies a physical disk
+temperature with `diskinventory.TemperatureCollected`. The physical-disk
+projection's `temperature` and the `disk_health` SMART row's `temperature`
+carry only a reading the current observation collected. A value normalization
+retained instead (a disk in standby, a host agent past its reporting lease)
+moves to `last_known_temperature` with `last_known_temperature_reason`. The
+same split feeds the AI chat context and Patrol. The "Physical Disks Needing
+Attention" list and Patrol's disk issue gate, triage flags and finding
+verification judge heat on the collected reading alone. Their text renders a
+retained value as "last known 41C (disk is in standby)". Proofs:
+`TestDiskToolsReportRetainedTemperatureAsLastKnown` in
+`internal/ai/tools/physical_disk_evidence_test.go`,
+`TestBuildUnifiedResourceContextJudgesDiskHeatOnCollectedTemperature` in
+`internal/ai/resource_context_test.go` and
+`TestPatrolPhysicalDiskRowsJudgeHeatOnCollectedTemperature` in
+`internal/ai/patrol_ai_more_test.go`.
+
 Retained summaries disclose that point and bucket timestamps describe returned
 history inside the requested window. Their spacing does not measure collection
 uptime or explain missing history. Collector lifecycle and retention settings

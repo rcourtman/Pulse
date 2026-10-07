@@ -353,8 +353,12 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 			}
 		}
 
-		// A live temperature is not two historical observations. Leave empty
-		// or single-point histories intact instead of inventing a flat line.
+		// Neither a current nor a retained temperature is two historical
+		// observations. Keep single-point histories intact, and omit disks
+		// without stored samples instead of inventing a flat line.
+		if len(tempPoints) == 0 {
+			continue
+		}
 
 		result[d.resourceID] = DiskChartEntry{
 			Name:        d.name,

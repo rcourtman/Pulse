@@ -939,7 +939,7 @@ func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
 		return
 	}
 
-	if diskTemperatureCollected(disk.Temperature, disk.Collection) && m.metricsHistory != nil {
+	if diskinventory.TemperatureCollected(disk.Temperature, disk.Collection) && m.metricsHistory != nil {
 		m.metricsHistory.AddDiskMetric(resourceID, "smart_temp", float64(disk.Temperature), now)
 	}
 
@@ -951,22 +951,6 @@ func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
 	if len(writes) > 0 {
 		m.metricsStore.WriteBatchBounded(writes)
 	}
-}
-
-// diskTemperatureCollected reports whether a disk temperature was collected by
-// its current observation. Normalization may carry a last-known temperature
-// when it was not (standby, an agent past its reporting lease); that value must
-// not be recorded as a new history sample. A temperature without collection
-// state predates the contract and keeps the old behavior.
-func diskTemperatureCollected(temperature int, collection *diskinventory.CollectionStatus) bool {
-	if temperature <= 0 {
-		return false
-	}
-	if collection == nil {
-		return true
-	}
-	state := collection.Temperature.State
-	return state == "" || state == diskinventory.FieldAvailable
 }
 
 // smartMetricStoreWrites builds the persisted SMART writes for one physical
@@ -989,7 +973,7 @@ func (m *Monitor) smartMetricStoreWrites(disk models.PhysicalDisk, resourceID st
 		})
 	}
 
-	if diskTemperatureCollected(disk.Temperature, disk.Collection) {
+	if diskinventory.TemperatureCollected(disk.Temperature, disk.Collection) {
 		appendWrite("smart_temp", float64(disk.Temperature))
 	}
 

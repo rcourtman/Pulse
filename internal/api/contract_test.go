@@ -5228,6 +5228,64 @@ func TestContract_PerformanceReportTransportUsesCatalogDefinition(t *testing.T) 
 	}
 }
 
+// Normalization keeps a disk's last-known temperature when the current
+// observation did not collect one (a disk in standby, a host agent past its
+// reporting lease). Reports present their disk tables as measured, so the
+// performance report and the reporting runtime snapshot leave that value out.
+func TestContract_ReportsOmitRetainedDiskTemperatures(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	state := models.NewState()
+	state.Nodes = []models.Node{{ID: "node-1", Name: "node-a", Status: "online"}}
+	disk := func(id, devPath string, temperature int, collection diskinventory.FieldStatus) unifiedresources.Resource {
+		return unifiedresources.Resource{
+			ID: id, Type: unifiedresources.ResourceTypePhysicalDisk, Name: id, ParentName: "node-a",
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"node-a"}},
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+				DevPath: devPath, DiskType: "hdd", Health: "PASSED", Wearout: -1, Temperature: temperature,
+				Collection: &diskinventory.CollectionStatus{Temperature: collection},
+			},
+		}
+	}
+	monitor := newReportingMonitorForTest(t, state, []unifiedresources.Resource{
+		disk("disk-standby", "/dev/sda", 61, diskinventory.Unavailable("smartctl", "disk is in standby")),
+		disk("disk-silent", "/dev/sdb", 57, diskinventory.Unavailable("smartctl", "host agent stopped reporting")),
+		disk("disk-live", "/dev/sdc", 38, diskinventory.Available("smartctl")),
+	})
+	handler := NewReportingHandlers(newReportingMTMForTest(t, monitor), nil)
+	want := map[string]int{"/dev/sda": 0, "/dev/sdb": 0, "/dev/sdc": 38}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/reporting?format=pdf&resourceType=node&resourceId=node-1", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "default"))
+	rec := httptest.NewRecorder()
+	handler.HandleGenerateReport(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	reported := map[string]int{}
+	for _, d := range engine.lastReq.Disks {
+		reported[d.Device] = d.Temperature
+	}
+	if !reflect.DeepEqual(reported, want) {
+		t.Fatalf("performance report disk temperatures = %v, want %v", reported, want)
+	}
+
+	snapshot, ok := handler.getRuntimeStateSnapshot(context.Background(), "default")
+	if !ok {
+		t.Fatal("expected runtime snapshot to be available")
+	}
+	snapshotted := map[string]int{}
+	for _, d := range snapshot.Disks {
+		snapshotted[d.Device] = d.Temperature
+	}
+	if !reflect.DeepEqual(snapshotted, want) {
+		t.Fatalf("reporting runtime snapshot disk temperatures = %v, want %v", snapshotted, want)
+	}
+}
+
 func TestContract_ReportingRequestCarriesEntitledReportBranding(t *testing.T) {
 	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
 	original := reporting.GetEngine()
