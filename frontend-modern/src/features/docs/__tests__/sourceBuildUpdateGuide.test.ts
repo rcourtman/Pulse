@@ -46,7 +46,9 @@ describe('source-built server update help', () => {
     const element = section('source-build');
     const text = prose(element);
     expect(text).toContain('writes a pulse binary in the source checkout');
-    expect(text).toContain("does not install that binary into the running service's executable path");
+    expect(text).toContain(
+      "does not install that binary into the running service's executable path",
+    );
     expect(text).toContain('restart the old installed binary');
     expect(text).toContain('Do not build in the active installation directory');
     expect(element.querySelector('pre')).toBeNull();
@@ -67,7 +69,9 @@ describe('source-built server update help', () => {
   it('preserves edition and persistent state and does not equate restart with recovery', () => {
     const text = prose(section('source-build'));
     expect(text).toContain('Keep private Pro installations on their private runtime');
-    expect(text).toContain('service identity, executable path, configuration, credentials and data');
+    expect(text).toContain(
+      'service identity, executable path, configuration, credentials and data',
+    );
     expect(text).toContain('Restore only a service that was active before the update');
     expect(text).toContain('running version, ordinary collection and notification delivery');
     expect(text).toContain('previous binary and state backup until recovery is verified');
@@ -82,8 +86,9 @@ describe('source-built server update help', () => {
     ]);
     for (const link of links) {
       const [name, fragment] = link.getAttribute('href')!.slice('/docs/'.length).split('#');
-      expect(render(read(`frontend-modern/public/docs/${name}.md`), name).querySelector(`#${fragment}`))
-        .not.toBeNull();
+      expect(
+        render(read(`frontend-modern/public/docs/${name}.md`), name).querySelector(`#${fragment}`),
+      ).not.toBeNull();
       expect(link.hasAttribute('data-doc-link')).toBe(true);
       expect(link.hasAttribute('target')).toBe(false);
     }
