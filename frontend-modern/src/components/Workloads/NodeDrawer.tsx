@@ -124,7 +124,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
 
       {/* Use CSS hidden instead of Show to avoid mount/unmount which causes scroll jumps.
           overflow-anchor: none prevents browser scroll anchoring from jumping when display toggles. */}
-      <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
+      <div class={`[overflow-anchor:none] ${activeTab() === 'overview' ? '' : 'hidden'}`}>
         <NodeDrawerOverview
           node={props.node}
           disks={props.disks}
@@ -133,7 +133,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
         />
       </div>
 
-      <div class={activeTab() === 'history' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
+      <div class={`[overflow-anchor:none] ${activeTab() === 'history' ? '' : 'hidden'}`}>
         <GuestDrawerHistory
           currentMetrics={currentMetrics()}
           groups={historyGroups()}
@@ -142,7 +142,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
         />
       </div>
 
-      <div class={activeTab() === 'manage' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
+      <div class={`[overflow-anchor:none] ${activeTab() === 'manage' ? '' : 'hidden'}`}>
         <Show when={activeTab() === 'manage'}>
           <div data-testid="node-manage-tab">
             <ResourceOperatorStateSection
@@ -156,10 +156,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
 
       <Show when={enabledDiscoveryTarget()}>
         {(target) => (
-          <div
-            class={activeTab() === 'discovery' ? '' : 'hidden'}
-            style={{ 'overflow-anchor': 'none' }}
-          >
+          <div class={`[overflow-anchor:none] ${activeTab() === 'discovery' ? '' : 'hidden'}`}>
             <Suspense fallback={<DiscoveryLoadingFallback />}>
               <DiscoveryTab
                 resourceType="agent"

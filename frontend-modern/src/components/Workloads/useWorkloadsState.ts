@@ -105,12 +105,6 @@ export interface WorkloadsSurfaceProps {
   }>;
   resourceSnapshotRefetch?: () => Promise<unknown>;
   statusModeStorageScope?: string;
-  // Platform pages that render their own hosts table above the embedded
-  // workloads surface (e.g. Proxmox overview) own the per-host CPU / Memory
-  // / Disk / Temperature / uptime / version stats. Setting
-  // `compactGroupHeaders` strips those stats from the NodeGroupHeader rows
-  // in grouped mode so the section dividers don't duplicate the info.
-  compactGroupHeaders?: boolean;
   // Default Workloads behavior owns grouped host row drawers inline. Platform
   // pages with a dedicated host table can disable that drawer so host details
   // open from the host-owned table instead of the embedded guest table.
@@ -581,6 +575,9 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     prefetchGuests: metricHistoryPrefetchGuests,
     range: workloadMetricHistoryRange,
     selectedNode,
+    // Grouped node rows carry no metric cells, so this reader never polls
+    // the infrastructure summary.
+    series: 'guests',
   });
   const [workloadHistoryHintSeen, setWorkloadHistoryHintSeen] = usePersistentSignal<boolean>(
     STORAGE_KEYS.WORKLOADS_HISTORY_HINT_SEEN,
@@ -728,7 +725,6 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     workloadsNoInventoryState,
     ws,
     groupingMode,
-    compactGroupHeaders: () => props.compactGroupHeaders === true,
     groupNodeDrawerMode: () => props.groupNodeDrawerMode ?? 'inline',
     groupLabelBadges,
   } as const;

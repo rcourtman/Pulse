@@ -48,6 +48,7 @@ import {
   RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER,
   RESOURCE_CHANGE_SOURCE_TYPE_ORDER,
   getResourceChangeKindPresentation,
+  getResourceChangePresentation,
   getResourceChangeSourceAdapterPresentation,
   getResourceChangeSourceTypePresentation,
 } from '@/utils/resourceChangePresentation';
@@ -178,7 +179,10 @@ const HostDetailsDisclosure: Component<{
             <SystemInfoCard variant="agent" agent={agent()} />
             <HardwareCard variant="agent" agent={agent()} />
             <NetworkInterfacesCard interfaces={agent().networkInterfaces} />
-            <DisksCard disks={agent().disks} />
+            <DisksCard
+              disks={agent().disks}
+              lastKnownReason={props.drawer.agentReadingsLastKnownReason()}
+            />
             <RaidCard arrays={props.drawer.agentMeta()?.raid} />
             <TemperaturesCard rows={props.drawer.temperatureRows()} title="Thermals" />
             <TemperaturesCard rows={props.drawer.customSensorRows()} title="Custom Metrics" />
@@ -592,7 +596,8 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
               <div class="mt-3 space-y-2">
                 <For each={drawer.sortedResourceTimeline()}>
                   {(change) => {
-                    const kindPresentation = getResourceChangeKindPresentation(change.kind);
+                    // A close that was not a recovery reads as a move, not "Alert resolved".
+                    const kindPresentation = getResourceChangePresentation(change);
                     const sourceTypePresentation = getResourceChangeSourceTypePresentation(
                       change.sourceType,
                     );

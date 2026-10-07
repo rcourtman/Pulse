@@ -221,11 +221,17 @@ func TestCloneResource_MutateSourceStatusMap(t *testing.T) {
 		ID: "r-1",
 		SourceStatus: map[DataSource]SourceStatus{
 			SourceProxmox: {Status: "online", ExpectedUpdateIntervalSeconds: 300},
+			SourceAgent:   {Status: "stale", reported: StatusOffline},
 		},
 	}
 	cloned := cloneResource(original)
 	if cloned.SourceStatus[SourceProxmox].ExpectedUpdateIntervalSeconds != 300 {
 		t.Fatal("clone lost collector cadence")
+	}
+	// A clone that dropped the source verdict would aggregate a silent agent
+	// back to warning.
+	if cloned.SourceStatus[SourceAgent].reported != StatusOffline {
+		t.Fatal("clone lost the agent's offline verdict")
 	}
 
 	cloned.SourceStatus[SourceDocker] = SourceStatus{Status: "online"}

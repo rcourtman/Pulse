@@ -210,6 +210,62 @@ export function getResourceChangeKindPresentation(
   );
 }
 
+// Metadata key carrying the reason code of an alert_resolved change whose
+// close was not a recovery (unifiedresources.MetadataAlertResolution).
+// Ordinary recoveries omit it.
+const ALERT_RESOLUTION_METADATA_KEY = 'alert_resolution';
+
+// A close that was not a recovery is neither a live problem nor a healthy
+// outcome, so it reads in the same neutral blue as the alert history's
+// "moved to agent" badge.
+const ALERT_CLOSED_WITHOUT_RECOVERY_CLASS =
+  'bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300';
+
+const ALERT_CLOSED_WITHOUT_RECOVERY_PRESENTATIONS: Record<string, ResourceChangeLabelPresentation> =
+  {
+    moved_to_agent: {
+      label: 'Alert moved',
+      plural: 'Alerts moved',
+      className: ALERT_CLOSED_WITHOUT_RECOVERY_CLASS,
+    },
+  };
+
+const ALERT_CLOSED_WITHOUT_RECOVERY_FALLBACK: ResourceChangeLabelPresentation = {
+  label: 'Alert closed',
+  plural: 'Alerts closed',
+  className: ALERT_CLOSED_WITHOUT_RECOVERY_CLASS,
+};
+
+/**
+ * The reason code of an alert_resolved change that closed without recovering,
+ * such as "moved_to_agent" when a node alert moved to its Pulse agent.
+ * Undefined for an ordinary recovery and every other kind.
+ */
+export function getResourceChangeAlertResolution(
+  change: Pick<ResourceChange, 'kind' | 'metadata'>,
+): string | undefined {
+  if (change.kind !== 'alert_resolved') return undefined;
+  const reason = change.metadata?.[ALERT_RESOLUTION_METADATA_KEY];
+  return typeof reason === 'string' && reason.trim() !== '' ? reason.trim() : undefined;
+}
+
+/**
+ * Presentation for one change: its kind's, except that an alert close that
+ * was not a recovery reads as a move instead of a green "Alert resolved".
+ */
+export function getResourceChangePresentation(
+  change: Pick<ResourceChange, 'kind' | 'metadata'>,
+): ResourceChangeLabelPresentation {
+  const resolution = getResourceChangeAlertResolution(change);
+  if (resolution) {
+    return (
+      ALERT_CLOSED_WITHOUT_RECOVERY_PRESENTATIONS[resolution] ??
+      ALERT_CLOSED_WITHOUT_RECOVERY_FALLBACK
+    );
+  }
+  return getResourceChangeKindPresentation(change.kind);
+}
+
 export function getResourceChangeSourceTypePresentation(
   sourceType: ResourceChangeSourceType | string,
 ): ResourceChangeLabelPresentation {
@@ -266,6 +322,12 @@ export function formatResourceChangeKind(kind: ResourceChange['kind']): string {
 }
 
 export function formatResourceChangeHeadline(change: ResourceChange): string {
+  // The alert engine's account of a close that was not a recovery already
+  // says where the alert went, so it is the headline on its own.
+  if (getResourceChangeAlertResolution(change)) {
+    const reason = change.reason?.trim();
+    return reason || `${getResourceChangePresentation(change).label}: ${change.resourceId}`;
+  }
   if (change.kind === 'state_transition' && change.from && change.to) {
     return `${formatResourceChangeKind(change.kind)}: ${change.from} → ${change.to}`;
   }

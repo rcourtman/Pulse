@@ -806,6 +806,10 @@ func resourceFromHostUnraidPhysicalDisk(host models.Host, disk models.HostUnraid
 	health := unraidPhysicalDiskHealth(disk)
 	assessment := assessUnraidPhysicalDisk(disk)
 	sizeBytes := unraidDiskSizeBytes(host, disk)
+	var collection *diskinventory.CollectionStatus
+	if status := unraidDiskTemperatureStatus(host, disk); status.State != "" {
+		collection = &diskinventory.CollectionStatus{Temperature: status}
+	}
 	resource := Resource{
 		Type:      ResourceTypePhysicalDisk,
 		Name:      name,
@@ -829,6 +833,7 @@ func resourceFromHostUnraidPhysicalDisk(host models.Host, disk models.HostUnraid
 			ReadCount:    disk.ReadCount,
 			WriteCount:   disk.WriteCount,
 			ErrorCount:   disk.ErrorCount,
+			Collection:   collection,
 			Risk:         physicalDiskRiskFromAssessment(assessment),
 		},
 	}
@@ -839,6 +844,29 @@ func resourceFromHostUnraidPhysicalDisk(host models.Host, disk models.HostUnraid
 		identity.MachineID = serial
 	}
 	return resource, identity
+}
+
+// unraidTemperatureSource is the provenance of a temperature read from an
+// Unraid agent's array inventory; the agent's standby SMART rows use it too.
+const unraidTemperatureSource = "unraid"
+
+// unraidDiskTemperatureStatus returns the collection state of the temperature
+// an Unraid inventory row carries. The inventory has no per-field provenance:
+// each accepted report replaces it, and once the host's reporting lease
+// expires State.ExpireHostTelemetry keeps it as last-known context and marks
+// the host offline. A temperature kept past that point, or one a spun-down
+// disk still carries, is not collected.
+func unraidDiskTemperatureStatus(host models.Host, disk models.HostUnraidDisk) diskinventory.FieldStatus {
+	switch {
+	case disk.Temperature <= 0:
+		return diskinventory.FieldStatus{}
+	case strings.EqualFold(strings.TrimSpace(host.Status), "offline"):
+		return diskinventory.Unavailable(unraidTemperatureSource, models.HostAgentStoppedReportingReason)
+	case disk.SpunDown:
+		return diskinventory.Unavailable(unraidTemperatureSource, "disk is reported spun down")
+	default:
+		return diskinventory.Available(unraidTemperatureSource)
+	}
 }
 
 func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Resource, ResourceIdentity) {
@@ -880,6 +908,7 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 	serial := strings.TrimSpace(disk.Serial)
 	diskType := strings.TrimSpace(disk.Type)
 	temperature := disk.Temperature
+	collection := diskinventory.CloneStatus(disk.Collection)
 	health := strings.TrimSpace(disk.Health)
 	if unraidDisk != nil {
 		if model == "" {
@@ -896,6 +925,13 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 		}
 		if temperature <= 0 {
 			temperature = unraidDisk.Temperature
+			// The reading is now the Unraid inventory's, and so is its state.
+			if status := unraidDiskTemperatureStatus(host, *unraidDisk); status.State != "" {
+				if collection == nil {
+					collection = &diskinventory.CollectionStatus{}
+				}
+				collection.Temperature = status
+			}
 		}
 		if health == "" || strings.EqualFold(health, "UNKNOWN") {
 			health = unraidPhysicalDiskHealth(*unraidDisk)
@@ -939,7 +975,7 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 			WriteCount:   unraidDiskCounter(unraidDisk, "write"),
 			ErrorCount:   unraidDiskCounter(unraidDisk, "error"),
 			IO:           physicalDiskIOToMeta(disk.IO),
-			Collection:   diskinventory.CloneStatus(disk.Collection),
+			Collection:   collection,
 			SMART:        convertSMARTAttributes(disk.Attributes),
 			Risk:         physicalDiskRiskFromAssessment(assessment),
 		},
@@ -1290,10 +1326,9 @@ func unraidPhysicalDiskHealth(disk models.HostUnraidDisk) string {
 
 func assessUnraidPhysicalDisk(disk models.HostUnraidDisk) storagehealth.Assessment {
 	assessment := storagehealth.AssessSample(storagehealth.Sample{
-		Model:       disk.Model,
-		Health:      unraidPhysicalDiskHealth(disk),
-		Temperature: disk.Temperature,
-		Wearout:     -1,
+		Model:   disk.Model,
+		Health:  unraidPhysicalDiskHealth(disk),
+		Wearout: -1,
 	})
 	addReason := func(code string, severity storagehealth.RiskLevel, summary string) {
 		if strings.TrimSpace(summary) == "" {

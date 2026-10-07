@@ -65,3 +65,46 @@ func TestMergeReportedStatusLetsTheSourceWithdrawItsOwnAvailability(t *testing.T
 		t.Fatal("MergeReportedStatus mutated its input")
 	}
 }
+
+func TestTemperatureCollectedOnlyForAReadingTakenByThisObservation(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		temperature int
+		status      *CollectionStatus
+		want        bool
+	}{
+		{"no reading", 0, &CollectionStatus{Temperature: Available("smartctl")}, false},
+		{"collected", 41, &CollectionStatus{Temperature: Available("smartctl")}, true},
+		{"predates collection state", 41, nil, true},
+		{"no temperature state", 41, &CollectionStatus{Serial: Available("smartctl")}, true},
+		{"retained in standby", 41, &CollectionStatus{Temperature: Unavailable("smartctl", "disk is in standby")}, false},
+		{"retained past the agent lease", 41, &CollectionStatus{Temperature: Unavailable("unraid", "host agent stopped reporting")}, false},
+		{"unsupported", 41, &CollectionStatus{Temperature: Unsupported("proxmox_disks", "not exposed")}, false},
+		{"missing", 41, &CollectionStatus{Temperature: Missing("smartctl", "attribute absent")}, false},
+	} {
+		if got := TemperatureCollected(tc.temperature, tc.status); got != tc.want {
+			t.Errorf("%s: TemperatureCollected = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestLegacyHostAgentStatusFillsTheLegacyAgentProvenance(t *testing.T) {
+	stopped := "host agent stopped reporting"
+	for _, tc := range []struct {
+		name       string
+		status     FieldStatus
+		hasReading bool
+		want       FieldStatus
+	}{
+		{"stateless reading", FieldStatus{}, true, Available(LegacyHostAgentSource)},
+		{"no reading", FieldStatus{}, false, FieldStatus{}},
+		{"sourceless withdrawal", Unavailable("", stopped), true, Unavailable(LegacyHostAgentSource, stopped)},
+		{"sourceless withdrawal without a reading", Unavailable("", stopped), false, Unavailable(LegacyHostAgentSource, stopped)},
+		{"current agent state", Unavailable("smartctl", "disk is in standby"), false, Unavailable("smartctl", "disk is in standby")},
+		{"current agent reading", Available("smartctl"), true, Available("smartctl")},
+	} {
+		if got := LegacyHostAgentStatus(tc.status, tc.hasReading); got != tc.want {
+			t.Errorf("%s: LegacyHostAgentStatus = %+v, want %+v", tc.name, got, tc.want)
+		}
+	}
+}

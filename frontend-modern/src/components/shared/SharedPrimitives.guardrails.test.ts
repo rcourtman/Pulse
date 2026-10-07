@@ -1,3 +1,6 @@
+import { traverse, transformSync, types as t } from '@babel/core';
+// @ts-expect-error babel-preset-solid ships no type declarations.
+import solidPreset from 'babel-preset-solid';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -101,7 +104,6 @@ import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?ra
 import tableCardSource from '@/components/shared/TableCard.tsx?raw';
 import groupedTableModeSegmentedControlSource from '@/components/shared/GroupedTableModeSegmentedControl.tsx?raw';
 import groupedTableRowPresentationSource from '@/components/shared/groupedTableRowPresentation.ts?raw';
-import unifiedResourceTableViewportSyncSource from '@/components/Infrastructure/useUnifiedResourceTableViewportSync.ts?raw';
 import storagePoolsTableWindowingSource from '@/components/Storage/useStoragePoolsTableWindowing.ts?raw';
 import workloadViewportSyncSource from '@/components/Workloads/useWorkloadViewportSync.ts?raw';
 import platformWindowedItemsSource from '@/features/platformPage/usePlatformWindowedItems.ts?raw';
@@ -217,16 +219,13 @@ import proxmoxCoverageTableSource from '@/features/proxmox/ProxmoxCoverageTable.
 import proxmoxMailGatewayTableSource from '@/features/proxmox/ProxmoxMailGatewayTable.tsx?raw';
 import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?raw';
 import proxmoxHostTableModelSource from '@/features/proxmox/proxmoxHostTableModel.ts?raw';
+import proxmoxPageModelSource from '@/features/proxmox/proxmoxPageModel.ts?raw';
 import proxmoxRecoverableTableSource from '@/features/proxmox/ProxmoxRecoverableTable.tsx?raw';
 import proxmoxReplicationTableSource from '@/features/proxmox/ProxmoxReplicationTable.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
 import availabilityChecksTableSource from '@/features/standalone/AvailabilityChecksTable.tsx?raw';
 import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable.tsx?raw';
 import agentMachineTableModelSource from '@/features/standalone/agentMachineTableModel.ts?raw';
-import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
-import unifiedResourceServiceInfrastructureCardSource from '@/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx?raw';
-import unifiedResourcePBSTableSectionSource from '@/components/Infrastructure/UnifiedResourcePBSTableSection.tsx?raw';
-import unifiedResourcePMGTableSectionSource from '@/components/Infrastructure/UnifiedResourcePMGTableSection.tsx?raw';
 import proxmoxMailGatewayDrawerSource from '@/features/proxmox/ProxmoxMailGatewayDrawer.tsx?raw';
 import swarmServicesDrawerSource from '@/components/Docker/SwarmServicesDrawer.tsx?raw';
 import k8sDeploymentsDrawerSource from '@/components/Kubernetes/K8sDeploymentsDrawer.tsx?raw';
@@ -350,6 +349,19 @@ describe('shared primitive guardrails', () => {
     expect(source).not.toMatch(/max-h-|overflow-y-|custom-scrollbar/);
     expect(source).toContain('<For each={props.disks}>');
     expect(source).toContain('<StackedDiskBar');
+  });
+
+  it("keeps a silent agent's retained disk usage out of threshold colour and usage bars", () => {
+    const source = readFrontendSource('src/components/shared/cards/DisksCard.tsx');
+    expect(source).toContain('lastKnownReason?: string;');
+    expect(source).toContain('`Last known reading, not current: ${reason}`');
+    expect(source).toMatch(/<Show\s+when=\{!lastKnownTitle\(\)\}[\s\S]*?<StackedDiskBar/);
+    expect(source).toMatch(
+      /<Show when=\{!lastKnownTitle\(\)\}>\s*<div[^>]*data-testid="disks-card-mount-bar"/,
+    );
+    expect(
+      readFrontendSource('src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx'),
+    ).toContain('lastKnownReason={props.drawer.agentReadingsLastKnownReason()}');
   });
 
   it('keeps one canonical agent-host metric history group catalog', () => {
@@ -1057,8 +1069,6 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/TableCardHeader.tsx');
     expect(registeredRule?.canonical?.export).toBe('TableCardHeader');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
-      'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',
-      'src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx',
       'src/components/Storage/StorageContentCard.tsx',
       'src/features/platformPage/sharedPlatformPage.tsx',
     ]);
@@ -1080,11 +1090,7 @@ describe('shared primitive guardrails', () => {
     expect(tableCardHeaderSource).toContain('TABLE_CARD_HEADER_CLASS');
     expect(tableCardHeaderSource).not.toContain('Pinned to');
     expect(tableCardHeaderSource).not.toContain('Scoped to');
-    for (const source of [
-      unifiedResourceHostTableCardSource,
-      unifiedResourceServiceInfrastructureCardSource,
-      storageContentCardSource,
-    ]) {
+    for (const source of [storageContentCardSource]) {
       expect(source).toContain('TableCardHeader');
       expect(source).not.toContain('SummaryTableCardHeader');
     }
@@ -1116,8 +1122,6 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/TableCard.tsx');
     expect(registeredRule?.canonical?.export).toBe('TableCard');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
-      'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',
-      'src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx',
       'src/components/Storage/StorageContentCard.tsx',
       'src/components/Workloads/WorkloadsSurface.tsx',
       'src/components/Workloads/WorkloadsTable.tsx',
@@ -1149,8 +1153,6 @@ describe('shared primitive guardrails', () => {
       workloadsSurfaceSource,
       alertHistoryTableSectionSource,
       sharedPlatformPageSource,
-      unifiedResourceHostTableCardSource,
-      unifiedResourceServiceInfrastructureCardSource,
       storageContentCardSource,
     ]) {
       expect(source).toContain('TableCard');
@@ -1394,13 +1396,7 @@ describe('shared primitive guardrails', () => {
     expect(guestRowStateSource).not.toContain('bg-sky-50/70');
     expect(guestRowStateSource).not.toContain('ring-sky-400/25');
 
-    for (const source of [
-      storagePoolRowSource,
-      diskListSource,
-      unifiedResourceHostTableCardSource,
-      unifiedResourcePBSTableSectionSource,
-      unifiedResourcePMGTableSectionSource,
-    ]) {
+    for (const source of [storagePoolRowSource, diskListSource]) {
       expect(source).toContain('data-summary-row-active');
       expect(source).not.toContain('bg-sky-50/70');
       expect(source).not.toContain('ring-sky-400/25');
@@ -1416,8 +1412,6 @@ describe('shared primitive guardrails', () => {
     expect(nodeGroupHeaderSource).toContain('getGroupedTableRowCellClass');
     expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
     expect(workloadPanelSource).toContain('getGroupedTableRowCellClass');
-    expect(unifiedResourceHostTableCardSource).toContain('getInteractiveGroupedTableRowClass');
-    expect(unifiedResourceHostTableCardSource).toContain('getGroupedTableRowCellClass');
     expect(alertHistoryTableGroupRowSource).toContain('getGroupedTableRowClass');
     expect(alertHistoryTableGroupRowSource).toContain('getGroupedTableRowCellClass');
     expect(alertHistoryTableGroupRowSource).not.toContain('class="bg-surface-alt"');
@@ -1426,13 +1420,12 @@ describe('shared primitive guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('getGroupedTableRowClass');
     expect(infrastructureSourceManagerSource).toContain('getGroupedTableRowCellClass');
     expect(infrastructureSourceManagerSource).not.toContain('bg-base hover:bg-base');
-    expect(unifiedResourceHostTableCardSource).toContain('data-summary-group-member-active');
   });
 
   it('routes Proxmox node version presentation through the shared formatter', () => {
-    expect(nodeGroupHeaderSource).toContain("from '@/utils/proxmoxVersion'");
-    expect(nodeGroupHeaderSource).toContain('formatProxmoxVersion(props.node.pveVersion)');
-    expect(nodeGroupHeaderSource).not.toContain('pve-manager\\/');
+    expect(proxmoxPageModelSource).toContain("from '@/utils/proxmoxVersion'");
+    expect(proxmoxPageModelSource).toContain('formatProxmoxVersion(resource.proxmox?.pveVersion)');
+    expect(proxmoxPageModelSource).not.toContain('pve-manager\\/');
 
     expect(proxmoxVersionSource).toContain('formatProxmoxVersion');
     expect(proxmoxVersionSource).toContain('pve-manager\\/');
@@ -1463,7 +1456,6 @@ describe('shared primitive guardrails', () => {
     expect(windowedPageScrollSource).not.toContain("addEventListener('touch");
     for (const source of [
       platformWindowedItemsSource,
-      unifiedResourceTableViewportSyncSource,
       storagePoolsTableWindowingSource,
       workloadViewportSyncSource,
     ]) {
@@ -1487,9 +1479,6 @@ describe('shared primitive guardrails', () => {
     expect(tableCardHeaderSource).toContain('TABLE_CARD_HEADER_CLASS');
 
     for (const source of [
-      unifiedResourceHostTableCardSource,
-      unifiedResourcePBSTableSectionSource,
-      unifiedResourcePMGTableSectionSource,
       alertHistoryTableSectionSource,
       workloadsTableSource,
       storagePoolsTableSource,
@@ -1509,7 +1498,6 @@ describe('shared primitive guardrails', () => {
     }
 
     for (const source of [
-      unifiedResourceHostTableCardSource,
       alertHistoryTableSectionSource,
       workloadsTableSource,
       storageContentCardSource,
@@ -1517,9 +1505,7 @@ describe('shared primitive guardrails', () => {
       expect(source).toContain('<TableCard');
     }
 
-    for (const source of [unifiedResourceHostTableCardSource, storageContentCardSource]) {
-      expect(source).toContain('TableCardHeader');
-    }
+    expect(storageContentCardSource).toContain('TableCardHeader');
 
     expect(alertHistoryTableSectionSource).not.toContain(
       'overflow-hidden rounded-sm border border-border',
@@ -1718,14 +1704,7 @@ describe('shared primitive guardrails', () => {
     expect(platformResourceDetailTableRowSource).toContain('SummaryRowActionButton');
     expect(platformResourceDetailTableRowSource).toContain('hideWhenRowTappableOnMobile');
 
-    for (const source of [
-      guestRowSource,
-      storagePoolRowSource,
-      diskListSource,
-      unifiedResourceHostTableCardSource,
-      unifiedResourcePBSTableSectionSource,
-      unifiedResourcePMGTableSectionSource,
-    ]) {
+    for (const source of [guestRowSource, storagePoolRowSource, diskListSource]) {
       expect(source).toContain('createSummaryInteractiveRowPreviewHandlers');
       expect(source).toContain('SummaryRowActionButton');
       expect(source).toContain('hideWhenRowTappableOnMobile');
@@ -1740,7 +1719,6 @@ describe('shared primitive guardrails', () => {
     expect(workloadPanelSource).toContain('createSummaryInteractiveRowPreviewHandlers');
     expect(workloadPanelSource).not.toContain('kind="scope"');
     expect(storageGroupRowSource).not.toContain('kind="scope"');
-    expect(unifiedResourceHostTableCardSource).not.toContain('kind="scope"');
 
     expect(nodeGroupHeaderSource).toContain('ResourceNameWithWebInterfaceLink');
     expect(webInterfaceLinkSource).toContain('event.stopPropagation()');
@@ -5394,9 +5372,6 @@ describe('shared primitive guardrails', () => {
         'src/features/proxmox/ProxmoxNodesTable.tsx',
         'src/components/Alerts/AlertResourceGroupHeader.tsx',
         'src/components/Alerts/AlertResourceTableRow.tsx',
-        'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',
-        'src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx',
-        'src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx',
         'src/features/docker/DockerNativeTableShared.tsx',
         'src/features/docker/DockerContainersTable.tsx',
         'src/features/kubernetes/KubernetesClustersTable.tsx',
@@ -5413,9 +5388,6 @@ describe('shared primitive guardrails', () => {
     expect(proxmoxNodesTableSource).toContain('ResourceNameWithWebInterfaceLink');
     expect(alertResourceGroupHeaderSource).toContain('ResourceNameWithWebInterfaceLink');
     expect(alertResourceTableRowSource).toContain('ResourceNameWithWebInterfaceLink');
-    expect(unifiedResourceHostTableCardSource).toContain('ResourceNameWithWebInterfaceLink');
-    expect(unifiedResourcePBSTableSectionSource).toContain('ResourceNameWithWebInterfaceLink');
-    expect(unifiedResourcePMGTableSectionSource).toContain('ResourceNameWithWebInterfaceLink');
     expect(nodeGroupHeaderSource).not.toContain('target="_blank"');
     expect(guestRowSource).not.toContain('target="_blank"');
     expect(agentsMachinesTableSource).not.toContain('target="_blank"');
@@ -7766,9 +7738,6 @@ describe('shared primitive guardrails', () => {
     expect(inlineDetailTableRowSource).toContain('.focus({ preventScroll: true })');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
       expect.arrayContaining([
-        'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',
-        'src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx',
-        'src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx',
         'src/components/Workloads/WorkloadPanel.tsx',
         'src/features/docker/DockerHostsTable.tsx',
         'src/features/docker/DockerNetworksTable.tsx',
@@ -7796,9 +7765,6 @@ describe('shared primitive guardrails', () => {
       dockerHostsTableSource,
       proxmoxCoverageTableSource,
       proxmoxNodesTableSource,
-      unifiedResourceHostTableCardSource,
-      unifiedResourcePBSTableSectionSource,
-      unifiedResourcePMGTableSectionSource,
       workloadPanelSource,
     ]) {
       expect(source).toContain('InlineDetailTableRow');
@@ -8798,6 +8764,21 @@ describe('shared primitive guardrails', () => {
     expect(drawerAttentionSectionSource).toContain('Show fewer alerts');
     expect(drawerAttentionSectionSource).toContain('aria-expanded={expanded()}');
     expect(drawerAttentionSectionSource).not.toContain('DetailSectionTable');
+    // A threshold alert held under its trigger leads with the live reading and
+    // a second line saying what clears it, never only its stale breach text.
+    expect(drawerAttentionSectionSource).toContain('item.detail');
+    expect(drawerAttentionSectionSource).toContain('item.title ?? item.message');
+    for (const liveAlertConsumer of [
+      'src/components/Workloads/NodeDrawerOverview.tsx',
+      'src/features/proxmox/ProxmoxMailGatewayDrawer.tsx',
+    ]) {
+      const source = readFrontendSource(liveAlertConsumer);
+      expect(source).toContain('...getAlertAttentionCopy(alert)');
+      expect(source).not.toContain('message: alert.message');
+    }
+    expect(readFrontendSource('src/components/Workloads/guestDrawerModel.ts')).toContain(
+      'getAlertAttentionCopy(alert)',
+    );
 
     const overviewConsumers = [
       'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
@@ -8893,4 +8874,136 @@ describe('shared primitive guardrails', () => {
       expect(rule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(overviewConsumers);
     }
   });
+});
+
+// The production server sends `style-src 'self' 'nonce-...'` without
+// 'unsafe-inline' (internal/api/security.go), so the browser reports every
+// style attribute that arrives as markup. Solid compiles static style values
+// (`style="..."`, or any literal entry of a `style={{ ... }}` object) into the
+// element's template HTML, which is such markup: each render logs a CSP
+// violation, and whether the style still applies is up to the browser. The Vite
+// dev server allows inline styles, so this only shows in a production build.
+// Dynamic style values are applied through CSSOM at runtime and are fine.
+const componentRuntimeSources = import.meta.glob(
+  ['../../**/*.tsx', '!../../**/__tests__/**', '!../../**/*.test.tsx'],
+  { query: '?raw', eager: true, import: 'default' },
+) as Record<string, string>;
+
+const compileSolidTemplates = (source: string, filename: string): string[] => {
+  // Same Solid preset options vite-plugin-solid uses for the client build.
+  const result = transformSync(source, {
+    filename,
+    babelrc: false,
+    configFile: false,
+    ast: true,
+    code: false,
+    parserOpts: { plugins: ['jsx', 'typescript'] },
+    presets: [[solidPreset, { generate: 'dom', hydratable: false }]],
+  });
+  const templates: string[] = [];
+  if (!result?.ast) return templates;
+
+  const templateHelpers = new Set<string>();
+  traverse(result.ast, {
+    ImportSpecifier(path) {
+      const imported = path.node.imported;
+      const importedName = t.isIdentifier(imported) ? imported.name : imported.value;
+      const parent = path.parentPath.node;
+      if (
+        importedName === 'template' &&
+        t.isImportDeclaration(parent) &&
+        parent.source.value === 'solid-js/web'
+      ) {
+        templateHelpers.add(path.node.local.name);
+      }
+    },
+  });
+  if (templateHelpers.size === 0) return templates;
+
+  traverse(result.ast, {
+    CallExpression(path) {
+      const { callee, arguments: args } = path.node;
+      if (!t.isIdentifier(callee) || !templateHelpers.has(callee.name)) return;
+      const [html] = args;
+      if (t.isTemplateLiteral(html)) {
+        templates.push(html.quasis.map((quasi) => quasi.value.cooked ?? '').join(''));
+      } else if (t.isStringLiteral(html)) {
+        templates.push(html.value);
+      }
+    },
+  });
+  return templates;
+};
+
+// Style attributes and <style> elements, including those inside nested
+// <template> content, which querySelectorAll does not enter.
+const collectInlineStyleMarkup = (root: ParentNode): string[] =>
+  Array.from(root.querySelectorAll('[style], style, template')).flatMap((element) => {
+    const found: string[] = [];
+    if (element.hasAttribute('style')) {
+      found.push(`<${element.localName} style="${element.getAttribute('style')}">`);
+    }
+    if (element.localName === 'style') found.push('<style>');
+    if (element instanceof HTMLTemplateElement) {
+      found.push(...collectInlineStyleMarkup(element.content));
+    }
+    return found;
+  });
+
+const findTemplateStyleAttributes = (source: string, filename: string): string[] =>
+  compileSolidTemplates(source, filename).flatMap((html) => {
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    return collectInlineStyleMarkup(template.content);
+  });
+
+describe('production CSP inline style guardrails', () => {
+  it('detects the static style forms Solid compiles into template markup', () => {
+    const fixture = `
+      export const Fixture = (props: { width: number; shown: boolean }) => (
+        <section>
+          <div style={{ 'overflow-anchor': 'none' }} />
+          <span style="animation-delay: 120ms" />
+          <p style={{ 'min-width': '0', width: \`\${props.width}px\` }} />
+          <b style={{ width: \`\${props.width}px\` }} />
+          <i style={props.shown ? 'opacity: 1' : undefined} />
+          <em class="[overflow-anchor:none]" />
+          <u STYLE="color: blue" />
+          <template>
+            <s style="color: red" />
+          </template>
+          <style>{'.fixture { color: green; }'}</style>
+        </section>
+      );
+    `;
+
+    expect(findTemplateStyleAttributes(fixture, 'Fixture.tsx')).toEqual([
+      '<div style="overflow-anchor:none">',
+      '<span style="animation-delay:120ms">',
+      '<p style="min-width:0">',
+      '<u style="color:blue">',
+      '<s style="color:red">',
+      '<style>',
+    ]);
+  });
+
+  // Use a class for static styling instead: a Tailwind utility, or an
+  // arbitrary property such as `[overflow-anchor:none]`. Only files that
+  // mention style can emit one, and compiling those takes a few seconds, or
+  // tens of seconds on a loaded machine.
+  it('keeps static style attributes out of every runtime component template', () => {
+    const paths = Object.keys(componentRuntimeSources);
+    expect(paths.length).toBeGreaterThan(100);
+
+    const offenders = paths
+      .filter((path) => /\bstyle\b/i.test(componentRuntimeSources[path]))
+      .flatMap((path) =>
+        findTemplateStyleAttributes(componentRuntimeSources[path], path).map(
+          (attribute) => `${path}: ${attribute}`,
+        ),
+      )
+      .sort();
+
+    expect(offenders).toEqual([]);
+  }, 120_000);
 });

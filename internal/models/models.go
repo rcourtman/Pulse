@@ -107,6 +107,8 @@ type Alert struct {
 	Acknowledged    bool       `json:"acknowledged"`
 	AckTime         *time.Time `json:"ackTime,omitempty"`
 	AckUser         string     `json:"ackUser,omitempty"`
+	// MetricStatus is the live evaluation behind an open threshold alert.
+	MetricStatus *MetricAlertStatus `json:"metricStatus,omitempty"`
 	// Metadata carries alert-engine annotations (notably resourceType) so the
 	// frontend can classify an alert without re-deriving resource identity.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
@@ -130,6 +132,56 @@ type AlertResolution struct {
 type ResolvedAlert struct {
 	Alert
 	ResolvedTime time.Time `json:"resolvedTime"`
+}
+
+// Metric alert phases. A threshold alert stays open after its reading drops
+// below the trigger: it holds until the reading reaches the recovery level,
+// then must stay there for the recovery delay before it clears.
+const (
+	MetricAlertPhaseBreaching  = "breaching"
+	MetricAlertPhaseLatched    = "latched"
+	MetricAlertPhaseRecovering = "recovering"
+)
+
+// MetricAlertStatus describes the reading Pulse is evaluating now for an open
+// threshold alert and why the alert is still open. The alert's Value, Message
+// and LastSeen keep describing the last reading that met the trigger, which
+// can be minutes or days old while the alert holds, so surfaces lead with
+// this instead. It is volatile: rebuilt on every evaluation, never persisted.
+type MetricAlertStatus struct {
+	Phase string `json:"phase"`
+	// Value is the value compared with the rule. For a rolling-average rule
+	// that is the average; RawValue then carries the latest sample.
+	Value                   float64   `json:"value"`
+	RawValue                *float64  `json:"rawValue,omitempty"`
+	EvaluationWindowSeconds int       `json:"evaluationWindowSeconds,omitempty"`
+	Unit                    string    `json:"unit,omitempty"`
+	ObservedAt              time.Time `json:"observedAt"`
+	// Trigger opens the alert at or above this value; Recovery is the level
+	// the value must be at or below for RecoveryDelaySeconds to clear it.
+	Trigger              float64 `json:"trigger"`
+	Recovery             float64 `json:"recovery"`
+	RecoveryDelaySeconds int     `json:"recoveryDelaySeconds,omitempty"`
+	// Recovery progress, present only in the recovering phase.
+	RecoveryStartedAt      *time.Time `json:"recoveryStartedAt,omitempty"`
+	RecoveryElapsedSeconds int        `json:"recoveryElapsedSeconds,omitempty"`
+}
+
+// Clone returns a deep copy.
+func (s *MetricAlertStatus) Clone() *MetricAlertStatus {
+	if s == nil {
+		return nil
+	}
+	clone := *s
+	if s.RawValue != nil {
+		raw := *s.RawValue
+		clone.RawValue = &raw
+	}
+	if s.RecoveryStartedAt != nil {
+		startedAt := *s.RecoveryStartedAt
+		clone.RecoveryStartedAt = &startedAt
+	}
+	return &clone
 }
 
 // Node represents a Proxmox VE node
@@ -4051,7 +4103,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	hostAgentByHostname := make(map[string]map[string]struct{}) // lowercase hostname -> hostAgentIDs
 	hostAgentByIP := make(map[string]map[string]struct{})       // normalized ip -> hostAgentIDs
 	validHostAgentIDs := make(map[string]bool)                  // set of existing host agent IDs
-	hostHostnameByID := make(map[string]string)                 // hostAgentID -> normalized full hostname
+	hostByID := make(map[string]Host)                           // hostAgentID -> host
 	addHostAlias := func(name, hostID string) {
 		name = strings.TrimSpace(strings.ToLower(name))
 		if name == "" || hostID == "" {
@@ -4086,7 +4138,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	for _, host := range s.Hosts {
 		if host.ID != "" {
 			validHostAgentIDs[host.ID] = true
-			hostHostnameByID[host.ID] = strings.TrimSpace(strings.ToLower(host.Hostname))
+			hostByID[host.ID] = host
 			addHostAlias(host.Hostname, host.ID)
 			// Also index by short hostname
 			if idx := strings.Index(host.Hostname, "."); idx > 0 {
@@ -4109,16 +4161,8 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	// Preserve legitimate split views when the same agent strongly bridges
 	// both endpoints through an exact IP or a full (dotted) hostname.
 	hostStronglyCorroboratesNode := func(hostID string, node Node) bool {
-		endpoint := extractHostEndpoint(node.Host)
-		if endpoint == "" {
-			return false
-		}
-		if ip := normalizeIPAddress(endpoint); ip != "" {
-			_, ok := hostIPsByID[hostID][ip]
-			return ok
-		}
-		hostname := hostHostnameByID[hostID]
-		return strings.Contains(endpoint, ".") && endpoint == hostname
+		host, ok := hostByID[hostID]
+		return ok && hostReportsNodeEndpoint(host, node)
 	}
 	sharedAgentProvesNodePair := func(hostID string, existing, candidate Node) bool {
 		if nodeCrossViewMergeProven(existing, candidate) {
@@ -5695,7 +5739,9 @@ func (s *State) ExpireHostTelemetry(hostID string, lastSeen time.Time) (Host, bo
 	return Host{}, false
 }
 
-const hostAgentStoppedReportingReason = "host agent stopped reporting"
+// HostAgentStoppedReportingReason is the collection-state reason recorded on
+// readings a host agent supplied once its reporting lease has expired.
+const HostAgentStoppedReportingReason = "host agent stopped reporting"
 
 // expireHostSMARTReadings marks the temperature and I/O counters of one SMART
 // row as no longer collected, keeping their values as last-known evidence.
@@ -5725,7 +5771,7 @@ func expireCollectedReading(status *diskinventory.FieldStatus, hasValue bool) bo
 	default:
 		return false
 	}
-	*status = diskinventory.Unavailable(status.Source, hostAgentStoppedReportingReason)
+	*status = diskinventory.Unavailable(status.Source, HostAgentStoppedReportingReason)
 	return true
 }
 

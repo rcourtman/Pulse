@@ -235,7 +235,6 @@ describe('platform overview layout guardrails', () => {
       expect(source).not.toContain('const [search, ');
     }
 
-    expect(sharedPlatformPageSource).toContain('searchSuggestions={tableState.searchSuggestions}');
     expect(platformSearchSuggestionsSource).toContain('buildPlatformResourceSearchSuggestions');
     expect(platformSearchSuggestionsSource).not.toContain('platformData');
   });
@@ -657,7 +656,6 @@ describe('platform overview layout guardrails', () => {
     expect(standalonePageSurfaceSource).not.toContain('UnifiedResourceTable');
     expect(agentsMachinesTableSource).toContain('PlatformResourceDetailTableRow');
     expect(agentsMachinesTableSource).not.toContain('ResourceDetailDrawer');
-    expect(standalonePageModelSource).not.toContain('infrastructureSelectors');
     expect(standalonePageModelSource).not.toContain('buildAgentsPageFilterModel');
     expect(standalonePageModelSource).not.toContain('buildStandalonePageFilterModel');
   });

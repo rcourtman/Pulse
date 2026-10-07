@@ -1,7 +1,10 @@
 import type { Node } from '@/types/api';
 import type { WorkloadGuest, ViewMode, WorkloadType } from '@/types/workloads';
-import { getWorkloadInfoValue, type WorkloadIOEmphasis } from './guestRowModel';
-import { computeIOScale } from '@/components/Infrastructure/infrastructureSelectors';
+import {
+  getWorkloadInfoValue,
+  type IODistributionStats,
+  type WorkloadIOEmphasis,
+} from './guestRowModel';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import { parseFilterStack, evaluateFilterStack, splitSearchExclusions } from '@/utils/searchQuery';
 import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
@@ -535,18 +538,47 @@ export const computeWorkloadStats = (guests: WorkloadGuest[]): WorkloadStats => 
   };
 };
 
-export const computeWorkloadIOEmphasis = (guests: WorkloadGuest[]): WorkloadIOEmphasis => {
-  const resources = guests.map((guest) => ({
-    network: {
-      rxBytes: Math.max(0, guest.networkIn ?? 0),
-      txBytes: Math.max(0, guest.networkOut ?? 0),
-    },
-    diskIO: {
-      readRate: Math.max(0, guest.diskRead ?? 0),
-      writeRate: Math.max(0, guest.diskWrite ?? 0),
-    },
-  }));
-
-  const { network, diskIO } = computeIOScale(resources as Parameters<typeof computeIOScale>[0]);
-  return { network, diskIO };
+const computeMedian = (values: number[]): number => {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+  return sorted[mid];
 };
+
+const computePercentile = (values: number[], percentile: number): number => {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const clamped = Math.max(0, Math.min(1, percentile));
+  const index = Math.max(0, Math.min(sorted.length - 1, Math.ceil(clamped * sorted.length) - 1));
+  return sorted[index];
+};
+
+// Median absolute deviation plus upper percentiles feed getOutlierEmphasis in
+// guestRowModel; non-finite and negative samples are dropped.
+const buildIODistribution = (values: number[]): IODistributionStats => {
+  const valid = values.filter((value) => Number.isFinite(value) && value >= 0);
+  if (valid.length === 0) {
+    return { median: 0, mad: 0, max: 0, p97: 0, p99: 0, count: 0 };
+  }
+
+  const median = computeMedian(valid);
+  const deviations = valid.map((value) => Math.abs(value - median));
+  const mad = computeMedian(deviations);
+  const max = Math.max(...valid, 0);
+  const p97 = computePercentile(valid, 0.97);
+  const p99 = computePercentile(valid, 0.99);
+
+  return { median, mad, max, p97, p99, count: valid.length };
+};
+
+export const computeWorkloadIOEmphasis = (guests: WorkloadGuest[]): WorkloadIOEmphasis => ({
+  network: buildIODistribution(
+    guests.map((guest) => Math.max(0, guest.networkIn ?? 0) + Math.max(0, guest.networkOut ?? 0)),
+  ),
+  diskIO: buildIODistribution(
+    guests.map((guest) => Math.max(0, guest.diskRead ?? 0) + Math.max(0, guest.diskWrite ?? 0)),
+  ),
+});

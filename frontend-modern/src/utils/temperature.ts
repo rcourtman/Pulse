@@ -109,15 +109,32 @@ export type TemperatureDisplayMetric = Extract<
   'temperature' | 'diskTemperature'
 >;
 
+/**
+ * Colour for a temperature reading. An open alert on the reading sets a floor:
+ * the alert holds until the reading falls to its clear level, so a reading
+ * that has dipped under the trigger must not look healthy beside the alert.
+ */
 export const getTemperatureTextClass = (
   celsius: number | null | undefined,
   thresholds?: MetricDisplayThresholds | null,
   metric: TemperatureDisplayMetric = 'temperature',
+  openAlertSeverity?: 'warning' | 'critical' | null,
 ): string => {
   if (celsius === null || celsius === undefined || !Number.isFinite(celsius)) {
     return 'text-muted';
   }
+  // Null disk thresholds mean disk temperature alerting is off for that disk,
+  // so no reading of it is warm or hot.
+  if (metric === 'diskTemperature' && thresholds === null) {
+    return 'text-base-content';
+  }
+  const readingSeverity = getMetricSeverity(
+    celsius,
+    metric,
+    thresholds ?? getDefaultDisplayMetricThresholds(metric),
+  );
+  // Below critical, an open alert's severity is never lower than the reading's.
   return TEMPERATURE_TEXT_CLASSES[
-    getMetricSeverity(celsius, metric, thresholds ?? getDefaultDisplayMetricThresholds(metric))
+    readingSeverity === 'critical' || !openAlertSeverity ? readingSeverity : openAlertSeverity
   ];
 };

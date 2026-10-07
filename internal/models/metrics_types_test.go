@@ -488,3 +488,21 @@ func TestPhysicalDiskSnapshotPreservesIndependentPollingCadence(t *testing.T) {
 		t.Fatal("snapshot mutation changed collector state")
 	}
 }
+
+func TestMetricAlertStatusCloneIsDeep(t *testing.T) {
+	raw := 91.0
+	startedAt := time.Date(2026, 10, 6, 10, 49, 0, 0, time.UTC)
+	status := &MetricAlertStatus{
+		Phase: MetricAlertPhaseRecovering, Value: 74, RawValue: &raw,
+		RecoveryStartedAt: &startedAt, RecoveryElapsedSeconds: 90,
+	}
+	clone := status.Clone()
+	*clone.RawValue = 10
+	*clone.RecoveryStartedAt = startedAt.Add(time.Hour)
+	if *status.RawValue != 91 || !status.RecoveryStartedAt.Equal(startedAt) {
+		t.Fatalf("clone shares pointers with the original: %+v", status)
+	}
+	if (*MetricAlertStatus)(nil).Clone() != nil {
+		t.Fatal("nil status must clone to nil")
+	}
+}

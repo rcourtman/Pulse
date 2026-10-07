@@ -119,15 +119,6 @@
           "path": "src/components/Alerts/AlertResourceTableRow.tsx"
         },
         {
-          "path": "src/components/Infrastructure/UnifiedResourceHostTableCard.tsx"
-        },
-        {
-          "path": "src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx"
-        },
-        {
-          "path": "src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx"
-        },
-        {
           "path": "src/features/docker/DockerNativeTableShared.tsx"
         },
         {
@@ -212,9 +203,6 @@
         "export": "InlineDetailTableRow"
       },
       "requiredConsumers": [
-        { "path": "src/components/Infrastructure/UnifiedResourceHostTableCard.tsx" },
-        { "path": "src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx" },
-        { "path": "src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx" },
         { "path": "src/components/Workloads/WorkloadPanel.tsx" },
         { "path": "src/features/docker/DockerAlertsTable.tsx" },
         { "path": "src/features/docker/DockerHostsTable.tsx" },
@@ -413,8 +401,6 @@
         "export": "TableCard"
       },
       "requiredConsumers": [
-        { "path": "src/components/Infrastructure/UnifiedResourceHostTableCard.tsx" },
-        { "path": "src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx" },
         { "path": "src/components/Storage/StorageContentCard.tsx" },
         { "path": "src/components/Workloads/WorkloadsSurface.tsx" },
         { "path": "src/components/Workloads/WorkloadsTable.tsx" },
@@ -435,8 +421,6 @@
         "export": "TableCardHeader"
       },
       "requiredConsumers": [
-        { "path": "src/components/Infrastructure/UnifiedResourceHostTableCard.tsx" },
-        { "path": "src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx" },
         { "path": "src/components/Storage/StorageContentCard.tsx" },
         { "path": "src/features/platformPage/sharedPlatformPage.tsx" }
       ],

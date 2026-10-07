@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "94b7870855120b2c62fce19102903601b9fc4bfc",
+  "verified_at": "2026-10-06T22:30:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "6e4003a1508856b944680e35234d9f93ef59a02f870fea6f9f1173f7e641c905"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (8 nodes, local uncommitted generator overlay pinning pve3 /dev/nvme2 at 72C). Mock guests carry no agent facet and no linked physical disks, so Playwright route interception added agent.agentVersion '6.5.0' to redis-cache-01 (vm-3ae77f2c237ff912) in /api/resources responses and answered the guest's type=physical_disk&parent=<guest id> query with the stack's real 72C Crucial MX500 resource reparented to that guest",
+    "Production builds: with this commit (base 8259a74c9d plus the verdict commit 94b7870855) check-bundle-size reports WorkloadsSurface 64.31 kB gzip against a 70.23 kB max, every tracked chunk ok and none missing; origin/main d9ffb39ce8 plus 94b7870855 without this commit measured 70.64 kB (over by 0.40) and d9ffb39ce8 alone 70.20 kB. diskPresentation and GuestPhysicalDisks now build as their own chunks and the WorkloadsSurface chunk no longer contains the disk verdict strings",
+    "Guest drawer at 1440 and 390: the GuestPhysicalDisks module is requested only after the guest row is clicked open (none before), the parent query is sent once for the guest id, and the card reads 'Physical Disks & SMART (1)', 'Crucial MX500 2TB', '/dev/nvme2', 'Running Hot' (title 'Disk temperature is 72C', rgb(185,28,28)), '72\u00b0C', '1.82 TB'"
+  ],
+  "interactions": [
+    "Loaded /proxmox/overview at 1440x900 and 390x844, recorded module requests, then clicked the redis-cache-01 guest row to open its drawer and waited for the guest physical-disk card",
+    "Read the card text, the verdict label, its title and computed colour, and clipped a screenshot of the card at both widths",
+    "Ran vite build and check-bundle-size on d9ffb39ce8, on d9ffb39ce8 plus 94b7870855, and on this branch"
+  ]
+}

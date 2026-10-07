@@ -361,6 +361,9 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     // Exposed so the inline resource panel can resolve a display name without
     // threading the lookup down through the table and mobile list.
     getResource: props.getResource,
+    // Exposed so the resource panel can describe its open occurrence from the
+    // live alert instead of the message recorded when it opened.
+    activeAlerts: props.activeAlerts,
     formatAlertRowTime,
     formatAlertRowTimestamp,
     openResourceIncidentPanel: resourceIncidentsState.openResourceIncidentPanel,

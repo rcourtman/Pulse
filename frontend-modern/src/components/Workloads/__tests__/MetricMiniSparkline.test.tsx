@@ -4,6 +4,7 @@ import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import {
   MetricMiniSparkline,
+  MetricMiniSparklineRatePair,
   type MetricMiniSparklineValueLabelContext,
 } from '../MetricMiniSparkline';
 
@@ -145,5 +146,89 @@ describe('MetricMiniSparkline', () => {
     expect(screen.getByText('20 B/s')).toBeInTheDocument();
     expect(screen.getByText('Out')).toBeInTheDocument();
     expect(screen.getByText('200 B/s')).toBeInTheDocument();
+  });
+
+  it('shows a compact rate pair beside the chart while announcing the full rates', () => {
+    render(() => (
+      <MetricMiniSparkline
+        title="Disk I/O history"
+        unit="B/s"
+        valueLabel="3.32 MB/s / 512 KB/s"
+        valueContent={
+          <MetricMiniSparklineRatePair metric="diskIo" values={[3.32 * 1024 * 1024, 512 * 1024]} />
+        }
+        series={[
+          {
+            id: 'diskread',
+            label: 'Read',
+            color: '#3b82f6',
+            points: [
+              { timestamp: 1_000, value: 10 },
+              { timestamp: 2_000, value: 20 },
+            ],
+          },
+        ]}
+      />
+    ));
+
+    const sparkline = screen.getByTestId('metric-mini-sparkline');
+    expect(sparkline.dataset.valueLabelMode).toBe('inline');
+    expect(sparkline.textContent).toBe('R3.3MW512K');
+    expect(screen.queryByText('3.32 MB/s / 512 KB/s')).not.toBeInTheDocument();
+    expect(sparkline.querySelector('svg')).toHaveAttribute(
+      'aria-label',
+      'Disk I/O history, current 3.32 MB/s / 512 KB/s',
+    );
+
+    const pair = sparkline.querySelector('[data-metric-rate-pair]') as HTMLElement;
+    expect(pair).toHaveAttribute('aria-hidden', 'true');
+    // Glyph colours match the read/write series they label.
+    expect(screen.getByText('R')).toHaveStyle({ color: '#3b82f6' });
+    expect(screen.getByText('W')).toHaveStyle({ color: '#f59e0b' });
+  });
+
+  it('re-reads an open tooltip from the current series when history updates', () => {
+    const series = (inbound: number) => [
+      {
+        id: 'netin',
+        label: 'In',
+        color: '#10b981',
+        points: [
+          { timestamp: 1_000, value: 10 },
+          { timestamp: 2_000, value: inbound },
+          { timestamp: 3_000, value: 30 },
+        ],
+      },
+    ];
+    const [current, setCurrent] = createSignal(series(20));
+    render(() => (
+      <MetricMiniSparkline
+        title="Network history"
+        unit="B/s"
+        formatValue={(value) => `${value} B/s`}
+        series={current()}
+      />
+    ));
+
+    const svg = screen.getByTestId('metric-mini-sparkline').querySelector('svg') as SVGSVGElement;
+    svg.getBoundingClientRect = () =>
+      ({
+        bottom: 38,
+        height: 18,
+        left: 0,
+        right: 96,
+        top: 20,
+        width: 96,
+        x: 0,
+        y: 20,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    fireEvent.mouseMove(svg, { clientX: 48, clientY: 24 });
+    expect(screen.getByText('20 B/s')).toBeInTheDocument();
+
+    setCurrent(series(25));
+
+    expect(screen.queryByText('20 B/s')).not.toBeInTheDocument();
+    expect(screen.getByText('25 B/s')).toBeInTheDocument();
   });
 });

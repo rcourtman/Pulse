@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentMetadataAPI } from '@/api/agentMetadata';
@@ -1157,6 +1158,238 @@ describe('AgentsMachinesTable', () => {
     expect(screen.getByText('Disk /dev/sda Cold Standby')).toBeInTheDocument();
     expect(screen.getByText('standby')).toBeInTheDocument();
     expect(screen.getByText('1400 RPM')).toBeInTheDocument();
+  });
+
+  it('shows a retained disk temperature as last known, never as a current reading', async () => {
+    // A reporting agent whose SMART probe returned no temperature keeps the
+    // last reading with a non-available collection state. (A host agent past
+    // its lease is offline, and its row shows no temperature at all.)
+    const stoppedReporting = {
+      temperature: {
+        state: 'unavailable' as const,
+        source: 'smartctl',
+        reason: 'SMART probe returned no usable temperature data',
+      },
+    };
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'silent-nas',
+            name: 'Silent NAS',
+            agent: {
+              sensors: {
+                smart: [
+                  { device: '/dev/sda', model: 'Archive HDD', temperature: 71 },
+                  { device: '/dev/sdb', model: 'Parity HDD', temperature: 66 },
+                ].map((disk) => ({ ...disk, collection: stoppedReporting })),
+              },
+            },
+          }),
+          resource({
+            id: 'mixed-host',
+            name: 'Mixed Host',
+            agent: {
+              sensors: {
+                smart: [
+                  {
+                    device: '/dev/sda',
+                    model: 'Retained HDD',
+                    temperature: 69,
+                    collection: stoppedReporting,
+                  },
+                  { device: '/dev/nvme0', model: 'Fast SSD', temperature: 44 },
+                ],
+              },
+            },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    await openMachineColumnPicker();
+    await fireEvent.click(screen.getByLabelText('Temp'));
+
+    const triggerFor = (id: string) =>
+      container.querySelector(
+        `[data-agents-machine-row="${id}"] [data-agent-machine-temperature-trigger="true"]`,
+      ) as HTMLElement | null;
+
+    // Nothing is collected now, so the cell keeps the hottest retained value
+    // without a threshold colour and says it is last known.
+    const silent = triggerFor('silent-nas');
+    expect(silent).not.toBeNull();
+    if (!silent) return;
+    const retained = silent.querySelector('[data-temperature-reading="last-known"]');
+    expect(retained).not.toBeNull();
+    expect(retained).toHaveTextContent('71°C, last known');
+    expect(retained).toHaveClass('underline', 'decoration-dotted', 'text-muted');
+    expect(retained?.className).not.toMatch(/text-(green|yellow|red)-/);
+
+    await fireEvent.mouseEnter(silent);
+    const tooltip = await waitFor(() => {
+      const element = document.querySelector('[data-agent-machine-temperature-tooltip="true"]');
+      expect(element).not.toBeNull();
+      return element as HTMLElement;
+    });
+    expect(within(tooltip).getByText('71°C (last known)')).toHaveClass('text-muted');
+    expect(within(tooltip).getByText('66°C (last known)')).toHaveClass('text-muted');
+    await fireEvent.mouseLeave(silent);
+
+    // A disk collected now leads the cell even when a retained one is hotter.
+    const mixed = triggerFor('mixed-host');
+    expect(mixed).not.toBeNull();
+    if (!mixed) return;
+    expect(mixed).toHaveTextContent('44°C');
+    expect(mixed.querySelector('[data-temperature-reading="last-known"]')).toBeNull();
+    expect(within(mixed).queryByText('69°C')).toBeNull();
+  });
+
+  it("blanks an offline machine's retained readings, temperature and uptime included", async () => {
+    // A host agent past its reporting lease is offline: CPU, memory, disk and
+    // the sensors, uptime and disks it last reported are not current.
+    const stoppedReporting = {
+      temperature: {
+        state: 'unavailable' as const,
+        source: 'smartctl',
+        reason: 'host agent stopped reporting',
+      },
+    };
+    const lastReport: Partial<Resource> = {
+      cpu: { current: 32 },
+      memory: { total: 100, used: 73, free: 27, current: 73 },
+      disk: { total: 100, used: 80, free: 20, current: 80 },
+    };
+    const sensors = {
+      temperatureCelsius: { 'cpu.package': 45 },
+      thermalState: { pressure: 'serious' },
+      smart: [
+        {
+          device: '/dev/sda',
+          model: 'Archive HDD',
+          temperature: 41,
+          collection: stoppedReporting,
+        },
+      ],
+    };
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'silent-host',
+            name: 'Silent Host',
+            status: 'offline',
+            uptime: 2_500_000,
+            ...lastReport,
+            agent: { stale: true, uptimeSeconds: 2_500_000, sensors },
+          }),
+          resource({
+            id: 'live-host',
+            name: 'Live Host',
+            uptime: 2_500_000,
+            ...lastReport,
+            agent: {
+              uptimeSeconds: 2_500_000,
+              sensors: { temperatureCelsius: { 'cpu.package': 45 } },
+            },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    await openMachineColumnPicker();
+    await fireEvent.click(screen.getByLabelText('Temp'));
+    await fireEvent.click(screen.getByLabelText('Uptime'));
+
+    const cells = (id: string) => {
+      const row = container.querySelector(`[data-agents-machine-row="${id}"]`) as HTMLElement;
+      const headers = Array.from(container.querySelectorAll('thead th')).map((th) =>
+        (th.textContent ?? '').replace(/[▲▼]/g, '').trim(),
+      );
+      const values = Array.from(row.querySelectorAll('td')).map((td) =>
+        (td.textContent ?? '').trim(),
+      );
+      return (label: string) => values[headers.indexOf(label)];
+    };
+
+    const silent = cells('silent-host');
+    expect(silent('CPU')).toBe('—');
+    expect(silent('Up')).toBe('—');
+    expect(silent('Temp')).toBe('—');
+    expect(
+      container.querySelector(
+        '[data-agents-machine-row="silent-host"] [data-agent-machine-temperature-trigger="true"]',
+      ),
+    ).toBeNull();
+
+    const live = cells('live-host');
+    expect(live('CPU')).not.toBe('—');
+    expect(live('Up')).toBe('28d');
+    expect(live('Temp')).toBe('45°C');
+  });
+
+  it('moves a machine temperature between current and last known as its disk reports change', async () => {
+    // Fresh objects per update, like parsed API payloads: the store reconciles
+    // into the objects it was given, so a reused fixture would be rewritten.
+    const collected = () => ({ temperature: { state: 'available' as const, source: 'smartctl' } });
+    const stoppedReporting = () => ({
+      temperature: {
+        state: 'unavailable' as const,
+        source: 'smartctl',
+        reason: 'host agent stopped reporting',
+      },
+    });
+    const nas = (
+      temperature: number,
+      collection?: ReturnType<typeof collected> | ReturnType<typeof stoppedReporting>,
+    ) =>
+      resource({
+        id: 'nas',
+        name: 'NAS',
+        agent: {
+          sensors: { smart: [{ device: '/dev/sda', type: 'sata', temperature, collection }] },
+        },
+      });
+    const [resources, setResources] = createSignal<Resource[]>([nas(52, collected())]);
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={resources()}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    await openMachineColumnPicker();
+    await fireEvent.click(screen.getByLabelText('Temp'));
+    const cell = () =>
+      container.querySelector(
+        '[data-agents-machine-row="nas"] [data-agent-machine-temperature-trigger="true"]',
+      ) as HTMLElement;
+    const lastKnown = () => cell().querySelector('[data-temperature-reading="last-known"]');
+
+    expect(cell()).toHaveTextContent('52°C');
+    expect(lastKnown()).toBeNull();
+
+    setResources([nas(52, stoppedReporting())]);
+    await waitFor(() => expect(lastKnown()).not.toBeNull());
+    expect(cell()).toHaveTextContent('52°C, last known');
+
+    setResources([nas(47, collected())]);
+    await waitFor(() => expect(lastKnown()).toBeNull());
+    expect(cell()).toHaveTextContent('47°C');
+    expect(cell().querySelector('.decoration-dotted')).toBeNull();
+    expect(cell()).not.toHaveTextContent('last known');
+
+    setResources([nas(0)]);
+    await waitFor(() => expect(cell()).toHaveTextContent('—'));
+    expect(lastKnown()).toBeNull();
   });
 
   it('shows thermal pressure when macOS reports no Celsius temperature', async () => {

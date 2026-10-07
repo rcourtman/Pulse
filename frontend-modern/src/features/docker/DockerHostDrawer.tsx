@@ -111,11 +111,11 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
 
       {/* Use CSS hidden instead of Show to avoid mount/unmount which causes scroll jumps.
           overflow-anchor: none prevents browser scroll anchoring from jumping when display toggles. */}
-      <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
+      <div class={`[overflow-anchor:none] ${activeTab() === 'overview' ? '' : 'hidden'}`}>
         <DockerHostDrawerOverview host={props.host} />
       </div>
 
-      <div class={activeTab() === 'manage' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
+      <div class={`[overflow-anchor:none] ${activeTab() === 'manage' ? '' : 'hidden'}`}>
         <Show when={activeTab() === 'manage'}>
           <div class="space-y-3" data-testid="docker-host-manage-tab">
             <DockerHostDrawerManagement host={props.host} />
@@ -137,7 +137,7 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
         </Show>
       </div>
 
-      <div class={activeTab() === 'history' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
+      <div class={`[overflow-anchor:none] ${activeTab() === 'history' ? '' : 'hidden'}`}>
         <GuestDrawerHistory
           currentMetrics={currentMetrics()}
           groups={DOCKER_HOST_DRAWER_HISTORY_GROUPS}
@@ -148,10 +148,7 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
 
       <Show when={hasDiscoverySupport() ? discoveryConfig() : null}>
         {(config) => (
-          <div
-            class={activeTab() === 'discovery' ? '' : 'hidden'}
-            style={{ 'overflow-anchor': 'none' }}
-          >
+          <div class={`[overflow-anchor:none] ${activeTab() === 'discovery' ? '' : 'hidden'}`}>
             <Suspense fallback={<DiscoveryLoadingFallback />}>
               <DiscoveryTab
                 resourceType={config().resourceType}

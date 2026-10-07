@@ -8,12 +8,10 @@ import type {
 import {
   getResourcePolicyDisplayLabel,
   getResourcePolicyGovernedSummary,
-  getResourcePolicyTableBadges,
   getResourceRedactionHintLabel,
   getResourceRoutingScopeLabel,
   getResourceSensitivityLabel,
   hasDefaultResourcePolicyPosture,
-  shouldShowResourceAlternateName,
 } from '@/utils/resourcePolicyPresentation';
 import type { ResourcePolicyDisplayResource } from '@/utils/resourcePolicyPresentation';
 
@@ -22,10 +20,9 @@ import type { ResourcePolicyDisplayResource } from '@/utils/resourcePolicyPresen
  *
  * The existing sibling test (`resourcePolicyPresentation.test.ts`) exercises the
  * happy paths. This file targets the defensive / fallback arms of each named
- * function: undefined inputs, non-blocking postures, empty/whitespace strings,
- * the `?? hint` redaction fallback, the `?? 0` redact-length arm, the
- * sensitivity-vs-routing primary selection, and the concise-summary status
- * absence / all-empty-parts / no-semicolon branches.
+ * function: undefined inputs, empty/whitespace strings, the `?? hint`
+ * redaction fallback, the `?? 0` redact-length arm, and the concise-summary
+ * status absence / all-empty-parts / no-semicolon branches.
  *
  * NOTE: `getConciseGovernedDisplaySummary` is a module-private (non-exported)
  * helper, so it is covered indirectly through `getResourcePolicyDisplayLabel`,
@@ -145,57 +142,6 @@ describe('hasDefaultResourcePolicyPosture — branch coverage', () => {
         routing: { scope: 'cloud-summary' },
       }),
     ).toBe(true);
-  });
-});
-
-describe('getResourcePolicyTableBadges — branch coverage', () => {
-  it('returns an empty array when no policy is supplied', () => {
-    expect(getResourcePolicyTableBadges(undefined)).toEqual([]);
-  });
-
-  it('returns an empty array for a non-blocking public posture', () => {
-    expect(
-      getResourcePolicyTableBadges({
-        sensitivity: 'public',
-        routing: { scope: 'cloud-summary' },
-      }),
-    ).toEqual([]);
-  });
-
-  it('uses the sensitivity badge as primary when scope is not local-only (restricted + cloud-summary)', () => {
-    const badges = getResourcePolicyTableBadges({
-      sensitivity: 'restricted',
-      routing: { scope: 'cloud-summary' },
-    });
-    expect(badges).toHaveLength(1);
-    expect(badges[0]?.label).toBe('Restricted');
-    // No redactions -> redactionTitle is undefined and filtered out of the title.
-    expect(badges[0]?.title).toBe(
-      'Restricted: Resource data is tightly restricted and requires guarded handling. Cloud Summary: This resource may use cloud summarization within policy limits.',
-    );
-    expect(badges[0]?.title).not.toContain('Redacts');
-  });
-
-  it('uses the sensitivity badge as primary when restricted with local-first scope and redactions', () => {
-    const badges = getResourcePolicyTableBadges({
-      sensitivity: 'restricted',
-      routing: { scope: 'local-first', redact: ['hostname', 'path'] },
-    });
-    expect(badges).toHaveLength(1);
-    expect(badges[0]?.label).toBe('Restricted');
-    expect(badges[0]?.title).toContain('Local First');
-    expect(badges[0]?.title).toContain('Redacts Hostname, Path.');
-  });
-
-  it('uses the routing badge as primary when scope is local-only even with non-restricted sensitivity', () => {
-    const badges = getResourcePolicyTableBadges({
-      sensitivity: 'sensitive',
-      routing: { scope: 'local-only', redact: ['alias'] },
-    });
-    expect(badges).toHaveLength(1);
-    expect(badges[0]?.label).toBe('Local Only');
-    expect(badges[0]?.title).toContain('Sensitive');
-    expect(badges[0]?.title).toContain('Redacts Alias.');
   });
 });
 
@@ -367,54 +313,5 @@ describe('getResourcePolicyDisplayLabel — branch coverage', () => {
         }),
       ),
     ).toBe('storage array (degraded)');
-  });
-});
-
-describe('shouldShowResourceAlternateName — branch coverage', () => {
-  it('returns false when no resource is supplied', () => {
-    expect(shouldShowResourceAlternateName(undefined)).toBe(false);
-    expect(shouldShowResourceAlternateName(null)).toBe(false);
-  });
-
-  it('returns false when displayName is absent', () => {
-    expect(shouldShowResourceAlternateName(asResource({ name: 'host-1' }))).toBe(false);
-  });
-
-  it('returns false when name is absent', () => {
-    expect(shouldShowResourceAlternateName(asResource({ displayName: 'Host One' }))).toBe(false);
-  });
-
-  it('treats a whitespace-only displayName as present (guard does not trim) and thus differing from name', () => {
-    // The guard `!resource?.displayName` does not trim, so '   ' is truthy and
-    // passes; then ''.toLowerCase() !== 'host-1' -> true.
-    expect(shouldShowResourceAlternateName({ name: 'host-1', displayName: '   ' })).toBe(true);
-  });
-
-  it('returns false when the policy requires governed handling', () => {
-    expect(
-      shouldShowResourceAlternateName({
-        name: 'host-1',
-        displayName: 'Host One',
-        policy: governedPolicy(),
-      }),
-    ).toBe(false);
-  });
-
-  it('returns false when displayName and name match case-insensitively after trimming', () => {
-    expect(
-      shouldShowResourceAlternateName({
-        name: 'HOST-1',
-        displayName: '  host-1  ',
-      }),
-    ).toBe(false);
-  });
-
-  it('returns true when displayName and name differ', () => {
-    expect(
-      shouldShowResourceAlternateName({
-        name: 'host-1',
-        displayName: 'Primary Node',
-      }),
-    ).toBe(true);
   });
 });

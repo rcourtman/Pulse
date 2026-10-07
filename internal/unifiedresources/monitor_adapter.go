@@ -26,6 +26,7 @@ type MonitorAdapter struct {
 	activeAlerts    []models.Alert
 	lastRebuiltAt   time.Time
 	staleThresholds map[DataSource]time.Duration
+	legacyHistory   legacyHistoryBackfill
 
 	overlays overlayReadStateCache
 }
@@ -195,13 +196,29 @@ func (a *MonitorAdapter) currentRegistry() *ResourceRegistry {
 }
 
 // RecordChange forwards canonical resource-history events into the underlying
-// resource store when monitoring has a durable store attached.
+// resource store when monitoring has a durable store attached. Alert lifecycle
+// events carry source-native references (Proxmox node and guest IDs, agent
+// IDs, Docker host and Swarm service IDs, sub-resource references); they
+// resolve here so history reads by canonical ID include them. PVE disk alert
+// rows are owned row by row instead (proxmoxDiskAlertOwner).
 func (a *MonitorAdapter) RecordChange(change ResourceChange) error {
 	registry := a.currentRegistry()
 	if registry == nil || registry.store == nil {
 		return nil
 	}
 	sourceRef := change.ResourceID
+	if ref, ok := proxmoxDiskAlertRowReference(change); ok {
+		// A PVE disk alert reference never binds: the row goes to the disk its
+		// own hardware identity names, or stays under the reference.
+		if owner := registry.proxmoxDiskAlertOwner(ref, change.Metadata); owner != "" && owner != ref {
+			change.Metadata = cloneChangeMetadata(change.Metadata)
+			change.Metadata[MetadataAlertResourceID] = ref
+			change.ResourceID = owner
+		}
+		return registry.store.RecordChange(change)
+	}
+	history, hasHistory := registry.store.(resourceHistoryIdentityWriter)
+	unbound := false
 	if sourceID, derivedID, ok := legacyDockerHistoryIdentity(sourceRef); ok {
 		// Use exact source identity when inventory is present, including any
 		// canonical identity merge. Full Docker IDs remain derivable after removal.
@@ -212,7 +229,7 @@ func (a *MonitorAdapter) RecordChange(change ResourceChange) error {
 			change.ResourceID = resolvedID
 		} else {
 			change.ResourceID = derivedID
-			if history, ok := registry.store.(resourceHistoryIdentityWriter); ok {
+			if hasHistory {
 				id, found, err := history.ResolveHistorySourceIdentity(sourceRef)
 				if err != nil {
 					return err
@@ -222,13 +239,34 @@ func (a *MonitorAdapter) RecordChange(change ResourceChange) error {
 				}
 			}
 		}
-	}
-	if sourceRef != change.ResourceID {
-		if writer, ok := registry.store.(resourceHistoryIdentityWriter); ok {
-			return writer.RecordChangeWithSourceIdentity(change, sourceRef)
+	} else if resolvedID, claimed := registry.resolveHistoryReference(sourceRef); resolvedID != "" {
+		change.ResourceID = resolvedID
+	} else if hasHistory && !isDockerNameHistoryReference(sourceRef) {
+		// A later generation may name the resource or settle a conflict.
+		unbound = true
+		if !claimed {
+			// No resource answers to it: keep the binding an earlier event recorded.
+			id, found, err := history.ResolveHistorySourceIdentity(CanonicalResourceID(sourceRef))
+			if err != nil {
+				return err
+			}
+			if found {
+				change.ResourceID = id
+				unbound = false
+			}
 		}
 	}
-	return registry.store.RecordChange(change)
+	if hasHistory && CanonicalResourceID(sourceRef) != CanonicalResourceID(change.ResourceID) {
+		return history.RecordChangeWithSourceIdentity(change, sourceRef)
+	}
+	if err := registry.store.RecordChange(change); err != nil {
+		return err
+	}
+	// Inventory may name the resource in a later generation; bind the row then.
+	if _, ok := registry.store.(legacyHistoryBinder); unbound && ok {
+		a.legacyHistory.add(CanonicalResourceID(sourceRef), time.Now())
+	}
+	return nil
 }
 
 // GetRecentChanges forwards canonical resource-history reads into the
@@ -437,6 +475,7 @@ func (a *MonitorAdapter) replaceRegistryLocked(snapshot models.StateSnapshot, re
 	a.activeAlerts = append([]models.Alert(nil), snapshot.ActiveAlerts...)
 	a.lastRebuiltAt = rebuiltAt
 	a.mu.Unlock()
+	a.bindLegacyHistory(rebuilt, time.Now())
 }
 
 // ShouldSkipAPIPolling returns true when agent coverage indicates API

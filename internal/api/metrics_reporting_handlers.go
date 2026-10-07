@@ -14,12 +14,14 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog/log"
 )
@@ -333,6 +335,9 @@ type reportingEnrichmentSnapshot struct {
 	RecentlyResolved []models.ResolvedAlert
 	LegacyBackups    models.PVEBackups
 	Resources        []unifiedresources.Resource
+	// alertManager supplies the tenant's disk temperature thresholds. Nil
+	// means the factory alert configuration.
+	alertManager *alerts.Manager
 }
 
 func emptyReportingEnrichmentSnapshot() reportingEnrichmentSnapshot {
@@ -404,6 +409,7 @@ func (h *ReportingHandlers) getReportingEnrichmentSnapshot(ctx context.Context, 
 		RecentlyResolved: monitor.RecentlyResolvedSnapshot(),
 		LegacyBackups:    monitor.PVEBackupsSnapshot(),
 		Resources:        unifiedResources,
+		alertManager:     monitor.GetAlertManager(),
 	}
 	snapshot.normalizeCollections()
 	return snapshot, true
@@ -750,6 +756,37 @@ func reportSubjectIDMatches(req *reporting.MetricReportRequest, candidateID stri
 	return req.MetricsResourceID != "" && candidateID == req.MetricsResourceID
 }
 
+// reportActiveAlertInfo is the report row for an open alert.
+func reportActiveAlertInfo(alert models.Alert) reporting.AlertInfo {
+	return reporting.AlertInfo{
+		Type:       alert.Type,
+		Level:      alert.Level,
+		Message:    alert.Message,
+		Value:      alert.Value,
+		Threshold:  alert.Threshold,
+		StartTime:  alert.StartTime,
+		ResourceID: alert.ResourceID,
+	}
+}
+
+// reportResolvedAlertInfo is the report row for a recently resolved alert. It
+// keeps the alert's resolution, so a node alert that moved to its Pulse agent
+// is never reported as a recovery.
+func reportResolvedAlertInfo(resolved models.ResolvedAlert) reporting.AlertInfo {
+	info := reportActiveAlertInfo(resolved.Alert)
+	resolvedTime := resolved.ResolvedTime
+	info.ResolvedTime = &resolvedTime
+	if resolution := resolved.Resolution; resolution != nil {
+		info.Resolution = &reporting.AlertResolution{
+			Reason:              resolution.Reason,
+			SuccessorResourceID: resolution.SuccessorResourceID,
+			SuccessorName:       resolution.SuccessorName,
+			Summary:             resolution.Summary,
+		}
+	}
+	return info
+}
+
 // enrichNodeReport adds node-specific data to the report request
 func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest, snapshot reportingEnrichmentSnapshot, start, end time.Time) {
 	// Find the node
@@ -791,29 +828,13 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 	// Find alerts for this node
 	for _, alert := range snapshot.ActiveAlerts {
 		if reportSubjectIDMatches(req, alert.ResourceID) || alert.Node == node.Name {
-			req.Alerts = append(req.Alerts, reporting.AlertInfo{
-				Type:      alert.Type,
-				Level:     alert.Level,
-				Message:   alert.Message,
-				Value:     alert.Value,
-				Threshold: alert.Threshold,
-				StartTime: alert.StartTime,
-			})
+			req.Alerts = append(req.Alerts, reportActiveAlertInfo(alert))
 		}
 	}
 	for _, resolved := range snapshot.RecentlyResolved {
 		if (reportSubjectIDMatches(req, resolved.ResourceID) || resolved.Node == node.Name) &&
 			resolved.ResolvedTime.After(start) && resolved.ResolvedTime.Before(end) {
-			resolvedTime := resolved.ResolvedTime
-			req.Alerts = append(req.Alerts, reporting.AlertInfo{
-				Type:         resolved.Type,
-				Level:        resolved.Level,
-				Message:      resolved.Message,
-				Value:        resolved.Value,
-				Threshold:    resolved.Threshold,
-				StartTime:    resolved.StartTime,
-				ResolvedTime: &resolvedTime,
-			})
+			req.Alerts = append(req.Alerts, reportResolvedAlertInfo(resolved))
 		}
 	}
 
@@ -875,18 +896,49 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 				continue
 			}
 			pd := r.PhysicalDisk
+			temperatureWarning, temperatureCritical := reportDiskTemperatureThresholds(snapshot.alertManager, pd.DiskType)
 			req.Disks = append(req.Disks, reporting.DiskInfo{
-				Device:      pd.DevPath,
-				Model:       pd.Model,
-				Serial:      pd.Serial,
-				Type:        pd.DiskType,
-				Size:        pd.SizeBytes,
-				Health:      pd.Health,
-				Temperature: pd.Temperature,
-				WearLevel:   pd.Wearout,
+				Device:              pd.DevPath,
+				Model:               pd.Model,
+				Serial:              pd.Serial,
+				Type:                pd.DiskType,
+				Size:                pd.SizeBytes,
+				Health:              pd.Health,
+				Temperature:         reportDiskTemperature(*pd),
+				WearLevel:           pd.Wearout,
+				TemperatureWarning:  temperatureWarning,
+				TemperatureCritical: temperatureCritical,
 			})
 		}
 	}
+}
+
+// reportDiskTemperatureThresholds returns the alert disk temperature thresholds
+// a report colours a disk reading by: the clear value and the trigger, from
+// the same policy as disk temperature alerts and the Physical Disks Temp
+// column. Zero means disk temperature alerting is off for the disk.
+func reportDiskTemperatureThresholds(manager *alerts.Manager, diskType string) (float64, float64) {
+	threshold := manager.DiskTemperatureThreshold(diskType)
+	if threshold == nil || threshold.Trigger <= 0 {
+		return 0, 0
+	}
+	warning := threshold.Clear
+	if warning <= 0 || warning > threshold.Trigger {
+		warning = threshold.Trigger
+	}
+	return warning, threshold.Trigger
+}
+
+// reportDiskTemperature returns the disk temperature a report may tabulate:
+// one the current observation collected. Normalization may keep a last-known
+// temperature it did not collect (a disk in standby, a host agent past its
+// reporting lease); a report presents its values as measured, so that one is
+// left out (0, rendered as no reading) rather than shown as current.
+func reportDiskTemperature(pd unifiedresources.PhysicalDiskMeta) int {
+	if !diskinventory.TemperatureCollected(pd.Temperature, pd.Collection) {
+		return 0
+	}
+	return pd.Temperature
 }
 
 // enrichVMReport adds VM-specific data to the report request
@@ -922,29 +974,13 @@ func (h *ReportingHandlers) enrichVMReport(ctx context.Context, orgID string, re
 	// Find alerts for this VM
 	for _, alert := range snapshot.ActiveAlerts {
 		if reportSubjectIDMatches(req, alert.ResourceID) {
-			req.Alerts = append(req.Alerts, reporting.AlertInfo{
-				Type:      alert.Type,
-				Level:     alert.Level,
-				Message:   alert.Message,
-				Value:     alert.Value,
-				Threshold: alert.Threshold,
-				StartTime: alert.StartTime,
-			})
+			req.Alerts = append(req.Alerts, reportActiveAlertInfo(alert))
 		}
 	}
 	for _, resolved := range snapshot.RecentlyResolved {
 		if reportSubjectIDMatches(req, resolved.ResourceID) &&
 			resolved.ResolvedTime.After(start) && resolved.ResolvedTime.Before(end) {
-			resolvedTime := resolved.ResolvedTime
-			req.Alerts = append(req.Alerts, reporting.AlertInfo{
-				Type:         resolved.Type,
-				Level:        resolved.Level,
-				Message:      resolved.Message,
-				Value:        resolved.Value,
-				Threshold:    resolved.Threshold,
-				StartTime:    resolved.StartTime,
-				ResolvedTime: &resolvedTime,
-			})
+			req.Alerts = append(req.Alerts, reportResolvedAlertInfo(resolved))
 		}
 	}
 
@@ -1201,29 +1237,13 @@ func (h *ReportingHandlers) enrichContainerReport(ctx context.Context, orgID str
 	// Find alerts for this container
 	for _, alert := range snapshot.ActiveAlerts {
 		if reportSubjectIDMatches(req, alert.ResourceID) {
-			req.Alerts = append(req.Alerts, reporting.AlertInfo{
-				Type:      alert.Type,
-				Level:     alert.Level,
-				Message:   alert.Message,
-				Value:     alert.Value,
-				Threshold: alert.Threshold,
-				StartTime: alert.StartTime,
-			})
+			req.Alerts = append(req.Alerts, reportActiveAlertInfo(alert))
 		}
 	}
 	for _, resolved := range snapshot.RecentlyResolved {
 		if reportSubjectIDMatches(req, resolved.ResourceID) &&
 			resolved.ResolvedTime.After(start) && resolved.ResolvedTime.Before(end) {
-			resolvedTime := resolved.ResolvedTime
-			req.Alerts = append(req.Alerts, reporting.AlertInfo{
-				Type:         resolved.Type,
-				Level:        resolved.Level,
-				Message:      resolved.Message,
-				Value:        resolved.Value,
-				Threshold:    resolved.Threshold,
-				StartTime:    resolved.StartTime,
-				ResolvedTime: &resolvedTime,
-			})
+			req.Alerts = append(req.Alerts, reportResolvedAlertInfo(resolved))
 		}
 	}
 

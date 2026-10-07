@@ -6,17 +6,11 @@ import type {
   ResourceSensitivity,
 } from '@/types/resource';
 import { requiresGovernedResourceDisplay } from '@/types/resource';
-import type { IntelligencePolicyPostureSummary } from '@/types/aiIntelligence';
 
 type PolicyBadgePresentation = {
   label: string;
   title: string;
   className: string;
-};
-
-export type ResourcePolicyCountSummary = {
-  label: string;
-  count: number;
 };
 
 export type ResourcePolicyDisplayResource = Pick<
@@ -116,39 +110,6 @@ export const hasDefaultResourcePolicyPosture = (policy?: ResourcePolicy): boolea
     (policy.routing.redact?.length ?? 0) === 0,
   );
 
-export const hasBlockingResourcePolicyPosture = (policy?: ResourcePolicy): boolean =>
-  Boolean(policy && (policy.sensitivity === 'restricted' || policy.routing.scope === 'local-only'));
-
-export const getResourcePolicyTableBadges = (
-  policy?: ResourcePolicy,
-): PolicyBadgePresentation[] => {
-  if (!policy) return [];
-
-  if (!hasBlockingResourcePolicyPosture(policy)) {
-    return [];
-  }
-
-  const sensitivity = sensitivityPresentation[policy.sensitivity];
-  const routing = routingPresentation[policy.routing.scope];
-  const redactions = getResourcePolicyRedactionLabels(policy);
-  const primary = policy.routing.scope === 'local-only' ? routing : sensitivity;
-  const redactionTitle = redactions.length > 0 ? `Redacts ${redactions.join(', ')}.` : undefined;
-
-  return [
-    {
-      label: primary.label,
-      className: primary.className,
-      title: [
-        `${sensitivity.label}: ${sensitivity.title}`,
-        `${routing.label}: ${routing.title}`,
-        redactionTitle,
-      ]
-        .filter(Boolean)
-        .join(' '),
-    },
-  ];
-};
-
 export const getResourceSensitivityLabel = (sensitivity?: ResourceSensitivity): string =>
   sensitivity ? sensitivityPresentation[sensitivity].label : 'Unclassified';
 
@@ -160,58 +121,6 @@ export const getResourceRedactionHintLabel = (hint?: ResourceRedactionHint): str
 
 export const getResourcePolicyRedactionLabels = (policy?: ResourcePolicy): string[] =>
   (policy?.routing.redact ?? []).map((hint) => getResourceRedactionHintLabel(hint));
-
-const buildCountSummaries = <T extends string>(
-  counts: Partial<Record<T, number>> | undefined,
-  order: readonly T[],
-  labelFn: (value: T) => string,
-  includeZeroCounts: boolean,
-): ResourcePolicyCountSummary[] => {
-  if (!counts) return [];
-
-  const summaries: ResourcePolicyCountSummary[] = [];
-  for (const value of order) {
-    const count = counts[value] ?? 0;
-    if (!includeZeroCounts && count <= 0) {
-      continue;
-    }
-    summaries.push({
-      label: labelFn(value),
-      count,
-    });
-  }
-  return summaries;
-};
-
-export const getResourcePolicySensitivitySummaries = (
-  posture?: IntelligencePolicyPostureSummary | null,
-): ResourcePolicyCountSummary[] =>
-  buildCountSummaries(
-    posture?.sensitivity_counts,
-    RESOURCE_POLICY_SENSITIVITY_ORDER,
-    getResourceSensitivityLabel,
-    true,
-  );
-
-export const getResourcePolicyRoutingSummaries = (
-  posture?: IntelligencePolicyPostureSummary | null,
-): ResourcePolicyCountSummary[] =>
-  buildCountSummaries(
-    posture?.routing_counts,
-    RESOURCE_POLICY_ROUTING_ORDER,
-    getResourceRoutingScopeLabel,
-    true,
-  );
-
-export const getResourcePolicyRedactionSummaries = (
-  posture?: IntelligencePolicyPostureSummary | null,
-): ResourcePolicyCountSummary[] =>
-  buildCountSummaries(
-    posture?.redaction_counts,
-    RESOURCE_POLICY_REDACTION_ORDER,
-    getResourceRedactionHintLabel,
-    false,
-  );
 
 const getConciseGovernedDisplaySummary = (summary: string): string => {
   const trimmed = summary.trim();
@@ -262,16 +171,4 @@ export const getResourcePolicyDisplayLabel = (
   }
 
   return resource.displayName?.trim() || resource.name?.trim() || '';
-};
-
-export const shouldShowResourceAlternateName = (
-  resource?: ResourcePolicyDisplayResource | null,
-): boolean => {
-  if (!resource?.displayName || !resource.name) return false;
-
-  if (requiresGovernedResourceDisplay(resource.policy)) {
-    return false;
-  }
-
-  return resource.displayName.trim().toLowerCase() !== resource.name.trim().toLowerCase();
 };

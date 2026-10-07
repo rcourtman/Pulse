@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "base_sha": "1b6a9b45d7a85ae2add1ff4213ef80f6b35f7309",
+  "verified_at": "2026-10-06T22:49:34Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/DiskList.tsx",
+    "frontend-modern/src/components/Storage/useDiskDetailModel.ts",
+    "frontend-modern/src/components/Storage/useDiskListModel.ts",
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx",
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts",
+    "frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts",
+    "frontend-modern/src/utils/metricThresholds.ts",
+    "frontend-modern/src/utils/temperature.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/DiskList.tsx": "9fbcdb4659cfdf443f521c9b15969f485876cbdde8d7503110e12325b1899538",
+    "frontend-modern/src/components/Storage/useDiskDetailModel.ts": "51dea57998a0c0d88f4a8d6410ff16dc0559674cfecf456b61706bac145321af",
+    "frontend-modern/src/components/Storage/useDiskListModel.ts": "778db34c9def3a921e4bb6f9a36a79dcaa804962e9fb5bc3c03d908c585d8503",
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "ef649564bd14366aa71121e9c09ac4309bcd299fd1d388ceff5d5969671ae471",
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts": "dac5b69aa5c603b719946fc3262d810a5a9bdc86469f33c3097542516f73d5cd",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "4210a0e7d61113f774462571700582d2f32cfe4474f04048e03d728272bd2247",
+    "frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts": "f983ea771d8f21ab018ca38a802aa7fa9795860c0ff010adcb7507cf9c47678c",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx": "168af9011efa41fc545dfb198f6eff5e9d5dbb003a0cd330c1238a820979c6b9",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts": "36497cd8a519e3de9564eefb4b1a245fac6b0478c9f9a44a262c24228fc33dc9",
+    "frontend-modern/src/utils/metricThresholds.ts": "227994b089456c54489d64c90d3a3111421ec0c1b13adddc2744ab2d3749cfc2",
+    "frontend-modern/src/utils/temperature.ts": "a67d4ec80af39b6057ed155dc8ce5ce4c7e697345f7b9fadb798dcbd31605f9f"
+  },
+  "routes": ["/proxmox/storage?tab=disks&q=West%20Production", "/truenas/storage"],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack built from this exact staged content (embedded UI and backend from one tree). A local-only generator overlay, never committed, pinned Proxmox disks from a control file: Samsung 990 PRO NVMe 63C, Crucial MX500 SATA 56C, WD Black SN850X NVMe 72C, Seagate IronWolf SATA 52C, plus TrueNAS mock disk sda (SATA) at 57C. The API returned no physicalDisk.risk and status online for every pinned disk",
+    "Same-session control on a second private stack built from the base without this change (main plus #2623): NVMe 63C read 'Running Hot' (amber) beside a green 63C cell with risk warning [temperature_high] and status warning; SATA 56C read 'Healthy' beside a red 56C cell; with the NVMe trigger raised to 75 the NVMe 72C still read 'Running Hot' from the flat 70C rule beside an amber cell",
+    "After, factory thresholds, 1440: Crucial MX500 56C 'Running Hot' red, title 'Disk temperature is 56\u00b0C, at or above its 55\u00b0C alert threshold.', red 56C cell, sorted first; WD Black 72C 'Running Hot' red with its 70C threshold; Samsung 990 PRO 63C 'Healthy' with a green cell; Crucial MX500 51C 'Healthy' with an amber cell (the band below the trigger stays colour only)",
+    "After, factory thresholds, 390: same rows with compact 'Hot' in red beside red cells, 'Healthy' beside the green 63C NVMe; no horizontal overflow (scrollWidth 390)",
+    "After, NVMe trigger raised to 75/70 through PUT /api/alerts/config: WD Black NVMe 72C is no longer Running Hot (its mock SMART health is UNKNOWN so it reads 'Unknown') and its cell is amber; SATA 56C still Running Hot",
+    "After, agent Disk Temp default switched off (trigger 0) through PUT /api/alerts/config: no disk reads Running Hot and every Temp cell is uncoloured (text-base-content); TrueNAS sda reads healthy with an Online dot",
+    "After, disk drawer for the 56C SATA disk: header 'Running Hot  Disk temperature is 56\u00b0C, at or above its 55\u00b0C alert threshold.' and the Temperature card reads 56\u00b0C",
+    "After, TrueNAS Storage at 1440: sda (57C) is an Attention row with Health 'Disk temperature is 57\u00b0C, at or above its 55\u00b0C alert threshold.'; the Attention status filter lists it; other disks healthy and unchanged",
+    "After, TrueNAS Storage at 390: the Health column is phone-hidden, and sda's status dot reads Warning (amber) while cool disks stay Online (green)"
+  ],
+  "interactions": [
+    "Loaded Physical Disks filtered to West Production at 1440x900 and 390x844 and read each row's health word, title, colour and Temp cell class on both the before and after stacks",
+    "Changed diskTempByType.nvme to 75/70, then agentDefaults.diskTemperature to 0, through GET/PUT /api/alerts/config and reloaded Physical Disks and TrueNAS Storage after each, then restored the factory config",
+    "Opened the inline drawer of the 56C SATA disk by clicking its row",
+    "Loaded TrueNAS Storage at 1440 and 390, clicked the Attention status filter, and read sda's Health cell, title and status dot"
+  ]
+}
