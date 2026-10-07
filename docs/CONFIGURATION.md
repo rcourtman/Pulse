@@ -222,8 +222,8 @@ Numeric intervals are **seconds** unless noted otherwise.
 | `pvePollingInterval` | PVE polling interval |
 | `pbsPollingInterval` | PBS polling interval |
 | `pmgPollingInterval` | PMG polling interval |
-| `backupPollingInterval` | Backup polling interval (`0` = auto) |
-| `backupPollingEnabled` | Enable backup polling |
+| `backupPollingInterval` | Backup-record polling interval (`0` = auto, not disabled). See [Backup polling and guest safety](#backup-polling-and-guest-safety). |
+| `backupPollingEnabled` | Enable scheduled backup-record collection, not a guest-agent pause. See [Backup polling and guest safety](#backup-polling-and-guest-safety). |
 | `adaptivePollingEnabled` | Enable adaptive polling |
 | `adaptivePollingBaseInterval` | Base interval for adaptive polling |
 | `adaptivePollingMinInterval` | Minimum adaptive polling interval |
@@ -379,8 +379,8 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 | `PMG_POLLING_INTERVAL` | PMG metrics polling frequency | `60s` |
 | `CONNECTION_TIMEOUT` | API connection timeout | `60s` |
 | `BACKUP_POLLING_CYCLES` | Poll cycles between backup checks | `10` |
-| `ENABLE_BACKUP_POLLING` | Enable backup job monitoring | `true` |
-| `BACKUP_POLLING_INTERVAL` | Backup polling frequency | `0` (Auto) |
+| `ENABLE_BACKUP_POLLING` | Enable scheduled backup-record collection, not a guest-agent pause. See [Backup polling and guest safety](#backup-polling-and-guest-safety). | `true` |
+| `BACKUP_POLLING_INTERVAL` | Backup-record polling interval (`0` = auto, not disabled). See [Backup polling and guest safety](#backup-polling-and-guest-safety). | `0` (Auto) |
 | `ENABLE_TEMPERATURE_MONITORING` | Enable temperature monitoring (where supported) | `true` |
 | `SSH_PORT` | SSH port for temperature collection over SSH | `22` |
 | `ADAPTIVE_POLLING_ENABLED` | Enable smart polling for large clusters | `false` |
@@ -399,6 +399,42 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 | `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS` | Optional comma-separated VMID allowlist for Proxmox-side LXC Docker discovery; when set, only these guests are socket-probed and inventoried. Empty means all running LXCs are eligible when detection or inventory is enabled | *(unset)* |
 | `PULSE_TELEMETRY` | Outbound usage telemetry ([details](PRIVACY.md)); set `false` to disable | `true` |
 | `PULSE_DEPLOYMENT_METHOD` | Optional closed telemetry label: `docker_compose`, `docker_run`, `container_other`, `systemd`, `binary_other`, or `other`; invalid values are reported only as the safe runtime fallback | Inferred as `container_other` or `binary_other` |
+
+### Backup polling and guest safety
+
+The Recovery panel's **Enable backup polling** switch (`backupPollingEnabled`,
+or `ENABLE_BACKUP_POLLING`) controls whether Pulse schedules collection of
+Proxmox/PBS backup records and guest snapshots. **Turning it off does not pause
+ordinary PVE monitoring or its QEMU Guest Agent disk, memory and metadata
+reads.** It does not stop Proxmox or PBS from running backup jobs, and changing
+the setting does not cancel work already in flight. Do not use this switch as
+a freeze-enabled backup safety precaution.
+
+`backupPollingInterval` and `BACKUP_POLLING_INTERVAL` control that collection's
+cadence. **`0` means automatic cadence, not disabled.** Longer intervals delay
+backup evidence refresh; disabled polling leaves it unrefreshed. A retained
+backup row or posture is not proof of a current observation, a successful
+restore or guest thaw. Check the matching workload, datastore, namespace and
+artifact time in the provider's own tools before relying on it; do not clear
+history or run another backup to repair a Pulse display. Environment overrides
+take precedence over `system.json` and lock the corresponding UI controls.
+Schedule configuration changes outside backup or freeze/thaw windows.
+
+For an affected installation, follow the deployment-specific
+[backup safety precaution](VM_DISK_MONITORING.md#backup-safety) before a planned
+freeze-enabled backup: pause the actual Pulse server and prevent its updater or
+deployment controller from restarting it. This is not incident recovery, and
+stopping Pulse does not cancel a guest-agent request already issued. Keep Pulse
+stopped until the backup has ended and independent post-backup checks confirm
+**thaw, fresh successful workload writes to every filesystem covered by the
+backup, and workload liveness**. Use established checks independent of Pulse
+and the QEMU Guest Agent, not new probes or forced writes. If any check fails or
+is unavailable, leave Pulse and its updater paused and use the guest/platform's
+recovery procedure. After all checks pass, restore **only services and timers
+that were active before the pause**; do not guess unknown pre-pause states.
+**Pulse monitoring and alerts are unavailable while stopped**: arrange
+independent outage coverage. This precaution does not establish a fixed
+monitoring defect.
 
 ### Logging Overrides
 
