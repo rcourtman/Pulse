@@ -2745,6 +2745,22 @@ derived alert read-model and Last 24 Hours stat refresh for
 shared acknowledgement owner instead of keeping its own alert mutation fork.
 Future overview action behavior should extend that shared acknowledgement hook
 instead of putting acknowledge mutations back into render shells.
+Overview ages and bands read the shared clock. `AlertOverviewAlertCard.tsx`
+passes its own `useRelativeTimeNow` reading as `now` to
+`formatAlertOverviewStartedAgo` and `getMetricAlertPresentation`, and the Last
+24 Hours count in `useAlertOverviewState.ts` reads the same clock, so all three
+measure from the wall clock. The hook no longer exposes a minute `tick`: read
+as "now", that tick measured a card mounted between ticks from up to a minute
+earlier, so an alert raised 70 seconds ago read "this minute", an alert
+raised since the last tick stayed out of the 24h count until the next one, a
+reading already past the 10-minute stale cut-off led the card as live, and the
+stale flip and 24h drop landed up to a minute late. A mounted card now turns stale,
+and an alert leaves the 24h count, within one 30-second tick with no data
+change. The delivery diagnoses refresh is a server read and keeps its own
+minute interval rather than following the 30-second clock.
+`AlertOverviewAlertCard.clock.test.tsx` pins the mid-tick mount, the stale flip
+and the 24h drop under fake timers, and `useAlertOverviewState.test.tsx` pins
+the diagnoses cadence.
 Render-heavy alert overview ownership now routes through
 `frontend-modern/src/features/alerts/AlertOverviewStatsCards.tsx`,
 `frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx`,
