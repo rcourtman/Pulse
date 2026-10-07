@@ -292,6 +292,14 @@ func PhysicalDiskMetricID(disk models.PhysicalDisk) string {
 	return strings.TrimSpace(fallback)
 }
 
+// PhysicalDiskMetaMetricID returns the history key metrics readers use for a
+// physical disk resource. fallback keys a disk without a usable serial or WWN.
+// The writers key a controller member's history by a source ID that already
+// names the member (HostSMARTDiskMetricID, ProxmoxPhysicalDiskSourceID), so,
+// as PhysicalDiskMetricID does, such a fallback is returned unchanged. Only a
+// fallback without the member's topology gets it appended: a Proxmox source ID
+// from before members were scoped, or the canonical resource ID a view falls
+// back to.
 func PhysicalDiskMetaMetricID(disk *PhysicalDiskMeta, fallback string) string {
 	if disk == nil {
 		return strings.TrimSpace(fallback)
@@ -302,15 +310,19 @@ func PhysicalDiskMetaMetricID(disk *PhysicalDiskMeta, fallback string) string {
 	if wwn := strings.TrimSpace(disk.WWN); diskinventory.IsUsableHardwareID(wwn) {
 		return wwn
 	}
-	if diskinventory.IsControllerMemberTarget(disk.Target) && strings.TrimSpace(fallback) != "" {
-		return diskinventory.PreferredID(
+	if fallback = strings.TrimSpace(fallback); diskinventory.IsControllerMemberTarget(disk.Target) && fallback != "" {
+		scoped := diskinventory.PreferredID(
 			"",
 			"",
-			strings.TrimSpace(fallback),
+			fallback,
 			disk.DevPath,
 			disk.Controller,
 			disk.Target,
 		)
+		if member := strings.TrimPrefix(scoped, fallback); member != "" && strings.HasSuffix(fallback, member) {
+			return fallback
+		}
+		return scoped
 	}
 	return PreferredPhysicalDiskMetricID(disk.Serial, disk.WWN, fallback)
 }

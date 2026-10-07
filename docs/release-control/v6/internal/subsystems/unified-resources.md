@@ -3554,6 +3554,24 @@ remain preferred over device fallback. Direct SATA, SAS, and NVMe fallbacks
 retain their historical device-scoped shape; controller members sharing one
 block path add controller/target scope so they cannot collapse into one
 resource. Topology correlation is parent-scoped and ambiguity fails closed.
+That scope is added once. A controller member without a usable serial or WWN
+keeps its history under a source ID that already names the member: the host
+agent's `HostSMARTDiskMetricID`, and the Proxmox `PhysicalDiskMetricID`, which
+returns `ProxmoxPhysicalDiskSourceID`. `PhysicalDiskMetaMetricID` therefore
+returns a fallback that already ends in the disk's own device, controller and
+target unchanged as the metrics target. It appends that topology only to a
+fallback without it: a Proxmox source ID from before members were scoped,
+which `PhysicalDiskMetricID` scopes the same way, or the canonical resource ID
+`PhysicalDiskView.MetricResourceID` falls back to. The suffix survives a merge
+because a member target only reaches a disk together with the controller the
+agent reported beside it (the multiplexed smartctl path sets both), and the
+Proxmox row copies both from that agent row. A registry rehydrated from
+persisted resources rebuilds the agent source ID in the same scoped shape
+(`seedAgentPhysicalDiskSourceIDLocked`). TrueNAS disks carry no controller
+target and keep their fallback. The reader used to append the topology to an
+already scoped source ID as well, so such a member's chart read a key no
+writer used. Proof: `TestPhysicalDiskMetaMetricIDScopesAControllerMemberOnce`,
+`TestIdentitylessControllerMembersReadTheirWritersHistory`.
 
 Host reports, monitoring models, registry merges, typed physical-disk views,
 API resources, websocket/REST snapshot merges, and storage presentation must

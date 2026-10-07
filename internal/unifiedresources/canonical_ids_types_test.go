@@ -824,6 +824,84 @@ func TestSplitAgentDisksOnTwoMachinesNeverOverwriteEachOther(t *testing.T) {
 	}
 }
 
+// The metrics reader scopes a controller member's fallback key to the member
+// once, as the writers do. A source ID that already names the member is the
+// writer's key and stays unchanged. A Proxmox source ID from before members
+// were scoped, and the canonical resource ID a view falls back to, get the
+// member topology appended. A disk that is no controller member keeps its
+// fallback.
+func TestPhysicalDiskMetaMetricIDScopesAControllerMemberOnce(t *testing.T) {
+	agent := models.Host{ID: "host-pve"}
+	agentMember := models.HostDiskSMART{Device: "sdd", Controller: "ctrl0", Target: "megaraid,3"}
+	labelledMember := models.HostDiskSMART{Device: "sdc [megaraid,1]", Controller: "sdc", Target: "megaraid,1"}
+	pveMember := models.PhysicalDisk{
+		ID:       ProxmoxPhysicalDiskSourceID("pve", "node1", "/dev/sdx", "", "megaraid,0"),
+		Instance: "pve", Node: "node1", DevPath: "/dev/sdx", Target: "megaraid,0",
+	}
+	legacyPVEMember := pveMember
+	legacyPVEMember.ID = "pve-node1--dev-sdx"
+	tests := []struct {
+		name     string
+		meta     PhysicalDiskMeta
+		fallback string
+		want     string
+	}{
+		{
+			name:     "agent member source ID",
+			meta:     PhysicalDiskMeta{DevPath: "sdd", Controller: "ctrl0", Target: "megaraid,3"},
+			fallback: HostSMARTDiskSourceID(agent, agentMember),
+			want:     HostSMARTDiskMetricID(agent, agentMember),
+		},
+		{
+			name:     "agent member reported under its smartctl label, merged with its Proxmox path",
+			meta:     PhysicalDiskMeta{DevPath: "/dev/sdc", Controller: "sdc", Target: "megaraid,1"},
+			fallback: HostSMARTDiskSourceID(agent, labelledMember),
+			want:     HostSMARTDiskMetricID(agent, labelledMember),
+		},
+		{
+			name:     "proxmox member source ID",
+			meta:     PhysicalDiskMeta{DevPath: "/dev/sdx", Target: "megaraid,0"},
+			fallback: pveMember.ID,
+			want:     PhysicalDiskMetricID(pveMember),
+		},
+		{
+			name:     "proxmox member source ID from before members were scoped",
+			meta:     PhysicalDiskMeta{DevPath: "/dev/sdx", Target: "megaraid,0"},
+			fallback: legacyPVEMember.ID,
+			want:     PhysicalDiskMetricID(legacyPVEMember),
+		},
+		{
+			name:     "canonical resource ID",
+			meta:     PhysicalDiskMeta{DevPath: "/dev/sdx", Target: "megaraid,0"},
+			fallback: "physical_disk-0123456789abcdef",
+			want:     "physical_disk-0123456789abcdef:sdx@/megaraid,0",
+		},
+		{
+			name:     "no controller member",
+			meta:     PhysicalDiskMeta{DevPath: "/dev/sda"},
+			fallback: "truenas-system:disk:sda",
+			want:     "truenas-system:disk:sda",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := PhysicalDiskMetaMetricID(&tt.meta, tt.fallback); got != tt.want {
+				t.Fatalf("PhysicalDiskMetaMetricID(%q) = %q, want %q", tt.fallback, got, tt.want)
+			}
+		})
+	}
+	for name, key := range map[string]string{
+		"agent member":          HostSMARTDiskMetricID(agent, agentMember),
+		"proxmox member":        PhysicalDiskMetricID(pveMember),
+		"legacy proxmox member": PhysicalDiskMetricID(legacyPVEMember),
+		"labelled agent member": HostSMARTDiskMetricID(agent, labelledMember),
+	} {
+		if strings.Count(key, "@") != 1 {
+			t.Fatalf("%s writer key %q, want the member topology once", name, key)
+		}
+	}
+}
+
 func TestIsUnsupportedLegacyResourceIDAlias(t *testing.T) {
 	tests := []struct {
 		name string

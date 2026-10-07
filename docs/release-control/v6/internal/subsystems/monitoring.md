@@ -4104,6 +4104,14 @@ ambiguous. Direct SATA, SAS, and NVMe device fallback IDs retain their legacy
 shape, while multiple controller members behind one block path add their
 controller target to the fallback identity. Per-member I/O must never inherit
 an aggregate controller counter.
+A linked node's agent with no SMART reading for a device, such as a member's
+standby row, files that device's I/O under the Proxmox disk's metrics target
+(`proxmoxPhysicalDiskMatchesForLinkedNode` reads `MetricResourceID`). For a
+member merged with its Proxmox row that target is the member's own SMART key,
+scoped to the member once (`PhysicalDiskMetaMetricID`), so its SMART and I/O
+history share one series. The target used to carry the member topology twice,
+and I/O already stored under that doubled key is left to age out rather than
+migrated. Proof: `TestIdentitylessControllerMembersReadTheirWritersHistory`.
 The same rules apply to SATA and NVMe inventory: direct-disk source IDs keep
 their historical shape, controller-member IDs add their member target, and
 cross-source correlation is scoped to the canonical parent node. A successful
