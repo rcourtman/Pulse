@@ -230,6 +230,25 @@ establish the reporter's native payload, installed cause or containing release.
 
 ### Filesystem collection precedes optional guest reads — discussion #2538
 
+Filesystem byte observations do not default absent, null, negative or
+fractional usage to a healthy zero. Positive capacity requires an explicit
+integral used-byte count within capacity; counters and the deduplicated guest
+aggregate must fit the signed disk model. Numeric strings, integral decimal
+and exponent forms, privileged-total fallback, genuine zero/full readings and
+Windows mount/device metadata retain their existing support. Exact integer
+bytes do not round through a JSON float, including object-style replies.
+Ambiguous duplicate/case-conflicting byte fields are not usage evidence.
+
+Malformed array rows remain isolated from usable peers. If no usable reading
+survives, the existing unavailable/previous-reading path remains in force.
+An unrepresentable aggregate is unavailable, not a wrapped or silently partial
+total; invalid counters are not labelled as special mounts. These completed
+replies do not alter command admission, locks, retries, cooldown or backup
+behaviour. `guest_filesystem_bytes_test.go` in both Proxmox and monitoring
+covers exact counters, wire/object/peer admission, signed arithmetic and an
+ordinary later poll with an explicit healthy zero. This establishes source
+reading integrity, not native QEMU-only recovery or independent thaw.
+
 Both the detailed-status and recent-evidence/no-status QEMU builders collect
 filesystem usage before optional Linux `/proc/meminfo` and guest metadata.
 Windows/Android guests may answer filesystem queries without supporting every

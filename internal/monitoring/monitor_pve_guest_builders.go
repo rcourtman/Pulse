@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -573,6 +574,7 @@ type vmFSInfoSummary struct {
 	individualDisks []models.Disk
 	skippedFS       []string
 	includedFS      []string
+	invalidBytes    bool
 }
 
 func (m *Monitor) fetchVMFSInfo(ctx context.Context, instanceName string, res proxmox.ClusterResource, client PVEClientInterface) ([]proxmox.VMFileSystem, string, bool) {
@@ -645,6 +647,14 @@ func (m *Monitor) summarizeVMFSInfo(instanceName string, res proxmox.ClusterReso
 		Msg("Processing filesystems from guest agent")
 
 	for _, fs := range fsInfo {
+		// Other PVEClientInterface implementations can supply records without
+		// the wire decoder. Never subtract/cast contradictory or unrepresentable
+		// counters into the signed disk model, even in an individual mount row.
+		if fs.UsedBytes > fs.TotalBytes || fs.TotalBytes > math.MaxInt64 {
+			summary.invalidBytes = true
+			summary.skippedFS = append(summary.skippedFS, fs.Mountpoint+"(invalid-byte-counts)")
+			continue
+		}
 		// Skip special filesystems and mounts
 		shouldSkip, reasons := fsfilters.ShouldSkipFilesystem(fs.Type, fs.Mountpoint, fs.TotalBytes, fs.UsedBytes)
 		if shouldSkip {
@@ -716,6 +726,11 @@ func (m *Monitor) summarizeVMFSInfo(instanceName string, res proxmox.ClusterReso
 			}
 
 			if countThisFS {
+				if fs.TotalBytes > math.MaxInt64-summary.totalBytes {
+					// A partial aggregate would look like complete guest usage.
+					// Leave it unavailable rather than wrap or silently drop a disk.
+					return vmFSInfoSummary{invalidBytes: true}
+				}
 				summary.totalBytes += fs.TotalBytes
 				summary.usedBytes += fs.UsedBytes
 			}
@@ -854,7 +869,8 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, summary.individualDisks, true, ""
 	}
 
-	// Only special filesystems found - show allocated disk size instead
+	// No usable aggregate - show allocated disk size instead. Invalid counters
+	// are a reading failure, not evidence that every filesystem is special.
 	if diskTotal > 0 {
 		diskUsage = -1 // Show as allocated size
 	}
@@ -862,8 +878,12 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 		Str("instance", instanceName).
 		Str("vm", res.Name).
 		Int("filesystems_found", len(fsInfo)).
-		Msg("Guest agent provided filesystem info but no usable filesystems found (all were special mounts)")
+		Bool("invalid_byte_counts", summary.invalidBytes).
+		Msg("Guest agent provided filesystem info but no usable disk aggregate was available")
 
+	if summary.invalidBytes {
+		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil, false, "agent-error"
+	}
 	return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil, false, "special-filesystems-only"
 }
 
