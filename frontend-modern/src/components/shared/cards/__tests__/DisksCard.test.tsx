@@ -1,4 +1,5 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DisksCard } from '../DisksCard';
 
@@ -68,6 +69,64 @@ describe('DisksCard', () => {
     expect(mounts.children).toHaveLength(count);
     expect(mounts.className).not.toMatch(/max-h-|overflow-|custom-scrollbar/);
     expect(screen.getByTitle(`/mnt/disk-${count - 1}`)).toBeInTheDocument();
+  });
+
+  const GiB = 1024 ** 3;
+  const fullRootDisks = () => [
+    { mountpoint: '/', total: 100 * GiB, used: 93 * GiB, free: 7 * GiB, usage: 0.93 },
+    { mountpoint: '/data', total: 100 * GiB, used: 41 * GiB, free: 59 * GiB, usage: 0.41 },
+  ];
+
+  it('colours current usage by the disk thresholds and draws usage bars', () => {
+    render(() => <DisksCard disks={fullRootDisks()} />);
+
+    expect(screen.getByTestId('stacked-disk-bar')).toBeInTheDocument();
+    expect(screen.getByText('93%')).toHaveClass('text-red-600');
+    expect(screen.getByText('41%')).toHaveClass('text-muted');
+    expect(screen.getAllByTestId('disks-card-mount-bar')).toHaveLength(2);
+    expect(screen.getByTestId('disks-card-mounts')).not.toHaveTextContent('Last known');
+  });
+
+  it('keeps retained usage figures but reads them as last known, without threshold colour or bars', () => {
+    render(() => (
+      <DisksCard disks={fullRootDisks()} lastKnownReason="host agent stopped reporting" />
+    ));
+    const title = 'Last known reading, not current: host agent stopped reporting';
+
+    const total = screen.getByTestId('disks-card-total');
+    expect(total).toHaveTextContent('Total Usage');
+    expect(total).toHaveTextContent('Last known 67% · 134 GB / 200 GB');
+    expect(within(total).getByTitle(title)).toHaveClass('text-muted');
+    expect(screen.queryByTestId('stacked-disk-bar')).toBeNull();
+
+    const mounts = screen.getByTestId('disks-card-mounts');
+    expect(mounts.children).toHaveLength(2);
+    const root = screen.getByText('Last known 93%');
+    expect(root).toHaveClass('text-muted');
+    expect(root).not.toHaveClass('text-red-600');
+    expect(root.closest('[title]')).toHaveAttribute('title', title);
+    expect(mounts).toHaveTextContent('93.0 GB / 100 GB');
+    expect(screen.getByText('Last known 41%')).toHaveClass('text-muted');
+    expect(screen.queryAllByTestId('disks-card-mount-bar')).toHaveLength(0);
+  });
+
+  it('follows the reason when an agent stops and resumes reporting', () => {
+    const [reason, setReason] = createSignal<string | undefined>();
+    render(() => <DisksCard disks={fullRootDisks()} lastKnownReason={reason()} />);
+
+    expect(screen.getByText('93%')).toHaveClass('text-red-600');
+    expect(screen.getAllByTestId('disks-card-mount-bar')).toHaveLength(2);
+
+    setReason('host agent stopped reporting');
+    expect(screen.getByText('Last known 93%')).toHaveClass('text-muted');
+    expect(screen.queryByTestId('stacked-disk-bar')).toBeNull();
+    expect(screen.queryAllByTestId('disks-card-mount-bar')).toHaveLength(0);
+
+    setReason(undefined);
+    expect(screen.getByText('93%')).toHaveClass('text-red-600');
+    expect(screen.queryByText(/Last known/)).toBeNull();
+    expect(screen.getByTestId('stacked-disk-bar')).toBeInTheDocument();
+    expect(screen.getAllByTestId('disks-card-mount-bar')).toHaveLength(2);
   });
 
   it('renders nothing when no disks are available', () => {

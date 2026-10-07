@@ -616,6 +616,22 @@ SharedPrimitives.guardrails.test.ts protects this composition; component tests
 preserve mount counts and totals. The disk-mounts qualification fixture checks
 short/long lists, themes and keyboard reachability with production CSS.
 
+### Retained disk usage
+
+DisksCard takes an optional `lastKnownReason` for usage figures that are
+retained rather than current. The machine drawer passes the host-agent
+stopped-reporting reason when `agent.stale` is set, the same signal that marks
+its Thermals rows "(last known)". The card keeps every figure, because a disk
+that filled before the machine went quiet is evidence. The total and each mount
+read "Last known N%" with used and total bytes, in muted text titled "Last known
+reading, not current: <reason>". Threshold text colour, the aggregate
+`StackedDiskBar` and the per-mount bars are dropped, as the guest drawer does
+for retained filesystem rows. Mount rows may wrap, with the label capped at the
+row width, so on a phone a long mountpoint takes its own line instead of
+squeezing the figures out of the card. `DisksCard.test.tsx` covers both
+readings and SharedPrimitives.guardrails.test.ts pins the branch and the drawer
+wiring.
+
 ### Ollama credential editing
 The provider panel exposes the existing Basic Auth configuration. Saved passwords
 are represented by presence text, never a placeholder secret or input value.
@@ -6539,6 +6555,11 @@ rebuilding it per surface. The overview shell must compose
 acknowledge/restore behavior rather than keeping duplicate API and notification
 logic inline in `useAlertOverviewState.ts` or a revived dashboard recent-alert
 panel.
+That hook takes the shared alert store's required `updateAlert` and keeps no
+acknowledgement override: the store holds the optimistic state until the server
+confirms it, while a second copy in the hook outlived that confirmation and hid
+a later unacknowledge from another session until reload. Snooze state reads the
+same store alerts.
 The same feature-owner rule now applies to the alert scheduling surface:
 `frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx` must remain the
 schedule render shell, while

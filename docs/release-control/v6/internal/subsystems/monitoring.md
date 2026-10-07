@@ -1229,6 +1229,20 @@ that changes one of these reference shapes must change
 Swarm service, ID-less container and service, ZFS pool and device, and host
 filesystem shapes against the real alert manager.
 
+PVE disk health and wearout lifecycle events pass through the same writer but
+never bind their path reference: each row goes to the physical disk its
+recorded serial or WWN names, or stays under the reference, under the
+unified-resources history identity clause. When a reboot reorders devices
+before the registry catches up, a row that records a serial or WWN goes to the
+disk the stale registry places at the path only if that disk reports the same
+identity (the unified-resources clause lists where inventory merges or keys
+disks differently); a row without either names only an identity-less disk at
+its path.
+`TestProxmoxDiskAlertTimelineFollowsRecordedHardware` in
+`internal/monitoring/monitor_alert_handling_test.go` pins that path, and the
+reference's incidents for the Alerts history Resource action, against the real
+alert manager.
+
 TrueNAS native alert projection preserves the trimmed, uppercase provider level in ResourceIncident.NativeSeverity. INFO and NOTICE retain the same canonical monitor risk; consumers must not lose their distinct actionability when projecting provider evidence. Native CRITICAL, ALERT, and EMERGENCY all project to canonical critical severity; EMERGENCY must not be discarded as unknown or make a still-active condition appear recovered. WARNING remains warning, and INFO and NOTICE remain informational at this projection boundary.
 
 Verification: `TestIncidentProjectionPreservesNativeSeverity` in `internal/truenas/provider_pool_health_contract_test.go` covers all seven native levels and case/whitespace normalization. `TestTrueNASNativeSeverityDispatch` in `internal/alerts/truenas_native_dispatch_test.go` verifies downstream INFO suppression, NOTICE preservation, notification severity, duplicate-poll retention, and confirmed recovery callback identity. The TrueNAS lifecycle tests in `internal/alerts/unified_incidents_test.go` require repeated EMERGENCY evidence to interrupt recovery confirmation. These are fixture-based projection and manager checks, not appliance ingestion or external notification-provider receipt proof.
@@ -4096,7 +4110,16 @@ state supersede the availability it supplied earlier
 (`diskinventory.MergeReportedStatus`), so neither a skipped disk poll nor a
 host that is never disk-polled again can carry it forward. Expiry is
 compare-and-set on the report time the evaluation judged stale, so a report
-accepted in between is never expired. Every SMART temperature history writer
+accepted in between is never expired.
+A legacy agent (from before collection provenance) withdraws its readings
+without a source, so `hostAgentSMARTCollection` stamps its reading copied onto
+the Proxmox disk through `diskinventory.LegacyHostAgentStatus`, the same rule
+the unified-resources registry applies to match that withdrawal to the copy: a
+silent legacy agent's retained temperature is not collected on the canonical
+disk either, even when no disk poll refreshes the copy. Proof:
+`TestSilentLegacyAgentCanonicalDiskFollowsItsWithdrawal` in
+`internal/monitoring/physical_disk_roundtrip_test.go`.
+Every SMART temperature history writer
 records a temperature only when its current collection state is available (or
 predates collection state), so a retained reading has to keep its non-available
 state to stay out of history; a path that relabels a carried reading as

@@ -2316,7 +2316,11 @@ A standalone host agent past its reporting lease reaches the Machines table as
 offline metric fallback blanks its CPU, memory, disk, network, disk I/O, uptime
 and temperature cells. The machine drawer drops a silent agent's uptime and
 marks its non-disk Thermals rows "(last known)" with the reason as title,
-keyed on `agent.stale` because those rows are that agent's own sensors. For SMART disk
+keyed on `agent.stale` because those rows are that agent's own sensors.
+Its Disks card reads the agent's retained filesystem usage as last known on the
+same signal (`agentReadingsLastKnownReason`): each figure stays, muted and
+titled with the reason, without threshold colour or usage bars.
+For SMART disk
 temperatures on rows that still render, the provenance travels on
 `agent.sensors.smart[].collection`: the Machines temperature cell
 (`AgentsMachinesTable.tsx`, `agentMachineTableModel.ts`), its tooltip and the
@@ -3581,19 +3585,49 @@ state the Proxmox row still carries from the same source
 past its reporting lease must not stay "collected" through the Proxmox row's
 copy of the agent's own state, including when its host is down and no disk
 poll refreshes that copy.
-Each merge step also stops the shown temperature borrowing another row's
-availability (`pairPhysicalDiskTemperatureState`). The value is still chosen
-by source preference and the states merged as above, so when the two rows of a
-step carry different temperatures the shown value could sit under the other
-row's `available` state, for example a silent agent's retained reading carried
-over a Proxmox row that collected its own reading now. When the merged state
-says collected but the row the shown value came from says it was not, the
-merged state becomes that row's own. The rule never changes a value and never
-grants availability; rows with the same value keep the merged state. It sees
-only the two rows of one step: the merged disk keeps one state per field, so
-with three or more rows for one disk a withdrawal an earlier step replaced is
-not visible to a later step, and the earlier step's merged state stands in for
-its row. Tracking each reading's own state across merges would close that.
+Each merge step then presents the shown temperature under a state that belongs
+to it (`pairPhysicalDiskTemperatureState`). The value is still chosen by source
+preference and the field states merged as above, so the shown value could
+otherwise sit under another row's state: a silent agent's retained reading
+under a Proxmox row's current `available`, or a legacy agent's stateless
+reading under a Proxmox inventory row's `unsupported`. One merged state per
+field cannot say whose reading is shown once a disk has three or more rows, so
+the registry keeps each row's own temperature reading and state on the merged
+disk (merge-time only, never serialized) and derives the state from the
+readings of the shown value. Each counts its own state, except that a state a
+non-agent row copied from an agent source gives way to an agent row's own
+withdrawal of that source (a legacy agent's sourceless withdrawal matches its
+`host_agent` copy through `diskinventory.LegacyHostAgentStatus`, the rule
+monitoring stamps the copy with); that withdrawal is the only state taken from
+a reading of another value, and it never grants `available`. A collected
+reading is presented over one that is not and an agent's own report over a
+copy, so while a current reading holds the shown value, the order in which
+different rows arrive does not change the state. A second agent reporting the
+same disk is not a copy: its withdrawal leaves another agent's own collected
+reading collected. A row that reports again replaces its reading. When source
+preference keeps showing a value no current reading holds (the row that
+reported it went into standby, or reported again without the SMART attributes
+that made its value preferred), the value keeps the state it was presented with
+and the row that state belonged to, under that row's later withdrawal, and the
+agent's withdrawal of its source still supersedes it; a row's earlier report
+never competes as current evidence. Such a kept state depends on the history of
+reports, as the kept value itself does, and stays `available` when its row now
+reports a different collected value. A disk that arrives without the record, or
+no longer presents the value and state it was built for (edited), stands as one
+reading of unknown rows: an incoming agent row's withdrawal of the source of
+its state supersedes it, and when the agent is among its sources its own
+withdrawal still supersedes an incoming copy. A disk entering the registry as a
+new row is that row alone. Two boundaries lose rows. JSON keeps only the
+presented state, so a withdrawal it does not show cannot supersede a copy
+merged after a round trip; the production rebuild ingests every row into a
+fresh registry and never merges across JSON. A manual link keeps the primary
+disk's readings and drops the other disk's, so rows merged after the link
+(supplemental records) meet only the primary's.
+`registry_merge_policy_test.go`
+(`TestPhysicalDiskMergePairsEveryShownTemperatureWithItsRowState`) checks every
+ingest order of a catalog of agent, Unraid, Proxmox and TrueNAS rows against
+this rule, and `TestPhysicalDiskMergeTemperatureReadingsAcrossIngestBoundaries`
+pins the boundaries.
 Unraid array-inventory rows carry no per-field provenance, so the adapter
 derives the state of a positive temperature taken from one (a row without a
 temperature claims no state): `unavailable` from `unraid`
@@ -5921,34 +5955,63 @@ and `TestHistoryIdentityMonitorAdapterResolvesSubResourceReferences` in
 `internal/monitoring/monitor_alert_handling_test.go` against the real alert
 producers.
 PVE disk health and wearout alerts (`ProxmoxPhysicalDiskAlertResourceID`,
-`<instance>:<node>:disk:<device key>`) stay unbound, although
+`<instance>:<node>:disk:<device key>`) never bind, although
 `ResolveReferenceID` resolves the same reference to the physical disk at that
 path for operator mutes (#2112). A device path is not hardware identity: a
 replacement disk in the same slot, or a reboot that reorders devices, takes
 over the path, and disk alerts are evaluated before their poll's disks reach
-the registry, so a lifecycle event can resolve against a generation that still
-places another disk there. A binding belongs to the reference string and
-moves to its latest target, carrying every row journaled under the reference
-and every read of it. Bound, the path would put rows a replaced disk journaled
-into its successor's history, and the Alerts history Resource action, which
-reads incidents by the alert's own reference, would show the successor's
-incidents for its predecessor's alert. Checking the serial each disk alert
-records (`disk_serial`) narrows this but does not close it: an event rejected
-for naming other hardware is still journaled under the reference and joins the
-disk the reference is bound to, the check and the journal write are not
-atomic, and an atomic check would still leave one binding owning every row
-under the path. A disk's history therefore omits its own SMART health and
-wearout alerts; they stay under the alert's reference, where incident
-timelines by alert identifier and start time find them. The Resource action
-reads the whole reference, so it lists every disk that has held the path, and
-alert identifiers derive from the path too. Binding them needs ownership per
-row, not per reference: each event written under the disk its recorded
-hardware identity names, rows with missing, unusable or ambiguous identity
-left under the reference rather than inferred from the current path, and a
-decided read for the Resource action. `proxmoxDiskAlertMetadata` records the
-serial but not the WWN, so WWN ownership also needs a producer change. Proof:
-`TestHistoryIdentityLeavesProxmoxDiskAlertReferencesUnbound` in
-`internal/unifiedresources/history_identity_test.go`.
+the registry. A binding belongs to the reference string and would carry every
+row and every read of the path to whichever disk held it last. Each lifecycle
+row is owned on its own instead (`proxmoxDiskAlertOwner` in
+`internal/unifiedresources/pve_disk_alert_history.go`). The alert records the
+evaluated disk's serial and WWN (`disk_serial`, `disk_wwn`), and
+`MonitorAdapter.RecordChange` writes the row under the one physical disk the
+registry knows by that hardware identity (`diskinventory.HardwareIdentityMatch`),
+wherever it sits now. A differing WWN does not rule a disk out, because the
+registry keeps a merged agent observation's WWN, which smartctl frames
+differently from PVE; of two matching disks, a WWN only one of them shares
+with the row decides. The registry only translates identity into a
+canonical ID: the path never breaks a tie, so a generation that still places
+another disk at the path never gains a row that disk does not match by
+identity, and no check precedes a later write. With no such disk in inventory
+(a new disk before its first poll reaches the registry, or a removed one), the
+row takes the canonical ID the registry mints for an identity it
+knows by nothing else (`MachineIdentityCanonicalID`), unless another resource
+holds that ID. A row without usable identity names only the one identity-less
+disk at its path. Every other row, missing, unusable or ambiguous, stays under
+the reference and is never retried. An owned row records its alert's
+reference as `alert_resource_id`. A read by the reference returns the rows
+journaled under it plus the rows owned away from it, matched through the
+indexed alert identifier (`ProxmoxPhysicalDiskAlertIdentifiers`) and that
+recorded reference, and every count uses the same predicate. The Alerts
+history Resource action therefore still lists every occurrence raised under
+the path, across the disks that held it, and alert-centric reads keep their
+occurrences (see the AI runtime contract's incident-history queries). Rows
+journaled under the reference before ownership existed stay there,
+unrewritten, until the journal's 30-day retention removes them. The disk
+drawer requests no change history, so ownership reaches the facets, timeline
+and intelligence APIs, Assistant resource context and Patrol's scoped change
+feed. History follows inventory where inventory merges: the registry merges
+disks that report the same serial, and a disk whose poll reports no serial
+keeps the serial last seen at its path (`preserveUnavailablePhysicalDiskEvidence`).
+A disk the registry correlates with its agent's observation by path (an
+identity-less or SAS agent disk) keeps that observation's ID and its serial
+and WWN. When the identifiers PVE records for it share nothing with the
+agent's (a SAS address reported as the serial, with no common WWN), or the
+alert fired before the PVE observation reached the registry, the row carries
+the minted ID: the disk's own history omits it, and reads by the reference
+still return it. A disk the registry keys by its agent's WWN alone also
+carries the serial PVE reports, so another disk reporting that serial, before
+its own first poll reaches the registry, has its row written under the first
+disk. Proof:
+`TestHistoryIdentityNeverBindsProxmoxDiskAlertReferences`,
+`TestProxmoxDiskAlertRowsFollowRecordedHardwareIdentity`,
+`TestProxmoxDiskAlertOwnerDecisions` and
+`TestProxmoxDiskAlertReferenceReadUsesIndexes` in
+`internal/unifiedresources/history_identity_test.go`, and
+`TestProxmoxDiskAlertTimelineFollowsRecordedHardware` in
+`internal/monitoring/monitor_alert_handling_test.go` against the real alert
+manager.
 That same shared timeline vocabulary now includes the `activity` change kind
 for provider-read breadcrumbs such as VMware tasks and events, plus the
 `vmware_adapter` source-adapter token for canonical provenance drill-down.

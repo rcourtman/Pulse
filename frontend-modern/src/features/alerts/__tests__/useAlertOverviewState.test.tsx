@@ -1,5 +1,6 @@
 import { renderHook } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AlertsAPI } from '@/api/alerts';
@@ -142,13 +143,19 @@ describe('useAlertOverviewState', () => {
 
   it('owns overview stats, filtering, and acknowledge flows outside the tab shell', async () => {
     const now = Date.now();
-    const [activeAlerts] = createSignal<Record<string, Alert>>({
-      warning: makeAlert('warning', new Date(now - 60_000).toISOString(), false),
+    const warning = () => makeAlert('warning', new Date(now - 60_000).toISOString(), false);
+    // Keyed like the websocket store: updateAlert merges into the stored
+    // alert and server payloads replace it in place.
+    const [alertsById, setAlertsById] = createStore<Record<string, Alert>>({
+      warning: warning(),
       acknowledged: makeAlert('acknowledged', new Date(now - 2 * 60_000).toISOString(), true),
       old: makeAlert('old', new Date(now - 3 * 86_400_000).toISOString(), false),
     });
+    const activeAlerts = () => alertsById;
     const [showAcknowledged, setShowAcknowledged] = createSignal(false);
-    const updateAlert = vi.fn();
+    const updateAlert = vi.fn((alertIdentifier: string, updates: Partial<Alert>) => {
+      setAlertsById(alertIdentifier, { ...alertsById[alertIdentifier], ...updates });
+    });
 
     vi.mocked(AlertsAPI.acknowledge).mockResolvedValue(undefined as any);
     vi.mocked(AlertsAPI.unacknowledge).mockResolvedValue(undefined as any);
@@ -196,10 +203,19 @@ describe('useAlertOverviewState', () => {
       'acknowledged',
     ]);
     setShowAcknowledged(false);
+    // The server confirms, then another session unacknowledges: the card
+    // returns without a reload.
+    setAlertsById('warning', reconcile({ ...warning(), acknowledged: true, ackUser: 'admin' }));
+    expect(result.filteredAlerts().map((alert) => alert.id)).toEqual(['old']);
+    setAlertsById('warning', reconcile(warning()));
+    expect(result.filteredAlerts().map((alert) => alert.id)).toEqual(['warning', 'old']);
+    expect(result.alertStats()).toMatchObject({ active: 2, acknowledged: 1 });
 
     vi.advanceTimersByTime(1500);
     expect(result.processingAlerts().has('warning')).toBe(false);
 
+    await result.handleAlertAcknowledgement(alertsById.warning);
+    vi.advanceTimersByTime(1500);
     await result.handleBulkAcknowledge();
 
     expect(AlertsAPI.bulkAcknowledge).toHaveBeenCalledWith(['old']);

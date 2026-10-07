@@ -547,6 +547,11 @@ type PhysicalDiskMeta struct {
 	Collection           *diskinventory.CollectionStatus `json:"collection,omitempty"`
 	SMART                *SMARTMeta                      `json:"smart,omitempty"`
 	Risk                 *PhysicalDiskRisk               `json:"risk,omitempty"`
+
+	// temperatureReadings is the registry's merge-time record of each row's
+	// own temperature reading. It is never serialized; see
+	// physicalDiskTemperatureReadings.
+	temperatureReadings *physicalDiskTemperatureReadings
 }
 
 // PhysicalDiskIOMeta preserves the cumulative kernel counters attributed to a

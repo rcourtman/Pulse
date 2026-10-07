@@ -87,3 +87,24 @@ func TestTemperatureCollectedOnlyForAReadingTakenByThisObservation(t *testing.T)
 		}
 	}
 }
+
+func TestLegacyHostAgentStatusFillsTheLegacyAgentProvenance(t *testing.T) {
+	stopped := "host agent stopped reporting"
+	for _, tc := range []struct {
+		name       string
+		status     FieldStatus
+		hasReading bool
+		want       FieldStatus
+	}{
+		{"stateless reading", FieldStatus{}, true, Available(LegacyHostAgentSource)},
+		{"no reading", FieldStatus{}, false, FieldStatus{}},
+		{"sourceless withdrawal", Unavailable("", stopped), true, Unavailable(LegacyHostAgentSource, stopped)},
+		{"sourceless withdrawal without a reading", Unavailable("", stopped), false, Unavailable(LegacyHostAgentSource, stopped)},
+		{"current agent state", Unavailable("smartctl", "disk is in standby"), false, Unavailable("smartctl", "disk is in standby")},
+		{"current agent reading", Available("smartctl"), true, Available("smartctl")},
+	} {
+		if got := LegacyHostAgentStatus(tc.status, tc.hasReading); got != tc.want {
+			t.Errorf("%s: LegacyHostAgentStatus = %+v, want %+v", tc.name, got, tc.want)
+		}
+	}
+}

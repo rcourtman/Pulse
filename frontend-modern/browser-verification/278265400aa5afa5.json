@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "8ad0cbbe260f032868b7fdd2132d8c71f804de2c",
+  "verified_at": "2026-10-07T10:19:14Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/useAlertAcknowledgementState.ts",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts",
+    "frontend-modern/src/stores/websocket.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/useAlertAcknowledgementState.ts": "9fac405c3a458892dba9d90398b41ccf5165b5882b7d64ecf6b0864c93669698",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "f291f66349571e09a70f2061b9503feae62a5c290b7e6a30f02389cdfdf3b60a",
+    "frontend-modern/src/stores/websocket.ts": "54fdd1c3048ca7bf81f2297c5e05e6c4c465936cbb15fd561e39e57a32ee2888"
+  },
+  "routes": [
+    "/alerts/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock stack built from this tree (backend rebuilt at the base commit, Vite serving the edited sources): Alerts > Overview with 13 active mock alerts, one critical Docker service alert (ops-prometheus) and warnings, including the Acknowledged section and the Unacknowledge control on an acknowledged card.",
+    "Before the change (origin/main bea0cec8b9, same stack): after a local Acknowledge then a curl unacknowledge, /api/alerts/active reported acknowledged:false while the overview kept the card hidden and read '2 critical, Acknowledged 1' against a nav badge of 3 critical, until reload.",
+    "After the change at 1280x900 and 375x812: the same card returns to the active list as the first card within 2 seconds of the remote unacknowledge, the header counts agree with the nav badge, and no toast fires.",
+    "Socket-beats-response race (acknowledge response held 1.5s in the page so the broadcast lands first, then a server-side unacknowledge 200ms after it resolves): the card is back at once and no 'Server did not confirm' toast or REST re-fetch occurs over 18s. With only websocket.ts reverted to main, the card stayed hidden about 16s and then that toast fired.",
+    "Only console error on the final load is the existing 403 of the acknowledge request's first attempt, which the API client retries with a fresh CSRF token (same on main)."
+  ],
+  "interactions": [
+    "Clicked Acknowledge on the critical card, then POST /api/alerts/unacknowledge for that alert from curl (another session); repeated at both viewports.",
+    "Restore direction: curl acknowledge of a warning alert, clicked Unacknowledge in the tab (card returns to active, 'Alert restored' toast), then curl acknowledge again; the card moved back to Acknowledged within 2 seconds.",
+    "Race run driven from the page with a fetch wrapper delaying the acknowledge response and AlertsAPI.unacknowledge sent after it, watching toasts and /api/alerts/active requests."
+  ]
+}

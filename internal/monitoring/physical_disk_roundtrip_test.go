@@ -533,7 +533,7 @@ func TestMergeHostAgentSMARTIntoDisks_LegacyAgentTemperatureFollowsLease(t *test
 	}}}})
 
 	reporting := mergeHostAgentSMARTIntoDisks([]models.PhysicalDisk{proxmoxDisk}, nodes, state.GetHosts())[0]
-	if reporting.Temperature != 38 || reporting.Collection.Temperature != diskinventory.Available(hostAgentLegacySource) {
+	if reporting.Temperature != 38 || reporting.Collection.Temperature != diskinventory.Available(diskinventory.LegacyHostAgentSource) {
 		t.Fatalf("legacy agent temperature not recorded as collected: temp=%d collection=%+v", reporting.Temperature, reporting.Collection)
 	}
 	if !diskinventory.TemperatureCollected(reporting.Temperature, reporting.Collection) {
@@ -552,6 +552,72 @@ func TestMergeHostAgentSMARTIntoDisks_LegacyAgentTemperatureFollowsLease(t *test
 		if diskinventory.TemperatureCollected(got.Temperature, got.Collection) {
 			t.Fatalf("%s: a silent legacy agent's retained temperature must not reach history", name)
 		}
+	}
+}
+
+// A legacy agent (before collection provenance) withdraws its readings without
+// a source when its lease expires, while monitoring stamps its reading copied
+// onto the Proxmox disk with the legacy agent source. When no disk poll
+// refreshes that copy (the host is down), the canonical disk merged from the
+// agent's row and the Proxmox row must still follow the agent's withdrawal,
+// and collect the reading again once the agent reports.
+func TestSilentLegacyAgentCanonicalDiskFollowsItsWithdrawal(t *testing.T) {
+	state := models.NewState()
+	state.UpdateNodesForInstance("pve1", []models.Node{{
+		ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online",
+		LastSeen: time.Now(), LinkedAgentID: "agent-1",
+	}})
+	report := func(seen time.Time) {
+		state.UpsertHost(models.Host{
+			ID: "agent-1", Hostname: "node1", LinkedNodeID: "pve1-node1", Status: "online",
+			IntervalSeconds: 30, LastSeen: seen,
+			Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+				Device: "/dev/sdb", Serial: "LEGACY2", Type: "sata", Health: "PASSED", Temperature: 38,
+			}}},
+		})
+	}
+	lastReport := time.Now()
+	report(lastReport)
+	inventory := models.PhysicalDisk{
+		ID: "pve1-node1-sdb", Node: "node1", Instance: "pve1", DevPath: "/dev/sdb", Serial: "LEGACY2",
+		Type: "sata", Health: "PASSED", Wearout: -1, LastChecked: time.Now(),
+		Collection: &diskinventory.CollectionStatus{
+			Temperature: diskinventory.Unsupported("proxmox_disks", "Proxmox disk inventory does not expose temperature"),
+		},
+	}
+	// The disk poll while the agent reported is the copy the Proxmox row
+	// keeps once its host stops being polled.
+	state.UpdatePhysicalDisks("pve1", mergeHostAgentSMARTIntoDisks(
+		[]models.PhysicalDisk{inventory}, state.GetSnapshot().Nodes, state.GetHosts()))
+	canonical := func() (int, *diskinventory.CollectionStatus) {
+		t.Helper()
+		adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+		adapter.PopulateFromSnapshot(state.GetSnapshot())
+		disks := adapter.PhysicalDisks()
+		if len(disks) != 1 || disks[0].Serial() != "LEGACY2" {
+			t.Fatalf("canonical disks = %d, want the agent and Proxmox rows merged into one", len(disks))
+		}
+		return disks[0].Temperature(), disks[0].Collection()
+	}
+
+	if temperature, collection := canonical(); temperature != 38 || !diskinventory.TemperatureCollected(temperature, collection) {
+		t.Fatalf("reporting legacy agent: temperature=%d collection=%+v, want 38 collected", temperature, collection)
+	}
+
+	if _, expired := state.ExpireHostTelemetry("agent-1", lastReport); !expired {
+		t.Fatal("the agent's lease did not expire")
+	}
+	temperature, collection := canonical()
+	if temperature != 38 || diskinventory.TemperatureCollected(temperature, collection) {
+		t.Fatalf("silent legacy agent: temperature=%d collection=%+v, want the retained 38 not collected", temperature, collection)
+	}
+	if collection.Temperature.Reason != models.HostAgentStoppedReportingReason {
+		t.Fatalf("silent legacy agent: temperature state %+v, want the agent's own withdrawal", collection.Temperature)
+	}
+
+	report(time.Now())
+	if temperature, collection := canonical(); temperature != 38 || !diskinventory.TemperatureCollected(temperature, collection) {
+		t.Fatalf("resumed legacy agent: temperature=%d collection=%+v, want 38 collected again", temperature, collection)
 	}
 }
 

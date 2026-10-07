@@ -890,6 +890,22 @@ payload that contradicts an unconfirmed local acknowledge or unacknowledge,
 and the confirming payload then replaces the optimistic copy. Because a
 replacement reconciles the stored alert in place, local optimistic updates are
 stored as copies, so it never rewrites a record a caller keeps for rollback.
+The store's `updateAlert` holds the only optimistic copy of an acknowledgement.
+`useAlertAcknowledgementState` writes through it and keeps no override of its
+own, so once the server confirms it, a later server change such as an
+unacknowledge from another session reaches the open tab. When no hold is
+pending and the stored alert already shows the local acknowledge or
+unacknowledge, the store sets no hold and keeps the server's `ackTime` and
+`ackUser`: the request's own broadcast can reach the socket before its HTTP
+response, and a hold would then wait for a second confirmation and skip the
+next real change. Every local acknowledgement write supersedes a REST recovery
+in flight: the store discards that response, which the server may have built
+before accepting the write, and fetches again once it settles. A hold that
+gives up after 15 seconds re-syncs from `/api/alerts/active`, waiting for a
+recovery already in flight and fetching again if that one applies nothing,
+because the payloads the hold skipped may not be followed by another alert
+change. `websocket-unified.test.ts`, `useAlertAcknowledgementState.test.tsx`
+and `useAlertOverviewState.test.tsx` pin these paths.
 Operational evidence and lifecycle identity are typed through
 `internal/operationaltrust`. Evidence envelopes distinguish completeness,
 confidence, permissions, freshness, correlation, and bounded provider detail.
@@ -2260,6 +2276,17 @@ wearout recovery rules. `TestProxmoxDiskCanonicalResourceIDTrimsIdentity` pins
 the persisted identity shape; monitoring's registry-backed
 `TestProxmoxPhysicalDiskMuteResolvesAndSuppressesWearoutAlert` pins the policy
 path. These are source invariants, not evidence of installed field relief.
+Each PVE disk alert records the evaluated disk's serial and WWN
+(`unifiedresources.MetadataDiskSerial`, `MetadataDiskWWN`), and resource
+history owns each lifecycle row by that identity rather than by the path. A
+row without a usable serial or WWN names only an identity-less disk at its
+path, and a row whose identity is ambiguous, or names no disk but one another
+resource already holds, stays under the path reference.
+Reads by the path reference find those rows through the alert identifiers
+`ProxmoxPhysicalDiskAlertIdentifiers` lists, so spec IDs and occurrence IDs
+must keep matching it;
+`TestCheckDiskHealthAlertsCarryHistoryOwnershipIdentity` in
+`internal/alerts/alerts_test.go` pins both.
 Shared metric threshold runtime now lives in
 `internal/alerts/metric_runtime.go`. That file owns metric threshold lookup,
 per-metric delay and intent resolution, reducer input composition, active-alert
