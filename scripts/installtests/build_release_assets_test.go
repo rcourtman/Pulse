@@ -5367,7 +5367,7 @@ func TestDockerModuleDownloadKeepsPinnedGraphAndBoundedRecovery(t *testing.T) {
 		"sh /usr/local/bin/pulse-go-mod-download",
 	)
 	assertFileContainsAll(t, repoFile("scripts", "go-mod-download.sh"),
-		"timeout 180 go mod download", "[ \"$attempt\" -eq 3 ]", "INTERNAL_ERROR; received from peer",
+		"timeout -k 5 180 go mod download", "[ \"$attempt\" -eq 3 ]", "INTERNAL_ERROR; received from peer",
 		"exit !(seen && !unknown)",
 	)
 	// The automatic script-smoke discovery must execute the behavioural proof,

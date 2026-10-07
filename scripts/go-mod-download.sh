@@ -16,8 +16,9 @@ trap 'exit 143' TERM
 attempt=1
 while :; do
     # Both Alpine BusyBox and GNU timeout support this fixed invocation.
-    # An attempt timeout is a terminal failure, not a reason to retry.
-    if timeout 180 go mod download >"$log" 2>&1; then
+    # TERM at 180 seconds has a five-second KILL backstop. A timeout
+    # is a terminal failure, not a reason to retry.
+    if timeout -k 5 180 go mod download >"$log" 2>&1; then
         cat "$log"
         exit 0
     else

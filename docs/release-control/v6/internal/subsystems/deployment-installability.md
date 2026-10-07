@@ -7020,8 +7020,8 @@ The Docker backend builder uses `scripts/go-mod-download.sh` with the same
 `go.mod`, `go.sum`, Go toolchain, proxy/sum database and module/build caches.
 Only a failed download whose every diagnostic matches the observed HTTPS
 HTTP/2 `stream error ... INTERNAL_ERROR; received from peer` may run again.
-There are at most three attempts, each bounded to 180 seconds, with two- and
-four-second delays. Every failed attempt's output remains visible. Access
+There are at most three attempts, each terminated at 180 seconds with a
+five-second KILL backstop, with two- and four-second delays. Every failed attempt's output remains visible. Access
 refusals, checksum/integrity errors, unknown or mixed diagnostics, missing tools,
 timeouts and signals stop with the observed nonzero exit; an exhausted transport
 failure never becomes a success. No alternate endpoint or graph rewrite exists.

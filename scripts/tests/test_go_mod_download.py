@@ -50,9 +50,9 @@ sys.exit(status)
             timeout = tools / 'timeout'
             timeout.write_text('''#!/bin/sh
 printf '%s\\n' "$*" >> "$DOWNLOAD_FIXTURE/timeout.calls"
-[ "$1" = 180 ] || exit 99
+[ "$1" = -k ] && [ "$2" = 5 ] && [ "$3" = 180 ] || exit 99
 if [ -n "${FIXTURE_TIMEOUT_STATUS:-}" ]; then exit "$FIXTURE_TIMEOUT_STATUS"; fi
-shift
+shift 3
 exec "$@"
 ''')
             timeout.chmod(0o755)
@@ -81,7 +81,7 @@ exec "$@"
         self.assertEqual(result.stdout, 'download complete\n')
         self.assertEqual(len(calls), 1)
         self.assertEqual(delays, [])
-        self.assertEqual(timeouts, ['180 go mod download'])
+        self.assertEqual(timeouts, ['-k 5 180 go mod download'])
 
     def test_docker_stage_recovers_observed_failure(self):
         result, calls, delays, timeouts = self.run_download(
@@ -89,7 +89,7 @@ exec "$@"
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(calls), 2)
         self.assertEqual(delays, ['2'])
-        self.assertEqual(timeouts, ['180 go mod download'] * 2)
+        self.assertEqual(timeouts, ['-k 5 180 go mod download'] * 2)
         self.assertIn(STREAM_ERROR, result.stderr)
 
     def test_two_failures_can_recover_on_last_attempt(self):
@@ -157,7 +157,7 @@ exec "$@"
                 self.assertEqual(result.returncode, status)
                 self.assertEqual(calls, [])
                 self.assertEqual(delays, [])
-                self.assertEqual(timeouts, ['180 go mod download'])
+                self.assertEqual(timeouts, ['-k 5 180 go mod download'])
 
     def test_arbitrary_arguments_are_rejected_before_download(self):
         result, calls, delays, timeouts = self.run_download([(0, '')], args=('-x',))
