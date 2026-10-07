@@ -5,6 +5,27 @@ providers. Use it to find recorded artifacts, identify gaps in protection and
 check the source of a backup before using the provider's own recovery tools.
 Pulse does not restore workloads from these views.
 
+## Choose the right backup
+
+The **Recovery** settings panel and the platform backup views serve different
+jobs. Their backups are not interchangeable:
+
+| Backup | What it is for | What it does not establish |
+|---|---|---|
+| Provider backup, snapshot or replication artifact | Recovering a monitored workload through the provider's own tools; see [where to look](#where-to-look) | A successful task does not prove guest thaw or application recovery |
+| **Create Backup** in **Settings → System → Recovery** | Encrypted transfer of the [included Pulse configuration](MIGRATION.md#configuration-transfer) | Not a workload backup or a full Pulse installation backup; history and agent enrolment state are excluded |
+| Consistent filesystem/volume backup of Pulse | [Full-state recovery](MIGRATION.md#full-state-recovery), including retained history and the matching encryption key | Not a backup of the workloads Pulse monitors |
+| Updater installation snapshot | Version-specific [server update recovery](AUTO_UPDATE.md#what-an-update-snapshot-contains) | A recorded snapshot path does not prove a complete or consistent data backup |
+
+**Restore Backup** in the Recovery settings panel imports Pulse configuration,
+not a VM, container, dataset or PVC. Import **replaces** the included settings
+and API-token records; it does not merge them. Export the destination's existing
+configuration before importing, retain the original passphrase privately, and
+follow the [transfer and validation steps](MIGRATION.md#transfer-the-included-configuration).
+Do not import configuration, restore Pulse data or restart monitoring to clear
+a guest freeze or an incorrect backup badge. Follow the independent guest-safety
+checks below and the provider's recovery procedure instead.
+
 ## Where to look
 
 There is no top-level Recovery page. Open the existing platform view:
