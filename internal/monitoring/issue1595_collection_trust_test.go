@@ -612,3 +612,164 @@ func TestRegistrySASPathJoinRefusesContradictingWWN(t *testing.T) {
 		})
 	}
 }
+
+// A registry rehydrated from a persisted unified snapshot seeds each source
+// key's mapping before the next poll arrives. Proxmox keys a disk by its slot,
+// so a disk swapped into the slot arrives under the previous disk's key. The
+// mapping is refused when the two carry hardware identities naming different
+// disks, and nothing else may merge the replacement back into the old disk,
+// so it gets its own canonical resource instead of the old disk's ID, serial,
+// temperature and failed health. Identity missing on one side keeps the
+// mapping, and so does a serial that may not be the drive's own (a SAS
+// address, a SCSI designator, a USB bridge's serial) set against the agent's.
+func TestRegistrySeededSlotMappingRefusesReplacedDisk(t *testing.T) {
+	const slotSourceID = "pve1-node1--dev-sdb"
+	// Each kind is the slot's previous disk as Proxmox and the agent reported
+	// it; the registry merged the two reports by WWN or by path, unless the
+	// case has Proxmox alone report it.
+	kinds := map[string]struct{ agentType, vendor, proxmoxType, proxmoxSerial string }{
+		"sata":    {agentType: "sata", vendor: "ATA", proxmoxType: "hdd", proxmoxSerial: "ZR5A0001"},
+		"sas":     {agentType: "sas", vendor: "SEAGATE", proxmoxType: "hdd", proxmoxSerial: "5000c500aaaa0003"},
+		"usb":     {agentType: "usb", vendor: "JMicron", proxmoxType: "usb", proxmoxSerial: "BRIDGE0001"},
+		"scsi":    {agentType: "sata", vendor: "SEAGATE", proxmoxType: "hdd", proxmoxSerial: "Z1Z0VPD0001"},
+		"usb-ata": {agentType: "sata", vendor: "ATA", proxmoxType: "usb", proxmoxSerial: "BRIDGE0001"},
+	}
+	for _, tc := range []struct {
+		name          string
+		kind          string
+		proxmoxFirst  bool
+		proxmoxOnly   bool
+		legacyAgent   bool
+		serial        string
+		wwn           string
+		replacedDrive bool
+	}{
+		{name: "replacement disk", kind: "sata", serial: "ZR5B0002", wwn: "0x5000c500bbbb0002", replacedDrive: true},
+		{name: "replacement disk without a WWN", kind: "sata", serial: "ZR5B0002", wwn: "unknown", replacedDrive: true},
+		{name: "same disk", kind: "sata", serial: "ZR5A0001", wwn: "0x5000c500aaaa0001"},
+		{name: "same disk without a serial", kind: "sata", serial: "unknown", wwn: "0x5000c500aaaa0001"},
+		{name: "SAS disk whose Proxmox serial is a SAS address", kind: "sas", serial: "5000c500aaaa0003", wwn: "0x5000c500aaaa0001"},
+		{name: "SAS disk without a Proxmox WWN", kind: "sas", serial: "5000c500aaaa0003", wwn: "unknown"},
+		{name: "USB disk whose Proxmox serial is the bridge's", kind: "usb", serial: "BRIDGE0001", wwn: "unknown"},
+		{name: "USB bridge serial under Proxmox vendor ATA", kind: "usb-ata", serial: "BRIDGE0001", wwn: "unknown"},
+		{name: "disk whose Proxmox serial is a SCSI designator", kind: "scsi", serial: "Z1Z0VPD0001", wwn: "unknown"},
+		{name: "SAS replacement disk", kind: "sas", serial: "5000c500bbbb0003", wwn: "0x5000c500bbbb0002", replacedDrive: true},
+		{name: "drive swapped in the same USB enclosure", kind: "usb", proxmoxFirst: true,
+			serial: "BRIDGE0001", wwn: "0x5000c500bbbb0002", replacedDrive: true},
+		{name: "SCSI designator from an agent without collection status", kind: "scsi", legacyAgent: true,
+			serial: "Z1Z0VPD0001", wwn: "unknown"},
+		{name: "replacement Proxmox alone reports, without a WWN", kind: "scsi", proxmoxOnly: true,
+			serial: "Z1Z0VPD0002", wwn: "unknown", replacedDrive: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			kind := kinds[tc.kind]
+			now := time.Now()
+			node := models.Node{
+				ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online",
+				LastSeen: now, LinkedAgentID: "agent-1",
+			}
+			host := models.Host{
+				ID: "agent-1", Hostname: "node1", LinkedNodeID: "pve1-node1", Status: "online", LastSeen: now,
+				Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+					Device: "/dev/sdb", Serial: "ZR5A0001", WWN: "5-c50-aaaa0001", Type: kind.agentType,
+					Health: "FAILED", Temperature: 55,
+					Collection: &diskinventory.CollectionStatus{
+						Serial:      diskinventory.Available("smartctl"),
+						Temperature: diskinventory.Available("smartctl"),
+					},
+				}}},
+			}
+			// As monitor_pve builds the slot's row from disks/list.
+			slotDisk := func(serial, wwn, health string) models.PhysicalDisk {
+				disk := models.PhysicalDisk{
+					ID: slotSourceID, Node: "node1", Instance: "pve1", DevPath: "/dev/sdb", Vendor: kind.vendor,
+					Serial: proxmoxReportedDiskIdentity(serial), WWN: proxmoxReportedDiskIdentity(wwn),
+					Type: kind.proxmoxType, Health: health, Wearout: -1, LastChecked: now,
+					Collection: &diskinventory.CollectionStatus{
+						Serial: diskinventory.Missing("proxmox_disks", "disk serial was not reported"),
+					},
+				}
+				if disk.Serial != "" {
+					disk.Collection.Serial = diskinventory.Available("proxmox_disks")
+				}
+				return disk
+			}
+			previousDisk := slotDisk(kind.proxmoxSerial, "0x5000c500aaaa0001", "FAILED")
+			previous := unifiedresources.NewRegistry(nil)
+			if tc.proxmoxFirst {
+				previous.IngestSnapshot(models.StateSnapshot{
+					Nodes: []models.Node{node}, PhysicalDisks: []models.PhysicalDisk{previousDisk},
+				})
+			}
+			hosts := []models.Host{host}
+			if tc.proxmoxOnly {
+				hosts = nil
+			}
+			if tc.legacyAgent {
+				host.Sensors.SMART[0].Collection = nil
+			}
+			previous.IngestSnapshot(models.StateSnapshot{
+				Nodes: []models.Node{node}, Hosts: hosts, PhysicalDisks: []models.PhysicalDisk{previousDisk},
+			})
+			persisted := previous.ListByType(unifiedresources.ResourceTypePhysicalDisk)
+			if len(persisted) != 1 || persisted[0].PhysicalDisk == nil ||
+				!hasIssue1595Source(persisted[0].Sources, unifiedresources.SourceProxmox) ||
+				hasIssue1595Source(persisted[0].Sources, unifiedresources.SourceAgent) == tc.proxmoxOnly {
+				t.Fatalf("want one disk merged from Proxmox and the agent (Proxmox alone: %v), got %+v", tc.proxmoxOnly, persisted)
+			}
+			oldID, oldDisk := persisted[0].ID, *persisted[0].PhysicalDisk
+
+			// Restart: rehydrate from the persisted resources, then poll
+			// Proxmox before the agent has reported again. A second restart
+			// rehydrates from the result, where both disks may claim the slot.
+			current := slotDisk(tc.serial, tc.wwn, "PASSED")
+			seed := previous.List()
+			slotID := ""
+			for restart := 1; restart <= 2; restart++ {
+				rehydrated := unifiedresources.NewRegistry(nil)
+				rehydrated.IngestResources(seed)
+				rehydrated.IngestSnapshot(models.StateSnapshot{
+					Nodes: []models.Node{node}, PhysicalDisks: []models.PhysicalDisk{current},
+				})
+				seed = rehydrated.List()
+
+				var slot *unifiedresources.Resource
+				disks := rehydrated.ListByType(unifiedresources.ResourceTypePhysicalDisk)
+				for index := range disks {
+					for _, target := range rehydrated.SourceTargets(disks[index].ID) {
+						if target.Source == unifiedresources.SourceProxmox && target.SourceID == slotSourceID {
+							slot = &disks[index]
+						}
+					}
+				}
+				if slot == nil || slot.PhysicalDisk == nil {
+					t.Fatalf("restart %d: no disk holds the Proxmox slot key among %d disks", restart, len(disks))
+				}
+				if slotID != "" && slot.ID != slotID {
+					t.Fatalf("restart %d: slot moved from %s to %s", restart, slotID, slot.ID)
+				}
+				slotID = slot.ID
+				if !tc.replacedDrive {
+					if slot.ID != oldID || len(disks) != 1 {
+						t.Fatalf("restart %d: slot disk = %s with %d disks, want the persisted disk %s alone",
+							restart, slot.ID, len(disks), oldID)
+					}
+					continue
+				}
+				if slot.ID == oldID || len(disks) != 2 {
+					t.Fatalf("restart %d: replacement took the persisted disk's canonical ID %s (%d disks)", restart, oldID, len(disks))
+				}
+				if slot.PhysicalDisk.Serial != current.Serial || slot.PhysicalDisk.WWN != current.WWN ||
+					slot.PhysicalDisk.Temperature != 0 || slot.PhysicalDisk.Health != "PASSED" {
+					t.Fatalf("restart %d: replacement took the persisted disk's identity or readings: %+v", restart, slot.PhysicalDisk)
+				}
+				for _, disk := range disks {
+					if disk.ID == oldID && (disk.PhysicalDisk == nil ||
+						disk.PhysicalDisk.Serial != oldDisk.Serial || disk.PhysicalDisk.WWN != oldDisk.WWN) {
+						t.Fatalf("restart %d: persisted disk was rewritten: %+v", restart, disk.PhysicalDisk)
+					}
+				}
+			}
+		})
+	}
+}

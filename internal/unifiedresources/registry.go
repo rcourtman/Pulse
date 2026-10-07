@@ -602,6 +602,7 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 	rr.refreshStoragePostureLocked()
 	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
+	rr.refreshProxmoxSensorSetupLocked()
 	rr.refreshCanonicalIdentitiesLocked()
 	rr.markStaleLocked(time.Now().UTC(), thresholds)
 	rr.invalidateViewsLocked()
@@ -653,6 +654,7 @@ func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRec
 	rr.refreshStoragePostureLocked()
 	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
+	rr.refreshProxmoxSensorSetupLocked()
 	rr.refreshCanonicalIdentitiesLocked()
 	rr.invalidateViewsLocked()
 	rr.mu.Unlock()
@@ -849,6 +851,7 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 	rr.refreshStoragePostureLocked()
 	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
+	rr.refreshProxmoxSensorSetupLocked()
 	rr.refreshCanonicalIdentitiesLocked()
 	rr.markStaleLocked(time.Now().UTC(), thresholds)
 	rr.invalidateViewsLocked()
@@ -2916,22 +2919,30 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	// Rehydrated registries seed exact source mappings from the persisted
 	// unified snapshot. Honor that durable mapping before attempting weaker
 	// identity correlation, but fail closed if a colliding source key belongs
-	// to a different physical-disk parent.
+	// to a different physical-disk parent. A Proxmox disk key names a slot, so
+	// it is also refused when the slot now holds a different disk, and no
+	// later step may merge the observation into the refused disk either.
+	refusedDiskID := ""
 	if mappedID := rr.bySource[source][sourceID]; mappedID != "" {
 		if existing := rr.resources[mappedID]; existing != nil &&
 			existing.Type == resource.Type &&
 			(resource.Type != ResourceTypePhysicalDisk ||
 				physicalDiskMatchScopeCompatible(existing, &resource)) {
-			if onlyMissing {
-				return ""
+			if source == SourceProxmox && resource.Type == ResourceTypePhysicalDisk &&
+				proxmoxDiskSlotHoldsAnotherDisk(existing, &resource) {
+				refusedDiskID = existing.ID
+			} else {
+				if onlyMissing {
+					return ""
+				}
+				rr.mergeInto(existing, resource, source, sourceID)
+				return existing.ID
 			}
-			rr.mergeInto(existing, resource, source, sourceID)
-			return existing.ID
 		}
 	}
 
 	// Linked resources must be mutually linked to avoid one-sided/ambiguous auto-merges.
-	if linked := rr.resolveLinkedResource(source, sourceID, resource); linked != "" {
+	if linked := rr.resolveLinkedResource(source, sourceID, resource); linked != "" && linked != refusedDiskID {
 		existing := rr.resources[linked]
 		if existing != nil {
 			if onlyMissing {
@@ -2946,7 +2957,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	candidateID := rr.sourceSpecificID(resource.Type, source, sourceID)
 
 	if resource.Type == ResourceTypeAgent || resource.Type == ResourceTypePhysicalDisk {
-		if match, excluded := rr.findMatch(resource, candidateID); match != nil {
+		if match, excluded := rr.findMatch(resource, candidateID); match != nil && match.ResourceB != refusedDiskID {
 			existing := rr.resources[match.ResourceB]
 			if existing != nil {
 				if onlyMissing {
@@ -2975,6 +2986,9 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 		resource.ID = rr.physicalDiskIDForMachineLocked(resource.ID, candidateID, &resource, source, onlyMissing)
 	}
 	normalizeResourceRelationships(&resource)
+	if resource.ID == refusedDiskID {
+		resource.ID = candidateID
+	}
 	if existing := rr.resources[resource.ID]; existing != nil {
 		if onlyMissing {
 			return ""
@@ -3225,6 +3239,56 @@ func physicalDiskMatchScopeCompatible(existing, incoming *Resource) bool {
 		return existingParent != "" && existingParent == incomingParent
 	}
 	return identitiesShareHostname(existing.Identity, incoming.Identity)
+}
+
+// proxmoxDiskSlotHoldsAnotherDisk reports whether a Proxmox disk observed
+// under a mapped slot key (ProxmoxPhysicalDiskSourceID) names a different disk
+// than the resource the key maps to: the slot's disk was swapped, and merging
+// would keep the previous disk's canonical ID and, where an agent report was
+// merged in, its serial, WWN and readings. Only hardware identity reported on
+// both sides counts, and differing serials only where
+// physicalDiskMappedSerialsComparable says both are the drive's own.
+func proxmoxDiskSlotHoldsAnotherDisk(existing, incoming *Resource) bool {
+	if existing.PhysicalDisk == nil || incoming.PhysicalDisk == nil {
+		return false
+	}
+	existingSerial, existingWWN := existing.PhysicalDisk.Serial, existing.PhysicalDisk.WWN
+	incomingSerial, incomingWWN := incoming.PhysicalDisk.Serial, incoming.PhysicalDisk.WWN
+	if diskinventory.HardwareIdentityMatch(existingSerial, existingWWN, incomingSerial, incomingWWN) {
+		return false
+	}
+	if !physicalDiskMappedSerialsComparable(existing, incoming) {
+		existingSerial, incomingSerial = "", ""
+	}
+	return diskinventory.HardwareIdentityConflict(existingSerial, existingWWN, incomingSerial, incomingWWN)
+}
+
+// physicalDiskMappedSerialsComparable reports whether differing serials on a
+// mapped disk and a Proxmox observation under its slot key name different
+// disks. Proxmox may report a SAS disk's transport address as its serial
+// (#1595). A disk Proxmox alone reports carries Proxmox's serial, compared as
+// is. A disk merged with an agent report may carry the agent's serial instead
+// (mergeInto restores it, and collection status does not reliably say which),
+// so its serial is compared only where Proxmox read the drive's own serial
+// too, as monitoring's hostAgentSMARTSerialComparable decides: an NVMe
+// controller serial, or an ATA drive's IDENTIFY serial, not a SCSI designator
+// or a USB bridge's serial.
+func physicalDiskMappedSerialsComparable(existing, incoming *Resource) bool {
+	switch {
+	case physicalDiskTypeIs(existing, "sas") || physicalDiskTypeIs(incoming, "sas"):
+		return false
+	case !hasDataSource(existing.Sources, SourceAgent):
+		return true
+	case physicalDiskTypeIs(incoming, "nvme"):
+		return physicalDiskTypeIs(existing, "nvme")
+	case physicalDiskTypeIs(incoming, "usb"):
+		return false
+	}
+	return physicalDiskTypeIs(existing, "sata") && strings.EqualFold(strings.TrimSpace(incoming.PhysicalDisk.Vendor), "ATA")
+}
+
+func physicalDiskTypeIs(disk *Resource, diskType string) bool {
+	return strings.EqualFold(strings.TrimSpace(disk.PhysicalDisk.DiskType), diskType)
 }
 
 func (rr *ResourceRegistry) resolveLinkedResource(source DataSource, sourceID string, resource Resource) string {

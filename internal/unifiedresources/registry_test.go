@@ -7517,3 +7517,248 @@ func TestPhysicalDiskRiskNeverJudgesTemperature(t *testing.T) {
 		t.Fatalf("meta recompute risk = %+v, want none for a collected 72C", risk)
 	}
 }
+
+// The Proxmox page's Overview lists nodes without their disk inventory, so the
+// outdated sensor setup verdict has to arrive on the node itself. The registry
+// derives it from the node's legacy-format temperature payload and the disks
+// it parents, with the same reading rule every disk temperature consumer uses.
+func TestProxmoxNodeSensorSetupOutdatedFromItsDisks(t *testing.T) {
+	now := time.Now()
+	legacy := &models.Temperature{Available: true, LegacySensorsFormat: true}
+	inventoryOnly := &diskinventory.CollectionStatus{
+		Temperature: diskinventory.Unsupported("proxmox_disks", "Proxmox disk inventory does not expose temperature"),
+	}
+	node := func(name string, temperature *models.Temperature) models.Node {
+		return models.Node{
+			ID:          "homelab-" + name,
+			Name:        name,
+			Instance:    "homelab",
+			Status:      "online",
+			LastSeen:    now,
+			Temperature: temperature,
+		}
+	}
+	disk := func(nodeName, devPath, diskType string, temperature int, collection *diskinventory.CollectionStatus) models.PhysicalDisk {
+		return models.PhysicalDisk{
+			ID:          ProxmoxPhysicalDiskSourceID("homelab", nodeName, devPath, "", ""),
+			Node:        nodeName,
+			Instance:    "homelab",
+			DevPath:     devPath,
+			Model:       "Disk " + devPath,
+			Serial:      "SERIAL-" + nodeName + devPath,
+			Type:        diskType,
+			Health:      "PASSED",
+			Wearout:     -1,
+			Temperature: temperature,
+			Collection:  collection,
+			LastChecked: now,
+		}
+	}
+
+	cases := []struct {
+		name  string
+		nodes []models.Node
+		disks []models.PhysicalDisk
+		want  bool
+	}{
+		{
+			name:  "SATA disk without a temperature",
+			nodes: []models.Node{node("pve", legacy)},
+			disks: []models.PhysicalDisk{disk("pve", "/dev/sda", "sata", 0, inventoryOnly)},
+			want:  true,
+		},
+		{
+			// Proxmox's own disk inventory types these disks by form factor.
+			name:  "Proxmox hdd and ssd inventory types",
+			nodes: []models.Node{node("pve", legacy)},
+			disks: []models.PhysicalDisk{disk("pve", "/dev/sda", "hdd", 0, inventoryOnly), disk("pve", "/dev/sdb", "ssd", 0, inventoryOnly)},
+			want:  true,
+		},
+		{
+			name:  "SAS disk whose reading is retained, not current",
+			nodes: []models.Node{node("pve", legacy)},
+			disks: []models.PhysicalDisk{disk("pve", "/dev/sda", "sas", 41, &diskinventory.CollectionStatus{
+				Temperature: diskinventory.Unavailable("host_agent", "host agent stopped reporting"),
+			})},
+			want: true,
+		},
+		{
+			name:  "SATA disk whose reading the source marks missing",
+			nodes: []models.Node{node("pve", legacy)},
+			disks: []models.PhysicalDisk{disk("pve", "/dev/sda", "sata", 38, &diskinventory.CollectionStatus{
+				Temperature: diskinventory.Missing("proxmox_node_smart", "temperature was not reported"),
+			})},
+			want: true,
+		},
+		{
+			name:  "SATA disk with a current reading",
+			nodes: []models.Node{node("pve", legacy)},
+			disks: []models.PhysicalDisk{disk("pve", "/dev/sda", "sata", 36, &diskinventory.CollectionStatus{
+				Temperature: diskinventory.Available("proxmox_node_smart"),
+			})},
+			want: false,
+		},
+		{
+			name:  "reading from a source that predates collection state",
+			nodes: []models.Node{node("pve", legacy)},
+			disks: []models.PhysicalDisk{disk("pve", "/dev/sda", "sata", 36, nil)},
+			want:  false,
+		},
+		{
+			// NVMe temperatures arrive through kernel hwmon even on a legacy setup.
+			name:  "NVMe disk without a temperature",
+			nodes: []models.Node{node("pve", legacy)},
+			disks: []models.PhysicalDisk{disk("pve", "/dev/nvme0n1", "nvme", 0, inventoryOnly)},
+			want:  false,
+		},
+		{
+			name:  "current setup payload",
+			nodes: []models.Node{node("pve", &models.Temperature{Available: true})},
+			disks: []models.PhysicalDisk{disk("pve", "/dev/sda", "sata", 0, inventoryOnly)},
+			want:  false,
+		},
+		{
+			name:  "failed temperature collection",
+			nodes: []models.Node{node("pve", &models.Temperature{Available: false, LegacySensorsFormat: true})},
+			disks: []models.PhysicalDisk{disk("pve", "/dev/sda", "sata", 0, inventoryOnly)},
+			want:  false,
+		},
+		{
+			name:  "waiting disk belongs to another node",
+			nodes: []models.Node{node("pve", legacy), node("pve2", &models.Temperature{Available: true})},
+			disks: []models.PhysicalDisk{disk("pve2", "/dev/sda", "sata", 0, inventoryOnly)},
+			want:  false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := NewRegistry(nil)
+			registry.IngestSnapshot(models.StateSnapshot{Nodes: tc.nodes, PhysicalDisks: tc.disks})
+			got := proxmoxNodeSensorSetupOutdated(t, registry.List(), "pve")
+			if got != tc.want {
+				t.Fatalf("pve sensorSetupOutdated = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// A linked host agent that reads the disk's SMART temperature itself answers
+// what the legacy SSH setup cannot, so the node is not flagged; the verdict is
+// derived on every ingest, so a later snapshot clears an earlier flag.
+func TestProxmoxNodeSensorSetupOutdatedFollowsWhereTheReadingArrives(t *testing.T) {
+	now := time.Now()
+	nodes := []models.Node{{
+		ID:            "homelab-pve",
+		Name:          "pve",
+		Instance:      "homelab",
+		LinkedAgentID: "host-pve",
+		Status:        "online",
+		LastSeen:      now,
+		Temperature:   &models.Temperature{Available: true, LegacySensorsFormat: true},
+	}}
+	inventory := []models.PhysicalDisk{{
+		ID:          ProxmoxPhysicalDiskSourceID("homelab", "pve", "/dev/sda", "", ""),
+		Node:        "pve",
+		Instance:    "homelab",
+		DevPath:     "/dev/sda",
+		Model:       "WDC WD80EFAX",
+		Serial:      "SERIAL-SDA",
+		Type:        "hdd",
+		Health:      "PASSED",
+		Wearout:     -1,
+		Collection:  &diskinventory.CollectionStatus{Temperature: diskinventory.Unsupported("proxmox_disks", "Proxmox disk inventory does not expose temperature")},
+		LastChecked: now,
+	}}
+	agent := func(collection *diskinventory.CollectionStatus) []models.Host {
+		return []models.Host{{
+			ID:           "host-pve",
+			Hostname:     "pve",
+			LinkedNodeID: "homelab-pve",
+			Status:       "online",
+			LastSeen:     now,
+			Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+				Device:      "/dev/sda",
+				Model:       "WDC WD80EFAX",
+				Serial:      "SERIAL-SDA",
+				Type:        "sata",
+				Temperature: 34,
+				Health:      "PASSED",
+				Collection:  collection,
+			}}},
+		}}
+	}
+
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{Nodes: nodes, PhysicalDisks: inventory})
+	if !proxmoxNodeSensorSetupOutdated(t, registry.List(), "pve") {
+		t.Fatal("legacy node with an unread hdd: sensorSetupOutdated = false, want true")
+	}
+
+	registry.IngestSnapshot(models.StateSnapshot{
+		Nodes:         nodes,
+		PhysicalDisks: inventory,
+		Hosts:         agent(&diskinventory.CollectionStatus{Temperature: diskinventory.Available("host_agent")}),
+	})
+	if proxmoxNodeSensorSetupOutdated(t, registry.List(), "pve") {
+		t.Fatal("linked agent reads the disk now: sensorSetupOutdated = true, want the earlier flag cleared")
+	}
+	// Clients merge a facet field by field, so the cleared verdict must be on
+	// the wire as false, not omitted.
+	assertProxmoxNodeSensorSetupJSON(t, registry.ListForPresentation(), "pve", `"sensorSetupOutdated":false`)
+
+	registry.IngestSnapshot(models.StateSnapshot{
+		Nodes:         nodes,
+		PhysicalDisks: inventory,
+		Hosts:         agent(&diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("host_agent", "host agent stopped reporting")}),
+	})
+	presented := registry.ListForPresentation()
+	if !proxmoxNodeSensorSetupOutdated(t, presented, "pve") {
+		t.Fatal("agent reading retained, not current: sensorSetupOutdated = false, want true")
+	}
+	assertProxmoxNodeSensorSetupJSON(t, presented, "pve", `"sensorSetupOutdated":true`)
+}
+
+func assertProxmoxNodeSensorSetupJSON(t *testing.T, resources []Resource, nodeName, want string) {
+	t.Helper()
+	for _, resource := range resources {
+		if resource.Proxmox == nil || resource.Proxmox.NodeName != nodeName || CanonicalResourceType(resource.Type) != ResourceTypeAgent {
+			continue
+		}
+		payload, err := json.Marshal(resource.Proxmox)
+		if err != nil {
+			t.Fatalf("marshal node proxmox facet: %v", err)
+		}
+		if !strings.Contains(string(payload), want) {
+			t.Fatalf("node proxmox payload = %s, want %s for list readers", payload, want)
+		}
+		return
+	}
+	t.Fatalf("node %q not presented", nodeName)
+}
+
+func proxmoxNodeSensorSetupOutdated(t *testing.T, resources []Resource, nodeName string) bool {
+	t.Helper()
+	var found *Resource
+	for i := range resources {
+		resource := &resources[i]
+		if CanonicalResourceType(resource.Type) != ResourceTypeAgent || resource.Proxmox == nil || resource.Proxmox.NodeName != nodeName {
+			continue
+		}
+		if found != nil {
+			t.Fatalf("node %q presented twice: %s and %s", nodeName, found.ID, resource.ID)
+		}
+		found = resource
+	}
+	if found == nil {
+		t.Fatalf("node %q not found among %d resources", nodeName, len(resources))
+	}
+	for _, resource := range resources {
+		if CanonicalResourceType(resource.Type) != ResourceTypeAgent && resource.Proxmox != nil && resource.Proxmox.SensorSetupOutdated != nil {
+			t.Fatalf("%s %s carries the node verdict", resource.Type, resource.ID)
+		}
+	}
+	if found.Proxmox.SensorSetupOutdated == nil {
+		t.Fatalf("node %q has no explicit sensor setup verdict", nodeName)
+	}
+	return *found.Proxmox.SensorSetupOutdated
+}

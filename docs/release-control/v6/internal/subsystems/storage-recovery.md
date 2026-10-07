@@ -960,6 +960,15 @@ Patrol coverage, schedule, finding, and approval state belongs on Patrol-owned
 surfaces or explicit Patrol affordances; Proxmox overview must not treat it as
 backup coverage, restore readiness, PBS verification/protection proof, or a
 replacement for the Proxmox Backups tab and workload Backup column.
+The outdated sensor setup notice above the Proxmox tabs is temperature
+guidance, not storage or recovery evidence. It reads the registry's per-node
+`proxmox.sensorSetupOutdated` verdict from the node rows the active tab already
+loads (Overview, Storage, Replication and Backups load nodes; Ceph and Mail do
+not, so it does not render there), so the Overview query must not add
+`physical_disk` rows to feed it; the derived `ProxmoxData` flag opens no storage
+or recovery path.
+`ProxmoxPageSurface.contract.test.tsx` pins the notice on Overview with no disk
+rows and an Overview query without `physical_disk`.
 The Proxmox inline estate totals are likewise an adjacent frontend-primitives
 and unified-resource projection, not backup or recovery evidence.
 `ProxmoxPageSurface` must flow the already-loaded workload inventory into the
@@ -6937,3 +6946,14 @@ guest, integration host, Docker host and app container rows it judges to have
 stopped reporting, or answers a lapsed linked agent from its node row. It reads
 only snapshot status and the registry's per-source sightings, and writes
 nothing.
+
+### Demo write guard ignores websocket upgrade headers
+
+`internal/api/demo_middleware.go` no longer exempts every request carrying
+`Upgrade: websocket` from the demo read-only guard. On a `DEMO_MODE` instance a
+`POST`, `PUT`, `PATCH` or `DELETE` with websocket handshake headers is now
+judged like any other write: outside the login, logout, AI execute and OIDC
+allowlist it gets the generic demo `403`, or `404` on a hidden route, and that
+includes config import at `/api/config/import`. HTTP/1.1 websocket handshakes
+are `GET` requests and still connect. No storage, retention, backup, migration
+or recovery path is added or moved.
