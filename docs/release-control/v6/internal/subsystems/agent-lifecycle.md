@@ -3775,6 +3775,14 @@ The authenticated native-route control covers the store/native boundary.
 
 The partial-result path no longer discards every successful row when another guest fails. The helper remains in its private network on every platform; pmxcfs abstract IPC is still unavailable there on the reported PVE estate (#2511). That defect is not fixed by the partial protocol (#2513), and API monitoring remains the safe existing alternative. The earlier host-network proposal is not part of this implementation.
 
+### Alert settings saves do not touch agent lifecycle
+
+`PUT /api/alerts/config` in `internal/api/alerting/alerts.go` now keeps stored
+values for the top-level keys a client leaves out. Agent alert defaults
+(`agentDefaults`) follow the same rule as every other key; enrollment,
+reporting leases, commands and agent removal are unchanged.
+`internal/api/alerting/alerts_test.go` pins the handler.
+
 ### VM guest execution admission (backup precaution)
 
 `AgentRegisterPayload.guest_exec_guard_version` is optional; version 1 on a

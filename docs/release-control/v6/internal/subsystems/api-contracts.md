@@ -10465,6 +10465,22 @@ boundaries. Alert evaluation after that save remains alerts-owned and must use
 the persisted trigger/recovery pair plus a valid derived critical threshold;
 the API must not invent a TrueNAS-specific threshold sidecar.
 
+`PUT /api/alerts/config` replaces only the top-level keys the body carries
+and keeps the stored value of every key it leaves out, so a client that does
+not know a setting cannot turn it off by leaving it out: the thresholds page
+has no flapping-detection or alert-TTL controls, and an older browser bundle
+or API script predates later fields. A sent key replaces its stored value
+whole, so `"overrides": {}` removes every override rather than merging, and
+the merged config then goes through the same normalization as any update (for
+example, activation state is never cleared). The read, merge and apply run
+under the alert manager's lock, so two concurrent partial saves cannot revert
+each other in memory; the handler runs one save at a time and persists a
+snapshot of the applied config, so successful saves through this endpoint
+reach `alerts.json` in the order they were applied. A body that is not a JSON object, `null` included, is a 400 and changes
+nothing. `TestUpdateAlertConfig_KeepsStoredValuesForUnsentKeys`
+and `TestUpdateAlertConfig_RejectsNonObjectBody` in
+`internal/api/alerting/alerts_test.go` prove the transport.
+
 ### Alert intent and UDP availability transport
 
 `GET /api/alerts/intent-policies` and

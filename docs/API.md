@@ -929,7 +929,9 @@ For an existing incident whose notifications should be paused without clearing
 it, use the snooze and unsnooze endpoints below.
 
 - `GET /api/alerts/config`
-- `PUT /api/alerts/config`
+- `PUT /api/alerts/config` — replaces only the top-level keys the body
+  carries; a key left out keeps its stored value, and the merged config is
+  normalized as before. The body must be a JSON object.
 - `GET /api/alerts/deadman/config` — returns only whether an external watchdog
   is configured; `pingUrl` is `***REDACTED***` when present and never returns
   the credential-bearing URL
