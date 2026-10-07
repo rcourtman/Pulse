@@ -147,7 +147,7 @@ describe('useAlertOverviewState', () => {
       acknowledged: makeAlert('acknowledged', new Date(now - 2 * 60_000).toISOString(), true),
       old: makeAlert('old', new Date(now - 3 * 86_400_000).toISOString(), false),
     });
-    const [showAcknowledged] = createSignal(false);
+    const [showAcknowledged, setShowAcknowledged] = createSignal(false);
     const updateAlert = vi.fn();
 
     vi.mocked(AlertsAPI.acknowledge).mockResolvedValue(undefined as any);
@@ -185,6 +185,17 @@ describe('useAlertOverviewState', () => {
     );
     expect(notificationStore.success).toHaveBeenCalledWith('Alert acknowledged');
     expect(result.processingAlerts().has('warning')).toBe(true);
+    // Hiding/counting acknowledgement is not deletion or measured recovery.
+    expect(result.alertStats()).toMatchObject({ active: 1, acknowledged: 2 });
+    expect(result.filteredAlerts().map((alert) => alert.id)).toEqual(['old']);
+    expect(Object.keys(activeAlerts())).toHaveLength(3);
+    setShowAcknowledged(true);
+    expect(result.filteredAlerts().map((alert) => alert.id)).toEqual([
+      'old',
+      'warning',
+      'acknowledged',
+    ]);
+    setShowAcknowledged(false);
 
     vi.advanceTimersByTime(1500);
     expect(result.processingAlerts().has('warning')).toBe(false);

@@ -549,6 +549,40 @@ This tolerance delays activation; it does not disable powered-off monitoring.
 Use the existing guest offline-alert toggle when a guest should never produce
 powered-off alerts.
 
+### Acknowledge and snooze existing alerts
+
+In **Alerts → Overview**, these actions apply to an existing incident, not its
+threshold rule. Monitoring continues; neither action repairs the workload or
+confirms recovery.
+
+| Action | Effect |
+| --- | --- |
+| **Acknowledge** | Marks the incident as seen. While acknowledged, further firing notifications, escalation and its recovery notification are suppressed. The underlying alert can remain active. |
+| **Unacknowledge** | Removes that acknowledgement. Normal notification policies apply again; this is not a guaranteed immediate resend. |
+| **Snooze** | Pauses notifications and escalation for this incident until the selected time, including critical notifications. Monitoring can still detect recovery during the snooze. |
+| **Resume** | Ends this incident's snooze early. It does not remove an acknowledgement or clear the underlying alert. |
+
+Acknowledged alerts are hidden from the default active list and excluded from
+its **Active** count. Use **Show acknowledged** to inspect them and
+**Unacknowledge** only when they need attention again. **No unacknowledged
+alerts** does not mean every workload recovered. Before **Acknowledge all**, read
+the count and scope: the toolbar applies to all unacknowledged active alerts;
+a group's button applies to that group, including its collapsed related alerts.
+Use the individual action when only one incident has been reviewed.
+
+Choose a **Snooze** duration on the incident's card and check its **Snoozed until**
+time. **Until tomorrow at 9:00** uses the browser's local timezone, not the
+[quiet-hours timezone](#quiet-hours-and-notification-holds). On expiry or
+**Resume**, an acknowledged incident remains acknowledged; remove that hold
+separately if intended. Other schedules, routing, cooldowns and destination
+settings still apply, so ending a snooze is not proof of delivery or a promise
+to replay missed notifications.
+
+These incident actions are not **Dismiss retained failures** or **Retry retained
+deliveries**. They do not retry a failed notification. Check fresh readings and
+the workload for recovery, and [Recent delivery activity](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing)
+for delivery. Do not create an outage or lower thresholds to test an action.
+
 ### Quiet hours and notification holds
 
 Open **Alerts → Schedule → Quiet hours** to enable a notification quiet period.

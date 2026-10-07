@@ -72,6 +72,10 @@ describe('notification evidence privacy help', () => {
   });
 
   it('connects both entry points to existing shipped privacy precautions', () => {
+    const guides: Record<string, HTMLElement> = {
+      WEBHOOKS: article('WEBHOOKS'),
+      TROUBLESHOOTING: article('TROUBLESHOOTING'),
+    };
     const cases = [
       [
         'TROUBLESHOOTING',
@@ -87,9 +91,9 @@ describe('notification evidence privacy help', () => {
       ],
     ];
     for (const [from, to, href, label] of cases) {
-      const link = article(from).querySelector(`a[href="${href}"]`);
+      const link = guides[from].querySelector(`a[href="${href}"]`);
       expect(link?.textContent).toBe(label);
-      expect(article(to).querySelector(href.slice(href.indexOf('#')))).not.toBeNull();
+      expect(guides[to].querySelector(href.slice(href.indexOf('#')))).not.toBeNull();
     }
   });
 });
