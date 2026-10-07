@@ -8,8 +8,10 @@ import {
   getAlertHistoryStatusPresentation,
   getAlertIncidentLevelBadgeClass,
 } from '@/utils/alertIncidentPresentation';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 import { AlertHistoryItemActions } from './AlertHistoryItemActions';
+import { getAlertHistoryRowCopy } from './alertHistoryModel';
 import { AlertResourceIncidentsPanel } from './AlertResourceIncidentsPanel';
 import type { AlertHistoryState } from './useAlertHistoryState';
 
@@ -23,6 +25,10 @@ interface AlertHistoryTableAlertRowProps {
 export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps) {
   const rowKey = () => props.state.getIncidentRowKey(props.alert);
   const historyStatusPresentation = () => getAlertHistoryStatusPresentation(props.alert.status);
+  // An open threshold alert's live reading turns stale when evaluations stop,
+  // so it rechecks on the shared clock; the last breach moves to the hover.
+  const now = useRelativeTimeNow();
+  const descriptionCopy = () => getAlertHistoryRowCopy(props.alert, now);
 
   return (
     <>
@@ -62,9 +68,9 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
 
         <TableCell
           class={`${getPlatformTableCellClassForKind('text')} max-w-[300px] truncate text-base-content`}
-          title={props.alert.description}
+          title={descriptionCopy().title}
         >
-          {props.alert.description}
+          {descriptionCopy().text}
         </TableCell>
 
         <TableCell

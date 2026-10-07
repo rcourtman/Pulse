@@ -7,6 +7,7 @@ import {
 import { isPulseSystemAlert } from '@/utils/alertScope';
 
 import { alertTypeDisplayLabel, unifiedTypeToAlertDisplayType } from './helpers';
+import { getMetricAlertPresentation } from './metricAlertPresentation';
 
 export const MS_PER_HOUR = 60 * 60 * 1000;
 
@@ -33,6 +34,22 @@ export interface HistoryItem {
   closeDetail?: string;
   acknowledged?: boolean;
   systemAlert?: boolean;
+  /**
+   * The open alert behind an active row, so the row can describe a threshold
+   * alert held below its trigger from its live reading. Closed rows have none.
+   */
+  liveAlert?: Pick<Alert, 'type' | 'value' | 'lastSeen' | 'metricStatus' | 'metadata'>;
+}
+
+export interface AlertHistoryRowCopy {
+  /** What the row leads with. */
+  text: string;
+  /** What clears an open threshold alert from here. */
+  detail?: string;
+  /** The last reading that met the trigger, once the live one differs. */
+  lastBreach?: string;
+  /** The full copy, for hover where the row truncates. */
+  title: string;
 }
 
 export interface AlertTrendSeries {
@@ -205,6 +222,7 @@ export function buildAlertHistoryItems({
       rawAlertType: alert.type,
       description: alert.message,
       acknowledged: false,
+      ...(systemScoped ? {} : { liveAlert: alert }),
     });
   });
 
@@ -249,6 +267,29 @@ export function buildAlertHistoryItems({
   });
 
   return items;
+}
+
+// The open row is the one occurrence still in progress. A threshold alert can
+// stay open below its trigger while its message keeps the last breach, so the
+// row leads with the reading Pulse is evaluating now, as the Alerts card does.
+// Closed rows, and open ones without a live status, keep the recorded message,
+// which search and the Assistant handoff also read. The clock is read only for
+// open rows, so closed rows do not re-render on every tick.
+export function getAlertHistoryRowCopy(
+  item: Pick<HistoryItem, 'description' | 'liveAlert'>,
+  now: () => number = Date.now,
+): AlertHistoryRowCopy {
+  const recorded = item.description ?? '';
+  const presentation = item.liveAlert ? getMetricAlertPresentation(item.liveAlert, now()) : null;
+  if (!presentation) return { text: recorded, title: recorded };
+  return {
+    text: presentation.summary,
+    detail: presentation.detail,
+    lastBreach: presentation.lastBreach,
+    title: [presentation.summary, presentation.detail, presentation.lastBreach]
+      .filter(Boolean)
+      .join('\n'),
+  };
 }
 
 export function filterAlertHistoryItems(

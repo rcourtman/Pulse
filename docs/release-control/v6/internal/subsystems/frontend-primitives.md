@@ -133,6 +133,15 @@ card's left column (status icon and text) keeps a 16rem floor and the text
 breaks long words, so the action buttons wrap instead of squeezing the reading
 to its longest word beside them.
 
+### History rows read held alerts through the same helper — issue #2068
+
+`AlertHistoryTableAlertRow` and `AlertHistoryMobileList` take their message
+copy from `getAlertHistoryRowCopy` in `features/alerts/alertHistoryModel.ts`,
+which wraps the same `metricAlertPresentation.ts` helper for an active row's
+`liveAlert`. It reads the `useRelativeTimeNow` clock only for rows with a live
+alert, so a reading that stops updating turns stale on screen while closed
+rows never re-render on the tick.
+
 ### Canonical drawer History preserves guest read provenance
 
 The shared resource drawer passes selected memory observation state/source/time

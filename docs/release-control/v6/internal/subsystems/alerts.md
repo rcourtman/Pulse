@@ -104,6 +104,19 @@ recorded message. Every disk alert on a guest carries the guest's name, so the
 presentation names the disk from `metadata.label`, as the per-disk message
 does.
 
+### History leads its open row with the live reading — issue #2068
+
+Alerts > History is a log of occurrences, but its open row is the one
+occurrence still in progress: it already shows an Active badge and a running
+duration, so a breach message beside them reads as the reading now. An active
+history row for a threshold alert with a usable live status leads with the
+presentation's summary; the desktop row carries the clear rule and last
+breach in its hover, and the phone card shows them as muted lines because it
+has no hover. `buildAlertHistoryItems` keeps `description` as the recorded
+message, so search and the Assistant handoff still read the record, and
+attaches the source alert as `liveAlert` only to active, non-system rows.
+Closed rows, and open ones without a live status, keep their recorded message.
+
 ### Retained guest observations are not alert evidence
 
 Guest memory marked `last-known`, `unavailable` or an unknown observation state
