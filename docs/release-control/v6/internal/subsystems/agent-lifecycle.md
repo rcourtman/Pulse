@@ -744,6 +744,16 @@ through `GetLiveHostsSnapshot`, which copies only hosts (see the monitoring
 contract); it must not route through a full state snapshot, which copied every
 guest on each agent report.
 
+The mock toggle keeps the same boundary for evaluations already in flight.
+`SetMockMode` ends the mock-mode epoch before it clears alerts and forgets the
+fixture agents (see the monitoring contract), so a fixture agent pass that read
+the estate before the toggle cannot reopen the agent's alerts or re-register
+its hostname deduplication afterwards. The toggle waits for the
+alert-manager calls already running, not for whole passes. Report admission is
+not fenced: a live report already past its mock-mode check when mock mode is
+switched on can still be evaluated after the clear, and its alerts can persist
+until mock mode is left.
+
 Physical-disk evidence collected by a host agent must survive projection back
 into monitoring's models. Absent evidence has to carry its declared sentinel
 rather than a zero value that reads as a real measurement: an absent

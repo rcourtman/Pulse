@@ -1663,10 +1663,12 @@ boundaries:
 - Leaving mock mode routes the fixture agents through `HandleHostRemoved`.
   `ClearActiveAlerts` drops their alerts but not their hostname registrations,
   and a real node named like a fixture agent (`pve1`) would otherwise keep its
-  metric alerts suppressed with no agent to own them. A pass whose snapshot
-  predates the switch finds mock mode off under the same lock and evaluates
-  nothing. Two overlapping passes can still evaluate an older snapshot after
-  a newer one; the next pass reconciles the set again.
+  metric alerts suppressed with no agent to own them. `SetMockMode` ends the
+  mock-mode epoch before it forgets them, so a pass whose snapshot predates the
+  switch finds its epoch ended under the same lock and evaluates nothing, and
+  an agent whose departure the switch refused stays in the forgotten set. Two
+  overlapping passes in one epoch can still evaluate an older snapshot after a
+  newer one; the next pass reconciles the set again.
 
 Fixture agents must carry readings a real agent could report. Mock Kubernetes
 pods share 0.7 single-pod memory footprints per node, which keeps a node's pods
@@ -1721,14 +1723,115 @@ boundary around it:
   matches node names only, so it relies on fixture node names being unique
   across instances, which they are.
 
-The disk loop relies on the pass's single up-front mode check, like every
-loop in `checkMockAlerts` except the host-agent step, which re-checks under its
-own lock. A pass already past that check when mock mode is switched off can
-reopen its fixture alerts after `SetMockMode(false)` clears them, and
-other paths that evaluate fixture data (frontend refresh into unified alert
-evaluation, backup rollups) have the same window. That mode-exit race predates
-the disk loop and is not closed here; a lock around `checkMockAlerts` alone
-would leave the other paths open.
+Switching mock mode fences the alert evaluations that read mode-dependent data
+(`mockModeFence`, `internal/monitoring/mock_mode_fence.go`). `GetState`, the
+fixture graph, the unified read view, the recovery rollups and the connection
+ledger all change source when the mode flips. A pass already holding one side's
+data used to reach the alert manager after `SetMockMode` cleared it, and its
+fixture alerts then stayed in live mode, with nothing left to evaluate or
+resolve them, until the 24-hour stale sweep. Each of these paths takes a scope
+before it reads anything mode-dependent and sends its alert-manager calls
+through it:
+
+- `checkMockAlerts`, for every loop including the host-agent and disk steps
+  and the mock alert snapshot cache;
+- `checkBackupAlerts`, shared by the PVE, PBS and mock polls, and
+  `pollGuestSnapshots`, whose guest inventory is the fixture read view in mock
+  mode;
+- `checkConnectionAlerts`, whose ledger lists fixture connections in mock mode;
+- `pruneStaleDockerAlerts`, which removes Docker alerts for hosts missing from
+  the read view;
+- the resource-store refresh. `updateResourceStore` and
+  `updateResourceStoreForRead` take the scope of the state they rebuild from
+  (`currentStateWithScope` for `GetState`), and the unified alert sync
+  (`syncUnifiedResourceAlertsToState`) runs its policy reconcile, identity and
+  availability-link migrations, per-resource metrics and incident sync under
+  it.
+
+`SetMockMode` flips the mode, ends the epoch, waits for the alert-manager calls
+already admitted under it and only then clears, so nothing these paths read
+before the flip lands after the clear, in either direction. Switches are
+serialized. The wait covers the calls already running, not whole passes, but it
+has no fixed wall-clock bound: backup evaluation and unified incident sync are
+estate-wide calls, and an admitted call can include metric-window reads and
+migration persistence. Unified metrics are evaluated one resource per call, and
+reads, capacity-trend queries and registry rebuilds stay outside the wait.
+Admission never blocks, so a call made inside an admitted one cannot deadlock a
+waiting switch; `SetMockMode` itself must not be called from inside an
+evaluation.
+
+A registry rebuild publishes shared state, so a rebuild holding the mode the
+monitor left can finish after a newer refresh published and replace the
+registry that refresh reads back. A rebuild whose epoch has ended does not
+start, and one already running is tracked: a refresh evaluates the registry it
+read back only if no ended-epoch rebuild overlapped it, and otherwise leaves the
+alerts to the next refresh. Even without a late rebuild, the registry still
+holds the fixture estate right after leaving mock mode, and may hold it until an
+undisturbed rebuild in the new epoch has replaced it
+(`mockModeFence.registryCurrent`); in mock mode the read paths use the fixture
+view instead. The live readers that act on that inventory (Docker pruning, the
+backup-age guest lookup, the guest inventory of the backup and snapshot
+pollers, and the pollers' previous-node and previous-guest carry, which writes
+back into live state) read it through `currentModeReadState`, which serves a
+view of current monitor state meanwhile. That view omits provider-owned
+supplemental resources and persisted manual agent links, so a carry in the
+window can fall back to platform guest memory for one poll, and it copies the
+estate, so only callers outside per-resource loops use it. Every other live
+registry reader (`GetUnifiedReadStateOrSnapshot` callers such as metrics
+targets and system usage, and the broadcast view) may still see the fixture
+estate until the next rebuild, as before, and metric samples synced from a late
+rebuild stay in metric history.
+
+The fixture sources behind the router's mock supplemental adapters
+(`mock.SupplementalRecords`, `mock.SupplementalChanges`) serve nothing while
+mock mode is off. The router swaps those adapters for the real TrueNAS and
+vSphere pollers only after `SetMockMode` returns, one source at a time with a
+refresh after each, and the adapters used to fall back to default fixtures, so
+a single switch to live mode raised fixture vSphere incidents. Two concurrent
+mock-mode requests can still leave the router's provider set disagreeing with
+the mode (fixture adapters serving nothing in live mode, or real pollers
+feeding mock mode); neither raises fixture alerts in live mode.
+
+Report admission and the live pollers outside the paths above are not fenced:
+a live report or poll already past its mock-mode check when mock mode is
+switched on can still evaluate after that clear, and its alerts can persist
+until mock mode is left.
+
+The fence and the clear are per monitor while the mode is process-wide. A
+tenant monitor other than the one `SetMockMode` was called on neither drains
+nor clears, so fixture alerts it raised outlive the switch as they did before
+the fence; switching mock mode with several tenant monitors running is not
+covered.
+
+The proofs park a real evaluation at a fixed point, switch modes and release
+it. `TestLeavingMockModeRefusesTheRestOfAnInFlightPass` holds a mock pass at its
+first storage capacity read, `TestLeavingMockModeDiscardsAnInFlightFrontendRefresh`
+holds a frontend read in its supplemental-records supply,
+`TestLeavingMockModeDiscardsAnInFlightBackupEvaluation` holds a backup
+evaluation at its guest lookup, and
+`TestLeavingMockModeDiscardsAnInFlightConnectionCheck` holds the ledger read.
+Against the unfenced code they left about 40 fixture storage, disk and Docker
+alerts, 5 vSphere incidents and 137 backup-age alerts in live mode, and counted
+a mock-mode observation toward a live connection's three-observation
+confirmation. `TestLeavingMockModeWaitsForAnInFlightEvaluation` holds an
+evaluation in its CPU window read, outside the alert manager's lock, and fails
+if the switch returns first; `TestLiveRefreshIgnoresARegistryRepublishedFromMockMode`
+lets a mock-mode rebuild republish while a live refresh is held before reading
+the registry back, then checks the next live refresh evaluates live records.
+Each of those two fails against a fence without its wait or its overlap check.
+`TestDockerPruneIgnoresTheRegistryMockModeLeft` raises a live Docker alert
+before any live rebuild and fails if pruning reads the fixture registry, and
+`TestPreviousStateCarryIgnoresTheRegistryMockModeLeft` fails if the
+previous-state carry returns fixture nodes or guests. All eight are in
+`internal/monitoring/monitor_mock_alerts_test.go`;
+`TestSupplementalFixturesServeNothingOutsideMockMode` in
+`internal/mock/platform_fixtures_test.go` pins the fixture sources;
+`TestMockModeFence*` in
+`internal/monitoring/mock_mode_fence_test.go` pin the fence itself, and
+`TestStoreRefreshTakesItsMockModeScopeBeforeReadingState` in
+`internal/monitoring/canonical_guardrails_test.go` rejects a call that reads
+state in an argument ahead of `m.mockModeFence.begin()` and pins the
+end-epoch-then-clear order in `SetMockMode`.
 
 The disk evaluation runs on the mock alert tick, not the poller's disk
 interval (five minutes by default, `PhysicalDiskPollingMinutes` per instance).
