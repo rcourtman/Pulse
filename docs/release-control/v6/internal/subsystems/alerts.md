@@ -1905,6 +1905,23 @@ well as its alerts.
 `internal/alerts/host_unraid_lifecycle_test.go` pins the clear, the holds, the
 restarted count and the pending-run and count cleanup.
 
+### Proxmox node cleanup keeps platform metric alerts
+
+`CleanupAlertsForNodes` runs on every Proxmox node poll (and every mock alert
+tick) and removes alerts whose `Node` is not a current Proxmox node or PBS
+instance. Kubernetes, TrueNAS and vSphere metric alerts carry a cluster or
+platform host in `Node` and a display label such as `TrueNAS Disk` or
+`Kubernetes Pod` in `metadata.resourceType`, which the preserve list's
+platform words never matched. The cleanup used to delete them silently on
+each poll while their reducer incident stayed firing, so the next evaluation
+re-created each one and handed it to the alert callback again as a new
+alert. `shouldPreserveAlertOutsideNodeCleanup` now keeps any alert carrying
+`metadata.platformType`, or whose label maps through
+`CanonicalAlertResourceType` to a Kubernetes, TrueNAS or vSphere type.
+`TestCleanupAlertsForNodesKeepsPlatformMetricAlerts` in
+`internal/alerts/alerts_test.go` pins both signals, and its
+sibling pins that a guest alert on a removed Proxmox node is still removed.
+
 ### Configured flapping thresholds remain reachable
 
 Every accepted positive `FlappingThreshold`, including values above ten, must
@@ -2783,6 +2800,22 @@ derived alert read-model and Last 24 Hours stat refresh for
 shared acknowledgement owner instead of keeping its own alert mutation fork.
 Future overview action behavior should extend that shared acknowledgement hook
 instead of putting acknowledge mutations back into render shells.
+Overview ages and bands read the shared clock. `AlertOverviewAlertCard.tsx`
+passes its own `useRelativeTimeNow` reading as `now` to
+`formatAlertOverviewStartedAgo` and `getMetricAlertPresentation`, and the Last
+24 Hours count in `useAlertOverviewState.ts` reads the same clock, so all three
+measure from the wall clock. The hook no longer exposes a minute `tick`: read
+as "now", that tick measured a card mounted between ticks from up to a minute
+earlier, so an alert raised 70 seconds ago read "this minute", an alert
+raised since the last tick stayed out of the 24h count until the next one, a
+reading already past the 10-minute stale cut-off led the card as live, and the
+stale flip and 24h drop landed up to a minute late. A mounted card now turns stale,
+and an alert leaves the 24h count, within one 30-second tick with no data
+change. The delivery diagnoses refresh is a server read and keeps its own
+minute interval rather than following the 30-second clock.
+`AlertOverviewAlertCard.clock.test.tsx` pins the mid-tick mount, the stale flip
+and the 24h drop under fake timers, and `useAlertOverviewState.test.tsx` pins
+the diagnoses cadence.
 Render-heavy alert overview ownership now routes through
 `frontend-modern/src/features/alerts/AlertOverviewStatsCards.tsx`,
 `frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx`,

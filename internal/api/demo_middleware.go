@@ -33,14 +33,11 @@ func DemoModeMiddleware(cfg *config.Config, next http.Handler) http.Handler {
 			}
 		}
 
-		// Allow GET and HEAD requests (read-only)
+		// Allow GET and HEAD requests (read-only). WebSocket handshakes are GET
+		// requests (RFC 6455 section 4.1), so /ws and /api/agent/ws connect
+		// through this branch. An Upgrade header never exempts another method:
+		// a POST carrying "Upgrade: websocket" is still a write.
 		if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// Allow WebSocket upgrades
-		if strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
 			next.ServeHTTP(w, r)
 			return
 		}

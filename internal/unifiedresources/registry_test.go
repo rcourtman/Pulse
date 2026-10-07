@@ -5686,7 +5686,8 @@ func TestMarkStaleRecomputesFromRemainingFreshSources(t *testing.T) {
 			Availability: &AvailabilityData{
 				TargetID: "probe-delly", LinkedResourceID: host.ID,
 				Address: "192.0.2.5", Protocol: "tcp", Port: 8006,
-				Enabled: true, Available: true,
+				Enabled: true, Available: true, LastChecked: &recentNow,
+				Evidence: availabilityProbeEvidence(t, "probe-delly", recentNow),
 			},
 		},
 		Identity: ResourceIdentity{IPAddresses: []string{"192.0.2.5"}},
@@ -5759,6 +5760,7 @@ func TestMarkStaleKeepsProxmoxRuntimeStateIndependentOfAvailabilityFacet(t *test
 			Availability: &AvailabilityData{
 				TargetID: "probe-102", LinkedResourceID: checkedID,
 				Address: "192.0.2.102", Protocol: "icmp", Enabled: true, Available: true,
+				LastChecked: &freshSeen, Evidence: availabilityProbeEvidence(t, "probe-102", freshSeen),
 			},
 		},
 	}})
@@ -5778,6 +5780,305 @@ func TestMarkStaleKeepsProxmoxRuntimeStateIndependentOfAvailabilityFacet(t *test
 	}
 	if got := statuses["lab:node-a:102"]; got != StatusOnline {
 		t.Fatalf("availability-faceted stale container status = %q, want online", got)
+	}
+}
+
+// availabilityCheckRecord is a check the poller ran at checkedAt against the
+// resource targetID names. Its evidence stays current for two minutes, the
+// two poll intervals of a local check; Available stays as the last run left
+// it, as a local check that misses its cadence does.
+func availabilityCheckRecord(t *testing.T, checkID, targetID string, passing bool, checkedAt time.Time) IngestRecord {
+	t.Helper()
+	status, failures := StatusOnline, 0
+	if !passing {
+		status, failures = StatusOffline, 3
+	}
+	return IngestRecord{
+		SourceID: checkID,
+		Resource: Resource{
+			Type: ResourceTypeNetworkEndpoint, Name: checkID, Status: status, LastSeen: checkedAt,
+			Sources: []DataSource{SourceAvailability},
+			Availability: &AvailabilityData{
+				TargetID: checkID, LinkedResourceID: targetID,
+				Address: "192.0.2.80", Protocol: "http", Port: 443,
+				Enabled: true, Available: passing, LastChecked: &checkedAt,
+				ConsecutiveFailures: failures, FailureThreshold: 2, PollIntervalSeconds: 60,
+				Evidence: availabilityProbeEvidence(t, checkID, checkedAt),
+			},
+		},
+	}
+}
+
+func ingestProxmoxGuestSeenAt(t *testing.T, rr *ResourceRegistry, sourceID string, seen time.Time) string {
+	t.Helper()
+	rr.IngestRecords(SourceProxmox, []IngestRecord{{
+		SourceID: sourceID,
+		Resource: Resource{
+			Type: ResourceTypeSystemContainer, Name: sourceID, Status: StatusOnline, LastSeen: seen,
+			Proxmox: &ProxmoxData{RuntimeStatus: "running", NodeName: "node-a"},
+		},
+	}})
+	for _, resource := range rr.ListByType(ResourceTypeSystemContainer) {
+		if resource.Name == sourceID {
+			return resource.ID
+		}
+	}
+	t.Fatalf("guest %s not ingested", sourceID)
+	return ""
+}
+
+// A failing availability check proves only that one port or service does not
+// answer, so it never decides its target's status: a node the poller expired
+// stays offline, a guest whose poll went quiet stays a warning instead of
+// counting as stopped, and neither reads online. Only a passing check with
+// current evidence proves the target answers. The stale pass used to count
+// any current check as online, so a failing probe kept an expired node up.
+func TestStalePassReadsAvailabilityCheckVerdicts(t *testing.T) {
+	now := time.Now().UTC()
+	quietSeen := now.Add(-5 * time.Minute)
+	lapsed := now.Add(-10 * time.Minute)
+	expiredNode := models.StateSnapshot{Nodes: []models.Node{{
+		ID: "homelab-pve9", Name: "pve9", Instance: "homelab", ClusterName: "homelab",
+		Status: "offline", LastSeen: quietSeen,
+	}}}
+	quietGuest := models.StateSnapshot{VMs: []models.VM{{
+		ID: "homelab:pve9:101", Name: "web", Node: "pve9", Instance: "homelab",
+		VMID: 101, Status: "running", Type: "qemu", LastSeen: quietSeen,
+	}}}
+	for _, tc := range []struct {
+		name       string
+		snapshot   models.StateSnapshot
+		targetType ResourceType
+		passing    bool
+		checkedAt  time.Time
+		want       ResourceStatus
+	}{
+		{"expired node, current failing check", expiredNode, ResourceTypeAgent, false, now, StatusOffline},
+		{"expired node, lapsed failing check", expiredNode, ResourceTypeAgent, false, lapsed, StatusOffline},
+		{"expired node, lapsed passing check", expiredNode, ResourceTypeAgent, true, lapsed, StatusOffline},
+		{"expired node, current passing check", expiredNode, ResourceTypeAgent, true, now, StatusOnline},
+		{"quiet guest, current failing check", quietGuest, ResourceTypeVM, false, now, StatusWarning},
+		{"quiet guest, lapsed failing check", quietGuest, ResourceTypeVM, false, lapsed, StatusWarning},
+		{"quiet guest, current passing check", quietGuest, ResourceTypeVM, true, now, StatusOnline},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := NewRegistry(nil)
+			rr.IngestSnapshot(tc.snapshot)
+			target := onlyResourceOfType(t, rr, tc.targetType)
+			rr.IngestRecords(SourceAvailability, []IngestRecord{
+				availabilityCheckRecord(t, "probe-1", target.ID, tc.passing, tc.checkedAt),
+			})
+			rr.MarkStale(now, nil)
+
+			got, ok := rr.Get(target.ID)
+			if !ok || len(AvailabilityChecksForResource(*got)) != 1 {
+				t.Fatalf("check not projected onto %s: %+v", target.ID, got.AvailabilityChecks)
+			}
+			if got.Status != tc.want {
+				t.Fatalf("status = %q, want %q", got.Status, tc.want)
+			}
+		})
+	}
+}
+
+// One availability sighting stands for every check on a target, and it
+// carries whichever check was projected last. Each check is judged by its own
+// evidence instead, so a failing check that just ran cannot lend its
+// freshness to another check's old pass, in either projection order.
+func TestAvailabilityChecksAreJudgedByTheirOwnEvidence(t *testing.T) {
+	now := time.Now().UTC()
+	lapsed := now.Add(-10 * time.Minute)
+	for _, tc := range []struct {
+		name               string
+		passedAt, failedAt time.Time
+		want               ResourceStatus
+	}{
+		{name: "lapsed pass, current failure", passedAt: lapsed, failedAt: now, want: StatusWarning},
+		{name: "current pass, lapsed failure", passedAt: now, failedAt: lapsed, want: StatusOnline},
+	} {
+		for _, order := range [][]string{{"pass", "fail"}, {"fail", "pass"}} {
+			t.Run(tc.name+", "+strings.Join(order, " then "), func(t *testing.T) {
+				rr := NewRegistry(nil)
+				target := ingestProxmoxGuestSeenAt(t, rr, "lab:node-a:101", now.Add(-5*time.Minute))
+				records := map[string]IngestRecord{
+					"pass": availabilityCheckRecord(t, "probe-pass", target, true, tc.passedAt),
+					"fail": availabilityCheckRecord(t, "probe-fail", target, false, tc.failedAt),
+				}
+				for _, key := range order {
+					rr.IngestRecords(SourceAvailability, []IngestRecord{records[key]})
+				}
+				rr.MarkStale(now, nil)
+
+				got, ok := rr.Get(target)
+				if !ok {
+					t.Fatal("target missing")
+				}
+				if checks := AvailabilityChecksForResource(*got); len(checks) != 2 {
+					t.Fatalf("expected both checks on the target, got %+v", checks)
+				}
+				if got.Status != tc.want {
+					t.Fatalf("status = %q, want %q", got.Status, tc.want)
+				}
+			})
+		}
+	}
+}
+
+// A check's verdict moves with the check. Projecting, re-running or
+// retargeting a check is not a delivery from the resource's own sources, so a
+// target whose status the stale pass owns is judged again at once rather than
+// keeping the old checks' verdict until the next pass; the resources API
+// replays checks after its stale pass and never runs another.
+func TestChangedAvailabilityChecksJudgeTheirTargetsAgain(t *testing.T) {
+	now := time.Now().UTC()
+	quietSeen := now.Add(-5 * time.Minute)
+	rr := NewRegistry(nil)
+	first := ingestProxmoxGuestSeenAt(t, rr, "lab:node-a:101", quietSeen)
+	second := ingestProxmoxGuestSeenAt(t, rr, "lab:node-a:102", quietSeen)
+	rr.MarkStale(now, nil)
+
+	status := func(id string) ResourceStatus {
+		t.Helper()
+		resource, ok := rr.Get(id)
+		if !ok {
+			t.Fatalf("resource %s missing", id)
+		}
+		return resource.Status
+	}
+
+	rr.IngestRecords(SourceAvailability, []IngestRecord{
+		availabilityCheckRecord(t, "probe-moving", first, true, now),
+		availabilityCheckRecord(t, "probe-failing", first, false, now),
+	})
+	if got := status(first); got != StatusOnline {
+		t.Fatalf("first status = %q once a passing check lands, want online", got)
+	}
+
+	rr.IngestRecords(SourceAvailability, []IngestRecord{
+		availabilityCheckRecord(t, "probe-moving", second, true, now),
+	})
+	left, _ := rr.Get(first)
+	if checks := AvailabilityChecksForResource(*left); len(checks) != 1 || checks[0].TargetID != "probe-failing" {
+		t.Fatalf("first checks = %+v, want only probe-failing", checks)
+	}
+	if got := status(first); got != StatusWarning {
+		t.Fatalf("first status = %q after its passing check moved away, want warning", got)
+	}
+	if got := status(second); got != StatusOnline {
+		t.Fatalf("second status = %q after the passing check moved onto it, want online", got)
+	}
+
+	rr.IngestRecords(SourceAvailability, []IngestRecord{
+		availabilityCheckRecord(t, "probe-moving", second, false, now),
+	})
+	if got := status(second); got != StatusWarning {
+		t.Fatalf("second status = %q once its only check fails, want warning", got)
+	}
+
+	rr.MarkStale(now, nil)
+	if got := status(first); got != StatusWarning {
+		t.Fatalf("first status = %q after the next pass, want warning", got)
+	}
+	if got := status(second); got != StatusWarning {
+		t.Fatalf("second status = %q after the next pass, want warning", got)
+	}
+}
+
+// A projected check's sighting is not one of its target's own sources. Its
+// going quiet hands the stale pass nothing to decide, and replacing the check
+// takes no ownership away, so a target whose own source has never delivered
+// keeps the status that source gave it whatever its checks say.
+func TestAvailabilitySightingNeverHandsTheStalePassItsTarget(t *testing.T) {
+	now := time.Now().UTC()
+	quickChecks := map[DataSource]time.Duration{SourceAvailability: 30 * time.Second}
+	for _, tc := range []struct {
+		name     string
+		ingested ResourceStatus
+		passing  bool
+	}{
+		{name: "online guest, quiet failing check", ingested: StatusOnline, passing: false},
+		{name: "offline placeholder, quiet passing check", ingested: StatusOffline, passing: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := NewRegistry(nil)
+			rr.IngestRecords(SourceProxmox, []IngestRecord{{
+				SourceID: "lab:node-a:101",
+				Resource: Resource{
+					Type: ResourceTypeSystemContainer, Name: "lab:node-a:101", Status: tc.ingested,
+					Proxmox: &ProxmoxData{RuntimeStatus: "running", NodeName: "node-a"},
+				},
+			}})
+			target := onlyResourceOfType(t, rr, ResourceTypeSystemContainer).ID
+
+			rr.IngestRecords(SourceAvailability, []IngestRecord{
+				availabilityCheckRecord(t, "probe-1", target, tc.passing, now.Add(-time.Minute)),
+			})
+			rr.MarkStale(now, quickChecks)
+			got, _ := rr.Get(target)
+			if sighting := got.SourceStatus[SourceAvailability]; sighting.Status != "stale" {
+				t.Fatalf("availability sighting = %+v, want stale", sighting)
+			}
+			if got.Status != tc.ingested {
+				t.Fatalf("status = %q with a quiet check, want %q from the target's own source", got.Status, tc.ingested)
+			}
+
+			rr.IngestRecords(SourceAvailability, []IngestRecord{
+				availabilityCheckRecord(t, "probe-1", target, !tc.passing, now),
+			})
+			rr.MarkStale(now, quickChecks)
+			if got, _ := rr.Get(target); got.Status != tc.ingested {
+				t.Fatalf("status = %q after the check flipped, want %q", got.Status, tc.ingested)
+			}
+		})
+	}
+}
+
+// A manual link keeps the primary's own availability checks and not the
+// linked resource's, so the merged resource is judged by the checks it
+// carries. The linked resource's fresher availability sighting survives the
+// merge as delivery bookkeeping; it must not become a verdict for checks the
+// merged resource does not show.
+func TestManualLinkJudgesOnlyTheChecksTheMergedResourceCarries(t *testing.T) {
+	now := time.Now().UTC()
+	quietSeen := now.Add(-5 * time.Minute)
+	store := NewMemoryStore()
+	if err := store.AddLink(ResourceLink{ResourceA: "vm-web", ResourceB: "agent-web", PrimaryID: "vm-web"}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	rr := NewRegistry(store)
+	rr.IngestResources([]Resource{
+		{
+			ID: "vm-web", Type: ResourceTypeVM, Name: "web", Status: StatusWarning, LastSeen: quietSeen,
+			Sources: []DataSource{SourceProxmox},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceProxmox: {Status: "stale", LastSeen: quietSeen, reported: StatusOnline},
+			},
+		},
+		{
+			ID: "agent-web", Type: ResourceTypeAgent, Name: "web", Status: StatusWarning, LastSeen: now,
+			Sources: []DataSource{SourceAgent, SourceAvailability},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceAgent:        {Status: "stale", LastSeen: quietSeen, reported: StatusOnline},
+				SourceAvailability: {Status: "online", LastSeen: now},
+			},
+			AvailabilityChecks: []AvailabilityData{{
+				TargetID: "probe-web", Enabled: true, Available: false, LastChecked: &now,
+				ConsecutiveFailures: 3, FailureThreshold: 2,
+				Evidence: availabilityProbeEvidence(t, "probe-web", now),
+			}},
+			Agent: &AgentData{AgentID: "host-web", Hostname: "web"},
+		},
+	})
+
+	merged, ok := rr.Get("vm-web")
+	if !ok {
+		t.Fatal("linked resource missing")
+	}
+	if checks := AvailabilityChecksForResource(*merged); len(checks) != 0 {
+		t.Fatalf("merged resource exposes the linked resource's checks: %+v", checks)
+	}
+	if merged.Status != StatusWarning {
+		t.Fatalf("status = %q, want warning from its own quiet sources", merged.Status)
 	}
 }
 
@@ -7143,4 +7444,249 @@ func TestPhysicalDiskRiskNeverJudgesTemperature(t *testing.T) {
 	if risk := physicalDiskRiskFromMeta(meta, nil); risk != nil {
 		t.Fatalf("meta recompute risk = %+v, want none for a collected 72C", risk)
 	}
+}
+
+// The Proxmox page's Overview lists nodes without their disk inventory, so the
+// outdated sensor setup verdict has to arrive on the node itself. The registry
+// derives it from the node's legacy-format temperature payload and the disks
+// it parents, with the same reading rule every disk temperature consumer uses.
+func TestProxmoxNodeSensorSetupOutdatedFromItsDisks(t *testing.T) {
+	now := time.Now()
+	legacy := &models.Temperature{Available: true, LegacySensorsFormat: true}
+	inventoryOnly := &diskinventory.CollectionStatus{
+		Temperature: diskinventory.Unsupported("proxmox_disks", "Proxmox disk inventory does not expose temperature"),
+	}
+	node := func(name string, temperature *models.Temperature) models.Node {
+		return models.Node{
+			ID:          "homelab-" + name,
+			Name:        name,
+			Instance:    "homelab",
+			Status:      "online",
+			LastSeen:    now,
+			Temperature: temperature,
+		}
+	}
+	disk := func(nodeName, devPath, diskType string, temperature int, collection *diskinventory.CollectionStatus) models.PhysicalDisk {
+		return models.PhysicalDisk{
+			ID:          ProxmoxPhysicalDiskSourceID("homelab", nodeName, devPath, "", ""),
+			Node:        nodeName,
+			Instance:    "homelab",
+			DevPath:     devPath,
+			Model:       "Disk " + devPath,
+			Serial:      "SERIAL-" + nodeName + devPath,
+			Type:        diskType,
+			Health:      "PASSED",
+			Wearout:     -1,
+			Temperature: temperature,
+			Collection:  collection,
+			LastChecked: now,
+		}
+	}
+
+	cases := []struct {
+		name  string
+		nodes []models.Node
+		disks []models.PhysicalDisk
+		want  bool
+	}{
+		{
+			name:  "SATA disk without a temperature",
+			nodes: []models.Node{node("pve", legacy)},
+			disks: []models.PhysicalDisk{disk("pve", "/dev/sda", "sata", 0, inventoryOnly)},
+			want:  true,
+		},
+		{
+			// Proxmox's own disk inventory types these disks by form factor.
+			name:  "Proxmox hdd and ssd inventory types",
+			nodes: []models.Node{node("pve", legacy)},
+			disks: []models.PhysicalDisk{disk("pve", "/dev/sda", "hdd", 0, inventoryOnly), disk("pve", "/dev/sdb", "ssd", 0, inventoryOnly)},
+			want:  true,
+		},
+		{
+			name:  "SAS disk whose reading is retained, not current",
+			nodes: []models.Node{node("pve", legacy)},
+			disks: []models.PhysicalDisk{disk("pve", "/dev/sda", "sas", 41, &diskinventory.CollectionStatus{
+				Temperature: diskinventory.Unavailable("host_agent", "host agent stopped reporting"),
+			})},
+			want: true,
+		},
+		{
+			name:  "SATA disk whose reading the source marks missing",
+			nodes: []models.Node{node("pve", legacy)},
+			disks: []models.PhysicalDisk{disk("pve", "/dev/sda", "sata", 38, &diskinventory.CollectionStatus{
+				Temperature: diskinventory.Missing("proxmox_node_smart", "temperature was not reported"),
+			})},
+			want: true,
+		},
+		{
+			name:  "SATA disk with a current reading",
+			nodes: []models.Node{node("pve", legacy)},
+			disks: []models.PhysicalDisk{disk("pve", "/dev/sda", "sata", 36, &diskinventory.CollectionStatus{
+				Temperature: diskinventory.Available("proxmox_node_smart"),
+			})},
+			want: false,
+		},
+		{
+			name:  "reading from a source that predates collection state",
+			nodes: []models.Node{node("pve", legacy)},
+			disks: []models.PhysicalDisk{disk("pve", "/dev/sda", "sata", 36, nil)},
+			want:  false,
+		},
+		{
+			// NVMe temperatures arrive through kernel hwmon even on a legacy setup.
+			name:  "NVMe disk without a temperature",
+			nodes: []models.Node{node("pve", legacy)},
+			disks: []models.PhysicalDisk{disk("pve", "/dev/nvme0n1", "nvme", 0, inventoryOnly)},
+			want:  false,
+		},
+		{
+			name:  "current setup payload",
+			nodes: []models.Node{node("pve", &models.Temperature{Available: true})},
+			disks: []models.PhysicalDisk{disk("pve", "/dev/sda", "sata", 0, inventoryOnly)},
+			want:  false,
+		},
+		{
+			name:  "failed temperature collection",
+			nodes: []models.Node{node("pve", &models.Temperature{Available: false, LegacySensorsFormat: true})},
+			disks: []models.PhysicalDisk{disk("pve", "/dev/sda", "sata", 0, inventoryOnly)},
+			want:  false,
+		},
+		{
+			name:  "waiting disk belongs to another node",
+			nodes: []models.Node{node("pve", legacy), node("pve2", &models.Temperature{Available: true})},
+			disks: []models.PhysicalDisk{disk("pve2", "/dev/sda", "sata", 0, inventoryOnly)},
+			want:  false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := NewRegistry(nil)
+			registry.IngestSnapshot(models.StateSnapshot{Nodes: tc.nodes, PhysicalDisks: tc.disks})
+			got := proxmoxNodeSensorSetupOutdated(t, registry.List(), "pve")
+			if got != tc.want {
+				t.Fatalf("pve sensorSetupOutdated = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// A linked host agent that reads the disk's SMART temperature itself answers
+// what the legacy SSH setup cannot, so the node is not flagged; the verdict is
+// derived on every ingest, so a later snapshot clears an earlier flag.
+func TestProxmoxNodeSensorSetupOutdatedFollowsWhereTheReadingArrives(t *testing.T) {
+	now := time.Now()
+	nodes := []models.Node{{
+		ID:            "homelab-pve",
+		Name:          "pve",
+		Instance:      "homelab",
+		LinkedAgentID: "host-pve",
+		Status:        "online",
+		LastSeen:      now,
+		Temperature:   &models.Temperature{Available: true, LegacySensorsFormat: true},
+	}}
+	inventory := []models.PhysicalDisk{{
+		ID:          ProxmoxPhysicalDiskSourceID("homelab", "pve", "/dev/sda", "", ""),
+		Node:        "pve",
+		Instance:    "homelab",
+		DevPath:     "/dev/sda",
+		Model:       "WDC WD80EFAX",
+		Serial:      "SERIAL-SDA",
+		Type:        "hdd",
+		Health:      "PASSED",
+		Wearout:     -1,
+		Collection:  &diskinventory.CollectionStatus{Temperature: diskinventory.Unsupported("proxmox_disks", "Proxmox disk inventory does not expose temperature")},
+		LastChecked: now,
+	}}
+	agent := func(collection *diskinventory.CollectionStatus) []models.Host {
+		return []models.Host{{
+			ID:           "host-pve",
+			Hostname:     "pve",
+			LinkedNodeID: "homelab-pve",
+			Status:       "online",
+			LastSeen:     now,
+			Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+				Device:      "/dev/sda",
+				Model:       "WDC WD80EFAX",
+				Serial:      "SERIAL-SDA",
+				Type:        "sata",
+				Temperature: 34,
+				Health:      "PASSED",
+				Collection:  collection,
+			}}},
+		}}
+	}
+
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{Nodes: nodes, PhysicalDisks: inventory})
+	if !proxmoxNodeSensorSetupOutdated(t, registry.List(), "pve") {
+		t.Fatal("legacy node with an unread hdd: sensorSetupOutdated = false, want true")
+	}
+
+	registry.IngestSnapshot(models.StateSnapshot{
+		Nodes:         nodes,
+		PhysicalDisks: inventory,
+		Hosts:         agent(&diskinventory.CollectionStatus{Temperature: diskinventory.Available("host_agent")}),
+	})
+	if proxmoxNodeSensorSetupOutdated(t, registry.List(), "pve") {
+		t.Fatal("linked agent reads the disk now: sensorSetupOutdated = true, want the earlier flag cleared")
+	}
+	// Clients merge a facet field by field, so the cleared verdict must be on
+	// the wire as false, not omitted.
+	assertProxmoxNodeSensorSetupJSON(t, registry.ListForPresentation(), "pve", `"sensorSetupOutdated":false`)
+
+	registry.IngestSnapshot(models.StateSnapshot{
+		Nodes:         nodes,
+		PhysicalDisks: inventory,
+		Hosts:         agent(&diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("host_agent", "host agent stopped reporting")}),
+	})
+	presented := registry.ListForPresentation()
+	if !proxmoxNodeSensorSetupOutdated(t, presented, "pve") {
+		t.Fatal("agent reading retained, not current: sensorSetupOutdated = false, want true")
+	}
+	assertProxmoxNodeSensorSetupJSON(t, presented, "pve", `"sensorSetupOutdated":true`)
+}
+
+func assertProxmoxNodeSensorSetupJSON(t *testing.T, resources []Resource, nodeName, want string) {
+	t.Helper()
+	for _, resource := range resources {
+		if resource.Proxmox == nil || resource.Proxmox.NodeName != nodeName || CanonicalResourceType(resource.Type) != ResourceTypeAgent {
+			continue
+		}
+		payload, err := json.Marshal(resource.Proxmox)
+		if err != nil {
+			t.Fatalf("marshal node proxmox facet: %v", err)
+		}
+		if !strings.Contains(string(payload), want) {
+			t.Fatalf("node proxmox payload = %s, want %s for list readers", payload, want)
+		}
+		return
+	}
+	t.Fatalf("node %q not presented", nodeName)
+}
+
+func proxmoxNodeSensorSetupOutdated(t *testing.T, resources []Resource, nodeName string) bool {
+	t.Helper()
+	var found *Resource
+	for i := range resources {
+		resource := &resources[i]
+		if CanonicalResourceType(resource.Type) != ResourceTypeAgent || resource.Proxmox == nil || resource.Proxmox.NodeName != nodeName {
+			continue
+		}
+		if found != nil {
+			t.Fatalf("node %q presented twice: %s and %s", nodeName, found.ID, resource.ID)
+		}
+		found = resource
+	}
+	if found == nil {
+		t.Fatalf("node %q not found among %d resources", nodeName, len(resources))
+	}
+	for _, resource := range resources {
+		if CanonicalResourceType(resource.Type) != ResourceTypeAgent && resource.Proxmox != nil && resource.Proxmox.SensorSetupOutdated != nil {
+			t.Fatalf("%s %s carries the node verdict", resource.Type, resource.ID)
+		}
+	}
+	if found.Proxmox.SensorSetupOutdated == nil {
+		t.Fatalf("node %q has no explicit sensor setup verdict", nodeName)
+	}
+	return *found.Proxmox.SensorSetupOutdated
 }

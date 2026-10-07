@@ -543,8 +543,12 @@ func TestStoreRefreshTakesItsMockModeScopeBeforeReadingState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read monitor.go: %v", err)
 	}
-	if got := strings.Count(string(data), "m.mockModeFence.advance()\n\t\tm.alertManager.ClearActiveAlerts()"); got != 2 {
-		t.Fatalf("SetMockMode must end the mock-mode epoch immediately before clearing alerts in both directions, found %d", got)
+	source := string(data)
+	if got := strings.Count(source, "m.mockModeFence.advance()\n\tm.alertManager.ClearActiveAlerts()"); got != 1 {
+		t.Fatalf("endMockModeEpoch must end the mock-mode epoch immediately before clearing alerts, found %d", got)
+	}
+	if !strings.Contains(source, "for _, monitor := range monitors {\n\t\tmonitor.endMockModeEpoch(enable)\n\t}") {
+		t.Fatal("SetMockMode must end the epoch of every monitor the switch reaches")
 	}
 }
 
@@ -1664,16 +1668,11 @@ func TestMonitorSetMockModeAuthorizesBeforeResettingRuntimeState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read monitor.go: %v", err)
 	}
-	source := string(data)
-	requiredSnippets := []string{
-		"if err := mock.SetEnabled(true); err != nil {",
-		"if err := mock.SetEnabled(false); err != nil {",
-		"return err",
-	}
-	for _, snippet := range requiredSnippets {
-		if !strings.Contains(source, snippet) {
-			t.Fatalf("monitor.go must contain %q", snippet)
-		}
+	source := strings.Join(strings.Fields(string(data)), " ")
+	authorize := strings.Index(source, "if err := mock.SetEnabled(enable); err != nil { return err }")
+	reset := strings.Index(source, "monitor.endMockModeEpoch(enable)")
+	if authorize < 0 || reset < 0 || authorize > reset {
+		t.Fatal("SetMockMode must return the mock.SetEnabled error before it ends any monitor's epoch or resets its state")
 	}
 }
 

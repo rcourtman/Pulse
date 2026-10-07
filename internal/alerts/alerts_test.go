@@ -12687,6 +12687,82 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 	})
 }
 
+// TestCleanupAlertsForNodesKeepsPlatformMetricAlerts pins that the Proxmox
+// node cleanup, which runs on every Proxmox poll, leaves Kubernetes, TrueNAS
+// and vSphere metric alerts alone. Their Node is a cluster or platform host,
+// never a Proxmox node, and their resourceType is a display label.
+func TestCleanupAlertsForNodesKeepsPlatformMetricAlerts(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	inputs := []*UnifiedResourceInput{
+		{ID: "physical-disk:truenas-main/sda", Type: "truenas-disk", Name: "sda", Node: "truenas-main", Instance: "TrueNAS", Temperature: &UnifiedResourceMetric{Value: 80, Percent: 80}},
+		{ID: "storage:truenas-main/pool:tank", Type: "truenas-pool", Name: "tank", Node: "truenas-main", Instance: "TrueNAS", Disk: &UnifiedResourceMetric{Percent: 95}},
+		{ID: "k8s:prod:pod:api", Type: "pod", Name: "api", Node: "k8s-node-1", Instance: "prod", CPU: &UnifiedResourceMetric{Percent: 99}},
+		{ID: "vmware:vc:vm:app-01", Type: "vmware-vm", Name: "app-01", Node: "esxi-01", Instance: "vc", CPU: &UnifiedResourceMetric{Percent: 99}},
+	}
+	for _, input := range inputs {
+		m.CheckUnifiedResource(input)
+	}
+	platformAlerts := alertKeys(m)
+	if len(platformAlerts) != len(inputs) {
+		t.Fatalf("expected one alert per platform resource, got %v", platformAlerts)
+	}
+
+	m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+
+	for _, alertID := range platformAlerts {
+		if _, exists := testLookupActiveAlert(t, m, alertID); !exists {
+			t.Fatalf("Proxmox node cleanup removed platform alert %q; remaining %v", alertID, alertKeys(m))
+		}
+	}
+
+	// The platform id alone keeps an alert whose label is not recognised.
+	m.mu.Lock()
+	labels := make(map[*Alert]interface{}, len(m.activeAlerts))
+	for _, alert := range m.activeAlerts {
+		labels[alert] = alert.Metadata["resourceType"]
+		alert.Metadata["resourceType"] = "Unrecognised"
+	}
+	m.mu.Unlock()
+	m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+	if got := alertKeys(m); len(got) != len(platformAlerts) {
+		t.Fatalf("platform alerts removed despite their platformType: %v", got)
+	}
+	m.mu.Lock()
+	for alert, label := range labels {
+		alert.Metadata["resourceType"] = label
+	}
+	m.mu.Unlock()
+
+	// A legacy-shaped alert whose metadata predates platformType is still kept
+	// by its display label.
+	m.mu.Lock()
+	for _, alert := range m.activeAlerts {
+		delete(alert.Metadata, alertPlatformTypeKey)
+	}
+	m.mu.Unlock()
+	m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+	if got := alertKeys(m); len(got) != len(platformAlerts) {
+		t.Fatalf("display-label platform alerts removed without platformType: %v", got)
+	}
+}
+
+// The cleanup still removes a Proxmox guest alert whose node left the estate.
+func TestCleanupAlertsForNodesStillRemovesMissingProxmoxNodeAlerts(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	m.CheckUnifiedResource(&UnifiedResourceInput{ID: "pve-gone:node-gone:101", Type: "vm", Name: "vm-101", Node: "node-gone", Instance: "pve-gone", CPU: &UnifiedResourceMetric{Percent: 99}})
+	if len(alertKeys(m)) != 1 {
+		t.Fatalf("expected the guest CPU alert, got %v", alertKeys(m))
+	}
+	m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+	if got := alertKeys(m); len(got) != 0 {
+		t.Fatalf("guest alert on a removed node survived cleanup: %v", got)
+	}
+}
+
 func TestCheckZFSPoolHealth(t *testing.T) {
 	// t.Parallel()
 	poolStateAlertID := buildCanonicalStateID("local-zfs/zfs-pool:rpool", "local-zfs/zfs-pool:rpool-state")
