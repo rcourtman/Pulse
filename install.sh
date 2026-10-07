@@ -4079,6 +4079,10 @@ if [[ "\$auto_selector_allowed" == "true" ]]; then
         fi
         if [[ "\$configured_channel" == "rc" ]]; then
             extra_args+=(--rc)
+        else
+            # Bind the parsed default too: the installer has its own saved
+            # preference reader, which must not re-interpret the same file.
+            extra_args+=(--stable)
         fi
     fi
 fi

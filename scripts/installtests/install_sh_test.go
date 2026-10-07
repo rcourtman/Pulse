@@ -4375,6 +4375,9 @@ func TestSetupUpdateCommandHonorsRCChannelAndCustomPaths(t *testing.T) {
 	if !strings.Contains(got, `extra_args+=(--rc)`) {
 		t.Fatalf("update helper missing rc channel forwarding:\n%s", got)
 	}
+	if !strings.Contains(got, `extra_args+=(--stable)`) {
+		t.Fatalf("update helper must bind the parsed stable channel before the installer rereads configuration:\n%s", got)
+	}
 	if !strings.Contains(got, `INSTALLER_URL="https://github.com/example/pulse-fork/releases/latest/download/install.sh"`) {
 		t.Fatalf("update helper missing configured repo installer url:\n%s", got)
 	}

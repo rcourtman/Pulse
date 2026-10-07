@@ -5197,11 +5197,15 @@ missing jq stops before downloading or executing the installer, with explicit
 `--stable`/`--rc` recovery guidance and no configuration rewrite. A missing file
 retains the default. Explicit existing selectors (including `--prerelease`)
 and the existing source-build marker keep precedence over saved configuration.
+The helper forwards both parsed channels explicitly, including the stable
+default for an existing file, so the containing installer cannot reinterpret
+that same configuration through its older saved-preference reader.
 
 `TestManualUpdateChannelAdmission` generates and executes the actual helper
 against local transport fixtures and genuinely signed installer/sidecar bytes.
-It checks final arguments, pre-download refusal, configuration preservation,
-selector/marker precedence and signature rejection. This is bounded source
+It checks final arguments and the actual installer channel-selection functions,
+pre-download refusal, configuration preservation, selector/marker precedence
+and signature rejection. This is bounded source
 acceptance, not installed upgrade, native service restoration or published
 release acceptance. The installer, archive, signing, rollback and service gates
 remain unchanged.

@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -35,8 +36,40 @@ func TestManualUpdateChannelAdmission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	rootSource, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selectionFunctions := ""
+	for _, name := range []string{"read_configured_update_channel", "selected_update_channel"} {
+		body := regexp.MustCompile(`(?ms)^` + name + `\(\) \{\n.*?^\}`).Find(rootSource)
+		if body == nil {
+			t.Fatalf("cannot find actual installer channel function %s", name)
+		}
+		selectionFunctions += string(body) + "\n"
+	}
 	installer := filepath.Join(assets, "install.sh")
-	if err := os.WriteFile(installer, []byte("#!/bin/bash\nset -eu\nprintf '%s\\n' EXECUTED \"$@\" > \"$MANUAL_UPDATE_CALLS\"\n"), 0600); err != nil {
+	// The real installer reads configuration again unless the helper forwards
+	// an explicit channel. Use its actual selection functions to catch that
+	// crossing rather than accepting helper arguments alone as the outcome.
+	fixture := `#!/bin/bash
+set -eu
+CONFIG_DIR="$PULSE_CONFIG_DIR"
+FORCE_CHANNEL=""
+FORCE_VERSION=""
+UPDATE_CHANNEL=""
+IGNORE_CONFIGURED_UPDATE_CHANNEL=false
+` + selectionFunctions + `
+for arg in "$@"; do
+    case "$arg" in
+        --stable) FORCE_CHANNEL=stable ;;
+        --rc|--pre|--prerelease) FORCE_CHANNEL=rc ;;
+    esac
+done
+printf '%s\n' EXECUTED "$@" > "$MANUAL_UPDATE_CALLS"
+selected_update_channel > "$MANUAL_UPDATE_CHANNEL"
+`
+	if err := os.WriteFile(installer, []byte(fixture), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if out, err := exec.Command("ssh-keygen", "-q", "-Y", "sign", "-f", key, "-n", "pulse-install", installer).CombinedOutput(); err != nil {
@@ -53,19 +86,19 @@ func TestManualUpdateChannelAdmission(t *testing.T) {
 		brokenLink           bool
 		badSignature         bool
 	}{
-		{name: "stable", config: `{"updateChannel":"stable"}`},
+		{name: "stable", config: `{"updateChannel":"stable"}`, want: []string{"--stable"}},
 		{name: "rc", config: `{"updateChannel":"rc"}`, want: []string{"--rc"}},
 		{name: "normalized_rc", config: `{"updateChannel":" RC "}`, want: []string{"--rc"}},
-		{name: "normalized_stable", config: `{"updateChannel":" STABLE "}`},
-		{name: "missing_setting", config: `{}`},
-		{name: "null_setting", config: `{"updateChannel":null}`},
-		{name: "empty_setting", config: `{"updateChannel":" "}`},
+		{name: "normalized_stable", config: `{"updateChannel":" STABLE "}`, want: []string{"--stable"}},
+		{name: "missing_setting", config: `{}`, want: []string{"--stable"}},
+		{name: "null_setting", config: `{"updateChannel":null}`, want: []string{"--stable"}},
+		{name: "empty_setting", config: `{"updateChannel":" "}`, want: []string{"--stable"}},
 		{name: "missing_file", missingConfig: true},
-		{name: "nested_only", config: `{"other":{"updateChannel":"rc"}}`},
-		{name: "stable_with_nested_rc", config: `{"updateChannel":"stable","other":{"updateChannel":"rc"}}`},
+		{name: "nested_only", config: `{"other":{"updateChannel":"rc"}}`, want: []string{"--stable"}},
+		{name: "stable_with_nested_rc", config: `{"updateChannel":"stable","other":{"updateChannel":"rc"}}`, want: []string{"--stable"}},
 		{name: "rc_with_nested_stable", config: `{"updateChannel":"rc","other":{"updateChannel":"stable"}}`, want: []string{"--rc"}},
 		{name: "escaped_setting_name", config: `{"update\u0043hannel":"rc"}`, want: []string{"--rc"}},
-		{name: "quoted_only", config: `{"note":"\"updateChannel\":\"rc\""}`},
+		{name: "quoted_only", config: `{"note":"\"updateChannel\":\"rc\""}`, want: []string{"--stable"}},
 		{name: "truncated", config: `{"updateChannel":"rc"`, blocked: true},
 		{name: "valid_object_then_garbage", config: `{"updateChannel":"rc"} trailing`, blocked: true},
 		{name: "two_objects", config: `{"updateChannel":"stable"} {"updateChannel":"rc"}`, blocked: true},
@@ -157,8 +190,9 @@ esac
 			}
 			calls := filepath.Join(dir, "calls")
 			transport := filepath.Join(dir, "transport")
+			channel := filepath.Join(dir, "channel")
 			cmd := exec.Command(bash, append([]string{helper}, tc.args...)...)
-			cmd.Env = append(os.Environ(), "PATH="+path, "FIXTURE_ASSETS="+assets, "MANUAL_UPDATE_CALLS="+calls, "MANUAL_UPDATE_TRANSPORT="+transport,
+			cmd.Env = append(os.Environ(), "PATH="+path, "FIXTURE_ASSETS="+assets, "MANUAL_UPDATE_CALLS="+calls, "MANUAL_UPDATE_TRANSPORT="+transport, "MANUAL_UPDATE_CHANNEL="+channel,
 				"BAD_SIGNATURE="+map[bool]string{true: "true", false: "false"}[tc.badSignature])
 			out, runErr := cmd.CombinedOutput()
 			if tc.blocked {
@@ -187,6 +221,16 @@ esac
 				want := append([]string{"EXECUTED"}, tc.want...)
 				if !reflect.DeepEqual(strings.Split(strings.TrimSuffix(string(got), "\n"), "\n"), want) {
 					t.Fatalf("installer args %q, want %q", got, want)
+				}
+				selected, err := os.ReadFile(channel)
+				wantChannel := "stable"
+				for _, arg := range tc.want {
+					if arg == "--rc" || arg == "--prerelease" {
+						wantChannel = "rc"
+					}
+				}
+				if err != nil || strings.TrimSpace(string(selected)) != wantChannel {
+					t.Fatalf("installer selected %q: %v, want %s", selected, err, wantChannel)
 				}
 			}
 			if !tc.missingConfig && !tc.directory && !tc.brokenLink {
