@@ -827,11 +827,12 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    and raw tool traces are forensic context and must stay secondary to what
    Patrol did.
 2. Keep Patrol-specific copy and badge logic inside the governed Patrol presentation helpers instead of page-local branches
-   Patrol assessment copy must not present an all-clear health prediction while
-   active Patrol findings or Patrol runtime issues are still present. The
-   canonical summary helper owns that conflict resolution so the visible
-   assessment title, description, and compact metrics all speak from the same
-   current findings state. Patrol-owned runtime issues must stay
+   Patrol renders no assessment copy today. If it returns, it must not present
+   an all-clear health prediction while active Patrol findings or Patrol
+   runtime issues are still present, and one shared presenter must own that
+   conflict resolution so the visible assessment title, description, and
+   compact metrics all speak from the same current findings state.
+   Patrol-owned runtime issues must stay
    distinct from infrastructure findings in assessment copy rather than being
    described as infrastructure warning findings about Patrol itself.
    Historical Patrol trust regressions must also suppress a green all-clear in
@@ -842,13 +843,24 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    tolerance and otherwise allows two configured Patrol intervals before
    warning, so deliberately slower schedules are not mislabeled while an old
    default-schedule result cannot remain green indefinitely.
-   Assessment coverage caveats must also reconcile against current run-history
-   proof: a stale coverage factor or prediction must not claim recent coverage
-   is incomplete when the latest completed full Patrol run successfully checked
-   real resources.
-   Recency coverage copy must also come from the shared presentation helper:
-   use verified wording only for successful full patrols, and use neutral
-   checked wording for failed full patrols or scoped activity.
+   No assessment readout renders today, so nothing reconciles a coverage
+   caveat against run history: once runtime states (running, blocked,
+   disabled, unavailable) and stale coverage have taken precedence, the
+   current-findings empty state withholds the all-clear (`Check needed`)
+   whenever the overall-health summary carries any
+   `coverage` factor, including the backend `Recent Patrol errors` factor that
+   can outlast a successful full Patrol run until three consecutive clean full
+   runs lead the coverage window or the erroring runs leave it
+   (`summarizeRecentPatrolCoverage` in `internal/ai/intelligence.go`), and
+   whenever the latest completed full run ended with errors or only targeted or
+   follow-up runs completed. If an assessment readout returns, its coverage
+   caveat must reconcile against current run-history proof: a stale coverage
+   factor or prediction must not claim recent coverage is incomplete when the
+   latest completed full Patrol run successfully checked real resources.
+   Recency coverage copy comes from the shared presentation helper
+   (`getPatrolRecencyPresentation`): `checked N resources` for the latest
+   completed run with a positive count, whatever its type or error state. It
+   never says `verified`.
 3. Update this contract whenever a new Patrol-specific page, store, helper, or presentation component becomes canonical runtime surface area
 4. Keep retired hosted-model and trial-like Patrol acquisition copy out of the
    normal self-hosted GA app. Patrol may parse legacy transport fields, but
@@ -1496,15 +1508,29 @@ provider/settings affordances.
 The feature surface now also keeps the same shell/runtime split internally:
 `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` owns feature
 composition, the Patrol-owned section files under
-`frontend-modern/src/features/patrol/` own the header, banner, summary, and
-workspace render surfaces, and
-`frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` owns Patrol
-state, transport, polling, and effect lifecycle. The shell and section surfaces
-must not re-accumulate Patrol API calls, timer orchestration, or store refresh
-semantics, and `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` now
+`frontend-modern/src/features/patrol/` own the header, banner, workspace, and
+tab-panel render surfaces (the Inbox attention list, Protection objectives, and
+the Activity tab's `This week` digest and recent work), and
+`frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` owns the
+page's shared Patrol state, transport, polling, and effect lifecycle. The shell
+and the header, banner, and workspace surfaces must not re-accumulate those
+Patrol API calls, timer orchestration, or store refresh semantics; the
+attention list, objectives, recent work, and `This week` panels each own their
+own typed read and refresh instead, and `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` now
 owns the canonical summary normalization so Patrol consumers inherit one
 governed recent-change and policy-posture snapshot instead of reintroducing
 hook-local fallback logic.
+The hook no longer returns the summary card's severity and fix tallies. Its
+`summaryStats` accessor (critical, warning, and total active findings plus
+fixed outcomes, counted client-side over the Patrol findings list) lost its
+only reader when the Patrol summary card was deleted and has been removed,
+together with the `canonical-patrol/no-local-summary-card-presentation` rule in
+`frontend-modern/scripts/canonical-platform-audit.mjs`, whose regex matched only
+text shaped like the deleted card's tint ternaries on
+`summaryStats().criticalFindings`, `warningFindings` and `fixedCount`. The open-issue severity counts the page shows today come from
+the Activity tab's `This week` card, which reads them from
+`GET /api/ai/patrol/digest` (see that card's section below); a count surface
+that returns must not revive a hook-local tally of the findings list.
 That same Patrol hook boundary now consumes shared AI settings/model truth
 through `frontend-modern/src/stores/aiRuntimeState.ts` instead of mounting its
 own `/api/settings/ai` or `/api/ai/models` reads. Patrol-specific state still
@@ -1571,12 +1597,20 @@ compatible `handoff_metadata.kind=patrol_configuration_failure` plus only the
 runtime-failure boolean needed for drawer/session presentation, so they restore
 as a Patrol control issue without carrying raw provider, credential, command,
 or retry payloads into the browser.
-Successful provider-model saves that return
-`patrol_readiness.status=not_ready` are still Patrol control issues, not silent
-successes: the Patrol popover must keep the saved provider/model visible,
-render a `Patrol control needs attention` inline state with the returned
-readiness cause and summary; any Assistant handoff from that state must
-describe a Patrol control issue rather than a save failure.
+Successful Pulse Intelligence settings saves whose returned
+`patrol_readiness.status` is `not_ready` or `warning` are still Patrol control
+issues, not silent successes: Settings > Provider & Models, Patrol, Assistant
+and Service context keep the saved non-secret values in the form and raise a
+warning
+toast (`<page> settings saved, but Patrol is not ready` or `... is degraded`)
+with the readiness summary, provider and model instead of a success toast
+(`getAISettingsPatrolReadinessSaveMessage` in
+`frontend-modern/src/components/Settings/useAISettingsState.ts`). A Patrol
+on/off toggle save whose response reports `not_ready` raises the fixed warning
+`Patrol setting was saved, but Patrol is not ready to run.` in either
+direction, because readiness is evaluated independently of `patrol_enabled`.
+Patrol renders no inline control-issue state or Assistant handoff for either
+case.
 A separate browser proof in
 `tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts` keeps the
 authenticated launch workbench monitor-first. When the runtime has monitored
@@ -1675,55 +1709,49 @@ must not show Pro trial CTAs, upgrade links, paid helper copy, or a plan-lock
 upsell banner in the default Patrol workflow unless hosted mode, an explicit
 commercial handoff, or an active entitlement makes those actions relevant.
 That degraded empty-state copy must also interpret the finding state rather
-than simply replaying the primary assessment sentence verbatim: when coverage
+than replaying an `overall_health.prediction` sentence verbatim: when coverage
 is incomplete, the findings panel should tell the operator to run Patrol to
 complete coverage before trusting the all-clear. The page must not duplicate
 the assessment prediction as a second independent status surface above current
 issues.
-Secondary metric strips must not render `No issues found` when the same
-governed overall-health summary says coverage is incomplete or health still
-requires attention; compact assessment derivation belongs to the shared
-`frontend-modern/src/utils/patrolSummaryPresentation.ts` helper for Assistant,
-history, and explicit context consumers rather than the default Patrol page.
-Any explicit context assessment shell must also stay inside the shared Pulse
-card language. It should use the same neutral `bg-surface` page-card base as
-adjacent Pulse surfaces, carrying severity through compact header accents, icon
-treatments, and badges instead of tinting an entire full-width assessment panel
-as a one-off warning banner.
-That supporting score chip must also avoid overstating infrastructure truth.
-When the current state is dominated by incomplete coverage or Patrol-owned
-runtime failures, the chip should read as an `Assessment` grade rather than an
-`Health` grade; `Health` belongs to verified healthy infrastructure states.
-That same helper also owns explicit assessment explanations. Assessment
-consumers must not pair an `Issues detected` headline with a raw coverage-only
-`overall_health.prediction` sentence from a separate source; when active
-findings and incomplete verification are both true, the assessment should
-describe both in one canonical message.
-That same assessment contract must also distinguish Patrol-owned runtime
-findings from infrastructure findings. When the only active Patrol findings are
-synthetic Patrol service/runtime conditions such as the `ai-service`
-provider-credit failure, the top assessment should read as a Patrol runtime
-issue rather than implying infrastructure issues were detected across the
-estate. When there is exactly one active Patrol runtime finding, that same
-assessment copy should name the concrete runtime failure, such as
-`Provider billing or quota issue`, instead of reducing the state to a generic count of
-runtime findings.
-That primary assessment must also expose a single visible recommended next
-step derived from the same Patrol summary contract, not a page-local helper.
-`frontend-modern/src/utils/patrolSummaryPresentation.ts` owns that decision
-from pending governed approvals, Patrol runtime issues, active infrastructure
-findings, verification posture, and the current assessment tone. Pending
-approvals take priority over general triage, coverage-incomplete states must
-ask for full verification before any all-clear claim, runtime impairment must
-point the operator back to restoring Patrol visibility, and verified healthy
-states should fall back to continued scheduled monitoring rather than
-inviting generic Assistant chat.
-When that recommendation has an immediate governed operator path, the same
-helper must also declare the bounded action kind. The summary card may map
-those action kinds only to existing Patrol controls: run a full Patrol,
-review approval-scoped findings, review active findings, or open Patrol
-provider settings. It must not
-invent page-local remediation, approval, or execution authority from
+No shared presenter derives a compact assessment, assessment shell, score
+chip, assessment explanation, or recommended next step today. The helpers that
+did (`getPatrolAssessmentPresentation`, `getPatrolAssessmentShellPresentation`,
+`getPatrolScoreChipLabel`, `getPatrolCompactAssessmentLabel`,
+`getPatrolSummaryMetricState`, `getPatrolAssessmentAction` and their siblings)
+have had no production caller since the Patrol summary card was deleted
+(several lost theirs months earlier) and are gone;
+`frontend-modern/src/utils/patrolSummaryPresentation.ts` now owns only the
+header recency line (`getPatrolRecencyPresentation`) and the run-history
+verification posture the current-findings empty state reads
+(`getPatrolVerificationPresentation`). If a summary card, metric strip, or
+assessment readout returns, it must derive its state from one shared
+Patrol-owned presenter rather than page-local logic, and keep these rules.
+A secondary metric strip must not render `No issues found` while the governed
+overall-health summary says coverage is incomplete or health still requires
+attention. An assessment shell stays inside the shared Pulse card language:
+the neutral `bg-surface` page-card base, with severity carried by compact
+header accents, icon treatments, and badges rather than a tinted full-width
+warning banner. A supporting score chip reads as an `Assessment` grade rather
+than a `Health` grade when incomplete coverage or Patrol-owned runtime failures
+dominate; `Health` belongs to verified healthy infrastructure states. An
+`Issues detected` headline is never paired with a raw coverage-only
+`overall_health.prediction` sentence from a separate source; active findings
+and incomplete verification are described together in one message. When the
+only active Patrol findings are synthetic Patrol service/runtime conditions
+such as the `ai-service` provider-credit failure, the readout names a Patrol
+runtime issue rather than implying infrastructure issues across the estate,
+and with exactly one such finding it names the concrete failure, such as
+`Provider billing or quota issue`. Any recommended next step comes from that
+same presenter: pending approvals take priority over general triage,
+coverage-incomplete states ask for a full check before any all-clear, runtime
+impairment points the operator back to restoring Patrol visibility, and
+healthy states fall back to continued scheduled monitoring rather than
+inviting generic Assistant chat. When that recommendation has an immediate
+governed operator path, the presenter declares a bounded action kind that maps
+only to existing Patrol controls (run a full Patrol, review approval-scoped
+findings, review active findings, or open Patrol provider settings), never to
+page-local remediation, approval, or execution authority invented from
 recommendation text.
 If a summary card returns, that same runtime-owned assessment must expose the
 fix path directly. When the primary Patrol issue is a Patrol runtime/provider
@@ -1801,8 +1829,8 @@ dismiss, resolve, or suppress controls for them. The correct operator path is
 to fix Patrol provider configuration in Pulse Intelligence > Provider & Models
 settings and rerun Patrol, optionally adding context notes, rather than hiding
 the runtime issue.
-That same runtime-versus-infrastructure split must carry through the summary
-metrics strip as well. When Patrol-owned runtime issues are active, the
+If a summary metrics strip returns, that same runtime-versus-infrastructure
+split must carry through it. When Patrol-owned runtime issues are active, the
 supporting metrics must stop counting them under generic infrastructure
 `Warnings` or `Active findings`; the strip should break out `Runtime issues`
 separately and reserve infrastructure finding counts for actual estate issues.
@@ -1810,16 +1838,18 @@ The findings list must respect that same trust priority. When Patrol-owned
 runtime issues share a severity tier with ordinary infrastructure findings, the
 runtime issue should sort first within that tier so Patrol blindness is not
 buried under same-severity estate warnings.
-The summary recency chip must follow the same governed scope distinction. When
-the latest completed activity was only a scoped run, the summary should label
-that timestamp as `Last activity` instead of `Last patrol`; `Last full patrol`
-belongs only to the most recent completed full Patrol run.
-That same distinction is transport-backed. `last_patrol_at` names the last
-completed full Patrol sweep, while `last_activity_at` may advance on scoped
-work or fix-verification checks without claiming a new full verification pass.
-That same recency contract also applies to the header metadata row. The top
-header must not revert to a generic `Last:` timestamp when the rest of Patrol
-is explicitly distinguishing activity from full verification recency.
+Patrol renders no summary recency chip today; the page-header recency line is
+the only Patrol recency surface, and `getPatrolRecencyPresentation` labels it.
+When run history holds a completed run, the line reads `Last check` for the
+most recent one of any type: full, targeted, or follow-up. Otherwise it falls
+back to the status transport: `Last check` with `last_patrol_at` when that is
+the only timestamp, when it is at least as recent as `last_activity_at`, or when
+only the activity timestamp fails to parse; otherwise `Last activity` with
+`last_activity_at`. The transport keeps the
+distinction: `last_patrol_at` names the last completed full Patrol sweep,
+while `last_activity_at` may advance on scoped work or fix-verification checks
+without claiming a new full verification pass. The header must not revert to
+a generic `Last:` timestamp.
 If Patrol renders a summary surface again, it must also avoid reintroducing a
 second compact assessment or verification layer beneath the primary card. Supporting metric strips
 belong to counts and outcomes such as active findings, critical findings,
@@ -1828,8 +1858,8 @@ verification labels in a second row that competes with the primary governed
 assessment and verification copy above.
 The same supporting-chip rule applies to timing: such a primary summary card
 may show health and active-finding support, but it should not add another recency
-pill once header metadata, verification, and findings footer already carry the
-governed activity/verification timestamps.
+pill, because the header recency line already carries the governed activity
+timestamp.
 That same Patrol-owned run-history surface must keep platform-backed system
 counts canonical too. When the backend distinguishes API-backed TrueNAS
 systems from unified-agent hosts in Patrol run history, the run-history chips
@@ -1844,16 +1874,20 @@ split also applies to findings counts: the primary assessment card may keep
 health as supporting context, but active
 findings, warning counts, and critical counts belong to the supporting metric
 strip rather than being repeated as duplicate badges inside the primary card.
-That same summary surface must also explain what Patrol actually checked
-without turning coverage mechanics into the default product language. Recent
-run history should drive a visible check summary that tells the operator
-whether Patrol recently completed a clean broad check, only ran targeted alert
-or anomaly-triggered checks, or ended its most recent broad check with errors,
-so the page does not leave trust and coverage as implicit background knowledge.
-When same-day run history shows both a recent broad check and a burst of
-targeted or follow-up activity, that same surface should expose the recent
+Patrol renders no check summary today. `getPatrolVerificationPresentation`
+still classifies recent run history (a clean full check, a full check that
+ended with errors, only targeted or follow-up checks, or no completed check)
+and computes a same-day activity-mix label, but its only reader is the
+current-findings empty state, which uses just its warning tone to withhold the
+all-clear; the header recency line carries the visible coverage phrase. If a
+check summary returns with that summary surface, it must explain what Patrol
+actually checked without turning coverage mechanics into the default product
+language: whether Patrol recently completed a clean broad check, only ran
+targeted alert or anomaly-triggered checks, or ended its most recent broad
+check with errors. When same-day run history shows both a recent broad check
+and a burst of targeted or follow-up activity, that surface should expose the
 activity mix in check language instead of asking operators to reconcile a
-`Recently verified` headline with a busy Patrol strip elsewhere on the page.
+`Recently checked` headline with a busy Patrol strip elsewhere on the page.
 Fix-verification checks belong to that same explanation layer as follow-up
 checks, not as evidence of a fresh full-estate sweep.
 The same hierarchy keeps correlations, recent changes, and policy posture off
@@ -1880,8 +1914,9 @@ activity facts belong in run history, selected finding details, or explicit
 secondary context, not as a second Patrol verdict label.
 That same activity explanation should handle noisy Patrol behavior concretely.
 When same-day history shows a mix of full sweeps, verification checks, and
-scoped alert- or anomaly-triggered patrols, the verification/activity surface
-should expose a compact breakdown of those run categories instead of leaving
+scoped alert- or anomaly-triggered patrols, a returning verification/activity
+surface should expose a compact breakdown of those run categories (Patrol
+renders none today) instead of leaving
 operators to infer why Patrol looked busy from an undifferentiated run count
 alone.
 The same operational layer should also surface scoped-trigger state directly.
@@ -2328,10 +2363,10 @@ focused on product title, recency, and route controls instead of repeating
 the same trust counters above the workspace tabs.
 The same page-header recency line must also surface the coverage
 signal from the most recent completed run via
-`PatrolRecencyPresentation.resourcesChecked`, populated by
-`getPatrolRecencyPresentation` from
-`PatrolRunRecord.resources_checked`. The render reads "Last full
-patrol: 3m ago — checked 47 resources" so operators see both
+`PatrolRecencyPresentation.resourcesCheckedLabel` (raw count in
+`resourcesChecked`), populated by `getPatrolRecencyPresentation` from
+`PatrolRunRecord.resources_checked`. The render reads "Last check:
+3m ago · checked 47 resources" so operators see both
 temporal recency and coverage in one line. The field stays optional
 (omitted when zero) so a degenerate run that completed without
 checking any resources does not render a misleading "checked 0

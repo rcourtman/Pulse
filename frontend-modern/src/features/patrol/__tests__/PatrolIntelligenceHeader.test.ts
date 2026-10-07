@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import {
   PATROL_AUTONOMY_POLICY_PRESENTATION,
   getPatrolAutopilotExpiry,
-  getPatrolConfigurationFailureInlineDetails,
 } from '../PatrolIntelligenceHeader';
 import {
   getPatrolAlertAnalysisAvailabilityPresentation,
@@ -34,38 +33,6 @@ describe('PatrolIntelligenceHeader', () => {
     expect(getPatrolAutopilotExpiry('2026-12-31T12:00:00Z')?.toISOString()).toBe(
       '2026-12-31T12:00:00.000Z',
     );
-  });
-
-  it('keeps Patrol mode readiness context visible inline', () => {
-    expect(
-      getPatrolConfigurationFailureInlineDetails({
-        message: 'Patrol mode could not be saved.',
-        code: 'patrol_readiness_not_ready',
-        readiness: {
-          status: 'not_ready',
-          cause: 'model_unsupported_tools',
-          summary:
-            'The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
-          provider: 'openrouter',
-          model: 'openrouter:deepseek/deepseek-r1',
-        },
-      }),
-    ).toEqual([
-      'patrol_readiness_not_ready · model_unsupported_tools',
-      'Setup: The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
-      'Provider: openrouter',
-      'Model: openrouter:deepseek/deepseek-r1',
-    ]);
-  });
-
-  it('falls back to the blocked cause when readiness cause is absent', () => {
-    expect(
-      getPatrolConfigurationFailureInlineDetails({
-        message: 'Patrol mode could not be saved.',
-        code: 'patrol_autonomy_pro_required',
-        blockedCause: 'license_required',
-      }),
-    ).toEqual(['patrol_autonomy_pro_required · license_required']);
   });
 
   it('keeps trigger runtime status in the header chrome after setup', () => {
