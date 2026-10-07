@@ -41,7 +41,7 @@ import {
 import { getApprovalExpiryTime, isLivePendingApproval } from '@/utils/approvalState';
 import { sortPendingApprovalsByUrgency } from '@/utils/approvalRiskPresentation';
 import { logger } from '@/utils/logger';
-import type { CorrelationsResponse, IntelligenceSummary } from '@/types/aiIntelligence';
+import type { IntelligenceSummary } from '@/types/aiIntelligence';
 import { normalizeIntelligenceSummary } from './aiIntelligenceSummaryModel';
 import { presentationPolicyIsDemoMode } from './sessionPresentationPolicy';
 import { eventBus } from './events';
@@ -466,12 +466,6 @@ const [intelligenceSummary, setIntelligenceSummary] = createSignal<IntelligenceS
 );
 
 // ============================================
-// Learned Correlations
-// ============================================
-
-const [correlations, setCorrelations] = createSignal<CorrelationsResponse | null>(null);
-
-// ============================================
 // Org Switch Reset
 // ============================================
 
@@ -490,7 +484,6 @@ eventBus.on('org_switched', () => {
   setApprovalsError(null);
   setCircuitBreakerStatus(null);
   setIntelligenceSummary(null);
-  setCorrelations(null);
 });
 
 // ============================================
@@ -809,29 +802,11 @@ export const aiIntelligenceStore = {
   },
   circuitBreakerStatusSignal: circuitBreakerStatus,
 
-  // Learned Correlations
-  get correlations() {
-    return correlations();
-  },
-  correlationsSignal: correlations,
-
   // Canonical Intelligence Summary
   get intelligenceSummary() {
     return intelligenceSummary();
   },
   intelligenceSummarySignal: intelligenceSummary,
-
-  async loadCorrelations(resourceId?: string) {
-    try {
-      const response = await AIAPI.getCorrelations(resourceId);
-      setCorrelations(response);
-      return response;
-    } catch (e) {
-      logger.error('Failed to load correlations:', e);
-      setCorrelations(null);
-      return null;
-    }
-  },
 
   async loadDashboardData() {
     await Promise.all([
@@ -840,7 +815,6 @@ export const aiIntelligenceStore = {
       this.loadPatrolFindings(),
       this.loadCircuitBreakerStatus(),
       this.loadPendingApprovals(),
-      this.loadCorrelations(),
     ]);
   },
 

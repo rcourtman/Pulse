@@ -647,7 +647,6 @@ export function usePatrolIntelligenceState() {
       aiIntelligenceStore.loadIntelligenceSummary(),
       aiIntelligenceStore.loadFindings(),
       aiIntelligenceStore.loadCircuitBreakerStatus(),
-      aiIntelligenceStore.loadCorrelations(),
     ]);
   }
 
