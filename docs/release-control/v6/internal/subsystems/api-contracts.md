@@ -7259,12 +7259,14 @@ introducing VMware-only mention payloads or provider-local inventory reads
 under `/api/vmware/*`. Runtime-specific container/app mentions remain shared
 unified-resource mentions as well; VMware network inventory does not create a
 provider-local mention family.
-That same `/api/ai/chat` payload boundary owns per-request execution-mode
-overrides. Dashboard Pulse Brief and other scoped handoffs may include
-`autonomous_mode:false` on the chat request to force approval-required command
-execution for that exchange, but the transport must treat the field as a
-request override only and must not mutate the user's persistent AI control
-setting.
+That same `/api/ai/chat` payload boundary owns request-local execution mode,
+and the server sets it. `ChatRequest` in `internal/api/ai_handler.go` has no
+`autonomous_mode` field, so the `autonomous_mode:false` that scoped handoffs
+such as an explain-this-issue request still send is dropped at decode, and the
+handler passes approval-required mode into the chat service for every
+exchange; an Autonomous control level runs as Controlled for that request.
+That clamp is request-local and must not mutate the user's persistent AI
+control setting.
 That same chat transport boundary owns new-session anchoring. When the request
 omits `session_id`, the handler may generate and stream a session ID
 immediately so the browser can anchor the visible turn, but that generated ID is
@@ -7318,7 +7320,7 @@ not serialize the model-only `handoff_context`, runtime failure detail, action
 preflight/result bodies, remediation descriptions, raw commands, or approval
 command payloads, and it must not preserve Patrol-authored next-step
 recommendation fields from legacy handoffs.
-Patrol finding handoffs are stricter than ordinary chat requests: when a request
+Patrol finding handoffs keep that clamp on their own path: when a request
 carries a non-empty `finding_id` or resolves to model-only Patrol briefing,
 resource, or action context, `internal/api/ai_handler.go` must clamp the
 request-local autonomous mode to false even if the caller supplied

@@ -5608,12 +5608,14 @@ wording stays aligned with the drawer's recent-change cards and timeline.
 Timeline cards in that drawer surface change metadata when it is present, so
 the history view preserves the richer provenance already carried by the
 unified-resource model instead of flattening those fields away.
-The same Infrastructure resource-only links now also default through the
-shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
+The shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
-cards from the Patrol page, resource drawer, and problem-resource dashboard
-panels, so canonical resource-filter path construction stays owned by the
-shared summary cards rather than being duplicated per surface.
+cards keep resource links behind an optional `buildResourceHref` input with no
+default, following the 2026-05-16 cross-resource drilldown retirement above.
+The resource drawer passes none, so its change and correlation labels render
+as plain text; a surface that needs resource links must pass a platform-route
+builder into the shared card rather than rebuilding resource-filter paths per
+surface.
 Platform tables supply the resource-label resolver to the resource drawer
 through `PlatformResourceDetailTableRow`. `createPlatformResourceLabelResolver(...)`
 in `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
