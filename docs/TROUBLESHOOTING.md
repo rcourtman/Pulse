@@ -389,6 +389,52 @@ to compare one affected row's explanation, Job, History and Access with the
 matching native PBS record. Do not run a new backup, restart or clear history
 just to diagnose the disagreement.
 
+#### Replication jobs are Pending, stale or missing
+
+**Proxmox → Replication** monitors storage replication between PVE nodes,
+not PBS backups. A replication result does not establish backup coverage,
+restore readiness or guest thaw. Use the owning Proxmox installation's
+existing replication status while Pulse's reading is uncertain.
+
+Start with **All** and clear the table's search. **No replication jobs match
+current filters** is different from an empty inventory, a missing tab or
+**Could not load replication jobs**. Record the actual message; a missing
+row is not proof that Proxmox deleted the job.
+
+| Observation in Pulse | What to compare | What it does not establish |
+| --- | --- | --- |
+| **Pending**, with current sync times | The same job's outcome, failures and error in Proxmox. Pulse can retain sync times without a usable outcome for its Healthy/Pending classification. | Pending alone does not prove a job is waiting or failed. A recent time, zero displayed failures or no displayed error alone does not prove success. |
+| Old sync times or an overdue next sync | The same job's existing native last/next sync and outcome. Record whether actual sync times advance during ordinary polling. | A changing “ago” or “overdue” label is the browser clock advancing, not evidence of a new poll. A Healthy pill does not establish current inventory or a running scheduler. |
+| Empty inventory, missing tab or load error | Whether the expected jobs still exist in Proxmox, which Pulse connection owns them, and any displayed read error. | Missing or failed collection is unknown, not an empty healthy result. Correcting a status pill does not establish lifecycle or polling recovery. |
+
+For one affected job, expand its row using the control beside **Guest**;
+the details retain **Job**, **Route**, **Last sync**, **Next sync**, **Duration**
+and **Failures** even when narrow layouts hide table columns. Compare the
+owning installation, job/guest ID and source → target route with the existing
+native Proxmox replication view. Similar names or VMIDs in separate
+installations do not identify the same job. An unavailable native observation
+can be reported as unavailable; do not force a sync to obtain one.
+
+Treat **classification** and **stale or absent inventory after a lifecycle
+change** as separate symptoms. If a previous restart restored data, keep that
+observation and the now-working setup; do not repeat a restart, reboot or
+update to reproduce it. One current row does not prove every job recovered.
+
+For help, give the running Pulse/PVE versions, container image tag if relevant,
+the original sequence and time, which symptoms remain, and one matching job's
+Pulse versus native status, sync times, failures and redacted error. Include
+any already-observed recovery, without recreating missing original evidence.
+Use consistent placeholders for private installations, nodes and guest/job
+identities so the route remains comparable. Do not share tokens, full API
+responses, configuration, HAR exports or unredacted screenshots.
+
+Do not restart or upgrade Pulse, reboot nodes, change schedules, disable/re-enable
+jobs, recreate connections, widen token permissions or disable privilege
+separation just to diagnose the table. Do not run a new sync, backup, restore,
+live diagnostics or guest-agent probe as a test. A frozen or unresponsive
+guest needs the separate [backup safety procedure](VM_DISK_MONITORING.md#backup-safety),
+not these display checks.
+
 #### Monitoring is mixed between Proxmox installations
 
 Pulse is intended to monitor [multiple Proxmox installations](CONFIGURATION.md#multiple-proxmox-installations).
