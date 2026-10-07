@@ -3431,6 +3431,20 @@ It owns probe status, incidents, history, evidence, and the outgoing `checks`
 relationship. The matched resource carries every correlated check in the canonical
 `availabilityChecks` facet, keyed by saved target id, while `availability`
 remains an additive singular compatibility summary selected from that set.
+The summary is the worst check: a confirmed outage first, then any other
+observed failure, then an unchecked, ambiguous or unresolved check, then a
+passing one, ties going to the first saved target id. A confirmed outage is an
+enabled check whose observed failures reach its failure threshold, with an
+unavailable aggregate when one is reported and an outcome that is not
+indeterminate. That is the gate the availability poller applies before it
+raises `availability_unreachable`, so a probe agent that stops reporting keeps
+its old failure count but confirms nothing. `availabilityOutageConfirmed` in
+`internal/unifiedresources/availability.go` holds that rule for both the
+ranking and `EvaluateResourceHealth`, which reads the summary. A confirmed
+outage on any attached check therefore makes the resource's health critical
+even when a check that sorts earlier has failed below its threshold, with the
+`availability_failed` reason unless a critical alert explains the verdict
+first.
 Adding a second explicit or unambiguously correlated check must retain both
 source-owned endpoint rows, project both facets onto the same resource, and
 emit one `checks` relationship per target from the check to that resource.
