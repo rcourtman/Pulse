@@ -372,6 +372,14 @@ member-aware template below; do not use the short example as an exactly-once key
 
 ### Sample PSA payloads
 
+Use this extended template only with a Pulse version that exposes
+`NotRecovered` and member `Resolution`; **v6.5.0 does not have these fields**.
+Consult the help bundled with your installed version before replacing a
+working template. If rendering reports a missing field, leave failed deliveries
+retained rather than retrying the batch or removing the reason fields and
+treating every close as recovery. A newer guide on the website does not establish
+that its supporting software has been released.
+
 A fuller template for normal queued firing and recovery notifications includes
 tenant context and every member's occurrence, severity, condition and close reason. The
 primary fields remain convenient summary context, **not the whole batch**:

@@ -28,6 +28,17 @@ const closeText = (): string => {
 };
 
 describe('webhook non-recovery close help', () => {
+  it('keeps unsupported stable versions and failed renders out of blind batch retries', () => {
+    const text = article().textContent!.replace(/\s+/g, ' ');
+    expect(text).toContain('v6.5.0 does not have these fields');
+    expect(text).toContain('Consult the help bundled with your installed version');
+    expect(text).toContain('leave failed deliveries retained rather than retrying the batch');
+    expect(text).toContain('removing the reason fields and treating every close as recovery');
+    expect(text).toContain(
+      'A newer guide on the website does not establish that its supporting software has been released',
+    );
+  });
+
   it('ships the exact tested guidance and member-aware copied template', () => {
     expect(readFileSync(path.join(root, 'frontend-modern/public/docs/WEBHOOKS.md'), 'utf8')).toBe(
       guide(),
