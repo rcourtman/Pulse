@@ -41,9 +41,7 @@ describe('existing metric threshold help', () => {
       defaults: { memory: 85, cpu: 80 },
     };
     expect(
-      isAlertResourceMetricOff(
-        getAlertResourceMetricDisplayValue(resource, 'memory', {}, false),
-      ),
+      isAlertResourceMetricOff(getAlertResourceMetricDisplayValue(resource, 'memory', {}, false)),
     ).toBe(true);
     expect(getAlertResourceMetricDisplayValue(resource, 'cpu', {}, false)).toBe(80);
     expect(article().querySelector('pre')).toBeNull();
