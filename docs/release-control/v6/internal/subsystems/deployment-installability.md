@@ -15,6 +15,30 @@
 
 ## Purpose
 
+### Server replacement requires a confirmed inactive service
+
+The server installer's archive and source-build paths stage their inputs before
+stopping Pulse. Manual version changes, menu updates and reinstalls must not stop
+the service before staging, so a download/build failure does not create an outage.
+Immediately before binary replacement, the detected service must return an
+explicit `inactive` state. An `active` or `failed` unit is stopped with the
+existing five-second command bound and read back; only an `inactive` result
+admits replacement. A failed unit does not imply prior workload liveness.
+
+Failed/timed-out reads or stops, transitional states and malformed/empty results
+refuse replacement without an automatic restart or retry. Retain the installed
+binary, version and source-build marker on this refusal; temporary downloaded
+archives are cleaned up. Preserve the prior-active flag across a successful stop
+for the existing post-update liveness check. This does not establish restoration
+after a later installation failure, filesystem/data rollback or native systemd
+acceptance.
+
+`scripts/tests/test_server_installer_stop.py` exercises both real replacement
+paths with fixture-only external producers and a local service-command shim,
+including actual command timeouts, bytes/modes, liveness attribution and all
+three manual staging-failure flows. The existing root-installer ordering and
+update-resilience tests remain independent controls.
+
 ### Shipped documentation is checked before CI dependency work
 
 Build and Test checks every shipped Markdown mirror immediately after the
