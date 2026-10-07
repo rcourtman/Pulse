@@ -309,18 +309,48 @@ first step before platform-local cleanup.
 #### Filter Pulse's systemd journal by severity
 
 Current systemd installs preserve Pulse's structured log level as the journal
-priority. For example, show warnings and more important records with:
+priority. For warnings and more important records, use this bounded Bash reader
+on the Pulse host, with an account authorised to read its journal. In Proxmox
+LXC, run it inside the Pulse container, not on the Proxmox host. Substitute the
+actual service name (`pulse-backend` on some older installs) and original
+incident's time window; no new action or request ID is needed.
 
 ```bash
-sudo journalctl -u pulse -p warning
+# systemd / Proxmox LXC — warning and higher priority
+(
+command -v timeout >/dev/null 2>&1 || {
+  printf 'Log read unavailable: GNU timeout is required; no unbounded fallback.\n' >&2
+  exit 1
+}
+if pulse_logs=$(timeout --signal=TERM --kill-after=1s 8s journalctl -u pulse -p warning --since '15 minutes ago' --lines 200 --no-pager 2>&1); then
+  if [ -n "$pulse_logs" ]; then
+    printf '%s\n' "$pulse_logs"
+  fi
+else
+  pulse_log_status=$?
+  printf 'Log read unavailable (exit %s); no partial excerpt shown.\n' "$pulse_log_status" >&2
+  exit "$pulse_log_status"
+fi
+)
 ```
 
+This requires **GNU `timeout`**, reads at most 200 records from the last 15
+minutes and allows eight seconds plus a one-second termination grace. A failed
+or timed-out read is unavailable, not an empty warning search; no partial
+excerpt is shown. Stop if the utility or journal access is unavailable; do not
+use an unbounded substitute. These local excerpts are **not sanitised**; follow
+[log-sharing precautions](#inspect-notification-logs) before sharing any line.
+
 The stored message remains JSON (`"level":"warn"`, for example), while
-`PRIORITY` is available to `journalctl` and syslog forwarding. If a current
-Pulse warning appears only with `-p info`, inspect `systemctl cat pulse`; the
-installed service must contain `SyslogLevelPrefix=true` and
-`PULSE_LOG_JOURNAL_LEVEL_PREFIX=true`. Re-run the current signed installer to
-repair an older generated unit rather than adding a JSON-parsing wrapper.
+`PRIORITY` is available to `journalctl` and syslog forwarding. An empty filtered
+read does not prove that no warning occurred: an older generated unit may store
+all records at info priority. Use the [bounded unfiltered systemd reader](#inspect-notification-logs)
+to retain the original incident evidence instead. An administrator can check
+locally whether the service configuration contains `SyslogLevelPrefix=true` and
+`PULSE_LOG_JOURNAL_LEVEL_PREFIX=true`; do not post the full unit or environment,
+which can contain credentials. Do not reinstall or restart Pulse just to obtain
+logs. Repair an older generated unit through the current signed installer at a
+planned maintenance window, preserving the deployment's settings and data.
 
 #### VMs show "-" for disk usage
 - Read the disk value's explanation and observation time first; a dash is not
