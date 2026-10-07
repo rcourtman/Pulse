@@ -415,31 +415,49 @@ authorised to read these counters; a failed read is unavailable, not zero.
 # systemd / Proxmox LXC: Pulse resident-memory sample
 (
   set -eu
-  date -u +'%Y-%m-%dT%H:%M:%SZ'
-  pid=$(systemctl show pulse --property=MainPID --value)
-  case "$pid" in
-    ''|0|*[!0-9]*) printf 'No running Pulse PID; sample unavailable.\n' >&2; exit 1 ;;
-  esac
-  identity=$(TZ=UTC ps -p "$pid" -o pid=,lstart=)
-  if [ -z "$identity" ]; then
-    printf 'Process identity unavailable.\n' >&2; exit 1
+  if timeout --kill-after=1s 8s bash <<'PULSE_MEMORY_SAMPLE'
+set -eu
+date -u +'%Y-%m-%dT%H:%M:%SZ'
+pid=$(systemctl show pulse --property=MainPID --value)
+case "$pid" in
+  ''|0|*[!0-9]*) printf 'No running Pulse PID; sample unavailable.\n' >&2; exit 1 ;;
+esac
+identity=$(TZ=UTC ps -p "$pid" -o pid=,lstart=)
+if [ -z "$identity" ]; then
+  printf 'Process identity unavailable.\n' >&2; exit 1
+fi
+counters=$(awk '
+  $1 == "VmRSS:" || $1 == "RssAnon:" || $1 == "RssFile:" ||
+  $1 == "RssShmem:" || $1 == "VmSwap:" {
+    if (NF != 3 || $2 !~ /^[0-9]+$/ || $3 != "kB" || seen[$1]++) exit 1
+    print; fields++
+  }
+  END { if (fields != 5) exit 1 }
+' "/proc/$pid/status")
+current_pid=$(systemctl show pulse --property=MainPID --value)
+current_identity=$(TZ=UTC ps -p "$pid" -o pid=,lstart=)
+if [ "$pid" != "$current_pid" ] || [ "$identity" != "$current_identity" ]; then
+  printf 'Pulse changed during collection; discard this sample.\n' >&2; exit 1
+fi
+printf 'Pulse process (PID and UTC start): %s\n%s\n' "$identity" "$counters"
+PULSE_MEMORY_SAMPLE
+  then
+    :
+  else
+    status=$?
+    printf 'Resident-memory sample unavailable; retain the error and stop sampling.\n' >&2
+    exit "$status"
   fi
-  counters=$(awk '
-    $1 == "VmRSS:" || $1 == "RssAnon:" || $1 == "RssFile:" ||
-    $1 == "RssShmem:" || $1 == "VmSwap:" {
-      if (NF != 3 || $2 !~ /^[0-9]+$/ || $3 != "kB" || seen[$1]++) exit 1
-      print; fields++
-    }
-    END { if (fields != 5) exit 1 }
-  ' "/proc/$pid/status")
-  current_pid=$(systemctl show pulse --property=MainPID --value)
-  current_identity=$(TZ=UTC ps -p "$pid" -o pid=,lstart=)
-  if [ "$pid" != "$current_pid" ] || [ "$identity" != "$current_identity" ]; then
-    printf 'Pulse changed during collection; discard this sample.\n' >&2; exit 1
-  fi
-  printf 'Pulse process (PID and UTC start): %s\n%s\n' "$identity" "$counters"
 )
 ```
+
+The recipe requires GNU `timeout`: it gives the read-only sampling commands
+eight seconds, with a one-second termination grace, rather than leaving a hung
+reader running indefinitely. It does not stop or restart Pulse. A missing
+utility, timeout or reader error means the sample is unavailable; keep the
+failure, and do not remove the deadline or rerun it against an unresponsive
+installation. No complete process/counter sample is printed before every check
+succeeds; the initial UTC timestamp alone is not a memory result.
 
 Linux labels these values `kB`, meaning 1,024 bytes; divide by 1,024 for MiB.
 `VmRSS` is resident process memory, split into anonymous (`RssAnon`),

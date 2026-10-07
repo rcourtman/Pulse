@@ -13,9 +13,11 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 
@@ -39,7 +41,7 @@ def recipe() -> str:
 
 
 READER = '''#!/usr/bin/env python3
-import json, os, pathlib, subprocess, sys
+import json, os, pathlib, subprocess, sys, time
 name = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
 root = pathlib.Path(os.environ['RECIPE_FIXTURE'])
@@ -48,6 +50,8 @@ previous = [json.loads(line) for line in log.read_text().splitlines()] if log.ex
 count = sum(call['name'] == name for call in previous)
 with log.open('a') as stream:
     stream.write(json.dumps({'name': name, 'args': args}) + '\\n')
+if name == os.environ.get('HANG_TOOL'):
+    time.sleep(30)
 if name == 'date':
     assert args == ['-u', '+%Y-%m-%dT%H:%M:%SZ']
     print('2026-10-06T00:00:00Z')
@@ -69,6 +73,25 @@ else:
 '''
 
 
+def run_owned_recipe(copied: str, env: dict[str, str]) -> subprocess.CompletedProcess:
+    """Keep the existing ten-second assertion; clean up our shell on every exit."""
+    with subprocess.Popen(["bash", "-c", copied], env=env, text=True,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          start_new_session=True) as process:
+        try:
+            stdout, stderr = process.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            # Never target a service or another test's group. TimeoutExpired
+            # remains an error, not a passing or empty sample.
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.communicate(timeout=5)
+            raise
+        return subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr)
+
+
 class MemoryTroubleshootingDocsTest(unittest.TestCase):
     def exercise(self, *, status: str = COUNTERS, copied: str | None = None,
                  **settings: str):
@@ -81,9 +104,9 @@ class MemoryTroubleshootingDocsTest(unittest.TestCase):
             (directory / "status").write_text(status, encoding="utf-8")
             env = dict(os.environ, PATH=f"{directory}:{os.environ['PATH']}",
                        RECIPE_FIXTURE=str(directory), REAL_AWK=shutil.which("awk"), **settings)
-            result = subprocess.run(["bash", "-c", copied if copied is not None else recipe()],
-                                    env=env, text=True, capture_output=True, timeout=10)
-            calls = [json.loads(line) for line in (directory / "calls.jsonl").read_text().splitlines()]
+            result = run_owned_recipe(copied if copied is not None else recipe(), env)
+            log = directory / "calls.jsonl"
+            calls = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
             return result, calls
 
     def assert_no_memory_claim(self, result):
@@ -167,6 +190,34 @@ class MemoryTroubleshootingDocsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.count("0 kB"), 5)
 
+    def test_hung_service_reader_is_unavailable_before_the_test_deadline(self):
+        started = time.monotonic()
+        result, calls = self.exercise(HANG_TOOL="systemctl")
+        self.assertLess(time.monotonic() - started, 10)
+        self.assertEqual(result.returncode, 124, result.stderr)
+        self.assert_no_memory_claim(result)
+        self.assertIn("sample unavailable", result.stderr)
+        self.assertEqual([call["name"] for call in calls], ["date", "systemctl"])
+
+    def test_hung_counter_reader_never_publishes_identity_or_partial_memory(self):
+        started = time.monotonic()
+        result, calls = self.exercise(HANG_TOOL="awk")
+        self.assertLess(time.monotonic() - started, 10)
+        self.assertEqual(result.returncode, 124, result.stderr)
+        self.assert_no_memory_claim(result)
+        self.assertIn("sample unavailable", result.stderr)
+        self.assertEqual([call["name"] for call in calls], ["date", "systemctl", "ps", "awk"])
+
+    def test_missing_deadline_utility_is_not_a_sample_or_an_unbounded_fallback(self):
+        copied = recipe().replace("timeout --kill-after=1s 8s bash",
+                                  "pulse-missing-memory-deadline --kill-after=1s 8s bash")
+        self.assertNotEqual(copied, recipe())
+        result, calls = self.exercise(copied=copied)
+        self.assertEqual(result.returncode, 127, result.stderr)
+        self.assert_no_memory_claim(result)
+        self.assertIn("sample unavailable", result.stderr)
+        self.assertEqual(calls, [])
+
     @unittest.skipUnless(sys.platform.startswith("linux"), "Linux /proc recipe")
     def test_real_linux_status_of_an_owned_disposable_process(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -178,8 +229,7 @@ class MemoryTroubleshootingDocsTest(unittest.TestCase):
                 command.chmod(0o700)
                 env = dict(os.environ, PATH=f"{directory}:{os.environ['PATH']}",
                            RECIPE_CHILD_PID=str(child.pid))
-                result = subprocess.run(["bash", "-c", recipe()], env=env,
-                                        text=True, capture_output=True, timeout=10)
+                result = run_owned_recipe(recipe(), env)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("Pulse process (PID and UTC start)", result.stdout)
                 for field in ("VmRSS", "RssAnon", "RssFile", "RssShmem", "VmSwap"):
@@ -197,11 +247,13 @@ class MemoryTroubleshootingDocsTest(unittest.TestCase):
                        "1,024 bytes", "approximate and not an atomic snapshot",
                        "not specifically the Go heap", "different run",
                        "do not measure Pulse RSS", "do not assume its PID 1 is Pulse",
+                       "requires GNU `timeout`", "initial UTC timestamp alone",
+                       "do not remove the deadline", "does not stop or restart Pulse",
                        "Do not restart Pulse, drop caches, force garbage collection",
                        "Do not post a heap dump", "existing screenshots remain useful"):
             self.assertIn(phrase, guide)
         self.assertNotRegex(recipe(),
-                            r"\b(?:sudo|restart|kill|rm|truncate|sqlite3|curl|printenv|cat)\b"
+                            r"(?<!-)\b(?:sudo|restart|kill|rm|truncate|sqlite3|curl|printenv|cat)\b"
                             r"|--follow|--token|cmdline|environ|smaps")
 
 
