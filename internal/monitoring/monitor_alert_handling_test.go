@@ -1771,3 +1771,74 @@ func TestSilentLinkedAgentStopsRefreshingNodeTemperatureAlert(t *testing.T) {
 	require.NotNil(t, poll())
 	require.True(t, temperatureAlert().LastSeen.After(held.LastSeen), "a fresh agent reading is evaluated")
 }
+
+// Drive the actual node/agent evaluators into the monitor's lifecycle handler,
+// rather than fabricating a pre-stamped handover event.
+func TestMonitorReportedAgentHandoverUsesActualMetricOwner(t *testing.T) {
+	manager := alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
+	t.Cleanup(manager.Stop)
+	cfg := manager.GetConfig()
+	cfg.Enabled = true
+	cfg.ActivationState = alerts.ActivationPending
+	cfg.TimeThresholds = map[string]int{}
+	cfg.SuppressionWindow = 0
+	cfg.NodeDefaults.CPU = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
+	cfg.NodeDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 85, Clear: 80}
+	cfg.AgentDefaults.CPU = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
+	cfg.AgentDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 85, Clear: 80}
+	cfg.Overrides = map[string]alerts.ThresholdConfig{
+		"agent-a": {Memory: &alerts.HysteresisThreshold{Trigger: 0}},
+		"agent-b": {CPU: &alerts.HysteresisThreshold{Trigger: 0}},
+	}
+	manager.UpdateConfig(cfg)
+	store := unifiedresources.NewMemoryStore()
+	incidentStore := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+	m := &Monitor{alertManager: manager, incidentStore: incidentStore, resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))}
+	incidentStore.SetResourceTimelineStore(m.resourceStore.(memory.IncidentTimelineStore))
+	manager.SubscribeLifecycleCallback(m.handleAlertLifecycleEvent)
+	node := models.Node{ID: "instance/node", Name: "node", Instance: "instance", Status: "online", ConnectionHealth: "healthy", CPU: 0.99, Memory: models.Memory{Total: 100, Used: 99, Free: 1, Usage: 99}}
+	manager.CheckNode(node)
+	opened := manager.GetActiveAlerts()
+	require.Len(t, opened, 2)
+	cpuAgent := models.Host{ID: "agent-a", Hostname: "node", DisplayName: "CPU reader", Status: "online", LinkedNodeID: node.ID, CPUUsage: 50}
+	memoryAgent := models.Host{ID: "agent-b", Hostname: "node", DisplayName: "Memory reader", Status: "online", LinkedNodeID: node.ID, Memory: node.Memory}
+	manager.CheckHost(cpuAgent)
+	manager.CheckHost(memoryAgent)
+	manager.CheckNode(node)
+	for _, a := range opened {
+		timeline := incidentStore.GetTimelineByAlertAt(a.ID, a.StartTime)
+		require.NotNil(t, timeline)
+		require.Len(t, timeline.Events, 2)
+		wantName := "CPU reader"
+		wantID := "agent:agent-a"
+		if a.Type == "memory" {
+			wantName = "Memory reader"
+			wantID = "agent:agent-b"
+		}
+		summary := "Alert moved to " + wantName + ". This is not a recovery: check the agent for the current reading."
+		require.Equal(t, summary, timeline.Events[1].Summary)
+		events, err := manager.AlertEvents(eventlog.Filter{AlertID: a.ID, Types: []string{eventlog.TypeResolved}})
+		require.NoError(t, err)
+		require.Len(t, events, 1)
+		require.Equal(t, "moved_to_agent", events[0].Reason)
+		require.Equal(t, summary, events[0].Message)
+		found := false
+		for _, row := range manager.GetAlertHistory(10) {
+			if row.ID == a.ID && row.Resolution != nil {
+				found = true
+				require.NotNil(t, row.Resolution)
+				require.Equal(t, wantID, row.Resolution.SuccessorResourceID)
+			}
+		}
+		require.True(t, found, "no resolved History row for %s", a.ID)
+	}
+	changes, err := store.GetRecentChanges(node.ID, time.Time{}, 10)
+	require.NoError(t, err)
+	require.Len(t, changes, 4)
+	for _, c := range changes {
+		if c.Kind == unifiedresources.ChangeAlertResolved {
+			require.Equal(t, "moved_to_agent", c.Metadata[unifiedresources.MetadataAlertResolution])
+			require.Contains(t, c.Reason, "This is not a recovery")
+		}
+	}
+}

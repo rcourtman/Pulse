@@ -66,6 +66,7 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 
 	m.config = config
 	normalizeOverrides(m.config.Overrides)
+	m.reconcileHostAgentNodeLinksNoLock()
 
 	// Update cached quiet hours location
 	if m.config.Schedule.QuietHours.Enabled && m.config.Schedule.QuietHours.Timezone != "" {
