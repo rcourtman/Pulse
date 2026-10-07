@@ -6895,3 +6895,14 @@ migration or recovery authority is added or moved.
 The performance report and reporting runtime snapshot handlers apply the same
 test before tabulating a disk temperature. That changes only which held value a
 report shows, not any storage or recovery path.
+
+### Demo write guard ignores websocket upgrade headers
+
+`internal/api/demo_middleware.go` no longer exempts every request carrying
+`Upgrade: websocket` from the demo read-only guard. On a `DEMO_MODE` instance a
+`POST`, `PUT`, `PATCH` or `DELETE` with websocket handshake headers is now
+judged like any other write: outside the login, logout, AI execute and OIDC
+allowlist it gets the generic demo `403`, or `404` on a hidden route, and that
+includes config import at `/api/config/import`. HTTP/1.1 websocket handshakes
+are `GET` requests and still connect. No storage, retention, backup, migration
+or recovery path is added or moved.
