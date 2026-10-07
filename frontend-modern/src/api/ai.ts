@@ -276,11 +276,6 @@ export class AIAPI {
     }) as Promise<{ success: boolean }>;
   }
 
-  // Circuit breaker status
-  static async getCircuitBreakerStatus(): Promise<CircuitBreakerStatus> {
-    return apiFetchJSON(`${this.baseUrl}/ai/circuit/status`) as Promise<CircuitBreakerStatus>;
-  }
-
   // ============================================
   // Investigation Fix Approvals
   // ============================================
@@ -565,14 +560,6 @@ export interface RemediationExecutionResult {
   step_results?: StepResult[];
   started_at?: string;
   completed_at?: string;
-}
-
-export interface CircuitBreakerStatus {
-  state: 'closed' | 'open' | 'half-open';
-  can_patrol: boolean;
-  consecutive_failures: number;
-  total_successes: number;
-  total_failures: number;
 }
 
 // ============================================

@@ -6,7 +6,6 @@ vi.mock('@/api/ai', () => ({
     getRemediationPlans: vi.fn(),
     getPendingApprovals: vi.fn(),
     getIntelligenceSummary: vi.fn(),
-    getCircuitBreakerStatus: vi.fn(),
   },
 }));
 
@@ -622,8 +621,6 @@ describe('aiIntelligenceStore', () => {
         incidents_tracked: 0,
       },
     });
-    vi.mocked(AIAPI.getCircuitBreakerStatus).mockResolvedValueOnce(null as never);
-
     await aiIntelligenceStore.loadDashboardData();
 
     expect(AIAPI.getIntelligenceSummary).toHaveBeenCalledTimes(1);
@@ -631,13 +628,13 @@ describe('aiIntelligenceStore', () => {
     // These are every AIAPI read the bundle makes (Patrol findings come from
     // the Patrol API module). It does not load the global learned-correlation
     // list: no page renders it, and the resource drawer reads per-resource
-    // correlations from resource intelligence instead.
+    // correlations from resource intelligence instead. Nor does it load the
+    // provider circuit-breaker status, which no surface renders.
     const aiReads = Object.entries(AIAPI)
       .filter(([, read]) => vi.isMockFunction(read) && read.mock.calls.length > 0)
       .map(([name]) => name)
       .sort();
     expect(aiReads).toEqual([
-      'getCircuitBreakerStatus',
       'getIntelligenceSummary',
       'getPendingApprovals',
       'getUnifiedFindings',

@@ -6728,6 +6728,11 @@ The browser does not read the global learned-correlation list:
 `/api/ai/intelligence/correlations`, and neither the shared AI intelligence
 store nor the Patrol page loads it, because no page renders it. The resource
 drawer reads per-resource correlations from the resource-intelligence payload.
+The browser does not read `GET /api/ai/circuit/status` either:
+`frontend-modern/src/api/ai.ts` carries no client for it and the shared AI
+intelligence store holds no breaker state, because an open breaker already
+reaches Patrol as the `circuit_open` runtime block cause. The route stays a
+backend API surface.
 AI-facing policy metadata must also be cloned through the shared unified-
 resource policy helper so chat and tools consumers do not maintain their own
 policy copy logic. Chat mention prefetch now calls that shared helper directly

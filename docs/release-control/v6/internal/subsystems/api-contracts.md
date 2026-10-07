@@ -7305,6 +7305,12 @@ no client for it, and neither the dashboard load bundle in
 fetches it. The resource drawer's correlation evidence comes from the
 resource-intelligence payload above. The route stays an API surface behind the
 `ai:execute` scope.
+The frontend does not load `GET /api/ai/circuit/status` either. No surface
+renders provider breaker state, so `frontend-modern/src/api/ai.ts` carries no
+client or `CircuitBreakerStatus` type for it, and neither that dashboard bundle
+nor the Patrol refresh path fetches it. An open breaker reaches the Patrol page
+through `/api/ai/patrol/status` as the `circuit_open` blocked cause. The route
+stays a backend API surface.
 That correlations route now reads through the canonical AI intelligence
 facade first, so the handler and its payload keep the detector behind one
 shared access layer instead of routing directly to Patrol-local correlation

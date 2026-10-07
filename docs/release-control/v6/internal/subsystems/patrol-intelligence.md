@@ -2181,10 +2181,13 @@ requester identity as safe metadata, without copying the approval command
 payload into Assistant.
 That same store now owns the Patrol dashboard load bundle as well, so the
 page refresh path stays aligned on a single orchestrated AI bundle instead of
-repeating the individual summary, findings, circuit-breaker, and approval
-fetches inline. Neither that bundle nor the Patrol refresh path fetches the
-global learned-correlation list: the Patrol page renders no correlations, so
-the store holds no copy of that list.
+repeating the individual summary, findings, and approval fetches inline.
+Neither that bundle nor the Patrol refresh path fetches the global
+learned-correlation list: the Patrol page renders no correlations, so
+the store holds no copy of that list. Nor do they fetch the provider
+circuit-breaker status: an open breaker already reaches the page as the
+`circuit_open` Patrol runtime block on `/api/ai/patrol/status`, so the store
+holds no separate breaker state.
 The shared
 `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and
 `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`

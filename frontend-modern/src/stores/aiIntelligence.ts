@@ -5,7 +5,6 @@
  * - Unified findings (alerts + AI findings)
  * - Canonical intelligence summary
  * - Remediation plans
- * - Circuit breaker status
  */
 
 import { createSignal } from 'solid-js';
@@ -25,7 +24,6 @@ import {
 import type { ResourceCriticality } from '@/api/resourceOperatorState';
 import type {
   RemediationPlan,
-  CircuitBreakerStatus,
   UnifiedFindingRecord,
   InvestigationRecord,
   ApprovalRequest,
@@ -450,14 +448,6 @@ function getPatrolOpenWorkCount(): number {
 }
 
 // ============================================
-// Circuit Breaker
-// ============================================
-
-const [circuitBreakerStatus, setCircuitBreakerStatus] = createSignal<CircuitBreakerStatus | null>(
-  null,
-);
-
-// ============================================
 // Canonical Intelligence Summary
 // ============================================
 
@@ -482,7 +472,6 @@ eventBus.on('org_switched', () => {
   setPlansError(null);
   setPendingApprovalsWithExpiryTracking([]);
   setApprovalsError(null);
-  setCircuitBreakerStatus(null);
   setIntelligenceSummary(null);
 });
 
@@ -796,12 +785,6 @@ export const aiIntelligenceStore = {
     }
   },
 
-  // Circuit Breaker
-  get circuitBreakerStatus() {
-    return circuitBreakerStatus();
-  },
-  circuitBreakerStatusSignal: circuitBreakerStatus,
-
   // Canonical Intelligence Summary
   get intelligenceSummary() {
     return intelligenceSummary();
@@ -813,7 +796,6 @@ export const aiIntelligenceStore = {
       this.loadIntelligenceSummary(),
       this.loadFindings(),
       this.loadPatrolFindings(),
-      this.loadCircuitBreakerStatus(),
       this.loadPendingApprovals(),
     ]);
   },
@@ -827,15 +809,6 @@ export const aiIntelligenceStore = {
       logger.error('Failed to load intelligence summary:', e);
       setIntelligenceSummary(null);
       return null;
-    }
-  },
-
-  async loadCircuitBreakerStatus() {
-    try {
-      const status = await AIAPI.getCircuitBreakerStatus();
-      setCircuitBreakerStatus(status);
-    } catch (e) {
-      logger.error('Failed to load circuit breaker status:', e);
     }
   },
 

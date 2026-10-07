@@ -6822,7 +6822,8 @@ Patrol stale-data Retry action spin indefinitely or stay disabled
 while Patrol findings and status remain visible.
 Neither the Patrol load and poll path (the store's `loadDashboardData` bundle)
 nor the Retry path's background supporting reads fetch the global
-learned-correlation list, which no Patrol surface shows.
+learned-correlation list or the provider circuit-breaker status, neither of
+which any Patrol surface shows.
 That same Patrol shell should make scoped trigger policy legible without
 another navigation step. `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`
 should keep actionable scoped-trigger state legible without promoting
