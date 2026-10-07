@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen, within } from '@solidjs/testing-library';
 import { WorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
 import proxmoxBackupServersTableSource from '../ProxmoxBackupServersTable.tsx?raw';
 import proxmoxCoverageTableSource from '../ProxmoxCoverageTable.tsx?raw';
@@ -13,6 +13,7 @@ import {
   SortableHead,
   formatCompactBackupAge,
 } from '../proxmoxBackupsTableShared';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 import type { RecoverableArtifact } from '../proxmoxBackupRecoveryModel';
 
 afterEach(cleanup);
@@ -203,5 +204,84 @@ describe('backup-date-evidence age cell', () => {
     const value = screen.getByText('1h');
     expect(value).toHaveClass('text-emerald-600');
     expect(value.title).toContain(createdAt);
+  });
+});
+
+describe('backup age cell on the shared clock', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('keeps the age and its freshness band moving while the artifact does not change', () => {
+    vi.useFakeTimers({ now: new Date('2026-10-04T12:00:00Z') });
+    const createdAt = '2026-10-04T06:00:00Z';
+    const backup = artifact({ createdAt, createdMs: Date.parse(createdAt) });
+
+    render(() => (
+      <>
+        <span data-testid="full">
+          <ProxmoxBackupAgeText artifact={backup} />
+        </span>
+        <span data-testid="compact">
+          <ProxmoxBackupAgeText artifact={backup} compact />
+        </span>
+      </>
+    ));
+
+    expect(screen.getByTestId('full')).toHaveTextContent('6h ago');
+    expect(screen.getByText('6h')).toHaveClass('text-emerald-600');
+
+    // Eight days pass with no new backup and no data refresh. The next clock
+    // tick moves both ages and drops the backup out of the current band.
+    vi.setSystemTime(new Date('2026-10-12T12:00:00Z'));
+    vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
+
+    expect(screen.getByTestId('full')).toHaveTextContent('8d ago');
+    const compact = screen.getByText('8d');
+    expect(compact).toHaveClass('text-amber-600');
+    expect(compact.closest('[title]')?.getAttribute('title')).toBe(
+      `Aging backup age · ${createdAt}`,
+    );
+  });
+
+  it('keeps the full age text and its band in step between clock ticks', () => {
+    vi.useFakeTimers({ now: new Date('2026-10-04T12:00:00Z') });
+    // Another mounted cell starts the shared clock.
+    render(() => <ProxmoxBackupAgeText artifact={artifact()} />);
+
+    // Before the next tick, a backup crosses seven days old as its row mounts.
+    vi.setSystemTime(new Date('2026-10-11T12:00:10Z'));
+    const createdAt = '2026-10-04T12:00:00Z';
+    render(() => (
+      <span data-testid="boundary">
+        <ProxmoxBackupAgeText
+          artifact={artifact({ createdAt, createdMs: Date.parse(createdAt) })}
+        />
+      </span>
+    ));
+
+    const cell = within(screen.getByTestId('boundary')).getByTitle(/backup age/);
+    expect(cell).toHaveTextContent('7d ago');
+    expect(cell).toHaveClass('text-amber-600');
+  });
+
+  it('does not band a backup that finished after the last clock tick as unknown', () => {
+    vi.useFakeTimers({ now: new Date('2026-10-04T12:00:00Z') });
+    // Another mounted cell starts the shared clock at 12:00:00.
+    render(() => <ProxmoxBackupAgeText artifact={artifact()} />);
+
+    // A backup that finished 20s later arrives before the next tick.
+    vi.setSystemTime(new Date('2026-10-04T12:00:25Z'));
+    const createdAt = '2026-10-04T12:00:20Z';
+    render(() => (
+      <span data-testid="fresh">
+        <ProxmoxBackupAgeText
+          artifact={artifact({ createdAt, createdMs: Date.parse(createdAt) })}
+          compact
+        />
+      </span>
+    ));
+
+    const fresh = within(screen.getByTestId('fresh')).getByText('now');
+    expect(fresh).toHaveClass('text-emerald-600');
+    expect(screen.queryByText('Unknown')).not.toBeInTheDocument();
   });
 });

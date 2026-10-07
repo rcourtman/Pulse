@@ -51,7 +51,7 @@ func metricStabilityFor(metricType string, delaySeconds int) metricStabilityPoli
 
 func isMetricThresholdAlertType(metricType string) bool {
 	switch metricType {
-	case "cpu", "memory", "disk", "diskRead", "diskWrite", "networkIn", "networkOut", "temperature", "usage":
+	case "cpu", "memory", "disk", "diskRead", "diskWrite", "networkIn", "networkOut", "temperature", "diskTemperature", "usage":
 		return true
 	default:
 		return false
@@ -77,6 +77,8 @@ func getThresholdForMetric(config ThresholdConfig, metricType string) *Hysteresi
 		return config.NetworkOut
 	case "temperature":
 		return config.Temperature
+	case "diskTemperature":
+		return config.DiskTemperature
 	case "usage":
 		return config.Usage
 	default:

@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "base_sha": "7aa537abe112e5f0b9c043885c62bc255b700134",
+  "verified_at": "2026-10-06T13:58:52Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "7f789e2e38fab255bd080a647b1f9d20185419c336974bc188fa9c2dec3c2e06",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts": "34de374717a338b6d7417e0264f3ed1f106c965262a88336a52a3ebe1e0e3208",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "a0c08531c1b3c9eba9827ddf02ece46e55ca6eece7629b9b005653ac5129b6ef",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx": "262e641559d38ccadacf45a74a37b3ec95cbb58887c5ab620b966d369cd9a638",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "147ce30feded49cbe9bf833daa78edd1a6fbcff6db419d9303b21e62c9fe00e3",
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "9da12964e02d081b80c848db8741f69d701f8c99e73ed01e9c8958c9d6b51930",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "4d6c1097737138d1dd6b1ecfc28ee33b0815ffa78279120bcb524cea38053d2a",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "b9c718460ec18d6ef0a72b2fe9d291e0e813feaecfc6d4cd2f8694cda467fbdf"
+  },
+  "routes": [
+    "/kubernetes/workloads",
+    "/proxmox/backups",
+    "/proxmox/replication",
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack built from this tree; Playwright page.clock installed at load, /ws held after first render (server frames dropped) and REST GETs replayed from their last response, then the clock fast-forwarded with no data change",
+    "Kubernetes workloads 1600px: Job/CronJob Detail \"Completed 48m ago\" / \"Last success 1h ago\" -> \"Completed 3h ago\" / \"Last success 4h ago\" after 3h",
+    "Kubernetes Job row expansion: controller section \"01:59 PM (48m ago)\" -> \"01:59 PM (3h ago)\" with the absolute time unchanged; Runtime context Last seen \"1s ago\" -> \"3 hours ago\"",
+    "Proxmox backups 1600px and 390px: tracked artifact \"1d ago\" / \"1d\" in the current (green) band -> \"8d ago\" / \"8d\" in the aging (amber) band, title \"Aging backup age\", after 7 days",
+    "Proxmox replication 1600px: row and expanded Last sync \"21m ago\" -> \"3h ago\", Next sync \"in 8m\" -> \"2h overdue\" in red after 3h; one background /api/replication/jobs read fired during the jump",
+    "Proxmox replication 390px compact row: Last sync \"21m\" -> \"3h\", Next sync \"8m\" -> \"-2h\"",
+    "Machines 1600px with Last seen column hidden: identity title \"| seen just now\" -> \"| seen 3h ago\"; 390px Seen cells \"just now\" -> \"3h ago\"",
+    "Control on the same stack with the seven runtime files swapped back to the parent: Kubernetes Detail and expansion, replication expanded Last sync / Next sync and phone row, machines subtitle, and phone backup ages stayed frozen; desktop backup text moved but the band stayed green"
+  ],
+  "interactions": [
+    "Clicked a Kubernetes Job controller row to open its expansion",
+    "Clicked \"Expand details for replication job 100-0\"",
+    "Opened View > Choose which columns to display and unchecked Last seen on Machines",
+    "page.clock.fastForward 3h (Kubernetes, replication, machines) and 7 days (backups) with data held"
+  ]
+}

@@ -5,7 +5,8 @@ import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
-import { apiFetch } from '@/utils/apiClient';
+import { apiErrorFromResponse, apiFetch } from '@/utils/apiClient';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   PlatformTableToolbar,
   PlatformErrorState,
@@ -234,8 +235,10 @@ const NEXT_SYNC_TONE_CLASS: Record<NextSyncTone, string> = {
 // An overdue next-sync is the one signal that catches a stalled pvesr
 // scheduler even while the last sync still reports ok, so it gets its own
 // column instead of folding into the status pill (which mirrors PVE's own
-// job state).
-function nextSyncFor(job: ReplicationJob): { text: string; tone: NextSyncTone } {
+// job state). The countdown is measured from the shared relative-time clock:
+// a stalled scheduler leaves nextSync unchanged, so a countdown read once at
+// render would sit at "in 3m" and never turn overdue.
+function nextSyncFor(job: ReplicationJob, now: number): { text: string; tone: NextSyncTone } {
   if (!job.enabled) return { text: '—', tone: 'muted' };
   let target = 0;
   if (job.nextSyncUnix && job.nextSyncUnix > 0) {
@@ -246,7 +249,7 @@ function nextSyncFor(job: ReplicationJob): { text: string; tone: NextSyncTone } 
     if (Number.isFinite(parsed)) target = parsed;
   }
   if (!target) return { text: '—', tone: 'muted' };
-  const minutes = Math.floor((target - Date.now()) / 60_000);
+  const minutes = Math.floor((target - now) / 60_000);
   if (minutes < 0) {
     const overdue = Math.abs(minutes);
     const text = overdue < 60 ? `${overdue}m overdue` : `${Math.floor(overdue / 60)}h overdue`;
@@ -261,10 +264,15 @@ export const compactReplicationNextSyncText = (text: string, tone: NextSyncTone)
   return text.replace(/^in /, '');
 };
 
-export async function fetchReplicationJobs(): Promise<ReplicationJob[]> {
-  const response = await apiFetch('/api/replication/jobs?platform=proxmox-pve');
+export async function fetchReplicationJobs(signal?: AbortSignal): Promise<ReplicationJob[]> {
+  const response = await apiFetch('/api/replication/jobs?platform=proxmox-pve', { signal });
   if (!response.ok) {
-    throw new Error(`Failed to load replication jobs (${response.status})`);
+    // A structured error keeps the HTTP status, so a 401/403 withdraws the
+    // jobs as an access failure instead of being retained as an outage.
+    throw await apiErrorFromResponse(
+      response,
+      `Failed to load replication jobs (${response.status})`,
+    );
   }
   const payload = (await response.json()) as ReplicationJobsResponse;
   return Array.isArray(payload?.data) ? payload.data : [];
@@ -283,6 +291,9 @@ export const ProxmoxReplicationTable: Component<{
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<ReplicationStatusFilter>('all');
   const [expandedJobKey, setExpandedJobKey] = createSignal<string | null>(null);
+  // Rows stay mounted between job refreshes, so Last sync and Next sync read
+  // the shared clock to keep moving while a job's timestamps do not change.
+  const now = useRelativeTimeNow();
 
   const filterByStatus = (want: ReplicationStatusFilter) => {
     const split = splitSearchExclusions(search());
@@ -502,7 +513,7 @@ export const ProxmoxReplicationTable: Component<{
                       {(job, index) => {
                         const classification = classifyJob(job);
                         const ind = indicatorFor(classification);
-                        const next = nextSyncFor(job);
+                        const next = () => nextSyncFor(job, now());
                         const sourceNode = (job.sourceNode ?? '').trim() || '—';
                         const targetNode = (job.targetNode ?? '').trim() || '—';
                         const guestLabel = formatGuestLabel(job);
@@ -607,9 +618,9 @@ export const ProxmoxReplicationTable: Component<{
                                   }
                                 >
                                   <span class="tabular-nums text-[10px]">
-                                    {formatPlatformTableRelativeTimeValue(
-                                      syncTimeValue(job),
-                                    ).replace(/ ago$/, '')}
+                                    {formatPlatformTableRelativeTimeValue(syncTimeValue(job), {
+                                      now: now(),
+                                    }).replace(/ ago$/, '')}
                                   </span>
                                 </Show>
                               </TableCell>
@@ -618,11 +629,11 @@ export const ProxmoxReplicationTable: Component<{
                                   class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content ${mobilePaddingClass()}`}
                                 >
                                   <span
-                                    class={`${NEXT_SYNC_TONE_CLASS[next.tone]} ${isCompact() ? 'text-[10px]' : ''}`}
+                                    class={`${NEXT_SYNC_TONE_CLASS[next().tone]} ${isCompact() ? 'text-[10px]' : ''}`}
                                   >
                                     {isCompact()
-                                      ? compactReplicationNextSyncText(next.text, next.tone)
-                                      : next.text}
+                                      ? compactReplicationNextSyncText(next().text, next().tone)
+                                      : next().text}
                                   </span>
                                 </TableCell>
                               </Show>
@@ -701,13 +712,15 @@ export const ProxmoxReplicationTable: Component<{
                                   <dd class="font-mono text-base-content">{job.schedule || '—'}</dd>
                                   <dt class="font-semibold text-muted">Last sync</dt>
                                   <dd class="text-base-content">
-                                    {formatPlatformTableRelativeTimeValue(syncTimeValue(job))}
+                                    {formatPlatformTableRelativeTimeValue(syncTimeValue(job), {
+                                      now: now(),
+                                    })}
                                   </dd>
                                   <dt class="font-semibold text-muted">Next sync</dt>
                                   <dd
-                                    class={NEXT_SYNC_TONE_CLASS[next.tone] || 'text-base-content'}
+                                    class={NEXT_SYNC_TONE_CLASS[next().tone] || 'text-base-content'}
                                   >
-                                    {next.text}
+                                    {next().text}
                                   </dd>
                                   <dt class="font-semibold text-muted">Duration</dt>
                                   <dd class="text-base-content">

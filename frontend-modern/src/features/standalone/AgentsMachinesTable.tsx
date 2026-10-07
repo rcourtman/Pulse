@@ -25,6 +25,7 @@ import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import {
   compareAgentVersions,
@@ -56,11 +57,13 @@ import {
   type PlatformResourceStatusFilter,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import { PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS } from '@/features/storageBackups/diskTemperaturePresentation';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import type { Disk } from '@/types/api';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { getActionableAgentIdFromResource } from '@/utils/agentResources';
+import { getUnifiedResourceAlertStyles } from '@/utils/alerts';
 import { formatBytes, formatSpeed, formatObservedSpeed, normalizeDiskArray } from '@/utils/format';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -73,6 +76,8 @@ import {
 } from '@/utils/raidPresentation';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { getPreferredResourceIP } from '@/utils/resourceIdentity';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
+import { formatTemperature } from '@/utils/temperature';
 import {
   RESOURCE_METADATA_CHANGED_EVENT,
   type ResourceMetadataChangedDetail,
@@ -98,6 +103,7 @@ import {
   getAgentMachineTemperatureTitle,
   getAgentMachineThermalPressurePresentation,
   getNextAgentMachineSortState,
+  isAgentMachineTemperatureLastKnown,
   sortAgentMachines,
   type AgentMachineColumn,
   type AgentMachineColumnId,
@@ -180,6 +186,8 @@ const AgentMachineMetricTooltip: Component<{
 
 const AgentMachineTemperatureCell: Component<{
   celsius: number | undefined;
+  /** The value is a retained reading, not a current one. */
+  lastKnown?: boolean;
   metric: AgentMachineTemperatureMetric;
   sections: AgentMachineTemperatureDetailSection[];
   thresholds?: MetricDisplayThresholds | null;
@@ -219,7 +227,26 @@ const AgentMachineTemperatureCell: Component<{
           }
         >
           {(value) => (
-            <TemperatureGauge value={value()} metric={props.metric} thresholds={props.thresholds} />
+            <Show
+              when={!props.lastKnown}
+              fallback={
+                // A retained reading takes no threshold colour; its detail
+                // rows say it is last known.
+                <span
+                  class={`text-xs whitespace-nowrap ${PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS}`}
+                  data-temperature-reading="last-known"
+                >
+                  {formatTemperature(value())}
+                  <span class="sr-only">, last known</span>
+                </span>
+              }
+            >
+              <TemperatureGauge
+                value={value()}
+                metric={props.metric}
+                thresholds={props.thresholds}
+              />
+            </Show>
           )}
         </Show>
       }
@@ -1174,6 +1201,9 @@ export const AgentsMachinesTable: Component<{
   onExternalStatusChange?: (value: PlatformResourceStatusFilter) => void;
   onResetFilters?: () => void;
 }> = (props) => {
+  // A machine that stops reporting keeps the same last-seen time, which is
+  // exactly when its age must keep moving, so row ages read the shared clock.
+  const now = useRelativeTimeNow();
   const [locallyRemovedResourceIds, setLocallyRemovedResourceIds] = createSignal<
     Record<string, boolean>
   >({});
@@ -1196,6 +1226,7 @@ export const AgentsMachinesTable: Component<{
     }
     tableState.resetFilters();
   };
+  const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
   const [sortKey, setSortKey] = createSignal<AgentMachineSortKey>('name');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
@@ -1482,7 +1513,7 @@ export const AgentsMachinesTable: Component<{
                     const agentStaleTitle = () => {
                       const last = asTrimmedString(machine.agent?.lastReportAt);
                       const when = last
-                        ? ` Last report ${formatPlatformTableRelativeTimeValue(last)}.`
+                        ? ` Last report ${formatPlatformTableRelativeTimeValue(last, { now: now() })}.`
                         : '';
                       return `Agent has stopped reporting.${when} Re-run the install command from the Pulse UI to refresh its token.`;
                     };
@@ -1534,7 +1565,7 @@ export const AgentsMachinesTable: Component<{
                         ? availabilityFor(machine)?.lastChecked
                         : machine.lastSeen;
                     const lastSeenLabel = () =>
-                      formatPlatformTableRelativeTimeValue(lastSeenValue());
+                      formatPlatformTableRelativeTimeValue(lastSeenValue(), { now: now() });
                     const machineSubtitle = () =>
                       machineRowSubtitleFor(
                         name(),
@@ -1558,6 +1589,7 @@ export const AgentsMachinesTable: Component<{
                     const raidArrays = () => getAgentMachineRaidArrayDetails(machine);
                     const raidSummary = () => getAgentMachineRaidSummary(machine);
                     const temperature = () => getAgentMachineTemperatureCelsius(machine);
+                    const temperatureLastKnown = () => isAgentMachineTemperatureLastKnown(machine);
                     const temperatureMetric = () => getAgentMachineTemperatureMetric(machine);
                     const temperatureThresholds = () =>
                       temperatureMetric() === 'diskTemperature'
@@ -1577,6 +1609,22 @@ export const AgentsMachinesTable: Component<{
                       getAgentMachineThermalPressurePresentation(machine);
                     const isExpanded = () => drawer.isExpanded(machine);
                     const detailRowId = () => drawer.detailRowId(machine);
+                    // Tint the row for the open alerts its drawer lists, so a
+                    // machine over a threshold stands out without opening it.
+                    const machineAlertStyles = createMemo(() =>
+                      getUnifiedResourceAlertStyles(
+                        machine,
+                        activeAlerts,
+                        alertsActivation.detectionEnabled(),
+                      ),
+                    );
+                    const machineAlertBg = () => {
+                      const s = machineAlertStyles();
+                      if (!s.hasUnacknowledgedAlert) return '';
+                      return s.severity === 'critical'
+                        ? 'bg-red-50 dark:bg-red-950/25'
+                        : 'bg-yellow-50 dark:bg-yellow-950/25';
+                    };
                     const agentMetadataId = () => agentMetadataIdFor(machine);
                     const agentRemovalId = () => agentRemovalIdFor(machine);
                     const savedWebInterfaceUrl = () => savedAgentCustomUrlFor(agentMetadataId());
@@ -1587,7 +1635,9 @@ export const AgentsMachinesTable: Component<{
                     return (
                       <>
                         <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs ${
+                            isExpanded() ? '' : machineAlertBg()
+                          }`}
                           data-agents-machine-row={machine.id}
                           onClick={toggleDetails}
                         >
@@ -1756,7 +1806,9 @@ export const AgentsMachinesTable: Component<{
                               class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('uptime')} text-base-content`}
                             >
                               {formatPlatformTableUptimeValue(
-                                machine.uptime ?? machine.agent?.uptimeSeconds,
+                                canRenderMetrics()
+                                  ? (machine.uptime ?? machine.agent?.uptimeSeconds)
+                                  : undefined,
                               )}
                             </TableCell>
                           </Show>
@@ -1764,14 +1816,20 @@ export const AgentsMachinesTable: Component<{
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('temp')} text-base-content`}
                             >
-                              <AgentMachineTemperatureCell
-                                celsius={temperature()}
-                                metric={temperatureMetric()}
-                                sections={temperatureSections()}
-                                thresholds={temperatureThresholds()}
-                                title={temperatureTitle()}
-                                thermalPressure={thermalPressure()}
-                              />
+                              <Show
+                                when={canRenderMetrics()}
+                                fallback={<span class="text-muted">—</span>}
+                              >
+                                <AgentMachineTemperatureCell
+                                  celsius={temperature()}
+                                  lastKnown={temperatureLastKnown()}
+                                  metric={temperatureMetric()}
+                                  sections={temperatureSections()}
+                                  thresholds={temperatureThresholds()}
+                                  title={temperatureTitle()}
+                                  thermalPressure={thermalPressure()}
+                                />
+                              </Show>
                             </TableCell>
                           </Show>
                           <Show when={columnVisibility.isColumnVisible('lastSeen')}>

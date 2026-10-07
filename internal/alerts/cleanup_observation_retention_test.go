@@ -48,7 +48,7 @@ func TestCleanupContinuingDockerUpdateKeepsOccurrence(t *testing.T) {
 				LastChecked: time.Now().Add(-6 * time.Hour),
 			}
 			container := models.DockerContainer{ID: "retention-container", Name: "web", Image: "mongo:7", UpdateStatus: pending}
-			resourceID := DockerResourceID(host.ID, container.ID)
+			resourceID := DockerContainerResourceID(host.ID, container.ID, "")
 			trackingKey := dockerUpdateTrackingKey(host, container)
 			first := time.Now().Add(-25 * time.Hour)
 			m.mu.Lock()

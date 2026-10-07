@@ -101,7 +101,6 @@ import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?ra
 import tableCardSource from '@/components/shared/TableCard.tsx?raw';
 import groupedTableModeSegmentedControlSource from '@/components/shared/GroupedTableModeSegmentedControl.tsx?raw';
 import groupedTableRowPresentationSource from '@/components/shared/groupedTableRowPresentation.ts?raw';
-import unifiedResourceTableViewportSyncSource from '@/components/Infrastructure/useUnifiedResourceTableViewportSync.ts?raw';
 import storagePoolsTableWindowingSource from '@/components/Storage/useStoragePoolsTableWindowing.ts?raw';
 import workloadViewportSyncSource from '@/components/Workloads/useWorkloadViewportSync.ts?raw';
 import platformWindowedItemsSource from '@/features/platformPage/usePlatformWindowedItems.ts?raw';
@@ -217,16 +216,13 @@ import proxmoxCoverageTableSource from '@/features/proxmox/ProxmoxCoverageTable.
 import proxmoxMailGatewayTableSource from '@/features/proxmox/ProxmoxMailGatewayTable.tsx?raw';
 import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?raw';
 import proxmoxHostTableModelSource from '@/features/proxmox/proxmoxHostTableModel.ts?raw';
+import proxmoxPageModelSource from '@/features/proxmox/proxmoxPageModel.ts?raw';
 import proxmoxRecoverableTableSource from '@/features/proxmox/ProxmoxRecoverableTable.tsx?raw';
 import proxmoxReplicationTableSource from '@/features/proxmox/ProxmoxReplicationTable.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
 import availabilityChecksTableSource from '@/features/standalone/AvailabilityChecksTable.tsx?raw';
 import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable.tsx?raw';
 import agentMachineTableModelSource from '@/features/standalone/agentMachineTableModel.ts?raw';
-import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
-import unifiedResourceServiceInfrastructureCardSource from '@/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx?raw';
-import unifiedResourcePBSTableSectionSource from '@/components/Infrastructure/UnifiedResourcePBSTableSection.tsx?raw';
-import unifiedResourcePMGTableSectionSource from '@/components/Infrastructure/UnifiedResourcePMGTableSection.tsx?raw';
 import proxmoxMailGatewayDrawerSource from '@/features/proxmox/ProxmoxMailGatewayDrawer.tsx?raw';
 import swarmServicesDrawerSource from '@/components/Docker/SwarmServicesDrawer.tsx?raw';
 import k8sDeploymentsDrawerSource from '@/components/Kubernetes/K8sDeploymentsDrawer.tsx?raw';
@@ -1057,8 +1053,6 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/TableCardHeader.tsx');
     expect(registeredRule?.canonical?.export).toBe('TableCardHeader');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
-      'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',
-      'src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx',
       'src/components/Storage/StorageContentCard.tsx',
       'src/features/platformPage/sharedPlatformPage.tsx',
     ]);
@@ -1080,11 +1074,7 @@ describe('shared primitive guardrails', () => {
     expect(tableCardHeaderSource).toContain('TABLE_CARD_HEADER_CLASS');
     expect(tableCardHeaderSource).not.toContain('Pinned to');
     expect(tableCardHeaderSource).not.toContain('Scoped to');
-    for (const source of [
-      unifiedResourceHostTableCardSource,
-      unifiedResourceServiceInfrastructureCardSource,
-      storageContentCardSource,
-    ]) {
+    for (const source of [storageContentCardSource]) {
       expect(source).toContain('TableCardHeader');
       expect(source).not.toContain('SummaryTableCardHeader');
     }
@@ -1116,8 +1106,6 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/TableCard.tsx');
     expect(registeredRule?.canonical?.export).toBe('TableCard');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
-      'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',
-      'src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx',
       'src/components/Storage/StorageContentCard.tsx',
       'src/components/Workloads/WorkloadsSurface.tsx',
       'src/components/Workloads/WorkloadsTable.tsx',
@@ -1149,8 +1137,6 @@ describe('shared primitive guardrails', () => {
       workloadsSurfaceSource,
       alertHistoryTableSectionSource,
       sharedPlatformPageSource,
-      unifiedResourceHostTableCardSource,
-      unifiedResourceServiceInfrastructureCardSource,
       storageContentCardSource,
     ]) {
       expect(source).toContain('TableCard');
@@ -1394,13 +1380,7 @@ describe('shared primitive guardrails', () => {
     expect(guestRowStateSource).not.toContain('bg-sky-50/70');
     expect(guestRowStateSource).not.toContain('ring-sky-400/25');
 
-    for (const source of [
-      storagePoolRowSource,
-      diskListSource,
-      unifiedResourceHostTableCardSource,
-      unifiedResourcePBSTableSectionSource,
-      unifiedResourcePMGTableSectionSource,
-    ]) {
+    for (const source of [storagePoolRowSource, diskListSource]) {
       expect(source).toContain('data-summary-row-active');
       expect(source).not.toContain('bg-sky-50/70');
       expect(source).not.toContain('ring-sky-400/25');
@@ -1416,8 +1396,6 @@ describe('shared primitive guardrails', () => {
     expect(nodeGroupHeaderSource).toContain('getGroupedTableRowCellClass');
     expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
     expect(workloadPanelSource).toContain('getGroupedTableRowCellClass');
-    expect(unifiedResourceHostTableCardSource).toContain('getInteractiveGroupedTableRowClass');
-    expect(unifiedResourceHostTableCardSource).toContain('getGroupedTableRowCellClass');
     expect(alertHistoryTableGroupRowSource).toContain('getGroupedTableRowClass');
     expect(alertHistoryTableGroupRowSource).toContain('getGroupedTableRowCellClass');
     expect(alertHistoryTableGroupRowSource).not.toContain('class="bg-surface-alt"');
@@ -1426,13 +1404,12 @@ describe('shared primitive guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('getGroupedTableRowClass');
     expect(infrastructureSourceManagerSource).toContain('getGroupedTableRowCellClass');
     expect(infrastructureSourceManagerSource).not.toContain('bg-base hover:bg-base');
-    expect(unifiedResourceHostTableCardSource).toContain('data-summary-group-member-active');
   });
 
   it('routes Proxmox node version presentation through the shared formatter', () => {
-    expect(nodeGroupHeaderSource).toContain("from '@/utils/proxmoxVersion'");
-    expect(nodeGroupHeaderSource).toContain('formatProxmoxVersion(props.node.pveVersion)');
-    expect(nodeGroupHeaderSource).not.toContain('pve-manager\\/');
+    expect(proxmoxPageModelSource).toContain("from '@/utils/proxmoxVersion'");
+    expect(proxmoxPageModelSource).toContain('formatProxmoxVersion(resource.proxmox?.pveVersion)');
+    expect(proxmoxPageModelSource).not.toContain('pve-manager\\/');
 
     expect(proxmoxVersionSource).toContain('formatProxmoxVersion');
     expect(proxmoxVersionSource).toContain('pve-manager\\/');
@@ -1463,7 +1440,6 @@ describe('shared primitive guardrails', () => {
     expect(windowedPageScrollSource).not.toContain("addEventListener('touch");
     for (const source of [
       platformWindowedItemsSource,
-      unifiedResourceTableViewportSyncSource,
       storagePoolsTableWindowingSource,
       workloadViewportSyncSource,
     ]) {
@@ -1487,9 +1463,6 @@ describe('shared primitive guardrails', () => {
     expect(tableCardHeaderSource).toContain('TABLE_CARD_HEADER_CLASS');
 
     for (const source of [
-      unifiedResourceHostTableCardSource,
-      unifiedResourcePBSTableSectionSource,
-      unifiedResourcePMGTableSectionSource,
       alertHistoryTableSectionSource,
       workloadsTableSource,
       storagePoolsTableSource,
@@ -1509,7 +1482,6 @@ describe('shared primitive guardrails', () => {
     }
 
     for (const source of [
-      unifiedResourceHostTableCardSource,
       alertHistoryTableSectionSource,
       workloadsTableSource,
       storageContentCardSource,
@@ -1517,9 +1489,7 @@ describe('shared primitive guardrails', () => {
       expect(source).toContain('<TableCard');
     }
 
-    for (const source of [unifiedResourceHostTableCardSource, storageContentCardSource]) {
-      expect(source).toContain('TableCardHeader');
-    }
+    expect(storageContentCardSource).toContain('TableCardHeader');
 
     expect(alertHistoryTableSectionSource).not.toContain(
       'overflow-hidden rounded-sm border border-border',
@@ -1718,14 +1688,7 @@ describe('shared primitive guardrails', () => {
     expect(platformResourceDetailTableRowSource).toContain('SummaryRowActionButton');
     expect(platformResourceDetailTableRowSource).toContain('hideWhenRowTappableOnMobile');
 
-    for (const source of [
-      guestRowSource,
-      storagePoolRowSource,
-      diskListSource,
-      unifiedResourceHostTableCardSource,
-      unifiedResourcePBSTableSectionSource,
-      unifiedResourcePMGTableSectionSource,
-    ]) {
+    for (const source of [guestRowSource, storagePoolRowSource, diskListSource]) {
       expect(source).toContain('createSummaryInteractiveRowPreviewHandlers');
       expect(source).toContain('SummaryRowActionButton');
       expect(source).toContain('hideWhenRowTappableOnMobile');
@@ -1740,7 +1703,6 @@ describe('shared primitive guardrails', () => {
     expect(workloadPanelSource).toContain('createSummaryInteractiveRowPreviewHandlers');
     expect(workloadPanelSource).not.toContain('kind="scope"');
     expect(storageGroupRowSource).not.toContain('kind="scope"');
-    expect(unifiedResourceHostTableCardSource).not.toContain('kind="scope"');
 
     expect(nodeGroupHeaderSource).toContain('ResourceNameWithWebInterfaceLink');
     expect(webInterfaceLinkSource).toContain('event.stopPropagation()');
@@ -5394,9 +5356,6 @@ describe('shared primitive guardrails', () => {
         'src/features/proxmox/ProxmoxNodesTable.tsx',
         'src/components/Alerts/AlertResourceGroupHeader.tsx',
         'src/components/Alerts/AlertResourceTableRow.tsx',
-        'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',
-        'src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx',
-        'src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx',
         'src/features/docker/DockerNativeTableShared.tsx',
         'src/features/docker/DockerContainersTable.tsx',
         'src/features/kubernetes/KubernetesClustersTable.tsx',
@@ -5413,9 +5372,6 @@ describe('shared primitive guardrails', () => {
     expect(proxmoxNodesTableSource).toContain('ResourceNameWithWebInterfaceLink');
     expect(alertResourceGroupHeaderSource).toContain('ResourceNameWithWebInterfaceLink');
     expect(alertResourceTableRowSource).toContain('ResourceNameWithWebInterfaceLink');
-    expect(unifiedResourceHostTableCardSource).toContain('ResourceNameWithWebInterfaceLink');
-    expect(unifiedResourcePBSTableSectionSource).toContain('ResourceNameWithWebInterfaceLink');
-    expect(unifiedResourcePMGTableSectionSource).toContain('ResourceNameWithWebInterfaceLink');
     expect(nodeGroupHeaderSource).not.toContain('target="_blank"');
     expect(guestRowSource).not.toContain('target="_blank"');
     expect(agentsMachinesTableSource).not.toContain('target="_blank"');
@@ -7766,9 +7722,6 @@ describe('shared primitive guardrails', () => {
     expect(inlineDetailTableRowSource).toContain('.focus({ preventScroll: true })');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
       expect.arrayContaining([
-        'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',
-        'src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx',
-        'src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx',
         'src/components/Workloads/WorkloadPanel.tsx',
         'src/features/docker/DockerHostsTable.tsx',
         'src/features/docker/DockerNetworksTable.tsx',
@@ -7796,9 +7749,6 @@ describe('shared primitive guardrails', () => {
       dockerHostsTableSource,
       proxmoxCoverageTableSource,
       proxmoxNodesTableSource,
-      unifiedResourceHostTableCardSource,
-      unifiedResourcePBSTableSectionSource,
-      unifiedResourcePMGTableSectionSource,
       workloadPanelSource,
     ]) {
       expect(source).toContain('InlineDetailTableRow');

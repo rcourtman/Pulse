@@ -65,6 +65,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/edition"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	licensetestsupport "github.com/rcourtman/pulse-go-rewrite/pkg/licensing/testsupport"
@@ -5224,6 +5225,128 @@ func TestContract_PerformanceReportTransportUsesCatalogDefinition(t *testing.T) 
 	}
 	if engine.lastReq.MetricType != "cpu" || engine.lastReq.Title != "Node report" {
 		t.Fatalf("expected trimmed canonical optional fields, got %+v", engine.lastReq)
+	}
+}
+
+// Normalization keeps a disk's last-known temperature when the current
+// observation did not collect one (a disk in standby, a host agent past its
+// reporting lease). Reports present their disk tables as measured, so the
+// performance report and the reporting runtime snapshot leave that value out.
+func TestContract_ReportsOmitRetainedDiskTemperatures(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	state := models.NewState()
+	state.Nodes = []models.Node{{ID: "node-1", Name: "node-a", Status: "online"}}
+	disk := func(id, devPath string, temperature int, collection diskinventory.FieldStatus) unifiedresources.Resource {
+		return unifiedresources.Resource{
+			ID: id, Type: unifiedresources.ResourceTypePhysicalDisk, Name: id, ParentName: "node-a",
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"node-a"}},
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+				DevPath: devPath, DiskType: "hdd", Health: "PASSED", Wearout: -1, Temperature: temperature,
+				Collection: &diskinventory.CollectionStatus{Temperature: collection},
+			},
+		}
+	}
+	monitor := newReportingMonitorForTest(t, state, []unifiedresources.Resource{
+		disk("disk-standby", "/dev/sda", 61, diskinventory.Unavailable("smartctl", "disk is in standby")),
+		disk("disk-silent", "/dev/sdb", 57, diskinventory.Unavailable("smartctl", "host agent stopped reporting")),
+		disk("disk-live", "/dev/sdc", 38, diskinventory.Available("smartctl")),
+	})
+	handler := NewReportingHandlers(newReportingMTMForTest(t, monitor), nil)
+	want := map[string]int{"/dev/sda": 0, "/dev/sdb": 0, "/dev/sdc": 38}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/reporting?format=pdf&resourceType=node&resourceId=node-1", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "default"))
+	rec := httptest.NewRecorder()
+	handler.HandleGenerateReport(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	reported := map[string]int{}
+	for _, d := range engine.lastReq.Disks {
+		reported[d.Device] = d.Temperature
+	}
+	if !reflect.DeepEqual(reported, want) {
+		t.Fatalf("performance report disk temperatures = %v, want %v", reported, want)
+	}
+
+	snapshot, ok := handler.getRuntimeStateSnapshot(context.Background(), "default")
+	if !ok {
+		t.Fatal("expected runtime snapshot to be available")
+	}
+	snapshotted := map[string]int{}
+	for _, d := range snapshot.Disks {
+		snapshotted[d.Device] = d.Temperature
+	}
+	if !reflect.DeepEqual(snapshotted, want) {
+		t.Fatalf("reporting runtime snapshot disk temperatures = %v, want %v", snapshotted, want)
+	}
+}
+
+// Report disk tables colour a reading by the disk's alert disk temperature
+// thresholds (the tenant's per-type policy), not a fixed 50/60C: amber from the
+// clear value, red from the trigger, as the Physical Disks Temp column does.
+func TestContract_ReportsCarryDiskTemperatureAlertThresholds(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	state := models.NewState()
+	state.Nodes = []models.Node{{ID: "node-1", Name: "node-a", Status: "online"}}
+	disk := func(id, devPath, diskType string, temperature int) unifiedresources.Resource {
+		return unifiedresources.Resource{
+			ID: id, Type: unifiedresources.ResourceTypePhysicalDisk, Name: id, ParentName: "node-a",
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"node-a"}},
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+				DevPath: devPath, DiskType: diskType, Health: "PASSED", Wearout: -1, Temperature: temperature,
+				Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")},
+			},
+		}
+	}
+	monitor := newReportingMonitorForTest(t, state, []unifiedresources.Resource{
+		disk("disk-nvme", "/dev/nvme0n1", "nvme", 63),
+		disk("disk-sata", "/dev/sda", "sata", 56),
+	})
+	handler := NewReportingHandlers(newReportingMTMForTest(t, monitor), nil)
+	thresholdsByDevice := func() map[string][2]float64 {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/reporting?format=pdf&resourceType=node&resourceId=node-1", nil)
+		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "default"))
+		rec := httptest.NewRecorder()
+		handler.HandleGenerateReport(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+		}
+		got := map[string][2]float64{}
+		for _, d := range engine.lastReq.Disks {
+			got[d.Device] = [2]float64{d.TemperatureWarning, d.TemperatureCritical}
+		}
+		return got
+	}
+
+	// No alert manager: the factory per-type policy.
+	if got, want := thresholdsByDevice(), map[string][2]float64{"/dev/nvme0n1": {65, 70}, "/dev/sda": {50, 55}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("factory report disk thresholds = %v, want %v", got, want)
+	}
+
+	manager := alerts.NewManager()
+	cfg := manager.GetConfig()
+	cfg.DiskTempByType["nvme"] = alerts.HysteresisThreshold{Trigger: 75, Clear: 70}
+	manager.UpdateConfig(cfg)
+	setUnexportedField(t, monitor, "alertManager", manager)
+	if got, want := thresholdsByDevice(), map[string][2]float64{"/dev/nvme0n1": {70, 75}, "/dev/sda": {50, 55}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("configured report disk thresholds = %v, want %v", got, want)
+	}
+
+	cfg = manager.GetConfig()
+	cfg.AgentDefaults.DiskTemperature = &alerts.HysteresisThreshold{Trigger: 0, Clear: 0}
+	manager.UpdateConfig(cfg)
+	if got, want := thresholdsByDevice(), map[string][2]float64{"/dev/nvme0n1": {0, 0}, "/dev/sda": {0, 0}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("report disk thresholds with disk temperature alerting off = %v, want %v", got, want)
 	}
 }
 
@@ -12546,6 +12669,129 @@ func TestContract_MetricsHistoryAgentTemperatureLiveFallback(t *testing.T) {
 	}
 }
 
+// Normalization may keep a disk temperature it did not collect this time: a
+// host agent past its reporting lease, or a disk in standby. The history
+// endpoint must not return that retained value as a live point at "now", and
+// mock mode must not grow a synthetic series that ends on it. A collected
+// temperature still answers an empty range with a live point.
+func TestContract_MetricsHistoryDiskLivePointOnlyForCollectedTemperature(t *testing.T) {
+	state := models.NewState()
+	lastReport := time.Now().Add(-time.Hour)
+	state.UpsertHost(models.Host{
+		ID: "agent-silent", Hostname: "silent", Status: "online", IntervalSeconds: 30, LastSeen: lastReport,
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+			Device: "/dev/sdb", Serial: "WD-SILENT-LIVE", Type: "sata", Health: "PASSED", Temperature: 41,
+			Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")},
+		}}},
+	})
+	if _, changed := state.ExpireHostTelemetry("agent-silent", lastReport); !changed {
+		t.Fatal("the silent agent's lease expiry did not mark its SMART readings")
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(state.GetSnapshot())
+	var resources []unifiedresources.Resource
+	for _, resource := range unifiedresources.NewMonitorAdapter(registry).GetAll() {
+		if resource.Type == unifiedresources.ResourceTypePhysicalDisk {
+			resources = append(resources, resource)
+		}
+	}
+	if len(resources) != 1 || resources[0].PhysicalDisk.Temperature != 41 {
+		t.Fatalf("silent agent disk resources = %+v, want one disk retaining 41", resources)
+	}
+	staticDisk := func(serial string, temperature int, status diskinventory.FieldStatus) unifiedresources.Resource {
+		return unifiedresources.Resource{
+			ID:   "physical-disk:" + serial,
+			Type: unifiedresources.ResourceTypePhysicalDisk,
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+				Serial:      serial,
+				Temperature: temperature,
+				Collection:  &diskinventory.CollectionStatus{Temperature: status},
+			},
+			MetricsTarget: &unifiedresources.MetricsTarget{ResourceType: "disk", ResourceID: serial},
+		}
+	}
+	resources = append(resources,
+		staticDisk("WD-STANDBY-LIVE", 38, diskinventory.Unavailable("smartctl", "disk is in standby")),
+		staticDisk("WD-AWAKE-LIVE", 36, diskinventory.Available("smartctl")),
+		staticDisk("WD-ASLEEP-LIVE", 0, diskinventory.Unavailable("smartctl", "disk is in standby")),
+	)
+
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(staticPhysicalDiskResourceStore{resources: resources})
+	setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
+	setUnexportedField(t, monitor, "metricsStore", store)
+	router := &Router{monitor: monitor}
+
+	history := func(query string) (metricsHistoryResponse, map[string]json.RawMessage) {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		router.handleMetricsHistory(rec, httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=disk&"+query, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d, body=%s", query, rec.Code, rec.Body.String())
+		}
+		var single metricsHistoryResponse
+		var all struct {
+			Metrics map[string]json.RawMessage `json:"metrics"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &single); err != nil {
+			t.Fatalf("%s: decode: %v", query, err)
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &all); err != nil {
+			t.Fatalf("%s: decode metrics: %v", query, err)
+		}
+		return single, all.Metrics
+	}
+
+	for _, serial := range []string{"WD-SILENT-LIVE", "WD-STANDBY-LIVE"} {
+		resp, _ := history("resourceId=" + serial + "&metric=smart_temp&range=5m")
+		if resp.Source == "live" || len(resp.Points) != 0 {
+			t.Fatalf("%s: retained temperature served as current: source=%q points=%+v", serial, resp.Source, resp.Points)
+		}
+		if _, all := history("resourceId=" + serial + "&range=5m"); all["smart_temp"] != nil {
+			t.Fatalf("%s: retained temperature served in the all-metrics response: %s", serial, all["smart_temp"])
+		}
+	}
+	resp, _ := history("resourceId=WD-AWAKE-LIVE&metric=smart_temp&range=5m")
+	if resp.Source != "live" || len(resp.Points) != 1 || resp.Points[0].Value != 36 {
+		t.Fatalf("collected temperature not served as a live point: source=%q points=%+v", resp.Source, resp.Points)
+	}
+
+	// Mock mode pads a sparse stored series out to now from the disk's current
+	// temperature. A retained temperature is not current, so the stored
+	// samples stay as they are.
+	// Without a current reading (retained, absent, or no such disk) there is
+	// nothing to pad with, so the last stored sample is not extended either.
+	setMockModeForTest(t, true)
+	now := time.Now()
+	for _, serial := range []string{"WD-STANDBY-LIVE", "WD-ASLEEP-LIVE", "WD-REMOVED-LIVE"} {
+		store.Write("disk", serial, "smart_temp", 38, now.Add(-50*time.Minute))
+		store.Write("disk", serial, "smart_temp", 38, now.Add(-40*time.Minute))
+	}
+	store.Flush()
+	for _, serial := range []string{"WD-STANDBY-LIVE", "WD-ASLEEP-LIVE", "WD-REMOVED-LIVE"} {
+		resp, _ = history("resourceId=" + serial + "&metric=smart_temp&range=1h")
+		if resp.Source != "store" || len(resp.Points) != 2 {
+			t.Fatalf("%s: mock mode padded stored temperature history to now without a current reading: source=%q points=%d", serial, resp.Source, len(resp.Points))
+		}
+	}
+	// With nothing stored, mock mode must not seed its synthetic series from a
+	// retained temperature either. (The monitor's generic demo series for the
+	// disk ID is not derived from the disk's reading.)
+	resp, _ = history("resourceId=WD-SILENT-LIVE&metric=smart_temp&range=1h")
+	if resp.Source == "mock_synthetic" {
+		t.Fatalf("mock mode synthesized history from a silent agent's retained temperature: points=%+v", resp.Points)
+	}
+	resp, _ = history("resourceId=WD-AWAKE-LIVE&metric=smart_temp&range=1h")
+	if resp.Source != "mock_synthetic" || len(resp.Points) < 2 || resp.Points[len(resp.Points)-1].Value != 36 {
+		t.Fatalf("mock mode stopped synthesizing a collected temperature: source=%q points=%+v", resp.Source, resp.Points)
+	}
+}
+
 func TestContract_MetricsHistoryCanonicalizesLegacyKubernetesPodIDs(t *testing.T) {
 	mh := monitoring.NewMetricsHistory(1000, time.Hour)
 	now := time.Now().UTC().Truncate(time.Second)
@@ -16643,9 +16889,9 @@ func TestContract_PBSHostAgentComposesIntoOwningSystem(t *testing.T) {
 // An agent on a Proxmox cluster node reports SMART data for the node's disks,
 // and the registry stamps each disk with the owning node's identity so it
 // stays discoverable in the Proxmox workspace. A disk is not a cluster member:
-// projecting it as one folded its health into the node row, so a warm NVMe
-// drive rendered an actively reporting node as Stale whenever the agent's
-// report was newer than the last Proxmox poll.
+// projecting it as one folded its health into the node row, so a disk with a
+// SMART warning rendered an actively reporting node as Stale whenever the
+// agent's report was newer than the last Proxmox poll.
 func TestContract_ConnectionSystemMembersIgnoreOwnedPhysicalDisks(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
 	monitor, err := monitoring.New(cfg)
@@ -16656,6 +16902,7 @@ func TestContract_ConnectionSystemMembersIgnoreOwnedPhysicalDisks(t *testing.T) 
 
 	polledAt := time.Now().UTC().Add(-10 * time.Second)
 	reportedAt := polledAt.Add(6 * time.Second)
+	reallocatedSectors := int64(3)
 	adapter := unifiedresources.NewMonitorAdapter(nil)
 	adapter.PopulateFromSnapshot(models.StateSnapshot{
 		Nodes: []models.Node{{
@@ -16684,8 +16931,9 @@ func TestContract_ConnectionSystemMembersIgnoreOwnedPhysicalDisks(t *testing.T) 
 					Model:       "WD_BLACK SN7100 4TB",
 					Serial:      "SN7100-AURORA",
 					Type:        "nvme",
-					Temperature: 63,
+					Temperature: 41,
 					Health:      "PASSED",
+					Attributes:  &models.SMARTAttributes{ReallocatedSectors: &reallocatedSectors},
 				}},
 			},
 		}},

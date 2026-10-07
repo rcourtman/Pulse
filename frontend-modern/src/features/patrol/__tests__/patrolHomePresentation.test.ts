@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { PatrolObjective } from '@/api/patrol';
-import type { AttentionItem } from '@/api/patrolAttention';
+import type { AttentionItem, AttentionItemDetail } from '@/api/patrolAttention';
 import {
+  getAttentionHandoverClose,
   getPatrolAttentionDecisionReason,
   getPatrolObjectiveProtectionSummary,
   partitionPatrolAttention,
@@ -143,5 +144,64 @@ describe('patrol home presentation', () => {
       paused: 1,
       tone: 'warning',
     });
+  });
+});
+
+describe('getAttentionHandoverClose', () => {
+  const transition = (
+    overrides: Partial<AttentionItemDetail['timeline'][number]>,
+  ): AttentionItemDetail['timeline'][number] => ({
+    id: 'transition-1',
+    operationalRecordId: 'record-1',
+    from: 'open',
+    to: 'resolved',
+    at: '2026-08-14T08:00:00Z',
+    cause: 'recovery_evidence',
+    causeKey: 'memory:pve1',
+    evidenceIds: ['evidence-1'],
+    ...overrides,
+  });
+  const reason =
+    'Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading.';
+
+  it('returns the handover account only for a record closed by an ownership transfer', () => {
+    const resolved = attentionItem({ state: 'resolved' });
+    expect(
+      getAttentionHandoverClose({
+        item: resolved,
+        timeline: [transition({ cause: 'ownership_transferred', reason })],
+      }),
+    ).toBe(reason);
+    expect(
+      getAttentionHandoverClose({
+        item: resolved,
+        timeline: [transition({ cause: 'ownership_transferred' })],
+      }),
+    ).toBe('This alert moved to another owner when it closed. It did not recover.');
+    expect(getAttentionHandoverClose({ item: resolved, timeline: [transition({})] })).toBeNull();
+  });
+
+  it('follows the latest close, so a later recovery or reopen wins', () => {
+    const handover = transition({ cause: 'ownership_transferred', reason });
+    const reopened = transition({
+      id: 'transition-2',
+      from: 'resolved',
+      to: 'open',
+      at: '2026-08-14T09:00:00Z',
+      cause: 'detector_decision',
+    });
+    const recovered = transition({ id: 'transition-3', at: '2026-08-14T10:00:00Z' });
+    expect(
+      getAttentionHandoverClose({
+        item: attentionItem({ state: 'resolved' }),
+        timeline: [handover, reopened, recovered],
+      }),
+    ).toBeNull();
+    expect(
+      getAttentionHandoverClose({
+        item: attentionItem({ state: 'open' }),
+        timeline: [handover, reopened],
+      }),
+    ).toBeNull();
   });
 });

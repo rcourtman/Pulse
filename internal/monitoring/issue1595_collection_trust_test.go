@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
 type issue1595TopologyFixture struct {
@@ -315,4 +316,54 @@ func hasIssue1595Source(sources []unifiedresources.DataSource, want unifiedresou
 		}
 	}
 	return false
+}
+
+// An agent report's SMART row may carry a temperature its collector did not
+// collect this time (retained across a standby or failed probe, or kept after
+// the agent's reporting lease expired). Only a temperature
+// diskinventory.TemperatureCollected accepts becomes a history sample.
+func TestWriteHostSMARTMetricsRecordsOnlyCollectedTemperatures(t *testing.T) {
+	storeConfig := metrics.DefaultConfig(t.TempDir())
+	storeConfig.FlushInterval = time.Hour
+	store, err := metrics.NewStore(storeConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	m := &Monitor{metricsStore: store}
+
+	host := models.Host{ID: "agent-1", Hostname: "node1", Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{
+		{Device: "sda", Serial: "COLLECTED1", Temperature: 41,
+			Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")}},
+		{Device: "sdb", Serial: "LEGACY1", Temperature: 38},
+		{Device: "sdc", Serial: "RETAINED1", Temperature: 36,
+			Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("smartctl", "disk is in standby")}},
+		{Device: "sdd", Serial: "SILENT1", Temperature: 44,
+			Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("smartctl", models.HostAgentStoppedReportingReason)}},
+		{Device: "sde", Serial: "MISSING1", Temperature: 39,
+			Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Missing("smartctl", "temperature attribute absent")}},
+	}}}
+	now := time.Now()
+	m.writeHostSMARTMetrics(host, now)
+	store.Flush()
+
+	for _, tc := range []struct {
+		disk models.HostDiskSMART
+		want int
+	}{
+		{host.Sensors.SMART[0], 1},
+		{host.Sensors.SMART[1], 1},
+		{host.Sensors.SMART[2], 0},
+		{host.Sensors.SMART[3], 0},
+		{host.Sensors.SMART[4], 0},
+	} {
+		id := unifiedresources.HostSMARTDiskSourceID(host, tc.disk)
+		points, err := store.Query("disk", id, "smart_temp", now.Add(-time.Minute), now.Add(time.Minute), 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(points) != tc.want {
+			t.Fatalf("%s: temperature samples = %d, want %d", tc.disk.Serial, len(points), tc.want)
+		}
+	}
 }

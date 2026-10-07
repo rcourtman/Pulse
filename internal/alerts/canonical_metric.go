@@ -76,6 +76,30 @@ func formatMetricValue(value float64, suffix string) string {
 	return fmt.Sprintf("%.1f%s", value, suffix)
 }
 
+// releaseCanonicalMetricAlert stops evaluating a metric spec the way a
+// disabled threshold does: any pending run is dropped and any open alert is
+// resolved. A non-nil resolution says why the close was not a recovery, and
+// travels with the resolved alert to every consumer.
+func (m *Manager) releaseCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec, resourceName, node, instance, resourceType string, value float64, resolution *AlertResolution) {
+	if spec.MetricThreshold == nil {
+		return
+	}
+	storageKey := canonicalTrackingKeyForSpec(spec, spec.ID)
+	m.mu.Lock()
+	m.core.ApplyMetric(reducer.MetricSignal{
+		ResourceID: spec.ResourceID,
+		Key:        spec.ID,
+		Metric:     spec.MetricThreshold.Metric,
+		Value:      value,
+		ObservedAt: time.Now(),
+	}, reducer.MetricRule{})
+	m.mu.Unlock()
+	// A guest that moved nodes may hold this alert under its old node-scoped
+	// identity; re-home it first so the clear below can resolve it.
+	m.rehomeStrandedGuestAlert(storageKey, spec.ID, string(spec.Kind), spec.ResourceID, resourceName, node, instance, resourceType)
+	m.clearAlertWithResolution(storageKey, resolution)
+}
+
 func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec, resourceName, node, instance, resourceType string, value float64, threshold *HysteresisThreshold, opts *metricOptions) {
 	if spec.MetricThreshold == nil {
 		return
@@ -86,19 +110,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	trackingKey := storageKey
 	metricType := spec.MetricThreshold.Metric
 	if spec.Disabled || spec.MetricThreshold.Trigger <= 0 {
-		m.mu.Lock()
-		m.core.ApplyMetric(reducer.MetricSignal{
-			ResourceID: spec.ResourceID,
-			Key:        spec.ID,
-			Metric:     metricType,
-			Value:      value,
-			ObservedAt: time.Now(),
-		}, reducer.MetricRule{})
-		m.mu.Unlock()
-		// A guest that moved nodes may hold this alert under its old node-scoped
-		// identity; re-home it first so the clear below can resolve it.
-		m.rehomeStrandedGuestAlert(storageKey, spec.ID, string(spec.Kind), spec.ResourceID, resourceName, node, instance, resourceType)
-		m.clearAlert(storageKey)
+		m.releaseCanonicalMetricAlert(spec, resourceName, node, instance, resourceType, value, nil)
 		return
 	}
 
@@ -342,6 +354,15 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			return
 		}
 
+		// A hold keeps the last breach's value and message, but what the
+		// alert is about is current: one restored from an older checkpoint,
+		// or raised before its producer named a child type or platform,
+		// must not link to the wrong page until it re-fires or clears.
+		if refreshMetricAlertClassification(existingAlert, alertMetadata) {
+			m.setActiveRecoveryAlert(existingAlert, storageKey)
+			m.saveActiveAlertsAsync("canonical metric classification")
+		}
+
 		if !triggered && primary == "" {
 			// Hysteresis hold or recovery run: Value, Message and LastSeen
 			// keep the last breach, and nothing here may notify. Only the
@@ -441,4 +462,32 @@ func alertspecsMetricTriggered(spec *alertspecs.MetricThresholdSpec, observed fl
 	default:
 		return false
 	}
+}
+
+// metricAlertClassificationKeys name what a metric alert is about and which
+// platform owns it. They describe the resource, not the reading.
+var metricAlertClassificationKeys = []string{"resourceType", alertPlatformTypeKey}
+
+// refreshMetricAlertClassification copies the producer's current
+// classification onto an open alert and reports whether anything changed.
+func refreshMetricAlertClassification(alert *Alert, metadata map[string]interface{}) bool {
+	if alert == nil {
+		return false
+	}
+	changed := false
+	for _, key := range metricAlertClassificationKeys {
+		value, _ := metadata[key].(string)
+		if value == "" {
+			continue
+		}
+		if current, _ := alert.Metadata[key].(string); current == value {
+			continue
+		}
+		if alert.Metadata == nil {
+			alert.Metadata = make(map[string]interface{}, len(metricAlertClassificationKeys))
+		}
+		alert.Metadata[key] = value
+		changed = true
+	}
+	return changed
 }

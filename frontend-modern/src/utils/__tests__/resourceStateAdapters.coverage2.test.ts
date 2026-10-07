@@ -981,7 +981,9 @@ describe('buildTemperature (via nodeFromResource)', () => {
     );
     expect(node?.temperature?.cpuPackage).toBe(42);
     expect(node?.temperature?.cpuMax).toBe(42);
-    expect(node?.temperature?.cpuMin).toBe(42);
+    // A bare reading has no low or record history to report.
+    expect(node?.temperature?.cpuMin).toBeUndefined();
+    expect(node?.temperature?.cpuMaxRecord).toBeUndefined();
     expect(node?.temperature?.available).toBe(true);
     expect(node?.temperature?.hasCPU).toBe(true);
   });

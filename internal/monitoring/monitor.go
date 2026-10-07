@@ -648,7 +648,10 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 			ioCopy := *matched.IO
 			updated[i].IO = &ioCopy
 		}
-		updated[i].Collection = diskinventory.MergeStatus(updated[i].Collection, matched.Collection)
+		// The agent's later word on a field it supplied (its lease expired, or
+		// the disk went into standby) must win over the copy a skipped disk
+		// poll carries forward from the previous merge.
+		updated[i].Collection = diskinventory.MergeReportedStatus(updated[i].Collection, hostAgentSMARTCollection(*matched))
 
 		if shouldUseHostAgentPhysicalDiskHealth(updated[i].Health, matched.Health) {
 			updated[i].Health = matched.Health
@@ -656,6 +659,28 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 	}
 
 	return updated
+}
+
+// hostAgentLegacySource is the provenance recorded for a temperature from an
+// agent that predates collection provenance (before 6.2). Those agents only
+// send readings they collected.
+const hostAgentLegacySource = "host_agent"
+
+// hostAgentSMARTCollection returns the agent's collection state for one SMART
+// row, giving a provenance-less temperature the legacy agent source so that
+// history and later lease expiry treat it like any other agent reading.
+func hostAgentSMARTCollection(smart models.HostDiskSMART) *diskinventory.CollectionStatus {
+	collection := diskinventory.CloneStatus(smart.Collection)
+	if collection == nil {
+		collection = &diskinventory.CollectionStatus{}
+	}
+	switch {
+	case collection.Temperature.State == "" && smart.Temperature > 0 && !smart.Standby:
+		collection.Temperature = diskinventory.Available(hostAgentLegacySource)
+	case collection.Temperature.State != "" && strings.TrimSpace(collection.Temperature.Source) == "":
+		collection.Temperature.Source = hostAgentLegacySource
+	}
+	return collection
 }
 
 func shouldUseHostAgentPhysicalDiskHealth(existing, incoming string) bool {
@@ -914,8 +939,7 @@ func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
 		return
 	}
 
-	// Temperature (always write if > 0)
-	if disk.Temperature > 0 && m.metricsHistory != nil {
+	if diskinventory.TemperatureCollected(disk.Temperature, disk.Collection) && m.metricsHistory != nil {
 		m.metricsHistory.AddDiskMetric(resourceID, "smart_temp", float64(disk.Temperature), now)
 	}
 
@@ -949,8 +973,7 @@ func (m *Monitor) smartMetricStoreWrites(disk models.PhysicalDisk, resourceID st
 		})
 	}
 
-	// Temperature (always write if > 0)
-	if disk.Temperature > 0 {
+	if diskinventory.TemperatureCollected(disk.Temperature, disk.Collection) {
 		appendWrite("smart_temp", float64(disk.Temperature))
 	}
 
@@ -1263,6 +1286,8 @@ type Monitor struct {
 	recoveryIngestPending     []recoveryIngestBatch
 	mockMetricsCancel         context.CancelFunc
 	mockMetricsWg             sync.WaitGroup
+	mockHostAgentsMu          sync.Mutex
+	mockHostAgents            map[string]models.Host   // Fixture agents evaluated by the last mock alert pass
 	dockerChecker             DockerChecker            // Optional Docker checker for LXC containers
 	dockerCheckerConfiguredAt time.Time                // Last time the Docker checker was configured
 	dockerCheckAllowedVMIDs   map[int]struct{}         // Optional VMID allowlist gating the LXC Docker socket probe; empty means all guests
@@ -1332,8 +1357,10 @@ func (m *Monitor) getRuntimeContext() context.Context {
 
 // clusterSensorsCacheEntry stores temperature data collected by a sibling agent via SSH.
 type clusterSensorsCacheEntry struct {
-	sensors   models.HostSensorSummary
-	updatedAt time.Time
+	reporterID string // host agent that collected the reading over SSH
+	nodeName   string // lowercase Proxmox node name the reading describes
+	sensors    models.HostSensorSummary
+	updatedAt  time.Time
 }
 
 type rrdMemCacheEntry struct {
@@ -3575,6 +3602,7 @@ func hostFromReadStateView(view *unifiedresources.HostView) models.Host {
 	if trimmed := strings.TrimSpace(view.Name()); trimmed != "" && trimmed != view.Hostname() {
 		displayName = trimmed
 	}
+	status, lastSeen := hostAgentLivenessFromReadStateView(view, time.Now())
 
 	return models.Host{
 		ID:                firstNonEmptyString(view.AgentID(), view.ID()),
@@ -3596,10 +3624,10 @@ func hostFromReadStateView(view *unifiedresources.HostView) models.Host {
 		RAID:              hostRAIDFromReadStateView(view.RAID()),
 		Unraid:            hostUnraidFromReadStateView(view.Unraid()),
 		Ceph:              hostCephFromReadStateView(view.Ceph()),
-		Status:            string(view.Status()),
+		Status:            status,
 		UptimeSeconds:     view.UptimeSeconds(),
 		IntervalSeconds:   view.IntervalSeconds(),
-		LastSeen:          view.LastSeen(),
+		LastSeen:          lastSeen,
 		AgentVersion:      view.AgentVersion(),
 		IntegrationSource: view.IntegrationSource(),
 		MachineID:         view.MachineID(),
@@ -3620,6 +3648,25 @@ func hostFromReadStateView(view *unifiedresources.HostView) models.Host {
 		LinkedVMID:        view.LinkedVMID(),
 		LinkedContainerID: view.LinkedContainerID(),
 	}
+}
+
+// hostAgentLivenessFromReadStateView returns the status and last report of the
+// agent behind a read-state host row. A row merged with a Proxmox node takes
+// LastSeen from its freshest source and stays online while PVE polling
+// continues, so a silent agent would look current: its retained disk summary
+// and datasets kept feeding the node, and its connection read as active. A
+// models.Host describes the agent, so read the agent source's own sighting
+// and lease, as evaluateHostAgents does for the host in state.
+func hostAgentLivenessFromReadStateView(view *unifiedresources.HostView, now time.Time) (string, time.Time) {
+	status, lastSeen := string(view.Status()), view.LastSeen()
+	agentSighting, ok := view.SourceStatus(unifiedresources.SourceAgent)
+	if !ok || agentSighting.LastSeen.IsZero() {
+		return status, lastSeen
+	}
+	if !hostAgentReportCurrent(agentSighting.LastSeen, view.IntervalSeconds(), now) {
+		status = "offline"
+	}
+	return status, agentSighting.LastSeen
 }
 
 func vmFromReadStateView(view *unifiedresources.VMView) models.VM {
@@ -4567,6 +4614,7 @@ func (m *Monitor) SetMockMode(enable bool) error {
 			return err
 		}
 		m.alertManager.ClearActiveAlerts()
+		m.forgetMockHostAgents()
 		m.mu.Lock()
 		m.resetStateLocked()
 		m.metricsHistory.Reset()
@@ -5984,6 +6032,7 @@ func (m *Monitor) syncUnifiedPhysicalDiskMetrics(store ResourceStoreInterface) {
 			RPM:             resource.PhysicalDisk.RPM,
 			Used:            resource.PhysicalDisk.Used,
 			SmartAttributes: smartAttributesFromUnifiedMeta(resource.PhysicalDisk.SMART),
+			Collection:      diskinventory.CloneStatus(resource.PhysicalDisk.Collection),
 			LastChecked:     resource.LastSeen,
 		}
 		if disk.Serial == "" {

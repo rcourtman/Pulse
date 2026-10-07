@@ -288,6 +288,41 @@ exposing the source-specific ambiguous `wearout` name, and distinguishes it from
 `smart.percentageUsed` as consumed endurance. The regression proof is
 `internal/ai/tools/physical_disk_evidence_test.go`.
 
+Disk temperatures reach the model as current readings only when they were
+collected now. `tools.SplitDiskTemperature` classifies a physical disk
+temperature with `diskinventory.TemperatureCollected`. The physical-disk
+projection's `temperature` and the `disk_health` SMART row's `temperature`
+carry only a reading the current observation collected. A value normalization
+retained instead (a disk in standby, a host agent past its reporting lease)
+moves to `last_known_temperature` with `last_known_temperature_reason`. The
+same split feeds the AI chat context and Patrol. The "Physical Disks Needing
+Attention" list and Patrol's disk issue gate, triage flags and finding
+verification judge heat on the collected reading alone. Their text renders a
+retained value as "last known 41C (disk is in standby)". Proofs:
+`TestDiskToolsReportRetainedTemperatureAsLastKnown` in
+`internal/ai/tools/physical_disk_evidence_test.go`,
+`TestBuildUnifiedResourceContextJudgesDiskHeatOnCollectedTemperature` in
+`internal/ai/resource_context_test.go` and
+`TestPatrolPhysicalDiskRowsJudgeHeatOnCollectedTemperature` in
+`internal/ai/patrol_ai_more_test.go`.
+
+They judge that collected reading against the alert disk temperature policy,
+not a fixed line. `ThresholdProvider.GetDiskTemperatureThreshold(diskType)`
+(the alert manager's per-type trigger and clear) resolves each disk's limits
+once in `patrolPhysicalDiskRows`, and the run state carries the provider
+(`patrolRuntimeState.thresholdProvider`). With no provider the factory alert
+configuration applies. A disk is hot from its trigger: a triage warning, a disk
+issue and an AI chat "needing attention" entry, as its temperature alert and
+Physical Disks Running Hot verdict are. A disk-high finding recovers at or
+below the clear value (under the trigger when there is no band below it), as
+the alert does. With no current reading, a disk last seen hot leaves that
+verification unknown rather than recovered. Scoped runs keep the provider, and a
+provider set before Patrol starts is handed to it. Below the trigger Patrol flags nothing, so an NVMe at 63C stays
+quiet and a SATA disk at 56C is flagged. Proofs:
+`internal/ai/patrol_disk_temperature_test.go` and
+`TestAlertThresholdAdapter_DiskTemperatureFollowsAlertPolicy` in
+`internal/ai/alert_threshold_adapter_test.go`.
+
 Retained summaries disclose that point and bucket timestamps describe returned
 history inside the requested window. Their spacing does not measure collection
 uptime or explain missing history. Collector lifecycle and retention settings
@@ -4638,7 +4673,22 @@ summaries became the alarm name still carry "<entity> <moref> has VMware alarm
 <name> (<colour>)", so the title strips that wording to the same alarm name.
 Patrol's seed context lists active and recently resolved alerts by resource:
 each line names the alert's resource unless the message already does, because
-provider incidents such as vCenter alarms say only what was flagged. The projection also collapses open/resolved churn:
+provider incidents such as vCenter alarms say only what was flagged.
+A recently resolved alert that closed without recovering, such as a node metric
+handed to its Pulse agent, must not read as a recovery to Patrol, the
+assistant or the alert tool: Patrol's seed writes `closed <ago>. <summary>` in place of `resolved <ago>`, the
+assistant's alert context writes `closed <ago> ago) <summary>`, the
+`pulse_alerts` `resolved` action returns the summary as `resolution` with
+`successor_resource_id`, and incident memory titles the close with the summary
+(`alertResolvedEventSummary`, or the `alert_resolution` resource-change
+metadata when it projects from the canonical timeline).
+`TestSeedHealthAndAlerts_HandoverIsNotARecovery`,
+`TestService_buildAlertContext_HandoverIsNotARecovery`,
+`TestExecuteListResolvedAlertsReportsHandover` and
+`TestIncidentStore_HandoverCloseIsNotARecovery` pin it. Performance reports
+(`pkg/reporting`, the report narrator) do not carry the resolution yet: a
+report generated within the five-minute recently-resolved window after a
+handover still lists that alert as resolved. The projection also collapses open/resolved churn:
 when a record's timeline holds at least four open-to-resolved or
 resolved-to-open transitions inside the last 24 hours, the item carries a
 `flapping` summary (transition count, window, first and latest transition) and
@@ -6508,6 +6558,20 @@ Patrol scope payloads. API-backed TrueNAS systems may still keep `truenas`
 platform metadata and separate run-history coverage counts, but AI resource
 type fields must normalize to canonical `agent` once they cross the governed
 runtime boundary.
+Patrol scope resolution registers the alert subsystem's Docker references as
+aliases, built by the same `internal/alerts` builders rather than formatted
+locally: `DockerHostResourceID` on the Docker host record, and on each
+container record `dockerAlertScopeAlias`, which passes the container's name so
+a container reported without an ID answers to its marked name reference
+(`docker:<host ID>/name:<name>`) and never to its host's reference.
+`dockerServiceAlertScopeAliases` registers service references, including
+`docker:<host ID>/service/name:<name>` for a service without an ID, on the
+owning host. The legacy snapshot record of a container without an ID has no ID
+to scope by, so only the unified read state can scope its alerts. Proof:
+`TestResolvePatrolScopeResolvesDockerAlertResourceIDs` in
+`internal/ai/patrol_run_test.go` and
+`TestDockerServiceAlertScopeAliasesDeriveIDFromName` in
+`internal/ai/patrol_state_scope_alias_test.go`.
 The same governed-context rule also applies to the main unified AI resource
 overview: infrastructure, workload, alert-label, and top-consumer summaries
 must not leak raw resource names, cluster labels, IP addresses, or unresolved

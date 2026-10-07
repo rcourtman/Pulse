@@ -41,7 +41,7 @@ func TestPhysicalDiskRiskFromAssessment_ConvertsReasons(t *testing.T) {
 		Level: storagehealth.RiskCritical,
 		Reasons: []storagehealth.Reason{
 			{Code: "pending_sectors", Severity: storagehealth.RiskCritical, Summary: "Pending sectors detected (5)"},
-			{Code: "temperature_high", Severity: storagehealth.RiskWarning, Summary: "Disk temperature is 65C"},
+			{Code: "reallocated_sectors", Severity: storagehealth.RiskWarning, Summary: "Reallocated sectors detected (4)"},
 		},
 	}
 	result := PhysicalDiskRiskFromAssessment(assessment)
@@ -66,7 +66,7 @@ func TestPhysicalDiskRiskFromAssessmentAndIncidents_IncludesDiskHealthIncidents(
 	assessment := storagehealth.Assessment{
 		Level: storagehealth.RiskWarning,
 		Reasons: []storagehealth.Reason{
-			{Code: "temperature_high", Severity: storagehealth.RiskWarning, Summary: "Disk temperature is 63C"},
+			{Code: "reallocated_sectors", Severity: storagehealth.RiskWarning, Summary: "Reallocated sectors detected (2)"},
 		},
 	}
 	incidents := []ResourceIncident{
@@ -137,14 +137,15 @@ func TestPhysicalDiskAssessmentFromMeta_PendingSectors(t *testing.T) {
 	}
 }
 
-func TestPhysicalDiskAssessmentFromMeta_HighTemperature(t *testing.T) {
+// Heat is the alert disk temperature policy's to judge, never disk risk's.
+func TestPhysicalDiskAssessmentFromMeta_HighTemperatureIsNotRisk(t *testing.T) {
 	meta := &PhysicalDiskMeta{
 		Health:      "PASSED",
 		Temperature: 72,
 	}
 	assessment := physicalDiskAssessmentFromMeta(meta)
-	if assessment.Level != storagehealth.RiskCritical {
-		t.Errorf("72°C should produce critical assessment, got %s", assessment.Level)
+	if assessment.Level != storagehealth.RiskHealthy || len(assessment.Reasons) != 0 {
+		t.Errorf("72°C should leave the assessment healthy, got %+v", assessment)
 	}
 }
 

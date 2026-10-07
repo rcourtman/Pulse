@@ -1,12 +1,5 @@
 import { useLocation } from '@solidjs/router';
-import {
-  Show,
-  createEffect,
-  createMemo,
-  createResource,
-  createSignal,
-  type Accessor,
-} from 'solid-js';
+import { Show, createEffect, createMemo, createSignal, type Accessor } from 'solid-js';
 import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
@@ -58,7 +51,10 @@ import { ProxmoxCephTable } from './ProxmoxCephTable';
 import { ProxmoxMailGatewayTable } from './ProxmoxMailGatewayTable';
 import { ProxmoxNodesTable } from './ProxmoxNodesTable';
 import { ProxmoxReplicationTable, fetchReplicationJobs } from './ProxmoxReplicationTable';
+import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
+import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import type { ReplicationJob } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { updateStore } from '@/stores/updates';
 import {
@@ -85,6 +81,8 @@ const PROXMOX_PLATFORM_FILTER = 'proxmox-all';
 const PROXMOX_WORKLOAD_STATUS_STORAGE_SCOPE = 'proxmox';
 const PROXMOX_WORKLOAD_EXCLUDED_TYPES = ['app-container'] as const;
 const PHONE_MOUNTED_TAB_LIMIT = 2;
+const REPLICATION_JOBS_POLL_MS = 30_000;
+const NO_REPLICATION_JOBS: ReplicationJob[] = [];
 const VALID_TABS = new Set<ProxmoxPageTabId>(PROXMOX_TAB_SPECS.map((tab) => tab.id));
 const PROXMOX_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
   { value: 'all', label: 'All' },
@@ -123,13 +121,29 @@ export function ProxmoxPageSurface() {
   });
   // Replication jobs come straight from /api/replication/jobs (they bypass
   // the unified-resource pipeline), so the surface owns the fetch: the job
-  // count gates the Replication tab and the same data feeds the table.
-  // Reading an errored resource throws, hence the `.error` guards.
-  const [replicationJobs, { refetch: refetchReplicationJobs }] =
-    createResource(fetchReplicationJobs);
-  const replicationJobCount = createMemo(() =>
-    replicationJobs.error ? 0 : (replicationJobs() ?? []).length,
-  );
+  // count gates the Replication tab and the same data feeds the table. The
+  // read polls in the background because the table's Last sync and Next sync
+  // keep moving on the shared clock: a snapshot read once at mount would age
+  // a job that keeps syncing and count it overdue. A failed poll keeps the
+  // last jobs, so the tab does not vanish under the user.
+  const replicationJobs = createNonSuspendingQuery({
+    source: () => 'proxmox-pve',
+    fetcher: (_source, signal) => fetchReplicationJobs(signal),
+    initialValue: NO_REPLICATION_JOBS,
+    pollMs: REPLICATION_JOBS_POLL_MS,
+  });
+  const replicationJobCount = createMemo(() => replicationJobs.value().length);
+  // Replication presence is known once a read has succeeded. A failed read
+  // before that says nothing, so a direct link holds on its error and Retry
+  // instead of falling to Overview; a failed poll after that keeps the last
+  // answer rather than reopening a route an empty read already closed. An
+  // access denial withdraws that answer, so the link holds on the denial.
+  const replicationJobsConfirmed = createMemo<boolean>((confirmed) => {
+    if (!replicationJobs.resolvedOnce()) return false;
+    const error = replicationJobs.error();
+    if (getAPIReadAccessErrorMessage(error)) return false;
+    return confirmed || !error;
+  }, false);
   const visibleTabs = createMemo(() => {
     // An unknown snapshot is not evidence that every optional integration is
     // present. Never use estate-wide aggregations here: unrelated VMware VMs
@@ -146,7 +160,9 @@ export function ProxmoxPageSurface() {
     const requested = requestedTab();
     // Do not discard a direct link while counts are still unknown: its own
     // resource query must be allowed to hydrate before deciding it is absent.
-    return !tabEvidence.facets?.() || visibleTabIds().has(requested) ? requested : 'overview';
+    const countsUnknown =
+      !tabEvidence.facets?.() || (requested === 'replication' && !replicationJobsConfirmed());
+    return countsUnknown || visibleTabIds().has(requested) ? requested : 'overview';
   });
   const shouldHydrateTab = (tab: ProxmoxPageTabId) => activeTab() === tab;
   const overviewResources = useUnifiedResources({
@@ -350,7 +366,7 @@ export function ProxmoxPageSurface() {
             <PlatformOutdatedAgentNotice
               hosts={outdatedAgentHosts()}
               targetVersion={serverVersionDisplay()}
-              missingLabel="agent-contributed Proxmox node detail and command support"
+              missingLabel="fixes and node details"
               copyVariant="latest-detail"
               actionHref={outdatedAgentUpdatePath()}
               actionLabel="Open agent upgrade commands"
@@ -403,9 +419,9 @@ export function ProxmoxPageSurface() {
             </Show>
             <Show when={activeTab() === 'replication'}>
               <ProxmoxReplicationTable
-                jobs={replicationJobs.error ? undefined : replicationJobs()}
-                error={replicationJobs.error}
-                onRetry={() => void refetchReplicationJobs()}
+                jobs={replicationJobs.resolvedOnce() ? replicationJobs.value() : undefined}
+                error={replicationJobs.error() ?? undefined}
+                onRetry={() => void replicationJobs.refetch()}
                 emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
                 emptyTitle="No replication jobs"
                 emptyDescription="Replication jobs appear here once PVE is configured to replicate guests between nodes."
@@ -479,7 +495,6 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
     // surface, so label it with the platform vocabulary instead of 'Info'.
     columnLabelOverrides: { info: 'ID' },
     statusModeStorageScope: PROXMOX_WORKLOAD_STATUS_STORAGE_SCOPE,
-    compactGroupHeaders: true,
     groupNodeDrawerMode: 'disabled',
     metricDisplayMode: props.metricDisplayMode,
     onMetricDisplayModeChange: props.setMetricDisplayMode,
@@ -622,7 +637,6 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
           forcedPlatform={PROXMOX_PLATFORM_FILTER}
           excludedWorkloadTypes={PROXMOX_WORKLOAD_EXCLUDED_TYPES}
           showNestedExcludedWorkloads
-          compactGroupHeaders
           groupNodeDrawerMode="disabled"
           suppressFilterToolbar
           emptyStateTitle="No Proxmox workloads"

@@ -235,7 +235,6 @@ describe('platform overview layout guardrails', () => {
       expect(source).not.toContain('const [search, ');
     }
 
-    expect(sharedPlatformPageSource).toContain('searchSuggestions={tableState.searchSuggestions}');
     expect(platformSearchSuggestionsSource).toContain('buildPlatformResourceSearchSuggestions');
     expect(platformSearchSuggestionsSource).not.toContain('platformData');
   });

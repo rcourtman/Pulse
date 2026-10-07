@@ -265,8 +265,8 @@ func TestCheckNodeKeepsTemperatureAlertWhenHostAgentMonitorsNode(t *testing.T) {
 
 	node, host := testNodeWithHostAgent()
 	m.CheckHost(host)
-	if !m.hasHostAgentForNode(node.Name) {
-		t.Fatalf("expected CheckHost to register %q for node deduplication", host.Hostname)
+	if !m.hasHostAgentForNode(node.ID) {
+		t.Fatalf("expected CheckHost to link %q to node %q for deduplication", host.ID, node.ID)
 	}
 
 	node.Temperature = &models.Temperature{Available: true, CPUPackage: 90}
@@ -356,6 +356,256 @@ func TestCheckNodeMissingTemperatureDoesNotResolveOpenAlert(t *testing.T) {
 	m.CheckNode(node)
 	if testHasActiveAlert(t, m, tempAlertID) {
 		t.Fatalf("expected disabled temperature threshold to clear %q without a reading", tempAlertID)
+	}
+}
+
+// Deduplication only hands the agent the usage metrics it evaluates. With agent
+// alerts switched off, or one agent threshold off, the node keeps those alerts
+// so the machine is never left unmonitored.
+func TestCheckNodeKeepsUsageMetricsTheAgentDoesNotEvaluate(t *testing.T) {
+	setup := func(t *testing.T) (*Manager, models.Node, models.Host) {
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.config.TimeThresholds = map[string]int{}
+		m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+		m.config.NodeDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+		m.config.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+		m.config.AgentDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+		m.mu.Unlock()
+		node, host := testNodeWithHostAgent()
+		node.CPU = 0.95
+		node.Memory = models.Memory{Total: 100, Used: 95, Free: 5, Usage: 95}
+		host.CPUUsage = 95
+		host.Memory = node.Memory
+		return m, node, host
+	}
+	nodeCPU := func(node models.Node) string { return canonicalMetricStateID(node.ID, "cpu") }
+	nodeMemory := func(node models.Node) string { return canonicalMetricStateID(node.ID, "memory") }
+
+	t.Run("agent_alerts_disabled", func(t *testing.T) {
+		m, node, host := setup(t)
+		m.CheckHost(host)
+		m.CheckNode(node)
+		if testHasActiveAlert(t, m, nodeCPU(node)) {
+			t.Fatalf("expected the agent to own CPU while its alerts are enabled")
+		}
+
+		m.mu.Lock()
+		m.config.DisableAllAgents = true
+		m.mu.Unlock()
+		m.CheckHost(host)
+		m.CheckNode(node)
+		if !testHasActiveAlert(t, m, nodeCPU(node)) || !testHasActiveAlert(t, m, nodeMemory(node)) {
+			t.Fatalf("expected the node to alert on CPU and memory while agent alerts are disabled")
+		}
+	})
+
+	t.Run("agent_cpu_threshold_off", func(t *testing.T) {
+		m, node, host := setup(t)
+		m.mu.Lock()
+		m.config.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 0, Clear: 0}
+		m.mu.Unlock()
+		m.CheckHost(host)
+		m.CheckNode(node)
+		if !testHasActiveAlert(t, m, nodeCPU(node)) {
+			t.Fatalf("expected the node to keep CPU when the agent CPU threshold is off")
+		}
+		if testHasActiveAlert(t, m, nodeMemory(node)) {
+			t.Fatalf("expected the agent to keep owning memory")
+		}
+		if got := testActiveAlertIDsOfType(m, "memory"); len(got) != 1 {
+			t.Fatalf("expected exactly one memory alert for the machine, got %v", got)
+		}
+	})
+}
+
+// Ownership follows what the linked agents are configured to evaluate, not one
+// report's data: a missing agent memory reading must not hand memory back to
+// the node, a second linked agent's metrics count, and the node's disk metric
+// belongs to the agent only when the agent evaluates that same filesystem.
+func TestCheckNodeUsageOwnershipFollowsWhatAgentsEvaluate(t *testing.T) {
+	setup := func(t *testing.T) (*Manager, models.Node, models.Host) {
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.Enabled = true
+		m.config.TimeThresholds = map[string]int{}
+		m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+		m.config.NodeDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+		m.config.NodeDefaults.Disk = &HysteresisThreshold{Trigger: 90, Clear: 85}
+		m.config.AgentDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 75}
+		m.config.AgentDefaults.Memory = &HysteresisThreshold{Trigger: 85, Clear: 80}
+		m.config.AgentDefaults.Disk = &HysteresisThreshold{Trigger: 90, Clear: 85}
+		m.mu.Unlock()
+		node, host := testNodeWithHostAgent()
+		return m, node, host
+	}
+
+	t.Run("missing_agent_memory_reading", func(t *testing.T) {
+		m, node, host := setup(t)
+		node.Memory = models.Memory{Total: 100, Used: 95, Free: 5, Usage: 95}
+		host.Memory = node.Memory
+		m.CheckHost(host)
+		m.CheckNode(node)
+
+		host.Memory = models.Memory{Total: 100, UsageUnavailable: true}
+		m.CheckHost(host)
+		m.CheckNode(node)
+		agentAlertID := canonicalMetricStateID(hostResourceID(host.ID), "memory")
+		if got := testActiveAlertIDsOfType(m, "memory"); len(got) != 1 || got[0] != agentAlertID {
+			t.Fatalf("expected only the agent memory alert while its reading is missing, got %v", got)
+		}
+	})
+
+	t.Run("second_linked_agent", func(t *testing.T) {
+		m, node, host := setup(t)
+		node.CPU = 0.95
+		m.mu.Lock()
+		m.config.Overrides = map[string]ThresholdConfig{
+			"agent-a": {CPU: &HysteresisThreshold{Trigger: 0, Clear: 0}},
+		}
+		m.mu.Unlock()
+		agentA := host
+		agentA.ID = "agent-a"
+		agentB := host
+		agentB.ID = "agent-b"
+		agentB.CPUUsage = 95
+		m.CheckHost(agentA)
+		m.CheckHost(agentB)
+		m.CheckNode(node)
+		agentBAlertID := canonicalMetricStateID(hostResourceID(agentB.ID), "cpu")
+		if got := testActiveAlertIDsOfType(m, "cpu"); len(got) != 1 || got[0] != agentBAlertID {
+			t.Fatalf("expected only agent-b's CPU alert when it covers CPU for the node, got %v", got)
+		}
+	})
+
+	t.Run("summary_disk", func(t *testing.T) {
+		m, node, host := setup(t)
+		root := models.Disk{Mountpoint: "/", Device: "/dev/sda1", Total: 100, Used: 95, Free: 5, Usage: 95}
+		data := models.Disk{Mountpoint: "/data", Device: "/dev/sdb1", Total: 100, Used: 10, Free: 90, Usage: 10}
+		host.Disks = []models.Disk{root, data}
+		node.Disk = models.Disk{Total: 100, Used: 95, Free: 5, Usage: 95}
+		rootResourceID, _ := hostDiskResourceID(host, root)
+		nodeDiskAlertID := canonicalMetricStateID(node.ID, "disk")
+
+		m.mu.Lock()
+		m.config.Overrides = map[string]ThresholdConfig{rootResourceID: {Disabled: true}}
+		m.mu.Unlock()
+		m.CheckHost(host)
+		m.CheckNode(node)
+		if !testHasActiveAlert(t, m, nodeDiskAlertID) {
+			t.Fatalf("expected the node to keep its root disk alert while the agent skips that filesystem")
+		}
+
+		m.mu.Lock()
+		m.config.Overrides = nil
+		m.mu.Unlock()
+		m.CheckHost(host)
+		m.CheckNode(node)
+		if testHasActiveAlert(t, m, nodeDiskAlertID) {
+			t.Fatalf("expected the node to release its disk alert once the agent evaluates the same filesystem")
+		}
+		if !testHasActiveAlert(t, m, canonicalMetricStateID(rootResourceID, "disk")) {
+			t.Fatalf("expected the agent's root filesystem alert")
+		}
+	})
+}
+
+// A missing reading keeps the incident but must not let a sustained-for or
+// recovery delay complete across the gap in evidence.
+func TestCheckNodeMissingTemperatureInterruptsTimingRuns(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.MetricTimeThresholds = map[string]map[string]int{"node": {"temperature": 300}}
+	m.config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.mu.Unlock()
+
+	node, _ := testNodeWithHostAgent()
+	tempAlertID := canonicalMetricStateID(node.ID, "temperature")
+	specID := canonicalMetricSpecID(node.ID, "temperature")
+	hot := &models.Temperature{Available: true, CPUPackage: 85}
+
+	node.Temperature = hot
+	m.CheckNode(node)
+	m.mu.Lock()
+	pending := testCoreIsPending(m, node.ID, specID)
+	m.core.ShiftPending(-10 * time.Minute)
+	m.mu.Unlock()
+	if !pending {
+		t.Fatalf("expected a pending temperature run before the reading went missing")
+	}
+
+	node.Temperature = nil
+	m.CheckNode(node)
+	node.Temperature = hot
+	m.CheckNode(node)
+	if testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected the sustained-for delay to restart after a missing reading, not fire on the first sample back")
+	}
+
+	m.mu.Lock()
+	m.core.ShiftPending(-10 * time.Minute)
+	m.mu.Unlock()
+	m.CheckNode(node)
+	if !testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected the temperature alert to fire after a sustained run")
+	}
+
+	node.Temperature = &models.Temperature{Available: true, CPUPackage: 60}
+	m.CheckNode(node)
+	m.mu.RLock()
+	incident, _ := m.core.Incident(node.ID, specID)
+	m.mu.RUnlock()
+	if incident.RecoverySince.IsZero() {
+		t.Fatalf("expected a recovery run to start below the clear threshold")
+	}
+
+	node.Temperature = nil
+	m.CheckNode(node)
+	m.mu.RLock()
+	incident, _ = m.core.Incident(node.ID, specID)
+	m.mu.RUnlock()
+	if !incident.RecoverySince.IsZero() {
+		t.Fatalf("expected a missing reading to restart the recovery run")
+	}
+	if !testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected the temperature alert to stay open without a reading")
+	}
+}
+
+// Node alerts keep the PVE instance name in Instance. A config save must judge
+// them against node thresholds, not fall through to guest thresholds, which
+// have no temperature threshold and used to resolve a live temperature alert.
+func TestConfigSaveKeepsNodeTemperatureAlertOverTrigger(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.mu.Unlock()
+
+	node, _ := testNodeWithHostAgent()
+	node.Temperature = &models.Temperature{Available: true, CPUPackage: 90}
+	m.CheckNode(node)
+	tempAlertID := canonicalMetricStateID(node.ID, "temperature")
+	if !testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected node temperature alert %q", tempAlertID)
+	}
+
+	m.UpdateConfig(m.GetConfig())
+	if !testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected a config save to keep a node temperature alert still over its trigger")
+	}
+
+	config := m.GetConfig()
+	config.Overrides = map[string]ThresholdConfig{
+		node.ID: {Temperature: &HysteresisThreshold{Trigger: 95, Clear: 92}},
+	}
+	m.UpdateConfig(config)
+	if testHasActiveAlert(t, m, tempAlertID) {
+		t.Fatalf("expected a node override raising the trigger above the reading to resolve the alert")
 	}
 }
 
@@ -1135,5 +1385,63 @@ func TestCheckMetricResolveRemovesCanonicallyKeyedAlert(t *testing.T) {
 
 	if resolved := manager.GetResolvedAlert(buildCanonicalStateID(resourceID, "metric-threshold:disk")); resolved == nil {
 		t.Fatal("expected a recently-resolved entry for the cleared alert")
+	}
+}
+
+// DiskTemperatureThreshold is the policy Patrol and the Physical Disks Health
+// verdict judge disk heat by, so it must resolve every disk type exactly as
+// CheckHost does: the per-type trigger the user set, else the agent default,
+// and nothing at all once the agent default is switched off.
+func TestDiskTemperatureThresholdMatchesCheckHostPolicy(t *testing.T) {
+	m := configureDiskTempTypeHostManager(t)
+
+	for diskType, want := range map[string]HysteresisThreshold{
+		"nvme":  {Trigger: 70, Clear: 65},
+		" NVMe": {Trigger: 70, Clear: 65},
+		"sas":   {Trigger: 65, Clear: 60},
+		"sata":  {Trigger: 55, Clear: 50},
+		"hdd":   {Trigger: 55, Clear: 50},
+		"":      {Trigger: 55, Clear: 50},
+	} {
+		if got := m.DiskTemperatureThreshold(diskType); got == nil || *got != want {
+			t.Errorf("DiskTemperatureThreshold(%q) = %+v, want %+v", diskType, got, want)
+		}
+		if got := DefaultDiskTemperatureThreshold(diskType); got == nil || *got != want {
+			t.Errorf("DefaultDiskTemperatureThreshold(%q) = %+v, want the factory %+v", diskType, got, want)
+		}
+	}
+
+	// A user who raised the NVMe trigger to 75 gets no alert at 72C, and the
+	// policy says the same disk is not hot.
+	m.mu.Lock()
+	m.config.DiskTempByType["nvme"] = HysteresisThreshold{Trigger: 75, Clear: 70}
+	m.mu.Unlock()
+	if got := m.DiskTemperatureThreshold("nvme"); got == nil || got.Trigger != 75 || got.Clear != 70 {
+		t.Fatalf("raised nvme threshold = %+v, want 75/70", got)
+	}
+	host := hostWithSMARTDiskTemp("host-temp-raised-nvme", "nvme", 72)
+	m.CheckHost(host)
+	if _, exists := testLookupActiveAlert(t, m, hostDiskTempAlertID(host)); exists {
+		t.Fatalf("expected no alert for nvme at 72C under a raised 75C trigger, active: %v", alertKeys(m))
+	}
+
+	// The returned threshold is a copy.
+	m.DiskTemperatureThreshold("nvme").Trigger = 1
+	if got := m.DiskTemperatureThreshold("nvme"); got.Trigger != 75 {
+		t.Fatalf("caller mutation reached the config: %+v", got)
+	}
+
+	m.mu.Lock()
+	m.config.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 0, Clear: 0}
+	m.mu.Unlock()
+	for _, diskType := range []string{"nvme", "sata", "hdd"} {
+		if got := m.DiskTemperatureThreshold(diskType); got == nil || got.Trigger > 0 {
+			t.Errorf("DiskTemperatureThreshold(%q) with disk temperature alerting off = %+v, want a disabled threshold", diskType, got)
+		}
+	}
+
+	var nilManager *Manager
+	if got := nilManager.DiskTemperatureThreshold("nvme"); got == nil || got.Trigger != 70 {
+		t.Fatalf("nil manager threshold = %+v, want the factory nvme 70", got)
 	}
 }

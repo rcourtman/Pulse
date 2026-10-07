@@ -576,7 +576,7 @@ func (m *Monitor) recordAlertTimelineChange(alert *alerts.Alert, kind unifiedres
 		return
 	}
 
-	change := unifiedresources.BuildAlertTimelineChange(alert.ResourceID, kind, occurredAt, actor, unifiedresources.AlertTimelineChange{
+	timelineChange := unifiedresources.AlertTimelineChange{
 		AlertIdentifier: alert.ID,
 		AlertStartedAt:  alert.StartTime,
 		AlertType:       alert.Type,
@@ -585,7 +585,12 @@ func (m *Monitor) recordAlertTimelineChange(alert *alerts.Alert, kind unifiedres
 		AlertValue:      alert.Value,
 		AlertThreshold:  alert.Threshold,
 		AlertMetadata:   alert.Metadata,
-	})
+	}
+	if summary := alert.Resolution.Summary(); summary != "" {
+		timelineChange.ResolutionReason = string(alert.Resolution.Reason)
+		timelineChange.ResolutionSummary = summary
+	}
+	change := unifiedresources.BuildAlertTimelineChange(alert.ResourceID, kind, occurredAt, actor, timelineChange)
 	if change == nil {
 		return
 	}
@@ -686,6 +691,16 @@ func (m *Monitor) checkMockAlerts() {
 		guestsChecked++
 	}
 
+	// Check alerts for host agents. Live agents are evaluated as each report
+	// lands, and mock mode discards reports and keeps fixture agents out of
+	// the monitor state the host health sweep reads, so without this pass no
+	// agent CPU, memory, disk, temperature or offline alert can open against
+	// mock data. Agents go before nodes so a linked node hands its CPU, memory
+	// and disk alerts to its agent on the first tick, as the host-agent
+	// hostname deduplication does in production.
+	log.Debug().Int("hostCount", len(state.Hosts)).Msg("checking host agent alerts")
+	m.evaluateMockHostAgents(state.Hosts, state.Nodes)
+
 	// Check alerts for each node
 	for _, node := range state.Nodes {
 		m.alertManager.CheckNode(node)
@@ -700,6 +715,14 @@ func (m *Monitor) checkMockAlerts() {
 			Msg("Checking storage for alerts")
 		m.alertManager.CheckStorageWithCapacityTrend(storage, m.storageCapacityTrend(storage, time.Now()))
 	}
+
+	// Check alerts for physical disks. Live disks are evaluated by the
+	// physical disk poller, which only polls configured Proxmox instances, and
+	// the fixture deliberately keeps a FAILED cohort and worn SSDs, so without
+	// this pass the estate shows failing disks with no disk-health or
+	// disk-wearout alert.
+	log.Debug().Int("diskCount", len(state.PhysicalDisks)).Msg("checking physical disk alerts")
+	m.checkMockPhysicalDiskAlerts(state.PhysicalDisks, state.Nodes, state.Hosts)
 
 	// Check alerts for PBS instances
 	log.Debug().Int("pbsCount", len(state.PBSInstances)).Msg("checking PBS alerts")
@@ -727,6 +750,67 @@ func (m *Monitor) checkMockAlerts() {
 	mock.UpdateAlertSnapshots(m.alertManager.GetActiveAlerts(), m.alertManager.GetRecentlyResolved())
 }
 
+// evaluateMockHostAgents evaluates every fixture agent and remembers the set.
+// A runtime mock config change rebuilds the estate, so an agent can leave it
+// between passes; it then goes through HandleHostRemoved, as a deleted live
+// agent does, or its alerts and hostname deduplication would outlive it.
+func (m *Monitor) evaluateMockHostAgents(hosts []models.Host, nodes []models.Node) {
+	m.mockHostAgentsMu.Lock()
+	defer m.mockHostAgentsMu.Unlock()
+
+	// A pass that took its snapshot before the monitor left mock mode must
+	// not re-register fixture agents after forgetMockHostAgents ran.
+	if !mock.IsMockEnabled() {
+		return
+	}
+
+	current := make(map[string]models.Host, len(hosts))
+	for _, host := range hosts {
+		if host.ID != "" {
+			current[host.ID] = host
+		}
+	}
+	// Remove first so a departed agent cannot unregister a hostname that a
+	// remaining agent registers on this same pass.
+	for id, host := range m.mockHostAgents {
+		if _, ok := current[id]; !ok {
+			m.alertManager.HandleHostRemoved(host)
+		}
+	}
+	for _, host := range hosts {
+		m.checkMockHostAlerts(host, nodes)
+	}
+	m.mockHostAgents = current
+}
+
+// forgetMockHostAgents removes the fixture agents when the monitor leaves mock
+// mode. ClearActiveAlerts drops their alerts but not their hostname
+// deduplication, so a real node named like a fixture agent (pve1) would keep
+// its CPU, memory and disk alerts suppressed with no agent to own them. The
+// removal also clears anything a pass already in flight recreated; mock mode
+// is off before this runs, so no later pass can register them again.
+func (m *Monitor) forgetMockHostAgents() {
+	m.mockHostAgentsMu.Lock()
+	defer m.mockHostAgentsMu.Unlock()
+
+	for _, host := range m.mockHostAgents {
+		m.alertManager.HandleHostRemoved(host)
+	}
+	m.mockHostAgents = nil
+}
+
+// checkMockHostAlerts applies the live host-agent boundary to a fixture. An
+// offline fixture has no fresh telemetry, so it goes through the host
+// connectivity lifecycle that evaluateHostAgents uses for a lapsed report.
+// CheckHost treats its input as a fresh report and would mark the host online.
+func (m *Monitor) checkMockHostAlerts(host models.Host, nodes []models.Node) {
+	if strings.EqualFold(strings.TrimSpace(host.Status), "offline") {
+		m.alertManager.HandleHostOfflineWithCorrelation(host, sharedSystemAlertCorrelationForHost(host, nodes))
+		return
+	}
+	m.alertManager.CheckHost(host)
+}
+
 // checkMockDockerHostAlerts preserves the same evidence boundary as live
 // agent monitoring. An explicitly offline fixture is missing fresh container
 // telemetry; its last container states must not be reinterpreted as a fresh
@@ -738,4 +822,39 @@ func (m *Monitor) checkMockDockerHostAlerts(host models.DockerHost) {
 		return
 	}
 	m.alertManager.CheckDockerHost(host)
+}
+
+// checkMockPhysicalDiskAlerts applies the physical disk poller's alert
+// boundary to fixture disks. The poller only evaluates disks on nodes it
+// reached, so a disk on a node that is not online keeps whatever alert it
+// had, and a device matched by the linked agent's --disk-exclude patterns is
+// evaluated as healthy. The poller's wait for host-agent links to settle after
+// a restart does not apply: fixture links and exclusions are complete from the
+// first pass.
+func (m *Monitor) checkMockPhysicalDiskAlerts(disks []models.PhysicalDisk, nodes []models.Node, hosts []models.Host) {
+	type nodeKey struct{ instance, name string }
+
+	excludeByHost := make(map[string][]string, len(hosts))
+	for _, host := range hosts {
+		if len(host.DiskExclude) > 0 {
+			excludeByHost[host.ID] = host.DiskExclude
+		}
+	}
+	onlineNodes := make(map[nodeKey]bool, len(nodes))
+	excludeByNode := make(map[nodeKey][]string)
+	for _, node := range nodes {
+		key := nodeKey{instance: node.Instance, name: node.Name}
+		onlineNodes[key] = node.Status == "online"
+		if patterns := excludeByHost[node.LinkedAgentID]; node.LinkedAgentID != "" && len(patterns) > 0 {
+			excludeByNode[key] = patterns
+		}
+	}
+
+	for _, disk := range disks {
+		key := nodeKey{instance: disk.Instance, name: disk.Node}
+		if !onlineNodes[key] {
+			continue
+		}
+		m.checkPhysicalDiskAlerts(disk.Instance, disk, excludeByNode[key])
+	}
 }

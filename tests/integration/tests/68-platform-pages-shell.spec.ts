@@ -136,7 +136,7 @@ const PLATFORM_PAGES: readonly PlatformPageCase[] = [
 ];
 
 // Every populated inventory tab — embedded canonical Workloads/Storage and
-// UnifiedResourceTable-backed infrastructure views — owns an operator search
+// platform-native infrastructure tables — owns an operator search
 // input. Overview stacks are summary surfaces and intentionally suppress their
 // table toolbars. Keep each route as an independent browser test so one slow
 // navigation cannot consume the time budget or state of the remaining routes.

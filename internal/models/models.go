@@ -107,11 +107,31 @@ type Alert struct {
 	Acknowledged    bool       `json:"acknowledged"`
 	AckTime         *time.Time `json:"ackTime,omitempty"`
 	AckUser         string     `json:"ackUser,omitempty"`
+	// MetricStatus is the live evaluation behind an open threshold alert.
+	MetricStatus *MetricAlertStatus `json:"metricStatus,omitempty"`
 	// Metadata carries alert-engine annotations (notably resourceType) so the
 	// frontend can classify an alert without re-deriving resource identity.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
-	// MetricStatus is the live evaluation behind an open threshold alert.
-	MetricStatus *MetricAlertStatus `json:"metricStatus,omitempty"`
+	// Resolution is set only on a resolved alert whose close was not a
+	// recovery, so readers never report its resource as healthy.
+	Resolution *AlertResolution `json:"resolution,omitempty"`
+}
+
+// AlertResolution is the state projection of the alert engine's
+// AlertResolution: why an alert closed without its condition clearing.
+type AlertResolution struct {
+	Reason              string `json:"reason"`
+	SuccessorResourceID string `json:"successorResourceId,omitempty"`
+	SuccessorName       string `json:"successorName,omitempty"`
+	// Summary is the alert engine's one-line account, such as "Alert moved
+	// to pve1 (Host Agent). This is not a recovery: ...".
+	Summary string `json:"summary,omitempty"`
+}
+
+// ResolvedAlert represents a recently resolved alert
+type ResolvedAlert struct {
+	Alert
+	ResolvedTime time.Time `json:"resolvedTime"`
 }
 
 // Metric alert phases. A threshold alert stays open after its reading drops
@@ -162,12 +182,6 @@ func (s *MetricAlertStatus) Clone() *MetricAlertStatus {
 		clone.RecoveryStartedAt = &startedAt
 	}
 	return &clone
-}
-
-// ResolvedAlert represents a recently resolved alert
-type ResolvedAlert struct {
-	Alert
-	ResolvedTime time.Time `json:"resolvedTime"`
 }
 
 // Node represents a Proxmox VE node
@@ -4089,7 +4103,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	hostAgentByHostname := make(map[string]map[string]struct{}) // lowercase hostname -> hostAgentIDs
 	hostAgentByIP := make(map[string]map[string]struct{})       // normalized ip -> hostAgentIDs
 	validHostAgentIDs := make(map[string]bool)                  // set of existing host agent IDs
-	hostHostnameByID := make(map[string]string)                 // hostAgentID -> normalized full hostname
+	hostByID := make(map[string]Host)                           // hostAgentID -> host
 	addHostAlias := func(name, hostID string) {
 		name = strings.TrimSpace(strings.ToLower(name))
 		if name == "" || hostID == "" {
@@ -4124,7 +4138,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	for _, host := range s.Hosts {
 		if host.ID != "" {
 			validHostAgentIDs[host.ID] = true
-			hostHostnameByID[host.ID] = strings.TrimSpace(strings.ToLower(host.Hostname))
+			hostByID[host.ID] = host
 			addHostAlias(host.Hostname, host.ID)
 			// Also index by short hostname
 			if idx := strings.Index(host.Hostname, "."); idx > 0 {
@@ -4147,16 +4161,8 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	// Preserve legitimate split views when the same agent strongly bridges
 	// both endpoints through an exact IP or a full (dotted) hostname.
 	hostStronglyCorroboratesNode := func(hostID string, node Node) bool {
-		endpoint := extractHostEndpoint(node.Host)
-		if endpoint == "" {
-			return false
-		}
-		if ip := normalizeIPAddress(endpoint); ip != "" {
-			_, ok := hostIPsByID[hostID][ip]
-			return ok
-		}
-		hostname := hostHostnameByID[hostID]
-		return strings.Contains(endpoint, ".") && endpoint == hostname
+		host, ok := hostByID[hostID]
+		return ok && hostReportsNodeEndpoint(host, node)
 	}
 	sharedAgentProvesNodePair := func(hostID string, existing, candidate Node) bool {
 		if nodeCrossViewMergeProven(existing, candidate) {
@@ -5686,13 +5692,22 @@ func (s *State) SetHostStatus(hostID, status string) bool {
 // ExpireHostTelemetry marks a host offline and clears transient operation
 // claims that cannot remain authoritative after the reporting lease expires.
 // Static topology and health counters remain available as last-known context.
-func (s *State) ExpireHostTelemetry(hostID string) (Host, bool) {
+// SMART temperature and I/O readings stay as last-known values, but their
+// collection state says they are no longer collected.
+//
+// lastSeen is the report time the caller judged stale. A host that has
+// reported since then is left untouched and nothing is returned, so a report
+// accepted between that judgement and this call is never expired.
+func (s *State) ExpireHostTelemetry(hostID string, lastSeen time.Time) (Host, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	for i, host := range s.Hosts {
 		if host.ID != hostID {
 			continue
+		}
+		if !host.LastSeen.Equal(lastSeen) {
+			return Host{}, false
 		}
 		changed := host.Status != "offline"
 		host.Status = "offline"
@@ -5710,6 +5725,11 @@ func (s *State) ExpireHostTelemetry(hostID string) (Host, bool) {
 			host.Unraid.SyncProgress = 0
 			changed = true
 		}
+		for idx := range host.Sensors.SMART {
+			if expireHostSMARTReadings(&host.Sensors.SMART[idx]) {
+				changed = true
+			}
+		}
 		s.Hosts[i] = host
 		if changed {
 			s.LastUpdate = time.Now()
@@ -5717,6 +5737,42 @@ func (s *State) ExpireHostTelemetry(hostID string) (Host, bool) {
 		return cloneHost(host), changed
 	}
 	return Host{}, false
+}
+
+// HostAgentStoppedReportingReason is the collection-state reason recorded on
+// readings a host agent supplied once its reporting lease has expired.
+const HostAgentStoppedReportingReason = "host agent stopped reporting"
+
+// expireHostSMARTReadings marks the temperature and I/O counters of one SMART
+// row as no longer collected, keeping their values as last-known evidence.
+// Reports from agents that predate collection provenance carry no state, so a
+// present reading is treated as collected. It reports whether anything changed.
+func expireHostSMARTReadings(disk *HostDiskSMART) bool {
+	collection := diskinventory.CloneStatus(disk.Collection)
+	if collection == nil {
+		collection = &diskinventory.CollectionStatus{}
+	}
+	temperature := expireCollectedReading(&collection.Temperature, disk.Temperature > 0)
+	io := expireCollectedReading(&collection.IO, disk.IO != nil)
+	if !temperature && !io {
+		return false
+	}
+	disk.Collection = collection
+	return true
+}
+
+func expireCollectedReading(status *diskinventory.FieldStatus, hasValue bool) bool {
+	switch status.State {
+	case diskinventory.FieldAvailable:
+	case "":
+		if !hasValue {
+			return false
+		}
+	default:
+		return false
+	}
+	*status = diskinventory.Unavailable(status.Source, HostAgentStoppedReportingReason)
+	return true
 }
 
 // TouchHost updates the last seen timestamp for a host.

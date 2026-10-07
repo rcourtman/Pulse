@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "dcb69cfb020193d05d9e4e668d19b820a0c46d31",
+  "verified_at": "2026-10-06T22:07:56Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
+    "frontend-modern/src/features/standalone/agentMachineTableModel.ts",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts",
+    "frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts",
+    "frontend-modern/src/types/api.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts": "6cdf797534d6ecba8f8007561195f9245899ff881a225f83c2c6c6293b557f8c",
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "98e9dc568360b5b6c9552433207e0e2fa78b91ba17da53fa513fb42484373ff5",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "a1dfacc661118c77fea482d26ffbc6d1c6aca0d351d77744f7a2dbbd4770ef6f",
+    "frontend-modern/src/features/standalone/agentMachineTableModel.ts": "1f9be08ed7100a330142eab8900b04474360785e75c1b95a8a42d4bc35fa7233",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "debb0d30e95b84d010d5b7478d61ce5fa9487c0bfb43b3eb812e16b4a75acf2e",
+    "frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts": "c62e4d1e74b9278ef34d93e8101c3d41ab67b17885b6810116a2f96bd112301c",
+    "frontend-modern/src/types/api.ts": "bb2712595745499cc51ed5c6e54ea24998e00d42ce45c8715b1d6c3eed6afc3e"
+  },
+  "routes": [
+    "/standalone",
+    "/proxmox?q=analytics-batch-01"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack built from this tree (base dcb69cfb02) plus a local-only go build -overlay of internal/mock/generator.go: three standalone Linux agents get SMART rows; Apollo-114 (CPU sensors) and Meridian-731 (SMART only) are stamped as State.ExpireHostTelemetry does (status offline, temperatures kept, collection.temperature unavailable 'host agent stopped reporting', source kept), Europa-405 keeps reporting. /api/resources returned agent.sensors.smart[].collection end to end, status warning and agent.stale true for the silent agents.",
+    "Same-session control with the HEAD runtime files under the same Vite: Meridian-731's Temp cell rendered 52°C in threshold green, the tooltip and the drawer Thermals card listed the retained disks as plain current readings, and the guest Physical Disks card showed plain muted 52°C/41°C with no last-known cue.",
+    "After: Meridian-731's Temp cell renders '52°C' muted (slate-600 light, slate-400 dark) with a dotted underline, no threshold colour and screen-reader ', last known'; its tooltip lists both disks '(last known)' muted. Apollo-114 keeps its CPU package value (no collection state) while its disk tooltip rows read '(last known)'. Europa-405 is unchanged.",
+    "Machine drawer (Platform details > Machine details > Thermals) at desktop and phone: 'Disk nvme0n1 52°C (last known)' and 'Disk sda 41°C (last known)' with title 'Last known reading, not current: host agent stopped reporting'; cpu.package unchanged.",
+    "Guest drawer Physical Disks card at desktop and phone: Playwright routes add the agent version a VM-resident agent would carry to analytics-batch-01 and answer its physical_disk child query with Meridian-731's real registry disks (collection state untouched) re-parented to the VM, because mock mode never links an agent inside a VM. Both disks render muted, dotted, with the reason title and ', last known'.",
+    "Light and dark schemes on the Machines page. Bundle check: Standalone +0.22 kB, shared chunk +0.20 kB, WorkloadsSurface and InfrastructureWorkspace flat versus a same-machine main build, no tracked chunk renamed.",
+    "Not covered: a real host agent going silent on hardware, an agent genuinely running inside a VM, or stale-row CPU/memory/disk cells (flagged separately)."
+  ],
+  "interactions": [
+    "Enabled the Temp column from View > column picker on /standalone and read every row's cell text, class, computed colour and text decoration.",
+    "Hovered the Temp cell of the SMART-only and the CPU-sensor silent agents and read the tooltip rows and their muted state.",
+    "Opened the Apollo-114 drawer by row click (desktop) and CPU cell tap (phone), expanded Platform details and the Machine Show details, and read the Thermals rows with their titles.",
+    "Opened the analytics-batch-01 guest drawer from the Proxmox guest table at desktop and phone and read the Physical Disks card summaries, data-temperature-reading, titles and decoration.",
+    "Swapped the runtime files to HEAD under the running Vite for the same-session control, then restored and re-ran every pass on the final tree."
+  ]
+}

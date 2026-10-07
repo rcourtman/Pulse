@@ -153,6 +153,12 @@ type DiskInfo struct {
 	Health      string // PASSED, FAILED, UNKNOWN
 	Temperature int    // Celsius
 	WearLevel   int    // 0-100, percentage of life REMAINING (100 = healthy, 0 = end of life, -1 = unknown)
+	// TemperatureWarning and TemperatureCritical are the disk's alert disk
+	// temperature thresholds in Celsius (the clear value and the trigger). The
+	// reading is amber from Warning and red from Critical, as in the Physical
+	// Disks Temp column. A zero Critical leaves the reading uncoloured.
+	TemperatureWarning  float64
+	TemperatureCritical float64
 }
 
 // MultiReportRequest defines the parameters for generating a multi-resource report.

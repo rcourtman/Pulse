@@ -86,6 +86,166 @@ describe('InlineDetailTableRow', () => {
     });
   });
 
+  it('re-spans when a summary column is removed or restored while the row stays open', async () => {
+    const [showSystem, setShowSystem] = createSignal(true);
+    render(() => (
+      <Table>
+        <TableBody>
+          <tr>
+            <td>Machine</td>
+            <Show when={showSystem()}>
+              <td>System</td>
+            </Show>
+            <td>Seen</td>
+          </tr>
+          <InlineDetailTableRow colspan={3}>
+            <div>Column picker detail</div>
+          </InlineDetailTableRow>
+        </TableBody>
+      </Table>
+    ));
+    const detailCell = () => screen.getByText('Column picker detail').closest('td');
+
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '3'));
+    setShowSystem(false);
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '2'));
+    setShowSystem(true);
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '3'));
+    // The relayout nudge for a growing span must not leave a width behind.
+    expect(detailCell()?.style.width).toBe('');
+  });
+
+  it('forces one layout of the widened detail cell when its span grows, none when it shrinks', async () => {
+    const [showSystem, setShowSystem] = createSignal(false);
+    render(() => (
+      <Table>
+        <TableBody>
+          <tr>
+            <td>Machine</td>
+            <Show when={showSystem()}>
+              <td>System</td>
+            </Show>
+            <td>Seen</td>
+          </tr>
+          <InlineDetailTableRow colspan={showSystem() ? 3 : 2}>
+            <div>Growing span detail</div>
+          </InlineDetailTableRow>
+        </TableBody>
+      </Table>
+    ));
+    const detailCell = screen.getByText('Growing span detail').closest('td')!;
+    await waitFor(() => expect(detailCell).toHaveAttribute('colspan', '2'));
+
+    // jsdom has no layout, so record the forced layout reads Chromium needs to
+    // recompute fixed-layout column widths for the widened cell.
+    const layoutReads: Array<{ width: string; colspan: string | null }> = [];
+    const offsetWidth = vi
+      .spyOn(HTMLElement.prototype, 'offsetWidth', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        if (this === detailCell) {
+          layoutReads.push({ width: this.style.width, colspan: this.getAttribute('colspan') });
+        }
+        return 0;
+      });
+    try {
+      // The requested span and the summary cells change in the same update.
+      setShowSystem(true);
+      await waitFor(() => expect(detailCell).toHaveAttribute('colspan', '3'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(layoutReads).toEqual([{ width: '0px', colspan: '3' }]);
+      expect(detailCell.style.width).toBe('');
+
+      layoutReads.length = 0;
+      setShowSystem(false);
+      await waitFor(() => expect(detailCell).toHaveAttribute('colspan', '2'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(layoutReads).toEqual([]);
+    } finally {
+      offsetWidth.mockRestore();
+    }
+  });
+
+  it('re-measures for a summary cell span change but not for churn inside a cell', async () => {
+    const [uptimeSpan, setUptimeSpan] = createSignal(1);
+    const [reading, setReading] = createSignal({ value: '24%', tone: 'text-green-600' });
+    const [busy, setBusy] = createSignal(false);
+    render(() => (
+      <Table>
+        <TableBody>
+          <tr>
+            <td>Machine</td>
+            <td colspan={uptimeSpan()}>
+              <span class={reading().tone}>{reading().value}</span>
+              <Show when={busy()}>
+                <em>refreshing</em>
+              </Show>
+            </td>
+          </tr>
+          <InlineDetailTableRow colspan={2}>
+            <div>Live metric detail</div>
+          </InlineDetailTableRow>
+        </TableBody>
+      </Table>
+    ));
+    const detailCell = () => screen.getByText('Live metric detail').closest('td');
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '2'));
+
+    const getComputedStyleSpy = vi.spyOn(window, 'getComputedStyle');
+    try {
+      setReading({ value: '91%', tone: 'text-red-600' });
+      setBusy(true);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(getComputedStyleSpy).not.toHaveBeenCalled();
+
+      setUptimeSpan(2);
+      await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '3'));
+      expect(getComputedStyleSpy).toHaveBeenCalled();
+    } finally {
+      getComputedStyleSpy.mockRestore();
+    }
+  });
+
+  it('re-spans when a summary cell is hidden in place while the row stays open', async () => {
+    const [hideUptime, setHideUptime] = createSignal(false);
+    render(() => (
+      <Table>
+        <TableBody>
+          <tr>
+            <td>Machine</td>
+            <td style={{ display: hideUptime() ? 'none' : undefined }}>Uptime</td>
+            <td>Seen</td>
+          </tr>
+          <InlineDetailTableRow colspan={3}>
+            <div>Hidden cell detail</div>
+          </InlineDetailTableRow>
+        </TableBody>
+      </Table>
+    ));
+    const detailCell = () => screen.getByText('Hidden cell detail').closest('td');
+
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '3'));
+    setHideUptime(true);
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '2'));
+  });
+
+  it('follows a changed requested span when there is no summary row to measure', async () => {
+    const [colspan, setColspan] = createSignal(5);
+    render(() => (
+      <Table>
+        <TableBody>
+          <InlineDetailTableRow colspan={colspan()}>
+            <div>Requested span detail</div>
+          </InlineDetailTableRow>
+        </TableBody>
+      </Table>
+    ));
+    const detailCell = () => screen.getByText('Requested span detail').closest('td');
+
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '5'));
+    setColspan(6);
+    await waitFor(() => expect(detailCell()).toHaveAttribute('colspan', '6'));
+  });
+
   it('restores focus to the controlling disclosure when focused detail content closes', async () => {
     const Fixture = () => {
       const [open, setOpen] = createSignal(true);

@@ -1,11 +1,13 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReplicationJob } from '@/types/api';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 import {
   ProxmoxReplicationTable,
   REPLICATION_MOBILE_COLUMNS,
   REPLICATION_MOBILE_COLUMN_WIDTHS,
   compactReplicationNextSyncText,
+  fetchReplicationJobs,
   formatMobileReplicationGuestLabel,
 } from '../ProxmoxReplicationTable';
 import replicationTableSource from '../ProxmoxReplicationTable.tsx?raw';
@@ -130,5 +132,93 @@ describe('ProxmoxReplicationTable', () => {
 
   it('matches jobs by their error text', () => {
     expect(replicationTableSource).toMatch(/job\.lastSyncStatus,\s*job\.error,\s*job\.comment,/);
+  });
+});
+
+describe('fetchReplicationJobs', () => {
+  it('passes the caller abort signal to the network request', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ data: [], meta: { total: 0 } })));
+    const controller = new AbortController();
+
+    await expect(fetchReplicationJobs(controller.signal)).resolves.toEqual([]);
+
+    const init = fetchSpy.mock.calls.find(([url]) =>
+      String(url).includes('/api/replication/jobs'),
+    )?.[1];
+    expect(init?.signal).toBe(controller.signal);
+  });
+
+  it('keeps the HTTP status on a failed read so access denials are recognised', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ message: 'Insufficient permissions' }), { status: 403 }),
+    );
+
+    await expect(fetchReplicationJobs()).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe('ProxmoxReplicationTable relative times', () => {
+  const start = Date.parse('2026-10-04T12:00:00Z');
+  // Last synced 5 minutes before the table opens, next sync due 10 minutes after.
+  const job = () =>
+    replicationJob({
+      lastSyncUnix: (start - 5 * 60_000) / 1000,
+      nextSyncUnix: (start + 10 * 60_000) / 1000,
+    });
+  const renderTable = () =>
+    render(() => (
+      <ProxmoxReplicationTable
+        jobs={[job()]}
+        error={undefined}
+        onRetry={() => undefined}
+        emptyIcon={<span />}
+        emptyTitle="No replication jobs"
+        emptyDescription="Replication jobs appear here."
+      />
+    ));
+  // Two hours pass with no new job data; the next clock tick re-reads them.
+  const twoHoursLater = () => {
+    vi.setSystemTime(start + 2 * 60 * 60_000);
+    vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
+  };
+
+  afterEach(() => vi.useRealTimers());
+
+  it('keeps the compact Last sync and Next sync moving while the job does not change', () => {
+    vi.useFakeTimers({ now: start });
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(400);
+    renderTable();
+
+    expect(screen.getByText('5m')).toBeInTheDocument();
+    expect(screen.getByText('10m')).toBeInTheDocument();
+
+    twoHoursLater();
+
+    // A stalled scheduler leaves nextSync unchanged, so the countdown must
+    // turn overdue on its own.
+    expect(screen.getByText('2h')).toBeInTheDocument();
+    expect(screen.getByText('-1h')).toHaveClass('text-red-600');
+    expect(screen.queryByText('10m')).not.toBeInTheDocument();
+  });
+
+  it('keeps the expanded Last sync and Next sync moving while the job does not change', async () => {
+    vi.useFakeTimers({ now: start });
+    renderTable();
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for replication job 100-0' }),
+    );
+    const detail = (label: string) =>
+      screen.getByText(label, { selector: 'dt' }).nextElementSibling as HTMLElement;
+
+    expect(detail('Last sync')).toHaveTextContent('5m ago');
+    expect(detail('Next sync')).toHaveTextContent('in 10m');
+
+    twoHoursLater();
+
+    expect(detail('Last sync')).toHaveTextContent('2h ago');
+    expect(detail('Next sync')).toHaveTextContent('1h overdue');
+    expect(detail('Next sync')).toHaveClass('text-red-600');
   });
 });

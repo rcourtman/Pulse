@@ -284,41 +284,39 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 	}
 }
 
-// dockerAlertResourcePath returns the portion of the alert's resource ID after
-// the "docker:" scheme, matching the IDs built by DockerResourceID and
-// DockerServiceResourceID. Canonical alerts are stored under
+// dockerAlertResourcePath splits the alert's resource ID after the "docker:"
+// scheme into the host and the child path, matching the IDs built by
+// DockerHostResourceID ("<host>"), DockerContainerResourceID
+// ("<host>/<container ID>" or "<host>/name:<name>") and
+// DockerServiceResourceID ("<host>/service/<service ID>" or
+// "<host>/service/name:<name>"). child is empty for a host's own alert. A
+// name can contain anything, so callers classify by the first segment of
+// child, never by searching the whole path. Canonical alerts are stored under
 // "<resourceID>::<specID>" state IDs, so the legacy "docker-container-" /
 // "docker-service-" alert-ID prefixes never match them.
-func dockerAlertResourcePath(alert *Alert) (string, bool) {
+func dockerAlertResourcePath(alert *Alert) (host, child string, ok bool) {
 	if alert == nil {
-		return "", false
+		return "", "", false
 	}
-	resourceID := strings.TrimSpace(alert.ResourceID)
-	if !strings.HasPrefix(resourceID, "docker:") {
-		return "", false
+	path, found := strings.CutPrefix(strings.TrimSpace(alert.ResourceID), "docker:")
+	if !found {
+		return "", "", false
 	}
-	return strings.TrimPrefix(resourceID, "docker:"), true
+	host, child, _ = strings.Cut(path, "/")
+	return host, child, true
 }
 
 func isDockerContainerAlert(alert *Alert) bool {
-	path, ok := dockerAlertResourcePath(alert)
-	if !ok {
-		return false
-	}
-	// "hostID/containerID" has a path separator; host-level IDs ("hostID") do
-	// not, and services use "hostID/service/serviceID".
-	return strings.Contains(path, "/") && !strings.Contains(path, "/service/")
+	_, child, ok := dockerAlertResourcePath(alert)
+	return ok && child != "" && !strings.HasPrefix(child, "service/")
 }
 
 func isDockerServiceAlert(alert *Alert) bool {
 	if alert != nil && strings.HasPrefix(strings.TrimSpace(alert.ResourceID), "docker-service:") {
 		return true
 	}
-	path, ok := dockerAlertResourcePath(alert)
-	if !ok {
-		return false
-	}
-	return strings.Contains(path, "/service/")
+	_, child, ok := dockerAlertResourcePath(alert)
+	return ok && strings.HasPrefix(child, "service/")
 }
 
 func alertPrimaryResourceType(alert *Alert) string {
@@ -431,6 +429,16 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				continue
 			}
 			threshold = getThresholdForMetric(thresholds, metricType)
+			// Agent policy is the only policy for agent alerts. Falling
+			// through would let the storage or guest switches resolve a
+			// SMART, RAID or sensor alert that CheckHost re-raises on the
+			// next report.
+			if threshold == nil {
+				if isMetricThresholdAlertType(metricType) {
+					alertsToResolve = append(alertsToResolve, alertID)
+				}
+				continue
+			}
 		}
 
 		if alert.Type == "docker-host-offline" ||
@@ -487,9 +495,16 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			threshold = getThresholdForMetric(thresholds, metricType)
 		}
 
-		isNodeResource := primaryResourceType == "" || primaryResourceType == "node"
+		// Node alerts carry resourceType "node" in metadata and keep the PVE
+		// instance name in Instance, so the metadata decides. The Instance
+		// heuristic only classifies legacy alerts without a resource type;
+		// applied to current node alerts it fell through to guest thresholds,
+		// which have no temperature threshold, and a config save resolved
+		// temperature alerts that were still over their trigger.
+		isNodeResource := primaryResourceType == "node" ||
+			(primaryResourceType == "" && !strings.Contains(resourceID, ":") && (alert.Instance == "Node" || alert.Instance == alert.Node))
 		isStorageResource := alertResourceTypeKeysContain(resourceTypeKeys, "storage")
-		if threshold == nil && !handledModernPlatformType && isNodeResource && !strings.Contains(resourceID, ":") && (alert.Instance == "Node" || alert.Instance == alert.Node) {
+		if threshold == nil && !handledModernPlatformType && isNodeResource {
 			if allDisabled, _ := m.alertPolicyTypeSwitchesNoLock("node"); allDisabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
@@ -572,12 +587,14 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			continue
 		}
 
+		// buildCanonicalMetricSpec keeps a clear level only below the trigger,
+		// and without one the evaluator keeps firing at the trigger itself.
+		// A clear level at or above the trigger must not resolve a reading
+		// the next evaluation raises again.
 		clearThreshold := threshold.Clear
-		if clearThreshold <= 0 {
-			clearThreshold = threshold.Trigger
-		}
+		hasRecoveryBand := clearThreshold > 0 && clearThreshold < threshold.Trigger
 
-		if alert.Value <= clearThreshold {
+		if hasRecoveryBand && alert.Value <= clearThreshold {
 			alertsToResolve = append(alertsToResolve, alertID)
 			log.Info().
 				Str("alertID", alertID).

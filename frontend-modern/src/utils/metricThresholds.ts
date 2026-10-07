@@ -269,7 +269,9 @@ export const resolveMetricDisplayThresholds = (
  * Resolve display thresholds for a physical disk's SMART temperature.
  * Mirrors the backend precedence: an explicit diskTemperature override on the
  * host (or inherited linked resource) wins, then the per-type map
- * (diskTempByType: nvme/sas/sata), then the global agent default.
+ * (diskTempByType: nvme/sas/sata), then the global agent default. A
+ * switched-off agent default switches every type off, as disk temperature
+ * alerts do. Null means disk temperature alerting is off for this disk.
  */
 export const resolveDiskTemperatureDisplayThresholds = (
   config: AlertConfig | null,
@@ -285,6 +287,11 @@ export const resolveDiskTemperatureDisplayThresholds = (
     return resolveThreshold(overrideValue, FACTORY_AGENT_DEFAULTS.diskTemperature, margin);
   }
 
+  const baseValue = getBaseThresholdValue(config?.agentDefaults, 'diskTemperature');
+  if (baseValue !== undefined && resolveThreshold(baseValue, undefined, margin) === null) {
+    return null;
+  }
+
   const byTypeFallback = normalizedType ? FACTORY_DISK_TEMP_BY_TYPE[normalizedType] : undefined;
   if (normalizedType) {
     const byType = config?.diskTempByType?.[normalizedType];
@@ -293,7 +300,6 @@ export const resolveDiskTemperatureDisplayThresholds = (
     }
   }
 
-  const baseValue = getBaseThresholdValue(config?.agentDefaults, 'diskTemperature');
   return resolveThreshold(
     baseValue,
     byTypeFallback ?? FACTORY_AGENT_DEFAULTS.diskTemperature,

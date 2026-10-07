@@ -7,8 +7,8 @@
     "index": {
       "baselineGzip": 150212
     },
-    "sharedPlatformPage": {
-      "baselineGzip": 120645
+    "MetricBar": {
+      "baselineGzip": 120887
     },
     "Alerts": {
       "baselineGzip": 120045

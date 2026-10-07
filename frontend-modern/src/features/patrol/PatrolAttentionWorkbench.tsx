@@ -68,6 +68,7 @@ import { copyToClipboard } from '@/utils/clipboard';
 import type { PatrolAutonomyLevel } from '@/api/patrol';
 import {
   getAttentionFlappingPresentation,
+  getAttentionHandoverClose,
   getLinkedPatrolFindings,
   getPatrolRememberedDecisionPresentation,
   partitionPatrolAttention,
@@ -139,6 +140,23 @@ export function sortPatrolAttentionDecisions(
 
     return left.item.id.localeCompare(right.item.id);
   });
+}
+
+// Ending a suppression, early or at its expiry, puts the alert in
+// Acknowledged when it is acknowledged, which is not active attention, and
+// otherwise in Open, back in the decision inbox.
+function getAttentionSuppressionEndPresentation(reviewed: boolean) {
+  return reviewed
+    ? {
+        durationLabel: 'End suppression after',
+        actionLabel: 'End suppression',
+        successLabel: 'Suppression ended. It stays reviewed',
+      }
+    : {
+        durationLabel: 'Return it to active attention after',
+        actionLabel: 'Return to active attention',
+        successLabel: 'Returned to decision inbox',
+      };
 }
 
 export function PatrolAttentionWorkbench(
@@ -310,7 +328,7 @@ export function PatrolAttentionWorkbench(
   };
   const changeLifecycle = async (
     operation: () => Promise<unknown>,
-    options: { advanceAfter?: boolean; successLabel?: string } = {},
+    options: { advanceAfter?: boolean; successLabel?: string | (() => string) } = {},
   ) => {
     if (lifecycleBusy()) return;
     const selected = selectedItemId();
@@ -327,7 +345,10 @@ export function PatrolAttentionWorkbench(
         const remaining = orderedDecisions();
         const next =
           remaining.find((decision) => decision.item.id === nextCandidateId) ?? remaining[0];
-        const successLabel = options.successLabel ?? 'Decision updated';
+        const successLabel =
+          (typeof options.successLabel === 'function'
+            ? options.successLabel()
+            : options.successLabel) ?? 'Decision updated';
         setReviewNotice(
           attentionView() === 'handled'
             ? remaining.length > 0
@@ -564,10 +585,17 @@ export function PatrolAttentionWorkbench(
                   successLabel: 'Suppressed temporarily',
                 })
               }
-              onUnsuppress={(itemId) =>
+              onUnsuppress={(itemId, reviewed) =>
                 changeLifecycle(() => unsuppressPatrolAttention(itemId), {
                   advanceAfter: attentionView() === 'handled',
-                  successLabel: 'Returned to decision inbox',
+                  // Announce the state the reload reports, so a detail read
+                  // before the review changed elsewhere cannot misstate it.
+                  successLabel: () => {
+                    const after = patrolAttentionStore.items().find((entry) => entry.id === itemId);
+                    return getAttentionSuppressionEndPresentation(
+                      after ? after.state === 'acknowledged' : reviewed,
+                    ).successLabel;
+                  },
                 })
               }
               onOpenFindings={props.onOpenFindings}
@@ -834,7 +862,7 @@ function AttentionDetail(props: {
   onAcknowledge: (itemId: string) => Promise<void>;
   onUnacknowledge: (itemId: string) => Promise<void>;
   onSuppress: (itemId: string, reason: string, expiresAt: string) => Promise<void>;
-  onUnsuppress: (itemId: string) => Promise<void>;
+  onUnsuppress: (itemId: string, reviewed: boolean) => Promise<void>;
   onOpenFindings?: (item: AttentionItem) => void;
   findings?: () => UnifiedFinding[];
 }) {
@@ -971,7 +999,10 @@ function AttentionDetail(props: {
           <div class="space-y-5 px-4 py-4 sm:px-5">
             <section>
               <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-                <StateBadge item={loaded().item} />
+                <StateBadge
+                  item={loaded().item}
+                  movedClose={Boolean(getAttentionHandoverClose(loaded()))}
+                />
                 <span aria-hidden="true">·</span>
                 <EvidenceLabel item={loaded().item} detail />
                 <span aria-hidden="true">·</span>
@@ -984,6 +1015,9 @@ function AttentionDetail(props: {
               <p class="mt-3 text-sm leading-6 text-base-content">
                 {loaded().item.plainLanguageSummary}
               </p>
+              <Show when={getAttentionHandoverClose(loaded())}>
+                {(handover) => <p class="mt-1 text-xs leading-5 text-muted">{handover()}</p>}
+              </Show>
               <Show when={getAttentionFlappingPresentation(loaded().item.flapping)}>
                 {(flapping) => (
                   <p class="mt-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs leading-5 text-amber-900 dark:border-amber-900/25 dark:bg-amber-950/30 dark:text-amber-200">
@@ -1247,12 +1281,14 @@ function AttentionLifecycleControls(props: {
   onAcknowledge: (itemId: string) => Promise<void>;
   onUnacknowledge: (itemId: string) => Promise<void>;
   onSuppress: (itemId: string, reason: string, expiresAt: string) => Promise<void>;
-  onUnsuppress: (itemId: string) => Promise<void>;
+  onUnsuppress: (itemId: string, reviewed: boolean) => Promise<void>;
 }) {
   const [showSuppression, setShowSuppression] = createSignal(false);
   const [reason, setReason] = createSignal('');
   const [durationMs, setDurationMs] = createSignal<number>(SUPPRESSION_DURATIONS[1].value);
   const state = () => props.detail.item.state;
+  const reviewed = () => Boolean(props.detail.operationalRecord.acknowledgement);
+  const suppressionEnd = () => getAttentionSuppressionEndPresentation(reviewed());
   const canAcknowledge = () => ['open', 'stale', 'unknown', 'resolving'].includes(state());
   const canSuppress = () =>
     ['open', 'acknowledged', 'stale', 'unknown', 'resolving'].includes(state());
@@ -1326,9 +1362,9 @@ function AttentionLifecycleControls(props: {
               size="sm"
               class="min-h-11 sm:min-h-0"
               isLoading={props.busy}
-              onClick={() => void props.onUnsuppress(props.detail.item.id)}
+              onClick={() => void props.onUnsuppress(props.detail.item.id, reviewed())}
             >
-              Return to active attention
+              {suppressionEnd().actionLabel}
             </Button>
           </Show>
           <Show when={canSuppress() && !showSuppression()}>
@@ -1369,7 +1405,7 @@ function AttentionLifecycleControls(props: {
             />
             <FormSelect
               id={`attention-suppression-duration-${props.detail.item.id}`}
-              label="Return it to active attention after"
+              label={suppressionEnd().durationLabel}
               fieldBaseClass="block"
               labelClass="text-xs"
               selectClass="mt-1 w-auto"
@@ -1793,10 +1829,17 @@ function severityTone(item: AttentionItem): MetadataBadgeTone {
   }
 }
 
-function StateBadge(props: { item: AttentionItem }) {
+// movedClose marks a resolved item whose condition moved to another owner: it
+// did not recover, so it must not wear the green "Resolved" badge.
+function StateBadge(props: { item: AttentionItem; movedClose?: boolean }) {
   return (
-    <MetadataBadge tone={stateTone(props.item)} size="xs" shape="rounded" appearance="outline">
-      {formatLabel(props.item.state)}
+    <MetadataBadge
+      tone={props.movedClose ? 'info' : stateTone(props.item)}
+      size="xs"
+      shape="rounded"
+      appearance="outline"
+    >
+      {props.movedClose ? 'Moved' : formatLabel(props.item.state)}
     </MetadataBadge>
   );
 }

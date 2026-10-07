@@ -258,12 +258,13 @@ export const ProxmoxNodesTable: Component<{
     nodePreview.toggle();
   };
 
-  // Use the same canonical history reader the workloads table uses; cache
-  // keys collide so the two readers dedupe their fetches.
+  // Use the same canonical history reader the workloads table uses. This
+  // table draws node rows only, so it polls the infrastructure summary and
+  // leaves the guest history to the workloads table below.
   const metricHistory = useWorkloadTableMetricHistory({
     enabled: isSparklineMode,
     range: () => props.metricHistoryRange?.() ?? '1h',
-    selectedNode: () => '',
+    series: 'nodes',
   });
 
   return (

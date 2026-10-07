@@ -1361,8 +1361,21 @@ remove settled items and append genuinely new work. Acknowledging an occurrence
 is presented as `Mark reviewed`: on success the item leaves the active inbox,
 Patrol announces the remaining decision count, and advances to the next current
 item. Temporary suppression uses the same advancement loop and explicitly says
-that the occurrence will return at the chosen time. Clearing the final item
-returns to the calm inbox with an honest completion announcement.
+when it ends and which state it hands the occurrence back to. Clearing the
+final item returns to the calm inbox with an honest completion announcement.
+Ending a suppression, early or at its expiry, puts the alert in Acknowledged
+when it is acknowledged and in Open otherwise (`unsuppressOperationalAlert`),
+and Acknowledged is not active attention. So for an issue marked reviewed
+(`operationalRecord.acknowledgement` present) the suppression form's duration
+reads `End suppression after` and the early-end control reads `End
+suppression`; an unreviewed issue keeps `Return it to active attention after`
+and `Return to active attention`. The handled-view notice after ending it reads
+the state the post-change reload reports for the item, `Suppression ended. It
+stays reviewed.` for Acknowledged and `Returned to decision inbox` otherwise,
+so a detail read before the review changed elsewhere cannot misstate the
+outcome; it falls back to the detail's acknowledgement only when the item is
+gone from the reload. `getAttentionSuppressionEndPresentation` owns that copy
+and `PatrolAttentionWorkbench.test.tsx` pins all three cases.
 
 The attention queue orders genuine operator decisions by severity, actionable
 approval/review state, and latest observation time. Collapsed rows expose the
@@ -1380,6 +1393,14 @@ to traverse the list again. At widths where the detail replaces the queue's
 reading position, its visible close affordance is an explicit `Back to list`
 control; wide layouts retain the compact close icon. Both controls clear the
 deep link and restore focus to the originating queue row.
+A resolved item whose latest close is an `ownership_transferred` transition did
+not recover: its condition moved to another record, such as the linked Pulse
+agent's own alert. The detail's state badge reads `Moved` in the info tone
+instead of the green `Resolved`, and the transition's reason (where the
+condition went, and that it is not a recovery) sits directly under the summary
+rather than only inside Evidence and history (`getAttentionHandoverClose` in
+`patrolHomePresentation.ts`). The timeline names that cause `Ownership
+transferred`, never `Recovery evidence`.
 
 The active Patrol queue now uses compact severity-accented rows for
 prioritisation and a single focused review panel for the selected issue. The

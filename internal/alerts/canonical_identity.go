@@ -16,6 +16,27 @@ func buildCanonicalStateID(resourceID, specID string) string {
 	return resourceID + canonicalStateSeparator + specID
 }
 
+// splitCanonicalStateID splits a canonical state ID into its resource and
+// spec parts. A resource ID can itself contain the separator (a Docker host
+// disambiguated as "<base>::<suffix>"), so an ID that ends with the alert's
+// spec ID splits before it, and one that starts with the alert's resource ID
+// splits after it. Only without either does it split at the first separator.
+// The spec comes first: an alert restored from before this rule can carry a
+// resource ID that was cut short at the first separator.
+func splitCanonicalStateID(id, resourceID, specID string) (resource, spec string, ok bool) {
+	if specID = strings.TrimSpace(specID); specID != "" {
+		if prefix, found := strings.CutSuffix(id, canonicalStateSeparator+specID); found && prefix != "" {
+			return prefix, specID, true
+		}
+	}
+	if resourceID = strings.TrimSpace(resourceID); resourceID != "" {
+		if rest, found := strings.CutPrefix(id, resourceID+canonicalStateSeparator); found && rest != "" {
+			return resourceID, rest, true
+		}
+	}
+	return strings.Cut(id, canonicalStateSeparator)
+}
+
 func canonicalMetricSpecID(resourceID, metric string) string {
 	if resourceID == "" || metric == "" {
 		return ""
@@ -149,17 +170,24 @@ func deriveCanonicalIdentity(alert *Alert) canonicalIdentity {
 	}
 }
 
+// canonicalSpecIDHint is the spec ID an alert already records, on the alert
+// or in its metadata.
+func canonicalSpecIDHint(alert *Alert) string {
+	if alert.CanonicalSpecID != "" {
+		return alert.CanonicalSpecID
+	}
+	specID, _ := alert.Metadata["canonicalSpecID"].(string)
+	return specID
+}
+
 func inferCanonicalResourceIDFromLegacyAlert(alert *Alert) string {
 	if alert == nil {
 		return ""
 	}
 
 	id := alert.ID
-	if strings.Contains(id, canonicalStateSeparator) {
-		parts := strings.SplitN(id, canonicalStateSeparator, 2)
-		if len(parts) == 2 {
-			return parts[0]
-		}
+	if resource, _, ok := splitCanonicalStateID(id, alert.ResourceID, canonicalSpecIDHint(alert)); ok {
+		return resource
 	}
 	switch {
 	case strings.HasPrefix(id, "host-offline-"):
@@ -230,11 +258,8 @@ func inferCanonicalSpecIDFromLegacyAlert(alert *Alert) string {
 		return ""
 	}
 	id := alert.ID
-	if strings.Contains(id, canonicalStateSeparator) {
-		parts := strings.SplitN(id, canonicalStateSeparator, 2)
-		if len(parts) == 2 {
-			return parts[1]
-		}
+	if _, spec, ok := splitCanonicalStateID(id, alert.ResourceID, canonicalSpecIDHint(alert)); ok {
+		return spec
 	}
 	resourceID := inferCanonicalResourceIDFromLegacyAlert(alert)
 	switch {

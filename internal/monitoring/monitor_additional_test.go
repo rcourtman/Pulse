@@ -1158,3 +1158,640 @@ func TestTenantDeletionWaitsForSlowMonitoringLoop(t *testing.T) {
 	}
 	mtm.FinishTenantDeletion("deletion")
 }
+
+// The poller reads the previous poll's nodes back through the unified read
+// state. Those lookups key on the Proxmox source ID, so the projection must
+// return it (not the registry's unified resource ID) and carry the stored
+// temperature; otherwise the node's CPU low/record values reset to the
+// current reading every poll and a failed collection never carries over.
+func TestPreviousNodeProjectionFeedsPollerTemperatureTracking(t *testing.T) {
+	instanceCfg := config.PVEInstance{Name: "pve1", Host: "https://10.0.0.1:8006"}
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	m := &Monitor{
+		config:        &config.Config{TemperatureMonitoringEnabled: true, PVEInstances: []config.PVEInstance{instanceCfg}},
+		state:         models.NewState(),
+		resourceStore: adapter,
+	}
+	base := models.Node{ID: "pve1-node1", NodeIdentity: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online", Type: "node"}
+
+	// publish rebuilds the unified store from state the way the monitor does,
+	// alongside the host agents' latest reports.
+	var hosts []models.Host
+	publish := func() {
+		snapshot := m.state.GetSnapshot()
+		snapshot.Hosts = hosts
+		adapter.PopulateFromSnapshot(snapshot)
+	}
+	// poll delivers an agent report (none when agentReading is 0), runs one PVE
+	// poll's temperature step against the previous poll's nodes, and publishes
+	// the polled node.
+	poll := func(agentReading float64) *models.Temperature {
+		t.Helper()
+		hosts = nil
+		if agentReading > 0 {
+			hosts = []models.Host{{
+				ID: "agent-1", Hostname: "node1", Status: "online", LinkedNodeID: base.ID, IntervalSeconds: 30, LastSeen: time.Now(),
+				Sensors: models.HostSensorSummary{TemperatureCelsius: map[string]float64{"cpu_package": agentReading}},
+			}}
+		}
+		publish()
+		prevNodes := m.snapshotPrevNodes("pve1")
+		polled := base
+		polled.LastSeen = time.Now()
+		m.collectNodeTemperatureData(context.Background(), "pve1", &instanceCfg, proxmox.Node{Node: "node1"}, &polled, prevNodes, "online")
+		m.state.UpdateNodesForInstance("pve1", []models.Node{polled})
+		publish()
+		return polled.Temperature
+	}
+
+	if temp := poll(50); temp == nil || temp.CPUMin != 50 || temp.CPUMaxRecord != 50 {
+		t.Fatalf("first reading = %#v, want min and record initialised to 50", temp)
+	}
+	prevNodes := m.snapshotPrevNodes("pve1")
+	if len(prevNodes) != 1 || prevNodes[0].ID != base.ID || prevNodes[0].Temperature == nil {
+		t.Fatalf("previous nodes = %#v, want source ID %q with its temperature", prevNodes, base.ID)
+	}
+
+	if temp := poll(62); temp == nil || temp.CPUPackage != 62 || temp.CPUMin != 50 || temp.CPUMaxRecord != 62 {
+		t.Fatalf("second reading = %#v, want current 62, low 50, record 62", temp)
+	}
+	third := poll(45)
+	if third == nil || third.CPUPackage != 45 || third.CPUMin != 45 || third.CPUMaxRecord != 62 {
+		t.Fatalf("third reading = %#v, want current 45, low 45, record 62", third)
+	}
+
+	// No agent and no SSH collector: the last reading carries over with its
+	// original timestamp, inside the carry window.
+	carried := poll(0)
+	if carried == nil || carried.CPUPackage != 45 || !carried.LastUpdate.Equal(third.LastUpdate) {
+		t.Fatalf("carried reading = %#v, want the previous 45 with its original timestamp", carried)
+	}
+}
+
+// When a whole Proxmox instance stops answering, its last-known nodes are
+// written back into state through the offline grace policy. That writeback
+// must keep each node the same resource: the poller's source ID and the
+// config-derived identity the registry derives a cluster member's canonical ID
+// from. Past grace the node goes offline and stops presenting a temperature.
+func TestPVEOutageWritebackKeepsNodeIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		instances      []config.PVEInstance
+		wantID         string
+		providerScoped bool
+	}{
+		{
+			name:      "cluster member",
+			instances: []config.PVEInstance{{Name: "pve-a", Host: "https://10.0.0.1:8006", IsCluster: true, ClusterName: "lab"}},
+			wantID:    "lab-node1",
+		},
+		{
+			name: "cluster name shared by two connections",
+			instances: []config.PVEInstance{
+				{Name: "pve-a", Host: "https://10.0.0.1:8006", IsCluster: true, ClusterName: "lab"},
+				{Name: "pve-b", Host: "https://10.0.1.1:8006", IsCluster: true, ClusterName: "lab"},
+			},
+			wantID:         "pve-a-node1",
+			providerScoped: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+			m := &Monitor{
+				config:         &config.Config{PVEInstances: tc.instances},
+				state:          models.NewState(),
+				resourceStore:  adapter,
+				nodeLastOnline: make(map[string]time.Time),
+			}
+			instanceCfg := m.getInstanceConfig("pve-a")
+			if got := m.pveNodeID("pve-a", instanceCfg, "node1"); got != tc.wantID {
+				t.Fatalf("pveNodeID = %q, want %q", got, tc.wantID)
+			}
+			now := time.Now()
+			polled := m.placeholderNodeForInstance("pve-a", instanceCfg, "node1")
+			polled.Status = "online"
+			polled.ConnectionHealth = "healthy"
+			polled.LastSeen = now
+			polled.Temperature = &models.Temperature{CPUPackage: 55, Available: true, HasCPU: true, LastUpdate: now}
+			if polled.ProviderScopedIdentity != tc.providerScoped {
+				t.Fatalf("ProviderScopedIdentity = %v, want %v", polled.ProviderScopedIdentity, tc.providerScoped)
+			}
+			m.nodeLastOnline[polled.ID] = now
+			m.state.UpdateNodesForInstance("pve-a", []models.Node{polled})
+			adapter.PopulateFromSnapshot(m.state.GetSnapshot())
+			unifiedID := adapter.Nodes()[0].ID()
+
+			for cycle := 0; cycle < 3; cycle++ {
+				m.markPVEInstanceNodesUnreachable("pve-a")
+				adapter.PopulateFromSnapshot(m.state.GetSnapshot())
+				stateNodes := m.state.GetSnapshot().Nodes
+				if len(stateNodes) != 1 || stateNodes[0].ID != tc.wantID || stateNodes[0].ClusterName != "lab" ||
+					stateNodes[0].ProviderScopedIdentity != tc.providerScoped {
+					t.Fatalf("cycle %d: state nodes = %#v, want %q kept with its cluster identity", cycle, stateNodes, tc.wantID)
+				}
+				if stateNodes[0].Status != "online" || stateNodes[0].Temperature == nil {
+					t.Fatalf("cycle %d: node within grace = %#v, want online with its recent temperature", cycle, stateNodes[0])
+				}
+				if nodes := adapter.Nodes(); len(nodes) != 1 || nodes[0].ID() != unifiedID {
+					t.Fatalf("cycle %d: unified nodes = %v, want the single resource %q", cycle, nodes, unifiedID)
+				}
+			}
+
+			// The process last saw the node online beyond the grace period.
+			m.nodeLastOnline[polled.ID] = now.Add(-2 * nodeOfflineGracePeriod)
+			polled.LastSeen = now.Add(-2 * nodeOfflineGracePeriod)
+			m.state.UpdateNodesForInstance("pve-a", []models.Node{polled})
+			adapter.PopulateFromSnapshot(m.state.GetSnapshot())
+			m.markPVEInstanceNodesUnreachable("pve-a")
+			adapter.PopulateFromSnapshot(m.state.GetSnapshot())
+			expired := m.state.GetSnapshot().Nodes
+			if len(expired) != 1 || expired[0].ID != tc.wantID || expired[0].Status != "offline" || expired[0].Temperature != nil {
+				t.Fatalf("expired nodes = %#v, want %q offline without a temperature", expired, tc.wantID)
+			}
+			if nodes := adapter.Nodes(); len(nodes) != 1 || nodes[0].ID() != unifiedID {
+				t.Fatalf("unified nodes after expiry = %v, want the single resource %q", nodes, unifiedID)
+			}
+		})
+	}
+}
+
+// Within grace a preserved node keeps its temperature only while the reading
+// is inside the same carry window a failed collection gets.
+func TestPreserveOrExpireNodesBoundsGraceTemperature(t *testing.T) {
+	m := &Monitor{config: &config.Config{}, state: models.NewState(), nodeLastOnline: make(map[string]time.Time)}
+	now := time.Now()
+	m.nodeLastOnline["pve-node1"] = now
+	stale := now.Add(-m.nodeTemperatureCarryWindow() - time.Minute)
+	preserved := m.preserveOrExpireNodes([]models.Node{{
+		ID: "pve-node1", Name: "node1", Status: "online", LastSeen: now,
+		Temperature: &models.Temperature{CPUPackage: 70, Available: true, LastUpdate: stale},
+	}})
+	if len(preserved) != 1 || preserved[0].Status != "online" || preserved[0].Temperature != nil {
+		t.Fatalf("preserved = %#v, want online within grace without the stale temperature", preserved)
+	}
+}
+
+// When detailed node status fails, the poller may carry its own last trusted
+// memory reading for one cycle. On a node merged with a host agent, the read
+// state holds the agent's memory, which is not the Proxmox value the snapshot
+// vouches for, so the carry must use the snapshot and keep its used, cache
+// and free split summing to the total.
+func TestPollPVENodeCarriesOwnMemorySnapshot(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	const gib = uint64(1024 * 1024 * 1024)
+
+	mon := newTestPVEMonitor("test")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	mon.resourceStore = adapter
+
+	client := &stubPVEClient{nodeStatus: &proxmox.NodeStatus{
+		Memory: &proxmox.MemoryStatus{Total: 16 * gib, Used: 12 * gib, Free: 1 * gib, Available: 8 * gib},
+	}}
+	node := proxmox.Node{Node: "node1", Status: "online", MaxMem: 16 * gib, Mem: 15 * gib, MaxCPU: 8}
+
+	first, _, _, err := mon.pollPVENode(context.Background(), "test", &mon.config.PVEInstances[0], client, node, "healthy", nil)
+	if err != nil {
+		t.Fatalf("first pollPVENode() error = %v", err)
+	}
+	if !first.Memory.HasKnownUsage() || first.Memory.Used != int64(8*gib) || first.Memory.Cache == 0 {
+		t.Fatalf("first.Memory = %+v, want 8 GiB used with reclaimable cache split out", first.Memory)
+	}
+	mon.state.UpdateNodesForInstance("test", []models.Node{first})
+	snapshot := mon.state.GetSnapshot()
+	snapshot.Hosts = []models.Host{{
+		ID: "agent-1", Hostname: "node1", Status: "online", LinkedNodeID: first.ID, IntervalSeconds: 30, LastSeen: time.Now(),
+		Memory: models.Memory{Total: int64(16 * gib), Used: int64(3 * gib), Free: int64(13 * gib), Usage: 18.75},
+	}}
+	adapter.PopulateFromSnapshot(snapshot)
+
+	client.nodeStatus = nil
+	second, _, _, err := mon.pollPVENode(context.Background(), "test", &mon.config.PVEInstances[0], client, node, "healthy", mon.snapshotPrevNodes("test"))
+	if err != nil {
+		t.Fatalf("second pollPVENode() error = %v", err)
+	}
+	if second.Memory.Used != first.Memory.Used || second.Memory.Cache != first.Memory.Cache || second.Memory.Free != first.Memory.Free {
+		t.Fatalf("second.Memory = %+v, want the poller's own reading %+v", second.Memory, first.Memory)
+	}
+	if second.Memory.Used+second.Memory.Cache+second.Memory.Free != second.Memory.Total {
+		t.Fatalf("second.Memory = %+v, want used + cache + free = total", second.Memory)
+	}
+	if snap := mon.nodeSnapshots[makeNodeSnapshotKey("test", "node1")]; snap.MemorySource != "previous-snapshot" {
+		t.Fatalf("snapshot.MemorySource = %q, want previous-snapshot", snap.MemorySource)
+	}
+}
+
+// Authoritative cluster membership writes previous nodes back too. Read from
+// the unified store, an offline member keeps its source ID and agent link but
+// stops presenting a temperature, and a member missing from /nodes keeps a
+// reading only inside the carry window.
+func TestPVEMembershipReconcileKeepsPreviousNodeIdentity(t *testing.T) {
+	cfg := &config.Config{PVEInstances: []config.PVEInstance{{
+		Name: "cluster-api", Host: "https://pve-a:8006", IsCluster: true, ClusterName: "production",
+	}}}
+	m := newUnreachableTestMonitor(t, cfg)
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	m.resourceStore = adapter
+	instanceCfg := &cfg.PVEInstances[0]
+	now := time.Now()
+	polled := func(name string, tempAge time.Duration) models.Node {
+		node := m.placeholderNodeForInstance("cluster-api", instanceCfg, name)
+		node.Status = "online"
+		node.ConnectionHealth = "healthy"
+		node.LastSeen = now
+		node.Temperature = &models.Temperature{CPUPackage: 60, Available: true, HasCPU: true, LastUpdate: now.Add(-tempAge)}
+		return node
+	}
+	offlineMember := polled("pve-a", 0)
+	offlineMember.LinkedAgentID = "agent-pve-a"
+	m.state.UpdateNodesForInstance("cluster-api", []models.Node{
+		offlineMember, polled("pve-b", 0), polled("pve-c", m.nodeTemperatureCarryWindow()+time.Minute),
+	})
+	adapter.PopulateFromSnapshot(m.state.GetSnapshot())
+
+	client := &membershipPVEClient{statuses: []proxmox.ClusterStatus{
+		{Type: "cluster", Name: "production", Quorate: 1},
+		{Type: "node", Name: "pve-a", Online: 0},
+		{Type: "node", Name: "pve-b", Online: 1},
+		{Type: "node", Name: "pve-c", Online: 1},
+	}}
+	got := pveNodeByName(m.reconcilePVENodeInventory(
+		context.Background(), "cluster-api", instanceCfg, client, nil, m.snapshotPrevNodes("cluster-api"),
+	))
+
+	if node := got["pve-a"]; node.ID != "production-pve-a" || node.Status != "offline" || node.Temperature != nil || node.LinkedAgentID != "agent-pve-a" {
+		t.Fatalf("offline member = %#v, want production-pve-a offline with its agent link and no temperature", node)
+	}
+	if node := got["pve-b"]; node.ID != "production-pve-b" || node.Status != "unknown" || node.Temperature == nil {
+		t.Fatalf("unobserved member = %#v, want production-pve-b unknown with its recent temperature", node)
+	}
+	if node := got["pve-c"]; node.ID != "production-pve-c" || node.Status != "unknown" || node.Temperature != nil {
+		t.Fatalf("unobserved member = %#v, want production-pve-c unknown without its stale temperature", node)
+	}
+
+	// Writing the reconciled inventory back keeps every member the same
+	// unified resource.
+	unifiedIDs := func() map[string]string {
+		ids := make(map[string]string)
+		for _, node := range adapter.Nodes() {
+			ids[node.NodeName()] = node.ID()
+		}
+		return ids
+	}
+	before := unifiedIDs()
+	m.state.UpdateNodesForInstance("cluster-api", sortedPVENodeInventory(got))
+	adapter.PopulateFromSnapshot(m.state.GetSnapshot())
+	if after := unifiedIDs(); len(after) != 3 || after["pve-a"] != before["pve-a"] || after["pve-b"] != before["pve-b"] || after["pve-c"] != before["pve-c"] {
+		t.Fatalf("unified IDs after writeback = %v, want %v", after, before)
+	}
+}
+
+// A temperature carried over from an earlier poll keeps a lapsed host agent's
+// lease: a reading the agent supplied (stamped no later than its last report)
+// is dropped once the agent stops reporting, even when its latest report had
+// no sensors, while a reading taken after that report keeps the carry window.
+// The same rule bounds what an instance outage preserves within node grace.
+func TestNodeTemperatureCarryRespectsAgentLease(t *testing.T) {
+	now := time.Now()
+	silentSince := now.Add(-hostAgentHealthWindow(30) - time.Minute)
+	instanceCfg := config.PVEInstance{Name: "pve1", Host: "https://10.0.0.1:8006"}
+	base := models.Node{ID: "pve1-node1", NodeIdentity: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online", Type: "node", LastSeen: now}
+
+	for _, tc := range []struct {
+		name         string
+		readingAt    time.Time
+		agentSensors bool
+		wantCarried  bool
+	}{
+		{name: "reading from the silent agent", readingAt: silentSince, agentSensors: true},
+		{name: "silent agent whose last report had no sensors", readingAt: silentSince.Add(-30 * time.Second)},
+		{name: "SSH reading taken after the agent went silent", readingAt: now.Add(-time.Minute), agentSensors: true, wantCarried: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+			m := &Monitor{
+				config:         &config.Config{TemperatureMonitoringEnabled: true, PVEInstances: []config.PVEInstance{instanceCfg}},
+				state:          models.NewState(),
+				resourceStore:  adapter,
+				nodeLastOnline: map[string]time.Time{base.ID: now},
+			}
+			agent := models.Host{ID: "agent-1", Hostname: "node1", Status: "offline", LinkedNodeID: base.ID, IntervalSeconds: 30, LastSeen: silentSince}
+			if tc.agentSensors {
+				agent.Sensors = models.HostSensorSummary{TemperatureCelsius: map[string]float64{"cpu_package": 92}}
+			}
+			published := base
+			published.Temperature = &models.Temperature{CPUPackage: 92, CPUMin: 92, CPUMaxRecord: 92, Available: true, HasCPU: true, LastUpdate: tc.readingAt}
+			m.state.UpdateNodesForInstance("pve1", []models.Node{published})
+			snapshot := m.state.GetSnapshot()
+			snapshot.Hosts = []models.Host{agent}
+			adapter.PopulateFromSnapshot(snapshot)
+
+			polled := base
+			m.collectNodeTemperatureData(context.Background(), "pve1", &instanceCfg, proxmox.Node{Node: "node1"}, &polled, m.snapshotPrevNodes("pve1"), "online")
+			if carried := polled.Temperature != nil; carried != tc.wantCarried {
+				t.Fatalf("failed collection carried = %v (%#v), want %v", carried, polled.Temperature, tc.wantCarried)
+			}
+
+			preserved := m.preserveOrExpireNodes(m.snapshotPrevNodes("pve1"))
+			if len(preserved) != 1 || preserved[0].Status != "online" {
+				t.Fatalf("preserved = %#v, want the node online within grace", preserved)
+			}
+			if kept := preserved[0].Temperature != nil; kept != tc.wantCarried {
+				t.Fatalf("outage preservation kept temperature = %v, want %v", kept, tc.wantCarried)
+			}
+		})
+	}
+}
+
+// A carried node reading keeps the node's CPU temperature steady through a
+// failed collection, but never its disk temperatures: those also stamp the
+// node's physical disks, which have their own freshness and standby state.
+// Here a current agent whose only sensor is a SMART disk reports that disk in
+// standby, so collection returns nothing; the disk must not be re-stamped with
+// its pre-sleep reading through the carry.
+func TestCarriedNodeTemperatureLeavesDiskReadingsOut(t *testing.T) {
+	now := time.Now()
+	instanceCfg := config.PVEInstance{Name: "pve1", Host: "https://10.0.0.1:8006"}
+	base := models.Node{ID: "pve1-node1", NodeIdentity: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online", Type: "node", LastSeen: now}
+	disk := models.PhysicalDisk{ID: "pve1-node1-sda", Node: "node1", Instance: "pve1", DevPath: "/dev/sda", Serial: "WD-STANDBY", Type: "hdd"}
+
+	for _, tc := range []struct {
+		name     string
+		previous models.Temperature
+		wantCPU  bool
+	}{
+		{
+			name: "CPU and disk reading",
+			previous: models.Temperature{
+				Available: true, HasCPU: true, CPUPackage: 50, HasSMART: true, HasNVMe: true,
+				SMART: []models.DiskTemp{{Device: "/dev/sda", Serial: "WD-STANDBY", Temperature: 38}},
+				NVMe:  []models.NVMeTemp{{Device: "nvme0", Temp: 44}},
+			},
+			wantCPU: true,
+		},
+		{
+			name: "disk-only reading",
+			previous: models.Temperature{
+				Available: true, HasSMART: true,
+				SMART: []models.DiskTemp{{Device: "/dev/sda", Serial: "WD-STANDBY", Temperature: 38}},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+			m := &Monitor{
+				config:         &config.Config{TemperatureMonitoringEnabled: true, PVEInstances: []config.PVEInstance{instanceCfg}},
+				state:          models.NewState(),
+				resourceStore:  adapter,
+				nodeLastOnline: map[string]time.Time{base.ID: now},
+			}
+			published := base
+			previous := tc.previous
+			previous.LastUpdate = now.Add(-time.Minute)
+			published.Temperature = &previous
+			m.state.UpdateNodesForInstance("pve1", []models.Node{published})
+			snapshot := m.state.GetSnapshot()
+			snapshot.Hosts = []models.Host{{
+				ID: "agent-1", Hostname: "node1", Status: "online", LinkedNodeID: base.ID, IntervalSeconds: 30, LastSeen: now,
+				Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{Device: "sda", Serial: "WD-STANDBY", Standby: true}}},
+			}}
+			adapter.PopulateFromSnapshot(snapshot)
+
+			polled := base
+			m.collectNodeTemperatureData(context.Background(), "pve1", &instanceCfg, proxmox.Node{Node: "node1"}, &polled, m.snapshotPrevNodes("pve1"), "online")
+			if tc.wantCPU {
+				if polled.Temperature == nil || polled.Temperature.CPUPackage != 50 || !polled.Temperature.LastUpdate.Equal(previous.LastUpdate) {
+					t.Fatalf("carried temperature = %#v, want CPU 50 with its original timestamp", polled.Temperature)
+				}
+				if len(polled.Temperature.SMART) != 0 || len(polled.Temperature.NVMe) != 0 || polled.Temperature.HasSMART || polled.Temperature.HasNVMe {
+					t.Fatalf("carried temperature kept disk readings: %#v", polled.Temperature)
+				}
+			} else if polled.Temperature != nil {
+				t.Fatalf("carried temperature = %#v, want none when only disk readings were left", polled.Temperature)
+			}
+			if stamped := mergeNVMeTempsIntoDisks([]models.PhysicalDisk{disk}, []models.Node{polled}); stamped[0].Temperature != 0 {
+				t.Fatalf("standby disk stamped with %d°C from a carried reading, want no reading", stamped[0].Temperature)
+			}
+
+			// Outage preservation follows the same rule.
+			preserved := m.preserveOrExpireNodes(m.snapshotPrevNodes("pve1"))
+			if len(preserved) != 1 {
+				t.Fatalf("preserved = %#v, want one node", preserved)
+			}
+			if got := preserved[0].Temperature; (got != nil) != tc.wantCPU || (got != nil && (len(got.SMART) != 0 || len(got.NVMe) != 0)) {
+				t.Fatalf("preserved temperature = %#v, want CPU only (%v)", got, tc.wantCPU)
+			}
+		})
+	}
+}
+
+// Two Proxmox connections can each have a node with the same name (one "px1"
+// per site). The poller's temperature lookup must never hand one site's node the
+// host agent, or the agent's cluster-sibling SSH readings, of the other.
+func TestNodeTemperatureStaysWithinSameNamedNodesSite(t *testing.T) {
+	instanceCfg := config.PVEInstance{Name: "siteB"}
+	poll := func(m *Monitor, instance, nodeName string) *models.Temperature {
+		m.config = &config.Config{TemperatureMonitoringEnabled: true}
+		polled := readStateTestNode(instance, nodeName)
+		m.collectNodeTemperatureData(context.Background(), instance, &instanceCfg, proxmox.Node{Node: nodeName}, &polled, nil, "online")
+		return polled.Temperature
+	}
+	sites := func() []models.Node {
+		return []models.Node{readStateTestNode("siteA", "px1"), readStateTestNode("siteA", "px2"), readStateTestNode("siteB", "px1")}
+	}
+
+	t.Run("agent linked to the other site's node", func(t *testing.T) {
+		m := readStateMonitor(sites(), []models.Host{reportingTestHost("agent-a", "px1", "siteA-px1", 77)})
+		if temp := poll(m, "siteA", "px1"); temp == nil || temp.CPUPackage != 77 {
+			t.Fatalf("siteA px1 temperature = %#v, want its linked agent's 77", temp)
+		}
+		if temp := poll(m, "siteB", "px1"); temp != nil {
+			t.Fatalf("siteB px1 took site A's agent reading: %#v", temp)
+		}
+	})
+
+	t.Run("unlinked agent whose hostname several nodes share", func(t *testing.T) {
+		m := readStateMonitor(sites(), []models.Host{reportingTestHost("agent-x", "px1", "", 66)})
+		for _, instance := range []string{"siteA", "siteB"} {
+			if temp := poll(m, instance, "px1"); temp != nil {
+				t.Fatalf("%s px1 took an agent the linker could not place: %#v", instance, temp)
+			}
+		}
+	})
+
+	t.Run("unlinked agent whose hostname one node has", func(t *testing.T) {
+		m := readStateMonitor(sites(), []models.Host{reportingTestHost("agent-y", "px2", "", 61)})
+		if temp := poll(m, "siteA", "px2"); temp == nil || temp.CPUPackage != 61 {
+			t.Fatalf("siteA px2 temperature = %#v, want the unambiguous agent's 61", temp)
+		}
+	})
+
+	t.Run("two unlinked agents with the node's hostname", func(t *testing.T) {
+		m := readStateMonitor(sites(), []models.Host{reportingTestHost("agent-y1", "px2", "", 61), reportingTestHost("agent-y2", "px2", "", 62)})
+		if temp := poll(m, "siteA", "px2"); temp != nil {
+			t.Fatalf("siteA px2 took one of two candidate agents: %#v", temp)
+		}
+	})
+
+	t.Run("one cluster added through two connections", func(t *testing.T) {
+		// The state folds both views of pve01 into one slot, held under whichever
+		// view merged last, and the agent link follows the slot. Each view's poll
+		// must still take the agent's reading.
+		var instances []config.PVEInstance
+		for _, name := range []string{"enacon-a", "enacon-b"} {
+			instances = append(instances, config.PVEInstance{
+				Name: name, IsCluster: true, ClusterName: "enacon",
+				ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "pve01", Host: "https://192.168.1.11:8006", Fingerprint: "AA:AA"}},
+			})
+		}
+		adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+		m := &Monitor{config: &config.Config{TemperatureMonitoringEnabled: true, PVEInstances: instances}, state: models.NewState(), resourceStore: adapter}
+		view := func(instanceCfg *config.PVEInstance) models.Node {
+			return models.Node{
+				ID: instanceCfg.Name + "-pve01", NodeIdentity: instanceCfg.Name + "-pve01", Name: "pve01", Instance: instanceCfg.Name,
+				ClusterName: "enacon", IsClusterMember: true, Host: "https://192.168.1.11:8006",
+				TLSFingerprint: pveNodeTLSFingerprint(instanceCfg, "pve01"), Status: "online", LastSeen: time.Now(),
+			}
+		}
+		m.state.UpdateNodesForInstance("enacon-a", []models.Node{view(&instances[0])})
+		m.state.UpsertHost(reportingTestHost("agent-pve01", "pve01", "", 64))
+		if err := m.state.LinkHostAgentToNode("agent-pve01", "enacon-a-pve01"); err != nil {
+			t.Fatalf("LinkHostAgentToNode: %v", err)
+		}
+		adapter.PopulateFromSnapshot(m.state.GetSnapshot())
+
+		for round := 0; round < 3; round++ {
+			for i := range instances {
+				polled := view(&instances[i])
+				m.collectNodeTemperatureData(context.Background(), instances[i].Name, &instances[i], proxmox.Node{Node: "pve01"}, &polled, nil, "online")
+				if polled.Temperature == nil || polled.Temperature.CPUPackage != 64 {
+					t.Fatalf("round %d %s temperature = %#v, want the folded node's agent reading 64", round, instances[i].Name, polled.Temperature)
+				}
+				m.state.UpdateNodesForInstance(instances[i].Name, []models.Node{polled})
+				adapter.PopulateFromSnapshot(m.state.GetSnapshot())
+			}
+		}
+		if nodes := m.state.GetSnapshot().Nodes; len(nodes) != 1 {
+			t.Fatalf("state holds %d nodes, want both views folded into one", len(nodes))
+		}
+	})
+
+	t.Run("unclustered node whose address two sites' namesakes share", func(t *testing.T) {
+		// Both site nodes would fold with the polled view by address alone; the
+		// state declines an ambiguous alias, so the lookup must take neither.
+		nodes := sites()
+		for i := range nodes {
+			nodes[i].ClusterName = map[string]string{"siteA": "a", "siteB": "b"}[nodes[i].Instance]
+			nodes[i].Host = "https://10.0.0.5:8006"
+		}
+		m := readStateMonitor(nodes, []models.Host{reportingTestHost("agent-a", "px1", "siteA-px1", 77)})
+		polled := readStateTestNode("siteC", "px1")
+		polled.Host = "https://10.0.0.5:8006"
+		m.config = &config.Config{TemperatureMonitoringEnabled: true}
+		m.collectNodeTemperatureData(context.Background(), "siteC", &config.PVEInstance{Name: "siteC"}, proxmox.Node{Node: "px1"}, &polled, nil, "online")
+		if polled.Temperature != nil {
+			t.Fatalf("siteC px1 took a namesake's agent reading: %#v", polled.Temperature)
+		}
+	})
+
+	t.Run("multi-homed host added through two standalone connections", func(t *testing.T) {
+		// The agent reports both connection addresses, so the state folds the two
+		// views into one slot through it. Each view's poll must take its reading.
+		adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+		m := &Monitor{config: &config.Config{TemperatureMonitoringEnabled: true}, state: models.NewState(), resourceStore: adapter}
+		views := map[string]string{"lan-a": "https://10.0.0.5:8006", "lan-b": "https://10.0.1.5:8006"}
+		view := func(instance string) models.Node {
+			polled := readStateTestNode(instance, "minipc")
+			polled.Host = views[instance]
+			return polled
+		}
+		m.state.UpdateNodesForInstance("lan-a", []models.Node{view("lan-a")})
+		agent := reportingTestHost("agent-minipc", "minipc", "", 64)
+		agent.ReportIP = "10.0.0.5"
+		agent.NetworkInterfaces = []models.HostNetworkInterface{{Name: "eth0", Addresses: []string{"10.0.0.5/24"}}, {Name: "eth1", Addresses: []string{"10.0.1.5/24"}}}
+		m.state.UpsertHost(agent)
+		if err := m.state.LinkHostAgentToNode("agent-minipc", "lan-a-minipc"); err != nil {
+			t.Fatalf("LinkHostAgentToNode: %v", err)
+		}
+		adapter.PopulateFromSnapshot(m.state.GetSnapshot())
+
+		for round := 0; round < 3; round++ {
+			for _, instance := range []string{"lan-a", "lan-b"} {
+				polled := view(instance)
+				m.collectNodeTemperatureData(context.Background(), instance, &config.PVEInstance{Name: instance}, proxmox.Node{Node: "minipc"}, &polled, nil, "online")
+				if polled.Temperature == nil || polled.Temperature.CPUPackage != 64 {
+					t.Fatalf("round %d %s temperature = %#v, want the folded host's agent reading 64", round, instance, polled.Temperature)
+				}
+				m.state.UpdateNodesForInstance(instance, []models.Node{polled})
+				adapter.PopulateFromSnapshot(m.state.GetSnapshot())
+			}
+		}
+		if nodes := m.state.GetSnapshot().Nodes; len(nodes) != 1 {
+			t.Fatalf("state holds %d nodes, want both views folded into one", len(nodes))
+		}
+	})
+
+	t.Run("namesake's agent reporting the polled node's address", func(t *testing.T) {
+		// Site A's px1 agent also reports 10.0.1.5, the address site B's px1
+		// uses. The fingerprints contradict, so site B's node is another machine.
+		siteA := readStateTestNode("siteA", "px1")
+		siteA.Host = "https://10.0.0.5:8006"
+		agent := reportingTestHost("agent-a", "px1", "siteA-px1", 77)
+		agent.ReportIP = "10.0.0.5"
+		agent.NetworkInterfaces = []models.HostNetworkInterface{{Name: "eth0", Addresses: []string{"10.0.0.5/24", "10.0.1.5/24"}}}
+		m := readStateMonitor([]models.Node{siteA}, []models.Host{agent})
+		m.config = &config.Config{TemperatureMonitoringEnabled: true, PVEInstances: []config.PVEInstance{
+			{Name: "siteA", Host: "https://10.0.0.5:8006", Fingerprint: "AA:AA"},
+			{Name: "siteB", Host: "https://10.0.1.5:8006", Fingerprint: "BB:BB"},
+		}}
+		polled := readStateTestNode("siteB", "px1")
+		polled.Host = "https://10.0.1.5:8006"
+		polled.TLSFingerprint = pveNodeTLSFingerprint(&m.config.PVEInstances[1], "px1")
+		m.collectNodeTemperatureData(context.Background(), "siteB", &m.config.PVEInstances[1], proxmox.Node{Node: "px1"}, &polled, nil, "online")
+		if polled.Temperature != nil {
+			t.Fatalf("siteB px1 took site A's agent reading: %#v", polled.Temperature)
+		}
+	})
+
+	t.Run("sibling reading across the two connections of one cluster", func(t *testing.T) {
+		// A cluster added twice can keep px1 under one connection's view and the
+		// reporting px2 under the other's; both connections list the same
+		// members with the same fingerprints, so the reading is px1's.
+		var instances []config.PVEInstance
+		for _, name := range []string{"enacon-a", "enacon-b"} {
+			instances = append(instances, config.PVEInstance{
+				Name: name, IsCluster: true, ClusterName: "enacon",
+				ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "px1", Fingerprint: "11:11"}, {NodeName: "px2", Fingerprint: "22:22"}},
+			})
+		}
+		member := func(instanceCfg *config.PVEInstance, name string) models.Node {
+			node := readStateTestNode(instanceCfg.Name, name)
+			node.ClusterName, node.IsClusterMember = "enacon", true
+			node.TLSFingerprint = pveNodeTLSFingerprint(instanceCfg, name)
+			return node
+		}
+		m := readStateMonitor(
+			[]models.Node{member(&instances[0], "px1"), member(&instances[1], "px2")},
+			[]models.Host{reportingTestHost("agent-px2", "px2", "enacon-b-px2", 50)},
+		)
+		m.applyClusterSensors("agent-px2", clusterSensorReport("px1", 88), time.Now())
+		m.config = &config.Config{TemperatureMonitoringEnabled: true, PVEInstances: instances}
+		polled := member(&instances[0], "px1")
+		m.collectNodeTemperatureData(context.Background(), "enacon-a", &instances[0], proxmox.Node{Node: "px1"}, &polled, nil, "online")
+		if polled.Temperature == nil || polled.Temperature.CPUPackage != 88 {
+			t.Fatalf("px1 temperature = %#v, want the sibling reading 88", polled.Temperature)
+		}
+	})
+
+	t.Run("cluster sibling reading from the other site", func(t *testing.T) {
+		m := readStateMonitor(sites(), []models.Host{reportingTestHost("agent-a2", "px2", "siteA-px2", 50)})
+		m.applyClusterSensors("agent-a2", clusterSensorReport("px1", 88), time.Now())
+		if temp := poll(m, "siteA", "px1"); temp == nil || temp.CPUPackage != 88 {
+			t.Fatalf("siteA px1 temperature = %#v, want its cluster sibling's 88", temp)
+		}
+		if temp := poll(m, "siteB", "px1"); temp != nil {
+			t.Fatalf("siteB px1 took site A's cluster sibling reading: %#v", temp)
+		}
+	})
+}

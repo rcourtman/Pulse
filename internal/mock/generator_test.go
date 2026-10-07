@@ -478,6 +478,144 @@ func TestBuildFixtureStateCreatesHostEntriesForKubernetesNodes(t *testing.T) {
 	}
 }
 
+// newMockKubernetesTestCluster builds ready, schedulable nodes with a fixed
+// number of running pods each, so placement does not depend on the random
+// readiness the fixture generator rolls.
+func newMockKubernetesTestCluster(nodeCount, podsPerNode int) models.KubernetesCluster {
+	cluster := models.KubernetesCluster{ID: "usage-test", Name: "usage-test", Status: "online"}
+	for n := 0; n < nodeCount; n++ {
+		nodeName := fmt.Sprintf("usage-test-%d", n)
+		cluster.Nodes = append(cluster.Nodes, models.KubernetesNode{
+			UID:                 nodeName + "-uid",
+			Name:                nodeName,
+			Ready:               true,
+			CapacityCPU:         8,
+			AllocCPU:            8,
+			CapacityMemoryBytes: 32 << 30,
+			AllocMemoryBytes:    32 << 30,
+		})
+		for p := 0; p < podsPerNode; p++ {
+			cluster.Pods = append(cluster.Pods, models.KubernetesPod{
+				UID:       fmt.Sprintf("%s-pod-%d-uid", nodeName, p),
+				Name:      fmt.Sprintf("%s-pod-%d", nodeName, p),
+				Namespace: "apps",
+				NodeName:  nodeName,
+				Phase:     "Running",
+				OwnerKind: "Deployment",
+			})
+		}
+	}
+	return cluster
+}
+
+func TestMockKubernetesDenseNodesStayBelowAllocatableMemory(t *testing.T) {
+	cluster := newMockKubernetesTestCluster(3, 13)
+	data := models.StateSnapshot{KubernetesClusters: []models.KubernetesCluster{cluster}}
+	for _, node := range cluster.Nodes {
+		data.Hosts = append(data.Hosts, models.Host{ID: "host-" + node.Name, Hostname: node.Name, Status: "online"})
+	}
+
+	start := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	for tick := 0; tick < 40; tick++ {
+		initializeMockKubernetesClusterUsage(&data.KubernetesClusters[0], start.Add(time.Duration(tick)*15*time.Second), false)
+		// The mock tick re-derives each linked host's memory from its node.
+		syncMockKubernetesNodeHosts(&data)
+
+		podMemory := make(map[string]float64, len(cluster.Nodes))
+		for _, pod := range data.KubernetesClusters[0].Pods {
+			podMemory[pod.NodeName] += pod.UsageMemoryPercent
+		}
+		for _, node := range data.KubernetesClusters[0].Nodes {
+			if node.UsageMemoryBytes >= node.AllocMemoryBytes || node.UsageMemoryPercent >= 100 {
+				t.Fatalf("tick %d: node %s with 13 running pods is pinned at allocatable memory (%.1f%%)", tick, node.Name, node.UsageMemoryPercent)
+			}
+			// Steady-state shares stay under the ceiling, which clips to it
+			// exactly; a total at the ceiling means it bound without a transient.
+			if podMemory[node.Name] >= mockKubernetesNodePodMemoryCeiling*100-0.01 {
+				t.Fatalf("tick %d: node %s pods hold %.2f%%, the ceiling bound in steady state", tick, node.Name, podMemory[node.Name])
+			}
+		}
+		for _, host := range data.Hosts {
+			if host.Memory.Usage >= 100 {
+				t.Fatalf("tick %d: linked host %s memory = %.1f%%, want the node's unsaturated reading", tick, host.Hostname, host.Memory.Usage)
+			}
+		}
+	}
+}
+
+func TestMockKubernetesRescheduledPodsDoNotSaturateReceivingNode(t *testing.T) {
+	cluster := newMockKubernetesTestCluster(3, 8)
+	start := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	for tick := 0; tick < 40; tick++ {
+		initializeMockKubernetesClusterUsage(&cluster, start.Add(time.Duration(tick)*15*time.Second), false)
+	}
+
+	// Two nodes fail: their sixteen pods move to the survivor carrying
+	// readings sized for nodes that each ran a third as many pods.
+	cluster.Nodes[0].Ready = false
+	cluster.Nodes[1].Ready = false
+	initializeMockKubernetesClusterUsage(&cluster, start.Add(40*15*time.Second), false)
+
+	survivor := cluster.Nodes[2]
+	running := 0
+	for _, pod := range cluster.Pods {
+		if pod.NodeName == survivor.Name {
+			running++
+		}
+	}
+	if running != 24 {
+		t.Fatalf("survivor runs %d pods after the failures, want all 24", running)
+	}
+	// Pods hold at most the ceiling and system overhead tops out at 26%.
+	if limit := (mockKubernetesNodePodMemoryCeiling + 0.26) * 100; survivor.UsageMemoryPercent > limit+1e-9 {
+		t.Fatalf("survivor memory = %.1f%% right after rescheduling, want at most %.1f%%", survivor.UsageMemoryPercent, limit)
+	}
+}
+
+func TestMockKubernetesPodMemoryShareKeepsNodeWithinBudget(t *testing.T) {
+	for pods := 0; pods <= 64; pods++ {
+		share := mockKubernetesPodMemoryShare(pods)
+		if share <= 0 || share > 1 {
+			t.Fatalf("share(%d) = %f, want (0, 1]", pods, share)
+		}
+		if committed := float64(pods) * share; committed > mockKubernetesNodePodMemoryBudget+1e-9 {
+			t.Fatalf("%d pods commit %.2f single-pod footprints, want at most %.2f", pods, committed, mockKubernetesNodePodMemoryBudget)
+		}
+	}
+}
+
+func TestMockKubernetesLoneHeavyPodStaysUnderNodeCeiling(t *testing.T) {
+	// A five-minute cadence lets smoothing track each target closely, so the
+	// pod reaches its real peaks.
+	setMockUpdateInterval(5 * time.Minute)
+	t.Cleanup(func() { setMockUpdateInterval(DefaultConfig.UpdateInterval) })
+
+	// The heaviest footprint: the highest base and burst seeds on a
+	// Guaranteed StatefulSet pod.
+	uid, best := "", uint64(0)
+	for i := 0; i < 2000; i++ {
+		candidate := fmt.Sprintf("lone-pod-%d", i)
+		weight := mockStableHash64(candidate, "mem-base")%20 + mockStableHash64(candidate, "mem-burst")%36
+		if uid == "" || weight > best {
+			uid, best = candidate, weight
+		}
+	}
+	cluster := newMockKubernetesTestCluster(1, 1)
+	cluster.Pods[0].UID = uid
+	cluster.Pods[0].OwnerKind = "StatefulSet"
+	cluster.Pods[0].QoSClass = "Guaranteed"
+
+	start := time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC)
+	peak := 0.0
+	for tick := 0; tick < 288; tick++ {
+		initializeMockKubernetesClusterUsage(&cluster, start.Add(time.Duration(tick)*5*time.Minute), false)
+		peak = math.Max(peak, cluster.Pods[0].UsageMemoryPercent)
+	}
+	if peak >= mockKubernetesNodePodMemoryCeiling*100-0.01 {
+		t.Fatalf("lone pod %s peaked at %.2f%%: the ceiling clipped a steady-state reading", uid, peak)
+	}
+}
+
 func TestGenerateNodesBoundsDirectConfiguration(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.NodeCount = 1 << 30

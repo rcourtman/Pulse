@@ -47,7 +47,7 @@ export const MetricHoverModeSegmentedControl: Component<MetricHoverModeSegmented
       },
       {
         value: 'history',
-        title: 'Preview synchronized CPU, memory, and disk history across the row',
+        title: 'Preview synchronized CPU, memory, disk, and I/O history across the row',
         label: 'History',
       },
     ]}

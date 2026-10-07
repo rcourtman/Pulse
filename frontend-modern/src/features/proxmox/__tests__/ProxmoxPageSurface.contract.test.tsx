@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -21,6 +21,9 @@ const mockWorkloadSearch = vi.hoisted(() => vi.fn(() => ''));
 const mockSelectedNode = vi.hoisted(() => vi.fn<() => string | null>(() => null));
 const mockHandleNodeSelect = vi.hoisted(() => vi.fn());
 const mockWorkloadsOptions = vi.hoisted(() => vi.fn());
+const mockFetchReplicationJobs = vi.hoisted(() =>
+  vi.fn((_signal?: AbortSignal) => Promise.resolve([] as unknown[])),
+);
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource =>
   ({
@@ -152,8 +155,18 @@ vi.mock('../ProxmoxNodesTable', () => ({
 }));
 
 vi.mock('../ProxmoxReplicationTable', () => ({
-  ProxmoxReplicationTable: () => <div data-testid="replication-table" />,
-  fetchReplicationJobs: () => Promise.resolve([]),
+  ProxmoxReplicationTable: (props: { jobs?: unknown[]; error?: unknown; onRetry: () => void }) => (
+    <div
+      data-testid="replication-table"
+      data-jobs={props.jobs === undefined ? 'loading' : props.jobs.length}
+      data-error={props.error ? 'yes' : 'no'}
+    >
+      <button type="button" onClick={() => props.onRetry()}>
+        Retry replication
+      </button>
+    </div>
+  ),
+  fetchReplicationJobs: (signal?: AbortSignal) => mockFetchReplicationJobs(signal),
 }));
 
 const renderSurface = () =>
@@ -198,6 +211,16 @@ describe('ProxmoxPageSurface contract', () => {
 
     expect(mockWorkloadsOptions).toHaveBeenCalledWith(
       expect.objectContaining({ resourceSnapshotChange }),
+    );
+  });
+
+  it('leaves host details to the nodes table instead of the embedded guest table', () => {
+    setResources([makeResource({ id: 'vm-1', type: 'vm' })]);
+
+    renderSurface();
+
+    expect(mockWorkloadsOptions).toHaveBeenCalledWith(
+      expect.objectContaining({ groupNodeDrawerMode: 'disabled' }),
     );
   });
 
@@ -247,9 +270,7 @@ describe('ProxmoxPageSurface contract', () => {
     expect(screen.getByTestId('nodes-table')).toHaveAttribute('data-rows', '1');
     const notice = screen.getByTestId('platform-outdated-agent-notice');
     expect(notice).toHaveTextContent('delly runs an older Pulse agent (v5.1.34).');
-    expect(notice).toHaveTextContent(
-      'latest agent-contributed Proxmox node detail and command support',
-    );
+    expect(notice).toHaveTextContent('latest fixes and node details');
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
       '/settings/infrastructure/agent-doctor?agents=agent%3Aagent-delly',
@@ -628,6 +649,204 @@ describe('ProxmoxPageSurface contract', () => {
       expect(tabs).toHaveAttribute('data-tabs', 'overview,backups');
       expect(tabs).toHaveAttribute('data-active', 'overview');
     });
+  });
+
+  it('re-reads replication jobs in the background and keeps the tab through a failed read', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    mockPathname.mockReturnValue('/proxmox/replication');
+    const node = makeResource({ id: 'node:pve1', type: 'agent', name: 'pve1' });
+    mockUseUnifiedResources.mockReturnValue({
+      resources: () => [node],
+      facets: () => ({ incidentCount: 0, byType: {} }),
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(async () => []),
+    });
+    let resolveFirstRead: (jobs: unknown[]) => void = () => undefined;
+    mockFetchReplicationJobs.mockReset();
+    mockFetchReplicationJobs.mockReturnValueOnce(
+      new Promise<unknown[]>((resolve) => {
+        resolveFirstRead = resolve;
+      }),
+    );
+
+    try {
+      renderSurface();
+      const tabs = screen.getByTestId('platform-section-tabs');
+      // Counts are known but the first read is pending: a direct link stays put.
+      expect(tabs).toHaveAttribute('data-active', 'replication');
+      expect(screen.getByTestId('replication-table')).toHaveAttribute('data-jobs', 'loading');
+
+      resolveFirstRead([{ id: 'job-1' }]);
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-jobs', '1'),
+      );
+      expect(tabs).toHaveAttribute('data-tabs', 'overview,replication');
+
+      // The table's ages move on the shared clock, so its jobs are re-read in
+      // the background rather than aging a snapshot taken at mount.
+      mockFetchReplicationJobs.mockResolvedValueOnce([{ id: 'job-1' }, { id: 'job-2' }]);
+      vi.advanceTimersByTime(30_000);
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-jobs', '2'),
+      );
+
+      // A failed read reports the error but keeps the tab and the user on it.
+      mockFetchReplicationJobs.mockRejectedValueOnce(new Error('replication read failed'));
+      vi.advanceTimersByTime(30_000);
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-error', 'yes'),
+      );
+      expect(tabs).toHaveAttribute('data-tabs', 'overview,replication');
+      expect(tabs).toHaveAttribute('data-active', 'replication');
+
+      mockFetchReplicationJobs.mockResolvedValueOnce([{ id: 'job-1' }]);
+      vi.advanceTimersByTime(30_000);
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-error', 'no'),
+      );
+      expect(screen.getByTestId('replication-table')).toHaveAttribute('data-jobs', '1');
+      expect(mockFetchReplicationJobs).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+      mockFetchReplicationJobs.mockReset();
+      mockFetchReplicationJobs.mockImplementation(() => Promise.resolve([]));
+    }
+  });
+
+  it('holds a direct replication link on a failed first read and recovers on retry', async () => {
+    mockPathname.mockReturnValue('/proxmox/replication');
+    const node = makeResource({ id: 'node:pve1', type: 'agent', name: 'pve1' });
+    mockUseUnifiedResources.mockReturnValue({
+      resources: () => [node],
+      facets: () => ({ incidentCount: 0, byType: {} }),
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(async () => []),
+    });
+    mockFetchReplicationJobs.mockReset();
+    mockFetchReplicationJobs.mockRejectedValueOnce(new Error('replication read failed'));
+    mockFetchReplicationJobs.mockResolvedValueOnce([{ id: 'job-1' }]);
+
+    try {
+      renderSurface();
+      const tabs = screen.getByTestId('platform-section-tabs');
+      // A failed read says nothing about whether replication exists, so the
+      // link keeps its error and Retry instead of falling back to Overview.
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-error', 'yes'),
+      );
+      expect(tabs).toHaveAttribute('data-active', 'replication');
+      expect(tabs).toHaveAttribute('data-tabs', 'overview');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Retry replication' }));
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-jobs', '1'),
+      );
+      expect(screen.getByTestId('replication-table')).toHaveAttribute('data-error', 'no');
+      expect(tabs).toHaveAttribute('data-tabs', 'overview,replication');
+      expect(tabs).toHaveAttribute('data-active', 'replication');
+    } finally {
+      mockFetchReplicationJobs.mockReset();
+      mockFetchReplicationJobs.mockImplementation(() => Promise.resolve([]));
+    }
+  });
+
+  it('keeps an empty replication answer through a failed poll instead of reopening the route', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    mockPathname.mockReturnValue('/proxmox/replication');
+    const node = makeResource({ id: 'node:pve1', type: 'agent', name: 'pve1' });
+    mockUseUnifiedResources.mockReturnValue({
+      resources: () => [node],
+      facets: () => ({ incidentCount: 0, byType: {} }),
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(async () => []),
+    });
+    mockFetchReplicationJobs.mockReset();
+    mockFetchReplicationJobs.mockResolvedValueOnce([]);
+    mockFetchReplicationJobs.mockRejectedValueOnce(new Error('replication read failed'));
+    mockFetchReplicationJobs.mockResolvedValueOnce([]);
+
+    try {
+      renderSurface();
+      const tabs = screen.getByTestId('platform-section-tabs');
+      // An empty answer means no replication: the link falls back to Overview.
+      await waitFor(() => expect(tabs).toHaveAttribute('data-active', 'overview'));
+
+      vi.advanceTimersByTime(30_000);
+      await waitFor(() => expect(mockFetchReplicationJobs).toHaveBeenCalledTimes(2));
+      await Promise.resolve();
+      expect(tabs).toHaveAttribute('data-active', 'overview');
+      expect(screen.queryByTestId('replication-table')).not.toBeInTheDocument();
+
+      vi.advanceTimersByTime(30_000);
+      await waitFor(() => expect(mockFetchReplicationJobs).toHaveBeenCalledTimes(3));
+      expect(tabs).toHaveAttribute('data-active', 'overview');
+    } finally {
+      vi.useRealTimers();
+      mockFetchReplicationJobs.mockReset();
+      mockFetchReplicationJobs.mockImplementation(() => Promise.resolve([]));
+    }
+  });
+
+  it('holds a direct replication link on an access denial that withdraws loaded jobs', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    mockPathname.mockReturnValue('/proxmox/replication');
+    const node = makeResource({ id: 'node:pve1', type: 'agent', name: 'pve1' });
+    mockUseUnifiedResources.mockReturnValue({
+      resources: () => [node],
+      facets: () => ({ incidentCount: 0, byType: {} }),
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(async () => []),
+    });
+    mockFetchReplicationJobs.mockReset();
+    mockFetchReplicationJobs.mockResolvedValueOnce([{ id: 'job-1' }]);
+    mockFetchReplicationJobs.mockRejectedValueOnce(
+      Object.assign(new Error('Insufficient permissions'), { status: 403 }),
+    );
+
+    try {
+      renderSurface();
+      const tabs = screen.getByTestId('platform-section-tabs');
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-jobs', '1'),
+      );
+
+      vi.advanceTimersByTime(30_000);
+      await waitFor(() =>
+        expect(screen.getByTestId('replication-table')).toHaveAttribute('data-error', 'yes'),
+      );
+      // The denied jobs are withdrawn, so the tab goes; the link shows why.
+      expect(tabs).toHaveAttribute('data-tabs', 'overview');
+      expect(tabs).toHaveAttribute('data-active', 'replication');
+    } finally {
+      vi.useRealTimers();
+      mockFetchReplicationJobs.mockReset();
+      mockFetchReplicationJobs.mockImplementation(() => Promise.resolve([]));
+    }
+  });
+
+  it('cancels an in-flight replication read when the page unmounts', async () => {
+    mockPathname.mockReturnValue('/proxmox/replication');
+    setResources([makeResource({ id: 'node:pve1', type: 'agent', name: 'pve1' })]);
+    mockFetchReplicationJobs.mockReset();
+    mockFetchReplicationJobs.mockReturnValueOnce(new Promise<unknown[]>(() => undefined));
+
+    try {
+      const view = renderSurface();
+      expect(mockFetchReplicationJobs).toHaveBeenCalledTimes(1);
+      const signal = mockFetchReplicationJobs.mock.calls[0][0];
+      expect(signal).toBeInstanceOf(AbortSignal);
+      expect(signal?.aborted).toBe(false);
+
+      view.unmount();
+      expect(signal?.aborted).toBe(true);
+    } finally {
+      mockFetchReplicationJobs.mockReset();
+      mockFetchReplicationJobs.mockImplementation(() => Promise.resolve([]));
+    }
   });
 
   it('does not surface stale-agent notices for development builds without an agent target', () => {

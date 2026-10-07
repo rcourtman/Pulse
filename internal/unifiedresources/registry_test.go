@@ -10,6 +10,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 func TestRegistry_CachedReadsUseSharedLock(t *testing.T) {
@@ -7031,5 +7032,115 @@ func TestRegistryProjectionSnapshotDetachesAndTracksMappings(t *testing.T) {
 	rows, emptyTargets := empty.ListWithMetricsTargets()
 	if len(rows) != 0 || len(emptyTargets) != 0 {
 		t.Fatal("empty projection invented resources or targets")
+	}
+}
+
+// Disk risk (and the warning status it drives) never judges temperature,
+// collected or retained. Heat belongs to the alert disk temperature policy,
+// which users tune per disk type and per host and which no registry can see.
+// The reading itself stays on the resource for that policy to judge.
+func TestPhysicalDiskRiskNeverJudgesTemperature(t *testing.T) {
+	// A fresh check time keeps the registry's source-staleness sweep out of
+	// the status this test reads.
+	now := time.Now()
+	retained := diskinventory.Unavailable("host_agent", "host agent stopped reporting")
+
+	cases := []struct {
+		name       string
+		collection *diskinventory.CollectionStatus
+	}{
+		{name: "collected now", collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Available("proxmox_node_smart")}},
+		{name: "source predates collection state", collection: nil},
+		{name: "state left empty", collection: &diskinventory.CollectionStatus{}},
+		{name: "retained after the agent went silent", collection: &diskinventory.CollectionStatus{Temperature: retained}},
+		{name: "retained while in standby", collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("smartctl", "disk is in standby")}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			adapter := NewMonitorAdapter(NewRegistry(nil))
+			adapter.PopulateFromSnapshot(models.StateSnapshot{
+				PhysicalDisks: []models.PhysicalDisk{{
+					ID:          "homelab-pve--dev-sda",
+					Node:        "pve",
+					Instance:    "homelab",
+					DevPath:     "/dev/sda",
+					Model:       "WDC WD80EFAX",
+					Serial:      "SERIAL-SDA",
+					Type:        "sata",
+					Health:      "PASSED",
+					Wearout:     -1,
+					Temperature: 72,
+					Collection:  tc.collection,
+					LastChecked: now,
+				}},
+			})
+			var disks []Resource
+			for _, resource := range adapter.GetAll() {
+				if resource.Type == ResourceTypePhysicalDisk {
+					disks = append(disks, resource)
+				}
+			}
+			if len(disks) != 1 || disks[0].PhysicalDisk == nil {
+				t.Fatalf("physical disks = %+v, want one", disks)
+			}
+			disk := disks[0]
+			if disk.PhysicalDisk.Temperature != 72 {
+				t.Fatalf("temperature = %d, want the reading kept at 72", disk.PhysicalDisk.Temperature)
+			}
+			if disk.PhysicalDisk.Risk != nil || disk.Status != StatusOnline {
+				t.Fatalf("72C disk: status = %q risk = %+v, want online with no risk", disk.Status, disk.PhysicalDisk.Risk)
+			}
+		})
+	}
+
+	// A host agent's SMART row merged with the Proxmox inventory row for the
+	// same disk goes through the registry merge and its risk recompute.
+	adapter := NewMonitorAdapter(NewRegistry(nil))
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:       "host-pve",
+			Hostname: "pve",
+			Status:   "online",
+			LastSeen: now,
+			Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+				Device:      "/dev/sda",
+				Model:       "WDC WD80EFAX",
+				Serial:      "SERIAL-SDA",
+				Type:        "sata",
+				Temperature: 72,
+				Health:      "PASSED",
+				Collection:  &diskinventory.CollectionStatus{Temperature: diskinventory.Available("host_agent")},
+			}}},
+		}},
+		PhysicalDisks: []models.PhysicalDisk{{
+			ID:          "homelab-pve--dev-sda",
+			Node:        "pve",
+			Instance:    "homelab",
+			DevPath:     "/dev/sda",
+			Model:       "WDC WD80EFAX",
+			Serial:      "SERIAL-SDA",
+			Type:        "sata",
+			Health:      "PASSED",
+			Wearout:     -1,
+			Collection:  &diskinventory.CollectionStatus{Temperature: diskinventory.Unsupported("proxmox_disks", "Proxmox disk inventory does not expose temperature")},
+			LastChecked: now,
+		}},
+	})
+	var merged []Resource
+	for _, resource := range adapter.GetAll() {
+		if resource.Type == ResourceTypePhysicalDisk {
+			merged = append(merged, resource)
+		}
+	}
+	if len(merged) != 1 || merged[0].PhysicalDisk == nil {
+		t.Fatalf("physical disks = %d, want the agent and Proxmox rows merged into one", len(merged))
+	}
+	if disk := merged[0].PhysicalDisk; disk.Temperature != 72 || disk.Risk != nil {
+		t.Fatalf("merged disk temperature = %d risk = %+v, want 72 with no risk", disk.Temperature, disk.Risk)
+	}
+
+	meta := &PhysicalDiskMeta{Health: "PASSED", Temperature: 72, Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Available("host_agent")}}
+	if risk := physicalDiskRiskFromMeta(meta, nil); risk != nil {
+		t.Fatalf("meta recompute risk = %+v, want none for a collected 72C", risk)
 	}
 }

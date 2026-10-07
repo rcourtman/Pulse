@@ -137,6 +137,7 @@ type Alert struct {
 	AckTime           *time.Time                             `json:"ackTime,omitempty"`
 	AckUser           string                                 `json:"ackUser,omitempty"`
 	Correlation       *AlertCorrelation                      `json:"correlation,omitempty"`
+	Resolution        *AlertResolution                       `json:"resolution,omitempty"` // set only when a close was not a recovery
 	Metadata          map[string]interface{}                 `json:"metadata,omitempty"`
 	LastNotified      *time.Time                             `json:"lastNotified,omitempty"`
 	LastEscalation    int                                    `json:"lastEscalation,omitempty"`
@@ -185,6 +186,8 @@ func (a *Alert) Clone() *Alert {
 	if a.Correlation != nil {
 		clone.Correlation = cloneAlertCorrelation(a.Correlation)
 	}
+
+	clone.Resolution = a.Resolution.Clone()
 
 	if len(a.EscalationTimes) > 0 {
 		clone.EscalationTimes = append([]time.Time(nil), a.EscalationTimes...)

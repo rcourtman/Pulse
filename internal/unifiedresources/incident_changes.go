@@ -16,6 +16,9 @@ const (
 	MetadataAlertMessage    = "alert_message"
 	MetadataAlertValue      = "alert_value"
 	MetadataAlertThreshold  = "alert_threshold"
+	// MetadataAlertResolution is the reason code of a resolve that was not a
+	// recovery, such as "moved_to_agent". Ordinary recoveries omit it.
+	MetadataAlertResolution = "alert_resolution"
 	MetadataCommand         = "command"
 	MetadataSuccess         = "success"
 	MetadataOutputExcerpt   = "output_excerpt"
@@ -38,6 +41,11 @@ type AlertTimelineChange struct {
 	AlertValue      float64
 	AlertThreshold  float64
 	AlertMetadata   map[string]any
+	// ResolutionReason and ResolutionSummary describe a resolve that was not
+	// a recovery. They are empty for an ordinary recovery and ignored on
+	// every other lifecycle kind.
+	ResolutionReason  string
+	ResolutionSummary string
 }
 
 // BuildAlertTimelineChange constructs a canonical resource change for alert
@@ -73,6 +81,9 @@ func BuildAlertTimelineChange(resourceID string, kind ChangeKind, occurredAt tim
 	}
 	if !alert.AlertStartedAt.IsZero() {
 		change.Metadata[MetadataAlertStartedAt] = alert.AlertStartedAt.UTC().Format(time.RFC3339Nano)
+	}
+	if reason := strings.TrimSpace(alert.ResolutionReason); kind == ChangeAlertResolved && reason != "" {
+		change.Metadata[MetadataAlertResolution] = reason
 	}
 	for key, value := range cloneChangeMetadata(alert.AlertMetadata) {
 		if _, exists := change.Metadata[key]; exists {
@@ -178,6 +189,11 @@ func alertChangeReason(kind ChangeKind, alert AlertTimelineChange) string {
 	case ChangeAlertUnsnoozed:
 		return "Alert notifications resumed"
 	case ChangeAlertResolved:
+		// A close that was not a recovery must not read as one: the alert's
+		// own message describes the condition that is still unresolved.
+		if summary := strings.TrimSpace(alert.ResolutionSummary); summary != "" {
+			return summary
+		}
 		if message != "" {
 			return fmt.Sprintf("Alert resolved: %s", message)
 		}

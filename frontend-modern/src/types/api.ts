@@ -626,6 +626,9 @@ export interface HostDiskSMART {
   temperature: number; // Temperature in Celsius
   health?: string; // PASSED, FAILED, UNKNOWN
   standby?: boolean; // True if disk was in standby
+  // A non-available temperature state marks the value as last known, such as
+  // a host agent that stopped reporting.
+  collection?: import('./resource').PhysicalDiskCollectionStatus;
 }
 
 export interface HostRAIDArray {
@@ -1376,16 +1379,32 @@ export interface Alert {
   ackUser?: string;
   correlation?: AlertCorrelation;
   metadata?: Record<string, unknown>;
-  operationalRecord?: OperationalRecord;
-  latestTransition?: LifecycleTransition;
-  transitions?: LifecycleTransition[];
-  evidence?: EvidenceEnvelope[];
   /**
    * Live evaluation behind an open threshold alert. `value`, `message` and
    * `lastSeen` keep the last reading that met the trigger; this is the
    * reading being evaluated now and why the alert has not cleared.
    */
   metricStatus?: MetricAlertStatus;
+  operationalRecord?: OperationalRecord;
+  latestTransition?: LifecycleTransition;
+  transitions?: LifecycleTransition[];
+  evidence?: EvidenceEnvelope[];
+  // Set only on a closed alert whose condition did not clear, such as a node
+  // metric handed to its Pulse agent. Absent for an ordinary recovery.
+  resolution?: AlertResolution;
+}
+
+// Why an alert closed without recovering (alerts.AlertResolution).
+export interface AlertResolution {
+  reason: 'moved_to_agent' | (string & {});
+  successorResourceId?: string;
+  successorName?: string;
+  // The alert engine's one-line account; carried on state snapshots only.
+  summary?: string;
+}
+
+export interface ResolvedAlert extends Alert {
+  resolvedTime: string;
 }
 
 export type MetricAlertPhase = 'breaching' | 'latched' | 'recovering';
@@ -1406,10 +1425,6 @@ export interface MetricAlertStatus {
   recoveryDelaySeconds?: number;
   recoveryStartedAt?: string;
   recoveryElapsedSeconds?: number;
-}
-
-export interface ResolvedAlert extends Alert {
-  resolvedTime: string;
 }
 
 // One entry from the append-only alert event log

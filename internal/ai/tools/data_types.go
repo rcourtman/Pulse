@@ -1222,7 +1222,12 @@ type SMARTDiskSummary struct {
 	Device      string `json:"device"`
 	Model       string `json:"model"`
 	Health      string `json:"health"`
-	Temperature int    `json:"temperature,omitempty"`
+	Temperature int    `json:"temperature,omitempty"` // Celsius, only when collected now
+	// LastKnownTemperature is a temperature kept from an earlier observation
+	// when the current one did not collect it (a disk in standby, a host
+	// agent past its reporting lease); LastKnownTemperatureReason says why.
+	LastKnownTemperature       int    `json:"last_known_temperature,omitempty"`
+	LastKnownTemperatureReason string `json:"last_known_temperature_reason,omitempty"`
 }
 
 // RAIDArraySummary is a summarized RAID array
@@ -2045,10 +2050,16 @@ type PhysicalDiskSummary struct {
 	Risk                 *unifiedresources.PhysicalDiskRisk                            `json:"risk,omitempty"`
 	SMART                *unifiedresources.SMARTMeta                                   `json:"smart,omitempty"`
 	LifeRemainingPercent *int                                                          `json:"life_remaining_percent,omitempty"` // SSD life remaining percent (0-100), nil when unavailable
-	Temperature          *int                                                          `json:"temperature,omitempty"`            // Celsius, nil when unavailable
+	Temperature          *int                                                          `json:"temperature,omitempty"`            // Celsius, nil unless collected now
 	RPM                  *int                                                          `json:"rpm,omitempty"`                    // 0 for SSDs, nil when unavailable
 	Used                 string                                                        `json:"used,omitempty"`
 	LastChecked          time.Time                                                     `json:"last_checked,omitempty"`
+
+	// LastKnownTemperature is a temperature kept from an earlier observation
+	// when the current one did not collect it (a disk in standby, a host
+	// agent past its reporting lease); LastKnownTemperatureReason says why.
+	LastKnownTemperature       *int   `json:"last_known_temperature,omitempty"`
+	LastKnownTemperatureReason string `json:"last_known_temperature_reason,omitempty"`
 }
 
 // ========== Host RAID Types ==========
@@ -2364,4 +2375,9 @@ type ResolvedAlertSummary struct {
 	Threshold    float64   `json:"threshold,omitempty"`
 	StartTime    time.Time `json:"start_time"`
 	ResolvedTime time.Time `json:"resolved_time"`
+	// Resolution is set only when the alert closed without recovering, such
+	// as a node metric handed to its Pulse agent; the successor resource
+	// owns the condition from then on.
+	Resolution          string `json:"resolution,omitempty"`
+	SuccessorResourceID string `json:"successor_resource_id,omitempty"`
 }

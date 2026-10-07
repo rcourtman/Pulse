@@ -123,6 +123,11 @@ export const getTemperatureTextClass = (
   if (celsius === null || celsius === undefined || !Number.isFinite(celsius)) {
     return 'text-muted';
   }
+  // Null disk thresholds mean disk temperature alerting is off for that disk,
+  // so no reading of it is warm or hot.
+  if (metric === 'diskTemperature' && thresholds === null) {
+    return 'text-base-content';
+  }
   const readingSeverity = getMetricSeverity(
     celsius,
     metric,

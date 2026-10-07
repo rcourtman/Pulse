@@ -296,6 +296,19 @@ not disable the local host, SMART, Ceph, or Proxmox reporting modules, alter
 agent enrollment or identity, or add remote command authority. The disabled
 path is pinned by `TestCollectClusterSensors_Disabled`; configuration parsing
 is pinned by `TestLoadConfigDisableClusterPeerSensorsFlag`.
+Pulse attributes peer readings to the agent that reported them. Peers are
+named by bare Proxmox node name, which a node of another connection can share,
+so monitoring keys its cluster sensor cache by reporting agent and node name.
+A reading serves a node only when the agent's currently linked node belongs to
+that node's connection, or to another connection with a fingerprint-proven view
+of the node (a cluster added twice); attribution follows the agent's link like
+its own sensors. An unlinked reporter's peer readings serve no node, nor do
+those of a reporter whose manual link names a node ID the read state does not
+hold. This reads
+the existing agent link and adds no identity, enrollment, link or command
+authority; the ingest path is pinned by
+`TestApplyHostReportScopesClusterSensorsToReportersConnection` in
+`internal/monitoring/monitor_host_agents_test.go`.
 On supported Linux systemd hosts, the opt-in safe runtime is a root-owned,
 unprivileged monitoring collector plus the no-network typed helper, with
 remediation installed only as the separate root-owned `pulse-agent-runner`.
@@ -736,6 +749,23 @@ into monitoring's models. Absent evidence has to carry its declared sentinel
 rather than a zero value that reads as a real measurement: an absent
 physical-disk view projects `Wearout` as `unifiedresources.WearoutUnreported`,
 never `0`, which would announce a spent disk the agent never reported.
+When the host heartbeat lease expires, `State.ExpireHostTelemetry` keeps that
+agent's SMART temperature and I/O counters as last-known values but marks them
+`unavailable` ("host agent stopped reporting"); the agent's next accepted
+report replaces them. Expiry is compare-and-set on the report time the offline
+sweep judged stale, so a report admitted between that judgement and the expiry
+is never expired.
+Unraid array-inventory temperatures follow the same lease: while the host is
+offline the unified-resources adapter reports them `unavailable` with the same
+reason (`models.HostAgentStoppedReportingReason`) and leaves them out of the
+disk's risk, and the metrics-history API does not return any such retained
+disk temperature as a live point.
+Downstream readers keep that distinction too. The disk temperature charts do
+not pad a series to now with the retained value. The AI chat context, Patrol and
+the AI disk tools present it only as a last-known value with its reason. The
+performance report and the reporting runtime snapshot leave it out of their
+disk tables. The performance report colours a collected reading by the
+tenant's alert disk temperature thresholds for the disk type, not a fixed line.
 
 An enabled availability target assigned to a host agent creates an
 agent-lifecycle lease for that exact target/agent pairing. First assignment
@@ -1270,6 +1300,10 @@ update, profile rollout, command reachability, or fleet-control authority.
     lifecycle presentation evidence. It keeps mock active-alert and history
     payloads aligned with the canonical alert contract, but it cannot enroll,
     identify, link, command, remove, or otherwise grant authority to an agent.
+    The optional `models.Alert.Resolution` field is the same kind of
+    evidence: it says a resolved node alert now belongs to a linked agent's
+    own alert and names that agent as display text, but the link itself stays
+    the agent lifecycle's, and the field cannot create, change or authorize it.
 27. `internal/monitoring/monitor.go` shared with `monitoring`: monitor construction owns both monitoring runtime initialization and fail-closed agent lifecycle journal hydration before report admission.
 28. `internal/monitoring/monitor_agents.go` shared with `monitoring`: server-side Unified Agent report, removal, token binding, tombstone expiry, and re-enrollment semantics are jointly owned by agent lifecycle authority and monitoring ingest.
 29. `pkg/agents/host/report.go` shared with `monitoring`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host maintenance posture.
@@ -8214,6 +8248,21 @@ or create agent continuity evidence. The removal lifecycle proof keeps a
 removed host blocked across a PBS storage sync so metric timestamp maintenance
 cannot become an accidental re-enrollment transition.
 
+### Mock fixture agents reuse only the removal alert boundary
+
+`internal/monitoring/monitor.go` now holds the set of fixture agents the last
+mock alert pass evaluated. When a runtime mock config change drops an agent
+from the estate, `evaluateMockHostAgents` routes it through the alert
+manager's `HandleHostRemoved`, the same alert boundary a deleted live agent
+crosses. Leaving mock mode routes every fixture agent through the same call,
+which also releases their hostname deduplication. Neither path writes a
+removal tombstone, revokes a token, touches continuity evidence or admits a
+report: fixture agents have no credentials or durable identity, and real
+reports stay discarded while mock mode is on.
+`TestMockHostAgentLeavingFixtureUsesRemovalLifecycle` in
+`internal/monitoring/monitor_host_agent_removal_lifecycle_test.go` pins the
+alert cleanup.
+
 ### Deploy enrollment swaps credentials as one durable transition
 
 A deploy bootstrap token remains the live credential until Pulse can durably
@@ -8790,3 +8839,15 @@ no update status, instead of reporting "no update available" (#2353). Agent
 registration, enrolment, install, update, removal and report identity are
 unchanged; the per-image memo lives in the registry checker and is pruned
 each collection cycle to the images in use.
+
+### Host snapshots report a linked agent's own heartbeat
+
+`internal/monitoring/monitor.go` changed only so a host produced from the read
+state carries the agent source's own last report and reads offline past the
+agent's reporting lease, even when the agent's row is merged with a Proxmox
+node that PVE polling keeps fresh. The agent connection on the Connections
+list and the update-readiness agent-continuity check therefore age a silent
+agent from its last report instead of from the PVE poll, and mark it stale at
+their own heartbeat cutoff (`fleethealth.AgentStaleThreshold`, which is
+separate from the monitoring reporting lease). Agent registration, enrolment,
+install, update, removal and report identity are unchanged.

@@ -5,6 +5,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import {
   formatBytes,
   formatSpeed,
+  formatCompactSpeed,
   formatObservedSpeed,
   formatPercent,
   formatCpuPercent,
@@ -66,6 +67,26 @@ describe('formatSpeed', () => {
   it('handles explicit decimal places', () => {
     expect(formatSpeed(1024, 0)).toBe('1 KB/s');
     expect(formatSpeed(1024 * 1024, 1)).toBe('1.0 MB/s');
+  });
+});
+
+describe('formatCompactSpeed', () => {
+  it.each([
+    [0, '0'],
+    [-1024, '0'],
+    [Number.NaN, '0'],
+    [512, '<1K'],
+    [1024, '1.0K'],
+    [3.32 * 1024 * 1024, '3.3M'],
+    [9.94 * 1024, '9.9K'],
+    [9.96 * 1024, '10K'],
+    [512 * 1024, '512K'],
+    [1023.6 * 1024, '1.0M'],
+    [2.5 * 1024 ** 3, '2.5G'],
+    [2 ** 64, '16E'],
+    [Number.MAX_VALUE, '>1023E'],
+  ])('formats %s B/s as %s', (value, expected) => {
+    expect(formatCompactSpeed(value)).toBe(expected);
   });
 });
 
