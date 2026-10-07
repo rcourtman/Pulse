@@ -3899,3 +3899,10 @@ reconfirmation and empty intent checkpoint. Storage routes in
 intent grace. Existing restart, empty-capacity and predictive-capacity controls
 remain required. These source controls are not native storage recovery or
 installed destination-delivery evidence.
+
+`TestStorageConnectivityGapWebhook` also exercises the production Monitor
+callbacks, ordinary notification queue and guest-local HTTP receiver: the gap
+and first fresh healthy poll send no recovery; confirmed recovery sends one
+resolved receipt with the original occurrence identity, and the queue drains
+without failed/DLQ work. This is synthetic callback/receiver acceptance, not a
+native appliance or external webhook-provider result.
