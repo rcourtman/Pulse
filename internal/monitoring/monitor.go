@@ -1300,6 +1300,7 @@ type Monitor struct {
 	guestMetadataCache         map[string]guestMetadataCacheEntry
 	guestMetadataLimiterMu     sync.Mutex
 	guestMetadataLimiter       map[string]time.Time
+	guestMetadataInFlight      map[string]bool // Guarded by guestMetadataLimiterMu; released only on fetch completion.
 	guestMetadataSlots         chan struct{}
 	guestMetadataMinRefresh    time.Duration
 	guestMetadataRefreshJitter time.Duration

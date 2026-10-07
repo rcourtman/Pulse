@@ -97,6 +97,11 @@ func (m *Monitor) tryReserveGuestMetadataFetch(key string, now time.Time) bool {
 	m.guestMetadataLimiterMu.Lock()
 	defer m.guestMetadataLimiterMu.Unlock()
 
+	// A time-based hold limits retry rate, but is not completion evidence.
+	// Keep ownership until the fetch returns, even if its hold has expired.
+	if m.guestMetadataInFlight[key] {
+		return false
+	}
 	if next, ok := m.guestMetadataLimiter[key]; ok && now.Before(next) {
 		return false
 	}
@@ -104,8 +109,21 @@ func (m *Monitor) tryReserveGuestMetadataFetch(key string, now time.Time) bool {
 	if hold <= 0 {
 		hold = defaultGuestMetadataHold
 	}
+	if m.guestMetadataLimiter == nil {
+		m.guestMetadataLimiter = make(map[string]time.Time)
+	}
+	if m.guestMetadataInFlight == nil {
+		m.guestMetadataInFlight = make(map[string]bool)
+	}
 	m.guestMetadataLimiter[key] = now.Add(hold)
+	m.guestMetadataInFlight[key] = true
 	return true
+}
+
+func (m *Monitor) releaseGuestMetadataFetch(key string) {
+	m.guestMetadataLimiterMu.Lock()
+	delete(m.guestMetadataInFlight, key)
+	m.guestMetadataLimiterMu.Unlock()
 }
 
 func (m *Monitor) scheduleNextGuestMetadataFetch(key string, now time.Time) {
@@ -256,12 +274,12 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	}
 
 	reserved := m.tryReserveGuestMetadataFetch(key, now)
-	if !reserved && ok {
+	// An empty cache does not grant permission to bypass another fetch or the
+	// backoff from an early deferral. Return only existing identity, if any.
+	if !reserved {
 		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, false
 	}
-	if !reserved && !ok {
-		reserved = true
-	}
+	defer m.releaseGuestMetadataFetch(key)
 
 	// Start with cached values as fallback in case new calls fail
 	ipAddresses := cloneStringSlice(cached.ipAddresses)

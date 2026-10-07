@@ -550,6 +550,23 @@ Local tests are not native freeze/thaw evidence; supplied
 platform/artifact provenance and mount completeness still need independent
 review. The tools add no runtime interface, recovery action or release gate.
 
+
+Metadata enrichment owns one fetch per existing `(instance, node, VMID)` cache
+key until the whole fetch returns, including slot waiting and early deferral.
+The configured hold remains retry timing, not proof that an in-flight fetch
+completed. A cold cache cannot override another owner's reservation or an early
+failure's backoff. A denied reservation returns only previously retained
+identity (or none), without creating fresh evidence, a transport deferral or a
+new retry deadline. Other keys remain independent; completion releases only
+in-flight ownership and preserves normal refresh/backoff scheduling.
+
+`guest_metadata_reservation_test.go` exercises real HTTP enrichment with cold
+and retained caches, active and expired scheduling holds, early unverified-lock
+and cancelled-slot exits, independent VMs and ordinary resumption. The existing
+shared Proxmox busy/cooldown fence, lock checks and no-replay policy are unchanged.
+These source controls establish neither a reported freeze cause nor native
+QEMU-only recovery.
+
 ### Exact TrueNAS subscription termination — issue #2396
 
 JSON-RPC stream readers and the subscription-acknowledgement wait recognise
