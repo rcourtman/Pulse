@@ -2143,12 +2143,22 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerSource).toContain('getResourceChangeKindPresentation');
     expect(resourceDetailDrawerSource).toContain('getResourceChangeSourceTypePresentation');
     expect(resourceDetailDrawerSource).toContain('getResourceChangeSourceAdapterPresentation');
-    expect(resourceChangeSummarySource).toContain('getResourceChangeKindPresentation');
+    // Per-change rows read getResourceChangePresentation, which wraps the
+    // kind presentation so an alert close that was not a recovery reads as
+    // a move.
+    expect(resourceDetailDrawerSource).toContain('getResourceChangePresentation(change)');
+    expect(resourceChangeSummarySource).toContain('getResourceChangePresentation(change)');
+    expect(resourceChangeSummarySource).not.toContain(
+      'getResourceChangeKindPresentation(change.kind)',
+    );
     expect(resourceChangeSummarySource).toContain('getResourceChangeSourceTypePresentation');
     expect(resourceChangeSummarySource).toContain('getResourceChangeSourceAdapterPresentation');
     expect(resourceDetailDrawerSource).not.toContain('healthToneClass(');
     expect(resourceDetailDrawerSource).not.toContain('normalizeHealthLabel(');
     expect(resourceChangePresentationSource).toContain('getResourceChangeKindPresentation');
+    expect(resourceChangePresentationSource).toContain(
+      'export function getResourceChangePresentation',
+    );
     expect(resourceChangePresentationSource).toContain('getResourceChangeSourceTypePresentation');
     expect(resourceChangePresentationSource).toContain(
       'getResourceChangeSourceAdapterPresentation',
