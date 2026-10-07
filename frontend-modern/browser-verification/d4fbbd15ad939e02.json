@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "43a80dafd91e92d3079a039cdb08929281812eef",
+  "verified_at": "2026-10-07T13:06:25Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/types/workloads.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "f984547722c304cd3c80610a3e5ef743b3e6ad268493016ddc649c858e54e6de",
+    "frontend-modern/src/hooks/useWorkloads.ts": "1439f5bc51ad5e362eb21b65b9d95b870f84cdae823770f4ae41dd848905703d",
+    "frontend-modern/src/types/workloads.ts": "4eebb6b801a056900e7fc309679cdca891b48bdd2672e40dbb58eaffce4ca0c6"
+  },
+  "routes": [
+    "/proxmox?q=analytics-batch-310",
+    "/proxmox?q=analytics-batch-118",
+    "/proxmox?q=analytics-batch-58",
+    "/proxmox?q=analytics-batch-262"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack built from origin/main 43a80dafd9 plus this change, with a local-only go build -overlay of internal/mock/generator.go: host agents apollo-114 and meridian-731 held past their reporting lease (offline, LastSeen frozen 14 minutes back, readings retained); all four standalone agents seeded with md0 raid1 clean and md1 raid5 'clean, degraded, recovering' at 42.4% / 118M/sec (sdd1 faulty, sde1 spare rebuilding); analytics-batch-310 and analytics-batch-58 forced to report no Proxmox guest filesystems with diskStatusReason agent-not-running",
+    "Agents linked into VMs through the real POST /api/resources/{vm}/link: apollo-114 -> analytics-batch-118, meridian-731 -> analytics-batch-310 (both silent), spectrum-709 -> analytics-batch-262 and meridian-848 -> analytics-batch-58 (both live). /api/resources serves agent.stale true with the agent's raid, disks and networkInterfaces on the two silent VMs and no stale flag on the two live ones",
+    "Before this change (same stack, PR 2652 head, real browser run): silent VMs showed Guest RAID with emerald 'clean', amber 'clean, degraded, recovering', 'Rebuild: 42% \u00b7 118M/sec' and coloured member badges, network rows and 'Pulse 0.2.0-alpha' as current; the live analytics-batch-58 showed its agent filesystems as 'Usage unavailable \u00b7 ?/328 GB' under 'Guest agent not running. Install and start qemu-guest-agent in the VM.'",
+    "After, silent analytics-batch-310 (agent filesystems) at 1440 and 390: Pulse Agent row 'Pulse 0.2.0-alpha \u00b7 stopped reporting' in amber with title 'Pulse Agent 0.2.0-alpha has stopped reporting. Its readings here are its last report.'; Filesystems status 'Using last known disk stats. The Pulse Agent in this guest stopped reporting.' with 'Last known 75%' / 'Last known 42%' rows and no bars; Network status 'Using last known interface details. The Pulse Agent in this guest stopped reporting.' over a muted eth0 row; both RAID arrays data-raid-reading=last-known, '(last known)' states in muted text titled 'Last known reading, not current: host agent stopped reporting', 'Rebuild was at 42%', neutral badges 'sdd1 \u00b7 faulty' and 'sde1 \u00b7 spare rebuilding'",
+    "After, silent analytics-batch-118 with Proxmox guest filesystems (earlier run of the same change): RAID, network and agent row read as above while the Proxmox filesystem rows kept their usage and bars",
+    "After, live analytics-batch-58 (agent filesystems, Proxmox agent-not-running): '/ 65%' and '/data 28%' with progress bars, no status line, no qemu-guest-agent advice; RAID current with emerald/amber states and 'Rebuild: 42% \u00b7 118M/sec'",
+    "After, live control analytics-batch-262 (Proxmox filesystems): unchanged at both widths",
+    "No horizontal page overflow at either width; no page errors. Stopped guests were not exercised in the browser: their agent filesystems read 'Usage unavailable' under the stopped-VM message whether the guest status or the Proxmox vm-stopped reason says stopped, and the stale flip on an open drawer, are covered by GuestDrawer.test.tsx. The final stopped-status gate changes only stopped guests, so the running-guest states above were observed on this code path"
+  ],
+  "interactions": [
+    "Opened each guest's inline drawer from the Proxmox workloads table filtered by name (name cell click at 1440, first visible cell tap at 390)",
+    "Scrolled the phone drawer to the Network section and Guest RAID card and captured both",
+    "Read computed text colour, titles and data-raid-reading of every Filesystems, Network, System and RAID row via Playwright"
+  ]
+}
