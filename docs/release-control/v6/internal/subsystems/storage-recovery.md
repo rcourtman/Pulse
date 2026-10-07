@@ -6781,13 +6781,30 @@ Alerts > Thresholds, `diskTempByType`, else the agent Disk Temp default).
 Disk risk never carries heat, because every registry that rebuilds it lacks the
 alert configuration. `extractPhysicalDiskPresentationData` takes the alerts
 store's `getDiskTemperatureThresholds` resolver, so the Temp cell colour and the
-verdict read one thresholds object. The band below the trigger is a Temp cell
+verdict read one thresholds object. It resolves them under the alert override
+keys of the machine whose agent reports the disk, as disk temperature alerts
+are evaluated under that host. `getPhysicalDiskAlertResourceIds`
+(`components/Storage/physicalDiskAlertOwner.ts`) follows the disk's parent to
+the agent machine, through the pool for an Unraid array or cache disk, and
+reads that machine's keys in the order `CheckHost` reads them
+(`getAgentMachineAlertOverrideKeys`: the agent ID, the machine's canonical ID,
+then the node or guest the agent is merged with).
+A Disk Temp override set on the machine therefore replaces the per-type trigger
+for every disk it reports, on Physical Disks, the disk detail and the pool
+drawer's linked disks. A guest drawer passes the guest agent's ID, then the
+guest's own keys. An override that switches the machine's alerts off leaves its
+disks uncoloured and never hot. The band below the trigger is a Temp cell
 colour only, and a retained (not current) reading is never heat. The verdict
 judges the current reading, with no memory of an alert. A disk temperature
 alert held between its clear value and trigger shows an amber Temp cell, not
 `Running Hot`. A switched-off agent Disk Temp default resolves to null, which
 leaves the reading uncoloured and never hot, as alerting is off for it.
-Per-host Disk Temp overrides do not yet reach Physical Disks. PDF performance
+Two cases stay on the per-type trigger in the browser while alerts and Patrol
+apply the override: on the Storage page, a disk whose agent an operator
+manually linked into a VM (the page loads agents and pools, not guests; the
+guest drawer applies it), and an override an agent inherits from a guest it is
+linked to without a merge, because agent link hints are not published to the
+browser. PDF performance
 reports colour a disk reading by the same per-type thresholds, which
 `reporting.DiskInfo` carries.
 `frontend-modern/src/features/storageBackups/__tests__/diskPresentation.test.ts`
@@ -6795,7 +6812,10 @@ pins cell-and-verdict agreement for every type from 40C to 80C under factory and
 raised triggers, plus retained readings, failure evidence, sorting and
 filtering. `frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx`
 covers NVMe 63C, SATA 56C and a raised NVMe trigger loaded through the alerts
-store.
+store, and NVMe disks at 72C on three machines judged by an 80C override, the
+per-type trigger and switched-off alerts.
+`frontend-modern/src/components/Storage/__tests__/physicalDiskAlertOwner.test.ts`
+pins the owner walk and the key order.
 
 ### Pool-to-physical-disk ownership in Storage details
 

@@ -63,7 +63,7 @@ func (m *mockThresholdProvider) GetGuestCPUThreshold() float64    { return 0 }
 func (m *mockThresholdProvider) GetGuestMemoryThreshold() float64 { return m.guestMem }
 func (m *mockThresholdProvider) GetGuestDiskThreshold() float64   { return m.guestDisk }
 func (m *mockThresholdProvider) GetStorageThreshold() float64     { return m.storage }
-func (m *mockThresholdProvider) GetDiskTemperatureThreshold(diskType string) (float64, float64) {
+func (m *mockThresholdProvider) GetDiskTemperatureThreshold(_ alerts.DiskTemperatureHost, diskType string) (float64, float64) {
 	if limits, ok := m.diskTemperature[diskType]; ok {
 		return limits[0], limits[1]
 	}

@@ -99,11 +99,12 @@ describe('useWorkloads', () => {
     },
   );
 
-  it('preserves linked-agent RAID arrays from the VM resource for guest detail', async () => {
+  it('preserves linked-agent RAID arrays and agent ID from the VM resource for guest detail', async () => {
     const [snapshot] = createSignal([
       {
         ...sampleResource,
         agent: {
+          agentId: 'host-guest-agent',
           agentVersion: '6.4.5',
           raid: [
             {
@@ -130,6 +131,8 @@ describe('useWorkloads', () => {
     try {
       await flushAsync();
       expect(result!.workloads()[0]?.canonicalResourceId).toBe(sampleResource.id);
+      // The guest drawer judges the agent's disks under this ID's overrides.
+      expect(result!.workloads()[0]?.agentId).toBe('host-guest-agent');
       expect(result!.workloads()[0]?.agentRaid).toMatchObject([
         { device: '/dev/md0', level: 'raid1', state: 'clean' },
       ]);

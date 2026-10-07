@@ -3,6 +3,7 @@ package ai
 import (
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -20,7 +21,7 @@ func (m MockThresholdProvider) GetNodeMemoryThreshold() float64  { return m.Node
 func (m MockThresholdProvider) GetGuestMemoryThreshold() float64 { return m.GuestMem }
 func (m MockThresholdProvider) GetGuestDiskThreshold() float64   { return m.GuestDisk }
 func (m MockThresholdProvider) GetStorageThreshold() float64     { return m.Storage }
-func (m MockThresholdProvider) GetDiskTemperatureThreshold(string) (float64, float64) {
+func (m MockThresholdProvider) GetDiskTemperatureThreshold(alerts.DiskTemperatureHost, string) (float64, float64) {
 	return 0, 0
 }
 

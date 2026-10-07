@@ -1445,3 +1445,116 @@ func TestDiskTemperatureThresholdMatchesCheckHostPolicy(t *testing.T) {
 		t.Fatalf("nil manager threshold = %+v, want the factory nvme 70", got)
 	}
 }
+
+// HostDiskTemperatureThreshold is the disk heat policy for a disk a host agent
+// reports, so it must agree with CheckHost on every host-level override: an
+// explicit Disk Temp override on the host, or inherited from its linked node,
+// replaces the per-type entry; the first override in the chain decides even
+// when it sets no Disk Temp; and a host whose alerts are off judges no heat.
+func TestHostDiskTemperatureThresholdMatchesCheckHostOverrides(t *testing.T) {
+	const hostID = "host-temp-policy"
+	const nodeID = "pve1-node1"
+	perType := &HysteresisThreshold{Trigger: 70, Clear: 65}
+
+	for _, tc := range []struct {
+		name      string
+		overrides map[string]ThresholdConfig
+		linkNode  bool
+		want      *HysteresisThreshold
+		off       bool
+	}{
+		{name: "no override", want: perType},
+		{
+			name:      "host disk temp override",
+			overrides: map[string]ThresholdConfig{hostID: {DiskTemperature: &HysteresisThreshold{Trigger: 80, Clear: 75}}},
+			want:      &HysteresisThreshold{Trigger: 80, Clear: 75},
+		},
+		{
+			name:      "host override without disk temp",
+			overrides: map[string]ThresholdConfig{hostID: {Memory: &HysteresisThreshold{Trigger: 90, Clear: 85}}},
+			want:      perType,
+		},
+		{
+			name:      "linked node disk temp override",
+			overrides: map[string]ThresholdConfig{nodeID: {DiskTemperature: &HysteresisThreshold{Trigger: 78, Clear: 72}}},
+			linkNode:  true,
+			want:      &HysteresisThreshold{Trigger: 78, Clear: 72},
+		},
+		{
+			name: "host override shadows linked node",
+			overrides: map[string]ThresholdConfig{
+				hostID: {Memory: &HysteresisThreshold{Trigger: 90, Clear: 85}},
+				nodeID: {DiskTemperature: &HysteresisThreshold{Trigger: 78, Clear: 72}},
+			},
+			linkNode: true,
+			want:     perType,
+		},
+		{
+			name:      "host disk temp switched off",
+			overrides: map[string]ThresholdConfig{hostID: {DiskTemperature: &HysteresisThreshold{}}},
+			off:       true,
+		},
+		{
+			name:      "host alerts disabled",
+			overrides: map[string]ThresholdConfig{hostID: {Disabled: true}},
+		},
+		{
+			name:      "linked node alerts disabled",
+			overrides: map[string]ThresholdConfig{nodeID: {Disabled: true}},
+			linkNode:  true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := configureDiskTempTypeHostManager(t)
+			m.mu.Lock()
+			for id, override := range tc.overrides {
+				m.config.Overrides[id] = override
+			}
+			m.mu.Unlock()
+
+			owner := DiskTemperatureHost{ID: hostID}
+			if tc.linkNode {
+				owner.LinkedNodeID = nodeID
+			}
+			got := m.HostDiskTemperatureThreshold(owner, "nvme")
+			switch {
+			case tc.off:
+				if got == nil || got.Trigger > 0 {
+					t.Fatalf("HostDiskTemperatureThreshold = %+v, want a switched-off threshold", got)
+				}
+			case (got == nil) != (tc.want == nil) || (got != nil && *got != *tc.want):
+				t.Fatalf("HostDiskTemperatureThreshold = %+v, want %+v", got, tc.want)
+			}
+
+			check := func(temperature int) bool {
+				host := hostWithSMARTDiskTemp(hostID, "nvme", temperature)
+				host.LinkedNodeID = owner.LinkedNodeID
+				m.CheckHost(host)
+				_, exists := testLookupActiveAlert(t, m, hostDiskTempAlertID(host))
+				return exists
+			}
+			if got == nil || got.Trigger <= 0 {
+				if check(99) {
+					t.Fatalf("CheckHost alerted at 99C on a host the policy judges no heat for, active: %v", alertKeys(m))
+				}
+				return
+			}
+			trigger := int(got.Trigger)
+			if check(trigger - 1) {
+				t.Fatalf("CheckHost alerted at %dC, under the policy trigger %v", trigger-1, got.Trigger)
+			}
+			if !check(trigger) {
+				t.Fatalf("CheckHost stayed quiet at the policy trigger %dC, active: %v", trigger, alertKeys(m))
+			}
+		})
+	}
+
+	m := configureDiskTempTypeHostManager(t)
+	if got, want := m.HostDiskTemperatureThreshold(DiskTemperatureHost{}, "sas"), m.DiskTemperatureThreshold("sas"); got == nil || want == nil || *got != *want {
+		t.Fatalf("hostless policy = %+v, want DiskTemperatureThreshold %+v", got, want)
+	}
+	var nilManager *Manager
+	if got := nilManager.HostDiskTemperatureThreshold(DiskTemperatureHost{ID: hostID}, "nvme"); got == nil || got.Trigger != 70 {
+		t.Fatalf("nil manager host policy = %+v, want the factory nvme 70", got)
+	}
+}

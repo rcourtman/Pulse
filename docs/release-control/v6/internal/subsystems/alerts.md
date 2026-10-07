@@ -1773,14 +1773,24 @@ an alert the next evaluation raises again.
 The policy `CheckHost` applies to a SMART disk (the agent Disk Temp default,
 refined by the disk type's `DiskTempByType` entry, and switched off for every
 type when that default is off) is the canonical answer to "is this disk too
-hot". `diskTemperatureThresholdForType` in `internal/alerts/host.go` holds it,
-and `Manager.DiskTemperatureThreshold(diskType)` exposes it, without host
-overrides, to Patrol through `AlertThresholdAdapter.GetDiskTemperatureThreshold`.
+hot". `diskTemperatureThresholdForType` in `internal/alerts/host.go` holds it.
+`Manager.HostDiskTemperatureThreshold(host, diskType)` resolves it for the host
+agent that reports a disk exactly as `CheckHost` does: an explicit Disk Temp
+override on that host, or one inherited from its linked node or guest, replaces
+the per-type entry, the first override in that chain decides even when it sets
+no Disk Temp, and an override that switches the host's alerts off leaves no
+threshold. `TestHostDiskTemperatureThresholdMatchesCheckHostOverrides` pins each
+case against what `CheckHost` fires. `Manager.DiskTemperatureThreshold(diskType)`
+is the hostless case. Patrol reads the policy through
+`AlertThresholdAdapter.GetDiskTemperatureThreshold`.
 `DefaultDiskTemperatureThreshold` serves callers with no manager. Disk risk
 (`internal/storagehealth`) judges no temperature. The Physical Disks Temp cell
-and Health verdict mirror the per-type triggers and a switched-off default in
-`resolveDiskTemperatureDisplayThresholds`; host overrides do not reach that
-page yet. That resolver returns null when the agent Disk Temp default is off.
+and Health verdict mirror the policy in `resolveDiskTemperatureDisplayThresholds`
+under the override keys of the machine whose agent reports the disk, in the
+order `CheckHost` reads them. That resolver returns null when the agent Disk
+Temp default is off or an override or agent default switches the host's alerts
+off. The global alerts switch and the agent alert-type switch stop `CheckHost`
+without changing the policy.
 The displays that read it treat null as off: no threshold colour
 (`getTemperatureTextClass` with `diskTemperature`) and never hot. A
 `DiskTempByType` entry cannot be switched off on its own, because

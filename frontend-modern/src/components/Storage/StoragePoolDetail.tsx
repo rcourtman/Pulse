@@ -39,6 +39,7 @@ import {
   STORAGE_DETAIL_SECTION_TITLE_SPACED_CLASS,
 } from '@/features/storageBackups/detailPresentation';
 import type { StorageRecord } from '@/features/storageBackups/models';
+import type { PhysicalDiskAlertResourceIdResolver } from '@/features/storageBackups/diskPresentation';
 import type { Resource } from '@/types/resource';
 import { formatTemperature } from '@/utils/temperature';
 import { StorageDetailKeyValueRow } from './StorageDetailKeyValueRow';
@@ -47,6 +48,7 @@ import { useStoragePoolDetailModel } from './useStoragePoolDetailModel';
 interface StoragePoolDetailProps {
   record: StorageRecord;
   physicalDisks: Resource[];
+  getDiskAlertResourceIds?: PhysicalDiskAlertResourceIdResolver;
   summarySeriesId: string;
   controlsId?: string;
 }
@@ -67,6 +69,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
   } = useStoragePoolDetailModel({
     record: () => props.record,
     physicalDisks: () => props.physicalDisks,
+    getDiskAlertResourceIds: props.getDiskAlertResourceIds,
   });
   const rangeOptions = createMemo(() =>
     getUnlockedHistoryRangeOptions(STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS, maxHistoryDays()),
@@ -285,7 +288,10 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                                 ? PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS
                                 : getLinkedDiskTemperatureTextClass(
                                     disk.temperature,
-                                    getDiskTemperatureThresholds(disk.diskType),
+                                    getDiskTemperatureThresholds(
+                                      disk.diskType,
+                                      disk.alertResourceIds,
+                                    ),
                                   )
                             }`}
                             title={disk.temperatureLastKnownTitle}

@@ -3,6 +3,7 @@ import { useWebSocket } from '@/contexts/appRuntime';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource, ResourceType } from '@/types/resource';
+import { getPhysicalDiskAlertResourceIds, indexPhysicalDiskOwners } from './physicalDiskAlertOwner';
 
 const STORAGE_PAGE_RESOURCES_QUERY = 'type=agent,pbs,storage,physical_disk,ceph';
 
@@ -42,6 +43,11 @@ export const useStoragePageResources = (options: UseStoragePageResourcesOptions 
     ...resourceSource,
     resources: storageResourceRows,
   };
+  // A disk's heat is judged under the alert overrides of the machine whose
+  // agent reports it; this page loads those machines and pools with the disks.
+  const physicalDiskOwners = createMemo(() => indexPhysicalDiskOwners(resourceSource.resources()));
+  const getDiskAlertResourceIds = (disk: Resource): string[] =>
+    getPhysicalDiskAlertResourceIds(disk, physicalDiskOwners());
   const alertsEnabled = alertsActivation.detectionEnabled;
 
   return {
@@ -53,6 +59,7 @@ export const useStoragePageResources = (options: UseStoragePageResourcesOptions 
     reconnect,
     nodes,
     physicalDisks,
+    getDiskAlertResourceIds,
     cephResources,
     storageResources,
     alertsEnabled,

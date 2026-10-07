@@ -84,7 +84,7 @@ func TestAlertThresholdAdapter_Fallbacks(t *testing.T) {
 }
 
 func TestAlertThresholdAdapter_DiskTemperatureFollowsAlertPolicy(t *testing.T) {
-	if trigger, clear := NewAlertThresholdAdapter(nil).GetDiskTemperatureThreshold("nvme"); trigger != 70 || clear != 65 {
+	if trigger, clear := NewAlertThresholdAdapter(nil).GetDiskTemperatureThreshold(alerts.DiskTemperatureHost{}, "nvme"); trigger != 70 || clear != 65 {
 		t.Fatalf("no manager: nvme = %v/%v, want the factory 70/65", trigger, clear)
 	}
 
@@ -93,17 +93,42 @@ func TestAlertThresholdAdapter_DiskTemperatureFollowsAlertPolicy(t *testing.T) {
 	cfg.DiskTempByType["nvme"] = alerts.HysteresisThreshold{Trigger: 75, Clear: 70}
 	mgr.UpdateConfig(cfg)
 	a := NewAlertThresholdAdapter(mgr)
-	if trigger, clear := a.GetDiskTemperatureThreshold("nvme"); trigger != 75 || clear != 70 {
+	if trigger, clear := a.GetDiskTemperatureThreshold(alerts.DiskTemperatureHost{}, "nvme"); trigger != 75 || clear != 70 {
 		t.Fatalf("raised nvme = %v/%v, want 75/70", trigger, clear)
 	}
-	if trigger, clear := a.GetDiskTemperatureThreshold("sata"); trigger != 55 || clear != 50 {
+	if trigger, clear := a.GetDiskTemperatureThreshold(alerts.DiskTemperatureHost{}, "sata"); trigger != 55 || clear != 50 {
 		t.Fatalf("sata = %v/%v, want 55/50", trigger, clear)
 	}
 
 	cfg = mgr.GetConfig()
 	cfg.AgentDefaults.DiskTemperature = &alerts.HysteresisThreshold{Trigger: 0, Clear: 0}
 	mgr.UpdateConfig(cfg)
-	if trigger, clear := a.GetDiskTemperatureThreshold("nvme"); trigger != 0 || clear != 0 {
+	if trigger, clear := a.GetDiskTemperatureThreshold(alerts.DiskTemperatureHost{}, "nvme"); trigger != 0 || clear != 0 {
 		t.Fatalf("disk temperature alerting off: nvme = %v/%v, want 0/0", trigger, clear)
+	}
+}
+
+// A host's Disk Temp override reaches Patrol for that host's disks only, and a
+// host whose alerts are switched off has no disk heat policy at all.
+func TestAlertThresholdAdapter_DiskTemperatureHonoursHostOverrides(t *testing.T) {
+	mgr := alerts.NewManager()
+	cfg := mgr.GetConfig()
+	cfg.Overrides = map[string]alerts.ThresholdConfig{
+		"host-raised": {DiskTemperature: &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}},
+		"host-off":    {Disabled: true},
+	}
+	mgr.UpdateConfig(cfg)
+	a := NewAlertThresholdAdapter(mgr)
+
+	for host, want := range map[string][2]float64{
+		"host-raised": {80, 75},
+		"host-plain":  {70, 65},
+		"host-off":    {0, 0},
+		"":            {70, 65},
+	} {
+		trigger, clear := a.GetDiskTemperatureThreshold(alerts.DiskTemperatureHost{ID: host}, "nvme")
+		if trigger != want[0] || clear != want[1] {
+			t.Errorf("host %q nvme = %v/%v, want %v/%v", host, trigger, clear, want[0], want[1])
+		}
 	}
 }

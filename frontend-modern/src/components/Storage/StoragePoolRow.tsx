@@ -24,6 +24,7 @@ import {
   STORAGE_POOL_ROW_USAGE_WRAP_CLASS,
 } from '@/features/storageBackups/storagePoolRowPresentation';
 import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
+import type { PhysicalDiskAlertResourceIdResolver } from '@/features/storageBackups/diskPresentation';
 import type { Resource } from '@/types/resource';
 import {
   getStoragePoolCellPaddingClass,
@@ -57,6 +58,7 @@ interface StoragePoolRowProps {
   alertHeadlineCompact?: string | null;
   alertHeadlineClass?: string;
   physicalDisks: Resource[];
+  getDiskAlertResourceIds?: PhysicalDiskAlertResourceIdResolver;
   alertDataAttrs: {
     'data-row-id': string;
     'data-alert-state': string;
@@ -247,6 +249,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         <StoragePoolDetail
           record={props.record}
           physicalDisks={props.physicalDisks}
+          getDiskAlertResourceIds={props.getDiskAlertResourceIds}
           summarySeriesId={props.summarySeriesId}
           controlsId={detailControlsId()}
         />

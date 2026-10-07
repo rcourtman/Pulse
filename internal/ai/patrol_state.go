@@ -100,9 +100,9 @@ type patrolRuntimeState struct {
 }
 
 // diskTemperatureLimits resolves the alert disk temperature policy for one
-// disk type.
-func (s patrolRuntimeState) diskTemperatureLimits(diskType string) diskTemperatureLimits {
-	return diskTemperatureLimitsFor(s.thresholdProvider, diskType)
+// disk of the given type that the given host agent reports.
+func (s patrolRuntimeState) diskTemperatureLimits(host alerts.DiskTemperatureHost, diskType string) diskTemperatureLimits {
+	return diskTemperatureLimitsFor(s.thresholdProvider, host, diskType)
 }
 
 func newPatrolRuntimeState(snapshot models.StateSnapshot) patrolRuntimeState {

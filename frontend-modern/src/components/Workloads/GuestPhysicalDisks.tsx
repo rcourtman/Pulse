@@ -19,10 +19,15 @@ const LazyDiskDetail = lazy(() =>
   import('@/components/Storage/DiskDetail').then(({ DiskDetail }) => ({ default: DiskDetail })),
 );
 
-const GuestPhysicalDiskRow: Component<{ disk: Resource }> = (props) => {
+const GuestPhysicalDiskRow: Component<{ disk: Resource; alertResourceIds: string[] }> = (props) => {
   const [expanded, setExpanded] = createSignal(false);
   const { getDiskTemperatureThresholds } = useAlertsActivation();
-  const data = () => extractPhysicalDiskPresentationData(props.disk, getDiskTemperatureThresholds);
+  const data = () =>
+    extractPhysicalDiskPresentationData(
+      props.disk,
+      getDiskTemperatureThresholds,
+      props.alertResourceIds,
+    );
   const health = () => getPhysicalDiskHealthStatus(data());
   const temperature = () => getPhysicalDiskTemperaturePresentation(data());
   const label = () => data().model || data().devPath || props.disk.name;
@@ -68,7 +73,11 @@ const GuestPhysicalDiskRow: Component<{ disk: Resource }> = (props) => {
               </p>
             }
           >
-            <LazyDiskDetail disk={props.disk} nodes={[]} />
+            <LazyDiskDetail
+              disk={props.disk}
+              nodes={[]}
+              alertResourceIds={props.alertResourceIds}
+            />
           </Suspense>
         </div>
       </Show>
@@ -76,7 +85,15 @@ const GuestPhysicalDiskRow: Component<{ disk: Resource }> = (props) => {
   );
 };
 
-export const GuestPhysicalDisks: Component<{ parentId: string }> = (props) => {
+export const GuestPhysicalDisks: Component<{
+  parentId: string;
+  /**
+   * Alert override keys judging these disks' heat, in the order the backend
+   * reads them: the guest's own agent reports them, so its Disk Temp override
+   * applies, then the guest's canonical ID and override keys.
+   */
+  alertResourceIds?: string[];
+}> = (props) => {
   // The Proxmox Overview snapshot deliberately excludes physical disks. Query
   // only the open guest's direct children rather than hydrating every disk in
   // a large estate (or mistaking the VMID-based table key for the resource ID).
@@ -104,7 +121,11 @@ export const GuestPhysicalDisks: Component<{ parentId: string }> = (props) => {
             Physical Disks &amp; SMART ({disks().length})
           </h3>
           <div class="space-y-2">
-            <For each={disks()}>{(disk) => <GuestPhysicalDiskRow disk={disk} />}</For>
+            <For each={disks()}>
+              {(disk) => (
+                <GuestPhysicalDiskRow disk={disk} alertResourceIds={props.alertResourceIds ?? []} />
+              )}
+            </For>
           </div>
         </InfoCardFrame>
       </Show>

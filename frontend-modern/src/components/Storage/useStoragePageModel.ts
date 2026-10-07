@@ -66,6 +66,7 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     storageResources,
     nodes,
     physicalDisks,
+    getDiskAlertResourceIds,
     cephResources,
     alertsEnabled,
   } = useStoragePageResources({ resourceSource: options.resourceSource });
@@ -471,6 +472,7 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     initialDataReceived: surfaceInitialDataReceived,
     nodeOptions,
     physicalDisks,
+    getDiskAlertResourceIds,
     nodes,
     groupedRecords,
     expandedGroups,
