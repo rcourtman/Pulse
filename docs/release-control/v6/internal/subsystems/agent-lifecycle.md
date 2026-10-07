@@ -765,6 +765,15 @@ not fenced: a live report already past its mock-mode check when mock mode is
 switched on can still be evaluated after the clear, and its alerts can persist
 until mock mode is left.
 
+Every tenant monitor registers its own fixture agents, and their node links,
+in its own alert manager, so the toggle forgets the fixture agents of every
+running monitor, not only those of the monitor it was called through. A link
+left behind would keep owning its fixture node's usage alerts after mock mode
+ends. `TestLeavingMockModeReleasesFixtureAgentNodeLinksOnEveryRunningMonitor`
+in `internal/monitoring/monitor_host_agent_removal_lifecycle_test.go` switches
+through the default monitor and fails if the other tenant's node stays
+suppressed.
+
 Physical-disk evidence collected by a host agent must survive projection back
 into monitoring's models. Absent evidence has to carry its declared sentinel
 rather than a zero value that reads as a real measurement: an absent
