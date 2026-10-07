@@ -5723,3 +5723,53 @@ VMIDs in separate instances, expiry/offline/empty/withdrawal/recovery and a
 backup lock with zero filesystem calls. Sequential snapshot replacement pins
 inventory removal/recovery without restarting the monitor. These are synthetic
 source controls, not a native cause, thaw or installed recovery for #2616/#2619.
+
+### Runtime-owned Proxmox replication observations — #2606
+
+The ordinary PVE scheduler/provider/executor dispatches a bounded replication
+read independently of `cluster/resources` availability, traditional guest
+fallback and disabled guest-detail monitoring. Its ten-second context is
+captured from the monitor runtime before dispatch, not from the short-lived
+scheduled task. One read per registered instance/client coalesces overlapping
+cycles; runtime replacement and retirement cancel/invalidate the claim. A
+replacement client can recover on the next ordinary cycle without waiting for
+an old read. Publication checks cancellation, the claim and the current client
+under the same lock; a late obsolete completion cannot overwrite or clear a
+newer result, including a successful empty inventory.
+
+Only an explicitly decoded `data` array is a complete replication inventory.
+Missing/null/malformed envelopes, cancellation (including after final status
+body consumption), access/transport errors and unavailable endpoints preserve
+the prior jobs and their original `LastPolled`. A complete successful empty
+array removes only that instance's jobs. Individual uncanceled status-access
+failures retain the existing unknown-outcome contract, not inferred success.
+No wire fields, classification, permission contract or scheduler cadence change.
+
+`monitor_pve_replication_lifecycle_test.go` exercises ordinary fallback/disabled
+paths and canceled/unavailable versus complete empty reads; the owned-boundary
+controls in `monitor_pve_replication_owner_test.go` cover coalescing, cycle/runtime
+cancellation, replacement, retirement, late completion and ordinary recovery.
+`pkg/proxmox/replication_lifecycle_test.go` binds envelope and cancellation
+controls to the real HTTP client. Synthetic proofs do not establish #2606's
+reported eleven-hour cause, native PVE recovery or published availability.
+
+### Non-destructive PVE backup access guidance
+
+Backup storage-list/content access warnings name the attempted endpoint and
+point operators to the actual saved PVE connection, installed-version endpoint
+permissions and both user/token scopes without disabling privilege separation.
+Observed HTTP 401 is an authentication rejection; 403 is an access denial, not
+proof of a particular missing role. Unknown errors and proxy bodies quoting
+another status remain unconfirmed. The private HTTP error wrapper exposes only
+its numeric wire status for this distinction, never its body or credentials.
+Warnings and associated log guidance contain no unconditional ACL command,
+assumed account, token ID, token secret or role prescription. Endpoint text is
+bounded and control-quoted. Collection, inventory/error completeness, polling
+cadence and setup permissions are unchanged.
+
+`monitor_backup_poll_test.go` and `canonical_guardrails_test.go` retain the safe
+saved-identity/manual-token contract. `pve_backup_warning_test.go` exercises
+401/403/proxy errors through the real client and storage-list/content producer,
+as well as unknown evidence and hostile endpoint text. The HTTP status helper
+has wrapped-error/body-injection controls in `api_error_status_test.go`. These
+are local source controls, not a native permission diagnosis or availability.

@@ -108,20 +108,43 @@ func (m *Monitor) updatePVEBackupTemplateSubjectsFromClusterResources(instanceNa
 	m.updatePVEBackupTemplateSubjectsForType(instanceName, "lxc", lxcTemplates)
 }
 
-func quotePVEACLTokenID(tokenID string) string {
-	return "'" + strings.ReplaceAll(tokenID, "'", `'"'"'`) + "'"
+func pveBackupPermissionWarning(instanceCfg *config.PVEInstance) string {
+	identity := "the configured user and API token in the saved PVE connection"
+	if instanceCfg != nil && strings.TrimSpace(instanceCfg.TokenName) == "" {
+		identity = "the configured login credentials or manually supplied API token in the saved PVE connection"
+	}
+	return "Check " + identity + ". For a privilege-separated token, check both user and token scopes without disabling privilege separation. Verify the permissions required by the rejected endpoint on your installed PVE version; a failed read alone does not identify a missing role. Do not delete nodes, remove registration state or rotate credentials to diagnose an empty backup table."
 }
 
-func pveBackupPermissionWarning(instanceCfg *config.PVEInstance) string {
-	warning := "Missing PVEDatastoreAdmin permission on /storage. Run: pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin"
-	if instanceCfg == nil {
-		return warning + "; if using a privilege-separated API token, also grant PVEDatastoreAdmin on /storage to that token."
+func pveBackupAccessWarning(instanceCfg *config.PVEInstance, endpoint string, err error) string {
+	status, known := proxmox.APIErrorStatus(err)
+	cause := "PVE backup inventory access failed; authentication or permission cause is unconfirmed."
+	if known && status == 401 {
+		cause = "PVE rejected backup inventory authentication (HTTP 401); this is not evidence of a missing role."
+	} else if known && status == 403 {
+		cause = "PVE denied backup inventory access (HTTP 403); the required permission and scope need verification."
 	}
-	tokenID := strings.TrimSpace(instanceCfg.TokenName)
-	if tokenID == "" || !strings.Contains(tokenID, "!") {
-		return warning + "; if using a privilege-separated API token, also grant PVEDatastoreAdmin on /storage to that token."
+	// Endpoint comes from the actual attempted node/storage operation, never
+	// from provider error text. Bound and quote it to keep controls out of logs
+	// and warnings. No credential, token ID or provider body is reproduced.
+	endpointRunes := []rune(strings.ToValidUTF8(endpoint, "?"))
+	if len(endpointRunes) > 256 {
+		endpoint = string(endpointRunes[:256]) + "…"
+	} else {
+		endpoint = string(endpointRunes)
 	}
-	return warning + " && pveum aclmod /storage -token " + quotePVEACLTokenID(tokenID) + " -role PVEDatastoreAdmin"
+	return cause + " Rejected endpoint: " + strconv.Quote(endpoint) + ". " + pveBackupPermissionWarning(instanceCfg)
+}
+
+func (m *Monitor) recordPVEBackupAccessWarning(instanceName, endpoint string, err error) {
+	warning := pveBackupAccessWarning(m.getInstanceConfig(instanceName), endpoint, err)
+	m.mu.Lock()
+	if m.backupPermissionWarnings == nil {
+		m.backupPermissionWarnings = make(map[string]string)
+	}
+	m.backupPermissionWarnings[instanceName] = warning
+	m.mu.Unlock()
+	log.Warn().Str("instance", instanceName).Str("guidance", warning).Msg("PVE backup inventory access failed")
 }
 
 func (m *Monitor) backupInventoryScopeForAlerts() *alerts.BackupInventoryScope {
@@ -234,6 +257,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			if isPVEBackupPermissionError(err) {
 				hadPermissionError = true
 				permissionFailureCount++
+				m.recordPVEBackupAccessWarning(instanceName, fmt.Sprintf("/nodes/%s/storage", node.Node), err)
 			}
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_for_backups", instanceName, err).WithNode(node.Node)
 			log.Warn().Err(monErr).Str("node", node.Node).Msg("failed to get storage for backups - skipping node")
@@ -267,15 +291,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				if isPVEBackupPermissionError(err) {
 					hadPermissionError = true
 					permissionFailureCount++
-					warning := pveBackupPermissionWarning(m.getInstanceConfig(instanceName))
-					m.mu.Lock()
-					m.backupPermissionWarnings[instanceName] = warning
-					m.mu.Unlock()
-					log.Warn().
-						Str("instance", instanceName).
-						Str("node", node.Node).
-						Str("storage", storage.Storage).
-						Msg("Backup permission denied - PVEDatastoreAdmin role may be missing on /storage")
+					m.recordPVEBackupAccessWarning(instanceName, fmt.Sprintf("/nodes/%s/storage/%s/content", node.Node, storage.Storage), err)
 				} else {
 					log.Debug().Err(monErr).
 						Str("node", node.Node).

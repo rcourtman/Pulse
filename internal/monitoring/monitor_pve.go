@@ -1539,8 +1539,13 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	// Poll VMs and containers FIRST - this is the most critical data.
 	// This happens immediately after starting the storage fallback goroutine,
 	// so VM/container polling runs in parallel with (and is not blocked by) storage operations.
-	if err := m.pollGuestsWithFallback(ctx, instanceName, instanceCfg, client, nodes, nodeEffectiveStatus); err != nil {
-		pollErr = err
+	guestErr := m.pollGuestsWithFallback(ctx, instanceName, instanceCfg, client, nodes, nodeEffectiveStatus)
+	// Replication is independent of guest-detail availability and the short
+	// scheduled cycle. Include fallback/disabled guest monitoring too; a failed
+	// guest read must not leave replication frozen until a manual restart.
+	m.pollReplicationStatusAsync(instanceName, client, nil)
+	if guestErr != nil {
+		pollErr = guestErr
 		return
 	}
 

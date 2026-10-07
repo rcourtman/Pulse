@@ -1217,6 +1217,7 @@ type Monitor struct {
 	lastAuthAttempt            map[string]time.Time                       // Track last auth attempt time
 	lastClusterCheck           map[string]time.Time                       // Track last cluster check for standalone nodes
 	lastPhysicalDiskPoll       map[string]time.Time                       // Track last physical disk poll time per instance
+	pveReplicationPolls        map[string]*pveReplicationPoll             // Owned runtime/client-scoped replication reads; guarded by mu
 	lastPVEBackupPoll          map[string]time.Time                       // Track last PVE backup poll per instance
 	vzdumpJobTaskCache         map[string]vzdumpJobTaskCacheEntry         // Cache synthesized per-guest tasks for multi-guest vzdump job runs, keyed by instance|UPID
 	lastPBSBackupPoll          map[string]time.Time                       // Track last PBS backup poll per instance
@@ -1347,6 +1348,12 @@ type Monitor struct {
 func (m *Monitor) setRuntimeContext(ctx context.Context, hub *websocket.Hub) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// A new runtime invalidates detached replication reads even when the old
+	// caller has not yet canceled its parent context.
+	for name, poll := range m.pveReplicationPolls {
+		poll.cancel()
+		delete(m.pveReplicationPolls, name)
+	}
 	m.runtimeCtx = ctx
 	m.wsHub = hub
 }
