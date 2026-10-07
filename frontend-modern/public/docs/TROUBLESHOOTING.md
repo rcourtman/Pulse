@@ -509,31 +509,81 @@ back to an older version does not make that data a clean older-version baseline.
 For a responsive **Linux systemd / Proxmox LXC** install, the following reads
 two process-I/O samples, waiting 60 seconds between them. Run it inside the
 Pulse container for LXC, not on the Proxmox host. Substitute the actual service
-name (`pulse-backend` on some older installs). Use an account authorised to
-read the process counters; no service restart or database access is needed.
+name (`pulse-backend` on some older installs) in both `systemctl` calls. Use an
+account already permitted to read the process counters. The collector does not
+elevate privileges or prompt: an unprivileged deadline cannot reliably stop a
+privileged reader. If access is denied, stop rather than changing privileges
+to make it pass; no service restart or database access is needed.
 
 ```bash
 # systemd / Proxmox LXC: bounded process-write samples
 (
-  set -e
-  for sample in 1 2; do
-    date -u +'%Y-%m-%dT%H:%M:%SZ'
-    pid=$(systemctl show pulse --property=MainPID --value)
-    case "$pid" in
-      ''|0|*[!0-9]*) printf 'No running Pulse PID; sample unavailable.\n' >&2; exit 1 ;;
-    esac
-    TZ=UTC ps -p "$pid" -o pid=,lstart=
-    sudo awk '
-      $1 == "write_bytes:" || $1 == "cancelled_write_bytes:" { print; fields++ }
-      END { if (fields != 2) exit 1 }
-    ' "/proc/$pid/io"
-    if [ "$sample" -eq 1 ]; then sleep 60; fi
-  done
+  set -eu
+  command -v timeout >/dev/null 2>&1 || {
+    printf 'Write samples unavailable: GNU timeout is required.\n' >&2; exit 1
+  }
+  if samples=$(timeout --signal=KILL 80s bash <<'PULSE_WRITE_SAMPLES' 2>/dev/null
+set -eu
+read_sample() {
+  set -eu
+  pid=$(systemctl show pulse --property=MainPID --value)
+  case "$pid" in
+    ''|0|*[!0-9]*) exit 1 ;;
+  esac
+  identity=$(TZ=UTC ps -p "$pid" -o pid=,lstart=)
+  [ -n "$identity" ] || exit 1
+  start_ticks=$(awk '
+    { sub(/^.*\) /, ""); if ($20 !~ /^[0-9]+$/) exit 1; print $20; found++ }
+    END { if (found != 1) exit 1 }
+  ' "/proc/$pid/stat")
+  timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+  counters=$(awk '
+    $1 == "write_bytes:" || $1 == "cancelled_write_bytes:" {
+      if (NF != 2 || $2 !~ /^[0-9]+$/ || seen[$1]++) exit 1
+      print; fields++
+    }
+    END { if (fields != 2) exit 1 }
+  ' "/proc/$pid/io")
+  current_pid=$(systemctl show pulse --property=MainPID --value)
+  current_identity=$(TZ=UTC ps -p "$pid" -o pid=,lstart=)
+  current_ticks=$(awk '
+    { sub(/^.*\) /, ""); if ($20 !~ /^[0-9]+$/) exit 1; print $20; found++ }
+    END { if (found != 1) exit 1 }
+  ' "/proc/$pid/stat")
+  [ "$pid" = "$current_pid" ] && [ "$identity" = "$current_identity" ] &&
+    [ "$start_ticks" = "$current_ticks" ] || exit 1
+  printf 'Identity: %s; start ticks=%s\nSample UTC: %s\n%s\n' \
+    "$identity" "$start_ticks" "$timestamp" "$counters"
+}
+first=$(read_sample)
+sleep 60
+second=$(read_sample)
+[ "${first%%$'\n'*}" = "${second%%$'\n'*}" ] || exit 1
+printf '%s\n\n%s\n' "$first" "$second"
+PULSE_WRITE_SAMPLES
+  ); then
+    printf '%s\n' "$samples"
+  else
+    status=$?
+    printf 'Write samples unavailable (exit %s); no complete pair. Stop sampling.\n' "$status" >&2
+    exit "$status"
+  fi
 )
 ```
 
-Compare `write_bytes` only when both samples have the same PID and process
-start time, no restart occurred, and the counter did not decrease. Divide the
+Each recipe requires **GNU `timeout`** and limits the complete two-sample
+collection, including the 60-second wait, to 80 seconds. At the deadline it
+kills its own read-only collection group, including readers that ignore TERM,
+not Pulse or Docker. This deliberate hard stop prevents a reader surviving after
+the collection shell exits. A missing utility, permission failure, timeout or changed identity
+makes the pair unavailable; no partial identity, counter or raw reader error is
+printed, and there is no unbounded fallback. Stop sampling on failure rather
+than removing the deadline or retrying against an unresponsive installation.
+
+The process recipe checks the same PID and process start time before and after
+each read and across both samples. Linux start ticks also distinguish PID reuse
+within one displayed second. These checks do not make the counters atomic.
+Compare `write_bytes` only when no restart occurred and the counter did not decrease. Divide the
 byte difference by the **actual elapsed seconds**. This is storage-accounted
 process I/O, not filesystem growth or physical SSD wear; cancelled writes and
 background writeback can differ from device measurements. Keep
@@ -543,24 +593,59 @@ day's total. Preserve the window and units with the result.
 
 For **Docker / Compose**, run this on the Docker host, replacing `pulse` with
 the running container name. It reads only the start time and selected statistics,
-not the container environment or configuration.
+not the container environment or configuration. Each stats call targets the
+full container ID, not a reusable name. The name must still resolve to the same
+running ID, start time and restart count after the read and across both samples;
+a replacement, restart or stopped container makes the pair unavailable.
 
 ```bash
 # Docker: bounded container statistics
 (
-  set -e
-  for sample in 1 2; do
-    date -u +'%Y-%m-%dT%H:%M:%SZ'
-    docker inspect --format 'Started={{.State.StartedAt}}' pulse
-    stats=$(docker stats --no-stream --format \
-      'CPU={{.CPUPerc}} Memory={{.MemUsage}} BlockIO={{.BlockIO}}' pulse)
-    if [ -z "$stats" ]; then
-      printf 'Container statistics unavailable; no zero inferred.\n' >&2
-      exit 1
-    fi
-    printf '%s\n' "$stats"
-    if [ "$sample" -eq 1 ]; then sleep 60; fi
-  done
+  set -eu
+  command -v timeout >/dev/null 2>&1 || {
+    printf 'Container samples unavailable: GNU timeout is required.\n' >&2; exit 1
+  }
+  if samples=$(timeout --signal=KILL 80s bash <<'PULSE_CONTAINER_SAMPLES' 2>/dev/null
+set -eu
+read_sample() {
+  set -eu
+  identity=$(docker inspect --type container --format \
+    '{{.Id}} {{.State.StartedAt}} {{.State.Running}} {{.RestartCount}}' pulse)
+  case "$identity" in *$'\n'*) exit 1 ;; esac
+  read -r id started running restarts extra <<< "$identity"
+  [ "${#id}" -eq 64 ] && [ "$running" = true ] && [ -z "$extra" ] || exit 1
+  case "$id" in *[!0-9a-f]*) exit 1 ;; esac
+  case "$started" in 0001-*) exit 1 ;; ????-??-??T??:??:??*Z) ;; *) exit 1 ;; esac
+  case "$restarts" in ''|*[!0-9]*) exit 1 ;; esac
+  timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+  stats=$(docker stats --no-stream --format \
+    'CPU={{.CPUPerc}} Memory={{.MemUsage}} BlockIO={{.BlockIO}}' "$id")
+  case "$stats" in
+    *$'\n'*) exit 1 ;;
+    CPU=*%\ Memory=*\ /\ *\ BlockIO=*\ /\ *) ;;
+    *) exit 1 ;;
+  esac
+  cpu=${stats%% *}
+  [[ "${cpu#CPU=}" =~ ^[0-9]+([.][0-9]+)?%$ ]] || exit 1
+  case "$stats" in *--*) exit 1 ;; esac
+  current_identity=$(docker inspect --type container --format \
+    '{{.Id}} {{.State.StartedAt}} {{.State.Running}} {{.RestartCount}}' pulse)
+  [ "$identity" = "$current_identity" ] || exit 1
+  printf 'Identity: %s\nSample UTC: %s\n%s\n' "$identity" "$timestamp" "$stats"
+}
+first=$(read_sample)
+sleep 60
+second=$(read_sample)
+[ "${first%%$'\n'*}" = "${second%%$'\n'*}" ] || exit 1
+printf '%s\n\n%s\n' "$first" "$second"
+PULSE_CONTAINER_SAMPLES
+  ); then
+    printf '%s\n' "$samples"
+  else
+    status=$?
+    printf 'Container samples unavailable (exit %s); no complete pair. Stop sampling.\n' "$status" >&2
+    exit "$status"
+  fi
 )
 ```
 
