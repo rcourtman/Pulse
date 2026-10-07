@@ -79,6 +79,7 @@ type Manager struct {
 	unifiedIncidentFirstSeen     map[string]time.Time            // Preserve the first confirmed observation as lifecycle start
 	unifiedIncidentRecoveries    map[string]int                  // Track consecutive healthy observations before provider-incident recovery
 	hostDiskTempPendingContexts  map[string]hostDiskTempContext  // Only live pending temperature runs; config saves need link/type identity
+	hostSMARTRiskAbsences        map[string]int                  // Consecutive non-empty reports omitting a SMART risk resource
 	hostDiskTempAbsences         map[string]int                  // Track consecutive SMART reports missing a disk that holds temperature alert state
 	dockerRestartTracking        map[string]*dockerRestartRecord // Track restart counts and times for restart loop detection
 	dockerUpdateFirstSeen        map[string]time.Time            // Track when image updates were first detected for alert delay
