@@ -537,6 +537,19 @@ For numeric metric rules such as CPU, memory and disk usage:
 | Blank per-resource metric value | Inherits the group default; it does **not** mean Off. An inherited Off default remains Off. |
 | Saved numeric metric trigger `0` or a negative value | Disables that metric rule. Zero does **not** mean “alert on any usage”. Older saved rules may use `0`; the current metric Off control writes `-1`. |
 
+**Metric Off is not a metric-hiding control.** The reading remains visible; Off
+does not mark it **ignored** or **N/A**, nor prove that the workload is healthy.
+For an appliance VM whose hypervisor memory reading does not represent useful
+guest memory pressure, turn off only that VM's **Memory** metric rule if those
+alerts are unwanted. Keep its CPU, disk, backup and uptime monitoring in place;
+do not disable the whole resource or global alerts to quiet one metric.
+
+A near-100% hypervisor memory reading alone does not establish guest memory
+pressure or an appliance fault. Check the appliance's own ordinary status where
+available. Do not install an agent, restart the VM or change its configuration
+solely to remove the reading. Pulse has no per-VM control here to replace one
+metric with an explicitly ignored reading.
+
 **Zero has different meanings in different fields.** A zero *metric trigger*
 disables the rule, but zero *powered-off tolerance* below means immediate
 eligibility on an authoritative stopped observation. Do not copy one field's

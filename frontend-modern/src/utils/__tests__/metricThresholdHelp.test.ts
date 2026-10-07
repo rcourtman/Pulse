@@ -22,6 +22,31 @@ function article() {
 }
 
 describe('existing metric threshold help', () => {
+  it('distinguishes a per-VM memory alert override from hiding or ignoring a reading', () => {
+    const text = article().textContent?.replace(/\s+/g, ' ');
+    expect(text).toContain('Metric Off is not a metric-hiding control');
+    expect(text).toContain('The reading remains visible');
+    expect(text).toContain('does not mark it ignored or N/A');
+    expect(text).toContain("turn off only that VM's Memory metric rule");
+    expect(text).toContain('Keep its CPU, disk, backup and uptime monitoring in place');
+    expect(text).toContain('do not disable the whole resource or global alerts');
+    expect(text).toContain('alone does not establish guest memory pressure or an appliance fault');
+    expect(text).toContain('Do not install an agent, restart the VM or change its configuration');
+    expect(text).toContain('no per-VM control here to replace one metric');
+
+    const resource = {
+      id: 'appliance-vm',
+      name: 'Appliance VM',
+      thresholds: { memory: -1 },
+      defaults: { memory: 85, cpu: 80 },
+    };
+    expect(
+      isAlertResourceMetricOff(getAlertResourceMetricDisplayValue(resource, 'memory', {}, false)),
+    ).toBe(true);
+    expect(getAlertResourceMetricDisplayValue(resource, 'cpu', {}, false)).toBe(80);
+    expect(article().querySelector('pre')).toBeNull();
+  });
+
   it('renders Off and inheritance separately, matching the live editor model', () => {
     const rows = [...article().querySelectorAll('tbody tr')].map((row) =>
       row.textContent?.replace(/\s+/g, ' '),
