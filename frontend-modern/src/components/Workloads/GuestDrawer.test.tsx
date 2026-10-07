@@ -171,7 +171,7 @@ function makeGuestWithDiscoveryTarget(overrides: Partial<WorkloadGuest> = {}): W
 }
 
 function getDiscoveryPanel(): HTMLElement {
-  const panel = screen.getByTestId('discovery-tab').closest('[style*="overflow-anchor"]');
+  const panel = screen.getByTestId('discovery-tab').closest('[class*="overflow-anchor"]');
   if (!(panel instanceof HTMLElement)) {
     throw new Error('Discovery tab panel not found');
   }
@@ -649,7 +649,7 @@ describe('GuestDrawer', () => {
       const { container } = solidRender(() => (
         <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />
       ));
-      const panels = container.querySelectorAll('[style*="overflow-anchor"]');
+      const panels = container.querySelectorAll('[class*="overflow-anchor"]');
       expect(panels[0]).not.toHaveClass('hidden');
       expect(panels[1]).toHaveClass('hidden');
     });
@@ -950,7 +950,7 @@ describe('GuestDrawer', () => {
         <GuestDrawer guest={makeGuestWithDiscoveryTarget()} onClose={vi.fn()} />
       ));
       await fireEvent.click(screen.getByRole('tab', { name: 'Discovery' }));
-      const panels = container.querySelectorAll('[style*="overflow-anchor"]');
+      const panels = container.querySelectorAll('[class*="overflow-anchor"]');
       expect(panels[0]).toHaveClass('hidden');
       expect(getDiscoveryPanel()).not.toHaveClass('hidden');
     });
@@ -1084,7 +1084,7 @@ describe('GuestDrawer', () => {
       ));
       await fireEvent.click(screen.getByRole('tab', { name: 'Discovery' }));
       await fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
-      const panels = container.querySelectorAll('[style*="overflow-anchor"]');
+      const panels = container.querySelectorAll('[class*="overflow-anchor"]');
       expect(panels[0]).not.toHaveClass('hidden');
       expect(getDiscoveryPanel()).toHaveClass('hidden');
     });

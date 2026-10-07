@@ -41,12 +41,11 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
             id={popoverId}
             role="dialog"
             aria-labelledby={titleId}
-            class="fixed z-9999 bg-surface rounded-md shadow-xs border border-border overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150"
+            class="fixed z-9999 bg-surface rounded-md shadow-xs border border-border overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150 min-w-[200px]"
             style={{
               top: `${state.popoverPosition().top}px`,
               left: `${state.popoverPosition().left}px`,
               'max-width': `${state.maxWidth()}px`,
-              'min-width': '200px',
             }}
           >
             {/* Header */}
