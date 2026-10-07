@@ -542,6 +542,28 @@ squeezing the figures out of the card. `DisksCard.test.tsx` covers both
 readings and SharedPrimitives.guardrails.test.ts pins the branch and the drawer
 wiring.
 
+### Retained RAID state
+
+RaidCard takes the same optional `lastKnownReason`, and the machine drawer
+passes it on the same signal as the Disks card. The card keeps every array and
+member state, because an array that degraded before the machine went quiet is
+evidence. Each state reads "<state> (last known)" in muted text beside a muted
+dot, titled "Last known reading, not current: <reason>". A rebuild figure is
+not progress once the agent is silent, so where the card shows one (above 0 and
+below 100%) it reads "Rebuild was at N%" without the rebuild speed. Member
+badges drop their status colour, so a member that was not healthy names its
+state in the badge ("/dev/sdb2 · faulty"). The Machines table's RAID column
+applies the same rule from `agent.stale` to what it shows: a muted summary and
+a tooltip headed "RAID Arrays (last known)" without the rebuild bar or speed.
+The array header row wraps, so on a phone the longer state takes its own line
+instead of truncating the array name. The card's empty guard is tracked, so a
+drawer opened before the first RAID report shows the card once arrays arrive.
+`raidPresentation.ts` owns member health: mdadm's healthy "active sync"
+members read healthy, where they used to take the amber warning badge.
+`RaidCard.test.tsx`, `raidPresentation.test.ts` and
+`AgentsMachinesTable.test.tsx` cover both readings and the transitions between
+them, and SharedPrimitives.guardrails.test.ts pins the branch and both wirings.
+
 ### Ollama credential editing
 The provider panel exposes the existing Basic Auth configuration. Saved passwords
 are represented by presence text, never a placeholder secret or input value.

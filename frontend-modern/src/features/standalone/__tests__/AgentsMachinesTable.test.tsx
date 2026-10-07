@@ -1015,6 +1015,90 @@ describe('AgentsMachinesTable', () => {
     expect(screen.getByText('120 MB/s')).toBeInTheDocument();
   });
 
+  it("reads a silent agent's RAID arrays as last known, without live colour or rebuild progress", async () => {
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'silent-raid-host',
+            name: 'Silent RAID Host',
+            status: 'offline',
+            agent: {
+              stale: true,
+              raid: [
+                {
+                  device: '/dev/md0',
+                  name: 'media',
+                  level: 'raid6',
+                  state: 'recovering',
+                  totalDevices: 6,
+                  activeDevices: 5,
+                  workingDevices: 5,
+                  failedDevices: 1,
+                  spareDevices: 1,
+                  devices: [
+                    { device: '/dev/sda', state: 'active sync', slot: 0 },
+                    { device: '/dev/sdb', state: 'faulty', slot: 1 },
+                    { device: '/dev/sdc', state: 'spare', slot: 2 },
+                  ],
+                  rebuildPercent: 37.2,
+                  rebuildSpeed: '120 MB/s',
+                },
+              ],
+            },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    await openMachineColumnPicker();
+    await fireEvent.click(screen.getByLabelText('RAID'));
+
+    const trigger = container.querySelector('[data-agent-machine-raid-trigger="true"]');
+    expect(trigger).not.toBeNull();
+    if (!trigger) return;
+    // The summary keeps the evidence but drops to muted text.
+    const summary = trigger.querySelector('[data-raid-reading]');
+    expect(summary).toHaveAttribute('data-raid-reading', 'last-known');
+    expect(summary).toHaveClass('text-muted');
+    expect(summary).not.toHaveClass('text-base-content');
+    expect(summary).toHaveTextContent('1/1 degraded, last known');
+
+    await fireEvent.mouseEnter(trigger);
+
+    expect(await screen.findByText('RAID Arrays (last known)')).toBeInTheDocument();
+    const state = screen.getByText('recovering');
+    expect(state).toHaveClass('text-muted');
+    expect(state.className).not.toMatch(/amber|emerald|red/);
+    expect(state.parentElement).toHaveAttribute(
+      'title',
+      'Last known reading, not current: host agent stopped reporting',
+    );
+    expect(state.parentElement?.querySelector('span[aria-hidden="true"]')).toHaveClass(
+      'bg-slate-400',
+    );
+    expect(screen.getByText('Rebuild was at 37%')).toBeInTheDocument();
+    expect(screen.queryByText('Rebuilding')).not.toBeInTheDocument();
+    const tooltip = document.querySelector('[data-agent-machine-raid-tooltip="true"]');
+    expect(tooltip?.innerHTML).not.toMatch(/(text|bg|border)-(emerald|amber|red)-\d/);
+    expect(tooltip?.querySelector('[style*="width"]')).toBeNull();
+    expect(screen.queryByText('120 MB/s')).not.toBeInTheDocument();
+    // Badges lose their colour, so a member that was not healthy names its state.
+    for (const label of ['/dev/sda', '/dev/sdb · faulty', '/dev/sdc · spare']) {
+      const badge = screen.getByText(label);
+      expect(badge.className).not.toMatch(/amber|emerald|red/);
+      expect(badge).toHaveClass('text-muted');
+    }
+    const failedCount = screen
+      .getByText((_, element) => element?.tagName === 'SPAN' && element.textContent === 'Failed 1')
+      .querySelector('.font-mono');
+    expect(failedCount).toHaveClass('text-base-content');
+    expect(failedCount?.className).not.toMatch(/red/);
+  });
+
   it('sorts machines by operational metrics from the column headers', async () => {
     const { container } = render(() => (
       <AgentsMachinesTable
