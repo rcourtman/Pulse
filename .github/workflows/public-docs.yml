@@ -10,6 +10,14 @@ on:
       - "scripts/check_public_docs.py"
       - "scripts/check_docs_mirror.py"
       - "scripts/readme_entrypoints_test.py"
+      - "scripts/tests/run.sh"
+      - "scripts/tests/test_public_docs_workflow.py"
+      - "scripts/tests/test_pve_backup_troubleshooting_docs.py"
+      - "scripts/tests/test_vm_disk_diagnostics.py"
+      - "scripts/tests/test_memory_troubleshooting_docs.py"
+      - "scripts/tests/test_performance_troubleshooting_docs.py"
+      - "scripts/tests/test_troubleshooting_logs.py"
+      - "scripts/test-vm-disk.sh"
       - ".github/workflows/public-docs.yml"
   push:
     branches:
@@ -22,6 +30,14 @@ on:
       - "scripts/check_public_docs.py"
       - "scripts/check_docs_mirror.py"
       - "scripts/readme_entrypoints_test.py"
+      - "scripts/tests/run.sh"
+      - "scripts/tests/test_public_docs_workflow.py"
+      - "scripts/tests/test_pve_backup_troubleshooting_docs.py"
+      - "scripts/tests/test_vm_disk_diagnostics.py"
+      - "scripts/tests/test_memory_troubleshooting_docs.py"
+      - "scripts/tests/test_performance_troubleshooting_docs.py"
+      - "scripts/tests/test_troubleshooting_logs.py"
+      - "scripts/test-vm-disk.sh"
       - ".github/workflows/public-docs.yml"
 
 permissions:
@@ -49,3 +65,18 @@ jobs:
 
       - name: Check shipped docs mirror sync
         run: python3 scripts/check_docs_mirror.py
+
+      - name: Check documentation safety workflow contract
+        run: python3 scripts/tests/test_public_docs_workflow.py
+
+      # Build and Test intentionally skips its smoke suite for docs-only
+      # changes. Exercise the existing safety guidance and copied recipes here
+      # too, without installing frontend/Go dependencies or calling providers.
+      - name: Exercise backup safety and diagnostic recipes
+        run: |
+          scripts/tests/run.sh \
+            test_pve_backup_troubleshooting_docs.py \
+            test_vm_disk_diagnostics.py \
+            test_memory_troubleshooting_docs.py \
+            test_performance_troubleshooting_docs.py \
+            test_troubleshooting_logs.py
