@@ -286,11 +286,10 @@ export function ProxmoxPageSurface() {
   const serverVersionDisplay = createMemo(() =>
     formatAgentVersionDisplay(agentUpdateTargetVersion()),
   );
+  // The node carries the registry's verdict, so the notice reads the same on
+  // every tab that lists nodes; no tab hydrates disks for it.
   const outdatedSensorSetupNodes = createMemo(() =>
-    collectOutdatedSensorSetupNodes(
-      model().pveNodes,
-      model().resources.filter((resource) => resource.type === 'physical_disk'),
-    ),
+    collectOutdatedSensorSetupNodes(model().pveNodes),
   );
 
   // The hosts table at the top and the embedded WorkloadsSurface below share

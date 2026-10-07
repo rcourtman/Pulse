@@ -2997,6 +2997,36 @@ or force every provider type back into the active route payload. Docker,
 Kubernetes, TrueNAS, and VMware surface contract tests pin their route query
 maps, and the shared hook test pins facet normalization.
 
+### Proxmox node verdicts over disks arrive on the node
+
+The Proxmox page hydrates one query per workflow, and only its Storage tab
+loads `physical_disk` rows, so a node verdict that depends on the node's disks
+is derived in the registry and carried on the node, never rebuilt in the page
+from disk rows. `ProxmoxData.SensorSetupOutdated` (`proxmox.sensorSetupOutdated`
+on REST and websocket rows) is that verdict for the outdated sensor setup
+notice. `refreshProxmoxSensorSetupLocked`
+(`internal/unifiedresources/proxmox_sensor_setup.go`) runs after
+`buildChildCounts` on every ingest path and gives every Proxmox node an
+explicit true or false (other resources omit it), because browser facet merges
+read an omitted field as a partial snapshot and would keep an earlier true. It
+is true when the node's temperature payload is available and in the legacy
+`sensors -j` format (`models.Temperature.LegacySensorsFormat`) and a disk whose
+canonical parent is the node has no reading collected now
+(`diskinventory.TemperatureCollected`) and a type whose temperature a PVE node
+gets only through SMART: `sata`, `sas`, or the `hdd` and `ssd` form factors
+Proxmox's own inventory reports. Proxmox also types a non-rotational USB device
+`ssd`, so a USB device without SMART counts. A retained reading does not count
+as current, including one kept while a host agent reports the disk in standby;
+a reading a linked host agent collects now clears the disk. NVMe disks never
+set it, because kernel hwmon reports them even on a legacy setup, and a host
+agent the registry has not linked to the node contributes no disks. The
+verdict reflects the registry's node and disk state at each ingest.
+`TestProxmoxNodeSensorSetupOutdatedFromItsDisks` and
+`TestProxmoxNodeSensorSetupOutdatedFollowsWhereTheReadingArrives` in
+`internal/unifiedresources/registry_test.go` pin the rule, the linked-agent
+case, the explicit false on the wire and the presented JSON;
+`resourceStateAdapters.test.ts` pins that a false clears a merged true.
+
 ### Canonical REST facets preserve realtime workload evidence
 
 The frontend REST projection retains the complete source-authored Proxmox
