@@ -1,9 +1,6 @@
 package alerts
 
-import (
-	"sync"
-	"testing"
-)
+import "testing"
 
 func TestUpdateConfigNormalizesBackupIndicatorHours(t *testing.T) {
 	t.Run("non-positive values default", func(t *testing.T) {
@@ -86,6 +83,49 @@ func TestUpdateConfigNormalizesFlappingSettings(t *testing.T) {
 	}
 }
 
+func TestUpdateConfigNormalizesExactEscalationRoutingAndRepeatPolicy(t *testing.T) {
+	m := newTestManager(t)
+	cfg := m.GetConfig()
+	cfg.Schedule.Escalation = EscalationConfig{
+		Enabled:        true,
+		RepeatCritical: true,
+		RepeatEvery:    1,
+		Levels: []EscalationLevel{
+			{
+				After:          -1,
+				Notify:         "WEBHOOKS",
+				DestinationIDs: []string{" webhook:pager ", "email", "webhook:pager", "https://secret.example"},
+			},
+			{After: 181, Notify: "email"},
+		},
+	}
+
+	m.UpdateConfig(cfg)
+
+	got := m.GetConfig().Schedule.Escalation
+	if got.RepeatEvery != DefaultEscalationRepeatMinutes {
+		t.Fatalf("repeat interval = %d, want %d", got.RepeatEvery, DefaultEscalationRepeatMinutes)
+	}
+	if got.Levels[0].Notify != "webhook" {
+		t.Fatalf("legacy target = %q, want webhook", got.Levels[0].Notify)
+	}
+	if got.Levels[0].After != MinEscalationDelayMinutes {
+		t.Fatalf("minimum escalation delay = %d, want %d", got.Levels[0].After, MinEscalationDelayMinutes)
+	}
+	if got.Levels[1].After != MaxEscalationDelayMinutes {
+		t.Fatalf("maximum escalation delay = %d, want %d", got.Levels[1].After, MaxEscalationDelayMinutes)
+	}
+	wantIDs := []string{"webhook:pager", "email"}
+	if len(got.Levels[0].DestinationIDs) != len(wantIDs) {
+		t.Fatalf("destination IDs = %v, want %v", got.Levels[0].DestinationIDs, wantIDs)
+	}
+	for index, want := range wantIDs {
+		if got.Levels[0].DestinationIDs[index] != want {
+			t.Fatalf("destination IDs = %v, want %v", got.Levels[0].DestinationIDs, wantIDs)
+		}
+	}
+}
+
 // The thresholds page sends no flapping, alert TTL or custom-rule keys. A save
 // through ApplyConfigUpdate must leave those settings as stored, also after
 // the merged config is normalized in place.
@@ -140,65 +180,24 @@ func TestApplyConfigUpdateKeepsConcurrentPartialUpdates(t *testing.T) {
 		base.MaxAlertAgeDays = 0
 		m.UpdateConfig(base)
 
-		var wg sync.WaitGroup
-		for _, body := range []string{`{"flappingEnabled": true}`, `{"maxAlertAgeDays": 9}`} {
-			wg.Add(1)
+		bodies := []string{`{"flappingEnabled": true}`, `{"maxAlertAgeDays": 9}`}
+		done := make(chan struct{}, len(bodies))
+		for _, body := range bodies {
 			go func(body string) {
-				defer wg.Done()
+				defer func() { done <- struct{}{} }()
 				if _, err := m.ApplyConfigUpdate([]byte(body)); err != nil {
 					t.Errorf("ApplyConfigUpdate(%s): %v", body, err)
 				}
 			}(body)
 		}
-		wg.Wait()
+		for range bodies {
+			<-done
+		}
 
 		got := m.GetConfig()
 		if !got.FlappingEnabled || got.MaxAlertAgeDays != 9 {
 			t.Fatalf("round %d: flapping=%v maxAlertAgeDays=%d, want both concurrent updates kept",
 				round, got.FlappingEnabled, got.MaxAlertAgeDays)
-		}
-	}
-}
-
-func TestUpdateConfigNormalizesExactEscalationRoutingAndRepeatPolicy(t *testing.T) {
-	m := newTestManager(t)
-	cfg := m.GetConfig()
-	cfg.Schedule.Escalation = EscalationConfig{
-		Enabled:        true,
-		RepeatCritical: true,
-		RepeatEvery:    1,
-		Levels: []EscalationLevel{
-			{
-				After:          -1,
-				Notify:         "WEBHOOKS",
-				DestinationIDs: []string{" webhook:pager ", "email", "webhook:pager", "https://secret.example"},
-			},
-			{After: 181, Notify: "email"},
-		},
-	}
-
-	m.UpdateConfig(cfg)
-
-	got := m.GetConfig().Schedule.Escalation
-	if got.RepeatEvery != DefaultEscalationRepeatMinutes {
-		t.Fatalf("repeat interval = %d, want %d", got.RepeatEvery, DefaultEscalationRepeatMinutes)
-	}
-	if got.Levels[0].Notify != "webhook" {
-		t.Fatalf("legacy target = %q, want webhook", got.Levels[0].Notify)
-	}
-	if got.Levels[0].After != MinEscalationDelayMinutes {
-		t.Fatalf("minimum escalation delay = %d, want %d", got.Levels[0].After, MinEscalationDelayMinutes)
-	}
-	if got.Levels[1].After != MaxEscalationDelayMinutes {
-		t.Fatalf("maximum escalation delay = %d, want %d", got.Levels[1].After, MaxEscalationDelayMinutes)
-	}
-	wantIDs := []string{"webhook:pager", "email"}
-	if len(got.Levels[0].DestinationIDs) != len(wantIDs) {
-		t.Fatalf("destination IDs = %v, want %v", got.Levels[0].DestinationIDs, wantIDs)
-	}
-	for index, want := range wantIDs {
-		if got.Levels[0].DestinationIDs[index] != want {
-			t.Fatalf("destination IDs = %v, want %v", got.Levels[0].DestinationIDs, wantIDs)
 		}
 	}
 }
