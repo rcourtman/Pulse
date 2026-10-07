@@ -20,6 +20,30 @@ def backup_section():
 
 
 class PVEBackupTroubleshootingDocsTest(unittest.TestCase):
+    def test_replication_help_uses_existing_row_details_not_backup_commands(self):
+        trouble = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
+        section = trouble.split("#### Replication jobs are Pending, stale or missing\n", 1)[1].split("\n#### ", 1)[0]
+        text = " ".join(section.split())
+        self.assertNotIn("```", section)
+        table = (ROOT / "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx").read_text()
+        # Tie the help's expansion and privacy-safe observation fields to the
+        # actual surface, not a speculative job API or native recovery proof.
+        self.assertIn("PlatformResourceDetailToggleButton", table)
+        for label in ("Guest", "Job", "Route", "Last sync", "Next sync", "Duration", "Failures"):
+            with self.subTest(label=label):
+                self.assertIn(f"**{label}**", section)
+                self.assertRegex(table, rf">{label}</(?:dt|TableHead)>")
+        for phrase in ("not PBS backups", "unknown, not an empty healthy result",
+                       "does not establish lifecycle or polling recovery",
+                       "do not repeat a restart, reboot or update", "widen token permissions",
+                       "consistent placeholders", "VM_DISK_MONITORING.md#backup-safety"):
+            self.assertIn(phrase, text)
+        faq = (ROOT / "docs/FAQ.md").read_text()
+        self.assertIn("TROUBLESHOOTING.md#replication-jobs-are-pending-stale-or-missing", faq)
+        for name in ("FAQ.md", "TROUBLESHOOTING.md"):
+            self.assertEqual((ROOT / "docs" / name).read_bytes(),
+                             (ROOT / "frontend-modern/public/docs" / name).read_bytes())
+
     def test_multi_installation_help_is_mirrored_and_keeps_cosmetic_names_separate(self):
         for name in ("CONFIGURATION.md", "TROUBLESHOOTING.md", "PBS.md"):
             with self.subTest(guide=name):
