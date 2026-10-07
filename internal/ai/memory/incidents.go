@@ -1747,18 +1747,14 @@ func cloneTime(value time.Time) *time.Time {
 	return &cloned
 }
 
-var incidentCounter int64
+var incidentCounter, incidentEventCounter atomic.Int64
 
 func generateIncidentID() string {
-	incidentCounter++
-	return "inc-" + time.Now().Format("20060102150405") + "-" + intToString(int(incidentCounter%1000))
+	return nextSequencedID("inc-", &incidentCounter)
 }
 
-var incidentEventCounter int64
-
 func generateIncidentEventID() string {
-	incidentEventCounter++
-	return "inc-evt-" + time.Now().Format("20060102150405") + "-" + intToString(int(incidentEventCounter%1000))
+	return nextSequencedID("inc-evt-", &incidentEventCounter)
 }
 
 func formatAlertSummary(alert *alerts.Alert) string {

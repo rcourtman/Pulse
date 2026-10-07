@@ -128,6 +128,25 @@ on component mount. Closing clears the registered input so later keyboard
 commands cannot target a detached composer. A handoff must leave Escape and
 keyboard input in Assistant, not the underlying alert search.
 
+### Process-wide memory ID sequences
+
+`internal/ai/memory` mints incident, incident-event, remediation-record and
+context-memory IDs from package-level sequences that every store in the process
+shares. Multi-tenant monitoring gives each tenant monitor its own
+`IncidentStore`, and their alert checks call `RecordAlertFired` from separate
+goroutines, while a store's mutex covers only its own state. Each sequence is
+therefore an `atomic.Int64` minted through `nextSequencedID` in
+`internal/ai/memory/ids.go`, never a plain package counter. The ID shape stays
+`<prefix><local second>-<n>`, but `n` no longer wraps at 1000. The old
+`counter%1000` suffix repeated an ID whenever one generator minted more than a
+thousand in a wall-clock second, and incident notes resolve an incident by ID
+while timeline merges deduplicate events by ID. Within one process IDs are now
+unique by construction. Across restarts only the timestamp separates them, so a
+repeated local second (DST fall-back or a backward clock step) can still meet a
+restarted sequence's suffix. Persisted IDs and the stored format are unchanged.
+`internal/ai/memory/ids_test.go` mints from every generator concurrently and
+records alerts into two tenant stores concurrently; run it under `-race`.
+
 ### Canonical incident-history queries
 
 Incident context reads `IncidentStore.QueryIncidents`, whose page contains
