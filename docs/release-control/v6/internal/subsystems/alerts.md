@@ -1780,14 +1780,16 @@ override on that host, or one inherited from its linked node or guest, replaces
 the per-type entry, the first override in that chain decides even when it sets
 no Disk Temp, and an override that switches the host's alerts off leaves no
 threshold. `TestHostDiskTemperatureThresholdMatchesCheckHostOverrides` pins each
-case against what `CheckHost` fires. `Manager.DiskTemperatureThreshold(diskType)`
+case against what `CheckHost` fires, including an override under the canonical
+resource the agent ID resolves to and one inherited from a linked guest. `Manager.DiskTemperatureThreshold(diskType)`
 is the hostless case. Patrol reads the policy through
 `AlertThresholdAdapter.GetDiskTemperatureThreshold`.
 `DefaultDiskTemperatureThreshold` serves callers with no manager. Disk risk
 (`internal/storagehealth`) judges no temperature. The Physical Disks Temp cell
 and Health verdict mirror the policy in `resolveDiskTemperatureDisplayThresholds`
 under the override keys of the machine whose agent reports the disk, in the
-order `CheckHost` reads them. That resolver returns null when the agent Disk
+order `CheckHost` reads them as far as the browser can see that chain
+(`storage-recovery.md` lists where it cannot). That resolver returns null when the agent Disk
 Temp default is off or an override or agent default switches the host's alerts
 off. The global alerts switch and the agent alert-type switch stop `CheckHost`
 without changing the policy.

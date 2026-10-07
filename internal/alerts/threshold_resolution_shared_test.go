@@ -1448,18 +1448,23 @@ func TestDiskTemperatureThresholdMatchesCheckHostPolicy(t *testing.T) {
 
 // HostDiskTemperatureThreshold is the disk heat policy for a disk a host agent
 // reports, so it must agree with CheckHost on every host-level override: an
-// explicit Disk Temp override on the host, or inherited from its linked node,
-// replaces the per-type entry; the first override in the chain decides even
-// when it sets no Disk Temp; and a host whose alerts are off judges no heat.
+// explicit Disk Temp override on the host (or the canonical resource its ID
+// resolves to), or inherited from its linked node or guest, replaces the
+// per-type entry; the first override in the chain decides even when it sets no
+// Disk Temp; and a host whose alerts are off judges no heat.
 func TestHostDiskTemperatureThresholdMatchesCheckHostOverrides(t *testing.T) {
 	const hostID = "host-temp-policy"
 	const nodeID = "pve1-node1"
+	const vmID = "pve1-node1-105"
+	const canonicalID = "agent-canonical-temp-policy"
 	perType := &HysteresisThreshold{Trigger: 70, Clear: 65}
 
 	for _, tc := range []struct {
 		name      string
 		overrides map[string]ThresholdConfig
 		linkNode  bool
+		linkVM    bool
+		canonical bool
 		want      *HysteresisThreshold
 		off       bool
 	}{
@@ -1490,6 +1495,24 @@ func TestHostDiskTemperatureThresholdMatchesCheckHostOverrides(t *testing.T) {
 			want:     perType,
 		},
 		{
+			// The agent ID resolves to the machine's canonical resource ID.
+			name:      "canonical machine disk temp override",
+			overrides: map[string]ThresholdConfig{canonicalID: {DiskTemperature: &HysteresisThreshold{Trigger: 82, Clear: 77}}},
+			canonical: true,
+			want:      &HysteresisThreshold{Trigger: 82, Clear: 77},
+		},
+		{
+			name:      "linked guest disk temp override",
+			overrides: map[string]ThresholdConfig{vmID: {DiskTemperature: &HysteresisThreshold{Trigger: 76, Clear: 71}}},
+			linkVM:    true,
+			want:      &HysteresisThreshold{Trigger: 76, Clear: 71},
+		},
+		{
+			name:      "linked guest alerts disabled",
+			overrides: map[string]ThresholdConfig{vmID: {Disabled: true}},
+			linkVM:    true,
+		},
+		{
 			name:      "host disk temp switched off",
 			overrides: map[string]ThresholdConfig{hostID: {DiskTemperature: &HysteresisThreshold{}}},
 			off:       true,
@@ -1511,10 +1534,18 @@ func TestHostDiskTemperatureThresholdMatchesCheckHostOverrides(t *testing.T) {
 				m.config.Overrides[id] = override
 			}
 			m.mu.Unlock()
+			if tc.canonical {
+				m.SetResourceIntentIdentityResolver(func(resourceID string) (string, bool) {
+					return canonicalID, resourceID == hostID
+				})
+			}
 
 			owner := DiskTemperatureHost{ID: hostID}
 			if tc.linkNode {
 				owner.LinkedNodeID = nodeID
+			}
+			if tc.linkVM {
+				owner.LinkedVMID = vmID
 			}
 			got := m.HostDiskTemperatureThreshold(owner, "nvme")
 			switch {
@@ -1529,6 +1560,7 @@ func TestHostDiskTemperatureThresholdMatchesCheckHostOverrides(t *testing.T) {
 			check := func(temperature int) bool {
 				host := hostWithSMARTDiskTemp(hostID, "nvme", temperature)
 				host.LinkedNodeID = owner.LinkedNodeID
+				host.LinkedVMID = owner.LinkedVMID
 				m.CheckHost(host)
 				_, exists := testLookupActiveAlert(t, m, hostDiskTempAlertID(host))
 				return exists

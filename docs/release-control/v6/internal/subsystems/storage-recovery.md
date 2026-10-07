@@ -6799,12 +6799,18 @@ judges the current reading, with no memory of an alert. A disk temperature
 alert held between its clear value and trigger shows an amber Temp cell, not
 `Running Hot`. A switched-off agent Disk Temp default resolves to null, which
 leaves the reading uncoloured and never hot, as alerting is off for it.
-Two cases stay on the per-type trigger in the browser while alerts and Patrol
-apply the override: on the Storage page, a disk whose agent an operator
-manually linked into a VM (the page loads agents and pools, not guests; the
-guest drawer applies it), and an override an agent inherits from a guest it is
-linked to without a merge, because agent link hints are not published to the
-browser. PDF performance
+The browser rebuilds that chain from what it loads, so it can differ from
+alerts and Patrol, which read the agent's own link hints and resolve every key
+to its canonical resource. On the Storage page, a disk whose agent an operator
+manually linked into a VM keeps the per-type trigger, because the page loads
+agents and pools, not guests. An override the agent inherits from a node or
+guest it is linked to without a merge, or one stored under that node's own
+canonical resource ID, does not reach the browser, because agent link hints
+are not published. The guest drawer applies the guest's own override keys,
+which `CheckHost` reads only when the agent is also linked to that guest
+automatically. Overrides set on the reporting agent's own row, or on the node
+or guest it is merged with, reach the browser through the keys above. PDF
+performance
 reports colour a disk reading by the same per-type thresholds, which
 `reporting.DiskInfo` carries.
 `frontend-modern/src/features/storageBackups/__tests__/diskPresentation.test.ts`
