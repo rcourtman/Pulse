@@ -4,8 +4,6 @@ import {
   getContainerRuntimeBadgeForRuntime,
   getInfrastructurePlatformBadges,
   getInfrastructureSystemIdentityBadges,
-  getInfrastructureSystemIdentitySortLabel,
-  getInfrastructureSystemTitleBadges,
   getPlatformBadge,
   getSourceBadge,
   getTypeBadge,
@@ -158,7 +156,6 @@ describe('resourceBadgePresentation', () => {
     expect(
       getInfrastructureSystemIdentityBadges(unraidStorage).map((badge) => badge.label),
     ).toEqual(['Unraid']);
-    expect(getInfrastructureSystemIdentitySortLabel(unraidStorage)).toBe('Unraid');
 
     const pbsDatastore = makeResource({
       type: 'storage',
@@ -278,7 +275,6 @@ describe('resourceBadgePresentation', () => {
     expect(getInfrastructureSystemIdentityBadges(resource).map((badge) => badge.label)).toEqual([
       'PVE',
     ]);
-    expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('PVE');
   });
 
   it('shows platform versions when the reported version belongs to the platform identity', () => {
@@ -319,7 +315,7 @@ describe('resourceBadgePresentation', () => {
     );
   });
 
-  it('does not repeat the unversioned platform source after a versioned system identity', () => {
+  it('takes the platform version from the agent report when the platform facet has none', () => {
     const agentDiscoveredPve = makeResource({
       type: 'agent',
       platformType: 'proxmox-pve',
@@ -343,9 +339,6 @@ describe('resourceBadgePresentation', () => {
 
     expect(systemBadges.map((badge) => badge.label)).toEqual(['PVE 8.3.3']);
     expect(sourceBadges.map((badge) => badge.label)).toEqual(['PVE', 'Agent']);
-    expect(
-      getInfrastructureSystemTitleBadges(systemBadges, sourceBadges).map((badge) => badge.label),
-    ).toEqual(['PVE 8.3.3', 'Agent']);
   });
 
   it('prefers platform-facet version over agent OS version on hybrid-source resources', () => {
@@ -391,7 +384,6 @@ describe('resourceBadgePresentation', () => {
     expect(getInfrastructureSystemIdentityBadges(resource).map((badge) => badge.label)).toEqual([
       'PVE',
     ]);
-    expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('PVE');
   });
 
   it('renders Proxmox LXC Docker hosts with a canonical LXC badge and surfaces the VMID in the tooltip', () => {
@@ -449,7 +441,6 @@ describe('resourceBadgePresentation', () => {
     expect(getInfrastructureSystemIdentityBadges(resource)[0]?.title).toBe(
       'TCP availability probe power-meter-01.lab.local:1883',
     );
-    expect(getInfrastructureSystemIdentitySortLabel(resource)).toBe('TCP');
   });
 
   it('uses ICMP identity for ping-only availability endpoints', () => {
