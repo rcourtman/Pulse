@@ -32,9 +32,15 @@ output = b""
 sent = False
 command_sent = False
 exit_sent = False
+command_ready = not history
+command_tail = b""
+send_tail_at = 0
 deadline = time.monotonic() + 15
 while time.monotonic() < deadline:
     ready, _, _ = select.select([master], [], [], .1)
+    if command_tail and time.monotonic() >= send_tail_at:
+        os.write(master, command_tail)
+        command_tail = b""
     if ready:
         try: chunk = os.read(master, 65536)
         except OSError as e:
@@ -44,19 +50,32 @@ while time.monotonic() < deadline:
         output += chunk
         if history and output.endswith(b"PULSE_TEST$ "):
             if not command_sent:
-                os.write(master, (p["command"] + "\n").encode())
+                # Readline also disables echo while editing a command. A
+                # control-byte marker (not its echoed shell source) proves the
+                # whole command was parsed before a prompt can accept input.
+                submitted = b"printf '\\036PULSE_COMMAND_READY\\037'; " + (p["command"] + "\n").encode()
+                if p.get("split_command"):
+                    suffix = b"(paste at this prompt, not in the command): "
+                    at = submitted.index(suffix) + len(suffix)
+                    os.write(master, submitted[:at])
+                    command_tail = submitted[at:]
+                    send_tail_at = time.monotonic() + .2
+                else:
+                    os.write(master, submitted)
                 command_sent = True
             elif not exit_sent:
                 # Do not queue shell input while the bootstrap/installer still
                 # owns the terminal or may be restoring its input mode.
                 os.write(master, b"exit\n")
                 exit_sent = True
+        if b"\x1ePULSE_COMMAND_READY\x1f" in output:
+            command_ready = True
         # The interactive shell also echoes the copied command, which contains
         # this prompt literal. A PTY read may end there before the command has
         # even run. Never deliver a credential while terminal echo is enabled:
         # the real bootstrap disables it before printing the input prompt.
         silent = not (termios.tcgetattr(tty_watch)[3] & termios.ECHO)
-        if output.endswith(b"(paste at this prompt, not in the command): ") and silent and not sent:
+        if output.endswith(b"(paste at this prompt, not in the command): ") and command_ready and silent and not sent:
             os.write(master, (p["input"] + "\n").encode())
             sent = True
     if child.poll() is not None and not ready: break
@@ -407,7 +426,9 @@ func TestPrivateBootstrapPTYWaitsForSilentPrompt(t *testing.T) {
 	// the actual bootstrap downloads/preflights and owns the private prompt.
 	command = "printf %s " + posixShellQuote(prompt) + "; sleep 0.2; " + command
 	history := filepath.Join(root, "shell-history")
-	payload, err := json.Marshal(map[string]string{"command": command, "input": token, "history": history})
+	// Split the copied command exactly at its prompt literal while Readline
+	// owns the terminal. Echo-off alone must not release the credential there.
+	payload, err := json.Marshal(map[string]string{"command": command, "input": token, "history": history, "split_command": "yes"})
 	if err != nil {
 		t.Fatal(err)
 	}
