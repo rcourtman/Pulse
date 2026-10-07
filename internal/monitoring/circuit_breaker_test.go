@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"math/big"
 	"testing"
 	"time"
 )
@@ -586,4 +587,72 @@ func TestCircuitBreaker_StateDetails(t *testing.T) {
 			t.Errorf("state = %s, want unknown", state)
 		}
 	})
+}
+
+// Advance the clock rather than waiting or contacting an unhealthy provider.
+// The independent unbounded-integer oracle preserves the existing exponential
+// sequence, while crossing both signed-duration overflow and shift-width bounds.
+func TestCircuitBreaker_BackoffNeverOverflows(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		base, cap time.Duration
+	}{
+		{"default", 5 * time.Second, 5 * time.Minute},
+		{"one minute", 5 * time.Second, time.Minute},
+		{"odd cap", time.Nanosecond, 61 * time.Nanosecond},
+		{"largest duration", time.Nanosecond, time.Duration(1<<63 - 1)},
+		{"large initial duration", time.Duration(1 << 62), time.Duration(1<<63 - 1)},
+		{"base above cap", time.Second, time.Millisecond},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cb := newCircuitBreaker(3, tc.base, tc.cap, time.Second)
+			now := time.Date(2026, 10, 7, 0, 0, 0, 0, time.UTC)
+			expected := big.NewInt(int64(tc.base))
+			cap := big.NewInt(int64(tc.cap))
+			for failures := 1; failures <= 130; failures++ {
+				cb.recordFailure(now)
+				if failures < 3 {
+					if !cb.allow(now) {
+						t.Fatal("failure threshold changed")
+					}
+					continue
+				}
+				expected.Lsh(expected, uint(failures))
+				if expected.Cmp(cap) > 0 {
+					expected.Set(cap)
+				}
+				state, gotFailures, retryAt := cb.State()
+				want := time.Duration(expected.Int64())
+				if state != "open" || gotFailures != failures || retryAt.Sub(now) != want || cb.retryInterval != want {
+					t.Fatalf("failure %d: state=%s count=%d delay=%v retry=%v, want %v", failures, state, gotFailures, cb.retryInterval, retryAt.Sub(now), want)
+				}
+				if cb.allow(retryAt.Add(-time.Nanosecond)) {
+					t.Fatalf("failure %d admitted an early retry", failures)
+				}
+				if !cb.allow(retryAt) {
+					t.Fatalf("failure %d denied the due probe", failures)
+				}
+				if cb.allow(retryAt) {
+					t.Fatalf("failure %d admitted a second half-open probe", failures)
+				}
+				now = retryAt
+			}
+			cb.recordSuccess()
+			state, failures, retryAt := cb.State()
+			if state != "closed" || failures != 0 || !retryAt.IsZero() || cb.retryInterval != tc.base || !cb.allow(now) {
+				t.Fatal("successful probe did not restore the original healthy admission")
+			}
+			for i := 0; i < 3; i++ {
+				cb.recordFailure(now)
+			}
+			expected.SetInt64(int64(tc.base))
+			expected.Lsh(expected, 3)
+			if expected.Cmp(cap) > 0 {
+				expected.Set(cap)
+			}
+			if cb.retryInterval != time.Duration(expected.Int64()) {
+				t.Fatal("a new failure episode retained the old saturated delay")
+			}
+		})
+	}
 }

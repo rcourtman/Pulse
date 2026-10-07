@@ -116,7 +116,17 @@ func (b *circuitBreaker) recordFailure(now time.Time) {
 
 func (b *circuitBreaker) trip(now time.Time) {
 	b.state = breakerOpen
-	delay := b.retryInterval << uint(b.failureCount)
+	// Saturate before doubling. Shifting a time.Duration first can wrap it
+	// negative (or to zero after enough failures), defeating the retry fence
+	// even though the result is subsequently compared with maxDelay.
+	delay := b.retryInterval
+	for remaining := b.failureCount; remaining > 0; remaining-- {
+		if delay > b.maxDelay/2 {
+			delay = b.maxDelay
+			break
+		}
+		delay *= 2
+	}
 	if delay > b.maxDelay {
 		delay = b.maxDelay
 	}

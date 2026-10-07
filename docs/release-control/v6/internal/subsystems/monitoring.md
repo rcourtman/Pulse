@@ -17,6 +17,24 @@
 
 ## Purpose
 
+### Sustained poll failures preserve the capped retry fence
+
+Scheduler circuit-breaker backoff saturates before duration arithmetic can
+wrap. Every failure episode retains the existing threshold, exponential
+sequence up to the configured cap and single half-open probe window; prolonged
+failure cannot turn that cap into an immediate retry or a past retry timestamp.
+A successful poll still resets the failure count, interval and outstanding
+error, and one connection's failures do not block another connection.
+
+`TestCircuitBreaker_BackoffNeverOverflows` compares 130 failure transitions
+against an independent unbounded-integer oracle, including odd and maximum
+representable duration caps, exact retry boundaries and success/new-episode
+recovery. `TestMonitorPersistentFailureBackoffAndRecovery` carries persistent
+failure through actual scheduler result/admission and health entry points,
+including unrelated-instance progress and cleared error state. These are
+in-memory source controls, not native guest recovery, appliance request repair
+or installed CPU/network relief. No database or provider operation is involved.
+
 ### Active-alert state projection carries the live metric status — issue #2068
 
 `activeAlertsSnapshot` copies the alert manager's volatile `MetricStatus`
