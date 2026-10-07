@@ -7097,6 +7097,7 @@
         "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts",
         "frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts",
         "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+        "frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts",
         "frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts",
         "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts",
         "frontend-modern/src/components/Workloads/workloadFilterConfigModel.ts",
@@ -7129,7 +7130,6 @@
         "frontend-modern/src/utils/searchQuery.ts",
         "frontend-modern/src/utils/thresholdSliderPresentation.ts",
         "frontend-modern/src/utils/workloads.ts",
-        "frontend-modern/src/utils/workloadsSummaryCache.ts",
         "internal/api/router_bench_test.go",
         "internal/api/slo.go",
         "internal/api/slo_bench_test.go",
@@ -7256,6 +7256,7 @@
               "frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts",
               "frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts",
               "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+              "frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts",
               "frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts",
               "frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts",
               "frontend-modern/src/components/Workloads/workloadFilterConfigModel.ts",
@@ -7282,8 +7283,7 @@
               "frontend-modern/src/types/workloads.ts",
               "frontend-modern/src/utils/searchQuery.ts",
               "frontend-modern/src/utils/thresholdSliderPresentation.ts",
-              "frontend-modern/src/utils/workloads.ts",
-              "frontend-modern/src/utils/workloadsSummaryCache.ts"
+              "frontend-modern/src/utils/workloads.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -7303,6 +7303,7 @@
               "frontend-modern/src/components/Workloads/__tests__/useStackedMemoryBarState.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/useThresholdSliderState.test.ts",
               "frontend-modern/src/components/Workloads/__tests__/useWorkloadSelectionState.test.ts",
+              "frontend-modern/src/components/Workloads/__tests__/useWorkloadTableMetricHistory.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/useWorkloadViewportSync.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/workloadFilterConfigModel.test.ts",
               "frontend-modern/src/components/Workloads/__tests__/workloadInventorySourceIssues.branchcov2.test.ts",
@@ -7327,8 +7328,7 @@
               "frontend-modern/src/hooks/__tests__/useWorkloads.test.ts",
               "frontend-modern/src/utils/__tests__/searchQuery.test.ts",
               "frontend-modern/src/utils/__tests__/thresholdSliderPresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/workloads.test.ts",
-              "frontend-modern/src/utils/__tests__/workloadsSummaryCache.test.ts"
+              "frontend-modern/src/utils/__tests__/workloads.test.ts"
             ]
           },
           {

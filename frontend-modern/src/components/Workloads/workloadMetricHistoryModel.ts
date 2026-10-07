@@ -1,4 +1,4 @@
-import type { ChartData, MetricPoint, TimeRange } from '@/api/charts';
+import type { ChartData, InfrastructureChartsResponse, MetricPoint, TimeRange } from '@/api/charts';
 import type { Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
@@ -199,6 +199,49 @@ export const getNodeChartKeyCandidates = (node: Node): string[] => {
 };
 
 type ChartDataMap = Record<string, ChartData | undefined> | Map<string, ChartData> | undefined;
+
+const pickLongerSeries = (
+  incoming: MetricPoint[] | undefined,
+  existing: MetricPoint[] | undefined,
+): MetricPoint[] | undefined => {
+  const incomingLength = incoming?.length ?? 0;
+  const existingLength = existing?.length ?? 0;
+  if (incomingLength === 0 && existingLength === 0) return undefined;
+  return incomingLength >= existingLength ? incoming : existing;
+};
+
+const mergeInfrastructureChartData = (
+  existing: ChartData | undefined,
+  incoming: ChartData,
+): ChartData => {
+  if (!existing) return incoming;
+  return {
+    cpu: pickLongerSeries(incoming.cpu, existing.cpu),
+    memory: pickLongerSeries(incoming.memory, existing.memory),
+    disk: pickLongerSeries(incoming.disk, existing.disk),
+    diskread: pickLongerSeries(incoming.diskread, existing.diskread),
+    diskwrite: pickLongerSeries(incoming.diskwrite, existing.diskwrite),
+    netin: pickLongerSeries(incoming.netin, existing.netin),
+    netout: pickLongerSeries(incoming.netout, existing.netout),
+  };
+};
+
+// The infrastructure summary reports node, host-agent and Docker-host series
+// in separate maps. Node rows look them up by one key set, so fold the maps
+// together; where a key appears in more than one, each metric keeps the
+// longer series.
+export const buildInfrastructureHistoryChartMap = (
+  response: Pick<InfrastructureChartsResponse, 'nodeData' | 'agentData' | 'dockerHostData'>,
+): Map<string, ChartData> => {
+  const map = new Map<string, ChartData>();
+  for (const source of [response.nodeData, response.agentData, response.dockerHostData]) {
+    if (!source) continue;
+    for (const [id, data] of Object.entries(source)) {
+      map.set(id, mergeInfrastructureChartData(map.get(id), data));
+    }
+  }
+  return map;
+};
 
 const readChartData = (source: ChartDataMap, key: string): ChartData | undefined => {
   if (!source || !key) return undefined;

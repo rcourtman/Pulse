@@ -65,6 +65,7 @@ import type { EvidenceEnvelope } from '@/types/operationalTrust';
 import type { ActionDetailResponse } from '@/types/actionAudit';
 import { getAlertResourceIncidentAcknowledgedByLabel } from '@/utils/alertIncidentPresentation';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { copyToClipboard } from '@/utils/clipboard';
 import type { PatrolAutonomyLevel } from '@/api/patrol';
 import {
@@ -1284,6 +1285,9 @@ function AttentionLifecycleControls(props: {
   onSuppress: (itemId: string, reason: string, expiresAt: string) => Promise<void>;
   onUnsuppress: (itemId: string, reviewed: boolean) => Promise<void>;
 }) {
+  // The acknowledgement time never changes while the detail stays open, so its
+  // age reads the shared clock.
+  const now = useRelativeTimeNow();
   const [showSuppression, setShowSuppression] = createSignal(false);
   const [reason, setReason] = createSignal('');
   const [durationMs, setDurationMs] = createSignal<number>(SUPPRESSION_DURATIONS[1].value);
@@ -1313,7 +1317,7 @@ function AttentionLifecycleControls(props: {
           {(acknowledgement) => (
             <p class="mb-2 text-xs leading-5 text-muted">
               {getAlertResourceIncidentAcknowledgedByLabel(acknowledgement().by)}{' '}
-              {formatRelativeTime(acknowledgement().at, { compact: true })}.
+              {formatRelativeTime(acknowledgement().at, { compact: true, now: now() })}.
             </p>
           )}
         </Show>
@@ -1452,6 +1456,9 @@ function AttentionLifecycleControls(props: {
 }
 
 function AttentionTimelineList(props: { timeline: AttentionItemDetail['timeline'] }) {
+  // The open detail is read once per selection and its transitions never
+  // change, so their ages read the shared clock.
+  const now = useRelativeTimeNow();
   return (
     <ol class="space-y-3">
       <For each={props.timeline}>
@@ -1461,7 +1468,7 @@ function AttentionTimelineList(props: { timeline: AttentionItemDetail['timeline'
               {formatLabel(transition.from)} to {formatLabel(transition.to)}
             </p>
             <p class="mt-0.5 text-[11px] text-muted">
-              {formatRelativeTime(transition.at, { compact: true })} ·{' '}
+              {formatRelativeTime(transition.at, { compact: true, now: now() })} ·{' '}
               {formatLabel(transition.cause)}
             </p>
             <Show when={transition.reason}>
@@ -1793,6 +1800,9 @@ function DetailSection(props: { title: string; children: import('solid-js').JSX.
 }
 
 function EvidenceObservation(props: { evidence: EvidenceEnvelope }) {
+  // An evidence record's observation time is fixed, so its age reads the
+  // shared clock while the detail stays open.
+  const now = useRelativeTimeNow();
   return (
     <li class="rounded-md border border-border-subtle p-3">
       <div class="flex flex-wrap items-center gap-2">
@@ -1816,7 +1826,7 @@ function EvidenceObservation(props: { evidence: EvidenceEnvelope }) {
       </div>
       <p class="mt-1 text-xs text-muted">
         {props.evidence.source.collector} · observed{' '}
-        {formatRelativeTime(props.evidence.observedAt, { compact: true })}
+        {formatRelativeTime(props.evidence.observedAt, { compact: true, now: now() })}
       </p>
       <Show when={props.evidence.reason?.message}>
         {(reason) => <p class="mt-1 text-xs leading-5 text-muted">{reason()}</p>}

@@ -1408,11 +1408,12 @@ describe('Workloads performance contract', () => {
       // surface must not poll the infrastructure summary.
       expect(workloadsStateSource).toContain("series: 'guests',");
       expect(workloadTableMetricHistoryStateSource).toContain(
-        'fetchWorkloadsSummaryAndCache(parsed.range',
+        'ChartsAPI.getWorkloadCharts(parsed.range, signal',
       );
       expect(workloadTableMetricHistoryStateSource).toContain(
-        'fetchInfrastructureSummaryAndCache(parsed.range',
+        'ChartsAPI.getInfrastructureSummaryCharts(parsed.range, signal',
       );
+      expect(workloadTableMetricHistoryStateSource).not.toContain('localStorage');
       expect(workloadTableMetricHistoryStateSource).toContain(
         "if (options.series !== 'guests' || !options.enabled()) return null;",
       );

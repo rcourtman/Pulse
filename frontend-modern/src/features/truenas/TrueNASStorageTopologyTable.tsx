@@ -37,6 +37,10 @@ import {
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import {
+  PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS,
+  getPhysicalDiskTemperaturePresentation,
+} from '@/features/storageBackups/diskTemperaturePresentation';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource } from '@/types/resource';
 import {
@@ -200,6 +204,40 @@ const DiskEnduranceCell: Component<{ row: TrueNASStorageTopologyRow }> = (props)
   );
 };
 
+// A disk row may carry a last known temperature it did not collect now, such
+// as a host agent's reading after the agent stopped reporting on a merged disk.
+const diskTemperatureReading = (row: TrueNASStorageTopologyRow) => {
+  const disk = row.kind === 'disk' ? row.resource.physicalDisk : undefined;
+  return disk
+    ? getPhysicalDiskTemperaturePresentation({
+        temperature: disk.temperature ?? 0,
+        collection: disk.collection,
+      })
+    : null;
+};
+
+// A retained reading reads as last known, never as the disk's temperature now.
+const DiskTemperatureCell: Component<{ row: TrueNASStorageTopologyRow }> = (props) => {
+  const reading = () => diskTemperatureReading(props.row);
+  const value = () =>
+    props.row.kind === 'disk' ? props.row.resource.physicalDisk?.temperature : undefined;
+  return (
+    <Show
+      when={reading()?.current === false}
+      fallback={<PlatformTableTemperatureValue value={value()} emptyText="-" />}
+    >
+      <span
+        class={PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS}
+        title={reading()?.title}
+        data-temperature-reading="last-known"
+      >
+        <PlatformTableTemperatureValue value={value()} />
+        <span class="sr-only">, last known</span>
+      </span>
+    </Show>
+  );
+};
+
 const ISSUE_TONES: Record<TrueNASStorageIssue['status'], PlatformIssueTone> = {
   attention: 'warning',
   offline: 'danger',
@@ -253,9 +291,10 @@ const getTrueNASStorageSortValue = (
     case 'endurance':
       return row.kind === 'disk' ? (diskEndurance(row)?.value ?? null) : null;
     case 'temp': {
-      if (row.kind !== 'disk') return null;
-      const temperature = row.resource.physicalDisk?.temperature;
-      return typeof temperature === 'number' && Number.isFinite(temperature) ? temperature : null;
+      // Hottest first ranks current readings only; a last known one sorts as
+      // no reading.
+      const reading = diskTemperatureReading(row);
+      return reading?.current ? (row.resource.physicalDisk?.temperature ?? null) : null;
     }
     case 'health':
       return HEALTH_SORT_RANK[
@@ -575,14 +614,7 @@ export const TrueNASStorageTopologyTable: Component<{
                               kindFilter() === 'disks' ? 'table-cell' : 'hidden lg:table-cell'
                             } text-base-content`}
                           >
-                            <PlatformTableTemperatureValue
-                              value={
-                                row.kind === 'disk'
-                                  ? row.resource.physicalDisk?.temperature
-                                  : undefined
-                              }
-                              emptyText="-"
-                            />
+                            <DiskTemperatureCell row={row} />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}

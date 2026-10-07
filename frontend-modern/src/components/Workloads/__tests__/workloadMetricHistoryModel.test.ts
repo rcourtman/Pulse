@@ -4,6 +4,7 @@ import type { Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
 
 import {
+  buildInfrastructureHistoryChartMap,
   buildMetricMiniSparklinePath,
   computeMetricMiniSparklineHoverState,
   findChartDataForCandidates,
@@ -65,6 +66,82 @@ describe('workloadMetricHistoryModel', () => {
   it('finds chart data by normalized candidate', () => {
     const chartData = { cpu: [{ timestamp: 1, value: 5 }] };
     expect(findChartDataForCandidates(['pve-101'], [{ 'pve:pve:101': chartData }])).toBe(chartData);
+  });
+
+  it('folds node, agent and Docker host summary series into one node lookup', () => {
+    const point = (timestamp: number, value: number) => ({ timestamp, value });
+    const map = buildInfrastructureHistoryChartMap({
+      nodeData: {
+        'cluster-a-pve1': { cpu: [point(1, 10)] },
+        'shared-host': {
+          cpu: [point(1, 10)],
+          netin: [point(1, 1), point(2, 2)],
+          netout: [],
+        },
+      },
+      agentData: {
+        'agent-1': { memory: [point(1, 40)] },
+        'shared-host': {
+          cpu: [point(1, 20), point(2, 30)],
+          netin: [point(1, 5)],
+          netout: [point(1, 6), point(2, 7)],
+        },
+      },
+      dockerHostData: {
+        'docker-1': { disk: [point(1, 70)] },
+      },
+    });
+
+    expect([...map.keys()].sort()).toEqual([
+      'agent-1',
+      'cluster-a-pve1',
+      'docker-1',
+      'shared-host',
+    ]);
+    expect(map.get('cluster-a-pve1')?.cpu).toEqual([point(1, 10)]);
+    expect(map.get('agent-1')?.memory).toEqual([point(1, 40)]);
+    expect(map.get('docker-1')?.disk).toEqual([point(1, 70)]);
+    // A key reported by more than one source keeps the longer series per metric.
+    const shared = map.get('shared-host');
+    expect(shared?.cpu).toEqual([point(1, 20), point(2, 30)]);
+    expect(shared?.netin).toEqual([point(1, 1), point(2, 2)]);
+    expect(shared?.netout).toEqual([point(1, 6), point(2, 7)]);
+    expect(shared?.memory).toBeUndefined();
+    expect(
+      findChartDataForCandidates(getNodeChartKeyCandidates({ id: 'agent:agent-1' } as Node), [map])
+        ?.memory,
+    ).toEqual([point(1, 40)]);
+  });
+
+  it('merges every summary metric and lets the later source win a tie', () => {
+    const metrics = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'] as const;
+    const series = (value: number, length: number) =>
+      Array.from({ length }, (_, index) => ({ timestamp: index + 1, value }));
+    // Node data is longer for even-indexed metrics, agent data for odd ones;
+    // Docker host data ties the winner and must replace it.
+    const nodeData = Object.fromEntries(metrics.map((m, i) => [m, series(1, i % 2 === 0 ? 3 : 1)]));
+    const agentData = Object.fromEntries(
+      metrics.map((m, i) => [m, series(2, i % 2 === 0 ? 1 : 3)]),
+    );
+    const dockerHostData = Object.fromEntries(metrics.map((m) => [m, series(3, 3)]));
+    const map = buildInfrastructureHistoryChartMap({
+      nodeData: { host: nodeData },
+      agentData: { host: agentData },
+      dockerHostData: { host: dockerHostData },
+    });
+    const withoutDocker = buildInfrastructureHistoryChartMap({
+      nodeData: { host: nodeData },
+      agentData: { host: agentData },
+    });
+
+    for (const [index, metric] of metrics.entries()) {
+      expect(map.get('host')?.[metric]).toEqual(series(3, 3));
+      expect(withoutDocker.get('host')?.[metric]).toEqual(series(index % 2 === 0 ? 1 : 2, 3));
+    }
+  });
+
+  it('builds an empty node lookup when the infrastructure summary has no series', () => {
+    expect(buildInfrastructureHistoryChartMap({ nodeData: {} }).size).toBe(0);
   });
 
   it('returns paired I/O series from chart data', () => {

@@ -417,8 +417,8 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).not.toContain("import('@/components/Settings/Settings')");
     expect(appSource).toContain('const timeoutId = window.setTimeout(() => {');
     expect(appSource).toContain('void preloadAppShellRoutes();');
-    expect(appRuntimeStateSource).not.toContain('fetchInfrastructureSummaryAndCache');
-    expect(appRuntimeStateSource).not.toContain('fetchWorkloadsSummaryAndCache');
+    expect(appRuntimeStateSource).not.toContain('getInfrastructureSummaryCharts');
+    expect(appRuntimeStateSource).not.toContain('getWorkloadCharts');
     expect(appRuntimeStateSource).not.toContain('requestIdleCallback');
     expect(appRuntimeStateSource).toContain('ssoSessionDisplayName?: string;');
     expect(appRuntimeStateSource).toContain(

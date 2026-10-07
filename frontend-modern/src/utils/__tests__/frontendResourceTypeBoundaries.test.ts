@@ -177,7 +177,6 @@ import guestDrawerStateSource from '@/components/Workloads/useGuestDrawerState.t
 import workloadGuestPresentationSource from '@/utils/workloadGuestPresentation.ts?raw';
 import orgScopeSource from '@/utils/orgScope.ts?raw';
 import workloadsUtilitySource from '@/utils/workloads.ts?raw';
-import infrastructureSummaryCacheSource from '@/utils/infrastructureSummaryCache.ts?raw';
 import workloadEmptyStatePresentationSource from '@/utils/workloadEmptyStatePresentation.ts?raw';
 import resourceChangeSummarySource from '@/components/Infrastructure/ResourceChangeSummary.tsx?raw';
 import resourceChangePresentationSource from '@/utils/resourceChangePresentation.ts?raw';
@@ -874,8 +873,6 @@ describe('frontend resource type boundaries', () => {
     expect(enhancedCpuBarStateSource).toContain('useTooltip');
     expect(enhancedCpuBarModelSource).toContain('export function buildEnhancedCPUBarPresentation');
     expect(enhancedCpuBarModelSource).toContain('tooltipUsageClass');
-    expect(infrastructureSummaryCacheSource).toContain('normalizeOrgScope(getOrgID())');
-    expect(infrastructureSummaryCacheSource).not.toContain('const normalizeOrgScope =');
     expect(useWorkloadsSource).toContain('normalizeOrgScope(getOrgID())');
     expect(useWorkloadsSource).not.toContain('const normalizeOrgScope =');
     expect(useUnifiedResourcesSource).toContain('normalizeOrgScope(getOrgID())');

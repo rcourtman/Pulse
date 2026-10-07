@@ -104,6 +104,11 @@ type ResourceRegistry struct {
 	// nil during a batch means reference reads use the live scan until the
 	// final identity refresh rebuilds the index. Empty values are ambiguous.
 	canonicalIdentityIndex map[string]string
+	// physicalDisksByHardware lists every disk resource ever indexed under a
+	// hardware key (physicalDiskHardwareKey). The IdentityMatcher keeps one
+	// resource per machine ID, so it cannot see same-serial disks on several
+	// machines. Entries are validated on read, never removed eagerly.
+	physicalDisksByHardware map[string]map[string]struct{}
 
 	// Cached typed view indexes. Invalidated on ingest, rebuilt lazily on
 	// first access. Protected by mu — callers hold RLock to read, and the
@@ -835,6 +840,7 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 		rr.seedSourceMappingsFromResourceLocked(rr.resources[resourceID])
 		if resource := rr.resources[resourceID]; resource != nil {
 			rr.indexSupersededCanonicalIDsLocked(resourceID, resource.SupersededCanonicalIDs)
+			rr.indexPhysicalDiskHardwareLocked(resource)
 		}
 	}
 	rr.applyManualLinks(thresholds)
@@ -2929,6 +2935,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 			}
 			stampPhysicalDiskTemperatureReading(&resource, source, sourceID)
 			rr.resources[resource.ID] = &resource
+			rr.indexPhysicalDiskHardwareLocked(&resource)
 			rr.bySource[source][sourceID] = resource.ID
 			rr.matcher.Add(resource.ID, identity)
 			return resource.ID
@@ -2936,6 +2943,9 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	}
 
 	resource.ID = rr.chooseNewID(resource.Type, identity, source, sourceID)
+	if resource.Type == ResourceTypePhysicalDisk {
+		resource.ID = rr.physicalDiskIDForMachineLocked(resource.ID, candidateID, &resource, source, onlyMissing)
+	}
 	normalizeResourceRelationships(&resource)
 	if existing := rr.resources[resource.ID]; existing != nil {
 		if onlyMissing {
@@ -2948,6 +2958,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	}
 	stampPhysicalDiskTemperatureReading(&resource, source, sourceID)
 	rr.resources[resource.ID] = &resource
+	rr.indexPhysicalDiskHardwareLocked(&resource)
 	rr.bySource[source][sourceID] = resource.ID
 	rr.matcher.Add(resource.ID, identity)
 
@@ -3842,6 +3853,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 			existing.Name = incoming.Name
 		}
 	}
+	rr.indexPhysicalDiskHardwareLocked(existing)
 }
 
 func clearUnavailableSourceMemoryMetric(metrics *ResourceMetrics, incoming *Resource, source DataSource) *ResourceMetrics {
@@ -5271,6 +5283,267 @@ func (rr *ResourceRegistry) chooseNewID(resourceType ResourceType, identity Reso
 		}
 	}
 	return rr.sourceSpecificID(resourceType, source, sourceID)
+}
+
+// physicalDiskIDForMachineLocked decides which resource a new disk
+// observation joins once findMatch has refused every candidate. A usable
+// serial or WWN identifies a disk only on one machine: dual-ported SAS shelves,
+// cloned VMs with an explicit serial, fixed-serial USB bridges and TrueNAS
+// systems report one identifier on several machines. id is chooseNewID's
+// hardware-keyed ID and candidateID the observation's source-specific ID.
+//
+// With no other disk carrying the identity, the disk keeps id, so a disk seen
+// on one machine never changes ID. Otherwise it joins the one disk it does not
+// conflict with (a second reporter on the same machine), unless an operator
+// exclusion separates them, which leaves it on candidateID as findMatch's
+// excluded branch does. An exclusion recorded against any ID the disk can hold
+// (id, its current ID or its machine-scoped ID) applies, so a split survives a
+// re-key; once the identity spans machines, id no longer names one disk, so a
+// split recorded against it applies to every copy (erring towards an extra
+// row, never a merge the operator forbade). Manual links recorded against id
+// stop applying for the same reason. When every disk carrying the identity
+// sits on another machine, each
+// copy takes the identity keyed to the machine of its canonical parent at that
+// point, and the copy holding id is re-keyed too. So machines can be ingested
+// in any order, and id never passes between disks that coexist on different
+// machines. Like any serial-keyed ID it still passes to a same-serial disk
+// that appears once the previous holder is gone, and a disk's ID changes when
+// a same-serial disk first appears on another machine and back when it goes
+// away. More than one joinable disk joins none, except that the holder of id
+// keeps it.
+func (rr *ResourceRegistry) physicalDiskIDForMachineLocked(id, candidateID string, incoming *Resource, source DataSource, onlyMissing bool) string {
+	key := physicalDiskHardwareKey(incoming.Identity)
+	if key == "" {
+		return id
+	}
+	siblings := rr.physicalDisksWithHardwareKeyLocked(key)
+	if len(siblings) == 0 {
+		return id
+	}
+	var joinable []*Resource
+	excluded := false
+	for _, sibling := range siblings {
+		if rr.physicalDiskMachinesConflictLocked(sibling, incoming, source) {
+			continue
+		}
+		if rr.isExcluded(sibling.ID, candidateID) || rr.isExcluded(id, candidateID) ||
+			rr.isExcluded(rr.physicalDiskScopedIDLocked(sibling), candidateID) {
+			excluded = true
+			continue
+		}
+		joinable = append(joinable, sibling)
+	}
+	if len(joinable) == 1 {
+		return joinable[0].ID
+	}
+	for _, sibling := range joinable {
+		if sibling.ID == id {
+			return id
+		}
+	}
+	if excluded && len(joinable) == 0 {
+		return rr.physicalDiskFallbackIDLocked(candidateID, incoming, source)
+	}
+	scopedID := rr.physicalDiskScopedIDLocked(incoming)
+	if scopedID == "" {
+		return id
+	}
+	if holder := rr.resources[scopedID]; holder != nil &&
+		(holder.Type != ResourceTypePhysicalDisk || rr.physicalDiskMachinesConflictLocked(holder, incoming, source)) {
+		return rr.physicalDiskFallbackIDLocked(candidateID, incoming, source)
+	}
+	if len(joinable) == 0 && !onlyMissing {
+		for _, sibling := range siblings {
+			if sibling.ID == id {
+				rr.rekeyPhysicalDiskLocked(sibling, rr.physicalDiskScopedIDLocked(sibling))
+			}
+		}
+	}
+	return scopedID
+}
+
+// physicalDiskMachinesConflictLocked reports whether two disks carrying one
+// hardware identity provably sit on different machines. One reporter placing
+// the identity on two machines is proof even when their hostnames match, as
+// cloned VMs keep both. Different reporters may sit on machine resources the
+// registry never merged, such as a TrueNAS system and the agent running on it,
+// so there differing machines conflict only when both disks name hosts with no
+// hostname in common. An unknown machine is never a conflict.
+func (rr *ResourceRegistry) physicalDiskMachinesConflictLocked(existing, incoming *Resource, source DataSource) bool {
+	incomingMachine := rr.physicalDiskMachineLocked(incoming.ParentID)
+	reported, ok := existing.parentBySource[source]
+	if !ok && existing.ParentID != nil && len(existing.Sources) == 1 && existing.Sources[0] == source {
+		// Per-source parents do not survive serialization; a single-source
+		// disk's own parent is that source's.
+		reported, ok = *existing.ParentID, true
+	}
+	if ok && incomingMachine != "" {
+		if reportedMachine := rr.physicalDiskMachineLocked(&reported); reportedMachine != "" && reportedMachine != incomingMachine {
+			return true
+		}
+	}
+	if existingMachine := rr.physicalDiskMachineLocked(existing.ParentID); existingMachine != "" && existingMachine == incomingMachine {
+		return false
+	}
+	if physicalDiskHostname(existing) == "" || physicalDiskHostname(incoming) == "" {
+		return false
+	}
+	return !identitiesShareHostname(existing.Identity, incoming.Identity)
+}
+
+// physicalDiskMachineLocked resolves a disk's parent to the machine it sits
+// on: the nearest host-shaped ancestor (a Proxmox node, agent host or TrueNAS
+// system above a pool or Unraid array), else the topmost known ancestor.
+func (rr *ResourceRegistry) physicalDiskMachineLocked(parentID *string) string {
+	if parentID == nil {
+		return ""
+	}
+	id := CanonicalResourceID(strings.TrimSpace(*parentID))
+	for depth := 0; id != "" && depth < 8; depth++ {
+		parent := rr.resources[id]
+		if parent == nil || parent.Type == ResourceTypeAgent || parent.ParentID == nil {
+			return id
+		}
+		next := CanonicalResourceID(strings.TrimSpace(*parent.ParentID))
+		if next == "" || next == id {
+			return id
+		}
+		id = next
+	}
+	return id
+}
+
+// physicalDiskScopedIDLocked keys a disk's hardware identity to its machine,
+// or to its hostname when the machine is unknown.
+func (rr *ResourceRegistry) physicalDiskScopedIDLocked(disk *Resource) string {
+	key := physicalDiskHardwareKey(disk.Identity)
+	scope := rr.physicalDiskScopeLocked(disk)
+	if key == "" || scope == "" {
+		return ""
+	}
+	return buildHashID(ResourceTypePhysicalDisk, key+"@"+scope)
+}
+
+// physicalDiskFallbackIDLocked returns the observation's source-specific ID,
+// keyed to its machine when another machine's disk already holds it: agent
+// disk source IDs are the bare serial, so one candidate ID serves every host.
+func (rr *ResourceRegistry) physicalDiskFallbackIDLocked(candidateID string, incoming *Resource, source DataSource) string {
+	holder := rr.resources[candidateID]
+	if holder == nil || (holder.Type == ResourceTypePhysicalDisk && !rr.physicalDiskMachinesConflictLocked(holder, incoming, source)) {
+		return candidateID
+	}
+	if scope := rr.physicalDiskScopeLocked(incoming); scope != "" {
+		return buildHashID(ResourceTypePhysicalDisk, candidateID+"@"+scope)
+	}
+	return candidateID
+}
+
+func (rr *ResourceRegistry) physicalDiskScopeLocked(disk *Resource) string {
+	if machine := rr.physicalDiskMachineLocked(disk.ParentID); machine != "" {
+		return "machine:" + machine
+	}
+	if hostname := physicalDiskHostname(disk); hostname != "" {
+		return "host:" + hostname
+	}
+	return ""
+}
+
+// physicalDiskHardwareKey is the stable key chooseNewID hashes into a disk's
+// hardware-keyed canonical ID, or "" when the disk has no hardware identity.
+func physicalDiskHardwareKey(identity ResourceIdentity) string {
+	if machineID := strings.TrimSpace(identity.MachineID); machineID != "" {
+		return "machine:" + machineID
+	}
+	if dmiUUID := strings.TrimSpace(identity.DMIUUID); dmiUUID != "" {
+		return "dmi:" + dmiUUID
+	}
+	return ""
+}
+
+// physicalDiskHostname is the disk's least full hostname, so a scoped ID does
+// not depend on the order merges appended hostnames in.
+func physicalDiskHostname(disk *Resource) string {
+	least := ""
+	for _, hostname := range disk.Identity.Hostnames {
+		if NormalizeHostname(hostname) == "" {
+			continue
+		}
+		if full := NormalizeFullHostname(hostname); least == "" || full < least {
+			least = full
+		}
+	}
+	return least
+}
+
+func (rr *ResourceRegistry) indexPhysicalDiskHardwareLocked(disk *Resource) {
+	if disk == nil || disk.Type != ResourceTypePhysicalDisk {
+		return
+	}
+	key := physicalDiskHardwareKey(disk.Identity)
+	if key == "" {
+		return
+	}
+	if rr.physicalDisksByHardware == nil {
+		rr.physicalDisksByHardware = make(map[string]map[string]struct{})
+	}
+	ids := rr.physicalDisksByHardware[key]
+	if ids == nil {
+		ids = make(map[string]struct{})
+		rr.physicalDisksByHardware[key] = ids
+	}
+	ids[disk.ID] = struct{}{}
+}
+
+// physicalDisksWithHardwareKeyLocked returns the live disks carrying key,
+// sorted by ID, and drops index entries that no longer match.
+func (rr *ResourceRegistry) physicalDisksWithHardwareKeyLocked(key string) []*Resource {
+	ids := rr.physicalDisksByHardware[key]
+	disks := make([]*Resource, 0, len(ids))
+	for id := range ids {
+		disk := rr.resources[id]
+		if disk == nil || disk.ID != id || disk.Type != ResourceTypePhysicalDisk || physicalDiskHardwareKey(disk.Identity) != key {
+			delete(ids, id)
+			continue
+		}
+		disks = append(disks, disk)
+	}
+	sort.Slice(disks, func(i, j int) bool { return disks[i].ID < disks[j].ID })
+	return disks
+}
+
+// rekeyPhysicalDiskLocked moves a disk to newID, carrying its source mappings,
+// identity index entries, retired-ID claims, child parent references and
+// relationship endpoints.
+func (rr *ResourceRegistry) rekeyPhysicalDiskLocked(disk *Resource, newID string) {
+	oldID := disk.ID
+	if newID == "" || newID == oldID || rr.resources[newID] != nil {
+		return
+	}
+	delete(rr.resources, oldID)
+	disk.ID = newID
+	rr.resources[newID] = disk
+	rr.updateSourceMappings(oldID, newID)
+	rr.matcher.Add(newID, disk.Identity)
+	rr.indexPhysicalDiskHardwareLocked(disk)
+	for retiredID, claimant := range rr.supersededIndex {
+		if claimant == oldID {
+			rr.supersededIndex[retiredID] = newID
+		}
+	}
+	for _, resource := range rr.resources {
+		if resource == nil {
+			continue
+		}
+		for index := range resource.Relationships {
+			relationship := &resource.Relationships[index]
+			if relationship.SourceID == oldID {
+				relationship.SourceID = newID
+			}
+			if relationship.TargetID == oldID {
+				relationship.TargetID = newID
+			}
+		}
+	}
 }
 
 func (rr *ResourceRegistry) sourceResourceID(source DataSource, sourceID string) string {

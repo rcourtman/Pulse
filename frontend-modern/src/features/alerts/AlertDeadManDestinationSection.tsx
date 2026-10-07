@@ -1,4 +1,4 @@
-import { createSignal, createUniqueId, onMount, Show, type Accessor } from 'solid-js';
+import { createSignal, createUniqueId, onCleanup, onMount, Show, type Accessor } from 'solid-js';
 
 import { AlertsAPI } from '@/api/alerts';
 import { Button } from '@/components/shared/Button';
@@ -6,6 +6,7 @@ import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import type { DeadManStatus } from '@/types/alerts';
 import { formatRelativeTime } from '@/utils/format';
 import { logger } from '@/utils/logger';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 interface AlertDeadManDestinationSectionProps {
   pingUrl: Accessor<string>;
@@ -14,6 +15,13 @@ interface AlertDeadManDestinationSectionProps {
 }
 
 const REDACTED_PING_URL = '***REDACTED***';
+// Pulse pings the watchdog every minute, so a status read once at mount goes
+// stale while the panel stays open.
+export const DEAD_MAN_STATUS_POLL_MS = 30_000;
+// A read pending this long at a poll tick counts as a full interval old. The
+// slack absorbs timer jitter: the next tick can land a few milliseconds short
+// of a full interval after the read the previous tick started.
+const DEAD_MAN_STATUS_STALE_MS = DEAD_MAN_STATUS_POLL_MS - 1_000;
 
 const statusPresentation: Record<DeadManStatus['state'], { label: string; class: string }> = {
   disabled: {
@@ -54,21 +62,72 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
   const [unavailable, setUnavailable] = createSignal(false);
   const [showUrl, setShowUrl] = createSignal(false);
 
-  const loadStatus = async () => {
-    if (loading()) return;
-    setLoading(true);
+  // The status read has no timeout. Every read gets a sequence number, and a
+  // read's outcome applies only when it is newer than the last read that
+  // settled: a success shows its status and clears the unavailable mark, a
+  // failure sets it. A slow or hung read therefore cannot overwrite a newer
+  // outcome or block later reads, and reads slower than the poll interval
+  // still land in order. A background read waits while the newest read is
+  // younger than one poll interval (less a second of timer slack); a Refresh
+  // still pending at such a poll counts as stalled and frees the button.
+  // Nothing applies after the panel unmounts.
+  let latestStarted = 0;
+  let latestSettled = 0;
+  let pendingSince: number | undefined;
+  let foregroundRequest = 0;
+  let foregroundSince = 0;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+  const loadStatus = async (options: { background?: boolean } = {}) => {
+    const startedAt = Date.now();
+    if (options.background) {
+      if (loading() && startedAt - foregroundSince >= DEAD_MAN_STATUS_STALE_MS) {
+        setLoading(false);
+      }
+      if (pendingSince !== undefined && startedAt - pendingSince < DEAD_MAN_STATUS_STALE_MS) {
+        return;
+      }
+    } else if (loading()) {
+      return;
+    }
+    const request = ++latestStarted;
+    pendingSince = startedAt;
+    if (!options.background) {
+      foregroundRequest = request;
+      foregroundSince = startedAt;
+      setLoading(true);
+    }
     try {
-      setStatus(await AlertsAPI.getDeadManStatus());
+      const next = await AlertsAPI.getDeadManStatus();
+      if (disposed || request < latestSettled) return;
+      latestSettled = request;
+      setStatus(next);
       setUnavailable(false);
     } catch (error) {
+      if (disposed || request < latestSettled) return;
+      latestSettled = request;
       logger.error('Failed to load external watchdog status', error);
       setUnavailable(true);
     } finally {
-      setLoading(false);
+      if (!disposed) {
+        if (request === latestStarted) pendingSince = undefined;
+        // A Refresh is answered by its own read or by any newer one.
+        if (request >= foregroundRequest) setLoading(false);
+      }
     }
   };
 
-  onMount(() => void loadStatus());
+  // Last success and Monitor progress keep aging on the shared clock, and the
+  // status is re-read in the background so a moving age never describes a
+  // heartbeat that has since been sent.
+  const now = useRelativeTimeNow();
+  onMount(() => {
+    void loadStatus();
+    const timer = setInterval(() => void loadStatus({ background: true }), DEAD_MAN_STATUS_POLL_MS);
+    onCleanup(() => clearInterval(timer));
+  });
 
   const presentation = () => {
     const current = status();
@@ -162,7 +221,10 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
                 <div class="font-medium text-muted">Last success</div>
                 <div class="mt-1 text-base-content">
                   {current().lastSuccessAt
-                    ? formatRelativeTime(current().lastSuccessAt, { emptyText: 'Never' })
+                    ? formatRelativeTime(current().lastSuccessAt, {
+                        emptyText: 'Never',
+                        now: now(),
+                      })
                     : 'Never'}
                 </div>
               </div>
@@ -170,7 +232,10 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
                 <div class="font-medium text-muted">Monitor progress</div>
                 <div class="mt-1 text-base-content">
                   {current().lastMonitoringProgress
-                    ? formatRelativeTime(current().lastMonitoringProgress, { emptyText: 'Waiting' })
+                    ? formatRelativeTime(current().lastMonitoringProgress, {
+                        emptyText: 'Waiting',
+                        now: now(),
+                      })
                     : 'Waiting'}
                 </div>
               </div>

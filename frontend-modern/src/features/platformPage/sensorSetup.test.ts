@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Resource } from '@/types/resource';
+import type { PhysicalDiskCollectionStatus, Resource } from '@/types/resource';
 import { collectOutdatedSensorSetupNodes } from './sensorSetup';
 
 const node = (over: Partial<Resource> & { proxmox?: Resource['proxmox'] }): Resource =>
@@ -11,6 +11,7 @@ const disk = (over: {
   nodeName?: string;
   diskType?: string;
   temperature?: number;
+  collection?: PhysicalDiskCollectionStatus;
 }): Resource =>
   ({
     id: over.id ?? 'disk-1',
@@ -20,6 +21,7 @@ const disk = (over: {
     physicalDisk: {
       diskType: over.diskType ?? 'sata',
       temperature: over.temperature ?? 0,
+      collection: over.collection,
     },
     platformData: over.nodeName ? { proxmox: { nodeName: over.nodeName } } : {},
   }) as unknown as Resource;
@@ -78,6 +80,28 @@ describe('collectOutdatedSensorSetupNodes', () => {
         [disk({ nodeName: 'pve1', diskType: 'sata', temperature: 34 })],
       ),
     ).toEqual([]);
+  });
+
+  it('treats a retained temperature that is not current as missing', () => {
+    // Normalization keeps a disk's last known temperature when the current
+    // observation did not collect one, such as after a linked host agent
+    // stopped reporting. The disk cannot be read now, so the notice stays.
+    const retained = (state: 'available' | 'unavailable' | 'missing') =>
+      disk({
+        nodeName: 'pve1',
+        diskType: 'sata',
+        temperature: 34,
+        collection: {
+          temperature: { state, source: 'agent', reason: 'host agent stopped reporting' },
+        },
+      });
+    expect(collectOutdatedSensorSetupNodes([legacyNode()], [retained('unavailable')])).toEqual([
+      { id: 'node-1', name: 'pve1' },
+    ]);
+    expect(collectOutdatedSensorSetupNodes([legacyNode()], [retained('missing')])).toEqual([
+      { id: 'node-1', name: 'pve1' },
+    ]);
+    expect(collectOutdatedSensorSetupNodes([legacyNode()], [retained('available')])).toEqual([]);
   });
 
   it('ignores legacy nodes with only NVMe disks missing temperatures', () => {
