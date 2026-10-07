@@ -112,7 +112,7 @@ func TestRootInstallScriptStagesUpdateBeforeStoppingService(t *testing.T) {
 		`ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"`,
 		`download_release_archive "$LATEST_RELEASE" "$pulse_arch" "$archive_path"`,
 		`run_upgrade_readiness_preflight "$CURRENT_VERSION" "$expected_release"`,
-		`safe_systemctl stop "$EXISTING_SERVICE"`,
+		`stop_pulse_for_replacement "$EXISTING_SERVICE"`,
 		`install_pulse_archive "$archive_path" "$expected_release"`,
 	}
 

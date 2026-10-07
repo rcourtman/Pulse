@@ -590,6 +590,44 @@ safe_systemctl() {
     }
 }
 
+# A failed/timed-out is-active query is not evidence that replacement is safe.
+# Require an explicit stopped state, and read it back after a successful stop.
+# Do not restart after an uncertain stop: the operator must reconcile that state.
+stop_pulse_for_replacement() {
+    local service_name="$1"
+    local state=""
+    if ! state=$(timeout 5 systemctl show "$service_name" --property=ActiveState --value 2>/dev/null); then
+        print_error "Could not read Pulse service state ($service_name); refusing binary replacement"
+        return 1
+    fi
+    case "$state" in
+        inactive) return 0 ;;
+        active) PULSE_WAS_ACTIVE="true" ;;
+        failed) ;; # A failed unit can retain processes; stop it without claiming prior liveness.
+        *)
+            print_error "Pulse service state is not settled ($service_name); refusing binary replacement"
+            return 1
+            ;;
+    esac
+
+    print_info "Stopping existing Pulse service ($service_name)..."
+    if ! safe_systemctl stop "$service_name"; then
+        print_error "Could not stop Pulse ($service_name); refusing binary replacement. Check service state before retrying."
+        return 1
+    fi
+    if ! state=$(timeout 5 systemctl show "$service_name" --property=ActiveState --value 2>/dev/null); then
+        print_error "Could not confirm Pulse stopped ($service_name); refusing binary replacement"
+        return 1
+    fi
+    case "$state" in
+        inactive) return 0 ;;
+        *)
+            print_error "Pulse has not reached a stopped state ($service_name); refusing binary replacement"
+            return 1
+            ;;
+    esac
+}
+
 # Detect existing service name (pulse or pulse-backend)
 detect_service_name() {
     if [[ "$SERVICE_NAME_EXPLICIT" == "true" ]]; then
@@ -3447,8 +3485,6 @@ download_pulse() {
         local archive_from_temp=false
         local inferred_release=""
 
-        rm -f "$BUILD_FROM_SOURCE_MARKER"
-
         if ! ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"; then
             # The configuration snapshot taken earlier is not needed: the update
             # never reached staging. Remove it so a retry loop on a low-space
@@ -3507,12 +3543,13 @@ download_pulse() {
             exit 1
         fi
 
-        # Detect and stop existing service after the archive is available but before replacing the binary.
+        # Stage first, then require a confirmed stop before any binary replacement.
         EXISTING_SERVICE=$(detect_service_name)
-        if timeout 5 systemctl is-active --quiet "$EXISTING_SERVICE" 2>/dev/null; then
-            print_info "Stopping existing Pulse service ($EXISTING_SERVICE)..."
-            safe_systemctl stop "$EXISTING_SERVICE" || true
-            sleep 2
+        if ! stop_pulse_for_replacement "$EXISTING_SERVICE"; then
+            if [[ "$archive_from_temp" == "true" ]]; then
+                rm -f "$archive_path" "${archive_path}.sshsig"
+            fi
+            exit 1
         fi
 
         if ! install_pulse_archive "$archive_path" "$expected_release"; then
@@ -3522,6 +3559,7 @@ download_pulse() {
             exit 1
         fi
 
+        rm -f "$BUILD_FROM_SOURCE_MARKER"
         if [[ "$archive_from_temp" == "true" ]]; then
             rm -f "$archive_path" "${archive_path}.sshsig"
         fi
@@ -3815,10 +3853,10 @@ build_from_source() {
     fi
 
     service_name=$(detect_service_name)
-    if timeout 5 systemctl is-active --quiet "$service_name" 2>/dev/null; then
-        print_info "Stopping existing Pulse service ($service_name)..."
-        safe_systemctl stop "$service_name" || true
-        sleep 2
+    if ! stop_pulse_for_replacement "$service_name"; then
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$temp_build"
+        return 1
     fi
 
     mkdir -p "$INSTALL_DIR/bin" "$INSTALL_DIR/scripts"
@@ -4648,10 +4686,7 @@ wait_for_service_active() {
 # guarantee it comes back up afterward (#1323).
 stop_pulse_for_update() {
     PULSE_WAS_ACTIVE="false"
-    if timeout 5 systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-        PULSE_WAS_ACTIVE="true"
-    fi
-    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    stop_pulse_for_replacement "$SERVICE_NAME"
 }
 
 # After an update, if Pulse was running beforehand, make sure it is running again:
@@ -4912,7 +4947,6 @@ main() {
             fi
             
             backup_existing
-            stop_pulse_for_update
             create_user
             download_pulse
             # A half-removed installation (binary present, /etc/pulse or the
@@ -5084,7 +5118,6 @@ main() {
                 fi
                 
                 backup_existing
-                stop_pulse_for_update
                 create_user
                 download_pulse
                 # Same repair as the --version path: a half-removed
@@ -5112,7 +5145,6 @@ main() {
                 offer_existing_auto_updates
 
                 backup_existing
-                stop_pulse_for_update
                 create_user
                 download_pulse
                 setup_directories

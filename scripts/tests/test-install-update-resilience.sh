@@ -24,6 +24,7 @@ SYSTEMCTL_ACTIVE="no"
 START_ATTEMPTS=0
 systemctl() {
     case "$1" in
+        show) if [[ "$SYSTEMCTL_ACTIVE" == "yes" ]]; then echo active; else echo inactive; fi ;;
         is-active) [[ "$SYSTEMCTL_ACTIVE" == "yes" ]] && return 0 || return 1 ;;
         stop) SYSTEMCTL_ACTIVE="no"; return 0 ;;
         start) START_ATTEMPTS=$((START_ATTEMPTS + 1)); return 0 ;;
