@@ -429,9 +429,12 @@ Pulse can start, stop, and restart Docker / Podman containers directly from the 
   not just a restart. SSO accounts and temporary lockouts have separate paths.
 
 - **Logs**
-  ```bash
-  docker logs -f pulse
-  ```
+  Use the [bounded Docker log reader](TROUBLESHOOTING.md#inspect-notification-logs)
+  on the host running the Pulse server, with its actual container name. It reads
+  both output streams with a deadline, time window and record limit; a failed
+  read is not an empty log. Review the excerpt privately and share only the
+  relevant redacted error, not credentials, private host details or the full log.
+  Do not follow logs indefinitely or repeat a failed update to collect evidence.
 
 - **Shell Access**
   ```bash
