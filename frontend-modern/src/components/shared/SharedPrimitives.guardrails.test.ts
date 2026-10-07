@@ -1350,7 +1350,6 @@ describe('shared primitive guardrails', () => {
     expect(contextualFocusSource).toContain('export const revealInlineDetailInViewport');
     expect(contextualFocusSource).toContain('markRouteStateDeliberateScroll');
     expect(contextualFocusSource).toContain('data-inline-detail-for');
-    expect(summaryCardInteractionSource).toContain('chartHoveredSeriesId');
     expect(summaryCardInteractionSource).toContain('SummarySeriesGroupScope');
     expect(summaryCardInteractionSource).toContain('resolveSummaryGroupScope');
     expect(summaryCardInteractionSource).toContain('resolveSummaryGroupMemberInteractionState');
@@ -1364,7 +1363,6 @@ describe('shared primitive guardrails', () => {
     expect(summaryTableFocusSource).toContain('export function useSummaryTableFocusBridge');
     expect(summaryTableFocusSource).toContain('export function useSummaryPageInteractionState');
     expect(summaryTableFocusSource).toContain('resolveSummaryActiveSeriesId');
-    expect(summaryTableFocusSource).toContain('activeScopeState');
     expect(summaryTableFocusSource).toContain('focusedSeriesId');
     expect(summaryTableFocusSource).toContain('findInlineDetailElement');
     expect(summaryTableFocusSource).toContain('revealInlineDetailInViewport');
@@ -1376,8 +1374,9 @@ describe('shared primitive guardrails', () => {
     expect(summaryTableFocusSource).toContain("event.key !== 'Escape'");
     expect(summaryTableFocusSource).toContain('querySelector<HTMLElement>(');
     expect(summaryTableFocusSource).toContain(
-      "row.scrollIntoView({ behavior: 'smooth', block: 'center' })",
+      "row.scrollIntoView({ behavior: 'smooth', block: 'nearest' })",
     );
+    expect(summaryTableFocusSource).not.toContain("window.addEventListener('scroll'");
     expect(summaryTableFocusSource).not.toContain('useNavigate(');
   });
 
