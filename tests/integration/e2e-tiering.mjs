@@ -10,7 +10,6 @@ export const QUARANTINED_SPECS = [
   // spec turns that open bug into a permanent red.
   '**/03-multi-tenant.spec.ts',
   '**/47-inline-selection-scroll-stability.spec.ts',
-  '**/48-summary-hover-selection.spec.ts',
 ];
 
 /**
