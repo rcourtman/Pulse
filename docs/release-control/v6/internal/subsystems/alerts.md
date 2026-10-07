@@ -674,6 +674,7 @@ default construction path still restores.
 47a. `internal/alerts/capacity_forecast.go`
 47b. `internal/alerts/windowed_metric.go`
 48. `internal/alerts/node.go`
+48a. `internal/alerts/host_agent_node_links.go`
 49. `internal/alerts/host.go`
 50. `internal/alerts/backup_snapshot.go`
 51. `internal/alerts/disk_health.go`
@@ -2053,24 +2054,45 @@ clears the incident. `TestStorageUnknownConnectivityDoesNotRecover` and
 capacity activation, normalised offline activation and confirmed recovery.
 Proxmox node alert evaluation now lives in `internal/alerts/node.go`. That file
 owns node metric and temperature projection, node offline lifecycle handling,
-host-agent deduplication bookkeeping, and instance-scoped node display-name
-cache updates; future Proxmox node alert behavior should extend that resource
+and instance-scoped node display-name cache updates; future Proxmox node alert behavior should extend that resource
 checker owner rather than expanding the central Manager file.
 When a reporting host agent is linked to a node (`LinkedNodeID`, the monitor's
 automatic or operator-set identity decision), the agent resource owns each
 CPU, memory or disk usage metric it actually evaluates, and `CheckNode` releases
 its own copy of those metrics through the disabled-threshold path every cycle:
 the pending run is dropped and any node alert still open from before the link is
-resolved, never left frozen until the agent goes offline. `CheckHost` registers
-the link only after evaluation, recording which metrics the agent is configured
-to evaluate (a live CPU or memory threshold; for disk, a live threshold on the
-summary filesystem `models.SummaryDisk` picks, which is also what the linked
-node's disk metric reports), and removes it while agent alerts are disabled.
-Ownership follows configuration, not one report's data, so a missing agent
-reading keeps the agent's alert open instead of handing the metric back to the
-node for a cycle. With several agents linked to one node, a metric is owned when
-any of them evaluates it. A metric no agent evaluates stays with the node, so
-deduplication never leaves a machine unmonitored.
+resolved, never left frozen until the agent goes offline. `CheckHost` applies
+its link outcome after evaluation in per-agent report order. CPU and memory
+ownership requires a live threshold plus a usable, finite observation with a
+ready evaluation window, or a still-open agent alert or reducer run. For disk,
+that evidence must belong to the summary filesystem `models.SummaryDisk` picks,
+which is also what the linked node's disk metric reports. Configuration alone
+is not coverage: an agent with no observation and no open run leaves the node
+responsible. Missing readings keep an existing agent alert, without creating a
+node duplicate; observation-gap interruption and fresh confirmation/recovery
+remain unchanged. Disabling a usage metric releases canonical/shadow pending
+runs and explicit intent grace, even without a reading. A disabled agent or host
+also releases its CPU/memory pending runs. `UpdateConfig` immediately revokes
+unsupported link coverage, and in-flight reports recheck current policy before
+applying their outcome. Newer reports, offline and removal invalidate older
+link updates and removals. Several linked agents contribute the union of their
+coverage; stale alert metadata alone never suppresses a node. The accepted
+short duplicate window remains restart-before-first-report and
+first-offline-before-confirmed-offline; manually linked sibling agents retain
+their own alerts. Explicit host/inherited disk overrides beat `DiskFillByType`,
+as do direct filesystem overrides. A saved direct filesystem disable revokes
+summary disk ownership without a new agent report. Per-type defaults retain
+the existing normalization contract (zero is restored to the type default);
+this repair does not add a per-type Off setting. A nil effective filesystem
+threshold drops its pending run.
+
+A node-side close is an ownership handover, not observed recovery: each released
+metric carries `moved_to_agent` and the identity/name of an agent actually
+covering that metric in the same link snapshot. If several agents cover it,
+the lowest covering agent ID wins deterministically; a sibling covering only
+another metric must not be named. Resolved consumers still receive the close.
+`internal/alerts/host_agent_node_links.go` owns ordered links and per-metric
+successor selection, without persisting stale coverage across restart.
 Deduplication keys on that link,
 never on a hostname match, so a same-named node in another instance keeps its
 alerts, an agent reporting an FQDN still dedups its node, and an operator unlink
@@ -2089,13 +2111,26 @@ instance name in `Instance`.
 `TestCheckNodeKeepsTemperatureAlertWhenHostAgentMonitorsNode`,
 `TestCheckNodeReleasesOpenMetricAlertWhenHostAgentRegisters`,
 `TestCheckNodeMissingTemperatureDoesNotResolveOpenAlert`,
-`TestCheckNodeMissingTemperatureInterruptsTimingRuns` and
-`TestConfigSaveKeepsNodeTemperatureAlertOverTrigger` and
+`TestCheckNodeMissingTemperatureInterruptsTimingRuns`,
+`TestConfigSaveKeepsNodeTemperatureAlertOverTrigger`,
 `TestCheckNodeKeepsUsageMetricsTheAgentDoesNotEvaluate`,
-`TestCheckNodeUsageOwnershipFollowsWhatAgentsEvaluate` in
-`internal/alerts/threshold_resolution_shared_test.go`, and
+`TestCheckNodeUsageOwnershipFollowsWhatAgentsEvaluate`,
+`TestCheckNodeKeepsMetricsTheAgentCannotEvaluate`,
+`TestDisabledAgentThresholdReleasesPendingRunWithoutReading`,
+`TestHostAgentNodeLinkFollowsConfigAndReportOrder`,
+`TestCheckNodeTakesBackMetricsWhenAgentUnlinks`,
+`TestHostDiskOverrideBeatsDiskFillByType`,
+`TestReleaseCanonicalMetricAlertClearsIntentPending` in
+`internal/alerts/threshold_resolution_shared_test.go` and
+`TestReportedAlertOwnershipComposition` in
+`internal/alerts/reported_alert_composition_test.go`, plus
 `TestHostAgentDeduplicationFollowsNodeLink` in
-`internal/alerts/host_dedup_test.go`, pin these rules.
+`internal/alerts/host_dedup_test.go` and
+`TestCheckMetricReportsWhetherObservationWasUsable` in
+`internal/alerts/windowed_metric_test.go`, pin these rules.
+The real monitor lifecycle/History route is exercised by
+`TestMonitorReportedAgentHandoverUsesActualMetricOwner` in
+`internal/monitoring/monitor_alert_handling_test.go`.
 Host-agent alert evaluation now lives in `internal/alerts/host.go`. That file
 owns host identity, host-agent metric projection, host disk/SMART/RAID/Unraid
 health handling, host cleanup, and host offline lifecycle handling; future host
