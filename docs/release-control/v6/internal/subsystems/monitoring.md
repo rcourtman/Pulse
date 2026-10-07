@@ -318,6 +318,23 @@ required; all responses in this fixture are synthetic.
 
 ### Guest-agent coordination around backups — issue #2439
 
+A completed OS-info outcome keeps its existing suppression semantics even when
+the later agent-version read is deferred. Unsupported OS-info still disables
+that optional command; ordinary completed failures still accumulate towards
+the existing three-failure limit, and a supported reply resets that count.
+Only these safety fields are retained on version deferral: partial network/OS
+metadata is not published, old identity is not made fresh, and the shared pause
+and configured retry backoff remain in force. A network or OS-info deferral
+does not establish another completed OS-info failure.
+
+`guest_metadata_suppression_test.go` covers cold and retained caches, threshold
+accumulation, supported reset and earlier deferrals. Its real HTTP fixture
+drives cluster and node poll entry points through a lock appearing before the
+version request, then ordinary disk/network/version resumption without another
+suppressed OS-info request and with fresh disk History. It changes no native
+guest, backup policy, lock admission, cooldown, retry or single-attempt rule.
+These source controls do not establish native recovery or a reported cause.
+
 The process-local admission table remains capped at 4,096 endpoint/VMID
 entries. Expired entries replaced by a new admission consume no extra slot;
 when new aliases would exceed the bound, expired idle entries are reclaimed
