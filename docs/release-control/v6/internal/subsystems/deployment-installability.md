@@ -30,6 +30,36 @@ Unix real-agent controls keep their independent two-second watchdog, with
 process-group cancellation and separate build/probe timings. These source
 fixtures do not establish signed native installation, persistence or recovery.
 
+### Legacy sensor cleanup requires observed stopped targets
+
+The legacy sensor uninstaller must confirm each existing unit has stopped and
+was disabled before removing keys, mounts or files. Missing units are a no-op;
+failed or unknown service observation/stop/disable blocks further cleanup.
+Local container enumeration must succeed. Only current (pre-snapshot) legacy
+mount entries are eligible: snapshots and unrelated mounts remain unchanged.
+For each affected exact container, a successful status read must identify
+running or stopped. Previously running targets require a successful bounded
+stop and an explicit stopped readback; every subsequent configuration mutation
+requires a fresh stopped readback. Unknown state or failed stop means no edits
+or restart of that target. A failed `pct set` never falls back to direct edits.
+Direct legacy-line removal preserves file ownership/mode and reports errors.
+
+Only a previously running target may be restarted after cleanup or a confirmed
+mutation failure, and its running state must be observed. Lost stopped state
+prevents both further edits and automatic restoration. Failed enumeration,
+container edits/restoration, service cleanup or reload returns nonzero and
+cannot report whole cleanup complete. Incomplete container cleanup preserves
+legacy files and API access for local recovery. This does not remove the need
+for the guide's planned outage, backups and independent workload checks.
+
+`TestUninstallSensorProxyMountSafety`, `TestUninstallSensorProxyServiceSafety`
+and `TestUninstallSensorProxyMainReportsIncompleteLocalCleanup` execute isolated
+shell fixtures for status/stop/set/edit/start failures, lost state, only-prior-
+active restoration, snapshots, absent units and completion propagation. Only
+the fixed config directory is substituted; lifecycle tools are mocks, not native
+Proxmox or installed systemd acceptance. Remote SSH trust, purge consent and
+API-user removal opt-in remain unchanged.
+
 ### Audit report cleanup belongs to the original invoking process
 
 The npm audit wrapper retains a captured advisory until the parent classifies

@@ -270,10 +270,10 @@ func TestUninstallSensorProxyScriptRemovesTempFootprintAndManagedKeys(t *testing
 	if err := os.MkdirAll(binDir, 0755); err != nil {
 		t.Fatalf("mkdir bin dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(binDir, "systemctl"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+	if err := os.WriteFile(filepath.Join(binDir, "systemctl"), []byte("#!/bin/sh\ncase \"$1\" in show) echo not-found;; esac\nexit 0\n"), 0755); err != nil {
 		t.Fatalf("write systemctl stub: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(binDir, "pct"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+	if err := os.WriteFile(filepath.Join(binDir, "pct"), []byte("#!/bin/sh\necho \"VMID Status Lock Name\"\nexit 0\n"), 0755); err != nil {
 		t.Fatalf("write pct stub: %v", err)
 	}
 
