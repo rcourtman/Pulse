@@ -469,7 +469,7 @@ func TestCheckDockerContainerImageUpdatePreservesDelayAcrossHostIDChange(t *test
 	newHost.ID = "docker-host-new"
 	newHost.DisplayName = "New Docker Host"
 
-	oldResourceID := DockerResourceID(oldHost.ID, container.ID)
+	oldResourceID := DockerContainerResourceID(oldHost.ID, container.ID, "")
 	m.checkDockerContainerImageUpdate(oldHost, container, oldResourceID, "web", "docker-instance", "docker.local")
 
 	firstSeen := time.Now().Add(-25 * time.Hour)
@@ -479,7 +479,7 @@ func TestCheckDockerContainerImageUpdatePreservesDelayAcrossHostIDChange(t *test
 	m.dockerUpdateFirstSeenByIdentity[trackingKey] = firstSeen
 	m.mu.Unlock()
 
-	newResourceID := DockerResourceID(newHost.ID, container.ID)
+	newResourceID := DockerContainerResourceID(newHost.ID, container.ID, "")
 	m.checkDockerContainerImageUpdate(newHost, container, newResourceID, "web", "docker-instance", "docker.local")
 
 	alertID := "docker-container-update-" + newResourceID
@@ -639,7 +639,7 @@ func TestUpdateConfigClearsDockerContainerUpdateAlertsWhenDisabled(t *testing.T)
 		Name:  "/frontend",
 		Image: "nginx:latest",
 	}
-	resourceID := DockerResourceID(host.ID, container.ID)
+	resourceID := DockerContainerResourceID(host.ID, container.ID, "")
 	firstSeen := time.Now().Add(-48 * time.Hour)
 	_, canonicalAlertID, trackingKey := seedDockerUpdateAlert(t, m, host, container, resourceID, firstSeen)
 
@@ -677,7 +677,7 @@ func TestUpdateConfigKeepsDockerContainerUpdateAlertsWhenStillEnabled(t *testing
 		Name:  "/api",
 		Image: "ghcr.io/example/api:latest",
 	}
-	resourceID := DockerResourceID(host.ID, container.ID)
+	resourceID := DockerContainerResourceID(host.ID, container.ID, "")
 	firstSeen := time.Now().Add(-30 * time.Hour)
 	_, canonicalAlertID, trackingKey := seedDockerUpdateAlert(t, m, host, container, resourceID, firstSeen)
 
@@ -723,7 +723,7 @@ func TestEvaluateDockerContainerClearsUpdateAlertWhenOverrideDisabled(t *testing
 		Name:  "/worker",
 		Image: "ghcr.io/example/worker:latest",
 	}
-	resourceID := DockerResourceID(host.ID, container.ID)
+	resourceID := DockerContainerResourceID(host.ID, container.ID, "")
 	firstSeen := time.Now().Add(-36 * time.Hour)
 	alertID, canonicalAlertID, trackingKey := seedDockerUpdateAlert(t, m, host, container, resourceID, firstSeen)
 
@@ -884,7 +884,7 @@ func TestDockerUpdateRestartRestoresActivePendingAge(t *testing.T) {
 					}
 					container := models.DockerContainer{ID: "container", Name: "web", Image: "mongo:7", State: "running", UpdateStatus: pending}
 					host := models.DockerHost{ID: "host", AgentID: "agent", Hostname: "host", Containers: []models.DockerContainer{container}}
-					resourceID := DockerResourceID(host.ID, container.ID)
+					resourceID := DockerContainerResourceID(host.ID, container.ID, "")
 					canonicalID := buildCanonicalStateID(resourceID, resourceID+"-image-update")
 					trackingKey := dockerUpdateTrackingKey(host, container)
 					first := time.Now().Add(-time.Duration(delay+2) * time.Hour)
