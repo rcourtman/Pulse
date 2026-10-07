@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "bab38a25b92684c978c4273200765152040624ed",
+  "verified_at": "2026-10-07T15:05:37Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/alertResourceTableModel.ts",
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/alertResourceTableModel.ts": "9d2cbc37fe80492a67b54b106a1c413ea1cbca66b1cd30e1c100d1c90a408eea",
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts": "3070cf7df162eefd5653e5a6eb0a0722e2ffa04b33b12a81ebb2f38a4035c62f"
+  },
+  "routes": [
+    "/alerts/thresholds/proxmox",
+    "/alerts/thresholds/systems",
+    "/alerts/thresholds/kubernetes",
+    "/alerts/thresholds/truenas",
+    "/alerts/thresholds/vsphere",
+    "/alerts/thresholds/docker"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock stack (PULSE_MOCK_MODE: 3 PVE nodes, 3 agents, 1 Kubernetes cluster, TrueNAS, vSphere) on a backend built from bab38a25b9, Vite on this tree, alerts activated, fresh data dir per run, no injected data",
+    "Before (origin/main payload builder): Proxmox Global Defaults CPU and Temp switched Off and saved; the API stored nodeDefaults.cpu {-1, 0} and nodeDefaults.temperature {80, 75}; after reload Temp read On 80",
+    "Final content, 1280 wide: Machines CPU Off saved as agentDefaults.cpu {0, 0} and reads Off after reload with the Custom badge (factory is 80)",
+    "Final content, 390 wide: Kubernetes Clusters Memory Off saved as kubernetesDefaults.memory {0, 0} and reads Off after reload",
+    "Same payload change, earlier passes: Proxmox Temp Off saved {0, 0} and reads Off after reload (1280); TrueNAS Systems CPU and vSphere Hosts CPU Off saved {0, 0} and read Off (390); Machines CPU at 1% raised 8 agent CPU alerts, switching it Off resolved all 8, Proxmox Temp Off resolved the node temperature alert, nothing re-fired over two minutes, values stayed Off across a backend restart (1024 and 375)",
+    "Custom badge on a fresh install: no Proxmox, Kubernetes, TrueNAS or vSphere Global Defaults group reads Custom (on the payload-only build Kubernetes, TrueNAS Systems and vSphere Hosts/VMs did); after an unrelated save (Proxmox node CPU 81) only Virtualization Hosts reads Custom and VMs & Containers stays clean",
+    "Docker Containers still reads Custom on a fresh install because the backend's no-alerts.json fallback stores Docker CPU/memory/disk as {0, 0}; separate pre-existing defect, not touched here",
+    "No page errors in any Playwright run"
+  ],
+  "interactions": [
+    "Playwright: Expand all, clicked a Global Defaults On/Off badge, Save Changes, read GET /api/alerts/config, reloaded and re-read badge states and the Custom badge (Machines CPU at 1280x900, Kubernetes Memory at 390x844)",
+    "Playwright: recorded Custom badges on Proxmox, Kubernetes, TrueNAS, vSphere and Docker on a fresh install, changed Proxmox node CPU to 81, saved, recorded them again",
+    "Browser pane and Playwright (earlier passes on the same payload change): Machines CPU 1% then Off with /api/alerts/active reads, backend restart, Proxmox Temp, TrueNAS and vSphere CPU Off at phone width"
+  ]
+}

@@ -3806,16 +3806,15 @@ query...`, and `Reading storage...` before streamed tool arguments are
    presentation must stay compact: source, status, one primary subject, and an
    optional safe route link. It must not render Patrol-authored remediation
    steps, evidence chips, command summaries, recommendations, or suggested-prompt
-   chips as the answer. Patrol assessment handoffs must use the same
-   `patrol-assessment` target identity for live opens and restored sessions
-   rather than inheriting retired dashboard context. While such a handoff is
-   attached, the Assistant empty
+   chips as the answer. Restored Patrol assessment sessions must use the
+   `patrol-assessment` target identity rather than inheriting retired dashboard
+   context; Patrol no longer opens live assessment handoffs. While such a
+   session is attached, the Assistant empty
    message state must also remain source-named and must not fall back to generic
    cluster/system starter prompts that compete with the attached briefing.
-   Structured Patrol run and Patrol mode save-failure handoffs may render bounded,
-   redacted diagnostic lines in the drawer when they are opened directly from
-   Patrol runtime/control surfaces, but the attached headline must remain
-   source-owned (`Patrol run attached`, `Patrol mode ... attached`)
+   Structured Patrol run handoffs may render bounded, redacted diagnostic lines
+   in the drawer when they are opened directly from Patrol run history, but the
+   attached headline must remain source-owned (`Patrol run attached`)
    and the drawer must still exclude raw provider payloads, commands, and
    Patrol-authored remediation steps.
    Platform tabs in that same `frontend-modern/src/App.tsx` shell may remain
@@ -4523,13 +4522,14 @@ resolve canonical/source IDs and unique aliases before collection, reject
     Assistant explains the current Patrol record rather than only the original
     investigation narrative. The saved-session handoff envelope must also
     preserve first-class Patrol source identity when product callers provide
-    safe metadata. Patrol assessment handoffs remain `patrol_assessment`
-    whole-surface review sessions even when their bounded action references
-    name individual findings; the session list must not infer a
-    `patrol_finding` identity from those action references once metadata is
-    present. Patrol mode save-failure handoffs remain
-    `patrol_configuration_failure` sessions for compatibility and may expose only the safe
-    runtime-failure boolean needed for browser presentation. Run-specific
+    safe metadata. Saved Patrol assessment sessions (the browser no longer
+    creates them) remain `patrol_assessment` whole-surface review sessions even
+    when their bounded action references name individual findings; the session
+    list must not infer a `patrol_finding` identity from those action
+    references once metadata is present. Saved Patrol mode save-failure
+    sessions remain `patrol_configuration_failure` sessions for compatibility
+    and may expose only the safe runtime-failure boolean needed for browser
+    presentation. Run-specific
     fields stay reserved for `patrol_run` handoffs, while hidden model context,
     command payloads, preflight output, and action results remain
     backend-owned. The finding briefing may surface the primary
@@ -5519,17 +5519,11 @@ factor by the ratio of errored runs to relevant runs in the scoring
 window. Above 50% of recent runs erroring is a `-30` impact and is
 described as "Most recent Patrol runs encountered errors"; above 25%
 is `-20`; otherwise the original `-10` light-tier description applies.
-This prevents the score chip from showing grade A while the same
-assessment surface warns the operator that coverage is incomplete or
-recent runs failed, which previously happened whenever one successful
-manual run sat among many failed startup runs.
-Downstream Assistant handoffs must treat that coverage factor as a
-secondary caveat when Patrol also carries active findings, pending
-approvals, or governed action references. The coverage-gap explanation
-and scoped-activity prompt are primary Assistant framing only for
-coverage-only assessments; active Patrol findings keep the prompt,
-briefing action label, and safety note focused on finding priority,
-affected resources, evidence, and the governed next step.
+This keeps the grade from reading A when most recent runs errored, which
+previously happened whenever one successful manual run sat among many failed
+startup runs. A light error share still deducts only 10 points, and three
+trailing successful full runs drop the penalty entirely. The Patrol page no longer renders the score; it reads the overall
+health only to qualify the findings empty state.
 
 Absence-based auto-resolve paths in `internal/ai/patrol_ai.go` are
 all gated on the category whitelist exposed by

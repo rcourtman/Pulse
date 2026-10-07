@@ -121,6 +121,11 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertNotIn("Pulse Assistant should be replaced by", normalized_content)
         self.assertNotIn("MCP replaces Pulse Assistant", normalized_content)
         self.assertNotIn("Assistant can be removed", normalized_content)
+        # The Patrol summary card and its supporting-context section are gone,
+        # so the docs point at where check history actually lives.
+        self.assertIn("Activity > Finding options and history", normalized_content)
+        self.assertNotIn("legacy operational score remain", normalized_content)
+        self.assertNotIn("collapsed supporting-context section", normalized_content)
         self.assertIn("- **Anthropic** (API key)", content)
         self.assertIn("Anthropic OAuth is not a supported runtime authentication method", normalized_content)
         self.assertIn("does not make Anthropic configured", normalized_content)
