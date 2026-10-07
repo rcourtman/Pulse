@@ -1876,13 +1876,17 @@ a switched-off agent alert default does not reach a TrueNAS disk; only the agent
 Disk Temp value does, through the per-type tier. The resolver takes the disk
 resource rather than a disk type, so the agent-disk
 `getDiskTemperatureThresholds` cannot be passed in its place. Judges that still
-differ: Disable all TrueNAS silences these alerts while the views keep judging
-heat, as the agent switches do for agent disks, and Patrol
-(`diskTemperatureLimitsFor`) judges a TrueNAS disk as a disk of its TrueNAS
-system, whose synthetic `AgentID` makes it a host to
-`HostDiskTemperatureThreshold`, so the agent alert default and a host override
-under that ID reach Patrol while the disk's own override and the TrueNAS-wide
-value do not.
+differ: Disable all TrueNAS silences these alerts while the views and Patrol
+keep judging heat, as the agent switches do for agent disks.
+Patrol and the AI chat context judge a TrueNAS disk by the same tiers through
+`Manager.TrueNASDiskTemperatureThreshold(resourceID, diskType)`
+(`internal/alerts/truenas_disk_temperature.go`), which runs
+`effectiveAlertPolicyNoLock` for `truenas-disk` under the canonical resource ID
+and returns nil when the disk's override or TrueNAS Disks defaults disable its
+alerts. `IsTrueNASDiskResource` names the disks it judges, the ones
+`unifiedAlertResourceType` maps to `truenas-disk`, so Patrol no longer walks a
+TrueNAS disk to its system's synthetic `AgentID` and a host override under that
+ID no longer reaches the disk.
 The `resolveTrueNASDiskTemperatureDisplayThresholds` cases in
 `utils/__tests__/metricThresholds.test.ts`, `truenasPageModel.test.ts`,
 `TrueNASStorageTopologyTable.test.tsx` and
@@ -1895,6 +1899,11 @@ The `resolveTrueNASDiskTemperatureDisplayThresholds` cases in
 `internal/alerts/alerts_test.go` pin re-judging on a config save;
 `TestNormalizeTrueNASDiskTemperatureKeepsOnlyChosenValues` pins the
 saved-config migration.
+`TestTrueNASDiskTemperatureThresholdMatchesTrueNASDiskAlerts` and
+`TestIsTrueNASDiskResourceMatchesTheUnifiedEvaluator` in
+`internal/alerts/threshold_resolution_shared_test.go` pin the public resolver
+against the trigger and clear the alert fires with at each tier, including an
+override found through the canonical identity and an untyped disk.
 
 ### Agent disk temperature alerts clear when their disk leaves the report
 

@@ -79,6 +79,26 @@ func (a *AlertThresholdAdapter) GetDiskTemperatureThreshold(host alerts.DiskTemp
 	} else {
 		threshold = alerts.DefaultDiskTemperatureThreshold(diskType)
 	}
+	return diskTemperatureTriggerAndClear(threshold)
+}
+
+// GetTrueNASDiskTemperatureThreshold returns the temperature alert trigger and
+// clear values for one TrueNAS disk, resolved exactly as its temperature alert
+// resolves them (alerts.Manager.TrueNASDiskTemperatureThreshold): the disk's
+// own override, then the TrueNAS-wide value, then the per-type policy.
+func (a *AlertThresholdAdapter) GetTrueNASDiskTemperatureThreshold(resourceID, diskType string) (float64, float64) {
+	var threshold *alerts.HysteresisThreshold
+	if a.manager != nil {
+		threshold = a.manager.TrueNASDiskTemperatureThreshold(resourceID, diskType)
+	} else {
+		threshold = alerts.DefaultDiskTemperatureThreshold(diskType)
+	}
+	return diskTemperatureTriggerAndClear(threshold)
+}
+
+// diskTemperatureTriggerAndClear unpacks a disk temperature threshold, with a
+// nil or non-positive trigger meaning off (0, 0).
+func diskTemperatureTriggerAndClear(threshold *alerts.HysteresisThreshold) (float64, float64) {
 	if threshold == nil || threshold.Trigger <= 0 {
 		return 0, 0
 	}

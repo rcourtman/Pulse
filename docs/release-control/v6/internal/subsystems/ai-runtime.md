@@ -339,6 +339,17 @@ linked node or guest) replaces the per-type trigger, and an override or agent
 default that switches the host's alerts off leaves no heat to judge. A disk no
 agent reports gets the per-type policy. The global alerts switch and the agent
 alert-type switch stop `CheckHost` without changing this policy, as before.
+A TrueNAS disk (`alerts.IsTrueNASDiskResource`, the disks the unified evaluator
+alerts on as `truenas-disk`) skips that walk, because its TrueNAS system carries
+a synthetic `Agent.AgentID` that would pass for a host agent:
+`physicalDiskTemperatureLimits` resolves it through
+`ThresholdProvider.GetTrueNASDiskTemperatureThreshold(resourceID, diskType)`
+(the alert manager's `TrueNASDiskTemperatureThreshold`, the `truenas-disk`
+tiers of `effectiveAlertPolicyNoLock`), so the disk's own override, then the
+TrueNAS-wide TrueNAS Disks value, then the per-type policy decide, as for its
+temperature alert, and a disabled override or TrueNAS Disks default leaves no
+heat. A host override under the system's synthetic ID no longer reaches its
+disks, and Disable all TrueNAS silences the alert without changing this policy.
 The run state carries the provider (`patrolRuntimeState.thresholdProvider`). With no provider the factory alert
 configuration applies. A disk is hot from its trigger: a triage warning, a disk
 issue and an AI chat "needing attention" entry, as its temperature alert and
@@ -349,9 +360,13 @@ verification unknown rather than recovered. Scoped runs keep the provider, and a
 provider set before Patrol starts is handed to it. Below the trigger Patrol flags nothing, so an NVMe at 63C stays
 quiet and a SATA disk at 56C is flagged. Proofs:
 `internal/ai/patrol_disk_temperature_test.go` (a real registry with one
-overridden agent in `TestPatrolJudgesAgentDisksByTheAgentDiskTemperatureOverride`),
-`TestAlertThresholdAdapter_DiskTemperatureFollowsAlertPolicy` and
-`TestAlertThresholdAdapter_DiskTemperatureHonoursHostOverrides` in
+overridden agent in `TestPatrolJudgesAgentDisksByTheAgentDiskTemperatureOverride`,
+and TrueNAS fixture disks under a per-disk override, a TrueNAS-wide value and a
+host override on the system ID, one with a retained reading, in
+`TestPatrolJudgesTrueNASDisksByTheirAlertTiers`),
+`TestAlertThresholdAdapter_DiskTemperatureFollowsAlertPolicy`,
+`TestAlertThresholdAdapter_DiskTemperatureHonoursHostOverrides` and
+`TestAlertThresholdAdapter_TrueNASDiskTemperatureFollowsItsAlertTiers` in
 `internal/ai/alert_threshold_adapter_test.go`.
 
 Retained summaries disclose that point and bucket timestamps describe returned

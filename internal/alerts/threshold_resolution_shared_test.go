@@ -7,6 +7,7 @@ import (
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func boolPtr(v bool) *bool {
@@ -1588,5 +1589,241 @@ func TestHostDiskTemperatureThresholdMatchesCheckHostOverrides(t *testing.T) {
 	var nilManager *Manager
 	if got := nilManager.HostDiskTemperatureThreshold(DiskTemperatureHost{ID: hostID}, "nvme"); got == nil || got.Trigger != 70 {
 		t.Fatalf("nil manager host policy = %+v, want the factory nvme 70", got)
+	}
+}
+
+// TrueNASDiskTemperatureThreshold is the disk heat policy for a TrueNAS disk,
+// so it must agree with the disk's temperature alert on every tier: the
+// disk's own override, then the TrueNAS-wide value, then the per-type policy.
+// A host override under the TrueNAS system's synthetic agent ID is not one of
+// them. Disable all TrueNAS silences the alert without changing the policy,
+// as the agent switches do for agent disks.
+func TestTrueNASDiskTemperatureThresholdMatchesTrueNASDiskAlerts(t *testing.T) {
+	disk := trueNASTemperatureDisk("nvme0n1", "nvme", 0)
+
+	const canonicalDiskID = "physical-disk:canonical-nvme0n1"
+	for _, tc := range []struct {
+		name     string
+		mutate   func(*AlertConfig)
+		setup    func(*Manager)
+		want     *HysteresisThreshold
+		off      bool
+		silenced bool
+	}{
+		{name: "per-type policy", want: &HysteresisThreshold{Trigger: 70, Clear: 65}},
+		{
+			name: "raised per-type trigger",
+			mutate: func(cfg *AlertConfig) {
+				cfg.DiskTempByType = map[string]HysteresisThreshold{"nvme": {Trigger: 75, Clear: 70}}
+			},
+			want: &HysteresisThreshold{Trigger: 75, Clear: 70},
+		},
+		{
+			name: "TrueNAS-wide value",
+			mutate: func(cfg *AlertConfig) {
+				cfg.TrueNASDiskDefaults.Temperature = &HysteresisThreshold{Trigger: 62, Clear: 57}
+			},
+			want: &HysteresisThreshold{Trigger: 62, Clear: 57},
+		},
+		{
+			name: "per-disk override beats the TrueNAS-wide value",
+			mutate: func(cfg *AlertConfig) {
+				cfg.TrueNASDiskDefaults.Temperature = &HysteresisThreshold{Trigger: 62, Clear: 57}
+				cfg.Overrides = map[string]ThresholdConfig{disk.ID: {Temperature: &HysteresisThreshold{Trigger: 75, Clear: 70}}}
+			},
+			want: &HysteresisThreshold{Trigger: 75, Clear: 70},
+		},
+		{
+			name: "per-disk override without a clear value",
+			mutate: func(cfg *AlertConfig) {
+				cfg.Overrides = map[string]ThresholdConfig{disk.ID: {Temperature: &HysteresisThreshold{Trigger: 75}}}
+			},
+			want: &HysteresisThreshold{Trigger: 75, Clear: 70},
+		},
+		{
+			name: "per-disk override under the canonical identity",
+			mutate: func(cfg *AlertConfig) {
+				cfg.Overrides = map[string]ThresholdConfig{canonicalDiskID: {Temperature: &HysteresisThreshold{Trigger: 78, Clear: 73}}}
+			},
+			setup: func(m *Manager) {
+				m.SetResourceIntentIdentityResolver(func(resourceID string) (string, bool) {
+					return canonicalDiskID, resourceID == disk.ID
+				})
+			},
+			want: &HysteresisThreshold{Trigger: 78, Clear: 73},
+		},
+		{
+			name: "host override under the TrueNAS system ID does not reach its disks",
+			mutate: func(cfg *AlertConfig) {
+				cfg.Overrides = map[string]ThresholdConfig{"truenas-main": {DiskTemperature: &HysteresisThreshold{Trigger: 50, Clear: 45}}}
+			},
+			want: &HysteresisThreshold{Trigger: 70, Clear: 65},
+		},
+		{
+			name: "per-disk override switches the disk off",
+			mutate: func(cfg *AlertConfig) {
+				cfg.Overrides = map[string]ThresholdConfig{disk.ID: {Temperature: &HysteresisThreshold{}}}
+			},
+			off: true,
+		},
+		{
+			name: "per-disk override disables the disk's alerts",
+			mutate: func(cfg *AlertConfig) {
+				cfg.Overrides = map[string]ThresholdConfig{disk.ID: {Disabled: true}}
+			},
+		},
+		{
+			name: "TrueNAS-wide off",
+			mutate: func(cfg *AlertConfig) {
+				cfg.TrueNASDiskDefaults.Temperature = &HysteresisThreshold{}
+			},
+			off: true,
+		},
+		{
+			name: "TrueNAS Disks defaults disabled",
+			mutate: func(cfg *AlertConfig) {
+				cfg.TrueNASDiskDefaults.Disabled = true
+			},
+		},
+		{
+			name: "agent Disk Temp default off",
+			mutate: func(cfg *AlertConfig) {
+				cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{}
+			},
+			off: true,
+		},
+		{
+			name: "Disable all TrueNAS keeps the policy",
+			mutate: func(cfg *AlertConfig) {
+				cfg.DisableAllTrueNAS = true
+			},
+			want:     &HysteresisThreshold{Trigger: 70, Clear: 65},
+			silenced: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newTestManager(t)
+			cfg := unifiedEvalBaseConfig()
+			cfg.TrueNASDiskDefaults = ThresholdConfig{}
+			if tc.mutate != nil {
+				tc.mutate(&cfg)
+			}
+			configureUnifiedEvalManager(t, m, cfg)
+			if tc.setup != nil {
+				tc.setup(m)
+			}
+
+			got := m.TrueNASDiskTemperatureThreshold(" "+disk.ID+" ", " NVMe")
+			switch {
+			case tc.off:
+				if got == nil || got.Trigger > 0 {
+					t.Fatalf("TrueNASDiskTemperatureThreshold = %+v, want a switched-off threshold", got)
+				}
+			case (got == nil) != (tc.want == nil) || (got != nil && *got != *tc.want):
+				t.Fatalf("TrueNASDiskTemperatureThreshold = %+v, want %+v", got, tc.want)
+			}
+
+			var alert *Alert
+			fires := func(temperature int) bool {
+				reading := disk
+				meta := *disk.PhysicalDisk
+				meta.Temperature = temperature
+				reading.PhysicalDisk = &meta
+				checkTrueNASTemperatureDisk(t, m, reading)
+				var firing bool
+				alert, firing = trueNASDiskTemperatureAlert(t, m, reading)
+				return firing
+			}
+			if tc.silenced {
+				if fires(99) {
+					t.Fatalf("alert fired at 99C with TrueNAS alerts disabled, active: %v", alertKeys(m))
+				}
+				return
+			}
+			if got == nil || got.Trigger <= 0 {
+				if fires(99) {
+					t.Fatalf("alert fired at 99C on a disk the policy judges no heat for, active: %v", alertKeys(m))
+				}
+				return
+			}
+			trigger := int(got.Trigger)
+			if fires(trigger - 1) {
+				t.Fatalf("alert fired at %dC, under the policy trigger %v", trigger-1, got.Trigger)
+			}
+			if !fires(trigger) {
+				t.Fatalf("alert stayed quiet at the policy trigger %dC, active: %v", trigger, alertKeys(m))
+			}
+			// The alert recovers at the clear value Patrol reads.
+			if alert.Threshold != got.Trigger || alert.Metadata["clearThreshold"] != got.Clear {
+				t.Fatalf("alert trigger/clear = %v/%v, want the policy %v/%v", alert.Threshold, alert.Metadata["clearThreshold"], got.Trigger, got.Clear)
+			}
+		})
+	}
+
+	// A disk whose type TrueNAS never reported follows the agent Disk Temp
+	// default, as its alert does.
+	t.Run("untyped disk", func(t *testing.T) {
+		m := newTestManager(t)
+		cfg := unifiedEvalBaseConfig()
+		cfg.TrueNASDiskDefaults = ThresholdConfig{}
+		cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 58, Clear: 53}
+		configureUnifiedEvalManager(t, m, cfg)
+		untypedDisk := trueNASTemperatureDisk("sdx", "", 58)
+		if got := m.TrueNASDiskTemperatureThreshold(untypedDisk.ID, ""); got == nil || got.Trigger != 58 || got.Clear != 53 {
+			t.Fatalf("untyped disk = %+v, want the agent default 58/53", got)
+		}
+		checkTrueNASTemperatureDisk(t, m, untypedDisk)
+		if _, firing := trueNASDiskTemperatureAlert(t, m, untypedDisk); !firing {
+			t.Fatalf("untyped disk at the agent default 58C raised no alert, active: %v", alertKeys(m))
+		}
+	})
+
+	m := configureDiskTempTypeHostManager(t)
+	m.TrueNASDiskTemperatureThreshold(disk.ID, "nvme").Trigger = 1
+	if got := m.TrueNASDiskTemperatureThreshold(disk.ID, "nvme"); got == nil || got.Trigger != 70 {
+		t.Fatalf("caller mutation reached the config: %+v", got)
+	}
+	var nilManager *Manager
+	if got := nilManager.TrueNASDiskTemperatureThreshold(disk.ID, "sata"); got == nil || got.Trigger != 55 {
+		t.Fatalf("nil manager TrueNAS disk policy = %+v, want the factory sata 55", got)
+	}
+}
+
+// IsTrueNASDiskResource names the disks the unified evaluator judges as
+// TrueNAS disks, the ones TrueNASDiskTemperatureThreshold resolves.
+func TestIsTrueNASDiskResourceMatchesTheUnifiedEvaluator(t *testing.T) {
+	agentDisk := unifiedresources.Resource{
+		ID: "physical-disk:host-1/nvme0n1", Type: unifiedresources.ResourceTypePhysicalDisk,
+		Sources:      []unifiedresources.DataSource{unifiedresources.SourceAgent},
+		PhysicalDisk: &unifiedresources.PhysicalDiskMeta{DiskType: "nvme"},
+	}
+	trueNASFacetDisk := agentDisk
+	trueNASFacetDisk.TrueNAS = &unifiedresources.TrueNASData{}
+	mergedDisk := agentDisk
+	mergedDisk.Sources = []unifiedresources.DataSource{unifiedresources.SourceAgent, unifiedresources.SourceTrueNAS}
+	noMetaDisk := trueNASTemperatureDisk("sdy", "sata", 40)
+	noMetaDisk.PhysicalDisk = nil
+	trueNASSystem := unifiedresources.Resource{
+		ID: "agent:truenas-main", Type: unifiedresources.ResourceTypeAgent,
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+	}
+	for name, tc := range map[string]struct {
+		resource unifiedresources.Resource
+		want     bool
+	}{
+		"TrueNAS-sourced disk": {resource: trueNASTemperatureDisk("sda", "sata", 40), want: true},
+		"TrueNAS facet disk":   {resource: trueNASFacetDisk, want: true},
+		"agent and TrueNAS":    {resource: mergedDisk, want: true},
+		"no disk metadata":     {resource: noMetaDisk, want: true},
+		"agent disk":           {resource: agentDisk},
+		"TrueNAS system":       {resource: trueNASSystem},
+	} {
+		if got := IsTrueNASDiskResource(tc.resource); got != tc.want {
+			t.Errorf("%s: IsTrueNASDiskResource = %v, want %v", name, got, tc.want)
+		}
+		input, ok := UnifiedResourceInputFromResource(tc.resource)
+		if evaluated := ok && input.Type == "truenas-disk"; evaluated != tc.want {
+			t.Errorf("%s: unified evaluator judges it as a TrueNAS disk = %v, want %v", name, evaluated, tc.want)
+		}
 	}
 }

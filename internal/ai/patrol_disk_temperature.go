@@ -22,12 +22,53 @@ type diskTemperatureLimits struct {
 // that host's Disk Temp override applies, or from the factory alert
 // configuration when Patrol has no threshold provider.
 func diskTemperatureLimitsFor(provider ThresholdProvider, host alerts.DiskTemperatureHost, diskType string) diskTemperatureLimits {
-	var trigger, clear float64
 	if provider != nil {
-		trigger, clear = provider.GetDiskTemperatureThreshold(host, diskType)
-	} else if threshold := alerts.DefaultDiskTemperatureThreshold(diskType); threshold != nil {
-		trigger, clear = threshold.Trigger, threshold.Clear
+		return newDiskTemperatureLimits(provider.GetDiskTemperatureThreshold(host, diskType))
 	}
+	return factoryDiskTemperatureLimits(diskType)
+}
+
+// trueNASDiskTemperatureLimitsFor resolves the policy for one TrueNAS disk the
+// way its temperature alert does, from the user's alert configuration, so the
+// disk's own override and the TrueNAS-wide value apply, or from the factory
+// alert configuration when Patrol has no threshold provider.
+func trueNASDiskTemperatureLimitsFor(provider ThresholdProvider, resourceID, diskType string) diskTemperatureLimits {
+	if provider != nil {
+		return newDiskTemperatureLimits(provider.GetTrueNASDiskTemperatureThreshold(resourceID, diskType))
+	}
+	return factoryDiskTemperatureLimits(diskType)
+}
+
+// physicalDiskTemperatureLimits resolves the policy for one physical disk
+// resource under the alert that judges its heat. A TrueNAS disk has its own
+// temperature alert, judged by the disk's override, the TrueNAS-wide value and
+// the per-type policy; its TrueNAS system carries a synthetic agent ID, so the
+// host walk would wrongly treat that system as a host agent. Any other disk is
+// judged as a SMART disk of the host agent that reports it.
+func physicalDiskTemperatureLimits(provider ThresholdProvider, disk unifiedresources.Resource, owners map[string]unifiedresources.Resource) diskTemperatureLimits {
+	diskType := ""
+	if disk.PhysicalDisk != nil {
+		diskType = disk.PhysicalDisk.DiskType
+	}
+	if alerts.IsTrueNASDiskResource(disk) {
+		return trueNASDiskTemperatureLimitsFor(provider, disk.ID, diskType)
+	}
+	return diskTemperatureLimitsFor(provider, physicalDiskTemperatureHost(disk, owners), diskType)
+}
+
+// factoryDiskTemperatureLimits is the policy for a disk of the given type
+// under the factory alert configuration.
+func factoryDiskTemperatureLimits(diskType string) diskTemperatureLimits {
+	if threshold := alerts.DefaultDiskTemperatureThreshold(diskType); threshold != nil {
+		return newDiskTemperatureLimits(threshold.Trigger, threshold.Clear)
+	}
+	return diskTemperatureLimits{}
+}
+
+// newDiskTemperatureLimits builds limits from an alert trigger and clear
+// value. A non-positive trigger is off; a clear value missing or above the
+// trigger leaves no band below it.
+func newDiskTemperatureLimits(trigger, clear float64) diskTemperatureLimits {
 	if trigger <= 0 {
 		return diskTemperatureLimits{}
 	}
@@ -72,7 +113,8 @@ func physicalDiskOwnerIndex(urp UnifiedResourceProvider) map[string]unifiedresou
 // disk, the host its disk temperature alerts are evaluated under: the agent on
 // the machine the disk is parented to or, for a disk parented to a storage
 // pool (Unraid array and cache disks), the agent on the pool's machine. A disk
-// no agent reports gets the hostless policy.
+// no agent reports gets the hostless policy. TrueNAS disks do not come here;
+// physicalDiskTemperatureLimits judges them by their own alert.
 func physicalDiskTemperatureHost(disk unifiedresources.Resource, owners map[string]unifiedresources.Resource) alerts.DiskTemperatureHost {
 	parentID := disk.ParentID
 	for hops := 0; parentID != nil && hops < 2; hops++ {

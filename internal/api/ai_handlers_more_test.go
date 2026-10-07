@@ -158,6 +158,9 @@ func (stubThresholdProvider) GetStorageThreshold() float64   { return 92 }
 func (stubThresholdProvider) GetDiskTemperatureThreshold(alerts.DiskTemperatureHost, string) (float64, float64) {
 	return 70, 65
 }
+func (stubThresholdProvider) GetTrueNASDiskTemperatureThreshold(string, string) (float64, float64) {
+	return 70, 65
+}
 
 type stubMetricsHistoryProvider struct{}
 

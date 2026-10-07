@@ -24,6 +24,9 @@ func (m MockThresholdProvider) GetStorageThreshold() float64     { return m.Stor
 func (m MockThresholdProvider) GetDiskTemperatureThreshold(alerts.DiskTemperatureHost, string) (float64, float64) {
 	return 0, 0
 }
+func (m MockThresholdProvider) GetTrueNASDiskTemperatureThreshold(string, string) (float64, float64) {
+	return 0, 0
+}
 
 func TestCalculatePatrolThresholds_Default(t *testing.T) {
 	// Test default behavior (exact mode)

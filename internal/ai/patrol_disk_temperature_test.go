@@ -8,6 +8,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
@@ -341,5 +342,148 @@ func TestPhysicalDiskTemperatureHostFollowsTheParentChain(t *testing.T) {
 	}
 	if got := physicalDiskTemperatureHost(unifiedresources.Resource{ID: "orphan"}, owners); got != (alerts.DiskTemperatureHost{}) {
 		t.Errorf("parentless disk: host = %+v, want hostless", got)
+	}
+}
+
+// trueNASHeatRegistry is a TrueNAS system whose pool holds four disks beside
+// the two overridden host agents of overriddenAgentDisksRegistry: nvme0n1 at
+// 72C, nvme1n1 at 63C, SATA sda at 60C and SATA sdb, whose 80C reading is
+// retained from before standby. The user saved a TrueNAS-wide 62C (clear 57),
+// raised nvme0n1's own trigger to 75C (clear 70), and left a 50C Disk Temp
+// override under the TrueNAS system's synthetic agent ID. It returns the disk
+// resources by name.
+func trueNASHeatRegistry(t *testing.T) (*unifiedresources.ResourceRegistry, *AlertThresholdAdapter, map[string]unifiedresources.Resource) {
+	t.Helper()
+	registry, _ := overriddenAgentDisksRegistry(t)
+	now := time.Now()
+	disk := func(name, transport string, temperature int) truenas.Disk {
+		return truenas.Disk{
+			ID: "disk-" + name, Name: name, Pool: "tank", Status: "ONLINE", Model: "Model " + name,
+			Serial: "SERIAL-" + strings.ToUpper(name), Temperature: temperature, Transport: transport,
+		}
+	}
+	records := truenas.FixtureRecords(truenas.FixtureSnapshot{
+		CollectedAt: now,
+		System:      truenas.SystemInfo{Hostname: "truenas-main", Healthy: true, CollectedAt: now},
+		Pools:       []truenas.Pool{{ID: "pool-tank", Name: "tank", Status: "ONLINE"}},
+		Disks: []truenas.Disk{
+			disk("nvme0n1", "nvme", 72), disk("nvme1n1", "nvme", 63),
+			disk("sda", "sata", 60), disk("sdb", "sata", 80),
+		},
+	})
+	for i := range records {
+		if meta := records[i].Resource.PhysicalDisk; meta != nil && records[i].Resource.Name == "sdb" {
+			meta.Collection = &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("truenas", "disk is in standby")}
+		}
+	}
+	registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
+
+	adapter := unifiedresources.NewUnifiedAIAdapter(registry)
+	disks := make(map[string]unifiedresources.Resource)
+	for _, r := range adapter.GetByType(unifiedresources.ResourceTypePhysicalDisk) {
+		if alerts.IsTrueNASDiskResource(r) {
+			disks[r.Name] = r
+		}
+	}
+	systemAgentID := ""
+	for _, r := range adapter.GetAll() {
+		if r.Agent != nil && r.Agent.Platform == "truenas" {
+			systemAgentID = r.Agent.AgentID
+		}
+	}
+	if len(disks) != 4 || systemAgentID == "" {
+		t.Fatalf("TrueNAS disks = %v, system agent ID = %q; want four disks under one system", disks, systemAgentID)
+	}
+
+	mgr := alerts.NewManager()
+	cfg := mgr.GetConfig()
+	cfg.TrueNASDiskDefaults.Temperature = &alerts.HysteresisThreshold{Trigger: 62, Clear: 57}
+	cfg.Overrides = map[string]alerts.ThresholdConfig{
+		"agent-cool":        {DiskTemperature: &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}},
+		systemAgentID:       {DiskTemperature: &alerts.HysteresisThreshold{Trigger: 50, Clear: 45}},
+		disks["nvme0n1"].ID: {Temperature: &alerts.HysteresisThreshold{Trigger: 75, Clear: 70}},
+	}
+	mgr.UpdateConfig(cfg)
+	return registry, NewAlertThresholdAdapter(mgr), disks
+}
+
+// Patrol judges a TrueNAS disk by its own temperature alert's tiers, not as a
+// disk of the TrueNAS system's synthetic host agent: nvme0n1's override keeps
+// it quiet at 72C, the TrueNAS-wide 62C flags nvme1n1 at 63C (under the NVMe
+// trigger of 70C) and spares SATA sda at 60C (over the SATA trigger of 55C),
+// and the 50C host override under the system ID reaches none of them. A
+// retained reading stays unjudged. Agent disks keep their host's override.
+func TestPatrolJudgesTrueNASDisksByTheirAlertTiers(t *testing.T) {
+	registry, provider, disks := trueNASHeatRegistry(t)
+	state := newPatrolRuntimeStateWithProviders(models.StateSnapshot{}, nil, unifiedresources.NewUnifiedAIAdapter(registry))
+	state.thresholdProvider = provider
+
+	type want struct {
+		limits diskTemperatureLimits
+		issue  bool
+	}
+	expected := map[string]want{
+		disks["nvme0n1"].ID: {limits: diskTemperatureLimits{trigger: 75, clear: 70}},
+		disks["nvme1n1"].ID: {limits: diskTemperatureLimits{trigger: 62, clear: 57}, issue: true},
+		disks["sda"].ID:     {limits: diskTemperatureLimits{trigger: 62, clear: 57}},
+		disks["sdb"].ID:     {limits: diskTemperatureLimits{trigger: 62, clear: 57}},
+	}
+	rows := patrolPhysicalDiskRows(state, nil)
+	if len(rows) != 6 {
+		t.Fatalf("rows = %+v, want four TrueNAS disks and two agent disks", rows)
+	}
+	for _, row := range rows {
+		w, trueNAS := expected[row.id]
+		if !trueNAS {
+			// overriddenAgentDisksRegistry: agent-cool's 76C NVMe under its 80C
+			// override, agent-plain's 72C NVMe over the NVMe trigger.
+			w = want{limits: diskTemperatureLimits{trigger: 70, clear: 65}, issue: true}
+			if row.temperature.Collected == 76 {
+				w = want{limits: diskTemperatureLimits{trigger: 80, clear: 75}}
+			}
+		}
+		if row.temperatureLimits != w.limits {
+			t.Errorf("disk %s at %dC: limits = %+v, want %+v", row.id, row.temperature.Collected, row.temperatureLimits, w.limits)
+		}
+		if got := patrolPhysicalDiskHealthIssue(row); got != w.issue {
+			t.Errorf("disk %s at %dC: health issue = %v, want %v", row.id, row.temperature.Collected, got, w.issue)
+		}
+	}
+
+	flags := triageDiskHealthChecksState(state, nil)
+	for _, name := range []string{"nvme0n1", "sda", "sdb"} {
+		if flag := triageFindFlag(flags, func(f TriageFlag) bool {
+			return f.ResourceID == disks[name].ID && strings.Contains(f.Reason, "Disk temperature")
+		}); flag != nil {
+			t.Errorf("%s: unexpected temperature flag %+v", name, *flag)
+		}
+	}
+	if flag := triageFindFlag(flags, func(f TriageFlag) bool {
+		return f.ResourceID == disks["nvme1n1"].ID && strings.Contains(f.Reason, "Disk temperature")
+	}); flag == nil || flag.Threshold != 62 {
+		t.Errorf("nvme1n1: temperature flag = %+v, want one at the TrueNAS-wide 62C", flag)
+	}
+
+	if _, err := verifyMetricRecoveredState(state, PatrolThresholds{}, "disk-high", disks["sdb"].ID, "physical_disk"); !errors.Is(err, aicontracts.ErrVerificationUnknown) {
+		t.Errorf("retained 80C: err = %v, want ErrVerificationUnknown", err)
+	}
+
+	s := &Service{}
+	s.SetUnifiedResourceProvider(unifiedresources.NewUnifiedAIAdapter(registry))
+	s.SetPatrolThresholdProvider(provider)
+	_, section, _ := strings.Cut(s.buildUnifiedResourceContext(), "Physical Disks Needing Attention")
+	section, _, _ = strings.Cut(section, "\n\n")
+	for _, reading := range []string{"Temp: 63C", "Temp: 72C"} {
+		if !strings.Contains(section, reading) {
+			t.Errorf("attention section = %q, want the disk at %s", section, reading)
+		}
+	}
+	for _, reading := range []string{"Temp: 60C", "Temp: 76C", "Temp: 80C"} {
+		if strings.Contains(section, reading) {
+			t.Errorf("attention section = %q, lists a disk at %s", section, reading)
+		}
+	}
+	if strings.Count(section, "Temp: 72C") != 1 {
+		t.Errorf("attention section = %q, want only agent-plain's 72C disk, not TrueNAS nvme0n1 under its 75C override", section)
 	}
 }
