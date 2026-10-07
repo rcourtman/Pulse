@@ -6901,3 +6901,11 @@ allowlist it gets the generic demo `403`, or `404` on a hidden route, and that
 includes config import at `/api/config/import`. HTTP/1.1 websocket handshakes
 are `GET` requests and still connect. No storage, retention, backup, migration
 or recovery path is added or moved.
+
+### Demo mode hides the pprof routes
+
+`internal/api/demo_mode_operations.go` adds the Go runtime profiling family
+(`/debug/pprof` and every path below it, every method) to the public-demo
+hidden routes, so the demo guard on a `DEMO_MODE` instance answers it with
+`404`. That removes a diagnostic read surface on demo instances only; no
+storage, retention, backup, migration or recovery path is added or moved.
