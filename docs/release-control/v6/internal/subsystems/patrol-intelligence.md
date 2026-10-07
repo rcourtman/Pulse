@@ -366,8 +366,8 @@ or historical proof/counting for resolved-only work.
    summary.
    Runtime/setup findings are still active Patrol work, but setup-only runtime
    failures must read as one setup task rather than an infrastructure issue
-   queue. The header may suppress run and schedule/model controls while setup is
-   the only active work, but it must keep the Patrol mode selector visible
+   queue. The header may suppress its run control and `Settings` link while setup
+   is the only active work, but it must keep the Patrol mode selector available
    because the operator's autonomy boundary remains a primary product choice
    even before Patrol can run. The workspace must replace the generic findings
    row with a dedicated provider/runtime setup task, one current issue label,
@@ -698,15 +698,19 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    Effective runtime blocks on event-triggered Patrol must pass through the same
    `status.trigger_status` presentation helper, but the default header and
    activity strip may surface them only when they explain an actionable manual
-   Patrol block; background-only trigger pauses belong in secondary schedule and
-   model diagnostics when manual Patrol still works.
-   Patrol mode selection belongs to the always-visible header control;
-   the header drawer is the secondary Schedule & model surface and may expose
-   provider model, schedule, trigger tuning, and readiness errors, but it must
-   not duplicate the four Patrol mode choices or reintroduce a save button
-   for already auto-saving secondary fields. The provider model setting must lead with the effective
-   Patrol/default model summary; the full model catalog is power-user detail
-   behind an explicit change action, not the default content of the drawer.
+   Patrol block; while manual Patrol still works, a background-only trigger
+   pause stays off the header, and no other surface renders it today.
+   Patrol mode selection belongs to the Patrol page header, which has no
+   schedule and model drawer. The Patrol model, schedule, and trigger tuning
+   live on Settings > Pulse Intelligence > Patrol, which the header's
+   `Settings` link opens when setup is not blocking, and save together through
+   that page's `Save Patrol settings` button. The same page runs the model
+   readiness check as its own `Check Patrol model` action, separate from that
+   save. That settings page must not duplicate the
+   four Patrol mode choices; it points back to the Patrol page for them. The
+   Patrol model field must lead with the current selection or `Use shared
+   default`; the full model catalog is power-user detail that opens only from
+   the picker, not the default content of the page.
    When Patrol mode is available, the Patrol mode selector must keep the
    default view to the selected mode and one short sentence. It must not render a
    secondary `Limits` disclosure, hard-limit matrix, or policy explainer on the
@@ -1458,19 +1462,30 @@ surface for Patrol intelligence. This contract now owns that orchestration and
 presentation boundary while leaving shared transport and payload-shape
 ownership in the governed AI runtime and API contract surfaces.
 
-The Patrol control panel (`PatrolIntelligenceHeader.tsx`,
-`usePatrolIntelligenceState.ts`) exposes the per-rule alert-trigger policy
-directly under the Alert-Triggered Patrols toggle. A minimum-severity selector
-("Investigate alerts at or above": Critical only / Warning and critical) renders
-only while alert triggers are enabled and persists through
-`AIAPI.updateSettings({ patrol_alert_trigger_min_severity })` with optimistic
-state and revert-on-error, mirroring the existing trigger-toggle handlers. The
-selector reads `patrol_alert_trigger_min_severity` from the settings response,
-defaulting to critical-only, and must keep using the shared AI settings shape
-rather than forking a patrol-local form.
+The per-rule alert-trigger policy lives on Settings > Pulse Intelligence >
+Patrol (`PatrolSettingsContent` in
+`frontend-modern/src/components/Settings/AISettings.tsx`, form state and save
+in `useAISettingsState.ts`), not on the Patrol page. The Patrol page header
+has no trigger controls. Outside setup-only states it may show a one-line
+`status.trigger_status` summary when there is something to note (queued
+triggers, busy mode, alert or anomaly triggers off) and links to that settings
+page, unless a provider setup block puts a `Fix setup` action in place of the
+link. In the settings page's Triggers section, a
+minimum-severity selector ("Investigate alerts at or above": Critical only /
+Warning and critical) sits under the `Alert-triggered Patrols` toggle and
+renders only while that toggle is on. The selector and the trigger toggles
+edit the settings form only, and nothing is written until `Save Patrol
+settings`, which sends `patrol_alert_trigger_min_severity` in the page's single
+`AIAPI.updateSettings` payload whenever it differs from the loaded value.
+There is no optimistic write and no revert: a rejected save raises an error
+toast and leaves the edit in the form to retry, and a successful save reloads
+the form from the response. The selector reads
+`patrol_alert_trigger_min_severity` from the settings response, defaulting to
+critical-only, and must keep using the shared AI settings form rather than
+forking a Patrol-local form or save path.
 
-The Patrol page now keeps the Patrol mode policy inline on the main surface,
-not inside the secondary Schedule & model drawer: the first configurable decision remains
+The Patrol page keeps the Patrol mode policy on its own header, not on
+Settings > Pulse Intelligence > Patrol: the first configurable decision remains
 what Patrol may handle automatically (`Watch only`, `Ask first`,
 `Safe auto-fix`, `Autopilot`), and there must be only one visible chooser for
 that decision.
@@ -1493,13 +1508,15 @@ Commercial, runtime, and documentation copy that describes this same decision
 must also use those visible labels and the umbrella name `Patrol mode`, not
 the retired `Only watch`, `Fix safe issues`, `Full control`, or generic
 `Patrol control level` vocabulary.
-Provider model, run schedule, trigger tuning, readiness checks, and saved
-readiness issues belong to the secondary Schedule & model drawer. Within that
-secondary drawer, the panel disambiguates the two alert-driven AI toggles by
-scope rather than by near-identical names. The genuinely general path is
-Alert-Triggered Patrols, which runs a focused Patrol investigation of the
-alert's own issue. The Pro-gated `AlertTriggeredAnalysis` toggle presents as
-"Container Update Risk" with copy scoped to container-update alerts, because the
+Provider model, run schedule, trigger tuning, readiness checks, and the saved
+readiness result belong on Settings > Pulse Intelligence > Patrol; a save whose
+response reports Patrol not ready or degraded raises a warning toast instead of
+a success toast. In that page's Triggers section, the two alert-driven AI
+toggles are told apart by scope rather than by near-identical names. The
+genuinely general path is `Alert-triggered Patrols`, which runs a focused
+Patrol investigation of the alert's own issue. The Pro-gated
+`AlertTriggeredAnalysis` toggle presents as
+"Container update risk" with copy scoped to container-update alerts, because the
 enterprise `AlertTriggeredAnalyzer` only assesses `docker-container-update`
 alerts and returns nil for every other alert type. New copy must keep the
 container-update toggle scoped to its real Docker-update-risk capability instead
@@ -1538,11 +1555,13 @@ owns local toggle optimism, run-status orchestration, and Patrol-only copy,
 including runtime-availability messaging that stays Patrol-first in
 operator-facing shells and uses provider/API-key wording only for the actual
 provider settings boundary, but the underlying AI runtime catalog must stay shared
-with chat and AI settings. The advanced Patrol model selector must remain
+with chat and AI settings. The Patrol model selector on Settings > Pulse
+Intelligence > Patrol (`AIModelOverrideField` with `kind="patrol"`) reads that
+same shared catalog and must remain
 state-driven across async settings/catalog loading: a saved direct-provider
 model such as `deepseek:deepseek-v4-flash` must render as that provider model
 once the shared catalog supplies it, not fall back visually to the default
-model or an unrelated OpenRouter entry because the popover mounted after the
+model or an unrelated OpenRouter entry because the field rendered before the
 catalog request completed.
 The Patrol page now also treats Patrol runtime availability as a first-class
 render contract: the header chip, primary summary card, and status bar must
@@ -1926,10 +1945,10 @@ plain-text renders: the latest-run segment must keep an explicit textual
 separator between run kind and result, so degraded entries read as
 `Scoped run · error` rather than collapsing into concatenated strings like
 `Scoped runerror`.
-Those runtime facts must stay aligned with Patrol mode copy. The
-header settings surface should expose alert-triggered and anomaly-triggered
-scoped patrols as separate controls, with the legacy aggregate event-trigger
-toggle treated as compatibility-only transport rather than the primary product
+Those runtime facts must stay aligned with Patrol mode copy. Settings > Pulse
+Intelligence > Patrol, not the Patrol header, exposes alert-triggered and
+anomaly-triggered scoped Patrols as separate controls, with the legacy aggregate
+event-trigger toggle treated as compatibility-only transport rather than the primary product
 model.
 The findings empty state must also stay subordinate to the Patrol header and
 assessment shell rather than mirroring their timing metadata. In the primary
