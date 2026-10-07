@@ -3008,6 +3008,15 @@ recovery evidence. Unremembered overflow deliveries remain auditable with
 `reason=capacity`; cache expiry, overflow, or restart is not a successful
 storage operation or a reason to delete historical events.
 
+### Alert settings saves keep unsent keys without a new storage path
+
+`PUT /api/alerts/config` now applies only the top-level keys the body carries
+and keeps stored values for the rest, so a thresholds save no longer turns off
+alert TTL cleanup. It still writes `alerts.json` through the existing
+`SaveAlertConfig` path, opens no storage or recovery route, and leaves backup
+and snapshot alert settings under the same replace-what-was-sent rule as every
+other key. `internal/api/alerting/alerts_test.go` pins the handler.
+
 ### Container diagnostics shares private bootstrap transport (1 October 2026)
 
 Recovery-adjacent diagnostics now reuse the canonical complete installer
