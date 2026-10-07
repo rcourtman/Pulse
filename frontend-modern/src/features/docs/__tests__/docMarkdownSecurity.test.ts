@@ -148,7 +148,7 @@ describe('documentation rewritten-link security boundary', () => {
       ),
     );
     expect(article.querySelector('script, svg, iframe, [onclick], [onerror]')).toBeNull();
-    const link = article.querySelector('a[data-doc-link]')!;
+    const link = article.querySelector<HTMLAnchorElement>('a[data-doc-link]')!;
     expect(link.textContent).toBe('Install');
     expect(link.getAttribute('href')).toBe('/docs/INSTALL#"><img src=x onerror=probe()>');
     expect(link.origin).toBe(new URL(bases[1]).origin);
