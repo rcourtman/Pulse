@@ -6,6 +6,7 @@ import (
 
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rs/zerolog/log"
 )
 
@@ -57,6 +58,9 @@ type UnifiedResourceInput struct {
 	Temperature *UnifiedResourceMetric
 
 	StorageAliases []string // Durable policy lookup identities for storage alerts.
+	// DiskType is a physical disk's type ("nvme", "sas", "sata"). It picks
+	// the disk temperature threshold of a TrueNAS disk.
+	DiskType string
 }
 
 type unifiedMetricCandidate struct {
@@ -297,6 +301,11 @@ func (m *Manager) evaluateUnifiedMetrics(input *UnifiedResourceInput, thresholds
 		if platformType != "" {
 			metadata[alertPlatformTypeKey] = platformType
 		}
+		if input.Type == "truenas-disk" {
+			// A config save re-judges the open temperature alert against
+			// the threshold for this disk type.
+			metadata["diskType"] = input.DiskType
+		}
 		merged.Metadata = metadata
 		opts = &merged
 	}
@@ -357,14 +366,18 @@ func (m *Manager) interruptUnobservedUnifiedMetrics(input *UnifiedResourceInput,
 	}
 }
 
+// metricOptionsWithTags records a resource's tags on its metric alerts. With
+// no tags it drops any an open alert still carries: config-save reevaluation
+// reads pulse-relaxed back from them, and a removed tag left behind judged
+// the alert by thresholds the evaluator no longer applies.
 func metricOptionsWithTags(opts *metricOptions, tags []string) *metricOptions {
-	if len(tags) == 0 {
-		return opts
-	}
-
 	merged := metricOptions{}
 	if opts != nil {
 		merged = *opts
+	}
+	if len(tags) == 0 {
+		merged.RemoveMetadata = append(append([]string(nil), merged.RemoveMetadata...), "tags")
+		return &merged
 	}
 	metadata := make(map[string]interface{}, len(merged.Metadata)+1)
 	for key, value := range merged.Metadata {
@@ -603,9 +616,14 @@ func UnifiedResourceInputFromResource(resource unifiedresources.Resource) (*Unif
 	}
 	if resource.Temperature != nil {
 		input.Temperature = &UnifiedResourceMetric{Value: *resource.Temperature, Percent: *resource.Temperature}
-	} else if resource.PhysicalDisk != nil && resource.PhysicalDisk.Temperature > 0 {
+	} else if resource.PhysicalDisk != nil &&
+		diskinventory.TemperatureCollected(resource.PhysicalDisk.Temperature, resource.PhysicalDisk.Collection) {
+		// A retained last-known reading is not current evidence of heat.
 		value := float64(resource.PhysicalDisk.Temperature)
 		input.Temperature = &UnifiedResourceMetric{Value: value, Percent: value}
+	}
+	if resource.PhysicalDisk != nil {
+		input.DiskType = strings.ToLower(strings.TrimSpace(resource.PhysicalDisk.DiskType))
 	}
 
 	return input, true
@@ -850,7 +868,7 @@ func (m *Manager) CheckUnifiedResourceWithCapacityTrend(input *UnifiedResourceIn
 		return
 	}
 
-	thresholds := m.resolveResourceThresholds(input.Type, input.ID)
+	thresholds := m.effectiveAlertPolicyNoLock(alertPolicyQuery{TypeKey: input.Type, ResourceID: input.ID, DiskType: input.DiskType}).Thresholds
 	m.mu.RUnlock()
 
 	if thresholds.Disabled {

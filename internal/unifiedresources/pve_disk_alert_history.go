@@ -28,6 +28,11 @@ const (
 // "<reference>::<reference><suffix>" (buildCanonicalStateID over the spec ID).
 var proxmoxDiskAlertSpecSuffixes = []string{"-health", "-wearout"}
 
+// proxmoxDiskTemperatureAlertSpecID is the PVE disk temperature alert's spec,
+// a metric threshold spec (canonicalMetricSpecID over "diskTemperature"), so
+// its identifier is "<reference>::metric-threshold:diskTemperature".
+const proxmoxDiskTemperatureAlertSpecID = "metric-threshold:diskTemperature"
+
 // ProxmoxPhysicalDiskAlertIdentifiers lists the alert identifiers of the PVE
 // disk alerts raised under ref, or nil when ref is not shaped like a PVE disk
 // alert reference.
@@ -35,11 +40,11 @@ func ProxmoxPhysicalDiskAlertIdentifiers(ref string) []string {
 	if !isProxmoxPhysicalDiskAlertReference(ref) {
 		return nil
 	}
-	identifiers := make([]string, 0, len(proxmoxDiskAlertSpecSuffixes))
+	identifiers := make([]string, 0, len(proxmoxDiskAlertSpecSuffixes)+1)
 	for _, suffix := range proxmoxDiskAlertSpecSuffixes {
 		identifiers = append(identifiers, ref+"::"+ref+suffix)
 	}
-	return identifiers
+	return append(identifiers, ref+"::"+proxmoxDiskTemperatureAlertSpecID)
 }
 
 // isProxmoxPhysicalDiskAlertReference matches "<instance>:<node>:disk:<key>"

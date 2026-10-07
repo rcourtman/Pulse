@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FindingsPanel } from '../FindingsPanel';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 
 const mockState = vi.hoisted(() => {
   const loadFindings = vi.fn();
@@ -782,5 +783,165 @@ describe('FindingsPanel investigate action gating', () => {
     expandRow();
     const busyButton = screen.getByRole('button', { name: 'Switching…' });
     expect(busyButton).toBeDisabled();
+  });
+});
+
+describe('FindingsPanel future times', () => {
+  const hour = 60 * 60 * 1000;
+
+  beforeEach(() => {
+    mockState.findings = [...mockState.initialFindings];
+    mockState.loadPatrolFindings.mockClear();
+    mockState.findingsLoading = false;
+    mockState.findingsError = null;
+    mockState.patrolFindingsLoading = false;
+    mockState.patrolFindingsError = null;
+    mockState.patrolPendingApprovals = [];
+  });
+
+  it('counts reminders and snoozes down on the shared clock instead of reading just now', () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+      now: Date.parse('2026-03-30T12:00:00Z'),
+    });
+    mockState.patrolFindings = [
+      {
+        ...mockState.initialPatrolFindings[0],
+        id: 'finding-later',
+        title: 'Backup job keeps slipping',
+        status: 'dismissed',
+        dismissedReason: 'will_fix_later',
+        remindAt: '2026-04-06T12:00:00Z',
+      },
+      {
+        ...mockState.initialPatrolFindings[0],
+        id: 'finding-snoozed',
+        title: 'Swap pressure on vm-100',
+        status: 'snoozed',
+        snoozedUntil: '2026-03-30T15:00:00Z',
+      },
+    ];
+
+    try {
+      render(() => <FindingsPanel findingsSource="patrol" filterOverride="resolved" />);
+
+      const reminder = screen.getByText(/Reminding in 7d/);
+      const snooze = screen.getByText(/snoozed, returns in 3h/);
+      expect(reminder).toHaveAttribute(
+        'title',
+        expect.stringMatching(
+          /^Reminder due .+\. Pulse brings this finding back on its first reminder check after that\.$/,
+        ),
+      );
+      expect(snooze).toHaveAttribute('title', expect.stringMatching(/^Snoozed until /));
+      expect(screen.queryByText(/just now/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Overdue commitments/ })).not.toBeInTheDocument();
+
+      // The findings are not re-read: only the shared clock moves.
+      vi.advanceTimersByTime(2 * hour);
+      expect(snooze).toHaveTextContent('snoozed, returns in 1h');
+
+      vi.advanceTimersByTime(hour);
+      expect(snooze).toHaveTextContent('snooze ended');
+
+      vi.setSystemTime(Date.parse('2026-04-06T12:30:00Z'));
+      vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
+      expect(reminder).toHaveTextContent('Reminder overdue');
+      // The Overdue commitments chip reads the same clock as the label, with no
+      // findings re-read.
+      expect(screen.getByRole('button', { name: /Overdue commitments \(1\)/ })).toBeInTheDocument();
+      expect(reminder).toHaveAttribute('title', expect.stringMatching(/^Reminder was due /));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps overdue rows mounted across clock ticks and adds a reminder once it falls due', () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+      now: Date.parse('2026-03-30T12:00:00Z'),
+    });
+    mockState.patrolFindings = [
+      {
+        ...mockState.initialPatrolFindings[0],
+        id: 'finding-overdue',
+        title: 'Certificate renewal keeps slipping',
+        status: 'dismissed',
+        dismissedReason: 'will_fix_later',
+        remindAt: '2026-03-30T11:00:00Z',
+      },
+      {
+        ...mockState.initialPatrolFindings[0],
+        id: 'finding-due-soon',
+        title: 'Backup job keeps slipping',
+        status: 'dismissed',
+        dismissedReason: 'will_fix_later',
+        remindAt: '2026-03-30T12:10:00Z',
+      },
+    ];
+
+    try {
+      render(() => <FindingsPanel findingsSource="patrol" filterOverride="resolved" />);
+      fireEvent.click(screen.getByRole('button', { name: /Overdue commitments \(1\)/ }));
+
+      const review = screen.getByRole('button', {
+        name: 'Review issue for Certificate renewal keeps slipping',
+      });
+      review.focus();
+      expect(screen.queryByText('Backup job keeps slipping')).not.toBeInTheDocument();
+
+      // A tick that moves no deadline past now leaves the rows alone.
+      vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
+      expect(review.isConnected).toBe(true);
+      expect(document.activeElement).toBe(review);
+
+      // Once the second reminder falls due it joins the open Overdue filter
+      // and the chip count, on the same clock as the row labels.
+      vi.advanceTimersByTime(10 * 60 * 1000);
+      expect(screen.getByText('Backup job keeps slipping')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Overdue commitments \(2\)/ })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('calls a reminder overdue only once the Overdue commitments list holds it', () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+      now: Date.parse('2026-03-30T12:00:00Z'),
+    });
+    mockState.patrolFindings = [
+      {
+        ...mockState.initialPatrolFindings[0],
+        id: 'finding-due',
+        title: 'Certificate renewal keeps slipping',
+        status: 'dismissed',
+        dismissedReason: 'will_fix_later',
+        remindAt: '2026-03-30T12:00:05Z',
+      },
+    ];
+    const [filter, setFilter] = createSignal<'active' | 'resolved'>('active');
+
+    try {
+      render(() => <FindingsPanel findingsSource="patrol" filterOverride={filter()} />);
+      expect(screen.queryByText('Certificate renewal keeps slipping')).not.toBeInTheDocument();
+
+      // The deadline passes between ticks of the shared clock, and the row
+      // first mounts before the next tick: it must not call itself overdue
+      // while the chip and filter do not count it.
+      vi.setSystemTime(Date.parse('2026-03-30T12:00:10Z'));
+      setFilter('resolved');
+      expect(screen.getByText('Certificate renewal keeps slipping')).toBeInTheDocument();
+      expect(screen.getByText(/Reminder due/)).toBeInTheDocument();
+      expect(screen.queryByText(/Reminder overdue/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Overdue commitments/ })).not.toBeInTheDocument();
+
+      // The next tick moves the label, the chip and the filter together.
+      vi.advanceTimersByTime(RELATIVE_TIME_TICK_MS);
+      expect(screen.getByText(/Reminder overdue/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Overdue commitments \(1\)/ })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

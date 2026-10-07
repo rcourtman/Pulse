@@ -275,6 +275,18 @@ Without comparable identity (a SAS, SCSI or USB replacement with no WWN on one
 side) the row still matches. Report admission and the SMART wire contract are
 unchanged; the regression is
 `TestHostAgentSMARTRowForSwappedOutDiskDoesNotLendItsIdentity`.
+A PVE disk that a still-reporting linked Agent's SMART row matches is marked
+`AgentSMARTReported` (internal poll evidence on `models.PhysicalDisk`, never
+serialized); disks the poller builds from that report when the Proxmox disk
+query fails go through the same merge, and an Agent whose lease lapsed owns
+none. The Agent then owns the disk's temperature alert
+through `CheckHost`, and the PVE disk temperature check closes its own as
+moved to the Agent, so one disk never alerts twice. Report admission, the SMART
+wire contract and Agent authority are unchanged;
+`TestMergeHostAgentSMARTIntoDisksMarksDisksTheAgentReports` in
+`internal/monitoring/physical_disk_roundtrip_test.go` and
+`TestPhysicalDiskAgentSMARTReportedStaysInternal` in
+`internal/models/deepcopy_test.go` pin the marker.
 
 Assistant historical metric wiring uses the current monitor's retained store
 and registry metrics coordinates. Historical reads do not alter enrollment,
@@ -4797,6 +4809,12 @@ agent-lifecycle operations. If those routes are called directly, the API must
 fail them as unsupported rather than presenting file diffs or reverts as
 agent command rollback, enrollment repair, update rollback, or fleet-control
 authority.
+Assistant session mutations (`/abort`, `/summarize`, `/fork`, `/undo`,
+`/redo`, `/steer` under `/api/ai/sessions/{id}`) accept only `POST`; any other
+method that reaches those handlers gets `405` before touching session state.
+That method guard
+is AI-runtime transport hardening in `internal/api/ai_handler.go`; it adds no
+agent command, enrollment, update, or fleet-control path.
 That same shared dependency now also assumes hosted cloud handoff authorizes
 tenant org access before browser lifecycle continues. Lifecycle-adjacent opens
 into hosted workspaces may depend on `internal/api/cloud_handoff_handlers.go`,

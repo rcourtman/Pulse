@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "base_sha": "bdf0f76b7bf61d550b1cb8574497eef75b354acb",
+  "verified_at": "2026-10-07T14:11:27Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/AlertResourceTableDesktop.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx",
+    "frontend-modern/src/components/Alerts/ResourceTable.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableAgentsResourcesSection.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableTrueNASTab.tsx",
+    "frontend-modern/src/components/Alerts/alertResourceTableModel.ts",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsPlatformData.ts",
+    "frontend-modern/src/features/alerts/thresholds/trueNASDiskTemperature.ts",
+    "frontend-modern/src/types/alerts.ts",
+    "frontend-modern/src/utils/alertThresholdDefaults.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/AlertResourceTableDesktop.tsx": "4d09dd97adc2868889e256455c207b6b9089ea311713878f0d6ff00efb6b7123",
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx": "ceaf136da9361a5b1756350626a833da4dfebcb4f211c7269d7d89d37fb7e085",
+    "frontend-modern/src/components/Alerts/ResourceTable.tsx": "7e80a6c789b3069fcadcb86e0a6689e5319e7b0ac5d5bfa1a596520daec2d7e1",
+    "frontend-modern/src/components/Alerts/ThresholdsTableAgentsResourcesSection.tsx": "fc4e9f4d05c0bf5799acbbe64c37b901e104869ff120819342432563789ad0e9",
+    "frontend-modern/src/components/Alerts/ThresholdsTableTrueNASTab.tsx": "a22b86c28b65ec18ba81171fb1206a24107a0d97db19d7dd488bdfd0a689a956",
+    "frontend-modern/src/components/Alerts/alertResourceTableModel.ts": "5881aeaf7ee575589997bf67fb713a01784ce7ca16ecb5a5eaea77f36010837a",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts": "b60ba59688d6ea0cabfb2b413b8adcaa85c8d41524c1d1f0df9bdb9e6d85733c",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "63b07de3f354f8328298348a8892ad73fde2f11ec6768e9c0f6fc37eb4c43516",
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts": "0e116e65c992a72e21d700835b0cb0db7173be9ec9c4980382958506d4e75976",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsPlatformData.ts": "8525b0b012198ff87e29063908a9907b7fa1080cd84187202b1cd3cf198a3b46",
+    "frontend-modern/src/features/alerts/thresholds/trueNASDiskTemperature.ts": "80433d42dd4658a1449c0f0c378d7fa52cd6dfab117d626195099768e750352f",
+    "frontend-modern/src/types/alerts.ts": "d072175ab98e3785eae643d655be4c2d54cac0eddc8b55803a2841a312062e5a",
+    "frontend-modern/src/utils/alertThresholdDefaults.ts": "077e291d5c224063a373a5e9f5555d9b470f585801b0cfdd9dc1acacf233af28"
+  },
+  "routes": [
+    "/alerts/thresholds/truenas",
+    "/truenas/storage"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock stack (8 nodes, mock TrueNAS truenas-main) with a local-only generator overlay pinning TrueNAS disk temperatures: nvme0n1 60C, nvme1n1 72C, sda 57C (SATA), sdc 63C (SAS); after = this branch, before = main logic in the same tree",
+    "Thresholds > TrueNAS > Disks with no saved TrueNAS-wide value: header reads 'Defaults: NVMe 70\u00b0C \u00b7 SAS 65\u00b0C \u00b7 SATA 55\u00b0C', note 'Unless set here, each disk alerts at Disk temperature by type, set under Agents.', Global Defaults Temp cell empty with placeholder 'By type' (fits after widening to w-20) and On, disk rows nvme0n1/nvme1n1 70\u00b0C, sda/sdb 55\u00b0C, sdc-sdf 65\u00b0C",
+    "Same section at 375px: Global Defaults card shows TEMP \u00b0C 'By type' with On, disk cards show their type triggers, no horizontal overflow",
+    "Agent Disk Temp default switched off through the API: header 'Defaults: all metric alerts off', Global Defaults cell Off with title 'Off because the agent Disk Temp default under Agents is off...', disk rows Off",
+    "Saved TrueNAS-wide 62: header 'Defaults: Temp 62\u00b0C', every disk row 62\u00b0C, Custom badge and reset control after reload; saved 55 survives save and reload as 55 (stored with truenasDiskTemperatureByType)",
+    "Alerts with factory per-type thresholds: after stack raises nvme1n1 72 (trigger 70) and sda 57 (trigger 55) with diskType metadata, none for nvme0n1 60 or sdc 63; before (main) raised all four at a flat 55",
+    "TrueNAS storage table agrees: Attention 'Disk temperature is 72\u00b0C, at or above its 70\u00b0C alert threshold.' on nvme1n1 and '57\u00b0C ... 55\u00b0C' on sda, none on nvme0n1",
+    "TrueNAS disk drawer (Platform details > Show TrueNAS > Health): nvme0n1 Temperature 60\u00b0C in default text colour (main toned it amber from the fixed 55C); sda 57\u00b0C amber rgb(252,211,77) at 1366 and at 375 with no overflow"
+  ],
+  "interactions": [
+    "Typed 62 into the TrueNAS Disks Global Defaults Temp cell, saved, reloaded: API truenasDiskDefaults {trigger 62, clear 57}, cell shows 62 with Custom",
+    "Triple-clicked and typed 55, saved, reloaded: API keeps {55, 50}, cell shows 55 with Custom and the reset control",
+    "Clicked Reset to factory defaults: cell returns to 'By type'; saved: API truenasDiskDefaults {}",
+    "On the 375px card, clicked On to switch the default Off, saved: API stores {trigger 0, clear 0} and the after stack's TrueNAS disk alerts resolve; clicked again: returns to 'By type', saved: {}",
+    "With the agent Disk Temp default off, clicked the Off badge: stages an explicit 55 (Custom, rows 55\u00b0C); discarded",
+    "Loaded an old saved config (flat 55/50, no marker) with the new binary: GET returns truenasDiskDefaults {} and truenasDiskTemperatureByType true",
+    "Expanded nvme0n1 and sda rows on /truenas/storage, opened Platform details and Show TrueNAS, read the Temperature row value and computed colour at 1366 and 375"
+  ]
+}

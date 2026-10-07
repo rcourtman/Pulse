@@ -2206,6 +2206,18 @@ the same record; the table renders defaults once, in both desktop table and
 narrow card layouts, and per-section metric columns must resolve to metric
 keys the shared column normalizer produces so the defaults editor reads and
 writes the same record keys the section persists.
+A global default that another setting decides while it is unset passes a
+`globalDefaultFallbacks` entry for that metric (label, title, whether the other
+setting is itself off, and the value switching on stages when it is). The
+TrueNAS Disks temperature uses it to read `By type`, following Disk
+temperature by type, with `features/alerts/thresholds/trueNASDiskTemperature.ts`
+giving each disk row its type's trigger from the unsaved editor state.
+`resolveAlertResourceGlobalDefaultCell` decides the cell for both layouts:
+unset follows the fallback, switching on from Off returns to unset unless the
+fallback is off, and an unset default with no fallback stays Off as the engine
+reads it. `ResourceTable.tsx` hands its props to the shared table state through
+getters, so the Custom badge and reset control follow defaults that load after
+the table mounts.
 Platform sub-routes that add native provider inventory must stay on the shared
 platform page and table primitives. The vSphere Networks surface routes through
 `/vmware/networks`, the shared platform tab model, the command palette
@@ -5345,7 +5357,19 @@ too. Every read of the clock returns the wall clock; the 30-second tick only
 tells readers to re-read, so a cell that mounts between ticks never measures
 from a stale time and a timestamp from the last few seconds never reads as a
 future time.
-The rule has one deliberate exception. The age of a latest reading (last used,
+Future times have their own formatter. `formatRelativeTime` is past-only: it
+reads a time ahead of `now` as "just now" (compact) or "0s ago", which is right
+for clock skew on something already observed and wrong for an expiry, a
+reminder or a schedule.
+Those go through `formatTimeUntil` (`frontend-modern/src/utils/format.ts`),
+which counts down ("in 3h", "in 1d"), rounds to the nearest unit so a duration
+just chosen reads as chosen, and returns `dueText` (default "now") once the
+time arrives. A countdown target does not change while its surface stays open,
+so the countdown passes `now` from the shared clock, as the Patrol suppression
+expiry and the Patrol findings reminder and snooze lines do. The replication
+Next sync column and the Patrol header's next-check `CountdownTimer` keep their
+own minute- and second-precision countdowns.
+The relative-age rule has one deliberate exception. The age of a latest reading (last used,
 last seen, last success, last checked) on data the surface reads once and does
 not re-read stays the age at read time, because a moving age over a snapshot
 that never refreshes claims the reading stopped when it may not have. Such a
@@ -5860,7 +5884,15 @@ the surface-alt detail row shell locally. The content shell must clip
 horizontal paint below the large breakpoint without becoming a scroll
 container, reset the parent table's `whitespace-nowrap` inheritance, and allow
 its descendants to shrink, then restore visible overflow for the static
-desktop layout. Long operator-state copy must wrap inside the shared row border
+desktop layout. Below that breakpoint the default content shell is capped at
+the table scroll shell's content-box inline size (`max-w-[100cqi]`; the shell
+is a size container), never a viewport estimate of the page chrome, so a phone
+drawer does not leave an empty strip beside its content (the retired
+`100vw-3.5rem` cap left 27px at 390px) and is never wider than the table's
+visible area. Callers that pass their own `contentClass` own their width.
+Fixed-layout cells clip overflow, so the sticky offset is inert and horizontal
+scrolling still moves the drawer with its cell.
+Long operator-state copy must wrap inside the shared row border
 instead of painting beneath adjacent controls or disappearing at the clip edge.
 When focused detail content is removed, `InlineDetailTableRow` restores focus
 to its current `aria-controls` disclosure with `preventScroll`; live refresh,

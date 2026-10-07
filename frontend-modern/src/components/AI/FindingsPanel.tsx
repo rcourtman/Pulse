@@ -39,6 +39,7 @@ import { AIAPI, type RemediationPlan } from '@/api/ai';
 import { createSuppressionRuleFromFinding, reinvestigateFinding } from '@/api/patrol';
 import type { PatrolRunRecord, PatrolRuntimeState, PatrolAutonomyLevel } from '@/api/patrol';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   getFindingAlertIdentifier,
   hasTriggeringAlert,
@@ -84,6 +85,8 @@ import {
   getFindingSubjectPresentation,
   getFindingTitlePresentation,
   getFindingRecencyPresentation,
+  getFindingReminderPresentation,
+  getFindingSnoozePresentation,
   getFindingEvidencePresentation,
   hasFindingInvestigationDetails,
   hasFindingInvestigationHandoffPointer,
@@ -194,6 +197,10 @@ function getFindingSuppressionRuleScope(finding: UnifiedFinding) {
 export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const location = useLocation();
   const [filter, setFilter] = createSignal<FindingsPanelFilter>(props.filterOverride ?? 'active');
+  // A reminder or snooze end never changes while its row stays on screen, so
+  // the countdown to it, and whether a reminder is overdue, read the shared
+  // clock.
+  const now = useRelativeTimeNow();
   const [sortBy, setSortBy] = createSignal<'severity' | 'time'>('severity');
   const [expandedId, setExpandedId] = createSignal<string | null>(null);
   let panelRoot: HTMLDivElement | undefined;
@@ -338,6 +345,32 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     }
   });
 
+  // Will_fix_later commitments whose RemindAt deadline has passed. The Go
+  // store's proactive sweep (SweepWillFixLaterReminders) wakes these on a 1h
+  // timer; until then the Overdue commitments chip and filter surface them on
+  // demand. The list is sampled on the shared clock and notifies only when its
+  // ids change, so a tick that moves no deadline past now does not rebuild the
+  // filtered rows. Each row's "Reminder overdue" label reads the same list, so
+  // a row that mounts between ticks agrees with the chip and filter.
+  const overdueFindingIds = createMemo(
+    () => {
+      const nowMs = now();
+      return sourceFindings()
+        .filter((f) => {
+          if (f.dismissedReason !== 'will_fix_later' || !f.remindAt) return false;
+          const due = Date.parse(f.remindAt);
+          return Number.isFinite(due) && due <= nowMs;
+        })
+        .map((f) => f.id);
+    },
+    [],
+    {
+      equals: (prev, next) =>
+        prev.length === next.length && prev.every((id, index) => id === next[index]),
+    },
+  );
+  const overdueFindingIdSet = createMemo(() => new Set(overdueFindingIds()));
+
   // Filter and sort findings
   const filteredFindings = createMemo(() => {
     if (hasUnknownRunSnapshot()) {
@@ -365,22 +398,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       const approvalFindingIds = new Set(sourceFindingsWithPendingApprovals().map((f) => f.id));
       findings = findings.filter((f) => approvalFindingIds.has(f.id));
     } else if (filter() === 'overdue') {
-      // Overdue surfaces will_fix_later commitments whose RemindAt
-      // deadline has already passed. The Go store's proactive sweep
-      // (SweepWillFixLaterReminders) wakes these on a 1h timer, but
-      // this filter lets the operator see them on demand — including
-      // any that the sweep has not yet promoted on this cycle.
-      const nowMs = Date.now();
-      findings = findings.filter((f) => {
-        if (f.dismissedReason !== 'will_fix_later') {
-          return false;
-        }
-        if (!f.remindAt) {
-          return false;
-        }
-        const due = Date.parse(f.remindAt);
-        return Number.isFinite(due) && due <= nowMs;
-      });
+      const overdueIds = overdueFindingIdSet();
+      findings = findings.filter((f) => overdueIds.has(f.id));
     }
 
     // Filter by specific finding IDs if provided
@@ -468,17 +487,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       ? scopedPendingApprovalCount()
       : sourceFindingsWithPendingApprovals().length,
   }));
-  // Count of will_fix_later commitments whose RemindAt deadline has
-  // already passed. Drives the Overdue commitments chip below.
-  const overdueCount = createMemo(() => {
-    const nowMs = Date.now();
-    return sourceFindings().filter((f) => {
-      if (f.dismissedReason !== 'will_fix_later') return false;
-      if (!f.remindAt) return false;
-      const due = Date.parse(f.remindAt);
-      return Number.isFinite(due) && due <= nowMs;
-    }).length;
-  });
+  // Drives the Overdue commitments chip below.
+  const overdueCount = createMemo(() => overdueFindingIds().length);
   // Active findings that restate an active alert (backend-stamped mirror).
   // They are demoted into a collapsed group below the list rather than shown
   // as separate items: the alert already owns that condition on the Patrol
@@ -1279,18 +1289,27 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   {formatOperatorStateDismissCauseLabel(getOperatorStateDismissCause(finding))}
                 </span>
               </Show>
-              <Show when={finding.dismissedReason === 'will_fix_later' && finding.remindAt}>
-                <span
-                  class="ml-2 text-amber-600 dark:text-amber-400"
-                  title="Pulse will surface this finding again on this date if it is still tripping."
-                >
-                  {' · '}Reminding {formatTime(finding.remindAt!)}
-                </span>
+              <Show
+                when={getFindingReminderPresentation(
+                  finding,
+                  now(),
+                  overdueFindingIdSet().has(finding.id),
+                )}
+              >
+                {(reminder) => (
+                  <span class="ml-2 text-amber-600 dark:text-amber-400" title={reminder().title}>
+                    {' · '}
+                    {reminder().label}
+                  </span>
+                )}
               </Show>
-              <Show when={finding.status === 'snoozed' && finding.snoozedUntil}>
-                <span class="ml-2 text-blue-500 dark:text-blue-400">
-                  {' · '}snoozed until {formatTime(finding.snoozedUntil!)}
-                </span>
+              <Show when={getFindingSnoozePresentation(finding, now())}>
+                {(snooze) => (
+                  <span class="ml-2 text-blue-500 dark:text-blue-400" title={snooze().title}>
+                    {' · '}
+                    {snooze().label}
+                  </span>
+                )}
               </Show>
               <Show when={finding.acknowledgedAt && finding.status === 'active'}>
                 <span class="ml-2 text-muted">

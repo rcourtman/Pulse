@@ -2124,6 +2124,29 @@ boundary around it:
   matches node names only, so it relies on fixture node names being unique
   across instances, which they are.
 
+`checkPhysicalDiskAlerts` also hands each disk's temperature to
+`CheckProxmoxDiskTemperature`, so a Proxmox disk that only the node's sensors
+report alerts under the disk temperature policy, as its Running Hot verdict
+already says it should. It passes the reading only when this poll collected it
+(`collectedPhysicalDiskTemperature`, `diskinventory.TemperatureCollected`), so
+a retained last-known value holds the alert rather than judging it, and it
+passes `AgentSMARTReported`, which `mergeHostAgentSMARTIntoDisks` sets on a
+disk a still-reporting linked agent lists in its SMART report (disks built
+from that report when the Proxmox query fails go through the same merge). A
+disk the agent lists is the agent's: `CheckHost` raises its temperature
+alert, and the PVE disk check closes its own as moved to the agent, so no
+disk alerts twice. Once the agent's lease lapses (`ExpireHostTelemetry` marks
+the host offline) its retained rows still enrich the disk, but ownership
+returns to the PVE check, which judges the node's own current readings; an
+agent newly linked to a disk with an open PVE alert takes it over on the next
+disk poll. An excluded device closes its temperature
+alert with the health and wearout ones. Fixture disks carry no agent SMART
+merge, so on a mock estate every hot disk on an online node alerts.
+`TestMergeHostAgentSMARTIntoDisksMarksDisksTheAgentReports` and
+`TestCheckPhysicalDiskAlertsRaisesProxmoxDiskTemperatureAlerts` in
+`internal/monitoring/physical_disk_roundtrip_test.go` pin the marker,
+the collected reading, agent ownership and exclusion.
+
 Switching mock mode fences the alert evaluations that read mode-dependent data
 (`mockModeFence`, `internal/monitoring/mock_mode_fence.go`). `GetState`, the
 fixture graph, the unified read view, the recovery rollups and the connection

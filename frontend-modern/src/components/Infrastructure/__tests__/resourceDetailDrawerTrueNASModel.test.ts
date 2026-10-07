@@ -381,8 +381,9 @@ describe('resourceDetailDrawerTrueNASModel', () => {
           },
         },
       });
+    const sataTrigger = () => ({ warning: 50, critical: 55 });
     const temperatureRow = (resource: Resource) =>
-      buildTrueNASDetailSections(resource)
+      buildTrueNASDetailSections(resource, sataTrigger)
         .find((section) => section.label === 'Health')
         ?.rows.find((row) => row.label === 'Temperature');
 

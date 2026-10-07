@@ -64,7 +64,7 @@ import {
 import type { EvidenceEnvelope } from '@/types/operationalTrust';
 import type { ActionDetailResponse } from '@/types/actionAudit';
 import { getAlertResourceIncidentAcknowledgedByLabel } from '@/utils/alertIncidentPresentation';
-import { formatRelativeTime } from '@/utils/format';
+import { formatAbsoluteTime, formatRelativeTime, formatTimeUntil } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { copyToClipboard } from '@/utils/clipboard';
 import type { PatrolAutonomyLevel } from '@/api/patrol';
@@ -153,12 +153,29 @@ function getAttentionSuppressionEndPresentation(reviewed: boolean) {
         durationLabel: 'End suppression after',
         actionLabel: 'End suppression',
         successLabel: 'Suppression ended. It stays reviewed',
+        countdownLabel: (remaining: string) => `Suppression ends ${remaining}. It stays reviewed.`,
       }
     : {
         durationLabel: 'Return it to active attention after',
         actionLabel: 'Return to active attention',
         successLabel: 'Returned to decision inbox',
+        countdownLabel: (remaining: string) => `Returns to active attention ${remaining}.`,
       };
+}
+
+// The suppression line counts down to the expiry in the same words as the
+// early-end button, and says so once the expiry has passed.
+export function getAttentionSuppressionExpiryLabel(
+  expiresAt: string,
+  reviewed: boolean,
+  now: number,
+): string {
+  const expiry = Date.parse(expiresAt);
+  if (!Number.isFinite(expiry)) return '';
+  if (expiry <= now) return 'Suppression has ended.';
+  return getAttentionSuppressionEndPresentation(reviewed).countdownLabel(
+    formatTimeUntil(expiry, { compact: true, now }),
+  );
 }
 
 export function PatrolAttentionWorkbench(
@@ -1285,8 +1302,9 @@ function AttentionLifecycleControls(props: {
   onSuppress: (itemId: string, reason: string, expiresAt: string) => Promise<void>;
   onUnsuppress: (itemId: string, reviewed: boolean) => Promise<void>;
 }) {
-  // The acknowledgement time never changes while the detail stays open, so its
-  // age reads the shared clock.
+  // The acknowledgement and suppression expiry times never change while the
+  // detail stays open, so the acknowledgement age and the countdown to the
+  // expiry read the shared clock.
   const now = useRelativeTimeNow();
   const [showSuppression, setShowSuppression] = createSignal(false);
   const [reason, setReason] = createSignal('');
@@ -1329,10 +1347,13 @@ function AttentionLifecycleControls(props: {
               </p>
               <Show when={suppression().expiresAt}>
                 {(expiresAt) => (
-                  <p>
-                    Returns to active attention {formatRelativeTime(expiresAt(), { compact: true })}
-                    .
-                  </p>
+                  <Show when={getAttentionSuppressionExpiryLabel(expiresAt(), reviewed(), now())}>
+                    {(label) => (
+                      <p title={`Suppressed until ${formatAbsoluteTime(Date.parse(expiresAt()))}`}>
+                        {label()}
+                      </p>
+                    )}
+                  </Show>
                 )}
               </Show>
             </div>

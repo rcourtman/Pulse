@@ -3570,6 +3570,12 @@ query...`, and `Reading storage...` before streamed tool arguments are
    answer (nothing streaming, no error block, no pending approval or
    question, and a user prompt available to re-send) because the undo
    boundary only operates on the last durable turn.
+   Session mutations stay POST-only at the handler: abort, summarize, fork,
+   undo, redo, and steer refuse every other method with `405` and
+   `Allow: POST` before resolving the Assistant service. A `GET` or `HEAD`
+   that the demo-mode read-only guard or the CSRF check admits as a read
+   therefore cannot cancel a running turn, compact or rewind a transcript,
+   or persist a fork.
    The empty Assistant drawer may surface recent non-empty sessions as direct
    resume actions using the backend session list already owned by the drawer;
    it must not create a parallel recent-chat store or product-authored prompt
