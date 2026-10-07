@@ -167,7 +167,10 @@ class ZFSMonitoringDocsTest(unittest.TestCase):
             self.assertIn(boundary, text)
 
     def test_zfs_guide_has_no_permission_or_recovery_mutation_recipe(self):
-        commands = "\n".join(re.findall(r"`([^`]+)`", ZFS_DOC.read_text()))
+        text = ZFS_DOC.read_text()
+        fenced = re.findall(r"```(?:bash|sh)\n(.*?)```", text, re.DOTALL)
+        inline = re.findall(r"(?<!`)`([^`\n]+)`(?!`)", text)
+        commands = "\n".join(fenced + inline)
         self.assertNotRegex(commands, r"\bpveum\b|aclmod|--privsep|\bsudo\b|"
                                       r"systemctl\s+(?:restart|stop)|"
                                       r"zpool\s+(?:scrub|clear|export|import|replace)")
