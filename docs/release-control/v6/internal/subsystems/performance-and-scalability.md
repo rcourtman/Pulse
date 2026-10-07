@@ -1507,7 +1507,6 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     default filter-option labels must flow through the shared all-option
     presentation helper via the workload filter config model instead of the
     hot-path shell hard-coding local `All ...` strings.
-28. Keep summary-card hover emphasis on one bounded rendering budget: when a summary row is active, shared sparkline and density-map primitives must promote the selected series and demote background series through the same active-series ID rather than layering a second page-local highlight pass, so zoom-range and hover scrubbing stay visually coherent without reintroducing multi-series overdraw on the hot summary cards. Density maps on that hot path must stay overview-first under focus: preserve the multi-entity heatmap rows, layer focused-entity detail inside the card, and avoid swapping transient hover into a separate single-series chart path.
 29. Keep public self-hosted checkout handoff endpoints on the adjacent
     commercial/router boundary, not the summary-chart hot path. When
     `internal/api/router.go`, `internal/api/router_routes_cloud.go`, or
@@ -1529,7 +1528,8 @@ them with new hot-path fetches. Node rows that draw infrastructure history
 must read the canonical infrastructure-summary route owned by
 `internal/api/router_routes_monitoring.go` and `internal/api/router.go`, today
 through `frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts`;
-storage summary cards must use the storage summary cache owners. The authenticated
+the storage pool Growth column must read through the storage summary cache
+owners (`useStorageSummaryCharts.ts` and `storageSummaryCache.ts`). The authenticated
 root path in `frontend-modern/src/App.tsx` must not prewarm a deleted
 dashboard-specific overview, trend, or summary transport.
     The same hot path must keep mock/demo chart identity on the canonical
@@ -2262,22 +2262,11 @@ Route-backed workload `resource` focus on that hot path is contextual state
 only, not inferred filter state: opening or closing an inline drawer must not
 invent, retain, or clear `agent` or node-scope filters unless those filters
 were already explicit in the managed workload URL.
-That same hot-path ownership now covers top-of-page summary emphasis: infrastructure
-and workloads summary cards must treat row hover, chart hover, and route focus
-as one shared active-series contract so time-range switches, row scrubbing, and
-chart cross-highlighting reuse one existing chart path instead of repainting
-page-local “selected row” overlays on top of already downsampled summary
-history. Hovering a sparkline or density map for one entity must promote that
-entity into the shared active series so sibling cards highlight the same object
-at once rather than maintaining chart-local hover state, and the synchronized
-hover timestamp must remain visible across those sibling cards even when the
-active entity has no samples for one metric in the current range. Those
-sibling cards should expose the synchronized value through one compact
-header-level readout, not by spawning duplicate floating tooltips on every
-chart.
-Infrastructure cluster-header hover now belongs to that same bounded hot path:
-hovering a grouped infrastructure header must scope the top cards to that
-cluster's unified-resource members through the shared group/entity interaction
+That same hot-path ownership covers summary emphasis. No top-of-page summary
+cards render on infrastructure or workloads today; if they return, row hover,
+chart hover, and route focus must stay one shared active-series contract that
+reuses one existing chart path instead of repainting page-local “selected row”
+overlays on top of already downsampled summary history.
 That same hot path now also owns dashboard freshness discipline. Supported
 unified-resource dashboard reads may hydrate from REST for first paint, but
 once websocket `state.resources` is available they must consume that canonical
@@ -2414,21 +2403,14 @@ must not tighten physical retention until the durable downgrade state reaches
 its governed day-60 purge timestamp. Re-upgrade clears that ceiling before the
 next retention run. The ceiling may only reduce configured retention; it must
 never expand an operator's shorter storage policy.
-contract instead of inventing an infrastructure-local summary filter branch.
-For shared line charts on that hot path, the shared sparkline primitive may
-isolate the selected series inside the existing render budget, but that
-isolation must still reuse the same summary series set and timeline data rather
-than triggering a second page-local chart recomputation.
-That same hot-path rule now covers contextual row focus on those pages.
-That same hot-path ownership now also forbids hover-driven table movement.
-When a summary chart promotes one active entity, the matching row may highlight
-in place if it is already mounted and visible, but the hot path must not
-auto-scroll the page or rebuild the table into a one-row filtered view on
-transient hover. Off-screen reveal must stay behind an explicit `Jump to row`
-action routed through the shared summary-table focus bridge.
-That same hot-path contract also owns the row-emphasis paint. Dashboard guest
-rows and infrastructure resource rows must expose summary-linked activity
-through the shared `data-summary-row-active` marker and let the shared frontend
+That same hot-path ownership forbids hover-driven table movement on the
+workloads and storage tables. Row hover may highlight the matching row in
+place, but the hot path must not auto-scroll the page or rebuild the table
+into a one-row filtered view on transient hover; only a deliberate row focus
+may reveal an off-screen row, through the shared summary-table focus bridge.
+That same hot-path contract also owns the row-emphasis paint. Workload guest
+and group rows and storage pool, group, and disk rows must expose
+summary-linked activity through the shared `data-summary-row-active` marker and let the shared frontend
 primitive render the emphasis, instead of layering lane-local row-fill classes
 that diverge across pages or wash out inline metric bars.
 `frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts` must
@@ -2436,14 +2418,7 @@ write workload selection back into the workloads route through the shared
 same-path route-state scheduler, but the actual shell-position handoff for
 query-only row focus must go through `frontend-modern/src/utils/appShellScrollRestoration.ts`
 plus the root `frontend-modern/src/App.tsx` shell so opening a focused
-workload does not look like a full page reload, and the governed infrastructure and
-workloads summary surfaces must keep the summary page-scoped while that focus
-reuses the shared highlight contract; density maps may retain page-level
-context, but they must now also surface focused-entity detail inside the same
-card instead of dimming the rest of the map into unusable background noise or
-swapping the hot path into a transient single-series chart. Line-card
-isolation must still flow through the shared sparkline runtime instead of a
-page-local focus overlay. The shared same-path scheduler must also own cleanup
+workload does not look like a full page reload. The shared same-path scheduler must also own cleanup
 for every deferred scroll-restore timeout and animation frame it creates, so
 route-state cleanup cannot leave hot-path replay work running after the owning
 surface unmounts.
@@ -2452,12 +2427,13 @@ focus may mount drawer-local facet and intelligence fetches, but those
 requests must retain the mounted page shell through the shared non-suspending
 query helper instead of bubbling a transient `Loading view...` fallback through
 `AppLayout.tsx` when an inline infrastructure drawer opens.
-That same hot-path rule now has one shared runtime boundary. Interactive-series
-filtering, active-series derivation, focused-label lookup, and local
-scroll-preserving row focus must extend
-`frontend-modern/src/components/shared/contextualFocus.ts` instead of
-rebuilding page-local `Set` scans or scroll repair logic in dashboard,
-infrastructure, or workloads hot paths.
+That same hot-path rule now has one shared runtime boundary. Local
+scroll-preserving row focus and inline-detail reveal must extend
+`frontend-modern/src/components/shared/contextualFocus.ts`, and active-series
+derivation must stay in
+`frontend-modern/src/components/shared/summaryCardInteraction.ts` behind
+`summaryTableFocus.ts`, instead of rebuilding page-local `Set` scans or scroll
+repair logic in workloads, storage, or platform-table hot paths.
 That same hot-path ownership now also covers deliberate inline-detail reveal.
 When a focused workload or infrastructure row opens its inline detail, the hot
 path may preserve scroll across same-route state writes, but the actual reveal
@@ -2471,8 +2447,9 @@ fold, marking that movement as deliberate so route-state restore does not
 replay over it and then scrolling only enough to keep the row header plus the
 top of the detail visible instead of hard-centering every expansion.
 That same hot-path ownership now includes summary cache invalidation. A
-summary chart cache that hydrates charts for fast remounts, today the storage
-page's module-scoped `frontend-modern/src/utils/storageSummaryCache.ts`, must
+summary history cache that hydrates fast remounts, today the storage page's
+module-scoped `frontend-modern/src/utils/storageSummaryCache.ts` behind the
+pool Growth column and its sort, must
 carry the chart contract version in its key and advance it when the summary
 chart timeline contract changes, so a hot-reloaded or long-lived browser tab
 cannot rehydrate an older series set before the next live fetch completes.
@@ -2785,7 +2762,7 @@ the filter and presentation rails wrap-capable instead of forcing a single
 no-wrap row that clips trailing actions. The workload shell leaves Type,
 Status, dynamic scope, and contextual `Clear filters` actions on
 the primary filter rail. Durable presentation choices — grouped/list mode,
-bars/trends, chart visibility, Guest/Host memory basis, and Columns — pass
+bars/trends, Guest/Host memory basis, and Columns — pass
 their panel content through `FilterBar.viewOptions` instead of importing or
 wrapping `ViewOptionsDisclosure` in the workload feature or rendering as
 equally prominent filter toggles. The shared FilterBar owns the inline View
@@ -2808,10 +2785,13 @@ label so the values are not an orphaned set of durations. Columns must expand
 as a full-width responsive checkbox row inside the View disclosure instead of
 opening a nested absolute panel or a tall single-column desktop list. On
 Proxmox, the non-default Host basis must remain visible in the workload memory
-column header after the View disclosure closes. Workload chart
-visibility remains a display preference: its menu action must expose explicit
-`Show charts` / `Hide charts` pressed state, and hiding charts must remove the
-summary section rather than leaving an empty collapsed summary band on screen.
+column header after the View disclosure closes. No workload summary chart
+section renders today, so the chart-visibility control in
+`frontend-modern/src/components/Workloads/WorkloadsFilter.tsx` stays hidden
+(no surface passes `onChartsToggle`). If a summary section returns, that
+control must expose explicit `Show charts` / `Hide charts` pressed state, and
+hiding charts must remove the summary section rather than leaving an empty
+collapsed summary band on screen.
 The Workloads-owned filter-config assembly now lives in
 `frontend-modern/src/components/Workloads/useWorkloadsState.ts`, so future
 filter runtime changes must extend through those owners instead of

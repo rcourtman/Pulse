@@ -2,12 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 import {
-  getAgentLikeIdentityAliases,
   getAgentLikeMetadataIds,
   getPreferredConfiguredNodeLabel,
   getPreferredNamedEntityLabel,
   getPreferredNormalizedPlatformId,
-  getNormalizedIdentityLookupVariants,
   getInfrastructureDiscoveryHostname,
   getInfrastructureMetadataId,
   getPreferredResourceClusterName,
@@ -293,41 +291,6 @@ describe('resourceIdentity', () => {
     ).toBe(true);
   });
 
-  it('builds agent-like aliases for legacy summary/detail surfaces', () => {
-    const agent = {
-      id: 'agent-explicit',
-      hostname: 'tower.local',
-      displayName: 'Tower',
-      status: 'online',
-      lastSeen: Date.now(),
-      canonicalIdentity: {
-        hostname: 'tower.canonical',
-      },
-      platformData: {
-        linkedAgentId: 'agent-linked',
-        agent: {
-          agentId: 'agent-platform',
-          hostname: 'tower.internal',
-        },
-      },
-      discoveryTarget: {
-        resourceType: 'agent',
-        resourceId: 'agent-discovery',
-        agentId: 'agent-discovery',
-      },
-    } as unknown as Agent;
-
-    expect(getAgentLikeIdentityAliases(agent)).toEqual([
-      'agent-discovery',
-      'agent-platform',
-      'agent-linked',
-      'agent-explicit',
-      'tower.canonical',
-      'tower.local',
-      'tower.internal',
-    ]);
-  });
-
   it('builds agent-like metadata ids without hostnames', () => {
     const agent = {
       id: 'agent-explicit',
@@ -354,14 +317,6 @@ describe('resourceIdentity', () => {
       'agent-linked',
       'agent-explicit',
     ]);
-  });
-
-  it('builds normalized identity lookup variants for host-like values', () => {
-    expect(getNormalizedIdentityLookupVariants('tower.local')).toEqual(['tower.local', 'tower']);
-    expect(getNormalizedIdentityLookupVariants('Tower.Local')).toEqual(['tower.local', 'tower']);
-    expect(getNormalizedIdentityLookupVariants('tower')).toEqual(['tower']);
-    expect(getNormalizedIdentityLookupVariants('')).toEqual([]);
-    expect(getNormalizedIdentityLookupVariants(undefined)).toEqual([]);
   });
 
   it('resolves infrastructure metadata ids and discovery hostnames', () => {

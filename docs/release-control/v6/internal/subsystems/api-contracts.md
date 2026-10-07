@@ -3720,6 +3720,10 @@ a new API state machine, queue contract, or verification-accounting field.
     requested metric filters through the shared guest-chart batch loader in
     `internal/monitoring/monitor_metrics.go` instead of fetching the full guest
     metric set and trimming after the API payload is already assembled.
+    `ChartsAPI.getInfrastructureSummaryCharts` is the only frontend client for
+    `/api/charts/infrastructure`; the deprecated `getInfrastructureCharts`
+    alias, which could not pass `metrics`, is removed and must not return as a
+    second unfiltered entry point.
 39. Keep the retired compact dashboard overview route absent from that same
     shared API surface. `internal/api/resourceapi/resources.go`,
     `internal/api/router_routes_monitoring.go`, and
