@@ -1111,6 +1111,17 @@ The first reason renders in the desktop Health column on the row's single line,
 coloured by bucket, with a count for the rest and the full list in the title
 and screen-reader text. Phones keep the status dot and reach the reason through
 the row drawer. Health sorts by severity rank, not label text.
+Disk risk carries no heat, so the table judges it itself. A disk whose current
+reading has reached its type's alert disk temperature trigger is an Attention
+row with the reason "Disk temperature is 57°C, at or above its 55°C alert
+threshold.". The trigger comes from the alerts store's
+`getDiskTemperatureThresholds`, which the table passes to the row build,
+filter, counts, sort and issue. `isPhysicalDiskRunningHot` in
+`features/storageBackups/diskTemperaturePresentation.ts` makes the same call
+for the Physical Disks verdict. The heat reason follows any native TrueNAS
+alert text, and a hot disk's status dot turns warning though its source state
+stays `online`, because phones show only the dot.
+`truenasPageModel.test.ts` and `TrueNASStorageTopologyTable.test.tsx` pin it.
 The vSphere Datastores and Networks tables follow the same exception-first
 Health column. `getVmwareDatastoreIssue` and `getVmwareNetworkIssue` return
 nothing for a green row; otherwise the reasons are, in order, an impaired
@@ -1535,7 +1546,10 @@ When every node shares one cluster and none is standalone, the model drops
 the `cluster` column (it would repeat one value on every row) and
 `ProxmoxNodesTable` names that cluster in the table header instead, visible
 during search and independent of the inventory-count preference, so the
-cluster identity is never lost. Workload status buckets read the canonical
+cluster identity is never lost. Its Trends sparklines read node history
+through `useWorkloadTableMetricHistory` with `series: 'nodes'`; guest history
+stays with the embedded workloads table below it, so the nodes table adds no
+guest-history poll to the page. Workload status buckets read the canonical
 health too: a running workload whose unified health names an open
 `warning_alert` or `critical_alert` reason counts under Attention, while
 `backup_stale` and other non-alert reasons do not.
@@ -2269,6 +2283,22 @@ and temperature facts must also compose the frontend-primitives
 `InfoCardKeyValueRow`. Mobile rows retain their condensed endpoint layout;
 desktop rows use the shared fixed label track so labels and values remain
 visually adjacent instead of spanning the full drawer width.
+A standalone host agent past its reporting lease reaches the Machines table as
+`offline`, as described in "A push reporter past its lease is offline". The
+offline metric fallback blanks its CPU, memory, disk, network, disk I/O, uptime
+and temperature cells. The machine drawer drops a silent agent's uptime and
+marks its non-disk Thermals rows "(last known)" with the reason as title,
+keyed on `agent.stale` because those rows are that agent's own sensors. For SMART disk
+temperatures on rows that still render, the provenance travels on
+`agent.sensors.smart[].collection`: the Machines temperature cell
+(`AgentsMachinesTable.tsx`, `agentMachineTableModel.ts`), its tooltip and the
+drawer's Thermals rows (`resourceDetailMappers.ts`) read it through
+`isPhysicalDiskTemperatureCurrent`, so a retained disk reading never stands for
+the machine while another disk has a current one. A positive direct
+`temperature` or `temperatureCelsius` reading carries no collection state and
+still leads the cell. Without one, and with no current non-standby disk, the
+hottest retained non-standby disk reading shows as last known without
+threshold colour.
 The same boundary applies to availability facts, resource change-history
 metadata, Docker/PBS/PMG service facts, nested PMG queue/mail breakdowns, and
 Docker container-update management facts. It also covers action-history facts,
@@ -2973,7 +3003,10 @@ canonical WebSocket snapshot, including the public `vmware-vsphere` alias for
 the raw `vmware` source, rather than degrading a source-scoped page to periodic
 REST refreshes. VMware Overview passes that same source-scoped snapshot into
 the embedded Workloads state, so hosts and VMs share one inventory generation
-and one explicit refresh path.
+and one explicit refresh path. Beyond disabling the grouped host drawer, it
+passes no option that adds host metrics to grouped rows: the shared Workloads
+group row carries host identity only, and per-host stats stay in the page's
+own hosts table.
 Its page-owned workload toolbar consumes the complete shared
 `getWorkloadsMetricFilterProps` binding, so vSphere VMs expose the same Bars,
 Trends, Details, History, range, and first-use discovery contract as every
@@ -3542,8 +3575,8 @@ and otherwise `available`. The value is kept as last-known context; it is
 collected again only when a reporting host sends a positive reading for a disk
 that is no longer spun down. The Unraid-native disk row carries that state, and
 so does a SMART row that falls back to the inventory reading because it has
-none of its own. The adapter's risk assessment of an Unraid row no longer counts
-a withdrawn inventory temperature as heat.
+none of its own. The adapter's risk assessment of an Unraid row judges no
+temperature at all; heat belongs to the alert disk temperature policy.
 
 Cross-source correlation compares normalized serial and WWN values across
 fields without truncation, allowing a PVE bare-hex array-volume serial to join
@@ -4089,13 +4122,13 @@ incidents during cross-source merges. A provider alert such as TrueNAS
 `truenas_smart` is not presentation-only context; it must become a canonical
 `physicalDisk.risk.reasons` entry so hybrid agent/API disk resources keep one
 shared disk-health truth after deduplication.
-That shared risk contract judges only a collected temperature. Both the
-adapter assessment and the registry's recompute from merged metadata
-(`physicalDiskAssessmentFromMeta`) pass the temperature through
-`storagehealth.CollectedTemperature`, so a retained `unavailable`,
-`unsupported` or `missing` temperature stays visible as last-known evidence
-but adds no `temperature_high` reason and leaves the disk `online` rather
-than `warning`. Proof: `TestPhysicalDiskRiskIgnoresRetainedTemperature` in
+That shared risk contract never judges temperature, collected or retained.
+Heat belongs to the alert disk temperature policy, which no registry can see,
+so neither the adapter assessment nor the registry's recompute from merged
+metadata (`physicalDiskAssessmentFromMeta`) passes a temperature into
+`storagehealth`. A 72C disk keeps its reading on the resource, adds no
+`temperature_high` reason and stays `online`. Proof:
+`TestPhysicalDiskRiskNeverJudgesTemperature` in
 `internal/unifiedresources/registry_test.go`.
 That same canonical disk contract now also owns recent aggregate temperature
 history. When a provider such as TrueNAS can supply `disk.temperature_agg`
@@ -6038,6 +6071,34 @@ to that boolean. Identity succession continues to rekey the same state row.
 `resource_operator_state_policy_test.go` pin normalization, validation,
 round-trip persistence, attention suppression, and the retired remediation
 lock.
+
+### A push reporter past its lease is offline
+
+The host agent, Docker and Kubernetes collectors push their own reports, and
+the monitor marks the machine, Docker host or cluster offline only once its
+reporting lease runs out. Ingest records that verdict on the source's
+sighting, and `aggregateStatus` counts such a sighting as `offline` whatever
+its age. The stale pass used to rank the stale sighting above `offline`, so a
+silent standalone agent reached every consumer as `warning`. The Machines
+table then showed it amber with its last report rendered as current readings,
+while its own drawer led with a critical "Host is offline" alert. A Docker host
+was offline only until its sighting crossed the 120-second stale threshold,
+then flipped to `warning`. With this rule, such rows take the existing
+offline treatment: frontend danger gates, the health verdict's `offline`
+reason, offline filters and counts.
+
+`SourceStatus.Status` keeps describing delivery freshness, so the sighting
+still reads `stale`. Health keeps its `telemetry_stale` reason, and
+monitored-system reasons are unchanged. A live source still carries a merged
+row: a Proxmox node whose linked agent stopped reporting stays `online` through
+the PVE poll. Pull sources (Proxmox, PBS, PMG, TrueNAS, vSphere) and the
+resources push collectors report about (guests, containers, pods, disks) keep
+the stale-to-warning rule. A JSON copy re-derives the unexported marker from
+its stored status in `IngestResources`, and a manual link that joins two
+resources reported by one source keeps the fresher sighting. The tests in
+`registry_merge_policy_test.go` pin the agent, Docker, Kubernetes,
+mixed-source, round-trip and manual-link cases, plus the boundaries that stay
+unchanged.
 
 ### Canonical object drawer hierarchy
 

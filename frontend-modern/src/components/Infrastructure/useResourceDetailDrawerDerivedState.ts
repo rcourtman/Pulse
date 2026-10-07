@@ -35,6 +35,7 @@ import type { ResourceIntelligence } from '@/types/aiIntelligence';
 import {
   buildCustomSensorRows,
   buildTemperatureRows,
+  HOST_AGENT_STOPPED_REPORTING_REASON,
   toAgentFromResource,
   toNodeFromProxmox,
   type AgentPlatformData,
@@ -201,7 +202,13 @@ export const useResourceDetailDrawerDerivedState = (
       [],
   );
   const agentInfo = createMemo(() => toAgentFromResource(resource(), agentMeta()));
-  const temperatureRows = createMemo(() => buildTemperatureRows(agentInfo()?.sensors));
+  // A silent agent's sensors are its last report, even on a row another
+  // source keeps online.
+  const temperatureRows = createMemo(() =>
+    buildTemperatureRows(agentInfo()?.sensors, {
+      lastKnownReason: resource().agent?.stale ? HOST_AGENT_STOPPED_REPORTING_REASON : undefined,
+    }),
+  );
   const customSensorRows = createMemo(() => buildCustomSensorRows(agentInfo()?.sensors));
 
   const dockerHostData = createMemo(() => platformData()?.docker as DockerPlatformData | undefined);

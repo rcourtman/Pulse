@@ -191,7 +191,7 @@ func (h *ReportingHandlers) getRuntimeStateSnapshot(ctx context.Context, orgID s
 				Type:        disk.DiskType,
 				Size:        disk.SizeBytes,
 				Health:      disk.Health,
-				Temperature: disk.Temperature,
+				Temperature: reportDiskTemperature(*disk),
 				WearLevel:   disk.Wearout,
 			})
 		}

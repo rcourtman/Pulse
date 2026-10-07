@@ -536,7 +536,7 @@ func TestMergeHostAgentSMARTIntoDisks_LegacyAgentTemperatureFollowsLease(t *test
 	if reporting.Temperature != 38 || reporting.Collection.Temperature != diskinventory.Available(hostAgentLegacySource) {
 		t.Fatalf("legacy agent temperature not recorded as collected: temp=%d collection=%+v", reporting.Temperature, reporting.Collection)
 	}
-	if !diskTemperatureCollected(reporting.Temperature, reporting.Collection) {
+	if !diskinventory.TemperatureCollected(reporting.Temperature, reporting.Collection) {
 		t.Fatal("a reporting legacy agent's temperature must reach history")
 	}
 
@@ -549,7 +549,7 @@ func TestMergeHostAgentSMARTIntoDisks_LegacyAgentTemperatureFollowsLease(t *test
 		if got.Temperature != 38 || got.Collection.Temperature.State != diskinventory.FieldUnavailable {
 			t.Fatalf("%s: silent legacy agent temperature presented as collected: temp=%d collection=%+v", name, got.Temperature, got.Collection)
 		}
-		if diskTemperatureCollected(got.Temperature, got.Collection) {
+		if diskinventory.TemperatureCollected(got.Temperature, got.Collection) {
 			t.Fatalf("%s: a silent legacy agent's retained temperature must not reach history", name)
 		}
 	}

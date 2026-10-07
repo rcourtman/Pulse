@@ -809,6 +809,14 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 				}
 			}
 		}
+		// The lease marker is unexported, so a persisted or serialized copy
+		// arrives without it. Its stored status still carries the verdict.
+		for source, status := range resource.SourceStatus {
+			if !status.leaseExpired && reportingLeaseExpired(source, *resource) {
+				status.leaseExpired = true
+				resource.SourceStatus[source] = status
+			}
+		}
 
 		rr.mu.Lock()
 		rr.canonicalIdentityIndex = nil
@@ -1754,6 +1762,29 @@ func sourceSightingStatus(lastSeen time.Time) string {
 		return "unknown"
 	}
 	return "online"
+}
+
+// reportingLeaseExpired reports whether a source delivered the machine,
+// Docker host or Kubernetes cluster it reports for as offline. Those
+// collectors push their own reports, and Pulse marks the reporter offline
+// only once its reporting lease runs out (evaluateHostAgents,
+// evaluateDockerAgents, evaluateKubernetesAgents). The registry's stale
+// threshold is a different clock: it can mark the sighting stale before
+// the lease ends, or leave it fresh after, so it must not decide the status.
+// Resources those sources describe (guests, containers, pods, disks) are
+// not lease holders and keep the stale-to-warning rule.
+func reportingLeaseExpired(source DataSource, resource Resource) bool {
+	if resource.Status != StatusOffline {
+		return false
+	}
+	switch source {
+	case SourceAgent, SourceDocker:
+		return resource.Type == ResourceTypeAgent
+	case SourceK8s:
+		return resource.Type == ResourceTypeK8sCluster
+	default:
+		return false
+	}
 }
 
 func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSource]time.Duration) {
@@ -2848,6 +2879,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	sighting := resource.SourceStatus[source]
 	sighting.Status = sourceSightingStatus(resource.LastSeen)
 	sighting.LastSeen = resource.LastSeen
+	sighting.leaseExpired = reportingLeaseExpired(source, resource)
 	resource.SourceStatus = map[DataSource]SourceStatus{source: sighting}
 	resource.parentBySource = make(map[DataSource]string)
 	rr.setSourceParent(&resource, source, resource.ParentID)
@@ -3788,6 +3820,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	sighting := incoming.SourceStatus[source]
 	sighting.Status = sourceSightingStatus(incoming.LastSeen)
 	sighting.LastSeen = incoming.LastSeen
+	sighting.leaseExpired = reportingLeaseExpired(source, incoming)
 	existing.SourceStatus[source] = sighting
 
 	if incoming.LastSeen.After(existing.LastSeen) {
@@ -4459,6 +4492,12 @@ func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource
 		primary.SourceStatus = make(map[DataSource]SourceStatus)
 	}
 	for source, status := range other.SourceStatus {
+		// Linked resources can share a source, such as an agent reinstalled
+		// under a new id. Keep the fresher sighting so a stale or expired one
+		// cannot override a reporter that is still live.
+		if current, ok := primary.SourceStatus[source]; ok && current.LastSeen.After(status.LastSeen) {
+			continue
+		}
 		primary.SourceStatus[source] = status
 	}
 	if other.LastSeen.After(primary.LastSeen) {
@@ -5827,14 +5866,22 @@ func aggregateStatus(resource *Resource) ResourceStatus {
 	best := StatusUnknown
 	bestScore := 0
 	for _, status := range resource.SourceStatus {
-		score := statusPriority[strings.ToLower(status.Status)]
+		state := strings.ToLower(strings.TrimSpace(status.Status))
+		// A reporter past its lease is offline, not merely late. Ranking its
+		// stale sighting above offline would show a silent machine as a
+		// warning while its retained readings render as current.
+		if status.leaseExpired {
+			state = "offline"
+		}
+		score := statusPriority[state]
 		if score > bestScore {
 			bestScore = score
-			if status.Status == "online" {
+			switch state {
+			case "online":
 				best = StatusOnline
-			} else if status.Status == "stale" {
+			case "stale":
 				best = StatusWarning
-			} else if status.Status == "offline" {
+			case "offline":
 				best = StatusOffline
 			}
 		}

@@ -495,7 +495,6 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
     // surface, so label it with the platform vocabulary instead of 'Info'.
     columnLabelOverrides: { info: 'ID' },
     statusModeStorageScope: PROXMOX_WORKLOAD_STATUS_STORAGE_SCOPE,
-    compactGroupHeaders: true,
     groupNodeDrawerMode: 'disabled',
     metricDisplayMode: props.metricDisplayMode,
     onMetricDisplayModeChange: props.setMetricDisplayMode,
@@ -638,7 +637,6 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
           forcedPlatform={PROXMOX_PLATFORM_FILTER}
           excludedWorkloadTypes={PROXMOX_WORKLOAD_EXCLUDED_TYPES}
           showNestedExcludedWorkloads
-          compactGroupHeaders
           groupNodeDrawerMode="disabled"
           suppressFilterToolbar
           emptyStateTitle="No Proxmox workloads"
