@@ -449,17 +449,20 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 	evaluatesSummaryDisk := false
 	summaryDiskLive := false
-	if len(host.Sensors.SMART) > 0 {
-		for _, disk := range host.Sensors.SMART {
-			diskResourceID, diskName := hostSMARTDiskResourceID(host, disk)
-			if host.LinkedNodeID == "" {
-				seenDisks[diskResourceID] = struct{}{}
+	if host.LinkedNodeID != "" {
+		// Preserve node ownership even when this report carries no SMART list.
+		m.clearHostSMARTDiskAlerts(host.ID)
+	} else {
+		var seenSMARTDisks map[string]struct{}
+		if len(host.Sensors.SMART) > 0 {
+			seenSMARTDisks = make(map[string]struct{}, len(host.Sensors.SMART))
+			for _, disk := range host.Sensors.SMART {
+				diskResourceID, diskName := hostSMARTDiskResourceID(host, disk)
+				seenSMARTDisks[diskResourceID] = struct{}{}
 				m.syncHostSMARTDiskRiskAlerts(host, disk, diskResourceID, diskName, nodeName, instanceName, baseMetadata, thresholds)
-				continue
 			}
-			m.syncHostSMARTDiskAlert(host, disk, diskResourceID, diskName, nodeName, instanceName, baseMetadata, "disk-health", nil)
-			m.syncHostSMARTDiskAlert(host, disk, diskResourceID, diskName, nodeName, instanceName, baseMetadata, "disk-wearout", nil)
 		}
+		m.cleanupHostSMARTDiskAlerts(host.ID, seenSMARTDisks, thresholds)
 	}
 
 	for _, disk := range host.Disks {
@@ -728,6 +731,7 @@ func (m *Manager) HandleHostTelemetryExpired(host models.Host) {
 
 	// Expiry interrupts timing, not the separate connectivity confirmation.
 	m.interruptHostDiskTemperatureRuns(host.ID)
+	m.resetHostSMARTDiskAbsences(host.ID)
 
 	if host.Unraid != nil {
 		unraid := *host.Unraid
@@ -984,6 +988,7 @@ func (m *Manager) clearHostDiskAlerts(hostID string) {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.resetHostSMARTDiskAbsencesNoLock(hostID)
 
 	for storageKey, alert := range m.activeAlerts {
 		alertID := effectiveAlertID(alert, storageKey)
@@ -1400,6 +1405,10 @@ func (m *Manager) cleanupHostDiskAlerts(host models.Host, seen map[string]struct
 		if !matches {
 			continue
 		}
+		// SMART health and wear follow their own inventory, not filesystems.
+		if isHostSMARTRiskAlertType(alert.Type) {
+			continue
+		}
 		if _, exists := seen[alert.ResourceID]; exists {
 			continue
 		}
@@ -1408,25 +1417,15 @@ func (m *Manager) cleanupHostDiskAlerts(host models.Host, seen map[string]struct
 }
 
 func (m *Manager) syncHostSMARTDiskRiskAlerts(host models.Host, disk models.HostDiskSMART, resourceID, resourceName, nodeName, instanceName string, baseMetadata map[string]interface{}, thresholds ThresholdConfig) {
-	smartThresholds := storagehealth.SMARTThresholds{
-		HealthFailure:        intValue(thresholds.SMARTHealthFailure) > 0,
-		ReallocatedSectors:   int64Value(thresholds.SMARTReallocated),
-		PendingSectors:       int64Value(thresholds.SMARTPending),
-		OfflineUncorrectable: int64Value(thresholds.SMARTUncorrectable),
-		MediaErrors:          int64Value(thresholds.SMARTMediaErrors),
-		LifeWarning:          intValue(thresholds.SMARTLifeWarning),
-		LifeCritical:         intValue(thresholds.SMARTLifeCritical),
-		AvailableSpareWarn:   intValue(thresholds.SMARTSpareWarning),
-		AvailableSpareCrit:   intValue(thresholds.SMARTSpareCritical),
-	}
+	smartThresholds, crcMinimumDelta := hostSMARTRiskThresholds(thresholds)
 	assessment := storagehealth.AssessHostSMARTDiskWithThresholds(disk, smartThresholds)
-	assessment.Reasons = append(assessment.Reasons, m.hostSMARTCounterGrowthReasons(resourceID, disk, int64Value(thresholds.SMARTCRCErrorDelta))...)
+	assessment.Reasons = append(assessment.Reasons, m.hostSMARTCounterGrowthReasons(resourceID, disk, crcMinimumDelta)...)
 	healthReasons, wearReasons := splitSMARTAlertReasons(assessment.Reasons)
 
-	if m.hostSMARTDiskAlertEvidenceKnown(resourceID, "disk-health", disk, healthReasons, smartThresholds, int64Value(thresholds.SMARTCRCErrorDelta)) {
+	if m.hostSMARTDiskAlertEvidenceKnown(resourceID, "disk-health", disk, healthReasons, smartThresholds, crcMinimumDelta) {
 		m.syncHostSMARTDiskAlert(host, disk, resourceID, resourceName, nodeName, instanceName, baseMetadata, "disk-health", healthReasons)
 	}
-	if m.hostSMARTDiskAlertEvidenceKnown(resourceID, "disk-wearout", disk, wearReasons, smartThresholds, int64Value(thresholds.SMARTCRCErrorDelta)) {
+	if m.hostSMARTDiskAlertEvidenceKnown(resourceID, "disk-wearout", disk, wearReasons, smartThresholds, crcMinimumDelta) {
 		m.syncHostSMARTDiskAlert(host, disk, resourceID, resourceName, nodeName, instanceName, baseMetadata, "disk-wearout", wearReasons)
 	}
 }

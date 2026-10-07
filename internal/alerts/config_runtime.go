@@ -102,6 +102,7 @@ func (m *Manager) UpdateConfig(config AlertConfig) {
 
 	// Re-evaluate active alerts against new thresholds
 	m.reevaluateActiveAlertsLocked()
+	m.pruneHostSMARTDiskAbsencesNoLock()
 }
 
 // migrateActivationState handles backward compatibility for activation state.
@@ -433,6 +434,13 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			thresholds := m.resolveHostAlertThresholdsNoLock(alert, resourceID)
 			if thresholds.Disabled {
 				alertsToResolve = append(alertsToResolve, alertID)
+				continue
+			}
+			if isHostSMARTRiskAlertType(metricType) {
+				smartThresholds, crcMinimumDelta := hostSMARTRiskThresholds(thresholds)
+				if hostSMARTRiskRulesOff(alert, smartThresholds, crcMinimumDelta) {
+					alertsToResolve = append(alertsToResolve, alertID)
+				}
 				continue
 			}
 			threshold = getThresholdForMetric(thresholds, metricType)

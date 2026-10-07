@@ -3849,3 +3849,30 @@ valid/legacy/provenance controls, missing/rejected/expiry gaps on both timing
 edges, explicit grace, acknowledgement/event preservation, host isolation,
 configuration intervals, override precedence and departure. These deterministic
 source tests do not establish installed temperatures or native guest recovery.
+
+### SMART risk inventory gaps and disabled rules
+
+Agent `disk-health` and `disk-wearout` alerts follow the SMART inventory, not
+filesystem usage cleanup. Empty inventory, standby and unobserved risk fields
+hold the existing occurrence and acknowledgement without recovery/refiring.
+Departure requires three consecutive non-empty reports omitting the disk;
+listing it again, an empty inventory or reporting-lease expiry restarts that
+confirmation. Both risk families on the same disk count once per report.
+Filesystem absence still resolves usage on its first missing report. Temperature
+pending/grace/recovery interruption and departure semantics remain unchanged.
+
+Disabling every recorded cause releases that risk alert without a reading,
+both on a configuration save and on an empty report. Partially enabled causes,
+missing legacy cause metadata and unknown codes remain conservative. Re-enabling
+cannot raise an alert from absent evidence; fresh bad evidence starts a new
+occurrence. Node linking retains existing node ownership, including when the
+agent's SMART inventory is empty; host removal and policy disablement release
+agent risk state and stale absence counts. Counts are ephemeral and restart
+conservatively after a process restart.
+
+`TestHostSMARTRisk*` in `host_unraid_lifecycle_test.go` exercises actual `CheckHost`, expiry, configuration
+save, firing/recovery callbacks and event history with synthetic telemetry.
+It covers both families sharing a disk, interruption/reconfirmation, partial
+rule disablement, re-enablement, legacy/unknown causes, filesystem and host
+isolation, removal and node-link ownership. These are source lifecycle controls,
+not collector, smartctl, installed notification or native disk-recovery proof.
