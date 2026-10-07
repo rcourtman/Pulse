@@ -6852,3 +6852,90 @@ above the hosts table without its filter toolbar. Nothing renders when
 vCenter reports no signals. The Overview's own model, workload snapshot and
 navigation facets still come from the Overview query; the Health tab keeps
 the filterable table.
+
+### Unlink replaces the pair's operator link
+
+`POST /api/resources/{id}/link` records a `ResourceLink`; unlink and
+report-merge record a `ResourceExclusion`. An operator decides each resource
+pair one way, and the later decision replaces the earlier: the store's
+`AddExclusion` deletes the pair's link rows and `AddLink` deletes its
+exclusion rows, in the same transaction as the write, matching both ID
+orders because canonical-ID succession can store either. Unlink used to add
+only the exclusion. The link row survived, and `applyManualLinks`, which
+never consults exclusions, kept the pair folded in the monitor's rebuilds and
+in the resources API's registry, so the agent facet stayed on the VM and the
+agent row stayed hidden although the API answered "Resources unlinked".
+`GetLinks` and `GetExclusions` return only each pair's latest decision
+(`effectiveManualPairDecisions` in `manual_link_decisions.go`), so a store
+that still holds both rows for a pair, written before this change or
+rewritten onto one pair by succession, reads its later write, and a tie
+reads as apart. Every registry loads its links and exclusions from its store
+when it is constructed, so the monitor's rebuild and the resources API's
+store-backed registry apply one decision with no exclusion check in
+`applyManualLinks`. Unlink keeps the exclusion, so identity matching and
+presentation coalescing also keep a pair apart that would otherwise match
+automatically.
+
+Identity pins honour the exclusion too. While a Proxmox node was linked to a
+standalone agent, the merged resource's pin could record the node's endpoint
+hostname with the agent's machine key. After unlink the node completed that
+key in `completeIdentityFromPins`, minted the agent's machine-derived ID and
+folded into the agent by ID, a path no exclusion check sees, so the pair
+stayed merged with the link row gone. A pin whose canonical ID the operator
+excluded from the ID the record takes without the pin (its `chooseNewID` or
+source-specific ID) now completes nothing. This covers pins already written
+that way, not only new ones. Merges through an agent's own declared node link
+(`resolveLinkedResource`) still ignore exclusions.
+
+The resources API seeds its registry from the monitor's listing, which
+already has the link applied, so it cannot split the pair itself: an unlink
+shows on REST, `/api/state` and the websocket from the monitor's next
+registry rebuild, the same generation in which a new link reaches the
+broadcast. REST applies a new link at once, because its own registry applies
+the store's links on top of the seed. The mock-mode view applies no operator
+links, so in mock mode REST splits a manually linked pair as soon as the
+unlink is recorded. Mock fixtures that identity matching merged stay merged
+on every surface: the fixture graph is built without the store's exclusions.
+
+The websocket broadcast coalesced host views with
+`CoalescePresentationHostResources`, which honours no exclusions, while the
+resources API's `ListForPresentation` honours the registry's, so a host pair
+the operator split could be one broadcast row and two REST rows. The
+broadcast now coalesces through `Monitor.coalesceResourcesForPresentation`,
+which asks the read state that listed the rows for
+`MonitorAdapter.CoalesceForPresentation` when its registry is store-backed
+(the resource store's adapter, or a host-continuity overlay that loaded the
+store's exclusions afresh). The mock view and other views built from an
+already-unified list sit on a store-less registry, which declines, so the
+resource store's adapter supplies the exclusions instead. Either applies its
+current registry's exclusions through the same `presentationExclusionFilter`
+that `ListForPresentation` uses; a rebuild published between listing the
+rows and coalescing them is judged by the newer generation's exclusions for
+that one broadcast. Both surfaces share one known limit: the filter compares
+the IDs of the rows being merged, so a third same-host fragment that merges
+first can carry an excluded pair into one row.
+
+A write leaves one row for its pair: `AddLink` and `AddExclusion` also delete
+a row of their own kind that succession stored in the other order, and the
+in-memory store replaces a pair's rows on every write and stamps `CreatedAt`
+as SQLite does. Reads keep the newest link per pair, so an older reversed copy
+cannot win with its primary, and drop exclusions older than it; duplicate
+exclusions already stored stay, which changes no decision. A registry resolves its `GetLinks` and `GetExclusions` results
+together in `loadOverrides`, so an unlink committed between the two reads
+cannot load both decisions for one generation. Report-merge still records
+exclusions against candidate IDs derived from the merged resource's type,
+which do not name the folded side of a cross-type manual link, so it does not
+undo such a link; unlink does. `TestManualPairDecisionReplacesThePreviousOne` and
+`TestManualPairDecisionReadsResolveStoredConflictsByRecency` pin the store
+rule on SQLite and the in-memory store,
+`TestUnlinkSplitsHostPairWhosePinTookTheOtherSidesKey` links and unlinks
+node and agent pairs (IP and FQDN endpoints, either side primary) through
+three monitor rebuilds per step,
+`TestRegistryResolvesDecisionsAcrossItsTwoReads` loads a link read before an
+unlink and the exclusion read after it,
+`TestResourceUnlinkSplitsManuallyLinkedPair` drives link, unlink and relink
+through the API handlers against a monitor adapter rebuilt twice per step,
+and `TestMonitorAdapterCoalesceForPresentationHonoursExclusions`,
+`TestBroadcastPresentationCoalesceHonoursMergeExclusions` and
+`TestBroadcastPresentationCoalescePrefersTheListingReadState` pin broadcast
+and REST row counts for a split host pair.

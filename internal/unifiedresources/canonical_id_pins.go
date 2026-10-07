@@ -239,7 +239,12 @@ func (rr *ResourceRegistry) loadIdentityPins() {
 // knows cluster+hostname) still derives the same canonical ID as a steady
 // state rebuild that knows the machine ID. Only missing fields are filled; an
 // incoming identity that already carries a machine ID is never overridden.
-func (rr *ResourceRegistry) completeIdentityFromPins(source DataSource, resource Resource, identity ResourceIdentity) ResourceIdentity {
+// A pin of a resource the operator split from this record (unlink or
+// report-merge) completes nothing: the record would mint the pinned
+// resource's machine-derived ID and fold into it by ID, which no exclusion
+// check sees. A node pin that took a linked agent's machine key kept the pair
+// merged after unlink that way.
+func (rr *ResourceRegistry) completeIdentityFromPins(source DataSource, sourceID string, resource Resource, identity ResourceIdentity) ResourceIdentity {
 	if CanonicalResourceType(resource.Type) != ResourceTypeAgent {
 		return identity
 	}
@@ -254,6 +259,12 @@ func (rr *ResourceRegistry) completeIdentityFromPins(source DataSource, resource
 		pin, ok = rr.identityPins.find(identity)
 	}
 	if !ok {
+		return identity
+	}
+	// The exclusion names the IDs the record holds without the pin.
+	if len(rr.exclusions) > 0 &&
+		(rr.isExcluded(pin.CanonicalID, rr.chooseNewID(resource.Type, identity, source, sourceID)) ||
+			rr.isExcluded(pin.CanonicalID, rr.sourceSpecificID(resource.Type, source, sourceID))) {
 		return identity
 	}
 	if strings.TrimSpace(identity.MachineID) == "" {

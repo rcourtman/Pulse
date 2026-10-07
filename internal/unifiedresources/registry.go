@@ -233,6 +233,9 @@ func (rr *ResourceRegistry) loadOverrides() {
 	}
 	exclusions, err := rr.store.GetExclusions()
 	if err == nil {
+		// An unlink or link landing between the two reads would load both
+		// decisions for its pair (manual_link_decisions.go).
+		rr.links, exclusions = effectiveManualPairDecisions(rr.links, exclusions)
 		for _, exclusion := range exclusions {
 			key := exclusionKey(exclusion.ResourceA, exclusion.ResourceB)
 			rr.exclusions[key] = struct{}{}
@@ -1432,23 +1435,7 @@ func (rr *ResourceRegistry) listMaterialized(withTargets bool) ([]Resource, map[
 // merge exclusions.
 func (rr *ResourceRegistry) ListForPresentation() []Resource {
 	resources := rr.List()
-
-	rr.mu.RLock()
-	exclusions := make(map[string]struct{}, len(rr.exclusions))
-	for key := range rr.exclusions {
-		exclusions[key] = struct{}{}
-	}
-	rr.mu.RUnlock()
-
-	return CoalescePresentationHostResourcesWithExclusions(resources, func(left, right Resource) bool {
-		leftID := CanonicalResourceID(left.ID)
-		rightID := CanonicalResourceID(right.ID)
-		if leftID == "" || rightID == "" {
-			return false
-		}
-		_, ok := exclusions[exclusionKey(leftID, rightID)]
-		return ok
-	})
+	return CoalescePresentationHostResourcesWithExclusions(resources, rr.presentationExclusionFilter())
 }
 
 // ListByType returns all resources of the provided type.
@@ -2923,7 +2910,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	// pulse-agent's pin on a same-named host) completing the identity would
 	// re-merge systems the connection scoping keeps apart.
 	if source != SourceTrueNAS {
-		identity = rr.completeIdentityFromPins(source, resource, identity)
+		identity = rr.completeIdentityFromPins(source, sourceID, resource, identity)
 	}
 	resource.Identity = identity
 	resource.Sources = []DataSource{source}

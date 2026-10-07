@@ -4478,7 +4478,7 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshotWithClock(snapshot mode
 	if metricsTargetResolver == nil {
 		metricsTargetResolver = broadcastMetricsTargetResolver(unifiedView.readState)
 	}
-	broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)
+	broadcastResources := m.coalesceResourcesForPresentation(unifiedView.readState, unifiedView.resources)
 	// Coalescing owns the outer slice. Decorate that one projection in place,
 	// not three full-resource copies; nested store data is still read-only.
 	healthAlerts := resourceHealthAlerts(frontendState.ActiveAlerts)
@@ -4499,6 +4499,39 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshotWithClock(snapshot mode
 		frontendState.LastUpdate = unifiedView.freshness.UnixMilli()
 	}
 	return frontendState
+}
+
+// presentationCoalescingResourceStore is implemented by resource stores whose
+// registry can hold the operator's merge exclusions (MonitorAdapter).
+type presentationCoalescingResourceStore interface {
+	CoalesceForPresentation(resources []unifiedresources.Resource) ([]unifiedresources.Resource, bool)
+}
+
+// coalesceResourcesForPresentation applies the presentation host coalesce with
+// the operator's merge exclusions, which the resources API's
+// ListForPresentation honours too: a host pair the operator split must not
+// show as one broadcast row while REST lists two. The read state that listed
+// the rows supplies them when its registry is store-backed, as the resource
+// store's adapter and a host-continuity overlay are; the mock view and other
+// views built from an unified list carry none, so the resource store's
+// adapter supplies them instead.
+func (m *Monitor) coalesceResourcesForPresentation(readState unifiedresources.ReadState, resources []unifiedresources.Resource) []unifiedresources.Resource {
+	if coalescer, ok := readState.(presentationCoalescingResourceStore); ok {
+		if coalesced, ok := coalescer.CoalesceForPresentation(resources); ok {
+			return coalesced
+		}
+	}
+	if m != nil {
+		m.mu.RLock()
+		store := m.resourceStore
+		m.mu.RUnlock()
+		if coalescer, ok := store.(presentationCoalescingResourceStore); ok {
+			if coalesced, ok := coalescer.CoalesceForPresentation(resources); ok {
+				return coalesced
+			}
+		}
+	}
+	return unifiedresources.CoalescePresentationHostResources(resources)
 }
 
 // GetLiveStateSnapshot returns the underlying monitor state snapshot without

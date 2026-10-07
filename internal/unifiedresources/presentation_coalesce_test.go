@@ -358,6 +358,56 @@ func TestCoalescePresentationHostResourcesWithExclusionsHonorsManualSplit(t *tes
 	}
 }
 
+// The broadcast coalesces through the adapter, the resources API through
+// ListForPresentation. Both must keep a host pair the operator split apart.
+func TestMonitorAdapterCoalesceForPresentationHonoursExclusions(t *testing.T) {
+	now := time.Date(2026, 10, 7, 21, 0, 0, 0, time.UTC)
+	resources := []Resource{
+		{
+			ID: "agent-runtime-alpha", Type: ResourceTypeAgent, Name: "alpha", Status: StatusOnline, LastSeen: now,
+			Sources:  []DataSource{SourceAgent},
+			Identity: ResourceIdentity{Hostnames: []string{"alpha"}},
+			Agent:    &AgentData{AgentID: "agent-alpha", Hostname: "alpha"},
+		},
+		{
+			ID: "agent-docker-alpha", Type: ResourceTypeAgent, Name: "alpha", Status: StatusOnline, LastSeen: now,
+			Sources:  []DataSource{SourceDocker},
+			Identity: ResourceIdentity{Hostnames: []string{"alpha"}},
+			Docker:   &DockerData{Hostname: "alpha"},
+		},
+	}
+	for _, split := range []bool{false, true} {
+		store := NewMemoryStore()
+		if split {
+			if err := store.AddExclusion(ResourceExclusion{ResourceA: "agent-docker-alpha", ResourceB: "agent-runtime-alpha"}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		registry := NewRegistry(store)
+		registry.IngestResources(resources)
+		adapter := NewMonitorAdapter(registry)
+		want := 1
+		if split {
+			want = 2
+		}
+		rows, ok := adapter.CoalesceForPresentation(adapter.GetAll())
+		if !ok || len(rows) != want {
+			t.Fatalf("split=%v: adapter coalesced %d rows (ok=%v), want %d", split, len(rows), ok, want)
+		}
+		if got := len(registry.ListForPresentation()); got != want {
+			t.Fatalf("split=%v: ListForPresentation gave %d rows, want %d", split, got, want)
+		}
+	}
+
+	// A registry without a store holds no operator decisions, so it declines
+	// rather than coalescing as if none existed.
+	storeless := NewRegistry(nil)
+	storeless.IngestResources(resources)
+	if _, ok := NewMonitorAdapter(storeless).CoalesceForPresentation(resources); ok {
+		t.Fatal("a store-less adapter claimed to carry operator decisions")
+	}
+}
+
 // A Proxmox node whose Pulse Agent has gone offline must show the live PVE CPU,
 // not the agent's last (0) reading. The agent is the presentation primary, so
 // without a freshness gate its stale 0 CPU was kept and the live value dropped.
