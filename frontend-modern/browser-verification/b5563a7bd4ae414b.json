@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "dcd409f9da0a7a7f35a2a4ad5a4354e0b1d3ee44",
+  "verified_at": "2026-10-07T10:50:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/format.ts",
+    "frontend-modern/src/utils/status.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/format.ts": "7fe003f3aba64378896fc55a810e54642962296c14b2445335cd684dc7c26268",
+    "frontend-modern/src/utils/status.ts": "87df830a90ba87d28b74910244b1a8e2870cb2fcc6057c95207656860795fc94"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/docker"
+  ],
+  "viewports": [
+    {
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production vite build of this tree is byte-identical (sha256 of every dist file) to the build of its parent dcd409f9da, because both removed exports were already tree-shaken; served embedded by a private DEMO_MODE mock backend on its own port",
+    "Proxmox overview workloads table at 1920: 161 guest rows, 512 Net I/O and Disk I/O values with top-outlier emphasis on 6 of them; at 390: 45 guest rows render with I/O columns hidden as before",
+    "Docker containers inline resource drawer for branch-portal-3 (REST list and websocket frames edited in Playwright to carry its real change history plus widened facet counts): Change history shows all nine facet badges with no +N chip, one line at 1440 and four wrapped lines at 390, no clipped badge",
+    "Console shows only the 401 and inline-style CSP messages the origin/main build also logs on these routes"
+  ],
+  "interactions": [
+    "Demo auto sign-in, then direct navigation to /proxmox/overview and /docker",
+    "Typed branch-portal-3 into Search containers and clicked its row to open the inline resource drawer, then scrolled the Change history facet summary into view"
+  ]
+}
