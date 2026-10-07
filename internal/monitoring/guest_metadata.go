@@ -135,8 +135,12 @@ func (m *Monitor) scheduleNextGuestMetadataFetch(key string, now time.Time) {
 		interval = config.DefaultGuestMetadataMinRefresh
 	}
 	jitter := m.guestMetadataRefreshJitter
-	if jitter > 0 && m.rng != nil {
-		interval += time.Duration(m.rng.Int63n(int64(jitter)))
+	if jitter > 0 {
+		m.rngMu.Lock()
+		if m.rng != nil {
+			interval += time.Duration(m.rng.Int63n(int64(jitter)))
+		}
+		m.rngMu.Unlock()
 	}
 	m.guestMetadataLimiterMu.Lock()
 	m.guestMetadataLimiter[key] = now.Add(interval)
