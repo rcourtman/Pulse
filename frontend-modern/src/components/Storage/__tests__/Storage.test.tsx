@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI } from '@/api/charts';
 import storageSummarySource from '@/components/Storage/useStorageSummaryCharts.ts?raw';
@@ -57,6 +58,9 @@ if (typeof HTMLCanvasElement.prototype.getContext === 'function') {
 
 let mockLocationSearch = '';
 let mockLocationPath = '/proxmox/storage';
+// Most tests read a location snapshot; set liveLocation to follow in-app navigation.
+let liveLocation = false;
+const [locationVersion, setLocationVersion] = createSignal(0);
 const navigateSpy = vi.fn();
 
 let wsConnected = true;
@@ -296,7 +300,19 @@ vi.mock('@solidjs/router', async () => {
   const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
   return {
     ...actual,
-    useLocation: () => ({ pathname: mockLocationPath, search: mockLocationSearch }),
+    useLocation: () =>
+      liveLocation
+        ? {
+            get pathname() {
+              locationVersion();
+              return mockLocationPath;
+            },
+            get search() {
+              locationVersion();
+              return mockLocationSearch;
+            },
+          }
+        : { pathname: mockLocationPath, search: mockLocationSearch },
     useNavigate: () => navigateSpy,
   };
 });
@@ -388,6 +404,7 @@ describe('Storage', () => {
     fetchMock.mockClear();
     mockLocationPath = '/proxmox/storage';
     mockLocationSearch = '';
+    liveLocation = false;
     navigateSpy.mockReset();
 
     wsConnected = true;
@@ -823,6 +840,41 @@ describe('Storage', () => {
     expect(
       screen.queryByRole('button', { name: 'Unpin summary scope for pve1' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('reopens the collapsed group of a pool focused by an in-app storage link', async () => {
+    liveLocation = true;
+    hookResources = [
+      buildStorageResource('storage-ceph-link', 'Ceph-Link-Store', 'pve1', {
+        storageType: 'cephfs',
+      }),
+      buildStorageResource('storage-other', 'Other-Store', 'pve2'),
+    ];
+    mockLocationSearch = '?group=node';
+
+    render(() => <Storage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Collapse pve1' }));
+    await waitFor(() => {
+      expect(screen.queryByText('Ceph-Link-Store')).not.toBeInTheDocument();
+    });
+
+    mockLocationSearch = '?group=node&resource=storage-ceph-link';
+    setLocationVersion((version) => version + 1);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Collapse pve1' })).toBeInTheDocument();
+      const poolRow = screen.getByText('Ceph-Link-Store').closest('tr[data-summary-series-id]');
+      expect(
+        document
+          .querySelector('tr[data-inline-detail-for]')
+          ?.getAttribute('data-inline-detail-for'),
+      ).toBe(poolRow?.getAttribute('data-summary-series-id'));
+    });
+    expect(screen.getAllByRole('tab', { name: 'Storage' })[0]).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   });
 
   it('clears pinned storage group scope from the content-card header action', async () => {

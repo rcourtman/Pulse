@@ -95,6 +95,10 @@ type ResourceRegistry struct {
 	exclusions   map[string]struct{}
 	identityPins *identityPinIndex
 	pbsBackups   []models.PBSBackup
+	// linkMergedIDs holds the resources a manual link folded into their
+	// primary. They are still observed, so identity succession treats them
+	// as live.
+	linkMergedIDs map[string]struct{}
 	// supersededIndex maps record-declared retired canonical IDs to the live
 	// resource that superseded them, so references persisted under a retired
 	// ID (availability links, API reads) keep resolving. An empty value marks
@@ -148,6 +152,13 @@ type ResourceRegistry struct {
 	// what the full scan would see; scores stay live through the shared
 	// pointers.
 	agentNodeScanIndex map[string][]agentNodeCandidate
+
+	// ingestStaleThresholds holds the caller-owned freshness thresholds of
+	// the snapshot or record ingest in progress, so each source merge into an
+	// existing row judges metric freshness as that ingest's manual links and
+	// stale pass do. nil outside an ingest and for callers without
+	// thresholds, where all three use the defaults.
+	ingestStaleThresholds map[DataSource]time.Duration
 }
 
 // agentNodeCandidate pairs a resources-map key with its entry so the indexed
@@ -243,6 +254,10 @@ func (rr *ResourceRegistry) IngestSnapshotWithStaleThresholds(snapshot models.St
 }
 
 func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresholds map[DataSource]time.Duration) {
+	rr.mu.Lock()
+	rr.ingestStaleThresholds = thresholds
+	rr.mu.Unlock()
+
 	hostByID := make(map[string]*models.Host, len(snapshot.Hosts))
 	for i := range snapshot.Hosts {
 		host := snapshot.Hosts[i]
@@ -606,15 +621,26 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 	rr.refreshCanonicalIdentitiesLocked()
 	rr.markStaleLocked(time.Now().UTC(), thresholds)
 	rr.invalidateViewsLocked()
+	rr.ingestStaleThresholds = nil
 	rr.mu.Unlock()
 }
 
 // IngestRecords ingests normalized records for a single source.
 func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRecord) {
-	rr.ingestRecords(source, records, false)
+	rr.ingestRecords(source, records, false, nil)
 }
 
-func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRecord, onlyMissing bool) {
+// IngestRecordsWithStaleThresholds ingests normalized records for a single
+// source and merges operator-linked resources with caller-owned thresholds.
+func (rr *ResourceRegistry) IngestRecordsWithStaleThresholds(source DataSource, records []IngestRecord, thresholds map[DataSource]time.Duration) {
+	rr.ingestRecords(source, records, false, thresholds)
+}
+
+func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRecord, onlyMissing bool, thresholds map[DataSource]time.Duration) {
+	rr.mu.Lock()
+	rr.ingestStaleThresholds = thresholds
+	rr.mu.Unlock()
+
 	var successions []CanonicalIDSuccession
 	supersededSeen := make(map[string]struct{})
 	for _, record := range records {
@@ -649,6 +675,16 @@ func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRec
 	rr.applyRecordSuccessions(successions)
 
 	rr.mu.Lock()
+	// Either side of an operator link can arrive as a record: a vSphere or
+	// TrueNAS VM with a Pulse agent inside, or an agent on a TrueNAS host.
+	// Snapshot and resource ingest apply the links, so record ingest must too,
+	// or the monitor's rebuilt registry keeps both rows while REST, which
+	// seeds from that registry, shows them merged. Continuity records only
+	// fill absent machines: a saved enrollment joined to its linked guest
+	// would lend the guest its offline verdict and old agent payload.
+	if !onlyMissing {
+		rr.applyManualLinks(thresholds)
+	}
 	rr.refreshStorageConsumersLocked()
 	rr.refreshPBSRollupsLocked()
 	rr.refreshStoragePostureLocked()
@@ -657,6 +693,7 @@ func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRec
 	rr.refreshProxmoxSensorSetupLocked()
 	rr.refreshCanonicalIdentitiesLocked()
 	rr.invalidateViewsLocked()
+	rr.ingestStaleThresholds = nil
 	rr.mu.Unlock()
 }
 
@@ -746,12 +783,25 @@ func (rr *ResourceRegistry) proxmoxGuestResourceIDForSourceRefLocked(ref string)
 	return uniqueID
 }
 
+// canonicalIDObservedLocked reports whether a canonical ID still names an
+// observed resource: a live row, or one a manual link folded into its primary.
+// Succeeding an observed ID would hand its operator rows, and the link that
+// folded it, to another resource.
+func (rr *ResourceRegistry) canonicalIDObservedLocked(id string) bool {
+	if _, live := rr.resources[id]; live {
+		return true
+	}
+	_, folded := rr.linkMergedIDs[id]
+	return folded
+}
+
 // applyRecordSuccessions re-keys operator-owned store rows from canonical IDs
 // that ingested records declared superseded (IngestRecord.SupersededCanonicalIDs)
 // onto the records' current canonical IDs. Mirrors the guards of pin-driven
-// successions in PersistIdentityPins: a superseded ID still held by a live
-// resource is skipped so a genuinely distinct sibling never has its rows
-// stolen. Re-runs are cheap no-ops once the old rows are gone.
+// successions in PersistIdentityPins: a superseded ID still observed, live or
+// folded into another resource by a manual link, is skipped so a genuinely
+// distinct sibling never has its rows stolen. Re-runs are cheap no-ops once
+// the old rows are gone.
 func (rr *ResourceRegistry) applyRecordSuccessions(successions []CanonicalIDSuccession) {
 	if len(successions) == 0 || rr.store == nil {
 		return
@@ -764,7 +814,7 @@ func (rr *ResourceRegistry) applyRecordSuccessions(successions []CanonicalIDSucc
 	rr.mu.RLock()
 	kept := make([]CanonicalIDSuccession, 0, len(successions))
 	for _, succession := range successions {
-		if _, live := rr.resources[succession.OldCanonicalID]; live {
+		if rr.canonicalIDObservedLocked(succession.OldCanonicalID) {
 			continue
 		}
 		kept = append(kept, succession)
@@ -1772,26 +1822,15 @@ func sourceVerdictsRecorded(sightings map[DataSource]SourceStatus) bool {
 }
 
 func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSource]time.Duration) {
-	thresholds = effectiveStaleThresholds(thresholds)
-
 	changed := false
 	for _, resource := range rr.resources {
 		previousStatus := resource.Status
 		staleFound := false
 		for source, status := range resource.SourceStatus {
-			threshold, ok := thresholds[source]
-			if !ok {
-				threshold = 120 * time.Second
-			}
-			if status.ExpectedUpdateIntervalSeconds > 0 {
-				// Slow inventory polls have their own cadence. A source must miss
-				// two expected intervals before its retained observation is stale.
-				threshold = max(threshold, 2*time.Duration(status.ExpectedUpdateIntervalSeconds)*time.Second)
-			}
 			if status.LastSeen.IsZero() {
 				continue
 			}
-			if now.Sub(status.LastSeen) > threshold {
+			if now.Sub(status.LastSeen) > sourceStaleThreshold(source, status, thresholds) {
 				changed = changed || status.Status != "stale"
 				status.Status = "stale"
 				resource.SourceStatus[source] = status
@@ -3940,7 +3979,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	existing.ParentID = rr.resolveCanonicalParentID(existing)
 
 	existing.Status = chooseStatus(existing.Status, incoming.Status, source, existing.Sources)
-	existing.Metrics = mergeMetrics(existing, existing.Metrics, incoming.Metrics, source, now, existing.SourceStatus, nil)
+	existing.Metrics = mergeMetrics(existing, existing.Metrics, incoming.Metrics, source, now, existing.SourceStatus, rr.ingestStaleThresholds)
 	existing.Metrics = clearUnavailableSourceMemoryMetric(existing.Metrics, &incoming, source)
 
 	// Prefer agent naming when available
@@ -4811,6 +4850,10 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 
 		rr.mergeResourceData(primary, other, thresholds)
 		delete(rr.resources, otherID)
+		if rr.linkMergedIDs == nil {
+			rr.linkMergedIDs = make(map[string]struct{})
+		}
+		rr.linkMergedIDs[otherID] = struct{}{}
 		rr.updateSourceMappings(otherID, primaryID)
 	}
 }
@@ -4875,6 +4918,12 @@ func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource
 	}
 	if primary.Ceph == nil {
 		primary.Ceph = other.Ceph
+	}
+	if primary.TrueNAS == nil {
+		primary.TrueNAS = other.TrueNAS
+	}
+	if primary.VMware == nil {
+		primary.VMware = other.VMware
 	}
 
 	// Manual links combine already-normalized resources. Preserve each metric's
@@ -6284,6 +6333,27 @@ func mergeMetrics(
 	return &merged
 }
 
+// sourceStaleThreshold is how long a source may go without delivering before
+// its sighting is stale: the caller's threshold for the source, else the
+// default. The stale pass and the metric merge's freshness gate both read it,
+// so the gate never calls a source current that the pass marks stale, or the
+// reverse.
+func sourceStaleThreshold(source DataSource, sighting SourceStatus, thresholds map[DataSource]time.Duration) time.Duration {
+	threshold := thresholds[source]
+	if threshold <= 0 {
+		threshold = defaultStaleThresholds[source]
+	}
+	if threshold <= 0 {
+		threshold = 120 * time.Second
+	}
+	if sighting.ExpectedUpdateIntervalSeconds > 0 {
+		// Slow inventory polls have their own cadence. A source must miss
+		// two expected intervals before its retained observation is stale.
+		threshold = max(threshold, 2*time.Duration(sighting.ExpectedUpdateIntervalSeconds)*time.Second)
+	}
+	return threshold
+}
+
 // metricSourceStale reports whether a source's most recent report is older than
 // its stale threshold. A zero/unknown last-seen is treated as NOT stale so the
 // merge never demotes a source on missing information.
@@ -6300,17 +6370,7 @@ func metricSourceStale(
 	if !ok || st.LastSeen.IsZero() {
 		return false
 	}
-	threshold := time.Duration(0)
-	if configured := thresholds[source]; configured > 0 {
-		threshold = configured
-	}
-	if threshold <= 0 {
-		threshold = defaultStaleThresholds[source]
-	}
-	if threshold <= 0 {
-		threshold = 60 * time.Second
-	}
-	return now.Sub(st.LastSeen) > threshold
+	return now.Sub(st.LastSeen) > sourceStaleThreshold(source, st, thresholds)
 }
 
 func mergeMetric(

@@ -1114,6 +1114,43 @@ history and affirmative recovery. This is source-fixture lifecycle proof, not
 an installed registry/destination result or a diagnosis of a reporter's daily
 resolve/reopen cycle.
 
+### A settings save keeps the alert settings it did not send
+
+`PUT /api/alerts/config` applies the body to the stored configuration through
+`Manager.ApplyConfigUpdate` and `ApplyAlertConfigUpdate` in
+`internal/alerts/config/update.go`: a top-level key the client sent replaces
+that setting whole, a key it left out keeps the stored value, and the result
+is normalized as any update is. The thresholds page has no control for
+flapping detection (`flappingEnabled` and its window, threshold and cooldown),
+alert TTL cleanup (`maxAlertAgeDays`, `maxAcknowledgedAgeDays`,
+`autoAcknowledgeAfterHours`) or `customRules`, so it never sends them. The
+handler used to decode the body into a zero `AlertConfig`, so every thresholds
+save turned flapping detection and TTL cleanup off, reset the flapping tuning
+to its defaults, dropped custom rules, and persisted that. The page's
+`flapping`, `aggregation` and `ioNormalization` payload objects are not
+`AlertConfig` fields and never enabled anything. A stored config keeps what it
+holds, including values an earlier save zeroed; nothing rewrites them.
+
+The body is decoded on its own, so sent keys mean exactly what the decoder
+makes of them, duplicates and case-folded keys included. Unsent fields are
+copied from a JSON round trip of the stored config, so the result shares no
+maps or slices with it. `ApplyConfigUpdate` reads, merges and applies under
+the manager lock, so two concurrent partial saves cannot revert each other in
+memory, and returns a JSON-cloned snapshot so that persistence, which
+normalizes the config it is handed in place, never writes into the live
+config's maps.
+
+`internal/alerts/config/update_test.go` covers unsent, explicit-off,
+case-folded, duplicate-key, malformed and full-body updates, a sent object
+replacing its stored value whole (a sent `truenasDiskDefaults: {}` does not
+inherit the stored temperature) and the no-sharing rule.
+`TestUpdateConfigKeepsSettingsAThresholdsSaveDidNotSend` and
+`TestApplyConfigUpdateKeepsConcurrentPartialUpdates` in
+`config_validation_test.go` run saves through the manager, and
+`TestUpdateAlertConfig_KeepsStoredValuesForUnsentKeys` in
+`internal/api/alerting/alerts_test.go` drives the handler against a real
+manager.
+
 ### Confirmed empty storage is recovery evidence
 
 Static storage capacity evaluation must admit a zero usage observation when
@@ -1996,6 +2033,61 @@ alert. `shouldPreserveAlertOutsideNodeCleanup` now keeps any alert carrying
 `TestCleanupAlertsForNodesKeepsPlatformMetricAlerts` in
 `internal/alerts/alerts_test.go` pins both signals, and its
 sibling pins that a guest alert on a removed Proxmox node is still removed.
+
+### Agent disk temperature alerts judge the reading the disk shows
+
+`CheckHost` judges each agent disk on the temperature, collection state and
+disk type the disk shows, read by `unifiedresources.HostDiskTemperatureReadings`
+from the same adapters the registry builds the disks with. A SMART row shows its
+own reading or, when the agent's probe returned none, the one the host's Unraid
+inventory reports for that disk (`HostSMARTDiskTemperature`), and keeps its
+`agent:<host>/disk_temp:<device>` resource. An Unraid inventory row whose disk
+key no SMART row carries, a disk only the inventory lists, shows that row's
+reading (`HostUnraidDiskTemperature`) and its own transport as disk type, under
+its kernel block device token, the resource a plain Linux SMART row for the
+same device uses. A SMART row and an Unraid row with one key are one registry
+disk even under different device labels, such as a controller member
+(`0 [megaraid,0]`) and its Unraid device (`sda`), and alert once, under the
+SMART row's resource. When smartctl and Unraid name
+one device with different serials the registry shows two disks on it, and the
+device's one alert judges the reading that stands highest against its own disk
+type's threshold (`judgedHostDiskTemperature`): over its trigger first, then
+inside its recovery band, then the larger margin over the trigger, with a tie
+keeping the reading listed first.
+Before this `CheckHost` read only the SMART row's own field, while the Physical
+Disks Temp cell, the Running Hot verdict ("at or above its alert threshold")
+and Patrol judged the Unraid reading against the same trigger, so such a disk
+could read as at its alert threshold with no alert. Unraid's own warning and
+critical disk temperature notifications do not make this redundant: Pulse
+already alerts on the smartctl readings and array state of the same hosts,
+which Unraid also notifies on, and a user who routes alerts through Pulse sets
+these thresholds here.
+
+Only a reading collected now fires or resolves
+(`HostDiskTemperatureReading.Collected`: no standby row, and
+`diskinventory.TemperatureCollected`), so a spun-down disk holds the alert
+like a listed disk without a temperature. A disk only the
+inventory lists whose device matches the agent's `--disk-exclude` patterns
+(`fsfilters.MatchesDeviceExclude`) raises nothing, and an alert it raised before
+the exclusion resolves on the next report (`clearHostDiskTemperatureResources`),
+whatever the SMART list holds, unless another listed reading uses the same
+resource: `docs/UNIFIED_AGENT.md` documents exclusion as
+removing the disk from monitoring, and linked Proxmox hosts already judge an
+excluded disk healthy. A disk only the inventory lists is also judged in a
+report whose SMART list is empty, because the disk shows the inventory's
+reading in that report. The absence cleanup above still runs only on a
+non-empty SMART list, and such a report neither counts toward nor restarts a
+disk's three, so a disk that leaves the inventory while every report's SMART
+list stays empty keeps its alert until the 24-hour stale-alert sweep.
+`TestCheckHostJudgesTheUnraidTemperatureADiskShows` and
+`TestCheckHostHoldsUnraidDiskTemperatureAlertUntilAReadingOrDeparture` in
+`internal/alerts/host_unraid_lifecycle_test.go` pin the fallback, the
+inventory-only disk, the empty SMART list, two disks on one device (also of
+different types), a controller member under another device label, standby,
+exclusion, the disk type
+and host override thresholds, the holds, the handover to a SMART reading,
+departure, and the exclusion clear with and without SMART rows and beside a
+listed SMART row. `TestJudgedHostDiskTemperatureOutranks` pins the ranking.
 
 ### Configured flapping thresholds remain reachable
 

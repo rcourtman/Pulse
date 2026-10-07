@@ -3008,6 +3008,15 @@ recovery evidence. Unremembered overflow deliveries remain auditable with
 `reason=capacity`; cache expiry, overflow, or restart is not a successful
 storage operation or a reason to delete historical events.
 
+### Alert settings saves keep unsent keys without a new storage path
+
+`PUT /api/alerts/config` now applies only the top-level keys the body carries
+and keeps stored values for the rest, so a thresholds save no longer turns off
+alert TTL cleanup. It still writes `alerts.json` through the existing
+`SaveAlertConfig` path, opens no storage or recovery route, and leaves backup
+and snapshot alert settings under the same replace-what-was-sent rule as every
+other key. `internal/api/alerting/alerts_test.go` pins the handler.
+
 ### Container diagnostics shares private bootstrap transport (1 October 2026)
 
 Recovery-adjacent diagnostics now reuse the canonical complete installer
@@ -4362,10 +4371,13 @@ one that returns must stay page-scoped instead of collapsing to the expanded
 row or replacing the page overview with row-local empty states.
 That same storage ownership now also governs reveal. Row hover may highlight
 the matching row in place, but storage hover must not auto-filter or
-auto-scroll the table. Reveal belongs only to deliberate focus: a focused
-pool or disk row may switch to the owning view or expand the owning group
-through the bridge's `revealActiveSeries` callback, and a pinned pool-group
-header that sits off-screen scrolls into view through the same bridge.
+auto-scroll the table. Reveal belongs only to deliberate focus: the bridge
+hands the focused pool or disk series to the `revealActiveSeries` callback,
+which reopens a focused pool's collapsed owning group, and a pinned pool-group
+header that sits off-screen scrolls into view through the same bridge. Focus
+only ever names a row in the active pools or disks view, so the callback never
+switches views; the view-switching branches that served the retired jump to
+the active row are gone.
 That same reveal contract now also owns inline-detail expansion. When a pool or
 disk row is deliberately focused and its inline detail opens on the storage
 page, the detail row must publish the same canonical summary series ID through
@@ -6253,6 +6265,19 @@ is in `applyLicensedFeatureConfigSnapshot`
 (`pkg/server/telemetry_licensed_features.go`), pinned by
 `TestApplyLicensedFeatureConfigSnapshot_CountsScheduledReportingAndProfiles`.
 
+### Single-resource report AI narration requires POST
+
+`internal/api/metrics_reporting_handlers.go` now accepts `POST` with a JSON
+body for `/api/admin/reports/generate` and lets only that method use the
+tenant's AI narrator; `GET` keeps working with query parameters and the
+deterministic summary. A narrated PDF records the same AI cost-ledger entry as
+before, and only a `POST` can now produce one. A `GET` reads Patrol findings
+only from an AI service that is already running
+(`AISettingsHandler.ExistingAIService`), so it no longer constructs a tenant AI
+service, whose construction opens that tenant's SQLite resource export store.
+Report content, backup and recovery enrichment, and tenant storage are
+otherwise unchanged.
+
 ### Audit-read activity is a bounded, content-free local history
 
 `audit_read_activity.json` follows the same shape as the existing external-agent
@@ -6873,6 +6898,15 @@ The performance report and reporting runtime snapshot handlers apply the same
 test before tabulating a disk temperature. That changes only which held value a
 report shows, not any storage or recovery path.
 
+### A linked agent's stale flag and guest disk owner open no storage path
+
+`internal/unifiedresources/types.go` now always sends `AgentData.Stale`, so a
+resumed agent clears its stopped-reporting mark in browsers that merge agent
+facets field by field, and `VMView.DiskFromLinkedAgent` keeps the poller from
+carrying a linked agent's guest disk forward as a Proxmox read. Both describe
+which source's reading is current; no backup, retention, migration or recovery
+path is added or moved.
+
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` no longer exempts every request carrying
@@ -6883,3 +6917,11 @@ allowlist it gets the generic demo `403`, or `404` on a hidden route, and that
 includes config import at `/api/config/import`. HTTP/1.1 websocket handshakes
 are `GET` requests and still connect. No storage, retention, backup, migration
 or recovery path is added or moved.
+
+### Demo mode hides the pprof routes
+
+`internal/api/demo_mode_operations.go` adds the Go runtime profiling family
+(`/debug/pprof` and every path below it, every method) to the public-demo
+hidden routes, so the demo guard on a `DEMO_MODE` instance answers it with
+`404`. That removes a diagnostic read surface on demo instances only; no
+storage, retention, backup, migration or recovery path is added or moved.

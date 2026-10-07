@@ -3690,6 +3690,14 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Alert settings saves do not touch agent lifecycle
+
+`PUT /api/alerts/config` in `internal/api/alerting/alerts.go` now keeps stored
+values for the top-level keys a client leaves out. Agent alert defaults
+(`agentDefaults`) follow the same rule as every other key; enrollment,
+reporting leases, commands and agent removal are unchanged.
+`internal/api/alerting/alerts_test.go` pins the handler.
+
 ### VM guest execution admission (backup precaution)
 
 `AgentRegisterPayload.guest_exec_guard_version` is optional; version 1 on a
@@ -7657,6 +7665,16 @@ bounded and classified temperature nodes, and leaves the host report intact
 when the helper is absent or incompatible. It does not treat Windows ACPI
 thermal zones as hardware sensor evidence, accept remote provider locations,
 or grant Pulse hardware-control authority.
+### Single-resource report AI narration requires POST
+
+`internal/api/metrics_reporting_handlers.go`, `internal/api/router.go` and
+`internal/api/ai_handlers.go` changed only how `/api/admin/reports/generate`
+reads its fields (a `POST` JSON body or `GET` query parameters), which of those
+may use the tenant's AI narrator (`POST` only), and how a `GET` finds Patrol
+findings (`ExistingAIService`, which never constructs a tenant AI service). No
+agent registration, enrolment, install, update, removal or report ingest path
+changed.
+
 ### Agent profile adoption is reported as a count only
 
 The usage telemetry snapshot reads `LoadAgentProfiles` and reports
@@ -8825,6 +8843,25 @@ in `internal/monitoring/monitor_host_agents_test.go`
 `internal/monitoring/issue1595_collection_trust_test.go`
 (`TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports`).
 
+### Unraid temperatures chart agent disk history
+
+`internal/monitoring/monitor_agents.go` changed only so the SMART history
+writer charts the temperature a host agent's disk shows. A SMART row without
+its own reading shows the one the host's Unraid inventory reports for the disk,
+when that inventory row describes the disk (`HostSMARTDiskTemperature`), and a
+disk only the Unraid inventory reports,
+such as a member the agent's SMART collection skips under `--disk-exclude`,
+shows that row's reading (`HostUnraidDiskTemperature`). Both are now written
+as `smart_temp` under the key the disk's metrics target reads
+(`HostSMARTDiskMetricID`, `HostUnraidDiskMetricID`); a reading the disk does
+not show as collected, a spun-down disk's or an expired host's, is not. Agent
+registration, enrolment, install, update, removal, report identity and disk
+source IDs are unchanged. Focused proof lives in
+`internal/monitoring/monitor_host_agents_test.go`
+(`TestApplyHostReportChartsUnraidTemperatureOfDiskWithoutSMART`) and
+`internal/monitoring/issue1595_collection_trust_test.go`
+(`TestAgentDiskChartsTheUnraidTemperatureItShows`).
+
 ### Windows braced MachineGuid does not abort agent startup
 
 The Windows unified agent resolves host information through gopsutil's combined
@@ -8953,3 +8990,11 @@ like any other write instead of always reaching its handler. Agent command
 websocket handshakes to `/api/agent/ws` are HTTP/1.1 `GET` requests, the only
 transport its gorilla upgrader serves, and still connect on a demo instance.
 No agent registration, enrolment, install, update or removal path changed.
+
+### Demo mode hides the pprof routes
+
+`internal/api/demo_mode_operations.go` changed only so the demo guard on a
+`DEMO_MODE` instance answers `/debug/pprof` and every path below it with `404`
+for every method. No agent route lives under `/debug/`, so agent registration,
+enrolment, install, update, removal, report ingest and `/api/agent/ws`
+handshakes are unchanged on a demo instance.

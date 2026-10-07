@@ -806,10 +806,7 @@ func resourceFromHostUnraidPhysicalDisk(host models.Host, disk models.HostUnraid
 	health := unraidPhysicalDiskHealth(disk)
 	assessment := assessUnraidPhysicalDisk(disk)
 	sizeBytes := unraidDiskSizeBytes(host, disk)
-	var collection *diskinventory.CollectionStatus
-	if status := unraidDiskTemperatureStatus(host, disk); status.State != "" {
-		collection = &diskinventory.CollectionStatus{Temperature: status}
-	}
+	temperature, collection := HostUnraidDiskTemperature(host, disk)
 	resource := Resource{
 		Type:      ResourceTypePhysicalDisk,
 		Name:      name,
@@ -824,7 +821,7 @@ func resourceFromHostUnraidPhysicalDisk(host models.Host, disk models.HostUnraid
 			SizeBytes:    sizeBytes,
 			Health:       health,
 			Wearout:      -1,
-			Temperature:  disk.Temperature,
+			Temperature:  temperature,
 			Used:         unraidDiskMountPath(disk),
 			StorageRole:  unraidDiskRole(&disk),
 			StorageGroup: unraidDiskGroup(&disk),
@@ -869,6 +866,46 @@ func unraidDiskTemperatureStatus(host models.Host, disk models.HostUnraidDisk) d
 	}
 }
 
+// HostUnraidDiskTemperature returns the temperature the disk resource built
+// from a host's Unraid inventory row shows, with its collection state. The
+// agent disk history writer charts this reading.
+func HostUnraidDiskTemperature(host models.Host, disk models.HostUnraidDisk) (int, *diskinventory.CollectionStatus) {
+	status := unraidDiskTemperatureStatus(host, disk)
+	if status.State == "" {
+		return disk.Temperature, nil
+	}
+	return disk.Temperature, &diskinventory.CollectionStatus{Temperature: status}
+}
+
+// HostSMARTDiskTemperature returns the temperature the disk resource built
+// from a host agent's SMART row shows, with its collection state. The agent
+// disk history writer charts this reading.
+func HostSMARTDiskTemperature(host models.Host, disk models.HostDiskSMART) (int, *diskinventory.CollectionStatus) {
+	return hostSMARTDiskTemperature(host, disk, matchUnraidDisk(host.Unraid, disk))
+}
+
+// hostSMARTDiskTemperature returns the temperature the disk resource built
+// from a host agent's SMART row shows, with the row's collection state: the
+// row's own reading, or, when the row has none, the one the host's Unraid
+// inventory reports for the disk. Unraid reads its members' temperatures with
+// its own per-disk SMART settings, so it can have one when the agent's probe
+// returned none. The reading is taken only from an Unraid row that describes
+// the row's disk (unraidDiskDescribesSMARTRow).
+func hostSMARTDiskTemperature(host models.Host, disk models.HostDiskSMART, unraidDisk *models.HostUnraidDisk) (int, *diskinventory.CollectionStatus) {
+	collection := diskinventory.CloneStatus(disk.Collection)
+	if disk.Temperature > 0 || !unraidDiskDescribesSMARTRow(host, disk, unraidDisk) {
+		return disk.Temperature, collection
+	}
+	// The reading is now the Unraid inventory's, and so is its state.
+	if status := unraidDiskTemperatureStatus(host, *unraidDisk); status.State != "" {
+		if collection == nil {
+			collection = &diskinventory.CollectionStatus{}
+		}
+		collection.Temperature = status
+	}
+	return unraidDisk.Temperature, collection
+}
+
 func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Resource, ResourceIdentity) {
 	name := strings.TrimSpace(disk.Model)
 	if name == "" {
@@ -907,8 +944,7 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 	model := strings.TrimSpace(disk.Model)
 	serial := hostSMARTDiskSerial(host, disk, unraidDisk)
 	diskType := strings.TrimSpace(disk.Type)
-	temperature := disk.Temperature
-	collection := diskinventory.CloneStatus(disk.Collection)
+	temperature, collection := hostSMARTDiskTemperature(host, disk, unraidDisk)
 	health := strings.TrimSpace(disk.Health)
 	if unraidDisk != nil {
 		if model == "" {
@@ -919,16 +955,6 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 		}
 		if sizeBytes <= 0 {
 			sizeBytes = unraidDiskSizeBytes(host, *unraidDisk)
-		}
-		if temperature <= 0 {
-			temperature = unraidDisk.Temperature
-			// The reading is now the Unraid inventory's, and so is its state.
-			if status := unraidDiskTemperatureStatus(host, *unraidDisk); status.State != "" {
-				if collection == nil {
-					collection = &diskinventory.CollectionStatus{}
-				}
-				collection.Temperature = status
-			}
 		}
 		if health == "" || strings.EqualFold(health, "UNKNOWN") {
 			health = unraidPhysicalDiskHealth(*unraidDisk)
@@ -1219,21 +1245,30 @@ func maxInt64() int64 {
 	return int64(^uint64(0) >> 1)
 }
 
+// matchUnraidDisk returns the host's Unraid row for a SMART row: the one
+// carrying the row's usable serial, else the one at its device path. A serial
+// names the drive and a path only where the kernel put it, so a serial match
+// anywhere in the inventory outranks a path match. A placeholder serial, which
+// several bridges report alike, is no match at all.
 func matchUnraidDisk(unraid *models.HostUnraidStorage, disk models.HostDiskSMART) *models.HostUnraidDisk {
 	if unraid == nil || len(unraid.Disks) == 0 {
 		return nil
 	}
 
-	normalizedDevice := strings.ToLower(normalizePhysicalDiskDeviceToken(disk.Device))
-	normalizedSerial := strings.TrimSpace(strings.ToLower(disk.Serial))
-	for i := range unraid.Disks {
-		candidate := &unraid.Disks[i]
-		if normalizedSerial != "" && strings.EqualFold(strings.TrimSpace(candidate.Serial), normalizedSerial) {
-			return candidate
+	if serial := strings.TrimSpace(disk.Serial); diskinventory.IsUsableHardwareID(serial) {
+		for i := range unraid.Disks {
+			if strings.EqualFold(strings.TrimSpace(unraid.Disks[i].Serial), serial) {
+				return &unraid.Disks[i]
+			}
 		}
-		candidateDevice := strings.ToLower(normalizePhysicalDiskDeviceToken(candidate.Device))
-		if normalizedDevice != "" && candidateDevice != "" && candidateDevice == normalizedDevice {
-			return candidate
+	}
+	normalizedDevice := strings.ToLower(normalizePhysicalDiskDeviceToken(disk.Device))
+	if normalizedDevice == "" {
+		return nil
+	}
+	for i := range unraid.Disks {
+		if strings.ToLower(normalizePhysicalDiskDeviceToken(unraid.Disks[i].Device)) == normalizedDevice {
+			return &unraid.Disks[i]
 		}
 	}
 	return nil
