@@ -1165,20 +1165,48 @@ If your Docker Swarm cluster isn't being detected:
 
 ### PVE Backups Not Showing (Recovery)
 
-If local PVE backups aren't appearing in Pulse after setting up via `--enable-proxmox`:
+Pulse's **server collects PVE backup inventory through the saved Proxmox API
+connection**, including storage and storage-content requests. A working host
+agent or successful `--enable-proxmox` setup does not prove that this separate
+API collection is current. Guest-agent disk readings are not backup inventory.
 
-1. **Check permissions**: The API token needs `PVEDatastoreAdmin` on `/storage`:
-   ```bash
-   pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin
-   pveum aclmod /storage -token 'pulse-monitor@pve!<token-name>' -role PVEDatastoreAdmin
-   ```
-   Replace `pulse-monitor@pve!<token-name>` with the full token ID shown in Pulse.
-   Privilege-separated PVE tokens need the storage ACL on the token as well as the service user.
+1. **Check existing evidence in Proxmox first.** In the native PVE interface,
+   identify the existing archive's node, storage, guest type/ID and time. Do not
+   run another backup or restore to create evidence. A missing Pulse row is not
+   proof that the archive is absent, and an OK task does not prove guest thaw.
+2. **Compare the same source in Pulse.** Open **Proxmox → Backups → By date**
+   and check the selected connection and filters against that archive. Coverage
+   posture is a different reading: expand its explanation rather than treating
+   an unprotected badge as a missing backup. Direct PBS collection and backups
+   seen through PVE are distinct sources; see [PBS data sources](PBS.md#data-source-indicator)
+   and [Recovery](RECOVERY.md#missing-or-inconsistent-evidence).
+3. **Inspect ordinary collection, not a new probe.** In **Settings →
+   Infrastructure**, check the affected saved PVE connection and existing
+   status. Keep connection/agent liveness separate from backup collection
+   freshness; use existing collection timestamps where available, and retain
+   the original redacted error and time. The server checks online nodes and queryable storage configured for
+   backup content. A failed, unavailable or partial read is not an empty
+   inventory; a successful connection test is not proof of sustained collection.
+4. **Repair access only when the evidence supports it.** Ask the Proxmox
+   administrator to compare the actual rejected endpoint and installed PVE
+   version with the configured service user and token's effective storage
+   permissions. With privilege separation, both user and token ACLs must allow
+   the request, including the relevant scope and inheritance. Audit-only
+   inventory access does not establish access to every backup-content request.
+   Do not apply blanket storage-administrator ACLs merely because a table is
+   empty, disable privilege separation or use an administrator token as a test.
+   See [Proxmox permission checks](TROUBLESHOOTING.md#check-permissions-proxmox).
 
-2. **Re-run setup**: Delete the node in Pulse Settings and re-run the agent with `--enable-proxmox`. Recent versions grant this permission automatically.
+**Do not delete the monitored node, remove registration state or rerun setup as
+a diagnostic.** Setup can rotate an existing API token and change permissions;
+it is not a harmless refresh. Preserve the connection, credentials, registration
+state and backup/history data. Make any evidenced configuration repair through
+normal maintenance outside backups, then observe ordinary polling without
+manual guest-agent probes, restarts or repeated **Test Connection** requests.
 
-3. **Check state file**: If re-running doesn't trigger setup, remove the state file:
-   ```bash
-   rm /var/lib/pulse-agent/proxmox-pve-registered
-   ```
-   Then restart the agent.
+For freeze-enabled backups, follow the [backup safety precaution](VM_DISK_MONITORING.md#backup-safety).
+It is not an incident recovery procedure or proof of a repaired thaw failure.
+If reporting a continuing mismatch, retain the running server version, source,
+original time, relevant missing privilege or redacted error and the differing
+native/Pulse observations. Keep token secrets, full ACL listings and private
+infrastructure details out of public reports; follow [Getting Help](TROUBLESHOOTING.md#-getting-help).
