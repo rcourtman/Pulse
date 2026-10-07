@@ -1904,6 +1904,23 @@ well as its alerts.
 `internal/alerts/host_unraid_lifecycle_test.go` pins the clear, the holds, the
 restarted count and the pending-run and count cleanup.
 
+### Proxmox node cleanup keeps platform metric alerts
+
+`CleanupAlertsForNodes` runs on every Proxmox node poll (and every mock alert
+tick) and removes alerts whose `Node` is not a current Proxmox node or PBS
+instance. Kubernetes, TrueNAS and vSphere metric alerts carry a cluster or
+platform host in `Node` and a display label such as `TrueNAS Disk` or
+`Kubernetes Pod` in `metadata.resourceType`, which the preserve list's
+platform words never matched. The cleanup used to delete them silently on
+each poll while their reducer incident stayed firing, so the next evaluation
+re-created each one and handed it to the alert callback again as a new
+alert. `shouldPreserveAlertOutsideNodeCleanup` now keeps any alert carrying
+`metadata.platformType`, or whose label maps through
+`CanonicalAlertResourceType` to a Kubernetes, TrueNAS or vSphere type.
+`TestCleanupAlertsForNodesKeepsPlatformMetricAlerts` in
+`internal/alerts/alerts_test.go` pins both signals, and its
+sibling pins that a guest alert on a removed Proxmox node is still removed.
+
 ### Configured flapping thresholds remain reachable
 
 Every accepted positive `FlappingThreshold`, including values above ten, must
@@ -1930,6 +1947,42 @@ acknowledge or change the identity of an active alert. The cleanup regression
 controls in `internal/alerts/flapping_threshold_test.go` exercise both sweeps,
 drained and retained windows, dispatch callbacks and delivery diagnosis. These
 modeled-time controls are not installed notification-destination acceptance.
+
+### Default thresholds keep a positive trigger's clear below it
+
+PBS, node temperature, agent, Kubernetes, TrueNAS and vSphere global defaults
+go through `normalizeThresholdPointer` in `internal/alerts/config/normalize.go`
+from `UpdateConfig`. The shared persistence normalization in
+`internal/config/persistence.go` applies the same normalizer, through
+`NormalizeHysteresisThreshold`, to the agent, node temperature and storage
+pairs. A missing or negative threshold takes the factory default and a zero
+trigger is off. A positive trigger always keeps a clear below it: a missing
+clear sits five points under the trigger, floored at 0, and a clear at or
+above the trigger is repaired. Guest and node usage, storage and Docker
+defaults hold the same bound through `EnsureValidHysteresis` in
+`ValidateHysteresisThresholds`, `NormalizeStorageDefaults` and
+`NormalizeDockerThreshold`. The canonical per-type entries (`nvme`, `sata` and
+`hdd` in `DiskFillByType`; `nvme`, `sas` and `sata` in `DiskTempByType`, the
+types the thresholds page edits) keep a positive trigger and follow the same
+clear rule; a non-positive trigger resets the entry to its type default,
+because the page cannot switch a type off on its own. Other per-type keys are
+stored as written.
+
+The thresholds page sends `max(0, trigger - 5)`, so a 1-5% default arrives
+with clear 0 and must not fall back to the factory clear. Agent defaults used
+to do that, storing `{trigger: 1, clear: 75}` for a 1% Machines CPU default,
+and per-type disk entries replaced the whole pair, trigger included. The
+evaluator already ignored a clear at or above the trigger
+(`buildCanonicalMetricSpec` drops it and the reducer then clears at the
+trigger), so those alerts fired and resolved the same way; `/api/alerts/config`
+served the factory clear and firing alerts reported it as `clearThreshold`. A
+repaired pair above the margin, such as `{50, 80}` written through the API,
+now has a real recovery band at 45 where it used to clear at the trigger.
+`internal/alerts/config/normalize_low_trigger_clear_test.go` pins every
+default family and both per-type maps, `TestUpdateConfigKeepsLowTriggerClearBelowTrigger` in
+`internal/alerts/config_validation_test.go` pins the saved config and the
+firing alert's clear level, and the low-trigger and stored-clear tests in
+`internal/config/persistence_test.go` pin the written file and load repair.
 
 ### Monitor-only delivery is terminal
 
@@ -2782,6 +2835,22 @@ derived alert read-model and Last 24 Hours stat refresh for
 shared acknowledgement owner instead of keeping its own alert mutation fork.
 Future overview action behavior should extend that shared acknowledgement hook
 instead of putting acknowledge mutations back into render shells.
+Overview ages and bands read the shared clock. `AlertOverviewAlertCard.tsx`
+passes its own `useRelativeTimeNow` reading as `now` to
+`formatAlertOverviewStartedAgo` and `getMetricAlertPresentation`, and the Last
+24 Hours count in `useAlertOverviewState.ts` reads the same clock, so all three
+measure from the wall clock. The hook no longer exposes a minute `tick`: read
+as "now", that tick measured a card mounted between ticks from up to a minute
+earlier, so an alert raised 70 seconds ago read "this minute", an alert
+raised since the last tick stayed out of the 24h count until the next one, a
+reading already past the 10-minute stale cut-off led the card as live, and the
+stale flip and 24h drop landed up to a minute late. A mounted card now turns stale,
+and an alert leaves the 24h count, within one 30-second tick with no data
+change. The delivery diagnoses refresh is a server read and keeps its own
+minute interval rather than following the 30-second clock.
+`AlertOverviewAlertCard.clock.test.tsx` pins the mid-tick mount, the stale flip
+and the 24h drop under fake timers, and `useAlertOverviewState.test.tsx` pins
+the diagnoses cadence.
 Render-heavy alert overview ownership now routes through
 `frontend-modern/src/features/alerts/AlertOverviewStatsCards.tsx`,
 `frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx`,
