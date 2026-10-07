@@ -1121,6 +1121,13 @@ for the Physical Disks verdict. The heat reason follows any native TrueNAS
 alert text, and a hot disk's status dot turns warning though its source state
 stays `online`, because phones show only the dot.
 `truenasPageModel.test.ts` and `TrueNASStorageTopologyTable.test.tsx` pin it.
+The Temp column reads the same collection state through
+`getPhysicalDiskTemperaturePresentation`. A disk temperature that is not
+current, such as a host agent's last reading kept on a merged disk row after
+the agent stopped reporting, renders as last known: muted, with its reason as
+the title and screen-reader "last known" text. The Temp sort ranks it as no
+reading, and the tree sort orders each sibling group, so a retained value
+never leads its group hottest first.
 The vSphere Datastores and Networks tables follow the same exception-first
 Health column. `getVmwareDatastoreIssue` and `getVmwareNetworkIssue` return
 nothing for a green row; otherwise the reasons are, in order, an impaired
@@ -2566,41 +2573,24 @@ application resource-provider or WebSocket lifecycle.
    `vmware` metadata plus shared `resource-incident` timeline entries on
    canonical `agent`, `vm`, `storage`, and `network` resources instead of creating
    provider-only resource kinds, identities, or history schemas.
-9. Keep summary-surface emphasis on canonical resource IDs. Infrastructure
-   summary row-hover, chart-hover, and route-focus behavior must keep using the
-   same unified-resource IDs that power the table rows, chart series, and
-   detail-route handoffs instead of introducing page-local summary IDs or
-   provider-local hover aliases when the selected series is highlighted.
-10. Keep infrastructure contextual focus route-backed and page-scoped. When an
-    infrastructure row opens its detail drawer, the selection must stay on the
-    same route through canonical resource query state, and the shared
-    summary-table focus/runtime contract plus the root app-shell restore path
-    must let direct row toggles open that drawer in place instead of looking
-    like a page refresh or remount. The
-    summary must keep `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
-    rendering the full page-level series set while only the focused label and
-    highlight state change.
-11. Keep infrastructure summary hover scope on canonical unified-resource ids
-    even when one metric is empty. Shared chart hover may synchronize one
-    timestamp across all four infrastructure cards, but the active emphasis
-    must still resolve through the same unified-resource id that powers the
-    table row, line charts, density maps, and drawer route state instead of
-    dropping the highlight or inventing a metric-local summary identity when
-    disk or network data is missing in range. When a sibling infrastructure
-    card can resolve that same resource id locally, it should surface the
-    synchronized value through the shared summary-card readout instead of
-    spawning a second chart tooltip.
-    Infrastructure summary numeric readouts that reflect canonical resource
-    counts or capacity must use the shared `AnimatedNumber` primitive rather
-    than page-local counter state, so readout motion stays presentation-only and
-    canonical unified-resource identity and scope stay unchanged.
-12. Keep infrastructure summary visibility as display preference, not a
-    unified-resource filter. Platform/runtime pages and shared infrastructure
-    summary consumers may hide or restore chart sections through shared
-    presentation controls, but those controls must not mutate resource
+9. Keep summary-surface emphasis on canonical resource IDs. A page that pairs
+   summary charts with resource rows must keep row-hover, chart-hover, and
+   route-focus behavior on the same unified-resource IDs that power the table
+   rows, chart series, and detail-route handoffs instead of introducing
+   page-local summary IDs or provider-local hover aliases when the selected
+   series is highlighted.
+10. Keep row contextual focus page-scoped. Pages whose rows share summary focus
+    through `useSummaryPageInteractionState` in
+    `frontend-modern/src/components/shared/summaryTableFocus.ts` (today the
+    Workloads and Storage pages) must let a direct row toggle open its detail
+    in place through that shared runtime and the root app-shell restore path,
+    instead of looking like a page refresh or remount.
+12. Keep summary-chart visibility a display preference, not a unified-resource
+    filter. Platform/runtime pages may hide or restore chart sections through
+    shared presentation controls, but those controls must not mutate resource
     identity, table membership, source scope, or summary-hover state. The
-    retired top-level `/infrastructure` page and its saved-view/route-state
-    machinery must not be reintroduced for this purpose.
+    retired top-level `/infrastructure` page, its summary chart strip, and its
+    saved-view/route-state machinery must not be reintroduced for this purpose.
 15. Keep operator-local resource search on the operator's own names.
     Resource-policy redaction is a transmission boundary (`docs/PRIVACY.md`),
     so local search over unified resources, such as the `ResourcePicker` and
@@ -3397,12 +3387,10 @@ to the exact resource-owned lifecycle capability and consume the canonical
 Proxmox source status/timestamp; it must not reconstruct action availability or
 freshness from guest power state or a locally hard-coded polling window.
 
-`InfrastructureSummary.tsx` and `infrastructureSummaryModel.ts` now surface
-`degraded` and `alerting` resource counts alongside the existing `online` and
-`offline` totals. `buildInfrastructureResourceCounts` is the canonical owner of
-this health-state projection: it must derive counts only from the resources
-accessor already available to the summary state, not from a separate API call or
-a re-projection of websocket state outside the shared summary pipeline.
+A page summary that shows `degraded` or `alerting` resource counts beside
+`online` and `offline` totals must derive them from the unified resources its
+page already holds, not from a separate API call or a re-projection of
+websocket state outside the shared resource pipeline.
 
 `resourceBadgePresentation.ts` owns the canonical system identity resolver,
 `getInfrastructureSystemIdentityBadges(...)`, which feeds the resource drawer's
@@ -3911,12 +3899,6 @@ unambiguous: `ResourceID` scopes saved vCenter connection replacement to
 `ConnectionID`, while host UUID / DMI identity matching belongs to the
 machine-identity selector path, so editing one connection cannot strip an
 unrelated VMware host whose UUID happens to equal that connection ID.
-That shared consumer ownership now includes same-tab summary hydration too.
-`frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-may keep an in-memory remount cache for canonical resource charts, but the key
-must carry an explicit summary contract version so a long-lived browser tab
-cannot resurrect older unified-resource summary shapes after the chart model or
-identity mapping changes.
 That same consumer ownership now also includes infrastructure drawer history
 fetches. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
 may hydrate canonical facet and intelligence data for the selected resource,
@@ -4027,19 +4009,6 @@ provider facet must be merged onto the shared resource so source identity,
 health, routing, and detail payloads cannot disagree. Operator-facing source
 filters may accept the `vmware-vsphere` alias for the VMware platform, but the
 emitted shared source family remains canonical `vmware`.
-That same canonical identity boundary now also applies to infrastructure
-summary emphasis. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
-may vary card presentation, but the active sparkline or density-map series must
-still resolve through the shared resource ID already emitted by unified
-resources so table hover, focused detail state, and summary highlight all point
-to the same resource identity.
-That same unified-resource boundary now also applies to infrastructure
-contextual focus plumbing. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for
-interactive-series filtering, focused-resource naming, and active-series
-resolution so the infrastructure summary stays page-scoped while still
-highlighting the same canonical resource IDs used by the unified-resource
-table and route state.
 TrueNAS application resources now carry the same shared source boundary.
 `internal/truenas/provider.go` projects native app API records into
 `TrueNASData.App`, while `internal/unifiedresources/types.go`,
@@ -4479,20 +4448,14 @@ used to list one ID four times),
 `useResourceDetailDrawerDockerActionsState.ts` owns Docker action runtime, and
 the overview/debug render-heavy surfaces live in dedicated drawer-local owners
 instead of staying inline in the shell.
-The infrastructure summary surface now follows the same shell/runtime/model
-shape: `InfrastructureSummary.tsx` is the render shell,
-`useInfrastructureSummaryState.ts` owns chart polling, cache hydration,
-org-scope lifecycle, and focused-summary state, and
-`infrastructureSummaryModel.ts` owns chart matching, focused-summary display
-selection, empty-state wording, and summary-series/metric derivation.
 The retired dashboard overview trend hook must not return as a second
-infrastructure sparkline consumer. Infrastructure summary surfaces must consume
-the infrastructure summary chart cache and shared unified-resource series
-matching logic instead of issuing bespoke per-resource
-`/api/metrics-store/history` fetches for overview cards. That keeps summary
-sparklines aligned with canonical resource identity matching, agent-facet
-fallback behavior, and first-sample empty-state semantics already owned by the
-infrastructure summary surface.
+infrastructure sparkline consumer. Node-row sparklines read the infrastructure
+summary route through
+`frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts` and
+match series to rows through the chart-key candidates in
+`frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts`
+(node ID, linked agent ID, and node name variants) instead of issuing bespoke
+per-node `/api/metrics-store/history` fetches.
 The backend AI and Patrol context renderers now derive their canonical change
 kind, source type, source adapter, actor, reason, and related-resource
 fragments from `internal/unifiedresources/change_presentation.go`, so the
@@ -4627,10 +4590,11 @@ The same shared agent-resource module now also owns the canonical cluster-name
 helpers, so Kubernetes context prefixes, Proxmox cluster labels, and
 cluster-name fetch keys stay aligned instead of each surface rebuilding its
 own pod, namespace, and VM routing fallbacks.
-The shared node-state adapter also routes Proxmox cluster labels through that
-same helper, so infrastructure summary projections keep the same canonical
-cluster name as the rest of the unified resource model instead of rewriting
-the label locally.
+The shared node-state adapter (`nodeFromResource` in
+`frontend-modern/src/utils/resourceStateAdapters.ts`) also routes Proxmox
+cluster labels through that same helper into the node's `clusterName`, so the
+Proxmox host drawer keeps the same canonical cluster name as the rest of the
+unified resource model instead of rewriting the label locally.
 Native provider tables keep a phone projection: prioritized identity and
 operational columns sized to the available width, with no local or
 document-level horizontal scrolling, for Proxmox backup, coverage, recoverable, Ceph, Mail Gateway, and replication rows; Docker native
@@ -4774,18 +4738,10 @@ while Docker update mutations route through
 and `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
 stays the composition owner, so unified-resource history, investigation, and
 drawer-local action runtime no longer accumulate inline beside the model layer.
-The infrastructure summary path now routes chart polling, cache hydration, and
-org-scope lifecycle through
-`frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`,
-while chart matching and summary-series derivation route through
-`frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
-and `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
-stays the render shell, so summary charts are no longer an unowned mixed
-resource consumer surface.
-The shared summary chart contract now also requires the backend feed to
-normalize tiered infrastructure history into equal-time summary buckets, so
-long-range unified-resource cards do not expose storage-tier density changes as
-right-edge chart compression.
+The shared summary chart contract requires the backend feed to normalize
+tiered infrastructure history into equal-time summary buckets, so long-range
+node sparklines do not expose storage-tier density changes as right-edge chart
+compression.
 The shared `ResourceFacetSummary` consumer now omits capability and
 relationship badges from the default table/detail surface entirely, while the
 backend contract keeps capability and relationship data on the owned resource
@@ -5454,9 +5410,8 @@ validation flows, `frontend-modern/src/utils/resourceTypeCompat.ts` owns
 frontend canonicalization from legacy or alias type tokens, and
 `frontend-modern/src/utils/resourceTypePresentation.ts` owns canonical
 resource-type labels and badge styling. `frontend-modern/src/utils/resourceBadgePresentation.ts`
-and `frontend-modern/src/components/Infrastructure/resourceBadges.ts` then
-own the shared resource/source/platform badge composition used by unified
-resource tables, drawers, and infrastructure summary cards. Future resource
+then owns the shared resource/source/platform badge composition used by
+resource tables and drawers. Future resource
 type or badge wording changes should extend these unified-resource owners
 instead of rebuilding type-label or badge mapping logic inside infrastructure,
 settings, alerts, recovery, or dashboard-local helpers.
@@ -5668,12 +5623,7 @@ ReadState resource-resolution lookups must also normalize surrounding
 whitespace on the incoming name before matching canonical resources. A valid
 resource must not look missing just because a consumer asked for `" myserver "`
 instead of `"myserver"`.
-The infrastructure summary surfaces now use the shared normalized identity
-lookup helper for these matches, so dotted hostnames such as
-`tower.example.local` collapse to the same canonical lookup variants as the
-resource table and resource detail surfaces instead of each view inventing
-its own comparison rule.
-The same identity surfaces also share the trimmed-string helper from
+Frontend identity helpers share the trimmed-string helper from
 `frontend-modern/src/utils/stringUtils.ts` so resource-id, hostname, and
 linked-node normalization keep the same fail-closed whitespace trimming rules
 instead of reimplementing ad hoc local string cleanups.

@@ -510,7 +510,7 @@ in-place click and chevron activation over a selection.
 96. `frontend-modern/src/components/Workloads/__tests__/useGroupedTableWindowing.test.ts`
 98. `frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts`
 99. `frontend-modern/src/components/Workloads/__tests__/useWorkloadViewportSync.test.tsx`
-100. `frontend-modern/src/utils/workloadsSummaryCache.ts`
+100. `frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts`
 101. `frontend-modern/src/routing/routePreload.ts`
 102. `frontend-modern/src/useAppRuntimeState.ts`
 103. `frontend-modern/src/utils/storageSummaryCache.ts`
@@ -1525,11 +1525,11 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     other per-request version discovery on activation, legacy exchange, or
     grant-refresh traffic just to stamp authenticated install metadata.
 30. Keep retired dashboard summary-chart paths absent rather than replacing
-them with new hot-path fetches. Infrastructure summary cards must continue to
-hydrate through `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-and the canonical infrastructure-summary route owned by
-`internal/api/router_routes_monitoring.go` and `internal/api/router.go`; storage
-summary cards must use the storage summary cache owners. The authenticated
+them with new hot-path fetches. Node rows that draw infrastructure history
+must read the canonical infrastructure-summary route owned by
+`internal/api/router_routes_monitoring.go` and `internal/api/router.go`, today
+through `frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts`;
+storage summary cards must use the storage summary cache owners. The authenticated
 root path in `frontend-modern/src/App.tsx` must not prewarm a deleted
 dashboard-specific overview, trend, or summary transport.
     The same hot path must keep mock/demo chart identity on the canonical
@@ -1614,10 +1614,9 @@ path. `frontend-modern/src/pages/Dashboard.tsx`,
 surfaces for KPI cards, problem-resource rows, or top-infrastructure
 identities. New summary cards must live on their owning product route and
 prove their data path there.
-32. Keep infrastructure and assistant consumers off deleted dashboard summary
-state. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-and globally mounted helpers such as `frontend-modern/src/components/AI/Chat/index.tsx`
-must read the live websocket snapshot or existing unified-resource cache
+32. Keep assistant and other globally mounted consumers off deleted dashboard
+summary state. Globally mounted helpers such as
+`frontend-modern/src/components/AI/Chat/index.tsx` must read the live websocket snapshot or existing unified-resource cache
 rather than forcing root navigation to pay for a replacement dashboard
 overview transport. When the assistant shell changes presentation,
 `frontend-modern/src/utils/aiChatPresentation.ts` must remain the canonical
@@ -1950,9 +1949,9 @@ re-instantiate `useWorkloadTableMetricHistory` and name the rows they draw
 through its required `series` option. The Proxmox nodes table passes
 `'nodes'` and polls only the infrastructure summary; the WorkloadsSurface
 reader passes `'guests'` and polls only the workloads history. Two readers
-on one page do not share reads: each forwards its own abort signal, which
-bypasses the summary caches' in-flight dedupe, and retained query values
-seed matching mounts and source changes without deduplicating requests. A
+on one page do not share reads: each passes its own abort signal straight to
+the charts API, and retained query values seed matching mounts and source
+changes without deduplicating requests. A
 reader therefore must not poll a summary its rows do not render. In Trends
 the vSphere overview polls only the workloads history, and the Proxmox
 overview polls the workloads history and the infrastructure summary once
@@ -2049,10 +2048,11 @@ must not restart a read. A range change or leaving the lens mode cancels
 pending and in-flight reads, while leaving a row lets its read settle into the
 bounded cache. Per-row query owners, estate-wide fan-out, and polling remain
 forbidden. Persistent Trends retains one cache-keyed
-`fetchWorkloadsSummaryAndCache` reader for all rendered guest rows. Grouped
+`ChartsAPI.getWorkloadCharts` reader for all rendered guest rows. Grouped
 host rows render no metric cells, so the WorkloadsSurface reader never polls
-`fetchInfrastructureSummaryAndCache`; node series belong to the page's hosts
-table reader. Range-sensitive readers clear prior-range data when no
+`ChartsAPI.getInfrastructureSummaryCharts`; node series belong to the page's
+hosts table reader. Both readers keep fetched series only in the query layer's
+retained cache; neither persists a summary to browser storage. Range-sensitive readers clear prior-range data when no
 exact cache entry exists and forward cancellation so superseded range work
 does not continue occupying browser connections. Sparkline ranges must stay
 bounded to the governed compact table windows. Expanded history belongs in the existing guest drawer chart
@@ -2211,15 +2211,10 @@ Operator-state suppression therefore adds at most one read per new
 finding, not per existing-finding update, and not per operator-set
 flag.
 
-Summary cards for Infrastructure, Storage, Workloads, and Recovery now surface
-health-state counts (offline, degraded, alerting) instead of raw online/offline
-splits. `InfrastructureSummary.tsx` and `infrastructureSummaryModel.ts` add
-`degraded` and `alerting` resource counts; `StorageSummary.tsx` and
-`useStoragePageSummary.ts` add `poolsDegraded` and `disksFailing` indicators;
-`WorkloadsSummary.tsx` and `useWorkloadsDerivedState.ts` add an
-alerting count derived from `activeAlerts`. These additions must remain
-read-only projections from existing websocket state — they must not introduce
-new polling loops or widen fetch scope on the hot-path boundary.
+A route summary that surfaces health-state counts (offline, degraded,
+alerting) must derive them as read-only projections from existing websocket
+state. It must not introduce new polling loops or widen fetch scope on the
+hot-path boundary.
 Agentless availability endpoints participate in the same unified-resource
 consumer hot path as other infrastructure resources. Adding
 `network-endpoint` to resource queries, filters, and summary counts must reuse
@@ -2475,23 +2470,22 @@ helper must still take over whenever the opened detail would land below the
 fold, marking that movement as deliberate so route-state restore does not
 replay over it and then scrolling only enough to keep the row header plus the
 top of the detail visible instead of hard-centering every expansion.
-That same hot-path ownership now includes summary cache invalidation.
-Infrastructure and workload summary caches may hydrate charts for fast remounts,
-but when the summary chart timeline contract changes, the cache version must
-advance and stale payloads must be purged on read so long-lived browser sessions
-cannot keep rendering pre-fix sparkline shapes after the backend timeline model
-has been corrected.
-That same cache contract also applies to same-tab in-memory hydration on the
-protected summary hot path. Infrastructure and workload summary shells must
-version their module-scoped remount caches alongside the chart contract so a
-hot-reloaded or long-lived browser tab cannot immediately rehydrate an older
-summary series set before the next live fetch completes.
-That same hot-path rule now applies to infrastructure summary resource
-filtering: `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-must include API-backed systems such as top-level TrueNAS appliances through
-the shared `isAgentFacetInfrastructureResource(...)` helper instead of a local
-`resource.type` branch, so the summary poll/cache path stays on one canonical
-infrastructure selector contract.
+That same hot-path ownership now includes summary cache invalidation. A
+summary chart cache that hydrates charts for fast remounts, today the storage
+page's module-scoped `frontend-modern/src/utils/storageSummaryCache.ts`, must
+carry the chart contract version in its key and advance it when the summary
+chart timeline contract changes, so a hot-reloaded or long-lived browser tab
+cannot rehydrate an older series set before the next live fetch completes.
+The table history reader keeps no summary cache of its own:
+`useWorkloadTableMetricHistory.ts` holds the infrastructure and workloads
+summaries only in the query layer's retained cache, which expires entries after
+five minutes and clears on org switch. A new persistent summary cache needs a
+reader in the same change: after their readers were deleted, the infrastructure
+and workloads summary caches kept serializing every polled response on the main
+thread (on the 50-node, 929-guest mock estate at the 1h range, about 9.6 MB of
+workloads and 0.9 MB of infrastructure JSON per 30-second poll) only to write
+it to browser storage, or drop it when over the size cap, with nothing reading
+it.
 That same protected hot path keeps storage trend loading route-owned after the
 dashboard overview retirement. `internal/api/router.go` must continue serving
 the compact `/api/charts/storage-summary` request backed by
@@ -2526,12 +2520,6 @@ query only if the runtime preserves ascending timestamps plus correct
 avg/min/max bucket aggregates within every returned resource/metric series, and
 the hot-path proof keeps latency, ordering, and aggregate correctness guarded
 together in the explicit metrics SLO surface. That protected surface should
-That same workload-summary hot path now also owns chart-cache invalidation
-whenever the shaped timeline contract changes. `frontend-modern/src/components/Workloads/WorkloadsSummary.tsx`
-must version-bust cached summary payloads in the same slice that changes
-workload chart bucket semantics or timestamp precision, so operators are not
-served stale mixed-cadence chart shapes after the backend timeline model has
-already been corrected.
 stay on one ordered index scan plus Go-side bucket aggregation rather than
 forcing SQLite to `GROUP BY` computed buckets through a temp B-tree on the
 fleet-scale workload path.
@@ -2942,17 +2930,16 @@ summary and detail surfaces iterate the bounded attached set from the same
 payload. Neither plural presentation nor freshness evaluation may issue a
 check-specific request, reconstruct the set from the settings API, or add a
 second websocket hydration path.
-The infrastructure summary hot path is now explicit shared ownership too:
-`InfrastructureSummary.tsx` stays a render shell,
-`useInfrastructureSummaryState.ts` owns chart polling and cache lifecycle, and
-`infrastructureSummaryModel.ts` owns chart matching, focused-summary display
-selection, empty-state wording, and summary-series/metric derivation. Future
-summary-chart work must not put polling, cache hydration, and series math
-back into the shell.
-The summary API feeding that hot path must also normalize mixed-resolution
-history into equal-time summary buckets before it reaches the shell/runtime
-owners, so long-range cards do not bunch recent higher-resolution samples at
-the right edge.
+The infrastructure summary API (`/api/charts/infrastructure`, shaped in
+`internal/api/chartapi/service.go`) must normalize mixed-resolution history into
+equal-time summary buckets before it reaches its consumers, today the Proxmox
+nodes table's Trends sparklines (`frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx`,
+reading through `useWorkloadTableMetricHistory` with `series: 'nodes'`), so
+long-range series do not bunch recent higher-resolution samples at the right
+edge. On the frontend,
+`useWorkloadTableMetricHistory.ts` owns polling for both estate summaries and
+`workloadMetricHistoryModel.ts` owns series folding and chart-key matching;
+table rows must not grow their own summary polling or series math.
 Compact resource-facet summary chips render through the shared
 `ResourceFacetSummary` component, whose only production consumer is the
 detail drawer's change history, so it renders every chip. A table-row use must
@@ -3010,10 +2997,11 @@ default `Internal` + `Cloud Summary` policy pair. That baseline posture still
 belongs to the canonical policy contract, but repeating it on every row burns
 row-density budget without adding operator-grade signal. No platform table
 renders policy chips today.
-The shared node adapter also uses that same cluster-name helper for the
-infrastructure summary surface, so Proxmox node projections stay aligned with
-the same canonical cluster label instead of carrying a raw adapter-local
-cluster string.
+The shared node adapter (`nodeFromResource` in
+`frontend-modern/src/utils/resourceStateAdapters.ts`) also uses that same
+cluster-name helper for the node's `clusterName`, so the Proxmox host drawer
+(`frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx`) shows the
+same canonical cluster label instead of a raw adapter-local cluster string.
 The drawer's Kubernetes namespace/deployment tabs use the canonical
 cluster-name helper for fetch keys, so the visible navigation label stays
 separate from the backend cluster lookup contract.
@@ -3049,30 +3037,20 @@ series key. Pod chart and history consumers must normalize bare pod IDs onto
 `k8s:<cluster>:pod:<uid>` before lookup; otherwise demo and mock workloads pay
 repeated empty-store misses and redundant refetch churn even while the shared
 workload charts already hold the same pod metrics in memory.
-The infrastructure and workload summary cards now share a canonical
-throughput-rate formatter in `frontend-modern/src/utils/throughputPresentation.ts`,
-so bytes-per-second labels stay consistent between the two summary surfaces
-instead of each component carrying its own rate string builder.
-That shared throughput boundary is now also explicitly governed here.
-`frontend-modern/src/components/Workloads/WorkloadsSummary.tsx` is the
-canonical workload-summary hot-path surface, and
-`frontend-modern/src/utils/throughputPresentation.ts` is the canonical
-bytes-per-second formatter shared by workload and infrastructure summary
-cards. Future throughput wording or workload-summary hot-path changes must
-extend these performance-owned surfaces instead of leaving the formatter or
-summary shell unowned in registry coverage.
-
 Resource detail mappers now also use the shared
 `frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor
 labels, so the canonical presentation layer owns that wording instead of the
 mapper carrying its own title-casing branch.
 
-Dashboard, workload-summary, infrastructure-summary, and org-scoped cache-key
-paths now normalize org scope through the shared
-`frontend-modern/src/utils/orgScope.ts` helper instead of each file carrying
-its own `getOrgID() || 'default'` fallback. That keeps cache isolation and
-multi-tenant row-scoping aligned across the dashboard and resource-summary hot
-paths.
+Org-scoped cache-key paths (`frontend-modern/src/hooks/useWorkloads.ts`,
+`frontend-modern/src/hooks/useUnifiedResources.ts`, and
+`frontend-modern/src/utils/storageSummaryCache.ts`) normalize org scope through
+the shared `frontend-modern/src/utils/orgScope.ts` helper instead of each file
+carrying its own `getOrgID() || 'default'` fallback. That keeps cache isolation
+and multi-tenant row-scoping aligned across the resource and storage-summary hot
+paths. Readers on `createNonSuspendingQuery` need no org key: on `org_switched`
+the query layer clears retained and live values, then re-reads every reader
+with a non-null source; a disabled reader fetches when it is enabled.
 
 GitHub-hosted runner proof for the API performance surface now intentionally
 uses a looser budget envelope than local/staging benchmark runs for the
@@ -3163,8 +3141,8 @@ runtime-capabilities response, but route shells must treat them as already
 loaded runtime identity facts. They must not start polling billing
 entitlements, checkout, or commercial posture endpoints just to decide whether
 a community runtime should show private Pulse Pro download guidance.
-Workloads and infrastructure summary consumers now also keep null-tolerant read
-models on the shared hot path. Guest rows, stacked bars, anomaly summaries, and
+Workloads consumers now also keep null-tolerant read models on the shared hot
+path. Guest rows, stacked bars, anomaly summaries, and
 resource detail mappers may accept partial platform metadata or undefined
 ratios, but they must normalize those values once in the shared model layer
 instead of scattering non-null assertions or per-component count coercion
