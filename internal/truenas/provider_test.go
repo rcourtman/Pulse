@@ -261,6 +261,53 @@ func TestProviderRecordsSynthesizesIncidentFromUnhealthyPoolStatus(t *testing.T)
 	}
 }
 
+func TestProviderRecordsPopulateStorageEnabledAndActive(t *testing.T) {
+	records := FixtureRecords(FixtureSnapshot{
+		CollectedAt: time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC),
+		System:      SystemInfo{Hostname: "truenas-main", Healthy: true},
+		Pools: []Pool{
+			{ID: "pool-tank", Name: "tank", Status: "ONLINE", TotalBytes: 1000, UsedBytes: 400},
+			{ID: "pool-cold", Name: "cold", Status: "DEGRADED", TotalBytes: 1000, UsedBytes: 400},
+			{ID: "pool-gone", Name: "gone", Status: "UNAVAIL"},
+			{ID: "pool-odd", Name: "odd", Status: ""},
+		},
+		Datasets: []Dataset{
+			{ID: "tank/apps", Name: "tank/apps", Pool: "tank", Mounted: true},
+			{ID: "tank/spare", Name: "tank/spare", Pool: "tank", Mounted: false},
+			{ID: "tank/vault", Name: "tank/vault", Pool: "tank", Mounted: false, Locked: true},
+		},
+	})
+
+	cases := []struct {
+		name   string
+		record unifiedresources.IngestRecord
+		active bool
+	}{
+		{"online pool", requirePoolRecord(t, records, "tank"), true},
+		{"degraded pool", requirePoolRecord(t, records, "cold"), true},
+		{"unavailable pool", requirePoolRecord(t, records, "gone"), false},
+		// An unreported pool state is not known offline, matching its status.
+		{"unknown-state pool", requirePoolRecord(t, records, "odd"), true},
+		{"mounted dataset", requireRecordByNameAndType(t, records, "tank/apps", unifiedresources.ResourceTypeStorage), true},
+		{"unmounted dataset", requireRecordByNameAndType(t, records, "tank/spare", unifiedresources.ResourceTypeStorage), false},
+		{"locked dataset", requireRecordByNameAndType(t, records, "tank/vault", unifiedresources.ResourceTypeStorage), false},
+	}
+	for _, tc := range cases {
+		storage := tc.record.Resource.Storage
+		if storage == nil {
+			t.Fatalf("%s: missing storage facet", tc.name)
+		}
+		// Consumers read these flags directly, so the zero value would mark
+		// every TrueNAS pool and dataset as disabled and inactive.
+		if !storage.Enabled {
+			t.Errorf("%s: Enabled = false, want true", tc.name)
+		}
+		if storage.Active != tc.active {
+			t.Errorf("%s: Active = %v, want %v", tc.name, storage.Active, tc.active)
+		}
+	}
+}
+
 func TestProviderRecordsDoesNotDuplicateNativePoolAlert(t *testing.T) {
 	alertTime := time.Date(2026, 6, 29, 11, 30, 0, 0, time.UTC)
 	records := FixtureRecords(FixtureSnapshot{
@@ -1390,6 +1437,75 @@ func TestProviderPhysicalDiskTemperatureHistoryUsesCanonicalMetricIDs(t *testing
 	}
 	if points[len(points)-1].Value != 34 {
 		t.Fatalf("expected latest point value 34, got %+v", points)
+	}
+}
+
+// A placeholder serial ("UNKNOWN", or QEMU's drive-scsi0 for a TrueNAS VM's
+// virtual disk) names no one disk. The disk must not take it as canonical
+// identity, and its native history must land on the key the registry
+// resolves for it, the disk's source ID, or the chart never finds it.
+func TestProviderPlaceholderDiskSerialsKeyNeitherIdentityNorHistory(t *testing.T) {
+	for _, serial := range []string{"drive-scsi0", "UNKNOWN"} {
+		t.Run(serial, func(t *testing.T) {
+			fixtures := DefaultFixtures()
+			fixtures.Disks[0].Serial = serial
+			diskName := fixtures.Disks[0].Name
+			now := time.Date(2026, 3, 29, 20, 0, 0, 0, time.UTC)
+			fetcher := &controllableStubFetcher{
+				snapshot: &fixtures,
+				diskHistory: map[string][]TimeSeriesPoint{
+					diskName: {
+						{Timestamp: now.Add(-time.Hour), Value: 31},
+						{Timestamp: now, Value: 33},
+					},
+				},
+			}
+			provider := NewLiveProviderForConnection(fetcher, "conn-1")
+			if err := provider.Refresh(context.Background()); err != nil {
+				t.Fatalf("Refresh() error = %v", err)
+			}
+
+			records := provider.Records()
+			registry := unifiedresources.NewRegistry(unifiedresources.NewMemoryStore())
+			registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
+			for _, record := range records {
+				if record.Resource.Type != unifiedresources.ResourceTypePhysicalDisk || record.Resource.Name != diskName {
+					continue
+				}
+				if record.Identity.MachineID != "" {
+					t.Fatalf("placeholder serial %q keyed disk identity %q", serial, record.Identity.MachineID)
+				}
+				// Its canonical ID now follows the source ID, so the
+				// hostname-keyed ID it had before connection scoping
+				// must be listed as superseded, as for a serial-less disk.
+				if len(record.SupersededCanonicalIDs) == 0 {
+					t.Fatalf("placeholder serial %q disk lists no superseded canonical IDs", serial)
+				}
+			}
+			for _, key := range trueNASDiskHistoryLookupKeys(fixtures.Disks[0]) {
+				if key == serial {
+					t.Fatalf("placeholder serial %q routes native history lookups", serial)
+				}
+			}
+			resourceID := ""
+			for _, resource := range registry.List() {
+				if resource.Type == unifiedresources.ResourceTypePhysicalDisk && resource.Name == diskName {
+					resourceID = resource.ID
+				}
+			}
+			target := registry.MetricsTarget(resourceID)
+			if target == nil || target.ResourceID == "" || target.ResourceID == serial {
+				t.Fatalf("metrics target for %s = %+v, want the disk's source ID", diskName, target)
+			}
+
+			history, err := provider.PhysicalDiskTemperatureHistory(context.Background(), 4*time.Hour)
+			if err != nil {
+				t.Fatalf("PhysicalDiskTemperatureHistory() error = %v", err)
+			}
+			if points := history[target.ResourceID]; len(points) != 2 {
+				t.Fatalf("native history under metrics target %q = %+v, history %+v", target.ResourceID, points, history)
+			}
+		})
 	}
 }
 

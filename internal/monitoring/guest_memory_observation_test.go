@@ -79,7 +79,7 @@ func testGuestMemoryObservationLifecycle(t *testing.T) {
 		assertGuestMemoryObservation(t, *legacy.Memory, state, source, at)
 		// REST and WebSocket state use this production conversion, including
 		// registry cloning and the nested Proxmox payload the drawer consumes.
-		front := m.buildBroadcastFrontendStateFromSnapshot(models.StateSnapshot{VMs: []models.VM{vm}})
+		front := m.buildBroadcastFrontendStateFromSnapshot(models.StateSnapshot{VMs: []models.VM{vm}}, m.mockModeFence.begin())
 		data, err := json.Marshal(front.Resources)
 		if err != nil {
 			t.Fatal(err)

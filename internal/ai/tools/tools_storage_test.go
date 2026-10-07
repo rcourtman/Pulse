@@ -279,6 +279,65 @@ func TestStorageUsagePercentNotDoubled(t *testing.T) {
 	}
 }
 
+func TestStoragePoolSummaryReadsStorageFacetFlags(t *testing.T) {
+	storage := func(enabled, active bool) *unifiedresources.StorageMeta {
+		return &unifiedresources.StorageMeta{Type: "dir", Enabled: enabled, Active: active}
+	}
+	cases := []struct {
+		name         string
+		status       unifiedresources.ResourceStatus
+		storage      *unifiedresources.StorageMeta
+		wantEnabled  bool
+		wantActive   bool
+		listSkipsRow bool
+	}{
+		// Proxmox storage that reports active=0 is unavailable, not disabled.
+		{"unavailable storage stays enabled", unifiedresources.StatusOffline, storage(true, false), true, false, false},
+		{"disabled storage", unifiedresources.StatusWarning, storage(false, false), false, false, false},
+		{"online storage", unifiedresources.StatusOnline, storage(true, true), true, true, false},
+		// PBS datastores report Active even while unavailable.
+		{"offline row whose source reports active", unifiedresources.StatusOffline, storage(true, true), true, false, false},
+		{"no facet online", unifiedresources.StatusOnline, nil, true, true, true},
+		{"no facet offline", unifiedresources.StatusOffline, nil, false, false, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resource := unifiedresources.Resource{
+				ID:      "local-lvm",
+				Name:    "local-lvm",
+				Type:    unifiedresources.ResourceTypeStorage,
+				Status:  tc.status,
+				Storage: tc.storage,
+			}
+
+			got := storagePoolSummaryFromResource(resource)
+			if got.Enabled != tc.wantEnabled || got.Active != tc.wantActive {
+				t.Fatalf("summary enabled/active = %v/%v, want %v/%v", got.Enabled, got.Active, tc.wantEnabled, tc.wantActive)
+			}
+			if tc.listSkipsRow {
+				return
+			}
+
+			executor := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{}})
+			executor.unifiedResourceProvider = &stubUnifiedResourceProvider{resources: []unifiedresources.Resource{resource}}
+			result, err := executor.executeListStorage(context.Background(), map[string]interface{}{})
+			if err != nil {
+				t.Fatalf("executeListStorage: %v", err)
+			}
+			var resp StorageResponse
+			if err := json.Unmarshal([]byte(result.Content[0].Text), &resp); err != nil {
+				t.Fatalf("decode storage response: %v", err)
+			}
+			if len(resp.Pools) != 1 {
+				t.Fatalf("pools = %+v, want one", resp.Pools)
+			}
+			if resp.Pools[0].Enabled != tc.wantEnabled || resp.Pools[0].Active != tc.wantActive {
+				t.Fatalf("listed enabled/active = %v/%v, want %v/%v", resp.Pools[0].Enabled, resp.Pools[0].Active, tc.wantEnabled, tc.wantActive)
+			}
+		})
+	}
+}
+
 func TestStorageResponsesUseCanonicalEmptyCollections(t *testing.T) {
 	backupsPayload, err := json.Marshal(EmptyBackupsResponse())
 	if err != nil {

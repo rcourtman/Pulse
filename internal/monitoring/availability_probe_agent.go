@@ -205,7 +205,7 @@ func (m *Monitor) applyProbeAvailabilityResultsAt(hostID string, results []Probe
 	if applied == 0 {
 		return
 	}
-	m.updateResourceStore(m.GetState())
+	m.updateResourceStore(m.currentStateWithScope())
 }
 
 func applicationResultFromReport(entry agentshost.AvailabilityProbeResult) *availabilityprobe.ApplicationResult {

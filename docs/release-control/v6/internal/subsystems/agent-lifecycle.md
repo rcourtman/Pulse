@@ -744,6 +744,16 @@ through `GetLiveHostsSnapshot`, which copies only hosts (see the monitoring
 contract); it must not route through a full state snapshot, which copied every
 guest on each agent report.
 
+The mock toggle keeps the same boundary for evaluations already in flight.
+`SetMockMode` ends the mock-mode epoch before it clears alerts and forgets the
+fixture agents (see the monitoring contract), so a fixture agent pass that read
+the estate before the toggle cannot reopen the agent's alerts or re-register
+its hostname deduplication afterwards. The toggle waits for the
+alert-manager calls already running, not for whole passes. Report admission is
+not fenced: a live report already past its mock-mode check when mock mode is
+switched on can still be evaluated after the clear, and its alerts can persist
+until mock mode is left.
+
 Physical-disk evidence collected by a host agent must survive projection back
 into monitoring's models. Absent evidence has to carry its declared sentinel
 rather than a zero value that reads as a real measurement: an absent
@@ -8746,6 +8756,24 @@ admission, token binding or removal-block behaviour. Focused proof lives in
 `internal/monitoring/physical_disk_roundtrip_test.go`
 (`TestMergeHostAgentSMARTIntoDisks_AgentWearoutDoesNotHideLowPVELife` and
 `TestMergeHostAgentSMARTIntoDisks_AgentWearoutFillsUnreportedPVELife`).
+
+### QEMU default disk serials are not agent disk identity
+
+`internal/monitoring/monitor.go` changed only so the unified physical-disk
+metric sync, which writes SMART history for disks without a native writer such
+as TrueNAS disks, always writes under the disk's resolved metrics target. It
+previously did so only for an empty serial, so a non-empty serial that was
+already rejected as a placeholder, such as `UNKNOWN`, sent the samples to the
+canonical resource ID that no reader resolves. The same change makes
+`diskinventory.IsUsableHardwareID` reject QEMU's default disk serials
+(`drive-scsi0`, `scsi0-hd0`, `none0`, `QM00001`), so a host agent inside a
+QEMU VM that reports one of them now keys that disk on its host and device
+through `HostSMARTDiskSourceID` instead of on a serial every such VM shares.
+Those disks change source ID and SMART metric key once. Agent registration,
+enrolment, install, update, removal and report identity are unchanged.
+Focused proof lives in `internal/monitoring/physical_disk_roundtrip_test.go`
+(`TestNestedProxmoxDefaultQEMUSerialsStayPerNode` and
+`TestTrueNASPlaceholderDiskSerialsStayPerApplianceAndShareOneHistoryKey`).
 
 ### Windows braced MachineGuid does not abort agent startup
 

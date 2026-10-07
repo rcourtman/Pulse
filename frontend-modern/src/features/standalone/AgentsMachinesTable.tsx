@@ -14,6 +14,7 @@ import {
 import { Portal } from 'solid-js/web';
 import { AgentMetadataAPI, type AgentMetadata } from '@/api/agentMetadata';
 import { MonitoringAPI } from '@/api/monitoring';
+import { HOST_AGENT_STOPPED_REPORTING_REASON } from '@/components/Infrastructure/resourceDetailMappers';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
 import { MetricBar } from '@/components/Workloads/MetricBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
@@ -70,7 +71,9 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import { notificationStore } from '@/stores/notifications';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
+  RAID_LAST_KNOWN_DEVICE_BADGE_CLASS,
   getRaidDeviceBadgeClass,
+  getRaidLastKnownDeviceLabel,
   getRaidStateTextClass,
   getRaidStateVariant,
 } from '@/utils/raidPresentation';
@@ -593,8 +596,16 @@ const AgentMachineDiskIOCell: Component<{
 const AgentMachineRaidCell: Component<{
   arrays: AgentMachineRaidArrayDetail[];
   summary: string;
+  /** Why the array states are retained rather than current. */
+  lastKnownReason?: string;
 }> = (props) => {
   const hasDetails = () => props.arrays.length > 0;
+  // A silent agent's arrays are its last report: keep the states as evidence
+  // without live status colour or rebuild progress.
+  const lastKnownTitle = () => {
+    const reason = props.lastKnownReason?.trim();
+    return reason ? `Last known reading, not current: ${reason}` : undefined;
+  };
   const shownArrays = () => props.arrays.slice(0, 6);
   const hiddenArrayCount = () => Math.max(0, props.arrays.length - shownArrays().length);
   const triggerLabel = () => props.summary || '—';
@@ -610,23 +621,33 @@ const AgentMachineRaidCell: Component<{
       triggerClass="inline-flex max-w-full justify-start"
       tooltipClass="min-w-[250px] max-w-[380px] space-y-2"
       enabled={hasDetails()}
-      ariaLabel={hasDetails() ? `RAID details: ${triggerLabel()}` : 'RAID unavailable'}
-      title={triggerLabel()}
+      ariaLabel={
+        hasDetails()
+          ? `RAID details: ${triggerLabel()}${lastKnownTitle() ? ', last known' : ''}`
+          : 'RAID unavailable'
+      }
+      title={lastKnownTitle() ? `${triggerLabel()}. ${lastKnownTitle()}` : triggerLabel()}
       maxWidth={400}
       trigger={
         <span
           class="max-w-full truncate text-[11px] font-medium"
           classList={{
-            'text-base-content': hasDetails(),
-            'text-muted': !hasDetails(),
+            'text-base-content': hasDetails() && !lastKnownTitle(),
+            'text-muted': !hasDetails() || Boolean(lastKnownTitle()),
           }}
+          data-raid-reading={lastKnownTitle() ? 'last-known' : 'current'}
         >
           {triggerLabel()}
+          <Show when={hasDetails() && lastKnownTitle()}>
+            <span class="sr-only">, last known</span>
+          </Show>
         </span>
       }
     >
       <section>
-        <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">RAID Arrays</div>
+        <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">
+          {lastKnownTitle() ? 'RAID Arrays (last known)' : 'RAID Arrays'}
+        </div>
         <div class="max-h-[300px] space-y-2 overflow-y-auto pr-1">
           <For each={shownArrays()}>
             {(array, index) => {
@@ -651,9 +672,20 @@ const AgentMachineRaidCell: Component<{
                         </Show>
                       </div>
                     </div>
-                    <div class="flex shrink-0 items-center gap-1.5" title={stateLabel(array.state)}>
-                      <StatusDot variant={getRaidStateVariant(array.state)} size="xs" ariaHidden />
-                      <span class={`text-[10px] font-medium ${getRaidStateTextClass(array.state)}`}>
+                    <div
+                      class="flex shrink-0 items-center gap-1.5"
+                      title={lastKnownTitle() ?? stateLabel(array.state)}
+                    >
+                      <StatusDot
+                        variant={lastKnownTitle() ? 'muted' : getRaidStateVariant(array.state)}
+                        size="xs"
+                        ariaHidden
+                      />
+                      <span
+                        class={`text-[10px] font-medium ${
+                          lastKnownTitle() ? 'text-muted' : getRaidStateTextClass(array.state)
+                        }`}
+                      >
                         {stateLabel(array.state)}
                       </span>
                     </div>
@@ -676,7 +708,13 @@ const AgentMachineRaidCell: Component<{
                     <Show when={array.failedDevices > 0}>
                       <span>
                         Failed{' '}
-                        <span class="font-mono text-red-600 dark:text-red-400">
+                        <span
+                          class="font-mono"
+                          classList={{
+                            'text-red-600 dark:text-red-400': !lastKnownTitle(),
+                            'text-base-content': Boolean(lastKnownTitle()),
+                          }}
+                        >
                           {array.failedDevices}
                         </span>
                       </span>
@@ -684,23 +722,32 @@ const AgentMachineRaidCell: Component<{
                   </div>
 
                   <Show when={rebuilding()}>
-                    <div class="mt-1.5">
-                      <div class="mb-0.5 flex items-center justify-between gap-3 text-[9px]">
-                        <span class="text-amber-600 dark:text-amber-400">Rebuilding</span>
-                        <span class="font-mono text-base-content">
-                          {Math.round(rebuildPercent())}%
-                        </span>
+                    <Show
+                      when={!lastKnownTitle()}
+                      fallback={
+                        <div class="mt-1.5 text-[9px] text-muted">
+                          Rebuild was at {Math.round(rebuildPercent())}%
+                        </div>
+                      }
+                    >
+                      <div class="mt-1.5">
+                        <div class="mb-0.5 flex items-center justify-between gap-3 text-[9px]">
+                          <span class="text-amber-600 dark:text-amber-400">Rebuilding</span>
+                          <span class="font-mono text-base-content">
+                            {Math.round(rebuildPercent())}%
+                          </span>
+                        </div>
+                        <div class="h-1 overflow-hidden rounded-full bg-surface-alt">
+                          <div
+                            class="h-full rounded-full bg-amber-500"
+                            style={{ width: rebuildWidth(rebuildPercent()) }}
+                          />
+                        </div>
+                        <Show when={array.rebuildSpeed}>
+                          {(speed) => <div class="mt-0.5 text-[9px] text-muted">{speed()}</div>}
+                        </Show>
                       </div>
-                      <div class="h-1 overflow-hidden rounded-full bg-surface-alt">
-                        <div
-                          class="h-full rounded-full bg-amber-500"
-                          style={{ width: rebuildWidth(rebuildPercent()) }}
-                        />
-                      </div>
-                      <Show when={array.rebuildSpeed}>
-                        {(speed) => <div class="mt-0.5 text-[9px] text-muted">{speed()}</div>}
-                      </Show>
-                    </div>
+                    </Show>
                   </Show>
 
                   <Show when={devices().length > 0}>
@@ -708,10 +755,14 @@ const AgentMachineRaidCell: Component<{
                       <For each={devices().slice(0, 12)}>
                         {(device) => (
                           <span
-                            class={`inline-flex max-w-full items-center truncate rounded-sm border px-1.5 py-0.5 text-[9px] font-medium ${getRaidDeviceBadgeClass(device)}`}
+                            class={`inline-flex max-w-full items-center truncate rounded-sm border px-1.5 py-0.5 text-[9px] font-medium ${
+                              lastKnownTitle()
+                                ? RAID_LAST_KNOWN_DEVICE_BADGE_CLASS
+                                : getRaidDeviceBadgeClass(device)
+                            }`}
                             title={`slot ${device.slot} - ${device.state}`}
                           >
-                            {device.device}
+                            {lastKnownTitle() ? getRaidLastKnownDeviceLabel(device) : device.device}
                           </span>
                         )}
                       </For>
@@ -1854,7 +1905,13 @@ export const AgentsMachinesTable: Component<{
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('text')} ${machineColumnWidthClass('raid')} text-base-content`}
                             >
-                              <AgentMachineRaidCell arrays={raidArrays()} summary={raidSummary()} />
+                              <AgentMachineRaidCell
+                                arrays={raidArrays()}
+                                summary={raidSummary()}
+                                lastKnownReason={
+                                  agentStale() ? HOST_AGENT_STOPPED_REPORTING_REASON : undefined
+                                }
+                              />
                             </TableCell>
                           </Show>
                           <Show when={columnVisibility.isColumnVisible('arch')}>

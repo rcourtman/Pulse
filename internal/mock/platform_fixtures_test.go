@@ -232,13 +232,42 @@ func TestUnifiedResourceSnapshotParentsDemoProxmoxWorkloads(t *testing.T) {
 }
 
 func TestSupplementalRecordsNormalizesVMwareAlias(t *testing.T) {
+	previous := IsMockEnabled()
+	mustSetEnabled(t, true)
+	t.Cleanup(func() { mustSetEnabled(t, previous) })
+
 	records := SupplementalRecords(unifiedresources.DataSource("vmware-vsphere"))
 	if len(records) == 0 {
 		t.Fatal("expected records for vmware-vsphere alias")
 	}
 }
 
+// The router's mock adapters outlive mock mode briefly while it swaps the real
+// pollers back in; a live refresh that reaches them must find no fixtures.
+func TestSupplementalFixturesServeNothingOutsideMockMode(t *testing.T) {
+	previous := IsMockEnabled()
+	mustSetEnabled(t, false)
+	t.Cleanup(func() { mustSetEnabled(t, previous) })
+
+	for _, source := range []unifiedresources.DataSource{
+		unifiedresources.SourceTrueNAS,
+		unifiedresources.SourceVMware,
+		unifiedresources.SourceAvailability,
+	} {
+		if records := SupplementalRecords(source); len(records) != 0 {
+			t.Errorf("SupplementalRecords(%s) served %d fixture records outside mock mode", source, len(records))
+		}
+		if changes := SupplementalChanges(source); len(changes) != 0 {
+			t.Errorf("SupplementalChanges(%s) served %d fixture changes outside mock mode", source, len(changes))
+		}
+	}
+}
+
 func TestSupplementalChangesNormalizesVMwareAlias(t *testing.T) {
+	previous := IsMockEnabled()
+	mustSetEnabled(t, true)
+	t.Cleanup(func() { mustSetEnabled(t, previous) })
+
 	changes := SupplementalChanges(unifiedresources.DataSource("vmware-vsphere"))
 	if len(changes) == 0 {
 		t.Fatal("expected activity changes for vmware-vsphere alias")

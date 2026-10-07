@@ -434,7 +434,7 @@ func TestMonitor_ResourceUpdate(t *testing.T) {
 	}
 
 	// updateResourceStore
-	m.updateResourceStore(models.StateSnapshot{})
+	m.updateResourceStore(models.StateSnapshot{}, m.mockModeFence.begin())
 	// PopulateFromSnapshot called (no-op in mock, but covered)
 
 	// getResourcesForBroadcast

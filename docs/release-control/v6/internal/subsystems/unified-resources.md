@@ -2308,6 +2308,12 @@ keyed on `agent.stale` because those rows are that agent's own sensors.
 Its Disks card reads the agent's retained filesystem usage as last known on the
 same signal (`agentReadingsLastKnownReason`): each figure stays, muted and
 titled with the reason, without threshold colour or usage bars.
+Its RAID card and the Machines RAID column and tooltip read the agent's
+retained arrays the same way: every array and member state they show stays, as
+evidence of what the array was doing when the agent went quiet, but without
+live status colour. Where a retained rebuild percentage is shown, it reads
+"Rebuild was at N%" with no speed or progress bar, and a member that was not
+healthy names its state in its badge.
 For SMART disk
 temperatures on rows that still render, the provenance travels on
 `agent.sensors.smart[].collection`: the Machines temperature cell
