@@ -4,12 +4,6 @@ const INLINE_DETAIL_TARGET_TOP_RATIO = 0.28;
 const INLINE_DETAIL_MIN_TOP_MARGIN = 72;
 const INLINE_DETAIL_MIN_DETAIL_PEEK = 160;
 
-export interface SummaryChartHoverSync {
-  sourceKey: string;
-  seriesId: string;
-  timestamp: number;
-}
-
 const resolveScrollableAncestor = (element: Element | null | undefined): HTMLElement | null => {
   let scroller = element instanceof HTMLElement ? element : null;
   while (scroller) {

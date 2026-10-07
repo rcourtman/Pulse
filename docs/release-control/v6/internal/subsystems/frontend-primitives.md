@@ -3031,9 +3031,9 @@ Agent`), with the plain-language source phrase available through accessible
    than receiving an unfiltered copy of the estate. Opaque unified-resource ids
    are not part of that visible search vocabulary and must not retain a node
    when the normalized guest table has no corresponding match.
-8. Keep summary interaction identity on one shared helper. Pages that expose row-hover, group-hover, or route-focus-driven summary emphasis, today the Workloads and Storage tables through `useSummaryPageInteractionState` in `frontend-modern/src/components/shared/summaryTableFocus.ts`, must derive page/group/entity scope through `frontend-modern/src/components/shared/summaryCardInteraction.ts` rather than letting each surface read `hovered || focused` from its own page-local ID source. Hovering or pinning a storage pool-group header, or a workload group header on a surface that enables inline group drawers (the Proxmox and VMware surfaces pass `groupNodeDrawerMode="disabled"` today), must scope the matching rows through that same shared contract instead of forking a page-local summary filter path. No summary card or chart strip renders today; one that returns must consume that same resolved scope, and the chart under the pointer must promote its series into the shared active entity through the bridge's `setChartHoverSync` input instead of keeping a chart-local hover island. Recovery is explicitly outside this interaction dialect: its retired posture-card strip must not return with row/group/chart hover behavior without a separate governed product decision.
+8. Keep summary interaction identity on one shared helper. Pages that expose row-hover, group-hover, or route-focus-driven summary emphasis, today the Workloads and Storage tables through `useSummaryPageInteractionState` in `frontend-modern/src/components/shared/summaryTableFocus.ts`, must derive page/group/entity scope through `frontend-modern/src/components/shared/summaryCardInteraction.ts` rather than letting each surface read `hovered || focused` from its own page-local ID source. Hovering or pinning a storage pool-group header, or a workload group header on a surface that enables inline group drawers (the Proxmox and VMware surfaces pass `groupNodeDrawerMode="disabled"` today), must scope the matching rows through that same shared contract instead of forking a page-local summary filter path. No summary card or chart strip renders today, and the bridge carries no chart-hover input; one that returns must consume that same resolved scope, and the chart under the pointer must enter its hovered series into `resolveSummaryScopeState` as a preview input that outranks row hover instead of keeping a chart-local hover island. Recovery is explicitly outside this interaction dialect: its retired posture-card strip must not return with row/group/chart hover behavior without a separate governed product decision.
 9. Keep any page summary page-scoped when table rows enter contextual focus. No infrastructure, workloads, or storage summary cards render today. If one returns, route-backed row selection may add a focused label and shared series emphasis, but the summary must continue to render the page-level series set instead of collapsing down to the selected row or replacing the global trend view with row-local empty states.
-10. Keep contextual row focus on the shared primitives. Same-route table drill-ins must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for local scroll preservation, off-screen reveal, inline-detail lookup, and deliberate inline-detail reveal, and must resolve the active series through `frontend-modern/src/components/shared/summaryCardInteraction.ts` behind `frontend-modern/src/components/shared/summaryTableFocus.ts`, instead of rebuilding page-local `Set` filters, focused-label scans, drawer-aware scroll math, or ad hoc scroll restoration in each surface.
+10. Keep contextual row focus on the shared primitives. Same-route table drill-ins must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for local scroll preservation, off-screen reveal, inline-detail lookup, and deliberate inline-detail reveal, and must resolve the active series through `frontend-modern/src/components/shared/summaryCardInteraction.ts` behind `frontend-modern/src/components/shared/summaryTableFocus.ts`, instead of rebuilding page-local `Set` filters, focused-label scans, drawer-aware scroll math, or ad hoc scroll restoration in each surface. `frontend-modern/src/components/shared/summaryTableFocus.ts` measures and scrolls rows only for deliberate focus, a focused row's inline detail or a pinned group header, so it must not keep window-level scroll or resize listeners or re-measure the hovered row on hover changes and scroll frames; an off-screen affordance for the active row needs a rendered consumer before that cost returns.
 11. Keep summary-linked table row emphasis on the shared primitive contract. Workloads, infrastructure, and storage rows that mirror the active summary entity must expose that state through `data-summary-row-active` and let the shared presentation in `frontend-modern/src/index.css` render the row emphasis, rather than carrying page-local sky or blue fill classes inside each row renderer. Group-scoped preview and pin must use that same shared presentation boundary: child rows that belong to a hovered or pinned summary group should expose `data-summary-group-member-active="preview|pinned"` so the block-level emphasis stays subtle, consistent, and reversible instead of each table inventing its own outline, badge, or full-strength fill treatment. Static grouped row headers on workloads, infrastructure, storage, recovery, and future grouped tables must use `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` plus the `.grouped-table-row` CSS contract in `frontend-modern/src/index.css`, rather than rebuilding local `bg-surface-alt` variants with subtly different light/dark behavior or page-local left-accent markers. That shared grouped-table primitive owns the subgroup cell padding, typography, small metadata, and badge treatment as well as the row background token, so a future adjustment to the subgroup visual language changes every grouped product table from one owner. Inline table detail rows on platform, workload, and infrastructure tables must compose `frontend-modern/src/components/shared/InlineDetailTableRow.tsx` for the full-width row, surface-alt cell, detail padding, and row-click containment instead of rebuilding page-local `TableRow` / `TableCell` / `div` shells around each drawer. Storage-backed reusable row presenters under `frontend-modern/src/features/storageBackups/` must also keep row height and alert accents on class/data-attribute presentation instead of runtime inline style maps, so the shared table contract stays CSP-safe on both steady-state and alert-highlighted routes.
 12. Keep retained-value data loading honest at the ownership boundary. Helpers
     that prevent a feature surface from falling through the app-level Suspense
@@ -3164,33 +3164,30 @@ Agent`), with the plain-language source phrase available through accessible
     operator action or selected Patrol context, uses distinct monitor labels,
     and does not become a nested card, generic dashboard strip, trust summary,
     or duplicate Patrol empty-work list. The
-    Patrol schedule and model drawer is part of that shared
-    feature-presentation boundary: it must stay viewport-bounded, expose an
-    accessible dialog label, keep the four-level control policy on the default
-    Patrol header, and keep provider model, schedule, trigger tuning, and
-    readiness validation inside the secondary disclosure. Backend save rejection reasons must pass
-    through as inline dialog state instead of being replaced with generic toast
-    copy, and that advanced disclosure must open when the inline state exists.
-    When the failure includes
-    Patrol readiness context, the inline state must expose the provider, model,
-    and readiness summary next to a direct provider-settings action instead of
-    hiding that diagnosis behind Assistant alone. The provider-model selector in
-    that popover must stay bound to the shared runtime settings/model catalog
-    even when the popover mounts after async catalog loading, but the full
-    catalog must stay behind an explicit change action so the default advanced
-    drawer leads with the current effective model summary rather than a raw
-    provider route list. A saved direct-provider Patrol model still renders as
-    that model instead of visually falling back to the default selection.
-    Successful provider-model saves that return a not-ready Patrol
-    readiness snapshot must use that same inline surface with `needs attention`
-    wording, and any Assistant handoff from that state describes a saved
-    configuration issue rather than a failed save. When governed fixes are locked, the same Patrol state
-    owner must clear stale full-mode unlock state before persisting the
-    monitor-only autonomy payload, so disabled paid controls cannot leak stale
-    permission into a save. If that inline state opens Assistant, the Patrol
-    feature must hand off
-    a source-named, model-only briefing and close the popover so the shared
-    Assistant drawer is not visually hidden behind feature chrome. When a
+    Patrol page keeps the four-level control policy on its header and has no
+    schedule and model drawer: schedule, trigger tuning, and the Patrol model
+    override live on Settings > Pulse Intelligence > Patrol, and providers and
+    the shared default model on Settings > Provider & Models. Those saves
+    report through the shared notification toasts, not inline state: a
+    rejected save raises an error toast carrying the backend's concrete reason
+    rather than generic fallback copy, and a saved response whose Patrol
+    readiness is not ready or degraded raises a warning toast naming the
+    readiness summary, provider, and model instead of a success toast. On the
+    Patrol page, an on/off save whose response reports Patrol not ready raises
+    a fixed warning toast, and a failed Patrol mode save raises an error toast
+    and restores the previous mode; neither renders inline save-failure state
+    or offers an Assistant handoff. If a Patrol settings popover or inline
+    save-failure state returns, it must stay viewport-bounded, expose an
+    accessible dialog label, bind any model selector to the shared runtime
+    settings and model catalog, show readiness context (provider, model,
+    summary) next to a direct provider-settings action rather than behind
+    Assistant alone, and describe a saved but not ready response as a saved
+    configuration issue rather than a failed save. An Assistant handoff from it
+    must send a source-named, model-only briefing and close the popover so the
+    shared Assistant drawer is not visually hidden behind feature chrome. When
+    governed fixes are locked, the Patrol state owner must clear stale
+    full-mode unlock state before persisting the monitor-only autonomy payload,
+    so disabled paid controls cannot leak stale permission into a save. When a
     restored Patrol assessment session is attached, the shared Assistant drawer
     empty state must
     stay aligned with that source-named briefing and must not render generic
@@ -4848,6 +4845,13 @@ performance-report transport (`/api/reporting` and `/api/reporting/generate-mult
 so the reporting panel does not go dead on mixed-version installs, but that
 compatibility path is intentionally report-only and must not invent the newer
 catalog-owned VM inventory export surface.
+`reportingPanelModel.ts` picks the single-resource transport from the catalog's
+`performanceReport.singleResourceMethod`: `POST` sends the request fields as a
+JSON body, which is the only transport the server lets narrate a PDF with Pulse
+Assistant, and `GET` sends the same fields as query parameters.
+`reportingCatalogModel.ts` reads a missing field as `GET`, the only method a
+backend that predates the field accepts, and the legacy compatibility catalog
+names `GET` for `/api/reporting`. Fleet reports stay `POST` on every backend.
 `ReportingPanel.tsx` must therefore treat `vmInventoryExport` as optional when
 it renders a governed reporting catalog. A legacy compatibility catalog with no
 inventory export still owns a valid enabled reporting surface and must continue

@@ -5155,6 +5155,7 @@ func TestContract_ReportingCatalogJSONSnapshot(t *testing.T) {
 			"title":"Performance Reports",
 			"description":"Generate PDF summaries or CSV metric exports from historical monitoring data for one or more selected resources.",
 			"singleResourceEndpoint":"/api/admin/reports/generate",
+			"singleResourceMethod":"POST",
 			"multiResourceEndpoint":"/api/admin/reports/generate-multi",
 			"singleFilenamePrefix":"report",
 			"singleFilenameSubject":"resource_id",
@@ -5300,6 +5301,169 @@ func TestContract_PerformanceReportTransportUsesCatalogDefinition(t *testing.T) 
 	}
 	if engine.lastReq.MetricType != "cpu" || engine.lastReq.Title != "Node report" {
 		t.Fatalf("expected trimmed canonical optional fields, got %+v", engine.lastReq)
+	}
+
+	post := httptest.NewRequest(
+		http.MethodPost,
+		"/api/reporting",
+		strings.NewReader(`{"resourceType":"node","resourceId":"node-1","metricType":" cpu ","title":" Node report "}`),
+	)
+	rec = httptest.NewRecorder()
+	handler.HandleGenerateReport(rec, post)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected POST 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if engine.lastReq.ResourceID != "node-1" || engine.lastReq.Format != definition.DefaultFormat ||
+		engine.lastReq.MetricType != "cpu" || engine.lastReq.Title != "Node report" {
+		t.Fatalf("expected POST body to carry the same canonical fields as GET, got %+v", engine.lastReq)
+	}
+}
+
+type recordingReportEngine struct {
+	*reporting.ReportEngine
+	requests []reporting.MetricReportRequest
+}
+
+func (e *recordingReportEngine) Generate(req reporting.MetricReportRequest) ([]byte, string, error) {
+	e.requests = append(e.requests, req)
+	return e.ReportEngine.Generate(req)
+}
+
+type countingReportNarrator struct{ calls atomic.Int32 }
+
+func (n *countingReportNarrator) Narrate(context.Context, reporting.NarrativeInput) (reporting.Narrative, error) {
+	n.calls.Add(1)
+	return reporting.Narrative{Source: reporting.NarrativeSourceAI, HealthStatus: "HEALTHY", HealthMessage: "narrated"}, nil
+}
+
+// A PDF single-resource report may be narrated by the tenant's Pulse
+// Assistant, a paid provider call recorded in the cost ledger. GET passes the
+// demo-mode guard and the CSRF check, and SameSite=Lax session cookies ride
+// cross-site top-level GET navigations, so only POST, the settings UI
+// transport, may reach the AI narrator. GET still returns the report, with
+// the deterministic summary and a note in place of the "Configure Pulse
+// Assistant" tip.
+func TestContract_SingleReportAINarrationRequiresPOST(t *testing.T) {
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	engine := &recordingReportEngine{ReportEngine: reporting.NewReportEngine(reporting.EngineConfig{MetricsStore: store})}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	// The narrator resolver stands for GetAIService, which can construct a
+	// tenant AI service; GET must use only the existing-service findings path.
+	narrator := &countingReportNarrator{}
+	var narratorResolves, findingsResolves atomic.Int32
+	handler := NewReportingHandlers(nil, nil)
+	handler.SetNarratorResolver(func(context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
+		narratorResolves.Add(1)
+		return narrator, nil, nil
+	})
+	handler.SetExistingFindingsResolver(func(context.Context) reporting.FindingsProvider {
+		findingsResolves.Add(1)
+		return nil
+	})
+	generate := func(req *http.Request) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		handler.HandleGenerateReport(rec, req)
+		return rec
+	}
+	const query = "/api/admin/reports/generate?format=pdf&resourceType=node&resourceId=node-1"
+
+	rec := generate(httptest.NewRequest(http.MethodGet, query, nil))
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/pdf" {
+		t.Fatalf("GET report: status %d, content type %q, body=%s", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
+	}
+	if got := narrator.calls.Load(); got != 0 {
+		t.Fatalf("GET report called the AI narrator %d times, want 0", got)
+	}
+	narrative, err := engine.NarrativeFor(engine.requests[len(engine.requests)-1])
+	if err != nil {
+		t.Fatalf("GET report narrative: %v", err)
+	}
+	if narrative.Source != reporting.NarrativeSourceHeuristic || narrative.Disclaimer != reportGETNarrativeNote {
+		t.Fatalf("GET report narrative = source %q disclaimer %q, want the deterministic summary with the GET note", narrative.Source, narrative.Disclaimer)
+	}
+
+	for _, method := range []string{http.MethodHead, http.MethodPut, http.MethodDelete} {
+		rec := generate(httptest.NewRequest(method, query, nil))
+		if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Allow") != "GET, POST" {
+			t.Fatalf("%s report: status %d, Allow %q, want 405 with Allow GET, POST", method, rec.Code, rec.Header().Get("Allow"))
+		}
+	}
+	if got := narrator.calls.Load(); got != 0 {
+		t.Fatalf("GET, HEAD, PUT and DELETE called the AI narrator %d times, want 0", got)
+	}
+	if got := narratorResolves.Load(); got != 0 {
+		t.Fatalf("GET, HEAD, PUT and DELETE resolved the AI service %d times, want 0", got)
+	}
+	if got := findingsResolves.Load(); got != 1 {
+		t.Fatalf("GET looked up existing Patrol findings %d times, want 1", got)
+	}
+
+	rec = generate(httptest.NewRequest(
+		http.MethodPost,
+		"/api/admin/reports/generate",
+		strings.NewReader(`{"format":"pdf","resourceType":"node","resourceId":"node-1"}`),
+	))
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/pdf" {
+		t.Fatalf("POST report: status %d, content type %q, body=%s", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
+	}
+	if got := narrator.calls.Load(); got != 1 {
+		t.Fatalf("POST report called the AI narrator %d times, want 1", got)
+	}
+	if got := narratorResolves.Load(); got != 1 {
+		t.Fatalf("POST report resolved the AI service %d times, want 1", got)
+	}
+}
+
+// The router's real resolvers: a GET report for a tenant whose AI service is
+// not running must not construct one, because construction can list provider
+// models and start background discovery. POST resolves it as before.
+func TestContract_SingleReportGETDoesNotConstructTenantAIService(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	router := &Router{
+		aiSettingsHandler: NewAISettingsHandler(config.NewMultiTenantPersistence(t.TempDir()), nil, nil),
+		reportingHandlers: NewReportingHandlers(nil, nil),
+	}
+	router.wireReportingAIResolvers()
+	t.Cleanup(router.aiSettingsHandler.StopServices)
+	tenantServices := func() int {
+		router.aiSettingsHandler.aiServicesMu.RLock()
+		defer router.aiSettingsHandler.aiServicesMu.RUnlock()
+		return len(router.aiSettingsHandler.aiServices)
+	}
+	generate := func(req *http.Request) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		router.reportingHandlers.HandleGenerateReport(rec, req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "tenant-1")))
+		return rec
+	}
+
+	rec := generate(httptest.NewRequest(http.MethodGet, "/api/admin/reports/generate?format=pdf&resourceType=node&resourceId=node-1", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET report: status %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := tenantServices(); got != 0 {
+		t.Fatalf("GET report constructed %d tenant AI services, want 0", got)
+	}
+	if _, ok := engine.lastReq.Narrator.(getReportNarrator); !ok || engine.lastReq.FindingsProvider != nil {
+		t.Fatalf("GET report narrator %T, findings %v; want the deterministic narrator and no findings without a running service", engine.lastReq.Narrator, engine.lastReq.FindingsProvider)
+	}
+
+	rec = generate(httptest.NewRequest(http.MethodPost, "/api/admin/reports/generate", strings.NewReader(`{"format":"pdf","resourceType":"node","resourceId":"node-1"}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST report: status %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := tenantServices(); got != 1 {
+		t.Fatalf("POST report resolved %d tenant AI services, want 1", got)
 	}
 }
 

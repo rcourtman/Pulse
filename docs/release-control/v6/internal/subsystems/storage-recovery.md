@@ -4371,10 +4371,13 @@ one that returns must stay page-scoped instead of collapsing to the expanded
 row or replacing the page overview with row-local empty states.
 That same storage ownership now also governs reveal. Row hover may highlight
 the matching row in place, but storage hover must not auto-filter or
-auto-scroll the table. Reveal belongs only to deliberate focus: a focused
-pool or disk row may switch to the owning view or expand the owning group
-through the bridge's `revealActiveSeries` callback, and a pinned pool-group
-header that sits off-screen scrolls into view through the same bridge.
+auto-scroll the table. Reveal belongs only to deliberate focus: the bridge
+hands the focused pool or disk series to the `revealActiveSeries` callback,
+which reopens a focused pool's collapsed owning group, and a pinned pool-group
+header that sits off-screen scrolls into view through the same bridge. Focus
+only ever names a row in the active pools or disks view, so the callback never
+switches views; the view-switching branches that served the retired jump to
+the active row are gone.
 That same reveal contract now also owns inline-detail expansion. When a pool or
 disk row is deliberately focused and its inline detail opens on the storage
 page, the detail row must publish the same canonical summary series ID through
@@ -6261,6 +6264,19 @@ reporting actually produced output, not whether it is currently armed. The read
 is in `applyLicensedFeatureConfigSnapshot`
 (`pkg/server/telemetry_licensed_features.go`), pinned by
 `TestApplyLicensedFeatureConfigSnapshot_CountsScheduledReportingAndProfiles`.
+
+### Single-resource report AI narration requires POST
+
+`internal/api/metrics_reporting_handlers.go` now accepts `POST` with a JSON
+body for `/api/admin/reports/generate` and lets only that method use the
+tenant's AI narrator; `GET` keeps working with query parameters and the
+deterministic summary. A narrated PDF records the same AI cost-ledger entry as
+before, and only a `POST` can now produce one. A `GET` reads Patrol findings
+only from an AI service that is already running
+(`AISettingsHandler.ExistingAIService`), so it no longer constructs a tenant AI
+service, whose construction opens that tenant's SQLite resource export store.
+Report content, backup and recovery enrichment, and tenant storage are
+otherwise unchanged.
 
 ### Audit-read activity is a bounded, content-free local history
 

@@ -2408,6 +2408,12 @@ workloads and storage tables. Row hover may highlight the matching row in
 place, but the hot path must not auto-scroll the page or rebuild the table
 into a one-row filtered view on transient hover; only a deliberate row focus
 may reveal an off-screen row, through the shared summary-table focus bridge.
+The bridge measures row position only inside that deliberate reveal. It must
+not keep window-level scroll or resize listeners, or re-measure the hovered
+row on every hover change and scroll frame, for an off-screen affordance that
+nothing renders: the retired `Jump to row` visibility check did exactly that,
+costing 128 `getComputedStyle` calls across eight row hovers and 320 across
+ten scroll steps on the 12-node mock storage table, and none once removed.
 That same hot-path contract also owns the row-emphasis paint. Workload guest
 and group rows and storage pool, group, and disk rows must expose
 summary-linked activity through the shared `data-summary-row-active` marker and let the shared frontend
