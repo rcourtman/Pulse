@@ -11,6 +11,7 @@ import {
   presentationPolicyHidesUpgradePrompts,
 } from '@/stores/sessionPresentationPolicy';
 import { formatRelativeTime } from '@/utils/format';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getAIProviderDisplayName } from '@/utils/aiProviderPresentation';
 import { getPatrolSetupAction } from '@/utils/patrolRuntimeActions';
 import { getPatrolAutonomyAvailabilityPresentation } from './patrolAutonomyAvailability';
@@ -30,6 +31,9 @@ function modelIdWithoutProviderPrefix(modelId: string | undefined): string {
 
 export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceState }) {
   const state = props.state;
+  // Patrol status re-reads keep the same blocked time while Patrol stays
+  // paused, so the Blocked age reads the shared clock.
+  const now = useRelativeTimeNow();
   const setupAction = createMemo(() =>
     getPatrolSetupAction(
       resolvePatrolBlockedActionCause(state.blockedCause(), state.patrolReadiness()?.cause),
@@ -267,7 +271,7 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
                 <p class="text-xs text-amber-700 dark:text-amber-300">{state.blockedReason()}</p>
                 <Show when={state.blockedAt()}>
                   <p class="text-[10px] text-amber-700 dark:text-amber-300">
-                    Blocked {formatRelativeTime(state.blockedAt(), { compact: true })}
+                    Blocked {formatRelativeTime(state.blockedAt(), { compact: true, now: now() })}
                   </p>
                 </Show>
               </div>

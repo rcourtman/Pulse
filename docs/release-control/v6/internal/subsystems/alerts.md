@@ -3350,6 +3350,27 @@ delivery pause because those policies must not disable observation of Pulse.
 Its Refresh and Show/Hide actions are the shared outline `Button` (xs and
 `settingsAction` sizes), not a copied border shell, so they match the other
 destination controls and keep a 44px touch target on phones.
+Last success and Monitor progress are ages, so they read the frontend-primitives
+shared relative-time clock and keep moving while the panel stays open, and the
+panel re-reads `GET /api/alerts/deadman/status` in the background every 30
+seconds. A moving age over a status read once at mount would claim the
+heartbeat stopped while Pulse kept pinging every minute, and a status that is
+never re-read kept its read-time age through a real stall, which is the one
+case this panel exists to show. A background re-read leaves the Refresh control
+alone, and a failed one keeps the last status and marks it unavailable. The
+status read has no timeout, so reads carry a sequence number and a read's
+outcome applies only when it is newer than the last read that settled: a
+success shows its status and clears the unavailable mark, a failure sets it. A
+slow or hung read can therefore neither overwrite a newer outcome nor block
+later reads, and reads slower than the poll still land in order. While the
+panel's poll runs, the next background read goes out at the first poll once the
+newest read has been pending at least 29 seconds (one second of slack absorbs
+timer jitter), and a Refresh is released by its own read, by any newer read that
+settles, or by the first poll at which it has been pending that long, so a hung
+Refresh frees within about two intervals of the click.
+The delivery log's relative hover time on each row reads the same clock: a
+logged attempt's time never changes, so its age is correct over a log that is
+only re-read on demand.
 
 Watchdog transport and monitoring progress remain notifications- and
 monitoring-owned respectively. Alerts owns the system-alert projection:

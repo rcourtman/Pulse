@@ -5314,6 +5314,17 @@ too. Every read of the clock returns the wall clock; the 30-second tick only
 tells readers to re-read, so a cell that mounts between ticks never measures
 from a stale time and a timestamp from the last few seconds never reads as a
 future time.
+The rule has one deliberate exception. The age of a latest reading (last used,
+last seen, last success, last checked) on data the surface reads once and does
+not re-read stays the age at read time, because a moving age over a snapshot
+that never refreshes claims the reading stopped when it may not have. Such a
+surface either re-reads the snapshot in the background, as Proxmox replication
+and the external watchdog panel do, or keeps the read-time age, as the Patrol
+attention detail does for Last seen. The external watchdog panel orders its
+re-reads by request, so a slow or hung read can neither pin it to an older
+snapshot nor overwrite a newer outcome while its ages keep moving. An
+immutable event time (when a delivery was attempted, a transition happened, a
+policy was set) ages correctly over any snapshot and reads the clock.
 Read-only metadata badges follow the same primitive-owned shell rule.
 `frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
 outlined appearances, compact sizing, shape, typed tone vocabulary, fit
