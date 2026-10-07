@@ -269,6 +269,24 @@ func TestCloneResource_MutateParentBySource(t *testing.T) {
 	}
 }
 
+// A registry seeded from another registry's listing indexes the folds each
+// cloned resource carries, so the clone must carry them, detached.
+func TestCloneResourceCarriesLinkFoldedIDs(t *testing.T) {
+	original := &Resource{ID: "vm-1", linkFoldedIDs: []string{"agent-1", "agent-2"}}
+	cloned := cloneResource(original)
+
+	if !reflect.DeepEqual(cloned.linkFoldedIDs, []string{"agent-1", "agent-2"}) {
+		t.Fatalf("cloned linkFoldedIDs = %v, want the original's folds", cloned.linkFoldedIDs)
+	}
+	cloned.linkFoldedIDs[0] = "MUTATED"
+	if original.linkFoldedIDs[0] != "agent-1" {
+		t.Error("mutating cloned linkFoldedIDs should not affect original")
+	}
+	if listed := cloneMaterializedResource(original); !reflect.DeepEqual(listed.linkFoldedIDs, original.linkFoldedIDs) {
+		t.Fatalf("listed linkFoldedIDs = %v, want %v", listed.linkFoldedIDs, original.linkFoldedIDs)
+	}
+}
+
 func TestCloneResource_MutateAvailabilityTimes(t *testing.T) {
 	checkedAt := time.Date(2026, time.July, 9, 12, 0, 0, 0, time.UTC)
 	succeededAt := checkedAt.Add(-time.Minute)

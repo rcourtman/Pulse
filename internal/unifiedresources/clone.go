@@ -62,6 +62,7 @@ func cloneResourceData(in *Resource) Resource {
 	out.DiscoveryReadiness = cloneResourceDiscoveryReadiness(in.DiscoveryReadiness)
 	out.MetricsTarget = cloneMetricsTarget(in.MetricsTarget)
 	out.SupersededCanonicalIDs = cloneStringSlice(in.SupersededCanonicalIDs)
+	out.linkFoldedIDs = cloneStringSlice(in.linkFoldedIDs)
 	out.PlatformScopes = cloneStringSlice(in.PlatformScopes)
 	out.Sources = cloneDataSourceSlice(in.Sources)
 	out.SourceStatus = cloneSourceStatusMap(in.SourceStatus)

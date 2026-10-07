@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -95,10 +96,15 @@ type ResourceRegistry struct {
 	exclusions   map[string]struct{}
 	identityPins *identityPinIndex
 	pbsBackups   []models.PBSBackup
-	// linkMergedIDs holds the resources a manual link folded into their
-	// primary. They are still observed, so identity succession treats them
-	// as live.
-	linkMergedIDs map[string]struct{}
+	// linkFoldIndex maps each canonical ID a manual link folded into another
+	// resource to the rows that took it in (Resource.linkFoldedIDs). Folded
+	// resources are still observed, so identity succession treats them as
+	// live, and references to them resolve to the row holding them. Holders
+	// carry their folds, so a registry seeded from another registry's listing
+	// indexes the same ones. Entries are rows, not IDs, and are checked on
+	// read (linkFoldHoldersLocked): a holder folded away, replaced or re-keyed
+	// needs no bookkeeping.
+	linkFoldIndex map[string][]*Resource
 	// supersededIndex maps record-declared retired canonical IDs to the live
 	// resource that superseded them, so references persisted under a retired
 	// ID (availability links, API reads) keep resolving. An empty value marks
@@ -774,8 +780,49 @@ func (rr *ResourceRegistry) canonicalIDObservedLocked(id string) bool {
 	if _, live := rr.resources[id]; live {
 		return true
 	}
-	_, folded := rr.linkMergedIDs[id]
-	return folded
+	return len(rr.linkFoldHoldersLocked(id)) > 0
+}
+
+// indexLinkFoldedIDsLocked records that holder took in canonical IDs operator
+// links folded into it.
+func (rr *ResourceRegistry) indexLinkFoldedIDsLocked(holder *Resource, foldedIDs []string) {
+	if holder == nil || len(foldedIDs) == 0 {
+		return
+	}
+	if rr.linkFoldIndex == nil {
+		rr.linkFoldIndex = make(map[string][]*Resource)
+	}
+	for _, foldedID := range foldedIDs {
+		if !slices.Contains(rr.linkFoldIndex[foldedID], holder) {
+			rr.linkFoldIndex[foldedID] = append(rr.linkFoldIndex[foldedID], holder)
+		}
+	}
+}
+
+// linkFoldHoldersLocked lists the live rows that hold a canonical ID an
+// operator link folded into them. More than one is ambiguous.
+func (rr *ResourceRegistry) linkFoldHoldersLocked(ref string) []string {
+	ref = CanonicalResourceID(ref)
+	var holders []string
+	for _, holder := range rr.linkFoldIndex[ref] {
+		if rr.resources[holder.ID] != holder || !slices.Contains(holder.linkFoldedIDs, ref) ||
+			slices.Contains(holders, holder.ID) {
+			continue
+		}
+		holders = append(holders, holder.ID)
+	}
+	return holders
+}
+
+// linkFoldHolderLocked resolves a canonical ID an operator link folded into
+// another resource to the row holding it. ambiguous reports two holders: the
+// reference must then resolve to nothing, not fall through to weaker matches.
+func (rr *ResourceRegistry) linkFoldHolderLocked(ref string) (holderID string, ambiguous bool) {
+	holders := rr.linkFoldHoldersLocked(ref)
+	if len(holders) != 1 {
+		return "", len(holders) > 1
+	}
+	return holders[0], false
 }
 
 // applyRecordSuccessions re-keys operator-owned store rows from canonical IDs
@@ -875,6 +922,7 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 		rr.seedSourceMappingsFromResourceLocked(rr.resources[resourceID])
 		if resource := rr.resources[resourceID]; resource != nil {
 			rr.indexSupersededCanonicalIDsLocked(resourceID, resource.SupersededCanonicalIDs)
+			rr.indexLinkFoldedIDsLocked(resource, resource.linkFoldedIDs)
 			rr.indexPhysicalDiskHardwareLocked(resource)
 		}
 	}
@@ -1525,6 +1573,11 @@ func (rr *ResourceRegistry) resolveReferenceIDLocked(ref string) (string, bool) 
 		return ref, false
 	}
 	if resolvedID := rr.supersededResourceIDLocked(ref); rr.resources[resolvedID] != nil {
+		return resolvedID, false
+	}
+	// A resource an operator link folded into another is that row now, as
+	// its agent alert references ("agent:<host ID>") already are.
+	if resolvedID, ambiguous := rr.linkFoldHolderLocked(ref); resolvedID != "" || ambiguous {
 		return resolvedID, false
 	}
 	if resolvedID := rr.uniqueSourceResourceIDLocked(ref); rr.resources[resolvedID] != nil {
@@ -3614,10 +3667,12 @@ func (rr *ResourceRegistry) resolveAvailabilityLinkedResource(ref string, incomi
 		return ""
 	}
 
-	// References persisted under a retired canonical ID or under a
-	// node-scoped guest source ID follow the resource across identity eras
-	// and live migrations. These arms resolve provider-declared persistence
-	// keys, not display aliases, so the explicit link stays fail-closed.
+	// References persisted under a retired canonical ID, under a resource an
+	// operator link folded into another, or under a node-scoped guest source
+	// ID follow the resource across identity eras, links and live
+	// migrations. These arms resolve provider-declared persistence keys and
+	// operator links, not display aliases, so the explicit link stays
+	// fail-closed.
 	eligible := func(candidateID string) string {
 		candidateID = CanonicalResourceID(candidateID)
 		existing := rr.resources[candidateID]
@@ -3628,6 +3683,9 @@ func (rr *ResourceRegistry) resolveAvailabilityLinkedResource(ref string, incomi
 	}
 	if candidateID := eligible(rr.supersededResourceIDLocked(exactID)); candidateID != "" {
 		return candidateID
+	}
+	if holderID, ambiguous := rr.linkFoldHolderLocked(exactID); holderID != "" || ambiguous {
+		return eligible(holderID)
 	}
 	if candidateID := eligible(rr.uniqueSourceResourceIDLocked(ref)); candidateID != "" {
 		return candidateID
@@ -4844,12 +4902,19 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 
 		rr.mergeResourceData(primary, other, thresholds)
 		delete(rr.resources, otherID)
-		if rr.linkMergedIDs == nil {
-			rr.linkMergedIDs = make(map[string]struct{})
-		}
-		rr.linkMergedIDs[otherID] = struct{}{}
+		rr.foldLinkedResourceLocked(primary, otherID, other)
 		rr.updateSourceMappings(otherID, primaryID)
 	}
+}
+
+// foldLinkedResourceLocked records on the link primary the resource folded
+// into it and every ID earlier links folded into that resource, so a chain of
+// links resolves to its last primary. The folded row has left the registry,
+// so its own index entries lapse on read.
+func (rr *ResourceRegistry) foldLinkedResourceLocked(primary *Resource, otherID string, other *Resource) {
+	folded := append([]string{otherID}, other.linkFoldedIDs...)
+	primary.linkFoldedIDs = uniqueTrimmed(append(append([]string(nil), primary.linkFoldedIDs...), folded...)...)
+	rr.indexLinkFoldedIDsLocked(primary, folded)
 }
 
 func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource, thresholds map[DataSource]time.Duration) {

@@ -6476,6 +6476,18 @@ no backup, snapshot, restore, retention, cleanup, or verification authority.
 The storage/recovery resource query and its admission, freshness, and
 persistence contracts are unchanged.
 
+### Link-folded resource references open no recovery path
+
+`internal/unifiedresources/types.go` gains an unexported
+`Resource.linkFoldedIDs`: the canonical IDs operator links folded into a
+merged resource, which the registry uses to resolve availability check links
+and reference reads by those IDs to the merged row. It is in-memory identity
+only, never serialized, persisted or exposed on the API. Storage and recovery
+code neither reads it nor resolves references through the registry's
+reference resolvers, so recovery ownership, restore targeting and protection
+grouping are unchanged. A folded ID never becomes a superseded ID, so no
+recovery, alert or availability configuration migrates through it.
+
 ### Token creation and deletion preserve restart-time persistence truth
 
 The shared `internal/api` token creation path treats its persisted inventory as
