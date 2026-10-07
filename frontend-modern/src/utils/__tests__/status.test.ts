@@ -16,7 +16,6 @@ import {
   getDockerHostStatusIndicator,
   getDockerContainerStatusIndicator,
   getDockerServiceStatusIndicator,
-  getPBSStatusIndicator,
   getReplicationJobStatusIndicator,
   isConnectedHealthStatus,
   getSimpleStatusIndicator,
@@ -404,55 +403,6 @@ describe('Status sets', () => {
       expect(ERROR_CONTAINER_STATES.has('unhealthy')).toBe(true);
       expect(ERROR_CONTAINER_STATES.has('restarting')).toBe(true);
     });
-  });
-});
-
-describe('getPBSStatusIndicator', () => {
-  it('returns muted for null/undefined', () => {
-    expect(getPBSStatusIndicator(null)).toEqual({ variant: 'muted', label: 'Unknown' });
-    expect(getPBSStatusIndicator(undefined)).toEqual({ variant: 'muted', label: 'Unknown' });
-  });
-
-  it('returns danger for offline connection', () => {
-    const result = getPBSStatusIndicator({ connectionHealth: 'offline', status: 'online' });
-    expect(result.variant).toBe('danger');
-  });
-
-  it('returns danger for offline status', () => {
-    const result = getPBSStatusIndicator({ status: 'offline' });
-    expect(result.variant).toBe('danger');
-  });
-
-  it('returns success for healthy status', () => {
-    const result = getPBSStatusIndicator({ status: 'healthy' });
-    expect(result.variant).toBe('success');
-    expect(result.label).toBe('Healthy');
-  });
-
-  it('returns success for online status', () => {
-    const result = getPBSStatusIndicator({ status: 'online' });
-    expect(result.variant).toBe('success');
-    expect(result.label).toBe('Online');
-  });
-
-  it('returns success for online status even with degraded connection', () => {
-    const result = getPBSStatusIndicator({ connectionHealth: 'degraded', status: 'online' });
-    expect(result.variant).toBe('success');
-  });
-
-  it('returns warning for degraded status', () => {
-    const result = getPBSStatusIndicator({ status: 'degraded' });
-    expect(result.variant).toBe('warning');
-  });
-
-  it('returns warning for syncing status', () => {
-    const result = getPBSStatusIndicator({ status: 'syncing' });
-    expect(result.variant).toBe('warning');
-  });
-
-  it('returns warning for unknown status (in degraded set)', () => {
-    const result = getPBSStatusIndicator({ status: 'unknown' });
-    expect(result.variant).toBe('warning');
   });
 });
 

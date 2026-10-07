@@ -2213,7 +2213,6 @@ describe('frontend resource type boundaries', () => {
     expect(aiChatSource).not.toContain('const normalizeMentionKeyPart =');
     expect(chatIdentifiersSource).toContain('normalizeChatMentionKeyPart');
     expect(chatIdentifiersSource).toContain('normalizeChatToolName');
-    expect(resourceIdentitySource).toContain('getNormalizedIdentityLookupVariants');
     expect(stringUtilsSource).toContain('export const asTrimmedString');
     expect(resourceIdentitySource).not.toContain(
       'const asTrimmedString = (value: unknown): string | undefined => {',

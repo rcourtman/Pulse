@@ -5380,8 +5380,11 @@ should extend these unified-resource owners instead of rebuilding status or
 badge logic inside PMG, recovery, dashboard, or infrastructure-local views.
 The shared resource-runtime adapter boundary is also owned here now.
 `frontend-modern/src/utils/agentResources.ts` owns canonical actionable
-resource identities, agent-facet detection, cluster-name fallbacks, and
-resource-derived chart-key candidates. `frontend-modern/src/utils/resourcePlatformData.ts`
+resource identities, agent-facet detection, and cluster-name fallbacks. It no
+longer carries a resource-wide chart-key candidate list: workload table
+sparklines match chart series to rows through the chart-key candidates in
+`frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts`.
+`frontend-modern/src/utils/resourcePlatformData.ts`
 owns the typed extraction of platform-data fragments from unified resources,
 and `frontend-modern/src/utils/resourceStateAdapters.ts` owns canonical
 projection from unified resources into node/PBS/PMG runtime view models.
