@@ -6543,6 +6543,20 @@ Patrol scope payloads. API-backed TrueNAS systems may still keep `truenas`
 platform metadata and separate run-history coverage counts, but AI resource
 type fields must normalize to canonical `agent` once they cross the governed
 runtime boundary.
+Patrol scope resolution registers the alert subsystem's Docker references as
+aliases, built by the same `internal/alerts` builders rather than formatted
+locally: `DockerHostResourceID` on the Docker host record, and on each
+container record `dockerAlertScopeAlias`, which passes the container's name so
+a container reported without an ID answers to its marked name reference
+(`docker:<host ID>/name:<name>`) and never to its host's reference.
+`dockerServiceAlertScopeAliases` registers service references, including
+`docker:<host ID>/service/name:<name>` for a service without an ID, on the
+owning host. The legacy snapshot record of a container without an ID has no ID
+to scope by, so only the unified read state can scope its alerts. Proof:
+`TestResolvePatrolScopeResolvesDockerAlertResourceIDs` in
+`internal/ai/patrol_run_test.go` and
+`TestDockerServiceAlertScopeAliasesDeriveIDFromName` in
+`internal/ai/patrol_state_scope_alias_test.go`.
 The same governed-context rule also applies to the main unified AI resource
 overview: infrastructure, workload, alert-label, and top-consumer summaries
 must not leak raw resource names, cluster labels, IP addresses, or unresolved

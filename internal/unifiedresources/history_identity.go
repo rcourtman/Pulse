@@ -26,7 +26,7 @@ func legacyDockerHistoryIdentity(ref string) (sourceID, canonicalID string, ok b
 		return "", "", false
 	}
 	sourceID = host + "/container/" + container
-	if host == "container" { // DockerResourceID's explicit hostless form.
+	if host == "container" { // DockerContainerResourceID's explicit hostless form.
 		sourceID = container
 	}
 	return sourceID, SourceSpecificID(ResourceTypeAppContainer, SourceDocker, sourceID), true
@@ -43,19 +43,23 @@ func isDockerHistoryReference(ref string) bool {
 }
 
 // isDockerNameHistoryReference marks Docker alert references that are not host
-// or service references: container references, which only a complete
-// container ID binds, and hostless service names. A name or shortened ID must
-// never join history, not even through a retained binding.
+// or service ID references: container references, which only a complete
+// container ID binds, the names of containers and services reported without an
+// ID, and hostless service names. A name or shortened ID must never join
+// history, not even through a retained binding.
 func isDockerNameHistoryReference(ref string) bool {
 	_, _, ok := dockerHostHistoryReference(ref)
 	return isDockerHistoryReference(ref) && !ok
 }
 
 // dockerHostHistoryReference parses the Docker host alert reference
-// ("docker:<host ID>", alerts.DockerResourceID without a container) and the
-// Swarm service alert reference ("docker:<host ID>/service/<service ID>",
+// ("docker:<host ID>", alerts.DockerHostResourceID) and the Swarm service
+// alert reference ("docker:<host ID>/service/<service ID>",
 // alerts.DockerServiceResourceID). serviceID is empty for a host reference.
-// "docker:unknown" is the shared fallback for alerts without a host.
+// A service reported without an ID alerts under "name:<name>" in the ID
+// position, and Swarm IDs never contain a colon, so that is a name, not a
+// service reference. "docker:unknown" was the old builder's fallback for
+// alerts without a host.
 func dockerHostHistoryReference(ref string) (hostID, serviceID string, ok bool) {
 	rest, found := strings.CutPrefix(strings.TrimSpace(ref), "docker:")
 	if !found {
@@ -65,7 +69,7 @@ func dockerHostHistoryReference(ref string) (hostID, serviceID string, ok bool) 
 	if hostID == "" || hostID == "unknown" || strings.TrimSpace(hostID) != hostID || strings.Contains(hostID, "/") {
 		return "", "", false
 	}
-	if isService && (serviceID == "" || strings.TrimSpace(serviceID) != serviceID || strings.Contains(serviceID, "/")) {
+	if isService && (serviceID == "" || strings.TrimSpace(serviceID) != serviceID || strings.ContainsAny(serviceID, "/:")) {
 		return "", "", false
 	}
 	return hostID, serviceID, true
@@ -74,43 +78,37 @@ func dockerHostHistoryReference(ref string) (hostID, serviceID string, ok bool) 
 // dockerHistoryOwnerLocked resolves a Docker host or Swarm service alert
 // reference through the registry's own Docker source identities. The host ID
 // is the Docker host's source ID. A service reference names the service with
-// that ID in the host's Swarm cluster, which every manager of the cluster
-// reports under its own host ID. A service without an ID is referenced by its
-// normalized name in the same place, so while the cluster has such a service
-// every service reference there is a conflict.
-func (rr *ResourceRegistry) dockerHistoryOwnerLocked(ref string) (resourceID string, conflict bool) {
+// that exact ID in the host's Swarm cluster, which every manager of the
+// cluster reports under its own host ID.
+func (rr *ResourceRegistry) dockerHistoryOwnerLocked(ref string) string {
 	hostID, serviceID, ok := dockerHostHistoryReference(ref)
 	if !ok {
-		return "", false
+		return ""
 	}
 	hostResourceID := rr.bySource[SourceDocker][hostID]
 	host := rr.resources[hostResourceID]
 	if host == nil || CanonicalResourceType(host.Type) != ResourceTypeAgent {
-		return "", false
+		return ""
 	}
 	if serviceID == "" {
-		return hostResourceID, false
+		return hostResourceID
 	}
 	if host.Docker == nil {
-		return "", false
+		return ""
 	}
 	cluster := dockerSwarmClusterKeyFromMeta(host.Docker.Swarm)
 	if cluster == "" {
-		return "", false
+		return ""
 	}
-	for _, other := range rr.resources {
-		if CanonicalResourceType(other.Type) == ResourceTypeDockerService && other.Docker != nil &&
-			strings.TrimSpace(other.Docker.ServiceID) == "" && dockerSwarmClusterKeyFromMeta(other.Docker.Swarm) == cluster {
-			return "", true
-		}
-	}
+	// The registry keys a service without an ID by its raw name, so the entry
+	// must carry exactly this ID.
 	serviceResourceID := rr.bySource[SourceDocker][normalizeSourceID(cluster+":service:"+serviceID)]
 	service := rr.resources[serviceResourceID]
 	if service == nil || CanonicalResourceType(service.Type) != ResourceTypeDockerService ||
 		service.Docker == nil || strings.TrimSpace(service.Docker.ServiceID) != serviceID {
-		return "", false
+		return ""
 	}
-	return serviceResourceID, false
+	return serviceResourceID
 }
 
 // historySubResourceOwner names the owner of a sub-resource alert reference,
@@ -169,8 +167,8 @@ func (rr *ResourceRegistry) resolveHistoryReference(ref string) (resourceID stri
 	rr.mu.RLock()
 	defer rr.mu.RUnlock()
 	if isDockerHistoryReference(ref) {
-		resourceID, conflict := rr.dockerHistoryOwnerLocked(ref)
-		return resourceID, resourceID != "" || conflict
+		resourceID = rr.dockerHistoryOwnerLocked(ref)
+		return resourceID, resourceID != ""
 	}
 	matches := rr.durableHistoryMatchesLocked(ref)
 	if ownerRef, ownerType, ok := historySubResourceOwner(ref); ok && len(matches) == 0 {
