@@ -2679,10 +2679,12 @@ truthfulness, not native thaw, containing-release or workload acceptance.
     snapshot-bridge adapters stay read-only. The rebuild, the live
     supplemental refresh and the read-state overlay ingest records with the
     adapter's configured stale thresholds, because record ingest joins
-    operator links and a link's metric merge judges each side's freshness
-    by them (unified-resources contract, "Operator links reach
-    record-ingested resources"). Regression coverage:
-    `TestMonitorAdapterJoinsLinkedRecordsWithConfiguredStaleThresholds` in
+    operator links and the freshness gate of every metric merge, a link's or
+    a source's into an existing row, reads them (unified-resources contract,
+    "Operator links reach record-ingested resources"). Regression
+    coverage:
+    `TestMonitorAdapterJoinsLinkedRecordsWithConfiguredStaleThresholds` and
+    `TestMonitorAdapterSourceMergesUseConfiguredStaleThresholds` in
     `internal/unifiedresources/monitor_adapter_read_state_test.go` and
     `TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity` in
     `internal/monitoring/issue1913_host_continuity_test.go`.

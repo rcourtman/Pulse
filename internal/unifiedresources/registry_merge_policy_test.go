@@ -247,6 +247,114 @@ func TestLeaseExpiredAgentOnLiveProxmoxNodeStaysOnline(t *testing.T) {
 	}
 }
 
+// A source merge into an existing row judges metric freshness by the ingest's
+// stale thresholds, as the stale pass that ends the ingest does. With PVE
+// polled every two minutes the monitor allows Proxmox four minutes, so a node
+// polled ninety seconds ago is current while its agent, silent for seventy-five
+// seconds, is stale, and the row shows the node's readings. Without thresholds
+// both sources are stale by the defaults and the agent keeps its precedence.
+func TestSourceMergesJudgeFreshnessByTheIngestStaleThresholds(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:            "homelab-pve1",
+			Name:          "pve1",
+			Instance:      "homelab",
+			Status:        "online",
+			LinkedAgentID: "host-pve1",
+			CPU:           0.12,
+			Memory:        models.Memory{Total: 64 << 30, Used: 16 << 30, Free: 48 << 30, Usage: 25},
+			LastSeen:      now.Add(-90 * time.Second),
+		}},
+		Hosts: []models.Host{{
+			ID:              "host-pve1",
+			MachineID:       "machine-pve1",
+			Hostname:        "pve1",
+			LinkedNodeID:    "homelab-pve1",
+			Status:          "online",
+			CPUUsage:        80,
+			Memory:          models.Memory{Total: 64 << 30, Used: 48 << 30, Free: 16 << 30, Usage: 75},
+			LastSeen:        now.Add(-75 * time.Second),
+			IntervalSeconds: 30,
+		}},
+	}
+
+	for _, tc := range []struct {
+		name        string
+		thresholds  map[DataSource]time.Duration
+		proxmoxPoll string
+		want        DataSource
+		wantCPU     float64
+		wantMemory  float64
+	}{
+		{"configured", map[DataSource]time.Duration{SourceProxmox: 4 * time.Minute}, "online", SourceProxmox, 12, 25},
+		{"defaults", nil, "stale", SourceAgent, 80, 75},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := NewRegistry(nil)
+			rr.IngestSnapshotWithStaleThresholds(snapshot, tc.thresholds)
+
+			resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+			if got := resource.SourceStatus[SourceProxmox].Status; got != tc.proxmoxPoll {
+				t.Fatalf("Proxmox sighting = %q, want %q: %+v", got, tc.proxmoxPoll, resource.SourceStatus)
+			}
+			if got := resource.SourceStatus[SourceAgent].Status; got != "stale" {
+				t.Fatalf("agent sighting = %q, want stale", got)
+			}
+			if resource.Metrics == nil || resource.Metrics.CPU == nil || resource.Metrics.Memory == nil {
+				t.Fatalf("merged row lost its readings: %+v", resource.Metrics)
+			}
+			if cpu := resource.Metrics.CPU; cpu.Source != tc.want || cpu.Percent != tc.wantCPU {
+				t.Fatalf("CPU = %.0f%% from %s, want %.0f%% from %s", cpu.Percent, cpu.Source, tc.wantCPU, tc.want)
+			}
+			if memory := resource.Metrics.Memory; memory.Source != tc.want || memory.Percent != tc.wantMemory {
+				t.Fatalf("memory = %.0f%% from %s, want %.0f%% from %s", memory.Percent, memory.Source, tc.wantMemory, tc.want)
+			}
+		})
+	}
+}
+
+// The metric merge and the stale pass read one threshold rule, so a source
+// sighting the merge treats as current is never one the pass marks stale.
+func TestMetricMergeFreshnessMatchesTheStalePass(t *testing.T) {
+	now := time.Now().UTC()
+	configured := map[DataSource]time.Duration{SourceProxmox: 4 * time.Minute, SourceVMware: 5 * time.Minute}
+	for _, tc := range []struct {
+		name       string
+		source     DataSource
+		sighting   SourceStatus
+		thresholds map[DataSource]time.Duration
+		wantStale  bool
+	}{
+		{"proxmox by default", SourceProxmox, SourceStatus{LastSeen: now.Add(-90 * time.Second)}, nil, true},
+		{"proxmox by configuration", SourceProxmox, SourceStatus{LastSeen: now.Add(-90 * time.Second)}, configured, false},
+		{"vsphere by default", SourceVMware, SourceStatus{LastSeen: now.Add(-3 * time.Minute)}, nil, true},
+		{"vsphere by configuration", SourceVMware, SourceStatus{LastSeen: now.Add(-3 * time.Minute)}, configured, false},
+		{"agent without its own threshold", SourceAgent, SourceStatus{LastSeen: now.Add(-75 * time.Second)}, configured, true},
+		{"slow disk inventory", SourceProxmox, SourceStatus{LastSeen: now.Add(-5 * time.Minute), ExpectedUpdateIntervalSeconds: 600}, nil, false},
+		{"missed two disk inventory polls", SourceProxmox, SourceStatus{LastSeen: now.Add(-21 * time.Minute), ExpectedUpdateIntervalSeconds: 600}, nil, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			status := map[DataSource]SourceStatus{tc.source: tc.sighting}
+			if got := metricSourceStale(now, status, tc.source, tc.thresholds); got != tc.wantStale {
+				t.Fatalf("metric merge stale = %v, want %v", got, tc.wantStale)
+			}
+
+			rr := NewRegistry(nil)
+			rr.resources["resource"] = &Resource{
+				ID:           "resource",
+				Status:       StatusOnline,
+				Sources:      []DataSource{tc.source},
+				SourceStatus: map[DataSource]SourceStatus{tc.source: tc.sighting},
+			}
+			rr.MarkStale(now, tc.thresholds)
+			if got := rr.resources["resource"].SourceStatus[tc.source].Status == "stale"; got != tc.wantStale {
+				t.Fatalf("stale pass stale = %v, want %v", got, tc.wantStale)
+			}
+		})
+	}
+}
+
 // Docker hosts hold a shorter lease than the registry's Docker stale
 // threshold, so a silent Docker host was offline for a while and then
 // flipped to warning once its sighting went stale.

@@ -1609,7 +1609,12 @@ Source freshness is a separate unified-resource status input, not a fixed
 global health timer. Snapshot rebuilds, resource seeding, supplemental record
 overlays, and cloned read-state overlays must preserve the monitoring-provided
 stale thresholds for Proxmox, PBS, and PMG sources so resources do not flap to
-warning/degraded between successful configured poll cycles.
+warning/degraded between successful configured poll cycles. A source merge
+into an existing row judges metric freshness by the ingest's thresholds and
+the stale pass's own threshold rule, so the merge's freshness gate never
+calls a source current that the stale pass marks stale, or the reverse. The
+gate decides only where no stronger rule does: a hypervisor-managed guest
+keeps its platform CPU even while that source is stale.
 
 Service-discovery readiness is a unified-resource payload contract, not a
 drawer-local decoration. Resource list/detail payloads that expose a
@@ -6556,8 +6561,21 @@ separate.
 
 - The monitor adapter passes its configured stale thresholds to record
   ingest, so a link joined there judges each side's metrics the way a
-  snapshot-time link does. Ordinary source merges into an existing row still
-  use the default thresholds on every ingest path.
+  snapshot-time link does. Ordinary source merges into an existing row use
+  the same thresholds on every ingest path: snapshot and record ingest hold
+  the caller's thresholds while they run, and `mergeInto` judges each
+  metric's freshness with them through `sourceStaleThreshold`, the rule the
+  stale pass reads. Before this, those merges used the defaults, so a
+  Proxmox node polled every two minutes showed a silent auto-linked agent's
+  readings while the stale pass called the node's poll current, and a
+  supplemental refresh of a linked vSphere VM kept the agent's memory over
+  vSphere's current reading. Outside mock mode the monitor configures only
+  Proxmox, PBS and PMG; mock mode also configures TrueNAS, vSphere and
+  availability. Regression coverage:
+  `TestMonitorAdapterSourceMergesUseConfiguredStaleThresholds` (rebuild,
+  supplemental refresh, overlay, node with auto-linked agent),
+  `TestSourceMergesJudgeFreshnessByTheIngestStaleThresholds` and
+  `TestMetricMergeFreshnessMatchesTheStalePass`.
 - Continuity records are the one record ingest that never joins links. A
   saved enrollment only fills an absent machine, so it stays its own row
   instead of lending its linked guest an offline verdict and an old agent
