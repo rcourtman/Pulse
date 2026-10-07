@@ -549,6 +549,57 @@ This tolerance delays activation; it does not disable powered-off monitoring.
 Use the existing guest offline-alert toggle when a guest should never produce
 powered-off alerts.
 
+### Destination severity and tag routing
+
+Open **Alerts → Notifications** and edit the email or webhook destination.
+For ordinary firing alerts, an enabled destination must match **both** its
+**Minimum alert severity** and **Resource tag routing**. Matching one does not
+bypass the other, or the separate notification schedules and holds.
+
+| Minimum alert severity | Eligible firing levels |
+| --- | --- |
+| **All alerts** | Informational, warning and critical alerts; other policies still apply. |
+| **Warnings and critical alerts** | Warning and critical alerts, not informational alerts. |
+| **Critical alerts only** | Critical alerts, not warning or informational alerts. |
+
+These are minimums, not exclusive channels. A critical alert can match both a
+**Warnings and critical alerts** destination and a **Critical alerts only**
+destination. There is no warning-only severity setting; tag filters select
+resources, not a severity exclusion. Each destination is evaluated independently,
+so one alert can go to more than one destination. Grouped alerts are filtered
+member by member: a critical member does not make the group's warning members
+eligible for a critical-only destination.
+
+An empty tag filter removes the **resource-tag restriction only**. It does not
+override minimum severity, paused delivery, a disabled destination or other
+notification policies. With tags selected:
+
+- **Match all tags** requires every selected tag on the same alert's routing
+  metadata. **Match any tag** requires at least one. An alert without usable
+  routing tags does not match a nonempty filter.
+- Matching is exact, ignoring case and surrounding whitespace; it does not
+  interpret wildcards, prefixes or regular expressions. A tag named `critical`
+  is a resource tag, not an alert-severity rule.
+- Proxmox resource tags use their tag text. Docker container and service labels
+  become `key:value` tags, or `key` when the value is empty: the label
+  `env=prod` is matched by `env:prod`, not just `prod`.
+
+For example, select `env:prod` and `team:ops`, **Match all tags**, and
+**Warnings and critical alerts**. A warning or critical alert carrying both
+tags is eligible for that destination. An informational alert with both tags
+is not. A critical alert carrying only `env:prod` also fails this filter;
+critical severity does not bypass tag routing. Choosing **Match any tag** would
+allow either tag, but would still exclude informational alerts.
+
+A successful **Test** does not exercise ordinary alert routing. Check an
+already occurring alert and [Recent delivery activity](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing)
+instead of creating an outage, removing filters or changing workload labels
+just to test delivery. Missing delivery is not evidence that the workload is
+healthy. Recovery uses the successful firing receipt for the same occurrence
+and destination, rather than reapplying changed tags or minimum severity;
+the separate [recovery controls and holds](#alert-reminders-and-recovery-notifications)
+still apply. Retained queued work also [keeps its saved destination settings](TROUBLESHOOTING.md#recover-retained-delivery-failures).
+
 ### Alert reminders and recovery notifications
 
 Open **Alerts → Schedule**. These controls govern notification eligibility, not
