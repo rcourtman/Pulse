@@ -28,6 +28,7 @@ const catalogPayload = {
     title: 'Performance Reports',
     description: 'Historical performance reporting',
     singleResourceEndpoint: '/api/admin/reports/generate',
+    singleResourceMethod: 'POST',
     multiResourceEndpoint: '/api/admin/reports/generate-multi',
     singleFilenamePrefix: 'report',
     singleFilenameSubject: 'resource_id',
@@ -476,6 +477,48 @@ describe('useReportingPanelState', () => {
     expect(hookState.scheduleForm()).toMatchObject({ kind: 'resources', attach: true });
 
     dispose();
+  });
+
+  it('posts a single-resource report as a JSON body through apiFetch', async () => {
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url === '/api/admin/reports/generate') {
+        return Promise.resolve(new Response('%PDF', { status: 200 }));
+      }
+      if (url === '/api/admin/reports/schedules') {
+        return Promise.resolve(jsonResponse(schedulesPayload));
+      }
+      return Promise.resolve(jsonResponse(catalogPayload));
+    });
+    const { createObjectURL, revokeObjectURL } = URL;
+    URL.createObjectURL = vi.fn(() => 'blob:report');
+    URL.revokeObjectURL = vi.fn();
+    try {
+      const { hookState, dispose } = mountHook();
+      await flushAsync();
+
+      hookState.setSelectedResources([{ id: 'vm-1', type: 'vm', name: 'vm-a' }]);
+      await hookState.handleGenerate();
+
+      const generate = apiFetchMock.mock.calls.filter(([url]) =>
+        String(url).startsWith('/api/admin/reports/generate'),
+      );
+      expect(generate).toHaveLength(1);
+      expect(generate[0][0]).toBe('/api/admin/reports/generate');
+      expect(generate[0][1]).toMatchObject({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(JSON.parse(String(generate[0][1].body))).toMatchObject({
+        resourceType: 'vm',
+        resourceId: 'vm-1',
+        format: catalogPayload.performanceReport.defaultFormat,
+      });
+      expect(showWarningMock).not.toHaveBeenCalled();
+      dispose();
+    } finally {
+      URL.createObjectURL = createObjectURL;
+      URL.revokeObjectURL = revokeObjectURL;
+    }
   });
 
   it('saves a Patrol weekly summary without a resource scope', async () => {

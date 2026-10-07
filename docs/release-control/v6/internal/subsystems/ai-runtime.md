@@ -7535,6 +7535,18 @@ prompt budget. Reporting is therefore an additive consumer of AI
 runtime, not a new ownership boundary, and the narrator/findings
 surfaces inherit the same governance the rest of the canonical AI
 runtime already enforces.
+Report narration is caller-requested spend, so on the single-resource HTTP
+route only `POST /api/admin/reports/generate` reaches it (fleet reports, from
+`POST .../generate-multi` or a report schedule, use the fleet narrator). The
+reporting narrator resolver goes through `AISettingsHandler.GetAIService`,
+which constructs a tenant service on first use and can then list provider
+models or start background discovery. A GET single-resource report never calls
+that resolver:
+it narrates deterministically and reads Patrol findings through
+`AISettingsHandler.ExistingAIService`, which returns only a service that is
+already running and never constructs one
+(`TestAISettingsHandler_ExistingAIServiceNeverConstructs`, and through the
+router's real wiring `TestContract_SingleReportGETDoesNotConstructTenantAIService`).
 
 The same canonical AI runtime now also owns the fleet-level report
 narrative through `report_fleet_narrator.go`. `Service` implements

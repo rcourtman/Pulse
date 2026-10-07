@@ -6265,6 +6265,19 @@ is in `applyLicensedFeatureConfigSnapshot`
 (`pkg/server/telemetry_licensed_features.go`), pinned by
 `TestApplyLicensedFeatureConfigSnapshot_CountsScheduledReportingAndProfiles`.
 
+### Single-resource report AI narration requires POST
+
+`internal/api/metrics_reporting_handlers.go` now accepts `POST` with a JSON
+body for `/api/admin/reports/generate` and lets only that method use the
+tenant's AI narrator; `GET` keeps working with query parameters and the
+deterministic summary. A narrated PDF records the same AI cost-ledger entry as
+before, and only a `POST` can now produce one. A `GET` reads Patrol findings
+only from an AI service that is already running
+(`AISettingsHandler.ExistingAIService`), so it no longer constructs a tenant AI
+service, whose construction opens that tenant's SQLite resource export store.
+Report content, backup and recovery enrichment, and tenant storage are
+otherwise unchanged.
+
 ### Audit-read activity is a bounded, content-free local history
 
 `audit_read_activity.json` follows the same shape as the existing external-agent
