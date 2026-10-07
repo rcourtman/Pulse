@@ -944,6 +944,15 @@ Patrol coverage, schedule, finding, and approval state belongs on Patrol-owned
 surfaces or explicit Patrol affordances; Proxmox overview must not treat it as
 backup coverage, restore readiness, PBS verification/protection proof, or a
 replacement for the Proxmox Backups tab and workload Backup column.
+The outdated sensor setup notice above the Proxmox tabs is temperature
+guidance, not storage or recovery evidence. It reads the registry's per-node
+`proxmox.sensorSetupOutdated` verdict from the node rows the active tab already
+loads (Overview, Storage, Replication and Backups load nodes; Ceph and Mail do
+not, so it does not render there), so the Overview query must not add
+`physical_disk` rows to feed it; the derived `ProxmoxData` flag opens no storage
+or recovery path.
+`ProxmoxPageSurface.contract.test.tsx` pins the notice on Overview with no disk
+rows and an Overview query without `physical_disk`.
 The Proxmox inline estate totals are likewise an adjacent frontend-primitives
 and unified-resource projection, not backup or recovery evidence.
 `ProxmoxPageSurface` must flow the already-loaded workload inventory into the
