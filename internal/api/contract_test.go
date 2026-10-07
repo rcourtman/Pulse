@@ -16889,9 +16889,9 @@ func TestContract_PBSHostAgentComposesIntoOwningSystem(t *testing.T) {
 // An agent on a Proxmox cluster node reports SMART data for the node's disks,
 // and the registry stamps each disk with the owning node's identity so it
 // stays discoverable in the Proxmox workspace. A disk is not a cluster member:
-// projecting it as one folded its health into the node row, so a warm NVMe
-// drive rendered an actively reporting node as Stale whenever the agent's
-// report was newer than the last Proxmox poll.
+// projecting it as one folded its health into the node row, so a disk with a
+// SMART warning rendered an actively reporting node as Stale whenever the
+// agent's report was newer than the last Proxmox poll.
 func TestContract_ConnectionSystemMembersIgnoreOwnedPhysicalDisks(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
 	monitor, err := monitoring.New(cfg)
@@ -16902,6 +16902,7 @@ func TestContract_ConnectionSystemMembersIgnoreOwnedPhysicalDisks(t *testing.T) 
 
 	polledAt := time.Now().UTC().Add(-10 * time.Second)
 	reportedAt := polledAt.Add(6 * time.Second)
+	reallocatedSectors := int64(3)
 	adapter := unifiedresources.NewMonitorAdapter(nil)
 	adapter.PopulateFromSnapshot(models.StateSnapshot{
 		Nodes: []models.Node{{
@@ -16930,8 +16931,9 @@ func TestContract_ConnectionSystemMembersIgnoreOwnedPhysicalDisks(t *testing.T) 
 					Model:       "WD_BLACK SN7100 4TB",
 					Serial:      "SN7100-AURORA",
 					Type:        "nvme",
-					Temperature: 63,
+					Temperature: 41,
 					Health:      "PASSED",
+					Attributes:  &models.SMARTAttributes{ReallocatedSectors: &reallocatedSectors},
 				}},
 			},
 		}},
