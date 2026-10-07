@@ -247,6 +247,114 @@ func TestLeaseExpiredAgentOnLiveProxmoxNodeStaysOnline(t *testing.T) {
 	}
 }
 
+// A source merge into an existing row judges metric freshness by the ingest's
+// stale thresholds, as the stale pass that ends the ingest does. With PVE
+// polled every two minutes the monitor allows Proxmox four minutes, so a node
+// polled ninety seconds ago is current while its agent, silent for seventy-five
+// seconds, is stale, and the row shows the node's readings. Without thresholds
+// both sources are stale by the defaults and the agent keeps its precedence.
+func TestSourceMergesJudgeFreshnessByTheIngestStaleThresholds(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:            "homelab-pve1",
+			Name:          "pve1",
+			Instance:      "homelab",
+			Status:        "online",
+			LinkedAgentID: "host-pve1",
+			CPU:           0.12,
+			Memory:        models.Memory{Total: 64 << 30, Used: 16 << 30, Free: 48 << 30, Usage: 25},
+			LastSeen:      now.Add(-90 * time.Second),
+		}},
+		Hosts: []models.Host{{
+			ID:              "host-pve1",
+			MachineID:       "machine-pve1",
+			Hostname:        "pve1",
+			LinkedNodeID:    "homelab-pve1",
+			Status:          "online",
+			CPUUsage:        80,
+			Memory:          models.Memory{Total: 64 << 30, Used: 48 << 30, Free: 16 << 30, Usage: 75},
+			LastSeen:        now.Add(-75 * time.Second),
+			IntervalSeconds: 30,
+		}},
+	}
+
+	for _, tc := range []struct {
+		name        string
+		thresholds  map[DataSource]time.Duration
+		proxmoxPoll string
+		want        DataSource
+		wantCPU     float64
+		wantMemory  float64
+	}{
+		{"configured", map[DataSource]time.Duration{SourceProxmox: 4 * time.Minute}, "online", SourceProxmox, 12, 25},
+		{"defaults", nil, "stale", SourceAgent, 80, 75},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := NewRegistry(nil)
+			rr.IngestSnapshotWithStaleThresholds(snapshot, tc.thresholds)
+
+			resource := onlyResourceOfType(t, rr, ResourceTypeAgent)
+			if got := resource.SourceStatus[SourceProxmox].Status; got != tc.proxmoxPoll {
+				t.Fatalf("Proxmox sighting = %q, want %q: %+v", got, tc.proxmoxPoll, resource.SourceStatus)
+			}
+			if got := resource.SourceStatus[SourceAgent].Status; got != "stale" {
+				t.Fatalf("agent sighting = %q, want stale", got)
+			}
+			if resource.Metrics == nil || resource.Metrics.CPU == nil || resource.Metrics.Memory == nil {
+				t.Fatalf("merged row lost its readings: %+v", resource.Metrics)
+			}
+			if cpu := resource.Metrics.CPU; cpu.Source != tc.want || cpu.Percent != tc.wantCPU {
+				t.Fatalf("CPU = %.0f%% from %s, want %.0f%% from %s", cpu.Percent, cpu.Source, tc.wantCPU, tc.want)
+			}
+			if memory := resource.Metrics.Memory; memory.Source != tc.want || memory.Percent != tc.wantMemory {
+				t.Fatalf("memory = %.0f%% from %s, want %.0f%% from %s", memory.Percent, memory.Source, tc.wantMemory, tc.want)
+			}
+		})
+	}
+}
+
+// The metric merge and the stale pass read one threshold rule, so a source
+// sighting the merge treats as current is never one the pass marks stale.
+func TestMetricMergeFreshnessMatchesTheStalePass(t *testing.T) {
+	now := time.Now().UTC()
+	configured := map[DataSource]time.Duration{SourceProxmox: 4 * time.Minute, SourceVMware: 5 * time.Minute}
+	for _, tc := range []struct {
+		name       string
+		source     DataSource
+		sighting   SourceStatus
+		thresholds map[DataSource]time.Duration
+		wantStale  bool
+	}{
+		{"proxmox by default", SourceProxmox, SourceStatus{LastSeen: now.Add(-90 * time.Second)}, nil, true},
+		{"proxmox by configuration", SourceProxmox, SourceStatus{LastSeen: now.Add(-90 * time.Second)}, configured, false},
+		{"vsphere by default", SourceVMware, SourceStatus{LastSeen: now.Add(-3 * time.Minute)}, nil, true},
+		{"vsphere by configuration", SourceVMware, SourceStatus{LastSeen: now.Add(-3 * time.Minute)}, configured, false},
+		{"agent without its own threshold", SourceAgent, SourceStatus{LastSeen: now.Add(-75 * time.Second)}, configured, true},
+		{"slow disk inventory", SourceProxmox, SourceStatus{LastSeen: now.Add(-5 * time.Minute), ExpectedUpdateIntervalSeconds: 600}, nil, false},
+		{"missed two disk inventory polls", SourceProxmox, SourceStatus{LastSeen: now.Add(-21 * time.Minute), ExpectedUpdateIntervalSeconds: 600}, nil, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			status := map[DataSource]SourceStatus{tc.source: tc.sighting}
+			if got := metricSourceStale(now, status, tc.source, tc.thresholds); got != tc.wantStale {
+				t.Fatalf("metric merge stale = %v, want %v", got, tc.wantStale)
+			}
+
+			rr := NewRegistry(nil)
+			rr.resources["resource"] = &Resource{
+				ID:           "resource",
+				Status:       StatusOnline,
+				Sources:      []DataSource{tc.source},
+				SourceStatus: map[DataSource]SourceStatus{tc.source: tc.sighting},
+			}
+			rr.MarkStale(now, tc.thresholds)
+			if got := rr.resources["resource"].SourceStatus[tc.source].Status == "stale"; got != tc.wantStale {
+				t.Fatalf("stale pass stale = %v, want %v", got, tc.wantStale)
+			}
+		})
+	}
+}
+
 // Docker hosts hold a shorter lease than the registry's Docker stale
 // threshold, so a silent Docker host was offline for a while and then
 // flipped to warning once its sighting went stale.
@@ -438,6 +546,319 @@ func TestManualLinkKeepsTheLiveSightingOfASharedSource(t *testing.T) {
 	}
 	if got := resource.SourceStatus[SourceAgent]; !got.LastSeen.Equal(now) {
 		t.Fatalf("agent sighting = %+v, want the live sighting", got)
+	}
+}
+
+// Either side of an operator link can arrive as a supplemental record: a
+// vSphere VM with a Pulse agent inside, or an agent on a TrueNAS host. The
+// monitor's rebuild ingests records after the snapshot, so it must join them
+// there too, keep the record side's provider payload, and list what the
+// resources API lists after seeding from it.
+func TestManualLinksJoinRecordIngestedResourcesInMonitorRebuild(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Hosts: []models.Host{
+			{ID: "host-app-guest", Hostname: "app-guest", MachineID: "machine-app-guest", Status: "online", LastSeen: now},
+			{ID: "host-nas", Hostname: "nas-a-mgmt", MachineID: "machine-nas-a", Status: "online", LastSeen: now},
+		},
+		LastUpdate: now,
+	}
+	vmRecord := IngestRecord{
+		SourceID: "vc-1:vm:vm-42",
+		Resource: Resource{
+			Type:       ResourceTypeVM,
+			Technology: "vmware",
+			Name:       "app-guest",
+			Status:     StatusOnline,
+			LastSeen:   now,
+			VMware:     &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "vm-42", EntityType: "vm"},
+		},
+		Identity: ResourceIdentity{Hostnames: []string{"app-guest"}},
+	}
+	records := map[DataSource][]IngestRecord{
+		SourceVMware: {vmRecord},
+		SourceTrueNAS: {
+			{
+				SourceID: "system:tn-1",
+				Resource: Resource{
+					Type:     ResourceTypeAgent,
+					Name:     "nas-a",
+					Status:   StatusOnline,
+					LastSeen: now,
+					TrueNAS:  &TrueNASData{Hostname: "nas-a"},
+				},
+				Identity: ResourceIdentity{Hostnames: []string{"nas-a"}},
+			},
+			{
+				SourceID:       "system:tn-1:pool:tank",
+				ParentSourceID: "system:tn-1",
+				Resource: Resource{
+					Type:     ResourceTypeStorage,
+					Name:     "tank",
+					Status:   StatusOnline,
+					LastSeen: now,
+					Storage:  &StorageMeta{Type: "zfs-pool", Platform: "truenas", Topology: "pool"},
+				},
+			},
+		},
+	}
+
+	for _, agentPrimary := range []bool{false, true} {
+		name := "record-primary"
+		if agentPrimary {
+			name = "agent-primary"
+		}
+		t.Run(name, func(t *testing.T) {
+			store := NewMemoryStore()
+			adapter := NewMonitorAdapter(NewRegistry(store))
+			adapter.PopulateSnapshotAndSupplemental(snapshot, records)
+
+			var vmID, guestAgentID, systemID, nasAgentID string
+			for _, resource := range adapter.GetAll() {
+				switch {
+				case resource.VMware != nil:
+					vmID = resource.ID
+				case resource.TrueNAS != nil:
+					systemID = resource.ID
+				case resource.Name == "app-guest":
+					guestAgentID = resource.ID
+				case resource.Name == "nas-a-mgmt":
+					nasAgentID = resource.ID
+				}
+			}
+			if vmID == "" || guestAgentID == "" || systemID == "" || nasAgentID == "" {
+				t.Fatalf("unlinked estate = %v, want the VM, both agents and the TrueNAS system", resourceIDs(adapter.GetAll()))
+			}
+			guestPrimary, nasPrimary := vmID, systemID
+			if agentPrimary {
+				guestPrimary, nasPrimary = guestAgentID, nasAgentID
+			}
+			for _, link := range []ResourceLink{
+				{ResourceA: vmID, ResourceB: guestAgentID, PrimaryID: guestPrimary},
+				{ResourceA: systemID, ResourceB: nasAgentID, PrimaryID: nasPrimary},
+			} {
+				if err := store.AddLink(link); err != nil {
+					t.Fatalf("add link: %v", err)
+				}
+			}
+
+			assertJoined := func(stage string) {
+				t.Helper()
+				resources := adapter.GetAll()
+				if len(resources) != 3 {
+					t.Fatalf("%s: resources = %v, want the linked VM, the linked TrueNAS system and its pool", stage, resourceIDs(resources))
+				}
+				// An agent inside a guest supplements the guest, whichever
+				// side the operator chose as primary.
+				guest, ok := adapter.currentRegistry().Get(vmID)
+				if !ok {
+					t.Fatalf("%s: linked vSphere VM %s missing from %v", stage, vmID, resourceIDs(resources))
+				}
+				if guest.Type != ResourceTypeVM || guest.VMware == nil || guest.Agent == nil {
+					t.Fatalf("%s: linked VM type=%s vmware=%t agent=%t, want the VM carrying its agent", stage, guest.Type, guest.VMware != nil, guest.Agent != nil)
+				}
+				if !slices.Contains(guest.Sources, SourceVMware) || !slices.Contains(guest.Sources, SourceAgent) {
+					t.Fatalf("%s: linked VM sources = %v, want vmware and agent", stage, guest.Sources)
+				}
+				system, ok := adapter.currentRegistry().Get(nasPrimary)
+				if !ok {
+					t.Fatalf("%s: linked TrueNAS system %s missing from %v", stage, nasPrimary, resourceIDs(resources))
+				}
+				if system.TrueNAS == nil || system.Agent == nil {
+					t.Fatalf("%s: linked system truenas=%t agent=%t, want the primary carrying both payloads", stage, system.TrueNAS != nil, system.Agent != nil)
+				}
+				if !slices.Contains(system.Sources, SourceTrueNAS) || !slices.Contains(system.Sources, SourceAgent) {
+					t.Fatalf("%s: linked system sources = %v, want truenas and agent", stage, system.Sources)
+				}
+				pool := onlyResourceOfType(t, adapter.currentRegistry(), ResourceTypeStorage)
+				if pool.ParentID == nil || *pool.ParentID != nasPrimary {
+					t.Fatalf("%s: pool parent = %v, want the linked system %s", stage, pool.ParentID, nasPrimary)
+				}
+
+				// Identity pins persisted by the rebuild must not re-key a link
+				// onto its own primary.
+				links, err := store.GetLinks()
+				if err != nil {
+					t.Fatalf("%s: get links: %v", stage, err)
+				}
+				for _, link := range links {
+					if link.ResourceA == link.ResourceB {
+						t.Fatalf("%s: link collapsed onto %s", stage, link.ResourceA)
+					}
+				}
+
+				// The resources API seeds its registry from this listing
+				// through resource ingest and must agree with it.
+				rest := NewRegistry(store)
+				rest.IngestResources(resources)
+				if got, want := resourceIDs(rest.List()), resourceIDs(resources); !slices.Equal(got, want) {
+					t.Fatalf("%s: a registry seeded from the monitor lists %v, monitor lists %v", stage, got, want)
+				}
+			}
+
+			next := snapshot
+			next.LastUpdate = now.Add(time.Second)
+			adapter.PopulateSnapshotAndSupplemental(next, records)
+			assertJoined("rebuild")
+
+			adapter.PopulateSupplementalRecords(SourceVMware, records[SourceVMware])
+			adapter.PopulateSupplementalRecords(SourceTrueNAS, records[SourceTrueNAS])
+			assertJoined("supplemental refresh")
+
+			next.LastUpdate = now.Add(2 * time.Second)
+			adapter.PopulateSnapshotAndSupplemental(next, records)
+			assertJoined("second rebuild")
+		})
+	}
+}
+
+// A Proxmox node that absorbs a linked agent carries the agent's machine key,
+// so the rebuild pins the node with it. The agent is still observed: that pin
+// must not succeed the agent's ID onto the node, which re-keyed the link onto
+// the node itself and split the pair on the next rebuild.
+func TestManualLinkKeepsItsEndpointsThroughIdentityPinPersistence(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID: "lab-pve1", Name: "pve1", Instance: "lab",
+			Host: "https://192.0.2.10:8006", Status: "online", LastSeen: now,
+		}},
+		Hosts: []models.Host{{
+			ID: "host-box", Hostname: "box-x", MachineID: "machine-box", Status: "online", LastSeen: now,
+		}},
+		LastUpdate: now,
+	}
+	store := NewMemoryStore()
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateSnapshotAndSupplemental(snapshot, nil)
+	var nodeID, agentID string
+	for _, resource := range adapter.GetAll() {
+		if resource.Proxmox != nil {
+			nodeID = resource.ID
+		} else if resource.Agent != nil {
+			agentID = resource.ID
+		}
+	}
+	if nodeID == "" || agentID == "" || nodeID == agentID {
+		t.Fatalf("unlinked estate = %v, want a node and a separate agent", resourceIDs(adapter.GetAll()))
+	}
+	if err := store.AddLink(ResourceLink{ResourceA: nodeID, ResourceB: agentID, PrimaryID: nodeID}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+
+	for rebuild := 1; rebuild <= 3; rebuild++ {
+		next := snapshot
+		next.LastUpdate = now.Add(time.Duration(rebuild) * time.Second)
+		adapter.PopulateSnapshotAndSupplemental(next, nil)
+		if got := resourceIDs(adapter.GetAll()); !slices.Equal(got, []string{nodeID}) {
+			t.Fatalf("rebuild %d: resources = %v, want only the linked node %s", rebuild, got, nodeID)
+		}
+		links, err := store.GetLinks()
+		if err != nil {
+			t.Fatalf("get links: %v", err)
+		}
+		if len(links) != 1 || links[0].ResourceA != nodeID || links[0].ResourceB != agentID {
+			t.Fatalf("rebuild %d: links = %+v, want %s -> %s kept", rebuild, links, nodeID, agentID)
+		}
+	}
+}
+
+// A record may name an older canonical ID as superseded on every ingest. When
+// that ID belongs to a resource a manual link folded into the record's own
+// resource, it is still observed: succeeding it on a later refresh would
+// re-key the link onto its primary.
+func TestRecordDeclaredSuccessionSparesALinkFoldedResource(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Hosts:      []models.Host{{ID: "host-nas", Hostname: "nas-a-mgmt", MachineID: "machine-nas-a", Status: "online", LastSeen: now}},
+		LastUpdate: now,
+	}
+	agentID := MachineIdentityCanonicalID(ResourceTypeAgent, "machine-nas-a")
+	records := []IngestRecord{{
+		SourceID:               "system:tn-1",
+		SupersededCanonicalIDs: []string{agentID},
+		Resource: Resource{
+			Type:     ResourceTypeAgent,
+			Name:     "nas-a",
+			Status:   StatusOnline,
+			LastSeen: now,
+			TrueNAS:  &TrueNASData{Hostname: "nas-a"},
+		},
+		Identity: ResourceIdentity{Hostnames: []string{"nas-a"}},
+	}}
+
+	unlinked := NewMonitorAdapter(NewRegistry(nil))
+	unlinked.PopulateSnapshotAndSupplemental(snapshot, map[DataSource][]IngestRecord{SourceTrueNAS: records})
+	var systemID string
+	for _, resource := range unlinked.GetAll() {
+		if resource.TrueNAS != nil {
+			systemID = resource.ID
+		}
+	}
+	if systemID == "" || !slices.Contains(resourceIDs(unlinked.GetAll()), agentID) {
+		t.Fatalf("unlinked estate = %v, want agent %s and a TrueNAS system", resourceIDs(unlinked.GetAll()), agentID)
+	}
+
+	store := NewMemoryStore()
+	if err := store.AddLink(ResourceLink{ResourceA: systemID, ResourceB: agentID, PrimaryID: systemID}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateSnapshotAndSupplemental(snapshot, map[DataSource][]IngestRecord{SourceTrueNAS: records})
+	adapter.PopulateSupplementalRecords(SourceTrueNAS, records)
+
+	if got := resourceIDs(adapter.GetAll()); !slices.Equal(got, []string{systemID}) {
+		t.Fatalf("resources = %v, want only the linked system %s", got, systemID)
+	}
+	links, err := store.GetLinks()
+	if err != nil {
+		t.Fatalf("get links: %v", err)
+	}
+	if len(links) != 1 || links[0].ResourceA != systemID || links[0].ResourceB != agentID {
+		t.Fatalf("links = %+v, want %s -> %s kept", links, systemID, agentID)
+	}
+}
+
+// A link merge folds the other resource's provider payloads into the primary
+// where the primary has none, whichever side the operator chose.
+func TestManualLinkKeepsProviderPayloadsThePrimaryLacks(t *testing.T) {
+	now := time.Now().UTC()
+	store := NewMemoryStore()
+	for _, link := range []ResourceLink{
+		{ResourceA: "agent-nas", ResourceB: "truenas-system", PrimaryID: "agent-nas"},
+		{ResourceA: "agent-esxi", ResourceB: "vmware-host", PrimaryID: "agent-esxi"},
+	} {
+		if err := store.AddLink(link); err != nil {
+			t.Fatalf("add link: %v", err)
+		}
+	}
+	host := func(id, name string, sources ...DataSource) Resource {
+		status := make(map[DataSource]SourceStatus, len(sources))
+		for _, source := range sources {
+			status[source] = SourceStatus{Status: "online", LastSeen: now}
+		}
+		return Resource{ID: id, Type: ResourceTypeAgent, Name: name, Status: StatusOnline, LastSeen: now, Sources: sources, SourceStatus: status}
+	}
+	agentNAS := host("agent-nas", "nas-a-mgmt", SourceAgent)
+	agentNAS.Agent = &AgentData{AgentID: "agent-nas", Hostname: "nas-a-mgmt"}
+	system := host("truenas-system", "nas-a", SourceTrueNAS)
+	system.TrueNAS = &TrueNASData{Hostname: "nas-a"}
+	agentESXi := host("agent-esxi", "esxi-01", SourceAgent)
+	agentESXi.Agent = &AgentData{AgentID: "agent-esxi", Hostname: "esxi-01"}
+	esxi := host("vmware-host", "esxi-01.lab", SourceVMware)
+	esxi.VMware = &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "host-101", EntityType: "host"}
+
+	rr := NewRegistry(store)
+	rr.IngestResources([]Resource{agentNAS, system, agentESXi, esxi})
+
+	if got := resourceIDs(rr.List()); !slices.Equal(got, []string{"agent-esxi", "agent-nas"}) {
+		t.Fatalf("resources = %v, want the two linked primaries", got)
+	}
+	if nas, _ := rr.Get("agent-nas"); nas.TrueNAS == nil || nas.Agent == nil {
+		t.Fatalf("linked TrueNAS system truenas=%t agent=%t, want both payloads", nas.TrueNAS != nil, nas.Agent != nil)
+	}
+	if host, _ := rr.Get("agent-esxi"); host.VMware == nil || host.Agent == nil {
+		t.Fatalf("linked vSphere host vmware=%t agent=%t, want both payloads", host.VMware != nil, host.Agent != nil)
 	}
 }
 
@@ -712,18 +1133,30 @@ func TestIngestResourcesKeepsAFacetSightingWithoutAVerdict(t *testing.T) {
 
 // aggregateStatus is the one rule the stale pass and manual links apply.
 // Current sources decide by their own verdicts in chooseStatus's priority
-// order; quiet sources only decide when no source is current.
+// order; quiet sources only decide when no source is current. Availability
+// checks on a monitored resource are judged by their own evidence, not their
+// shared sighting.
 func TestAggregateStatusReadsSourceVerdictsNotDelivery(t *testing.T) {
+	now := time.Now().UTC()
+	lapsed := now.Add(-10 * time.Minute)
 	current := func(reported ResourceStatus) SourceStatus {
 		return SourceStatus{Status: "online", reported: reported}
 	}
 	quiet := func(reported ResourceStatus) SourceStatus {
 		return SourceStatus{Status: "stale", reported: reported}
 	}
+	check := func(passing bool, checkedAt time.Time) []AvailabilityData {
+		return []AvailabilityData{{
+			TargetID: "probe-1", Enabled: true, Available: passing, LastChecked: &checkedAt,
+			Evidence: availabilityProbeEvidence(t, "probe-1", checkedAt),
+		}}
+	}
 	for _, tc := range []struct {
-		name      string
-		sightings map[DataSource]SourceStatus
-		want      ResourceStatus
+		name         string
+		resourceType ResourceType
+		sightings    map[DataSource]SourceStatus
+		checks       []AvailabilityData
+		want         ResourceStatus
 	}{
 		{
 			name:      "live poll reports offline, agent quiet",
@@ -767,8 +1200,56 @@ func TestAggregateStatusReadsSourceVerdictsNotDelivery(t *testing.T) {
 		},
 		{
 			name:      "a facet without a verdict never outranks a current verdict",
-			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusOffline), SourceAvailability: current("")},
+			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusOffline), SourcePBS: current("")},
 			want:      StatusOffline,
+		},
+		{
+			name:      "a current failing check abstains",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOffline), SourceAvailability: current("")},
+			checks:    check(false, now),
+			want:      StatusOffline,
+		},
+		{
+			name:      "a quiet failing check abstains rather than lifting an offline verdict to warning",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOffline), SourceAvailability: quiet("")},
+			checks:    check(false, lapsed),
+			want:      StatusOffline,
+		},
+		{
+			name:      "a passing check whose evidence lapsed abstains under a current sighting",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOnline), SourceAvailability: current("")},
+			checks:    check(true, lapsed),
+			want:      StatusWarning,
+		},
+		{
+			name:      "a passing check with current evidence proves the target answers under a quiet sighting",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOffline), SourceAvailability: quiet("")},
+			checks:    check(true, now),
+			want:      StatusOnline,
+		},
+		{
+			name:      "a passing check never lifts a resource whose own sources have not gone quiet",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: {Status: "unknown"}, SourceAvailability: current("")},
+			checks:    check(true, now),
+			want:      StatusUnknown,
+		},
+		{
+			name:      "a passing check never outranks a current verdict",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusOffline), SourceAvailability: current("")},
+			checks:    check(true, now),
+			want:      StatusOffline,
+		},
+		{
+			name:         "a check's own row keeps its quiet verdict",
+			resourceType: ResourceTypeNetworkEndpoint,
+			sightings:    map[DataSource]SourceStatus{SourceAvailability: quiet(StatusOffline)},
+			want:         StatusOffline,
+		},
+		{
+			name:         "a check's own row keeps its current verdict",
+			resourceType: ResourceTypeNetworkEndpoint,
+			sightings:    map[DataSource]SourceStatus{SourceAvailability: current(StatusWarning)},
+			want:         StatusWarning,
 		},
 		{
 			name:      "current unknown verdict leaves the quiet sources to decide",
@@ -782,7 +1263,8 @@ func TestAggregateStatusReadsSourceVerdictsNotDelivery(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := aggregateStatus(&Resource{SourceStatus: tc.sightings}); got != tc.want {
+			resource := &Resource{Type: tc.resourceType, SourceStatus: tc.sightings, AvailabilityChecks: tc.checks}
+			if got := aggregateStatus(resource, now); got != tc.want {
 				t.Fatalf("aggregateStatus = %q, want %q", got, tc.want)
 			}
 		})

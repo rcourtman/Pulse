@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -1416,19 +1417,35 @@ func preserveUnavailablePhysicalDiskEvidence(current, previous models.PhysicalDi
 	return current
 }
 
-// checkPhysicalDiskAlerts evaluates one Proxmox physical disk's health and
-// wearout alerts. A device matched by the linked host agent's --disk-exclude
-// patterns is evaluated as healthy, so excluding a disk also resolves the
-// alerts it already raised.
+// checkPhysicalDiskAlerts evaluates one Proxmox physical disk's health,
+// wearout and temperature alerts. A device matched by the linked host agent's
+// --disk-exclude patterns is evaluated as healthy and without a temperature
+// alert, so excluding a disk also resolves the alerts it already raised.
 func (m *Monitor) checkPhysicalDiskAlerts(instance string, disk models.PhysicalDisk, excludePatterns []string) {
-	if len(excludePatterns) > 0 && fsfilters.MatchesDeviceExclude(disk.DevPath, excludePatterns) {
+	excluded := len(excludePatterns) > 0 && fsfilters.MatchesDeviceExclude(disk.DevPath, excludePatterns)
+	if excluded {
 		healthyDisk := proxmoxDiskFromPhysicalDisk(disk)
 		healthyDisk.Health = "PASSED"
 		healthyDisk.Wearout = 100
 		m.alertManager.CheckDiskHealth(instance, disk.Node, healthyDisk)
-		return
+	} else {
+		m.alertManager.CheckDiskHealth(instance, disk.Node, proxmoxDiskFromPhysicalDisk(disk))
 	}
-	m.alertManager.CheckDiskHealth(instance, disk.Node, proxmoxDiskFromPhysicalDisk(disk))
+	m.alertManager.CheckProxmoxDiskTemperature(instance, disk.Node, alerts.ProxmoxDiskTemperatureReading{
+		Disk:       proxmoxDiskFromPhysicalDisk(disk),
+		Celsius:    collectedPhysicalDiskTemperature(disk),
+		AgentOwned: disk.AgentSMARTReported,
+		Excluded:   excluded,
+	})
+}
+
+// collectedPhysicalDiskTemperature is the disk's temperature when this poll
+// collected it, or 0 for a last-known value normalization kept.
+func collectedPhysicalDiskTemperature(disk models.PhysicalDisk) int {
+	if !diskinventory.TemperatureCollected(disk.Temperature, disk.Collection) {
+		return 0
+	}
+	return disk.Temperature
 }
 
 func proxmoxDiskFromPhysicalDisk(disk models.PhysicalDisk) proxmox.Disk {

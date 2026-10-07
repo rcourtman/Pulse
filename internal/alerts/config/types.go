@@ -388,6 +388,13 @@ type AlertConfig struct {
 	FlappingWindowSeconds          int                            `json:"flappingWindowSeconds"`        // Time window for counting state changes
 	FlappingThreshold              int                            `json:"flappingThreshold"`            // Number of state changes to trigger flapping
 	FlappingCooldownMinutes        int                            `json:"flappingCooldownMinutes"`      // Cooldown period after flapping detected
+
+	// TrueNASDiskTemperatureByType marks a config written since an unset
+	// TrueNASDiskDefaults.Temperature means each TrueNAS disk follows the
+	// disk temperature policy for its type. An older config carries the
+	// former flat factory value, which nobody chose, and normalization drops
+	// it once.
+	TrueNASDiskTemperatureByType bool `json:"truenasDiskTemperatureByType,omitempty"`
 }
 
 // UnmarshalJSON accepts canonical v6 alert config keys.

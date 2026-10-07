@@ -2090,6 +2090,20 @@ payload shape change when the portal presents compact client rows.
     index; clients must treat the endpoint's `accepted:true` as inbox
     receipt, not delivery. Browser clients must use the shared
     `AIChatAPI.steerSession(sessionId, { prompt, clientMessageId })` helper.
+    Every Assistant session mutation sub-resource under
+    `/api/ai/sessions/{id}` (`/abort`, `/summarize`, `/fork`, `/undo`,
+    `/redo`, `/steer`) accepts only `POST`. Any other method that reaches the
+    handler returns `405` with `Allow: POST` through
+    `requireAssistantSessionMutationMethod` in `internal/api/ai_handler.go`,
+    before the session service is resolved (earlier layers still answer
+    first: `Router.ServeHTTP` returns `200` for `OPTIONS` preflight, and
+    auth, scope, CSRF, and demo-mode guards keep their own refusals). The
+    session router dispatches these sub-resources by path alone, and the
+    demo-mode read-only guard and the CSRF check both treat `GET` and `HEAD`
+    as reads, so the method contract belongs to the mutating handler rather
+    than to its callers. `GET /api/ai/sessions/{id}/messages` stays the read
+    path, and the unsupported `/diff`, `/revert`, and `/unrevert` handlers
+    keep answering `501` for every method that reaches them.
     OpenCode-style file diff/revert session routes are deliberately not part
     of Pulse's supported Assistant session contract: Pulse sessions do not own
     local code-file edits, and infrastructure mutations must be reviewed
@@ -3326,6 +3340,7 @@ a new API state machine, queue contract, or verification-accounting field.
    action artifact so the Assistant runtime can refresh finding and action posture
    from IDs and safe summaries instead of relying on pasted chat text
    and the dedicated `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` owner, so recent-change counts and governed policy-posture fallbacks normalize once at the shared store boundary instead of as Patrol-hook-local payload repair
+   and the Patrol findings list the state hook reads from `aiIntelligenceStore.patrolFindings`, so `usePatrolIntelligenceState.ts` does not re-derive page-level severity tallies from it: the hook's unread `summaryStats` tally has been removed, the hook derives no client-side severity tally from that list today (the backend's per-severity `findings_count` reaches it only inside the AI summary payload it passes through), and the Activity tab's `This week` card takes its open-by-severity counts from `GET /api/ai/patrol/digest` instead of recounting that list
    and the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` card, so learned correlations and correlation context stay rendered through one governed frontend card instead of separate page-local list loops
    and the same shared correlation card's ordering and truncation rule, so callers pass raw correlations instead of encoding their own top-N sort behavior
    and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` cards' optional `buildResourceHref` input, so a surface that needs resource-filter links passes them into the shared card instead of rebuilding infrastructure URLs inline; the cards carry no link default since the cross-resource drilldown links were retired, and render resource labels as plain text
@@ -3696,6 +3711,10 @@ a new API state machine, queue contract, or verification-accounting field.
     requested metric filters through the shared guest-chart batch loader in
     `internal/monitoring/monitor_metrics.go` instead of fetching the full guest
     metric set and trimming after the API payload is already assembled.
+    `ChartsAPI.getInfrastructureSummaryCharts` is the only frontend client for
+    `/api/charts/infrastructure`; the deprecated `getInfrastructureCharts`
+    alias, which could not pass `metrics`, is removed and must not return as a
+    second unfiltered entry point.
 39. Keep the retired compact dashboard overview route absent from that same
     shared API surface. `internal/api/resourceapi/resources.go`,
     `internal/api/router_routes_monitoring.go`, and
@@ -4842,6 +4861,10 @@ transition and evidence times) from the frontend-primitives shared
 relative-time clock. That is presentation over the same `GET
 /api/ai/patrol/status`, run history and `GET /api/ai/patrol/attention/{id}`
 payloads: no field, request or polling cadence changes.
+The attention detail's suppression `expiresAt` and a finding's `remind_at` and
+`snoozed_until` from `GET /api/ai/patrol/findings` are future times, so the
+page presents them as countdowns from the same clock ("in 1d") instead of
+ages. That is presentation only: no field, request or polling cadence changes.
 
 ### Resource-list facets preserve scoped navigation evidence
 
@@ -7119,12 +7142,14 @@ introducing VMware-only mention payloads or provider-local inventory reads
 under `/api/vmware/*`. Runtime-specific container/app mentions remain shared
 unified-resource mentions as well; VMware network inventory does not create a
 provider-local mention family.
-That same `/api/ai/chat` payload boundary owns per-request execution-mode
-overrides. Dashboard Pulse Brief and other scoped handoffs may include
-`autonomous_mode:false` on the chat request to force approval-required command
-execution for that exchange, but the transport must treat the field as a
-request override only and must not mutate the user's persistent AI control
-setting.
+That same `/api/ai/chat` payload boundary owns request-local execution mode,
+and the server sets it. `ChatRequest` in `internal/api/ai_handler.go` has no
+`autonomous_mode` field, so the `autonomous_mode:false` that scoped handoffs
+such as an explain-this-issue request still send is dropped at decode, and the
+handler passes approval-required mode into the chat service for every
+exchange; an Autonomous control level runs as Controlled for that request.
+That clamp is request-local and must not mutate the user's persistent AI
+control setting.
 That same chat transport boundary owns new-session anchoring. When the request
 omits `session_id`, the handler may generate and stream a session ID
 immediately so the browser can anchor the visible turn, but that generated ID is
@@ -7178,7 +7203,7 @@ not serialize the model-only `handoff_context`, runtime failure detail, action
 preflight/result bodies, remediation descriptions, raw commands, or approval
 command payloads, and it must not preserve Patrol-authored next-step
 recommendation fields from legacy handoffs.
-Patrol finding handoffs are stricter than ordinary chat requests: when a request
+Patrol finding handoffs keep that clamp on their own path: when a request
 carries a non-empty `finding_id` or resolves to model-only Patrol briefing,
 resource, or action context, `internal/api/ai_handler.go` must clamp the
 request-local autonomous mode to false even if the caller supplied
@@ -7641,6 +7666,34 @@ read-only demo account. That same hidden read-side boundary includes `GET` and
 `HEAD` reads for `/api/admin/users` and manual discovery at `/api/discover`;
 public demo mode may block writes generically, but it must not reveal that
 admin-user inventory or manual-discovery read routes exist.
+The same policy hides the Go runtime profiling family for every method: on a
+`DEMO_MODE` instance the demo guard answers `/debug/pprof`, `/debug/pprof/`
+and every path below it with `404`, ahead of route authentication.
+`registerDebugRoutes` gates those handlers on `RequireAdmin` plus a
+`settings:read` scope that session logins skip, so a demo that signs visitors
+in as the configured admin would otherwise hand every visitor goroutine and
+heap dumps, the process command line, and CPU profiles, execution traces and
+forced garbage collection that cost the whole process. `PULSE_PPROF_DISABLED`
+still removes the routes on any instance.
+`TestPublicDemoAdminOperationsPolicyHidesEveryDebugRoute` fails when a literal
+route the parsed router files register under `/debug/`, with or without a
+method prefix, escapes that policy for any common method.
+`TestContract_DemoModeHidesPprofFromDemoAdminSession` in
+`internal/api/contract_test.go` signs in as that admin through the full
+router, proves the same session still reads `/debug/pprof/cmdline` below the
+demo guard, and gets `404` through it for eight pprof paths with `GET`,
+`HEAD`, `OPTIONS` and `POST`.
+That generic write block keys on the request method alone. The demo
+middleware admits `GET`, `HEAD` and `OPTIONS` plus the login, logout, AI
+execute and OIDC login/callback allowlist; HTTP/1.1 websocket handshakes for
+`/ws` and `/api/agent/ws` are `GET` requests and connect through that read
+branch, so an `Upgrade: websocket` or `Connection: Upgrade` header never
+carries a `POST`, `PUT`, `PATCH` or `DELETE` past the guard. A demo deployment that signs
+visitors in as the configured admin, as the public demo does, has only this
+guard between that session and admin writes such as `/api/system/mock-mode`.
+`TestContract_DemoModeUpgradeHeadersDoNotExemptWrites` in
+`internal/api/contract_test.go` signs in as that admin through the full router
+and pins both halves.
 That shared infrastructure install boundary now also preserves copied shell
 command payload continuity: any privilege-escalation wrapper applied at
 `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
@@ -9645,6 +9698,32 @@ narrator must fail closed: nil provider, parse failure, timeout, or
 empty response causes the engine to fall back to the heuristic
 narrative without surfacing the AI failure to the caller, so reporting
 is never blocked by AI availability.
+Only `POST /api/admin/reports/generate` may hand the tenant's AI narrator to
+the engine, because a narrated PDF makes a paid provider call and appends a
+`cost.UsageEvent` to the cost ledger. The single-resource handler accepts
+`POST` with a JSON body (the `generate-multi` decoding rules: 1MB cap, unknown
+fields and trailing payload rejected, through `decodeReportingRequestBody`) and
+`GET` with the same fields as query parameters, and answers any other method
+with `405` and `Allow: GET, POST`. GET never calls `resolveNarrator`, whose
+`GetAIService` can construct a tenant AI service (and with it list provider
+models or start background discovery): it narrates through `getReportNarrator`,
+the heuristic summary whose `Disclaimer` replaces the "Configure Pulse
+Assistant" tip with a note that AI narration needs POST, and reads Patrol
+findings through `SetExistingFindingsResolver`, which `router.go` backs with
+`AISettingsHandler.ExistingAIService` so only an already running service is
+used. GET passes the demo-mode guard and the CSRF check, and a SameSite=Lax
+session cookie rides a cross-site top-level GET navigation, so a link must not
+be able to spend AI budget. The reporting catalog advertises the transport as
+`performanceReport.singleResourceMethod` (`POST`), and the settings UI follows
+it. `generate-multi` and the manual schedule run endpoint
+(`POST /api/admin/reports/schedules/{id}/run`) were already POST-only; due
+schedules run from the server's scheduler, not an HTTP request.
+`TestContract_SingleReportAINarrationRequiresPOST` pins the rule on a real
+engine: GET, HEAD, PUT and DELETE make no narrator call and no AI service
+resolution, while POST makes one of each.
+`TestContract_SingleReportGETDoesNotConstructTenantAIService` drives
+`Router.wireReportingAIResolvers` with an uncached tenant: GET constructs no
+tenant AI service and POST resolves one.
 Report alerts keep the alert engine's resolution. The node, VM and
 container enrichers in `internal/api/metrics_reporting_handlers.go` build
 every row through `reportActiveAlertInfo` and `reportResolvedAlertInfo`,
@@ -10269,6 +10348,22 @@ the transport, persistence-error, canonical-key, reload, and restart
 boundaries. Alert evaluation after that save remains alerts-owned and must use
 the persisted trigger/recovery pair plus a valid derived critical threshold;
 the API must not invent a TrueNAS-specific threshold sidecar.
+
+`PUT /api/alerts/config` replaces only the top-level keys the body carries
+and keeps the stored value of every key it leaves out, so a client that does
+not know a setting cannot turn it off by leaving it out: the thresholds page
+has no flapping-detection or alert-TTL controls, and an older browser bundle
+or API script predates later fields. A sent key replaces its stored value
+whole, so `"overrides": {}` removes every override rather than merging, and
+the merged config then goes through the same normalization as any update (for
+example, activation state is never cleared). The read, merge and apply run
+under the alert manager's lock, so two concurrent partial saves cannot revert
+each other in memory; the handler runs one save at a time and persists a
+snapshot of the applied config, so successful saves through this endpoint
+reach `alerts.json` in the order they were applied. A body that is not a JSON object, `null` included, is a 400 and changes
+nothing. `TestUpdateAlertConfig_KeepsStoredValuesForUnsentKeys`
+and `TestUpdateAlertConfig_RejectsNonObjectBody` in
+`internal/api/alerting/alerts_test.go` prove the transport.
 
 ### Alert intent and UDP availability transport
 

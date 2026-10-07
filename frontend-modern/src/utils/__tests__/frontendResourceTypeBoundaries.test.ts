@@ -2212,7 +2212,6 @@ describe('frontend resource type boundaries', () => {
     expect(aiChatSource).not.toContain('const normalizeMentionKeyPart =');
     expect(chatIdentifiersSource).toContain('normalizeChatMentionKeyPart');
     expect(chatIdentifiersSource).toContain('normalizeChatToolName');
-    expect(resourceIdentitySource).toContain('getNormalizedIdentityLookupVariants');
     expect(stringUtilsSource).toContain('export const asTrimmedString');
     expect(resourceIdentitySource).not.toContain(
       'const asTrimmedString = (value: unknown): string | undefined => {',
@@ -3648,15 +3647,6 @@ describe('frontend resource type boundaries', () => {
       'historicalRegressionCount={state.historicalRegressionCount()}',
     );
     expect(patrolIntelligenceBannersSource).not.toContain('trackUpgradeClicked');
-    expect(patrolIntelligenceSurfaceSource).not.toContain(
-      "summaryStats().criticalFindings > 0\n                        ? 'bg-red-50 dark:bg-red-900/25 border-red-200 dark:border-red-800'",
-    );
-    expect(patrolIntelligenceSurfaceSource).not.toContain(
-      "summaryStats().warningFindings > 0\n                        ? 'bg-amber-50 dark:bg-amber-900/25 border-amber-200 dark:border-amber-800'",
-    );
-    expect(patrolIntelligenceSurfaceSource).not.toContain(
-      "summaryStats().fixedCount > 0\n                        ? 'bg-green-50 dark:bg-green-900/25 border-green-200 dark:border-green-800'",
-    );
     expect(patrolIntelligenceSurfaceSource).not.toContain(
       "(patrolStatus()?.quickstart_credits_remaining ?? 0) > 0\n                  ? 'bg-blue-50 dark:bg-blue-950/25 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'",
     );

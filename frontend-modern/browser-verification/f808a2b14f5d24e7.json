@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "421d1e5423e5b83b7923ea8c3b133ad520cd5f60",
+  "verified_at": "2026-10-07T15:23:47Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "0fef3795b2a6e2bcb1a979583deceeabd8536868adcb08eb383425dd97bb85ad"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol (Activity tab)",
+    "/patrol (Protection tab)",
+    "/patrol?attention=<first attention row>"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production build of this tree (vite build into internal/api/frontend-modern/dist, go build) on a private DEMO_MODE mock stack (port 7693, fresh data dir, telemetry off).",
+    "Inbox: tablist Inbox/Protection/Activity with Inbox selected; '50 decisions need you' attention list with 5 rows (for example 'Open clickhouse-2 · Docker container memory limit'); header recency line 'Last check: just now · checked 1377 resources'.",
+    "Activity: 'This week' digest card ('Patrol runs 11', 'New issues 6', '6 still open (2 critical, 4 warning)') above Recent work; Protection panel renders.",
+    "No console errors and no page errors at either width.",
+    "Dist proof against the parent tree (built at 333e51d2de, whose frontend-modern tree is identical to the parent 421d1e5423): 187 files each side; 94 byte-identical, 92 differ only in chunk-hash references and SRI strings; only assets/AIIntelligence-*.js differs in code, and after normalising hashes and 1-3 character identifiers its only residual is the removed summaryStats closure and its summaryStats entry in the returned state object. check-bundle-size.mjs passes."
+  ],
+  "interactions": [
+    "Demo auto sign-in, navigate to /patrol, read the header and Inbox attention rows.",
+    "Click the first attention row: URL gains ?attention=<id> and the detail panel opens; Escape, reload /patrol.",
+    "Click Activity, Protection, then Inbox tabs; Inbox re-selects.",
+    "Same script in a 1440x900 desktop context and a 390x844 phone context; screenshots of Inbox, opened row and Activity inspected at both widths."
+  ]
+}

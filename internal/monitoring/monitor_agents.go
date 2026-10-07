@@ -4081,14 +4081,18 @@ func (m *Monitor) writeHostSMARTMetrics(host models.Host, now time.Time) {
 		return
 	}
 
+	smartMetricIDs := make(map[string]struct{}, len(host.Sensors.SMART))
 	for _, disk := range host.Sensors.SMART {
-		resourceID := unifiedresources.HostSMARTDiskSourceID(host, disk)
+		resourceID := unifiedresources.HostSMARTDiskMetricID(host, disk)
 		if resourceID == "" {
 			continue
 		}
+		smartMetricIDs[resourceID] = struct{}{}
 
-		if diskinventory.TemperatureCollected(disk.Temperature, disk.Collection) {
-			m.metricsStore.Write("disk", resourceID, "smart_temp", float64(disk.Temperature), now)
+		// Chart the reading the disk shows: a row without its own carries the
+		// host's Unraid reading for the disk.
+		if temperature, collection := unifiedresources.HostSMARTDiskTemperature(host, disk); diskinventory.TemperatureCollected(temperature, collection) {
+			m.metricsStore.Write("disk", resourceID, "smart_temp", float64(temperature), now)
 		}
 
 		attrs := disk.Attributes
@@ -4125,6 +4129,50 @@ func (m *Monitor) writeHostSMARTMetrics(host models.Host, now time.Time) {
 		}
 		if attrs.UnsafeShutdowns != nil {
 			m.metricsStore.Write("disk", resourceID, "smart_unsafe_shutdowns", float64(*attrs.UnsafeShutdowns), now)
+		}
+	}
+
+	m.writeHostUnraidDiskTemperatures(host, smartMetricIDs, now)
+}
+
+// writeHostUnraidDiskTemperatures charts the temperature of each disk only the
+// host's Unraid inventory reports, such as a member the agent's SMART
+// collection skips under --disk-exclude. smartMetricIDs holds the history keys
+// of the host's SMART rows. A disk under one of those keys is that row's to
+// chart, and the row already carries the Unraid reading when it has none of
+// its own. Unraid rows sharing a key are one disk in the registry, which keeps
+// the latest of their readings, so the last row with a reading decides that
+// key's sample.
+func (m *Monitor) writeHostUnraidDiskTemperatures(host models.Host, smartMetricIDs map[string]struct{}, now time.Time) {
+	if host.Unraid == nil {
+		return
+	}
+	type reading struct {
+		temperature int
+		collection  *diskinventory.CollectionStatus
+	}
+	var keys []string
+	readings := make(map[string]reading, len(host.Unraid.Disks))
+	for _, disk := range host.Unraid.Disks {
+		resourceID := unifiedresources.HostUnraidDiskMetricID(host, disk)
+		if resourceID == "" {
+			continue
+		}
+		if _, ok := smartMetricIDs[resourceID]; ok {
+			continue
+		}
+		temperature, collection := unifiedresources.HostUnraidDiskTemperature(host, disk)
+		if temperature <= 0 {
+			continue
+		}
+		if _, ok := readings[resourceID]; !ok {
+			keys = append(keys, resourceID)
+		}
+		readings[resourceID] = reading{temperature: temperature, collection: collection}
+	}
+	for _, resourceID := range keys {
+		if r := readings[resourceID]; diskinventory.TemperatureCollected(r.temperature, r.collection) {
+			m.metricsStore.Write("disk", resourceID, "smart_temp", float64(r.temperature), now)
 		}
 	}
 }
@@ -4228,23 +4276,33 @@ func hostDiskIOMetricResourceID(host models.Host, io models.DiskIO, proxmoxDisks
 		return ""
 	}
 
+	smartDevice := diskinventory.DeviceToken(io.Device)
 	smartMetricID := ""
+	smartRowID := ""
 	for _, disk := range host.Sensors.SMART {
-		if disk.Standby {
+		if !strings.EqualFold(diskinventory.DeviceToken(disk.Device), smartDevice) {
 			continue
 		}
-		if strings.EqualFold(normalizeHostDiskDevice(disk.Device), device) {
-			candidate := unifiedresources.HostSMARTDiskSourceID(host, disk)
-			if smartMetricID != "" && smartMetricID != candidate {
-				// Multiple controller members share this kernel block path.
-				// The counter belongs to the aggregate device, not any member.
-				return ""
-			}
-			smartMetricID = candidate
+		// Multiple controller members share this kernel block path. The
+		// counter belongs to the aggregate device, not any member. Judge that
+		// on each row's own identity, standby rows included, since members
+		// never take the path's Unraid serial.
+		rowID := unifiedresources.HostSMARTDiskSourceID(host, disk)
+		if smartRowID != "" && smartRowID != rowID {
+			return ""
+		}
+		smartRowID = rowID
+		if !disk.Standby {
+			smartMetricID = unifiedresources.HostSMARTDiskMetricID(host, disk)
 		}
 	}
 	if smartMetricID != "" {
 		return smartMetricID
+	}
+	// A disk with no SMART reading to key it, spun down or unread, still
+	// carries the serial its Unraid row reports.
+	if unraidMetricID := unifiedresources.HostUnraidDeviceMetricID(host, device); unraidMetricID != "" {
+		return unraidMetricID
 	}
 
 	for _, pd := range proxmoxDisks {

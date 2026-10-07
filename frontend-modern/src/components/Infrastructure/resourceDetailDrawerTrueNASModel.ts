@@ -20,7 +20,11 @@ import {
   type DetailSection,
   type DetailValueTone,
 } from '@/components/shared/detailSectionModel';
-import { getPhysicalDiskTemperaturePresentation } from '@/features/storageBackups/diskTemperaturePresentation';
+import {
+  getPhysicalDiskTemperaturePresentation,
+  isPhysicalDiskRunningHot,
+} from '@/features/storageBackups/diskTemperaturePresentation';
+import type { TrueNASDiskTemperatureThresholdResolver } from '@/features/truenas/truenasPageModel';
 import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
 
 export type ResourceDetailDrawerTrueNASRowTone = DetailValueTone;
@@ -399,9 +403,13 @@ const diskTemperature = (disk: ResourcePhysicalDiskMeta) =>
   });
 
 // A retained reading, such as a silent host agent's on a merged disk row, is
-// not current: it takes no heat tone and its title says why.
+// not current: it takes no heat tone and its title says why. A current reading
+// is hot from its disk type's alert trigger, the threshold the TrueNAS storage
+// table and the disk's temperature alert judge it by. Without a resolver, heat
+// is not judged.
 const diskTemperatureRow = (
   disk: ResourcePhysicalDiskMeta,
+  resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
 ): ResourceDetailDrawerTrueNASRow | null => {
   const reading = diskTemperature(disk);
   if (!reading) return null;
@@ -411,9 +419,12 @@ const diskTemperatureRow = (
       tone: 'muted',
     });
   }
-  return row('Temperature', reading.label, {
-    tone: (disk.temperature ?? 0) >= 55 ? 'warning' : 'default',
-  });
+  const thresholds = resolveDiskTemperatureThresholds?.(disk.diskType ?? '') ?? null;
+  const hot = isPhysicalDiskRunningHot(
+    { temperature: disk.temperature ?? 0, collection: disk.collection },
+    thresholds,
+  );
+  return row('Temperature', reading.label, { tone: hot ? 'warning' : 'default' });
 };
 
 const currentDiskTemperatureLabel = (disk: ResourcePhysicalDiskMeta): string | null => {
@@ -424,6 +435,7 @@ const currentDiskTemperatureLabel = (disk: ResourcePhysicalDiskMeta): string | n
 const buildTrueNASDiskSections = (
   resource: Resource,
   disk: ResourcePhysicalDiskMeta,
+  resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
 ): ResourceDetailDrawerTrueNASSection[] => {
   const riskReasons = (disk.risk?.reasons ?? [])
     .map((reason) => asString(reason.summary))
@@ -439,7 +451,7 @@ const buildTrueNASDiskSections = (
 
   const healthRows = compactRows([
     row('Health', normalizeDelimitedLabel(disk.health), { tone: diskStateTone(disk) }),
-    diskTemperatureRow(disk),
+    diskTemperatureRow(disk, resolveDiskTemperatureThresholds),
     row(
       'Wearout',
       disk.wearout === undefined || disk.wearout < 0 ? null : formatPercent(disk.wearout),
@@ -746,6 +758,7 @@ const buildTrueNASShareSections = (
 
 export const buildTrueNASDetailSections = (
   resource: Resource,
+  resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
 ): ResourceDetailDrawerTrueNASSection[] => {
   if (resource.truenas?.share) return buildTrueNASShareSections(resource.truenas.share);
   if (resource.truenas?.vm) return buildTrueNASVMSections(resource, resource.truenas.vm);
@@ -754,7 +767,11 @@ export const buildTrueNASDetailSections = (
     return buildTrueNASStorageSections(resource, resource.storage);
   }
   if (isTrueNASScopedResource(resource) && resource.physicalDisk) {
-    return buildTrueNASDiskSections(resource, resource.physicalDisk);
+    return buildTrueNASDiskSections(
+      resource,
+      resource.physicalDisk,
+      resolveDiskTemperatureThresholds,
+    );
   }
   if (isTrueNASScopedResource(resource) && resource.truenas) {
     return buildTrueNASSystemSections(resource, resource.truenas);

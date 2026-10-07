@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  filterSummarySeriesByGroupScope,
   isSummarySeriesInGroupScope,
   normalizeSummarySeriesGroupScope,
   resolveSummaryGroupMemberInteractionState,
@@ -13,7 +12,7 @@ import {
 // summaryCardInteraction.ts. The existing spec (summaryCardInteraction.test.ts)
 // exercises the precedence/happy paths; this file targets the null/empty/
 // malformed-input arms that never fire there. A scoped v8 coverage run against
-// the existing spec alone leaves exactly 8 of 56 branch arms cold (0 functions):
+// the existing spec alone leaves these branch arms cold:
 //   b6  normalizeSummarySeriesGroupScope: `scope.seriesIds ?? []` nullish-fallback
 //   b8  normalizeSummarySeriesGroupScope: valid id but `seriesIds.length === 0` -> null
 //   b10 normalizeSummarySeriesGroupScope: `typeof scope.label !== 'string'` else arm
@@ -21,7 +20,6 @@ import {
 //   b14 isSummarySeriesInGroupScope: valid scope but empty seriesId -> false
 //   b19 resolveSummaryGroupMemberInteractionState: empty seriesId -> 'default'
 //   b37 resolveSummaryScopeState: hoveredGroupScope truthy -> group/preview return
-//   b43 filterSummarySeriesByGroupScope: null/invalid scope -> `[...series]`
 // Every asserted value below is hand-computed against the source in
 // src/components/shared/summaryCardInteraction.ts — no snapshots, no
 // constant-equals-itself tautologies. Deliberately-malformed inputs (missing
@@ -187,12 +185,12 @@ describe('summaryCardInteraction.branchcov0724pm', () => {
       });
     });
 
-    it('prefers a valid chartHoveredSeriesId over the hoveredGroupScope group return, confirming b37 is precedence-gated (regression guard)', () => {
-      // chartHoveredSeriesId 'alpha' is in the resolved scope -> entity/preview
+    it('prefers a hovered series inside the scope over the hoveredGroupScope group return, confirming b37 is precedence-gated (regression guard)', () => {
+      // hoveredSeriesId 'alpha' is in the resolved scope -> entity/preview
       // return wins; the hoveredGroupScope group arm (b37) is NOT taken here.
       expect(
         resolveSummaryScopeState({
-          chartHoveredSeriesId: 'alpha',
+          hoveredSeriesId: 'alpha',
           hoveredGroupScope: validScope,
         }),
       ).toEqual({
@@ -201,54 +199,6 @@ describe('summaryCardInteraction.branchcov0724pm', () => {
         seriesId: 'alpha',
         source: 'preview',
       });
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // filterSummarySeriesByGroupScope — the no-scope -> shallow-copy arm. The
-  // existing spec only calls this with a valid scope (the .filter path).
-  // -------------------------------------------------------------------------
-  describe('filterSummarySeriesByGroupScope', () => {
-    it('returns a copy of every series when the scope is null/undefined (b43)', () => {
-      const series = [{ id: 'alpha' }, { id: 'beta' }, { id: 'gamma' }];
-      // null scope -> normalizedScope null -> `return [...series]` (b43).
-      const fromNull = filterSummarySeriesByGroupScope(series, null);
-      expect(fromNull.map((s) => s.id)).toEqual(['alpha', 'beta', 'gamma']);
-      // Must be a NEW array reference (shallow copy), not the input identity.
-      expect(fromNull).not.toBe(series);
-      expect(fromNull).toEqual(series);
-
-      const fromUndefined = filterSummarySeriesByGroupScope(series, undefined);
-      expect(fromUndefined.map((s) => s.id)).toEqual(['alpha', 'beta', 'gamma']);
-      expect(fromUndefined).not.toBe(series);
-    });
-
-    it('returns a copy of every series when the scope normalizes to null because its id is blank (b43 via invalid id)', () => {
-      const series = [{ id: 'alpha' }];
-      // id '' -> normalizeSummarySeriesGroupScope returns null -> b43.
-      const result = filterSummarySeriesByGroupScope(series, {
-        id: '',
-        seriesIds: ['alpha'],
-      });
-      expect(result.map((s) => s.id)).toEqual(['alpha']);
-      expect(result).not.toBe(series);
-    });
-
-    it('returns a copy of every series when the scope normalizes to null because its seriesIds are empty (b43 via empty list)', () => {
-      const series = [{ id: 'alpha' }, { id: 'beta' }];
-      // valid id but empty seriesIds -> normalize returns null -> b43.
-      const result = filterSummarySeriesByGroupScope(series, {
-        id: 'cluster-a',
-        seriesIds: [],
-      });
-      expect(result.map((s) => s.id)).toEqual(['alpha', 'beta']);
-      expect(result).not.toBe(series);
-    });
-
-    it('still filters down to in-scope series for a valid scope so the b43 copy path is proven not to over-include', () => {
-      const series = [{ id: 'alpha' }, { id: 'beta' }, { id: 'gamma' }];
-      const result = filterSummarySeriesByGroupScope(series, validScope);
-      expect(result.map((s) => s.id)).toEqual(['alpha', 'beta']);
     });
   });
 });

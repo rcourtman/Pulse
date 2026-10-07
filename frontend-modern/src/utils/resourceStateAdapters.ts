@@ -124,8 +124,9 @@ const mergeRecord = <T extends JsonRecord>(incoming?: T, existing?: T): T | unde
 };
 
 // Native VM facets carry a runtime state and an explicit guest-agent outcome.
-// Their optional read reason, lock and false expected flag are omitempty on
-// wire. A new outcome supersedes those fields, not unrelated richer metadata.
+// Their optional read reason, lock, false expected flag and guest filesystems
+// are omitempty on wire. A new outcome supersedes those fields, not unrelated
+// richer metadata; withdrawn filesystems must not hide a linked agent's.
 // Partial/legacy facets without that evidence must retain the prior facts.
 const mergeProxmoxFacet = <T extends JsonRecord>(incoming?: T, existing?: T): T | undefined => {
   const merged = mergeRecord(incoming, existing);
@@ -142,9 +143,27 @@ const mergeProxmoxFacet = <T extends JsonRecord>(incoming?: T, existing?: T): T 
   )
     return merged;
   const next = { ...merged };
-  for (const key of ['diskStatusReason', 'guestAgentExpected', 'lock']) {
+  for (const key of ['diskStatusReason', 'guestAgentExpected', 'lock', 'disks']) {
     if (!Object.prototype.hasOwnProperty.call(incoming, key)) delete next[key];
   }
+  return next;
+};
+
+// Native agent facets always carry `stale`; facets synthesized from legacy
+// platform data never do. Their filesystem list is omitempty on wire, so a
+// native report without `disks` has withdrawn them, while a partial or legacy
+// facet keeps the prior list.
+const mergeAgentFacet = <T extends JsonRecord>(incoming?: T, existing?: T): T | undefined => {
+  const merged = mergeRecord(incoming, existing);
+  if (
+    !incoming ||
+    !merged ||
+    typeof incoming.stale !== 'boolean' ||
+    Object.prototype.hasOwnProperty.call(incoming, 'disks')
+  )
+    return merged;
+  const next = { ...merged };
+  delete next.disks;
   return next;
 };
 
@@ -180,7 +199,9 @@ const mergePlatformData = (
     const nested =
       key === 'proxmox'
         ? mergeProxmoxFacet(asRecord(incoming[key]), asRecord(existing[key]))
-        : mergeRecord(asRecord(incoming[key]), asRecord(existing[key]));
+        : key === 'agent'
+          ? mergeAgentFacet(asRecord(incoming[key]), asRecord(existing[key]))
+          : mergeRecord(asRecord(incoming[key]), asRecord(existing[key]));
     if (key === 'docker') {
       if (hasDockerFacetEvidence(nested)) {
         merged[key] = nested;
@@ -895,7 +916,9 @@ const mergeCanonicalSourceFacet = <T extends JsonRecord>(
   shouldKeepSourceFacet(incomingSources, ...sourceCandidates)
     ? sourceCandidates.includes('proxmox-pve')
       ? mergeProxmoxFacet(incomingFacet, existingFacet)
-      : mergeRecord(incomingFacet, existingFacet)
+      : sourceCandidates.includes('agent')
+        ? mergeAgentFacet(incomingFacet, existingFacet)
+        : mergeRecord(incomingFacet, existingFacet)
     : incomingFacet;
 
 // A missing field alone can be a partial snapshot. Explicit unavailable raw

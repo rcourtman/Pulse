@@ -944,6 +944,15 @@ Patrol coverage, schedule, finding, and approval state belongs on Patrol-owned
 surfaces or explicit Patrol affordances; Proxmox overview must not treat it as
 backup coverage, restore readiness, PBS verification/protection proof, or a
 replacement for the Proxmox Backups tab and workload Backup column.
+The outdated sensor setup notice above the Proxmox tabs is temperature
+guidance, not storage or recovery evidence. It reads the registry's per-node
+`proxmox.sensorSetupOutdated` verdict from the node rows the active tab already
+loads (Overview, Storage, Replication and Backups load nodes; Ceph and Mail do
+not, so it does not render there), so the Overview query must not add
+`physical_disk` rows to feed it; the derived `ProxmoxData` flag opens no storage
+or recovery path.
+`ProxmoxPageSurface.contract.test.tsx` pins the notice on Overview with no disk
+rows and an Overview query without `physical_disk`.
 The Proxmox inline estate totals are likewise an adjacent frontend-primitives
 and unified-resource projection, not backup or recovery evidence.
 `ProxmoxPageSurface` must flow the already-loaded workload inventory into the
@@ -1404,6 +1413,12 @@ state only. A restored prompt or restored message count may help an operator
 continue a protected-item investigation, but it must not become backup coverage
 evidence, recovery freshness, restore entitlement, storage-owner identity,
 approval policy, or a provider-local recovery command handoff.
+The POST-only guard on Assistant session mutations (`/abort`,
+`/summarize`, `/fork`, `/undo`, `/redo`, `/steer`; `405` with `Allow: POST`
+for any other method that reaches the handler) is transport hardening in
+`internal/api/ai_handler.go`.
+It opens no storage, backup, or recovery read or write path, and a rejected
+request never reaches session state.
 Approved Assistant tool execution through `internal/api/router_routes_ai_relay.go`
 is also adjacent API/AI action plumbing for storage/recovery consumers.
 `AssistantToolExecutor` / `ApprovedAssistantToolExecutor` may execute an already
@@ -2770,11 +2785,9 @@ canonical pre-handler authorization proof covering both transfer routes.
     top-level GitHub install.sh SERVER installer, so a correct local script
     (signed or not) is always preferred over a wrong-identity proxied one on the
     unverified curl-piped-into-bash agent path (issue #1470).
-15. Keep storage summary chart identity and sticky-shell behavior on the
-    shared storage path. Pool rows, disk rows, storage summary cards, and
-    storage detail charts must all address history through the canonical
-    unified-resource metrics-target IDs, and the storage page must reuse the
-    shared sticky summary primitive instead of a storage-local scroll wrapper.
+15. Keep storage chart identity on the shared storage path. Pool rows, disk
+    rows, the pool Growth column, and storage detail charts must all address
+    history through the canonical unified-resource metrics-target IDs.
     Expanded pool and physical-disk details must also follow the canonical
     object-detail information architecture: current configuration, topology,
     health, and SMART facts land on `Overview`; stored capacity and I/O charts
@@ -2820,10 +2833,9 @@ canonical pre-handler authorization proof covering both transfer routes.
     likewise native Assistant tool-visibility plumbing, not MCP transport
     state and not storage/recovery execution authority.
     When operators hover or focus pools versus physical disks, the storage
-    summary must reuse one resolved active-series ID across card state and
-    chart highlighting so pool-only cards demote cleanly during disk focus and
-    disk-temperature cards demote cleanly during pool focus, instead of
-    leaving stale row-local IDs or storage-local hover branches on the page.
+    page must reuse one resolved active-series ID for row emphasis in both
+    views instead of leaving stale row-local IDs or storage-local hover
+    branches on the page.
     Any page, group, or entity scope that becomes pinned through storage
     interaction must stay row-first: the pinned row or group remains the
     visible scoped state, and explicit clearing belongs to the shared storage
@@ -2836,16 +2848,15 @@ canonical pre-handler authorization proof covering both transfer routes.
     `data-summary-group-member-active="preview|pinned"` state so the grouped
     block reads as one scoped set without adding storage-local outlines, pill
     buttons, or heavy full-row fills.
-18. Keep storage summary remount caches versioned with the chart contract.
-    `frontend-modern/src/components/Storage/StorageSummary.tsx` may keep a
-    bounded in-memory cache for same-tab remounts, but its cache key must carry
-    an explicit summary contract version so long-lived demo sessions do not
-    rehydrate stale pool or disk sparkline shapes after the storage summary
-    chart model changes. The shared storage history owner at
-    `frontend-modern/src/utils/storageSummaryCache.ts` must likewise remain
-    bounded to 20 recent node/range summaries, use LRU replacement, and abort
-    in-flight requests when organization ownership changes so a late response
-    cannot recreate an old-scope cache entry.
+18. Keep the storage summary history cache versioned with the chart contract.
+    `frontend-modern/src/utils/storageSummaryCache.ts`, which
+    `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts` reads
+    for the pool Growth column, must carry an explicit summary contract version
+    in its cache key so long-lived demo sessions do not rehydrate stale pool or
+    disk series shapes after the storage summary chart model changes. It must
+    also remain bounded to 20 recent node/range summaries, use LRU replacement,
+    and abort in-flight requests when organization ownership changes so a late
+    response cannot recreate an old-scope cache entry.
 19. Keep cross-surface workload handoffs on canonical IDs too. Shared workload
     chart transport may look up provider-backed VM history through unified
     metrics targets, but infrastructure/workloads/storage/recovery navigation
@@ -2996,6 +3007,15 @@ Expiry-index pruning forgets only suppression state, never audit rows or
 recovery evidence. Unremembered overflow deliveries remain auditable with
 `reason=capacity`; cache expiry, overflow, or restart is not a successful
 storage operation or a reason to delete historical events.
+
+### Alert settings saves keep unsent keys without a new storage path
+
+`PUT /api/alerts/config` now applies only the top-level keys the body carries
+and keeps stored values for the rest, so a thresholds save no longer turns off
+alert TTL cleanup. It still writes `alerts.json` through the existing
+`SaveAlertConfig` path, opens no storage or recovery route, and leaves backup
+and snapshot alert settings under the same replace-what-was-sent rule as every
+other key. `internal/api/alerting/alerts_test.go` pins the handler.
 
 ### Container diagnostics shares private bootstrap transport (1 October 2026)
 
@@ -3686,11 +3706,6 @@ live wire-up and persistence resync so a finding the operator
 manually closed before a restart still reads as "Resolved by you"
 afterward, instead of being misattributed to Pulse's auto-detection.
 
-`StorageSummary.tsx`, `StoragePageSummary.tsx`, and `useStoragePageSummary.ts`
-now surface `poolsDegraded` and `disksFailing` health indicators alongside
-pool/disk counts. These additions project from existing websocket pool/disk
-state; they must not introduce new API polling or widen the storage-fetch
-boundary.
 Agentless availability endpoints are adjacent infrastructure context only, not
 storage or recovery inventory. Storage/recovery consumers may receive
 `network-endpoint` resources through shared unified-resource snapshots, but
@@ -3703,9 +3718,9 @@ not Standalone Machines membership, storage ownership, repository membership,
 backup coverage, or restore authority.
 That same owned summary path now also runs through
 `useStorageSummaryCharts.ts`: the storage page owns one page-scoped summary
-range and one shared storage-summary history fetch, and both the sticky
-summary cards and per-pool growth column reuse that payload instead of
-forking separate row-local history reads or duplicate polling loops.
+range and one shared storage-summary history fetch, and the per-pool Growth
+column and its growth sort reuse that payload instead of forking separate
+row-local history reads or duplicate polling loops.
 The storage table's default `priority` order is a risk list: records with an
 open, unacknowledged alert sort first by severity (fed into
 `sortStorageRecords` through `StorageSortContext.alertWeightByRecordId` from
@@ -4343,38 +4358,26 @@ split: storage derives the health semantics through
 Storage components and `features/storageBackups` presentation helpers must not
 recreate raw green/yellow rounded-dot classes locally.
 That same storage page ownership now also includes contextual focus behavior
-for pools and disks. Expanding a storage row may set a focused metrics-target
-ID for shared summary emphasis, but `frontend-modern/src/components/Storage/StorageSummary.tsx`
-must keep the storage summary page-scoped instead of collapsing its sparklines
-to the single expanded row or replacing the page overview with row-local empty
-states.
-That same page-scoped summary contract now also owns canonical hover-isolation
-behavior. Pool and disk rows must publish the resolved metrics-target ID into
-the shared summary contract so pool usage, used capacity, and available space
-cards can isolate the active row through the shared sparkline primitive while
-non-matching cards such as disk temperature demote to inactive context instead
-of rebuilding a row-local summary surface.
-That same shared summary contract now also owns chart-driven emphasis.
-Hovering one storage summary chart must promote the same canonical metrics
-target ID through sibling cards, so pool charts cross-highlight the same pool
-while non-matching cards such as disk temperature demote to inactive context
-instead of keeping chart-local hover state. When a sibling storage card can map
-that same entity into its own series set, it must also surface the synchronized
-value as a compact card-header readout instead of opening a second floating
-tooltip away from the pointer.
-That same storage summary contract now uses the shared contextual-focus owner.
-`frontend-modern/src/components/Storage/StorageSummary.tsx` must route
-interactive-series filtering, focused-label lookup, and active-series
-resolution through `frontend-modern/src/components/shared/contextualFocus.ts`
-so storage keeps the same page-scoped focus semantics as infrastructure and
-workloads instead of preserving a storage-local hover/focus branch.
-That same storage ownership now also governs summary-to-table reveal. Hovering
-pool or disk charts may highlight the matching row when the active view already
-shows it, but storage hover must not auto-filter or auto-scroll the table.
-When the active chart entity is off-screen or hidden behind the other storage
-view, the page must use the shared summary-table focus bridge and reveal the
-target row only through an explicit `Jump to row` action, switching views or
-expanding the owning group only for that deliberate reveal path.
+for pools and disks. Expanding a pool row or selecting a disk row sets the
+focused summary series ID and row hover sets the hovered one;
+`frontend-modern/src/components/Storage/useStoragePageModel.ts` must resolve
+both through the shared `useSummaryPageInteractionState` bridge in
+`frontend-modern/src/components/shared/summaryTableFocus.ts`, so pool, disk,
+and pool-group row emphasis keeps the same page/group/entity semantics as
+workloads instead of preserving a storage-local hover/focus branch. The
+storage summary history that `useStorageSummaryCharts.ts` loads feeds only the
+pool Growth column and its sort; no storage summary card strip renders, and
+one that returns must stay page-scoped instead of collapsing to the expanded
+row or replacing the page overview with row-local empty states.
+That same storage ownership now also governs reveal. Row hover may highlight
+the matching row in place, but storage hover must not auto-filter or
+auto-scroll the table. Reveal belongs only to deliberate focus: the bridge
+hands the focused pool or disk series to the `revealActiveSeries` callback,
+which reopens a focused pool's collapsed owning group, and a pinned pool-group
+header that sits off-screen scrolls into view through the same bridge. Focus
+only ever names a row in the active pools or disks view, so the callback never
+switches views; the view-switching branches that served the retired jump to
+the active row are gone.
 That same reveal contract now also owns inline-detail expansion. When a pool or
 disk row is deliberately focused and its inline detail opens on the storage
 page, the detail row must publish the same canonical summary series ID through
@@ -4397,8 +4400,8 @@ instead of a separate hardcoded recovery cache, so recovery filters, rollups,
 and shared route handoffs see the same platform set as settings and
 infrastructure.
 That same graph-owned mock boundary also owns demo-readiness for storage and
-recovery surfaces. Mock summary cards, seeded history, and provider-backed
-storage/recovery counts must come from the same canonical fixture graph so
+recovery surfaces. Mock seeded history and provider-backed storage/recovery
+counts must come from the same canonical fixture graph so
 storage and recovery demos show realistic healthy-versus-attention balance
 instead of blank history, stale provider context, or page-local fixture drift.
 That same recovery-facing demo contract also owns subject readability. When
@@ -4407,16 +4410,11 @@ subject identity shown to operators must stay human-readable
 `<cluster>/<namespace>/<pvc>` context from the canonical graph instead of
 opaque hash-like IDs that break demo trust and cross-surface recognition.
 That same adjacent chart boundary now also assumes seeded and live mock
-storage timelines are one continuous series. Disk-temperature, pool-usage,
-used-capacity, and available-space cards may consume shaped chart payloads for
-presentation, but those payloads must still reflect one canonical mock metric
-timeline instead of a seeded seven-day sparkline with a second live tail
-stitched on afterward.
-That same chart boundary now also owns row-hover summary filtering. Storage
-pool and disk rows may focus the summary cards, but the shared storage summary
-must filter every supported card through the same canonical metrics-target
-identity rather than letting temperature, capacity, or detail cards drift onto
-page-local row identifiers.
+storage timelines are one continuous series. Storage chart consumers such as
+the pool Growth column and the pool and disk History charts may consume shaped
+chart payloads for presentation, but those payloads must still reflect one
+canonical mock metric timeline instead of a seeded seven-day series with a
+second live tail stitched on afterward.
 That same shared `internal/api/` dependency also assumes auth-persistence
 teardown is synchronous when recovery-adjacent runtimes reinitialize. Session,
 CSRF, and recovery-token workers may not leave stale background goroutines or
@@ -4854,8 +4852,8 @@ the cloud-summary decision is derived from scope rather than stored as a
 separate boolean flag.
 The same storage-facing runtime paths now also normalize org scope through
 `frontend-modern/src/utils/orgScope.ts` before building cache keys or
-multi-tenant fetch state, so Dashboard, StorageSummary, and other storage
-adjacent consumers do not each keep a local `getOrgID() || 'default'`
+multi-tenant fetch state, so `storageSummaryCache.ts` and other
+storage-adjacent consumers do not each keep a local `getOrgID() || 'default'`
 fallback.
 
 The frontend storage and recovery surfaces are also first-class embedded
@@ -4897,10 +4895,10 @@ small table chrome to return to the primary page. It must not return as an
 equal-weight subtab or a top-level posture-card action strip without a separate
 governed product decision.
 Recovery is also intentionally outside the interactive page/group/entity
-summary-card contract used by workloads, infrastructure, and storage. The
-recovery route must not adopt `summaryCardInteraction.ts`, synchronized card
-hover, row-driven summary scope, or shared `SummaryPanel` card framing simply
-because adjacent monitoring pages use those primitives. Recovery may still show
+summary-scope contract that the workloads and storage tables use. The recovery
+route must not adopt `summaryCardInteraction.ts`, `summaryTableFocus.ts`,
+row-driven summary scope, or a summary card strip simply because adjacent
+monitoring pages use those primitives. Recovery may still show
 coverage breadth and platform context inside the Protection coverage table and
 event filters, but the page must read item-first so the unified recovery model
 is not visually anchored to one platform family.
@@ -5191,8 +5189,8 @@ recovery-local grid overrides or width hacks. Protected-items controls should
 also use the same shared `Reset all` page-controls action pattern as storage
 and workloads when visible filters are active, instead of forcing operators to
 clear each inventory filter manually.
-That same handoff should keep Recovery out of shared summary-card density
-tuning unless a new governed product decision reintroduces a first-viewport
+That same handoff should keep Recovery free of a first-viewport summary card
+strip unless a new governed product decision reintroduces a first-viewport
 summary owner. The current route should spend its top-level density budget on
 the activity section, compact controls, and one primary data card.
 That same shell rule applies to the recovery-events workspace.
@@ -6267,6 +6265,19 @@ is in `applyLicensedFeatureConfigSnapshot`
 (`pkg/server/telemetry_licensed_features.go`), pinned by
 `TestApplyLicensedFeatureConfigSnapshot_CountsScheduledReportingAndProfiles`.
 
+### Single-resource report AI narration requires POST
+
+`internal/api/metrics_reporting_handlers.go` now accepts `POST` with a JSON
+body for `/api/admin/reports/generate` and lets only that method use the
+tenant's AI narrator; `GET` keeps working with query parameters and the
+deterministic summary. A narrated PDF records the same AI cost-ledger entry as
+before, and only a `POST` can now produce one. A `GET` reads Patrol findings
+only from an AI service that is already running
+(`AISettingsHandler.ExistingAIService`), so it no longer constructs a tenant AI
+service, whose construction opens that tenant's SQLite resource export store.
+Report content, backup and recovery enrichment, and tenant storage are
+otherwise unchanged.
+
 ### Audit-read activity is a bounded, content-free local history
 
 `audit_read_activity.json` follows the same shape as the existing external-agent
@@ -6886,3 +6897,31 @@ migration or recovery authority is added or moved.
 The performance report and reporting runtime snapshot handlers apply the same
 test before tabulating a disk temperature. That changes only which held value a
 report shows, not any storage or recovery path.
+
+### A linked agent's stale flag and guest disk owner open no storage path
+
+`internal/unifiedresources/types.go` now always sends `AgentData.Stale`, so a
+resumed agent clears its stopped-reporting mark in browsers that merge agent
+facets field by field, and `VMView.DiskFromLinkedAgent` keeps the poller from
+carrying a linked agent's guest disk forward as a Proxmox read. Both describe
+which source's reading is current; no backup, retention, migration or recovery
+path is added or moved.
+
+### Demo write guard ignores websocket upgrade headers
+
+`internal/api/demo_middleware.go` no longer exempts every request carrying
+`Upgrade: websocket` from the demo read-only guard. On a `DEMO_MODE` instance a
+`POST`, `PUT`, `PATCH` or `DELETE` with websocket handshake headers is now
+judged like any other write: outside the login, logout, AI execute and OIDC
+allowlist it gets the generic demo `403`, or `404` on a hidden route, and that
+includes config import at `/api/config/import`. HTTP/1.1 websocket handshakes
+are `GET` requests and still connect. No storage, retention, backup, migration
+or recovery path is added or moved.
+
+### Demo mode hides the pprof routes
+
+`internal/api/demo_mode_operations.go` adds the Go runtime profiling family
+(`/debug/pprof` and every path below it, every method) to the public-demo
+hidden routes, so the demo guard on a `DEMO_MODE` instance answers it with
+`404`. That removes a diagnostic read surface on demo instances only; no
+storage, retention, backup, migration or recovery path is added or moved.

@@ -60,6 +60,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
+	pulsews "github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
@@ -5080,6 +5081,7 @@ func TestContract_ReportingCatalogJSONSnapshot(t *testing.T) {
 			"title":"Performance Reports",
 			"description":"Generate PDF summaries or CSV metric exports from historical monitoring data for one or more selected resources.",
 			"singleResourceEndpoint":"/api/admin/reports/generate",
+			"singleResourceMethod":"POST",
 			"multiResourceEndpoint":"/api/admin/reports/generate-multi",
 			"singleFilenamePrefix":"report",
 			"singleFilenameSubject":"resource_id",
@@ -5225,6 +5227,169 @@ func TestContract_PerformanceReportTransportUsesCatalogDefinition(t *testing.T) 
 	}
 	if engine.lastReq.MetricType != "cpu" || engine.lastReq.Title != "Node report" {
 		t.Fatalf("expected trimmed canonical optional fields, got %+v", engine.lastReq)
+	}
+
+	post := httptest.NewRequest(
+		http.MethodPost,
+		"/api/reporting",
+		strings.NewReader(`{"resourceType":"node","resourceId":"node-1","metricType":" cpu ","title":" Node report "}`),
+	)
+	rec = httptest.NewRecorder()
+	handler.HandleGenerateReport(rec, post)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected POST 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if engine.lastReq.ResourceID != "node-1" || engine.lastReq.Format != definition.DefaultFormat ||
+		engine.lastReq.MetricType != "cpu" || engine.lastReq.Title != "Node report" {
+		t.Fatalf("expected POST body to carry the same canonical fields as GET, got %+v", engine.lastReq)
+	}
+}
+
+type recordingReportEngine struct {
+	*reporting.ReportEngine
+	requests []reporting.MetricReportRequest
+}
+
+func (e *recordingReportEngine) Generate(req reporting.MetricReportRequest) ([]byte, string, error) {
+	e.requests = append(e.requests, req)
+	return e.ReportEngine.Generate(req)
+}
+
+type countingReportNarrator struct{ calls atomic.Int32 }
+
+func (n *countingReportNarrator) Narrate(context.Context, reporting.NarrativeInput) (reporting.Narrative, error) {
+	n.calls.Add(1)
+	return reporting.Narrative{Source: reporting.NarrativeSourceAI, HealthStatus: "HEALTHY", HealthMessage: "narrated"}, nil
+}
+
+// A PDF single-resource report may be narrated by the tenant's Pulse
+// Assistant, a paid provider call recorded in the cost ledger. GET passes the
+// demo-mode guard and the CSRF check, and SameSite=Lax session cookies ride
+// cross-site top-level GET navigations, so only POST, the settings UI
+// transport, may reach the AI narrator. GET still returns the report, with
+// the deterministic summary and a note in place of the "Configure Pulse
+// Assistant" tip.
+func TestContract_SingleReportAINarrationRequiresPOST(t *testing.T) {
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	engine := &recordingReportEngine{ReportEngine: reporting.NewReportEngine(reporting.EngineConfig{MetricsStore: store})}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	// The narrator resolver stands for GetAIService, which can construct a
+	// tenant AI service; GET must use only the existing-service findings path.
+	narrator := &countingReportNarrator{}
+	var narratorResolves, findingsResolves atomic.Int32
+	handler := NewReportingHandlers(nil, nil)
+	handler.SetNarratorResolver(func(context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
+		narratorResolves.Add(1)
+		return narrator, nil, nil
+	})
+	handler.SetExistingFindingsResolver(func(context.Context) reporting.FindingsProvider {
+		findingsResolves.Add(1)
+		return nil
+	})
+	generate := func(req *http.Request) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		handler.HandleGenerateReport(rec, req)
+		return rec
+	}
+	const query = "/api/admin/reports/generate?format=pdf&resourceType=node&resourceId=node-1"
+
+	rec := generate(httptest.NewRequest(http.MethodGet, query, nil))
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/pdf" {
+		t.Fatalf("GET report: status %d, content type %q, body=%s", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
+	}
+	if got := narrator.calls.Load(); got != 0 {
+		t.Fatalf("GET report called the AI narrator %d times, want 0", got)
+	}
+	narrative, err := engine.NarrativeFor(engine.requests[len(engine.requests)-1])
+	if err != nil {
+		t.Fatalf("GET report narrative: %v", err)
+	}
+	if narrative.Source != reporting.NarrativeSourceHeuristic || narrative.Disclaimer != reportGETNarrativeNote {
+		t.Fatalf("GET report narrative = source %q disclaimer %q, want the deterministic summary with the GET note", narrative.Source, narrative.Disclaimer)
+	}
+
+	for _, method := range []string{http.MethodHead, http.MethodPut, http.MethodDelete} {
+		rec := generate(httptest.NewRequest(method, query, nil))
+		if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Allow") != "GET, POST" {
+			t.Fatalf("%s report: status %d, Allow %q, want 405 with Allow GET, POST", method, rec.Code, rec.Header().Get("Allow"))
+		}
+	}
+	if got := narrator.calls.Load(); got != 0 {
+		t.Fatalf("GET, HEAD, PUT and DELETE called the AI narrator %d times, want 0", got)
+	}
+	if got := narratorResolves.Load(); got != 0 {
+		t.Fatalf("GET, HEAD, PUT and DELETE resolved the AI service %d times, want 0", got)
+	}
+	if got := findingsResolves.Load(); got != 1 {
+		t.Fatalf("GET looked up existing Patrol findings %d times, want 1", got)
+	}
+
+	rec = generate(httptest.NewRequest(
+		http.MethodPost,
+		"/api/admin/reports/generate",
+		strings.NewReader(`{"format":"pdf","resourceType":"node","resourceId":"node-1"}`),
+	))
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/pdf" {
+		t.Fatalf("POST report: status %d, content type %q, body=%s", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
+	}
+	if got := narrator.calls.Load(); got != 1 {
+		t.Fatalf("POST report called the AI narrator %d times, want 1", got)
+	}
+	if got := narratorResolves.Load(); got != 1 {
+		t.Fatalf("POST report resolved the AI service %d times, want 1", got)
+	}
+}
+
+// The router's real resolvers: a GET report for a tenant whose AI service is
+// not running must not construct one, because construction can list provider
+// models and start background discovery. POST resolves it as before.
+func TestContract_SingleReportGETDoesNotConstructTenantAIService(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	router := &Router{
+		aiSettingsHandler: NewAISettingsHandler(config.NewMultiTenantPersistence(t.TempDir()), nil, nil),
+		reportingHandlers: NewReportingHandlers(nil, nil),
+	}
+	router.wireReportingAIResolvers()
+	t.Cleanup(router.aiSettingsHandler.StopServices)
+	tenantServices := func() int {
+		router.aiSettingsHandler.aiServicesMu.RLock()
+		defer router.aiSettingsHandler.aiServicesMu.RUnlock()
+		return len(router.aiSettingsHandler.aiServices)
+	}
+	generate := func(req *http.Request) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		router.reportingHandlers.HandleGenerateReport(rec, req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "tenant-1")))
+		return rec
+	}
+
+	rec := generate(httptest.NewRequest(http.MethodGet, "/api/admin/reports/generate?format=pdf&resourceType=node&resourceId=node-1", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET report: status %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := tenantServices(); got != 0 {
+		t.Fatalf("GET report constructed %d tenant AI services, want 0", got)
+	}
+	if _, ok := engine.lastReq.Narrator.(getReportNarrator); !ok || engine.lastReq.FindingsProvider != nil {
+		t.Fatalf("GET report narrator %T, findings %v; want the deterministic narrator and no findings without a running service", engine.lastReq.Narrator, engine.lastReq.FindingsProvider)
+	}
+
+	rec = generate(httptest.NewRequest(http.MethodPost, "/api/admin/reports/generate", strings.NewReader(`{"format":"pdf","resourceType":"node","resourceId":"node-1"}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST report: status %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := tenantServices(); got != 1 {
+		t.Fatalf("POST report resolved %d tenant AI services, want 1", got)
 	}
 }
 
@@ -9211,6 +9376,11 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 			{method: http.MethodGet, path: "/api/discover/"},
 			{method: http.MethodHead, path: "/api/discover"},
 			{method: http.MethodGet, path: licensePurchaseStartPath},
+			{method: http.MethodGet, path: "/debug/pprof"},
+			{method: http.MethodGet, path: "/debug/pprof/"},
+			{method: http.MethodGet, path: "/debug/pprof/heap"},
+			{method: http.MethodPost, path: "/debug/pprof/symbol"},
+			{method: http.MethodOptions, path: "/debug/pprof/trace"},
 		}
 
 		for _, tc := range testCases {
@@ -9259,6 +9429,208 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 			}
 		}
 	})
+}
+
+// The public demo signs every visitor in as the configured admin, so admin
+// routes accept a demo session and the demo guard is the only thing between it
+// and a write. Websocket handshake headers must not carry a write past that
+// guard, while a genuine handshake from the same session must still connect.
+func TestContract_DemoModeUpgradeHeadersDoNotExemptWrites(t *testing.T) {
+	setMockModeForTest(t, true)
+
+	dataDir := t.TempDir()
+	hashedPass, err := authpkg.HashPassword("demo")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	cfg := &config.Config{
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		DemoMode:   true,
+		AuthUser:   "demo",
+		AuthPass:   hashedPass,
+	}
+
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	t.Cleanup(func() { monitor.Stop() })
+	if err := monitor.SetMockMode(true); err != nil {
+		t.Fatalf("set monitor mock mode: %v", err)
+	}
+
+	hub := pulsews.NewHub(nil)
+	go hub.Run()
+	t.Cleanup(hub.Stop)
+	router := NewRouter(cfg, monitor, nil, hub, nil, "1.0.0")
+	cleanupTestRouter(t, router)
+	server := newIPv4HTTPServer(t, router.Handler())
+	t.Cleanup(server.Close)
+
+	loginResp, err := http.Post(server.URL+"/api/login", "application/json", strings.NewReader(`{"username":"demo","password":"demo"}`))
+	if err != nil {
+		t.Fatalf("demo login: %v", err)
+	}
+	loginResp.Body.Close()
+	if loginResp.StatusCode != http.StatusOK {
+		t.Fatalf("demo login status = %d, want %d", loginResp.StatusCode, http.StatusOK)
+	}
+	var cookiePairs []string
+	csrfToken := ""
+	for _, cookie := range loginResp.Cookies() {
+		cookiePairs = append(cookiePairs, cookie.Name+"="+cookie.Value)
+		if cookie.Name == CookieNameCSRF {
+			csrfToken = cookie.Value
+		}
+	}
+	if csrfToken == "" {
+		t.Fatal("expected CSRF cookie after demo login")
+	}
+	sessionCookies := strings.Join(cookiePairs, "; ")
+
+	send := func(method, path, body string, headers map[string]string) (int, string) {
+		t.Helper()
+		req, err := http.NewRequest(method, server.URL+path, strings.NewReader(body))
+		if err != nil {
+			t.Fatalf("build %s %s: %v", method, path, err)
+		}
+		req.Header.Set("Cookie", sessionCookies)
+		for key, value := range headers {
+			req.Header.Set(key, value)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("%s %s: %v", method, path, err)
+		}
+		defer resp.Body.Close()
+		var payload bytes.Buffer
+		_, _ = payload.ReadFrom(resp.Body)
+		return resp.StatusCode, payload.String()
+	}
+
+	if status, body := send(http.MethodGet, "/api/system/mock-mode", "", nil); status != http.StatusOK {
+		t.Fatalf("demo session read of admin route status = %d, want %d: %s", status, http.StatusOK, body)
+	}
+
+	status, body := send(http.MethodPost, "/api/system/mock-mode", `{"enabled":false}`, map[string]string{
+		"Content-Type":          "application/json",
+		"X-CSRF-Token":          csrfToken,
+		"Connection":            "Upgrade",
+		"Upgrade":               "websocket",
+		"Sec-WebSocket-Version": "13",
+		"Sec-WebSocket-Key":     "dGhlIHNhbXBsZSBub25jZQ==",
+	})
+	if status != http.StatusForbidden || !strings.Contains(body, "Demo mode enabled") {
+		t.Fatalf("demo write with websocket upgrade headers status = %d, want %d demo block: %s", status, http.StatusForbidden, body)
+	}
+	if !mock.IsMockEnabled() {
+		t.Fatal("demo write with websocket upgrade headers switched mock mode off")
+	}
+
+	wsHeaders := wsHeadersForHTTP(t, server.URL)
+	wsHeaders.Set("Cookie", sessionCookies)
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURLForHTTP(server.URL)+"/ws", wsHeaders)
+	if err != nil {
+		status := 0
+		if resp != nil {
+			status = resp.StatusCode
+		}
+		t.Fatalf("demo session websocket handshake failed: %v (status %d)", err, status)
+	}
+	defer conn.Close()
+	if resp.StatusCode != http.StatusSwitchingProtocols {
+		t.Fatalf("demo session websocket handshake status = %d, want %d", resp.StatusCode, http.StatusSwitchingProtocols)
+	}
+}
+
+// The pprof routes are gated only on admin auth and session logins skip token
+// scopes, so the public demo's shared login reaches them like any admin. The
+// demo guard must answer every pprof path with 404 for that session, whatever
+// the method, while the handlers below it stay registered.
+func TestContract_DemoModeHidesPprofFromDemoAdminSession(t *testing.T) {
+	t.Setenv("PULSE_PPROF_DISABLED", "")
+
+	dataDir := t.TempDir()
+	hashedPass, err := authpkg.HashPassword("demo")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	cfg := &config.Config{
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		DemoMode:   true,
+		AuthUser:   "demo",
+		AuthPass:   hashedPass,
+	}
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	cleanupTestRouter(t, router)
+	server := newIPv4HTTPServer(t, router.Handler())
+	t.Cleanup(server.Close)
+	belowDemoGuard := newIPv4HTTPServer(t, router.mux)
+	t.Cleanup(belowDemoGuard.Close)
+
+	loginResp, err := http.Post(server.URL+"/api/login", "application/json", strings.NewReader(`{"username":"demo","password":"demo"}`))
+	if err != nil {
+		t.Fatalf("demo login: %v", err)
+	}
+	loginResp.Body.Close()
+	if loginResp.StatusCode != http.StatusOK {
+		t.Fatalf("demo login status = %d, want %d", loginResp.StatusCode, http.StatusOK)
+	}
+	var cookiePairs []string
+	for _, cookie := range loginResp.Cookies() {
+		cookiePairs = append(cookiePairs, cookie.Name+"="+cookie.Value)
+	}
+	if len(cookiePairs) == 0 {
+		t.Fatal("expected session cookies after demo login")
+	}
+	sessionCookies := strings.Join(cookiePairs, "; ")
+
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	send := func(baseURL, method, path string) (int, string) {
+		t.Helper()
+		req, err := http.NewRequest(method, baseURL+path, nil)
+		if err != nil {
+			t.Fatalf("build %s %s: %v", method, path, err)
+		}
+		req.Header.Set("Cookie", sessionCookies)
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("%s %s: %v", method, path, err)
+		}
+		defer resp.Body.Close()
+		var payload bytes.Buffer
+		_, _ = payload.ReadFrom(resp.Body)
+		return resp.StatusCode, payload.String()
+	}
+
+	status, body := send(belowDemoGuard.URL, http.MethodGet, "/debug/pprof/cmdline")
+	if status != http.StatusOK || body == "" {
+		t.Fatalf("demo session below the demo guard: pprof cmdline status = %d, want %d with a body", status, http.StatusOK)
+	}
+
+	paths := []string{
+		"/debug/pprof",
+		"/debug/pprof/",
+		"/debug/pprof/heap?gc=1",
+		"/debug/pprof/goroutine?debug=2",
+		"/debug/pprof/cmdline",
+		"/debug/pprof/profile?seconds=1",
+		"/debug/pprof/symbol",
+		"/debug/pprof/trace?seconds=1",
+	}
+	methods := []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPost}
+	for _, path := range paths {
+		for _, method := range methods {
+			if status, _ := send(server.URL, method, path); status != http.StatusNotFound {
+				t.Errorf("demo session %s %s status = %d, want %d", method, path, status, http.StatusNotFound)
+			}
+		}
+	}
 }
 
 func TestContract_ReleaseDemoFixtureRuntimeGuardrailsRemainCanonical(t *testing.T) {

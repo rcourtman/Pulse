@@ -95,6 +95,10 @@ type ResourceRegistry struct {
 	exclusions   map[string]struct{}
 	identityPins *identityPinIndex
 	pbsBackups   []models.PBSBackup
+	// linkMergedIDs holds the resources a manual link folded into their
+	// primary. They are still observed, so identity succession treats them
+	// as live.
+	linkMergedIDs map[string]struct{}
 	// supersededIndex maps record-declared retired canonical IDs to the live
 	// resource that superseded them, so references persisted under a retired
 	// ID (availability links, API reads) keep resolving. An empty value marks
@@ -148,6 +152,13 @@ type ResourceRegistry struct {
 	// what the full scan would see; scores stay live through the shared
 	// pointers.
 	agentNodeScanIndex map[string][]agentNodeCandidate
+
+	// ingestStaleThresholds holds the caller-owned freshness thresholds of
+	// the snapshot or record ingest in progress, so each source merge into an
+	// existing row judges metric freshness as that ingest's manual links and
+	// stale pass do. nil outside an ingest and for callers without
+	// thresholds, where all three use the defaults.
+	ingestStaleThresholds map[DataSource]time.Duration
 }
 
 // agentNodeCandidate pairs a resources-map key with its entry so the indexed
@@ -243,6 +254,10 @@ func (rr *ResourceRegistry) IngestSnapshotWithStaleThresholds(snapshot models.St
 }
 
 func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresholds map[DataSource]time.Duration) {
+	rr.mu.Lock()
+	rr.ingestStaleThresholds = thresholds
+	rr.mu.Unlock()
+
 	hostByID := make(map[string]*models.Host, len(snapshot.Hosts))
 	for i := range snapshot.Hosts {
 		host := snapshot.Hosts[i]
@@ -602,18 +617,30 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 	rr.refreshStoragePostureLocked()
 	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
+	rr.refreshProxmoxSensorSetupLocked()
 	rr.refreshCanonicalIdentitiesLocked()
 	rr.markStaleLocked(time.Now().UTC(), thresholds)
 	rr.invalidateViewsLocked()
+	rr.ingestStaleThresholds = nil
 	rr.mu.Unlock()
 }
 
 // IngestRecords ingests normalized records for a single source.
 func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRecord) {
-	rr.ingestRecords(source, records, false)
+	rr.ingestRecords(source, records, false, nil)
 }
 
-func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRecord, onlyMissing bool) {
+// IngestRecordsWithStaleThresholds ingests normalized records for a single
+// source and merges operator-linked resources with caller-owned thresholds.
+func (rr *ResourceRegistry) IngestRecordsWithStaleThresholds(source DataSource, records []IngestRecord, thresholds map[DataSource]time.Duration) {
+	rr.ingestRecords(source, records, false, thresholds)
+}
+
+func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRecord, onlyMissing bool, thresholds map[DataSource]time.Duration) {
+	rr.mu.Lock()
+	rr.ingestStaleThresholds = thresholds
+	rr.mu.Unlock()
+
 	var successions []CanonicalIDSuccession
 	supersededSeen := make(map[string]struct{})
 	for _, record := range records {
@@ -648,13 +675,25 @@ func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRec
 	rr.applyRecordSuccessions(successions)
 
 	rr.mu.Lock()
+	// Either side of an operator link can arrive as a record: a vSphere or
+	// TrueNAS VM with a Pulse agent inside, or an agent on a TrueNAS host.
+	// Snapshot and resource ingest apply the links, so record ingest must too,
+	// or the monitor's rebuilt registry keeps both rows while REST, which
+	// seeds from that registry, shows them merged. Continuity records only
+	// fill absent machines: a saved enrollment joined to its linked guest
+	// would lend the guest its offline verdict and old agent payload.
+	if !onlyMissing {
+		rr.applyManualLinks(thresholds)
+	}
 	rr.refreshStorageConsumersLocked()
 	rr.refreshPBSRollupsLocked()
 	rr.refreshStoragePostureLocked()
 	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
+	rr.refreshProxmoxSensorSetupLocked()
 	rr.refreshCanonicalIdentitiesLocked()
 	rr.invalidateViewsLocked()
+	rr.ingestStaleThresholds = nil
 	rr.mu.Unlock()
 }
 
@@ -744,12 +783,25 @@ func (rr *ResourceRegistry) proxmoxGuestResourceIDForSourceRefLocked(ref string)
 	return uniqueID
 }
 
+// canonicalIDObservedLocked reports whether a canonical ID still names an
+// observed resource: a live row, or one a manual link folded into its primary.
+// Succeeding an observed ID would hand its operator rows, and the link that
+// folded it, to another resource.
+func (rr *ResourceRegistry) canonicalIDObservedLocked(id string) bool {
+	if _, live := rr.resources[id]; live {
+		return true
+	}
+	_, folded := rr.linkMergedIDs[id]
+	return folded
+}
+
 // applyRecordSuccessions re-keys operator-owned store rows from canonical IDs
 // that ingested records declared superseded (IngestRecord.SupersededCanonicalIDs)
 // onto the records' current canonical IDs. Mirrors the guards of pin-driven
-// successions in PersistIdentityPins: a superseded ID still held by a live
-// resource is skipped so a genuinely distinct sibling never has its rows
-// stolen. Re-runs are cheap no-ops once the old rows are gone.
+// successions in PersistIdentityPins: a superseded ID still observed, live or
+// folded into another resource by a manual link, is skipped so a genuinely
+// distinct sibling never has its rows stolen. Re-runs are cheap no-ops once
+// the old rows are gone.
 func (rr *ResourceRegistry) applyRecordSuccessions(successions []CanonicalIDSuccession) {
 	if len(successions) == 0 || rr.store == nil {
 		return
@@ -762,7 +814,7 @@ func (rr *ResourceRegistry) applyRecordSuccessions(successions []CanonicalIDSucc
 	rr.mu.RLock()
 	kept := make([]CanonicalIDSuccession, 0, len(successions))
 	for _, succession := range successions {
-		if _, live := rr.resources[succession.OldCanonicalID]; live {
+		if rr.canonicalIDObservedLocked(succession.OldCanonicalID) {
 			continue
 		}
 		kept = append(kept, succession)
@@ -849,6 +901,7 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 	rr.refreshStoragePostureLocked()
 	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
+	rr.refreshProxmoxSensorSetupLocked()
 	rr.refreshCanonicalIdentitiesLocked()
 	rr.markStaleLocked(time.Now().UTC(), thresholds)
 	rr.invalidateViewsLocked()
@@ -947,20 +1000,7 @@ func (rr *ResourceRegistry) seedSourceIDForResourceLocked(resource *Resource, so
 				}
 			}
 		case ResourceTypePhysicalDisk:
-			if resource.PhysicalDisk == nil {
-				return ""
-			}
-			if parentSourceID := rr.seedParentSourceIDLocked(resource, SourceAgent); parentSourceID != "" {
-				return diskinventory.PreferredID(
-					resource.PhysicalDisk.Serial,
-					resource.PhysicalDisk.WWN,
-					parentSourceID,
-					resource.PhysicalDisk.DevPath,
-					resource.PhysicalDisk.Controller,
-					resource.PhysicalDisk.Target,
-				)
-			}
-			return PreferredPhysicalDiskMetricID(resource.PhysicalDisk.Serial, resource.PhysicalDisk.WWN, "")
+			return rr.seedAgentPhysicalDiskSourceIDLocked(resource)
 		}
 	case SourceDocker:
 		if resource.Docker == nil {
@@ -1782,44 +1822,61 @@ func sourceVerdictsRecorded(sightings map[DataSource]SourceStatus) bool {
 }
 
 func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSource]time.Duration) {
-	thresholds = effectiveStaleThresholds(thresholds)
-
 	changed := false
 	for _, resource := range rr.resources {
 		previousStatus := resource.Status
 		staleFound := false
 		for source, status := range resource.SourceStatus {
-			threshold, ok := thresholds[source]
-			if !ok {
-				threshold = 120 * time.Second
-			}
-			if status.ExpectedUpdateIntervalSeconds > 0 {
-				// Slow inventory polls have their own cadence. A source must miss
-				// two expected intervals before its retained observation is stale.
-				threshold = max(threshold, 2*time.Duration(status.ExpectedUpdateIntervalSeconds)*time.Second)
-			}
 			if status.LastSeen.IsZero() {
 				continue
 			}
-			if now.Sub(status.LastSeen) > threshold {
+			if now.Sub(status.LastSeen) > sourceStaleThreshold(source, status, thresholds) {
 				changed = changed || status.Status != "stale"
 				status.Status = "stale"
 				resource.SourceStatus[source] = status
-				staleFound = true
+				// The sighting of checks projected onto a resource is not one
+				// of its own sources, so its going quiet alone hands the stale
+				// pass nothing to decide; see reapplyStaleStatusForChecks.
+				if source != SourceAvailability || isAvailabilityOwnedResource(*resource) {
+					staleFound = true
+				}
 			}
 		}
 		if staleFound {
-			recomputed := aggregateStatus(resource)
-			if recomputed != StatusUnknown {
-				resource.Status = recomputed
-			} else if resource.Status == StatusOnline {
-				resource.Status = StatusWarning
-			}
+			applyStaleStatus(resource, now)
 		}
 		changed = changed || resource.Status != previousStatus
 	}
 	if changed {
 		rr.invalidateViewsLocked()
+	}
+}
+
+// applyStaleStatus is the stale pass's status rule for a resource with a
+// quiet sighting.
+func applyStaleStatus(resource *Resource, now time.Time) {
+	recomputed := aggregateStatus(resource, now)
+	if recomputed != StatusUnknown {
+		resource.Status = recomputed
+	} else if resource.Status == StatusOnline {
+		resource.Status = StatusWarning
+	}
+}
+
+// reapplyStaleStatusForChecks re-applies the stale pass's rule to a resource
+// whose availability checks just changed, when that pass owns its status
+// because one of the resource's own sources went quiet. Projecting or
+// retargeting a check is not a delivery from those sources, and the resources
+// API replays checks after its stale pass, so the verdict the old checks gave
+// would otherwise stand. The checks' own sighting never confers ownership:
+// a resource whose own sources have not gone quiet keeps the status they gave
+// it, whatever its checks say.
+func reapplyStaleStatusForChecks(resource *Resource, now time.Time) {
+	for source, sighting := range resource.SourceStatus {
+		if source != SourceAvailability && sighting.Status == "stale" {
+			applyStaleStatus(resource, now)
+			return
+		}
 	}
 }
 
@@ -2888,22 +2945,30 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	// Rehydrated registries seed exact source mappings from the persisted
 	// unified snapshot. Honor that durable mapping before attempting weaker
 	// identity correlation, but fail closed if a colliding source key belongs
-	// to a different physical-disk parent.
+	// to a different physical-disk parent. A Proxmox disk key names a slot, so
+	// it is also refused when the slot now holds a different disk, and no
+	// later step may merge the observation into the refused disk either.
+	refusedDiskID := ""
 	if mappedID := rr.bySource[source][sourceID]; mappedID != "" {
 		if existing := rr.resources[mappedID]; existing != nil &&
 			existing.Type == resource.Type &&
 			(resource.Type != ResourceTypePhysicalDisk ||
 				physicalDiskMatchScopeCompatible(existing, &resource)) {
-			if onlyMissing {
-				return ""
+			if source == SourceProxmox && resource.Type == ResourceTypePhysicalDisk &&
+				proxmoxDiskSlotHoldsAnotherDisk(existing, &resource) {
+				refusedDiskID = existing.ID
+			} else {
+				if onlyMissing {
+					return ""
+				}
+				rr.mergeInto(existing, resource, source, sourceID)
+				return existing.ID
 			}
-			rr.mergeInto(existing, resource, source, sourceID)
-			return existing.ID
 		}
 	}
 
 	// Linked resources must be mutually linked to avoid one-sided/ambiguous auto-merges.
-	if linked := rr.resolveLinkedResource(source, sourceID, resource); linked != "" {
+	if linked := rr.resolveLinkedResource(source, sourceID, resource); linked != "" && linked != refusedDiskID {
 		existing := rr.resources[linked]
 		if existing != nil {
 			if onlyMissing {
@@ -2918,7 +2983,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	candidateID := rr.sourceSpecificID(resource.Type, source, sourceID)
 
 	if resource.Type == ResourceTypeAgent || resource.Type == ResourceTypePhysicalDisk {
-		if match, excluded := rr.findMatch(resource, candidateID); match != nil {
+		if match, excluded := rr.findMatch(resource, candidateID); match != nil && match.ResourceB != refusedDiskID {
 			existing := rr.resources[match.ResourceB]
 			if existing != nil {
 				if onlyMissing {
@@ -2930,6 +2995,21 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 			}
 		} else if excluded {
 			resource.ID = candidateID
+			if resource.Type == ResourceTypePhysicalDisk {
+				// An agent disk's source-specific ID hashes its bare serial
+				// (sourceSpecificIDKey), so another machine's split copy may
+				// hold it, and one machine's observations may meet on it.
+				resource.ID = rr.physicalDiskFallbackIDLocked(candidateID, &resource, source)
+				if existing := rr.resources[resource.ID]; existing != nil && existing.Type == ResourceTypePhysicalDisk {
+					if onlyMissing {
+						return ""
+					}
+					rr.mergeInto(existing, resource, source, sourceID)
+					rr.bySource[source][sourceID] = existing.ID
+					rr.matcher.Add(existing.ID, existing.Identity)
+					return existing.ID
+				}
+			}
 			if onlyMissing && rr.resources[resource.ID] != nil {
 				return ""
 			}
@@ -2947,6 +3027,9 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 		resource.ID = rr.physicalDiskIDForMachineLocked(resource.ID, candidateID, &resource, source, onlyMissing)
 	}
 	normalizeResourceRelationships(&resource)
+	if resource.ID == refusedDiskID {
+		resource.ID = candidateID
+	}
 	if existing := rr.resources[resource.ID]; existing != nil {
 		if onlyMissing {
 			return ""
@@ -3046,6 +3129,7 @@ func (rr *ResourceRegistry) projectAvailabilityCheckLocked(
 		Status:   sourceSightingStatus(checkResource.LastSeen),
 		LastSeen: checkResource.LastSeen,
 	}
+	reapplyStaleStatusForChecks(target, time.Now().UTC())
 }
 
 func (rr *ResourceRegistry) removeAvailabilityProjectionLocked(
@@ -3080,6 +3164,7 @@ func (rr *ResourceRegistry) removeAvailabilityProjectionLocked(
 				resource.Sources = removeDataSource(resource.Sources, SourceAvailability)
 				delete(resource.SourceStatus, SourceAvailability)
 			}
+			reapplyStaleStatusForChecks(resource, time.Now().UTC())
 		}
 
 		// Build a fresh slice rather than compacting in place: callers may hold
@@ -3195,6 +3280,56 @@ func physicalDiskMatchScopeCompatible(existing, incoming *Resource) bool {
 		return existingParent != "" && existingParent == incomingParent
 	}
 	return identitiesShareHostname(existing.Identity, incoming.Identity)
+}
+
+// proxmoxDiskSlotHoldsAnotherDisk reports whether a Proxmox disk observed
+// under a mapped slot key (ProxmoxPhysicalDiskSourceID) names a different disk
+// than the resource the key maps to: the slot's disk was swapped, and merging
+// would keep the previous disk's canonical ID and, where an agent report was
+// merged in, its serial, WWN and readings. Only hardware identity reported on
+// both sides counts, and differing serials only where
+// physicalDiskMappedSerialsComparable says both are the drive's own.
+func proxmoxDiskSlotHoldsAnotherDisk(existing, incoming *Resource) bool {
+	if existing.PhysicalDisk == nil || incoming.PhysicalDisk == nil {
+		return false
+	}
+	existingSerial, existingWWN := existing.PhysicalDisk.Serial, existing.PhysicalDisk.WWN
+	incomingSerial, incomingWWN := incoming.PhysicalDisk.Serial, incoming.PhysicalDisk.WWN
+	if diskinventory.HardwareIdentityMatch(existingSerial, existingWWN, incomingSerial, incomingWWN) {
+		return false
+	}
+	if !physicalDiskMappedSerialsComparable(existing, incoming) {
+		existingSerial, incomingSerial = "", ""
+	}
+	return diskinventory.HardwareIdentityConflict(existingSerial, existingWWN, incomingSerial, incomingWWN)
+}
+
+// physicalDiskMappedSerialsComparable reports whether differing serials on a
+// mapped disk and a Proxmox observation under its slot key name different
+// disks. Proxmox may report a SAS disk's transport address as its serial
+// (#1595). A disk Proxmox alone reports carries Proxmox's serial, compared as
+// is. A disk merged with an agent report may carry the agent's serial instead
+// (mergeInto restores it, and collection status does not reliably say which),
+// so its serial is compared only where Proxmox read the drive's own serial
+// too, as monitoring's hostAgentSMARTSerialComparable decides: an NVMe
+// controller serial, or an ATA drive's IDENTIFY serial, not a SCSI designator
+// or a USB bridge's serial.
+func physicalDiskMappedSerialsComparable(existing, incoming *Resource) bool {
+	switch {
+	case physicalDiskTypeIs(existing, "sas") || physicalDiskTypeIs(incoming, "sas"):
+		return false
+	case !hasDataSource(existing.Sources, SourceAgent):
+		return true
+	case physicalDiskTypeIs(incoming, "nvme"):
+		return physicalDiskTypeIs(existing, "nvme")
+	case physicalDiskTypeIs(incoming, "usb"):
+		return false
+	}
+	return physicalDiskTypeIs(existing, "sata") && strings.EqualFold(strings.TrimSpace(incoming.PhysicalDisk.Vendor), "ATA")
+}
+
+func physicalDiskTypeIs(disk *Resource, diskType string) bool {
+	return strings.EqualFold(strings.TrimSpace(disk.PhysicalDisk.DiskType), diskType)
 }
 
 func (rr *ResourceRegistry) resolveLinkedResource(source DataSource, sourceID string, resource Resource) string {
@@ -3844,7 +3979,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	existing.ParentID = rr.resolveCanonicalParentID(existing)
 
 	existing.Status = chooseStatus(existing.Status, incoming.Status, source, existing.Sources)
-	existing.Metrics = mergeMetrics(existing, existing.Metrics, incoming.Metrics, source, now, existing.SourceStatus, nil)
+	existing.Metrics = mergeMetrics(existing, existing.Metrics, incoming.Metrics, source, now, existing.SourceStatus, rr.ingestStaleThresholds)
 	existing.Metrics = clearUnavailableSourceMemoryMetric(existing.Metrics, &incoming, source)
 
 	// Prefer agent naming when available
@@ -4715,6 +4850,10 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 
 		rr.mergeResourceData(primary, other, thresholds)
 		delete(rr.resources, otherID)
+		if rr.linkMergedIDs == nil {
+			rr.linkMergedIDs = make(map[string]struct{})
+		}
+		rr.linkMergedIDs[otherID] = struct{}{}
 		rr.updateSourceMappings(otherID, primaryID)
 	}
 }
@@ -4780,11 +4919,17 @@ func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource
 	if primary.Ceph == nil {
 		primary.Ceph = other.Ceph
 	}
+	if primary.TrueNAS == nil {
+		primary.TrueNAS = other.TrueNAS
+	}
+	if primary.VMware == nil {
+		primary.VMware = other.VMware
+	}
 
 	// Manual links combine already-normalized resources. Preserve each metric's
 	// recorded source instead of flattening the linked resource to SourceAgent.
 	primary.Metrics = mergeMetrics(primary, primary.Metrics, other.Metrics, "", time.Now().UTC(), primary.SourceStatus, thresholds)
-	primary.Status = aggregateStatus(primary)
+	primary.Status = aggregateStatus(primary, time.Now().UTC())
 }
 
 func (rr *ResourceRegistry) updateSourceMappings(fromID, toID string) {
@@ -5418,8 +5563,9 @@ func (rr *ResourceRegistry) physicalDiskScopedIDLocked(disk *Resource) string {
 }
 
 // physicalDiskFallbackIDLocked returns the observation's source-specific ID,
-// keyed to its machine when another machine's disk already holds it: agent
-// disk source IDs are the bare serial, so one candidate ID serves every host.
+// keyed to its machine when another machine's disk already holds it: an agent
+// disk's source-specific ID hashes its bare serial (sourceSpecificIDKey), so
+// one candidate ID serves every host.
 func (rr *ResourceRegistry) physicalDiskFallbackIDLocked(candidateID string, incoming *Resource, source DataSource) string {
 	holder := rr.resources[candidateID]
 	if holder == nil || (holder.Type == ResourceTypePhysicalDisk && !rr.physicalDiskMachinesConflictLocked(holder, incoming, source)) {
@@ -5578,8 +5724,7 @@ func (rr *ResourceRegistry) canonicalIDFromIdentity(resourceType ResourceType, i
 }
 
 func (rr *ResourceRegistry) sourceSpecificID(resourceType ResourceType, source DataSource, sourceID string) string {
-	stable := fmt.Sprintf("%s:%s", source, normalizeSourceID(sourceID))
-	return buildHashID(resourceType, stable)
+	return SourceSpecificID(resourceType, source, sourceID)
 }
 
 func buildHashID(resourceType ResourceType, stable string) string {
@@ -6188,6 +6333,27 @@ func mergeMetrics(
 	return &merged
 }
 
+// sourceStaleThreshold is how long a source may go without delivering before
+// its sighting is stale: the caller's threshold for the source, else the
+// default. The stale pass and the metric merge's freshness gate both read it,
+// so the gate never calls a source current that the pass marks stale, or the
+// reverse.
+func sourceStaleThreshold(source DataSource, sighting SourceStatus, thresholds map[DataSource]time.Duration) time.Duration {
+	threshold := thresholds[source]
+	if threshold <= 0 {
+		threshold = defaultStaleThresholds[source]
+	}
+	if threshold <= 0 {
+		threshold = 120 * time.Second
+	}
+	if sighting.ExpectedUpdateIntervalSeconds > 0 {
+		// Slow inventory polls have their own cadence. A source must miss
+		// two expected intervals before its retained observation is stale.
+		threshold = max(threshold, 2*time.Duration(sighting.ExpectedUpdateIntervalSeconds)*time.Second)
+	}
+	return threshold
+}
+
 // metricSourceStale reports whether a source's most recent report is older than
 // its stale threshold. A zero/unknown last-seen is treated as NOT stale so the
 // merge never demotes a source on missing information.
@@ -6204,17 +6370,7 @@ func metricSourceStale(
 	if !ok || st.LastSeen.IsZero() {
 		return false
 	}
-	threshold := time.Duration(0)
-	if configured := thresholds[source]; configured > 0 {
-		threshold = configured
-	}
-	if threshold <= 0 {
-		threshold = defaultStaleThresholds[source]
-	}
-	if threshold <= 0 {
-		threshold = 60 * time.Second
-	}
-	return now.Sub(st.LastSeen) > threshold
+	return now.Sub(st.LastSeen) > sourceStaleThreshold(source, st, thresholds)
 }
 
 func mergeMetric(
@@ -6372,15 +6528,25 @@ func chooseStatus(existing ResourceStatus, incoming ResourceStatus, source DataS
 // order: the highest-priority verdict, the best of equal ones. A source that
 // went quiet drops out of that decision, so a node the cluster reports
 // offline stays offline when its linked agent falls silent. A current facet
-// sighting without a verdict (the PBS association, an availability check)
-// counts as online only when no current source has one. Once every source is
-// quiet, an offline verdict survives (a node the poller expired, an agent past
-// its lease) and any other reads as warning; the best of those wins.
-func aggregateStatus(resource *Resource) ResourceStatus {
+// sighting without a verdict (the PBS association) counts as online only when
+// no current source has one. Availability checks projected onto a monitored
+// resource rank the same way, but their sighting is not their verdict: one
+// sighting stands for every check, so each check is judged at now by its own
+// evidence (see availabilityChecksProveOnline), and a check that does not
+// prove the resource answers abstains. Checks only decide once one of the
+// resource's own sources has gone quiet, so the stale pass owns the status and
+// reverts it when the evidence lapses. Once every source is quiet, an
+// offline verdict survives (a node the poller expired, an agent past its
+// lease) and any other reads as warning; the best of those wins.
+func aggregateStatus(resource *Resource, now time.Time) ResourceStatus {
 	var current, quiet ResourceStatus
 	currentPriority := -1
 	deliveredWithoutVerdict := false
+	checkedTarget := !isAvailabilityOwnedResource(*resource)
 	for source, sighting := range resource.SourceStatus {
+		if source == SourceAvailability && checkedTarget {
+			continue
+		}
 		switch strings.ToLower(strings.TrimSpace(sighting.Status)) {
 		case "online":
 			switch sighting.reported {
@@ -6407,6 +6573,8 @@ func aggregateStatus(resource *Resource) ResourceStatus {
 	case currentPriority >= 0:
 		return current
 	case deliveredWithoutVerdict:
+		return StatusOnline
+	case checkedTarget && quiet != "" && availabilityChecksProveOnline(AvailabilityChecksForResource(*resource), now):
 		return StatusOnline
 	case quiet != "":
 		return quiet

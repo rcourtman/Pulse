@@ -1512,15 +1512,29 @@ provider/settings affordances.
 The feature surface now also keeps the same shell/runtime split internally:
 `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` owns feature
 composition, the Patrol-owned section files under
-`frontend-modern/src/features/patrol/` own the header, banner, summary, and
-workspace render surfaces, and
-`frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` owns Patrol
-state, transport, polling, and effect lifecycle. The shell and section surfaces
-must not re-accumulate Patrol API calls, timer orchestration, or store refresh
-semantics, and `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` now
+`frontend-modern/src/features/patrol/` own the header, banner, workspace, and
+tab-panel render surfaces (the Inbox attention list, Protection objectives, and
+the Activity tab's `This week` digest and recent work), and
+`frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` owns the
+page's shared Patrol state, transport, polling, and effect lifecycle. The shell
+and the header, banner, and workspace surfaces must not re-accumulate those
+Patrol API calls, timer orchestration, or store refresh semantics; the
+attention list, objectives, recent work, and `This week` panels each own their
+own typed read and refresh instead, and `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` now
 owns the canonical summary normalization so Patrol consumers inherit one
 governed recent-change and policy-posture snapshot instead of reintroducing
 hook-local fallback logic.
+The hook no longer returns the summary card's severity and fix tallies. Its
+`summaryStats` accessor (critical, warning, and total active findings plus
+fixed outcomes, counted client-side over the Patrol findings list) lost its
+only reader when the Patrol summary card was deleted and has been removed,
+together with the `canonical-patrol/no-local-summary-card-presentation` rule in
+`frontend-modern/scripts/canonical-platform-audit.mjs`, whose regex matched only
+text shaped like the deleted card's tint ternaries on
+`summaryStats().criticalFindings`, `warningFindings` and `fixedCount`. The open-issue severity counts the page shows today come from
+the Activity tab's `This week` card, which reads them from
+`GET /api/ai/patrol/digest` (see that card's section below); a count surface
+that returns must not revive a hook-local tally of the findings list.
 That same Patrol hook boundary now consumes shared AI settings/model truth
 through `frontend-modern/src/stores/aiRuntimeState.ts` instead of mounting its
 own `/api/settings/ai` or `/api/ai/models` reads. Patrol-specific state still
@@ -2687,6 +2701,36 @@ clock while it stays open. Its `Last seen` and flapping window are latest
 readings of a record that may have moved since, so they stay the ages at
 read time, and the queue rows, summary, recent work, run history and digest
 re-derive on their own 30- or 60-second re-reads.
+Future times in Patrol count down instead of reading as ages, because the
+past-only `formatRelativeTime` reads each of them as "just now" for their whole
+duration. The attention detail's suppression line counts down to the expiry
+with the exact time on hover and names the state expiry restores in the
+early-end control's words, from the same
+`getAttentionSuppressionEndPresentation` split on
+`operationalRecord.acknowledgement`: an open issue reads `Returns to active
+attention in 1d.`, one marked reviewed reads `Suppression ends in 1d. It stays
+reviewed.` (expiry restores Acknowledged, which is not active attention), and a
+passed expiry reads `Suppression has ended.`
+(`getAttentionSuppressionExpiryLabel`). The findings list reads `Reminding in
+6d` for a will_fix_later reminder and `snoozed, returns in 3h` for a snooze,
+both through `formatTimeUntil` on the shared clock with the exact time on
+hover. A reminder reads `Reminder overdue` once the panel's overdue id list
+holds it. That list is sampled on the shared clock and is what the Overdue
+commitments chip and filter count, so the label, chip and filter agree: a row
+mounted or re-read between the deadline and the tick that adds it reads
+`Reminder due`, and a row already on screen keeps its last countdown until that
+tick. The list only notifies when its ids change, so a clock tick that moves no
+deadline past now does not rebuild the open Overdue rows. The hourly reminder
+sweep then brings the finding back whether or not it still trips. An ended
+snooze reads `snooze ended` until the next findings re-read drops the snoozed
+status: `GET /api/ai/patrol/findings` sends no status, so the frontend
+`aiIntelligence` store (`normalizeFindingStatus`) derives `snoozed` on each
+read only while `snoozed_until` is ahead, and the finding then shows as Active
+unless it has since resolved or been dismissed.
+`getFindingReminderPresentation` and `getFindingSnoozePresentation` in
+`aiFindingPresentation.ts` own the findings copy.
+`PatrolAttentionWorkbench.test.tsx`, `FindingsPanel.links.test.tsx` and
+`FindingsPanel.test.ts` pin it.
 
 ### This week card answers what Patrol did for the customer
 
