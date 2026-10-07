@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { AlertOverviewState } from '../useAlertOverviewState';
 import type { AlertIncidentTimelineState } from '../useAlertIncidentTimelineState';
 import { makeSystemAlert, SYSTEM_ALERT_TYPES } from '../__fixtures__/systemAlerts';
+import { temperatureStore } from '@/utils/temperature';
 
 vi.mock('@solidjs/router', () => ({
   A: (props: any) => (
@@ -67,7 +68,7 @@ describe('Pulse system-alert overview scope', () => {
       <AlertOverviewAlertCard alert={alert} state={state} timelineState={timelineState} />
     ));
     expect(screen.getByText('Pulse').closest('a')).toBeNull();
-    expect(screen.queryByText(/limit:/)).toBeNull();
+    expect(screen.queryByText(/Alert level/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'More' }));
     expect(screen.queryByText('Resource monitoring policy')).toBeNull();
   });
@@ -87,11 +88,133 @@ describe('Pulse system-alert overview scope', () => {
       'href',
       '/proxmox/overview',
     );
-    expect(screen.getByText('limit: 80%')).toBeInTheDocument();
+    expect(screen.getByText('Alert level 80%')).toBeInTheDocument();
     // Monitoring policy is a secondary action behind the More disclosure.
     expect(screen.queryByText('Resource monitoring policy')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'More' }));
     expect(screen.getByText('Resource monitoring policy')).toBeInTheDocument();
+  });
+
+  it('leads a threshold alert held under its trigger with the reading now', () => {
+    // minipc on 2026-10-06: the card said "Node temperature at 80.0°C" while
+    // the node read 72°C, because the message keeps the last breach.
+    const now = Date.now();
+    const alert = makeSystemAlert('temperature', {
+      id: 'homelab-minipc::metric-threshold:temperature',
+      resourceId: 'homelab-minipc',
+      resourceName: 'minipc',
+      node: 'minipc',
+      message: 'Node temperature at 80.0°C',
+      value: 80,
+      threshold: 80,
+      lastSeen: new Date(now - 5 * 60_000).toISOString(),
+      metadata: { resourceType: 'node' },
+      metricStatus: {
+        phase: 'recovering',
+        value: 72,
+        unit: '°C',
+        observedAt: new Date(now).toISOString(),
+        trigger: 80,
+        recovery: 75,
+        recoveryDelaySeconds: 300,
+        recoveryElapsedSeconds: 120,
+      },
+    });
+    render(() => (
+      <AlertOverviewAlertCard alert={alert} state={state} timelineState={timelineState} />
+    ));
+    expect(screen.getByText('Temperature 72°C now, recovering')).toHaveAttribute(
+      'title',
+      expect.stringMatching(/^Last reading at or above 80°C: 80°C, /),
+    );
+    expect(
+      screen.getByText('Clears after 5 minutes at 75°C or lower, 2 minutes so far.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Node temperature at 80.0°C')).toBeNull();
+    expect(screen.getByText('Alert level 80°C')).toBeInTheDocument();
+    expect(screen.getByText('Clear level 75°C')).toBeInTheDocument();
+  });
+
+  it('labels a rate alert level in its own unit, not a guessed percent', () => {
+    const alert = makeSystemAlert('diskWrite', {
+      id: 'vm-101::metric-threshold:diskWrite',
+      resourceId: 'vm-101',
+      resourceName: 'db-01',
+      message: 'VM diskWrite at 240.0 MB/s',
+      value: 240,
+      threshold: 200,
+      metadata: { resourceType: 'vm' },
+      metricStatus: {
+        phase: 'breaching',
+        value: 240,
+        unit: 'MB/s',
+        observedAt: new Date().toISOString(),
+        trigger: 200,
+        recovery: 200,
+      },
+    });
+    render(() => (
+      <AlertOverviewAlertCard alert={alert} state={state} timelineState={timelineState} />
+    ));
+    expect(screen.getByText('Disk Write 240 MB/s, above the 200 MB/s alert level')).toBeVisible();
+    expect(screen.getByText('Alert level 200 MB/s')).toBeInTheDocument();
+    // Clearing at the trigger itself needs no second level.
+    expect(screen.queryByText(/Clear level/)).toBeNull();
+  });
+
+  it('does not guess a percent for a threshold stated in its own message', () => {
+    const alert = makeSystemAlert('queue-age', {
+      id: 'pmg-eu::queue-age',
+      resourceId: 'pmg-eu',
+      resourceName: 'mail-gateway-eu',
+      message: 'PMG mail-gateway-eu has messages queued for 57 minutes (threshold: 30 minutes)',
+      value: 57,
+      threshold: 30,
+      metadata: { resourceType: 'pmg' },
+    });
+    render(() => (
+      <AlertOverviewAlertCard alert={alert} state={state} timelineState={timelineState} />
+    ));
+    expect(screen.getByText(alert.message)).toBeInTheDocument();
+    expect(screen.queryByText(/Alert level/)).toBeNull();
+  });
+
+  it('keeps the level label for a percent threshold that has no live status', () => {
+    const alert = makeSystemAlert('disk-wearout', {
+      id: 'disk-wearout-nvme0',
+      resourceId: 'host-1/disk:nvme0n1',
+      resourceName: 'nvme0n1',
+      message: 'SSD nvme0n1 has less than 10% life remaining',
+      value: 7,
+      threshold: 10,
+      metadata: { resourceType: 'physical_disk' },
+    });
+    render(() => (
+      <AlertOverviewAlertCard alert={alert} state={state} timelineState={timelineState} />
+    ));
+    expect(screen.getByText('Alert level 10%')).toBeInTheDocument();
+  });
+
+  it('shows a temperature level without a live status in the viewer unit', () => {
+    // Right after a restart an alert has no live status until it is evaluated.
+    temperatureStore.setUnit('fahrenheit');
+    try {
+      const alert = makeSystemAlert('temperature', {
+        id: 'homelab-minipc::metric-threshold:temperature',
+        resourceId: 'homelab-minipc',
+        resourceName: 'minipc',
+        message: 'Node temperature at 80.0°C',
+        value: 80,
+        threshold: 80,
+        metadata: { resourceType: 'node' },
+      });
+      render(() => (
+        <AlertOverviewAlertCard alert={alert} state={state} timelineState={timelineState} />
+      ));
+      expect(screen.getByText('Alert level 176°F')).toBeInTheDocument();
+    } finally {
+      temperatureStore.setUnit('celsius');
+    }
   });
 
   it('links a vCenter alarm on a network to vSphere by its incident provider', () => {

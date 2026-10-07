@@ -4703,6 +4703,21 @@ Assistant receives a selected attention item only after the operator opens it.
 The handoff is explanation-only and cannot infer a capability, approve an
 action, or replace evidence and lifecycle truth.
 
+A held threshold alert's attention summary leads with the live reading (issue
+#2068). An alert's `Message` keeps the last breach while the alert waits below
+its trigger for the clear level, so for a `MetricStatus` in the `latched` or
+`recovering` phase that is under ten minutes old, the projection builds
+`plainLanguageSummary` from the status instead: the reading now, then for a
+latched alert the alert level it is back under and the clear level with its
+hold, and for a recovering alert the clear level, delay and progress so far
+(rounded down). The words and rounding follow the frontend's
+`features/alerts/metricAlertPresentation.ts`, and a guest's disk is named
+from `metadata.label`. Temperatures stay in °C like the alert messages,
+because the server does not know a viewer's unit preference. A breaching
+alert keeps `Message`, which tracks the breach, and a stale or missing status
+falls back to it. The Patrol inbox, the investigation handoff and API clients
+read that summary, so none of them re-derives the phase.
+
 ### Patrol model-readiness evidence
 
 Keep the Patrol model-readiness advisor provider-neutral and evidence-based.
