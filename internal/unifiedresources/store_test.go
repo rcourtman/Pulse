@@ -2863,6 +2863,66 @@ func TestSQLiteResourceStore_ResourceOperatorState_RoundTrips(t *testing.T) {
 	}
 }
 
+// An upsert keeps a stored field the pin leaves empty; a replace writes the
+// pin as the whole row. Both give a strong key to the pin that carries it.
+func TestResourceIdentityPinReplaceClearsFieldsUpsertKeeps(t *testing.T) {
+	sqliteStore, err := NewSQLiteResourceStore(t.TempDir(), "")
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer sqliteStore.Close()
+
+	wide := ResourceIdentityPin{CanonicalID: "agent-a", ResourceType: ResourceTypeAgent, MachineID: "machine-a", DMIUUID: "dmi-a", ClusterName: "pool-a", Hostname: "host-a"}
+	narrow := ResourceIdentityPin{CanonicalID: "agent-a", ResourceType: ResourceTypeAgent, MachineID: "machine-a", Hostname: "host-a.lan"}
+	rival := ResourceIdentityPin{CanonicalID: "agent-b", ResourceType: ResourceTypeAgent, MachineID: "machine-b", ClusterName: "pool-a", Hostname: "host-a"}
+	for name, store := range map[string]ResourceStore{"memory": NewMemoryStore(), "sqlite": sqliteStore} {
+		t.Run(name, func(t *testing.T) {
+			pinFor := func(id string) (ResourceIdentityPin, bool) {
+				t.Helper()
+				pins, err := store.ListResourceIdentityPins()
+				if err != nil {
+					t.Fatalf("list pins: %v", err)
+				}
+				for _, pin := range pins {
+					if pin.CanonicalID == id {
+						return pin, true
+					}
+				}
+				return ResourceIdentityPin{}, false
+			}
+			if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{wide}); err != nil {
+				t.Fatalf("upsert wide pin: %v", err)
+			}
+			if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{narrow}); err != nil {
+				t.Fatalf("upsert narrow pin: %v", err)
+			}
+			kept := wide
+			kept.Hostname = narrow.Hostname
+			if got, _ := pinFor("agent-a"); got != kept {
+				t.Fatalf("after upsert: pin = %+v, want stored fields kept %+v", got, kept)
+			}
+			if err := store.ReplaceResourceIdentityPins([]ResourceIdentityPin{narrow}); err != nil {
+				t.Fatalf("replace narrow pin: %v", err)
+			}
+			if got, _ := pinFor("agent-a"); got != narrow {
+				t.Fatalf("after replace: pin = %+v, want exactly %+v", got, narrow)
+			}
+			if err := store.ReplaceResourceIdentityPins([]ResourceIdentityPin{wide}); err != nil {
+				t.Fatalf("replace wide pin: %v", err)
+			}
+			if err := store.ReplaceResourceIdentityPins([]ResourceIdentityPin{rival}); err != nil {
+				t.Fatalf("replace rival pin: %v", err)
+			}
+			if _, ok := pinFor("agent-a"); ok {
+				t.Fatalf("a replace claiming pool-a/host-a must delete the row holding that key")
+			}
+			if got, _ := pinFor("agent-b"); got != rival {
+				t.Fatalf("rival pin = %+v, want %+v", got, rival)
+			}
+		})
+	}
+}
+
 func TestResourceChangeReadsMergeCanonicalIDEras(t *testing.T) {
 	const machineID = "7d465a78-test-machine-id"
 	steadyID := buildHashID(ResourceTypeAgent, "machine:"+machineID)
