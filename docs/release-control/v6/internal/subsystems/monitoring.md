@@ -570,6 +570,16 @@ shared Proxmox busy/cooldown fence, lock checks and no-replay policy are unchang
 These source controls establish neither a reported freeze cause nor native
 QEMU-only recovery.
 
+The monitor's random source is shared by concurrent guest metadata refresh
+jitter and ordinary poll retry backoff. Both accesses, including lazy backoff
+initialisation, hold the same dedicated random-source mutex. The limiter mutex
+alone cannot protect the source: other guest keys and poll retries also use it.
+Keep seeded distributions, configured intervals, half-open jitter bounds and
+the existing no-jitter behaviour when metadata scheduling has no source.
+`monitor_random_test.go` checks source ownership deterministically, mixed
+concurrent seeded/lazy access under the race detector, and real HTTP enrichment
+for independent guests with bounded refresh and unchanged command counts.
+
 ### Exact TrueNAS subscription termination — issue #2396
 
 JSON-RPC stream readers and the subscription-acknowledgement wait recognise

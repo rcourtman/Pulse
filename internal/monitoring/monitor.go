@@ -1223,6 +1223,7 @@ type Monitor struct {
 	failureCounts              map[string]int
 	lastOutcome                map[string]taskOutcome
 	backoffCfg                 backoffConfig
+	rngMu                      sync.Mutex // Shared by poll backoff and concurrent guest metadata jitter.
 	rng                        *rand.Rand
 	maxRetryAttempts           int
 	tempCollector              *TemperatureCollector // SSH-based temperature collector
@@ -2847,6 +2848,8 @@ func (m *Monitor) updateBreakerMetric(instanceType InstanceType, instance string
 }
 
 func (m *Monitor) randomFloat() float64 {
+	m.rngMu.Lock()
+	defer m.rngMu.Unlock()
 	if m.rng == nil {
 		m.rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	}
