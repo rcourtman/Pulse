@@ -41,20 +41,24 @@ func webhookGuidePSATemplate(t *testing.T) string {
 }
 
 type guideMember struct {
-	ID         string `json:"alertId"`
-	StartedAt  string `json:"startedAt"`
-	Severity   string `json:"severity"`
-	ResourceID string `json:"resourceId"`
-	Resource   string `json:"resource"`
-	Summary    string `json:"summary"`
+	ID                  string `json:"alertId"`
+	StartedAt           string `json:"startedAt"`
+	Severity            string `json:"severity"`
+	ResourceID          string `json:"resourceId"`
+	Resource            string `json:"resource"`
+	Summary             string `json:"summary"`
+	ResolutionReason    string `json:"resolutionReason"`
+	SuccessorResourceID string `json:"successorResourceId"`
+	SuccessorName       string `json:"successorName"`
 }
 
 type guidePayload struct {
-	Event      string        `json:"event"`
-	TenantID   string        `json:"tenantId"`
-	StartedAt  string        `json:"startedAt"`
-	AlertCount int           `json:"alertCount"`
-	Members    []guideMember `json:"alerts"`
+	Event        string        `json:"event"`
+	TenantID     string        `json:"tenantId"`
+	StartedAt    string        `json:"startedAt"`
+	AlertCount   int           `json:"alertCount"`
+	Members      []guideMember `json:"alerts"`
+	NotRecovered *bool         `json:"notRecovered"`
 }
 
 type guideRequest struct {
@@ -113,8 +117,8 @@ func TestWebhookGuidePSALifecycle(t *testing.T) {
 	require.Equal(t, "alert", first.Event)
 	require.Equal(t, "synthetic-tenant", first.TenantID)
 	require.Equal(t, 1, first.AlertCount)
-	require.Equal(t, guideMember{alert.ID, start.Format(time.RFC3339Nano), "warning",
-		alert.ResourceID, alert.ResourceName, alert.Message}, first.Members[0])
+	require.Equal(t, guideMember{ID: alert.ID, StartedAt: start.Format(time.RFC3339Nano), Severity: "warning",
+		ResourceID: alert.ResourceID, Resource: alert.ResourceName, Summary: alert.Message}, first.Members[0])
 
 	// A synthetic retry retains the member identity even when rendering anew.
 	require.NoError(t, manager.sendGroupedWebhook(webhook, []*alerts.Alert{alert}))
@@ -170,6 +174,86 @@ func TestWebhookGuidePSAGroupMembershipAndInfo(t *testing.T) {
 	require.Equal(t, "resolved", resolved.Event)
 	require.Len(t, resolved.Members, 3)
 	require.Equal(t, "info", resolved.Members[2].Severity)
+}
+
+func TestWebhookGuidePSACloseReasons(t *testing.T) {
+	start := time.Date(2026, 10, 7, 3, 0, 0, 123456789, time.UTC)
+	recovered := &alerts.Alert{ID: "node::metric-threshold:cpu", StartTime: start,
+		ResourceID: "node", ResourceName: "synthetic-node", Node: "synthetic-node",
+		Level: alerts.AlertLevelWarning, Type: "cpu", Value: 95, Threshold: 90,
+		Message: "Original high CPU reading"}
+	moved := recovered.Clone()
+	moved.ID = "node::metric-threshold:memory"
+	moved.Type = "memory"
+	moved.Message = "Original high memory reading"
+	moved.Resolution = &alerts.AlertResolution{Reason: alerts.AlertResolutionMovedToAgent,
+		SuccessorResourceID: "agent-\"id\"\\path", SuccessorName: "agent \"name\"\né — 警告"}
+	missingSuccessor := moved.Clone()
+	missingSuccessor.Resolution.SuccessorResourceID = ""
+	missingSuccessor.Resolution.SuccessorName = ""
+	unknown := moved.Clone()
+	unknown.Resolution.Reason = alerts.AlertResolutionReason("future-\"reason\"\n")
+
+	for _, tc := range []struct {
+		name         string
+		members      []*alerts.Alert
+		firing       bool
+		notRecovered bool
+	}{
+		{"firing-is-not-recovery", []*alerts.Alert{recovered}, true, false},
+		{"ordinary-recovery", []*alerts.Alert{recovered}, false, false},
+		{"moved-still-above-threshold", []*alerts.Alert{moved}, false, true},
+		{"recovered-primary-moved-member", []*alerts.Alert{recovered, moved}, false, true},
+		{"moved-primary-recovered-member", []*alerts.Alert{moved, recovered}, false, true},
+		{"missing-successor", []*alerts.Alert{missingSuccessor}, false, true},
+		// The batch flag recognises current reasons only. Preserve an unknown
+		// member reason even when the flag is false; it is not a health verdict.
+		{"unknown-reason-preserved", []*alerts.Alert{unknown}, false, false},
+		{"nil-member-skipped", []*alerts.Alert{nil, recovered, moved}, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			manager, webhook, requests := webhookGuideSender(t, webhookGuidePSATemplate(t))
+			if tc.firing {
+				require.NoError(t, manager.sendGroupedWebhook(webhook, tc.members))
+			} else {
+				require.NoError(t, manager.sendResolvedWebhook(webhook, tc.members, start.Add(time.Minute)))
+			}
+			request, payload := webhookGuideRead(t, requests)
+			require.NotNil(t, payload.NotRecovered, "copied payload must distinguish missing from false")
+			require.Equal(t, tc.notRecovered, *payload.NotRecovered)
+			require.Equal(t, map[bool]string{true: "alert", false: "resolved"}[tc.firing], payload.Event)
+
+			var raw struct {
+				Members []map[string]json.RawMessage `json:"alerts"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(request.body), &raw))
+			index := 0
+			for _, member := range tc.members {
+				if member == nil {
+					continue
+				}
+				require.Less(t, index, len(payload.Members))
+				got := payload.Members[index]
+				require.Equal(t, member.ID, got.ID)
+				require.Equal(t, member.StartTime.UTC().Format(time.RFC3339Nano), got.StartedAt)
+				require.Equal(t, member.Message, got.Summary, "member message is not a recovery summary")
+				for _, key := range []string{"resolutionReason", "successorResourceId", "successorName"} {
+					require.Contains(t, raw.Members[index], key, "an empty known field must differ from an older missing field")
+				}
+				wantReason, wantID, wantName := "", "", ""
+				if member.Resolution != nil {
+					wantReason = string(member.Resolution.Reason)
+					wantID = member.Resolution.SuccessorResourceID
+					wantName = member.Resolution.SuccessorName
+				}
+				require.Equal(t, wantReason, got.ResolutionReason)
+				require.Equal(t, wantID, got.SuccessorResourceID)
+				require.Equal(t, wantName, got.SuccessorName)
+				index++
+			}
+			require.Len(t, payload.Members, index)
+		})
+	}
 }
 
 func TestWebhookGuideShortTemplateEscapesStrings(t *testing.T) {

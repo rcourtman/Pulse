@@ -48,6 +48,8 @@ For generic webhooks, use Go templates to format the JSON payload.
 **Convenience fields:**
 - `{{.ValueFormatted}}`, `{{.ThresholdFormatted}}`
 - `{{.StartTime}}`, `{{.Acknowledged}}`, `{{.AckTime}}`, `{{.AckUser}}`
+- `{{.NotRecovered}}` (a resolved batch includes a known non-recovery close;
+  inspect each member's `.Resolution` for its reason and successor)
 
 **Template helpers:** `title`, `upper`, `lower`, `printf`, `urlquery`/`urlencode`, `urlpath`/`pathescape`, `jsonString`
 
@@ -82,7 +84,9 @@ incidents or close tickets.
 These fields and behaviors are stable; ticket-routing integrations can rely on them.
 
 **Events.** `{{.Event}}` is `"alert"` or `"resolved"` — there is no separate
-"info" event class. Recovery delivery depends on **Notify on resolve** and a
+"info" event class. A resolved event closes an alert occurrence, not necessarily
+a recovered condition; see [non-recovery closes](#resolved-does-not-always-mean-recovered).
+Resolved delivery depends on **Notify on resolve** and a
 successful firing-delivery receipt for that occurrence and destination. Do not
 assume that every configured webhook receives both events.
 
@@ -214,6 +218,29 @@ Content-Type: application/json
 }
 ```
 
+### Resolved does not always mean recovered
+
+When a linked Pulse agent takes over a node metric, the node's open alert can
+close with reason `moved_to_agent` even while its last reading is above the
+threshold. The event is still `resolved` so integrations can close the old
+occurrence, but **this is not a recovery**. Record it as moved, not healthy;
+check the successor agent's current reading and alert policy separately.
+Do not assume that the successor has already fired an equivalent alert.
+
+The [full PSA template](#sample-psa-payloads) below includes each member's
+`resolutionReason`, `successorResourceId` and `successorName`. For a member
+without a resolution, these strings are empty: the sender treats that close
+as an ordinary recovery, not proof that every metric or workload is healthy.
+On a firing event they are not recovery evidence at all.
+
+Use the reason on **each member**, not just the primary alert or the batch's
+`notRecovered` flag. A group can contain both moved alerts and ordinary
+recoveries. The flag identifies known non-recovery closes, but `false` is not
+an independent health verdict. Retain an unknown non-empty reason or missing
+fields from an older/custom payload for reconciliation; do not silently map
+them to healthy. An absent successor identity does not justify guessing from
+a display name. Keep the original occurrence and any successor separate.
+
 ### Receiver correlation and deduplication
 
 Keep ticket correlation separate from suppressing repeated processing:
@@ -229,6 +256,10 @@ Keep ticket correlation separate from suppressing repeated processing:
   identify its observed occurrence; a later start with the same ID must be
   processed as a new occurrence. Firing and recovery use the same occurrence
   record, so an old delayed recovery must not close a newer incident.
+- For a `resolved` event, inspect each member's [resolution reason](#resolved-does-not-always-mean-recovered).
+  Close a moved occurrence as moved, not recovered, and keep unknown or
+  incomplete outcomes for reconciliation. Do not mark an entire mixed group
+  healthy from its event name or primary summary.
 - Within that record, handle `event` **and severity**. A warning becoming
   critical is an update, not a duplicate warning. Decide explicitly whether
   reminders update the existing ticket; do not create another ticket for each
@@ -248,7 +279,8 @@ Keep ticket correlation separate from suppressing repeated processing:
   this legacy header.
 
 Validate in an authorised test environment with firing, retry, warning-to-critical,
-recovery, recurrence of the same condition and a changed multi-alert group.
+recovery, recurrence of the same condition, a changed multi-alert group and
+a mixed moved/recovered close.
 Check actual tickets and receiver restart behaviour before enabling automatic
 actions. Do not cause a production outage or notification storm for this test.
 
@@ -308,8 +340,9 @@ There are two integration models. The push model is usually the right fit when t
 inbound endpoint (an ITSM/PSA inbound webhook, an email connector, or middleware
 that opens service tickets). Shape the JSON with a [custom template](#-custom-templates)
 to match the receiving system's schema. The bridge can open or update a ticket
-on `alert` and resolve that occurrence on `resolved`, subject to the [delivery
-conditions above](#-delivery-contract). Add authentication as a custom header
+on `alert` and close that occurrence on `resolved`, subject to the [delivery
+conditions above](#-delivery-contract) and its [resolution reason](#resolved-does-not-always-mean-recovered).
+Do not label a moved close as recovery. Add authentication as a custom header
 in the settings form; keep its value private.
 
 Configure it from the UI (**Alerts → Notifications → Add Webhook**) per org, or programmatically with an org-bound admin token:
@@ -339,13 +372,22 @@ member-aware template below; do not use the short example as an exactly-once key
 
 ### Sample PSA payloads
 
+Use this extended template only with a Pulse version that exposes
+`NotRecovered` and member `Resolution`; **v6.5.0 does not have these fields**.
+Consult the help bundled with your installed version before replacing a
+working template. If rendering reports a missing field, leave failed deliveries
+retained rather than retrying the batch or removing the reason fields and
+treating every close as recovery. A newer guide on the website does not establish
+that its supporting software has been released.
+
 A fuller template for normal queued firing and recovery notifications includes
-tenant context and every member's occurrence, severity and condition. The
+tenant context and every member's occurrence, severity, condition and close reason. The
 primary fields remain convenient summary context, **not the whole batch**:
 
 ```json
 {
   "event": "{{.Event | jsonString}}",
+  "notRecovered": {{.NotRecovered}},
   "alertId": "{{.ID | jsonString}}",
   "messageKey": "{{.MessageKey | jsonString}}",
   "severity": "{{.Level | jsonString}}",
@@ -369,7 +411,10 @@ primary fields remain convenient summary context, **not the whole batch**:
       "alertType": "{{.Type | jsonString}}",
       "resourceId": "{{.ResourceID | jsonString}}",
       "resource": "{{.ResourceName | jsonString}}",
-      "summary": "{{.Message | jsonString}}"
+      "summary": "{{.Message | jsonString}}",
+      "resolutionReason": "{{with .Resolution}}{{.Reason | jsonString}}{{end}}",
+      "successorResourceId": "{{with .Resolution}}{{.SuccessorResourceID | jsonString}}{{end}}",
+      "successorName": "{{with .Resolution}}{{.SuccessorName | jsonString}}{{end}}"
     }{{$comma = ","}}{{end}}{{end}}
   ]
 }
@@ -401,7 +446,12 @@ informational levels too; a two-priority mapping does not cover every condition.
 
 The **resolved** event retains the original member `alertId` and `startedAt`,
 letting the bridge close that occurrence's ticket rather than a later incident
-with the same ID. Its primary summary is:
+with the same ID. For an **ordinary recovery** (empty member `resolutionReason`),
+its primary summary is shown below. A moved close instead carries
+`resolutionReason: "moved_to_agent"` and successor context in the member array;
+it must not produce the healthy ticket outcome shown here. Member `summary`
+retains the original alert message, so use the structured reason rather than
+parsing that text for recovery.
 
 ```json
 {
