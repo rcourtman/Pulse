@@ -26,6 +26,7 @@ import (
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog"
@@ -4086,7 +4087,7 @@ func (m *Monitor) writeHostSMARTMetrics(host models.Host, now time.Time) {
 			continue
 		}
 
-		if diskTemperatureCollected(disk.Temperature, disk.Collection) {
+		if diskinventory.TemperatureCollected(disk.Temperature, disk.Collection) {
 			m.metricsStore.Write("disk", resourceID, "smart_temp", float64(disk.Temperature), now)
 		}
 

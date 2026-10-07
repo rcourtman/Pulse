@@ -67,6 +67,9 @@ func (concurrencyThresholdProvider) GetGuestMemoryThreshold() float64 {
 }
 func (concurrencyThresholdProvider) GetGuestDiskThreshold() float64 { return 95 }
 func (concurrencyThresholdProvider) GetStorageThreshold() float64   { return 92 }
+func (concurrencyThresholdProvider) GetDiskTemperatureThreshold(string) (float64, float64) {
+	return 70, 65
+}
 
 type concurrencyMetricsHistoryProvider struct{}
 

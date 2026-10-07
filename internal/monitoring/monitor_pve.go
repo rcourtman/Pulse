@@ -1175,15 +1175,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 				Int("wearout", disk.Wearout).
 				Msg("Checking disk health")
 
-			if excludePatterns, ok := diskExcludeByNode[disk.Node]; ok && fsfilters.MatchesDeviceExclude(disk.DevPath, excludePatterns) {
-				healthyDisk := proxmoxDiskFromPhysicalDisk(disk)
-				healthyDisk.Health = "PASSED"
-				healthyDisk.Wearout = 100
-				m.alertManager.CheckDiskHealth(inst, disk.Node, healthyDisk)
-				continue
-			}
-
-			m.alertManager.CheckDiskHealth(inst, disk.Node, proxmoxDiskFromPhysicalDisk(disk))
+			m.checkPhysicalDiskAlerts(inst, disk, diskExcludeByNode[disk.Node])
 		}
 
 		// Write SMART metrics to persistent store
@@ -1378,6 +1370,21 @@ func preserveUnavailablePhysicalDiskEvidence(current, previous models.PhysicalDi
 		current.IO = cloneDiskIO(previous.IO)
 	}
 	return current
+}
+
+// checkPhysicalDiskAlerts evaluates one Proxmox physical disk's health and
+// wearout alerts. A device matched by the linked host agent's --disk-exclude
+// patterns is evaluated as healthy, so excluding a disk also resolves the
+// alerts it already raised.
+func (m *Monitor) checkPhysicalDiskAlerts(instance string, disk models.PhysicalDisk, excludePatterns []string) {
+	if len(excludePatterns) > 0 && fsfilters.MatchesDeviceExclude(disk.DevPath, excludePatterns) {
+		healthyDisk := proxmoxDiskFromPhysicalDisk(disk)
+		healthyDisk.Health = "PASSED"
+		healthyDisk.Wearout = 100
+		m.alertManager.CheckDiskHealth(instance, disk.Node, healthyDisk)
+		return
+	}
+	m.alertManager.CheckDiskHealth(instance, disk.Node, proxmoxDiskFromPhysicalDisk(disk))
 }
 
 func proxmoxDiskFromPhysicalDisk(disk models.PhysicalDisk) proxmox.Disk {

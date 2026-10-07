@@ -1695,6 +1695,35 @@ an alert the next evaluation raises again.
 `TestConfigSaveKeepsAlertTheEvaluatorKeepsWithoutRecoveryBand` in
 `internal/alerts/host_unraid_lifecycle_test.go` pin these paths.
 
+### The disk temperature policy decides disk heat
+
+The policy `CheckHost` applies to a SMART disk (the agent Disk Temp default,
+refined by the disk type's `DiskTempByType` entry, and switched off for every
+type when that default is off) is the canonical answer to "is this disk too
+hot". `diskTemperatureThresholdForType` in `internal/alerts/host.go` holds it,
+and `Manager.DiskTemperatureThreshold(diskType)` exposes it, without host
+overrides, to Patrol through `AlertThresholdAdapter.GetDiskTemperatureThreshold`.
+`DefaultDiskTemperatureThreshold` serves callers with no manager. Disk risk
+(`internal/storagehealth`) judges no temperature. The Physical Disks Temp cell
+and Health verdict mirror the per-type triggers and a switched-off default in
+`resolveDiskTemperatureDisplayThresholds`; host overrides do not reach that
+page yet. That resolver returns null when the agent Disk Temp default is off.
+The displays that read it treat null as off: no threshold colour
+(`getTemperatureTextClass` with `diskTemperature`) and never hot. A
+`DiskTempByType` entry cannot be switched off on its own, because
+normalization restores a non-positive entry to its default.
+A disk is hot from its trigger. Alerts and Patrol findings stay open until the
+reading falls to the clear value, or under the trigger when there is no band
+below it. The Physical Disks verdict and the TrueNAS Health cell judge only the
+current reading against the trigger. PDF reports colour disk temperatures by
+the same thresholds. Judges that still differ: TrueNAS disk temperature alerts
+use `TrueNASDiskDefaults.Temperature` (a flat 55/50), and the TrueNAS disk
+drawer tones the reading from a fixed 55C.
+`TestDiskTemperatureThresholdMatchesCheckHostPolicy` in
+`internal/alerts/threshold_resolution_shared_test.go` pins per-type resolution, a raised
+NVMe trigger that `CheckHost` also honours, the copy, the disabled default and
+the nil manager.
+
 ### Agent disk temperature alerts clear when their disk leaves the report
 
 `CheckHost` also clears a disk temperature alert, and drops its pending

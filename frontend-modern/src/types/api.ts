@@ -626,6 +626,9 @@ export interface HostDiskSMART {
   temperature: number; // Temperature in Celsius
   health?: string; // PASSED, FAILED, UNKNOWN
   standby?: boolean; // True if disk was in standby
+  // A non-available temperature state marks the value as last known, such as
+  // a host agent that stopped reporting.
+  collection?: import('./resource').PhysicalDiskCollectionStatus;
 }
 
 export interface HostRAIDArray {

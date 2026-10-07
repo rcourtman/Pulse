@@ -66,6 +66,10 @@ type ThresholdProvider interface {
 	GetGuestDiskThreshold() float64
 	// GetStorageThreshold returns the usage alert trigger threshold for storage (0-100%)
 	GetStorageThreshold() float64
+	// GetDiskTemperatureThreshold returns the disk temperature alert trigger
+	// and clear values (°C) for a disk type. A zero trigger means disk
+	// temperature alerting is off.
+	GetDiskTemperatureThreshold(diskType string) (trigger, clear float64)
 }
 
 // AlertResolver provides the ability to review and resolve alerts

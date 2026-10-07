@@ -217,9 +217,13 @@ export const InlineResourceSummaryTables: Component<ResourceSummaryPresentationP
   const now = useRelativeTimeNow();
   const sections = (): DetailSection[] => {
     const docker = dockerContainerMeta(props.resource);
+    // An offline resource has no current uptime: the retained value is from
+    // its last report, and the Last seen row already says when that was.
     const uptimeSeconds = docker
       ? getDockerContainerUptimeSeconds(props.resource)
-      : props.resource.uptime;
+      : props.resource.status === 'offline'
+        ? undefined
+        : props.resource.uptime;
     const identityRows = compactDetailRows([
       ...props.drawer.primaryIdentityRows().map((row) => makeDetailRow(row.label, row.value)),
       props.showPlatformId ? makeDetailRow('Platform ID', props.resource.platformId) : null,

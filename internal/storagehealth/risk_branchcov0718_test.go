@@ -33,7 +33,7 @@ func TestAssessPhysicalDisk_Branches(t *testing.T) {
 	}{
 		{
 			// nil SmartAttributes arm: every *int64 pointer is skipped; only
-			// Model/Health/Temperature/Wearout are sourced from the disk.
+			// Model/Health/Wearout are sourced from the disk.
 			name:      "healthy disk with nil smart attributes stays healthy",
 			disk:      models.PhysicalDisk{Model: "Crucial MX500", Health: "PASSED", Temperature: 35, Wearout: 80},
 			wantLevel: RiskHealthy,
@@ -165,18 +165,10 @@ func TestAssessPhysicalDisk_Branches(t *testing.T) {
 			wantReasons: []string{"nvme_percentage_used_high"},
 		},
 		{
-			// Temperature >= 70 -> critical.
-			name:        "temperature critical",
-			disk:        models.PhysicalDisk{Health: "PASSED", Temperature: 72},
-			wantLevel:   RiskCritical,
-			wantReasons: []string{"temperature_high"},
-		},
-		{
-			// Temperature 60..69 -> warning.
-			name:        "temperature warning",
-			disk:        models.PhysicalDisk{Health: "PASSED", Temperature: 63},
-			wantLevel:   RiskWarning,
-			wantReasons: []string{"temperature_high"},
+			// Heat is the alert disk temperature policy's to judge, never risk's.
+			name:      "hot disk stays healthy",
+			disk:      models.PhysicalDisk{Health: "PASSED", Temperature: 72},
+			wantLevel: RiskHealthy,
 		},
 		{
 			// Reallocated sectors > 0 via SMART -> warning.
@@ -247,20 +239,20 @@ func TestAssessPhysicalDisk_NilSmartAttributesDoesNotPanic(t *testing.T) {
 // is preserved through the SMART-attribute mapping.
 func TestAssessPhysicalDisk_MultipleReasonsTakeHighest(t *testing.T) {
 	got := AssessPhysicalDisk(models.PhysicalDisk{
-		Health:      "PASSED",
-		Temperature: 63, // warning
+		Health: "PASSED",
 		SmartAttributes: &models.SMARTAttributes{
-			PendingSectors: int64Ptr(1), // critical
-			UDMACRCErrors:  int64Ptr(2), // monitor
+			ReallocatedSectors: int64Ptr(3), // warning
+			PendingSectors:     int64Ptr(1), // critical
+			UDMACRCErrors:      int64Ptr(2), // monitor
 		},
 	})
 	if got.Level != RiskCritical {
 		t.Fatalf("expected critical (highest), got %q; reasons=%+v", got.Level, got.Reasons)
 	}
 	if len(got.Reasons) != 3 {
-		t.Fatalf("expected 3 reasons (temperature_high, pending_sectors, crc_errors), got %d: %+v", len(got.Reasons), got.Reasons)
+		t.Fatalf("expected 3 reasons (reallocated_sectors, pending_sectors, crc_errors), got %d: %+v", len(got.Reasons), got.Reasons)
 	}
-	for _, code := range []string{"pending_sectors", "temperature_high", "crc_errors"} {
+	for _, code := range []string{"pending_sectors", "reallocated_sectors", "crc_errors"} {
 		if _, ok := reasonSeverity(got, code); !ok {
 			t.Errorf("expected reason %q present, got %+v", code, got.Reasons)
 		}
@@ -282,7 +274,7 @@ func TestAssessHostSMARTDisk_Branches(t *testing.T) {
 		wantReasons []string
 	}{
 		{
-			// nil Attributes arm: only Model/Health/Temperature are sourced;
+			// nil Attributes arm: only Model/Health are sourced;
 			// Wearout stays -1 so the wearout branch is skipped.
 			name:      "nil attributes stays healthy",
 			disk:      models.HostDiskSMART{Model: "WD Blue", Health: "PASSED", Temperature: 35},
@@ -402,18 +394,10 @@ func TestAssessHostSMARTDisk_Branches(t *testing.T) {
 			wantReasons: []string{"nvme_available_spare_low"},
 		},
 		{
-			// Temperature >= 70 -> critical.
-			name:        "temperature critical",
-			disk:        models.HostDiskSMART{Health: "PASSED", Temperature: 75},
-			wantLevel:   RiskCritical,
-			wantReasons: []string{"temperature_high"},
-		},
-		{
-			// Temperature 60..69 -> warning.
-			name:        "temperature warning",
-			disk:        models.HostDiskSMART{Health: "PASSED", Temperature: 60},
-			wantLevel:   RiskWarning,
-			wantReasons: []string{"temperature_high"},
+			// Heat is the alert disk temperature policy's to judge, never risk's.
+			name:      "hot disk stays healthy",
+			disk:      models.HostDiskSMART{Health: "PASSED", Temperature: 75},
+			wantLevel: RiskHealthy,
 		},
 		{
 			// Reallocated sectors > 0 via host SMART -> warning.
