@@ -14,7 +14,15 @@ import {
 import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
 import { getPhysicalDiskNodeIdentity } from '@/components/Storage/diskResourceUtils';
 import { getInfrastructureSettingsLocationLabel } from '@/utils/infrastructureSettingsPresentation';
+import {
+  resolveDiskTemperatureDisplayThresholds,
+  type MetricDisplayThresholds,
+} from '@/utils/metricThresholds';
 import { normalizeStorageSourceKey, storageSourceMatchesFilter } from '@/utils/storageSources';
+import {
+  getPhysicalDiskHeatSummary,
+  isPhysicalDiskRunningHot,
+} from './diskTemperaturePresentation';
 import type { NormalizedHealth, StorageHealthFilter } from './models';
 import { matchesStorageNodeTerms, parseStorageSearchQuery } from './storageSearchQuery';
 
@@ -67,6 +75,12 @@ export interface PhysicalDiskPresentationData {
   controller?: string;
   target?: string;
   temperature: number;
+  /**
+   * The alert disk temperature thresholds for this disk's type. The Temp cell
+   * colours the reading by them and the Health verdict judges heat by them.
+   * Absent means the factory thresholds for the type.
+   */
+  temperatureThresholds?: MetricDisplayThresholds | null;
   rpm: number;
   used: string;
   collection?: PhysicalDiskCollectionStatus;
@@ -395,13 +409,35 @@ export function getPhysicalDiskHostLabel(
   return (disk.node || resource.parentName || '').trim();
 }
 
+/**
+ * Resolves the alert disk temperature thresholds for a disk type. Callers with
+ * the user's alert configuration pass `getDiskTemperatureThresholds` from the
+ * alerts activation store; the default is the factory configuration.
+ */
+export type PhysicalDiskTemperatureThresholdResolver = (
+  diskType: string,
+) => MetricDisplayThresholds | null;
+
+const resolveFactoryDiskTemperatureThresholds: PhysicalDiskTemperatureThresholdResolver = (
+  diskType,
+) => resolveDiskTemperatureDisplayThresholds(null, diskType);
+
+/** The thresholds the Temp cell colours this disk's reading by. */
+export const getPhysicalDiskTemperatureThresholds = (
+  disk: Pick<PhysicalDiskPresentationData, 'temperatureThresholds' | 'type'>,
+): MetricDisplayThresholds | null =>
+  disk.temperatureThresholds !== undefined
+    ? disk.temperatureThresholds
+    : resolveFactoryDiskTemperatureThresholds(disk.type);
+
 export function extractPhysicalDiskPresentationData(
   resource: Resource,
+  resolveTemperatureThresholds: PhysicalDiskTemperatureThresholdResolver = resolveFactoryDiskTemperatureThresholds,
 ): PhysicalDiskPresentationData {
   const pd = resource.physicalDisk || ((resource.platformData as any)?.physicalDisk ?? {});
   const diskNode = getPhysicalDiskNodeIdentity(resource);
-  // A reason's code and severity decide the verdict even when it carries no
-  // display text, so only the summary list drops empty summaries.
+  // A reason's severity decides the verdict even when it carries no display
+  // text, so only the summary list drops empty summaries.
   const riskReasonDetails: ResourceStorageRiskReason[] = Array.isArray(pd.risk?.reasons)
     ? pd.risk.reasons
         .filter((reason: unknown) => reason !== null && typeof reason === 'object')
@@ -431,6 +467,7 @@ export function extractPhysicalDiskPresentationData(
     health: pd.health || 'UNKNOWN',
     wearout: pd.wearout ?? -1,
     temperature: pd.temperature ?? 0,
+    temperatureThresholds: resolveTemperatureThresholds(pd.diskType || ''),
     rpm: pd.rpm ?? 0,
     used: pd.used || '',
     storageRole: pd.storageRole,
@@ -503,23 +540,24 @@ export function getPhysicalDiskCollectionMessages(disk: PhysicalDiskPresentation
 
 export function buildPhysicalDiskPresentationDataMap(
   disks: Resource[],
+  resolveTemperatureThresholds?: PhysicalDiskTemperatureThresholdResolver,
 ): Map<string, PhysicalDiskPresentationData> {
   const map = new Map<string, PhysicalDiskPresentationData>();
   for (const disk of disks || []) {
-    map.set(disk.id, extractPhysicalDiskPresentationData(disk));
+    map.set(disk.id, extractPhysicalDiskPresentationData(disk, resolveTemperatureThresholds));
   }
   return map;
 }
 
 // Disks sort in the order their verdicts ask for action: replacement first,
-// then a disk running critically hot, then other warnings, then a warm disk.
+// then a disk running hot, then other warnings.
 const getPhysicalDiskVerdictPriority = (disk: PhysicalDiskPresentationData): number => {
   const verdict = getPhysicalDiskHealthVerdict(disk);
   switch (verdict.kind) {
     case 'replace':
       return 400;
     case 'hot':
-      return verdict.critical ? 300 : 100;
+      return 300;
     case 'attention':
       return 200;
     default:
@@ -677,11 +715,6 @@ export function hasPhysicalDiskSmartWarning(disk: PhysicalDiskPresentationData):
   );
 }
 
-// Heat is the one disk risk whose fix is cooling, not a replacement disk.
-// Alerts raise it as a temperature metric rather than as disk health, so the
-// verdict names it apart from the evidence that does mean replacing the disk.
-const PHYSICAL_DISK_TEMPERATURE_RISK_CODE = 'temperature_high';
-
 const PHYSICAL_DISK_RISK_SEVERITY_RANK: Record<string, number> = {
   monitor: 1,
   warning: 2,
@@ -696,20 +729,14 @@ interface PhysicalDiskRiskEvidence {
   summary?: string;
 }
 
-// Splits the disk's risk into heat and everything else, keeping the most
-// severe reason of each. A risk level that none of its reasons explains, or
-// one sent without reason codes, stays with the disk-health evidence.
-function splitPhysicalDiskRisk(disk: PhysicalDiskPresentationData): {
-  health: PhysicalDiskRiskEvidence;
-  heat: PhysicalDiskRiskEvidence;
-} {
-  const health: PhysicalDiskRiskEvidence = { rank: 0 };
-  const heat: PhysicalDiskRiskEvidence = { rank: 0 };
+// Keeps the disk's most severe risk reason. A risk level that none of its
+// reasons explains, or one sent without reasons, still sets the rank.
+function getPhysicalDiskRiskEvidence(disk: PhysicalDiskPresentationData): PhysicalDiskRiskEvidence {
+  const evidence: PhysicalDiskRiskEvidence = { rank: 0 };
   const details =
     disk.riskReasonDetails ??
     disk.riskReasons.map((summary) => ({ code: '', severity: disk.riskLevel || '', summary }));
   for (const reason of details) {
-    const evidence = reason.code === PHYSICAL_DISK_TEMPERATURE_RISK_CODE ? heat : health;
     const rank = getPhysicalDiskRiskSeverityRank(reason.severity);
     if (rank > evidence.rank) {
       evidence.rank = rank;
@@ -719,25 +746,25 @@ function splitPhysicalDiskRisk(disk: PhysicalDiskPresentationData): {
     }
   }
   const levelRank = getPhysicalDiskRiskSeverityRank(disk.riskLevel);
-  if (levelRank > Math.max(health.rank, heat.rank)) {
+  if (levelRank > evidence.rank) {
     // A reason with a known, lower severity does not explain this level, so
     // its text must not stand in as the verdict's reason.
-    if (health.rank > 0) health.summary = undefined;
-    health.rank = levelRank;
+    if (evidence.rank > 0) evidence.summary = undefined;
+    evidence.rank = levelRank;
   }
-  return { health, heat };
+  return evidence;
 }
 
 type PhysicalDiskHealthVerdict =
   | { kind: 'replace'; summary: string }
-  | { kind: 'hot'; critical: boolean; summary: string }
+  | { kind: 'hot'; summary: string }
   | { kind: 'attention'; summary: string }
   | { kind: 'clear' };
 
 function getPhysicalDiskHealthVerdict(
   disk: PhysicalDiskPresentationData,
 ): PhysicalDiskHealthVerdict {
-  const { health, heat } = splitPhysicalDiskRisk(disk);
+  const health = getPhysicalDiskRiskEvidence(disk);
   const critical = PHYSICAL_DISK_RISK_SEVERITY_RANK.critical;
   const warning = PHYSICAL_DISK_RISK_SEVERITY_RANK.warning;
   const lowLife = isPhysicalDiskWearoutReported(disk) && disk.wearout < 10;
@@ -748,8 +775,12 @@ function getPhysicalDiskHealthVerdict(
       summary: health.summary || 'Disk health has degraded to a critical state.',
     };
   }
-  if (heat.rank >= critical) {
-    return { kind: 'hot', critical: true, summary: heat.summary || 'Disk temperature is high.' };
+  const temperatureThresholds = getPhysicalDiskTemperatureThresholds(disk);
+  if (isPhysicalDiskRunningHot(disk, temperatureThresholds)) {
+    return {
+      kind: 'hot',
+      summary: getPhysicalDiskHeatSummary(disk.temperature, temperatureThresholds),
+    };
   }
   if (health.rank >= warning || hasPhysicalDiskSmartWarning(disk) || lowLife) {
     return {
@@ -758,9 +789,6 @@ function getPhysicalDiskHealthVerdict(
         health.summary ||
         (lowLife ? 'SSD life is running low.' : 'SMART counters indicate elevated risk.'),
     };
-  }
-  if (heat.rank >= warning) {
-    return { kind: 'hot', critical: false, summary: heat.summary || 'Disk temperature is high.' };
   }
   return { kind: 'clear' };
 }
@@ -778,11 +806,7 @@ export function getPhysicalDiskHealthStatus(
   }
 
   if (verdict.kind === 'hot') {
-    return {
-      label: 'Running Hot',
-      summary: verdict.summary,
-      tone: verdict.critical ? PHYSICAL_DISK_CRITICAL_TONE : PHYSICAL_DISK_WARNING_TONE,
-    };
+    return { label: 'Running Hot', summary: verdict.summary, tone: PHYSICAL_DISK_CRITICAL_TONE };
   }
 
   if (verdict.kind === 'attention') {
@@ -814,8 +838,9 @@ export function getPhysicalDiskNormalizedHealth(
   if (clearLabel === 'Online') return 'healthy';
   if (resource.status === 'offline') return 'offline';
   if (verdict.kind === 'replace') return 'critical';
-  // A disk running hot sits in the health filter at its temperature tier.
-  if (verdict.kind === 'hot') return verdict.critical ? 'critical' : 'warning';
+  // A disk running hot sits in the health filter with the critical disks, as
+  // its Temp cell reads red.
+  if (verdict.kind === 'hot') return 'critical';
   if (verdict.kind === 'attention') return 'warning';
   return clearLabel === 'Healthy' ? 'healthy' : 'unknown';
 }

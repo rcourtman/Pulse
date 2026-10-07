@@ -11,9 +11,8 @@ import (
 
 func TestAssessSample_HealthyDisk(t *testing.T) {
 	assessment := AssessSample(Sample{
-		Health:      "PASSED",
-		Temperature: 35,
-		Wearout:     80,
+		Health:  "PASSED",
+		Wearout: 80,
 	})
 	if assessment.Level != RiskHealthy {
 		t.Errorf("expected healthy, got %s", assessment.Level)
@@ -308,38 +307,6 @@ func TestAssessSample_NVMePercentageUsedWarning(t *testing.T) {
 	}
 }
 
-func TestAssessSample_TemperatureCritical(t *testing.T) {
-	assessment := AssessSample(Sample{
-		Health:      "PASSED",
-		Temperature: 72, // >=70 critical
-	})
-	if assessment.Level != RiskCritical {
-		t.Errorf("expected critical for temp=72, got %s", assessment.Level)
-	}
-}
-
-func TestAssessSample_TemperatureWarning(t *testing.T) {
-	assessment := AssessSample(Sample{
-		Health:      "PASSED",
-		Temperature: 63, // >=60, <70 warning
-	})
-	if assessment.Level != RiskWarning {
-		t.Errorf("expected warning for temp=63, got %s", assessment.Level)
-	}
-}
-
-func TestAssessSample_TemperatureHealthy(t *testing.T) {
-	assessment := AssessSample(Sample{
-		Health:      "PASSED",
-		Temperature: 45,
-	})
-	for _, r := range assessment.Reasons {
-		if r.Code == "temperature_high" {
-			t.Error("temp=45 should not trigger temperature_high")
-		}
-	}
-}
-
 func TestAssessSample_ReallocatedSectors(t *testing.T) {
 	assessment := AssessSample(Sample{
 		Health:             "PASSED",
@@ -371,10 +338,10 @@ func TestAssessSample_CRCErrors(t *testing.T) {
 
 func TestAssessSample_MultipleIssuesTakesHighest(t *testing.T) {
 	assessment := AssessSample(Sample{
-		Health:         "PASSED",
-		Temperature:    63, // warning
-		PendingSectors: 1,  // critical
-		UDMACRCErrors:  10, // monitor
+		Health:             "PASSED",
+		ReallocatedSectors: 1,  // warning
+		PendingSectors:     1,  // critical
+		UDMACRCErrors:      10, // monitor
 	})
 	if assessment.Level != RiskCritical {
 		t.Errorf("expected critical (highest), got %s", assessment.Level)
@@ -387,10 +354,11 @@ func TestAssessSample_MultipleIssuesTakesHighest(t *testing.T) {
 func TestAssessSample_ReasonsSortedBySeverityDescending(t *testing.T) {
 	assessment := AssessSample(Sample{
 		Health:             "PASSED",
-		Temperature:        63, // warning
 		PendingSectors:     1,  // critical
 		UDMACRCErrors:      10, // monitor
 		ReallocatedSectors: 1,  // warning
+		WearoutKnown:       true,
+		Wearout:            8, // warning
 	})
 	for i := 1; i < len(assessment.Reasons); i++ {
 		prevRank := severityRank(assessment.Reasons[i-1].Severity)
@@ -540,58 +508,20 @@ func TestAssessPhysicalDisk_RotationalZeroIsNotRisk(t *testing.T) {
 	}
 }
 
-func TestCollectedTemperatureKeepsOnlyCurrentReadings(t *testing.T) {
-	cases := []struct {
-		name       string
-		collection *diskinventory.CollectionStatus
-		want       int
-	}{
-		{name: "no collection state", collection: nil, want: 72},
-		{name: "empty state", collection: &diskinventory.CollectionStatus{}, want: 72},
-		{name: "available", collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")}, want: 72},
-		{name: "unavailable", collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Unavailable("smartctl", "disk is in standby")}, want: 0},
-		{name: "unsupported", collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Unsupported("proxmox_disks", "")}, want: 0},
-		{name: "missing", collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Missing("smartctl", "")}, want: 0},
-	}
-	for _, tc := range cases {
-		if got := CollectedTemperature(72, tc.collection); got != tc.want {
-			t.Errorf("%s: CollectedTemperature = %d, want %d", tc.name, got, tc.want)
-		}
-	}
-}
-
-func TestDiskAssessmentsIgnoreRetainedTemperature(t *testing.T) {
-	retained := &diskinventory.CollectionStatus{
-		Temperature: diskinventory.Unavailable("host_agent", "host agent stopped reporting"),
-	}
+// Heat belongs to the alert disk temperature policy, which users tune per disk
+// type and per host. Disk risk cannot see that configuration, so it must not
+// judge temperature at all, however hot and however current the reading.
+func TestDiskAssessmentsNeverJudgeTemperature(t *testing.T) {
 	collected := &diskinventory.CollectionStatus{Temperature: diskinventory.Available("host_agent")}
-
-	hasTemperatureReason := func(assessment Assessment) bool {
-		for _, reason := range assessment.Reasons {
-			if reason.Code == "temperature_high" {
-				return true
-			}
+	for _, temperature := range []int{56, 63, 72, 95} {
+		disk := models.PhysicalDisk{Model: "WDC WD80EFAX", Type: "sata", Health: "PASSED", Wearout: -1, Temperature: temperature, Collection: collected}
+		if got := AssessPhysicalDisk(disk); got.Level != RiskHealthy || len(got.Reasons) != 0 {
+			t.Errorf("%dC physical disk = %+v, want healthy with no reasons", temperature, got)
 		}
-		return false
-	}
 
-	disk := models.PhysicalDisk{Model: "WDC WD80EFAX", Type: "sata", Health: "PASSED", Wearout: -1, Temperature: 72}
-	disk.Collection = collected
-	if got := AssessPhysicalDisk(disk); got.Level != RiskCritical || !hasTemperatureReason(got) {
-		t.Fatalf("collected 72C physical disk = %+v, want critical temperature_high", got)
-	}
-	disk.Collection = retained
-	if got := AssessPhysicalDisk(disk); got.Level != RiskHealthy || hasTemperatureReason(got) {
-		t.Fatalf("retained 72C physical disk = %+v, want healthy", got)
-	}
-
-	smart := models.HostDiskSMART{Device: "/dev/sda", Model: "WDC WD80EFAX", Type: "sata", Health: "PASSED", Temperature: 72}
-	smart.Collection = collected
-	if got := AssessHostSMARTDisk(smart); got.Level != RiskCritical || !hasTemperatureReason(got) {
-		t.Fatalf("collected 72C host SMART disk = %+v, want critical temperature_high", got)
-	}
-	smart.Collection = retained
-	if got := AssessHostSMARTDisk(smart); got.Level != RiskHealthy || hasTemperatureReason(got) {
-		t.Fatalf("retained 72C host SMART disk = %+v, want healthy", got)
+		smart := models.HostDiskSMART{Device: "/dev/nvme0n1", Model: "Samsung 990 PRO", Type: "nvme", Health: "PASSED", Temperature: temperature, Collection: collected}
+		if got := AssessHostSMARTDisk(smart); got.Level != RiskHealthy || len(got.Reasons) != 0 {
+			t.Errorf("%dC host SMART disk = %+v, want healthy with no reasons", temperature, got)
+		}
 	}
 }

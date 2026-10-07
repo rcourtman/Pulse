@@ -9,6 +9,7 @@ import {
   filterAndSortPhysicalDisks,
   type PhysicalDiskPresentationData,
 } from '@/features/storageBackups/diskPresentation';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import { matchesPhysicalDiskNode } from './diskResourceUtils';
 
 type UseDiskListModelOptions = {
@@ -26,13 +27,19 @@ type UseDiskListModelOptions = {
 
 export const useDiskListModel = (options: UseDiskListModelOptions) => {
   const hasPVENodes = createMemo(() => options.nodes().length > 0);
+  const { getDiskTemperatureThresholds } = useAlertsActivation();
 
-  const diskDataById = createMemo(() => buildPhysicalDiskPresentationDataMap(options.disks()));
+  // Each disk's heat is judged by the user's alert disk temperature thresholds,
+  // so the presentation data recomputes when the alert configuration loads.
+  const diskDataById = createMemo(() =>
+    buildPhysicalDiskPresentationDataMap(options.disks(), getDiskTemperatureThresholds),
+  );
   const roleFilterOptions = createMemo(() => buildPhysicalDiskRoleFilterOptions(options.disks()));
   const groupFilterOptions = createMemo(() => buildPhysicalDiskGroupFilterOptions(options.disks()));
 
   const getDiskData = (disk: Resource): PhysicalDiskPresentationData =>
-    diskDataById().get(disk.id) ?? extractPhysicalDiskPresentationData(disk);
+    diskDataById().get(disk.id) ??
+    extractPhysicalDiskPresentationData(disk, getDiskTemperatureThresholds);
 
   const selectedNodeResource = createMemo(
     () => options.nodes().find((node) => node.id === options.selectedNode()) ?? null,

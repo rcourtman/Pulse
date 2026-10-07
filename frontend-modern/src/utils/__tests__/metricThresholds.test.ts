@@ -374,6 +374,29 @@ describe('metricThresholds', () => {
       });
     });
 
+    it('switches every disk type off with the agent disk temperature default', () => {
+      const config = {
+        enabled: true,
+        guestDefaults: {},
+        nodeDefaults: {},
+        agentDefaults: { diskTemperature: { trigger: 0, clear: 0 } },
+        diskTempByType: {
+          nvme: { trigger: 70, clear: 65 },
+          sata: { trigger: 55, clear: 50 },
+        },
+        storageDefault: { trigger: 85, clear: 80 },
+        overrides: { 'host-1': { diskTemperature: { trigger: 80, clear: 75 } } },
+      } as AlertConfig;
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'nvme')).toBeNull();
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'sata')).toBeNull();
+      expect(resolveDiskTemperatureDisplayThresholds(config, '')).toBeNull();
+      // An explicit host override still applies, as CheckHost applies it.
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'nvme', 'host-1')).toEqual({
+        warning: 75,
+        critical: 80,
+      });
+    });
+
     it('falls back to seeded per-type disk temperature defaults without config', () => {
       expect(resolveDiskTemperatureDisplayThresholds(null, 'nvme')).toEqual({
         warning: 65,

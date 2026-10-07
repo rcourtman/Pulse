@@ -345,13 +345,16 @@ func triageDiskHealthChecksState(snap patrolRuntimeState, scopedSet map[string]b
 	flags := make([]TriageFlag, 0)
 
 	for _, disk := range patrolPhysicalDiskRows(snap, scopedSet) {
-		flags = append(flags, triagePhysicalDiskFlags(disk.id, disk.name, disk.health, disk.wearout, disk.temperature.Collected)...)
+		flags = append(flags, triagePhysicalDiskFlags(disk.id, disk.name, disk.health, disk.wearout, disk.temperature.Collected, disk.temperatureLimits)...)
 	}
 
 	return flags
 }
 
-func triagePhysicalDiskFlags(resourceID, resourceName, health string, wearout, temperature int) []TriageFlag {
+// triagePhysicalDiskFlags judges heat by the alert disk temperature policy: a
+// warning from the alert trigger, the reading the disk's temperature alert and
+// its Running Hot verdict start at.
+func triagePhysicalDiskFlags(resourceID, resourceName, health string, wearout, temperature int, temperatureLimits diskTemperatureLimits) []TriageFlag {
 	flags := make([]TriageFlag, 0, 3)
 	if health != "" && !strings.EqualFold(health, "PASSED") && !strings.EqualFold(health, "UNKNOWN") && !strings.EqualFold(health, "OK") {
 		flags = append(flags, TriageFlag{
@@ -377,17 +380,17 @@ func triagePhysicalDiskFlags(resourceID, resourceName, health string, wearout, t
 			Threshold:    20,
 		})
 	}
-	if temperature > 55 {
+	if temperatureLimits.hot(temperature) {
 		flags = append(flags, TriageFlag{
 			ResourceID:   resourceID,
 			ResourceName: resourceName,
 			ResourceType: "physical_disk",
 			Category:     "health",
 			Severity:     "warning",
-			Reason:       fmt.Sprintf("Disk temperature %d°C", temperature),
+			Reason:       fmt.Sprintf("Disk temperature %d°C (alert threshold: %.0f°C)", temperature, temperatureLimits.trigger),
 			Metric:       "disk",
 			Value:        float64(temperature),
-			Threshold:    55,
+			Threshold:    temperatureLimits.trigger,
 		})
 	}
 	return flags

@@ -1111,6 +1111,17 @@ The first reason renders in the desktop Health column on the row's single line,
 coloured by bucket, with a count for the rest and the full list in the title
 and screen-reader text. Phones keep the status dot and reach the reason through
 the row drawer. Health sorts by severity rank, not label text.
+Disk risk carries no heat, so the table judges it itself. A disk whose current
+reading has reached its type's alert disk temperature trigger is an Attention
+row with the reason "Disk temperature is 57°C, at or above its 55°C alert
+threshold.". The trigger comes from the alerts store's
+`getDiskTemperatureThresholds`, which the table passes to the row build,
+filter, counts, sort and issue. `isPhysicalDiskRunningHot` in
+`features/storageBackups/diskTemperaturePresentation.ts` makes the same call
+for the Physical Disks verdict. The heat reason follows any native TrueNAS
+alert text, and a hot disk's status dot turns warning though its source state
+stays `online`, because phones show only the dot.
+`truenasPageModel.test.ts` and `TrueNASStorageTopologyTable.test.tsx` pin it.
 The vSphere Datastores and Networks tables follow the same exception-first
 Health column. `getVmwareDatastoreIssue` and `getVmwareNetworkIssue` return
 nothing for a green row; otherwise the reasons are, in order, an impaired
@@ -3564,8 +3575,8 @@ and otherwise `available`. The value is kept as last-known context; it is
 collected again only when a reporting host sends a positive reading for a disk
 that is no longer spun down. The Unraid-native disk row carries that state, and
 so does a SMART row that falls back to the inventory reading because it has
-none of its own. The adapter's risk assessment of an Unraid row no longer counts
-a withdrawn inventory temperature as heat.
+none of its own. The adapter's risk assessment of an Unraid row judges no
+temperature at all; heat belongs to the alert disk temperature policy.
 
 Cross-source correlation compares normalized serial and WWN values across
 fields without truncation, allowing a PVE bare-hex array-volume serial to join
@@ -4111,13 +4122,13 @@ incidents during cross-source merges. A provider alert such as TrueNAS
 `truenas_smart` is not presentation-only context; it must become a canonical
 `physicalDisk.risk.reasons` entry so hybrid agent/API disk resources keep one
 shared disk-health truth after deduplication.
-That shared risk contract judges only a collected temperature. Both the
-adapter assessment and the registry's recompute from merged metadata
-(`physicalDiskAssessmentFromMeta`) pass the temperature through
-`storagehealth.CollectedTemperature`, so a retained `unavailable`,
-`unsupported` or `missing` temperature stays visible as last-known evidence
-but adds no `temperature_high` reason and leaves the disk `online` rather
-than `warning`. Proof: `TestPhysicalDiskRiskIgnoresRetainedTemperature` in
+That shared risk contract never judges temperature, collected or retained.
+Heat belongs to the alert disk temperature policy, which no registry can see,
+so neither the adapter assessment nor the registry's recompute from merged
+metadata (`physicalDiskAssessmentFromMeta`) passes a temperature into
+`storagehealth`. A 72C disk keeps its reading on the resource, adds no
+`temperature_high` reason and stays `online`. Proof:
+`TestPhysicalDiskRiskNeverJudgesTemperature` in
 `internal/unifiedresources/registry_test.go`.
 That same canonical disk contract now also owns recent aggregate temperature
 history. When a provider such as TrueNAS can supply `disk.temperature_agg`

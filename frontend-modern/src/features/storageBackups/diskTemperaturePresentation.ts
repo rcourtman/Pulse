@@ -1,4 +1,5 @@
 import type { PhysicalDiskCollectionStatus, PhysicalDiskFieldStatus } from '@/types/resource';
+import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { formatTemperature } from '@/utils/temperature';
 
 // The canonical decision on whether a disk temperature is a current reading.
@@ -50,4 +51,30 @@ export function getPhysicalDiskTemperaturePresentation(disk: {
       ? undefined
       : getPhysicalDiskLastKnownTemperatureTitle(disk.collection?.temperature),
   };
+}
+
+// Disk heat is judged by the alert disk temperature policy, through the
+// thresholds the Temp column colours a reading by: a disk runs hot from its
+// type's alert trigger (`critical`), the reading its disk temperature alert
+// fires at. The band just below the trigger is a colour, not heat. A retained
+// reading is not current, and null thresholds mean disk temperature alerting
+// is off for the disk, so neither is ever hot. Disk risk never carries heat.
+export function isPhysicalDiskRunningHot(
+  disk: { temperature: number; collection?: PhysicalDiskCollectionStatus | null },
+  thresholds: MetricDisplayThresholds | null,
+): boolean {
+  if (!thresholds || !(thresholds.critical > 0)) return false;
+  if (!Number.isFinite(disk.temperature) || disk.temperature <= 0) return false;
+  if (!isPhysicalDiskTemperatureCurrent(disk.collection)) return false;
+  return disk.temperature >= thresholds.critical;
+}
+
+export function getPhysicalDiskHeatSummary(
+  temperature: number,
+  thresholds: MetricDisplayThresholds | null,
+): string {
+  const reading = formatTemperature(temperature);
+  return thresholds && thresholds.critical > 0
+    ? `Disk temperature is ${reading}, at or above its ${formatTemperature(thresholds.critical)} alert threshold.`
+    : `Disk temperature is ${reading}.`;
 }
