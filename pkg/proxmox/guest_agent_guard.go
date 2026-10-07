@@ -94,13 +94,16 @@ func acquireGuestAgent(endpoint string, vmid int) (func(bool), error) {
 	guestAgentGuards.Lock()
 	defer guestAgentGuards.Unlock()
 	now := time.Now()
-	if !now.Before(guestAgentGuards.nextCleanup) || len(guestAgentGuards.entries) >= maxGuestAgentGuardEntries {
+	cleanup := func() {
 		for key, entry := range guestAgentGuards.entries {
 			if !entry.busy && !now.Before(entry.until) {
 				delete(guestAgentGuards.entries, key)
 			}
 		}
 		guestAgentGuards.nextCleanup = now.Add(time.Minute)
+	}
+	if !now.Before(guestAgentGuards.nextCleanup) {
+		cleanup()
 	}
 	endpoints := guestAgentGuards.aliases[endpoint]
 	if len(endpoints) == 0 {
@@ -118,8 +121,24 @@ func acquireGuestAgent(endpoint string, vmid int) (func(bool), error) {
 		}
 		keys = append(keys, key)
 	}
-	if len(guestAgentGuards.entries)+len(keys) > maxGuestAgentGuardEntries {
-		return nil, &guestAgentDeferredError{reason: "agent-capacity"}
+	// Replacing an expired entry does not consume another slot. If new keys
+	// would exceed the bound, reclaim expired entries now rather than defer
+	// an otherwise eligible guest until the next periodic sweep. Never evict
+	// in-flight work or an unexpired uncertainty fence to make room.
+	additional := func() int {
+		count := 0
+		for _, key := range keys {
+			if _, exists := guestAgentGuards.entries[key]; !exists {
+				count++
+			}
+		}
+		return count
+	}
+	if len(guestAgentGuards.entries)+additional() > maxGuestAgentGuardEntries {
+		cleanup()
+		if len(guestAgentGuards.entries)+additional() > maxGuestAgentGuardEntries {
+			return nil, &guestAgentDeferredError{reason: "agent-capacity"}
+		}
 	}
 	for _, key := range keys {
 		guestAgentGuards.entries[key] = guestAgentGuardEntry{busy: true}

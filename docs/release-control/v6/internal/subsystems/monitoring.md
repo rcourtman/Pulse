@@ -318,6 +318,22 @@ required; all responses in this fixture are synthetic.
 
 ### Guest-agent coordination around backups — issue #2439
 
+The process-local admission table remains capped at 4,096 endpoint/VMID
+entries. Expired entries replaced by a new admission consume no extra slot;
+when new aliases would exceed the bound, expired idle entries are reclaimed
+before returning `agent-capacity`, even before the periodic cleanup deadline.
+In-flight commands and unexpired uncertainty cooldowns are never evicted,
+shortened or renewed to make space. An alias group is reserved atomically or
+not at all; full protected capacity still defers before any HTTP request.
+
+`pkg/proxmox/guest_agent_capacity_test.go` covers near-limit expired alias
+replacement, immediate expiry reclamation through all six HTTP readers,
+backup-lock rejection and ordinary resumption, plus fully protected capacity
+and incomplete group admission. These are synthetic source controls, not
+native recovery or a diagnosis of a reported shared pause. Existing lock,
+no-replay, cooldown, endpoint/VMID isolation and restart limitations remain.
+
+
 Filesystem-query diagnostics preserve this safety boundary. Missing, empty,
 unsupported or refused readings do not prescribe installing, activating or
 restarting QGA, changing backup settings, re-running setup or broadening a
