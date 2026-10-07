@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 import unittest
 
 from test_api_auth_docs import ROOT, TEST_TOKEN, exercise_curl, recording_server
@@ -36,10 +37,14 @@ def blocks(name):
 @contextmanager
 def proxy_server(status):
     requests = []
+    release_stall = threading.Event()
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             requests.append((self.command, self.path, dict(self.headers)))
+            if status == "stall":
+                release_stall.wait(timeout=20)
+                return
             self.send_response(status)
             self.send_header("Set-Cookie", "synthetic-session-must-not-be-printed")
             self.send_header("Location", "/unexpected-redirect-target")
@@ -55,6 +60,7 @@ def proxy_server(status):
     try:
         yield server.server_address[1], requests
     finally:
+        release_stall.set()
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
@@ -113,7 +119,7 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
                         self.assertEqual(result.returncode, 22)
                         self.assertEqual(len(requests), before + 1)
 
-    def exercise_proxy(self, home, port, role, *, editor_exit=0):
+    def exercise_proxy(self, home, port, role, *, editor_exit=0, curl_exit=0):
         recipes = blocks("PROXY_AUTH")
         self.assertEqual(len(recipes), 1)
         recipe = recipes[0].replace("http://127.0.0.1:7655", f"http://127.0.0.1:{port}")
@@ -135,6 +141,8 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
         recorder.write_text(
             "#!/usr/bin/env python3\nimport json, os, sys\nfrom pathlib import Path\n"
             "Path(os.environ['ARGV_RECEIPT']).write_text(json.dumps(sys.argv[1:]))\n"
+            "if os.environ['CURL_EXIT'] != '0':\n"
+            "    print('000', end=''); sys.exit(int(os.environ['CURL_EXIT']))\n"
             "os.execv(os.environ['REAL_CURL'], [os.environ['REAL_CURL'], *sys.argv[1:]])\n"
         )
         recorder.chmod(0o700)
@@ -145,11 +153,11 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
         env = dict(os.environ, HOME=str(home), PATH=f"{tools}:{os.environ['PATH']}", CURL_HOME=str(home),
                    XDG_CONFIG_HOME=str(home / ".config"), TMPDIR=str(home),
                    FIXTURE_HEADERS=str(headers), EDITOR_RECEIPT=str(home / "editor.json"),
-                   ARGV_RECEIPT=str(home / "argv.json"), REAL_CURL=real_curl, EDITOR_EXIT=str(editor_exit))
+                   ARGV_RECEIPT=str(home / "argv.json"), REAL_CURL=real_curl, EDITOR_EXIT=str(editor_exit), CURL_EXIT=str(curl_exit))
         for key in list(env):
             if key.lower().endswith("_proxy"):
                 del env[key]
-        result = subprocess.run(["bash", "-c", recipe], env=env, capture_output=True, timeout=10)
+        result = subprocess.run(["bash", "-c", recipe], env=env, capture_output=True, timeout=15)
         edited = json.loads((home / "editor.json").read_text())
         self.assertEqual((edited["directory_mode"], edited["file_mode"]), (0o700, 0o600))
         self.assertFalse(Path(edited["file"]).parent.exists(), "temporary credential directory must be cleaned")
@@ -159,6 +167,10 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
             self.assertEqual(argv[0], "--disable")
             self.assertIn("@" + edited["file"], argv)
             self.assertNotIn(TEST_TOKEN, " ".join(argv))
+            for option, value in (("--connect-timeout", "5"), ("--max-time", "10")):
+                self.assertIn(option, argv)
+                self.assertEqual(argv[argv.index(option) + 1], value)
+            self.assertNotIn("--retry", argv)
         else:
             self.assertFalse((home / "argv.json").exists())
         self.assertNotIn(TEST_TOKEN.encode(), result.stdout + result.stderr)
@@ -189,6 +201,60 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
                         self.assertEqual(headers.get("X-Proxy-Roles"), expected_role)
                         for unexpected in ("X-API-Token", "Authorization", "Cookie", "X-Curlrc-Injected"):
                             self.assertNotIn(unexpected, headers)
+
+    def test_proxy_setup_cannot_omit_role_choice_and_authenticated_boundary(self):
+        proxy = " ".join(DOCUMENTS["PROXY_AUTH"].read_text().split())
+        quick = proxy.split("## 🚀 Quick Start", 1)[1].split("## ⚙️ Configuration", 1)[0]
+        for phrase in ("every proxy-authenticated user an administrator",
+                       "PROXY_AUTH_ROLE_HEADER=X-Authentik-Groups",
+                       "PROXY_AUTH_ADMIN_ROLE=<exact-idp-admin-group>",
+                       "actual group separator", "Do not remove role gating",
+                       "successful IdP authentication", "authenticator is unavailable",
+                       "headers-only middleware does not authenticate",
+                       "authenticated non-admin and a signed-out session",
+                       "existing administrator recovery path"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, proxy if phrase == "actual group separator" else quick)
+        boundary = proxy.split("## ⚠️ Header Trust Boundary", 1)[1].split("## 📦 Examples", 1)[0]
+        for phrase in ("replace", "never append", "first", "username and configured role header",
+                       "must also come from the successful authenticator", "not be reachable"):
+            self.assertIn(phrase, boundary)
+
+    def test_provider_mappings_are_not_headers_only_deployment_recipes(self):
+        proxy = " ".join(DOCUMENTS["PROXY_AUTH"].read_text().split())
+        examples = proxy.split("## 📦 Examples", 1)[1].split("## 🔧 Troubleshooting", 1)[0]
+        self.assertIn("not complete provider deployment recipes", examples)
+        self.assertNotRegex(examples, r"```(?:yaml|nginx)")
+        for phrase in ("does not configure Authentik", "static username or admin group",
+                       "auth_request_set", "failed or unavailable subrequest",
+                       "tunnel is a transport, not an Access policy",
+                       "does not validate a Cloudflare Access JWT",
+                       "replace those headers", "all-users-admin"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, examples)
+
+    def test_proxy_transport_failure_has_no_role_result_or_retry(self):
+        # Deterministic adverse transport results exercise the copied shell's
+        # exit handling, not a second hand-written request implementation.
+        for curl_exit in (7, 28, 35, 60):
+            with self.subTest(curl_exit=curl_exit), tempfile.TemporaryDirectory() as temporary:
+                result = self.exercise_proxy(Path(temporary), 1, "", curl_exit=curl_exit)
+                self.assertEqual(result.returncode, curl_exit)
+                self.assertEqual(result.stdout, b"")
+                self.assertIn(f"curl exit {curl_exit}".encode(), result.stderr)
+                self.assertIn(b"no role result. Stop here.", result.stderr)
+
+    def test_proxy_stalled_real_transport_stops_and_cleans_up(self):
+        with proxy_server("stall") as (port, requests), tempfile.TemporaryDirectory() as temporary:
+            started = time.monotonic()
+            result = self.exercise_proxy(Path(temporary), port, "X-Proxy-Roles: none\n")
+            elapsed = time.monotonic() - started
+            self.assertEqual(result.returncode, 28, result.stderr.decode())
+            self.assertEqual(result.stdout, b"")
+            self.assertIn(b"no role result. Stop here.", result.stderr)
+            self.assertEqual(len(requests), 1)
+            self.assertGreaterEqual(elapsed, 9)
+            self.assertLess(elapsed, 15)
 
     def test_proxy_editor_failure_cleans_up_and_sends_no_request(self):
         with proxy_server(200) as (port, requests), tempfile.TemporaryDirectory() as temporary:
