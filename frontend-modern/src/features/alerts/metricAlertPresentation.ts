@@ -22,6 +22,10 @@ export interface MetricAlertPresentation {
   phaseLabel: string;
   /** The last reading that met the trigger, once the live one differs. */
   lastBreach?: string;
+  /** The level that opens the alert, in the metric's unit. */
+  alertLevel: string;
+  /** The level the reading must reach before the alert can clear. */
+  clearLevel: string;
 }
 
 const formatMetricValue = (value: number, unit: string | undefined): string => {
@@ -43,6 +47,14 @@ const formatSeconds = (seconds: number): string => {
   return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
 };
 
+// Progress rounds down, so a run four minutes and fifty seconds into a five
+// minute delay does not read as finished while the alert is still open.
+const formatElapsed = (seconds: number): string => {
+  if (seconds < 60) return formatSeconds(seconds);
+  if (seconds < 3600) return formatSeconds(Math.floor(seconds / 60) * 60);
+  return formatSeconds(Math.floor(seconds / 360) * 360);
+};
+
 const describeReading = (label: string, status: MetricAlertStatus): string => {
   const value = formatMetricValue(status.value, status.unit);
   const window = status.evaluationWindowSeconds ?? 0;
@@ -62,6 +74,14 @@ const describeClearRule = (status: MetricAlertStatus, lead: string): string => {
     : `${lead} ${recovery} or lower.`;
 };
 
+// A guest raises one disk alert per disk, all named after the guest, so the
+// reading names the disk the way the alert message does ("VM disk (/var)").
+const readingLabel = (alert: Pick<Alert, 'type' | 'metadata'>): string => {
+  const label = alertTypeDisplayLabel(alert.type);
+  const disk = alert.type === 'disk' ? alert.metadata?.label : undefined;
+  return typeof disk === 'string' && disk.trim() ? `${label} (${disk.trim()})` : label;
+};
+
 const isUsableStatus = (status: MetricAlertStatus | undefined): status is MetricAlertStatus =>
   !!status &&
   Number.isFinite(status.value) &&
@@ -76,15 +96,15 @@ const isUsableStatus = (status: MetricAlertStatus | undefined): status is Metric
  * no live status (non-threshold alerts, or the moments after a restart).
  */
 export function getMetricAlertPresentation(
-  alert: Pick<Alert, 'type' | 'value' | 'lastSeen' | 'metricStatus'>,
+  alert: Pick<Alert, 'type' | 'value' | 'lastSeen' | 'metricStatus' | 'metadata'>,
   now: number = Date.now(),
 ): MetricAlertPresentation | null {
   const status = alert.metricStatus;
   if (!isUsableStatus(status)) return null;
 
-  const label = alertTypeDisplayLabel(alert.type);
-  const reading = describeReading(label, status);
+  const reading = describeReading(readingLabel(alert), status);
   const trigger = formatMetricValue(status.trigger, status.unit);
+  const recovery = formatMetricValue(status.recovery, status.unit);
   const observedAt = Date.parse(status.observedAt);
   const stale = !Number.isFinite(observedAt) || now - observedAt > METRIC_ALERT_STATUS_STALE_MS;
 
@@ -105,12 +125,11 @@ export function getMetricAlertPresentation(
     case 'recovering': {
       const delay = status.recoveryDelaySeconds ?? 0;
       const elapsed = status.recoveryElapsedSeconds ?? 0;
-      const recovery = formatMetricValue(status.recovery, status.unit);
       summary = `${reading} now, recovering`;
       detail =
         delay > 0
           ? `Clears after ${formatSeconds(delay)} at ${recovery} or lower${
-              elapsed > 0 ? `, ${formatSeconds(Math.min(elapsed, delay))} so far` : ''
+              elapsed > 0 ? `, ${formatElapsed(Math.min(elapsed, delay))} so far` : ''
             }.`
           : `Clears at ${recovery} or lower.`;
       phaseLabel = 'Recovering';
@@ -131,7 +150,16 @@ export function getMetricAlertPresentation(
     lastBreach = `Last reading at or above ${trigger}: ${formatMetricValue(alert.value, status.unit)}${when}`;
   }
 
-  return { phase: status.phase, stale, summary, detail, phaseLabel, lastBreach };
+  return {
+    phase: status.phase,
+    stale,
+    summary,
+    detail,
+    phaseLabel,
+    lastBreach,
+    alertLevel: trigger,
+    clearLevel: recovery,
+  };
 }
 
 export interface AlertAttentionCopy {
@@ -142,7 +170,7 @@ export interface AlertAttentionCopy {
 
 /** Copy for an alert row in a drawer's "Needs attention" list. */
 export function getAlertAttentionCopy(
-  alert: Pick<Alert, 'type' | 'message' | 'value' | 'lastSeen' | 'metricStatus'>,
+  alert: Pick<Alert, 'type' | 'message' | 'value' | 'lastSeen' | 'metricStatus' | 'metadata'>,
   now: number = Date.now(),
 ): AlertAttentionCopy {
   const presentation = getMetricAlertPresentation(alert, now);

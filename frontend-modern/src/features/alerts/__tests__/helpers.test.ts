@@ -288,6 +288,8 @@ describe('getMetricAlertPresentation', () => {
       summary: 'Temperature 76°C now, back under the 80°C alert level',
       detail: 'Stays open until it reaches 75°C or lower and stays there for 5 minutes.',
       phaseLabel: 'Alert still open',
+      alertLevel: '80°C',
+      clearLevel: '75°C',
     });
     expect(presentation?.lastBreach).toMatch(/^Last reading at or above 80°C: 80°C, /);
   });
@@ -309,6 +311,13 @@ describe('getMetricAlertPresentation', () => {
         NOW,
       )?.detail,
     ).toBe('Clears after 5 minutes at 75°C or lower, 2 minutes so far.');
+    // Progress rounds down: 4m50s into a 5 minute delay is not "5 minutes so far".
+    expect(
+      getMetricAlertPresentation(
+        minipcAlert({ phase: 'recovering', value: 72, recoveryElapsedSeconds: 290 }),
+        NOW,
+      )?.detail,
+    ).toBe('Clears after 5 minutes at 75°C or lower, 4 minutes so far.');
   });
 
   it('names the alert level while the reading is still over it', () => {
@@ -357,6 +366,31 @@ describe('getMetricAlertPresentation', () => {
     expect(getMetricAlertPresentation(alert, NOW)).toMatchObject({
       summary: 'CPU averaged 84% over 10 minutes, latest 61% now, back under the 90% alert level',
       detail: 'Stays open until it reaches 80% or lower.',
+    });
+  });
+
+  it('names the disk of a per-disk guest alert, as its message does', () => {
+    // Every disk alert on a guest carries the guest's name; only the message
+    // and metadata say which disk.
+    const alert: Alert = {
+      ...minipcAlert(),
+      type: 'disk',
+      resourceName: 'web-01',
+      message: 'VM disk (/var) at 92.0%',
+      metadata: { label: '/var', mountpoint: '/var' },
+      metricStatus: {
+        phase: 'latched',
+        value: 87,
+        unit: '%',
+        observedAt: new Date(NOW).toISOString(),
+        trigger: 90,
+        recovery: 85,
+      },
+    };
+    expect(getMetricAlertPresentation(alert, NOW)).toMatchObject({
+      summary: 'Disk (/var) 87% now, back under the 90% alert level',
+      alertLevel: '90%',
+      clearLevel: '85%',
     });
   });
 

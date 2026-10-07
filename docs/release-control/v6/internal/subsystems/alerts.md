@@ -87,6 +87,23 @@ day is not auto-resolved as unmonitored. Frontend surfaces format the status
 through `features/alerts/metricAlertPresentation.ts` and never re-derive the
 phase or recovery timing.
 
+### Alert card and open incident lead with the live reading — issue #2068
+
+The Alerts overview card leads an open threshold alert with the presentation's
+summary and clear rule, keeps the last breach as the summary's hover text, and
+labels the alert and clear levels in the status's unit (temperatures follow
+the viewer's °C/°F preference, as every frontend reading does). Without a live
+status it keeps the message and labels an alert level only for metric types
+whose unit is known; other thresholds (queue ages, counts) are stated in their
+own message, so the card never guesses a percent. The resource incident panel
+describes only the open occurrence whose `alertIdentifier` and `openedAt`
+match an active alert's id and `startTime` (the incident store's occurrence
+key), from that alert's live status, rechecked on the shared relative-time
+clock so it turns stale when evaluations stop; closed occurrences keep their
+recorded message. Every disk alert on a guest carries the guest's name, so the
+presentation names the disk from `metadata.label`, as the per-disk message
+does.
+
 ### Retained guest observations are not alert evidence
 
 Guest memory marked `last-known`, `unavailable` or an unknown observation state

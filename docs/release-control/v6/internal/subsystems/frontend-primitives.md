@@ -120,6 +120,19 @@ and `title`, and `getTemperatureTextClass` treats an open alert's severity as
 a floor: a reading that has dipped under an open alert's trigger keeps the
 alert's tone, while the reading still wins when it is worse.
 
+### Alert card and incident panel format held alerts through one helper — issue #2068
+
+`AlertOverviewAlertCard` and `AlertResourceIncidentsPanel` describe an open
+threshold alert through `features/alerts/metricAlertPresentation.ts`
+(summary, clear rule, `alertLevel` and `clearLevel`) instead of their own unit
+guesses or the breach message. `useAlertHistoryState` exposes its active-alert
+accessor so the incident panel matches its open occurrence to the live alert
+without a second store read, and the panel reads `useRelativeTimeNow` so a
+reading that stops updating turns stale on screen. From the `sm` breakpoint the
+card's left column (status icon and text) keeps a 16rem floor and the text
+breaks long words, so the action buttons wrap instead of squeezing the reading
+to its longest word beside them.
+
 ### Canonical drawer History preserves guest read provenance
 
 The shared resource drawer passes selected memory observation state/source/time
