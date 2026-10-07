@@ -537,13 +537,11 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    through an explicit history review affordance, keep the ledger visually
    bounded, and return the user to the findings snapshot when a historical run is
    selected. Broad supporting context such as recent changes, correlations, and
-   policy coverage may be offered only as a compact `Details` affordance
-   when there is an active Patrol finding or an explicitly selected history
-   snapshot to explain. The full `Details` panel must render only
-   after that affordance is opened; its copy must tell operators it explains
-   Patrol's recorded finding or run state and must not present the data as a
-   separate raw evidence console. Degraded health or historical recurrence alone
-   must not surface a page-level forensic context block.
+   policy coverage stays off the Patrol page under the supporting-context rule
+   above, even when a finding is active or a history snapshot is selected; the
+   page has no `Details` context affordance for it. Degraded health or
+   historical recurrence alone must not surface a page-level forensic context
+   block either.
    The default Patrol surface must stay simple: the header, control selector,
    and Open work workspace own the ordinary operator state. Patrol must not
    render a separate always-visible status/activity/health strip just to prove
@@ -1241,7 +1239,7 @@ fix`, or `Explain` based on current finding state), while secondary
    `Health A` with issue-state copy such as `Issues detected` in the collapsed
    line. Do not add a normal-path assessment details expansion: assessment
    explanation, verification detail, activity mix, and supporting metrics belong in the
-   owning Findings, Runs, or `Details` surfaces
+   owning Findings or Runs surfaces
    instead of reopening the compact strip into a sparse status panel.
 
 ### Canonical operational attention workbench
@@ -1906,21 +1904,16 @@ activity mix in check language instead of asking operators to reconcile a
 `Recently verified` headline with a busy Patrol strip elsewhere on the page.
 Fix-verification checks belong to that same explanation layer as follow-up
 checks, not as evidence of a fresh full-estate sweep.
-The same hierarchy applies to the `Details` supporting context.
-Correlations, recent changes, and policy posture are secondary explanation for
-deeper investigation, so the default workspace may expose only the compact
-context affordance near the findings/history controls. When that disclosure is
-expanded, the page must render the panel as the immediate next workspace content
-and explicitly tell operators that the selected finding or run record remains
-the source of truth, while nearby activity, related patterns, and inspection
-boundaries are context Patrol considered and do not change the finding or count
-as a fresh Patrol run.
-When Patrol is healthy and fully verified, that supporting-context disclosure
-should stay out of the main page flow instead of advertising a second parallel
-Patrol workflow with nothing active to explain.
-That same operational context belongs behind the same secondary disclosure as
-verification, not as a default full-width strip that competes with the findings
-workspace. The workspace and shared
+The same hierarchy keeps correlations, recent changes, and policy posture off
+the Patrol page. They are secondary explanation for deeper investigation, so
+the workspace offers no `Details` supporting-context disclosure for them in any
+state, healthy or not: the selected finding or run record remains the Patrol
+source of truth, and that nearby evidence must not return as a second parallel
+Patrol workflow beside the findings and history controls.
+Patrol's run and trigger context, by contrast, belongs in the secondary
+`Finding options and history` workspace beside the findings and run history,
+not as a default full-width strip that competes with the current issues. The
+workspace and shared
 `frontend-modern/src/utils/patrolRunPresentation.ts` helpers may carry latest
 run kind/result, scoped-trigger state, and circuit-breaker warnings as factual
 support when the user opens the relevant context or when the page must surface
@@ -2139,11 +2132,10 @@ The Patrol seed context and AI runtime prompt path now also share the same
 correlation summary formatter from `internal/ai/correlation`, so learned-edge
 wording and confidence/count annotations stay canonical across the prompt
 surface instead of being rebuilt in each caller.
-The Patrol page also now renders the canonical intelligence summary card
-through the governed AI client and store, so the visible page summary and the
-resource/timeline sections stay aligned on the same shared backend slice.
-That same summary card now keeps recent changes and learned correlations
-primary while leaving the broader learning counters as backend coverage, so
+The Patrol page reads the canonical intelligence summary through the governed
+AI client and store but renders no intelligence summary card: it passes that
+summary's overall health to the Patrol findings panel, while recent changes,
+learned correlations, and the broader learning counters stay off the page, so
 the page does not present telemetry-style counts as a headline intelligence
 story.
 The shared AI summary payload also carries the canonical data-governance
@@ -2155,20 +2147,18 @@ correlation context plus canonical correlation evidence through the
 resource-intelligence payload, so the resource-level AI card can surface
 relationship reachability and learned edge patterns directly from the AI
 contract instead of inventing a second correlation summary.
-The Patrol intelligence page now also consumes the learned correlation list
-from the canonical AI correlations endpoint through the shared
-`frontend-modern/src/stores/aiIntelligence.ts` store, so the global summary
-and the resource drawer both reflect the same learned edge evidence instead
-of each page fetching its own copy. Both surfaces now render that evidence
-through the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
-card, so the correlation layout stays governed by one component instead of
-two page-local card implementations. That shared card also owns the
-correlation ordering and truncation rule, so the page and drawer hand it raw
-correlation lists instead of slicing or re-sorting them locally.
-The same page and drawer now also share the canonical
+The Patrol page renders no learned correlations or recent changes. The
+resource drawer renders its resource-scoped correlations from the
+resource-intelligence payload through the shared
+`frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
+card and its latest canonical change through the shared
 `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
-card for recent changes, so the timeline layout and relative-time wording
-stay governed by one frontend feed instead of separate page-local loops.
+card. Those cards own correlation ordering and truncation and the change
+summary's layout and relative-time wording, so a caller of either card, Patrol
+included, hands it raw lists instead of slicing or re-sorting them first. The
+drawer's full `Change history` timeline is a separate list that sorts and
+renders its own rows through the shared `resourceChangePresentation.ts`
+helpers.
 Patrol trial-entry surfaces are retired for normal self-hosted v6 GA.
 `ApprovalSection.tsx` and `usePatrolIntelligenceState.ts` may link to explicit
 plan, activation, recovery, support, or hosted handoff surfaces where
@@ -2217,26 +2207,25 @@ inline.
 The shared
 `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and
 `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
-cards now own the canonical Infrastructure resource-link default, so the
-Patrol page and resource drawer inherit resource-filter href construction
-through the shared summary cards instead of rebuilding local wrappers in each
-surface.
+cards carry no resource-link default since the cross-resource drilldown links
+were retired, so they render resource labels as plain text. A surface that
+needs resource links passes `buildResourceHref` to the shared card instead of
+rebuilding a local card wrapper.
 The Patrol intelligence page renders no data-governance posture counts: they
 left the page with its supporting-context block, and the shared posture card
 that rendered them has been removed. If Patrol shows posture counts again, it
 must render them through one shared unified-resource component instead of a
 Patrol-local count loop, and the resource drawer keeps only per-resource
 policy lines.
-That same Patrol summary surface now keeps health and findings primary while
-making recent changes and learned correlations available only
-through the on-demand `Details` context inspector, so expansion
-lane concepts stay available for deeper investigation without reading as the
+The Patrol page keeps health and findings primary and offers no recent-change
+or learned-correlation inspector: its on-demand `Details` context block left
+with the supporting-context section, so those expansion-lane concepts stay in
+the resource drawer and backend investigation instead of reading as the
 headline Patrol product story.
-That secondary investigation-context summary now also routes through the
-dedicated `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
-owner, so the Patrol hook composes one canonical payload-to-summary derivation
-instead of rebuilding recent-change, correlation, and governed-resource count
-copy inline.
+Patrol also derives no recent-change, correlation, or governed-resource count
+summary. If such a summary returns, the payload-to-summary derivation belongs
+in `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`,
+and the Patrol hook must not rebuild that count copy inline.
 The Patrol page's run-history tab label is now also tightened to `Runs`, while
 the underlying run-history panel remains canonical for run-record review,
 internal `finding_ids` scoping, and tool-call inspection. That copy change is
@@ -2258,19 +2247,21 @@ That same zero-coverage rule also applies to the expanded narrative sentence.
 When Patrol checked none of a known scoped set, the run summary must still say
 `Checked 0 of N scoped resources` rather than reverting to a generic `Patrol
 completed` sentence that hides the failed coverage.
-The Patrol page and resource drawer now also share the canonical
-`frontend-modern/src/utils/resourceChangePresentation.ts` formatter so
+The resource drawer formats recent changes through the canonical
+`frontend-modern/src/utils/resourceChangePresentation.ts` formatter, and any
+Patrol surface that shows recent changes must use the same formatter, so
 recent-change kind and headline wording stays aligned wherever the canonical
 timeline is surfaced.
-Patrol-owned supporting context may still apply a bounded explanation-layer
-normalization before rendering recent changes or attaching them to Assistant:
-same-state timeline records must describe the changed substate, such as Docker
-image status or command posture, instead of surfacing no-op wording like an
-`online` to `online` transition in the Patrol page or Assistant handoff.
-The Patrol page and resource drawer now keep canonical relationship semantics
-in the backend correlation path, while the visible frontend stays
-timeline-first and does not surface a separate relationship presentation
-helper.
+If Patrol renders recent changes or attaches them to an Assistant handoff, it
+must first apply a bounded explanation-layer normalization so same-state
+timeline records describe the changed substate, such as Docker image status or
+command posture, instead of surfacing no-op wording like an `online` to
+`online` transition.
+Canonical relationship semantics stay in the backend correlation path. The
+Patrol page renders no relationships; the resource drawer presents them in its
+`Relationship map` through the shared `ResourceCorrelationSummary.tsx` card
+and `frontend-modern/src/utils/resourceCorrelationPresentation.ts` helpers
+rather than a drawer-local relationship formatter.
 The backend Patrol and AI runtime summaries now also share
 `internal/unifiedresources/change_presentation.go` for the canonical
 change-kind and provenance mapping, so the same resource-model semantics
@@ -2280,11 +2271,13 @@ by the AI runtime prompt sections and Patrol seed context, so the change
 wording itself stays canonical before the surrounding section headers are
 applied.
 The same helper now also owns the canonical recent-change section wrapper,
-so the Patrol page and AI runtime can share the same heading and resource
+so the AI runtime prompt sections, including the Patrol intelligence context
+and Assistant handoff resource timelines, share the same heading and resource
 prefix rules instead of rebuilding that section locally.
 The canonical shared AI resource context now also surfaces policy routing and
-redaction hints from unified resources, so the Patrol page and resource drawer
-see the same governance posture that the runtime uses for export boundaries.
+redaction hints from unified resources, so the runtime's export boundaries and
+the resource drawer's governance rows read the same unified-resource policy
+posture; the Patrol page renders no posture.
 Patrol finding dismissal reasons and Patrol status labels now also route
 through the shared frontend identifier-label helper, so the Patrol surfaces
 do not keep their own underscore-stripping behavior separate from the rest

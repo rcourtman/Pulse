@@ -1,8 +1,4 @@
-import type {
-  CorrelationsResponse,
-  IntelligencePolicyPostureSummary,
-  ResourceCorrelation,
-} from '@/types/aiIntelligence';
+import type { ResourceCorrelation } from '@/types/aiIntelligence';
 import type { ApprovalRequest, InvestigationRecord, RemediationPlan } from '@/api/ai';
 import type { PatrolRunRecord } from '@/api/patrol';
 import type { AttentionItemDetail } from '@/api/patrolAttention';
@@ -55,12 +51,6 @@ import { formatRelativeTime } from '@/utils/format';
 function formatBriefingTimestamp(value: string | undefined): string {
   if (!value) return '';
   return formatRelativeTime(value, { compact: false, emptyText: '' });
-}
-
-export interface PatrolInvestigationContextSummaryInput {
-  recentChangesCount?: number | null;
-  correlations?: CorrelationsResponse | null;
-  policyPosture?: IntelligencePolicyPostureSummary | null;
 }
 
 export interface PatrolInvestigationContextSummary {
@@ -313,41 +303,6 @@ const SAME_STATE_CHANGED_FIELD_LABELS: Record<string, string> = {
   customUrl: 'custom URL',
   identity: 'identity',
 };
-
-export function buildPatrolInvestigationContextSummary(
-  input: PatrolInvestigationContextSummaryInput,
-): PatrolInvestigationContextSummary {
-  const recentChangeCount = normalizeNonNegativeCount(input.recentChangesCount);
-  const correlationCount = normalizeCorrelationCount(input.correlations);
-  const governedResourceCount = normalizeNonNegativeCount(input.policyPosture?.total_resources);
-
-  const parts: string[] = [];
-  if (recentChangeCount > 0) {
-    parts.push(`${recentChangeCount} recent change${recentChangeCount === 1 ? '' : 's'}`);
-  }
-  if (correlationCount > 0) {
-    parts.push(`${correlationCount} correlation${correlationCount === 1 ? '' : 's'}`);
-  }
-  if (governedResourceCount > 0) {
-    parts.push(
-      `${governedResourceCount} policy-covered resource${governedResourceCount === 1 ? '' : 's'}`,
-    );
-  }
-
-  return {
-    recentChangeCount,
-    correlationCount,
-    governedResourceCount,
-    hasContext: parts.length > 0,
-    summaryText: parts.join(' · '),
-  };
-}
-
-export function selectPatrolSupportingRecentChanges(
-  changes?: ResourceChange[] | null,
-): ResourceChange[] {
-  return normalizeAssessmentRecentChanges(changes);
-}
 
 export function buildPatrolInvestigationRecordPresentation(
   record?: InvestigationRecord | null,
@@ -2252,17 +2207,6 @@ function normalizeApprovalBriefing(
     actionDryRunSummary: normalizeText(approval?.actionDryRunSummary),
     actionRequestedBy: normalizeText(approval?.actionRequestedBy),
   };
-}
-
-function normalizeCorrelationCount(correlations?: CorrelationsResponse | null): number {
-  if (!correlations) return 0;
-  if (typeof correlations.count === 'number' && Number.isFinite(correlations.count)) {
-    return Math.max(0, Math.trunc(correlations.count));
-  }
-  if (Array.isArray(correlations.correlations)) {
-    return correlations.correlations.length;
-  }
-  return 0;
 }
 
 function normalizeNonNegativeCount(value?: number | null): number {

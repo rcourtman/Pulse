@@ -3163,10 +3163,10 @@ Agent`), with the plain-language source phrase available through accessible
     `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`,
     `frontend-modern/src/components/patrol/RunHistoryEntry.tsx`, and
     `frontend-modern/src/utils/patrolRuntimeActions.ts` must keep
-    Patrol assessment, verification, and findings primary; surface recent
-    changes, learned correlations, and policy coverage only as backend,
-    Assistant, selected-finding, or selected-run context when investigation
-    makes that evidence relevant; and use Patrol/provider wording for the shared provider settings,
+    Patrol assessment, verification, and findings primary; keep recent
+    changes, learned correlations, and policy coverage out of Patrol-owned
+    shells as backend or Assistant context, with no selected-finding or
+    selected-run page section for them; and use Patrol/provider wording for the shared provider settings,
     provider model, and provider circuit-breaker affordances instead of
     generic AI labels inside Patrol-owned shells. The shared app shell in
     `frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx` must
@@ -3181,9 +3181,10 @@ Agent`), with the plain-language source phrase available through accessible
     Assistant context rather than a default page section. Patrol initial data
     refresh failures must stay inside the Patrol feature shell as one compact
     stale-data retry banner; they must not replace the route with Suspense,
-    blank loading, raw transport errors, or page-local diagnostic panels. The Patrol
-    investigation-context owner normalizes same-state recent-change records into
-    changed-substate wording before Assistant handoff renders them. The same shared feature-shell
+    blank loading, raw transport errors, or page-local diagnostic panels. If a
+    Patrol Assistant handoff attaches recent-change records, the Patrol
+    investigation-context owner must first normalize same-state records into
+    changed-substate wording. The same shared feature-shell
     boundary owns the
     commercial-facing Patrol capability language: autonomy segmented controls
     and run-history/result labels must present the operator-facing policy levels
@@ -5002,8 +5003,8 @@ supporting metrics under that strip must stay metric-oriented and must not
 repeat assessment or verification labels as a second compact verdict row.
 The collapsed Patrol assessment strip itself must remain a compact readout
 rather than a headline-plus-paragraph block; explanatory assessment and
-recommendation copy belongs in the owning Findings, Runs, `Details`,
-or Assistant chat surfaces rather than a normal-path summary details expansion.
+recommendation copy belongs in the owning Findings, Runs, or Assistant chat
+surfaces rather than a normal-path summary details expansion.
 That readout should lead with current operator state and score rather than
 mixing a reassuring grade label with issue-state copy in the same line.
 That same summary shell should also keep the shared Pulse surface neutral:
@@ -6872,8 +6873,8 @@ or polling lifecycle. The Patrol feature is the current reference shape:
 feature shell, reads its active workspace view from the route through
 `patrolWorkspaceRouting.ts` rather than holding it in component state, `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
 owns the runtime state machine, `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
-owns the pure investigation-context summary and Patrol-to-Assistant operator
-briefing derivation, including the rule that active findings, pending
+owns the pure Patrol-to-Assistant handoff and operator briefing derivation,
+including the rule that active findings, pending
 approvals, and governed action references outrank secondary coverage caveats
 when building the Assistant prompt, action label, and safety note,
 `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` owns canonical AI
@@ -6950,17 +6951,11 @@ parallel page-level status strip above the current-work workspace.
 That same composition rule applies to the workspace: the default path should
 move directly into findings and run history instead of repeating runtime
 context through a second pre-tab status strip.
-`Details` follows that same composition rule. Recent changes,
-learned correlations, and policy coverage belong behind an explicitly secondary
-supporting-context affordance that only appears when Patrol has active findings
-or a selected run that needs explanation; healthy fully verified Patrol states
-and degraded summary health by themselves must not advertise that supporting
-evidence as a peer workflow. The default workspace may show the compact
-`Details` control, but the full panel must render only after the operator
-opens it. When that disclosure expands, the workspace must explicitly label the
-selected finding or run as Patrol's record and frame the supporting cards as
-explanatory context rather than as a fresh Patrol result or raw evidence
-console.
+Supporting context follows that same composition rule. Recent changes,
+learned correlations, and policy coverage stay off the Patrol workspace: it has
+no `Details` control or supporting-context panel for them in any state, with or
+without active findings or a selected run, so that evidence never competes
+with current work as a peer workflow or reads as a fresh Patrol result.
 Selected-run history should also suppress generic findings filter chrome and
 read as a Patrol run record. Missing legacy `finding_ids` remains an internal
 fail-closed scoping condition, but the visible caveat should say the finding
