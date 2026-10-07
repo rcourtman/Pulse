@@ -7182,6 +7182,12 @@ shell stays in `frontend-modern/src/features/alerts/OverviewTab.tsx`, while
 alert stats, filtered ordering, and single/bulk acknowledge runtime behavior.
 Future overview control flow should extend that hook rather than restoring
 action timers or acknowledge mutations to the tab shell.
+The overview follows the shared-clock rule for relative ages: the alert card
+reads `useRelativeTimeNow` for its started age and the live reading's stale
+cut-off, and the hook reads it for the Last 24 Hours count. A hook-local
+minute signal used as "now" is a table-local interval under that rule; the
+hook keeps a minute interval only to refresh delivery diagnoses, a server read
+whose cadence is not tied to the age clock.
 Render-heavy overview ownership now lives in
 `frontend-modern/src/features/alerts/AlertOverviewStatsCards.tsx`,
 `frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx`,
