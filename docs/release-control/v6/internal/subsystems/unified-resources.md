@@ -6616,9 +6616,9 @@ snapshot and resource ingest applied links, the rebuilt registry behind the
 websocket broadcast and `/api/state` kept both rows. The resources API, which
 seeds through resource ingest, showed them merged, and so did the published
 inventory whenever an unrelated absent machine made continuity hydration
-clone the registry. Mock mode builds its unified view from fixtures without
-the link store, so links do not reach the mock broadcast; that boundary is
-separate.
+clone the registry. Mock mode builds its unified view from fixtures and
+applies the same links there ("Mock-mode unified view applies operator
+links" below).
 
 - The monitor adapter passes its configured stale thresholds to record
   ingest, so a link joined there judges each side's metrics the way a
@@ -6672,6 +6672,65 @@ thresholds on the rebuild, supplemental and overlay paths, and
 (`TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity`) pins the
 published inventory with no continuity, an unrelated absent machine and the
 linked agent's own saved enrollment.
+
+### Mock-mode unified view applies operator links
+
+In mock mode the websocket broadcast, `/api/state`, and the monitor's
+`GetUnifiedReadStateOrSnapshot` and `UnifiedResourceSnapshot` readers serve a
+view of the fixture graph, not the monitor's resource store, and the fixture
+graph was built without the link store. The resources API seeds its registry
+from that same list through a registry backed by the link store, so a manual
+link showed merged there while the broadcast kept both rows. The fixture graph
+is now built with the links the monitor adapter's current registry generation
+loaded from its store (`MonitorAdapter.ManualLinks`), in a registry that has
+no store at all (`NewRegistryWithManualLinks`,
+`mock.UnifiedResourceSnapshotWithLinks`). Nothing that build ingests can write
+identity pins, canonical-ID successions or change records, and the view's read
+state forwards no history to the operator's store, so fixture data stays out
+of durable state through it.
+
+- The links apply at each ingest stage, as in the live rebuild: the snapshot,
+  then the TrueNAS and vSphere records, then availability. An availability
+  check that names the folded resource by source reference resolves through
+  the fold and projects onto the primary. Folding the finished list instead
+  dropped the check with the folded row. A check that names the folded
+  resource by canonical ID still loses its target, as live (fold history
+  above).
+- A link reaches the view when the adapter's next rebuild loads it, the same
+  point at which the live broadcast picks it up. The view's cache is keyed on
+  the fixture data version and on the links' resource pairs and primaries, so
+  a link change rebuilds it without waiting for a fixture tick. Freshness is
+  assigned in publication order: a view built from the same fixture
+  freshness and links as the one it replaces keeps its freshness, and any
+  other view gets a later one than every view published before it, even when
+  a slower build publishes after a newer one. The resources API reuses its
+  registry while that freshness is unchanged, so it follows the published
+  view and does not keep a list other links folded, for example after a
+  link's primary is reversed. Fixture freshness stands in for the fixture
+  data, as it already did for that cache.
+- Without links the view is built from the shared memoized fixture snapshot,
+  as before. With links each monitor builds its own linked snapshot whenever
+  the fixture data or links change (concurrent cache misses can each build
+  one).
+- Exclusions are not carried, as before. The broadcast's presentation
+  coalescing does not consult exclusions in either mode, while the resources
+  API's `ListForPresentation` does.
+- An agent linked into a guest leaves the agent listings (`Hosts()` lists
+  agent-type rows only) and the guest carries its facet, as in live mode.
+
+`TestMockUnifiedViewAppliesOperatorManualLinks` in
+`internal/monitoring/monitor_host_agents_test.go` pins the broadcast payload,
+the rebuild and freshness advance on a link change with the fixture data
+version held, the cached build afterwards, the same rows as a store-backed
+registry seeded through resource ingest the way the resources API seeds, and
+no change rows reaching the store through the view.
+`TestFixtureGraphAppliesManualLinksAtEachIngestStage` and
+`TestUnifiedResourceSnapshotWithLinksLeavesTheSharedSnapshotUnlinked` in
+`internal/mock/platform_fixtures_test.go` pin the staged availability
+projection and the untouched shared snapshot, and
+`TestRegistryWithManualLinksFoldsLikeTheStoreBackedRegistry` in
+`internal/unifiedresources/registry_test.go` pins the store-less registry
+against the store-backed one and the per-generation `ManualLinks` snapshot.
 
 ### Provider link network corroboration
 

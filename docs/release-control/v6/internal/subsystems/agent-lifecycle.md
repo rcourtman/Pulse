@@ -8982,6 +8982,18 @@ their own heartbeat cutoff (`fleethealth.AgentStaleThreshold`, which is
 separate from the monitoring reporting lease). Agent registration, enrolment,
 install, update, removal and report identity are unchanged.
 
+### Mock-mode read views fold linked fixture agents
+
+`internal/monitoring/monitor.go` changed only so the mock-mode unified view
+applies the operator's manual links (unified-resources contract, "Mock-mode
+unified view applies operator links"). A fixture agent the operator linked
+into a guest now folds into that guest in mock read views, as a linked agent
+already does in live mode, so host snapshots built from them
+(`HostsSnapshot`) stop listing it while the guest carries its facet. Agent
+registration, enrolment, report admission, removal, continuity and the
+fixture agent set itself are unchanged, and the view writes nothing to the
+resource store.
+
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` changed only so a `POST`, `PUT`, `PATCH` or

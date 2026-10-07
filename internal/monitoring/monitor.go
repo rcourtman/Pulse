@@ -1216,6 +1216,8 @@ type Monitor struct {
 	mockUnifiedViewMu          sync.Mutex
 	mockUnifiedView            monitorUnifiedStateView
 	mockUnifiedViewVersion     uint64
+	mockUnifiedViewLinks       []unifiedresources.ResourceLink
+	mockUnifiedViewFixtureAt   time.Time // fixture freshness the published view was built from
 	mockUnifiedViewValid       bool
 	pveClients                 map[string]PVEClientInterface
 	pbsClients                 map[string]*pbs.Client
@@ -5146,27 +5148,55 @@ func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
 	}
 
 	if mock.IsMockEnabled() {
-		// Read the version before the snapshot so a tick landing in between
-		// caches newer data under an older token (harmless rebuild next
-		// call) rather than ever serving stale data under a newer one.
+		// Read the version and links before the snapshot so a tick or
+		// rebuild landing in between caches newer data under an older
+		// token (harmless rebuild next call) rather than ever serving stale
+		// data under a newer one.
 		version := mock.FixtureDataVersion()
+		links := m.resourceStoreManualLinks()
 		m.mockUnifiedViewMu.Lock()
-		if m.mockUnifiedViewValid && m.mockUnifiedViewVersion == version {
+		if m.mockUnifiedViewValid && m.mockUnifiedViewVersion == version && sameManualLinks(m.mockUnifiedViewLinks, links) {
 			view := m.mockUnifiedView
 			m.mockUnifiedViewMu.Unlock()
 			return view
 		}
 		m.mockUnifiedViewMu.Unlock()
 
-		resources, freshness := mock.UnifiedResourceSnapshot()
+		// The fixture graph knows no link store, so the operator's links,
+		// as the resource store's current generation applied them, are
+		// applied while it is built, at each ingest stage like the live
+		// rebuild. Its registry has no store: fixture data never reaches
+		// durable state through it.
+		resources, freshness := mock.UnifiedResourceSnapshotWithLinks(links)
 		if len(resources) > 0 || !freshness.IsZero() {
 			// Consumers share this view between ticks, mirroring the
 			// sharing semantics the persistent-store ReadState path has
 			// always had in real mode: views are read-only.
 			view := monitorUnifiedStateViewFromResources(resources, freshness)
 			m.mockUnifiedViewMu.Lock()
+			// Readers key caches on freshness: the resources API reuses
+			// its registry, seeded from this list, while freshness is
+			// equal. A link change alters the view without moving any
+			// fixture timestamp, and a slow build can publish after a
+			// newer one, so freshness is assigned here, in publication
+			// order: a view built from the fixture freshness and links of
+			// the one it replaces keeps its freshness, and any other view
+			// gets one later than every view published before it. Fixture
+			// freshness stands in for the fixture data here, as it already
+			// does for that cache.
+			fixtureFreshness := view.freshness
+			if m.mockUnifiedViewValid {
+				previous := m.mockUnifiedView.freshness
+				if fixtureFreshness.Equal(m.mockUnifiedViewFixtureAt) && sameManualLinks(m.mockUnifiedViewLinks, links) {
+					view.freshness = previous
+				} else if !view.freshness.After(previous) {
+					view.freshness = previous.Add(time.Nanosecond)
+				}
+			}
 			m.mockUnifiedView = view
+			m.mockUnifiedViewFixtureAt = fixtureFreshness
 			m.mockUnifiedViewVersion = version
+			m.mockUnifiedViewLinks = links
 			m.mockUnifiedViewValid = true
 			m.mockUnifiedViewMu.Unlock()
 			return view
@@ -5200,6 +5230,33 @@ func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
 	}
 
 	return m.unifiedStateViewWithStandaloneHostContinuity(monitorUnifiedStateViewFromSnapshot(m.GetState()))
+}
+
+// manualLinkResourceStore is implemented by resource stores that apply the
+// operator's manual links (MonitorAdapter).
+type manualLinkResourceStore interface {
+	ManualLinks() []unifiedresources.ResourceLink
+}
+
+// resourceStoreManualLinks returns the operator links the resource store's
+// current generation applied, or nil when the store applies none.
+func (m *Monitor) resourceStoreManualLinks() []unifiedresources.ResourceLink {
+	m.mu.RLock()
+	store := m.resourceStore
+	m.mu.RUnlock()
+	linkStore, ok := store.(manualLinkResourceStore)
+	if !ok {
+		return nil
+	}
+	return linkStore.ManualLinks()
+}
+
+// sameManualLinks reports whether two link lists fold the same resources in
+// the same order. Link metadata (reason, author, time) does not change a fold.
+func sameManualLinks(a, b []unifiedresources.ResourceLink) bool {
+	return slices.EqualFunc(a, b, func(x, y unifiedresources.ResourceLink) bool {
+		return x.ResourceA == y.ResourceA && x.ResourceB == y.ResourceB && x.PrimaryID == y.PrimaryID
+	})
 }
 
 func (m *Monitor) currentUnifiedResourceFreshness() time.Time {
@@ -5286,7 +5343,11 @@ func (m *Monitor) GetUnifiedReadStateOrSnapshot() unifiedresources.ReadState {
 // the new epoch replaces it, so they get a view of current state meanwhile.
 // The view lists the state snapshot without provider-owned supplemental
 // resources or persisted manual links and copies the whole estate, so it is
-// only for callers outside per-resource loops.
+// only for callers outside per-resource loops. The links stay out because the
+// view is a plain projection of current state for a short window: the links
+// still apply in the registry once a rebuild in the new epoch lands. Meanwhile
+// typed lookups see linked resources unmerged; the previous-state carry, for
+// one, loses a manually linked agent's memory.
 func (m *Monitor) currentModeReadState() unifiedresources.ReadState {
 	if m == nil {
 		return nil

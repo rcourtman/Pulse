@@ -2834,6 +2834,38 @@ overlap/covered-write/liveness/resumption dependency. Preserve the monitoring
 and alert outage precaution until that operational outcome is verified.
 
 
+### Mock-mode unified view applies operator links
+
+The mock branch of `currentUnifiedStateView` builds the view the broadcast,
+`/api/state`, `GetUnifiedReadStateOrSnapshot` and `UnifiedResourceSnapshot`
+serve in mock mode from the fixture graph, which knows no link store. It now
+builds the graph with the links the monitor's resource store applied at its
+current generation (`resourceStoreManualLinks`,
+`mock.UnifiedResourceSnapshotWithLinks`; unified-resources contract
+"Mock-mode unified view applies operator links"), so a link reaches the mock
+broadcast when the resource store's next rebuild loads it, as in live mode; in
+mock mode that is normally the broadcast's own read-path refresh once the
+generation is older than `readPathRegistryFreshness`. The cached view is keyed
+on the fixture data version and the link list, so a link change rebuilds it
+without a fixture tick; an unchanged list keeps the shared build. Freshness,
+which the resources API keys its registry cache on, is assigned in
+publication order under `mockUnifiedViewMu`: a view built from the same
+fixture freshness and links as the one it replaces keeps its freshness, and
+any other view gets a later one than every view before it, so a slow build
+that publishes late cannot reuse a value. With no links the view still comes
+from the shared memoized fixture snapshot, so the demo's allocation profile is
+unchanged; with links each monitor builds its own linked snapshot whenever
+the fixture data or links change (concurrent misses can each build one). The fence view behind `currentModeReadState` still omits links (see
+the mock-mode fence above): it stays a plain projection of current state for
+the window before a rebuild in the new epoch, after which the registry applies
+the links again. `TestMockUnifiedViewAppliesOperatorManualLinks` in
+`internal/monitoring/monitor_host_agents_test.go` pins the broadcast, the
+freshness advance and the cache, `TestFixtureGraphAppliesManualLinksAtEachIngestStage`
+and `TestUnifiedResourceSnapshotWithLinksLeavesTheSharedSnapshotUnlinked` in
+`internal/mock/platform_fixtures_test.go` pin the linked fixture build, and
+`TestMockUnifiedStateViewUsesCanonicalMockFixtureGraph` in
+`internal/monitoring/canonical_guardrails_test.go` pins the call.
+
 ### Saved quiet-hours policy before queue activation
 
 `Monitor.New` binds `alerts.Manager.QuietHoursNotificationPolicy` to the
