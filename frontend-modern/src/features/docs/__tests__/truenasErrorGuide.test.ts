@@ -117,7 +117,9 @@ describe('shipped TrueNAS error diagnosis', () => {
   });
 
   it('keeps NAS-specific host, deadline and disclosure boundaries beside the reader link', () => {
-    const text = prose(sectionAt(renderGuide('TRUENAS'), '#no-data-appearing-after-adding-connection'));
+    const text = prose(
+      sectionAt(renderGuide('TRUENAS'), '#no-data-appearing-after-adding-connection'),
+    );
     for (const boundary of [
       'no request ID is required',
       'inside the Pulse container',
