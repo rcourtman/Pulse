@@ -5600,6 +5600,14 @@ Standalone, TrueNAS, and vSphere platform tables and their table-model helpers
 must compose those helpers instead of declaring local `metricFallback` /
 `finiteMetric` helpers or inlining centered muted dash fallback markup in
 metric cells.
+A row whose status indicator is `danger` (offline) blanks every reading from
+its last report, not only the metric bars. Proxmox node rows already gate
+uptime and temperature on online. The Machines table gates its Uptime and
+Temperature cells, and the Docker hosts table its temperature cell, on the same
+check. A machine another source keeps up stays rendered, since its cell may
+carry that source's current reading. Numeric cells keep their own
+right-aligned empty dash; the centred `PlatformTableMetricFallback` marker
+stays specific to metric-bar cells.
 Platform table metric severity coloring is alert-backed, not hardcoded. The
 Docker host and container, Proxmox node, Kubernetes cluster and node, TrueNAS
 system and app, and vSphere host tables must resolve display thresholds
@@ -7812,6 +7820,16 @@ never through the threshold colour classes, so a retained reading cannot look
 hot or healthy. Table, drawer and pool surfaces share that one decision in
 `frontend-modern/src/features/storageBackups/diskPresentation.ts` rather than
 each re-reading `collection.temperature`.
+That decision and its class now live in the small
+`frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts`
+module, which `diskPresentation.ts` re-exports, so the Machines table and the
+machine drawer's Thermals rows apply the same treatment without pulling the
+Storage presenter into their chunks. Those surfaces and the guest drawer's
+Physical Disks card import it directly.
+When the cell's value is a retained host-agent SMART temperature, it renders
+muted with a dotted underline and screen-reader "last known", as does a
+retained value in the guest card. Tooltip and Thermals rows say "(last known)",
+and the Thermals row carries the collection reason as its title.
 
 The focused browser proofs are
 `frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts`,

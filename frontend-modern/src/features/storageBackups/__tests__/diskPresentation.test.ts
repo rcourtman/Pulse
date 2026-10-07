@@ -18,6 +18,7 @@ import {
   PHYSICAL_DISK_SOURCE_BADGE_CLASS,
   PHYSICAL_DISK_TABLE_CLASS,
   PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS,
+  PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS,
   getPhysicalDiskEmptyStatePresentation,
   getPhysicalDiskCellPaddingClass,
   getPhysicalDiskColumnWidthStyle,
@@ -27,6 +28,7 @@ import {
   getPhysicalDiskHealthStatus,
   getPhysicalDiskHealthSummary,
   getPhysicalDiskHostLabel,
+  getPhysicalDiskLastKnownTemperatureTitle,
   getPhysicalDiskLifeLabel,
   getPhysicalDiskLifeTextClass,
   getPhysicalDiskNormalizedHealth,
@@ -48,6 +50,7 @@ import {
   normalizePhysicalDiskFacetFilter,
   type PhysicalDiskPresentationData,
 } from '@/features/storageBackups/diskPresentation';
+import * as diskTemperaturePresentation from '@/features/storageBackups/diskTemperaturePresentation';
 
 function makeDiskData(
   overrides: Partial<PhysicalDiskPresentationData> = {},
@@ -129,6 +132,23 @@ describe('diskPresentation', () => {
         ),
       ).toBeNull();
     }
+  });
+
+  it('serves the same temperature decision the Machines table and drawers import directly', () => {
+    // Tables outside Storage import the small module so they do not pull this
+    // one into their chunks. Both paths must stay one implementation.
+    expect(isPhysicalDiskTemperatureCurrent).toBe(
+      diskTemperaturePresentation.isPhysicalDiskTemperatureCurrent,
+    );
+    expect(getPhysicalDiskTemperaturePresentation).toBe(
+      diskTemperaturePresentation.getPhysicalDiskTemperaturePresentation,
+    );
+    expect(getPhysicalDiskLastKnownTemperatureTitle).toBe(
+      diskTemperaturePresentation.getPhysicalDiskLastKnownTemperatureTitle,
+    );
+    expect(PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS).toBe(
+      diskTemperaturePresentation.PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS,
+    );
   });
 
   it('distinguishes unsupported, unavailable, and unexpectedly missing disk evidence', () => {
