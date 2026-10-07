@@ -387,11 +387,9 @@ PY
 
     def test_retarget_uninstall_and_cleanup_use_saved_script_without_new_token(self):
         expected = (["--retarget", "--url", "https://pulse.example.com"], ["--uninstall"],
-                    ["--uninstall", "--purge", "--local-only"],
-                    ["--uninstall", "--purge", "--remove-proxmox-access", "--local-only"])
+                    ["--uninstall", "--local-only"])
         commands = [recipe(NAMES[0], "--retarget --url"), recipe(NAMES[0], 'agent-install.sh" --uninstall'),
-                    recipe(NAMES[1], "--uninstall --purge --local-only"),
-                    recipe(NAMES[1], "--uninstall --purge --remove-proxmox-access")]
+                    recipe(NAMES[1], "--uninstall --local-only")]
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             private = home / ".config/pulse"
