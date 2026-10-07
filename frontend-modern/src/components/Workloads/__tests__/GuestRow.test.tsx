@@ -1076,6 +1076,61 @@ describe('GuestRow', () => {
       );
       expect(container.querySelector('[data-workload-disk-read-status]')).toBeNull();
     });
+
+    it("follows a linked agent's filesystems, not the Proxmox read reason", () => {
+      // Proxmox has no guest filesystems, so the agent's fill in while
+      // Proxmox still reports its own agent-not-running.
+      const agentGuest = (overrides: Partial<WorkloadGuest> = {}) =>
+        makeGuest({
+          diskStatusReason: 'agent-not-running',
+          disksFromAgent: true,
+          disks: [makeDisk({ mountpoint: '/' })],
+          ...overrides,
+        });
+      const [guest, setGuest] = createSignal(agentGuest());
+      const { container } = render(() => (
+        <table>
+          <tbody>
+            <GuestRow guest={guest()} visibleColumnIds={['name', 'disk']} />
+          </tbody>
+        </table>
+      ));
+      expect(screen.getByTestId('disk-bar')).not.toHaveAttribute('data-status-message');
+      expect(container.querySelector('[data-workload-disk-read-status]')).toBeNull();
+
+      const lastKnown =
+        'Using last known disk stats. The Pulse Agent in this guest stopped reporting.';
+      setGuest(agentGuest({ agentStale: true }));
+      expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-status-message', lastKnown);
+      let notice = container.querySelector('[data-workload-disk-read-status]');
+      expect(notice?.querySelector('[aria-hidden="true"]')).toHaveTextContent('Last known');
+      expect(notice).toHaveAttribute('title', lastKnown);
+      expect(notice?.className).toContain('text-muted');
+
+      setGuest(agentGuest({ agentStale: true, status: 'stopped', diskStatusReason: 'vm-stopped' }));
+      expect(screen.queryByTestId('disk-bar')).toBeNull();
+      notice = container.querySelector('[data-workload-disk-read-status]');
+      expect(notice?.querySelector('[aria-hidden="true"]')).toHaveTextContent('Unavailable');
+      expect(notice).toHaveAttribute(
+        'title',
+        'Guest filesystem stats unavailable while the VM is stopped.',
+      );
+    });
+
+    it("does not announce a silent linked agent's sparkline reading as current", () => {
+      renderGuestRow({
+        guest: makeGuest({
+          diskStatusReason: 'agent-not-running',
+          disksFromAgent: true,
+          agentStale: true,
+        }),
+        visibleColumnIds: ['name', 'disk'],
+        metricDisplayMode: 'sparklines',
+      });
+      expect(
+        screen.getByRole('img', { name: 'test-vm disk usage history, last known 50%' }),
+      ).toBeInTheDocument();
+    });
   });
 
   describe('memory observation provenance', () => {

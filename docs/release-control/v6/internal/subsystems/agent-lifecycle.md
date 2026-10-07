@@ -9085,3 +9085,11 @@ like any other write instead of always reaching its handler. Agent command
 websocket handshakes to `/api/agent/ws` are HTTP/1.1 `GET` requests, the only
 transport its gorilla upgrader serves, and still connect on a demo instance.
 No agent registration, enrolment, install, update or removal path changed.
+
+### Demo mode hides the pprof routes
+
+`internal/api/demo_mode_operations.go` changed only so the demo guard on a
+`DEMO_MODE` instance answers `/debug/pprof` and every path below it with `404`
+for every method. No agent route lives under `/debug/`, so agent registration,
+enrolment, install, update, removal, report ingest and `/api/agent/ws`
+handshakes are unchanged on a demo instance.

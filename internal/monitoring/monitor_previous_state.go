@@ -134,25 +134,32 @@ func previousVMFromView(vm *unifiedresources.VMView) models.VM {
 	instance := vm.Instance()
 	node := vm.Node()
 	vmid := vm.VMID()
-	return models.VM{
-		ID:           makeGuestID(instance, node, vmid),
-		Instance:     instance,
-		Node:         node,
-		VMID:         vmid,
-		Name:         vm.Name(),
-		Type:         "qemu",
-		Status:       vm.RuntimeStatus(),
-		IPAddresses:  vm.IPAddresses(),
-		OSName:       vm.OSName(),
-		OSVersion:    vm.OSVersion(),
-		AgentVersion: vm.AgentVersion(),
-		Lock:         vm.Lock(),
-		Disk: models.Disk{
+	// Only Proxmox's own guest disk reading may be carried forward as last
+	// known. A linked agent's disk that filled in stays the agent's, or the
+	// carry would relabel it as Proxmox's and freeze it over the agent's.
+	var disk models.Disk
+	if !vm.DiskFromLinkedAgent() {
+		disk = models.Disk{
 			Used:  vm.DiskUsed(),
 			Total: vm.DiskTotal(),
 			Free:  max(0, vm.DiskTotal()-vm.DiskUsed()),
 			Usage: vm.DiskPercent(),
-		},
+		}
+	}
+	return models.VM{
+		ID:                makeGuestID(instance, node, vmid),
+		Instance:          instance,
+		Node:              node,
+		VMID:              vmid,
+		Name:              vm.Name(),
+		Type:              "qemu",
+		Status:            vm.RuntimeStatus(),
+		IPAddresses:       vm.IPAddresses(),
+		OSName:            vm.OSName(),
+		OSVersion:         vm.OSVersion(),
+		AgentVersion:      vm.AgentVersion(),
+		Lock:              vm.Lock(),
+		Disk:              disk,
 		NetworkInterfaces: guestNetworkInterfacesFromReadStateView(vm.NetworkInterfaces()),
 		Disks:             guestDisksFromReadStateView(vm.Disks()),
 		DiskStatusReason:  vm.DiskStatusReason(),

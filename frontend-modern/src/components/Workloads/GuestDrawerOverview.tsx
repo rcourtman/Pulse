@@ -16,7 +16,7 @@ import { formatBytes } from '@/utils/format';
 import { getShippedDocUrl } from '@/utils/docsLinks';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import {
-  getWorkloadGuestDiskStatusMessage,
+  getWorkloadGuestDiskRead,
   getWorkloadsGuestProtectionPresentation,
 } from '@/utils/workloadGuestPresentation';
 
@@ -153,44 +153,19 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         props.guest.vmware?.datacenterName ||
         props.guest.vmware?.clusterName,
       );
-    // Rows the linked Pulse agent supplied follow that agent's freshness, not
-    // the Proxmox reason for its own guest reads. A stopped guest has no
-    // current filesystems from either source, with or without the Proxmox
-    // vm-stopped reason, which it gives only for a guest with allocated disk.
-    const vmDiskReason = isGuestDrawerVM(props.guest) ? props.guest.diskStatusReason : undefined;
-    const agentDisks = props.guest.disksFromAgent === true;
-    const agentDisksStopped =
-      agentDisks && (props.guest.status === 'stopped' || vmDiskReason === 'vm-stopped');
-    const diskReason = agentDisks ? undefined : vmDiskReason;
-    const diskReadState = agentDisks
-      ? agentDisksStopped
+    // Rows the linked Pulse agent supplied follow that agent's freshness, the
+    // same rule the workload table's disk cell and History read.
+    const diskRead = getWorkloadGuestDiskRead(props.guest, isGuestDrawerVM(props.guest));
+    const diskReadState =
+      !props.guest.disksFromAgent && props.guest.telemetryAvailability?.disk === false
         ? 'unavailable'
-        : agentLastKnownReason()
-          ? 'last-known'
-          : 'current'
-      : props.guest.telemetryAvailability?.disk === false
-        ? 'unavailable'
-        : diskReason
-          ? diskReason.startsWith('prev-')
-            ? 'last-known'
-            : 'unavailable'
-          : 'current';
+        : diskRead.state;
     const diskRows = (props.guest.disks ?? []).map((disk, index) =>
       buildWorkloadsDiskPresentation(disk, index, props.diskThresholds, diskReadState),
     );
-    const diskStatusMessage = agentDisks
-      ? agentDisksStopped
-        ? isGuestDrawerVM(props.guest)
-          ? getWorkloadGuestDiskStatusMessage('vm-stopped')
-          : 'Filesystem usage is unavailable.'
-        : agentLastKnownReason()
-          ? 'Using last known disk stats. The Pulse Agent in this guest stopped reporting.'
-          : null
-      : diskReason
-        ? getWorkloadGuestDiskStatusMessage(diskReason)
-        : diskReadState === 'unavailable'
-          ? 'Filesystem usage is unavailable.'
-          : null;
+    const diskStatusMessage =
+      diskRead.message ??
+      (diskReadState === 'unavailable' ? 'Filesystem usage is unavailable.' : null);
 
     return compactDetailSections([
       discovery

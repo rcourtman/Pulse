@@ -384,6 +384,14 @@ expose only a raw reason. A same-VM fresh observation withdraws the notice and
 updates values without remounting the row. Permission, disabled-agent and actual
 unavailable cases retain their own explanations.
 
+When a linked Pulse agent's filesystems fill in for a VM with no Proxmox guest
+filesystems (`disksFromAgent`), the reading follows that agent instead of the
+Proxmox reason: current while it reports, last known once it is stale, and
+unavailable once the guest is stopped. `getWorkloadGuestDiskRead` in
+`workloadGuestPresentation.ts` owns that rule for the workload row's disk cell,
+the guest drawer's filesystem rows and its History, so the three cannot
+disagree about one guest; `workloadGuestPresentation.test.ts` pins it.
+
 Verification: `workloadGuestPresentation.test.ts`, the mounted `GuestRow`,
 `StackedDiskBar` and `GuestDrawerOverview.filesystems` regressions,
 and `browser-tests/guest-disk-deferral.cjs` cover the fixed reasons, retained/no

@@ -4,6 +4,7 @@ import {
   getWorkloadsGuestBackupStatusPresentation,
   getWorkloadsGuestBackupTooltip,
   getWorkloadsGuestProtectionPresentation,
+  getWorkloadGuestDiskRead,
   getWorkloadGuestDiskStatusMessage,
   getWorkloadsGuestNetworkEmptyState,
 } from '@/utils/workloadGuestPresentation';
@@ -118,5 +119,64 @@ describe('workloadGuestPresentation', () => {
     expect(getWorkloadGuestDiskStatusMessage('prev-no-filesystems')).toBe(
       'Using last known disk stats. No filesystems found. VM may be booting or using a Live ISO.',
     );
+  });
+
+  it("judges a linked agent's filesystems by that agent, not the Proxmox read reason", () => {
+    const agent = { diskStatusReason: 'agent-not-running', disksFromAgent: true };
+    expect(getWorkloadGuestDiskRead({ ...agent, status: 'running' }, true)).toEqual({
+      state: 'current',
+      message: null,
+      needsAction: false,
+    });
+    expect(
+      getWorkloadGuestDiskRead({ ...agent, status: 'running', agentStale: true }, true),
+    ).toEqual({
+      state: 'last-known',
+      message: 'Using last known disk stats. The Pulse Agent in this guest stopped reporting.',
+      needsAction: false,
+    });
+    // A stopped guest has no current filesystems from either source, with or
+    // without the Proxmox vm-stopped reason.
+    for (const guest of [
+      { ...agent, status: 'stopped', agentStale: true },
+      { ...agent, status: 'running', diskStatusReason: 'vm-stopped' },
+    ]) {
+      expect(getWorkloadGuestDiskRead(guest, true)).toEqual({
+        state: 'unavailable',
+        message: 'Guest filesystem stats unavailable while the VM is stopped.',
+        needsAction: false,
+      });
+    }
+    expect(getWorkloadGuestDiskRead({ disksFromAgent: true, status: 'stopped' }, false)).toEqual({
+      state: 'unavailable',
+      message: 'Filesystem usage is unavailable.',
+      needsAction: false,
+    });
+  });
+
+  it('keeps Proxmox read reasons for its own guest filesystems', () => {
+    expect(getWorkloadGuestDiskRead({ status: 'running' }, true).state).toBe('current');
+    expect(getWorkloadGuestDiskRead({ diskStatusReason: 'prev-vm-locked' }, true)).toEqual({
+      state: 'last-known',
+      message: getWorkloadGuestDiskStatusMessage('prev-vm-locked'),
+      needsAction: false,
+    });
+    expect(getWorkloadGuestDiskRead({ diskStatusReason: 'agent-not-running' }, true)).toEqual({
+      state: 'unavailable',
+      message: getWorkloadGuestDiskStatusMessage('agent-not-running'),
+      needsAction: false,
+    });
+    expect(
+      getWorkloadGuestDiskRead({ diskStatusReason: 'prev-agent-error' }, true).needsAction,
+    ).toBe(true);
+    expect(
+      getWorkloadGuestDiskRead({ diskStatusReason: 'permission-denied' }, true).needsAction,
+    ).toBe(true);
+    // Only a VM carries a Proxmox guest read reason.
+    expect(getWorkloadGuestDiskRead({ diskStatusReason: 'prev-vm-locked' }, false).state).toBe(
+      'current',
+    );
+    // An agent's staleness says nothing about Proxmox's own filesystems.
+    expect(getWorkloadGuestDiskRead({ agentStale: true }, true).state).toBe('current');
   });
 });

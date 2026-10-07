@@ -1007,3 +1007,21 @@ func TestResourceIncidentNativeSeverityJSONContract(t *testing.T) {
 		}
 	}
 }
+
+// Browsers merge agent facets field by field and keep an omitted field, so a
+// resumed agent must send stale=false or it stays marked as stopped reporting.
+func TestAgentDataAlwaysSendsStale(t *testing.T) {
+	for _, stale := range []bool{false, true} {
+		raw, err := json.Marshal(AgentData{AgentID: "agent-1", Stale: stale})
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		var decoded map[string]any
+		if err := json.Unmarshal(raw, &decoded); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if got, ok := decoded["stale"]; !ok || got != stale {
+			t.Fatalf("stale = %v (present %v), want explicit %v in %s", got, ok, stale, raw)
+		}
+	}
+}

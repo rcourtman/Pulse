@@ -383,6 +383,14 @@ func (v VMView) DiskPercent() float64 {
 	return viewMetricPercent(v.r.Metrics, selectMetricsDisk)
 }
 
+// DiskFromLinkedAgent reports whether the selected disk metric is the linked
+// Pulse agent's. It fills in when Proxmox has no guest filesystems of its own,
+// so it is never Proxmox's guest reading.
+func (v VMView) DiskFromLinkedAgent() bool {
+	return v.r != nil && v.r.Metrics != nil && v.r.Metrics.Disk != nil &&
+		v.r.Metrics.Disk.Source == SourceAgent
+}
+
 func (v VMView) NetIn() float64 {
 	if v.r == nil {
 		return 0

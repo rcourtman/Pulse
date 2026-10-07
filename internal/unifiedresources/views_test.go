@@ -2459,3 +2459,19 @@ func TestContainerViewLinkedAgentMemory(t *testing.T) {
 		t.Fatal("nil view has memory")
 	}
 }
+
+func TestVMViewDiskFromLinkedAgentFollowsSelectedMetricSource(t *testing.T) {
+	for _, tc := range []struct {
+		metrics *ResourceMetrics
+		want    bool
+	}{
+		{metrics: &ResourceMetrics{Disk: &MetricValue{Percent: 40, Source: SourceAgent}}, want: true},
+		{metrics: &ResourceMetrics{Disk: &MetricValue{Percent: 40, Source: SourceProxmox}}},
+		{metrics: &ResourceMetrics{Memory: &MetricValue{Percent: 40, Source: SourceAgent}}},
+		{metrics: nil},
+	} {
+		if got := NewVMView(&Resource{Type: ResourceTypeVM, Metrics: tc.metrics}).DiskFromLinkedAgent(); got != tc.want {
+			t.Fatalf("DiskFromLinkedAgent(%+v) = %v, want %v", tc.metrics, got, tc.want)
+		}
+	}
+}

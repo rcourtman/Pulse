@@ -55,10 +55,6 @@ export { GUEST_COLUMNS, VIEW_MODE_COLUMNS } from './guestRowModel';
 export type { GuestRowProps, WorkloadIOEmphasis } from './guestRowModel';
 import { getGuestColumnStyle } from './guestRowModel';
 
-// Disk-read reasons that point at something broken the user can fix, as
-// opposed to a guest that simply has no agent or is not running.
-const DISK_READ_ACTIONABLE_REASONS = new Set(['permission-denied', 'agent-error']);
-
 export function GuestRow(props: GuestRowProps) {
   const [rowActionProps] = splitProps(props, ['onClick']);
   const selectionGuard = createRowTextSelectionGuard();
@@ -83,6 +79,7 @@ export function GuestRow(props: GuestRowProps) {
     discoveryReadinessPresentation,
     diskRead,
     diskThresholds,
+    diskUsageRead,
     diskWrite,
     displayId,
     dockerHostId,
@@ -321,7 +318,9 @@ export function GuestRow(props: GuestRowProps) {
   };
 
   const getDiskStatusTooltip = () => {
-    if (!isVM(props.guest)) return 'Disk stats unavailable';
+    const message = diskUsageRead().message;
+    if (message) return message;
+    if (!isVM(props.guest) || props.guest.disksFromAgent) return 'Disk stats unavailable';
 
     const vm = props.guest as VM;
     return getWorkloadGuestDiskStatusMessage(vm.diskStatusReason);
@@ -329,10 +328,9 @@ export function GuestRow(props: GuestRowProps) {
   // A native title or bar tooltip is not a visible freshness cue on touch,
   // and disappears from the chart's accessible value when the history lens opens.
   const diskReadStatus = createMemo(() => {
-    const guest = props.guest;
-    if (!isVM(guest) || !guest.diskStatusReason) return undefined;
-    const reason = guest.diskStatusReason;
-    const retained = reason.startsWith('prev-');
+    const read = diskUsageRead();
+    if (read.state === 'current') return undefined;
+    const retained = read.state === 'last-known';
     return {
       label: retained
         ? usesCompactTableLayout()
@@ -341,11 +339,11 @@ export function GuestRow(props: GuestRowProps) {
         : usesCompactTableLayout()
           ? 'N/A'
           : 'Unavailable',
-      message: getDiskStatusTooltip(),
+      message: read.message,
       valueLabelContext: retained ? ('last known' as const) : ('current' as const),
       // Most reasons are a setup gap (no guest agent, VM stopped) rather than a
       // fault, so they stay muted; only a broken read the user can fix is amber.
-      needsAction: DISK_READ_ACTIONABLE_REASONS.has(reason.replace(/^prev-/, '')),
+      needsAction: read.needsAction,
     };
   });
   const diskValueLabelContext = (): MetricMiniSparklineValueLabelContext =>
@@ -692,11 +690,7 @@ export function GuestRow(props: GuestRowProps) {
                         aggregateDisk={props.guest.disk}
                         anomaly={diskAnomaly()}
                         thresholds={diskThresholds()}
-                        statusMessage={
-                          isVM(props.guest) && props.guest.diskStatusReason
-                            ? getDiskStatusTooltip()
-                            : undefined
-                        }
+                        statusMessage={diskUsageRead().message ?? undefined}
                       />
                     }
                   >

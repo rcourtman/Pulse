@@ -13,6 +13,7 @@ import {
 } from '@/features/alerts/metricAlertPresentation';
 import { formatBytes, formatPercent, getBackupInfo, type BackupThresholds } from '@/utils/format';
 import {
+  getWorkloadGuestDiskRead,
   getWorkloadGuestDiskStatusMessage,
   getWorkloadsGuestBackupStatusPresentation,
 } from '@/utils/workloadGuestPresentation';
@@ -137,12 +138,13 @@ export const getGuestDrawerDeferredMetrics = (
   guest: Guest,
 ): Record<string, GuestDrawerHistoryDeferredMetric> => {
   const metrics: Record<string, GuestDrawerHistoryDeferredMetric> = {};
-  if (isGuestDrawerVM(guest) && guest.diskStatusReason) {
+  // History judges the aggregate disk metric by the same rule as the
+  // filesystem rows, so a linked agent's reading follows that agent.
+  const disk = getWorkloadGuestDiskRead(guest, isGuestDrawerVM(guest));
+  if (disk.state !== 'current') {
     metrics.disk = {
-      lastKnownValue: guest.diskStatusReason.startsWith('prev-')
-        ? getGuestDrawerDiskUsage(guest)
-        : undefined,
-      message: getWorkloadGuestDiskStatusMessage(guest.diskStatusReason),
+      lastKnownValue: disk.state === 'last-known' ? getGuestDrawerDiskUsage(guest) : undefined,
+      message: disk.message,
     };
   }
   const memory = getGuestDrawerMemoryReading(guest);
@@ -172,7 +174,9 @@ export const getGuestDrawerCurrentMetrics = (guest: Guest): Record<string, numbe
   // A paused filesystem read is not current, even if the snapshot still
   // carries a numeric summary. Retained evidence has its own labelled path.
   const diskUsage =
-    isGuestDrawerVM(guest) && guest.diskStatusReason ? undefined : getGuestDrawerDiskUsage(guest);
+    getWorkloadGuestDiskRead(guest, isGuestDrawerVM(guest)).state === 'current'
+      ? getGuestDrawerDiskUsage(guest)
+      : undefined;
   const finite = (value: number | undefined): number | undefined =>
     typeof value === 'number' && Number.isFinite(value) ? value : undefined;
   return {

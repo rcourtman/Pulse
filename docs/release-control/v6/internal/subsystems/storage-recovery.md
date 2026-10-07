@@ -6933,6 +6933,15 @@ stopped reporting, or answers a lapsed linked agent from its node row. It reads
 only snapshot status and the registry's per-source sightings, and writes
 nothing.
 
+### A linked agent's stale flag and guest disk owner open no storage path
+
+`internal/unifiedresources/types.go` now always sends `AgentData.Stale`, so a
+resumed agent clears its stopped-reporting mark in browsers that merge agent
+facets field by field, and `VMView.DiskFromLinkedAgent` keeps the poller from
+carrying a linked agent's guest disk forward as a Proxmox read. Both describe
+which source's reading is current; no backup, retention, migration or recovery
+path is added or moved.
+
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` no longer exempts every request carrying
@@ -6943,3 +6952,11 @@ allowlist it gets the generic demo `403`, or `404` on a hidden route, and that
 includes config import at `/api/config/import`. HTTP/1.1 websocket handshakes
 are `GET` requests and still connect. No storage, retention, backup, migration
 or recovery path is added or moved.
+
+### Demo mode hides the pprof routes
+
+`internal/api/demo_mode_operations.go` adds the Go runtime profiling family
+(`/debug/pprof` and every path below it, every method) to the public-demo
+hidden routes, so the demo guard on a `DEMO_MODE` instance answers it with
+`404`. That removes a diagnostic read surface on demo instances only; no
+storage, retention, backup, migration or recovery path is added or moved.
