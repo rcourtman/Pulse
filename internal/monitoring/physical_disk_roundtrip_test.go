@@ -809,9 +809,9 @@ func (client *slotDiskPVEClient) GetDisks(context.Context, string) ([]proxmox.Di
 // it: the registry keys the disk on that serial, so the replacement would take
 // over the old disk's canonical resource, and every later poll would copy the
 // borrowed serial forward again. Current Proxmox spells a missing serial as
-// "unknown", which the poller records as reported; an empty serial comes from
-// producers that omit the field, such as the host-agent fallback rows. The
-// fake client below stands in for any of them.
+// "unknown", which the poller records as empty, as it does for producers that
+// omit the field, such as the host-agent fallback rows. The fake client below
+// stands in for any of them.
 func TestPhysicalDiskReplacementInSameSlotDoesNotInheritPreviousSerial(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	const (

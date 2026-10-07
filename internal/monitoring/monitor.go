@@ -560,11 +560,12 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 			return &smartData[matchIndex]
 		}
 
-		// Try to match by WWN (most reliable)
+		// Try to match by WWN (most reliable). PVE and the agent spell one WWN
+		// differently (0x5000c500a1b2c3d4 against smartctl's 5-c50-a1b2c3d4),
+		// so compare the normalized identity, not the reported string.
 		if diskinventory.IsUsableHardwareID(updated[i].WWN) {
 			matched = uniqueMatch(func(candidate models.HostDiskSMART) bool {
-				return diskinventory.IsUsableHardwareID(candidate.WWN) &&
-					strings.EqualFold(candidate.WWN, updated[i].WWN) &&
+				return diskinventory.HardwareIdentityMatch("", updated[i].WWN, "", candidate.WWN) &&
 					diskTopologyCompatible(updated[i].Controller, updated[i].Target, candidate.Controller, candidate.Target)
 			})
 		}
@@ -578,7 +579,12 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 			})
 		}
 
-		// Last resort: match by device path
+		// Last resort: match by device path. A path names a slot, not a disk,
+		// so the row there may describe the slot's previous occupant: the agent
+		// has not reported since the swap, or it went silent and its last rows
+		// are retained. A row whose identity contradicts the disk's is refused,
+		// or it would fill or promote the old serial onto the replacement,
+		// which would then take the old disk's canonical resource and history.
 		if matched == nil {
 			normalizedDevPath := normalizeSMARTDeviceIdentifier(updated[i].DevPath)
 			matched = uniqueMatch(func(candidate models.HostDiskSMART) bool {
@@ -587,6 +593,15 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 					normalizedDiskDev == normalizedDevPath &&
 					diskTopologyCompatible(updated[i].Controller, updated[i].Target, candidate.Controller, candidate.Target)
 			})
+			if matched != nil && hostAgentSMARTIdentityConflicts(updated[i], *matched) {
+				log.Debug().
+					Str("node", updated[i].Node).
+					Str("device", updated[i].DevPath).
+					Str("serial", updated[i].Serial).
+					Str("smartSerial", matched.Serial).
+					Msg("Skipping host agent SMART row whose disk identity contradicts the Proxmox disk at the same path")
+				matched = nil
+			}
 		}
 
 		if matched == nil {
@@ -701,6 +716,40 @@ func diskTopologyCompatible(leftController, leftTarget, rightController, rightTa
 		return false
 	}
 	return true
+}
+
+// hostAgentSMARTIdentityConflicts reports whether a SMART row found only by
+// device path names a different disk than the Proxmox disk at that path.
+// WWNs are compared for every disk; serials only where both producers read
+// the drive's own serial (hostAgentSMARTSerialComparable). Any other Proxmox
+// serial still counts toward agreement.
+func hostAgentSMARTIdentityConflicts(disk models.PhysicalDisk, smart models.HostDiskSMART) bool {
+	if diskinventory.HardwareIdentityMatch(disk.Serial, disk.WWN, smart.Serial, smart.WWN) {
+		return false
+	}
+	serial := ""
+	if hostAgentSMARTSerialComparable(disk, smart) {
+		serial = disk.Serial
+	}
+	return diskinventory.HardwareIdentityConflict(serial, disk.WWN, smart.Serial, smart.WWN)
+}
+
+// hostAgentSMARTSerialComparable reports whether the Proxmox serial was read
+// from the drive itself, as smartctl's is. Proxmox takes the serial from udev:
+// for an NVMe namespace that is the controller's serial, and for a disk
+// presented with SCSI vendor "ATA" (libata, or a SAS HBA's SCSI-ATA
+// translation) udev's ata_id reads it from IDENTIFY. Any other disk's Proxmox
+// serial may be a SAS address or SCSI designator from VPD page 0x83 (#1595),
+// or a USB bridge's own serial.
+func hostAgentSMARTSerialComparable(disk models.PhysicalDisk, smart models.HostDiskSMART) bool {
+	agentType := strings.ToLower(strings.TrimSpace(smart.Type))
+	switch strings.ToLower(strings.TrimSpace(disk.Type)) {
+	case "nvme":
+		return agentType == "nvme"
+	case "usb", "sas":
+		return false
+	}
+	return agentType == "sata" && strings.EqualFold(strings.TrimSpace(disk.Vendor), "ATA")
 }
 
 func shouldPromoteHostAgentSerial(disk models.PhysicalDisk, smart models.HostDiskSMART) bool {

@@ -1508,6 +1508,51 @@ later coarse healthy value and lets explicit SMART endurance replace
 contradictory Proxmox wearout. Missing
 permission, ambiguous identity, standby, and absent SMART fields remain
 neutral rather than borrowing telemetry from another disk.
+The device-path match is the last resort, and a path names a slot, not a
+disk: the row there may describe the slot's previous occupant, because the
+agent has not reported since a swap or went silent and keeps its last rows.
+`mergeHostAgentSMARTIntoDisks` refuses such a row when its identity
+contradicts the Proxmox disk's (`diskinventory.HardwareIdentityConflict`):
+nothing agrees across serial and WWN, and a field both producers report like
+for like disagrees. WWNs are compared for every disk. Serials are compared
+only where Proxmox's serial is the drive's own, as smartctl's is: a Proxmox
+disk typed `nvme` against an NVMe row, and one presented with SCSI vendor
+`ATA` (libata, or a SAS HBA's SCSI-ATA translation, where udev's `ata_id`
+reads IDENTIFY) and not typed `usb` or `sas` against an ATA row. Any other
+Proxmox serial may be a SAS address or SCSI designator (#1595) or a USB
+bridge's own serial, so it counts toward agreement only; a USB bridge that
+does expose the drive's serial is excluded too unless it reports vendor `ATA`.
+Reporter spellings are not disagreement: serials compare on letters and digits
+only (udev writes whitespace as underscores), a T10 vendor designator for an
+ATA drive (`ATA`, the model, then the serial) is no evidence against the serial
+it ends with, and a WWN that begins with the other is no evidence (udev's `ID_WWN` keeps only
+the first 64 bits of a 128-bit NAA 6 identifier). The refusal comes after the
+unique-path check, so a second row on the path still makes it ambiguous. The
+WWN match itself compares through `HardwareIdentityMatch`, so the agent's
+`5-c50-a1b2c3d4` spelling finds the Proxmox `0x5000c500a1b2c3d4` disk. The
+registry's SAS path join applies the same WWN refusal (unified-resources).
+Proxmox's disk inventory (`PVE::Diskmanage`) writes the literal `unknown` for
+a serial or WWN udev cannot read; the poller records it as empty, so the
+serial's collection state reads `missing` and the agent's serial or WWN can
+fill it, where the placeholder used to read as a collected serial. Retained
+evidence carries a previous serial only when it is a usable identity, so a
+record from before this change cannot restore the placeholder. Identity keys
+already ignored the placeholder, so the empty value keys the same; a disk whose
+serial the linked agent now fills keys its Proxmox SMART samples on that serial
+instead of its WWN or path, as the agent's own samples already were. Before the
+guard, the retained row of a swapped-out disk filled or promoted the old serial
+onto the replacement, which keyed it to the old disk's canonical resource and
+history, and lent it the old disk's temperature and failed health
+(`TestHostAgentSMARTRowForSwappedOutDiskDoesNotLendItsIdentity`,
+`TestHostAgentSMARTMergeRefusesPathMatchAcrossContradictingIdentity`,
+`TestRegistrySASPathJoinRefusesContradictingWWN`,
+`TestProxmoxUnknownDiskIdentityIsRecordedAsUnreported`,
+`TestHardwareIdentityConflict`). Without comparable evidence there is nothing
+to act on: a row without a usable serial or WWN still matches its path, and a
+replacement whose serial is not comparable (SAS, SCSI, USB) still takes a
+stale row's identity when either record lacks a WWN. The registry's seeded
+source mapping, which a restart reuses by the slot-shaped Proxmox source ID,
+does not apply this guard yet.
 Retaining evidence a disk poll could not collect follows the same identity
 rule. `previousPhysicalDiskEvidence` looks up the earlier record by serial, then
 by WWN, each compared through `diskinventory.HardwareIdentityMatch` against
@@ -1529,10 +1574,9 @@ serial, which keyed it to the old disk's canonical resource and SMART metric
 series, so every later poll carried the borrowed serial forward
 (`TestPhysicalDiskReplacementInSameSlotDoesNotInheritPreviousSerial`,
 `TestPreviousPhysicalDiskEvidenceRejectsSlotMatchAcrossConflictingIdentity`).
-This lookup is the only place the rule applies: a replacement that reports no
-usable serial or WWN cannot be told apart from the same disk and still
-inherits, and the linked agent's SMART merge, which runs first, can still fill
-or promote a serial from a stale SMART row it matched by device path.
+A replacement that reports no usable serial or WWN cannot be told apart from
+the same disk and still inherits. The linked agent's SMART merge, which runs
+first, refuses a contradicting device-path row on its own terms (above).
 Negative percentage-used counters remain unknown; values above 100 clamp to
 exhausted before deriving remaining life, so invalid or over-limit controller
 data cannot wrap into a fabricated healthy value.
