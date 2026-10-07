@@ -14,7 +14,10 @@ function renderGuide(name: string): HTMLElement {
     process.env.PULSE_PROXMOX_IDENTITY_GUIDE_INPUT_DIRECTORY ??
     path.join(repoRoot, 'frontend-modern/public/docs');
   const article = document.createElement('article');
-  article.innerHTML = renderDocMarkdown(readFileSync(path.join(directory, `${name}.md`), 'utf8'), name);
+  article.innerHTML = renderDocMarkdown(
+    readFileSync(path.join(directory, `${name}.md`), 'utf8'),
+    name,
+  );
   return article;
 }
 
@@ -29,11 +32,13 @@ function sectionAt(article: HTMLElement, fragment: string): HTMLElement {
   return section;
 }
 
-const identitySection = (): HTMLElement => sectionAt(renderGuide('TROUBLESHOOTING'), identityFragment);
-const prose = (section: HTMLElement): string => (section.textContent ?? '').replace(/\s+/g, ' ').trim();
+const identitySection = (): HTMLElement =>
+  sectionAt(renderGuide('TROUBLESHOOTING'), identityFragment);
+const prose = (section: HTMLElement): string =>
+  (section.textContent ?? '').replace(/\s+/g, ' ').trim();
 
 describe('shipped cross-installation Proxmox identity guidance', () => {
-  it('distinguishes intended multi-installation support from cosmetic names and a verified repair', () => {
+  it('separates multi-installation support, cosmetic names and repair', () => {
     const article = renderGuide('CONFIGURATION');
     const section = sectionAt(article, '#multiple-proxmox-installations');
     const text = prose(section);
@@ -56,29 +61,36 @@ describe('shipped cross-installation Proxmox identity guidance', () => {
       'Agent-backed Docker monitoring',
     ]);
     for (const row of rows) expect(row.querySelectorAll('td')).toHaveLength(3);
-    expect(prose(section)).toContain('One restored view does not establish that the others recovered');
+    expect(prose(section)).toContain(
+      'One restored view does not establish that the others recovered',
+    );
     expect(prose(rows[0])).toContain("that installation's own Proxmox view");
-    expect(prose(rows[1])).toContain('owning installation, guest type/VMID, datastore, namespace and backup time');
+    expect(prose(rows[1])).toContain(
+      'owning installation, guest type/VMID, datastore, namespace and backup time',
+    );
     expect(prose(rows[2])).toContain('Last seen and Identity evidence');
     expect(prose(rows[2])).toContain('Recent agent contact or a Healthy badge does not prove');
   });
 
-  it('takes configuration, backup and generic agent-help entry points to the same real heading', () => {
+  it('takes configuration, backup and agent help to the same real heading', () => {
     for (const name of ['CONFIGURATION', 'PBS']) {
       const link = renderGuide(name).querySelector<HTMLAnchorElement>(
         `a[href="/docs/TROUBLESHOOTING${identityFragment}"]`,
       );
       expect(link?.textContent).toBe('cross-installation identity checks');
-      expect(renderGuide('TROUBLESHOOTING').querySelector(new URL(link!.href).hash)?.textContent).toBe(
-        'Monitoring is mixed between Proxmox installations',
-      );
+      expect(
+        renderGuide('TROUBLESHOOTING').querySelector(new URL(link!.href).hash)?.textContent,
+      ).toBe('Monitoring is mixed between Proxmox installations');
     }
-    const agent = sectionAt(renderGuide('TROUBLESHOOTING'), '#agent-fleet-update-or-identity-issue');
+    const agent = sectionAt(
+      renderGuide('TROUBLESHOOTING'),
+      '#agent-fleet-update-or-identity-issue',
+    );
     expect(agent.querySelector(`a[href="${identityFragment}"]`)).not.toBeNull();
     expect(prose(agent)).toContain('not an agent update or re-enrolment command');
   });
 
-  it('reaches existing configuration, PBS and guest safety guidance rather than dead fragments', () => {
+  it('reaches existing configuration, PBS and guest safety headings', () => {
     const section = identitySection();
     for (const [name, fragment] of [
       ['CONFIGURATION', '#multiple-proxmox-installations'],
@@ -89,18 +101,24 @@ describe('shipped cross-installation Proxmox identity guidance', () => {
       expect(renderGuide(name).querySelector(fragment)).not.toBeNull();
     }
     expect(prose(section)).toContain('An OK backup does not prove thaw');
-    expect(prose(section)).toContain('a frozen or unresponsive guest needs the separate backup safety procedure');
+    expect(prose(section)).toContain(
+      'a frozen or unresponsive guest needs the separate backup safety procedure',
+    );
   });
 
   it('offers independent native readings before asking for a minimal report', () => {
     const section = identitySection();
     const paragraphs = [...section.querySelectorAll('p')];
-    const workaround = paragraphs.findIndex((p) => prose(p).startsWith('While attribution is uncertain'));
+    const workaround = paragraphs.findIndex((p) =>
+      prose(p).startsWith('While attribution is uncertain'),
+    );
     const report = paragraphs.findIndex((p) => prose(p).startsWith('For a report'));
     expect(workaround).toBeGreaterThanOrEqual(0);
     expect(report).toBeGreaterThan(workaround);
     expect(prose(paragraphs[workaround])).toContain("Docker host's existing runtime view");
-    expect(prose(paragraphs[workaround])).toContain('Do not make backup, restore or workload changes');
+    expect(prose(paragraphs[workaround])).toContain(
+      'Do not make backup, restore or workload changes',
+    );
     expect(prose(paragraphs[report])).toContain('which of the three symptoms remain');
     expect(prose(paragraphs[report])).toContain('expected versus displayed origin');
   });
@@ -109,14 +127,16 @@ describe('shipped cross-installation Proxmox identity guidance', () => {
     const text = prose(identitySection());
     expect(text).toContain('consistent placeholders such as site-A, site-B, node-X and guest-100');
     expect(text).toContain('say explicitly when the native names or VMIDs are equal');
-    expect(text).toContain('Keep actual addresses, hostnames, connection IDs and machine identities private');
+    expect(text).toContain(
+      'Keep actual addresses, hostnames, connection IDs and machine identities private',
+    );
     expect(text).toContain('Do not share a full Agent Doctor report');
     for (const withheld of ['API response', 'HAR export', 'token', 'unredacted screenshot']) {
       expect(text).toContain(withheld);
     }
   });
 
-  it('uses existing evidence without destructive recovery, live probes or incident recreation', () => {
+  it('avoids destructive recovery, live probes and incident recreation', () => {
     const section = identitySection();
     expect(section.querySelector('pre')).toBeNull();
     const text = prose(section);
