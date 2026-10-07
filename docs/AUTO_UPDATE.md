@@ -21,7 +21,7 @@ For v5, PVE, disabled, or failed agent updates, use **Agent Doctor** at
 | **ProxmoxVE LXC** | ✅ Yes | In-app update button |
 | **Systemd Service** | ✅ Yes | In-app update button |
 | **Docker** | ❌ Manual | Pull new image |
-| **Source Build** | ❌ Manual | Git pull + rebuild |
+| **Source Build** | ❌ Manual | Build, then install through the existing deployment procedure |
 
 ## Using One-Click Updates
 
@@ -62,7 +62,12 @@ In **Settings → System → Updates**:
 | Setting | Description |
 |---------|-------------|
 | **Update Channel** | Stable (recommended for production) or Pre-release (opt-in preview) |
-| **Auto-Check** | Enable or disable automatic updates |
+| **Automatic Stable Updates** | Allow unattended stable updates on supported host installations with an installed update timer |
+
+The update timer must already be installed and enabled for unattended updates.
+Saving the UI preference does not provision or start a missing timer. Check the
+existing deployment rather than editing `system.json` or creating another
+update service to make the preference take effect.
 
 ### Stored Settings (system.json)
 
@@ -112,12 +117,37 @@ sudo /bin/update
 
 ### Source Build
 
-```bash
-cd /path/to/pulse
-git pull
-make build
-sudo systemctl restart pulse
-```
+`make build` writes a `pulse` binary in the source checkout. It does not install
+that binary into the running service's executable path. Restarting the service
+after a build can therefore restart the old installed binary; if the service
+runs directly from the checkout, building there can instead overwrite its live
+executable. Do not build in the active installation directory.
+
+For a production update, prefer the exact signed release and the
+[existing-installation update procedure](INSTALL.md#-updates).
+Keep private Pro installations on their private runtime; a public source build
+is not a replacement for it.
+
+If you intentionally maintain a source-built deployment:
+
+1. Select the intended source tag or commit explicitly in a separate build
+   checkout, preserving local changes. A moving `main` branch is development
+   source, not the latest published stable release.
+2. Use that checkout's declared toolchain and locked dependencies. Build and
+   check the resulting binary's version before stopping the running service;
+   a successful build alone is not an installed update.
+3. Install through your existing deployment procedure, preserving its service
+   identity, executable path, configuration, credentials and data. Stage the
+   replacement separately; do not copy onto a running executable or remove
+   the previous binary and recovery snapshots first. If the active executable
+   path or recovery procedure is unknown, stop before changing the service.
+4. Restore only a service that was active before the update, then confirm the
+   running version, ordinary collection and notification delivery. Retain the
+   previous binary and state backup until recovery is verified; a restart or
+   version check alone does not establish healthy monitoring.
+
+Do not pull, rebuild or restart just to reproduce an update failure. Follow
+[update preparation and recovery limits](DEPLOYMENT_MODELS.md#updates-by-model) before another attempt.
 
 ## Rollback
 
