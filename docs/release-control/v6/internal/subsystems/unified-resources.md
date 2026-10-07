@@ -3394,10 +3394,14 @@ this health-state projection: it must derive counts only from the resources
 accessor already available to the summary state, not from a separate API call or
 a re-projection of websocket state outside the shared summary pipeline.
 
-`resourceBadgePresentation.ts` now owns the Infrastructure table system
-identity resolver. That resolver must prefer provider/API platform identity,
-then reported host OS or appliance identity, before falling back to Docker or
-other runtime capability labels.
+`resourceBadgePresentation.ts` owns the canonical system identity resolver,
+`getInfrastructureSystemIdentityBadges(...)`, which feeds the resource drawer's
+header badges and, through `getDockerHostSystemBadge(...)` in
+`frontend-modern/src/features/docker/dockerPageModel.ts` (which drops
+runtime-only Docker/Podman labels), the Docker hosts table's System column.
+That resolver must prefer provider/API platform
+identity, then reported host OS or appliance identity, before falling back to
+Docker or other runtime capability labels.
 
 This subsystem now sits under the dedicated core monitoring runtime lane so
 canonical resource identity, discovery normalization, and platform-runtime
@@ -4006,16 +4010,23 @@ across backend clone/merge and frontend transport. The owning resource remains
 the canonical `app-container`; the TrueNAS facet explains the platform-native
 app shape, and Docker metadata remains secondary runtime compatibility rather
 than the source of truth for the TrueNAS overview.
-That same infrastructure focus boundary now also owns deliberate drawer reveal.
-When an infrastructure row opens inline detail on the same route, the page must
-tag that detail with the canonical active resource ID. Direct row toggles that
-already have the row in view must capture the current `.app-scroll-shell`
-position through `frontend-modern/src/utils/appShellScrollRestoration.ts`, so
-the remounted root shell in `frontend-modern/src/App.tsx` can stay anchored,
-and then still hand off to the shared summary-table/contextual-focus helpers
-when the opened drawer would otherwise fall below the fold. That reveal must
-scroll only enough of the infrastructure table to keep the row header plus the
-start of the detail visible, not leave the drawer clipped and not hard-center
+Deliberate drawer reveal after a same-route selection write is owned by the
+Workloads table
+(`frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts`,
+governed in `performance-and-scalability`). Platform resource tables open their
+inline drawer through local component state, most through
+`createPlatformResourceDetailState(...)` in
+`frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
+while the Docker hosts and Proxmox nodes tables keep their own selection
+signal, and write no route state. An infrastructure table that moves drawer selection
+into route state must tag the opened detail with the canonical active resource
+ID; direct toggles of a row already in view must capture the current
+`.app-scroll-shell` position through
+`frontend-modern/src/utils/appShellScrollRestoration.ts`, so the remounted root
+shell in `frontend-modern/src/App.tsx` stays anchored, and then hand off to the
+shared summary-table/contextual-focus helpers when the opened drawer would fall
+below the fold. That reveal scrolls only enough to keep the row header plus the
+start of the detail visible, never leaving the drawer clipped or hard-centering
 the selected row.
 That same unified-resource boundary now also owns stored metrics-target
 continuity for provider-backed resources. When registry rebuild cannot derive a
@@ -4650,11 +4661,10 @@ The frontend now also consumes those facet reads through
 drawer, which keeps the presentation surface aligned with the governed API
 contract instead of rebuilding the relationship and timeline inline.
 The canonical routing owner now also lives in
-`frontend-modern/src/routing/resourceLinks.ts`, including the
-workload-to-infrastructure href builder used by Workloads row and drawer
-consumers. Future workload-to-resource navigation changes must extend through
-that shared routing contract instead of reintroducing workload-local path
-builders.
+`frontend-modern/src/routing/resourceLinks.ts`. Its workload-to-infrastructure
+href builder was retired with the legacy `/infrastructure` route, so future
+workload-to-resource navigation must extend that shared routing contract
+instead of reintroducing workload-local path builders.
 That same shared routing boundary now also owns the canonical Patrol
 destination used by cross-surface findings and drill-down links. Shared
 dashboard, alert, and settings referrals may target `/patrol` through
@@ -4672,9 +4682,10 @@ resolve the deep-link source from the canonical merged source set before
 falling back to raw `platformType`, so TrueNAS-backed hybrid systems do not
 lose their storage context just because agent telemetry is also present.
 That same routing contract now also owns workload platform scoping without
-restoring the retired `/workloads` top-level route. Shared workloads links,
-dashboard URL-sync state, and infrastructure drill-down helpers must preserve
-`platform=<owned-source-key>` for API-backed workloads such as TrueNAS
+restoring the retired `/workloads` top-level route. Workloads URL-sync state,
+and any workload link built through the shared `buildWorkloadsRouteSearch(...)`
+helper, must preserve `platform=<owned-source-key>` for API-backed workloads
+such as TrueNAS
 app-containers instead of collapsing those routes back to generic agent or
 Docker-only semantics when host telemetry is also present. Runtime-local
 filters like `agent` or cluster context may still be added as secondary scope,
@@ -5072,25 +5083,20 @@ block entirely.
 The shared frontend resource identity helper now owns that policy-aware
 display contract, so infrastructure surfaces that ask for the preferred
 resource label no longer need to re-encode the governed summary boundary by
-hand. Settings quick-picks, infrastructure selectors, and the connected-
-infrastructure / monitored-system projections now all stay on that same
-preferred-label helper instead of carrying a separate raw-name fallback fork.
+hand. Provider-bound frontend labels, such as Assistant chat resource labels
+and organization sharing, stay on that same preferred-label helper instead of
+carrying a separate raw-name fallback fork. Operator-local pickers such as the
+Settings `ResourcePicker` use `getPreferredInfrastructureDisplayName(...)` on
+purpose, under the operator-local resource search obligation above.
 That same helper also owns platform-id redundancy suppression for
 infrastructure drawers, so surfaces only render platform IDs when they add
 identity context beyond the canonical display name or hostname instead of
 repeating the same identifier chrome in both runtime and identity sections.
-The shared workloads-link helper now also uses that preferred-label helper
-for Kubernetes-cluster navigation fallbacks, so drawer/table navigation
-context stays inside the same governed resource-label boundary instead of
-repeating a raw display-name fork.
-That same shared workloads-link path now also owns top-level TrueNAS system
-handoffs to the canonical app-container workloads route, so infrastructure
-drawers and related-link surfaces do not strand canonical `truenas` resources
-on infrastructure-only navigation while API-backed apps already exist in the
-shared workloads model. That same helper must also honor merged
-`agent`+`truenas` source sets for top-level systems, so hybrid TrueNAS
-surfaces keep the same workload handoff even when the resource shape presents
-through the canonical host path instead of a raw `type='truenas'` row.
+The shared workloads-link helper, which labelled Kubernetes-cluster
+navigation fallbacks and handed top-level TrueNAS systems to the workloads
+route, was retired with the drawer's related-links injection described above.
+New drawer or table links follow the local operator identity rule for
+infrastructure links and land inside the owning platform page.
 The resource drawer's Kubernetes namespace and deployment tabs use the
 canonical cluster-name helper for backend fetch keys, keeping lookup identity
 separate from the governed display-label contract.
@@ -5128,10 +5134,12 @@ cluster name, namespace, or surface-local aliases.
 The drawer's discovery mapper also reuses that helper for pod fallback agent
 IDs, so the resource-detail path and the Workloads path stay aligned on the
 same cluster-name source of truth.
-The workload projection and workloads-link route helpers also share
-the same Kubernetes context prefix helper in the shared agent-resource
-layer, so pod grouping and cluster navigation keep the same cluster-context
-prefix before any surface-specific display fallback is applied.
+The workload projection and the resource drawer also share the Kubernetes
+context helper `getPreferredResourceKubernetesContext(...)` in
+`frontend-modern/src/utils/agentResources.ts`, directly in `useWorkloads` and
+through `getPreferredResourceClusterName(...)` in the drawer, so pod grouping
+and drawer cluster context keep the same cluster-context prefix before any
+surface-specific display fallback is applied.
 The unified-resource projection also reuses that same prefix helper for
 projected Kubernetes `clusterId`, so the shared resource store stays aligned
 with the Workloads and detail surfaces on the same canonical cluster-context
@@ -5397,14 +5405,14 @@ owners instead of rebuilding ad hoc platform-data parsing or action-target
 fallback logic inside alerts, settings, recovery, AI, or infrastructure-local
 state owners.
 Those runtime adapters must preserve the same operator-facing local identity
-boundary as the infrastructure tables and selectors: node, PBS, and PMG view
+boundary as the platform tables: node, PBS, and PMG view
 models keep canonical local instance labels for summary rows, drawers, and
 settings selectors, while governed summaries remain available for policy/detail
 surfaces rather than replacing per-instance operator identity.
 `ResourceFacetSummary` now consumes the shared
 `frontend-modern/src/utils/resourceChangePresentation.ts` label helper for
 canonical change kinds, source types, and adapter provenance, so the chip
-wording stays aligned across table, drawer, and intelligence surfaces.
+wording stays aligned with the drawer's recent-change cards and timeline.
 Timeline cards in that drawer surface change metadata when it is present, so
 the history view preserves the richer provenance already carried by the
 unified-resource model instead of flattening those fields away.
@@ -5414,14 +5422,17 @@ and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.ts
 cards from the Patrol page, resource drawer, and problem-resource dashboard
 panels, so canonical resource-filter path construction stays owned by the
 shared summary cards rather than being duplicated per surface.
-The unified resource table now also supplies a canonical resource-label
-resolver into the resource drawer, so related-resource timeline chips can use
-the same governed display labels as the table without adding a new
-detail-local lookup path.
+Platform tables supply the resource-label resolver to the resource drawer
+through `PlatformResourceDetailTableRow`. `createPlatformResourceLabelResolver(...)`
+in `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
+resolves an ID against the page's own resources through
+`getPreferredInfrastructureDisplayName(...)`, so related-resource timeline
+chips show the operator-local display name rather than a raw ID, without adding
+a detail-local lookup path. A table that passes no resolver leaves those chips
+on the raw resource ID.
 The resource drawer now also passes that same resolver into the shared
-correlation summary, so dependency and dependent chips stay on governed
-labels in the investigation path while the AI summary page keeps its broader
-raw-ID fallback.
+correlation summary, its only consumer, so dependency and dependent chips stay
+on those labels in the investigation path.
 The same timeline and facet-bundle reads now also accept governed `kind` and
 `sourceType` filters, plus a governed `sourceAdapter` filter for adapter-level
 provenance drill-down, so history can narrow by canonical change class and
@@ -5670,12 +5681,12 @@ because the legacy backend resource projection leaves `platformType` empty on
 several canonical resource types; the helper falls back to the resource's
 `sources` array via the existing source-platform normalization so mock
 fixtures and live backends produce the same client-side platform grouping.
-That same boundary also owns the infrastructure table's operator-facing system
-identity vocabulary. `frontend-modern/src/utils/resourceBadgePresentation.ts`,
-`frontend-modern/src/components/Infrastructure/resourceBadges.ts`, and the
-unified resource table sections may preserve full merged-source detail in
-tooltips and accessibility metadata, but visible table headers, sort keys, and
-row badges must answer what system the operator is looking at. Provider/API
+That same boundary also owns the operator-facing system identity vocabulary.
+`frontend-modern/src/utils/resourceBadgePresentation.ts` and its consumers, the
+Docker hosts table's System column through `getDockerHostSystemBadge(...)` and
+the resource drawer header, may preserve full merged-source detail in tooltips
+and accessibility metadata, but visible headers, sort keys, and badges must
+answer what system the operator is looking at. Provider/API
 platforms such as Proxmox, TrueNAS, VMware, and Kubernetes outrank collection
 methods; reported agent OS or appliance identity such as Unraid or Ubuntu
 outranks a generic container-runtime capability; and the shared generic source
@@ -5968,8 +5979,8 @@ hydration and unsupported filtered queries, but canonical live freshness for
 supported resource snapshots must flow from websocket `state.resources`
 instead of layering confirmatory REST refresh loops on top of already-owned
 resource updates.
-Shared infrastructure consumers such as the unified resource table and detail
-drawer must present that owned metadata through shared helpers instead of
+Shared infrastructure consumers such as platform tables and the resource
+detail drawer must present that owned metadata through shared helpers instead of
 reconstructing privacy posture from display names, source types, or other
 incidental runtime hints.
 
