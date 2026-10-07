@@ -1,6 +1,9 @@
 # Upgrade to Pulse v5
 
-This is a practical guide for upgrading an existing Pulse install to v5.
+This historical guide covers the v4-to-v5 transition. For an upgrade to a
+current release, follow [Updating Pulse](AUTO_UPDATE.md) and the
+[current installation and recovery guidance](INSTALL.md); do not downgrade
+to v5 to follow this page.
 
 ## Before You Upgrade
 
@@ -50,10 +53,20 @@ helm upgrade pulse pulse/pulse -n pulse
 
 ### Bootstrap token on fresh auth setup
 
-If you reset auth (for example by deleting `.env`), Pulse may require a bootstrap token before you can complete setup.
+An upgrade is not a reason to reset authentication. **Do not delete `.env` or
+repeat first-time setup to recover an existing login.** Follow
+[password recovery](TROUBLESHOOTING.md#i-forgot-my-password), preserving the
+existing configuration and data.
+
+A bootstrap token is for an installation that genuinely needs initial setup,
+not a replacement for an existing password. Retrieve it locally only when the
+setup screen asks for it:
 
 - Docker: `docker exec pulse /app/pulse bootstrap-token`
 - systemd/LXC: `sudo pulse bootstrap-token`
+
+Keep the token private and enter it in the setup screen; do not post it in a
+report or put it in a URL.
 
 ### Sensor proxy removal
 
@@ -89,25 +102,36 @@ Alternative option:
 
 ### Backups not showing (PVE)
 
-If local PVE backups aren't appearing in Pulse, your API token may be missing the `PVEDatastoreAdmin` permission required for backup visibility.
+An empty backup table does not establish a permission failure. Pulse's server
+reads PVE backup inventory through the saved Proxmox API connection; a working
+host agent does not prove that this separate collection is current.
 
-This can happen if:
-- You upgraded from v4 (older setup scripts didn't include this permission)
-- You set up nodes via the unified agent before v5.1.x (the agent wasn't granting this permission)
-- You created the API token manually without the storage permission
+1. Compare an **existing** archive in native PVE with **Proxmox → Backups →
+   By date**, retaining its node, storage, guest type/ID and time. Check the
+   selected connection and filters. Direct PBS and PVE passthrough are distinct
+   sources, and Coverage posture is not the same as archive presence. A failed
+   or partial read is not an empty inventory.
+2. Retain the existing collection status, original redacted error and time.
+   Connection liveness and a successful connection test do not establish backup
+   freshness. Do not run another backup, restore, guest-agent probe or restart
+   just to obtain evidence. An OK backup task does not prove guest thaw; follow
+   the [backup safety precaution](VM_DISK_MONITORING.md#backup-safety).
+3. If a request was rejected, have the Proxmox administrator check the **actual
+   rejected endpoint**, installed PVE version and configured service user/token.
+   With privilege separation, both user and token ACLs must permit that request
+   at the relevant scope and inheritance. Authentication failure is not proof
+   of a missing storage role, and audit-only access is not proof of access to
+   every storage-content endpoint. Do not grant blanket storage-administrator
+   access, disable privilege separation or substitute an administrator token
+   merely because backups are missing.
 
-**Quick fix** (run on each Proxmox host):
-```bash
-pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin
-pveum aclmod /storage -token 'pulse-monitor@pve!<token-name>' -role PVEDatastoreAdmin
-```
-Replace `pulse-monitor@pve!<token-name>` with the full token ID shown in Pulse,
-for example `pulse-monitor@pve!pulse-example`. Privilege-separated PVE tokens
-need the storage ACL on the token as well as the service user.
+**Do not delete the monitored node, remove registration state or rerun setup as
+a diagnostic.** Setup can rotate an existing API token and change permissions.
+Preserve the connection, credentials, registration state and backup/history data.
+Make any evidenced repair through normal maintenance outside backups, then
+observe ordinary polling rather than repeating **Test Connection**.
 
-**Alternative** (re-run setup):
-1. Delete the node from Pulse Settings
-2. Re-run the setup (either the UI-generated script or agent with `--enable-proxmox`)
-3. The new token will have correct permissions
-
-Note: The "re-run setup" option only works on v5.1.x or later, which includes the fix for agent-based setups.
+Use the [complete missing-PVE-backup checks](UNIFIED_AGENT.md#pve-backups-not-showing-recovery)
+and [Proxmox permission guidance](TROUBLESHOOTING.md#check-permissions-proxmox).
+Keep token secrets, full ACL listings and private infrastructure details out of
+public reports; follow [Getting Help](TROUBLESHOOTING.md#-getting-help).
