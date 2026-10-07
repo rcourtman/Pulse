@@ -41,7 +41,12 @@ while time.monotonic() < deadline:
             raise
         if not chunk: break
         output += chunk
-        if output.endswith(b"(paste at this prompt, not in the command): ") and not sent:
+        # The interactive shell also echoes the copied command, which contains
+        # this prompt literal. A PTY read may end there before the command has
+        # even run. Never deliver a credential while terminal echo is enabled:
+        # the real bootstrap disables it before printing the input prompt.
+        silent = not (termios.tcgetattr(tty_watch)[3] & termios.ECHO)
+        if output.endswith(b"(paste at this prompt, not in the command): ") and silent and not sent:
             os.write(master, (p["input"] + "\n").encode())
             sent = True
             if history: os.write(master, b"exit\n")
@@ -379,6 +384,47 @@ func TestPrivateBootstrapInteractiveHistoryContainsCommandButNotToken(t *testing
 	if strings.Contains(string(hist), token) || strings.Contains(string(out), token) {
 		t.Fatal("silent input entered shell history or terminal output")
 	}
+}
+
+// A complete, matching prompt printed before private input is ready must not
+// release the fixture's credential. This makes the echoed-command chunk race
+// deterministic, without relaxing the real output/history/argv leak checks.
+func TestPrivateBootstrapPTYWaitsForSilentPrompt(t *testing.T) {
+	root, env := bootstrapFixture(t, recordingInstaller)
+	token := strings.Repeat("g", 32)
+	command := BuildProxmoxAgentInstallCommand(AgentInstallCommandOptions{BaseURL: "https://pulse.example", Token: token, InstallType: "pve", IncludeInstallType: true})
+	prompt := "Pulse agent token (paste at this prompt, not in the command): "
+	// The fixture sees a prompt-shaped write while ECHO is still enabled, then
+	// the actual bootstrap downloads/preflights and owns the private prompt.
+	command = "printf %s " + posixShellQuote(prompt) + "; sleep 0.2; " + command
+	history := filepath.Join(root, "shell-history")
+	payload, err := json.Marshal(map[string]string{"command": command, "input": token, "history": history})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("python3", "-c", bootstrapPTYRunner)
+	cmd.Stdin = strings.NewReader(string(payload))
+	cmd.Env = append(os.Environ(), env...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("private prompt bootstrap: %v\n%s", err, out)
+	}
+	hist, err := os.ReadFile(history)
+	if err != nil || !strings.Contains(string(hist), command) {
+		t.Fatal("history control did not record the copied command")
+	}
+	args, err := os.ReadFile(filepath.Join(root, "argv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), token) || strings.Contains(string(hist), token) || strings.Contains(string(args), token) {
+		t.Fatal("PTY fixture sent credential before the silent prompt")
+	}
+	captured, err := os.ReadFile(filepath.Join(root, "captured-token"))
+	if err != nil || string(captured) != token {
+		t.Fatal("private prompt did not receive the complete credential")
+	}
+	assertContainerBootstrapCleanup(t, root)
 }
 
 // The public server installer is not the telemetry installer. If it is served
