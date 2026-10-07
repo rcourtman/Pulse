@@ -1691,18 +1691,26 @@ shell clickable behind another overlay.
     scoped table metric-history interaction that requested them. Platform
     landing should stay route-module warm and data-light until the selected
     platform page owns its normal resource/table query.
-    Platform pages that embed `WorkloadsSurface` reuse the canonical
-    workloads filter toolbar through the `showFilterToolbar` +
-    `suppressPlatformFilter` props in `WorkloadsSurfaceProps`. The page
-    keeps `tableOnly` to hide the dashboard cards and summary strip but
-    opts in to the same shared `FilterBar`, `GroupedTableModeSegmentedControl`,
-    `ColumnPicker`, status/type chips, and search-history primitives that
-    the global Workloads page renders, so platform operators get
-    dense-table search, sort, grouping, view, status, and column controls
-    on every embedded workloads tab without spawning a forked toolbar.
-    The platform scope flows through `forcedPlatform` as a typed page
-    input; `suppressPlatformFilter` drops the now-redundant Platform chip
-    from the rendered toolbar so the user never sees a removable lock.
+    Two platform pages embed `WorkloadsSurface`: the Proxmox and vSphere
+    Overview tabs (`frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
+    and `frontend-modern/src/features/vmware/VmwarePageSurface.tsx`). Each page
+    builds the workloads state itself with `useWorkloadsState`, renders the
+    one shared `WorkloadsFilter` toolbar (search, status filter, a type
+    filter that vSphere suppresses, and the View options for grouping, metric display, and columns on the
+    shared `FilterBar`) from that state, and hands the same state to `WorkloadsSurface` through its
+    `state` prop with `suppressFilterToolbar`, so the surface skips its own
+    filter row and the page never stacks two toolbars wired to one state.
+    Proxmox also passes that state's search, plus its page-owned metric mode
+    and history range, to the nodes table above the guests, so one toolbar
+    drives both tables. `WorkloadsSurface` has no `tableOnly` mode, no
+    `showFilterToolbar` prop, and no dashboard cards or summary strip to
+    hide: it renders its filter row (unless suppressed or in kiosk mode), the
+    workloads table, or an empty-state table card. The platform scope flows
+    through `forcedPlatform` as a typed page input to `useWorkloadsState`,
+    the toolbar, and the surface. `suppressPlatformFilter: true` makes the
+    state expose no Platform filter config and both pages pass
+    `platformFilter={undefined}` to the toolbar, so the user never sees the
+    locked platform as a removable chip.
 
 ### Navigation resolves from a bounded request
 

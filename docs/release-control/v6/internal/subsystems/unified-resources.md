@@ -2489,8 +2489,10 @@ signal source instead of advertising empty object browsers. The
 canonical TrueNAS adapter (`internal/truenas/provider.go::
     truenasRecordsFromSnapshot`) already emits the top-level TrueNAS
 appliance as a unified `agent` row tagged with the `truenas`
-platform, so TrueNAS defaults to `/truenas/overview` (the Systems
-sub-tab); the embedded `StorageSurface` lives at `/truenas/storage`.
+platform, so TrueNAS defaults to `/truenas/overview`, whose Overview
+sub-tab lists those systems in `TrueNASSystemsTable`. `/truenas/storage`
+renders the TrueNAS-owned `TrueNASStorageTopologyTable`, not
+`StorageSurface`; only the Proxmox Storage tab embeds `StorageSurface`.
 Any future platform that wants to default to a Systems / Hosts
 overview must first have its canonical resource adapter project the
 platform's top-level system as a unified resource so the builder

@@ -1161,18 +1161,21 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     absent platform families must not render as disabled placeholders in the
     paid or hosted app shell. Infrastructure is not an equal primary tab in
     that list. Workloads, Storage, and Recovery are not standalone aggregate
-    workspace tabs; their component surfaces remain reusable inside platform
-    pages via embedded `tableOnly` surfaces. Platform primary-tab settings
+    workspace tabs. Workload and storage rows render inside platform pages,
+    through the canonical `WorkloadsSurface` or `StorageSurface` where a page
+    embeds one and through platform-owned tables elsewhere; recovery rows
+    render only in platform-owned tabs such as Proxmox Backups and TrueNAS
+    Protection, because no Recovery surface exists. Platform primary-tab settings
     handoffs in `AppLayout.tsx` must target the canonical
     `/settings/infrastructure` workspace and must not retain retired settings
     aliases such as `/settings/workloads/docker` or nested
-    `/settings/infrastructure/platforms/*` paths. Each platform page must
-    remain chrome-only: routing plus sub-tab navigation that embeds the
-    canonical `WorkloadsSurface`, `StorageSurface`, or `RecoverySurface` in
-    `embedded tableOnly` mode with a forced platform/source filter. The shell must not introduce dashboard cards,
-    bespoke per-family tables, synthetic placeholder data, or reintroduce
-    Infrastructure as a primary navigation entry without a governed contract
-    decision recorded by the frontend-primitives owner.
+    `/settings/infrastructure/platforms/*` paths. Which platform tabs embed a
+    canonical surface and which render platform-owned tables is the
+    frontend-primitives platform-page rule; cloud-paid must not carry a
+    second copy of it. The paid or hosted shell must not introduce dashboard
+    cards, synthetic placeholder data, or forked per-family table primitives,
+    or reintroduce Infrastructure as a primary navigation entry, without a
+    governed contract decision recorded by the frontend-primitives owner.
     The presence of the user-facing `Machines` tab, backed by the internal
     `standalone` route/id, is not a new commercial usage unit: hosted and paid
     surfaces continue to meter the governed monitored-system grouping result

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import * as ts from 'typescript';
 import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable.tsx?raw';
 import agentMachineTableModelSource from '@/features/standalone/agentMachineTableModel.ts?raw';
 import standalonePageModelSource from '@/features/standalone/standalonePageModel.ts?raw';
@@ -62,6 +63,9 @@ import vsphereAlertsTableSource from '@/features/vmware/VsphereAlertsTable.tsx?r
 import vsphereDatastoresTableSource from '@/features/vmware/VsphereDatastoresTable.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
 import vsphereNetworksTableSource from '@/features/vmware/VsphereNetworksTable.tsx?raw';
+import storageSurfaceSource from '@/components/Storage/Storage.tsx?raw';
+import useWorkloadsStateSource from '@/components/Workloads/useWorkloadsState.ts?raw';
+import workloadsSurfaceSource from '@/components/Workloads/WorkloadsSurface.tsx?raw';
 
 const indexCssSource = readFileSync('src/index.css', 'utf8');
 
@@ -174,6 +178,81 @@ const proxmoxInlineDetailTableSources = [
   proxmoxCephClusterDrawerSource,
   proxmoxMailGatewayDrawerSource,
 ];
+
+type JsxTag = ts.JsxOpeningElement | ts.JsxSelfClosingElement;
+
+function parseTsx(source: string): ts.SourceFile {
+  return ts.createSourceFile('source.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+}
+
+/** Every node under `root` (inclusive) that passes `test`, in source order. */
+function findNodes<T extends ts.Node>(root: ts.Node, test: (node: ts.Node) => node is T): T[] {
+  const found: T[] = [];
+  const visit = (node: ts.Node) => {
+    if (test(node)) found.push(node);
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return found;
+}
+
+function isJsxTag(node: ts.Node): node is JsxTag {
+  return ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node);
+}
+
+function jsxTags(root: ts.Node, tag: string): JsxTag[] {
+  return findNodes(root, isJsxTag).filter((node) => node.tagName.getText() === tag);
+}
+
+/** The single `<tag>` under `root`; throws unless there is exactly one. */
+function onlyJsxTag(root: ts.Node, tag: string): JsxTag {
+  const tags = jsxTags(root, tag);
+  const [only] = tags;
+  if (tags.length !== 1 || !only) throw new Error(`expected one <${tag}>, found ${tags.length}`);
+  return only;
+}
+
+/** Source text of an attribute's value; a bare boolean attribute reads as `true`. */
+function jsxAttr(tag: JsxTag, name: string): string | undefined {
+  const attr = tag.attributes.properties.find(
+    (prop): prop is ts.JsxAttribute => ts.isJsxAttribute(prop) && prop.name.getText() === name,
+  );
+  if (!attr) return undefined;
+  if (!attr.initializer) return 'true';
+  return ts.isJsxExpression(attr.initializer)
+    ? attr.initializer.expression?.getText()
+    : attr.initializer.getText();
+}
+
+function functionDecl(root: ts.Node, name: string): ts.FunctionDeclaration {
+  const fn = findNodes(root, ts.isFunctionDeclaration).find((node) => node.name?.text === name);
+  if (!fn) throw new Error(`function ${name} not found`);
+  return fn;
+}
+
+/** Initializer text of every object property inside the first `callee(...)` call. */
+function callProperties(root: ts.Node, callee: string): Map<string, string> {
+  const call = findNodes(root, ts.isCallExpression).find(
+    (node) => node.expression.getText() === callee,
+  );
+  const properties = new Map<string, string>();
+  for (const property of call ? findNodes(call, ts.isPropertyAssignment) : []) {
+    properties.set(property.name.getText(), property.initializer.getText());
+  }
+  return properties;
+}
+
+/** Tab id of the nearest enclosing `activeTab() === 'x'` / `mountedTabs().has('x')` gate. */
+function enclosingTab(tag: ts.Node): string | undefined {
+  for (let node = tag.parent; node; node = node.parent) {
+    if (!ts.isJsxElement(node) || node.openingElement.tagName.getText() !== 'Show') continue;
+    const gate = (jsxAttr(node.openingElement, 'when') ?? '').match(
+      /^activeTab\(\) === '([a-z-]+)'$|^mountedTabs\(\)\.has\('([a-z-]+)'\)$/,
+    );
+    if (gate) return gate[1] ?? gate[2];
+  }
+  return undefined;
+}
 
 describe('platform overview layout guardrails', () => {
   it('keeps attention summaries canonical without a competing estate panel', () => {
@@ -695,6 +774,118 @@ describe('platform overview layout guardrails', () => {
         `${name} should pass suppressFilterToolbar to <WorkloadsSurface>`,
       ).toBe(true);
     }
+  });
+
+  it('keeps canonical surface embeds to the tabs the platform-page contract names', () => {
+    // The platform-page rule in frontend-primitives.md (mirrored by
+    // cloud-paid, storage-recovery, unified-resources and
+    // performance-and-scalability) names exactly these embeds:
+    // WorkloadsSurface on the Proxmox and vSphere Overview tabs,
+    // StorageSurface on the Proxmox Storage tab, and no Recovery surface.
+    const proxmoxFile = parseTsx(proxmoxPageSurfaceSource);
+    const truenasFile = parseTsx(truenasPageSurfaceSource);
+    const expectedEmbeds: Array<[string, ts.SourceFile, { workloads: number; storage: number }]> = [
+      [
+        'StandalonePageSurface',
+        parseTsx(standalonePageSurfaceSource),
+        { workloads: 0, storage: 0 },
+      ],
+      ['ProxmoxPageSurface', proxmoxFile, { workloads: 1, storage: 1 }],
+      ['DockerPageSurface', parseTsx(dockerPageSurfaceSource), { workloads: 0, storage: 0 }],
+      [
+        'KubernetesPageSurface',
+        parseTsx(kubernetesPageSurfaceSource),
+        { workloads: 0, storage: 0 },
+      ],
+      ['TrueNASPageSurface', truenasFile, { workloads: 0, storage: 0 }],
+      ['VmwarePageSurface', parseTsx(vmwarePageSurfaceSource), { workloads: 1, storage: 0 }],
+    ];
+    for (const [name, file, expected] of expectedEmbeds) {
+      expect(jsxTags(file, 'WorkloadsSurface').length, `${name} WorkloadsSurface embeds`).toBe(
+        expected.workloads,
+      );
+      expect(jsxTags(file, 'StorageSurface').length, `${name} StorageSurface embeds`).toBe(
+        expected.storage,
+      );
+      const recoveryEmbeds = findNodes(file, isJsxTag)
+        .map((tag) => tag.tagName.getText())
+        .filter((tag) => /^Recovery(?:Surface)?$/.test(tag));
+      expect(recoveryEmbeds, `${name} must not embed a Recovery surface`).toEqual([]);
+    }
+    expect(existsSync('src/features/recovery')).toBe(false);
+    expect(existsSync('src/components/Recovery')).toBe(false);
+
+    // Neither surface has an embedded or table-only mode, and WorkloadsSurface
+    // has no opt-in toolbar prop: the embedding page suppresses its toolbar.
+    const surfaceSources: Array<[string, string]> = [
+      ['WorkloadsSurface', workloadsSurfaceSource],
+      ['useWorkloadsState', useWorkloadsStateSource],
+      ['Storage', storageSurfaceSource],
+    ];
+    for (const [name, source] of surfaceSources) {
+      expect(source, `${name} must not declare an embed-mode prop`).not.toMatch(
+        /\b(?:embedded|tableOnly|showFilterToolbar)\??:/,
+      );
+      expect(source, `${name} must not read an embed-mode prop`).not.toMatch(
+        /props\.(?:embedded|tableOnly|showFilterToolbar)\b/,
+      );
+    }
+
+    // Each Workloads embed sits on its page's Overview tab, owns the state and
+    // the one toolbar, and locks the platform: the state is scoped to it and
+    // the Platform chip never shows as a removable filter.
+    const workloadsEmbedders: Array<[string, ts.SourceFile, string, string]> = [
+      ['ProxmoxPageSurface', proxmoxFile, 'ProxmoxOverview', 'PROXMOX_PLATFORM_FILTER'],
+      [
+        'VmwarePageSurface',
+        parseTsx(vmwarePageSurfaceSource),
+        'VmwareOverview',
+        'VMWARE_PLATFORM_FILTER',
+      ],
+    ];
+    for (const [name, file, overview, platform] of workloadsEmbedders) {
+      expect(enclosingTab(onlyJsxTag(file, overview)), `${name} overview tab`).toBe('overview');
+      const overviewFn = functionDecl(file, overview);
+      const state = callProperties(overviewFn, 'useWorkloadsState');
+      expect(state.get('forcedPlatform'), name).toBe(platform);
+      expect(state.get('suppressPlatformFilter'), name).toBe('true');
+      const toolbar = onlyJsxTag(overviewFn, 'WorkloadsFilter');
+      expect(jsxAttr(toolbar, 'platformFilter'), name).toBe('undefined');
+      expect(jsxAttr(toolbar, 'forcedPlatform'), name).toBe(platform);
+      const surface = onlyJsxTag(overviewFn, 'WorkloadsSurface');
+      expect(jsxAttr(surface, 'state'), name).toBe('workloadsState');
+      expect(jsxAttr(surface, 'suppressFilterToolbar'), name).toBe('true');
+    }
+
+    // StorageSurface sits on the Proxmox Storage tab with the source locked and
+    // no forcedView, so Storage keeps its Storage / Physical Disks view tabs.
+    const storageEmbed = onlyJsxTag(proxmoxFile, 'StorageSurface');
+    expect(enclosingTab(storageEmbed)).toBe('storage');
+    expect(jsxAttr(storageEmbed, 'forcedSourceFilter')).toBe('PROXMOX_PLATFORM_FILTER');
+    expect(jsxAttr(storageEmbed, 'forcedView')).toBeUndefined();
+    const storageControls = onlyJsxTag(parseTsx(storageSurfaceSource), 'StoragePageControls');
+    expect(jsxAttr(storageControls, 'showViewTabs')).toBe('!props.forcedView');
+
+    // TrueNAS storage and recovery rows render in TrueNAS-owned tables, and
+    // the Proxmox Backups tab is a Proxmox-owned table.
+    expect(enclosingTab(onlyJsxTag(truenasFile, 'TrueNASStorage'))).toBe('storage');
+    onlyJsxTag(functionDecl(truenasFile, 'TrueNASStorage'), 'TrueNASStorageTopologyTable');
+    expect(enclosingTab(onlyJsxTag(proxmoxFile, 'ProxmoxBackupsTable'))).toBe('backups');
+    expect(callProperties(truenasFile, 'useRecoveryPoints').get('platform')).toBe(
+      'TRUENAS_PLATFORM_FILTER',
+    );
+    const protectionHook = findNodes(truenasFile, ts.isVariableDeclaration).find(
+      (declaration) => declaration.name.getText() === 'protection',
+    );
+    expect(protectionHook?.initializer?.getText()).toMatch(/^useRecoveryPoints\(/);
+    const protectionTab = onlyJsxTag(truenasFile, 'TrueNASProtection');
+    expect(enclosingTab(protectionTab)).toBe('protection');
+    expect(jsxAttr(protectionTab, 'recoveryPoints')).toBe('protection');
+    const protectionTable = onlyJsxTag(
+      functionDecl(truenasFile, 'TrueNASProtection'),
+      'TrueNASProtectionTable',
+    );
+    expect(jsxAttr(protectionTable, 'points')).toBe('props.recoveryPoints.points()');
   });
 
   it('keeps mobile host tables focused on useful operational columns', () => {

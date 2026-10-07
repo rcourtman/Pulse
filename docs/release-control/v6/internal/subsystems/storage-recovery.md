@@ -3483,9 +3483,10 @@ the platform-first migration. The chip strips that previously rendered them
 inside the alert resource-incidents panel and Patrol findings panel were
 retired in the same pass; storage and recovery drilldowns now stay inside
 the platform-page sub-tabs rather than offering external surface jumps.
-Future cross-surface storage or recovery affordances must compose against
-the embedded `StorageSurface` / `RecoverySurface` consumers rather than
-reintroducing top-level URL builders.
+Future cross-surface storage or recovery affordances must link into the
+platform tab that owns those rows (the Proxmox Storage tab's embedded
+`StorageSurface`, `/truenas/storage`, the Proxmox Backups tab, or the TrueNAS
+Protection tab) rather than reintroducing top-level URL builders.
 The remaining storage and recovery route builders in
 `frontend-modern/src/routing/resourceLinks.ts` are query-state serializers, not
 destination builders: callers must append `buildStorageRouteSearch()` or
@@ -3498,21 +3499,24 @@ storage source, node, resource, workspace, rollup, or day state. Adding a
 shareable filter query to another surface must not broaden or reinterpret the
 storage and recovery serializer contract.
 
-Storage and Recovery can now be embedded by a platform page in table-only mode
-with a forced platform source/filter. Proxmox uses that embedding for
-source-scoped storage and recovery history, while the TrueNAS Protection tab
-uses the same Recovery surface with a forced `truenas` platform filter and the
-protection-coverage workspace as its default entry point. The embedded mode
-suppresses standalone page chrome, summary charts, and full filter chrome, but
-the Storage surface must keep the canonical Storage / Physical Disks view
-selector inside the table header unless the embedding explicitly locks a
-`forcedView`, and the Recovery surface must keep protection/events workspace
-state in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`.
-The canonical route-backed filter state, fetch builders, table rendering, and
-storage/recovery vocabulary remain owned by the Storage and Recovery surfaces.
-Platform pages must compose those owners rather than cloning storage pools,
-physical disks, recovery events, or protected-inventory tables under
-platform-specific data contracts.
+A platform page embeds `StorageSurface` with a forced source filter; there is
+no table-only mode, and no Recovery surface exists to embed. The Proxmox
+Storage tab is the only embedder: it passes `forcedSourceFilter`, and the
+surface keeps the canonical Storage / Physical Disks view selector because
+Proxmox locks no `forcedView`. Recovery rows render in platform-owned tabs.
+The Proxmox Backups tab (`frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx`)
+reads `/api/backups/pve`, `/api/backups/pbs`, and protection postures itself,
+and the TrueNAS Protection tab feeds
+`frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx` from
+`useRecoveryPoints` with the `truenas` platform forced. `/truenas/storage`
+renders `TrueNASStorageTopologyTable`, not `StorageSurface`. The Storage
+surface keeps owning its route-backed filter state, fetch builders, table
+rendering, and storage vocabulary for its embedder. The Proxmox Storage tab
+must keep its storage pools and physical disks on that embed rather than a
+Proxmox-local copy; TrueNAS storage is deliberately a TrueNAS-owned topology
+table built from the TrueNAS page model. Platform recovery tables must read
+the canonical backup, posture, and recovery-point transports rather than a
+platform-specific recovery data contract.
 
 The investigation enrichment path reads operator-state from the
 in-memory provider already wired against the durable
@@ -5996,16 +6000,19 @@ settings, but they must not reinterpret provider auth, provider connection, or
 model-selection causes as recovery-source health, backup readiness, or
 storage-control capability.
 That bounded projection is the current TrueNAS floor for storage and recovery:
-operators can inspect TrueNAS pools, datasets, disks, snapshots, and
-replication artifacts through the shared storage and recovery pages plus
-cross-surface handoffs. Storage and recovery do not promise a TrueNAS-local
-onboarding path, restore/control plane, or separate diagnostic transport;
-backend-native app actions, logs, and config reads stay on the adjacent
-AI/runtime path and only feed refreshed canonical recovery/state afterward.
-The TrueNAS platform page may embed that same canonical recovery surface as a
-scoped Protection tab, but it must keep the `truenas` platform filter forced,
-reuse recovery-owned protection/event workspace state, and avoid growing a
-TrueNAS-only snapshot or replication table contract.
+operators can inspect TrueNAS pools, datasets, and disks on the TrueNAS
+page's Storage tab (`TrueNASStorageTopologyTable`) and snapshots and
+replication artifacts on its Protection tab. Storage and recovery do not
+promise a TrueNAS-local onboarding path, restore/control plane, or separate
+diagnostic transport; backend-native app actions, logs, and config reads stay
+on the adjacent AI/runtime path and only feed refreshed canonical
+recovery/state afterward.
+The Protection tab is a platform-owned table, not an embedded recovery
+surface: `TrueNASProtectionTable.tsx` lists the recovery points
+`useRecoveryPoints` returns with the `truenas` platform filter forced. It must
+keep that filter forced and keep reading the canonical recovery-points
+transport rather than growing a TrueNAS-only snapshot or replication data
+contract.
 VMware vSphere is the current admitted narrower phase-1 direction. Storage and
 recovery may consume vCenter-backed
 datastore inventory plus VM snapshot-tree visibility as shared storage and

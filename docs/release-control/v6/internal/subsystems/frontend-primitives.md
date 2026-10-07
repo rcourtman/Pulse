@@ -3376,15 +3376,30 @@ Agent`), with the plain-language source phrase available through accessible
 default` instead of fusing provider and badge text such as
     `OpenRouterdefault`.
     Platform-first top-level pages registered through
-    `frontend-modern/src/App.tsx` must stay chrome-only and route through the
-    canonical app shell: each per-platform surface owns navigation and sub-tab
-    chrome, then embeds the canonical `WorkloadsSurface`, `StorageSurface`, or
-    `RecoverySurface` in `embedded tableOnly` mode with a forced platform or
-    source filter. Per-platform features must not
-    fork their own table primitives, header layouts, or summary cards when a
-    shared canonical surface already exists; new shared platform-page
-    primitives live under `frontend-modern/src/features/platformPage/` so the
-    chrome stays reusable across families.
+    `frontend-modern/src/App.tsx` route through the canonical app shell: each
+    per-platform page surface owns its route, `PlatformSectionTabs` sub-tab
+    navigation, and shared loading, empty, and error states, and its tabs are
+    built around tables rather than estate overview or attention summary
+    panels. Three tabs embed a cross-platform canonical surface with the
+    platform scope locked: the Proxmox and vSphere Overview tabs embed
+    `WorkloadsSurface` with `forcedPlatform` (the page owns the workloads
+    state and the one `WorkloadsFilter` toolbar), and the Proxmox Storage tab
+    embeds `StorageSurface` with `forcedSourceFilter`. Those tabs must keep
+    their guests, VMs, and storage rows on those embeds rather than a
+    platform-local copy. Neither surface has an `embedded` or `tableOnly`
+    mode, and no `RecoverySurface` exists: the aggregate Recovery surface was
+    deleted on 2026-05-26. Every other tab, including Docker containers,
+    Kubernetes pods, Machines, `/truenas/storage`
+    (`TrueNASStorageTopologyTable`), the Proxmox Backups tab, and the TrueNAS
+    Protection tab, renders a platform-owned table built from the shared
+    platform-page primitives in
+    `frontend-modern/src/features/platformPage/sharedPlatformPage.tsx`, even
+    where a canonical surface could list the same resource types.
+    Per-platform features must not fork their own table primitives, header
+    layouts, or summary cards when a shared canonical surface already exists;
+    new shared platform-page primitives live under
+    `frontend-modern/src/features/platformPage/` so the chrome stays reusable
+    across families.
     Source-specific platform product surfaces under
     `frontend-modern/src/features/`, such as the Proxmox Backups tab, may own
     domain IA and row models in their product subsystem while consuming shared
@@ -4420,12 +4435,13 @@ labels) bounded — individual subject names and full PolicyRule contents stay
 outside the rendered surface, mirroring the agent and unified-resource
 contracts.
 
-Embedded Recovery workspace controls now use the shared filter-toolbar
-primitive boundary. Platform pages may choose a default Recovery workspace,
-such as TrueNAS opening on protection coverage, but the compact
-protection/events selector must use `FilterSegmentedControl` and the
-recovery-owned `useRecoverySurfaceState` owner rather than page-local tabs,
-nested cards, or independent protection/event state in the embedding surface.
+No platform page embeds a Recovery workspace. The aggregate Recovery surface,
+its protection/events selector, and `useRecoverySurfaceState` were deleted on
+2026-05-26, and TrueNAS opens on its Overview tab. Recovery rows render in
+platform-owned tabs whose controls stay on the shared filter-toolbar
+primitives: the Proxmox Backups tab filters through the shared `FilterBar`,
+and `TrueNASProtectionTable.tsx` through `PlatformTableToolbar`, rather than
+page-local tab strips or nested cards.
 
 Cross-jump chip strips on alert and Patrol surfaces were retired on
 2026-05-16 alongside the platform-first migration. The
