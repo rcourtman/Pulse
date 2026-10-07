@@ -8806,6 +8806,25 @@ in `internal/monitoring/monitor_host_agents_test.go`
 `internal/monitoring/issue1595_collection_trust_test.go`
 (`TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports`).
 
+### Unraid temperatures chart agent disk history
+
+`internal/monitoring/monitor_agents.go` changed only so the SMART history
+writer charts the temperature a host agent's disk shows. A SMART row without
+its own reading shows the one the host's Unraid inventory reports for the disk,
+when that inventory row describes the disk (`HostSMARTDiskTemperature`), and a
+disk only the Unraid inventory reports,
+such as a member the agent's SMART collection skips under `--disk-exclude`,
+shows that row's reading (`HostUnraidDiskTemperature`). Both are now written
+as `smart_temp` under the key the disk's metrics target reads
+(`HostSMARTDiskMetricID`, `HostUnraidDiskMetricID`); a reading the disk does
+not show as collected, a spun-down disk's or an expired host's, is not. Agent
+registration, enrolment, install, update, removal, report identity and disk
+source IDs are unchanged. Focused proof lives in
+`internal/monitoring/monitor_host_agents_test.go`
+(`TestApplyHostReportChartsUnraidTemperatureOfDiskWithoutSMART`) and
+`internal/monitoring/issue1595_collection_trust_test.go`
+(`TestAgentDiskChartsTheUnraidTemperatureItShows`).
+
 ### Windows braced MachineGuid does not abort agent startup
 
 The Windows unified agent resolves host information through gopsutil's combined

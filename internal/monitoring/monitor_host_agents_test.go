@@ -3017,6 +3017,71 @@ func TestApplyHostReportPersistsSMARTMetricsForAgentDisks(t *testing.T) {
 	}
 }
 
+// An Unraid member the agent sends no SMART row for (a --disk-exclude match)
+// still shows the temperature its Unraid inventory row reports, so the report
+// charts it under the disk's serial. A disk with its own SMART reading keeps
+// it, and a spun-down member's leftover reading is not charted.
+func TestApplyHostReportChartsUnraidTemperatureOfDiskWithoutSMART(t *testing.T) {
+	storeCfg := metrics.DefaultConfig(t.TempDir())
+	storeCfg.WriteBufferSize = 1
+	store, err := metrics.NewStore(storeCfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+		metricsStore:      store,
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "agent-tower", Version: "1.0.0", IntervalSeconds: 30},
+		Host:  agentshost.HostInfo{ID: "machine-tower", Hostname: "tower", MachineID: "machine-tower"},
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Sensors: agentshost.Sensors{
+			SMART: []agentshost.DiskSMART{
+				{Device: "/dev/sda", Model: "IronWolf", Serial: "SERIAL-TOWER-1", Temperature: 41},
+			},
+		},
+		Unraid: &agentshost.UnraidStorage{ArrayStarted: true, Disks: []agentshost.UnraidDisk{
+			{Name: "disk1", Device: "sda", Role: "data", Status: "online", Serial: "SERIAL-TOWER-1", Temperature: 40},
+			{Name: "disk2", Device: "sdb", Role: "data", Status: "online", Serial: "SERIAL-TOWER-2", Temperature: 36},
+			{Name: "disk3", Device: "sdc", Role: "data", Status: "online", Serial: "SERIAL-TOWER-3", Temperature: 34, SpunDown: true},
+		}},
+		Timestamp: time.Now().UTC(),
+	}
+
+	if _, err := monitor.ApplyHostReport(report, nil); err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	store.Flush()
+
+	points := waitForStoredDiskMetric(t, store, "SERIAL-TOWER-2", "smart_temp")
+	if len(points) != 1 || points[0].Value != 36 {
+		t.Fatalf("SERIAL-TOWER-2 smart_temp = %+v, want the Unraid reading 36", points)
+	}
+	points = waitForStoredDiskMetric(t, store, "SERIAL-TOWER-1", "smart_temp")
+	if len(points) != 1 || points[0].Value != 41 {
+		t.Fatalf("SERIAL-TOWER-1 smart_temp = %+v, want its own SMART reading 41", points)
+	}
+	now := time.Now().UTC()
+	points, err = store.Query("disk", "SERIAL-TOWER-3", "smart_temp", now.Add(-time.Hour), now.Add(time.Hour), 60)
+	if err != nil {
+		t.Fatalf("Query smart_temp: %v", err)
+	}
+	if len(points) != 0 {
+		t.Fatalf("spun-down SERIAL-TOWER-3 smart_temp = %+v, want none", points)
+	}
+}
+
 func TestApplyHostReportPersistsAgentTemperatureMetric(t *testing.T) {
 	t.Helper()
 

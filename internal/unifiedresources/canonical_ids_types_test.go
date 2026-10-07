@@ -503,6 +503,50 @@ func TestHostUnraidDiskSourceIDNormalizesDeviceAndPrefersSerial(t *testing.T) {
 	}
 }
 
+// An Unraid inventory row's history key is the one the metrics target of the
+// disk resource built from it reads: its usable serial, unscoped like every
+// physical-disk history key, or else its host/device source ID. A row without
+// a device is not ingested as a disk and has no key.
+func TestHostUnraidDiskMetricIDMatchesItsDiskMetricsTarget(t *testing.T) {
+	host := models.Host{ID: "host-tower", Hostname: "tower"}
+	tests := []struct {
+		name string
+		disk models.HostUnraidDisk
+		want string
+	}{
+		{"serial", models.HostUnraidDisk{Device: "/dev/sdb", Serial: "SERIAL-DATA"}, "SERIAL-DATA"},
+		{"placeholder serial", models.HostUnraidDisk{Device: "sdc", Serial: "N/A"}, "host-tower:sdc"},
+		{"no serial", models.HostUnraidDisk{Device: "sdd [sat]"}, "host-tower:sdd"},
+		{"no device", models.HostUnraidDisk{Name: "disk9", Serial: "SERIAL-MISSING"}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := HostUnraidDiskMetricID(host, tt.disk)
+			if got != tt.want {
+				t.Fatalf("HostUnraidDiskMetricID(%+v) = %q, want %q", tt.disk, got, tt.want)
+			}
+			if tt.want == "" {
+				return
+			}
+			disk := tt.disk
+			disk.Name, disk.Role, disk.Status = "disk1", "data", "online"
+			registry := NewRegistry(nil)
+			registry.IngestSnapshot(models.StateSnapshot{Hosts: []models.Host{{
+				ID: host.ID, Hostname: host.Hostname, Status: "online",
+				Unraid: &models.HostUnraidStorage{ArrayStarted: true, Disks: []models.HostUnraidDisk{disk}},
+			}}})
+			disks := registry.ListByType(ResourceTypePhysicalDisk)
+			if len(disks) != 1 {
+				t.Fatalf("disks = %d, want 1", len(disks))
+			}
+			target := registry.MetricsTarget(disks[0].ID)
+			if target == nil || target.ResourceType != "disk" || target.ResourceID != got {
+				t.Fatalf("metrics target = %+v, want disk %q", target, got)
+			}
+		})
+	}
+}
+
 // An agent disk's source ID carries its host, because a usable serial or WWN
 // names the drive but not the machine; its metrics key is the hardware ID
 // alone. Without hardware identity the two keep one host/device/topology key.
