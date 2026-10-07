@@ -9,6 +9,7 @@ import {
   PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS,
   getPhysicalDiskTemperaturePresentation,
 } from '@/features/storageBackups/diskTemperaturePresentation';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource } from '@/types/resource';
 import { formatBytes } from '@/utils/format';
 
@@ -20,7 +21,8 @@ const LazyDiskDetail = lazy(() =>
 
 const GuestPhysicalDiskRow: Component<{ disk: Resource }> = (props) => {
   const [expanded, setExpanded] = createSignal(false);
-  const data = () => extractPhysicalDiskPresentationData(props.disk);
+  const { getDiskTemperatureThresholds } = useAlertsActivation();
+  const data = () => extractPhysicalDiskPresentationData(props.disk, getDiskTemperatureThresholds);
   const health = () => getPhysicalDiskHealthStatus(data());
   const temperature = () => getPhysicalDiskTemperaturePresentation(data());
   const label = () => data().model || data().devPath || props.disk.name;

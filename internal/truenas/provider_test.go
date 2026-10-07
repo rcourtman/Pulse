@@ -745,8 +745,9 @@ func TestRecordsIncludeDiskResourcesWithCorrectParentChain(t *testing.T) {
 			foundSmartReason = true
 		}
 	}
-	if !foundTemperatureReason {
-		t.Fatalf("expected sdc physical-disk risk to include temperature_high, got %+v", sdc.Resource.PhysicalDisk.Risk.Reasons)
+	// Heat is the alert disk temperature policy's to judge, not disk risk's.
+	if foundTemperatureReason {
+		t.Fatalf("expected sdc physical-disk risk to leave its 63C temperature to the alert policy, got %+v", sdc.Resource.PhysicalDisk.Risk.Reasons)
 	}
 	if !foundSmartReason {
 		t.Fatalf("expected sdc physical-disk risk to include truenas_smart, got %+v", sdc.Resource.PhysicalDisk.Risk.Reasons)
@@ -931,7 +932,9 @@ func TestRecordsIncludeTrueNASVMsAsCanonicalWorkloads(t *testing.T) {
 	}
 }
 
-func TestRecordsElevateOnlineDiskWhenTemperatureCritical(t *testing.T) {
+// A hot disk stays online with no disk risk. Its temperature is judged by the
+// alert disk temperature policy, which users tune per disk type.
+func TestRecordsLeaveDiskHeatToTheAlertPolicy(t *testing.T) {
 	previous := IsFeatureEnabled()
 	SetFeatureEnabled(true)
 	t.Cleanup(func() {
@@ -967,14 +970,14 @@ func TestRecordsElevateOnlineDiskWhenTemperatureCritical(t *testing.T) {
 	if diskRecord == nil {
 		t.Fatal("expected physical disk record")
 	}
-	if diskRecord.Resource.Status != unifiedresources.StatusWarning {
-		t.Fatalf("expected hot disk status warning, got %s", diskRecord.Resource.Status)
+	if diskRecord.Resource.Status != unifiedresources.StatusOnline {
+		t.Fatalf("expected hot disk status online, got %s", diskRecord.Resource.Status)
 	}
-	if diskRecord.Resource.PhysicalDisk == nil || diskRecord.Resource.PhysicalDisk.Risk == nil {
-		t.Fatalf("expected hot disk physical risk, got %+v", diskRecord.Resource.PhysicalDisk)
+	if diskRecord.Resource.PhysicalDisk == nil || diskRecord.Resource.PhysicalDisk.Temperature != 72 {
+		t.Fatalf("expected the hot disk to keep its 72C reading, got %+v", diskRecord.Resource.PhysicalDisk)
 	}
-	if diskRecord.Resource.PhysicalDisk.Risk.Level != storagehealth.RiskCritical {
-		t.Fatalf("expected hot disk critical risk, got %+v", diskRecord.Resource.PhysicalDisk.Risk)
+	if diskRecord.Resource.PhysicalDisk.Risk != nil {
+		t.Fatalf("expected no disk risk from temperature, got %+v", diskRecord.Resource.PhysicalDisk.Risk)
 	}
 }
 

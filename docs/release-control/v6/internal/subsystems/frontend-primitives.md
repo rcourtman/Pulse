@@ -504,8 +504,9 @@ available. Stable disk History catalog/organisation/access ownership is unchange
 
 The physical-disk verdict words and their phone forms are `Needs Attention`
 (`Attention`), `Running Hot` (`Hot`) and `Replace Now` (`Replace`), all from
-`getPhysicalDiskHealthCompactLabel` in `diskPresentation.ts`. A hot disk keeps
-the same label at either tier; its tone carries the severity.
+`getPhysicalDiskHealthCompactLabel` in `diskPresentation.ts`. `Running Hot` is
+red and starts at the disk's alert trigger, from the same thresholds object
+that colours its Temp cell (`getPhysicalDiskTemperatureThresholds`).
 
 Controller expansions carry the supplied kind-specific targets, absolute times,
 duration and cluster/namespace when the phone row omits those columns. Proxmox

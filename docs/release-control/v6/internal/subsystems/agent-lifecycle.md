@@ -809,7 +809,8 @@ Downstream readers keep that distinction too. The disk temperature charts do
 not pad a series to now with the retained value. The AI chat context, Patrol and
 the AI disk tools present it only as a last-known value with its reason. The
 performance report and the reporting runtime snapshot leave it out of their
-disk tables.
+disk tables. The performance report colours a collected reading by the
+tenant's alert disk temperature thresholds for the disk type, not a fixed line.
 
 An enabled availability target assigned to a host agent creates an
 agent-lifecycle lease for that exact target/agent pairing. First assignment

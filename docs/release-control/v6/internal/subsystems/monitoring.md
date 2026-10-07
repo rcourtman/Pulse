@@ -4743,17 +4743,18 @@ emit structured storage topology such as Unraid per-disk state, the shared
 assessment layer must derive canonical risk and alert severity from that
 richer disk topology instead of letting coarser aggregate counters override it
 and flap the operator-facing storage alert surface.
-That shared assessment judges only a disk temperature that was collected now.
-`storagehealth.CollectedTemperature` passes a reading through when its
-`collection.temperature` state is `available`, or when the source predates
-collection state, and otherwise drops it before `AssessPhysicalDisk` and
-`AssessHostSMARTDisk` build their sample. A last known value retained for a
-disk in standby or a host agent past its reporting lease therefore raises no
-`temperature_high` reason and cannot turn the disk's verdict or status into
-a warning, while the value itself stays on the resource as last-known
-history. Proof: `TestDiskAssessmentsIgnoreRetainedTemperature` and
-`TestCollectedTemperatureKeepsOnlyCurrentReadings` in
-`internal/storagehealth/risk_test.go`.
+That shared assessment never judges disk temperature. Heat is a metric owned
+by the alert disk temperature policy (`alerts.Manager.DiskTemperatureThreshold`:
+the per-type `diskTempByType` trigger, else the agent Disk Temp default), which
+users tune per disk type. Disk risk is rebuilt by registries that cannot see
+that configuration, so a heat rule here would contradict it: a flat 60/70C rule
+once called a healthy 63C NVMe hot and a 56C SATA disk fine. No disk type,
+temperature or collection state reaches `storagehealth.Sample`, the TrueNAS
+provider and the Unraid inventory assessment included, and a hot disk keeps an
+`online` status. Proof: `TestDiskAssessmentsNeverJudgeTemperature` in
+`internal/storagehealth/risk_test.go` and
+`TestRecordsLeaveDiskHeatToTheAlertPolicy` in
+`internal/truenas/provider_test.go`.
 That same monitoring-owned storage polling boundary also owns cluster-shared
 Proxmox storage status coherence. `internal/monitoring/monitor_polling_storage.go`
 must merge shared storage observations across nodes into one cluster-scoped

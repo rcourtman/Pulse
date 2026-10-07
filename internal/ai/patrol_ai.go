@@ -1930,8 +1930,9 @@ type patrolPhysicalDiskRow struct {
 	wearout                  int
 	// temperature.Collected is the only temperature Patrol may judge as
 	// heat; a retained last-known value is shown as context.
-	temperature   tools.DiskTemperature
-	smartEvidence []string
+	temperature       tools.DiskTemperature
+	temperatureLimits diskTemperatureLimits
+	smartEvidence     []string
 }
 
 type patrolPrecomputeNodeSource struct {
@@ -2464,7 +2465,7 @@ func patrolPhysicalDiskRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 				health = "UNKNOWN"
 			}
 
-			rows = append(rows, patrolPhysicalDiskRow{
+			row := patrolPhysicalDiskRow{
 				id:            r.ID,
 				name:          name,
 				node:          strings.TrimSpace(r.ParentName),
@@ -2477,7 +2478,9 @@ func patrolPhysicalDiskRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 				wearout:       r.PhysicalDisk.Wearout,
 				temperature:   tools.SplitDiskTemperature(r.PhysicalDisk.Temperature, r.PhysicalDisk.Collection),
 				smartEvidence: unifiedPhysicalDiskSMARTIssueParts(r.PhysicalDisk.SMART),
-			})
+			}
+			row.temperatureLimits = snap.diskTemperatureLimits(row.diskType)
+			rows = append(rows, row)
 		}
 		return rows
 	}
@@ -2505,7 +2508,7 @@ func patrolPhysicalDiskRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 			health = "UNKNOWN"
 		}
 
-		rows = append(rows, patrolPhysicalDiskRow{
+		row := patrolPhysicalDiskRow{
 			id:            d.ID,
 			name:          name,
 			node:          strings.TrimSpace(d.Node),
@@ -2518,7 +2521,9 @@ func patrolPhysicalDiskRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 			wearout:       d.Wearout,
 			temperature:   tools.SplitDiskTemperature(d.Temperature, d.Collection),
 			smartEvidence: modelPhysicalDiskSMARTIssueParts(d.SmartAttributes),
-		})
+		}
+		row.temperatureLimits = snap.diskTemperatureLimits(row.diskType)
+		rows = append(rows, row)
 	}
 	return rows
 }
@@ -2534,7 +2539,7 @@ func patrolPhysicalDiskHealthIssue(row patrolPhysicalDiskRow) bool {
 			(row.wearout == 0 &&
 				(strings.EqualFold(row.diskType, "ssd") || strings.EqualFold(row.diskType, "nvme")))) &&
 			row.wearout < 20) ||
-		row.temperature.Collected > 55 ||
+		row.temperatureLimits.hot(row.temperature.Collected) ||
 		len(row.smartEvidence) > 0
 }
 

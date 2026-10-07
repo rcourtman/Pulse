@@ -57,3 +57,26 @@ func TestFormatDuration(t *testing.T) {
 		t.Fatalf("expected 2 days, 1 hour, got %q", got)
 	}
 }
+
+// Disk temperatures in a report take the disk's alert thresholds, not a fixed
+// 50/60C: an NVMe at 63C under a 70C trigger stays uncoloured, a SATA disk at
+// 56C past its 55C trigger is red, and a disk without thresholds is plain.
+func TestDiskTemperatureSeverityFollowsAlertThresholds(t *testing.T) {
+	cases := []struct {
+		disk DiskInfo
+		want string
+	}{
+		{DiskInfo{Temperature: 63, TemperatureWarning: 65, TemperatureCritical: 70}, ""},
+		{DiskInfo{Temperature: 66, TemperatureWarning: 65, TemperatureCritical: 70}, "warning"},
+		{DiskInfo{Temperature: 70, TemperatureWarning: 65, TemperatureCritical: 70}, "critical"},
+		{DiskInfo{Temperature: 56, TemperatureWarning: 50, TemperatureCritical: 55}, "critical"},
+		{DiskInfo{Temperature: 72, TemperatureWarning: 70, TemperatureCritical: 75}, "warning"},
+		{DiskInfo{Temperature: 80}, ""},
+		{DiskInfo{Temperature: 0, TemperatureWarning: 50, TemperatureCritical: 55}, ""},
+	}
+	for _, tc := range cases {
+		if got := diskTemperatureSeverity(tc.disk); got != tc.want {
+			t.Errorf("diskTemperatureSeverity(%+v) = %q, want %q", tc.disk, got, tc.want)
+		}
+	}
+}

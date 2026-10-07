@@ -69,6 +69,8 @@ describe('diskDetailPresentation', () => {
     expect(getLinkedDiskTemperatureTextClass(65)).toBe('text-red-500');
     expect(getLinkedDiskTemperatureTextClass(52)).toBe('text-yellow-500');
     expect(getLinkedDiskTemperatureTextClass(45)).toBe('text-muted');
+    // Disk temperature alerting off for the disk: no reading is warm or hot.
+    expect(getLinkedDiskTemperatureTextClass(80, null)).toBe('text-muted');
     // Explicit thresholds (e.g. resolved for an NVMe disk) shift the colors.
     expect(getLinkedDiskTemperatureTextClass(55, { warning: 65, critical: 70 })).toBe('text-muted');
     expect(getLinkedDiskTemperatureTextClass(67, { warning: 65, critical: 70 })).toBe(

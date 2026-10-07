@@ -52,6 +52,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 	urp := s.unifiedResourceProvider
 	ap := s.alertProvider
 	agentServer := s.agentServer
+	thresholdProvider := s.thresholdProvider
 	s.mu.RUnlock()
 
 	if urp != nil {
@@ -410,13 +411,14 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 				attention := make([]unifiedresources.Resource, 0)
 				for _, disk := range physicalDisks {
 					health := ""
-					temperature := 0
+					hot := false
 					if disk.PhysicalDisk != nil {
 						health = strings.ToUpper(strings.TrimSpace(disk.PhysicalDisk.Health))
 						// A retained last-known reading is not current heat.
-						temperature = tools.SplitDiskTemperature(disk.PhysicalDisk.Temperature, disk.PhysicalDisk.Collection).Collected
+						collected := tools.SplitDiskTemperature(disk.PhysicalDisk.Temperature, disk.PhysicalDisk.Collection).Collected
+						hot = diskTemperatureLimitsFor(thresholdProvider, disk.PhysicalDisk.DiskType).hot(collected)
 					}
-					if disk.Status != unifiedresources.StatusOnline || (health != "" && health != "PASSED" && health != "UNKNOWN") || temperature >= 50 {
+					if disk.Status != unifiedresources.StatusOnline || (health != "" && health != "PASSED" && health != "UNKNOWN") || hot {
 						attention = append(attention, disk)
 					}
 				}

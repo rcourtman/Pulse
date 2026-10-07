@@ -25,7 +25,8 @@ export function getLinkedDiskTemperatureTextClass(
   tempCelsius: number,
   thresholds?: MetricDisplayThresholds | null,
 ): string {
-  if (!Number.isFinite(tempCelsius) || tempCelsius <= 0) {
+  // Null thresholds mean disk temperature alerting is off for this disk.
+  if (!Number.isFinite(tempCelsius) || tempCelsius <= 0 || thresholds === null) {
     return 'text-muted';
   }
   const severity = getMetricSeverity(tempCelsius, 'diskTemperature', thresholds);
@@ -137,7 +138,9 @@ export function getDiskDetailAttributeCards(
     cards.push({
       label: 'Temperature',
       value: temperature.label,
-      ok: getMetricSeverity(disk.temperature, 'diskTemperature', diskTempThresholds) !== 'critical',
+      ok:
+        diskTempThresholds === null ||
+        getMetricSeverity(disk.temperature, 'diskTemperature', diskTempThresholds) !== 'critical',
     });
   } else if (temperature) {
     // A retained reading is neither healthy nor hot now. The collection

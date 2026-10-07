@@ -1464,6 +1464,7 @@ func newPatrolScopedFilterState(snap patrolRuntimeState) patrolScopedFilterState
 		filtered: patrolRuntimeState{
 			readState:               snap.readState,
 			unifiedResourceProvider: snap.unifiedResourceProvider,
+			thresholdProvider:       snap.thresholdProvider,
 		},
 		includedResourceIDs: make(map[string]bool),
 		includedGuestVMIDs:  make(map[int]bool),
