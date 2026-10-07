@@ -4366,7 +4366,7 @@ func TestSetupUpdateCommandHonorsRCChannelAndCustomPaths(t *testing.T) {
 	if !strings.Contains(got, `helper_args=()`) || !strings.Contains(got, `helper_args=("$@")`) {
 		t.Fatalf("update helper missing passthrough helper args:\n%s", got)
 	}
-	if !strings.Contains(got, `-h|--help|--uninstall|--version|--rc|--pre|--stable|--source|--from-source|--branch|--archive|--archive=*|--skip-upgrade-preflight)`) {
+	if !strings.Contains(got, `-h|--help|--uninstall|--version|--rc|--pre|--prerelease|--stable|--source|--from-source|--branch|--archive|--archive=*|--skip-upgrade-preflight)`) {
 		t.Fatalf("update helper missing auto-selector guard for explicit flags:\n%s", got)
 	}
 	if !strings.Contains(got, `extra_args+=("${helper_args[@]}")`) {
@@ -4374,6 +4374,9 @@ func TestSetupUpdateCommandHonorsRCChannelAndCustomPaths(t *testing.T) {
 	}
 	if !strings.Contains(got, `extra_args+=(--rc)`) {
 		t.Fatalf("update helper missing rc channel forwarding:\n%s", got)
+	}
+	if !strings.Contains(got, `extra_args+=(--stable)`) {
+		t.Fatalf("update helper must bind the parsed stable channel before the installer rereads configuration:\n%s", got)
 	}
 	if !strings.Contains(got, `INSTALLER_URL="https://github.com/example/pulse-fork/releases/latest/download/install.sh"`) {
 		t.Fatalf("update helper missing configured repo installer url:\n%s", got)

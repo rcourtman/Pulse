@@ -4042,7 +4042,7 @@ auto_selector_allowed=true
 if [[ \${#helper_args[@]} -gt 0 ]]; then
     for helper_arg in "\${helper_args[@]}"; do
         case "\$helper_arg" in
-            -h|--help|--uninstall|--version|--rc|--pre|--stable|--source|--from-source|--branch|--archive|--archive=*|--skip-upgrade-preflight)
+            -h|--help|--uninstall|--version|--rc|--pre|--prerelease|--stable|--source|--from-source|--branch|--archive|--archive=*|--skip-upgrade-preflight)
                 auto_selector_allowed=false
                 break
                 ;;
@@ -4055,10 +4055,34 @@ if [[ "\$auto_selector_allowed" == "true" ]]; then
         if [[ -n "\$branch" ]]; then
             extra_args+=(--source "\$branch")
         fi
-    elif [[ -f "\${CONFIG_DIR}/system.json" ]]; then
-        configured_channel=\$(grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' "\${CONFIG_DIR}/system.json" 2>/dev/null | sed 's/.*"\([^"]*\)"$/\1/' || true)
+    elif [[ -e "\${CONFIG_DIR}/system.json" || -L "\${CONFIG_DIR}/system.json" ]]; then
+        # Never infer a release channel from nested, quoted or partial JSON.
+        # Missing/null channels retain the stable default; malformed or unknown
+        # preferences stop before download. An explicit selector above wins.
+        if [[ ! -f "\${CONFIG_DIR}/system.json" ]] || ! command -v jq >/dev/null 2>&1; then
+            echo "Cannot read the saved update channel; a regular system.json and jq are required. Select --stable or --rc explicitly, or restore the configuration." >&2
+            exit 1
+        fi
+        if ! configured_channel=\$(jq -er -s '
+            if length != 1 or (.[0] | type) != "object" then
+                error("expected one configuration object")
+            else .[0] end
+            | .updateChannel
+            | if . == null then "stable" else . end
+            | if type != "string" then error("invalid update channel") else . end
+            | gsub("^\\\\s+|\\\\s+\$"; "") | ascii_downcase
+            | if . == "" then "stable" else . end
+            | if . == "stable" or . == "rc" then . else error("unknown update channel") end
+        ' "\${CONFIG_DIR}/system.json" 2>/dev/null); then
+            echo "Cannot parse the saved update channel; no installer downloaded. Select --stable or --rc explicitly, or restore the configuration." >&2
+            exit 1
+        fi
         if [[ "\$configured_channel" == "rc" ]]; then
             extra_args+=(--rc)
+        else
+            # Bind the parsed default too: the installer has its own saved
+            # preference reader, which must not re-interpret the same file.
+            extra_args+=(--stable)
         fi
     fi
 fi
