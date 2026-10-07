@@ -1108,12 +1108,12 @@ func newSMARTLifecycleFixture(t *testing.T) *smartLifecycleFixture {
 		initial:  make(map[string]Alert), recoveries: make(chan *ResolvedAlert, 32),
 	}
 	m.SetAlertCallback(func(a *Alert) {
-		if a.Type == "disk-health" || a.Type == "disk-wearout" {
+		if a.ID == f.healthID || a.ID == f.wearID {
 			f.fires.Add(1)
 		}
 	})
 	m.SetResolvedAlertCallback(func(r *ResolvedAlert) {
-		if r.Alert.Type == "disk-health" || r.Alert.Type == "disk-wearout" {
+		if r.Alert.ID == f.healthID || r.Alert.ID == f.wearID {
 			f.recoveries <- r
 		}
 	})
@@ -1256,7 +1256,8 @@ func TestHostSMARTRiskRulesDisableBetweenReports(t *testing.T) {
 		t.Fatal("health policy disabled unrelated wearout")
 	}
 	// A missing report cannot resurrect it. Re-enable before another report;
-	// only a newly observed failing disk may start another occurrence.
+	// only fresh failing evidence may reactivate it, under the unchanged
+	// stateful refire/cooldown history policy.
 	f.host.Sensors.SMART = nil
 	f.m.CheckHost(f.host)
 	if testHasActiveAlert(t, f.m, f.healthID) {
@@ -1274,8 +1275,8 @@ func TestHostSMARTRiskRulesDisableBetweenReports(t *testing.T) {
 	f.host.Sensors.SMART = []models.HostDiskSMART{{Device: "/dev/sda", Health: "FAILED", Attributes: &models.SMARTAttributes{PercentageUsed: &used, PendingSectors: &pending}}}
 	f.m.CheckHost(f.host)
 	a := testRequireActiveAlert(t, f.m, f.healthID)
-	if a.StartTime.Equal(f.initial[f.healthID].StartTime) || f.fires.Load() != 3 {
-		t.Fatal("fresh bad evidence did not start exactly one new health occurrence")
+	if !a.StartTime.Equal(f.initial[f.healthID].StartTime) || !a.LastSeen.After(f.initial[f.healthID].LastSeen) || f.fires.Load() != 3 {
+		t.Fatalf("fresh evidence must refire once within the existing cooldown: start %v, prior %v, seen %v, prior %v, callbacks %d", a.StartTime, f.initial[f.healthID].StartTime, a.LastSeen, f.initial[f.healthID].LastSeen, f.fires.Load())
 	}
 }
 
@@ -1349,7 +1350,7 @@ func TestHostSMARTRiskFilesystemAndHostLifecycleStayIndependent(t *testing.T) {
 					f.m.HandleHostRemoved(f.host)
 				case "host-disabled":
 					cfg := f.m.GetConfig()
-					cfg.Overrides["agent:"+f.host.ID] = ThresholdConfig{Disabled: true}
+					cfg.Overrides[f.host.ID] = ThresholdConfig{Disabled: true}
 					f.m.UpdateConfig(cfg)
 				case "agents-disabled":
 					cfg := f.m.GetConfig()
@@ -1361,7 +1362,7 @@ func TestHostSMARTRiskFilesystemAndHostLifecycleStayIndependent(t *testing.T) {
 				f.host.LinkedNodeID = ""
 				cfg := f.m.GetConfig()
 				cfg.DisableAllAgents = false
-				delete(cfg.Overrides, "agent:"+f.host.ID)
+				delete(cfg.Overrides, f.host.ID)
 				f.m.UpdateConfig(cfg)
 				f.host.Sensors.SMART = present
 				f.m.CheckHost(f.host)
@@ -1429,14 +1430,19 @@ func TestHostSMARTRiskRestartAndGlobalPauseRestartDeparture(t *testing.T) {
 				f.m.Stop() // Actual checkpoint and ordinary persisted-alert restoration.
 				f.m = NewManagerWithDataDir(dir)
 				t.Cleanup(f.m.Stop)
+				store, err := eventlog.OpenInMemory()
+				if err != nil {
+					t.Fatal(err)
+				}
+				f.m.SetEventLog(store) // Observe post-restart lifecycle, not nonexistent old in-memory events.
 				f.m.UpdateConfig(cfg)
 				f.m.SetAlertCallback(func(a *Alert) {
-					if a.Type == "disk-health" || a.Type == "disk-wearout" {
+					if a.ID == f.healthID || a.ID == f.wearID {
 						f.fires.Add(1)
 					}
 				})
 				f.m.SetResolvedAlertCallback(func(r *ResolvedAlert) {
-					if r.Alert.Type == "disk-health" || r.Alert.Type == "disk-wearout" {
+					if r.Alert.ID == f.healthID || r.Alert.ID == f.wearID {
 						f.recoveries <- r
 					}
 				})

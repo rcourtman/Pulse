@@ -3864,8 +3864,8 @@ pending/grace/recovery interruption and departure semantics remain unchanged.
 Disabling every recorded cause releases that risk alert without a reading,
 both on a configuration save and on an empty report. Partially enabled causes,
 missing legacy cause metadata and unknown codes remain conservative. Re-enabling
-cannot raise an alert from absent evidence; fresh bad evidence starts a new
-occurrence. Node linking retains existing node ownership, including when the
+cannot raise an alert from absent evidence; fresh bad evidence uses the existing
+stateful refire/cooldown history policy. Node linking retains existing node ownership, including when the
 agent's SMART inventory is empty; host removal and policy disablement release
 agent risk state and stale absence counts. Counts are ephemeral and restart
 conservatively after a process restart.
