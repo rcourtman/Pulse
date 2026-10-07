@@ -84,7 +84,7 @@ describe('backup polling safety help', () => {
     }
   });
 
-  it('does not turn retained backup evidence into current protection or a disruptive diagnostic', () => {
+  it('rejects retained evidence and disruptive diagnostics', () => {
     const { article, text } = help();
     expect(text).toContain('Longer intervals delay backup evidence refresh');
     expect(text).toContain('disabled polling leaves it unrefreshed');
@@ -97,7 +97,7 @@ describe('backup polling safety help', () => {
     expect(article.querySelector('pre')).toBeNull();
   });
 
-  it('keeps the complete independent safety boundary rather than accepting an OK task or responsiveness', () => {
+  it('requires all independent recovery checks and prior-active restoration', () => {
     const { text } = help();
     expect(text).toContain('pause the actual Pulse server');
     expect(text).toContain('prevent its updater or deployment controller from restarting it');
@@ -109,7 +109,9 @@ describe('backup polling safety help', () => {
     );
     expect(text).toContain('independent of Pulse and the QEMU Guest Agent');
     expect(text).toContain('not new probes or forced writes');
-    expect(text).toContain('If any check fails or is unavailable, leave Pulse and its updater paused');
+    expect(text).toContain(
+      'If any check fails or is unavailable, leave Pulse and its updater paused',
+    );
     expect(text).toContain('only services and timers that were active before the pause');
     expect(text).toContain('do not guess unknown pre-pause states');
     expect(text).toContain('Pulse monitoring and alerts are unavailable while stopped');
@@ -119,9 +121,8 @@ describe('backup polling safety help', () => {
 
   it('links to the existing deployment-specific precaution without adding a probe command', () => {
     const { article } = help();
-    expect(article.querySelector('a[href="/docs/VM_DISK_MONITORING#backup-safety"]')?.textContent).toBe(
-      'backup safety precaution',
-    );
+    const link = article.querySelector('a[href="/docs/VM_DISK_MONITORING#backup-safety"]');
+    expect(link?.textContent).toBe('backup safety precaution');
     const safety = read('docs/VM_DISK_MONITORING.md');
     expect(read('frontend-modern/public/docs/VM_DISK_MONITORING.md')).toBe(safety);
     const target = render(safety, 'VM_DISK_MONITORING');
