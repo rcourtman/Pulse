@@ -138,6 +138,28 @@ status does not establish current resource health. Assistant handoff includes
 the latest bounded events, their source provenance and query coverage. It
 preserves the existing exclusion of raw command arguments/output. An absent
 closure does not acquire a duration measured up to the current time.
+A PVE disk alert row written under the physical disk its hardware identity
+names (`unifiedresources.OwnedAlertReference`) is matched to occurrences under
+its alert's own reference, as when it was journaled there, while its evidence
+keeps the owning disk. Reads by alert identifier and by that reference
+therefore return the same occurrences as before ownership, including one
+occurrence whose rows two disks own after one took over the path while
+failing. The one difference is an owned row whose occurrence's firing the
+read does not hold (another disk owns it, or retention removed it): before
+any event is assigned, its recorded start takes the occurrence that starts
+there, else the closest saved shell within the start tolerance, else opens
+the occurrence under the ID the alert-centric read gives it, instead of
+leaving the row as partial evidence. That boundary is not canonical, so a
+truncated read still keeps events without a start away from it. A read by a
+disk returns the occurrences its rows belong to and admits their saved
+shells, so a note recorded from a disk read reaches the occurrence the
+alert-centric read shows. The exception is two occurrences of one alert
+starting within the shell tolerance: the alert-centric read assigns a saved
+shell by firing order, which a disk read missing a firing cannot reproduce.
+`TestIncidentQueryKeepsOccurrencesOfHardwareOwnedDiskAlerts` and
+`TestIncidentQueryTruncatedReadKeepsOwnedOccurrencesGuarded` in
+`internal/ai/memory/incident_query_disk_owner_test.go` compare both layouts,
+the first on the memory and SQLite stores.
 
 
 ### Canonical Patrol and Assistant continuation, 2026-09-07

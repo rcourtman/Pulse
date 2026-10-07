@@ -22111,3 +22111,34 @@ func TestStaleCleanupKeepsThresholdAlertStillBeingEvaluated(t *testing.T) {
 		t.Fatal("cleanup kept an alert nobody has evaluated for over a day")
 	}
 }
+
+// Resource history owns each PVE disk alert row by the hardware identity the
+// alert records, and reads by the path reference find those rows by alert
+// identifier. Both must match what CheckDiskHealth produces.
+func TestCheckDiskHealthAlertsCarryHistoryOwnershipIdentity(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	disk := proxmox.Disk{DevPath: "/dev/sdb", Model: "Crucial MX500", Serial: "2117E59AB123", WWN: "0x5002538f12345678",
+		Type: "ssd", Health: "FAILED", Wearout: 3}
+	for i := 0; i < 3; i++ {
+		m.CheckDiskHealth("lab", "pve1", disk)
+	}
+
+	ref := unifiedresources.ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", disk.DevPath)
+	want := map[string]bool{}
+	for _, identifier := range unifiedresources.ProxmoxPhysicalDiskAlertIdentifiers(ref) {
+		want[identifier] = true
+	}
+	active := m.GetActiveAlerts()
+	if len(active) != len(want) {
+		t.Fatalf("active alerts = %d, want %d", len(active), len(want))
+	}
+	for _, alert := range active {
+		if !want[alert.ID] || alert.ResourceID != ref {
+			t.Fatalf("alert %q on %q is not a history identifier of %q", alert.ID, alert.ResourceID, ref)
+		}
+		if alert.Metadata[unifiedresources.MetadataDiskSerial] != disk.Serial || alert.Metadata[unifiedresources.MetadataDiskWWN] != disk.WWN {
+			t.Fatalf("alert %q records serial %v and WWN %v", alert.ID, alert.Metadata[unifiedresources.MetadataDiskSerial], alert.Metadata[unifiedresources.MetadataDiskWWN])
+		}
+	}
+}

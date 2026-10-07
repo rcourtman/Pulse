@@ -170,6 +170,10 @@ func (rr *ResourceRegistry) resolveHistoryReference(ref string) (resourceID stri
 		resourceID = rr.dockerHistoryOwnerLocked(ref)
 		return resourceID, resourceID != ""
 	}
+	if isProxmoxPhysicalDiskAlertReference(ref) {
+		// A device path is not durable identity (proxmoxDiskAlertOwner).
+		return "", false
+	}
 	matches := rr.durableHistoryMatchesLocked(ref)
 	if ownerRef, ownerType, ok := historySubResourceOwner(ref); ok && len(matches) == 0 {
 		// The owner must resolve uniquely and have the expected type. An owner
@@ -326,7 +330,8 @@ func (b *legacyHistoryBackfill) add(ref string, now time.Time) {
 // unboundHistoryReferences lists alert journal references without a binding.
 // Docker container references and hostless service names are excluded: the
 // store migration binds full container IDs, and names or shortened IDs must
-// never bind.
+// never bind. PVE disk alert references never bind either; their rows are
+// owned row by row (proxmoxDiskAlertOwner).
 func (s *SQLiteResourceStore) unboundHistoryReferences() ([]string, error) {
 	rows, err := s.db.Query(`SELECT DISTINCT canonical_id FROM resource_changes
 		WHERE kind GLOB 'alert_*'
@@ -342,7 +347,7 @@ func (s *SQLiteResourceStore) unboundHistoryReferences() ([]string, error) {
 		if err := rows.Scan(&ref); err != nil {
 			return nil, err
 		}
-		if !isDockerNameHistoryReference(ref) {
+		if !isDockerNameHistoryReference(ref) && !isProxmoxPhysicalDiskAlertReference(ref) {
 			refs = append(refs, ref)
 		}
 	}
