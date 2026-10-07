@@ -549,6 +549,45 @@ This tolerance delays activation; it does not disable powered-off monitoring.
 Use the existing guest offline-alert toggle when a guest should never produce
 powered-off alerts.
 
+### Alert reminders and recovery notifications
+
+Open **Alerts → Schedule**. These controls govern notification eligibility, not
+when a threshold first activates or when fresh readings clear an incident.
+Save changes and reload to confirm the running settings.
+
+| Control | Effect |
+| --- | --- |
+| **Alert cooldown** on | **Cooldown period** is the minimum interval, in minutes, before an existing alert can send an ordinary reminder after its last notification. It does not delay the first eligible notification. |
+| **Alert cooldown** off | Stops ordinary reminders for the same alert occurrence after its first notification. Off does **not** mean “send on every poll” or “no rate limit”, and it does not turn off monitoring or initial delivery. |
+| **Max alerts / hour** | Limits ordinary notifications per workload/metric combination over a rolling hour, not across the whole installation. Saving cooldown as off retains this separate limit; it does not remove it. |
+| **Recovery notifications** on | Enables eligible recovery messages for destinations with a recorded successful firing delivery for that same alert occurrence. It does not send an all-clear to every configured destination. |
+| **Recovery notifications** off | Stops recovery messages, not detection of recovery or closure of the incident in Pulse. |
+
+For example, with a **30-minute** cooldown, an alert last notified at **10:00**
+is not eligible for an ordinary reminder before **10:30**. That is a minimum
+interval, not a promise of a message at 10:30: the alert must still be active
+and its other policies must permit delivery. Severity changes and configured
+escalation are handled separately; cooldown off is not a way to silence them.
+The hourly limit is not a count of provider requests: delivery retries and
+multiple recipients are separate from alert eligibility.
+
+Recovery follows the configured grouping window too, so it need not send
+immediately when the incident clears. A destination that never successfully
+received that occurrence's firing notification is not eligible for its recovery.
+A successful delivery record means provider acceptance, **not that a person
+read the message**. Acknowledgement, snooze, quiet hours, destination settings
+and provider failures can also prevent recovery delivery; enabling the toggle
+does not bypass those controls.
+
+**A missing reminder or recovery message is not a workload health check.** Check
+fresh readings and the incident's state in **Alerts → Overview** or **History**,
+then correlate [Recent delivery activity](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing).
+Keep these policies distinct from [acknowledgement and snooze](#acknowledge-and-snooze-existing-alerts),
+[quiet hours](#quiet-hours-and-notification-holds) and
+[retrying retained failures](TROUBLESHOOTING.md#recover-retained-delivery-failures).
+Do not lower thresholds, create load or stop a workload to test reminders or
+recovery messages; inspect the next normally occurring incident instead.
+
 ### Acknowledge and snooze existing alerts
 
 In **Alerts → Overview**, these actions apply to an existing incident, not its

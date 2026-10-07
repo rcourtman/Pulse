@@ -712,6 +712,11 @@ alert was generated, routed or delivered to the intended recipient.
   plus any mute or maintenance policy, before treating an absent attempt as a
   transport failure. In **Alerts → Overview**, use **Show acknowledged** to find
   hidden incidents; **Resume** ends a snooze but does not remove acknowledgement.
+- For a missing repeat or all-clear, review [alert reminders and recovery notifications](CONFIGURATION.md#alert-reminders-and-recovery-notifications).
+  Cooldown off stops ordinary reminders for the same occurrence; it does not
+  mean unlimited repeats. Recovery messages require eligible prior firing
+  delivery to that destination. Their absence does not establish whether the
+  workload recovered: check fresh readings and the incident state separately.
 - Use **Recent delivery activity** to correlate the original alert, destination
   and absolute timestamp, including held-notification reasons. An empty window
   is not proof of healthy delivery; an **unavailable** read is not an empty log.
