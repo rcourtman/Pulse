@@ -4453,9 +4453,10 @@ func TestContract_SAMLLoginRejectsUnsupportedMethods(t *testing.T) {
 // A SAML provider configured by hand, with the IdP's SSO URL and its PEM
 // signing certificate pasted inline or named by IDPCertFile, verifies the
 // IdP's signatures with that certificate exactly as a provider configured from
-// IdP metadata does: the ACS accepts the IdP's signed Response and reads the
-// user from it, the IdP's signed answer to an SP-initiated logout completes
-// that logout, and a Response signed by any other key is refused. Manual
+// IdP metadata does: at default settings the ACS accepts the IdP's signed
+// answer to an SP-initiated login and reads the user from it, the IdP's signed
+// answer to an SP-initiated logout completes that logout, and a Response
+// signed by any other key is refused. Manual
 // metadata used to hold the certificate as a PEM block where crewjam/saml
 // base64-decodes DER, so every signature check for these providers failed
 // before reaching the key.
@@ -4485,34 +4486,32 @@ func TestContract_SAMLManualIDPCertificateVerifiesIdPSignatures(t *testing.T) {
 		{name: "manual certificate file", cfg: manual("", certFile)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			// ProcessResponse records no AuthnRequest IDs, so by default
-			// crewjam refuses every Response on InResponseTo. Allowing
-			// IdP-initiated responses skips that check and leaves the
-			// signature, issuer, destination and timing checks to decide.
-			tc.cfg.AllowIDPInitiated = true
 			service, err := NewSAMLService(context.Background(), "okta", tc.cfg, "https://pulse.example.com")
 			if err != nil {
 				t.Fatalf("NewSAMLService: %v", err)
 			}
+			browserKey := sessionHash("login-token")
+			startLogin := func() string {
+				t.Helper()
+				redirectURL, err := service.MakeAuthRequest("/", browserKey)
+				if err != nil {
+					t.Fatalf("MakeAuthRequest: %v", err)
+				}
+				return samlTestAuthnRequestID(t, redirectURL)
+			}
 
-			result, _, err := service.ProcessResponse(idp.acsPost(t, service))
+			result, _, err := service.ProcessResponse(idp.acsPostAnswering(t, service, startLogin()), browserKey)
 			if err != nil {
 				t.Fatalf("ACS refused the configured IdP's signed Response: %s", samlRejectionDetail(err))
 			}
 			if result.Username != "alice" {
 				t.Fatalf("ACS read username %q from the Response, want alice", result.Username)
 			}
-			if _, _, err := service.ProcessResponse(impostor.acsPost(t, service)); err == nil {
+			if _, _, err := service.ProcessResponse(impostor.acsPostAnswering(t, service, startLogin()), browserKey); err == nil {
 				t.Fatal("ACS accepted a Response signed by a key the provider was not given")
 			}
 
-			dataPath := t.TempDir()
-			resetSessionStoreForTests()
-			t.Cleanup(resetSessionStoreForTests)
-			resetCSRFStoreForTests()
-			t.Cleanup(resetCSRFStoreForTests)
-			InitSessionStore(dataPath)
-			InitCSRFStore(dataPath)
+			useSAMLTestAuthStores(t)
 			router := &Router{samlManager: NewSAMLServiceManager("https://pulse.example.com")}
 			router.samlManager.services["okta"] = service
 			requestID := startSAMLTestLogout(t, router, newSAMLTestSession(t, "alice"))

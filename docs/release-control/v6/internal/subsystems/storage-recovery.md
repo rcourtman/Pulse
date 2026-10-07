@@ -6895,6 +6895,16 @@ the PEM the administrator pasted and `idpCertFile` the path of a PEM file, so
 nothing persisted changes or needs migrating. No storage, retention, backup,
 migration or recovery path is added or moved.
 
+### SAML logins bound to the browser that started them
+
+`internal/api/saml_service.go` keeps each outstanding SAML AuthnRequest ID in
+memory on the provider's service, with the login's return path and the hash of
+the browser's `pulse_saml_login` cookie token, and honors it for ten minutes
+(at most 1,024 records; expired ones are dropped on the next login). The cookie
+expires after ten minutes. Nothing is persisted, so a restart during the IdP
+round trip refuses the returning Response and the user signs in again. No
+storage, retention, backup, migration or recovery path is added or moved.
+
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` no longer exempts every request carrying

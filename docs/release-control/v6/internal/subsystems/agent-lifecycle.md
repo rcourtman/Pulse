@@ -8955,6 +8955,17 @@ into its in-memory IdP descriptor as base64 DER, which crewjam/saml can read
 when it verifies the IdP's ACS Responses and LogoutResponses. No agent
 registration, enrolment, install, update or removal path changed.
 
+### SAML logins bound to the browser that started them
+
+`internal/api/saml_service.go` and `internal/api/saml_handlers.go` changed only
+so `/api/saml/{id}/login` records each SAML AuthnRequest against a short-lived
+login cookie and `/api/saml/{id}/acs` accepts the IdP's signed answer to it
+once, in that browser, at default settings, reposting the IdP's cross-site
+delivery once from Pulse's origin so the cookie arrives. Signed content
+carrying a prefixed attribute or namespace declaration named like a SAML
+attribute is refused. No agent
+registration, enrolment, install, update or removal path changed.
+
 ### Demo write guard ignores websocket upgrade headers
 
 `internal/api/demo_middleware.go` changed only so a `POST`, `PUT`, `PATCH` or

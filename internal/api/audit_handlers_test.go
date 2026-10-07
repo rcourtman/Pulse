@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -1129,5 +1131,48 @@ func TestSAMLSLOAuditsLogoutResponseNotBoundToSession(t *testing.T) {
 	completions := sloCallbackEvents()
 	if len(completions) != 1 || !completions[0].Success || completions[0].Details != "SAML SLO complete" {
 		t.Fatalf("expected one successful saml_slo_callback event, got %+v", completions)
+	}
+}
+
+// At the ACS, a correctly signed Response answering another browser's login is
+// refused, creates no session and is audited as a binding refusal, while the
+// browser that started that login completes it and is audited as a success.
+func TestSAMLACSAuditsResponseNotAnsweringThisBrowsersLogin(t *testing.T) {
+	previousManager := GetTenantAuditManager()
+	SetTenantAuditManager(nil)
+	t.Cleanup(func() {
+		SetTenantAuditManager(previousManager)
+	})
+	logger := &testAuditLoggerNoVerify{}
+	setAuditLogger(t, logger)
+
+	idp := newSAMLManualCertTestIdP(t)
+	router, service := newSAMLACSTestRouter(t, idp, false)
+	attackerRequestID, attackerToken := startSAMLTestLogin(t, router, "", "/")
+	_, victimToken := startSAMLTestLogin(t, router, "", "/")
+	form := url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(idp.responseXML(t, service, attackerRequestID))}}
+
+	loginEvents := func() []audit.Event {
+		var events []audit.Event
+		for _, event := range logger.events {
+			if event.EventType == "saml_login" {
+				events = append(events, event)
+			}
+		}
+		return events
+	}
+
+	assertSAMLLoginRefused(t, deliverSAMLTestResponse(t, router, form, victimToken), "another browser's Response")
+	refusals := loginEvents()
+	if len(refusals) != 1 || refusals[0].Success ||
+		refusals[0].Details != "SAML response does not answer a login started in this browser" {
+		t.Fatalf("expected one failed saml_login binding refusal, got %+v", refusals)
+	}
+
+	logger.events = nil
+	assertSAMLLoginSucceeded(t, deliverSAMLTestResponse(t, router, form, attackerToken), "/?saml=success", "the Response's own browser")
+	completions := loginEvents()
+	if len(completions) != 1 || !completions[0].Success || completions[0].Details != "SAML login success via okta" {
+		t.Fatalf("expected one successful saml_login event, got %+v", completions)
 	}
 }

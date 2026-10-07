@@ -10,10 +10,12 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -795,32 +797,447 @@ func (idp *samlManualCertTestIdP) metadataXML() string {
 // a signed, unsolicited (no InResponseTo) Response that identifies alice.
 func (idp *samlManualCertTestIdP) acsPost(t *testing.T, service *SAMLService) *http.Request {
 	t.Helper()
+	return samlTestACSRequest(service, url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(idp.responseXML(t, service, ""))}})
+}
+
+// acsPostAnswering returns the same request for an SP-initiated login: the
+// Response and its SubjectConfirmationData answer the AuthnRequest requestID.
+func (idp *samlManualCertTestIdP) acsPostAnswering(t *testing.T, service *SAMLService, requestID string) *http.Request {
+	t.Helper()
+	return samlTestACSRequest(service, url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(idp.responseXML(t, service, requestID))}})
+}
+
+// responseXML returns the Response the IdP posts to the service's ACS after
+// authenticating alice, answering requestID ("" for an unsolicited one). Both
+// the Response and its Assertion are signed.
+func (idp *samlManualCertTestIdP) responseXML(t *testing.T, service *SAMLService, requestID string) []byte {
+	t.Helper()
+	return idp.signedResponseXML(t, service, requestID, "alice", nil)
+}
+
+// signedResponseXML is responseXML for the user nameID, with edit applied to
+// the Assertion before the IdP signs it.
+func (idp *samlManualCertTestIdP) signedResponseXML(t *testing.T, service *SAMLService, requestID, nameID string, edit func(*saml.Assertion)) []byte {
+	t.Helper()
 	spMetadata := service.sp.Metadata()
 	authn := &saml.IdpAuthnRequest{
 		IDP:                     idp.idp,
 		HTTPRequest:             httptest.NewRequest(http.MethodPost, "https://idp.example.com/sso", nil),
+		Request:                 saml.AuthnRequest{ID: requestID},
 		ServiceProviderMetadata: spMetadata,
 		SPSSODescriptor:         &spMetadata.SPSSODescriptors[0],
 		ACSEndpoint:             &saml.IndexedEndpoint{Binding: saml.HTTPPostBinding, Location: service.sp.AcsURL.String()},
 		Now:                     time.Now(),
 	}
 	if err := (saml.DefaultAssertionMaker{}).MakeAssertion(authn, &saml.Session{
-		ID:         "idp-session-alice",
+		ID:         "idp-session-" + nameID,
 		CreateTime: time.Now(),
 		ExpireTime: time.Now().Add(time.Hour),
-		Index:      "idx-alice",
-		NameID:     "alice",
+		Index:      "idx-" + nameID,
+		NameID:     nameID,
 	}); err != nil {
 		t.Fatalf("make assertion: %v", err)
+	}
+	if edit != nil {
+		edit(authn.Assertion)
 	}
 	form, err := authn.PostBinding()
 	if err != nil {
 		t.Fatalf("sign ACS Response: %v", err)
 	}
-	req := httptest.NewRequest(http.MethodPost, service.sp.AcsURL.String(),
-		strings.NewReader(url.Values{"SAMLResponse": {form.SAMLResponse}}.Encode()))
+	raw, err := base64.StdEncoding.DecodeString(form.SAMLResponse)
+	if err != nil {
+		t.Fatalf("decode ACS Response: %v", err)
+	}
+	return raw
+}
+
+func samlTestACSRequest(service *SAMLService, form url.Values) *http.Request {
+	req := httptest.NewRequest(http.MethodPost, service.sp.AcsURL.String(), strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	return req
+}
+
+// samlTestAuthnRequestID returns the ID of the AuthnRequest carried by an
+// HTTP-Redirect binding URL to the IdP.
+func samlTestAuthnRequestID(t *testing.T, redirectURL string) string {
+	t.Helper()
+	location, err := url.Parse(redirectURL)
+	if err != nil || location.Host != "idp.example.com" {
+		t.Fatalf("unexpected AuthnRequest redirect %q (%v)", redirectURL, err)
+	}
+	var authnRequest struct {
+		ID string `xml:"ID,attr"`
+	}
+	if err := xml.Unmarshal(inflateSAMLTestPayload(t, location.Query().Get("SAMLRequest")), &authnRequest); err != nil {
+		t.Fatalf("parse AuthnRequest: %v", err)
+	}
+	if authnRequest.ID == "" {
+		t.Fatal("AuthnRequest has no ID")
+	}
+	return authnRequest.ID
+}
+
+// samlTestXMLAttr appends attr="value" to the first start tag named tag (any
+// prefix) in doc, the way an attacker edits a signed Response in transit.
+func samlTestXMLAttr(t *testing.T, doc []byte, tag, attr, value string) []byte {
+	t.Helper()
+	re := regexp.MustCompile(`<([A-Za-z0-9]+:)?` + tag + `[\s>/]`)
+	loc := re.FindIndex(doc)
+	if loc == nil {
+		t.Fatalf("no <%s> in %s", tag, doc)
+	}
+	end := bytes.IndexByte(doc[loc[0]:], '>') + loc[0]
+	if doc[end-1] == '/' {
+		end--
+	}
+	out := append([]byte{}, doc[:end]...)
+	out = append(out, []byte(` `+attr+`="`+value+`"`)...)
+	return append(out, doc[end:]...)
+}
+
+// useSAMLTestAuthStores gives the test fresh session and CSRF stores and puts
+// the previous ones back afterwards, so tests that run later still find the
+// stores they were using.
+func useSAMLTestAuthStores(t *testing.T) {
+	t.Helper()
+	dataPath := t.TempDir()
+
+	sessionStoreMu.Lock()
+	previousSessionStore, previousSessionPath := sessionStore, sessionStoreDataPath
+	sessionStore, sessionStoreDataPath = nil, ""
+	sessionStoreMu.Unlock()
+	csrfStoreMu.Lock()
+	previousCSRFStore, previousCSRFPath := csrfStore, csrfStoreDataPath
+	csrfStore, csrfStoreDataPath = nil, ""
+	csrfStoreMu.Unlock()
+	InitSessionStore(dataPath)
+	InitCSRFStore(dataPath)
+
+	t.Cleanup(func() {
+		resetSessionStoreForTests()
+		resetCSRFStoreForTests()
+		sessionStoreMu.Lock()
+		sessionStore, sessionStoreDataPath = previousSessionStore, previousSessionPath
+		sessionStoreMu.Unlock()
+		csrfStoreMu.Lock()
+		csrfStore, csrfStoreDataPath = previousCSRFStore, previousCSRFPath
+		csrfStoreMu.Unlock()
+	})
+}
+
+// samlTestUnsignedResponse removes the Response's own signature, leaving only
+// its Assertion signed, as many IdPs send it.
+func samlTestUnsignedResponse(t *testing.T, signed []byte) []byte {
+	t.Helper()
+	unsigned := regexp.MustCompile(`(?s)(<samlp:Response[^>]*>.*?</saml:Issuer>)<ds:Signature.*?</ds:Signature>`).ReplaceAll(signed, []byte("$1"))
+	if bytes.Equal(unsigned, signed) {
+		t.Fatalf("could not strip the Response signature from %s", signed)
+	}
+	return unsigned
+}
+
+const samlACSTestProvider = "okta"
+
+// newSAMLACSTestRouter returns a router whose "okta" SAML provider trusts idp
+// through its metadata, at default settings unless allowIDPInitiated is set,
+// with fresh session and CSRF stores.
+func newSAMLACSTestRouter(t *testing.T, idp *samlManualCertTestIdP, allowIDPInitiated bool) (*Router, *SAMLService) {
+	t.Helper()
+	useSAMLTestAuthStores(t)
+
+	cfg := &config.SAMLProviderConfig{IDPMetadataXML: idp.metadataXML(), AllowIDPInitiated: allowIDPInitiated}
+	service, err := NewSAMLService(context.Background(), samlACSTestProvider, cfg, "https://pulse.example.com")
+	if err != nil {
+		t.Fatalf("NewSAMLService: %v", err)
+	}
+	router := &Router{
+		samlManager: NewSAMLServiceManager("https://pulse.example.com"),
+		ssoConfig: &config.SSOConfig{Providers: []config.SSOProvider{{
+			ID: samlACSTestProvider, Name: "Test SAML", Type: config.SSOProviderTypeSAML, Enabled: true, SAML: cfg,
+		}}},
+	}
+	router.samlManager.services[samlACSTestProvider] = service
+	return router, service
+}
+
+// startSAMLTestLogin starts SP-initiated login in a browser holding loginToken
+// ("" for a browser that has none yet) and returns the ID of the AuthnRequest
+// sent to the IdP and the login token the browser holds afterwards.
+func startSAMLTestLogin(t *testing.T, router *Router, loginToken, returnTo string) (requestID, heldToken string) {
+	t.Helper()
+	target := "/api/saml/okta/login"
+	if returnTo != "" {
+		target += "?returnTo=" + url.QueryEscape(returnTo)
+	}
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	if loginToken != "" {
+		req.AddCookie(&http.Cookie{Name: cookieNameSAMLLogin, Value: loginToken})
+	}
+	rec := httptest.NewRecorder()
+	router.handleSAMLLogin(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("login: expected status %d, got %d body=%q", http.StatusFound, rec.Code, rec.Body.String())
+	}
+	heldToken = loginToken
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name == cookieNameSAMLLogin {
+			if !cookie.HttpOnly || cookie.SameSite != http.SameSiteLaxMode || cookie.MaxAge <= 0 || cookie.Path != "/" {
+				t.Fatalf("login cookie must be an HttpOnly SameSite=Lax cookie that expires, got %+v", cookie)
+			}
+			heldToken = cookie.Value
+		}
+	}
+	if heldToken == "" {
+		t.Fatal("login set no login cookie")
+	}
+	return samlTestAuthnRequestID(t, rec.Header().Get("Location")), heldToken
+}
+
+// postSAMLTestACS delivers an ACS form from a browser holding loginToken (""
+// for none). A cross-site HTTP-POST from the IdP carries no SameSite=Lax
+// cookie, so pass "" to model the IdP's own delivery.
+func postSAMLTestACS(router *Router, form url.Values, loginToken string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/api/saml/okta/acs", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if loginToken != "" {
+		req.AddCookie(&http.Cookie{Name: cookieNameSAMLLogin, Value: loginToken})
+	}
+	rec := httptest.NewRecorder()
+	router.handleSAMLACS(rec, req)
+	return rec
+}
+
+// samlTestRepostForm returns the hidden fields of the ACS repost page.
+func samlTestRepostForm(t *testing.T, rec *httptest.ResponseRecorder) url.Values {
+	t.Helper()
+	if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/html") {
+		t.Fatalf("expected the ACS repost page, got status %d type %q body=%q", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
+	}
+	form := url.Values{}
+	for _, match := range regexp.MustCompile(`<input type="hidden" name="([^"]+)" value="([^"]*)">`).FindAllStringSubmatch(rec.Body.String(), -1) {
+		form.Add(match[1], html.UnescapeString(match[2]))
+	}
+	return form
+}
+
+// deliverSAMLTestResponse delivers a Response the way the browser that holds
+// loginToken receives it: the IdP's cross-site POST, which carries no login
+// cookie and gets the repost page, then the page's same-origin repost.
+func deliverSAMLTestResponse(t *testing.T, router *Router, form url.Values, loginToken string) *httptest.ResponseRecorder {
+	t.Helper()
+	return postSAMLTestACS(router, samlTestRepostForm(t, postSAMLTestACS(router, form, "")), loginToken)
+}
+
+func assertSAMLLoginSucceeded(t *testing.T, rec *httptest.ResponseRecorder, wantLocation, label string) {
+	t.Helper()
+	if rec.Code != http.StatusFound || rec.Header().Get("Location") != wantLocation {
+		t.Fatalf("%s: expected redirect to %q, got status %d location %q body=%q", label, wantLocation, rec.Code, rec.Header().Get("Location"), rec.Body.String())
+	}
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name == cookieNameSession && cookie.Value != "" && ValidateSession(cookie.Value) {
+			return
+		}
+	}
+	t.Fatalf("%s: login established no session, cookies %v", label, rec.Result().Cookies())
+}
+
+func assertSAMLLoginRefused(t *testing.T, rec *httptest.ResponseRecorder, label string) {
+	t.Helper()
+	if rec.Code != http.StatusFound || !strings.Contains(rec.Header().Get("Location"), "saml_error=saml_validation_failed") {
+		t.Fatalf("%s: expected the validation-failed redirect, got status %d location %q body=%q", label, rec.Code, rec.Header().Get("Location"), rec.Body.String())
+	}
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name == cookieNameSession || cookie.Name == cookieNameSessionSecure {
+			t.Fatalf("%s: refused login wrote session cookie %+v", label, cookie)
+		}
+	}
+}
+
+// At default settings, with IdP-initiated logins off, SP-initiated login
+// completes: the IdP's cross-site POST of its signed answer gets the repost
+// page, whose same-origin repost carries the login cookie, and the login
+// returns to the recorded returnTo whatever RelayState the IdP posts.
+func TestHandleSAMLACS_CompletesLoginStartedInThisBrowser(t *testing.T) {
+	idp := newSAMLManualCertTestIdP(t)
+	router, service := newSAMLACSTestRouter(t, idp, false)
+
+	requestID, token := startSAMLTestLogin(t, router, "", "/alerts?tab=history&range=7d")
+	form := url.Values{
+		"SAMLResponse": {base64.StdEncoding.EncodeToString(idp.responseXML(t, service, requestID))},
+		"RelayState":   {"/settings"},
+	}
+	repost := postSAMLTestACS(router, form, "")
+	fields := samlTestRepostForm(t, repost)
+	if fields.Get("SAMLResponse") != form.Get("SAMLResponse") || fields.Get("RelayState") != "/settings" || fields.Get(samlACSRepostField) != "1" {
+		t.Fatalf("repost page must carry the posted fields and the repost marker, got %v", fields)
+	}
+	if cookies := repost.Result().Cookies(); len(cookies) != 0 {
+		t.Fatalf("repost page must not write cookies, got %v", cookies)
+	}
+	if body := repost.Body.String(); strings.Contains(body, " action=") || !strings.Contains(body, "document.forms[0].submit()") {
+		t.Fatalf("repost page must submit itself back to the URL the IdP posted to, got %q", body)
+	}
+
+	assertSAMLLoginSucceeded(t, postSAMLTestACS(router, fields, token), "/alerts?range=7d&saml=success&tab=history", "repost with login cookie")
+}
+
+// Each AuthnRequest is answered once, and only in the browser that started it.
+// A Response answering another browser's request, an unknown request or none
+// is refused, and refusing another browser leaves that browser's login intact.
+func TestHandleSAMLACS_RefusesResponsesNotAnsweringThisBrowsersLogin(t *testing.T) {
+	idp := newSAMLManualCertTestIdP(t)
+	router, service := newSAMLACSTestRouter(t, idp, false)
+
+	victimRequestID, victimToken := startSAMLTestLogin(t, router, "", "/")
+	attackerRequestID, attackerToken := startSAMLTestLogin(t, router, "", "/")
+	attackerForm := url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(idp.responseXML(t, service, attackerRequestID))}}
+
+	assertSAMLLoginRefused(t, deliverSAMLTestResponse(t, router, attackerForm, victimToken), "another browser's Response")
+	for _, requestID := range []string{"", "id-never-issued-by-this-sp"} {
+		form := url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(idp.responseXML(t, service, requestID))}}
+		assertSAMLLoginRefused(t, deliverSAMLTestResponse(t, router, form, victimToken), "InResponseTo="+requestID)
+	}
+	assertSAMLLoginRefused(t, postSAMLTestACS(router, url.Values{
+		"SAMLResponse":     attackerForm["SAMLResponse"],
+		samlACSRepostField: {"1"},
+	}, ""), "repost without a login cookie")
+
+	assertSAMLLoginSucceeded(t, deliverSAMLTestResponse(t, router, attackerForm, attackerToken), "/?saml=success", "the Response's own browser")
+	assertSAMLLoginRefused(t, deliverSAMLTestResponse(t, router, attackerForm, attackerToken), "replay in the same browser")
+
+	victimForm := url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(idp.responseXML(t, service, victimRequestID))}}
+	assertSAMLLoginSucceeded(t, deliverSAMLTestResponse(t, router, victimForm, victimToken), "/?saml=success", "the victim's own login after the refusals")
+}
+
+// encoding/xml fills an un-namespaced attribute field from a namespace
+// declaration with the same local name, and exclusive canonicalization leaves
+// an unused declaration out of the signed form. Declaring xmlns:InResponseTo
+// on a signed Response or Assertion must not rebind the attacker's answer to
+// the victim's outstanding AuthnRequest, whether the Response itself is signed
+// or only its Assertion is.
+func TestHandleSAMLACS_InResponseToIgnoresNamespaceDeclarations(t *testing.T) {
+	idp := newSAMLManualCertTestIdP(t)
+	router, service := newSAMLACSTestRouter(t, idp, false)
+
+	victimRequestID, victimToken := startSAMLTestLogin(t, router, "", "/")
+	attackerRequestID, _ := startSAMLTestLogin(t, router, "", "/")
+	signed := idp.responseXML(t, service, attackerRequestID)
+
+	spoofed := samlTestXMLAttr(t, signed, "Response", "xmlns:InResponseTo", victimRequestID)
+	spoofed = samlTestXMLAttr(t, spoofed, "SubjectConfirmationData", "xmlns:InResponseTo", victimRequestID)
+	assertSAMLLoginRefused(t, deliverSAMLTestResponse(t, router, url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(spoofed)}}, victimToken), "signed Response")
+
+	// Without its own signature the Response's attributes are the attacker's
+	// to write; only the signed Assertion says which request it answers.
+	assertionOnly := bytes.Replace(samlTestUnsignedResponse(t, signed), []byte(`InResponseTo="`+attackerRequestID+`"`), []byte(`InResponseTo="`+victimRequestID+`"`), 1)
+	assertionOnly = samlTestXMLAttr(t, assertionOnly, "SubjectConfirmationData", "xmlns:InResponseTo", victimRequestID)
+	assertSAMLLoginRefused(t, deliverSAMLTestResponse(t, router, url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(assertionOnly)}}, victimToken), "assertion-only signature")
+
+	victimForm := url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(idp.responseXML(t, service, victimRequestID))}}
+	assertSAMLLoginSucceeded(t, deliverSAMLTestResponse(t, router, victimForm, victimToken), "/?saml=success", "the victim's own login after the spoofs")
+}
+
+// Many IdPs sign only the Assertion. Its signed SubjectConfirmationData then
+// names the request, and the login completes. A signed assertion that confirms
+// no request cannot ride along with one that does: an IdP-signed assertion for
+// another user without a SubjectConfirmation, placed ahead of the victim's own
+// in an unsigned Response, is the assertion crewjam would return, and the
+// victim's request must not vouch for it.
+func TestHandleSAMLACS_BindsTheAssertionItReturns(t *testing.T) {
+	idp := newSAMLManualCertTestIdP(t)
+	router, service := newSAMLACSTestRouter(t, idp, false)
+
+	victimRequestID, victimToken := startSAMLTestLogin(t, router, "", "/")
+	victimResponse := samlTestUnsignedResponse(t, idp.responseXML(t, service, victimRequestID))
+
+	unconfirmed := idp.signedResponseXML(t, service, "", "mallory", func(assertion *saml.Assertion) {
+		assertion.Subject.SubjectConfirmations = nil
+	})
+	unconfirmedAssertion := regexp.MustCompile(`(?s)<saml:Assertion .*?</saml:Assertion>`).Find(unconfirmed)
+	at := bytes.Index(victimResponse, []byte("<saml:Assertion "))
+	if unconfirmedAssertion == nil || at < 0 {
+		t.Fatalf("could not splice assertions: %s / %s", unconfirmed, victimResponse)
+	}
+	spliced := append(append(append([]byte{}, victimResponse[:at]...), unconfirmedAssertion...), victimResponse[at:]...)
+	assertSAMLLoginRefused(t, deliverSAMLTestResponse(t, router, url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(spliced)}}, victimToken), "unconfirmed assertion ahead of the victim's")
+
+	assertSAMLLoginSucceeded(t, deliverSAMLTestResponse(t, router, url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(victimResponse)}}, victimToken), "/?saml=success", "assertion-only signature")
+}
+
+// Logins started in several tabs of one browser share its login cookie, and
+// each completes with its own Response, in any order, returning to its own
+// path.
+func TestHandleSAMLACS_CompletesLoginsFromSeveralTabs(t *testing.T) {
+	idp := newSAMLManualCertTestIdP(t)
+	router, service := newSAMLACSTestRouter(t, idp, false)
+
+	firstRequestID, token := startSAMLTestLogin(t, router, "", "/infrastructure")
+	secondRequestID, secondToken := startSAMLTestLogin(t, router, token, "/alerts")
+	if secondToken != token {
+		t.Fatalf("a second login must keep the browser's login token, got %q then %q", token, secondToken)
+	}
+
+	second := url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(idp.responseXML(t, service, secondRequestID))}}
+	assertSAMLLoginSucceeded(t, deliverSAMLTestResponse(t, router, second, token), "/alerts?saml=success", "second tab")
+	first := url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(idp.responseXML(t, service, firstRequestID))}}
+	assertSAMLLoginSucceeded(t, deliverSAMLTestResponse(t, router, first, token), "/infrastructure?saml=success", "first tab")
+}
+
+// With IdP-initiated logins allowed, an unsolicited Response still completes
+// without a login cookie or a repost, as before request binding. But a stale
+// signed Response stays stale: namespace declarations named like the
+// attributes crewjam checks for age cannot override them.
+func TestHandleSAMLACS_IDPInitiatedResponsesCannotOverrideTheirAge(t *testing.T) {
+	idp := newSAMLManualCertTestIdP(t)
+	router, service := newSAMLACSTestRouter(t, idp, true)
+
+	signed := idp.responseXML(t, service, "")
+	form := url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(signed)}, "RelayState": {"/settings"}}
+	assertSAMLLoginSucceeded(t, postSAMLTestACS(router, form, ""), "/settings?saml=success", "fresh unsolicited Response")
+
+	realNow := saml.TimeNow
+	t.Cleanup(func() { saml.TimeNow = realNow })
+	saml.TimeNow = func() time.Time { return realNow().Add(2 * time.Hour) }
+	assertSAMLLoginRefused(t, postSAMLTestACS(router, form, ""), "stale unsolicited Response")
+
+	future := realNow().Add(3 * time.Hour).UTC().Format(time.RFC3339)
+	spoofed := samlTestXMLAttr(t, signed, "Response", "xmlns:IssueInstant", future)
+	spoofed = samlTestXMLAttr(t, spoofed, "Assertion", "xmlns:IssueInstant", future)
+	spoofed = samlTestXMLAttr(t, spoofed, "SubjectConfirmationData", "xmlns:NotOnOrAfter", future)
+	spoofed = samlTestXMLAttr(t, spoofed, "Conditions", "xmlns:NotOnOrAfter", future)
+	assertSAMLLoginRefused(t, postSAMLTestACS(router, url.Values{"SAMLResponse": {base64.StdEncoding.EncodeToString(spoofed)}}, ""), "stale Response with spoofed age")
+}
+
+// The repost page is the IdP's form replayed from Pulse's origin: values are
+// HTML-escaped and its script carries the request's CSP nonce.
+func TestWriteSAMLACSRepost_EscapesFieldsAndCarriesCSPNonce(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/saml/okta/acs", strings.NewReader(url.Values{
+		"SAMLResponse": {`"><script>alert(1)</script>`},
+		"RelayState":   {"/"},
+		"Unrelated":    {"dropped"},
+	}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(context.WithValue(req.Context(), cspNonceKey{}, "test-nonce"))
+	if err := req.ParseForm(); err != nil {
+		t.Fatalf("parse form: %v", err)
+	}
+	rec := httptest.NewRecorder()
+	writeSAMLACSRepost(rec, req)
+
+	body := rec.Body.String()
+	if strings.Contains(body, "<script>alert(1)") || strings.Contains(body, "Unrelated") {
+		t.Fatalf("repost page must escape values and carry only SAML fields, got %q", body)
+	}
+	if !strings.Contains(body, `<script nonce="test-nonce">`) {
+		t.Fatalf("repost script must carry the CSP nonce, got %q", body)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("repost page must not be cached, got Cache-Control %q", got)
+	}
+	if fields := samlTestRepostForm(t, rec); fields.Get("SAMLResponse") != `"><script>alert(1)</script>` {
+		t.Fatalf("repost must carry the exact posted value, got %v", fields)
+	}
 }
 
 // samlRejectionDetail adds crewjam/saml's private reason to a rejected

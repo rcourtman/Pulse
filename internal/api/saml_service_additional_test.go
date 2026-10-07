@@ -46,7 +46,7 @@ func TestProcessResponse_InvalidResponse(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/acs", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	_, relay, err := service.ProcessResponse(req)
+	_, relay, err := service.ProcessResponse(req, "")
 	if err == nil {
 		t.Fatal("expected error for invalid response")
 	}

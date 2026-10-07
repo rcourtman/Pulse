@@ -14,14 +14,18 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/beevik/etree"
 	"github.com/crewjam/saml"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
+	dsig "github.com/russellhaering/goxmldsig"
 )
 
 // SAMLService manages SAML Service Provider functionality for a single provider
@@ -35,16 +39,19 @@ type SAMLService struct {
 	baseURL     string
 	lastRefresh time.Time
 
+	// authnRequests holds the SP-initiated AuthnRequests still waiting for
+	// the IdP's Response, each bound to the browser that started the login.
+	authnRequests samlRequestStore
 	// logoutRequests holds the SP-initiated LogoutRequests still waiting for
 	// the IdP's LogoutResponse.
-	logoutRequests samlLogoutRequestStore
+	logoutRequests samlRequestStore
 }
 
 const (
-	// samlLogoutRequestTTL bounds how long the IdP round trip of an
-	// SP-initiated logout may take, matching the OIDC login state lifetime.
-	samlLogoutRequestTTL        = 10 * time.Minute
-	maxSAMLLogoutRequestEntries = 1024
+	// samlRequestTTL bounds how long the IdP round trip of an SP-initiated
+	// login or logout may take, matching the OIDC login state lifetime.
+	samlRequestTTL        = 10 * time.Minute
+	maxSAMLRequestEntries = 1024
 	// samlLogoutResponseMaxBytes matches crewjam/saml's inflate limit for the
 	// HTTP-Redirect binding.
 	samlLogoutResponseMaxBytes = 10 << 20
@@ -55,34 +62,46 @@ const (
 // session.
 var errSAMLLogoutResponseUnbound = errors.New("logout response does not answer an outstanding logout request for this session")
 
-// samlLogoutRequestStore records the LogoutRequests this SP issued, keyed by
-// request ID, with the session each one logged out. crewjam/saml checks a
-// LogoutResponse's signature, destination, issuer, status and age but never
-// its InResponseTo, so without this record any recent signed response from the
-// IdP, including one answering another user's logout, would be accepted.
-type samlLogoutRequestStore struct {
+// errSAMLResponseUnbound marks an ACS Response that does not answer an
+// outstanding AuthnRequest this SP issued to the presenting browser.
+var errSAMLResponseUnbound = errors.New("response does not answer an outstanding authentication request from this browser")
+
+// samlRequestStore records the requests this SP issued and is still waiting
+// for the IdP to answer, keyed by request ID. Each record carries the key of
+// what the request is bound to: the browser that started an SP-initiated
+// login, or the session an SP-initiated logout ended.
+//
+// crewjam/saml checks a LogoutResponse's signature, destination, issuer,
+// status and age but never its InResponseTo, so without these records any
+// recent signed response from the IdP, including one answering another user's
+// logout, would be accepted. For logins crewjam does check InResponseTo, but
+// only against the request IDs its caller supplies, and without records there
+// were none to supply: every SP-initiated Response was refused.
+type samlRequestStore struct {
 	mu      sync.Mutex
-	entries map[string]samlLogoutRequest
+	entries map[string]samlRequestRecord
 }
 
-type samlLogoutRequest struct {
-	sessionKey string
-	expiresAt  time.Time
+type samlRequestRecord struct {
+	bindingKey string
+	// returnTo is the local path an SP-initiated login returns to.
+	returnTo  string
+	expiresAt time.Time
 }
 
-func (s *samlLogoutRequestStore) put(requestID, sessionKey string, now time.Time) {
+func (s *samlRequestStore) put(requestID string, record samlRequestRecord, now time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.entries == nil {
-		s.entries = make(map[string]samlLogoutRequest)
+		s.entries = make(map[string]samlRequestRecord)
 	}
 	for id, entry := range s.entries {
 		if !now.Before(entry.expiresAt) {
 			delete(s.entries, id)
 		}
 	}
-	for len(s.entries) >= maxSAMLLogoutRequestEntries {
+	for len(s.entries) >= maxSAMLRequestEntries {
 		oldestID := ""
 		var oldestExpiry time.Time
 		for id, entry := range s.entries {
@@ -93,10 +112,8 @@ func (s *samlLogoutRequestStore) put(requestID, sessionKey string, now time.Time
 		}
 		delete(s.entries, oldestID)
 	}
-	s.entries[requestID] = samlLogoutRequest{
-		sessionKey: sessionKey,
-		expiresAt:  now.Add(samlLogoutRequestTTL),
-	}
+	record.expiresAt = now.Add(samlRequestTTL)
+	s.entries[requestID] = record
 }
 
 // consume spends the outstanding request a verified LogoutResponse answers.
@@ -105,7 +122,7 @@ func (s *samlLogoutRequestStore) put(requestID, sessionKey string, now time.Time
 // it answers an unexpired request and the browser carries either no session
 // or the session that request logged out. The request is spent on every
 // verified presentation, so a response is honored at most once.
-func (s *samlLogoutRequestStore) consume(requestID, sessionKey string, now time.Time) error {
+func (s *samlRequestStore) consume(requestID, sessionKey string, now time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -117,10 +134,45 @@ func (s *samlLogoutRequestStore) consume(requestID, sessionKey string, now time.
 	if !now.Before(entry.expiresAt) {
 		return fmt.Errorf("%w: request %q expired", errSAMLLogoutResponseUnbound, requestID)
 	}
-	if sessionKey != "" && sessionKey != entry.sessionKey {
+	if sessionKey != "" && sessionKey != entry.bindingKey {
 		return fmt.Errorf("%w: request %q logged out a different session", errSAMLLogoutResponseUnbound, requestID)
 	}
 	return nil
+}
+
+// outstanding returns every unexpired request, sorted, and whether any of
+// them is bound to bindingKey.
+func (s *samlRequestStore) outstanding(bindingKey string, now time.Time) (requestIDs []string, bound bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for id, entry := range s.entries {
+		if now.Before(entry.expiresAt) {
+			requestIDs = append(requestIDs, id)
+			bound = bound || (bindingKey != "" && entry.bindingKey == bindingKey)
+		}
+	}
+	sort.Strings(requestIDs)
+	return requestIDs, bound
+}
+
+// spend removes and returns the unexpired request a verified ACS Response
+// answers, provided it is bound to bindingKey, the presenting browser. A
+// request bound to another browser is left for that browser, so presenting a
+// stolen Response elsewhere does not cost its owner the login.
+func (s *samlRequestStore) spend(requestID, bindingKey string, now time.Time) (samlRequestRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	entry, ok := s.entries[requestID]
+	if requestID == "" || bindingKey == "" || !ok || entry.bindingKey != bindingKey {
+		return samlRequestRecord{}, fmt.Errorf("%w: no outstanding request from this browser matches InResponseTo %q", errSAMLResponseUnbound, requestID)
+	}
+	delete(s.entries, requestID)
+	if !now.Before(entry.expiresAt) {
+		return samlRequestRecord{}, fmt.Errorf("%w: request %q expired", errSAMLResponseUnbound, requestID)
+	}
+	return entry, nil
 }
 
 func normalizeSAMLBaseURL(baseURL string) (string, error) {
@@ -544,25 +596,40 @@ func (s *SAMLService) loadSPCredentials() (*x509.Certificate, *rsa.PrivateKey, e
 	return cert, key, nil
 }
 
-// MakeAuthRequest creates a SAML AuthnRequest and returns the redirect URL
-func (s *SAMLService) MakeAuthRequest(relayState string) (string, error) {
+// MakeAuthRequest creates a SAML AuthnRequest and returns the HTTP-Redirect
+// binding URL that sends it to the IdP. It records the request as outstanding
+// for browserKey, the login binding key of the browser starting the login,
+// together with returnTo, so that ProcessResponse accepts the IdP's answer to
+// this request only once, only from that browser, and returns it to returnTo.
+func (s *SAMLService) MakeAuthRequest(returnTo, browserKey string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	if s.sp == nil {
 		return "", errors.New("service provider not initialized")
 	}
+	if browserKey == "" {
+		return "", errors.New("authentication request has no browser to bind")
+	}
 
-	if relayState == "" {
-		relayState = "/"
+	if returnTo == "" {
+		returnTo = "/"
 	}
 	if len(s.idpMetadata.IDPSSODescriptors) == 0 ||
 		len(s.idpMetadata.IDPSSODescriptors[0].SingleSignOnServices) == 0 {
 		return "", errors.New("idp does not support single sign-on")
 	}
 
-	// Use the simple redirect method
-	redirectURL, err := s.sp.MakeRedirectAuthenticationRequest(relayState)
+	// This is crewjam's MakeRedirectAuthenticationRequest, unrolled to learn
+	// the request's ID.
+	authnRequest, err := s.sp.MakeAuthenticationRequest(s.sp.GetSSOBindingLocation(saml.HTTPRedirectBinding), saml.HTTPRedirectBinding, saml.HTTPPostBinding)
+	if err != nil {
+		return "", fmt.Errorf("failed to create auth request: %w", err)
+	}
+	// Redirect appends RelayState to the query as given, so escape it: a
+	// returnTo with its own query string would otherwise split into stray
+	// parameters and come back from the IdP truncated.
+	redirectURL, err := authnRequest.Redirect(url.QueryEscape(returnTo), s.sp)
 	if err != nil {
 		return "", fmt.Errorf("failed to create auth request: %w", err)
 	}
@@ -576,11 +643,35 @@ func (s *SAMLService) MakeAuthRequest(relayState string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to validate auth redirect: %w", err)
 	}
+	s.authnRequests.put(authnRequest.ID, samlRequestRecord{bindingKey: browserKey, returnTo: returnTo}, time.Now())
 	return validatedURL, nil
 }
 
-// ProcessResponse processes a SAML response and extracts user information
-func (s *SAMLService) ProcessResponse(r *http.Request) (*SAMLAuthResult, string, error) {
+// AllowsIDPInitiated reports whether the provider accepts IdP-initiated
+// (unsolicited) Responses, which answer no AuthnRequest and so cannot be bound
+// to the browser that receives them.
+func (s *SAMLService) AllowsIDPInitiated() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.sp != nil && s.sp.AllowIDPInitiated
+}
+
+// ProcessResponse verifies the IdP's Response posted to the ACS and extracts
+// the user it authenticates, along with the local path the login returns to.
+//
+// Unless the provider allows IdP-initiated logins, the Response must answer
+// an unexpired AuthnRequest from MakeAuthRequest that is bound to browserKey,
+// the login binding key of the presenting browser ("" when it carries none),
+// and it spends that request, so each login is completed at most once and only
+// in the browser that started it. The request ID is read from what the IdP's
+// signatures cover, never from crewjam/saml's parsed fields (see
+// samlSignedContent). The returned path is the one recorded with the request,
+// not the posted RelayState. Binding failures wrap errSAMLResponseUnbound.
+//
+// With IdP-initiated logins allowed, crewjam skips InResponseTo entirely, so a
+// Response answering any request, or none, is accepted in any browser and
+// returns to its posted RelayState, as before request binding existed.
+func (s *SAMLService) ProcessResponse(r *http.Request, browserKey string) (*SAMLAuthResult, string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -595,16 +686,41 @@ func (s *SAMLService) ProcessResponse(r *http.Request) (*SAMLAuthResult, string,
 
 	relayState := r.FormValue("RelayState")
 
-	// Allow IdP-initiated flow
-	possibleRequestIDs := []string{}
-	if s.sp.AllowIDPInitiated {
-		possibleRequestIDs = append(possibleRequestIDs, "")
+	// crewjam checks that the Response answers one of possibleRequestIDs,
+	// every outstanding AuthnRequest here; spend then decides whether it is
+	// this browser's.
+	now := time.Now()
+	possibleRequestIDs := []string{""}
+	if !s.sp.AllowIDPInitiated {
+		var bound bool
+		possibleRequestIDs, bound = s.authnRequests.outstanding(browserKey, now)
+		if !bound {
+			return nil, relayState, fmt.Errorf("%w: this browser has no login in progress", errSAMLResponseUnbound)
+		}
 	}
 
-	// Parse and validate the SAML assertion
-	assertion, err := s.sp.ParseResponse(r, possibleRequestIDs)
+	// Parse and validate the SAML assertion on a copy of the service provider
+	// whose signature verifier keeps what each verified signature covers.
+	signed := &samlSignedContent{}
+	sp := *s.sp
+	sp.SignatureVerifier = signed
+	assertion, err := sp.ParseResponse(r, possibleRequestIDs)
 	if err != nil {
 		return nil, relayState, fmt.Errorf("failed to validate saml response: %w", err)
+	}
+
+	if !s.sp.AllowIDPInitiated {
+		requestID, err := signed.inResponseTo(assertion.ID)
+		if err != nil {
+			return nil, relayState, fmt.Errorf("%w: %v", errSAMLResponseUnbound, err)
+		}
+		// Artifact resolution and signature checks take time, so judge
+		// the request's expiry now rather than when parsing began.
+		request, err := s.authnRequests.spend(requestID, browserKey, time.Now())
+		if err != nil {
+			return nil, relayState, err
+		}
+		relayState = request.returnTo
 	}
 
 	// Extract user information from assertion
@@ -721,7 +837,7 @@ func (s *SAMLService) MakeLogoutRequest(nameID, sessionIdx, sessionKey string) (
 	if err != nil {
 		return "", err
 	}
-	s.logoutRequests.put(req.ID, sessionKey, time.Now())
+	s.logoutRequests.put(req.ID, samlRequestRecord{bindingKey: sessionKey}, time.Now())
 	return validatedURL, nil
 }
 
@@ -825,6 +941,180 @@ func logoutResponseInResponseTo(raw []byte) (string, error) {
 		}
 		return inResponseTo, nil
 	}
+}
+
+// samlSignedContent is the signature verifier ProcessResponse gives crewjam/saml
+// for one ACS Response. It verifies each signature exactly as crewjam's default
+// verifier does and keeps the content that signature covers: the canonical form
+// goxmldsig digested, which holds only what the IdP signed.
+//
+// crewjam reads a Response's fields by unmarshalling the posted elements with
+// encoding/xml, which fills an un-namespaced attribute field from any attribute
+// with that local name, whatever its prefix, the last one winning. That
+// includes a namespace declaration such as xmlns:IssueInstant, and exclusive
+// canonicalization leaves a declaration nothing uses out of the signed form,
+// so one can be appended to a signed element without breaking its signature
+// and override what crewjam checks: InResponseTo, IssueInstant, NotOnOrAfter,
+// Recipient, Destination. VerifySignature therefore refuses signed content
+// carrying any prefixed attribute or declaration named like an un-namespaced
+// attribute crewjam reads, so crewjam's fields match what was signed, and the
+// binding decision still reads InResponseTo from the kept canonical content
+// rather than from crewjam's fields.
+type samlSignedContent struct {
+	elements []*etree.Element
+}
+
+func (c *samlSignedContent) VerifySignature(validationContext *dsig.ValidationContext, el *etree.Element) error {
+	if shadow := samlShadowingAttribute(el); shadow != "" {
+		return fmt.Errorf("cannot validate signature on %s: %s shadows a SAML attribute", el.Tag, shadow)
+	}
+	signed, err := validationContext.Validate(el)
+	if err != nil {
+		return fmt.Errorf("cannot validate signature on %s: %v", el.Tag, err)
+	}
+	c.elements = append(c.elements, signed)
+	return nil
+}
+
+// inResponseTo returns the AuthnRequest ID that the signature covering the
+// assertion crewjam returned, identified by its ID, says it answers.
+//
+// When the Response, or an ArtifactResponse carrying it, is signed, the IdP
+// signed the whole message, the returned assertion included, and the signed
+// Response's InResponseTo names the request. Otherwise crewjam verified the
+// returned assertion's own signature, and the request is named by that
+// assertion's SubjectConfirmationData: every SubjectConfirmation of its
+// Subject must carry the same one, and at least one must exist, because
+// crewjam accepts a Subject without any. Other signed assertions in the same
+// Response, and assertions in Advice, do not take part.
+func (c *samlSignedContent) inResponseTo(assertionID string) (string, error) {
+	for _, el := range c.elements {
+		response := el
+		if el.Tag == "ArtifactResponse" {
+			response = samlChildElement(el, "Response")
+		}
+		if response == nil || response.Tag != "Response" {
+			continue
+		}
+		if requestID := samlUnprefixedAttr(response, "InResponseTo"); requestID != "" {
+			return requestID, nil
+		}
+		return "", errors.New("the signed Response answers no request")
+	}
+	var assertion *etree.Element
+	for _, el := range c.elements {
+		if el.Tag != "Assertion" || samlUnprefixedAttr(el, "ID") != assertionID {
+			continue
+		}
+		if assertion != nil {
+			return "", fmt.Errorf("several signed assertions carry ID %q", assertionID)
+		}
+		assertion = el
+	}
+	if assertion == nil {
+		return "", errors.New("no signature covers the returned assertion")
+	}
+	requestID := ""
+	if subject := samlChildElement(assertion, "Subject"); subject != nil {
+		for _, confirmation := range subject.ChildElements() {
+			if confirmation.Tag != "SubjectConfirmation" {
+				continue
+			}
+			// crewjam keeps the last SubjectConfirmationData of each
+			// confirmation, so every one must agree.
+			named := false
+			for _, data := range confirmation.ChildElements() {
+				if data.Tag != "SubjectConfirmationData" {
+					continue
+				}
+				value := samlUnprefixedAttr(data, "InResponseTo")
+				if value == "" || (requestID != "" && value != requestID) {
+					return "", errors.New("the signed assertion's subject confirmations do not name one request")
+				}
+				requestID, named = value, true
+			}
+			if !named {
+				return "", errors.New("a signed subject confirmation names no request")
+			}
+		}
+	}
+	if requestID == "" {
+		return "", errors.New("the signed assertion has no subject confirmation naming a request")
+	}
+	return requestID, nil
+}
+
+// samlChildElement returns el's first child element with local name tag.
+func samlChildElement(el *etree.Element, tag string) *etree.Element {
+	for _, child := range el.ChildElements() {
+		if child.Tag == tag {
+			return child
+		}
+	}
+	return nil
+}
+
+// samlUnprefixedAttr returns el's attribute key written without a prefix, the
+// one a signature over el covers, or "" when it has none.
+func samlUnprefixedAttr(el *etree.Element, key string) string {
+	for _, attr := range el.Attr {
+		if attr.Space == "" && attr.Key == key {
+			return attr.Value
+		}
+	}
+	return ""
+}
+
+// samlBoundAttributeNames holds the name of every un-namespaced XML attribute
+// crewjam/saml unmarshals from a Response or an Assertion. Namespaced ones such
+// as xsi:type only match their own namespace.
+var samlBoundAttributeNames = func() map[string]bool {
+	names := make(map[string]bool)
+	seen := make(map[reflect.Type]bool)
+	var collect func(t reflect.Type)
+	collect = func(t reflect.Type) {
+		for t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice || t.Kind() == reflect.Array {
+			t = t.Elem()
+		}
+		if t.Kind() != reflect.Struct || seen[t] {
+			return
+		}
+		seen[t] = true
+		for i := 0; i < t.NumField(); i++ {
+			field := t.Field(i)
+			name, options, _ := strings.Cut(field.Tag.Get("xml"), ",")
+			if strings.Contains(","+options+",", ",attr,") {
+				if name == "" {
+					name = field.Name
+				}
+				if !strings.Contains(name, " ") {
+					names[name] = true
+				}
+			}
+			collect(field.Type)
+		}
+	}
+	collect(reflect.TypeOf(saml.Response{}))
+	collect(reflect.TypeOf(saml.Assertion{}))
+	return names
+}()
+
+// samlShadowingAttribute returns the first prefixed attribute or namespace
+// declaration in el or its descendants whose local name is also an
+// un-namespaced attribute crewjam/saml reads, as written, or "" when there is
+// none.
+func samlShadowingAttribute(el *etree.Element) string {
+	for _, attr := range el.Attr {
+		if attr.Space != "" && samlBoundAttributeNames[attr.Key] {
+			return attr.Space + ":" + attr.Key
+		}
+	}
+	for _, child := range el.ChildElements() {
+		if shadow := samlShadowingAttribute(child); shadow != "" {
+			return shadow
+		}
+	}
+	return ""
 }
 
 func validateSAMLRedirectTarget(rawURL string, allowedEndpoints []saml.Endpoint) (string, error) {

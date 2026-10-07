@@ -5210,6 +5210,67 @@ in `internal/api/audit_handlers_test.go` replays one user's signed response
 into another user's browser and proves the victim's session survives and the
 refusal is audited.
 
+The SAML ACS at `/api/saml/{id}/acs` accepts a Response, at default settings,
+only as the IdP's answer to a login the presenting browser started. crewjam/saml
+refuses a Response unless its `InResponseTo`, and that of each bearer
+`SubjectConfirmationData`, is one of the request IDs its caller supplies, and
+Pulse used to supply none, so with `allowIdpInitiated` off, the default, every
+SAML login failed with "Authentication failed". `SAMLService.MakeAuthRequest`
+in `internal/api/saml_service.go` therefore records each AuthnRequest ID, on
+the provider's own service, with the sanitized `returnTo` and the hash of a
+random token that `handleSAMLLogin` sets as the `HttpOnly`, `SameSite=Lax`
+cookie `pulse_saml_login` (`__Host-pulse_saml_login` over HTTPS) for ten
+minutes. A browser that already holds a token keeps it, so logins started one
+after another in several tabs all stay valid. A record is honored for ten
+minutes, judged when the Response spends it, unless the 1,024-record cap
+evicts it first, oldest first. The IdP delivers its Response by a cross-site
+HTTP-POST, which browsers send without `SameSite=Lax` cookies, so
+`handleSAMLACS` answers a POST that carries a `SAMLResponse` or
+`SAMLart` but no login cookie with a page that posts the same fields once more
+from Pulse's own origin. The form has no `action`, so it returns to the URL
+the IdP posted to, path prefix included, its script carries the request's CSP
+nonce, and a marker field prevents a second repost. `SAMLService.ProcessResponse`
+then has crewjam check the Response against every outstanding request ID and
+reads the request it answers from the canonical form goxmldsig verified for
+the signature covering the assertion crewjam returned, never from crewjam's
+parsed fields, taking only an `InResponseTo` written without a prefix: the
+signed `Response`'s, or that of the `Response` inside a signed
+`ArtifactResponse`, when the IdP signed the message, and otherwise that of
+every `SubjectConfirmationData` in the returned assertion's own `Subject`,
+which must agree and of which there must be at least one, and no other signed
+assertion may carry its ID. Other assertions in the Response, and assertions
+in `Advice`, do not take part. That record is
+spent only when it is bound to the presenting browser's token, and the login
+returns to the recorded `returnTo`, not to the posted `RelayState`, which
+`MakeAuthRequest` now escapes into the redirect query so a `returnTo` with its
+own query string is not cut short at the IdP. A Response answering another browser's login, an unknown,
+expired or already spent request, or none is refused with the
+`saml_validation_failed` redirect and a failed `saml_login` audit event, and
+refusing another browser's Response leaves that browser's record for it. With
+`allowIdpInitiated` on, crewjam skips `InResponseTo`, so a Response answering
+any request or none is accepted in any browser without the cookie or the
+repost and returns to its posted `RelayState`, as before. In both modes the
+signature verifier refuses signed content carrying a prefixed attribute or a
+namespace declaration named like an un-namespaced attribute crewjam reads from
+a Response or Assertion, such as `xmlns:IssueInstant`, `xmlns:NotOnOrAfter` or
+`ext:ID`: encoding/xml fills an un-namespaced attribute field from any
+attribute with that local name, and exclusive canonicalization leaves an
+unused declaration out of the signed form, so appending one let a stale signed
+Response pass crewjam's age checks, and an IdP-initiated login could be
+replayed indefinitely. The records live in memory, so a
+restart or a saved provider change (which replaces the provider's service;
+a metadata refresh keeps the records) during the IdP round trip, or a login
+started on a host that does not share cookies with the configured public
+URL's, leaves the Response unmatched and the user starts the login again. Two logins started at
+the same moment in a browser that holds no token yet each mint one and only
+the last cookie set survives, so the other fails the same way, and, as with
+OIDC login state, a flood of unauthenticated login starts can evict pending
+records.
+`TestSAMLACSAuditsResponseNotAnsweringThisBrowsersLogin` in
+`internal/api/audit_handlers_test.go` delivers one browser's signed Response to
+another browser with a login in progress and proves it is refused and audited
+while its own browser completes the login.
+
 Alert delivery diagnosis is a read-only monitoring API contract.
 `GET /api/alerts/delivery-diagnosis?alertIdentifier=<id>` returns the alert
 manager's current delivery-policy projection for one active alert, including
@@ -6511,11 +6572,9 @@ migrating. `TestContract_SAMLManualIDPCertificateVerifiesIdPSignatures` in
 `internal/api/contract_test.go` signs an ACS Response and a LogoutResponse with
 one test IdP key and proves an inline-certificate provider, a certificate-file
 provider and a metadata provider accept both alike, while a Response signed by
-another key is refused. The proof enables IdP-initiated responses because
-`SAMLService.ProcessResponse` records no AuthnRequest IDs: with
-`allowIdpInitiated` off, crewjam refuses every ACS Response on `InResponseTo`
-whatever its signature. That is a known open exception, not part of this
-contract.
+another key is refused. The proof runs at default settings, with each
+Response answering an AuthnRequest that `SAMLService.MakeAuthRequest`
+recorded for the test browser, as the SAML ACS binding above requires.
 That same SSO provider-detail boundary must return the non-secret nested
 provider configuration used by the settings edit form. `GET
 /api/security/sso/providers/{id}` may keep the flat list/card fields for
