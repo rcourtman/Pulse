@@ -149,11 +149,15 @@ class NotificationTroubleshootingDocsTest(unittest.TestCase):
             self.assertIn(label, presentation)
             self.assertIn(label, notifications)
         for boundary in ("skips the persistent delivery queue", "not listed", "Notifications are paused",
-                         "minimum alert severity and tag filters", "held-notification reasons",
+                         "minimum severity and tag filters", "held-notification reasons",
                          "unavailable", "may receive a duplicate", "successful test does not itself retry",
                          "do not disable verification", "Do not delete `notification_queue.db`",
                          "do not post it wholesale", "enable debug logging just to collect it"):
             self.assertIn(boundary, notifications)
+        self.assertIn("[minimum severity and tag filters](CONFIGURATION.md#destination-severity-and-tag-routing)",
+                      section("Test succeeds but real alerts are missing", 4))
+        self.assertIn("Both must match: an empty tag filter does not bypass minimum severity", notifications)
+        self.assertIn("critical severity does not bypass a nonempty tag filter", notifications)
         for heading in ("Emails not sending", "Webhooks failing"):
             self.assertIn("#recover-retained-delivery-failures", section(heading, 4))
             self.assertIn("#inspect-notification-logs", section(heading, 4))
