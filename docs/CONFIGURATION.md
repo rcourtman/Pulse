@@ -484,9 +484,50 @@ For remote scraping with `PULSE_METRICS_TOKEN`, prefer a local scraper, tunnel, 
 
 ## 🔔 Alerts (`alerts.json`)
 
-Pulse uses a powerful alerting engine with hysteresis (separate trigger/clear thresholds) to prevent flapping.
+Manage alert rules in **Alerts → Thresholds**. Choose the platform and resource
+before editing; a group default can affect many resources, while a custom
+resource override takes precedence. Finish the edit and use **Save Changes**;
+an unsaved value is not the running policy. Reload after a successful save to
+check that the intended value persisted.
 
-**Managed via UI**: Alerts → Thresholds
+### Metric thresholds, Off and inheritance
+
+For numeric metric rules such as CPU, memory and disk usage:
+
+| Setting | Meaning |
+| --- | --- |
+| Positive metric threshold | Enables that metric rule at the entered value, subject to other alert policies. Read the column's unit: percentages, temperatures and throughput are not interchangeable. |
+| Metric **Off** | Disables that metric rule, not collection of its readings. Use the On/Off control rather than an empty input to disable it. |
+| Blank per-resource metric value | Inherits the group default; it does **not** mean Off. An inherited Off default remains Off. |
+| Saved numeric metric trigger `0` or a negative value | Disables that metric rule. Zero does **not** mean “alert on any usage”. Older saved rules may use `0`; the current metric Off control writes `-1`. |
+
+**Zero has different meanings in different fields.** A zero *metric trigger*
+disables the rule, but zero *powered-off tolerance* below means immediate
+eligibility on an authoritative stopped observation. Do not copy one field's
+meaning into another. Platform/resource alert switches, offline alerts and
+notification delivery have their own controls.
+
+Usage rules have separate trigger and clear values (hysteresis), so a small
+drop below the trigger does not repeatedly close and reopen the alert. In the
+manual CPU example below, `trigger: 90` and `clear: 80` mean:
+
+- A fresh evaluated value of **90% or higher** is eligible to activate the alert.
+- An already active alert stays active **above 80%**, even at 85%.
+- A fresh evaluated value of **80% or lower** is eligible to clear it.
+
+Configured evaluation windows and activation/recovery delays still apply;
+these are not promises of immediate notifications. The excerpt illustrates a
+saved rule, not the clear value produced by every UI edit.
+
+Disabling a metric can close its existing alert even while usage remains high.
+That disappearance is a policy change, **not measured recovery**. Missing or
+stale readings are not a healthy zero either. Check fresh readings and the
+workload before judging recovery; do not lower thresholds, create load or stop
+a workload just to test the rule. To quiet notifications without disabling a
+metric rule, review [Quiet hours](#quiet-hours-and-notification-holds) and their
+critical-alert exceptions. Check [Recent delivery activity](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing)
+separately: a saved threshold or a successful destination Test does not prove
+ordinary alert delivery.
 
 ### VM and container powered-off tolerance
 
