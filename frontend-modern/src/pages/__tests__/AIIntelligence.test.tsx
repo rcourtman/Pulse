@@ -935,7 +935,7 @@ describe('AIIntelligence entitlement gating', () => {
       });
       expect(screen.queryByRole('button', { name: /Starting/i })).not.toBeInTheDocument();
     } finally {
-      loadIntelligenceSummary.mockResolvedValue(undefined);
+      loadIntelligenceSummary.mockResolvedValue(null);
     }
   });
 
