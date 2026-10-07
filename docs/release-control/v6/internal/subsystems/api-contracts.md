@@ -4039,12 +4039,16 @@ the authoritative analysis outcome.
    `/api/settings/ai/update` may save a selected Patrol provider/model even
    when that model is not ready for tool-backed Patrol execution, but it must
    echo `patrol_readiness` with stable `cause` metadata and execution routes
-   must continue to fail closed before model calls. Frontend Patrol settings
+   must continue to fail closed before model calls. Frontend settings
    consumers must surface that saved-but-not-ready response as a saved
-   configuration issue with the echoed provider, model, cause, and summary
-   instead of reporting the successful save as a failed save or hiding the
-   readiness blocker behind a generic notification; and the structured
-   investigation-record contract, so unified findings may
+   configuration issue rather than a failed save, and never as inline failure
+   state: every Pulse Intelligence settings page (Provider & Models, Patrol,
+   Assistant, Service context) raises a warning notification naming the echoed
+   summary, provider, and model, while the Patrol page's on/off save raises a
+   fixed not-ready warning and leaves the diagnosis to the page's own readiness
+   surfaces, such as the readiness banner that names the summary, provider,
+   and model while the header offers `Fix setup` when Patrol is active; and
+   the structured investigation-record contract, so unified findings may
    expose `investigation_record` only through the shared
    `aicontracts.InvestigationRecord` payload shape, with frontend API types
    and backend contract tests updated in the same slice as any field change.
@@ -9687,6 +9691,32 @@ narrator must fail closed: nil provider, parse failure, timeout, or
 empty response causes the engine to fall back to the heuristic
 narrative without surfacing the AI failure to the caller, so reporting
 is never blocked by AI availability.
+Only `POST /api/admin/reports/generate` may hand the tenant's AI narrator to
+the engine, because a narrated PDF makes a paid provider call and appends a
+`cost.UsageEvent` to the cost ledger. The single-resource handler accepts
+`POST` with a JSON body (the `generate-multi` decoding rules: 1MB cap, unknown
+fields and trailing payload rejected, through `decodeReportingRequestBody`) and
+`GET` with the same fields as query parameters, and answers any other method
+with `405` and `Allow: GET, POST`. GET never calls `resolveNarrator`, whose
+`GetAIService` can construct a tenant AI service (and with it list provider
+models or start background discovery): it narrates through `getReportNarrator`,
+the heuristic summary whose `Disclaimer` replaces the "Configure Pulse
+Assistant" tip with a note that AI narration needs POST, and reads Patrol
+findings through `SetExistingFindingsResolver`, which `router.go` backs with
+`AISettingsHandler.ExistingAIService` so only an already running service is
+used. GET passes the demo-mode guard and the CSRF check, and a SameSite=Lax
+session cookie rides a cross-site top-level GET navigation, so a link must not
+be able to spend AI budget. The reporting catalog advertises the transport as
+`performanceReport.singleResourceMethod` (`POST`), and the settings UI follows
+it. `generate-multi` and the manual schedule run endpoint
+(`POST /api/admin/reports/schedules/{id}/run`) were already POST-only; due
+schedules run from the server's scheduler, not an HTTP request.
+`TestContract_SingleReportAINarrationRequiresPOST` pins the rule on a real
+engine: GET, HEAD, PUT and DELETE make no narrator call and no AI service
+resolution, while POST makes one of each.
+`TestContract_SingleReportGETDoesNotConstructTenantAIService` drives
+`Router.wireReportingAIResolvers` with an uncached tenant: GET constructs no
+tenant AI service and POST resolves one.
 Report alerts keep the alert engine's resolution. The node, VM and
 container enrichers in `internal/api/metrics_reporting_handlers.go` build
 every row through `reportActiveAlertInfo` and `reportResolvedAlertInfo`,

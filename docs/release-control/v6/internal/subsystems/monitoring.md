@@ -2699,7 +2699,18 @@ truthfulness, not native thaw, containing-release or workload acceptance.
     ingestion so canonical host IDs stay stable across restarts (see the
     unified-resources contract's durable identity-pin obligation). Rebuild
     paths added to the adapter must keep that persistence step; ephemeral
-    snapshot-bridge adapters stay read-only.
+    snapshot-bridge adapters stay read-only. The rebuild, the live
+    supplemental refresh and the read-state overlay ingest records with the
+    adapter's configured stale thresholds, because record ingest joins
+    operator links and the freshness gate of every metric merge, a link's or
+    a source's into an existing row, reads them (unified-resources contract,
+    "Operator links reach record-ingested resources"). Regression
+    coverage:
+    `TestMonitorAdapterJoinsLinkedRecordsWithConfiguredStaleThresholds` and
+    `TestMonitorAdapterSourceMergesUseConfiguredStaleThresholds` in
+    `internal/unifiedresources/monitor_adapter_read_state_test.go` and
+    `TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity` in
+    `internal/monitoring/issue1913_host_continuity_test.go`.
 
 11. The TrueNAS provider projects pools with `Storage.Topology` fixed to
     `pool` and the ZFS data vdev layout in `Storage.VDevLayout`. The

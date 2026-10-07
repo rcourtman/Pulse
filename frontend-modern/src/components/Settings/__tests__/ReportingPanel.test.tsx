@@ -35,6 +35,7 @@ const baseCatalog = {
     title: 'Performance Reports',
     description: 'Historical performance reporting',
     singleResourceEndpoint: '/api/admin/reports/generate',
+    singleResourceMethod: 'POST',
     multiResourceEndpoint: '/api/admin/reports/generate-multi',
     singleFilenamePrefix: 'report',
     singleFilenameSubject: 'resource_id',
