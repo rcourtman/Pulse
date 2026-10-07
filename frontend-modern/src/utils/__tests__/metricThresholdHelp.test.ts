@@ -73,10 +73,12 @@ describe('existing metric threshold help', () => {
     const element = article();
     expect(element.querySelector('a[href="#quiet-hours-and-notification-holds"]')).not.toBeNull();
     expect(
-      element.querySelector('a[href="/docs/TROUBLESHOOTING#test-succeeds-but-real-alerts-are-missing"]'),
+      element.querySelector(
+        'a[href="/docs/TROUBLESHOOTING#test-succeeds-but-real-alerts-are-missing"]',
+      ),
     ).not.toBeNull();
-    expect(readFileSync(path.join(repoRoot, 'frontend-modern/public/docs/CONFIGURATION.md'), 'utf8')).toBe(
-      source,
-    );
+    expect(
+      readFileSync(path.join(repoRoot, 'frontend-modern/public/docs/CONFIGURATION.md'), 'utf8'),
+    ).toBe(source);
   });
 });
