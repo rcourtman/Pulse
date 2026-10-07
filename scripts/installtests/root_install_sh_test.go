@@ -149,6 +149,31 @@ func TestRootInstallScriptStagesUpdateBeforeStoppingService(t *testing.T) {
 	if strings.Contains(archiveInstall, "pulse.old") || strings.Contains(archiveInstall, "temp_extract2") {
 		t.Fatal("archive replacement must not move/delete the old binary or blindly re-extract")
 	}
+	sourceInstall := extractRootInstallShellFunction(t, "build_from_source")
+	previous = -1
+	for _, step := range []string{
+		`make build`,
+		`mktemp -d "$INSTALL_DIR/bin/.pulse-stage-XXXXXX"`,
+		`cp pulse "$binary_stage/pulse"`,
+		`chmod 755 "$binary_stage/pulse"`,
+		`chown pulse:pulse "$binary_stage/pulse"`,
+		`timeout 5 "$binary_stage/pulse" --version`,
+		`source_revision=$(git rev-parse --short HEAD)`,
+		`stop_pulse_for_replacement "$service_name"`,
+		`mv -fT "$binary_stage/pulse" "$INSTALL_DIR/bin/pulse"`,
+	} {
+		position := strings.Index(sourceInstall, step)
+		if position <= previous {
+			t.Fatalf("source admission/replacement steps are out of order or missing at %s", step)
+		}
+		previous = position
+	}
+	if strings.Contains(sourceInstall, "pulse.old") || strings.Contains(sourceInstall, `cp pulse "$INSTALL_DIR/bin/pulse"`) {
+		t.Fatal("source replacement must not move/delete the old binary or copy onto the live path")
+	}
+	if !strings.Contains(sourceInstall, `recover_pulse_after_failed_replacement "$service_name"`) {
+		t.Fatal("failed source rename must use prior-active-only recovery")
+	}
 }
 
 func TestRootInstallScriptInstallsSignatureVerificationDependencies(t *testing.T) {

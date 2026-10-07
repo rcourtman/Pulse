@@ -6,6 +6,7 @@ These are ordinary-user installer controls, not native systemd acceptance.
 
 from pathlib import Path
 import os
+import itertools
 import subprocess
 import tempfile
 import tarfile
@@ -13,7 +14,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-INSTALLER = ROOT / "install.sh"
+INSTALLER = Path(os.environ.get("PULSE_INSTALLER_UNDER_TEST", ROOT / "install.sh"))
 
 SYSTEMCTL = r'''#!/usr/bin/env bash
 set -eu
@@ -123,8 +124,10 @@ git() {
   if [[ "$1" == clone ]]; then
     local target="${@: -1}"
     mkdir -p "$target/frontend-modern"
-    cp "$FIXTURE/new-binary" "$target/pulse"
+    [[ "$FAULT" == missing_binary ]] || cp "$FIXTURE/new-binary" "$target/pulse"
   else
+    [[ "$FAULT" != source_revision ]] || return 1
+    [[ "$FAULT" != source_revision_empty ]] || return 0
     echo abc1234
   fi
 }
@@ -180,6 +183,7 @@ class ServerInstallerStopTest(unittest.TestCase):
             (fixture / "config").mkdir()
             originals = {
                 installed / "bin/pulse": b"old executable\n",
+                installed / "bin/pulse.old": b"pre-existing recovery binary\n",
                 installed / "VERSION": b"v6.5.0\n",
                 installed / "BUILD_FROM_SOURCE": b"old branch\n",
                 fixture / "config/private-state": b"fixture persistent state\n",
@@ -192,6 +196,8 @@ class ServerInstallerStopTest(unittest.TestCase):
                 new_binary += b"sleep 10\n"
             elif fault == "version_exit":
                 new_binary += b"echo v6.6.0; exit 1\n"
+            elif fault == "version_empty":
+                new_binary += b"printf ' \\t\\n'\n"
             else:
                 version = "v6.5.0" if fault == "version_mismatch" else "unknown" if fault == "version_unknown" else "v6.6.0"
                 new_binary += ("echo " + version + "\n").encode()
@@ -277,25 +283,58 @@ class ServerInstallerStopTest(unittest.TestCase):
                     self.assertTrue(observation["local_archive_retained"])
 
     def test_atomic_rename_failure_restores_only_a_previously_active_service(self):
-        for state in ("active", "inactive", "failed"):
-            for fault in ("rename", "recovery_start", "recovery_inactive"):
-                with self.subTest(state=state, fault=fault):
-                    observation = self.exercise(REPLACEMENT, "archive", state, fault)
-                    result = observation["result"]
-                    self.assertNotEqual(result.returncode, 0)
-                    self.assertEqual(observation["files"], observation["originals"])
-                    self.assertTrue(all(m == 0o600 for m in observation["modes"].values()))
-                    self.assertEqual(observation["calls"].count("start pulse-custom"), int(state == "active"))
-                    self.assertNotIn("AGENTS", observation["calls"])
-                    self.assertNotIn("SCRIPTS", observation["calls"])
-                    if state == "active":
-                        if fault == "rename":
-                            self.assertIn("Previous Pulse binary is running again; the update failed", result.stdout)
-                        else:
-                            self.assertIn("could not be confirmed running", result.stderr)
-                    self.assertEqual(observation["stage_paths"], [])
-                    self.assertEqual(observation["temporary_paths_remaining"], [])
-                    self.assertFalse(observation["archive_retained"])
+        for flow, state, fault in itertools.product(
+            ("archive", "source"), ("active", "inactive", "failed"),
+            ("rename", "recovery_start", "recovery_inactive")
+        ):
+            with self.subTest(flow=flow, state=state, fault=fault):
+                observation = self.exercise(REPLACEMENT, flow, state, fault)
+                result = observation["result"]
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(observation["files"], observation["originals"])
+                self.assertTrue(all(m == 0o600 for m in observation["modes"].values()))
+                self.assertEqual(observation["calls"].count("start pulse-custom"), int(state == "active"))
+                self.assertNotIn("AGENTS", observation["calls"])
+                self.assertNotIn("SCRIPTS", observation["calls"])
+                if state == "active":
+                    if fault == "rename":
+                        self.assertIn("Previous Pulse binary is running again; the update failed", result.stdout)
+                    else:
+                        self.assertIn("could not be confirmed running", result.stderr)
+                self.assertEqual(observation["stage_paths"], [])
+                self.assertEqual(observation["temporary_paths_remaining"], [])
+                self.assertFalse(observation["archive_retained"])
+
+    def test_source_admission_failures_never_stop_or_mutate_pulse(self):
+        for fault in ("missing_binary", "stage_directory", "copy", "permissions",
+                      "ownership", "version_exit", "version_timeout", "version_empty",
+                      "source_revision", "source_revision_empty"):
+            with self.subTest(fault=fault):
+                observation = self.exercise(REPLACEMENT, "source", "active", fault)
+                self.assertNotEqual(observation["result"].returncode, 0)
+                self.assertEqual(observation["files"], observation["originals"])
+                self.assertTrue(all(m == 0o600 for m in observation["modes"].values()))
+                self.assertNotRegex(observation["calls"], r"(?m)^(show|stop|start|restart|RENAME|AGENTS|SCRIPTS)\b")
+                self.assertEqual(observation["stage_paths"], [])
+                self.assertEqual(observation["temporary_paths_remaining"], [])
+
+    def test_source_success_admits_bytes_before_stop_and_commits_once(self):
+        observation = self.exercise(REPLACEMENT, "source", "active")
+        self.assertEqual(observation["result"].returncode, 0, observation["result"].stderr)
+        calls = observation["calls"]
+        self.assertLess(calls.index("VERSION_PROBE"), calls.index("stop pulse-custom"))
+        self.assertLess(calls.index("stop pulse-custom"), calls.index("RENAME"))
+        self.assertEqual(calls.count("RENAME"), 1)
+        self.assertEqual(calls.count("VERSION_PROBE"), 1)
+        self.assertEqual(observation["files"]["install/bin/pulse"], observation["new_binary"])
+        self.assertEqual(observation["modes"]["install/bin/pulse"], 0o755)
+        self.assertEqual(observation["files"]["install/bin/pulse.old"], observation["originals"]["install/bin/pulse.old"])
+        self.assertEqual(observation["files"]["install/VERSION"], b"fixture-abc1234\n")
+        self.assertEqual(observation["files"]["install/BUILD_FROM_SOURCE"], b"fixture\n")
+        self.assertEqual(observation["files"]["config/private-state"], b"fixture persistent state\n")
+        self.assertEqual(observation["stage_paths"], [])
+        self.assertEqual(observation["temporary_paths_remaining"], [])
+        self.assertNotIn("start pulse-custom", calls)
 
     def test_archive_success_admits_bytes_before_stop_and_commits_once(self):
         observation = self.exercise(REPLACEMENT, "archive", "active")
