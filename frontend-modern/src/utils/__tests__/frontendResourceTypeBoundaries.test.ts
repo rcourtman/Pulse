@@ -3604,11 +3604,10 @@ describe('frontend resource type boundaries', () => {
     expect(aiIntelligenceSummaryModelSource).toContain(
       'export function normalizeIntelligenceSummary',
     );
-    // Verify the symbol is imported from the model without prescribing a
-    // specific single- vs multi-line import shape; usePatrolIntelligenceState
-    // groups several patrolInvestigationContextModel imports together.
-    expect(patrolIntelligenceStateSource).toMatch(
-      /import\s*\{[^}]*\bbuildPatrolAssistantFindingHandoffFromUnifiedFinding\b[^}]*\}\s*from '\.\/patrolInvestigationContextModel';/,
+    // FindingsPanel owns the Patrol finding to Assistant handoff; the page
+    // state hook must not carry a second, unwired copy of it.
+    expect(patrolIntelligenceStateSource).not.toContain(
+      'buildPatrolAssistantFindingHandoffFromUnifiedFinding',
     );
     expect(patrolIntelligenceStateSource).toContain('getPatrolSavedReadinessWarning');
     expect(patrolIntelligenceStateSource).not.toContain('recent_changes?.length');

@@ -282,7 +282,6 @@ export function PatrolIntelligenceWorkspace(props: {
               findingsSource="patrol"
               runSnapshot={state.selectedRun() ?? undefined}
               showControls={!state.selectedRun()}
-              onAssistantHandoff={(finding) => state.handleAssistantFindingHandoff(finding.id)}
               patrolProHandoff={(finding) =>
                 getPatrolProInvestigationHandoff({
                   autoFixLocked: state.autoFixLocked(),

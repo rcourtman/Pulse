@@ -3712,11 +3712,11 @@ production table, router and styles; it does not qualify full-app scrolling.
     assessment readout, but shared drawer/chrome primitives stay free of
     the `FindingsTrustSummary` shape so adding new trust signals goes
     through the contract first rather than per-shell branching.
-    Patrol header refresh controls stay on that same feature-owned shell
+    Patrol refresh controls stay on that same feature-owned shell
     boundary: `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
     must make the refresh affordance generation-aware and timeout-bounded, so
-    a slow supporting intelligence read cannot permanently disable the shared
-    Patrol header control while Patrol findings and status remain visible.
+    a slow supporting intelligence read cannot permanently disable the
+    stale-data Retry control while Patrol findings and status remain visible.
     That feature-owned
     presentation helper is the single emitter for investigation-record
     `impact` and `rollback` fields: when an investigation record exists but those fields
@@ -3863,6 +3863,10 @@ production table, router and styles; it does not qualify full-app scrolling.
     UI surfaces must not duplicate the `patrolControlStarter` query string or
     write Patrol control or legacy entry-point starter telemetry from local
     click handlers.
+    The Patrol finding-to-Assistant handoff has one owner,
+    `frontend-modern/src/components/AI/FindingsPanel.tsx`; the Patrol state
+    hook keeps no second copy of it, and the Patrol workspace passes no
+    handoff callback because nothing on the page reacts to a handoff.
 19. Keep shared summary-card emphasis coherent. When shared summary primitives enter an `inactive` state, `SummaryMetricCard`, `InteractiveSparkline`, and `DensityMap` must all demote background context together so storage, infrastructure, and workloads read as one interaction model instead of mixing page-local opacity, sticky-shell, or highlight rules.
 20. Keep density-map summaries overview-first. When a shared summary density map receives row focus or chart-hover emphasis, `frontend-modern/src/components/shared/DensityMap.tsx`, `frontend-modern/src/components/shared/useDensityMapState.ts`, and `frontend-modern/src/components/shared/densityMapModel.ts` must preserve the multi-entity overview rows and keep focused-entity detail in the hover tooltip instead of swapping the card into a single-series chart, dimming the rest of the map into unusable background noise, duplicating cursor-value tooltip copy, or adding persistent card chrome that steals heatmap space. The card body must stay overview-first; the tooltip may carry the active entity identity, current value, and peak, shared tooltip shells must follow semantic surface tokens instead of forcing a dark palette in light mode, the tooltip header must let long entity names consume the available width before truncating rather than clipping against an arbitrary fixed label cap, numeric metric readouts such as `16.9 MB/s` or `37.4 MB/s` must stay single-line instead of wrapping the unit onto a second row, and density-map detail that cannot fit cleanly inside the canonical tooltip shell must be omitted rather than introducing tooltip-specific chrome or a secondary chart inside the hover surface.
 21. Keep retired self-hosted hosted-model and trial acquisition surfaces out of
@@ -6814,7 +6818,7 @@ That same Patrol shell ownership includes refresh affordance state:
 `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` must keep
 operator refresh controls generation-aware, timeout-bounded, and separate from
 background polling state, so a slow supporting intelligence read cannot make the
-shared Patrol header Refresh Patrol action spin indefinitely or stay disabled
+Patrol stale-data Retry action spin indefinitely or stay disabled
 while Patrol findings and status remain visible.
 That same Patrol shell should make scoped trigger policy legible without
 another navigation step. `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`

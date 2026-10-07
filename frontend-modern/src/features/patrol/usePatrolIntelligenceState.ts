@@ -19,7 +19,6 @@ import {
   type AssistantWorkflowPromptActivitySurface,
   PULSE_OPERATIONS_LOOP_WORKFLOW_PROMPT_NAME,
   PULSE_PATROL_CONTROL_WORKFLOW_PROMPT_SURFACE,
-  PULSE_PATROL_WORKFLOW_PROMPT_SURFACE,
 } from '@/api/aiChat';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import {
@@ -28,7 +27,6 @@ import {
   loadAIRuntimeSettings,
   syncAIRuntimeSettings,
 } from '@/stores/aiRuntimeState';
-import { aiChatStore, type AIChatContext } from '@/stores/aiChat';
 import { notificationStore } from '@/stores/notifications';
 import { usePatrolStream } from '@/hooks/usePatrolStream';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
@@ -41,10 +39,7 @@ import {
 import { PATROL_AUTONOMY_FEATURE_KEY } from './patrolAutonomyAvailability';
 import type { AISettings } from '@/types/ai';
 import { apiErrorStatus } from '@/api/responseUtils';
-import {
-  hasFindingInvestigationHandoffPointer,
-  isPatrolRuntimeFinding,
-} from '@/utils/aiFindingPresentation';
+import { isPatrolRuntimeFinding } from '@/utils/aiFindingPresentation';
 import { getCanonicalScopeResourceIds } from '@/utils/patrolFormat';
 import { normalizePatrolRuntimeBlockedReason } from '@/utils/patrolRuntimePresentation';
 import { logger } from '@/utils/logger';
@@ -54,29 +49,9 @@ import {
   PATROL_CONTROL_STARTER_QUERY_PARAM,
   PATROL_OPERATIONS_LOOP_STARTER_QUERY_PARAM,
 } from '@/routing/resourceLinks';
-import {
-  buildPatrolAssistantApprovalBriefingInput,
-  buildPatrolAssistantFindingHandoffFromUnifiedFinding,
-  buildPatrolAssistantProposedFixBriefingInput,
-  buildPatrolAssistantProposedFixBriefingInputFromApproval,
-  patrolAssistantFindingHandoffRequiresApprovalMode,
-  type PatrolAssistantApprovalBriefingInput,
-  type PatrolAssistantFindingHandoff,
-} from './patrolInvestigationContextModel';
 import { schedulePatrolRunAcceptanceReconciliation } from './patrolRunAcceptance';
 
 type PatrolTab = 'findings' | 'history';
-
-const PATROL_GOVERNED_ACTION_OUTCOMES = new Set([
-  'fix_executed',
-  'fix_failed',
-  'fix_rejected',
-  'fix_verified',
-  'fix_verification_failed',
-  'fix_verification_unknown',
-]);
-const PATROL_VERIFIED_OUTCOMES = new Set(['fix_verified']);
-const PATROL_OPERATIONS_LOOP_WORKFLOW_PROMPT = PULSE_OPERATIONS_LOOP_WORKFLOW_PROMPT_NAME;
 
 const recordPatrolWorkflowStarterActivityForSurface = async (
   surface: AssistantWorkflowPromptActivitySurface,
@@ -92,44 +67,15 @@ const recordPatrolWorkflowStarterActivityForSurface = async (
   }
 };
 
-export const PATROL_REFRESH_TIMEOUT_MS = 15000;
 export const PATROL_MANUAL_SYNC_TIMEOUT_MS = 5000;
 export const PATROL_ACCEPTANCE_RECONCILE_MS = 15000;
 export const PATROL_ACCEPTANCE_REFRESH_TIMEOUT_MS = 5000;
-
-export function recordPatrolWorkflowStarterActivity(): void {
-  void recordPatrolWorkflowStarterActivityForSurface(
-    PULSE_PATROL_WORKFLOW_PROMPT_SURFACE,
-    'Patrol',
-  );
-}
 
 export function recordPatrolControlStarterActivity(): Promise<void> {
   return recordPatrolWorkflowStarterActivityForSurface(
     PULSE_PATROL_CONTROL_WORKFLOW_PROMPT_SURFACE,
     'Patrol mode handoff',
   );
-}
-
-interface PatrolAssistantWorkflowHandoffOptions {
-  recordStarterActivity?: () => void;
-  openAssistant?: (context: AIChatContext) => void;
-}
-
-export function openPatrolAssistantWorkflowHandoff(
-  handoff: PatrolAssistantFindingHandoff,
-  options: PatrolAssistantWorkflowHandoffOptions = {},
-): void {
-  const {
-    recordStarterActivity = recordPatrolWorkflowStarterActivity,
-    openAssistant = (context) => aiChatStore.open(context),
-  } = options;
-
-  recordStarterActivity();
-  openAssistant({
-    ...handoff.context,
-    preferredWorkflowPromptName: PATROL_OPERATIONS_LOOP_WORKFLOW_PROMPT,
-  });
 }
 
 const patrolErrorMessage = (error: unknown, fallback: string) =>
@@ -199,12 +145,10 @@ export function resolvePatrolBlockedActionCause(
 }
 
 export function usePatrolIntelligenceState() {
-  const [initialSurfaceReady, setInitialSurfaceReady] = createSignal(false);
   const [activeTab, setActiveTab] = createSignal<PatrolTab>('findings');
   const [findingsFilterOverride, setFindingsFilterOverride] = createSignal<
     'all' | 'active' | 'resolved' | 'approvals' | 'attention' | undefined
   >(undefined);
-  const [isRefreshing, setIsRefreshing] = createSignal(false);
   const [isManualRefreshRunning, setIsManualRefreshRunning] = createSignal(false);
   const [autonomyLevel, setAutonomyLevel] = createSignal<PatrolAutonomyLevel>('monitor');
   const [requestedAutonomyLevel, setRequestedAutonomyLevel] =
@@ -219,16 +163,13 @@ export function usePatrolIntelligenceState() {
   const [liveRunStartedAt, setLiveRunStartedAt] = createSignal('');
   const [investigationBudget, setInvestigationBudget] = createSignal(15);
   const [investigationTimeout, setInvestigationTimeout] = createSignal(300);
-  const [fullModeUnlocked, setFullModeUnlocked] = createSignal(false);
   const [isTogglingPatrol, setIsTogglingPatrol] = createSignal(false);
   const [isTriggeringPatrol, setIsTriggeringPatrol] = createSignal(false);
   const [selectedRun, setSelectedRun] = createSignal<PatrolRunRecord | null>(null);
-  const [assistantHandoffFindingId, setAssistantHandoffFindingId] = createSignal('');
   const [patrolLoadError, setPatrolLoadError] = createSignal('');
 
   let cancelAcceptanceReconciliation: (() => void) | undefined;
   let findingScrollTimerRef: ReturnType<typeof setTimeout> | undefined;
-  let refreshTimeoutRef: ReturnType<typeof setTimeout> | undefined;
   let manualRefreshTimeoutRef: ReturnType<typeof setTimeout> | undefined;
   let refreshRequestId = 0;
   let manualRefreshRequestId = 0;
@@ -249,26 +190,11 @@ export function usePatrolIntelligenceState() {
     setManualRunRequested(false);
   };
 
-  const clearRefreshTimeout = () => {
-    if (refreshTimeoutRef !== undefined) {
-      clearTimeout(refreshTimeoutRef);
-      refreshTimeoutRef = undefined;
-    }
-  };
-
   const clearManualRefreshTimeout = () => {
     if (manualRefreshTimeoutRef !== undefined) {
       clearTimeout(manualRefreshTimeoutRef);
       manualRefreshTimeoutRef = undefined;
     }
-  };
-
-  const finishRefresh = (requestId: number) => {
-    if (requestId !== refreshRequestId) {
-      return;
-    }
-    clearRefreshTimeout();
-    setIsRefreshing(false);
   };
 
   const rememberPatrolLoadError = (error: unknown, fallback: string) => {
@@ -526,7 +452,6 @@ export function usePatrolIntelligenceState() {
   });
 
   const intelligenceSummary = createMemo(() => aiIntelligenceStore.intelligenceSummary);
-  const circuitBreakerStatus = createMemo(() => aiIntelligenceStore.circuitBreakerStatus);
   const liveRunRecord = createMemo<PatrolRunRecord | null>(() => {
     if (!shouldShowLiveRun()) return null;
     return {
@@ -573,7 +498,6 @@ export function usePatrolIntelligenceState() {
       setRequestedAutonomyLevel(settings.requested_autonomy_level);
       setAutonomyLevel(settings.effective_autonomy_level);
       setAutopilotStatus(settings.autopilot_acknowledgement);
-      setFullModeUnlocked(settings.autopilot_acknowledgement.active);
       setInvestigationBudget(settings.investigation_budget);
       setInvestigationTimeout(settings.investigation_timeout_sec);
     } catch (err) {
@@ -663,72 +587,6 @@ export function usePatrolIntelligenceState() {
     }
   }
 
-  function handleAssistantFindingHandoff(findingId: string) {
-    setAssistantHandoffFindingId(findingId.trim());
-  }
-
-  const loadLatestInvestigationProposedFixBriefing = async (
-    finding: ReturnType<typeof allPatrolFindings>[number],
-    pendingApprovalBriefing: PatrolAssistantApprovalBriefingInput | undefined,
-  ) => {
-    if (finding.investigationRecord?.proposed_fix) {
-      return undefined;
-    }
-    const hasInvestigationPointer =
-      hasFindingInvestigationHandoffPointer(finding) || Boolean(pendingApprovalBriefing?.id);
-    if (!hasInvestigationPointer) {
-      return undefined;
-    }
-    if (
-      !patrolAssistantFindingHandoffRequiresApprovalMode({
-        investigationOutcome: finding.investigationOutcome,
-        remediationId: finding.remediationPlanId,
-        pendingApproval: pendingApprovalBriefing,
-        investigationRecord: finding.investigationRecord,
-      })
-    ) {
-      return undefined;
-    }
-
-    try {
-      const investigation = await AIAPI.getInvestigation(finding.id);
-      return buildPatrolAssistantProposedFixBriefingInput(investigation?.proposed_fix);
-    } catch {
-      return undefined;
-    }
-  };
-
-  async function openAssistantOperationsLoopForFinding(findingId: string): Promise<boolean> {
-    const normalizedFindingId = findingId.trim();
-    if (!normalizedFindingId) return false;
-
-    const finding = allPatrolFindings().find((candidate) => candidate.id === normalizedFindingId);
-    if (!finding) {
-      return false;
-    }
-
-    await aiIntelligenceStore.loadPendingApprovals();
-    const pendingApproval = aiIntelligenceStore.patrolPendingApprovals.find(
-      (approval) => approval.toolId === 'investigation_fix' && approval.targetId === finding.id,
-    );
-    const pendingApprovalBriefing = buildPatrolAssistantApprovalBriefingInput(pendingApproval);
-    const latestInvestigationProposedFix = await loadLatestInvestigationProposedFixBriefing(
-      finding,
-      pendingApprovalBriefing,
-    );
-    const proposedFix =
-      latestInvestigationProposedFix ||
-      buildPatrolAssistantProposedFixBriefingInputFromApproval(pendingApproval);
-    const handoff = buildPatrolAssistantFindingHandoffFromUnifiedFinding(finding, {
-      pendingApproval: pendingApprovalBriefing,
-      proposedFix,
-    });
-
-    openPatrolAssistantWorkflowHandoff(handoff);
-    setAssistantHandoffFindingId(finding.id);
-    return true;
-  }
-
   function startPolling() {
     clearInterval(refreshInterval);
     clearInterval(approvalPollInterval);
@@ -743,15 +601,6 @@ export function usePatrolIntelligenceState() {
 
   async function loadAllData() {
     const requestId = ++refreshRequestId;
-    clearRefreshTimeout();
-    setIsRefreshing(true);
-    refreshTimeoutRef = setTimeout(() => {
-      if (requestId === refreshRequestId) {
-        refreshTimeoutRef = undefined;
-        setIsRefreshing(false);
-      }
-    }, PATROL_REFRESH_TIMEOUT_MS);
-
     try {
       await Promise.all([
         // The Patrol surface needs dismissed findings too: the attention
@@ -773,8 +622,6 @@ export function usePatrolIntelligenceState() {
       if (requestId === refreshRequestId) {
         rememberPatrolLoadError(error, 'Patrol could not refresh.');
       }
-    } finally {
-      finishRefresh(requestId);
     }
   }
 
@@ -873,54 +720,6 @@ export function usePatrolIntelligenceState() {
     }
     return activeFindings.length > 0 && activeFindings.every(isPatrolRuntimeFinding);
   });
-  const patrolWorkIssueEvidenceCount = createMemo(() => {
-    const issueFindingCount = allPatrolFindings().filter(
-      (finding) =>
-        finding.status === 'active' ||
-        finding.status === 'resolved' ||
-        Boolean(finding.investigationSessionId) ||
-        Boolean(finding.investigationStatus) ||
-        Boolean(finding.investigationOutcome) ||
-        Boolean(finding.remediationPlanId),
-    ).length;
-    const status = patrolStatus();
-    const statusFindingCount =
-      (status?.findings_count ?? 0) +
-      (status?.fixed_count ?? 0) +
-      (status?.trust?.resolved ?? 0) +
-      (status?.trust?.fix_verified ?? 0);
-    return issueFindingCount + patrolPendingApprovalCount() + statusFindingCount;
-  });
-  const patrolWorkEvidenceCount = createMemo(
-    () =>
-      (patrolRunHistory.value()?.length ?? 0) +
-      allPatrolFindings().length +
-      (patrolStatus()?.last_patrol_at || patrolStatus()?.last_activity_at ? 1 : 0),
-  );
-  const patrolGovernedActionCount = createMemo(
-    () =>
-      allPatrolFindings().filter(
-        (finding) =>
-          finding.investigationOutcome &&
-          PATROL_GOVERNED_ACTION_OUTCOMES.has(finding.investigationOutcome),
-      ).length,
-  );
-  const patrolRejectedDecisionCount = createMemo(
-    () =>
-      allPatrolFindings().filter((finding) => finding.investigationOutcome === 'fix_rejected')
-        .length,
-  );
-  const patrolApprovedDecisionCount = createMemo(() =>
-    Math.max(0, patrolGovernedActionCount() - patrolRejectedDecisionCount()),
-  );
-  const patrolVerifiedOutcomeCount = createMemo(
-    () =>
-      allPatrolFindings().filter(
-        (finding) =>
-          finding.investigationOutcome &&
-          PATROL_VERIFIED_OUTCOMES.has(finding.investigationOutcome),
-      ).length,
-  );
   const findingsTabBadgeFindings = createMemo(() => {
     const snapshotFindings = selectedRunPatrolFindings();
     if (snapshotFindings === null) {
@@ -940,23 +739,19 @@ export function usePatrolIntelligenceState() {
   });
 
   onMount(async () => {
-    try {
-      await consumeRoutePatrolControlStarterHandoff();
-      const initialLoads = await Promise.allSettled([
-        loadRuntimeCapabilities(),
-        loadAllData(),
-        loadAutonomySettings(),
-        loadAIRuntimeModels(),
-        loadAIRuntimeSettings(),
-      ]);
-      const failedLoad = initialLoads.find(
-        (result): result is PromiseRejectedResult => result.status === 'rejected',
-      );
-      if (failedLoad) {
-        rememberPatrolLoadError(failedLoad.reason, 'Patrol could not refresh.');
-      }
-    } finally {
-      setInitialSurfaceReady(true);
+    await consumeRoutePatrolControlStarterHandoff();
+    const initialLoads = await Promise.allSettled([
+      loadRuntimeCapabilities(),
+      loadAllData(),
+      loadAutonomySettings(),
+      loadAIRuntimeModels(),
+      loadAIRuntimeSettings(),
+    ]);
+    const failedLoad = initialLoads.find(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
+    if (failedLoad) {
+      rememberPatrolLoadError(failedLoad.reason, 'Patrol could not refresh.');
     }
   });
 
@@ -975,7 +770,6 @@ export function usePatrolIntelligenceState() {
     document.addEventListener('visibilitychange', handleVisibility);
     onCleanup(() => {
       document.removeEventListener('visibilitychange', handleVisibility);
-      clearRefreshTimeout();
       clearManualRefreshTimeout();
     });
   });
@@ -993,10 +787,6 @@ export function usePatrolIntelligenceState() {
 
   return {
     activeTab,
-    activePatrolFindings,
-    activityRefreshTrigger,
-    acceptedManualRunId,
-    assistantHandoffFindingId,
     autonomyLevel,
     requestedAutonomyLevel,
     autopilotStatus,
@@ -1008,54 +798,39 @@ export function usePatrolIntelligenceState() {
     blockedCause,
     blockedReason,
     canTriggerPatrol,
-    circuitBreakerStatus,
     displayRunHistory,
     findingsTabBadgeCount,
     findingsTabBadgeFindings,
     findingsFilterOverride,
-    fullModeUnlocked,
     handleAutonomyChange,
-    handleAssistantFindingHandoff,
     handleRefreshPatrol,
     handleRunPatrol,
     handleTogglePatrol,
     historicalRegressionCount,
-    initialSurfaceReady,
     intelligenceSummary,
     isManualRefreshRunning,
-    isRefreshing,
     isTogglingPatrol,
     isTriggeringPatrol,
     isUpdatingAutonomy,
     revokeAutopilot,
     licenseRequired,
-    loadAllData,
     licenseRuntimeIdentity,
     manualRunRequested,
-    openAssistantOperationsLoopForFinding,
     patrolEnabledLocal,
-    patrolApprovedDecisionCount,
-    patrolGovernedActionCount,
     patrolPreflight,
     patrolLoadError,
     patrolPendingApprovalCount,
     patrolReadiness,
-    patrolRejectedDecisionCount,
     patrolRunHistory,
-    patrolVerifiedOutcomeCount,
-    patrolWorkEvidenceCount,
-    patrolWorkIssueEvidenceCount,
     runtimeState,
     patrolStatus,
     patrolStream,
-    recordPatrolWorkflowStarterActivity,
     selectedRun,
     selectedRunFindingIds,
     selectedRunHasFindingsSnapshot,
     selectedRunScopeResourceIds,
     setActiveTab,
     setFindingsFilterOverride,
-    setFullModeUnlocked,
     setAutopilotDialogOpen,
     setSelectedRun,
     setFindingScrollTimer: (timer: ReturnType<typeof setTimeout> | undefined) => {

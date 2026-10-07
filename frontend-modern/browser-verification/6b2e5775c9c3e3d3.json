@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "2cf213a77d2a50dcd47c0b0ab07c49f97bdd0534",
+  "verified_at": "2026-10-07T15:52:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx",
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx": "04ef5ff520eb84b7350d203799a406c22252a35aa6947de6aa7c922e5f4050b4",
+    "frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts": "c217fd2affd44a102ef39ba440519b5ca931db54b0f46555a23924d968bc7beb"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol (Activity > Finding options and history)",
+    "/patrol (Pulse Assistant drawer)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production builds (vite build into internal/api/frontend-modern/dist, go build) of the parent tree (92abdcd9ad; rebased onto 2cf213a77d, which changes only patrol-intelligence.md) and this tree, each on a private DEMO_MODE mock stack with its own data dir and port; the same Playwright script ran against both at both widths.",
+    "Patrol load with one served active finding (page.route on /api/ai/patrol/findings and /api/ai/unified/findings): Inbox renders, Activity > Finding options and history lists the finding, no console errors, same /api endpoint set as the parent build.",
+    "Finding expanded, Resolve or dismiss menu open, Open in Assistant clicked: the Pulse Assistant drawer opens with the finding attached ('High CPU usage on web-server (host)'), same requests as the parent build and no workflow-starter POST on either build.",
+    "Tab hidden then shown (visibilitychange): polling pauses and one reload runs; same endpoint set as the parent build.",
+    "Stale-data banner forced by failing GET /api/settings/ai on reload: 'Patrol could not refresh' with Retry shows on both builds; after unrouting, Retry clears the banner on both builds.",
+    "Dist proof: 187 files each side; after normalising chunk hashes, SRI strings and short identifiers, only the removed hook code differs in AIIntelligence.js, the now-unused pulse_patrol constant drops out of aiChat.js, and index.js reorders the same AIIntelligence preload list; check-bundle-size.mjs passes."
+  ],
+  "interactions": [
+    "Demo auto sign-in; on /patrol open the Activity tab and 'Finding options and history', expand the served finding, open 'Resolve or dismiss', click 'Open in Assistant', close the drawer.",
+    "Dispatch visibilitychange hidden then visible; reload with GET /api/settings/ai failing, then click Retry with the route restored.",
+    "Desktop 1440x900 and phone 390x844 contexts; screenshots of the Patrol page, the Assistant drawer and the stale-data banner inspected at both widths."
+  ]
+}

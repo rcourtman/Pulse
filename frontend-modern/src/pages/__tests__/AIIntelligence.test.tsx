@@ -598,8 +598,8 @@ async function openPatrolActivityMode() {
 
 describe('AIIntelligence entitlement gating', () => {
   it('keeps Patrol page data sync bounded without making it a primary action', () => {
-    expect(patrolIntelligenceStateSource).toContain('PATROL_REFRESH_TIMEOUT_MS');
-    expect(patrolIntelligenceStateSource).toContain('finishRefresh(requestId)');
+    expect(patrolIntelligenceStateSource).toContain('PATROL_MANUAL_SYNC_TIMEOUT_MS');
+    expect(patrolIntelligenceStateSource).toContain('requestId === manualRefreshRequestId');
     expect(patrolIntelligenceStateSource).toContain('requestId === refreshRequestId');
     expect(patrolIntelligenceStateSource).toContain('isManualRefreshRunning');
     expect(patrolIntelligenceStateSource).toContain('handleRefreshPatrol');
