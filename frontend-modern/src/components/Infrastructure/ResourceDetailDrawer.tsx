@@ -187,10 +187,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         tabs={drawer.tabs().map((tab) => ({ value: tab.id, label: tab.label }))}
       />
 
-      <div
-        class={drawer.activeTab() === 'overview' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
+      <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'overview' ? '' : 'hidden'}`}>
         <ResourceDetailDrawerOverviewTab
           resource={props.resource}
           drawer={drawer}
@@ -199,10 +196,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       </div>
 
       {/* Agent Machine Metrics History Tab */}
-      <div
-        class={drawer.activeTab() === 'history' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
+      <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'history' ? '' : 'hidden'}`}>
         <Show when={drawer.activeTab() === 'history'}>
           <Show
             when={drawer.metricsHistoryTarget()}
@@ -229,10 +223,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         </Show>
       </div>
 
-      <div
-        class={drawer.activeTab() === 'manage' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
+      <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'manage' ? '' : 'hidden'}`}>
         <Show when={drawer.activeTab() === 'manage'}>
           <div class="space-y-3" data-testid="resource-manage-tab">
             <ResourceOperatorStateSection
@@ -261,10 +252,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       </div>
 
       {/* Discovery Tab */}
-      <div
-        class={drawer.activeTab() === 'discovery' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
+      <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'discovery' ? '' : 'hidden'}`}>
         <Show when={drawer.activeTab() === 'discovery'}>
           <Show
             when={drawer.discoveryConfig()}
@@ -289,10 +277,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       </div>
 
       {/* PMG Mail Tab */}
-      <div
-        class={drawer.activeTab() === 'mail' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
+      <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'mail' ? '' : 'hidden'}`}>
         {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
         <Show when={drawer.activeTab() === 'mail'}>
           <Show
@@ -307,10 +292,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       </div>
 
       {/* Kubernetes Namespaces Tab */}
-      <div
-        class={drawer.activeTab() === 'namespaces' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
+      <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'namespaces' ? '' : 'hidden'}`}>
         {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
         <Show when={drawer.activeTab() === 'namespaces'}>
           <Show
@@ -331,10 +313,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       </div>
 
       {/* Kubernetes Deployments Tab */}
-      <div
-        class={drawer.activeTab() === 'deployments' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
+      <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'deployments' ? '' : 'hidden'}`}>
         {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
         <Show when={drawer.activeTab() === 'deployments'}>
           <Show
@@ -354,10 +333,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       </div>
 
       {/* Docker Swarm Tab */}
-      <div
-        class={drawer.activeTab() === 'swarm' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
+      <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'swarm' ? '' : 'hidden'}`}>
         {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
         <Show when={drawer.activeTab() === 'swarm'}>
           <Show
@@ -376,10 +352,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
       {/* Debug Tab */}
       <Show when={drawer.debugEnabled()}>
-        <div
-          class={drawer.activeTab() === 'debug' ? '' : 'hidden'}
-          style={{ 'overflow-anchor': 'none' }}
-        >
+        <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'debug' ? '' : 'hidden'}`}>
           <ResourceDetailDrawerDebugTab resource={props.resource} drawer={drawer} />
         </div>
       </Show>

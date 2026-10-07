@@ -5368,6 +5368,18 @@ That tooltip owner now also holds the CSP-safe hover contract: chart tooltips
 must render inside the chart surface with model-owned layout and SVG/attribute
 positioning, not through fixed portals or inline `left`/`top` style attributes
 that violate the public demo CSP.
+The same CSP rule binds every runtime component, not only these owners. Solid
+compiles a static `style` value (a `style="..."` string, or any literal entry
+of a `style={{ ... }}` object) into the element's template HTML, and the
+production `style-src 'self' 'nonce-...'` policy reports each one as a
+`style-src-attr` violation when that template is parsed. Static styling must be
+a class: a Tailwind utility, or an arbitrary property such as the
+`[overflow-anchor:none]` on drawer tab panels. Only dynamic values may use
+`style`, because Solid applies those through CSSOM.
+`frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts`
+compiles every runtime `.tsx` that mentions `style` with the client-build Solid
+preset and fails on any `style` attribute or `<style>` element in the
+resulting templates, including nested `<template>` content.
 Tooltip shell chrome must follow semantic surface, text, and border tokens
 rather than hardcoded dark palette utilities so light and dark themes share one
 primitive-owned contrast contract.

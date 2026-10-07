@@ -5069,16 +5069,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       <span class="min-w-0 flex-1 truncate font-medium">{currentStatusText()}</span>
                       <span class="flex shrink-0 gap-0.5" aria-hidden="true">
                         <span
-                          class={`h-1 w-1 rounded-full animate-bounce ${currentStatusDotClass()}`}
-                          style="animation-delay: 0ms; animation-duration: 1s"
+                          class={`h-1 w-1 rounded-full animate-bounce [animation-delay:0ms] ${currentStatusDotClass()}`}
                         />
                         <span
-                          class={`h-1 w-1 rounded-full animate-bounce ${currentStatusDotClass()}`}
-                          style="animation-delay: 150ms; animation-duration: 1s"
+                          class={`h-1 w-1 rounded-full animate-bounce [animation-delay:150ms] ${currentStatusDotClass()}`}
                         />
                         <span
-                          class={`h-1 w-1 rounded-full animate-bounce ${currentStatusDotClass()}`}
-                          style="animation-delay: 300ms; animation-duration: 1s"
+                          class={`h-1 w-1 rounded-full animate-bounce [animation-delay:300ms] ${currentStatusDotClass()}`}
                         />
                       </span>
                     </div>

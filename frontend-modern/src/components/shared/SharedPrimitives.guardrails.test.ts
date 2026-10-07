@@ -1,3 +1,6 @@
+import { traverse, transformSync, types as t } from '@babel/core';
+// @ts-expect-error babel-preset-solid ships no type declarations.
+import solidPreset from 'babel-preset-solid';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -8871,4 +8874,136 @@ describe('shared primitive guardrails', () => {
       expect(rule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(overviewConsumers);
     }
   });
+});
+
+// The production server sends `style-src 'self' 'nonce-...'` without
+// 'unsafe-inline' (internal/api/security.go), so the browser reports every
+// style attribute that arrives as markup. Solid compiles static style values
+// (`style="..."`, or any literal entry of a `style={{ ... }}` object) into the
+// element's template HTML, which is such markup: each render logs a CSP
+// violation, and whether the style still applies is up to the browser. The Vite
+// dev server allows inline styles, so this only shows in a production build.
+// Dynamic style values are applied through CSSOM at runtime and are fine.
+const componentRuntimeSources = import.meta.glob(
+  ['../../**/*.tsx', '!../../**/__tests__/**', '!../../**/*.test.tsx'],
+  { query: '?raw', eager: true, import: 'default' },
+) as Record<string, string>;
+
+const compileSolidTemplates = (source: string, filename: string): string[] => {
+  // Same Solid preset options vite-plugin-solid uses for the client build.
+  const result = transformSync(source, {
+    filename,
+    babelrc: false,
+    configFile: false,
+    ast: true,
+    code: false,
+    parserOpts: { plugins: ['jsx', 'typescript'] },
+    presets: [[solidPreset, { generate: 'dom', hydratable: false }]],
+  });
+  const templates: string[] = [];
+  if (!result?.ast) return templates;
+
+  const templateHelpers = new Set<string>();
+  traverse(result.ast, {
+    ImportSpecifier(path) {
+      const imported = path.node.imported;
+      const importedName = t.isIdentifier(imported) ? imported.name : imported.value;
+      const parent = path.parentPath.node;
+      if (
+        importedName === 'template' &&
+        t.isImportDeclaration(parent) &&
+        parent.source.value === 'solid-js/web'
+      ) {
+        templateHelpers.add(path.node.local.name);
+      }
+    },
+  });
+  if (templateHelpers.size === 0) return templates;
+
+  traverse(result.ast, {
+    CallExpression(path) {
+      const { callee, arguments: args } = path.node;
+      if (!t.isIdentifier(callee) || !templateHelpers.has(callee.name)) return;
+      const [html] = args;
+      if (t.isTemplateLiteral(html)) {
+        templates.push(html.quasis.map((quasi) => quasi.value.cooked ?? '').join(''));
+      } else if (t.isStringLiteral(html)) {
+        templates.push(html.value);
+      }
+    },
+  });
+  return templates;
+};
+
+// Style attributes and <style> elements, including those inside nested
+// <template> content, which querySelectorAll does not enter.
+const collectInlineStyleMarkup = (root: ParentNode): string[] =>
+  Array.from(root.querySelectorAll('[style], style, template')).flatMap((element) => {
+    const found: string[] = [];
+    if (element.hasAttribute('style')) {
+      found.push(`<${element.localName} style="${element.getAttribute('style')}">`);
+    }
+    if (element.localName === 'style') found.push('<style>');
+    if (element instanceof HTMLTemplateElement) {
+      found.push(...collectInlineStyleMarkup(element.content));
+    }
+    return found;
+  });
+
+const findTemplateStyleAttributes = (source: string, filename: string): string[] =>
+  compileSolidTemplates(source, filename).flatMap((html) => {
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    return collectInlineStyleMarkup(template.content);
+  });
+
+describe('production CSP inline style guardrails', () => {
+  it('detects the static style forms Solid compiles into template markup', () => {
+    const fixture = `
+      export const Fixture = (props: { width: number; shown: boolean }) => (
+        <section>
+          <div style={{ 'overflow-anchor': 'none' }} />
+          <span style="animation-delay: 120ms" />
+          <p style={{ 'min-width': '0', width: \`\${props.width}px\` }} />
+          <b style={{ width: \`\${props.width}px\` }} />
+          <i style={props.shown ? 'opacity: 1' : undefined} />
+          <em class="[overflow-anchor:none]" />
+          <u STYLE="color: blue" />
+          <template>
+            <s style="color: red" />
+          </template>
+          <style>{'.fixture { color: green; }'}</style>
+        </section>
+      );
+    `;
+
+    expect(findTemplateStyleAttributes(fixture, 'Fixture.tsx')).toEqual([
+      '<div style="overflow-anchor:none">',
+      '<span style="animation-delay:120ms">',
+      '<p style="min-width:0">',
+      '<u style="color:blue">',
+      '<s style="color:red">',
+      '<style>',
+    ]);
+  });
+
+  // Use a class for static styling instead: a Tailwind utility, or an
+  // arbitrary property such as `[overflow-anchor:none]`. Only files that
+  // mention style can emit one, and compiling those takes a few seconds, or
+  // tens of seconds on a loaded machine.
+  it('keeps static style attributes out of every runtime component template', () => {
+    const paths = Object.keys(componentRuntimeSources);
+    expect(paths.length).toBeGreaterThan(100);
+
+    const offenders = paths
+      .filter((path) => /\bstyle\b/i.test(componentRuntimeSources[path]))
+      .flatMap((path) =>
+        findTemplateStyleAttributes(componentRuntimeSources[path], path).map(
+          (attribute) => `${path}: ${attribute}`,
+        ),
+      )
+      .sort();
+
+    expect(offenders).toEqual([]);
+  }, 120_000);
 });

@@ -25,6 +25,8 @@ import (
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 // testEnvMu protects concurrent access to PULSE_DATA_DIR during parallel tests.
@@ -174,6 +176,61 @@ func newTestManager(t *testing.T) *Manager {
 	})
 
 	return m
+}
+
+// testLogCapture collects log events for captureTestLogs. TestMain installs
+// its hook before any test runs: writing log.Logger inside a test would race
+// with goroutines of managers that earlier tests left running.
+var testLogCapture struct {
+	mu     sync.Mutex
+	active bool
+	lines  []capturedLogLine
+}
+
+type capturedLogLine struct {
+	level   zerolog.Level
+	message string
+}
+
+func TestMain(m *testing.M) {
+	log.Logger = log.Logger.Hook(zerolog.HookFunc(func(_ *zerolog.Event, level zerolog.Level, message string) {
+		testLogCapture.mu.Lock()
+		defer testLogCapture.mu.Unlock()
+		if testLogCapture.active {
+			testLogCapture.lines = append(testLogCapture.lines, capturedLogLine{level: level, message: message})
+		}
+	}))
+	os.Exit(m.Run())
+}
+
+// captureTestLogs records log events, debug included, until the test ends.
+// The returned func counts the events seen so far with a level and message.
+func captureTestLogs(t *testing.T) func(zerolog.Level, string) int {
+	t.Helper()
+	originalLevel := zerolog.GlobalLevel()
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	testLogCapture.mu.Lock()
+	testLogCapture.active = true
+	testLogCapture.lines = nil
+	testLogCapture.mu.Unlock()
+	t.Cleanup(func() {
+		testLogCapture.mu.Lock()
+		testLogCapture.active = false
+		testLogCapture.lines = nil
+		testLogCapture.mu.Unlock()
+		zerolog.SetGlobalLevel(originalLevel)
+	})
+	return func(level zerolog.Level, message string) int {
+		testLogCapture.mu.Lock()
+		defer testLogCapture.mu.Unlock()
+		n := 0
+		for _, line := range testLogCapture.lines {
+			if line.level == level && line.message == message {
+				n++
+			}
+		}
+		return n
+	}
 }
 
 func TestAcknowledgePersistsThroughCheckMetric(t *testing.T) {
@@ -4498,6 +4555,10 @@ func TestCheckDiskHealthLowWearoutCreatesAlert(t *testing.T) {
 	if alert.Threshold != 10.0 {
 		t.Errorf("expected threshold 10.0, got %f", alert.Threshold)
 	}
+	// Wearout is life remaining: the message must not read as 5% worn.
+	if want := "SSD life remaining is 5%"; alert.Message != want {
+		t.Errorf("message = %q, want %q", alert.Message, want)
+	}
 	if got := alert.Metadata["canonicalAlertKind"]; got != "severity-threshold" {
 		t.Fatalf("canonicalAlertKind = %v, want severity-threshold", got)
 	}
@@ -4553,6 +4614,56 @@ func TestCheckDiskHealthWearoutAlertUpdatesOnSubsequentChecks(t *testing.T) {
 	}
 	if alert.Value != 6 {
 		t.Errorf("expected value to be updated to 6, got %f", alert.Value)
+	}
+	if want := "SSD life remaining is 6%"; alert.Message != want {
+		t.Errorf("message = %q, want %q", alert.Message, want)
+	}
+}
+
+// The physical-disk poller re-evaluates every disk each cycle (and mock mode
+// on every alert tick), so a failed or worn disk must log at error/warn once,
+// when its alert opens, and at debug on every later poll.
+func TestCheckDiskHealthLogsAlertOpeningOnce(t *testing.T) {
+	count := captureTestLogs(t)
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	// Exactly at the wearout threshold, which still alerts.
+	disk := proxmox.Disk{
+		DevPath: "/dev/sdf",
+		Model:   "Crucial CT500MX500SSD1",
+		Serial:  "2034E4A1B2C3",
+		Type:    "ssd",
+		Health:  "FAILED",
+		Wearout: 10,
+		Size:    500107862016,
+	}
+	const polls = 3
+	for i := 0; i < polls; i++ {
+		m.CheckDiskHealth("test-instance", "pve-node1", disk)
+	}
+
+	if got := count(zerolog.ErrorLevel, "Disk health alert created"); got != 1 {
+		t.Errorf("error-level health log count after %d polls = %d, want 1", polls, got)
+	}
+	if got := count(zerolog.DebugLevel, "Disk health check still failing"); got != polls-1 {
+		t.Errorf("debug-level health log count after %d polls = %d, want %d", polls, got, polls-1)
+	}
+	if got := count(zerolog.WarnLevel, "Disk wearout alert created"); got != 1 {
+		t.Errorf("warn-level wearout log count after %d polls = %d, want 1", polls, got)
+	}
+	if got := count(zerolog.DebugLevel, "Disk life remaining still at or below wearout threshold"); got != polls-1 {
+		t.Errorf("debug-level wearout log count after %d polls = %d, want %d", polls, got, polls-1)
+	}
+
+	// A disk that passes and then fails again opens a new alert, which logs
+	// at error again.
+	disk.Health = "PASSED"
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+	disk.Health = "FAILED"
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+	if got := count(zerolog.ErrorLevel, "Disk health alert created"); got != 2 {
+		t.Errorf("error-level health log count after the disk failed again = %d, want 2", got)
 	}
 }
 

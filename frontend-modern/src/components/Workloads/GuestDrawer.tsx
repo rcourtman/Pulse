@@ -160,7 +160,7 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
 
       {/* Use CSS hidden instead of Show to avoid mount/unmount which causes scroll jumps.
                  overflow-anchor: none prevents browser scroll anchoring from jumping when display toggles. */}
-      <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
+      <div class={`[overflow-anchor:none] ${activeTab() === 'overview' ? '' : 'hidden'}`}>
         <GuestDrawerOverview
           guest={props.guest}
           guestOsSummary={guestOsSummary()}
@@ -188,7 +188,7 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
       </div>
 
       {hasHistorySupport() && activeTab() === 'history' && (
-        <div style={{ 'overflow-anchor': 'none' }}>
+        <div class="[overflow-anchor:none]">
           <GuestDrawerHistory
             target={historyTarget()}
             range={historyRange()}
@@ -203,10 +203,7 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
                      up to the app-level Suspense and replace the entire page. */}
       <Show when={discoveryPanelKey()} keyed>
         {(_targetKey) => (
-          <div
-            class={activeTab() === 'discovery' ? '' : 'hidden'}
-            style={{ 'overflow-anchor': 'none' }}
-          >
+          <div class={`[overflow-anchor:none] ${activeTab() === 'discovery' ? '' : 'hidden'}`}>
             <Suspense fallback={<DiscoveryLoadingFallback text={discoveryLoadingState.text} />}>
               <DiscoveryTab
                 resourceType={discoveryResourceType()!}
@@ -226,7 +223,7 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
         )}
       </Show>
 
-      <div class={activeTab() === 'manage' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
+      <div class={`[overflow-anchor:none] ${activeTab() === 'manage' ? '' : 'hidden'}`}>
         <Show when={activeTab() === 'manage'}>
           <GuestDrawerManage
             guest={props.guest}
