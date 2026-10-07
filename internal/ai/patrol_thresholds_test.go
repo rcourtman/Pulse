@@ -20,6 +20,9 @@ func (m MockThresholdProvider) GetNodeMemoryThreshold() float64  { return m.Node
 func (m MockThresholdProvider) GetGuestMemoryThreshold() float64 { return m.GuestMem }
 func (m MockThresholdProvider) GetGuestDiskThreshold() float64   { return m.GuestDisk }
 func (m MockThresholdProvider) GetStorageThreshold() float64     { return m.Storage }
+func (m MockThresholdProvider) GetDiskTemperatureThreshold(string) (float64, float64) {
+	return 0, 0
+}
 
 func TestCalculatePatrolThresholds_Default(t *testing.T) {
 	// Test default behavior (exact mode)

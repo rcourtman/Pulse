@@ -130,6 +130,12 @@ describe('temperature', () => {
       expect(getTemperatureTextClass(80)).toContain('text-red-600');
     });
 
+    it('colours no disk reading whose disk temperature alerting is off', () => {
+      expect(getTemperatureTextClass(80, null, 'diskTemperature')).toBe('text-base-content');
+      // Node temperatures keep the factory colours without configured thresholds.
+      expect(getTemperatureTextClass(80, null, 'temperature')).toContain('text-red-600');
+    });
+
     it('honors configured warning and critical thresholds', () => {
       const thresholds = { warning: 80, critical: 85 };
 

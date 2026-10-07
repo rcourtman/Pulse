@@ -295,6 +295,12 @@ type SourceStatus struct {
 	LastSeen                      time.Time `json:"lastSeen"`
 	Error                         string    `json:"error,omitempty"`
 	ExpectedUpdateIntervalSeconds int64     `json:"expectedUpdateIntervalSeconds,omitempty"` // Collector-authored cadence, zero uses source default
+
+	// leaseExpired records that this source delivered the machine, Docker
+	// host or cluster it reports for as offline because its reporting lease
+	// ran out. Status aggregation counts that as offline whatever the
+	// sighting's age, while Status keeps describing delivery freshness.
+	leaseExpired bool
 }
 
 // ResourceIdentity holds identifiers used for matching.

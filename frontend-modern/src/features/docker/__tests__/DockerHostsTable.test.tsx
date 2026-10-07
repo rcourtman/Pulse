@@ -217,6 +217,58 @@ describe('DockerHostsTable', () => {
     );
   });
 
+  it("drops an offline host's retained temperature with its other readings", () => {
+    // A Docker host past its reporting lease is offline, and its last
+    // temperature is no more current than its last CPU, memory and disk.
+    const { container } = render(() => (
+      <DockerHostsTable
+        resources={[
+          makeDockerHost({
+            status: 'offline',
+            temperature: 51,
+            health: {
+              verdict: 'critical',
+              reasons: [
+                { code: 'offline', detail: '' },
+                { code: 'telemetry_stale', detail: '9m' },
+              ],
+            },
+          }),
+          makeDockerHost({
+            id: 'agent:docker-02',
+            name: 'docker-02',
+            displayName: 'docker-02',
+            temperature: 51,
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    const headers = Array.from(container.querySelectorAll('thead th')).map((th) =>
+      (th.textContent ?? '').trim(),
+    );
+    const tempIndex = headers.findIndex((header) => header.startsWith('Temp'));
+    expect(tempIndex).toBeGreaterThan(-1);
+    const temp = (id: string) =>
+      (
+        container.querySelectorAll(`[data-docker-host-row="${id}"] td`)[tempIndex]?.textContent ??
+        ''
+      ).trim();
+    expect(temp('agent:docker-01')).toBe('—');
+    expect(temp('agent:docker-02')).toBe('51.0°C');
+    const offlineRow = container.querySelector('[data-docker-host-row="agent:docker-01"]')!;
+    expect(within(offlineRow as HTMLElement).queryAllByTestId('stacked-memory-bar')).toHaveLength(
+      0,
+    );
+    expect(offlineRow.querySelector('[data-docker-host-stale] .sr-only')).toHaveTextContent(
+      'No report for 9m',
+    );
+  });
+
   it('tints a host row for the Docker alerts its drawer lists, not by display name', () => {
     // Docker alerts are keyed on the Docker host id and carry the hostname
     // as their node; neither is the row's id or its display name.

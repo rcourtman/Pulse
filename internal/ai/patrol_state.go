@@ -94,6 +94,15 @@ type patrolRuntimeState struct {
 	ConnectionHealth        map[string]bool
 	ActiveAlerts            []models.Alert
 	RecentlyResolved        []models.ResolvedAlert
+	// thresholdProvider carries the user's alert thresholds into the run. Nil
+	// means the factory alert configuration.
+	thresholdProvider ThresholdProvider
+}
+
+// diskTemperatureLimits resolves the alert disk temperature policy for one
+// disk type.
+func (s patrolRuntimeState) diskTemperatureLimits(diskType string) diskTemperatureLimits {
+	return diskTemperatureLimitsFor(s.thresholdProvider, diskType)
 }
 
 func newPatrolRuntimeState(snapshot models.StateSnapshot) patrolRuntimeState {
@@ -176,11 +185,16 @@ func (p *PatrolService) currentPatrolRuntimeState() patrolRuntimeState {
 	stateProvider := p.stateProvider
 	readState := p.readState
 	unifiedResourceProvider := p.unifiedResourceProvider
+	thresholdProvider := p.thresholdProvider
 	p.mu.RUnlock()
+	var state patrolRuntimeState
 	if stateProvider == nil {
-		return emptyPatrolRuntimeState(readState, unifiedResourceProvider)
+		state = emptyPatrolRuntimeState(readState, unifiedResourceProvider)
+	} else {
+		state = newPatrolRuntimeStateWithProviders(stateProvider.ReadSnapshot(), readState, unifiedResourceProvider)
 	}
-	return newPatrolRuntimeStateWithProviders(stateProvider.ReadSnapshot(), readState, unifiedResourceProvider)
+	state.thresholdProvider = thresholdProvider
+	return state
 }
 
 func (p *PatrolService) hasPatrolRuntimeInputs() bool {
@@ -199,8 +213,11 @@ func (p *PatrolService) patrolRuntimeStateForSnapshot(snapshot models.StateSnaps
 	p.mu.RLock()
 	readState := p.readState
 	unifiedResourceProvider := p.unifiedResourceProvider
+	thresholdProvider := p.thresholdProvider
 	p.mu.RUnlock()
-	return newPatrolRuntimeStateWithProviders(snapshot, readState, unifiedResourceProvider)
+	state := newPatrolRuntimeStateWithProviders(snapshot, readState, unifiedResourceProvider)
+	state.thresholdProvider = thresholdProvider
+	return state
 }
 
 func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeResourceRecord) bool) {
