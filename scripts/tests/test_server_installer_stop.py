@@ -116,9 +116,9 @@ resolve_latest_release_tag_for_channel() { echo v6.6.0; }
 read_configured_update_channel() { echo stable; }
 run_upgrade_readiness_preflight() { return 0; }
 safe_read() {
-  local choice=1
-  [[ "$FLOW" != reinstall ]] || choice=2
-  printf -v "$2" '%s' "$choice"
+  local selection=1
+  [[ "$FLOW" != reinstall ]] || selection=2
+  printf -v "$2" '%s' "$selection"
 }
 curl() { return 0; }
 download_pulse() { echo 'staging failed' >&2; exit 42; }
@@ -193,7 +193,7 @@ class ServerInstallerStopTest(unittest.TestCase):
         for flow in ("version", "update", "reinstall"):
             with self.subTest(flow=flow):
                 observation = self.exercise(STAGING_FAILURE, flow, "active")
-                self.assertEqual(observation["result"].returncode, 42)
+                self.assertEqual(observation["result"].returncode, 42, observation["result"].stderr)
                 self.assertEqual(observation["files"], observation["originals"])
                 self.assertNotRegex(observation["calls"], r"(?m)^stop\b")
 
