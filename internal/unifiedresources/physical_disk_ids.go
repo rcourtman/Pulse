@@ -22,8 +22,16 @@ func PreferredPhysicalDiskMetricID(serial, wwn, fallback string) string {
 }
 
 // HostSMARTDiskSourceID returns the registry source ID of a disk a host agent
-// reports through SMART.
+// reports through SMART. A usable serial or WWN names the drive but not the
+// machine: a dual-ported SAS shelf, cloned VMs with an explicit serial and
+// fixed-serial USB bridges report one identifier on several hosts, and the
+// registry keeps one resource per source ID. The key therefore carries the
+// reporting host. A disk without hardware identity keeps its historical
+// host/device/topology key, which is also its metrics key.
 func HostSMARTDiskSourceID(host models.Host, disk models.HostDiskSMART) string {
+	if hardwareID := PreferredPhysicalDiskMetricID(disk.Serial, disk.WWN, ""); hardwareID != "" {
+		return hostPhysicalDiskSourceID(host.ID, hardwareID)
+	}
 	return HostSMARTDiskMetricID(host, disk)
 }
 
@@ -43,15 +51,91 @@ func HostSMARTDiskMetricID(host models.Host, disk models.HostDiskSMART) string {
 	)
 }
 
+// HostUnraidDiskSourceID returns the registry source ID of a disk in a host's
+// Unraid inventory. It shares HostSMARTDiskSourceID's host-scoped serial key so
+// the SMART and Unraid observations of one disk keep one source mapping.
 func HostUnraidDiskSourceID(host models.Host, disk models.HostUnraidDisk) string {
-	device := normalizePhysicalDiskDeviceToken(disk.Device)
-	fallback := ""
-	if device != "" {
-		fallback = fmt.Sprintf("%s:%s", strings.TrimSpace(host.ID), device)
-	} else if strings.TrimSpace(disk.Name) != "" {
-		fallback = fmt.Sprintf("%s:unraid-slot:%s", strings.TrimSpace(host.ID), strings.TrimSpace(disk.Name))
+	if serial := PreferredPhysicalDiskMetricID(disk.Serial, "", ""); serial != "" {
+		return hostPhysicalDiskSourceID(host.ID, serial)
 	}
-	return PreferredPhysicalDiskMetricID(disk.Serial, "", fallback)
+	device := normalizePhysicalDiskDeviceToken(disk.Device)
+	if device != "" {
+		return fmt.Sprintf("%s:%s", strings.TrimSpace(host.ID), device)
+	}
+	if name := strings.TrimSpace(disk.Name); name != "" {
+		return fmt.Sprintf("%s:unraid-slot:%s", strings.TrimSpace(host.ID), name)
+	}
+	return ""
+}
+
+const hostPhysicalDiskSourceIDMarker = "/physical-disk:"
+
+func hostPhysicalDiskSourceID(hostID, hardwareID string) string {
+	if hostID = strings.TrimSpace(hostID); hostID == "" {
+		return hardwareID
+	}
+	return hostID + hostPhysicalDiskSourceIDMarker + hardwareID
+}
+
+// sourceSpecificIDKey returns the part of a source ID that SourceSpecificID
+// hashes. An agent disk's source ID carries its host, but it used to be the
+// bare serial or WWN, and the ID of a disk split from its match, like the
+// operator exclusion that split it, was derived from that. The host stays out
+// of the hash so both keep applying across the change.
+func sourceSpecificIDKey(resourceType ResourceType, source DataSource, sourceID string) string {
+	sourceID = normalizeSourceID(sourceID)
+	if source != SourceAgent || CanonicalResourceType(resourceType) != ResourceTypePhysicalDisk {
+		return sourceID
+	}
+	if _, hardwareID, ok := strings.Cut(sourceID, hostPhysicalDiskSourceIDMarker); ok && hardwareID != "" {
+		return hardwareID
+	}
+	return sourceID
+}
+
+// seedAgentPhysicalDiskSourceIDLocked rebuilds an agent disk's source ID for a
+// registry seeded from unified resources, which carry no source mappings. It
+// must reproduce the key HostSMARTDiskSourceID and HostUnraidDiskSourceID
+// ingest under, or a rehydrated disk loses its agent source target, and with
+// it the metrics target of a disk only the agent reports. When the reporting
+// host cannot be found, a disk with hardware identity falls back to the bare
+// serial or WWN its source ID used to be.
+func (rr *ResourceRegistry) seedAgentPhysicalDiskSourceIDLocked(resource *Resource) string {
+	disk := resource.PhysicalDisk
+	if disk == nil {
+		return ""
+	}
+	hostID := rr.seedAgentDiskHostIDLocked(resource)
+	if hardwareID := PreferredPhysicalDiskMetricID(disk.Serial, disk.WWN, ""); hardwareID != "" {
+		return hostPhysicalDiskSourceID(hostID, hardwareID)
+	}
+	if hostID == "" {
+		return ""
+	}
+	return diskinventory.PreferredID("", "", hostID, disk.DevPath, disk.Controller, disk.Target)
+}
+
+// seedAgentDiskHostIDLocked returns the agent ID of the host an agent-reported
+// disk sits on: its parent, or the host above the Unraid array or cache pool
+// that parents it. A parent that is neither yields no host.
+func (rr *ResourceRegistry) seedAgentDiskHostIDLocked(resource *Resource) string {
+	parentID := resource.ParentID
+	for depth := 0; parentID != nil && depth < 4; depth++ {
+		parent := rr.resources[CanonicalResourceID(strings.TrimSpace(*parentID))]
+		if parent == nil {
+			return ""
+		}
+		if parent.Agent != nil {
+			if agentID := strings.TrimSpace(parent.Agent.AgentID); agentID != "" {
+				return agentID
+			}
+		}
+		if CanonicalResourceType(parent.Type) != ResourceTypeStorage {
+			return ""
+		}
+		parentID = parent.ParentID
+	}
+	return ""
 }
 
 // ProxmoxPhysicalDiskSourceID returns the source-native ID used for physical

@@ -373,6 +373,86 @@ func TestWriteHostSMARTMetricsRecordsOnlyCollectedTemperatures(t *testing.T) {
 	}
 }
 
+// A dual-ported SAS shelf, cloned VMs with an explicit serial and fixed-serial
+// USB bridges report one usable serial on several hosts. The registry keeps a
+// disk per host, and each must keep its own agent source target, in the live
+// registry and in one rehydrated from its resources, or a disk only the agent
+// reports has no metrics target and no chart. Both targets read the series the
+// agent's SMART writer files under the serial: disk history follows the drive's
+// hardware identity, not the host.
+func TestSameSerialAgentDisksOnTwoHostsEachKeepTheirMetricsTarget(t *testing.T) {
+	storeConfig := metrics.DefaultConfig(t.TempDir())
+	storeConfig.FlushInterval = time.Hour
+	store, err := metrics.NewStore(storeConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	m := &Monitor{metricsStore: store}
+
+	now := time.Now().UTC().Truncate(time.Second)
+	const serial = "SHELF-SERIAL-1"
+	hosts := []models.Host{
+		{ID: "agent-alpha", Hostname: "alpha", MachineID: "machine-alpha", Status: "online", LastSeen: now},
+		{ID: "agent-beta", Hostname: "beta", MachineID: "machine-beta", Status: "online", LastSeen: now},
+	}
+	wantSourceIDs := make(map[string]bool, len(hosts))
+	for i := range hosts {
+		hosts[i].Sensors.SMART = []models.HostDiskSMART{{Device: "sda", Serial: serial, Model: "Shelf Disk", Type: "sas",
+			Health: "PASSED", Temperature: 40 + i, Collection: &diskinventory.CollectionStatus{Temperature: diskinventory.Available("smartctl")}}}
+		m.writeHostSMARTMetrics(hosts[i], now)
+		wantSourceIDs[unifiedresources.HostSMARTDiskSourceID(hosts[i], hosts[i].Sensors.SMART[0])] = true
+	}
+	store.Flush()
+	if len(wantSourceIDs) != len(hosts) {
+		t.Fatalf("agent disk source IDs = %v, want one per host", wantSourceIDs)
+	}
+
+	live := unifiedresources.NewRegistry(nil)
+	live.IngestSnapshot(models.StateSnapshot{Hosts: hosts})
+	rehydrated := unifiedresources.NewRegistry(nil)
+	rehydrated.IngestResources(live.List())
+	for _, tc := range []struct {
+		name     string
+		registry *unifiedresources.ResourceRegistry
+	}{{"live", live}, {"rehydrated", rehydrated}} {
+		disks := tc.registry.ListByType(unifiedresources.ResourceTypePhysicalDisk)
+		if len(disks) != len(hosts) {
+			t.Fatalf("%s: disks = %d, want one per host", tc.name, len(disks))
+		}
+		gotSourceIDs := make(map[string]bool, len(disks))
+		for _, disk := range disks {
+			for _, target := range tc.registry.SourceTargets(disk.ID) {
+				if target.Source == unifiedresources.SourceAgent {
+					gotSourceIDs[target.SourceID] = true
+				}
+			}
+			target := tc.registry.MetricsTarget(disk.ID)
+			if target == nil {
+				t.Fatalf("%s: disk %s has no metrics target", tc.name, disk.ID)
+			}
+			if target.ResourceType != "disk" || target.ResourceID != serial {
+				t.Fatalf("%s: disk %s metrics target = %+v, want the serial's disk series", tc.name, disk.ID, *target)
+			}
+			points, err := store.Query(target.ResourceType, target.ResourceID, "smart_temp", now.Add(-time.Minute), now.Add(time.Minute), 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(points) == 0 {
+				t.Fatalf("%s: disk %s metrics target reads no SMART temperature history", tc.name, disk.ID)
+			}
+		}
+		if len(gotSourceIDs) != len(wantSourceIDs) {
+			t.Fatalf("%s: agent source targets = %v, want each host's own %v", tc.name, gotSourceIDs, wantSourceIDs)
+		}
+		for sourceID := range wantSourceIDs {
+			if !gotSourceIDs[sourceID] {
+				t.Fatalf("%s: agent source targets = %v, want each host's own %v", tc.name, gotSourceIDs, wantSourceIDs)
+			}
+		}
+	}
+}
+
 // A SMART row found only by device path may describe the slot's previous
 // occupant. It is refused when its identity contradicts the Proxmox disk's,
 // judged only on what both producers report like for like: WWNs for every
