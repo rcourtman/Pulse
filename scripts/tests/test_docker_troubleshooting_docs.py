@@ -133,27 +133,11 @@ class DockerTroubleshootingDocsTest(unittest.TestCase):
         self.assertNotRegex(text, r"--property=Environment|systemctl (?:cat|restart)|--insecure")
 
     def test_command_channel_journal_check_is_bounded_and_read_only(self):
-        recipe = command("Commands enabled but remote control blocked")
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            for name, body in (
-                ("sudo", '#!/bin/sh\nexec "$@"\n'),
-                ("journalctl", '#!/usr/bin/python3\nimport json, sys\nfrom pathlib import Path\n'
-                 'Path("' + str(root / "argv.json") + '").write_text(json.dumps(sys.argv[1:]))\n'
-                 'print("WebSocket connection failed repeatedly, reconnecting")\n'),
-            ):
-                path = root / name
-                path.write_text(body)
-                path.chmod(0o700)
-            env = dict(os.environ, PATH=f"{root}:{os.environ['PATH']}", SYNTHETIC_SECRET=SECRET)
-            result = subprocess.run(["bash", "-eu", "-c", recipe], env=env,
-                                    capture_output=True, text=True, timeout=5)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(json.loads((root / "argv.json").read_text()), [
-                "-u", "pulse-agent.service", "--since", "15 minutes ago", "-n", "200",
-                "--no-pager", "--output=cat",
-            ])
-            self.assertNotIn(SECRET, result.stdout + result.stderr)
+        # The shared reader has executable deadline, partial-failure and stream
+        # controls in test_agent_log_docs; keep this entry point bound to it.
+        text = section("Commands enabled but remote control blocked")
+        self.assertIn("[bounded agent log reader](#collect-agent-logs-safely)", text)
+        self.assertNotIn("journalctl", text)
 
     def run_guest(self, *, socket="present", docker="ok", pct="ok", cli=True):
         with tempfile.TemporaryDirectory() as temporary:
