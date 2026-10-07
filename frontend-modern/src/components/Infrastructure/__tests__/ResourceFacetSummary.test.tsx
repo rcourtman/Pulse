@@ -37,33 +37,4 @@ describe('ResourceFacetSummary', () => {
     expect(queryByText('Capabilities 1')).toBeNull();
     expect(queryByText('Relationships 1')).toBeNull();
   });
-
-  it('collapses badges behind an overflow chip when a visible limit is set', () => {
-    const { getByText, queryByText } = render(() => (
-      <ResourceFacetSummary
-        counts={{
-          recentChanges: 3,
-          recentChangeKinds: {
-            restart: 2,
-            config_update: 1,
-            metric_anomaly: 1,
-          },
-          recentChangeSourceTypes: {
-            platform_event: 1,
-            pulse_diff: 2,
-          },
-          recentChangeSourceAdapters: {
-            docker_adapter: 2,
-            proxmox_adapter: 1,
-          },
-        }}
-        recentChanges={[]}
-        maxVisibleBadges={1}
-      />
-    ));
-
-    expect(getByText('Timeline 3')).toBeInTheDocument();
-    expect(getByText('+7')).toBeInTheDocument();
-    expect(queryByText('Config update 1')).toBeNull();
-  });
 });

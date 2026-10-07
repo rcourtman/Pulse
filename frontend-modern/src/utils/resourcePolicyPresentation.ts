@@ -116,39 +116,6 @@ export const hasDefaultResourcePolicyPosture = (policy?: ResourcePolicy): boolea
     (policy.routing.redact?.length ?? 0) === 0,
   );
 
-export const hasBlockingResourcePolicyPosture = (policy?: ResourcePolicy): boolean =>
-  Boolean(policy && (policy.sensitivity === 'restricted' || policy.routing.scope === 'local-only'));
-
-export const getResourcePolicyTableBadges = (
-  policy?: ResourcePolicy,
-): PolicyBadgePresentation[] => {
-  if (!policy) return [];
-
-  if (!hasBlockingResourcePolicyPosture(policy)) {
-    return [];
-  }
-
-  const sensitivity = sensitivityPresentation[policy.sensitivity];
-  const routing = routingPresentation[policy.routing.scope];
-  const redactions = getResourcePolicyRedactionLabels(policy);
-  const primary = policy.routing.scope === 'local-only' ? routing : sensitivity;
-  const redactionTitle = redactions.length > 0 ? `Redacts ${redactions.join(', ')}.` : undefined;
-
-  return [
-    {
-      label: primary.label,
-      className: primary.className,
-      title: [
-        `${sensitivity.label}: ${sensitivity.title}`,
-        `${routing.label}: ${routing.title}`,
-        redactionTitle,
-      ]
-        .filter(Boolean)
-        .join(' '),
-    },
-  ];
-};
-
 export const getResourceSensitivityLabel = (sensitivity?: ResourceSensitivity): string =>
   sensitivity ? sensitivityPresentation[sensitivity].label : 'Unclassified';
 
@@ -262,16 +229,4 @@ export const getResourcePolicyDisplayLabel = (
   }
 
   return resource.displayName?.trim() || resource.name?.trim() || '';
-};
-
-export const shouldShowResourceAlternateName = (
-  resource?: ResourcePolicyDisplayResource | null,
-): boolean => {
-  if (!resource?.displayName || !resource.name) return false;
-
-  if (requiresGovernedResourceDisplay(resource.policy)) {
-    return false;
-  }
-
-  return resource.displayName.trim().toLowerCase() !== resource.name.trim().toLowerCase();
 };
