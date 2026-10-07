@@ -235,5 +235,76 @@ class GeneralLogEvidenceTest(unittest.TestCase):
                 self.assertIn("no unbounded fallback", result.stderr)
 
 
+class SeverityLogEvidenceTest(unittest.TestCase):
+    """Priority filtering must not bypass the incident reader's safety bounds."""
+
+    heading = "#### Filter Pulse's systemd journal by severity"
+
+    def copied(self):
+        # Stop at the next H4; the generic section helper stops at H3.
+        text = section(self.heading).split("\n#### ", 1)[0]
+        blocks = re.findall(r"```bash\n(.*?)```", text, re.DOTALL)
+        self.assertEqual(len(blocks), 1)
+        return blocks[0]
+
+    def exercise(self, **settings):
+        result, argv = exercise_log_recipe("journalctl", self.copied(), **settings)
+        expected = ["-u", "pulse", "-p", "warning", "--since", "15 minutes ago",
+                    "--lines", "200", "--no-pager"]
+        self.assertEqual(argv, None if settings.get("missing_timeout") else expected)
+        return result
+
+    def test_priority_reader_keeps_incident_bounds_without_privilege_or_mutation(self):
+        copied = self.copied()
+        for bound in ("--signal=TERM --kill-after=1s 8s", "--since '15 minutes ago'",
+                      "--lines 200", "--no-pager"):
+            self.assertIn(bound, copied)
+        self.assertNotRegex(copied, r"\b(?:sudo|systemctl|curl|grep)\b|--follow")
+        self.assertEqual(DOC.read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md").read_bytes())
+
+    def test_success_keeps_both_complete_streams(self):
+        result = self.exercise(stdout=JSON_LOG, stderr=CONSOLE_LOG)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertCountEqual(result.stdout.splitlines(),
+                              (JSON_LOG + CONSOLE_LOG).splitlines())
+        self.assertEqual(result.stderr, "")
+
+    def test_failed_reader_withholds_partial_warning_and_private_error(self):
+        result = self.exercise(stdout=JSON_LOG, stderr="synthetic private error\n", exit_code=2)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("Log read unavailable (exit 2)", result.stderr)
+        self.assertNotIn("synthetic private error", result.stderr)
+
+    def test_real_deadline_withholds_partial_warning(self):
+        result = self.exercise(stdout=JSON_LOG, hang="term")
+        self.assertEqual(result.returncode, 124, result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("Log read unavailable (exit 124)", result.stderr)
+
+    def test_missing_timeout_stops_before_reading(self):
+        result = self.exercise(missing_timeout=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("no unbounded fallback", result.stderr)
+
+    def test_empty_success_does_not_invent_a_warning_or_reader_error(self):
+        result = self.exercise()
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
+
+    def test_old_unit_and_sharing_guidance_does_not_require_incident_reinstallation(self):
+        guide = " ".join(section(self.heading).split("\n#### ", 1)[0].split())
+        for boundary in ("inside the Pulse container, not on the Proxmox host",
+                         "not sanitised", "#inspect-notification-logs",
+                         "An empty filtered read does not prove", "info priority",
+                         "bounded unfiltered systemd reader", "check locally",
+                         "do not post the full unit or environment",
+                         "Do not reinstall or restart Pulse just to obtain logs",
+                         "planned maintenance window", "settings and data"):
+            self.assertIn(boundary, guide)
+        self.assertNotIn("systemctl cat", guide)
+
+
 if __name__ == "__main__":
     unittest.main()
