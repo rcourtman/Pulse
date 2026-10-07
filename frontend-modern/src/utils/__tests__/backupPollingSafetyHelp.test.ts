@@ -27,7 +27,9 @@ describe('backup polling safety help', () => {
   it('ships one safety explanation in the public configuration guide', () => {
     expect(read('frontend-modern/public/docs/CONFIGURATION.md')).toBe(guide);
     const article = render(guide, 'CONFIGURATION');
-    expect(article.querySelector(`#${fragment}`)?.textContent).toBe('Backup polling and guest safety');
+    expect(article.querySelector(`#${fragment}`)?.textContent).toBe(
+      'Backup polling and guest safety',
+    );
     expect(article.querySelectorAll(`[id="${fragment}"]`)).toHaveLength(1);
   });
 
@@ -45,7 +47,9 @@ describe('backup polling safety help', () => {
       expect(cell, key).toBeDefined();
       const link = cell!.parentElement?.querySelector(`a[href="#${fragment}"]`);
       expect(link?.textContent, key).toBe('Backup polling and guest safety');
-      expect(link?.hasAttribute('data-doc-link'), key).toBe(true);
+      // Same-document fragments use the viewer's native fragment handler,
+      // not its cross-document route marker.
+      expect(link?.hasAttribute('data-doc-link'), key).toBe(false);
     }
     expect(article.querySelector(`#${fragment}`)).not.toBeNull();
   });
@@ -53,7 +57,9 @@ describe('backup polling safety help', () => {
   it('distinguishes record collection from guest-agent reads and provider backup execution', () => {
     const { text } = help();
     expect(text).toContain('Enable backup polling');
-    expect(text).toContain('controls whether Pulse schedules collection of Proxmox/PBS backup records');
+    expect(text).toContain(
+      'controls whether Pulse schedules collection of Proxmox/PBS backup records',
+    );
     expect(text).toContain(
       'Turning it off does not pause ordinary PVE monitoring or its QEMU Guest Agent disk, memory and metadata reads',
     );
@@ -127,6 +133,8 @@ describe('backup polling safety help', () => {
       expect(target.querySelector(`#${id}`), id).not.toBeNull();
     }
     expect(article.querySelector('pre')).toBeNull();
-    expect(article.textContent).not.toMatch(/qm agent|pvesh|guest-fsfreeze|force-reset|disable backup freezing/);
+    expect(article.textContent).not.toMatch(
+      /qm agent|pvesh|guest-fsfreeze|force-reset|disable backup freezing/,
+    );
   });
 });
