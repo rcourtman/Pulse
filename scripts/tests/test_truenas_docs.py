@@ -19,6 +19,8 @@ import tempfile
 import threading
 import unittest
 
+from test_troubleshooting_logs import exercise_log_recipe
+
 
 ROOT = Path(__file__).resolve().parents[2]
 DOC = ROOT / "docs/TRUENAS.md"
@@ -69,8 +71,6 @@ class TrueNASDocsTest(unittest.TestCase):
         text = DOC.read_text()
         bash = "\n".join(re.findall(r"```bash\n(.*?)```", text, re.DOTALL))
         self.assertNotRegex(bash, r"Authorization:|Bearer\s|\$TOKEN|apiKey|--insecure")
-        self.assertIn("journalctl -u pulse --since '15 minutes ago' --lines 100 --no-pager", bash)
-        self.assertIn("docker logs --since 15m --tail 100 pulse", bash)
         self.assertIn("does not establish a live reading", text)
         self.assertIn("Do not upload a full browser network capture", text)
 
@@ -79,35 +79,27 @@ class TrueNASDocsTest(unittest.TestCase):
             "### Inventory works but CPU, memory or History is missing", 1)[0]
 
     def log_recipes(self):
-        blocks = re.findall(r"```bash\n(.*?)```", self.log_section(), re.DOTALL)
+        # Follow the actual local help link, not an unrelated test fixture or
+        # a second copy of the shell commands in this guide.
+        links = re.findall(r"\[bounded Pulse log readers\]\(([^)]+)\)", self.log_section())
+        self.assertEqual(links, ["TROUBLESHOOTING.md#inspect-notification-logs"])
+        self.assertNotIn("```", self.log_section(), "do not leave an unbounded alternate reader")
+        target = ROOT / "docs" / links[0].split("#", 1)[0]
+        self.assertEqual(target.read_bytes(), (ROOT / "frontend-modern/public/docs" / target.name).read_bytes())
+        section = target.read_text().split("### Inspect Notification Logs\n", 1)[1].split("\n### ", 1)[0]
+        blocks = re.findall(r"```bash\n(.*?)```", section, re.DOTALL)
         self.assertEqual(len(blocks), 2, "one bounded reader per deployment")
         return {"docker" if "# Docker" in block else "journalctl": block for block in blocks}
 
-    def exercise_log(self, reader, recipe, *, stdout="", stderr="", exitcode=0):
-        with tempfile.TemporaryDirectory() as temporary:
-            directory = Path(temporary)
-            command = directory / reader
-            command.write_text(
-                "#!/usr/bin/env python3\nimport json, os, pathlib, sys\n"
-                "pathlib.Path(os.environ['LOG_ARGV']).write_text(json.dumps(sys.argv[1:]))\n"
-                "sys.stdout.write(os.environ['LOG_STDOUT'])\n"
-                "sys.stderr.write(os.environ['LOG_STDERR'])\n"
-                "sys.exit(int(os.environ['LOG_EXIT']))\n"
-            )
-            command.chmod(0o700)
-            argv_path = directory / "argv.json"
-            env = dict(os.environ, PATH=f"{directory}:{os.environ['PATH']}",
-                       LOG_ARGV=str(argv_path), LOG_STDOUT=stdout, LOG_STDERR=stderr,
-                       LOG_EXIT=str(exitcode))
-            result = subprocess.run(["bash", "-c", recipe], env=env, capture_output=True,
-                                    text=True, timeout=5)
-            self.assertTrue(argv_path.exists(), "copied recipe must invoke the log reader")
-            return result, json.loads(argv_path.read_text())
+    def exercise_log(self, reader, recipe, *, exitcode=0, **settings):
+        result, argv = exercise_log_recipe(reader, recipe, exit_code=exitcode, **settings)
+        self.assertEqual(argv is None, bool(settings.get("missing_timeout")))
+        return result, argv
 
     def test_log_recipes_bound_the_read_and_keep_unfiltered_output(self):
         expected = {
-            "journalctl": ["-u", "pulse", "--since", "15 minutes ago", "--lines", "100", "--no-pager"],
-            "docker": ["logs", "--since", "15m", "--tail", "100", "pulse"],
+            "journalctl": ["-u", "pulse", "--since", "15 minutes ago", "--lines", "200", "--no-pager"],
+            "docker": ["logs", "--since", "15m", "--tail", "200", "pulse"],
         }
         self.assertEqual(set(self.log_recipes()), set(expected))
         for reader, recipe in self.log_recipes().items():
@@ -116,9 +108,10 @@ class TrueNASDocsTest(unittest.TestCase):
                                                 stderr="TrueNAS collection failed\n")
                 self.assertEqual(argv, expected[reader])
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stdout, "startup failed\n")
-                self.assertEqual(result.stderr, "TrueNAS collection failed\n")
-                self.assertNotRegex(recipe, r"[|<>]|\b(?:grep|curl|inspect|restart|printenv)\b|--follow")
+                self.assertCountEqual(result.stdout.splitlines(), ["startup failed", "TrueNAS collection failed"])
+                self.assertEqual(result.stderr, "")
+                self.assertNotRegex(recipe, r"\b(?:grep|curl|inspect|restart|printenv)\b|--follow")
+                self.assertIn("--signal=TERM --kill-after=1s 8s", recipe)
 
     def test_log_reader_failure_is_preserved_even_with_a_matching_partial_line(self):
         for reader, recipe in self.log_recipes().items():
@@ -127,8 +120,33 @@ class TrueNASDocsTest(unittest.TestCase):
                     result, _ = self.exercise_log(reader, recipe, stdout=output,
                                                   stderr="synthetic access failure\n", exitcode=2)
                     self.assertEqual(result.returncode, 2)
-                    self.assertEqual(result.stdout, output)
-                    self.assertEqual(result.stderr, "synthetic access failure\n")
+                    self.assertEqual(result.stdout, "")
+                    self.assertIn("Log read unavailable (exit 2)", result.stderr)
+                    self.assertNotIn("synthetic access failure", result.stderr)
+
+    def test_hung_readers_withhold_partial_nas_output_at_the_real_deadline(self):
+        for reader, recipe in self.log_recipes().items():
+            with self.subTest(reader=reader):
+                result, _ = self.exercise_log(reader, recipe, stdout="TrueNAS polling\n", hang="term")
+                self.assertEqual(result.returncode, 124, result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("Log read unavailable (exit 124)", result.stderr)
+
+    def test_reader_ignoring_term_is_killed_after_the_grace_period(self):
+        result, _ = self.exercise_log("docker", self.log_recipes()["docker"],
+                                     stdout="TrueNAS polling\n", hang="ignore-term")
+        self.assertEqual(result.returncode, 137, result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("Log read unavailable (exit 137)", result.stderr)
+
+    def test_missing_timeout_stops_before_reading_without_an_unbounded_fallback(self):
+        for reader, recipe in self.log_recipes().items():
+            with self.subTest(reader=reader):
+                result, argv = self.exercise_log(reader, recipe, missing_timeout=True)
+                self.assertIsNone(argv)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("no unbounded fallback", result.stderr)
 
     def test_legacy_pipelines_demonstrate_the_masked_reader_failure(self):
         legacy = {
@@ -151,12 +169,16 @@ class TrueNASDocsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0)
             self.assertEqual(result.stdout + result.stderr, "")
             result, _ = self.exercise_log(reader, recipe, stderr="synthetic-secret-echo\n")
-            self.assertIn("synthetic-secret-echo", result.stderr)
+            self.assertIn("synthetic-secret-echo", result.stdout)
         prose = " ".join(self.log_section().split())
         for boundary in ("inside the Pulse container", "actual service or container name",
                          "failed read, not", "successful empty read is inconclusive",
                          "not sanitised", "not the whole excerpt", "manually redacted",
-                         "anything echoed in an error", "Do not enable Debug"):
+                         "anything echoed in an error", "enable Debug",
+                         "record limit alone does not bound a hung reader", "GNU `timeout`",
+                         "eight-second deadline and one-second termination grace",
+                         "no request ID is required", "only after a successful read",
+                         "withholds partial output", "do not use an unbounded substitute"):
             self.assertIn(boundary, prose)
 
     def test_diagnostics_export_guidance_uses_current_copy_and_preserves_live_check_boundary(self):

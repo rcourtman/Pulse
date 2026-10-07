@@ -255,31 +255,30 @@ Distinguish these other results before choosing an action:
   [polling checks](#stale-truenas-data) to distinguish a completed failure from
   missing or stale observations; a connection test is not a substitute.
 
-If a local log excerpt is needed, run only the reader for your deployment on
-the machine running **Pulse**, using an account authorised to read its logs.
-For Proxmox LXC, run it **inside the Pulse container**, not on the Proxmox host
-or the TrueNAS appliance. Substitute the actual service or container name
-(`pulse-backend` on some older systemd installs), and adjust the time window to
-the original incident. These commands read at most 100 records from the last
-15 minutes; they do not follow logs, make API requests or change logging:
+If a local log excerpt is needed, use the
+[bounded Pulse log readers](TROUBLESHOOTING.md#inspect-notification-logs).
+Despite that section's notification heading, the unfiltered readers also
+cover TrueNAS polling and startup errors; no request ID is required. Choose
+only the reader for the deployment running **Pulse**, using an account
+authorised to read its logs. For Proxmox LXC, run it **inside the Pulse
+container**, not on the Proxmox host or the TrueNAS appliance. Substitute the
+actual service or container name (`pulse-backend` on some older systemd
+installs), and adjust the time window to the original incident.
 
-```bash
-# systemd / Proxmox LXC
-journalctl -u pulse --since '15 minutes ago' --lines 100 --no-pager
-```
+Those Bash recipes read at most 200 records from the last 15 minutes and
+require **GNU `timeout`**, with an eight-second deadline and one-second
+termination grace. A record limit alone does not bound a hung reader. If
+`timeout` is unavailable, stop; do not use an unbounded substitute. They do
+not follow logs, make API requests or change logging.
 
-```bash
-# Docker
-docker logs --since 15m --tail 100 pulse
-```
-
-Inspect both output streams; Docker can write application logs to stderr.
-Do not pipe the reader into `grep truenas`: it can hide a failed read behind a
-matching partial line and omit relevant startup or storage errors. A nonzero
-reader exit, denied read or missing service/container is a failed read, not
-"no TrueNAS errors". Even a successful empty read is inconclusive: check the
-window and selected instance, not the API key. Do not enable Debug or repeat
-the failing action just to collect more logs.
+Both output streams are captured because Docker can write application logs
+to stderr. An excerpt is shown only after a successful read; failure or
+timeout withholds partial output and reports the exit code. A nonzero reader
+exit, denied read or missing service/container is a failed read, not
+"no TrueNAS errors". Do not filter with `grep truenas`: relevant startup or
+storage errors may not contain that word. Even a successful empty read is
+inconclusive: check the window and selected instance, not the API key. Do not
+enable Debug or repeat the failing action just to collect more logs.
 
 Local logs are **not sanitised**. Share only the relevant timestamp, method,
 HTTP status or error category and a manually redacted error, not the whole
