@@ -70,16 +70,40 @@ verify_release_signature() {
 
 # Check if auto-updates are enabled
 check_auto_updates_enabled() {
-    # Check system.json for autoUpdateEnabled flag (note: no 's' - matches Go struct)
-    if [[ -f "$CONFIG_DIR/system.json" ]]; then
-        local enabled=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"autoUpdateEnabled"[[:space:]]*:[[:space:]]*true' || true)
-        local channel=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' || true)
-        if [[ -z "$enabled" ]]; then
+    # Consent must come from one complete object, not matching text in a
+    # truncated file, nested setting or quoted string. jq is already an
+    # installer dependency; without it, leave manual updates available but
+    # refuse to guess whether an unattended update was authorised.
+    if [[ -e "$CONFIG_DIR/system.json" || -L "$CONFIG_DIR/system.json" ]]; then
+        local settings="" enabled="" channel=""
+        if [[ ! -f "$CONFIG_DIR/system.json" ]] || ! command -v jq >/dev/null 2>&1; then
+            log error "Cannot verify auto-update configuration; a regular system.json and jq are required"
+            exit 1
+        fi
+        if ! settings=$(jq -er -s '
+            if length != 1 or (.[0] | type) != "object" then
+                error("expected one configuration object")
+            else .[0] end
+            | (.updateChannel | if . == null then "" else . end) as $channel
+            | if ((.autoUpdateEnabled // false) | type) != "boolean"
+                 or ($channel | type) != "string" then
+                error("invalid update settings")
+              else
+                [(.autoUpdateEnabled // false),
+                 ($channel | gsub("^\\s+|\\s+$"; "") | ascii_downcase)]
+                | @tsv
+              end
+        ' "$CONFIG_DIR/system.json" 2>/dev/null); then
+            log error "Cannot parse auto-update configuration; no unattended update attempted"
+            exit 1
+        fi
+        IFS=$'\t' read -r enabled channel <<< "$settings"
+        if [[ "$enabled" != "true" ]]; then
             log info "Auto-updates disabled in configuration"
             exit 0
         fi
-        if [[ "$channel" == "rc" ]]; then
-            log info "Prerelease channel detected; unattended auto-updates run only on stable"
+        if [[ -n "$channel" && "$channel" != "stable" ]]; then
+            log info "Non-stable channel detected; unattended auto-updates run only on stable"
             exit 0
         fi
     fi

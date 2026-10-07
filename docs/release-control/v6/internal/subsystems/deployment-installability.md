@@ -15,6 +15,33 @@
 
 ## Purpose
 
+### Unattended update consent comes from complete configuration
+
+When `system.json` exists, the unattended updater requires one complete JSON
+object and the top-level boolean `autoUpdateEnabled`. Matching text in nested
+settings, strings, truncated JSON or multiple documents is not consent. Missing
+or null opt-in remains disabled. The top-level channel is trimmed and
+case-normalised: only stable or its legacy empty/default value admits an
+unattended update; RC and unknown channels do not. Invalid field types,
+unreadable/nonregular configuration and a missing `jq` fail before any release
+download or installer action, without printing configuration contents. `jq` is
+already an installer dependency; manual updates remain available if its optional
+installation failed. The legacy no-configuration, enabled-timer opt-in and the
+independent disabled-timer gate remain unchanged.
+
+The standalone `scripts/installtests/pulse_auto_update_consent_test.go` remains
+part of the ordinary installer suite and can also run with
+`cd scripts/installtests && go test -race pulse_auto_update_consent_test.go`,
+without the installer package's application imports or local listeners.
+`TestAutoUpdateRequiresCompleteTopLevelConsent` executes the actual shell gate
+against valid and adverse configuration bytes, including padded RC and nested
+opt-in. `TestAutoUpdateConsentKeepsTimerAndParserBoundaries` checks legacy timer
+consent, missing parser and nonregular configuration. These are source-level
+ordinary-user fixtures, not installed timer/systemd or update acceptance.
+The registry binds the standalone verifier only to the unattended updater's
+runtime policy. It cannot satisfy the archive, PowerShell, Docker or other
+installer policies; their existing exact verification obligations remain.
+
 ### Server replacement requires admitted bytes and a confirmed inactive service
 
 The server installer's archive path verifies the signature, extracts the
