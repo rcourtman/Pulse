@@ -385,6 +385,18 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 		return client.GetVMAgentVersion(ctx, nodeName, vmid)
 	})
 	if errors.Is(err, proxmox.ErrGuestAgentDeferred) {
+		// A later shared pause does not undo a completed OS-info outcome.
+		// Retain its safety suppression without publishing partial metadata or
+		// renewing the age of last-known guest-agent evidence.
+		m.guestMetadataMu.Lock()
+		if m.guestMetadataCache == nil {
+			m.guestMetadataCache = make(map[string]guestMetadataCacheEntry)
+		}
+		entry := m.guestMetadataCache[key]
+		entry.osInfoFailureCount = osInfoFailureCount
+		entry.osInfoSkip = osInfoSkip
+		m.guestMetadataCache[key] = entry
+		m.guestMetadataMu.Unlock()
 		m.deferGuestMetadataRetry(key, time.Now())
 		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion, true
 	}
