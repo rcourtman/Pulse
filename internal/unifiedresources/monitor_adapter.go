@@ -199,13 +199,24 @@ func (a *MonitorAdapter) currentRegistry() *ResourceRegistry {
 // resource store when monitoring has a durable store attached. Alert lifecycle
 // events carry source-native references (Proxmox node and guest IDs, agent
 // IDs, Docker host and Swarm service IDs, sub-resource references); they
-// resolve here so history reads by canonical ID include them.
+// resolve here so history reads by canonical ID include them. PVE disk alert
+// rows are owned row by row instead (proxmoxDiskAlertOwner).
 func (a *MonitorAdapter) RecordChange(change ResourceChange) error {
 	registry := a.currentRegistry()
 	if registry == nil || registry.store == nil {
 		return nil
 	}
 	sourceRef := change.ResourceID
+	if ref, ok := proxmoxDiskAlertRowReference(change); ok {
+		// A PVE disk alert reference never binds: the row goes to the disk its
+		// own hardware identity names, or stays under the reference.
+		if owner := registry.proxmoxDiskAlertOwner(ref, change.Metadata); owner != "" && owner != ref {
+			change.Metadata = cloneChangeMetadata(change.Metadata)
+			change.Metadata[MetadataAlertResourceID] = ref
+			change.ResourceID = owner
+		}
+		return registry.store.RecordChange(change)
+	}
 	history, hasHistory := registry.store.(resourceHistoryIdentityWriter)
 	unbound := false
 	if sourceID, derivedID, ok := legacyDockerHistoryIdentity(sourceRef); ok {

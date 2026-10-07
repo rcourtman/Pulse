@@ -2170,6 +2170,17 @@ wearout recovery rules. `TestProxmoxDiskCanonicalResourceIDTrimsIdentity` pins
 the persisted identity shape; monitoring's registry-backed
 `TestProxmoxPhysicalDiskMuteResolvesAndSuppressesWearoutAlert` pins the policy
 path. These are source invariants, not evidence of installed field relief.
+Each PVE disk alert records the evaluated disk's serial and WWN
+(`unifiedresources.MetadataDiskSerial`, `MetadataDiskWWN`), and resource
+history owns each lifecycle row by that identity rather than by the path. A
+row without a usable serial or WWN names only an identity-less disk at its
+path, and a row whose identity is ambiguous, or names no disk but one another
+resource already holds, stays under the path reference.
+Reads by the path reference find those rows through the alert identifiers
+`ProxmoxPhysicalDiskAlertIdentifiers` lists, so spec IDs and occurrence IDs
+must keep matching it;
+`TestCheckDiskHealthAlertsCarryHistoryOwnershipIdentity` in
+`internal/alerts/alerts_test.go` pins both.
 Shared metric threshold runtime now lives in
 `internal/alerts/metric_runtime.go`. That file owns metric threshold lookup,
 per-metric delay and intent resolution, reducer input composition, active-alert

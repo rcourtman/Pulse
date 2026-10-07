@@ -589,41 +589,272 @@ func TestHistoryIdentityMonitorAdapterResolvesSubResourceReferences(t *testing.T
 // device path. Operator mutes resolve that reference to the disk at the path
 // (#2112), but history never binds it: the path passes to a replacement disk
 // in the same slot, and a binding would carry every row journaled under the
-// reference, and every read of the reference, to whichever disk held the path
-// last.
-func TestHistoryIdentityLeavesProxmoxDiskAlertReferencesUnbound(t *testing.T) {
+// reference, and every read of it, to whichever disk held the path last. A
+// live row goes to the disk its recorded hardware identity names; a row
+// journaled under the reference before stays there, unrewritten.
+func TestHistoryIdentityNeverBindsProxmoxDiskAlertReferences(t *testing.T) {
 	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, store.Close()) })
 	now := time.Now().UTC().Truncate(time.Second)
 	ref := ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", "/dev/sda")
-	event := func(id string, at time.Time) ResourceChange {
-		return ResourceChange{ID: id, ResourceID: ref, Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: at,
-			Metadata: map[string]any{"alert_type": "disk-health", "disk_serial": "ZA1A2B3C"}}
-	}
 	// Journaled before this process started, then raised live.
-	require.NoError(t, store.RecordChange(event("legacy", now.Add(-time.Hour))))
+	require.NoError(t, store.RecordChange(pveDiskAlertChange("legacy", "pve1", "/dev/sda", ChangeAlertFired, "ZA1A2B3C", "", now.Add(-time.Hour))))
 	snapshot := proxmoxHistoryIdentitySnapshot(now)
-	snapshot.PhysicalDisks = []models.PhysicalDisk{{ID: ProxmoxPhysicalDiskSourceID("lab", "pve1", "/dev/sda", "", ""), Node: "pve1", Instance: "lab",
-		DevPath: "/dev/sda", Model: "Seagate ST2000DM008", Serial: "ZA1A2B3C", Type: "hdd", Health: "FAILED", Wearout: -1, LastChecked: now}}
+	snapshot.PhysicalDisks = []models.PhysicalDisk{pveDiskHistoryTestDisk("pve1", "/dev/sda", "ZA1A2B3C", "", now)}
 	adapter := NewMonitorAdapter(NewRegistry(store))
 	adapter.PopulateFromSnapshot(snapshot)
 	registry := adapter.currentRegistry()
 	diskID, ok := registry.ResolveReferenceID(ref)
 	require.True(t, ok, "operator mutes resolve the reference to the disk")
 	require.Equal(t, ResourceTypePhysicalDisk, registry.resources[diskID].Type)
-	require.NoError(t, adapter.RecordChange(event("live", now)))
+	require.NotContains(t, adapter.legacyHistory.pending, ref, "the reference is never retried for a binding")
+	require.NoError(t, adapter.RecordChange(pveDiskAlertChange("live", "pve1", "/dev/sda", ChangeAlertFired, "ZA1A2B3C", "", now)))
 
 	_, found, err := store.ResolveHistorySourceIdentity(ref)
 	require.NoError(t, err)
 	require.False(t, found)
-	got, err := store.GetRecentChanges(ref, time.Time{}, 10)
+	byRef := pveDiskHistoryRows(t, store, ref)
+	require.ElementsMatch(t, []string{"legacy", "live"}, pveDiskHistoryIDs(byRef))
+	require.Equal(t, ref, byRef["legacy"].ResourceID)
+	require.Equal(t, diskID, byRef["live"].ResourceID)
+	require.ElementsMatch(t, []string{"live"}, pveDiskHistoryIDs(pveDiskHistoryRows(t, store, diskID)))
+}
+
+func pveDiskHistoryTestDisk(node, device, serial, wwn string, now time.Time) models.PhysicalDisk {
+	return models.PhysicalDisk{ID: ProxmoxPhysicalDiskSourceID("lab", node, device, "", ""), Node: node, Instance: "lab",
+		DevPath: device, Model: "Disk " + node + device, Serial: serial, WWN: wwn, Type: "sata", Health: "FAILED", Wearout: -1, LastChecked: now}
+}
+
+// pveDiskAlertChange is a lifecycle row as the alert manager journals it:
+// under the path reference, with the evaluated disk's hardware identity.
+func pveDiskAlertChange(id, node, device string, kind ChangeKind, serial, wwn string, at time.Time) ResourceChange {
+	ref := ProxmoxPhysicalDiskAlertResourceID("lab", node, device)
+	change := BuildAlertTimelineChange(ref, kind, at, "", AlertTimelineChange{
+		AlertIdentifier: ProxmoxPhysicalDiskAlertIdentifiers(ref)[0], AlertStartedAt: at, AlertType: "disk-health",
+		AlertMetadata: map[string]any{"disk_path": device, MetadataDiskSerial: serial, MetadataDiskWWN: wwn},
+	})
+	change.ID = id
+	return *change
+}
+
+func pveDiskHistoryRows(t *testing.T, store ResourceStore, resourceID string) map[string]ResourceChange {
+	t.Helper()
+	changes, err := store.GetRecentChangesFiltered(resourceID, time.Time{}, 100, ResourceChangeFilters{Kinds: []ChangeKind{ChangeAlertFired}})
 	require.NoError(t, err)
-	require.Len(t, got, 2)
-	for _, change := range got {
-		require.Equal(t, ref, change.ResourceID, change.ID)
+	rows := make(map[string]ResourceChange, len(changes))
+	for _, change := range changes {
+		rows[change.ID] = change
 	}
-	got, err = store.GetRecentChangesFiltered(diskID, time.Time{}, 10, ResourceChangeFilters{Kinds: []ChangeKind{ChangeAlertFired}})
+	return rows
+}
+
+func pveDiskHistoryIDs(rows map[string]ResourceChange) []string {
+	ids := make([]string, 0, len(rows))
+	for id := range rows {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// Each PVE disk alert row belongs to the disk its recorded serial or WWN
+// names, wherever that disk sits in the registry generation the event is
+// evaluated against, and never to the disk the path names: a reboot reorder
+// or a replacement disk before its first poll reaches the registry cannot
+// claim another disk's history. Reads by the path reference still return
+// every row raised under it.
+func TestProxmoxDiskAlertRowsFollowRecordedHardwareIdentity(t *testing.T) {
+	for _, backend := range []string{"sqlite", "memory"} {
+		t.Run(backend, func(t *testing.T) {
+			var store ResourceStore = NewMemoryStore()
+			if backend == "sqlite" {
+				sqlite, err := NewSQLiteResourceStore(t.TempDir(), "default")
+				require.NoError(t, err)
+				t.Cleanup(func() { require.NoError(t, sqlite.Close()) })
+				store = sqlite
+			}
+			now := time.Now().UTC().Truncate(time.Second)
+			const wwn = "0x5000c500a1b2c3d4"
+			snapshot := proxmoxHistoryIdentitySnapshot(now)
+			snapshot.PhysicalDisks = []models.PhysicalDisk{
+				pveDiskHistoryTestDisk("pve1", "/dev/sda", "ZA1A2B3C", "", now),
+				pveDiskHistoryTestDisk("pve1", "/dev/sdb", "ZA4D5E6F", "", now),
+				pveDiskHistoryTestDisk("pve1", "/dev/sdc", "", wwn, now),
+				pveDiskHistoryTestDisk("pve1", "/dev/sdd", "", "", now),
+			}
+			adapter := NewMonitorAdapter(NewRegistry(store))
+			adapter.PopulateFromSnapshot(snapshot)
+			registry := adapter.currentRegistry()
+			diskA := historyIdentityResourceID(t, registry, ResourceTypePhysicalDisk, "Disk pve1/dev/sda")
+			diskB := historyIdentityResourceID(t, registry, ResourceTypePhysicalDisk, "Disk pve1/dev/sdb")
+			diskW := historyIdentityResourceID(t, registry, ResourceTypePhysicalDisk, "Disk pve1/dev/sdc")
+			diskP := historyIdentityResourceID(t, registry, ResourceTypePhysicalDisk, "Disk pve1/dev/sdd")
+			sda := ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", "/dev/sda")
+			sdc := ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", "/dev/sdc")
+			sdd := ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", "/dev/sdd")
+			replacement := MachineIdentityCanonicalID(ResourceTypePhysicalDisk, "ZC9X8Y7Z")
+			replacementWWN := MachineIdentityCanonicalID(ResourceTypePhysicalDisk, "0x5000c500ffeeddcc")
+
+			want := map[string]string{}
+			record := func(change ResourceChange, owner string) {
+				t.Helper()
+				require.NoError(t, adapter.RecordChange(change))
+				want[change.ID] = owner
+			}
+			record(pveDiskAlertChange("own", "pve1", "/dev/sda", ChangeAlertFired, "ZA1A2B3C", "", now), diskA)
+			// A reboot put B at /dev/sda; the registry still places it at /dev/sdb.
+			record(pveDiskAlertChange("reordered", "pve1", "/dev/sda", ChangeAlertFired, "ZA4D5E6F", "", now), diskB)
+			// A replacement disk fired before its first poll reached the registry.
+			record(pveDiskAlertChange("replacement", "pve1", "/dev/sda", ChangeAlertFired, "ZC9X8Y7Z", "", now), replacement)
+			record(pveDiskAlertChange("wwn", "pve1", "/dev/sdc", ChangeAlertFired, "", wwn, now), diskW)
+			record(pveDiskAlertChange("wwn-replacement", "pve1", "/dev/sdc", ChangeAlertFired, "", "0x5000c500ffeeddcc", now), replacementWWN)
+			record(pveDiskAlertChange("path-only", "pve1", "/dev/sdd", ChangeAlertFired, "", "", now), diskP)
+			// No usable identity, and the disk at the path reports one: the row
+			// stays under the reference rather than following the path.
+			record(pveDiskAlertChange("unidentified", "pve1", "/dev/sda", ChangeAlertFired, "", "", now), sda)
+			record(pveDiskAlertChange("placeholder", "pve1", "/dev/sda", ChangeAlertFired, "To Be Filled By O.E.M.", "", now), sda)
+
+			all := pveDiskHistoryRows(t, store, "")
+			for id, owner := range want {
+				row, ok := all[id]
+				require.True(t, ok, id)
+				require.Equal(t, owner, row.ResourceID, id)
+				if strings.Contains(owner, ":disk:") {
+					require.Empty(t, OwnedAlertReference(row), id)
+				} else {
+					require.Equal(t, ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", row.Metadata["disk_path"].(string)), OwnedAlertReference(row), id)
+				}
+			}
+			for _, ref := range []string{sda, sdc, sdd} {
+				_, bound, err := store.(resourceHistoryIdentityWriter).ResolveHistorySourceIdentity(ref)
+				require.NoError(t, err)
+				require.False(t, bound, "a path reference never binds: %s", ref)
+			}
+			require.ElementsMatch(t, []string{"own"}, pveDiskHistoryIDs(pveDiskHistoryRows(t, store, diskA)))
+			require.ElementsMatch(t, []string{"reordered"}, pveDiskHistoryIDs(pveDiskHistoryRows(t, store, diskB)))
+			require.ElementsMatch(t, []string{"wwn"}, pveDiskHistoryIDs(pveDiskHistoryRows(t, store, diskW)))
+			require.ElementsMatch(t, []string{"path-only"}, pveDiskHistoryIDs(pveDiskHistoryRows(t, store, diskP)))
+
+			byRef := pveDiskHistoryRows(t, store, sda)
+			require.ElementsMatch(t, []string{"own", "reordered", "replacement", "unidentified", "placeholder"}, pveDiskHistoryIDs(byRef))
+			require.Equal(t, diskB, byRef["reordered"].ResourceID, "a read by the reference returns rows where they are owned")
+			count, err := store.CountRecentChangesFiltered(sda, time.Time{}, ResourceChangeFilters{Kinds: []ChangeKind{ChangeAlertFired}})
+			require.NoError(t, err)
+			require.Equal(t, len(byRef), count)
+			byKind, err := store.CountRecentChangesByKind(sda, time.Time{})
+			require.NoError(t, err)
+			require.Equal(t, len(byRef), byKind[ChangeAlertFired])
+
+			// Once the replacement reaches the registry it owns the row it raised.
+			snapshot.PhysicalDisks[0] = pveDiskHistoryTestDisk("pve1", "/dev/sda", "ZC9X8Y7Z", "", now)
+			adapter.PopulateFromSnapshot(snapshot)
+			require.Equal(t, replacement, historyIdentityResourceID(t, adapter.currentRegistry(), ResourceTypePhysicalDisk, "Disk pve1/dev/sda"))
+			require.ElementsMatch(t, []string{"replacement"}, pveDiskHistoryIDs(pveDiskHistoryRows(t, store, replacement)))
+		})
+	}
+}
+
+// The registry only translates a row's recorded hardware identity into a
+// canonical ID. A WWN only one of two matching disks shares decides between
+// them, the path never breaks a tie, and a row without usable identity names
+// only the one identity-less disk at its path.
+func TestProxmoxDiskAlertOwnerDecisions(t *testing.T) {
+	registry := NewRegistry(nil)
+	disk := func(id, node, device, serial, wwn string) {
+		registry.resources[id] = &Resource{ID: id, Type: ResourceTypePhysicalDisk,
+			PhysicalDisk: &PhysicalDiskMeta{DevPath: device, Serial: serial, WWN: wwn},
+			Proxmox:      &ProxmoxData{Instance: "lab", NodeName: node}}
+	}
+	serialDisk := MachineIdentityCanonicalID(ResourceTypePhysicalDisk, "ZA1A2B3C")
+	disk(serialDisk, "pve1", "/dev/sda", "ZA1A2B3C", "")
+	disk("physical_disk-dup-pve1", "pve1", "/dev/sdb", "DUP00001", "")
+	disk("physical_disk-dup-pve2", "pve2", "/dev/sdb", "DUP00001", "")
+	disk("physical_disk-twin-1", "pve1", "/dev/sdg", "TWIN0001", "0x5000c500000000a1")
+	disk("physical_disk-twin-2", "pve1", "/dev/sdh", "TWIN0001", "0x5000c500000000b2")
+	// A RAID volume: PVE reports the full NAA as its serial and a truncated
+	// udev WWN, and the merged agent observation keeps the full naa. WWN.
+	disk("physical_disk-raid", "pve1", "/dev/sdi", "600508b1001c5c7a1b2c3d4e5f607080", "naa.600508b1001c5c7a1b2c3d4e5f607080")
+	// Merged with its agent's observation, whose smartctl WWN the registry
+	// keeps in a framing PVE does not use.
+	disk(MachineIdentityCanonicalID(ResourceTypePhysicalDisk, "ZB5C6D7E"), "pve1", "/dev/sdj", "ZB5C6D7E", "5-c500-da60ca43")
+	disk("physical_disk-wwn", "pve1", "/dev/sdc", "", "naa.5000c500a1b2c3d4")
+	disk("physical_disk-path", "pve1", "/dev/sdd", "", "")
+	disk("physical_disk-member-1", "pve1", "/dev/sde", "", "")
+	disk("physical_disk-member-2", "pve1", "/dev/sde", "", "")
+	disk(MachineIdentityCanonicalID(ResourceTypePhysicalDisk, "HELD0001"), "pve1", "/dev/sdf", "OTHER001", "")
+
+	for _, tc := range []struct {
+		name, node, device, serial, wwn, want string
+	}{
+		{"serial", "pve1", "/dev/sda", "ZA1A2B3C", "", serialDisk},
+		{"serial after a move to another node", "pve2", "/dev/sdz", "ZA1A2B3C", "", serialDisk},
+		// The path never breaks a tie: a stale generation could still place
+		// the other disk there.
+		{"shared serial", "pve1", "/dev/sdb", "DUP00001", "", ""},
+		{"shared serial told apart by WWN", "pve1", "/dev/sdg", "TWIN0001", "naa.5000c500000000b2", "physical_disk-twin-2"},
+		{"shared serial without WWN", "pve1", "/dev/sdg", "TWIN0001", "", ""},
+		{"RAID volume with a truncated WWN", "pve1", "/dev/sdi", "600508b1001c5c7a1b2c3d4e5f607080", "0x600508b1001c5c7a", "physical_disk-raid"},
+		{"agent-framed WWN on the merged disk", "pve1", "/dev/sdj", "ZB5C6D7E", "0x5000c500da60ca43", MachineIdentityCanonicalID(ResourceTypePhysicalDisk, "ZB5C6D7E")},
+		{"WWN framing differs between reporters", "pve1", "/dev/sdc", "", "0x5000c500a1b2c3d4", "physical_disk-wwn"},
+		{"unknown hardware", "pve1", "/dev/sda", "ZC9X8Y7Z", "", MachineIdentityCanonicalID(ResourceTypePhysicalDisk, "ZC9X8Y7Z")},
+		{"minted ID held by other hardware", "pve1", "/dev/sda", "HELD0001", "", ""},
+		{"no identity, identity-less disk at path", "pve1", "/dev/sdd", "", "", "physical_disk-path"},
+		{"no identity, two disks at path", "pve1", "/dev/sde", "", "", ""},
+		{"no identity, disk at path reports one", "pve1", "/dev/sda", "", "", ""},
+		{"no identity, placeholder serial", "pve1", "/dev/sda", "0000000000000000", "", ""},
+		{"no identity, nothing at path", "pve1", "/dev/sdz", "", "", ""},
+	} {
+		ref := ProxmoxPhysicalDiskAlertResourceID("lab", tc.node, tc.device)
+		got := registry.proxmoxDiskAlertOwner(ref, map[string]any{MetadataDiskSerial: tc.serial, MetadataDiskWWN: tc.wwn})
+		require.Equal(t, tc.want, got, tc.name)
+	}
+}
+
+// A read by a PVE disk alert reference reaches the rows owned away from it
+// through the alert identity index, not a journal scan.
+func TestProxmoxDiskAlertReferenceReadUsesIndexes(t *testing.T) {
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
 	require.NoError(t, err)
-	require.Empty(t, got)
+	defer store.Close()
+	before := time.Now()
+	// The incident projection's read (memory.IncidentStore.QueryIncidents).
+	filters := ResourceChangeFilters{ObservedBefore: &before, Kinds: []ChangeKind{
+		ChangeAlertFired, ChangeAlertResolved, ChangeAlertAcknowledged, ChangeAlertUnacknowledged,
+		ChangeAlertSnoozed, ChangeAlertUnsnoozed, ChangeCommandExecuted, ChangeRunbookExecuted,
+	}}
+	ref := ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", "/dev/sda")
+	query, args := buildRecentChangeCountQuery([]string{ref}, before.Add(-resourceChangesRetention), filters, "EXPLAIN QUERY PLAN SELECT id FROM resource_changes", store.resourceChangesObservedAtExpr(), store.resourceChangesSourceTypeExpr(), store.resourceChangesSourceAdapterExpr())
+	rows, err := store.db.Query(query, args...)
+	require.NoError(t, err)
+	defer rows.Close()
+	var plans []string
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		require.NoError(t, rows.Scan(&id, &parent, &unused, &detail))
+		plans = append(plans, detail)
+	}
+	require.NoError(t, rows.Err())
+	plan := strings.Join(plans, "\n")
+	require.Contains(t, plan, "idx_resource_changes_canonical_time")
+	require.Contains(t, plan, "idx_resource_changes_alert_time")
+	require.NotContains(t, plan, "SCAN resource_changes")
+}
+
+func TestProxmoxPhysicalDiskAlertReferenceShape(t *testing.T) {
+	for _, ref := range []string{
+		ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", "/dev/sda"),
+		ProxmoxPhysicalDiskAlertResourceID("Production West", "pve5", "/dev/disk/by-id/ATA_DISK"),
+		ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", "/"),
+	} {
+		require.True(t, isProxmoxPhysicalDiskAlertReference(ref), ref)
+		require.Len(t, ProxmoxPhysicalDiskAlertIdentifiers(ref), 2, ref)
+	}
+	for _, ref := range []string{
+		ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", ""),
+		"agent:host-1/disk:sda", "lab-pve1", "lab:pve1:101", "docker:host/disk:sda", "pve1:disk:dev-sda", "lab:pve1:disk:Dev-SDA",
+	} {
+		require.False(t, isProxmoxPhysicalDiskAlertReference(ref), ref)
+		require.Nil(t, ProxmoxPhysicalDiskAlertIdentifiers(ref), ref)
+	}
 }

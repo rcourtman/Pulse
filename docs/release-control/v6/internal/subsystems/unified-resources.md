@@ -5927,34 +5927,63 @@ and `TestHistoryIdentityMonitorAdapterResolvesSubResourceReferences` in
 `internal/monitoring/monitor_alert_handling_test.go` against the real alert
 producers.
 PVE disk health and wearout alerts (`ProxmoxPhysicalDiskAlertResourceID`,
-`<instance>:<node>:disk:<device key>`) stay unbound, although
+`<instance>:<node>:disk:<device key>`) never bind, although
 `ResolveReferenceID` resolves the same reference to the physical disk at that
 path for operator mutes (#2112). A device path is not hardware identity: a
 replacement disk in the same slot, or a reboot that reorders devices, takes
 over the path, and disk alerts are evaluated before their poll's disks reach
-the registry, so a lifecycle event can resolve against a generation that still
-places another disk there. A binding belongs to the reference string and
-moves to its latest target, carrying every row journaled under the reference
-and every read of it. Bound, the path would put rows a replaced disk journaled
-into its successor's history, and the Alerts history Resource action, which
-reads incidents by the alert's own reference, would show the successor's
-incidents for its predecessor's alert. Checking the serial each disk alert
-records (`disk_serial`) narrows this but does not close it: an event rejected
-for naming other hardware is still journaled under the reference and joins the
-disk the reference is bound to, the check and the journal write are not
-atomic, and an atomic check would still leave one binding owning every row
-under the path. A disk's history therefore omits its own SMART health and
-wearout alerts; they stay under the alert's reference, where incident
-timelines by alert identifier and start time find them. The Resource action
-reads the whole reference, so it lists every disk that has held the path, and
-alert identifiers derive from the path too. Binding them needs ownership per
-row, not per reference: each event written under the disk its recorded
-hardware identity names, rows with missing, unusable or ambiguous identity
-left under the reference rather than inferred from the current path, and a
-decided read for the Resource action. `proxmoxDiskAlertMetadata` records the
-serial but not the WWN, so WWN ownership also needs a producer change. Proof:
-`TestHistoryIdentityLeavesProxmoxDiskAlertReferencesUnbound` in
-`internal/unifiedresources/history_identity_test.go`.
+the registry. A binding belongs to the reference string and would carry every
+row and every read of the path to whichever disk held it last. Each lifecycle
+row is owned on its own instead (`proxmoxDiskAlertOwner` in
+`internal/unifiedresources/pve_disk_alert_history.go`). The alert records the
+evaluated disk's serial and WWN (`disk_serial`, `disk_wwn`), and
+`MonitorAdapter.RecordChange` writes the row under the one physical disk the
+registry knows by that hardware identity (`diskinventory.HardwareIdentityMatch`),
+wherever it sits now. A differing WWN does not rule a disk out, because the
+registry keeps a merged agent observation's WWN, which smartctl frames
+differently from PVE; of two matching disks, a WWN only one of them shares
+with the row decides. The registry only translates identity into a
+canonical ID: the path never breaks a tie, so a generation that still places
+another disk at the path never gains a row that disk does not match by
+identity, and no check precedes a later write. With no such disk in inventory
+(a new disk before its first poll reaches the registry, or a removed one), the
+row takes the canonical ID the registry mints for an identity it
+knows by nothing else (`MachineIdentityCanonicalID`), unless another resource
+holds that ID. A row without usable identity names only the one identity-less
+disk at its path. Every other row, missing, unusable or ambiguous, stays under
+the reference and is never retried. An owned row records its alert's
+reference as `alert_resource_id`. A read by the reference returns the rows
+journaled under it plus the rows owned away from it, matched through the
+indexed alert identifier (`ProxmoxPhysicalDiskAlertIdentifiers`) and that
+recorded reference, and every count uses the same predicate. The Alerts
+history Resource action therefore still lists every occurrence raised under
+the path, across the disks that held it, and alert-centric reads keep their
+occurrences (see the AI runtime contract's incident-history queries). Rows
+journaled under the reference before ownership existed stay there,
+unrewritten, until the journal's 30-day retention removes them. The disk
+drawer requests no change history, so ownership reaches the facets, timeline
+and intelligence APIs, Assistant resource context and Patrol's scoped change
+feed. History follows inventory where inventory merges: the registry merges
+disks that report the same serial, and a disk whose poll reports no serial
+keeps the serial last seen at its path (`preserveUnavailablePhysicalDiskEvidence`).
+A disk the registry correlates with its agent's observation by path (an
+identity-less or SAS agent disk) keeps that observation's ID and its serial
+and WWN. When the identifiers PVE records for it share nothing with the
+agent's (a SAS address reported as the serial, with no common WWN), or the
+alert fired before the PVE observation reached the registry, the row carries
+the minted ID: the disk's own history omits it, and reads by the reference
+still return it. A disk the registry keys by its agent's WWN alone also
+carries the serial PVE reports, so another disk reporting that serial, before
+its own first poll reaches the registry, has its row written under the first
+disk. Proof:
+`TestHistoryIdentityNeverBindsProxmoxDiskAlertReferences`,
+`TestProxmoxDiskAlertRowsFollowRecordedHardwareIdentity`,
+`TestProxmoxDiskAlertOwnerDecisions` and
+`TestProxmoxDiskAlertReferenceReadUsesIndexes` in
+`internal/unifiedresources/history_identity_test.go`, and
+`TestProxmoxDiskAlertTimelineFollowsRecordedHardware` in
+`internal/monitoring/monitor_alert_handling_test.go` against the real alert
+manager.
 That same shared timeline vocabulary now includes the `activity` change kind
 for provider-read breadcrumbs such as VMware tasks and events, plus the
 `vmware_adapter` source-adapter token for canonical provenance drill-down.

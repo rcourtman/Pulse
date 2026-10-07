@@ -16,13 +16,17 @@ func proxmoxDiskCanonicalResourceID(instance, node, devPath string) string {
 	return unifiedresources.ProxmoxPhysicalDiskAlertResourceID(instance, node, devPath)
 }
 
+// proxmoxDiskAlertMetadata records the evaluated disk's hardware identity
+// with each alert. The alert reference names only the device path, so
+// resource history owns each lifecycle row by this serial or WWN.
 func proxmoxDiskAlertMetadata(disk proxmox.Disk) map[string]interface{} {
 	return map[string]interface{}{
-		"disk_path":   disk.DevPath,
-		"disk_model":  disk.Model,
-		"disk_serial": disk.Serial,
-		"disk_type":   disk.Type,
-		"disk_size":   disk.Size,
+		"disk_path":                         disk.DevPath,
+		"disk_model":                        disk.Model,
+		unifiedresources.MetadataDiskSerial: disk.Serial,
+		unifiedresources.MetadataDiskWWN:    disk.WWN,
+		"disk_type":                         disk.Type,
+		"disk_size":                         disk.Size,
 	}
 }
 
