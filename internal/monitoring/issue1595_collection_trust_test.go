@@ -367,3 +367,106 @@ func TestWriteHostSMARTMetricsRecordsOnlyCollectedTemperatures(t *testing.T) {
 		}
 	}
 }
+
+// A controller member without a usable serial or WWN keys its history by its
+// source ID, which already names the member behind the shared block path. The
+// metrics target that chart and history reads query has to be that key, not
+// the key with the member topology appended a second time, or every sample the
+// agent and Proxmox writers store goes unread. A SAS member reported under its
+// smartctl label merges with the Proxmox row for its block path, and the host
+// agent writes that path's I/O through the merged disk's metrics target, so
+// its SMART and I/O history have to share that key too.
+func TestIdentitylessControllerMemberMetricsTargetReadsWriterHistory(t *testing.T) {
+	storeConfig := metrics.DefaultConfig(t.TempDir())
+	storeConfig.FlushInterval = time.Hour
+	store, err := metrics.NewStore(storeConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	state := models.NewState()
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	m := &Monitor{state: state, resourceStore: adapter, metricsStore: store, metricsHistory: NewMetricsHistory(100, time.Hour)}
+
+	now := time.Now()
+	state.UpdateNodesForInstance("pve1", []models.Node{
+		{ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online", LastSeen: now},
+		{ID: "pve1-node2", Name: "node2", Instance: "pve1", Status: "online", LastSeen: now, LinkedAgentID: "agent-b"},
+	})
+	standalone := models.Host{ID: "agent-a", Hostname: "host-a", Status: "online", LastSeen: now,
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{
+			{Device: "sda", Controller: "ctrl0", Target: "megaraid,0", Temperature: 30},
+			{Device: "sda", Controller: "ctrl0", Target: "megaraid,1", Temperature: 31},
+		}}}
+	linked := models.Host{ID: "agent-b", Hostname: "node2", LinkedNodeID: "pve1-node2", Status: "online", LastSeen: now,
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{
+			{Device: "sdc [megaraid,3]", Controller: "sdc", Target: "megaraid,3", Type: "sas", Temperature: 33},
+		}},
+		DiskIO: []models.DiskIO{{Device: "sdc", ReadBytes: 4096}},
+	}
+	state.UpsertHost(standalone)
+	state.UpsertHost(linked)
+	pveMember := models.PhysicalDisk{
+		ID:       unifiedresources.ProxmoxPhysicalDiskSourceID("pve1", "node1", "/dev/sdb", "ctrl1", "megaraid,2"),
+		Instance: "pve1", Node: "node1", DevPath: "/dev/sdb", Controller: "ctrl1", Target: "megaraid,2", Temperature: 40,
+	}
+	pveBlockPath := models.PhysicalDisk{
+		ID:       unifiedresources.ProxmoxPhysicalDiskSourceID("pve1", "node2", "/dev/sdc", "", ""),
+		Instance: "pve1", Node: "node2", DevPath: "/dev/sdc", Serial: "unknown",
+	}
+	state.UpdatePhysicalDisks("pve1", []models.PhysicalDisk{pveMember, pveBlockPath})
+
+	m.writeHostSMARTMetrics(standalone, now)
+	m.writeHostSMARTMetrics(linked, now)
+	m.writeSMARTMetrics(pveMember, now)
+	store.Flush()
+	adapter.PopulateFromSnapshot(state.GetSnapshot())
+
+	want := map[string]struct {
+		key         string
+		temperature float64
+		devPath     string
+		topology    string
+	}{
+		"megaraid,0": {"agent-a:sda@ctrl0/megaraid,0", 30, "sda", ":sda@ctrl0/megaraid,0"},
+		"megaraid,1": {"agent-a:sda@ctrl0/megaraid,1", 31, "sda", ":sda@ctrl0/megaraid,1"},
+		"megaraid,2": {"pve1-node1--dev-sdb:sdb@ctrl1/megaraid,2", 40, "/dev/sdb", ":sdb@ctrl1/megaraid,2"},
+		"megaraid,3": {"agent-b:sdc@sdc/megaraid,3", 33, "/dev/sdc", ":sdc@sdc/megaraid,3"},
+	}
+	disks := m.GetUnifiedReadStateOrSnapshot().PhysicalDisks()
+	if len(disks) != len(want) {
+		t.Fatalf("physical disks = %d, want %d with the SAS member merged into its Proxmox row", len(disks), len(want))
+	}
+	for _, disk := range disks {
+		member, ok := want[disk.Target()]
+		if !ok {
+			t.Fatalf("unexpected disk %s at %q target %q", disk.ID(), disk.DevPath(), disk.Target())
+		}
+		if disk.DevPath() != member.devPath {
+			t.Fatalf("%s: device path = %q, want %q", disk.Target(), disk.DevPath(), member.devPath)
+		}
+		target := adapter.MetricsTargetForResource(disk.ID())
+		if target == nil || target.ResourceID != member.key {
+			t.Fatalf("%s: metrics target = %+v, want the writer's key %q", disk.Target(), target, member.key)
+		}
+		points, err := store.Query("disk", target.ResourceID, "smart_temp", now.Add(-time.Minute), now.Add(time.Minute), 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(points) != 1 || points[0].Value != member.temperature {
+			t.Fatalf("%s: history at the metrics target = %+v, want the %v sample its writer stored",
+				disk.Target(), points, member.temperature)
+		}
+		// A fallback that does not name the member yet, such as the canonical
+		// resource ID a view falls back to, still gets the topology.
+		meta := &unifiedresources.PhysicalDiskMeta{DevPath: disk.DevPath(), Controller: disk.Controller(), Target: disk.Target()}
+		if got := unifiedresources.PhysicalDiskMetaMetricID(meta, disk.ID()); got != disk.ID()+member.topology {
+			t.Fatalf("%s: canonical-ID fallback key = %q, want %q", disk.Target(), got, disk.ID()+member.topology)
+		}
+	}
+
+	ioKey := hostDiskIOMetricResourceID(linked, linked.DiskIO[0], m.proxmoxPhysicalDiskMatchesForLinkedNode(linked.LinkedNodeID))
+	if ioKey != want["megaraid,3"].key {
+		t.Fatalf("merged SAS member I/O key = %q, want its SMART history key %q", ioKey, want["megaraid,3"].key)
+	}
+}

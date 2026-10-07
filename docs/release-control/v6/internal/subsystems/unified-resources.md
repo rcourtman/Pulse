@@ -3546,6 +3546,16 @@ remain preferred over device fallback. Direct SATA, SAS, and NVMe fallbacks
 retain their historical device-scoped shape; controller members sharing one
 block path add controller/target scope so they cannot collapse into one
 resource. Topology correlation is parent-scoped and ambiguity fails closed.
+That scope is added once: a controller member without a usable serial or WWN
+writes its history under its source ID (`HostSMARTDiskSourceID`,
+`ProxmoxPhysicalDiskSourceID`), which already names the member, so
+`PhysicalDiskMetaMetricID` returns such a source ID unchanged as the metrics
+target and appends the topology only to a fallback that lacks it, such as the
+canonical resource ID. The host agent writes block-device I/O for a SAS member
+merged with its Proxmox row through that same metrics target.
+`internal/monitoring/issue1595_collection_trust_test.go` proves the agent and
+Proxmox writers' SMART samples are readable at the metrics target, and that a
+merged member's I/O writer selects that same key.
 
 Host reports, monitoring models, registry merges, typed physical-disk views,
 API resources, websocket/REST snapshot merges, and storage presentation must
