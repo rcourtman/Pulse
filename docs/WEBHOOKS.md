@@ -121,6 +121,12 @@ and HTTP status. A pending or held delivery is not a terminal failure; quiet
 hours and other delivery policies can postpone it. There is no fixed delivery
 deadline promised by the attempt count.
 
+Delivery activity masks recognised URL credentials, not arbitrary provider
+text or private infrastructure details. Keep full errors and screenshots
+private; follow the [delivery evidence precautions](TROUBLESHOOTING.md#recover-retained-delivery-failures)
+before sharing a manually redacted excerpt. A `REDACTED` marker is not proof
+that the remaining text is safe to post.
+
 Before choosing **Retry retained deliveries**, follow
 [retained-failure recovery](TROUBLESHOOTING.md#recover-retained-delivery-failures).
 It acts on all retained terminal failures, not just one webhook, and keeps their
