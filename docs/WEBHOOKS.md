@@ -102,7 +102,17 @@ severity and other delivery policies still apply.
 
 **Tenant identity.** In multi-tenant organizations and MSP client runtimes, `{{.TenantID}}` and `{{.TenantName}}` identify which tenant fired the alert. Client runtimes get identity from the `PULSE_TENANT_ID` / `PULSE_TENANT_NAME` environment; shared-process organizations stamp the org ID and display name automatically.
 
-**Resource tag routing.** Email and each alert webhook can be limited to resources with selected tags in **Alerts → Notifications**. An empty filter receives every alert. With multiple tags, choose **Match all tags** or **Match any tag**. Matching ignores case. Proxmox tags are matched as shown; Docker container and service labels are exposed as `key:value` tags (or `key` when the label value is empty). Recovery notifications follow the destinations that received the firing alert, even if a resource's tags change before recovery.
+**Destination routing.** Email and each alert webhook apply minimum severity
+and resource tags together in **Alerts → Notifications**. An empty tag filter
+removes only the tag restriction, not minimum severity or other delivery
+policies. **Warnings and critical alerts** includes critical alerts; it is not
+a warning-only channel. Multiple destinations can match the same firing alert,
+and groups are filtered member by member. See the
+[severity and tag routing guide](CONFIGURATION.md#destination-severity-and-tag-routing)
+for exact all/any matching and Docker label syntax. Recovery remains qualified
+by a successful firing-delivery receipt for the same occurrence and destination,
+even if tags or minimum severity change before recovery; other recovery controls
+and holds still apply.
 
 **Retries and retained failures.**
 

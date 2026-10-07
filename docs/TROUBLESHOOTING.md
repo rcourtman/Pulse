@@ -736,8 +736,10 @@ alert was generated, routed or delivered to the intended recipient.
 - Open **Alerts → Notifications**. If **Notifications are paused** is shown,
   configured destinations and a successful test do not enable real delivery.
   Turn delivery on there only when you intend to send alerts.
-- Check the affected alert, the destination's **Enabled** state, minimum alert
-  severity and tag filters. Review the [quiet-hours schedule](CONFIGURATION.md#quiet-hours-and-notification-holds)
+- Check the affected alert, the destination's **Enabled** state and
+  [minimum severity and tag filters](CONFIGURATION.md#destination-severity-and-tag-routing).
+  Both must match: an empty tag filter does not bypass minimum severity, and
+  critical severity does not bypass a nonempty tag filter. Review the [quiet-hours schedule](CONFIGURATION.md#quiet-hours-and-notification-holds)
   and [acknowledgement or snooze](CONFIGURATION.md#acknowledge-and-snooze-existing-alerts),
   plus any mute or maintenance policy, before treating an absent attempt as a
   transport failure. In **Alerts → Overview**, use **Show acknowledged** to find

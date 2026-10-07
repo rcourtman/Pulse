@@ -80,6 +80,63 @@ func TestTagRoutingNormalizesCaseSourcesAndModes(t *testing.T) {
 	}
 }
 
+// Exercise the documented combinations through ordinary grouped job creation,
+// not a settings Test or a synthetic reimplementation of the routing predicates.
+func TestDestinationRoutingHelpExamples(t *testing.T) {
+	makeAlert := func(id string, level alerts.AlertLevel, tags []string) *alerts.Alert {
+		alert := taggedRoutingAlert(id, tags)
+		alert.Level = level
+		return alert
+	}
+	group := []*alerts.Alert{
+		makeAlert("info-both", alerts.AlertLevelInfo, []string{"env:prod", "team:ops", "critical"}),
+		makeAlert("warning-both", alerts.AlertLevelWarning, []string{"env:prod", "team:ops"}),
+		makeAlert("critical-both", alerts.AlertLevelCritical, []string{"env:prod", "team:ops"}),
+		makeAlert("critical-env", alerts.AlertLevelCritical, []string{"env:prod"}),
+		makeAlert("critical-untagged", alerts.AlertLevelCritical, nil),
+		makeAlert("warning-prefix", alerts.AlertLevelWarning, []string{"env:production", "team:ops-extra"}),
+	}
+	for _, tc := range []struct {
+		name     string
+		filter   []string
+		mode     string
+		severity string
+		want     []string
+	}{
+		{"all-warning", []string{"env:prod", "team:ops"}, "all", "warning", []string{"warning-both", "critical-both"}},
+		{"any-warning", []string{"env:prod", "team:ops"}, "any", "warning", []string{"warning-both", "critical-both", "critical-env"}},
+		{"all-critical", []string{"env:prod", "team:ops"}, "all", "critical", []string{"critical-both"}},
+		{"empty-critical", nil, "all", "critical", []string{"critical-both", "critical-env", "critical-untagged"}},
+		{"critical-tag-is-not-severity", []string{"critical"}, "all", "all", []string{"info-both"}},
+		{"no-wildcard", []string{"env:*"}, "any", "warning", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			jobs := buildNotificationDeliveryJobs(
+				EmailConfig{Enabled: true, TagFilter: tc.filter, TagMode: tc.mode, MinimumSeverity: tc.severity},
+				[]WebhookConfig{
+					{ID: "ops", Enabled: true, TagFilter: tc.filter, TagMode: tc.mode, MinimumSeverity: tc.severity},
+					{ID: "disabled", Enabled: false},
+				},
+				AppriseConfig{}, group, eventAlert, time.Time{},
+			)
+			if len(tc.want) == 0 {
+				if len(jobs) != 0 {
+					t.Fatalf("unmatched tags produced %d delivery jobs", len(jobs))
+				}
+				return
+			}
+			if len(jobs) != 2 || jobs[0].EmailConfig == nil || jobs[1].WebhookConfig == nil || jobs[1].WebhookConfig.ID != "ops" {
+				t.Fatalf("expected independent enabled email and webhook jobs, got %+v", jobs)
+			}
+			for _, job := range jobs {
+				if got := alertIDs(job.Alerts); !reflect.DeepEqual(got, tc.want) {
+					t.Fatalf("%s firing members = %v, want %v", job.Type, got, tc.want)
+				}
+			}
+		})
+	}
+}
+
 func TestResolvedTagRoutingDefersToDeliveryReceipts(t *testing.T) {
 	alert := taggedRoutingAlert("changed-tags", []string{"customer:beta"})
 	routed := routeNotificationAlerts(
