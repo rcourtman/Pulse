@@ -130,7 +130,6 @@ const ALLOWLIST = new Set([
   'src/utils/remediationPresentation.ts',
   'src/utils/patrolEmptyStatePresentation.ts',
   'src/utils/patrolRunPresentation.ts',
-  'src/utils/patrolSummaryPresentation.ts',
   'src/utils/rbacPresentation.ts',
   'src/utils/rbacPermissions.ts',
   'src/utils/systemLogsPresentation.ts',
@@ -580,13 +579,6 @@ const HELPER_RULES = [
       /\bquickstart_credits_remaining\b[\s\S]{0,360}bg-blue-50\s+dark:bg-blue-950\s+border-blue-200\s+dark:border-blue-800\s+text-blue-700\s+dark:text-blue-300|\bquickstart_credits_remaining\b[\s\S]{0,360}bg-amber-50\s+dark:bg-amber-950\s+border-amber-200\s+dark:border-amber-800\s+text-amber-700\s+dark:text-amber-300/g,
     message:
       'Do not define local AI quickstart credits badge presentation in page code. Use @/utils/aiQuickstartPresentation instead.',
-  },
-  {
-    rule: 'canonical-patrol/no-local-summary-card-presentation',
-    regex:
-      /\bsummaryStats\(\)\.criticalFindings\s*>\s*0\b[\s\S]{0,320}bg-red-50[\s\S]{0,320}text-red-600|\bsummaryStats\(\)\.warningFindings\s*>\s*0\b[\s\S]{0,320}bg-amber-50[\s\S]{0,320}text-amber-600|\bsummaryStats\(\)\.fixedCount\s*>\s*0\b[\s\S]{0,320}bg-green-50[\s\S]{0,320}text-green-600/g,
-    message:
-      'Do not define local patrol summary card presentation in page code. Use @/utils/patrolSummaryPresentation instead.',
   },
   {
     rule: 'canonical-patrol/no-local-empty-state-copy',

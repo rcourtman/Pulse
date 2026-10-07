@@ -1508,15 +1508,29 @@ provider/settings affordances.
 The feature surface now also keeps the same shell/runtime split internally:
 `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` owns feature
 composition, the Patrol-owned section files under
-`frontend-modern/src/features/patrol/` own the header, banner, summary, and
-workspace render surfaces, and
-`frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` owns Patrol
-state, transport, polling, and effect lifecycle. The shell and section surfaces
-must not re-accumulate Patrol API calls, timer orchestration, or store refresh
-semantics, and `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` now
+`frontend-modern/src/features/patrol/` own the header, banner, workspace, and
+tab-panel render surfaces (the Inbox attention list, Protection objectives, and
+the Activity tab's `This week` digest and recent work), and
+`frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` owns the
+page's shared Patrol state, transport, polling, and effect lifecycle. The shell
+and the header, banner, and workspace surfaces must not re-accumulate those
+Patrol API calls, timer orchestration, or store refresh semantics; the
+attention list, objectives, recent work, and `This week` panels each own their
+own typed read and refresh instead, and `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` now
 owns the canonical summary normalization so Patrol consumers inherit one
 governed recent-change and policy-posture snapshot instead of reintroducing
 hook-local fallback logic.
+The hook no longer returns the summary card's severity and fix tallies. Its
+`summaryStats` accessor (critical, warning, and total active findings plus
+fixed outcomes, counted client-side over the Patrol findings list) lost its
+only reader when the Patrol summary card was deleted and has been removed,
+together with the `canonical-patrol/no-local-summary-card-presentation` rule in
+`frontend-modern/scripts/canonical-platform-audit.mjs`, whose regex matched only
+text shaped like the deleted card's tint ternaries on
+`summaryStats().criticalFindings`, `warningFindings` and `fixedCount`. The open-issue severity counts the page shows today come from
+the Activity tab's `This week` card, which reads them from
+`GET /api/ai/patrol/digest` (see that card's section below); a count surface
+that returns must not revive a hook-local tally of the findings list.
 That same Patrol hook boundary now consumes shared AI settings/model truth
 through `frontend-modern/src/stores/aiRuntimeState.ts` instead of mounting its
 own `/api/settings/ai` or `/api/ai/models` reads. Patrol-specific state still

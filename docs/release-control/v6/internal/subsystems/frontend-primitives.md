@@ -4901,6 +4901,16 @@ or not fully verified.
 The same empty-state helper must consume Patrol trust-history evidence so a
 historical regression reads as history review context, not as a current issue
 and not as a healthy all-clear.
+`frontend-modern/scripts/canonical-platform-audit.mjs` carries no Patrol
+summary-card rule. Its `canonical-patrol/no-local-summary-card-presentation`
+regex matched only text shaped like the deleted summary card's tint ternaries
+on `summaryStats().criticalFindings`, `warningFindings` and `fixedCount`. The
+Patrol state hook's `summaryStats` accessor has had no reader since that card
+was deleted, so the accessor and the rule are both gone.
+`frontend-modern/src/utils/patrolSummaryPresentation.ts` is off the audit
+allowlist too: it now holds only the recency and verification presenters,
+which no audit rule needs to exempt, so the audit scans it like any other
+module.
 The Patrol page renders no summary shell today. If one returns, the same
 hierarchy applies inside it: once its primary assessment strip states Patrol's
 current risk and verification basis,
