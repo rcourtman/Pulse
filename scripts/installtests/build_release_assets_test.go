@@ -5156,6 +5156,9 @@ func TestFrontendChangeClassificationPreservesStrictAudit(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			cmd := exec.CommandContext(ctx, "bash", "-c", run)
+			// Actions runs this shell from checkout root; its real relative
+			// compile-classifier helper must resolve there, not in this package.
+			cmd.Dir = repoFile()
 			cmd.Env = env
 			result, commandErr := cmd.CombinedOutput()
 			if tc.diffStatus != 0 {
