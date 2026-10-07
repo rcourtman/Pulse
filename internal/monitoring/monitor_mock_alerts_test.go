@@ -354,3 +354,124 @@ func TestMockFixturePassPausedAcrossDisableAndReenableIsRejected(t *testing.T) {
 		t.Fatalf("pass from before the disable re-evaluated the old estate: %v", ids)
 	}
 }
+
+// diskAlertKeys lists the active disk-health and disk-wearout alerts as
+// "type instance/node device" so assertions name the disk, not the alert ID.
+func diskAlertKeys(manager *alerts.Manager) map[string]bool {
+	keys := make(map[string]bool)
+	for _, alert := range manager.GetActiveAlerts() {
+		if alert.Type != "disk-health" && alert.Type != "disk-wearout" {
+			continue
+		}
+		devPath, _ := alert.Metadata["disk_path"].(string)
+		keys[alert.Type+" "+alert.Instance+"/"+alert.Node+" "+devPath] = true
+	}
+	return keys
+}
+
+func TestCheckMockAlertsEvaluatesPhysicalDisks(t *testing.T) {
+	// Pin the default estate: a PULSE_MOCK_* environment can select one with
+	// no FAILED disk (the public demo's eight nodes have none).
+	previousEnabled, previousConfig := mock.IsMockEnabled(), mock.GetConfig()
+	t.Cleanup(func() {
+		mustSetMockEnabled(t, false)
+		mock.SetMockConfig(previousConfig)
+		mustSetMockEnabled(t, previousEnabled)
+	})
+	mustSetMockEnabled(t, false)
+	cfg := mock.DefaultConfig
+	cfg.UpdateInterval = 5 * time.Minute
+	mock.SetMockConfig(cfg)
+	mustSetMockEnabled(t, true)
+	manager := newMockHostAlertTestManager(t)
+
+	monitor := &Monitor{alertManager: manager}
+	monitor.checkMockAlerts()
+
+	// The fixture keeps a FAILED cohort and worn SSDs stable across restarts
+	// so the disk alert lifecycle has evidence to act on. Each must raise the
+	// alert the physical disk poller raises for a live disk, and a disk on a
+	// node the poller would not reach raises nothing.
+	state := mock.CurrentFixtureGraph().State
+	onlineNodes := make(map[string]bool, len(state.Nodes))
+	for _, node := range state.Nodes {
+		onlineNodes[node.Instance+"/"+node.Name] = node.Status == "online"
+	}
+	want := make(map[string]bool)
+	failed, worn := 0, 0
+	for _, disk := range state.PhysicalDisks {
+		if !onlineNodes[disk.Instance+"/"+disk.Node] {
+			continue
+		}
+		if strings.EqualFold(disk.Health, "FAILED") {
+			want["disk-health "+disk.Instance+"/"+disk.Node+" "+disk.DevPath] = true
+			failed++
+		}
+		if disk.Wearout >= 0 && disk.Wearout < 10 {
+			want["disk-wearout "+disk.Instance+"/"+disk.Node+" "+disk.DevPath] = true
+			worn++
+		}
+	}
+	if failed == 0 || worn == 0 {
+		t.Fatalf("mock fixture has %d FAILED and %d worn disks on online nodes, want at least one of each", failed, worn)
+	}
+
+	got := diskAlertKeys(manager)
+	for key := range got {
+		if !want[key] {
+			t.Errorf("mock pass raised unexpected disk alert %q", key)
+		}
+	}
+	for key := range want {
+		if !got[key] {
+			t.Errorf("mock pass raised no alert %q", key)
+		}
+	}
+}
+
+func TestCheckMockPhysicalDiskAlertsFollowsPollerBoundary(t *testing.T) {
+	manager := newMockHostAlertTestManager(t)
+	monitor := &Monitor{alertManager: manager}
+
+	nodes := []models.Node{
+		{ID: "west-pve1", Name: "pve1", Instance: "west", Status: "online", LinkedAgentID: "host-west-pve1"},
+		{ID: "east-pve1", Name: "pve1", Instance: "east", Status: "offline"},
+	}
+	hosts := []models.Host{{ID: "host-west-pve1", Hostname: "pve1", Status: "online"}}
+	disks := []models.PhysicalDisk{
+		{Instance: "west", Node: "pve1", DevPath: "/dev/sda", Model: "Crucial MX500 2TB", Type: "sata", Health: "FAILED", Wearout: -1},
+		{Instance: "west", Node: "pve1", DevPath: "/dev/nvme0n1", Model: "Samsung 980 PRO 2TB", Type: "nvme", Health: "PASSED", Wearout: 6},
+		// Same node name on another instance: that node is offline, so the
+		// poller would not reach it and its disk must not alert.
+		{Instance: "east", Node: "pve1", DevPath: "/dev/sdb", Model: "WD Red Pro 8TB", Type: "sata", Health: "FAILED", Wearout: -1},
+	}
+
+	monitor.checkMockPhysicalDiskAlerts(disks, nodes, hosts)
+	got := diskAlertKeys(manager)
+	if len(got) != 2 || !got["disk-health west/pve1 /dev/sda"] || !got["disk-wearout west/pve1 /dev/nvme0n1"] {
+		t.Fatalf("disk alerts = %v, want only FAILED health on west/pve1 /dev/sda and wearout on west/pve1 /dev/nvme0n1", got)
+	}
+
+	// The linked agent's --disk-exclude forces matched devices healthy, so
+	// excluding a disk resolves the alerts it already raised. Endurance
+	// recovery needs three healthy-looking passes.
+	hosts[0].DiskExclude = []string{"/dev/sda", "nvme0n1"}
+	for i := 0; i < 3; i++ {
+		monitor.checkMockPhysicalDiskAlerts(disks, nodes, hosts)
+	}
+	if got := diskAlertKeys(manager); len(got) != 0 {
+		t.Fatalf("excluded devices kept disk alerts %v", got)
+	}
+
+	// A node that leaves the estate takes its disk alerts with it through the
+	// node cleanup the mock pass runs first.
+	hosts[0].DiskExclude = nil
+	monitor.checkMockPhysicalDiskAlerts(disks, nodes, hosts)
+	if got := diskAlertKeys(manager); len(got) != 2 {
+		t.Fatalf("disk alerts after removing the exclusion = %v, want both west/pve1 alerts back", got)
+	}
+	manager.CleanupAlertsForNodes(map[string]bool{"pve2": true})
+	if got := diskAlertKeys(manager); len(got) != 0 {
+		t.Fatalf("disk alerts outlived their departed node: %v", got)
+	}
+}

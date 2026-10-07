@@ -3209,6 +3209,16 @@ pointer isolation are
 pinned by `TestResourceFromHostPreservesCustomSensorMeta` and
 `TestCloneResourceIsolatesCustomSensorValues`.
 
+### Expired reporting leases change status only
+
+`SourceStatus` now carries an unexported marker that a push reporter (host
+agent, Docker, Kubernetes) delivered its machine, Docker host or cluster as
+offline at lease expiry. Status aggregation reads it, so such a row is
+`offline` instead of `warning`. The marker is not serialized, persisted or
+exposed on the wire, and the public `status`, `lastSeen` and cadence fields
+are unchanged. No storage path, recovery read or protection judgement depends
+on it. `TestCloneResource_MutateSourceStatusMap` pins that clones keep it.
+
 ### Shared system-settings boundary dropped dead auto-update schedule fields
 
 The shared `internal/api` system-settings surface this subsystem consumes
@@ -3854,6 +3864,21 @@ or alert evaluation. Verification: `diskPresentation.test.ts`,
 `diskDetailPresentation.test.ts`, `storagePoolDetailPresentation.test.ts`,
 `DiskList.test.tsx` (a row moving between current, retained and legacy states)
 and `DiskDetail.test.tsx`.
+The same decision reaches the disks that only a host agent's own SMART rows
+describe. `HostDiskSMART.collection` now crosses into the frontend type, and the
+helpers live in `frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts`
+(re-exported by `diskPresentation.ts`, one implementation) so the Machines
+table and the machine drawer can use them without loading the Storage
+presenter. The guest drawer's card already loads it for extraction and health.
+A silent agent's retained SMART temperature never becomes the Machines row's
+value while another disk has a current reading. When the machine has no
+positive direct or `temperatureCelsius` reading and no non-standby disk is
+current, the cell shows the hottest retained non-standby value as last known,
+without the per-disk-type threshold colour. The guest drawer's Physical Disks card marks a
+retained value the way the Physical Disks table does. Still presentation only.
+Verification: `diskPresentation.test.ts` (one implementation behind both import
+paths), `agentMachineTableModel.test.ts`, `AgentsMachinesTable.test.tsx`,
+`resourceDetailMappers.test.ts` and `GuestPhysicalDisks.test.tsx`.
 
 Direct SATA, SAS, and NVMe device fallback identities remain compatible.
 Controller-member fallback identities add controller/target scope only where
@@ -6766,6 +6791,26 @@ units, collection, retention, access or recovery boundary. The production
 disk/pool fixture `frontend-modern/browser-tests/history-touch.cjs` and mounted
 `HistoryChart.test.tsx` regressions verify presentation/input behaviour only,
 not live appliance collection or recovery success.
+
+### Physical-disk heat is not a replacement verdict
+
+The Physical Disks Health verdict names the action it asks for. Risk whose only
+reason is `temperature_high` reads `Running Hot` (compact `Hot`), red at the
+critical tier and amber at warning, with the temperature reason as its summary.
+`Replace Now` stays reserved for FAILED health, any other critical reason, and
+a critical level that no listed reason explains. `Needs Attention` keeps the
+remaining warning evidence. When heat and other evidence both apply, the more
+severe class names the verdict and failure evidence wins a tie, whatever order
+merged reasons arrive in. Sorting follows the verdict (replace, critical heat,
+attention, warning heat), and the health filter places a hot disk at its
+temperature tier, so `Needs attention` still lists it. This matches alerting,
+which raises disk heat as a Temperature metric and never as disk health.
+Thresholds are unchanged: the tier still comes from the server's disk risk
+(flat 60/70C), not the per-type alert thresholds that colour the Temp column.
+Reconciling those is separate work. `frontend-modern/src/features/storageBackups/__tests__/diskPresentation.test.ts`
+and `frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx` cover
+the split, merged reason order, the unexplained critical level, sorting and
+filtering.
 
 ### Pool-to-physical-disk ownership in Storage details
 

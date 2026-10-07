@@ -18,6 +18,7 @@ import {
   PHYSICAL_DISK_SOURCE_BADGE_CLASS,
   PHYSICAL_DISK_TABLE_CLASS,
   PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS,
+  PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS,
   getPhysicalDiskEmptyStatePresentation,
   getPhysicalDiskCellPaddingClass,
   getPhysicalDiskColumnWidthStyle,
@@ -27,6 +28,7 @@ import {
   getPhysicalDiskHealthStatus,
   getPhysicalDiskHealthSummary,
   getPhysicalDiskHostLabel,
+  getPhysicalDiskLastKnownTemperatureTitle,
   getPhysicalDiskLifeLabel,
   getPhysicalDiskLifeTextClass,
   getPhysicalDiskNormalizedHealth,
@@ -48,6 +50,7 @@ import {
   normalizePhysicalDiskFacetFilter,
   type PhysicalDiskPresentationData,
 } from '@/features/storageBackups/diskPresentation';
+import * as diskTemperaturePresentation from '@/features/storageBackups/diskTemperaturePresentation';
 
 function makeDiskData(
   overrides: Partial<PhysicalDiskPresentationData> = {},
@@ -129,6 +132,23 @@ describe('diskPresentation', () => {
         ),
       ).toBeNull();
     }
+  });
+
+  it('serves the same temperature decision the Machines table and drawers import directly', () => {
+    // Tables outside Storage import the small module so they do not pull this
+    // one into their chunks. Both paths must stay one implementation.
+    expect(isPhysicalDiskTemperatureCurrent).toBe(
+      diskTemperaturePresentation.isPhysicalDiskTemperatureCurrent,
+    );
+    expect(getPhysicalDiskTemperaturePresentation).toBe(
+      diskTemperaturePresentation.getPhysicalDiskTemperaturePresentation,
+    );
+    expect(getPhysicalDiskLastKnownTemperatureTitle).toBe(
+      diskTemperaturePresentation.getPhysicalDiskLastKnownTemperatureTitle,
+    );
+    expect(PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS).toBe(
+      diskTemperaturePresentation.PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS,
+    );
   });
 
   it('distinguishes unsupported, unavailable, and unexpectedly missing disk evidence', () => {
@@ -268,8 +288,298 @@ describe('diskPresentation', () => {
   it('shortens only the health words that cannot fit a phone health column', () => {
     expect(getPhysicalDiskHealthCompactLabel('Needs Attention')).toBe('Attention');
     expect(getPhysicalDiskHealthCompactLabel('Replace Now')).toBe('Replace');
+    expect(getPhysicalDiskHealthCompactLabel('Running Hot')).toBe('Hot');
     expect(getPhysicalDiskHealthCompactLabel('Healthy')).toBe('Healthy');
     expect(getPhysicalDiskHealthCompactLabel('Unknown')).toBe('Unknown');
+  });
+
+  describe('heat versus replacement evidence', () => {
+    const buildRiskDisk = (
+      id: string,
+      risk: { level: string; reasons: { code: string; severity: string; summary: string }[] },
+      overrides: Record<string, unknown> = {},
+    ): Resource =>
+      ({
+        id,
+        name: id,
+        type: 'physical_disk',
+        status: 'warning',
+        physicalDisk: {
+          devPath: `/dev/${id}`,
+          model: 'Crucial MX500 2TB',
+          diskType: 'sata',
+          health: 'PASSED',
+          wearout: 95,
+          temperature: 72,
+          risk,
+          ...overrides,
+        },
+        identity: { hostname: 'pve3' },
+        canonicalIdentity: { hostname: 'pve3' },
+        platformType: 'proxmox-pve',
+      }) as unknown as Resource;
+    const hot = (severity: string, celsius = 72) => ({
+      code: 'temperature_high',
+      severity,
+      summary: `Disk temperature is ${celsius}C`,
+    });
+
+    it('calls a disk that is only hot Running Hot at the tier of its reading', () => {
+      const criticalDisk = buildRiskDisk('sda', { level: 'critical', reasons: [hot('critical')] });
+      const criticalData = extractPhysicalDiskPresentationData(criticalDisk);
+      expect(criticalData.riskReasonDetails).toEqual([hot('critical')]);
+      expect(getPhysicalDiskHealthStatus(criticalData)).toEqual({
+        label: 'Running Hot',
+        summary: 'Disk temperature is 72C',
+        tone: 'text-red-700 dark:text-red-300',
+      });
+      expect(getPhysicalDiskNormalizedHealth(criticalDisk, criticalData)).toBe('critical');
+
+      const warmDisk = buildRiskDisk(
+        'sdb',
+        { level: 'warning', reasons: [hot('warning', 63)] },
+        { temperature: 63 },
+      );
+      const warmData = extractPhysicalDiskPresentationData(warmDisk);
+      expect(getPhysicalDiskHealthStatus(warmData)).toEqual({
+        label: 'Running Hot',
+        summary: 'Disk temperature is 63C',
+        tone: 'text-amber-700 dark:text-amber-300',
+      });
+      expect(getPhysicalDiskNormalizedHealth(warmDisk, warmData)).toBe('warning');
+    });
+
+    it('keeps Replace Now for failure evidence even when heat is listed first', () => {
+      // Merged risks keep insertion order, so heat can precede the reason
+      // that actually calls for a new disk.
+      const disk = buildRiskDisk('sda', {
+        level: 'critical',
+        reasons: [
+          hot('critical'),
+          {
+            code: 'pending_sectors',
+            severity: 'critical',
+            summary: 'Pending sectors detected (2)',
+          },
+        ],
+      });
+      const data = extractPhysicalDiskPresentationData(disk);
+      expect(getPhysicalDiskHealthStatus(data)).toEqual({
+        label: 'Replace Now',
+        summary: 'Pending sectors detected (2)',
+        tone: 'text-red-700 dark:text-red-300',
+      });
+
+      const failed = extractPhysicalDiskPresentationData(
+        buildRiskDisk(
+          'sdb',
+          {
+            level: 'critical',
+            reasons: [
+              hot('critical'),
+              {
+                code: 'health_status',
+                severity: 'critical',
+                summary: 'Disk reports health status FAILED',
+              },
+            ],
+          },
+          { health: 'FAILED' },
+        ),
+      );
+      expect(getPhysicalDiskHealthStatus(failed).label).toBe('Replace Now');
+      expect(getPhysicalDiskHealthStatus(failed).summary).toBe('Disk reports health status FAILED');
+    });
+
+    it('lets the more severe of heat and wear evidence name the verdict', () => {
+      const hotAndWorn = extractPhysicalDiskPresentationData(
+        buildRiskDisk('sda', {
+          level: 'critical',
+          reasons: [
+            hot('critical'),
+            { code: 'wearout_low', severity: 'warning', summary: 'SSD life remaining is 8%' },
+          ],
+        }),
+      );
+      expect(getPhysicalDiskHealthStatus(hotAndWorn).label).toBe('Running Hot');
+      expect(getPhysicalDiskHealthStatus(hotAndWorn).summary).toBe('Disk temperature is 72C');
+
+      const warmAndWorn = extractPhysicalDiskPresentationData(
+        buildRiskDisk(
+          'sdb',
+          {
+            level: 'warning',
+            reasons: [
+              hot('warning', 63),
+              { code: 'wearout_low', severity: 'warning', summary: 'SSD life remaining is 8%' },
+            ],
+          },
+          { temperature: 63 },
+        ),
+      );
+      expect(getPhysicalDiskHealthStatus(warmAndWorn)).toEqual({
+        label: 'Needs Attention',
+        summary: 'SSD life remaining is 8%',
+        tone: 'text-amber-700 dark:text-amber-300',
+      });
+    });
+
+    it('keeps a critical level that no listed reason explains as Replace Now', () => {
+      const data = extractPhysicalDiskPresentationData(
+        buildRiskDisk('sda', { level: 'critical', reasons: [hot('warning', 63)] }),
+      );
+      expect(getPhysicalDiskHealthStatus(data)).toEqual({
+        label: 'Replace Now',
+        summary: 'Disk health has degraded to a critical state.',
+        tone: 'text-red-700 dark:text-red-300',
+      });
+    });
+
+    it('decides the verdict from codes and severities even without display text', () => {
+      const pendingWithoutText = extractPhysicalDiskPresentationData(
+        buildRiskDisk('sda', {
+          level: 'critical',
+          reasons: [
+            hot('critical'),
+            { code: 'pending_sectors', severity: 'critical', summary: '' },
+          ],
+        }),
+      );
+      expect(pendingWithoutText.riskReasons).toEqual(['Disk temperature is 72C']);
+      expect(getPhysicalDiskHealthStatus(pendingWithoutText)).toEqual({
+        label: 'Replace Now',
+        summary: 'Disk health has degraded to a critical state.',
+        tone: 'text-red-700 dark:text-red-300',
+      });
+
+      const heatWithoutText = extractPhysicalDiskPresentationData(
+        buildRiskDisk('sdb', {
+          level: 'critical',
+          reasons: [{ code: 'temperature_high', severity: 'critical', summary: '' }],
+        }),
+      );
+      expect(getPhysicalDiskHealthStatus(heatWithoutText).label).toBe('Running Hot');
+    });
+
+    it('does not let a weaker reason stand in for an unexplained critical level', () => {
+      const data = extractPhysicalDiskPresentationData(
+        buildRiskDisk('sda', {
+          level: 'critical',
+          reasons: [
+            { code: 'crc_errors', severity: 'monitor', summary: 'UDMA CRC errors detected (2)' },
+            hot('warning', 63),
+          ],
+        }),
+      );
+      expect(getPhysicalDiskHealthStatus(data)).toEqual({
+        label: 'Replace Now',
+        summary: 'Disk health has degraded to a critical state.',
+        tone: 'text-red-700 dark:text-red-300',
+      });
+    });
+
+    it('reads severities case-insensitively and in any order within a class', () => {
+      const shouting = extractPhysicalDiskPresentationData(
+        buildRiskDisk('sda', {
+          level: 'CRITICAL',
+          reasons: [{ ...hot('critical'), severity: ' Critical ' }],
+        }),
+      );
+      expect(getPhysicalDiskHealthStatus(shouting).label).toBe('Running Hot');
+      expect(getPhysicalDiskHealthStatus(shouting).tone).toBe('text-red-700 dark:text-red-300');
+
+      const unsorted = extractPhysicalDiskPresentationData(
+        buildRiskDisk('sdb', {
+          level: 'critical',
+          reasons: [
+            { code: 'wearout_low', severity: 'warning', summary: 'SSD life remaining is 8%' },
+            {
+              code: 'pending_sectors',
+              severity: 'critical',
+              summary: 'Pending sectors detected (2)',
+            },
+          ],
+        }),
+      );
+      expect(getPhysicalDiskHealthStatus(unsorted).summary).toBe('Pending sectors detected (2)');
+    });
+
+    it('lets SMART counters and low life outrank warning heat', () => {
+      const warmAndLow = extractPhysicalDiskPresentationData(
+        buildRiskDisk(
+          'sda',
+          { level: 'warning', reasons: [hot('warning', 63)] },
+          { diskType: 'ssd', wearout: 8, temperature: 63 },
+        ),
+      );
+      expect(getPhysicalDiskHealthStatus(warmAndLow)).toEqual({
+        label: 'Needs Attention',
+        summary: 'SSD life is running low.',
+        tone: 'text-amber-700 dark:text-amber-300',
+      });
+
+      const warmAndReallocating = extractPhysicalDiskPresentationData(
+        buildRiskDisk(
+          'sdb',
+          { level: 'warning', reasons: [hot('warning', 63)] },
+          { temperature: 63, smart: { reallocatedSectors: 3 } },
+        ),
+      );
+      expect(getPhysicalDiskHealthStatus(warmAndReallocating).label).toBe('Needs Attention');
+    });
+
+    it('sorts a FAILED disk with no risk payload ahead of a critically hot one', () => {
+      const failedDisk = buildRiskDisk(
+        'sdb',
+        { level: 'healthy', reasons: [] },
+        { risk: undefined, health: 'FAILED', temperature: 40 },
+      );
+      const hotDisk = buildRiskDisk('sda', { level: 'critical', reasons: [hot('critical')] });
+      const failedData = extractPhysicalDiskPresentationData(failedDisk);
+      const hotData = extractPhysicalDiskPresentationData(hotDisk);
+      expect(getPhysicalDiskHealthStatus(failedData).label).toBe('Replace Now');
+      expect(
+        comparePhysicalDiskPresentation(failedDisk, failedData, hotDisk, hotData),
+      ).toBeLessThan(0);
+    });
+
+    it('sorts and filters hot disks by the action their verdict asks for', () => {
+      const warm = buildRiskDisk('sdc', { level: 'warning', reasons: [hot('warning', 63)] });
+      const worn = buildRiskDisk('sdd', {
+        level: 'warning',
+        reasons: [
+          { code: 'wearout_low', severity: 'warning', summary: 'SSD life remaining is 8%' },
+        ],
+      });
+      const hotDisk = buildRiskDisk('sda', { level: 'critical', reasons: [hot('critical')] });
+      const failing = buildRiskDisk('sdb', {
+        level: 'critical',
+        reasons: [
+          { code: 'media_errors', severity: 'critical', summary: 'Media errors detected (4)' },
+        ],
+      });
+      const healthy = buildRiskDisk(
+        'sde',
+        { level: 'healthy', reasons: [] },
+        { risk: undefined, temperature: 38 },
+      );
+      const disks = [healthy, warm, worn, hotDisk, failing];
+      const dataMap = buildPhysicalDiskPresentationDataMap(disks);
+      const sorted = (healthFilter: 'all' | 'attention' | 'critical' | 'warning') =>
+        filterAndSortPhysicalDisks(disks, {
+          selectedNode: null,
+          healthFilter,
+          searchTerm: '',
+          getDiskData: (disk) => dataMap.get(disk.id)!,
+          matchesNode: () => true,
+        }).map((disk) => disk.id);
+
+      // Device order alone would put each hot disk first.
+      expect(sorted('all')).toEqual(['sdb', 'sda', 'sdd', 'sdc', 'sde']);
+      expect(sorted('attention')).toEqual(['sdb', 'sda', 'sdd', 'sdc']);
+      expect(sorted('critical')).toEqual(['sdb', 'sda']);
+      expect(sorted('warning')).toEqual(['sdd', 'sdc']);
+    });
   });
 
   it('detects SMART warnings from counters', () => {

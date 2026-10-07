@@ -452,6 +452,9 @@ describe('Workloads platform-page embed contract', () => {
     expect(nodesTableSource).toContain('useWorkloadTableMetricHistory');
     expect(nodesTableSource).toContain('MetricMiniSparkline');
     expect(nodesTableSource).toContain('isSparklineMode');
+    // The hosts table draws node rows only: it polls the infrastructure
+    // summary and leaves guest history to the embedded workloads reader.
+    expect(nodesTableSource).toContain("series: 'nodes',");
   });
 
   it('lets platform pages move grouped host drawers to a dedicated host table owner', async () => {
@@ -1432,11 +1435,20 @@ describe('Workloads performance contract', () => {
       expect(workloadsFilterModelSource).toContain('mobileTrailing?: JSX.Element;');
       expect(workloadsStateSource).toContain('useWorkloadRouteState');
       expect(workloadsStateSource).toContain('range: workloadMetricHistoryRange');
+      // Grouped node rows render no metric cells, so Trends on the Workloads
+      // surface must not poll the infrastructure summary.
+      expect(workloadsStateSource).toContain("series: 'guests',");
       expect(workloadTableMetricHistoryStateSource).toContain(
         'fetchWorkloadsSummaryAndCache(parsed.range',
       );
       expect(workloadTableMetricHistoryStateSource).toContain(
         'fetchInfrastructureSummaryAndCache(parsed.range',
+      );
+      expect(workloadTableMetricHistoryStateSource).toContain(
+        "if (options.series !== 'guests' || !options.enabled()) return null;",
+      );
+      expect(workloadTableMetricHistoryStateSource).toContain(
+        "options.series === 'nodes' && options.enabled() ? buildHistoryScope(options.range()) : null",
       );
       expect(
         workloadTableMetricHistoryStateSource.match(/retainPreviousValueOnSourceChange: false/g),
@@ -1641,6 +1653,12 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerManageSource).toContain('ResourceOperatorStateSection');
       expect(guestDrawerOverviewSource).toContain('buildWorkloadsDiskPresentation');
       expect(guestDrawerOverviewSource).toContain('Filesystems');
+      // Linked physical disks load with an open agent guest's drawer, so the
+      // disk presentation module stays out of the WorkloadsSurface chunk.
+      expect(guestDrawerOverviewSource).toContain("import('./GuestPhysicalDisks')");
+      expect(guestDrawerOverviewSource).not.toMatch(
+        /^import (?!type )[^;]*from '\.\/GuestPhysicalDisks';/m,
+      );
       // The shared DetailSectionTable gives the earlier of the last two sections
       // the wider span, so the longer filesystem list must be declared before the
       // short tag list for mount points to get the readable panel width.

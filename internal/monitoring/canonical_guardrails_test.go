@@ -2234,7 +2234,8 @@ func TestProxmoxDiskAlertsRunOnMergedDiskState(t *testing.T) {
 			file: "monitor_pve.go",
 			snippets: []string{
 				"allDisks = mergeHostAgentSMARTIntoDisks(allDisks, nodesFromState, hosts)",
-				"m.alertManager.CheckDiskHealth(inst, disk.Node, proxmoxDiskFromPhysicalDisk(disk))",
+				"m.checkPhysicalDiskAlerts(inst, disk, diskExcludeByNode[disk.Node])",
+				"m.alertManager.CheckDiskHealth(instance, disk.Node, proxmoxDiskFromPhysicalDisk(disk))",
 				"func proxmoxDiskFromPhysicalDisk(disk models.PhysicalDisk) proxmox.Disk {",
 			},
 		},

@@ -57,6 +57,7 @@ import {
   type PlatformResourceStatusFilter,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import { PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS } from '@/features/storageBackups/diskTemperaturePresentation';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import type { Disk } from '@/types/api';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
@@ -76,6 +77,7 @@ import {
 import { asTrimmedString } from '@/utils/stringUtils';
 import { getPreferredResourceIP } from '@/utils/resourceIdentity';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
+import { formatTemperature } from '@/utils/temperature';
 import {
   RESOURCE_METADATA_CHANGED_EVENT,
   type ResourceMetadataChangedDetail,
@@ -101,6 +103,7 @@ import {
   getAgentMachineTemperatureTitle,
   getAgentMachineThermalPressurePresentation,
   getNextAgentMachineSortState,
+  isAgentMachineTemperatureLastKnown,
   sortAgentMachines,
   type AgentMachineColumn,
   type AgentMachineColumnId,
@@ -183,6 +186,8 @@ const AgentMachineMetricTooltip: Component<{
 
 const AgentMachineTemperatureCell: Component<{
   celsius: number | undefined;
+  /** The value is a retained reading, not a current one. */
+  lastKnown?: boolean;
   metric: AgentMachineTemperatureMetric;
   sections: AgentMachineTemperatureDetailSection[];
   thresholds?: MetricDisplayThresholds | null;
@@ -222,7 +227,26 @@ const AgentMachineTemperatureCell: Component<{
           }
         >
           {(value) => (
-            <TemperatureGauge value={value()} metric={props.metric} thresholds={props.thresholds} />
+            <Show
+              when={!props.lastKnown}
+              fallback={
+                // A retained reading takes no threshold colour; its detail
+                // rows say it is last known.
+                <span
+                  class={`text-xs whitespace-nowrap ${PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS}`}
+                  data-temperature-reading="last-known"
+                >
+                  {formatTemperature(value())}
+                  <span class="sr-only">, last known</span>
+                </span>
+              }
+            >
+              <TemperatureGauge
+                value={value()}
+                metric={props.metric}
+                thresholds={props.thresholds}
+              />
+            </Show>
           )}
         </Show>
       }
@@ -1565,6 +1589,7 @@ export const AgentsMachinesTable: Component<{
                     const raidArrays = () => getAgentMachineRaidArrayDetails(machine);
                     const raidSummary = () => getAgentMachineRaidSummary(machine);
                     const temperature = () => getAgentMachineTemperatureCelsius(machine);
+                    const temperatureLastKnown = () => isAgentMachineTemperatureLastKnown(machine);
                     const temperatureMetric = () => getAgentMachineTemperatureMetric(machine);
                     const temperatureThresholds = () =>
                       temperatureMetric() === 'diskTemperature'
@@ -1781,7 +1806,9 @@ export const AgentsMachinesTable: Component<{
                               class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('uptime')} text-base-content`}
                             >
                               {formatPlatformTableUptimeValue(
-                                machine.uptime ?? machine.agent?.uptimeSeconds,
+                                canRenderMetrics()
+                                  ? (machine.uptime ?? machine.agent?.uptimeSeconds)
+                                  : undefined,
                               )}
                             </TableCell>
                           </Show>
@@ -1789,14 +1816,20 @@ export const AgentsMachinesTable: Component<{
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('temp')} text-base-content`}
                             >
-                              <AgentMachineTemperatureCell
-                                celsius={temperature()}
-                                metric={temperatureMetric()}
-                                sections={temperatureSections()}
-                                thresholds={temperatureThresholds()}
-                                title={temperatureTitle()}
-                                thermalPressure={thermalPressure()}
-                              />
+                              <Show
+                                when={canRenderMetrics()}
+                                fallback={<span class="text-muted">—</span>}
+                              >
+                                <AgentMachineTemperatureCell
+                                  celsius={temperature()}
+                                  lastKnown={temperatureLastKnown()}
+                                  metric={temperatureMetric()}
+                                  sections={temperatureSections()}
+                                  thresholds={temperatureThresholds()}
+                                  title={temperatureTitle()}
+                                  thermalPressure={thermalPressure()}
+                                />
+                              </Show>
                             </TableCell>
                           </Show>
                           <Show when={columnVisibility.isColumnVisible('lastSeen')}>

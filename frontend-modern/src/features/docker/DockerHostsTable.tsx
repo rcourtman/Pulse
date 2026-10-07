@@ -517,7 +517,11 @@ export const DockerHostsTable: Component<{
                             class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-narrow-hidden hidden text-base-content min-[360px]:table-cell md:table-cell`}
                           >
                             <PlatformTableTemperatureValue
-                              value={host.temperature ?? docker()?.temperature}
+                              value={
+                                canRenderMetrics()
+                                  ? (host.temperature ?? docker()?.temperature)
+                                  : undefined
+                              }
                             />
                           </TableCell>
                           <Show when={showSwarmColumn()}>

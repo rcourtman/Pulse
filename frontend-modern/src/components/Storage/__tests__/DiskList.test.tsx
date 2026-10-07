@@ -343,6 +343,111 @@ describe('DiskList', () => {
     );
   });
 
+  it('says a disk that is only hot is running hot, not due for replacement', () => {
+    const view = renderDiskList({
+      disks: [
+        buildDisk('sda', 'pve3', {
+          model: 'Crucial MX500 2TB',
+          diskType: 'ssd',
+          wearout: 95,
+          temperature: 72,
+          risk: {
+            level: 'critical',
+            reasons: [
+              {
+                code: 'temperature_high',
+                severity: 'critical',
+                summary: 'Disk temperature is 72C',
+              },
+            ],
+          },
+        }),
+        buildDisk('sdb', 'pve3', {
+          temperature: 72,
+          smart: { pendingSectors: 2 },
+          risk: {
+            level: 'critical',
+            reasons: [
+              {
+                code: 'temperature_high',
+                severity: 'critical',
+                summary: 'Disk temperature is 72C',
+              },
+              {
+                code: 'pending_sectors',
+                severity: 'critical',
+                summary: 'Pending sectors detected (2)',
+              },
+            ],
+          },
+        }),
+      ],
+      nodes: [buildNode('node-pve3', 'pve3')],
+      selectedNode: null,
+      searchTerm: '',
+    });
+
+    const rows = Array.from(view.container.querySelectorAll('[data-row-id]'));
+    // The disk that needs replacing sorts above the one that needs cooling.
+    expect(rows.map((row) => row.getAttribute('data-row-id'))).toEqual(['sdb', 'sda']);
+    const hotRow = within(rows[1] as HTMLElement);
+    expect(hotRow.queryByText('Replace Now')).not.toBeInTheDocument();
+    expect(hotRow.getByText('Running Hot')).toHaveClass(
+      'platform-table-label-full',
+      'text-red-700',
+    );
+    expect(hotRow.getByText('Running Hot')).toHaveAttribute('title', 'Disk temperature is 72C');
+    expect(hotRow.getByText('Hot')).toHaveClass('platform-table-label-compact', 'text-red-700');
+    const failingRow = within(rows[0] as HTMLElement);
+    expect(failingRow.getByText('Replace Now')).toHaveAttribute(
+      'title',
+      'Pending sectors detected (2)',
+    );
+  });
+
+  it('follows a disk from warm to critically hot and back to healthy', async () => {
+    const heat = (severity: 'warning' | 'critical', celsius: number) => ({
+      level: severity,
+      reasons: [{ code: 'temperature_high', severity, summary: `Disk temperature is ${celsius}C` }],
+    });
+    const [disks, setDisks] = createStore({
+      items: [buildDisk('sda', 'pve3', { temperature: 63, risk: heat('warning', 63) })],
+    });
+    const [healthFilter, setHealthFilter] = createSignal<'all' | 'critical'>('all');
+    const view = render(() => (
+      <DiskList
+        disks={disks.items}
+        nodes={[]}
+        selectedNode={null}
+        searchTerm=""
+        healthFilter={healthFilter()}
+        selectedDiskId={null}
+        onSelectedDiskChange={() => {}}
+      />
+    ));
+    const row = () => view.container.querySelector('[data-row-id="sda"]') as HTMLElement | null;
+    expect(within(row()!).getByText('Running Hot')).toHaveClass('text-amber-700');
+    expect(within(row()!).getByText('Hot')).toHaveClass('text-amber-700');
+    setHealthFilter('critical');
+    await waitFor(() => expect(row()).toBeNull());
+
+    setDisks(
+      'items',
+      reconcile([buildDisk('sda', 'pve3', { temperature: 72, risk: heat('critical', 72) })]),
+    );
+    await waitFor(() => expect(row()).not.toBeNull());
+    expect(within(row()!).getByText('Running Hot')).toHaveClass('text-red-700');
+    expect(within(row()!).getByText('Running Hot')).toHaveAttribute(
+      'title',
+      'Disk temperature is 72C',
+    );
+
+    setHealthFilter('all');
+    setDisks('items', reconcile([buildDisk('sda', 'pve3', { temperature: 41 })]));
+    await waitFor(() => expect(within(row()!).getByText('Healthy')).toBeInTheDocument());
+    expect(within(row()!).queryByText('Running Hot')).not.toBeInTheDocument();
+  });
+
   it('renders SSD life and falls back to the Proxmox usage string for Belongs', () => {
     renderDiskList({
       disks: [

@@ -37,7 +37,13 @@ interface WorkloadTableMetricHistoryOptions {
   onDemand?: Accessor<boolean>;
   prefetchGuests?: Accessor<readonly WorkloadGuest[]>;
   range: Accessor<WorkloadTableMetricHistoryRange>;
-  selectedNode: Accessor<string | null | undefined>;
+  selectedNode?: Accessor<string | null | undefined>;
+  // The rows this caller draws while `enabled`. Each estate-wide history is a
+  // polled summary read, so a reader polls only the one its rows consume:
+  // guest rows read the workloads summary, node rows the infrastructure
+  // summary. Readers do not share in-flight requests, so a second reader on
+  // the same page pays for its own reads.
+  series: 'guests' | 'nodes';
 }
 
 interface ActiveGuestHistoryQueryKey {
@@ -111,13 +117,13 @@ const buildActiveGuestHistoryCacheKey = (key: ActiveGuestHistoryQueryKey): strin
 export function useWorkloadTableMetricHistory(
   options: WorkloadTableMetricHistoryOptions,
 ): WorkloadMetricHistoryReader {
-  const selectedNodeScope = createMemo(() => normalizeNodeScope(options.selectedNode()));
+  const selectedNodeScope = createMemo(() => normalizeNodeScope(options.selectedNode?.()));
   const workloadHistoryScope = createMemo(() => {
-    if (!options.enabled()) return null;
+    if (options.series !== 'guests' || !options.enabled()) return null;
     return buildHistoryScope(options.range(), selectedNodeScope());
   });
   const infrastructureHistoryScope = createMemo(() =>
-    options.enabled() ? buildHistoryScope(options.range()) : null,
+    options.series === 'nodes' && options.enabled() ? buildHistoryScope(options.range()) : null,
   );
 
   const workloadHistory = createNonSuspendingQuery<WorkloadChartsResponse, string>({

@@ -5469,6 +5469,15 @@ Backend API payloads and `frontend-modern/src/types/api.ts` must preserve that
 optional map without making it a required compatibility field, and clients must
 keep it as descriptive host telemetry rather than a temperature metric,
 resource identity, alert metric, or storage/recovery signal.
+Host sensor SMART rows (`smart[]`) also carry the optional per-field
+`collection` status (`PhysicalDiskCollectionStatus`). Backend API payloads and
+`frontend-modern/src/types/api.ts` (`HostDiskSMART.collection`) must preserve it
+on the agent facet. When a host agent passes its reporting lease, a SMART
+temperature that was current (`available`, or present without provenance) keeps
+its value and becomes `unavailable`. A state that was already not available is
+kept. Clients must read that state through the shared
+`isPhysicalDiskTemperatureCurrent` decision before treating the value as a
+current reading.
 Agent resource-context sections expose host package posture only as bounded
 operational facts: package manager, pending count, inventory state, inspection
 freshness, and reboot-required state. Raw package identifiers, versions, and
