@@ -321,8 +321,7 @@ func (m *Monitor) availabilityStatusSnapshotForTargets(targets []config.Availabi
 				}
 				if legacyLocationID == expected[0] || expected[0] == config.AvailabilityObservationLocationLocal {
 					if expected[0] == config.AvailabilityObservationLocationLocal {
-						legacy.ProbeAgentID = ""
-						legacy.ProbeReportReceivedAt = time.Time{}
+						legacy = adoptAvailabilityStatusAsLocal(legacy)
 					}
 					locations[expected[0]] = legacy
 				}
@@ -330,12 +329,21 @@ func (m *Monitor) availabilityStatusSnapshotForTargets(targets []config.Availabi
 		}
 		if len(expected) == 1 && expected[0] == config.AvailabilityObservationLocationLocal {
 			if _, ok := locations[expected[0]]; !ok {
-				if legacy, exists := out[target.ID]; exists {
-					legacy.ProbeAgentID = ""
-					legacy.ProbeReportReceivedAt = time.Time{}
-					locations[expected[0]] = legacy
-				} else {
+				legacy, exists := out[target.ID]
+				switch {
+				case !exists:
 					delete(out, target.ID)
+					continue
+				case legacy.ExpectedLocations <= 1:
+					locations[expected[0]] = adoptAvailabilityStatusAsLocal(legacy)
+				default:
+					// An aggregate over several locations is not one observation
+					// the local location can stand in for: its freshness may be
+					// one path's and its availability another's. The target
+					// reads as never checked until the local poller runs, with
+					// an entry of its own so connection health cannot fall back
+					// to the cached state from before the lapse.
+					out[target.ID] = availabilityStatusFromTarget(target)
 					continue
 				}
 			}
@@ -348,12 +356,29 @@ func (m *Monitor) availabilityStatusSnapshotForTargets(targets []config.Availabi
 			}
 			if status.ProbeAgentID != "" {
 				status = m.deriveAvailabilityProbeStaleness(target, status, now)
+			} else if len(expected) > 1 {
+				status = deriveLocalAvailabilityObservationStaleness(target, status, now)
 			}
 			locations[locationID] = status
 		}
 		out[target.ID] = aggregateAvailabilityLocationStatuses(target, expected, locations)
 	}
 	return out
+}
+
+// adoptAvailabilityStatusAsLocal presents a retained observation as the local
+// location's once the check falls back to local observation, as it does when
+// the external-probe entitlement lapses. A local location's check time is its
+// freshness, but a remote observation's check time is the agent's clock, so it
+// is held to the server's receipt time: a fast agent clock must not keep the
+// adopted result current after its receipt is cleared.
+func adoptAvailabilityStatusAsLocal(status AvailabilityProbeStatus) AvailabilityProbeStatus {
+	if !status.ProbeReportReceivedAt.IsZero() && status.LastChecked.After(status.ProbeReportReceivedAt) {
+		status.LastChecked = status.ProbeReportReceivedAt
+	}
+	status.ProbeAgentID = ""
+	status.ProbeReportReceivedAt = time.Time{}
+	return status
 }
 
 func (m *Monitor) RefreshAvailabilityTargets() {
@@ -986,6 +1011,12 @@ func availabilityEvidenceEnvelope(
 	}
 
 	freshnessAt := status.FreshnessTime()
+	if reachableAt := availabilityReachablePathFreshness(status); !reachableAt.IsZero() {
+		// An available check's claim rests on its reachable paths alone, so
+		// its evidence lasts as long as the newest of them, not as long as a
+		// fresher path that failed.
+		freshnessAt = reachableAt
+	}
 	if freshnessAt.IsZero() {
 		freshnessAt = observedAt
 	}
@@ -1026,6 +1057,22 @@ func availabilityEvidenceEnvelope(
 		return nil
 	}
 	return &envelope
+}
+
+// availabilityReachablePathFreshness returns the newest server-authored
+// freshness among the current paths that reached an available check observed
+// from several locations, and zero otherwise.
+func availabilityReachablePathFreshness(status AvailabilityProbeStatus) time.Time {
+	if !status.Available || len(status.Locations) < 2 {
+		return time.Time{}
+	}
+	var latest time.Time
+	for _, location := range status.Locations {
+		if location.Available && !location.Stale && location.FreshnessAt.After(latest) {
+			latest = location.FreshnessAt
+		}
+	}
+	return latest
 }
 
 func availabilityResourceTags(target config.AvailabilityTarget) []string {

@@ -5686,7 +5686,8 @@ func TestMarkStaleRecomputesFromRemainingFreshSources(t *testing.T) {
 			Availability: &AvailabilityData{
 				TargetID: "probe-delly", LinkedResourceID: host.ID,
 				Address: "192.0.2.5", Protocol: "tcp", Port: 8006,
-				Enabled: true, Available: true,
+				Enabled: true, Available: true, LastChecked: &recentNow,
+				Evidence: availabilityProbeEvidence(t, "probe-delly", recentNow),
 			},
 		},
 		Identity: ResourceIdentity{IPAddresses: []string{"192.0.2.5"}},
@@ -5759,6 +5760,7 @@ func TestMarkStaleKeepsProxmoxRuntimeStateIndependentOfAvailabilityFacet(t *test
 			Availability: &AvailabilityData{
 				TargetID: "probe-102", LinkedResourceID: checkedID,
 				Address: "192.0.2.102", Protocol: "icmp", Enabled: true, Available: true,
+				LastChecked: &freshSeen, Evidence: availabilityProbeEvidence(t, "probe-102", freshSeen),
 			},
 		},
 	}})
@@ -5778,6 +5780,305 @@ func TestMarkStaleKeepsProxmoxRuntimeStateIndependentOfAvailabilityFacet(t *test
 	}
 	if got := statuses["lab:node-a:102"]; got != StatusOnline {
 		t.Fatalf("availability-faceted stale container status = %q, want online", got)
+	}
+}
+
+// availabilityCheckRecord is a check the poller ran at checkedAt against the
+// resource targetID names. Its evidence stays current for two minutes, the
+// two poll intervals of a local check; Available stays as the last run left
+// it, as a local check that misses its cadence does.
+func availabilityCheckRecord(t *testing.T, checkID, targetID string, passing bool, checkedAt time.Time) IngestRecord {
+	t.Helper()
+	status, failures := StatusOnline, 0
+	if !passing {
+		status, failures = StatusOffline, 3
+	}
+	return IngestRecord{
+		SourceID: checkID,
+		Resource: Resource{
+			Type: ResourceTypeNetworkEndpoint, Name: checkID, Status: status, LastSeen: checkedAt,
+			Sources: []DataSource{SourceAvailability},
+			Availability: &AvailabilityData{
+				TargetID: checkID, LinkedResourceID: targetID,
+				Address: "192.0.2.80", Protocol: "http", Port: 443,
+				Enabled: true, Available: passing, LastChecked: &checkedAt,
+				ConsecutiveFailures: failures, FailureThreshold: 2, PollIntervalSeconds: 60,
+				Evidence: availabilityProbeEvidence(t, checkID, checkedAt),
+			},
+		},
+	}
+}
+
+func ingestProxmoxGuestSeenAt(t *testing.T, rr *ResourceRegistry, sourceID string, seen time.Time) string {
+	t.Helper()
+	rr.IngestRecords(SourceProxmox, []IngestRecord{{
+		SourceID: sourceID,
+		Resource: Resource{
+			Type: ResourceTypeSystemContainer, Name: sourceID, Status: StatusOnline, LastSeen: seen,
+			Proxmox: &ProxmoxData{RuntimeStatus: "running", NodeName: "node-a"},
+		},
+	}})
+	for _, resource := range rr.ListByType(ResourceTypeSystemContainer) {
+		if resource.Name == sourceID {
+			return resource.ID
+		}
+	}
+	t.Fatalf("guest %s not ingested", sourceID)
+	return ""
+}
+
+// A failing availability check proves only that one port or service does not
+// answer, so it never decides its target's status: a node the poller expired
+// stays offline, a guest whose poll went quiet stays a warning instead of
+// counting as stopped, and neither reads online. Only a passing check with
+// current evidence proves the target answers. The stale pass used to count
+// any current check as online, so a failing probe kept an expired node up.
+func TestStalePassReadsAvailabilityCheckVerdicts(t *testing.T) {
+	now := time.Now().UTC()
+	quietSeen := now.Add(-5 * time.Minute)
+	lapsed := now.Add(-10 * time.Minute)
+	expiredNode := models.StateSnapshot{Nodes: []models.Node{{
+		ID: "homelab-pve9", Name: "pve9", Instance: "homelab", ClusterName: "homelab",
+		Status: "offline", LastSeen: quietSeen,
+	}}}
+	quietGuest := models.StateSnapshot{VMs: []models.VM{{
+		ID: "homelab:pve9:101", Name: "web", Node: "pve9", Instance: "homelab",
+		VMID: 101, Status: "running", Type: "qemu", LastSeen: quietSeen,
+	}}}
+	for _, tc := range []struct {
+		name       string
+		snapshot   models.StateSnapshot
+		targetType ResourceType
+		passing    bool
+		checkedAt  time.Time
+		want       ResourceStatus
+	}{
+		{"expired node, current failing check", expiredNode, ResourceTypeAgent, false, now, StatusOffline},
+		{"expired node, lapsed failing check", expiredNode, ResourceTypeAgent, false, lapsed, StatusOffline},
+		{"expired node, lapsed passing check", expiredNode, ResourceTypeAgent, true, lapsed, StatusOffline},
+		{"expired node, current passing check", expiredNode, ResourceTypeAgent, true, now, StatusOnline},
+		{"quiet guest, current failing check", quietGuest, ResourceTypeVM, false, now, StatusWarning},
+		{"quiet guest, lapsed failing check", quietGuest, ResourceTypeVM, false, lapsed, StatusWarning},
+		{"quiet guest, current passing check", quietGuest, ResourceTypeVM, true, now, StatusOnline},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := NewRegistry(nil)
+			rr.IngestSnapshot(tc.snapshot)
+			target := onlyResourceOfType(t, rr, tc.targetType)
+			rr.IngestRecords(SourceAvailability, []IngestRecord{
+				availabilityCheckRecord(t, "probe-1", target.ID, tc.passing, tc.checkedAt),
+			})
+			rr.MarkStale(now, nil)
+
+			got, ok := rr.Get(target.ID)
+			if !ok || len(AvailabilityChecksForResource(*got)) != 1 {
+				t.Fatalf("check not projected onto %s: %+v", target.ID, got.AvailabilityChecks)
+			}
+			if got.Status != tc.want {
+				t.Fatalf("status = %q, want %q", got.Status, tc.want)
+			}
+		})
+	}
+}
+
+// One availability sighting stands for every check on a target, and it
+// carries whichever check was projected last. Each check is judged by its own
+// evidence instead, so a failing check that just ran cannot lend its
+// freshness to another check's old pass, in either projection order.
+func TestAvailabilityChecksAreJudgedByTheirOwnEvidence(t *testing.T) {
+	now := time.Now().UTC()
+	lapsed := now.Add(-10 * time.Minute)
+	for _, tc := range []struct {
+		name               string
+		passedAt, failedAt time.Time
+		want               ResourceStatus
+	}{
+		{name: "lapsed pass, current failure", passedAt: lapsed, failedAt: now, want: StatusWarning},
+		{name: "current pass, lapsed failure", passedAt: now, failedAt: lapsed, want: StatusOnline},
+	} {
+		for _, order := range [][]string{{"pass", "fail"}, {"fail", "pass"}} {
+			t.Run(tc.name+", "+strings.Join(order, " then "), func(t *testing.T) {
+				rr := NewRegistry(nil)
+				target := ingestProxmoxGuestSeenAt(t, rr, "lab:node-a:101", now.Add(-5*time.Minute))
+				records := map[string]IngestRecord{
+					"pass": availabilityCheckRecord(t, "probe-pass", target, true, tc.passedAt),
+					"fail": availabilityCheckRecord(t, "probe-fail", target, false, tc.failedAt),
+				}
+				for _, key := range order {
+					rr.IngestRecords(SourceAvailability, []IngestRecord{records[key]})
+				}
+				rr.MarkStale(now, nil)
+
+				got, ok := rr.Get(target)
+				if !ok {
+					t.Fatal("target missing")
+				}
+				if checks := AvailabilityChecksForResource(*got); len(checks) != 2 {
+					t.Fatalf("expected both checks on the target, got %+v", checks)
+				}
+				if got.Status != tc.want {
+					t.Fatalf("status = %q, want %q", got.Status, tc.want)
+				}
+			})
+		}
+	}
+}
+
+// A check's verdict moves with the check. Projecting, re-running or
+// retargeting a check is not a delivery from the resource's own sources, so a
+// target whose status the stale pass owns is judged again at once rather than
+// keeping the old checks' verdict until the next pass; the resources API
+// replays checks after its stale pass and never runs another.
+func TestChangedAvailabilityChecksJudgeTheirTargetsAgain(t *testing.T) {
+	now := time.Now().UTC()
+	quietSeen := now.Add(-5 * time.Minute)
+	rr := NewRegistry(nil)
+	first := ingestProxmoxGuestSeenAt(t, rr, "lab:node-a:101", quietSeen)
+	second := ingestProxmoxGuestSeenAt(t, rr, "lab:node-a:102", quietSeen)
+	rr.MarkStale(now, nil)
+
+	status := func(id string) ResourceStatus {
+		t.Helper()
+		resource, ok := rr.Get(id)
+		if !ok {
+			t.Fatalf("resource %s missing", id)
+		}
+		return resource.Status
+	}
+
+	rr.IngestRecords(SourceAvailability, []IngestRecord{
+		availabilityCheckRecord(t, "probe-moving", first, true, now),
+		availabilityCheckRecord(t, "probe-failing", first, false, now),
+	})
+	if got := status(first); got != StatusOnline {
+		t.Fatalf("first status = %q once a passing check lands, want online", got)
+	}
+
+	rr.IngestRecords(SourceAvailability, []IngestRecord{
+		availabilityCheckRecord(t, "probe-moving", second, true, now),
+	})
+	left, _ := rr.Get(first)
+	if checks := AvailabilityChecksForResource(*left); len(checks) != 1 || checks[0].TargetID != "probe-failing" {
+		t.Fatalf("first checks = %+v, want only probe-failing", checks)
+	}
+	if got := status(first); got != StatusWarning {
+		t.Fatalf("first status = %q after its passing check moved away, want warning", got)
+	}
+	if got := status(second); got != StatusOnline {
+		t.Fatalf("second status = %q after the passing check moved onto it, want online", got)
+	}
+
+	rr.IngestRecords(SourceAvailability, []IngestRecord{
+		availabilityCheckRecord(t, "probe-moving", second, false, now),
+	})
+	if got := status(second); got != StatusWarning {
+		t.Fatalf("second status = %q once its only check fails, want warning", got)
+	}
+
+	rr.MarkStale(now, nil)
+	if got := status(first); got != StatusWarning {
+		t.Fatalf("first status = %q after the next pass, want warning", got)
+	}
+	if got := status(second); got != StatusWarning {
+		t.Fatalf("second status = %q after the next pass, want warning", got)
+	}
+}
+
+// A projected check's sighting is not one of its target's own sources. Its
+// going quiet hands the stale pass nothing to decide, and replacing the check
+// takes no ownership away, so a target whose own source has never delivered
+// keeps the status that source gave it whatever its checks say.
+func TestAvailabilitySightingNeverHandsTheStalePassItsTarget(t *testing.T) {
+	now := time.Now().UTC()
+	quickChecks := map[DataSource]time.Duration{SourceAvailability: 30 * time.Second}
+	for _, tc := range []struct {
+		name     string
+		ingested ResourceStatus
+		passing  bool
+	}{
+		{name: "online guest, quiet failing check", ingested: StatusOnline, passing: false},
+		{name: "offline placeholder, quiet passing check", ingested: StatusOffline, passing: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := NewRegistry(nil)
+			rr.IngestRecords(SourceProxmox, []IngestRecord{{
+				SourceID: "lab:node-a:101",
+				Resource: Resource{
+					Type: ResourceTypeSystemContainer, Name: "lab:node-a:101", Status: tc.ingested,
+					Proxmox: &ProxmoxData{RuntimeStatus: "running", NodeName: "node-a"},
+				},
+			}})
+			target := onlyResourceOfType(t, rr, ResourceTypeSystemContainer).ID
+
+			rr.IngestRecords(SourceAvailability, []IngestRecord{
+				availabilityCheckRecord(t, "probe-1", target, tc.passing, now.Add(-time.Minute)),
+			})
+			rr.MarkStale(now, quickChecks)
+			got, _ := rr.Get(target)
+			if sighting := got.SourceStatus[SourceAvailability]; sighting.Status != "stale" {
+				t.Fatalf("availability sighting = %+v, want stale", sighting)
+			}
+			if got.Status != tc.ingested {
+				t.Fatalf("status = %q with a quiet check, want %q from the target's own source", got.Status, tc.ingested)
+			}
+
+			rr.IngestRecords(SourceAvailability, []IngestRecord{
+				availabilityCheckRecord(t, "probe-1", target, !tc.passing, now),
+			})
+			rr.MarkStale(now, quickChecks)
+			if got, _ := rr.Get(target); got.Status != tc.ingested {
+				t.Fatalf("status = %q after the check flipped, want %q", got.Status, tc.ingested)
+			}
+		})
+	}
+}
+
+// A manual link keeps the primary's own availability checks and not the
+// linked resource's, so the merged resource is judged by the checks it
+// carries. The linked resource's fresher availability sighting survives the
+// merge as delivery bookkeeping; it must not become a verdict for checks the
+// merged resource does not show.
+func TestManualLinkJudgesOnlyTheChecksTheMergedResourceCarries(t *testing.T) {
+	now := time.Now().UTC()
+	quietSeen := now.Add(-5 * time.Minute)
+	store := NewMemoryStore()
+	if err := store.AddLink(ResourceLink{ResourceA: "vm-web", ResourceB: "agent-web", PrimaryID: "vm-web"}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	rr := NewRegistry(store)
+	rr.IngestResources([]Resource{
+		{
+			ID: "vm-web", Type: ResourceTypeVM, Name: "web", Status: StatusWarning, LastSeen: quietSeen,
+			Sources: []DataSource{SourceProxmox},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceProxmox: {Status: "stale", LastSeen: quietSeen, reported: StatusOnline},
+			},
+		},
+		{
+			ID: "agent-web", Type: ResourceTypeAgent, Name: "web", Status: StatusWarning, LastSeen: now,
+			Sources: []DataSource{SourceAgent, SourceAvailability},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceAgent:        {Status: "stale", LastSeen: quietSeen, reported: StatusOnline},
+				SourceAvailability: {Status: "online", LastSeen: now},
+			},
+			AvailabilityChecks: []AvailabilityData{{
+				TargetID: "probe-web", Enabled: true, Available: false, LastChecked: &now,
+				ConsecutiveFailures: 3, FailureThreshold: 2,
+				Evidence: availabilityProbeEvidence(t, "probe-web", now),
+			}},
+			Agent: &AgentData{AgentID: "host-web", Hostname: "web"},
+		},
+	})
+
+	merged, ok := rr.Get("vm-web")
+	if !ok {
+		t.Fatal("linked resource missing")
+	}
+	if checks := AvailabilityChecksForResource(*merged); len(checks) != 0 {
+		t.Fatalf("merged resource exposes the linked resource's checks: %+v", checks)
+	}
+	if merged.Status != StatusWarning {
+		t.Fatalf("status = %q, want warning from its own quiet sources", merged.Status)
 	}
 }
 

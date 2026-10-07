@@ -1805,21 +1805,49 @@ func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSo
 				changed = changed || status.Status != "stale"
 				status.Status = "stale"
 				resource.SourceStatus[source] = status
-				staleFound = true
+				// The sighting of checks projected onto a resource is not one
+				// of its own sources, so its going quiet alone hands the stale
+				// pass nothing to decide; see reapplyStaleStatusForChecks.
+				if source != SourceAvailability || isAvailabilityOwnedResource(*resource) {
+					staleFound = true
+				}
 			}
 		}
 		if staleFound {
-			recomputed := aggregateStatus(resource)
-			if recomputed != StatusUnknown {
-				resource.Status = recomputed
-			} else if resource.Status == StatusOnline {
-				resource.Status = StatusWarning
-			}
+			applyStaleStatus(resource, now)
 		}
 		changed = changed || resource.Status != previousStatus
 	}
 	if changed {
 		rr.invalidateViewsLocked()
+	}
+}
+
+// applyStaleStatus is the stale pass's status rule for a resource with a
+// quiet sighting.
+func applyStaleStatus(resource *Resource, now time.Time) {
+	recomputed := aggregateStatus(resource, now)
+	if recomputed != StatusUnknown {
+		resource.Status = recomputed
+	} else if resource.Status == StatusOnline {
+		resource.Status = StatusWarning
+	}
+}
+
+// reapplyStaleStatusForChecks re-applies the stale pass's rule to a resource
+// whose availability checks just changed, when that pass owns its status
+// because one of the resource's own sources went quiet. Projecting or
+// retargeting a check is not a delivery from those sources, and the resources
+// API replays checks after its stale pass, so the verdict the old checks gave
+// would otherwise stand. The checks' own sighting never confers ownership:
+// a resource whose own sources have not gone quiet keeps the status they gave
+// it, whatever its checks say.
+func reapplyStaleStatusForChecks(resource *Resource, now time.Time) {
+	for source, sighting := range resource.SourceStatus {
+		if source != SourceAvailability && sighting.Status == "stale" {
+			applyStaleStatus(resource, now)
+			return
+		}
 	}
 }
 
@@ -3046,6 +3074,7 @@ func (rr *ResourceRegistry) projectAvailabilityCheckLocked(
 		Status:   sourceSightingStatus(checkResource.LastSeen),
 		LastSeen: checkResource.LastSeen,
 	}
+	reapplyStaleStatusForChecks(target, time.Now().UTC())
 }
 
 func (rr *ResourceRegistry) removeAvailabilityProjectionLocked(
@@ -3080,6 +3109,7 @@ func (rr *ResourceRegistry) removeAvailabilityProjectionLocked(
 				resource.Sources = removeDataSource(resource.Sources, SourceAvailability)
 				delete(resource.SourceStatus, SourceAvailability)
 			}
+			reapplyStaleStatusForChecks(resource, time.Now().UTC())
 		}
 
 		// Build a fresh slice rather than compacting in place: callers may hold
@@ -4784,7 +4814,7 @@ func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource
 	// Manual links combine already-normalized resources. Preserve each metric's
 	// recorded source instead of flattening the linked resource to SourceAgent.
 	primary.Metrics = mergeMetrics(primary, primary.Metrics, other.Metrics, "", time.Now().UTC(), primary.SourceStatus, thresholds)
-	primary.Status = aggregateStatus(primary)
+	primary.Status = aggregateStatus(primary, time.Now().UTC())
 }
 
 func (rr *ResourceRegistry) updateSourceMappings(fromID, toID string) {
@@ -6372,15 +6402,25 @@ func chooseStatus(existing ResourceStatus, incoming ResourceStatus, source DataS
 // order: the highest-priority verdict, the best of equal ones. A source that
 // went quiet drops out of that decision, so a node the cluster reports
 // offline stays offline when its linked agent falls silent. A current facet
-// sighting without a verdict (the PBS association, an availability check)
-// counts as online only when no current source has one. Once every source is
-// quiet, an offline verdict survives (a node the poller expired, an agent past
-// its lease) and any other reads as warning; the best of those wins.
-func aggregateStatus(resource *Resource) ResourceStatus {
+// sighting without a verdict (the PBS association) counts as online only when
+// no current source has one. Availability checks projected onto a monitored
+// resource rank the same way, but their sighting is not their verdict: one
+// sighting stands for every check, so each check is judged at now by its own
+// evidence (see availabilityChecksProveOnline), and a check that does not
+// prove the resource answers abstains. Checks only decide once one of the
+// resource's own sources has gone quiet, so the stale pass owns the status and
+// reverts it when the evidence lapses. Once every source is quiet, an
+// offline verdict survives (a node the poller expired, an agent past its
+// lease) and any other reads as warning; the best of those wins.
+func aggregateStatus(resource *Resource, now time.Time) ResourceStatus {
 	var current, quiet ResourceStatus
 	currentPriority := -1
 	deliveredWithoutVerdict := false
+	checkedTarget := !isAvailabilityOwnedResource(*resource)
 	for source, sighting := range resource.SourceStatus {
+		if source == SourceAvailability && checkedTarget {
+			continue
+		}
 		switch strings.ToLower(strings.TrimSpace(sighting.Status)) {
 		case "online":
 			switch sighting.reported {
@@ -6407,6 +6447,8 @@ func aggregateStatus(resource *Resource) ResourceStatus {
 	case currentPriority >= 0:
 		return current
 	case deliveredWithoutVerdict:
+		return StatusOnline
+	case checkedTarget && quiet != "" && availabilityChecksProveOnline(AvailabilityChecksForResource(*resource), now):
 		return StatusOnline
 	case quiet != "":
 		return quiet
