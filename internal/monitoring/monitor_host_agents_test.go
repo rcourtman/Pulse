@@ -3550,6 +3550,49 @@ func TestHostDiskIOMetricResourceIDFallbacks(t *testing.T) {
 	if got != "SATA-SERIAL-456" {
 		t.Fatalf("proxmox fallback: expected SATA-SERIAL-456, got %q", got)
 	}
+
+	// The disk resource carries the serial the host's Unraid inventory reports
+	// when no SMART reading names the disk, so its I/O is filed under it.
+	// Controller members behind one block device keep their own identity, so
+	// the device's counter belongs to no member, even while one is in standby.
+	// Two inventory rows on one device name no single disk. A legacy SMART
+	// device label still names its block device.
+	host.Sensors.SMART = append(host.Sensors.SMART,
+		models.HostDiskSMART{Device: "sdb"},
+		models.HostDiskSMART{Device: "sdc", Serial: "STANDBY-SERIAL", Standby: true},
+		models.HostDiskSMART{Device: "sde", Controller: "ctrl0", Target: "megaraid,0"},
+		models.HostDiskSMART{Device: "sde", Controller: "ctrl0", Target: "megaraid,1"},
+		models.HostDiskSMART{Device: "sdg", WWN: "5000c500a1b2c3e0", Controller: "ctrl1", Target: "megaraid,0"},
+		models.HostDiskSMART{Device: "/dev/sdg", WWN: "5000c500a1b2c3e1", Controller: "ctrl1", Target: "megaraid,1", Standby: true},
+		models.HostDiskSMART{Device: "sdh [sat]", Serial: "LEGACY-LABEL-SERIAL"},
+	)
+	host.Unraid = &models.HostUnraidStorage{Disks: []models.HostUnraidDisk{
+		{Device: "sda", Serial: "UNRAID-SERIAL-A"},
+		{Device: "sdb", Serial: "UNRAID-SERIAL-B"},
+		{Device: "sdc", Serial: "UNRAID-SERIAL-C"},
+		{Device: "sdd"},
+		{Device: "sde", Serial: "UNRAID-SERIAL-E"},
+		{Device: "sdf", Serial: "UNRAID-SERIAL-F1"},
+		{Device: "sdf", Serial: "UNRAID-SERIAL-F2"},
+	}}
+	for _, tc := range []struct {
+		device string
+		want   string
+	}{
+		{"sda", "UNRAID-SERIAL-A"},
+		{"sdb", "UNRAID-SERIAL-B"},
+		{"sdc", "UNRAID-SERIAL-C"},
+		{"sdd", "myhost:sdd"},
+		{"sde", ""},
+		{"sdf", "myhost:sdf"},
+		{"sdg", ""},
+		{"sdh", "LEGACY-LABEL-SERIAL"},
+		{"nvme0n1", "NVME-SERIAL-123"},
+	} {
+		if got := hostDiskIOMetricResourceID(host, models.DiskIO{Device: tc.device}, proxmoxDisks); got != tc.want {
+			t.Fatalf("device %s: expected %q, got %q", tc.device, tc.want, got)
+		}
+	}
 }
 
 func TestApplyHostReportSkipsMetricsAndSMARTWritesInMockMode(t *testing.T) {

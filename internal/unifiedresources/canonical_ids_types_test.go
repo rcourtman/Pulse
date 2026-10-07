@@ -565,6 +565,121 @@ func TestHostSMARTDiskSourceIDScopesHardwareIdentityToItsHost(t *testing.T) {
 	}
 }
 
+// A SMART row without a serial takes the one the host's Unraid inventory
+// reports for the disk, and its metrics key follows, because the disk resource
+// carries that serial and its metrics target reads it. The source ID stays the
+// row's own. A row's own serial, even a placeholder, is kept, as the adapter
+// keeps it, and the Unraid row then stays a disk of its own. So does a row on a
+// device path several rows share: controller members behind one block device
+// keep their own identity. A disk with no SMART row is keyed by its Unraid
+// serial alone, unless several Unraid rows name its device.
+func TestHostSMARTDiskMetricIDTakesTheSerialItsUnraidRowReports(t *testing.T) {
+	host := models.Host{ID: "host-tower", Hostname: "tower", MachineID: "machine-tower", Status: "online", LastSeen: time.Now().UTC()}
+	host.Unraid = &models.HostUnraidStorage{ArrayStarted: true, Disks: []models.HostUnraidDisk{
+		{Name: "disk1", Device: "sdb", Role: "data", Serial: "UNRAID-B"},
+		{Name: "disk2", Device: "sdc", Role: "data", Serial: "UNRAID-C"},
+		{Name: "disk3", Device: "sdd", Role: "data", Serial: "UNRAID-D"},
+		{Name: "disk4", Device: "sde", Role: "data", Serial: "UNRAID-E"},
+		{Name: "disk5", Device: "sdf", Role: "data", Serial: "UNRAID-F"},
+		{Name: "disk6", Device: "sdg", Role: "data"},
+		{Name: "disk7", Device: "sdh", Role: "data", Serial: "UNRAID-H"},
+		{Name: "disk8", Device: "sdi", Role: "data", Serial: "UNRAID-I1"},
+		{Name: "disk9", Device: "sdi", Role: "data", Serial: "UNRAID-I2"},
+	}}
+	tests := []struct {
+		name       string
+		disk       models.HostDiskSMART
+		wantSource string
+		wantMetric string
+	}{
+		{
+			name:       "no hardware identity",
+			disk:       models.HostDiskSMART{Device: "/dev/sdb"},
+			wantSource: "host-tower:sdb",
+			wantMetric: "UNRAID-B",
+		},
+		{
+			name:       "standby row",
+			disk:       models.HostDiskSMART{Device: "sdc", Standby: true},
+			wantSource: "host-tower:sdc",
+			wantMetric: "UNRAID-C",
+		},
+		{
+			name:       "wwn only",
+			disk:       models.HostDiskSMART{Device: "sdd", WWN: "5000c500a1b2c3d4"},
+			wantSource: "host-tower/physical-disk:5000c500a1b2c3d4",
+			wantMetric: "UNRAID-D",
+		},
+		{
+			name:       "own serial",
+			disk:       models.HostDiskSMART{Device: "sde", Serial: "SMART-E"},
+			wantSource: "host-tower/physical-disk:SMART-E",
+			wantMetric: "SMART-E",
+		},
+		{
+			name:       "own placeholder serial",
+			disk:       models.HostDiskSMART{Device: "sdf", Serial: "0000000000"},
+			wantSource: "host-tower:sdf",
+			wantMetric: "host-tower:sdf",
+		},
+		{
+			name:       "unraid row without serial",
+			disk:       models.HostDiskSMART{Device: "sdg"},
+			wantSource: "host-tower:sdg",
+			wantMetric: "host-tower:sdg",
+		},
+		{
+			name:       "controller member sharing a path",
+			disk:       models.HostDiskSMART{Device: "sdh", WWN: "5000c500a1b2c3e0", Controller: "ctrl0", Target: "megaraid,0"},
+			wantSource: "host-tower/physical-disk:5000c500a1b2c3e0",
+			wantMetric: "5000c500a1b2c3e0",
+		},
+		{
+			name:       "second controller member on that path",
+			disk:       models.HostDiskSMART{Device: "/dev/sdh", WWN: "5000c500a1b2c3e1", Controller: "ctrl0", Target: "megaraid,1"},
+			wantSource: "host-tower/physical-disk:5000c500a1b2c3e1",
+			wantMetric: "5000c500a1b2c3e1",
+		},
+	}
+	host.Sensors.SMART = make([]models.HostDiskSMART, 0, len(tests))
+	for _, tt := range tests {
+		host.Sensors.SMART = append(host.Sensors.SMART, tt.disk)
+	}
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{Hosts: []models.Host{host}})
+	targetBySourceID := make(map[string]string)
+	for _, disk := range rr.ListByType(ResourceTypePhysicalDisk) {
+		target := rr.MetricsTarget(disk.ID)
+		if target == nil {
+			continue
+		}
+		for _, sourceTarget := range rr.SourceTargets(disk.ID) {
+			if sourceTarget.Source == SourceAgent {
+				targetBySourceID[sourceTarget.SourceID] = target.ResourceID
+			}
+		}
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HostSMARTDiskSourceID(host, tt.disk); got != tt.wantSource {
+				t.Fatalf("HostSMARTDiskSourceID = %q, want %q", got, tt.wantSource)
+			}
+			if got := HostSMARTDiskMetricID(host, tt.disk); got != tt.wantMetric {
+				t.Fatalf("HostSMARTDiskMetricID = %q, want %q", got, tt.wantMetric)
+			}
+			if got := targetBySourceID[tt.wantSource]; got != tt.wantMetric {
+				t.Fatalf("disk metrics target = %q, want the writer's %q", got, tt.wantMetric)
+			}
+		})
+	}
+
+	for device, want := range map[string]string{"/dev/sde": "UNRAID-E", "sdg": "", "sdi": "", "sdz": ""} {
+		if got := HostUnraidDeviceMetricID(host, device); got != want {
+			t.Fatalf("HostUnraidDeviceMetricID(%q) = %q, want %q", device, got, want)
+		}
+	}
+}
+
 // A registry seeded from unified resources rebuilds each agent disk's source
 // mapping from the resource alone, after a JSON round trip drops per-source
 // parents. It must reproduce the key the agent's observation ingests under,

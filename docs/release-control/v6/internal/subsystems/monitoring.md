@@ -4790,6 +4790,20 @@ disk history model, and mock seeding plus live mock ticks in
 `internal/monitoring/mock_metrics_history.go` must append to that same disk
 timeline instead of creating a second drawer-only or mock-only disk history
 path.
+The SMART-resolved id is the serial the disk resource carries: when a SMART row
+reports none, `HostSMARTDiskMetricID` takes the one the host's Unraid inventory
+reports for that disk, as the unified-resources adapter does, unless several
+SMART rows share the disk's device path, and `hostDiskIOMetricResourceID` keys
+a device with no non-standby SMART row by its Unraid serial
+(`HostUnraidDeviceMetricID`, which refuses a device several Unraid rows name)
+before the linked Proxmox node's disks and the `<host>:<device>` fallback.
+Controller members sharing a device path keep distinct keys, so the I/O
+writer's aggregate-device guard, which compares every row on the path by its
+own identity (standby rows and legacy `sdc [sat]` labels included), files
+their counter under no member.
+Proof:
+`TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports` and
+`TestHostDiskIOMetricResourceIDFallbacks`.
 That same monitoring-owned disk-health boundary also includes shared storage
 risk assessment in `internal/storagehealth/`. When providers or host agents
 emit structured storage topology such as Unraid per-disk state, the shared

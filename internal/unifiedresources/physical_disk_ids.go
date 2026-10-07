@@ -26,29 +26,91 @@ func PreferredPhysicalDiskMetricID(serial, wwn, fallback string) string {
 // machine: a dual-ported SAS shelf, cloned VMs with an explicit serial and
 // fixed-serial USB bridges report one identifier on several hosts, and the
 // registry keeps one resource per source ID. The key therefore carries the
-// reporting host. A disk without hardware identity keeps its historical
-// host/device/topology key, which is also its metrics key.
+// reporting host. A row without hardware identity keeps its historical
+// host/device/topology key, which is also its metrics key unless the host's
+// Unraid inventory reports a serial for the disk.
 func HostSMARTDiskSourceID(host models.Host, disk models.HostDiskSMART) string {
 	if hardwareID := PreferredPhysicalDiskMetricID(disk.Serial, disk.WWN, ""); hardwareID != "" {
 		return hostPhysicalDiskSourceID(host.ID, hardwareID)
 	}
-	return HostSMARTDiskMetricID(host, disk)
+	return hostSMARTDiskKey(host, disk, "", "")
 }
 
 // HostSMARTDiskMetricID returns the history key a host agent's SMART and disk
 // I/O metrics are written under. Like every physical-disk source, it prefers
 // the drive's serial or WWN, so a disk keeps one history across sources and
-// hosts; see PreferredPhysicalDiskMetricID.
+// hosts; see PreferredPhysicalDiskMetricID. The serial is the one the disk
+// resource carries (hostSMARTDiskSerial), which its metrics target reads.
 func HostSMARTDiskMetricID(host models.Host, disk models.HostDiskSMART) string {
-	device := normalizePhysicalDiskDeviceToken(disk.Device)
+	serial := hostSMARTDiskSerial(host, disk, matchUnraidDisk(host.Unraid, disk))
+	return hostSMARTDiskKey(host, disk, serial, disk.WWN)
+}
+
+func hostSMARTDiskKey(host models.Host, disk models.HostDiskSMART, serial, wwn string) string {
 	return diskinventory.PreferredID(
-		disk.Serial,
-		disk.WWN,
+		serial,
+		wwn,
 		strings.TrimSpace(host.ID),
-		device,
+		normalizePhysicalDiskDeviceToken(disk.Device),
 		disk.Controller,
 		disk.Target,
 	)
+}
+
+// hostSMARTDiskSerial returns the serial of the disk a SMART row describes: the
+// row's own, or, when the row reports none, the one the host's Unraid
+// inventory reports for the disk. smartctl reports no serial for a disk in
+// standby, and the Unraid row still names it. A row without a serial matches
+// its Unraid row by device path alone, so it takes no serial from a path
+// several of the host's rows share: controller members behind one kernel block
+// device, which the Unraid row describes as a whole.
+func hostSMARTDiskSerial(host models.Host, disk models.HostDiskSMART, unraidDisk *models.HostUnraidDisk) string {
+	serial := strings.TrimSpace(disk.Serial)
+	if serial != "" || unraidDisk == nil || hostSMARTDevicePathShared(host, disk) {
+		return serial
+	}
+	return strings.TrimSpace(unraidDisk.Serial)
+}
+
+// hostSMARTDevicePathShared reports whether more than one of the host's SMART
+// rows, the row itself among them, names the row's device path.
+func hostSMARTDevicePathShared(host models.Host, disk models.HostDiskSMART) bool {
+	device := strings.ToLower(normalizePhysicalDiskDeviceToken(disk.Device))
+	if device == "" {
+		return false
+	}
+	rows := 0
+	for _, other := range host.Sensors.SMART {
+		if strings.ToLower(normalizePhysicalDiskDeviceToken(other.Device)) == device {
+			rows++
+		}
+	}
+	return rows > 1
+}
+
+// HostUnraidDeviceMetricID returns the history key of the disk a host's Unraid
+// inventory reports at device: its usable serial, which the disk resource
+// carries and its metrics target reads. It returns "" when the inventory has
+// no row for the device, more than one, or a row without a usable serial.
+func HostUnraidDeviceMetricID(host models.Host, device string) string {
+	device = strings.ToLower(normalizePhysicalDiskDeviceToken(device))
+	if host.Unraid == nil || device == "" {
+		return ""
+	}
+	var matched *models.HostUnraidDisk
+	for i := range host.Unraid.Disks {
+		if strings.ToLower(normalizePhysicalDiskDeviceToken(host.Unraid.Disks[i].Device)) != device {
+			continue
+		}
+		if matched != nil {
+			return ""
+		}
+		matched = &host.Unraid.Disks[i]
+	}
+	if matched == nil {
+		return ""
+	}
+	return PreferredPhysicalDiskMetricID(matched.Serial, "", "")
 }
 
 // HostUnraidDiskSourceID returns the registry source ID of a disk in a host's

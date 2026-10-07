@@ -8791,6 +8791,21 @@ Focused proof lives in `internal/monitoring/physical_disk_roundtrip_test.go`
 (`TestNestedProxmoxDefaultQEMUSerialsStayPerNode` and
 `TestTrueNASPlaceholderDiskSerialsStayPerApplianceAndShareOneHistoryKey`).
 
+### Unraid serials key agent disk history
+
+`internal/monitoring/monitor_agents.go` changed only so the SMART and disk I/O
+history writers key a host agent's disk by the serial its resource carries: the
+SMART row's own, else the one the host's Unraid inventory reports for that disk
+(`HostSMARTDiskMetricID`, `HostUnraidDeviceMetricID`). While the Unraid row
+names such a disk, its SMART and I/O history is written under that serial, which
+its chart already reads, instead of its WWN or host/device key. Agent
+registration, enrolment, install, update, removal, report identity and disk
+source IDs are unchanged. Focused proof lives
+in `internal/monitoring/monitor_host_agents_test.go`
+(`TestHostDiskIOMetricResourceIDFallbacks`) and
+`internal/monitoring/issue1595_collection_trust_test.go`
+(`TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports`).
+
 ### Windows braced MachineGuid does not abort agent startup
 
 The Windows unified agent resolves host information through gopsutil's combined

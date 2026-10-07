@@ -5389,6 +5389,31 @@ disk on a single host. Proof:
 `TestHostSMARTDiskSourceIDScopesHardwareIdentityToItsHost`,
 `TestRehydratedAgentDisksKeepTheirLiveSourceIDs`,
 `TestSplitAgentDisksOnTwoMachinesNeverOverwriteEachOther`.
+A SMART row that reports no serial, smartctl's standby row among them, takes
+the serial the host's Unraid inventory reports for the same disk
+(`hostSMARTDiskSerial` over `matchUnraidDisk`). The adapter shows that serial
+and the disk's metrics target reads it, so `HostSMARTDiskMetricID` resolves the
+same serial, and the disk I/O writer keys a device with no SMART reading by its
+Unraid serial (`HostUnraidDeviceMetricID`) before its Proxmox and host/device
+fallbacks. The writers used to key such a row on its WWN or host/device key,
+which the chart did not read, so the disk's SMART temperature and I/O history
+never appeared. The row's source ID stays its own (`HostSMARTDiskSourceID`
+reads only the row), so its SMART and Unraid observations still ingest under
+two keys onto one disk. Samples already written under the old key stay there:
+the chart did not read that key while the Unraid row named the disk (only
+Unraid OS reports an Unraid inventory, and it is never a Proxmox node whose
+disk row could replace the serial), and a device-keyed series can hold another
+disk's samples once device letters move. The key follows the inventory: while the host
+reports no Unraid row for the disk, the row's own key is both written and read.
+A row matches its Unraid row by device path alone, so a row on a path several
+of the host's SMART rows share, controller members behind one block device,
+takes no serial from it, and the I/O writer still files that device's counter
+under no member. The I/O writer's inventory fallback also skips a device
+several Unraid rows name, while a SMART row keeps the adapter's first match.
+A row's own serial is kept even when it is a placeholder, as the
+adapter keeps it, and the Unraid row then stays a disk of its own. Proof:
+`TestHostSMARTDiskMetricIDTakesTheSerialItsUnraidRowReports`,
+`TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports`.
 That same canonical physical-disk view must also expose source-independent host
 context. When a disk is API-backed rather than node-backed, typed views should
 fall back to canonical host identity such as `identity.hostnames` instead of

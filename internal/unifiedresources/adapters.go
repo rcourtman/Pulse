@@ -905,7 +905,7 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 	}
 	unraidDisk := matchUnraidDisk(host.Unraid, disk)
 	model := strings.TrimSpace(disk.Model)
-	serial := strings.TrimSpace(disk.Serial)
+	serial := hostSMARTDiskSerial(host, disk, unraidDisk)
 	diskType := strings.TrimSpace(disk.Type)
 	temperature := disk.Temperature
 	collection := diskinventory.CloneStatus(disk.Collection)
@@ -913,9 +913,6 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 	if unraidDisk != nil {
 		if model == "" {
 			model = strings.TrimSpace(unraidDisk.Model)
-		}
-		if serial == "" {
-			serial = strings.TrimSpace(unraidDisk.Serial)
 		}
 		if diskType == "" {
 			diskType = unraidDiskDiskType(*unraidDisk)
