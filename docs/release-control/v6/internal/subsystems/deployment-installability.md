@@ -214,6 +214,19 @@ which prints only package lines and the output of failing or unfinished tests
 (as plain `go test` does), exits non-zero on any failure behind `pipefail`,
 and writes each top-level test's seconds to an `internal-api-test-seconds-N`
 artifact that is uploaded even when the shard fails.
+The same existing artifact includes a `<seconds-file>.failures.json` observation
+index, available when its shard ends rather than when every workflow job ends.
+It records failed and unfinished top-level source-test identities separately,
+known package terminal actions and non-JSON line counts. It exports no assertion
+text, package output or parameterised subtest names. Each identity list is capped
+at 256 ASCII source names of at most 256 characters, with observed/omitted counts;
+missing package completion remains explicit. The artifact's run/source binding
+must be reconciled before using the index. Empty lists alone are not a pass,
+and this does not replace terminal logs, diagnose failures, grant a retry or
+change test selection, exit status, race/vet coverage or required check names.
+`test_api_failure_index.py` exercises failure/unfinished/package-only/unknown,
+privacy and bounds controls; the existing Go shard contract verifies the index
+beside unchanged timing output.
 `.github/scripts/refresh-internal-api-test-seconds.py --run <id>` downloads
 those artifacts with `gh run download`, takes each test's median across the
 given runs, and rewrites the weights file with `DEFAULT_WEIGHT` set to the mean

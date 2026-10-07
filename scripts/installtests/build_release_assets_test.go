@@ -4050,7 +4050,7 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 		}
 	}
 	for _, required := range []string{
-		"needs: changes",
+		"needs: [changes, test-compile]",
 		"fail-fast: false",
 		// The list comes from the commit under test, so a new test cannot be
 		// missed, and contiguous slices of go test's own order put it in
@@ -4088,8 +4088,9 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 	if strings.Contains(shards, "sort") {
 		t.Fatal("internal/api shards must keep go test's run order; sorting splits order-coupled tests")
 	}
-	if strings.Contains(shards, "\n    if:") {
-		t.Fatal("internal/api shards must expand for every change so the verdict never sees skipped shards")
+	if !strings.Contains(shards, "if: ${{ !cancelled() && needs.changes.result == 'success' }}") ||
+		strings.Contains(shards, "\n    if: needs.changes.outputs.code") {
+		t.Fatal("internal/api shards must expand for documentation-only changes and compilation failures")
 	}
 
 	verdict := workflowJobBlock(t, workflow, "backend-api-verdict")
@@ -4120,7 +4121,7 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 	t.Helper()
 	recorder := repoFile(".github", "scripts", "record-internal-api-test-seconds.py")
-	record := func(events string) (string, string, error) {
+	record := func(events string) (string, string, map[string]any, error) {
 		out := filepath.Join(t.TempDir(), "seconds.txt")
 		cmd := exec.Command("python3", recorder, out)
 		cmd.Stdin = strings.NewReader(events)
@@ -4129,7 +4130,15 @@ func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 		if readErr != nil {
 			t.Fatalf("recorder wrote no seconds file: %v", readErr)
 		}
-		return string(printed), string(written), err
+		indexBytes, readErr := os.ReadFile(out + ".failures.json")
+		if readErr != nil {
+			t.Fatalf("recorder wrote no failure identity index: %v", readErr)
+		}
+		var index map[string]any
+		if err := json.Unmarshal(indexBytes, &index); err != nil {
+			t.Fatalf("failure index is not JSON: %v", err)
+		}
+		return string(printed), string(written), index, err
 	}
 	const pkg = `"Package":"example/internal/api"`
 	passing := strings.Join([]string{
@@ -4139,7 +4148,7 @@ func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 		`{"Action":"output",` + pkg + `,"Output":"ok  \texample/internal/api\t2.000s\n"}`,
 		`{"Action":"pass",` + pkg + `,"Elapsed":2}`,
 	}, "\n") + "\n"
-	printed, written, err := record(passing)
+	printed, written, index, err := record(passing)
 	if err != nil {
 		t.Fatalf("recorder must pass a passing run: %v", err)
 	}
@@ -4150,6 +4159,11 @@ func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 		t.Fatalf("recorder seconds file = %q", written)
 	}
 
+	if index["package_terminal_action"] != "pass" ||
+		index["failed_top_level_tests"].(map[string]any)["observed_count"] != float64(0) {
+		t.Fatalf("passing failure identity index = %v", index)
+	}
+
 	failing := strings.Join([]string{
 		`{"Action":"run",` + pkg + `,"Test":"TestBroken"}`,
 		`{"Action":"output",` + pkg + `,"Test":"TestBroken/case","Output":"broken detail\n"}`,
@@ -4158,7 +4172,7 @@ func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 		`{"Action":"run",` + pkg + `,"Test":"TestHung"}`,
 		`{"Action":"output",` + pkg + `,"Test":"TestHung","Output":"panic: test timed out\n"}`,
 	}, "\n") + "\n"
-	printed, written, err = record(failing)
+	printed, written, index, err = record(failing)
 	if err == nil {
 		t.Fatal("recorder must exit non-zero when a test fails or never finishes")
 	}
@@ -4169,6 +4183,19 @@ func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
 	}
 	if written != "TestBroken 0.75\n" {
 		t.Fatalf("recorder must record only finished top-level tests, wrote %q", written)
+	}
+	for field, name := range map[string]string{
+		"failed_top_level_tests":     "TestBroken",
+		"unfinished_top_level_tests": "TestHung",
+	} {
+		observation := index[field].(map[string]any)
+		names := observation["names"].([]any)
+		if len(names) != 1 || names[0] != name || observation["omitted_count"] != float64(0) {
+			t.Fatalf("failure index %s = %v", field, observation)
+		}
+	}
+	if index["package_terminal_action"] != nil {
+		t.Fatalf("unfinished stream must not manufacture package completion: %v", index)
 	}
 }
 
