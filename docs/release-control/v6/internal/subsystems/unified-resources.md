@@ -1310,6 +1310,11 @@ may have moved since.
 `sortStandaloneResourcesByAttention` re-sorts on every clock tick, so it
 classifies each resource once per sort rather than twice per comparison, and
 the Settings availability page classifies loaded checks on the same clock.
+The Proxmox nodes table's temperature hover and the Mail Gateway drawer's Needs
+attention list read it when they describe a threshold alert's live reading, so
+a node or gateway host that stops reporting turns "now, back under the alert
+level" into the last reading's age while the row or drawer stays open. Rows
+without a temperature alert never read the clock.
 Kubernetes name columns hold the chevron, status dot and name inside one
 track, so their md widths leave the name room for a typical node or service
 name at a 768px viewport: Nodes 20 percent (with Capacity at 16 so its

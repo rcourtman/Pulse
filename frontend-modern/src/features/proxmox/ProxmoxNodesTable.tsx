@@ -59,6 +59,7 @@ import type { Disk, Node as LegacyNode } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { hasCurrentProxmoxUpdateEvidence } from '@/utils/proxmoxUpdateEvidence';
 import { nodeFromResource } from '@/utils/resourceStateAdapters';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   getResourceClusterLabel,
   filterProxmoxNodes,
@@ -217,6 +218,7 @@ export const ProxmoxNodesTable: Component<{
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = alertsActivation.detectionEnabled;
+  const now = useRelativeTimeNow();
   const [selectedNodeId, setSelectedNodeId] = createSignal<string | null>(null);
   const layoutMode = createMemo(() => {
     const measuredWidth = props.layoutWidth?.();
@@ -466,9 +468,12 @@ export const ProxmoxNodesTable: Component<{
                   if (!alert || alert.acknowledged) return null;
                   return alert.level === 'critical' ? 'critical' : 'warning';
                 };
+                // Rows stay mounted while a node's data is unchanged, so the
+                // hover reads the shared clock to turn stale when the node
+                // stops reporting; rows without the alert never read it.
                 const temperatureAlertTitle = () => {
                   const alert = temperatureAlert();
-                  const presentation = alert ? getMetricAlertPresentation(alert) : null;
+                  const presentation = alert ? getMetricAlertPresentation(alert, now()) : null;
                   return presentation
                     ? `${presentation.summary}. ${presentation.detail}`
                     : alert?.message;

@@ -5327,6 +5327,16 @@ class and title helpers, `getAvailabilityTargetsSummary`) take the settings
 panel's clock as `nowMs` the same way, and a creation time in a settings list
 or dialog (API token Created, an earlier profile-suggestion draft) is a fixed
 event, so its age reads the clock.
+`getMetricAlertPresentation(alert, now)` takes `now` as a required argument:
+the stale cut-off and the last-reading and last-breach ages all measure from
+it. The node, guest and Mail Gateway drawers hand their `useRelativeTimeNow`
+accessor to `getAlertAttentionCopy(alert, now)`, which reads it only for an
+alert with a live status, so a Needs attention list of status-less alerts
+does not re-render on each tick; the Proxmox nodes table reads the clock in
+the temperature hover only for a row that has a temperature alert. An alert whose resource stopped reporting
+keeps an unchanged live status, so without the clock an open drawer kept
+saying "76°C now, back under the 80°C alert level" for a reading that had
+stopped arriving.
 Read-only metadata badges follow the same primitive-owned shell rule.
 `frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
 outlined appearances, compact sizing, shape, typed tone vocabulary, fit

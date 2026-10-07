@@ -89,8 +89,9 @@ export const isGuestDrawerVM = (guest: Guest): guest is VM => resolveWorkloadTyp
 export const getGuestDrawerAlertAttention = (
   alert: Alert,
   context: Pick<GuestDrawerProps, 'guest' | 'memoryDisplayBasis' | 'parentMemoryTotal'>,
+  now: () => number,
 ): AlertAttentionCopy => {
-  const copy = getAlertAttentionCopy(alert);
+  const copy = getAlertAttentionCopy(alert, now);
   if (context.memoryDisplayBasis !== 'host' || alert.type.trim().toLowerCase() !== 'memory') {
     return copy;
   }

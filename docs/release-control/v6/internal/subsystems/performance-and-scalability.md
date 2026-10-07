@@ -2693,6 +2693,12 @@ backup from seconds ago as fresh rather than as a future time. On each
 its badge (one shared timer, no per-row interval); guests without a probe skip
 the probe presentation, and a guest's backup cell does not depend on the
 clock's ticks while it has no recorded backup time.
+The open guest drawer's Needs attention list reads the same clock:
+`getGuestDrawerAlertAttention(alert, context, now)` passes the accessor to the
+alerts presentation, so a held threshold reading turns stale when the guest
+stops reporting. The list reads the clock only for an alert with a live
+status; while it shows one, the list's items recompute and its rows re-render
+on the shared tick, and a list with none never depends on the tick.
 That per-row link state now also consumes the shared
 `frontend-modern/src/routing/resourceLinks.ts` workload-to-infrastructure
 helper instead of a workload-local routing shim. Future infrastructure-link

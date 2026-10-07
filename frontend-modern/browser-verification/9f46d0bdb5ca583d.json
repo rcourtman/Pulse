@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "base_sha": "9492f6bbb14b7f3436dc5273e873aa6dced13069",
+  "verified_at": "2026-10-07T15:12:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/features/alerts/metricAlertPresentation.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "d9438bf4b1a2caccaabd1c54b2536623b3cfae957b112eee6ca111de1608d8cd",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "cef67dda2e23e8291ff9b86435c81b45dccbdc319b6ddb3df1192de85414a0cf",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "df35a8c6b25d31dbf69a68a68f4756e9a3f9a9ffba3a6309273ca771f9744476",
+    "frontend-modern/src/features/alerts/metricAlertPresentation.ts": "9837f901b58a9ed913594a1846c3f235e984ec178a362980f604af49074048a0",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx": "5da51114483fafdea8b12e1f6b9a7246ea46b02ef0136ad6d32bdd8795a120b4",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "6f93cdb34e59fbb45880b76eb28001b8323b018f10044d50149fe58afd530506"
+  },
+  "routes": [
+    "/proxmox",
+    "/proxmox/mail"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack built from this branch (stacked on PR 2600 head 9492f6bbb1). Injected producer-shaped held threshold alerts through the /ws activeAlerts frames and /api/alerts/active: a node temperature alert on West Production B (pve2, latched 76\u00b0C under an 80\u00b0C trigger) and a guest memory alert on checkout-web-01 (latched 86% under 90%), both last observed two minutes before load. The Mail Gateway alert is synthetic (a host CPU threshold alert on mail-gateway-eu's canonical id agent:pmg-main), because no mock producer raises a threshold alert the gateway row matches",
+    "Proxmox node drawer, guest drawer and the nodes table temperature hover at load: 'Temperature 76\u00b0C now, back under the 80\u00b0C alert level' and 'Memory 86% now, back under the 90% alert level'; the Mail Gateway drawer: 'CPU 72% now, back under the 90% alert level' beside the real message-age alert, which is unchanged",
+    "Websocket held and every API read left pending (no data change, one websocket connection, a data-free pong before each step), page clock stepped a minute at a time: at +7 minutes still 'now'; at +9 minutes every surface reads 'Last reading: Temperature 76\u00b0C, 11 mins ago' / 'Last reading: Memory 86%, 11 mins ago' / 'Last reading: CPU 72%, 11 mins ago' and the hover reads 'Last reading: Temperature 76\u00b0C, 11 mins ago. Stays open until ...'; at +12 minutes all read '14 mins ago'",
+    "Same-session control with the six runtime files swapped to the PR 2600 head versions under the same Vite: every surface still said '76\u00b0C now, back under the 80\u00b0C alert level' (and '86% now', '72% now') fourteen minutes after the last reading",
+    "390px phone: both drawers show the same flip and ages (the temperature column is hidden at that width); attention rows wrap without clipping",
+    "Last breach line ('Last reading at or above 80\u00b0C: 82\u00b0C') shows no age in the UI because websocket alert frames carry no lastSeen; unchanged by this change",
+    "Attention-copy clock read limited to alerts with a live status: on /proxmox/mail with only the gateway's own message-age alert, the drawer row kept the same DOM node (tagged before the hold) through twelve minutes of clock ticks; with the clock read made unconditional (same session, same Vite) the row was replaced at every recorded step. In a mixed list (message-age plus a threshold alert) every row re-renders on the tick, as each already does on every poll while a resource reports",
+    "Re-ran the node drawer, guest drawer, nodes table hover and Mail Gateway drawer flips on the final files at 1440 and 390 wide: 'now' at +7 minutes, 'Last reading: ..., 11 mins ago' at +9, '14 mins ago' at +12, one websocket connection each"
+  ],
+  "interactions": [
+    "Expanded West Production B on /proxmox and clicked checkout-web-01's guest row, keeping both drawers open across the hold",
+    "Expanded mail-gateway-eu on /proxmox/mail",
+    "Held /ws and API reads, then stepped page.clock.runFor one minute at a time for twelve minutes, reading drawer rows and the temperature gauge title at +7, +9 and +12 minutes",
+    "Repeated the Proxmox scenario at 390x844 and with the pre-fix runtime files as a control",
+    "Tagged each Needs attention row before the hold and compared tags at +7, +9 and +12 minutes, with and without the conditional clock read"
+  ]
+}

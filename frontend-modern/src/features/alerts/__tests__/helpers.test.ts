@@ -396,17 +396,69 @@ describe('getMetricAlertPresentation', () => {
 
   it('returns null without a live status so callers keep the alert message', () => {
     expect(getMetricAlertPresentation(minipcAlert(), NOW)).toBeNull();
-    expect(getAlertAttentionCopy(minipcAlert(), NOW)).toEqual({
+    expect(getAlertAttentionCopy(minipcAlert(), () => NOW)).toEqual({
       message: 'Node temperature at 80.0°C',
     });
   });
 });
 
+describe('getMetricAlertPresentation clock', () => {
+  // No fake system time: NOW is a day before the wall clock, so an age read
+  // from Date.now() instead of the caller's clock would read "1 day ago".
+  it('measures the stale cut-off and both ages from the clock its caller passes', () => {
+    const alert = minipcAlert({
+      phase: 'latched',
+      value: 76,
+      observedAt: new Date(NOW - 12 * 60_000).toISOString(),
+    });
+    expect(getMetricAlertPresentation(alert, NOW)).toMatchObject({
+      stale: true,
+      summary: 'Last reading: Temperature 76°C, 12 mins ago',
+      lastBreach: 'Last reading at or above 80°C: 80°C, 3 mins ago',
+    });
+    // The same alert, an hour later on the caller's clock, with no new data.
+    expect(getMetricAlertPresentation(alert, NOW + 60 * 60_000)).toMatchObject({
+      summary: 'Last reading: Temperature 76°C, 1 hour ago',
+      lastBreach: 'Last reading at or above 80°C: 80°C, 1 hour ago',
+    });
+    expect(getAlertAttentionCopy(alert, () => NOW + 60 * 60_000).title).toBe(
+      [
+        'Last reading: Temperature 76°C, 1 hour ago',
+        'Stays open until it reaches 75°C or lower and stays there for 5 minutes.',
+        'Last reading at or above 80°C: 80°C, 1 hour ago',
+      ].join('\n'),
+    );
+  });
+
+  it('keeps a fresh reading "now" by the caller\'s clock, whatever the wall clock says', () => {
+    const presentation = getMetricAlertPresentation(
+      minipcAlert({ phase: 'latched', value: 76 }),
+      NOW,
+    );
+    expect(presentation?.stale).toBe(false);
+    expect(presentation?.summary).toBe('Temperature 76°C now, back under the 80°C alert level');
+    expect(presentation?.lastBreach).toBe('Last reading at or above 80°C: 80°C, 3 mins ago');
+  });
+});
+
 describe('getAlertAttentionCopy', () => {
+  it('reads the clock only for an alert that carries a live status', () => {
+    // A drawer list re-renders whenever a value it read changes, so reading
+    // the shared clock for a status-less alert would re-render it every tick.
+    const clock = vi.fn(() => NOW);
+    expect(getAlertAttentionCopy(minipcAlert(), clock)).toEqual({
+      message: 'Node temperature at 80.0°C',
+    });
+    expect(clock).not.toHaveBeenCalled();
+
+    getAlertAttentionCopy(minipcAlert({ phase: 'latched', value: 76 }), clock);
+    expect(clock).toHaveBeenCalledTimes(1);
+  });
+
   it('replaces the stale breach message and keeps the breach in the hover text', () => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
-    const copy = getAlertAttentionCopy(minipcAlert({ phase: 'recovering', value: 72 }), NOW);
+    const copy = getAlertAttentionCopy(minipcAlert({ phase: 'recovering', value: 72 }), () => NOW);
     vi.useRealTimers();
     expect(copy.message).toBe('Temperature 72°C now, recovering');
     expect(copy.detail).toBe('Clears after 5 minutes at 75°C or lower.');

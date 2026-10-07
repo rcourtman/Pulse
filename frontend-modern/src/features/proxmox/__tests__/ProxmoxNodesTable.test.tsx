@@ -60,7 +60,7 @@ vi.mock('@/components/shared/TemperatureGauge', () => ({
       alertSeverity: props.alertSeverity,
       title: props.title,
     });
-    return <div data-testid="temperature-gauge" />;
+    return <div data-testid="temperature-gauge" title={props.title} />;
   },
 }));
 
@@ -125,6 +125,7 @@ afterEach(() => {
   // test's sort choice cannot leak into the next render.
   window.localStorage.clear();
   cleanup();
+  vi.useRealTimers();
 });
 
 describe('ProxmoxNodesTable', () => {
@@ -422,6 +423,61 @@ describe('ProxmoxNodesTable', () => {
         alertSeverity: 'warning',
         title: 'Temperature 72°C now, recovering. Clears after 5 minutes at 75°C or lower.',
       }),
+    );
+  });
+
+  it('turns the held temperature reading stale on the shared clock while the row stays mounted', () => {
+    const openedAt = Date.parse('2026-10-07T10:00:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: openedAt });
+    // The node stops reporting a minute before the page is read: its alert's
+    // live status, and the row's data, never change again.
+    activeAlertsMock.value = {
+      'temperature-alert': {
+        id: 'temperature-alert',
+        resourceId: 'agent:pve-node-1',
+        type: 'temperature',
+        level: 'warning',
+        message: 'Node temperature at 80.0°C',
+        value: 80,
+        lastSeen: new Date(openedAt - 5 * 60_000).toISOString(),
+        acknowledged: false,
+        metricStatus: {
+          phase: 'latched',
+          value: 76,
+          unit: '°C',
+          observedAt: new Date(openedAt - 60_000).toISOString(),
+          trigger: 80,
+          recovery: 75,
+        },
+      },
+    };
+
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[makeNodeResource({ temperature: 76 })]}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    const gauge = screen.getByTestId('temperature-gauge');
+    expect(gauge).toHaveAttribute(
+      'title',
+      'Temperature 76°C now, back under the 80°C alert level. Stays open until it reaches 75°C or lower.',
+    );
+
+    vi.advanceTimersByTime(10 * 60_000);
+    expect(gauge).toHaveAttribute(
+      'title',
+      'Last reading: Temperature 76°C, 11 mins ago. Stays open until it reaches 75°C or lower.',
+    );
+
+    vi.advanceTimersByTime(5 * 60_000);
+    expect(gauge).toHaveAttribute(
+      'title',
+      'Last reading: Temperature 76°C, 16 mins ago. Stays open until it reaches 75°C or lower.',
     );
   });
 

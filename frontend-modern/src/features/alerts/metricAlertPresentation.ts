@@ -94,10 +94,16 @@ const isUsableStatus = (status: MetricAlertStatus | undefined): status is Metric
  * every surface says what the reading is now and why the alert is still open
  * instead of repeating the last breach. Returns null when the alert carries
  * no live status (non-threshold alerts, or the moments after a restart).
+ *
+ * `now` is the caller's clock, normally the `useRelativeTimeNow` reading, and
+ * every time-derived part (the stale cut-off and both ages) measures from it.
+ * The status stops changing when the resource stops reporting, so a mounted
+ * surface that measured from its render time would keep calling an old
+ * reading "now".
  */
 export function getMetricAlertPresentation(
   alert: Pick<Alert, 'type' | 'value' | 'lastSeen' | 'metricStatus' | 'metadata'>,
-  now: number = Date.now(),
+  now: number,
 ): MetricAlertPresentation | null {
   const status = alert.metricStatus;
   if (!isUsableStatus(status)) return null;
@@ -139,14 +145,14 @@ export function getMetricAlertPresentation(
 
   if (stale) {
     summary = `Last reading: ${reading}${
-      Number.isFinite(observedAt) ? `, ${formatRelativeTime(observedAt)}` : ''
+      Number.isFinite(observedAt) ? `, ${formatRelativeTime(observedAt, { now })}` : ''
     }`;
     phaseLabel = 'No recent reading';
   }
 
   let lastBreach: string | undefined;
   if (status.phase !== 'breaching' && Number.isFinite(alert.value)) {
-    const when = alert.lastSeen ? `, ${formatRelativeTime(alert.lastSeen)}` : '';
+    const when = alert.lastSeen ? `, ${formatRelativeTime(alert.lastSeen, { now })}` : '';
     lastBreach = `Last reading at or above ${trigger}: ${formatMetricValue(alert.value, status.unit)}${when}`;
   }
 
@@ -168,12 +174,17 @@ export interface AlertAttentionCopy {
   title?: string;
 }
 
-/** Copy for an alert row in a drawer's "Needs attention" list. */
+/**
+ * Copy for an alert row in a drawer's "Needs attention" list. `now` is the
+ * drawer's `useRelativeTimeNow` accessor, read only for an alert that carries
+ * a live status, so a list whose alerts have none does not re-render on every
+ * tick of the shared clock.
+ */
 export function getAlertAttentionCopy(
   alert: Pick<Alert, 'type' | 'message' | 'value' | 'lastSeen' | 'metricStatus' | 'metadata'>,
-  now: number = Date.now(),
+  now: () => number,
 ): AlertAttentionCopy {
-  const presentation = getMetricAlertPresentation(alert, now);
+  const presentation = alert.metricStatus ? getMetricAlertPresentation(alert, now()) : null;
   if (!presentation) return { message: alert.message };
   return {
     message: presentation.summary,

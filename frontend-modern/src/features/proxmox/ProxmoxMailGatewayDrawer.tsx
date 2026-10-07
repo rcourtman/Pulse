@@ -25,6 +25,7 @@ import type { StatusIndicatorVariant } from '@/utils/status';
 import { formatBytes } from '@/utils/format';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { apiFetch } from '@/utils/apiClient';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { PMGInstance, PMGNodeStatus, PMGQueueStatus, PMGSpamBucket } from '@/types/api';
 import type { Resource } from '@/types/resource';
 
@@ -229,6 +230,7 @@ export const ProxmoxMailGatewayDrawer: Component<{
     return asTrimmedString(meta?.instanceId) || props.instanceRow.id;
   };
   const [instance, { refetch }] = createResource<PMGInstance | null, string>(id, fetchPMGInstance);
+  const now = useRelativeTimeNow();
 
   const stats = createMemo(() => instance()?.mailStats);
   const quarantine = createMemo(() => instance()?.quarantine);
@@ -348,11 +350,13 @@ export const ProxmoxMailGatewayDrawer: Component<{
         )}
       </Show>
 
-      {/* The exact problem first: a phone cannot hover the row's short reason. */}
+      {/* The exact problem first: a phone cannot hover the row's short reason.
+          The copy reads the shared clock, so a gateway that stops reporting
+          turns its held reading stale while the drawer stays open. */}
       <DrawerAttentionSection
         items={(props.alerts ?? []).map((alert) => ({
           id: alert.id,
-          ...getAlertAttentionCopy(alert),
+          ...getAlertAttentionCopy(alert, now),
           subject: name(),
           metric: alertTypeDisplayLabel(alert.type),
           severity: alert.level,

@@ -8785,17 +8785,34 @@ describe('shared primitive guardrails', () => {
     // a second line saying what clears it, never only its stale breach text.
     expect(drawerAttentionSectionSource).toContain('item.detail');
     expect(drawerAttentionSectionSource).toContain('item.title ?? item.message');
+    // The copy measures from the drawer's shared clock: a resource that stops
+    // reporting leaves its live status unchanged, so a drawer that measured
+    // from its render time kept calling an old reading "now". The drawer hands
+    // over the accessor so only alerts with a live status read it.
     for (const liveAlertConsumer of [
       'src/components/Workloads/NodeDrawerOverview.tsx',
       'src/features/proxmox/ProxmoxMailGatewayDrawer.tsx',
     ]) {
       const source = readFrontendSource(liveAlertConsumer);
-      expect(source).toContain('...getAlertAttentionCopy(alert)');
+      expect(source).toContain('...getAlertAttentionCopy(alert, now)');
+      expect(source).toContain('const now = useRelativeTimeNow();');
       expect(source).not.toContain('message: alert.message');
     }
     expect(readFrontendSource('src/components/Workloads/guestDrawerModel.ts')).toContain(
-      'getAlertAttentionCopy(alert)',
+      'getAlertAttentionCopy(alert, now)',
     );
+    const guestDrawerOverviewSource = readFrontendSource(
+      'src/components/Workloads/GuestDrawerOverview.tsx',
+    );
+    expect(guestDrawerOverviewSource).toContain('const now = useRelativeTimeNow();');
+    expect(guestDrawerOverviewSource).toMatch(
+      /getGuestDrawerAlertAttention\(\s*alert,\s*\{[^}]*\},\s*now,?\s*\)/,
+    );
+    const proxmoxNodesTableSource = readFrontendSource(
+      'src/features/proxmox/ProxmoxNodesTable.tsx',
+    );
+    expect(proxmoxNodesTableSource).toContain('getMetricAlertPresentation(alert, now())');
+    expect(proxmoxNodesTableSource).toContain('const now = useRelativeTimeNow();');
 
     const overviewConsumers = [
       'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',

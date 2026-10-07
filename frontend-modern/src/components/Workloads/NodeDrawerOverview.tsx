@@ -372,10 +372,12 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
 
   return (
     <div class="space-y-3">
+      {/* A node that stops reporting leaves its alerts' live status as it was,
+          so only the clock turns "now" into the last reading's age. */}
       <DrawerAttentionSection
         items={(props.alerts ?? []).map((alert) => ({
           id: alert.id,
-          ...getAlertAttentionCopy(alert),
+          ...getAlertAttentionCopy(alert, now),
           subject:
             cleanText(alert.resourceName) ||
             cleanText(alert.nodeDisplayName) ||

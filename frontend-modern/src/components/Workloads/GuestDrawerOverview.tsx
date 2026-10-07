@@ -17,6 +17,7 @@ import {
   getWorkloadGuestDiskStatusMessage,
   getWorkloadsGuestProtectionPresentation,
 } from '@/utils/workloadGuestPresentation';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 import { AvailabilityProbeSuggestionCard } from './AvailabilityProbeSuggestionCard';
 import { buildWorkloadsDiskPresentation } from './diskListModel';
@@ -299,17 +300,24 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         : null,
     ]);
   };
+  // A guest that stops reporting leaves its alerts' live status as it was, so
+  // only the clock turns "now" into the last reading's age.
+  const now = useRelativeTimeNow();
 
   return (
     <div class="space-y-3">
       <DrawerAttentionSection
         items={(props.alerts ?? []).map((alert) => ({
           id: alert.id,
-          ...getGuestDrawerAlertAttention(alert, {
-            guest: props.guest,
-            memoryDisplayBasis: props.memoryDisplayBasis,
-            parentMemoryTotal: props.parentMemoryTotal,
-          }),
+          ...getGuestDrawerAlertAttention(
+            alert,
+            {
+              guest: props.guest,
+              memoryDisplayBasis: props.memoryDisplayBasis,
+              parentMemoryTotal: props.parentMemoryTotal,
+            },
+            now,
+          ),
           severity: alert.level,
           acknowledged: alert.acknowledged,
         }))}

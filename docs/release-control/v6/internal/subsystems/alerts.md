@@ -32,6 +32,22 @@ day is not auto-resolved as unmonitored. Frontend surfaces format the status
 through `features/alerts/metricAlertPresentation.ts` and never re-derive the
 phase or recovery timing.
 
+### A held reading turns stale on the caller's clock — issue #2068
+
+`getMetricAlertPresentation(alert, now)` takes `now` as a required argument
+and measures everything time-derived from it: the ten-minute stale cut-off
+(`METRIC_ALERT_STATUS_STALE_MS`), the age in a stale summary ("Last reading:
+Temperature 76°C, 11 mins ago") and the age of the last breach. A resource
+that stops reporting leaves its live status unchanged, so a surface mounted
+over that alert learns the reading is no longer "now" only from the clock.
+The node, guest and Mail Gateway drawers' Needs attention lists and the
+Proxmox nodes table's temperature hover pass the frontend-primitives shared
+relative-time clock, as the resource incident panel does; the Assistant
+handoff measures from the moment it is built. `getAlertAttentionCopy(alert,
+now)` takes the drawer's clock accessor and reads it only for an alert that
+carries a live status, so a list whose alerts carry none never depends on the
+clock.
+
 ### Alert card and open incident lead with the live reading — issue #2068
 
 The Alerts overview card leads an open threshold alert with the presentation's

@@ -568,6 +568,64 @@ describe('GuestDrawer', () => {
     expect(screen.queryByText('VM memory at 91.0%')).not.toBeInTheDocument();
   });
 
+  it('turns a held reading stale and keeps its ages moving while the drawer stays open', () => {
+    const openedAt = Date.parse('2026-10-07T10:00:00Z');
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: openedAt });
+    // The guest stopped reporting a minute before the drawer opened: the
+    // alert's live status, and every prop the drawer receives, never change.
+    solidRender(() => (
+      <GuestDrawer
+        guest={makeGuest()}
+        alerts={[
+          {
+            id: 'alert-memory-holding',
+            type: 'memory',
+            level: 'warning',
+            resourceId: 'inst1-node1-100',
+            resourceName: 'test-vm',
+            node: 'node1',
+            instance: 'inst1',
+            message: 'VM memory at 91.0%',
+            value: 91,
+            threshold: 90,
+            startTime: new Date(openedAt - 20 * 60_000).toISOString(),
+            lastSeen: new Date(openedAt - 5 * 60_000).toISOString(),
+            acknowledged: false,
+            metricStatus: {
+              phase: 'latched',
+              value: 87,
+              unit: '%',
+              observedAt: new Date(openedAt - 60_000).toISOString(),
+              trigger: 90,
+              recovery: 85,
+            },
+          },
+        ]}
+        onClose={vi.fn()}
+      />
+    ));
+    const attention = within(screen.getByTestId('drawer-attention-section'));
+
+    expect(attention.getByText('Memory 87% now, back under the 90% alert level')).toHaveAttribute(
+      'title',
+      expect.stringContaining('Last reading at or above 90%: 91%, 5 mins ago'),
+    );
+
+    // Past the ten-minute cut-off the reading is no longer "now".
+    vi.advanceTimersByTime(10 * 60_000);
+    expect(attention.queryByText(/now, back under/)).not.toBeInTheDocument();
+    expect(attention.getByText('Last reading: Memory 87%, 11 mins ago')).toHaveAttribute(
+      'title',
+      expect.stringContaining('Last reading at or above 90%: 91%, 15 mins ago'),
+    );
+
+    vi.advanceTimersByTime(5 * 60_000);
+    expect(attention.getByText('Last reading: Memory 87%, 16 mins ago')).toHaveAttribute(
+      'title',
+      expect.stringContaining('Last reading at or above 90%: 91%, 20 mins ago'),
+    );
+  });
+
   it('keeps generic Assistant and context-copy actions out of the drawer header', () => {
     render(() => <GuestDrawer guest={makeGuest({ name: 'homeassistant' })} onClose={vi.fn()} />);
 
