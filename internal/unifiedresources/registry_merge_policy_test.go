@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -1925,4 +1926,465 @@ func TestPhysicalDiskMergeTemperatureReadingsAcrossIngestBoundaries(t *testing.T
 			}
 		}
 	})
+}
+
+const sharedDiskSerial = "SHARED-SERIAL-1"
+
+// sharedSerialDiskSnapshot puts one /dev/sda carrying sharedDiskSerial under
+// each named PVE node of one instance, optionally with a linked host agent
+// reporting that disk over SMART on every node. pve1 also carries a disk whose
+// serial no other machine reports.
+func sharedSerialDiskSnapshot(now time.Time, withAgents bool, nodeNames ...string) models.StateSnapshot {
+	var snapshot models.StateSnapshot
+	for _, name := range nodeNames {
+		node := models.Node{
+			ID:       proxmoxNodeSourceID("pve", name),
+			Name:     name,
+			Instance: "pve",
+			Host:     "https://" + name + ":8006",
+			Status:   "online",
+			LastSeen: now,
+		}
+		if withAgents {
+			node.LinkedAgentID = "host-" + name
+			snapshot.Hosts = append(snapshot.Hosts, models.Host{
+				ID:           "host-" + name,
+				Hostname:     name,
+				MachineID:    "machine-" + name,
+				LinkedNodeID: node.ID,
+				Status:       "online",
+				LastSeen:     now,
+				Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+					Device:      "/dev/sda",
+					Model:       "SEAGATE ST4000NM0023",
+					Serial:      sharedDiskSerial,
+					Type:        "sas",
+					Temperature: 31,
+					Health:      "PASSED",
+				}}},
+			})
+		}
+		snapshot.Nodes = append(snapshot.Nodes, node)
+		snapshot.PhysicalDisks = append(snapshot.PhysicalDisks, models.PhysicalDisk{
+			ID:          ProxmoxPhysicalDiskSourceID("pve", name, "/dev/sda", "", ""),
+			Instance:    "pve",
+			Node:        name,
+			DevPath:     "/dev/sda",
+			Model:       "SEAGATE ST4000NM0023",
+			Serial:      sharedDiskSerial,
+			Type:        "sas",
+			Health:      "PASSED",
+			LastChecked: now,
+		})
+		if name == "pve1" {
+			snapshot.PhysicalDisks = append(snapshot.PhysicalDisks, models.PhysicalDisk{
+				ID:          ProxmoxPhysicalDiskSourceID("pve", name, "/dev/sdb", "", ""),
+				Instance:    "pve",
+				Node:        name,
+				DevPath:     "/dev/sdb",
+				Model:       "Samsung SSD 870",
+				Serial:      "UNIQUE-SERIAL-1",
+				Type:        "ssd",
+				Health:      "PASSED",
+				LastChecked: now,
+			})
+		}
+	}
+	return snapshot
+}
+
+// reversedSnapshot reverses every slice sharedSerialDiskSnapshot fills, so a
+// test can prove IDs do not depend on ingest order.
+func reversedSnapshot(snapshot models.StateSnapshot) models.StateSnapshot {
+	slices.Reverse(snapshot.Nodes)
+	slices.Reverse(snapshot.Hosts)
+	slices.Reverse(snapshot.PhysicalDisks)
+	return snapshot
+}
+
+// sharedSerialDisksByNode indexes the registry's sharedDiskSerial disks by
+// Proxmox node, failing when two claim one node or one lost its node.
+func sharedSerialDisksByNode(t *testing.T, rr *ResourceRegistry) map[string]Resource {
+	t.Helper()
+	byNode := make(map[string]Resource)
+	for _, disk := range rr.ListByType(ResourceTypePhysicalDisk) {
+		if disk.PhysicalDisk == nil || disk.PhysicalDisk.Serial != sharedDiskSerial {
+			continue
+		}
+		if disk.Proxmox == nil || disk.Proxmox.NodeName == "" {
+			t.Fatalf("disk %s has no Proxmox node: %+v", disk.ID, disk.Proxmox)
+		}
+		if _, dup := byNode[disk.Proxmox.NodeName]; dup {
+			t.Fatalf("two disks claim node %s", disk.Proxmox.NodeName)
+		}
+		byNode[disk.Proxmox.NodeName] = disk
+	}
+	return byNode
+}
+
+func TestPhysicalDisksSharingASerialStayOnEachMachine(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name       string
+		withAgents bool
+		sources    []DataSource
+	}{
+		{name: "proxmox only", sources: []DataSource{SourceProxmox}},
+		{name: "linked host agents", withAgents: true, sources: []DataSource{SourceProxmox, SourceAgent}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := NewRegistry(nil)
+			rr.IngestSnapshot(sharedSerialDiskSnapshot(now, tc.withAgents, "pve1", "pve2", "pve3"))
+
+			byNode := sharedSerialDisksByNode(t, rr)
+			if len(byNode) != 3 {
+				t.Fatalf("shared-serial disks by node = %d, want one per node", len(byNode))
+			}
+			bareID := rr.canonicalIDFromIdentity(ResourceTypePhysicalDisk, ResourceIdentity{MachineID: sharedDiskSerial})
+			for _, name := range []string{"pve1", "pve2", "pve3"} {
+				disk := byNode[name]
+				nodeID := rr.bySource[SourceProxmox][proxmoxNodeSourceID("pve", name)]
+				if disk.ParentID == nil || *disk.ParentID != nodeID {
+					t.Fatalf("disk on %s parent = %v, want its node %s", name, disk.ParentID, nodeID)
+				}
+				for _, source := range tc.sources {
+					if !containsDataSource(disk.Sources, source) {
+						t.Fatalf("disk on %s sources = %v, want %s merged in", name, disk.Sources, source)
+					}
+				}
+				if !slices.ContainsFunc(rr.GetChildren(nodeID), func(child Resource) bool { return child.ID == disk.ID }) {
+					t.Fatalf("node %s does not list its disk %s as a child", name, disk.ID)
+				}
+				// No machine keeps the unscoped ID, so it can never pass
+				// from one machine's disk to another's.
+				if disk.ID == bareID {
+					t.Fatalf("disk on %s holds the unscoped ID %s shared by every machine", name, bareID)
+				}
+			}
+
+			uniqueID := rr.canonicalIDFromIdentity(ResourceTypePhysicalDisk, ResourceIdentity{MachineID: "UNIQUE-SERIAL-1"})
+			if unique, ok := rr.Get(uniqueID); !ok || unique.PhysicalDisk == nil || unique.PhysicalDisk.Serial != "UNIQUE-SERIAL-1" {
+				t.Fatalf("a disk only one machine reports must keep its unscoped ID %s", uniqueID)
+			}
+
+			reordered := NewRegistry(nil)
+			reordered.IngestSnapshot(reversedSnapshot(sharedSerialDiskSnapshot(now, tc.withAgents, "pve1", "pve2", "pve3")))
+			for name, disk := range sharedSerialDisksByNode(t, reordered) {
+				if disk.ID != byNode[name].ID {
+					t.Fatalf("reversed ingest moved the disk on %s from %s to %s", name, byNode[name].ID, disk.ID)
+				}
+			}
+		})
+	}
+}
+
+func TestPhysicalDiskIDsHoldAcrossRehydrationWhenAMachineJoins(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	first := NewRegistry(nil)
+	first.IngestSnapshot(sharedSerialDiskSnapshot(now, false, "pve2", "pve3"))
+	before := sharedSerialDisksByNode(t, first)
+
+	rehydrated := NewRegistry(nil)
+	rehydrated.IngestResources(first.List())
+	rehydrated.IngestSnapshot(sharedSerialDiskSnapshot(now.Add(time.Minute), false, "pve1", "pve2", "pve3"))
+	after := sharedSerialDisksByNode(t, rehydrated)
+	if len(after) != 3 {
+		t.Fatalf("shared-serial disks by node = %d, want one per node", len(after))
+	}
+	for name, disk := range before {
+		if after[name].ID != disk.ID {
+			t.Fatalf("disk on %s moved from %s to %s when pve1 joined", name, disk.ID, after[name].ID)
+		}
+	}
+
+	fresh := NewRegistry(nil)
+	fresh.IngestSnapshot(sharedSerialDiskSnapshot(now.Add(time.Minute), false, "pve1", "pve2", "pve3"))
+	for name, disk := range sharedSerialDisksByNode(t, fresh) {
+		if after[name].ID != disk.ID {
+			t.Fatalf("disk on %s is %s after rehydration but %s after a fresh rebuild", name, after[name].ID, disk.ID)
+		}
+	}
+}
+
+// trueNASDiskRecords describes one TrueNAS system holding one disk, under a
+// pool when pool is set.
+func trueNASDiskRecords(now time.Time, system, hostname, pool, serial string) []IngestRecord {
+	records := []IngestRecord{{
+		SourceID: "system:" + system,
+		Resource: Resource{Type: ResourceTypeAgent, Name: hostname, Status: StatusOnline, LastSeen: now, TrueNAS: &TrueNASData{Hostname: hostname}},
+		Identity: ResourceIdentity{Hostnames: []string{hostname}},
+	}}
+	diskParent := "system:" + system
+	if pool != "" {
+		diskParent = "pool:" + system + ":" + pool
+		records = append(records, IngestRecord{
+			SourceID:       diskParent,
+			ParentSourceID: "system:" + system,
+			Resource:       Resource{Type: ResourceTypeStorage, Name: pool, Status: StatusOnline, LastSeen: now},
+			Identity:       ResourceIdentity{Hostnames: []string{hostname}},
+		})
+	}
+	return append(records, IngestRecord{
+		SourceID:       "disk:" + system + ":sda",
+		ParentSourceID: diskParent,
+		Resource: Resource{
+			Type: ResourceTypePhysicalDisk, Name: "sda", Status: StatusOnline, LastSeen: now,
+			PhysicalDisk: &PhysicalDiskMeta{DevPath: "/dev/sda", Serial: serial, Wearout: WearoutUnreported},
+		},
+		Identity: ResourceIdentity{MachineID: serial, Hostnames: []string{hostname}},
+	})
+}
+
+func TestPhysicalDiskReportersOnOneMachineJoinAcrossGroupingParents(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	agentOnArchive := models.StateSnapshot{Hosts: []models.Host{{
+		ID: "host-archive", Hostname: "archive", MachineID: "machine-archive", Status: "online", LastSeen: now,
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+			Device: "/dev/sda", Model: "WDC WD80EFAX", Serial: sharedDiskSerial, Type: "sata", Temperature: 30, Health: "PASSED",
+		}}},
+	}}}
+
+	// The TrueNAS API and the agent on the same box report one disk under
+	// different parents (pool and agent host) that the registry never merged.
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(agentOnArchive)
+	rr.IngestRecords(SourceTrueNAS, trueNASDiskRecords(now, "a", "archive", "tank", sharedDiskSerial))
+	disks := rr.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != 1 || !containsDataSource(disks[0].Sources, SourceAgent) || !containsDataSource(disks[0].Sources, SourceTrueNAS) {
+		t.Fatalf("disks = %+v, want the agent and TrueNAS rows of one box merged", disks)
+	}
+
+	// A cloned TrueNAS keeps both the serial and the hostname; one reporter
+	// placing the serial on two systems still proves two disks.
+	rr.IngestRecords(SourceTrueNAS, trueNASDiskRecords(now, "b", "archive", "tank", sharedDiskSerial))
+	disks = rr.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != 2 {
+		t.Fatalf("disks = %d, want the cloned system's disk kept apart", len(disks))
+	}
+	bySystem := make(map[string]Resource)
+	for _, disk := range disks {
+		for _, source := range []string{"disk:a:sda", "disk:b:sda"} {
+			if rr.bySource[SourceTrueNAS][source] == disk.ID {
+				bySystem[source] = disk
+			}
+		}
+	}
+	if len(bySystem) != 2 {
+		t.Fatalf("TrueNAS disk mappings = %+v, want one disk per system", rr.bySource[SourceTrueNAS])
+	}
+	if !containsDataSource(bySystem["disk:a:sda"].Sources, SourceAgent) {
+		t.Fatalf("system a disk sources = %v, want the agent row still merged", bySystem["disk:a:sda"].Sources)
+	}
+
+	// A disk moving into a pool on the same machine is the same disk.
+	moved := NewRegistry(nil)
+	moved.IngestRecords(SourceTrueNAS, trueNASDiskRecords(now, "a", "archive", "", sharedDiskSerial))
+	moved.IngestRecords(SourceTrueNAS, trueNASDiskRecords(now.Add(time.Minute), "a", "archive", "tank", sharedDiskSerial))
+	if disks := moved.ListByType(ResourceTypePhysicalDisk); len(disks) != 1 {
+		t.Fatalf("disks after moving into a pool = %d, want 1", len(disks))
+	}
+}
+
+func TestPhysicalDiskWithoutItsNodeRowJoinsItsOwnMachinesDisk(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	snapshot := sharedSerialDiskSnapshot(now, false, "pve1", "pve2")
+	// pve3 has an agent but no node row this poll, so its PVE disk arrives
+	// without a parent while the serial already spans other machines.
+	snapshot.Hosts = append(snapshot.Hosts, models.Host{
+		ID: "host-pve3", Hostname: "pve3", MachineID: "machine-pve3", Status: "online", LastSeen: now,
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+			Device: "/dev/sda", Model: "SEAGATE ST4000NM0023", Serial: sharedDiskSerial, Type: "sas", Temperature: 31, Health: "PASSED",
+		}}},
+	})
+	snapshot.PhysicalDisks = append(snapshot.PhysicalDisks, models.PhysicalDisk{
+		ID: ProxmoxPhysicalDiskSourceID("pve", "pve3", "/dev/sda", "", ""), Instance: "pve", Node: "pve3",
+		DevPath: "/dev/sda", Model: "SEAGATE ST4000NM0023", Serial: sharedDiskSerial, Type: "sas", Health: "PASSED", LastChecked: now,
+	})
+
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(snapshot)
+	byNode := sharedSerialDisksByNode(t, rr)
+	if len(byNode) != 3 {
+		t.Fatalf("shared-serial disks by node = %d, want one per node", len(byNode))
+	}
+	if sources := byNode["pve3"].Sources; !containsDataSource(sources, SourceAgent) || !containsDataSource(sources, SourceProxmox) {
+		t.Fatalf("pve3 disk sources = %v, want its agent and parentless PVE rows merged", sources)
+	}
+}
+
+func TestPhysicalDiskSiblingJoinHonoursManualExclusions(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	// An agent on pve1 that the registry never linked to the node reports the
+	// disk after both nodes' rows; hostname evidence alone joins it to pve1's.
+	agentOnPVE1 := models.StateSnapshot{Hosts: []models.Host{{
+		ID: "host-pve1", Hostname: "pve1", MachineID: "machine-pve1", Status: "online", LastSeen: now,
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+			Device: "/dev/sda", Model: "SEAGATE ST4000NM0023", Serial: sharedDiskSerial, Type: "sas", Temperature: 31, Health: "PASSED",
+		}}},
+	}}}
+	ingest := func(store ResourceStore) *ResourceRegistry {
+		rr := NewRegistry(store)
+		rr.IngestSnapshot(sharedSerialDiskSnapshot(now, false, "pve1", "pve2"))
+		rr.IngestSnapshot(agentOnPVE1)
+		return rr
+	}
+
+	joined := ingest(nil)
+	pve1Disk := sharedSerialDisksByNode(t, joined)["pve1"]
+	if !containsDataSource(pve1Disk.Sources, SourceAgent) {
+		t.Fatalf("pve1 disk sources = %v, want the agent row joined", pve1Disk.Sources)
+	}
+
+	store := NewMemoryStore()
+	agentCandidate := buildHashID(ResourceTypePhysicalDisk, string(SourceAgent)+":"+normalizeSourceID(sharedDiskSerial))
+	if err := store.AddExclusion(ResourceExclusion{ResourceA: pve1Disk.ID, ResourceB: agentCandidate}); err != nil {
+		t.Fatal(err)
+	}
+	split := ingest(store)
+	if disk, ok := split.Get(pve1Disk.ID); !ok || containsDataSource(disk.Sources, SourceAgent) {
+		t.Fatalf("excluded pve1 disk = %+v, want it kept apart from the agent row", disk)
+	}
+	if agentDisk, ok := split.Get(agentCandidate); !ok || !containsDataSource(agentDisk.Sources, SourceAgent) {
+		t.Fatalf("agent row should keep its source-specific ID %s once excluded", agentCandidate)
+	}
+}
+
+func TestPhysicalDiskClonesStayApartAfterSerializedRehydration(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	first := NewRegistry(nil)
+	first.IngestRecords(SourceTrueNAS, trueNASDiskRecords(now, "a", "archive", "tank", sharedDiskSerial))
+	payload, err := json.Marshal(first.List())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var persisted []Resource
+	if err := json.Unmarshal(payload, &persisted); err != nil {
+		t.Fatal(err)
+	}
+
+	rehydrated := NewRegistry(nil)
+	rehydrated.IngestResources(persisted)
+	// A clone keeps the hostname; the persisted disk lost its per-source
+	// parents, so only its own parent says which system TrueNAS saw it on.
+	rehydrated.IngestRecords(SourceTrueNAS, trueNASDiskRecords(now, "b", "archive", "tank", sharedDiskSerial))
+	if disks := rehydrated.ListByType(ResourceTypePhysicalDisk); len(disks) != 2 {
+		t.Fatalf("disks = %d, want the clone's disk kept apart after rehydration", len(disks))
+	}
+}
+
+func TestPhysicalDiskRekeyCarriesRetiredIDClaims(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	records := trueNASDiskRecords(now, "a", "archive-a", "tank", sharedDiskSerial)
+	records[len(records)-1].SupersededCanonicalIDs = []string{"physical_disk-retired"}
+	rr := NewRegistry(nil)
+	rr.IngestRecords(SourceTrueNAS, records)
+	bareID := rr.canonicalIDFromIdentity(ResourceTypePhysicalDisk, ResourceIdentity{MachineID: sharedDiskSerial})
+	if got := rr.supersededResourceIDLocked("physical_disk-retired"); got != bareID {
+		t.Fatalf("retired ID resolves to %q, want the disk %s", got, bareID)
+	}
+
+	rr.IngestRecords(SourceTrueNAS, trueNASDiskRecords(now, "b", "archive-b", "tank", sharedDiskSerial))
+	systemADisk := rr.bySource[SourceTrueNAS]["disk:a:sda"]
+	if systemADisk == bareID || systemADisk == "" {
+		t.Fatalf("system a disk = %q, want it re-keyed off the unscoped ID", systemADisk)
+	}
+	if got := rr.supersededResourceIDLocked("physical_disk-retired"); got != systemADisk {
+		t.Fatalf("retired ID resolves to %q after the re-key, want %s", got, systemADisk)
+	}
+}
+
+func TestPhysicalDiskSplitSurvivesARekey(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	agentDisk := func(id, hostname string) models.Host {
+		return models.Host{
+			ID: id, Hostname: hostname, MachineID: "machine-" + hostname, Status: "online", LastSeen: now,
+			Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+				Device: "/dev/sda", Model: "WDC WD80EFAX", Serial: sharedDiskSerial, Type: "sata", Temperature: 30, Health: "PASSED",
+			}}},
+		}
+	}
+	trueNASCandidate := buildHashID(ResourceTypePhysicalDisk, string(SourceTrueNAS)+":"+normalizeSourceID("disk:a:sda"))
+	bareID := MachineIdentityCanonicalID(ResourceTypePhysicalDisk, sharedDiskSerial)
+	ingest := func(t *testing.T, excludedID string, hosts ...models.Host) *ResourceRegistry {
+		t.Helper()
+		store := NewMemoryStore()
+		if err := store.AddExclusion(ResourceExclusion{ResourceA: excludedID, ResourceB: trueNASCandidate}); err != nil {
+			t.Fatal(err)
+		}
+		rr := NewRegistry(store)
+		rr.IngestSnapshot(models.StateSnapshot{Hosts: hosts})
+		rr.IngestRecords(SourceTrueNAS, trueNASDiskRecords(now, "a", "archive", "tank", sharedDiskSerial))
+		return rr
+	}
+	split := func(t *testing.T, rr *ResourceRegistry) {
+		t.Helper()
+		trueNASDisk, ok := rr.Get(trueNASCandidate)
+		if !ok || containsDataSource(trueNASDisk.Sources, SourceAgent) {
+			t.Fatalf("TrueNAS row = %+v, want it kept on %s apart from the agent row", trueNASDisk, trueNASCandidate)
+		}
+	}
+
+	t.Run("split recorded against the unscoped ID after another machine re-keyed the disk", func(t *testing.T) {
+		rr := ingest(t, bareID, agentDisk("host-archive", "archive"), agentDisk("host-other", "other"))
+		if _, ok := rr.Get(bareID); ok {
+			t.Fatalf("the unscoped ID %s should be re-keyed once two machines report the serial", bareID)
+		}
+		split(t, rr)
+	})
+	t.Run("split recorded against the scoped ID before the serial spans machines", func(t *testing.T) {
+		scoped := ingest(t, bareID, agentDisk("host-archive", "archive"), agentDisk("host-other", "other"))
+		archiveAgentDisk := ""
+		for _, disk := range scoped.ListByType(ResourceTypePhysicalDisk) {
+			if disk.ParentID != nil && *disk.ParentID == scoped.bySource[SourceAgent]["host-archive"] {
+				archiveAgentDisk = disk.ID
+			}
+		}
+		if archiveAgentDisk == "" || archiveAgentDisk == bareID {
+			t.Fatalf("archive agent disk = %q, want a machine-scoped ID", archiveAgentDisk)
+		}
+		split(t, ingest(t, archiveAgentDisk, agentDisk("host-archive", "archive")))
+	})
+}
+
+func TestPhysicalDiskExclusionFallbackStaysPerMachine(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	agents := models.StateSnapshot{}
+	for _, name := range []string{"pve1", "pve2"} {
+		agents.Hosts = append(agents.Hosts, models.Host{
+			ID: "host-" + name, Hostname: name, MachineID: "machine-" + name, Status: "online", LastSeen: now,
+			Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+				Device: "/dev/sda", Model: "SEAGATE ST4000NM0023", Serial: sharedDiskSerial, Type: "sas", Temperature: 31, Health: "PASSED",
+			}}},
+		})
+	}
+	probe := NewRegistry(nil)
+	probe.IngestSnapshot(sharedSerialDiskSnapshot(now, false, "pve1", "pve2"))
+	byNode := sharedSerialDisksByNode(t, probe)
+
+	// Both nodes' disks are split from the agent observation, whose
+	// source-specific ID is the same on every host.
+	store := NewMemoryStore()
+	agentCandidate := buildHashID(ResourceTypePhysicalDisk, string(SourceAgent)+":"+normalizeSourceID(sharedDiskSerial))
+	for _, name := range []string{"pve1", "pve2"} {
+		if err := store.AddExclusion(ResourceExclusion{ResourceA: byNode[name].ID, ResourceB: agentCandidate}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rr := NewRegistry(store)
+	rr.IngestSnapshot(sharedSerialDiskSnapshot(now, false, "pve1", "pve2"))
+	rr.IngestSnapshot(agents)
+
+	agentDisks := 0
+	for _, disk := range rr.ListByType(ResourceTypePhysicalDisk) {
+		if !containsDataSource(disk.Sources, SourceAgent) {
+			continue
+		}
+		agentDisks++
+		if containsDataSource(disk.Sources, SourceProxmox) {
+			t.Fatalf("disk %s merged an excluded agent row into a node's disk", disk.ID)
+		}
+	}
+	if agentDisks != 2 {
+		t.Fatalf("agent disks = %d, want one per host rather than both hosts on the shared fallback ID", agentDisks)
+	}
 }

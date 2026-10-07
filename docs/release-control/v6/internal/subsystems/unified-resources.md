@@ -5339,6 +5339,48 @@ serial or WWN only inside a compatible physical-disk parent scope; when those
 identifiers are absent or placeholders, host/device/topology fallback identity
 is authoritative. An exact seeded source mapping may be reused after restart
 only when its resource type and parent scope still agree.
+A usable serial or WWN identifies a disk on one machine only, and the canonical
+ID a new disk takes must honour that, not just matching. Dual-ported SAS
+shelves, cloned VMs with an explicit serial, fixed-serial USB bridges and
+TrueNAS systems report one identifier on several machines, and merging them on
+a hardware-keyed ID collision dropped every machine but the last from
+inventory. `physicalDiskIDForMachineLocked` resolves each disk's parent to its
+machine (the nearest host ancestor, so a TrueNAS pool or Unraid array counts as
+its system or host) and treats two disks carrying one identity as different
+machines only on evidence: one reporter placing the identity on two machines
+(for a single-source disk rehydrated without per-source parents, its own
+parent), or differing machines whose hostnames share nothing. Reporters on one
+machine still join across grouping parents and unmerged host resources (the
+TrueNAS API and the agent on that box), and an unknown machine never splits a
+disk. A split (operator exclusion) recorded against any ID the disk can hold,
+unscoped, current or machine-scoped, keeps the observation on its
+source-specific ID, keyed to its machine when another machine's disk already
+holds that ID (agent disk source IDs are the bare serial). Once the identity
+spans machines the unscoped ID no longer names one disk, so a split recorded
+against it applies to every copy, erring towards an extra row rather than a
+merge the operator forbade, and a manual link recorded against it stops
+applying. More than one joinable disk joins none, except that the holder of the
+unscoped ID keeps it. Once an identity spans machines, every copy not split off
+onto its source-specific ID takes the identity keyed to the machine of its
+canonical parent at that point, and the holder of the unscoped ID is re-keyed
+with its source mappings, retired-ID claims and relationship endpoints.
+Machines may be ingested in any order, and the unscoped ID never passes between
+disks that coexist on different machines. A disk only one machine reports keeps
+its unscoped ID, apart from observations an operator split off. Residuals: like
+any serial-keyed ID, the unscoped ID still passes to a same-serial disk that
+appears once the previous holder is gone; a disk's ID changes when a
+same-serial disk first appears on another machine and back when it goes away,
+and alert-history rows owned under the unscoped ID do not follow a re-key; a
+disk two reporters share is scoped to its canonical parent when the identity
+first spans machines, which the fixed ingest order (snapshot sources, then
+supplemental records) and source priority decide; agent SMART and Unraid disk
+source IDs are the bare serial, so same-serial agent disks on different hosts
+share one `SourceAgent` mapping and only the last ingested keeps the agent
+source target; same-serial disks share one metrics history key; and across
+reporters, hostnames that normalize alike (default TrueNAS names, short names
+across domains) still join. `IdentityMatcher` keeps one resource per machine
+ID, so the registry indexes disks by hardware key (`physicalDisksByHardware`)
+to see every copy.
 That same canonical physical-disk view must also expose source-independent host
 context. When a disk is API-backed rather than node-backed, typed views should
 fall back to canonical host identity such as `identity.hostnames` instead of
