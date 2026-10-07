@@ -1751,7 +1751,6 @@ the attached container fields searchable and attention-filterable from the
 network detail disclosure instead of forcing operators to inspect a full
 container inventory table.
 
-1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `performance-and-scalability`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `performance-and-scalability`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 12. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx` shared with `storage-recovery`: Proxmox backup server table rows are both a storage/recovery backup-health surface and a unified-resource platform-table consumer boundary.
     The table is composed on the Proxmox Backups tab and must not be duplicated
@@ -2624,11 +2623,13 @@ application resource-provider or WebSocket lifecycle.
     identity, table membership, source scope, or summary-hover state. The
     retired top-level `/infrastructure` page and its saved-view/route-state
     machinery must not be reintroduced for this purpose.
-15. Keep infrastructure search aligned with the governed display label. Shared
-    infrastructure filtering through
-    `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
-    must match the user-visible safe label for governed resources instead of
-    reintroducing redacted hostnames through search-only fallback candidates.
+15. Keep operator-local resource search on the operator's own names.
+    Resource-policy redaction is a transmission boundary (`docs/PRIVACY.md`),
+    so local search over unified resources, such as the `ResourcePicker` and
+    `useResources` search filters, matches the raw name from
+    `getPreferredInfrastructureDisplayName(...)` plus the resource ID rather
+    than the governed safe label. Provider-bound labels keep the governed
+    `getPreferredResourceDisplayName(...)` path.
 16. Preserve provider-backed storage backing-pool identity on canonical
     storage resources. `internal/unifiedresources/types.go`,
     `internal/unifiedresources/adapters.go`, `internal/unifiedresources/views.go`,
@@ -4531,15 +4532,14 @@ The same policy presenter now also owns the routing-scope labels used across
 AI-facing policy surfaces, while the resource detail drawer stays on
 per-resource policy lines instead of reconstructing a separate
 `Allowed`/`Blocked` row or `Cloud Summary` decision row locally.
-The infrastructure host-table shell now treats the default
-`Internal` + `Cloud Summary` posture as canonical policy metadata that should
-stay available in the drawer and AI/governance surfaces without being promoted
-to always-on row chrome. Inline row badges are reserved for blocking policy
-states such as `local-only` routing or `restricted` sensitivity, while
-`sensitive` + `local-first` and redaction-only posture remains visible in Data
-Handling, detail, and AI/governance surfaces. The table must not imply that
-ordinary sensitive resources carry an operator-actionable infrastructure
-exception.
+The default `Internal` + `Cloud Summary` posture is canonical policy metadata
+that stays available in the drawer and AI/governance surfaces without being
+promoted to always-on row chrome. A table that shows inline policy badges
+reserves them for blocking policy states such as `local-only` routing or
+`restricted` sensitivity, while `sensitive` + `local-first` and redaction-only
+posture remains visible in Data Handling, detail, and AI/governance surfaces.
+A table must not imply that ordinary sensitive resources carry an
+operator-actionable infrastructure exception.
 The resource drawer now applies the same rule to its investigation-context
 governance block: the default posture remains part of the canonical policy
 contract, but the drawer only surfaces the governance section when the policy
@@ -5123,11 +5123,10 @@ The frontend unified-resource hook now trusts backend canonical `policy` and
 `aiSafeSummary` values directly, so the canonical summary value stays
 aligned with the same policy-aware contract that governs sensitivity and
 routing metadata without re-normalizing locally.
-The resource detail drawer and unified resource table now also render that
-governed display label through the same policy-aware helper, and they suppress
-the raw alternate name when policy requires governed handling, so the visible
-label stays aligned with the backend redaction boundary instead of
-reconstructing a local name fallback.
+The resource detail drawer's governance summary now also renders that
+governed label through the same policy-aware helper, so it stays aligned with
+the backend redaction boundary instead of reconstructing a local name
+fallback.
 The resource detail drawer now also resolves its AI-safe summary through that
 same helper, so governed resources still present the canonical redacted label
 when the backend summary is missing instead of dropping the governed summary
@@ -5370,34 +5369,26 @@ path-policy coverage, so new unified-resource-owned runtime files must be added
 to a concrete proof route instead of falling back to subsystem-default
 verification.
 
-The infrastructure table, selector, and detail-mapper frontend consumers are
-now governed as explicit shared boundaries with the performance lane rather
-than implicit downstream usage. That means future fleet-scale table changes
-must preserve both canonical unified-resource semantics and the table
-performance proof route. The shared resource table and resource drawer now
-surface compact timeline summary chips, so facet presentation changes must
-continue to flow through the same governed resource-row surface rather than
-inventing a separate ad hoc summary path. Dense table rows must bound those
-chips with an explicit visible limit and overflow label, while row-level
-policy chips are limited to blocking `local-only`/`restricted` posture so
-mock-rich canonical resources cannot stack or overstate governance badges
-inside the resource column. Those row summaries now prefer canonical
-`facetCounts` on the
+The detail-mapper frontend consumer is governed as an explicit shared
+boundary with the performance lane rather than implicit downstream usage, so
+future fleet-scale changes there must preserve both canonical unified-resource
+semantics and the performance proof route. The resource drawer surfaces
+compact timeline summary chips through the shared `ResourceFacetSummary`, so
+facet presentation changes must continue to flow through that component rather
+than inventing a separate ad hoc summary path. A dense table row that adopts
+those chips must first give the shared component a visible limit and overflow
+label, and any row-level policy chip stays limited to blocking
+`local-only`/`restricted` posture so mock-rich canonical resources cannot stack
+or overstate governance badges inside the resource column. Those summaries now
+prefer canonical `facetCounts` on the
 resource object when available, so the backend list/read shapes remain the
 source of truth instead of forcing the frontend to infer totals only from
 loaded slices. The drawer now fetches those facets
 through one backend bundle endpoint, and that shared facet bundle preserves
 the timeline slice plus recent-change counts so the overview card and history
 summary can report the loaded history instead of collapsing to the currently
-loaded page when the timeline endpoint is paginated. Timeline references in
-that drawer now route
-through the canonical infrastructure resource filter, so the resource history
-remains navigable from the history surface instead of being purely
-descriptive text.
-The same infrastructure selector pipeline now also uses the policy-aware
-display contract for search candidates, so governed resources do not reappear
-through raw-name search forks even though the selector stays on the same
-hot-path budget.
+loaded page when the timeline endpoint is paginated. Related resources on
+those timeline entries render through the drawer's resource-label resolver.
 The shared recent-change presentation boundary is also owned here now.
 `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 is the canonical shared card for recent resource-change timelines, while
@@ -5722,14 +5713,8 @@ Unknown source types may contribute identity and source-label evidence, but
 they must not outrank the known canonical primary-type order when a merged host
 contains a governed connector such as `proxmox-pve` or `agent`.
 
-Infrastructure selector consumers must also preserve the canonical
-`KnownSourcePlatform` normalization boundary when collecting source filters and
-status facets. The selector layer may accept arbitrary user-visible filter
-strings, but it must not widen the canonical unified-resource source/status
-contracts that feed the infrastructure table and workload links.
-
-The same source-filter boundary now also applies to infrastructure source UI
-options in Settings and platform/runtime pages. Those surfaces may render
+The canonical `KnownSourcePlatform` source-filter boundary applies to
+infrastructure source UI options in Settings and platform/runtime pages. Those surfaces may render
 friendly string keys, but membership checks against available sources must
 normalize through the shared `frontend-modern/src/utils/sourcePlatforms.ts`
 helper before consulting `KnownSourcePlatform` sets.

@@ -74,7 +74,6 @@ import {
   computeWorkloadStats,
 } from '../workloadSelectors';
 import { getKubernetesContextKey } from '../workloadTopology';
-import { filterResources } from '@/components/Infrastructure/infrastructureSelectors';
 import { getCanonicalWorkloadId, normalizeWorkloadViewModeParam } from '@/utils/workloads';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 
@@ -347,24 +346,6 @@ const makeGuest = (i: number, overrides?: Record<string, unknown>) => ({
   lock: '',
   lastSeen: new Date().toISOString(),
   workloadType: i % 4 === 0 ? 'system-container' : i % 3 === 0 ? 'docker' : 'vm',
-  ...overrides,
-});
-
-const makeResource = (overrides?: Partial<Resource>): Resource => ({
-  id: 'resource-1',
-  type: 'vm',
-  name: 'secret-host-1',
-  displayName: 'secret-host-1',
-  platformId: 'platform-1',
-  platformType: 'proxmox-pve',
-  sourceType: 'api',
-  status: 'running',
-  lastSeen: Date.now(),
-  policy: {
-    sensitivity: 'restricted',
-    routing: { scope: 'local-only', redact: ['hostname'] },
-  },
-  aiSafeSummary: 'Production Host',
   ...overrides,
 });
 
@@ -835,18 +816,6 @@ describe('Workloads performance contract', () => {
       expect(screen.queryByText('2 running workloads have no Pulse Agent')).toBeNull();
       expect(screen.queryByRole('link', { name: 'Install agent' })).toBeNull();
       expect(document.body).not.toHaveTextContent('Add agent for AI actions');
-    });
-
-    it('searches policy-redacted resources by their raw display name in operator-local UI', () => {
-      // owning route search; redaction is a transmission-boundary policy
-      // (docs/PRIVACY.md), so the haystack must use the raw infra name.
-      const resources = [makeResource()];
-
-      const filtered = filterResources(resources, new Set(), new Set(), ['secret-host']);
-      const rawFiltered = filterResources(resources, new Set(), new Set(), ['Production']);
-
-      expect(filtered).toHaveLength(1);
-      expect(rawFiltered).toHaveLength(0);
     });
 
     it('keeps projected pod context keys aligned with the canonical cluster label', () => {
