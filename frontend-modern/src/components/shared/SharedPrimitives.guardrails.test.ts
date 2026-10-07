@@ -1348,13 +1348,8 @@ describe('shared primitive guardrails', () => {
     );
     expect(contextualFocusSource).toContain('export const findInlineDetailElement');
     expect(contextualFocusSource).toContain('export const revealInlineDetailInViewport');
-    expect(contextualFocusSource).toContain('export function useSummaryContextualFocusState');
-    expect(contextualFocusSource).toContain('chartHoveredSeriesId');
-    expect(contextualFocusSource).toContain('hoveredGroupScope');
-    expect(contextualFocusSource).toContain('filterSeriesForActiveScope');
     expect(contextualFocusSource).toContain('markRouteStateDeliberateScroll');
     expect(contextualFocusSource).toContain('data-inline-detail-for');
-    expect(summaryCardInteractionSource).toContain('chartHoveredSeriesId');
     expect(summaryCardInteractionSource).toContain('SummarySeriesGroupScope');
     expect(summaryCardInteractionSource).toContain('resolveSummaryGroupScope');
     expect(summaryCardInteractionSource).toContain('resolveSummaryGroupMemberInteractionState');
@@ -1368,7 +1363,6 @@ describe('shared primitive guardrails', () => {
     expect(summaryTableFocusSource).toContain('export function useSummaryTableFocusBridge');
     expect(summaryTableFocusSource).toContain('export function useSummaryPageInteractionState');
     expect(summaryTableFocusSource).toContain('resolveSummaryActiveSeriesId');
-    expect(summaryTableFocusSource).toContain('activeScopeState');
     expect(summaryTableFocusSource).toContain('focusedSeriesId');
     expect(summaryTableFocusSource).toContain('findInlineDetailElement');
     expect(summaryTableFocusSource).toContain('revealInlineDetailInViewport');
@@ -1380,8 +1374,9 @@ describe('shared primitive guardrails', () => {
     expect(summaryTableFocusSource).toContain("event.key !== 'Escape'");
     expect(summaryTableFocusSource).toContain('querySelector<HTMLElement>(');
     expect(summaryTableFocusSource).toContain(
-      "row.scrollIntoView({ behavior: 'smooth', block: 'center' })",
+      "row.scrollIntoView({ behavior: 'smooth', block: 'nearest' })",
     );
+    expect(summaryTableFocusSource).not.toContain("window.addEventListener('scroll'");
     expect(summaryTableFocusSource).not.toContain('useNavigate(');
   });
 
@@ -8761,7 +8756,10 @@ describe('shared primitive guardrails', () => {
     expect(summaryRowActionButtonSource).toContain('h-9 w-9');
     expect(searchFieldSource).toContain('min-h-11');
     expect(filterToolbarSource).toContain('min-h-11');
-    expect(inlineDetailTableRowSource).toContain('max-w-[calc(100vw-3.5rem)]');
+    // Phone and tablet drawers fill the table's visible width (the scroll
+    // shell is a size container), not a viewport guess at the page chrome.
+    expect(inlineDetailTableRowSource).toContain('max-w-[100cqi]');
+    expect(inlineDetailTableRowSource).not.toContain('100vw-3.5rem');
   });
 
   it('keeps shared settings panels dense without forking their desktop framing', () => {

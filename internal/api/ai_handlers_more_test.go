@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unsafe"
@@ -14,6 +15,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -22,6 +24,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 type stubMetadataProvider struct{}
@@ -793,5 +796,206 @@ func TestHandleExportAICostHistoryCarriesPromptCacheBuckets(t *testing.T) {
 	}
 	if !strings.Contains(lines[1], ",100000,10000,200000,1000000,1.000000,true,") {
 		t.Fatalf("csv row missing cache buckets or cache-rate pricing: %s", lines[1])
+	}
+}
+
+// sessionMutationRecordingAIService records every Assistant session mutation
+// and every running check that reaches the service, so a rejected request can
+// be proven to stop before the handler touches the service at all.
+type sessionMutationRecordingAIService struct {
+	capturingAIService
+	mu           sync.Mutex
+	mutations    []string
+	runningCalls int
+}
+
+func newSessionMutationRecordingAIService() *sessionMutationRecordingAIService {
+	return &sessionMutationRecordingAIService{capturingAIService: capturingAIService{running: true}}
+}
+
+func (s *sessionMutationRecordingAIService) record(op, sessionID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.mutations = append(s.mutations, op+":"+sessionID)
+}
+
+func (s *sessionMutationRecordingAIService) recorded() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.mutations...)
+}
+
+func (s *sessionMutationRecordingAIService) IsRunning() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.runningCalls++
+	return s.capturingAIService.running
+}
+
+func (s *sessionMutationRecordingAIService) runningChecks() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.runningCalls
+}
+
+func (s *sessionMutationRecordingAIService) AbortSession(ctx context.Context, sessionID string) error {
+	s.record("abort", sessionID)
+	return nil
+}
+
+func (s *sessionMutationRecordingAIService) SummarizeSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
+	s.record("summarize", sessionID)
+	return map[string]interface{}{"success": true}, nil
+}
+
+func (s *sessionMutationRecordingAIService) ForkSession(ctx context.Context, sessionID string) (*chat.Session, error) {
+	s.record("fork", sessionID)
+	return &chat.Session{ID: sessionID + "-fork"}, nil
+}
+
+func (s *sessionMutationRecordingAIService) UndoLastTurn(ctx context.Context, sessionID string, opts chat.SessionTurnUndoOptions) (*chat.SessionTurnUndoResult, error) {
+	s.record("undo", sessionID)
+	return &chat.SessionTurnUndoResult{Success: true, SessionID: sessionID}, nil
+}
+
+func (s *sessionMutationRecordingAIService) RedoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnRedoResult, error) {
+	s.record("redo", sessionID)
+	return &chat.SessionTurnRedoResult{Success: true, SessionID: sessionID}, nil
+}
+
+func (s *sessionMutationRecordingAIService) SteerSession(ctx context.Context, sessionID string, req chat.SessionSteerRequest) (*chat.SessionSteerResult, error) {
+	s.record("steer", sessionID)
+	return &chat.SessionSteerResult{Accepted: true, SessionID: sessionID}, nil
+}
+
+var assistantSessionMutationSubresources = []string{"abort", "summarize", "fork", "undo", "redo", "steer"}
+
+func TestAssistantSessionMutationsRequirePost(t *testing.T) {
+	for _, sub := range assistantSessionMutationSubresources {
+		for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete} {
+			t.Run(sub+"/"+method, func(t *testing.T) {
+				svc := newSessionMutationRecordingAIService()
+				handler := &AIHandler{}
+				setUnexportedField(t, handler, "defaultService", svc)
+				router := &Router{aiHandler: handler}
+
+				req := httptest.NewRequest(method, "/api/ai/sessions/session-1/"+sub, nil)
+				rec := httptest.NewRecorder()
+				router.routeAISessions(rec, req)
+
+				if rec.Code != http.StatusMethodNotAllowed {
+					t.Fatalf("%s %s status = %d, want %d", method, sub, rec.Code, http.StatusMethodNotAllowed)
+				}
+				if allow := rec.Header().Get("Allow"); allow != http.MethodPost {
+					t.Fatalf("%s %s Allow = %q, want %q", method, sub, allow, http.MethodPost)
+				}
+				if got := svc.recorded(); len(got) != 0 {
+					t.Fatalf("%s %s reached the service: %v", method, sub, got)
+				}
+				if checks := svc.runningChecks(); checks != 0 {
+					t.Fatalf("%s %s resolved the service (%d running checks) before rejecting the method", method, sub, checks)
+				}
+			})
+		}
+
+		t.Run(sub+"/POST", func(t *testing.T) {
+			svc := newSessionMutationRecordingAIService()
+			handler := &AIHandler{}
+			setUnexportedField(t, handler, "defaultService", svc)
+			router := &Router{aiHandler: handler}
+
+			body := ""
+			if sub == "steer" {
+				body = `{"prompt":"check the backup job too"}`
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/"+sub, strings.NewReader(body))
+			rec := httptest.NewRecorder()
+			router.routeAISessions(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("POST %s status = %d, want %d: %s", sub, rec.Code, http.StatusOK, rec.Body.String())
+			}
+			if got := svc.recorded(); !reflect.DeepEqual(got, []string{sub + ":session-1"}) {
+				t.Fatalf("POST %s mutations = %v, want [%s:session-1]", sub, got, sub)
+			}
+		})
+	}
+}
+
+func TestAssistantSessionReadSubresourcesKeepTheirMethods(t *testing.T) {
+	svc := newSessionMutationRecordingAIService()
+	handler := &AIHandler{}
+	setUnexportedField(t, handler, "defaultService", svc)
+	router := &Router{aiHandler: handler}
+
+	messagesReq := httptest.NewRequest(http.MethodGet, "/api/ai/sessions/session-1/messages", nil)
+	messagesRec := httptest.NewRecorder()
+	router.routeAISessions(messagesRec, messagesReq)
+	if messagesRec.Code != http.StatusOK {
+		t.Fatalf("GET messages status = %d, want %d: %s", messagesRec.Code, http.StatusOK, messagesRec.Body.String())
+	}
+
+	diffReq := httptest.NewRequest(http.MethodGet, "/api/ai/sessions/session-1/diff", nil)
+	diffRec := httptest.NewRecorder()
+	router.routeAISessions(diffRec, diffReq)
+	if diffRec.Code != http.StatusNotImplemented {
+		t.Fatalf("GET diff status = %d, want %d: %s", diffRec.Code, http.StatusNotImplemented, diffRec.Body.String())
+	}
+
+	if got := svc.recorded(); len(got) != 0 {
+		t.Fatalf("read sub-resources mutated the session: %v", got)
+	}
+}
+
+// TestDemoModeRouterRejectsAssistantSessionMutationsOverSafeMethods drives the
+// production handler chain: the demo-mode guard admits GET and HEAD as reads,
+// so the session mutation itself must refuse them.
+func TestDemoModeRouterRejectsAssistantSessionMutationsOverSafeMethods(t *testing.T) {
+	tempDir := t.TempDir()
+	hashed, err := internalauth.HashPassword("Password!1")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		AuthUser:   "admin",
+		AuthPass:   hashed,
+		DemoMode:   true,
+	}
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	t.Cleanup(router.shutdownBackgroundWorkers)
+	svc := newSessionMutationRecordingAIService()
+	setUnexportedField(t, router.aiHandler, "defaultService", svc)
+
+	serve := func(method, path string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(method, path, nil)
+		req.SetBasicAuth("admin", "Password!1")
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+
+	for _, sub := range assistantSessionMutationSubresources {
+		for _, method := range []string{http.MethodGet, http.MethodHead} {
+			rec := serve(method, "/api/ai/sessions/session-1/"+sub)
+			if rec.Header().Get("X-Demo-Mode") != "true" {
+				t.Fatalf("%s %s did not pass through the demo-mode guard", method, sub)
+			}
+			if rec.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("demo %s %s status = %d, want %d: %s", method, sub, rec.Code, http.StatusMethodNotAllowed, rec.Body.String())
+			}
+		}
+		if rec := serve(http.MethodPost, "/api/ai/sessions/session-1/"+sub); rec.Code != http.StatusForbidden {
+			t.Fatalf("demo POST %s status = %d, want %d: %s", sub, rec.Code, http.StatusForbidden, rec.Body.String())
+		}
+	}
+	if got := svc.recorded(); len(got) != 0 {
+		t.Fatalf("demo-mode requests mutated Assistant sessions: %v", got)
+	}
+
+	if rec := serve(http.MethodGet, "/api/ai/sessions/session-1/messages"); rec.Code != http.StatusOK {
+		t.Fatalf("demo GET messages status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
 	}
 }

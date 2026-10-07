@@ -294,6 +294,14 @@ expose only a raw reason. A same-VM fresh observation withdraws the notice and
 updates values without remounting the row. Permission, disabled-agent and actual
 unavailable cases retain their own explanations.
 
+When a linked Pulse agent's filesystems fill in for a VM with no Proxmox guest
+filesystems (`disksFromAgent`), the reading follows that agent instead of the
+Proxmox reason: current while it reports, last known once it is stale, and
+unavailable once the guest is stopped. `getWorkloadGuestDiskRead` in
+`workloadGuestPresentation.ts` owns that rule for the workload row's disk cell,
+the guest drawer's filesystem rows and its History, so the three cannot
+disagree about one guest; `workloadGuestPresentation.test.ts` pins it.
+
 Verification: `workloadGuestPresentation.test.ts`, the mounted `GuestRow`,
 `StackedDiskBar` and `GuestDrawerOverview.filesystems` regressions,
 and `browser-tests/guest-disk-deferral.cjs` cover the fixed reasons, retained/no
@@ -2116,6 +2124,18 @@ the same record; the table renders defaults once, in both desktop table and
 narrow card layouts, and per-section metric columns must resolve to metric
 keys the shared column normalizer produces so the defaults editor reads and
 writes the same record keys the section persists.
+A global default that another setting decides while it is unset passes a
+`globalDefaultFallbacks` entry for that metric (label, title, whether the other
+setting is itself off, and the value switching on stages when it is). The
+TrueNAS Disks temperature uses it to read `By type`, following Disk
+temperature by type, with `features/alerts/thresholds/trueNASDiskTemperature.ts`
+giving each disk row its type's trigger from the unsaved editor state.
+`resolveAlertResourceGlobalDefaultCell` decides the cell for both layouts:
+unset follows the fallback, switching on from Off returns to unset unless the
+fallback is off, and an unset default with no fallback stays Off as the engine
+reads it. `ResourceTable.tsx` hands its props to the shared table state through
+getters, so the Custom badge and reset control follow defaults that load after
+the table mounts.
 Platform sub-routes that add native provider inventory must stay on the shared
 platform page and table primitives. The vSphere Networks surface routes through
 `/vmware/networks`, the shared platform tab model, the command palette
@@ -3011,9 +3031,9 @@ Agent`), with the plain-language source phrase available through accessible
    than receiving an unfiltered copy of the estate. Opaque unified-resource ids
    are not part of that visible search vocabulary and must not retain a node
    when the normalized guest table has no corresponding match.
-8. Keep summary chart interaction identity on one shared helper. Summary surfaces that expose row-hover, group-hover, chart-hover, or route-focus-driven chart emphasis must derive page/group/entity scope through `frontend-modern/src/components/shared/summaryCardInteraction.ts` and pass that same resolved scope into card-state, sparkline, and density-map primitives, rather than letting cards read `hovered || focused` while charts listen to a different page-local ID source. Hovering one summary chart must promote that series into the shared active entity so sibling cards highlight the same object instead of keeping chart-local hover islands, and hovering or pinning a workload group header, infrastructure cluster header, or storage pool-group header must scope the matching summary cards through that same shared contract instead of forking a page-local summary filter path. Sibling cards should surface that synchronized hover as one compact header readout through the shared summary-card contract, while the chart under the pointer keeps the only floating tooltip. Recovery is explicitly outside this interaction dialect: its retired posture-card strip must not return with row/group/chart hover behavior without a separate governed product decision.
-9. Keep page summaries page-scoped when table rows enter contextual focus. Route-backed row selection may add a focused label and shared series emphasis, but infrastructure, workloads, and storage summary cards must continue to render the page-level series set instead of collapsing the summary down to the selected row or replacing the global trend view with row-local empty states.
-10. Keep contextual row focus on the shared summary primitive. Summary surfaces and same-route table drill-ins must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for interactive-series filtering, focused-name lookup, active-series derivation, local scroll preservation, and deliberate inline-detail reveal instead of rebuilding page-local `Set` filters, focused-label scans, drawer-aware scroll math, or ad hoc scroll restoration in each surface.
+8. Keep summary interaction identity on one shared helper. Pages that expose row-hover, group-hover, or route-focus-driven summary emphasis, today the Workloads and Storage tables through `useSummaryPageInteractionState` in `frontend-modern/src/components/shared/summaryTableFocus.ts`, must derive page/group/entity scope through `frontend-modern/src/components/shared/summaryCardInteraction.ts` rather than letting each surface read `hovered || focused` from its own page-local ID source. Hovering or pinning a storage pool-group header, or a workload group header on a surface that enables inline group drawers (the Proxmox and VMware surfaces pass `groupNodeDrawerMode="disabled"` today), must scope the matching rows through that same shared contract instead of forking a page-local summary filter path. No summary card or chart strip renders today, and the bridge carries no chart-hover input; one that returns must consume that same resolved scope, and the chart under the pointer must enter its hovered series into `resolveSummaryScopeState` as a preview input that outranks row hover instead of keeping a chart-local hover island. Recovery is explicitly outside this interaction dialect: its retired posture-card strip must not return with row/group/chart hover behavior without a separate governed product decision.
+9. Keep any page summary page-scoped when table rows enter contextual focus. No infrastructure, workloads, or storage summary cards render today. If one returns, route-backed row selection may add a focused label and shared series emphasis, but the summary must continue to render the page-level series set instead of collapsing down to the selected row or replacing the global trend view with row-local empty states.
+10. Keep contextual row focus on the shared primitives. Same-route table drill-ins must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for local scroll preservation, off-screen reveal, inline-detail lookup, and deliberate inline-detail reveal, and must resolve the active series through `frontend-modern/src/components/shared/summaryCardInteraction.ts` behind `frontend-modern/src/components/shared/summaryTableFocus.ts`, instead of rebuilding page-local `Set` filters, focused-label scans, drawer-aware scroll math, or ad hoc scroll restoration in each surface. `frontend-modern/src/components/shared/summaryTableFocus.ts` measures and scrolls rows only for deliberate focus, a focused row's inline detail or a pinned group header, so it must not keep window-level scroll or resize listeners or re-measure the hovered row on hover changes and scroll frames; an off-screen affordance for the active row needs a rendered consumer before that cost returns.
 11. Keep summary-linked table row emphasis on the shared primitive contract. Workloads, infrastructure, and storage rows that mirror the active summary entity must expose that state through `data-summary-row-active` and let the shared presentation in `frontend-modern/src/index.css` render the row emphasis, rather than carrying page-local sky or blue fill classes inside each row renderer. Group-scoped preview and pin must use that same shared presentation boundary: child rows that belong to a hovered or pinned summary group should expose `data-summary-group-member-active="preview|pinned"` so the block-level emphasis stays subtle, consistent, and reversible instead of each table inventing its own outline, badge, or full-strength fill treatment. Static grouped row headers on workloads, infrastructure, storage, recovery, and future grouped tables must use `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` plus the `.grouped-table-row` CSS contract in `frontend-modern/src/index.css`, rather than rebuilding local `bg-surface-alt` variants with subtly different light/dark behavior or page-local left-accent markers. That shared grouped-table primitive owns the subgroup cell padding, typography, small metadata, and badge treatment as well as the row background token, so a future adjustment to the subgroup visual language changes every grouped product table from one owner. Inline table detail rows on platform, workload, and infrastructure tables must compose `frontend-modern/src/components/shared/InlineDetailTableRow.tsx` for the full-width row, surface-alt cell, detail padding, and row-click containment instead of rebuilding page-local `TableRow` / `TableCell` / `div` shells around each drawer. Storage-backed reusable row presenters under `frontend-modern/src/features/storageBackups/` must also keep row height and alert accents on class/data-attribute presentation instead of runtime inline style maps, so the shared table contract stays CSP-safe on both steady-state and alert-highlighted routes.
 12. Keep retained-value data loading honest at the ownership boundary. Helpers
     that prevent a feature surface from falling through the app-level Suspense
@@ -3873,7 +3893,6 @@ production table, router and styles; it does not qualify full-app scrolling.
     settings flows must present provider setup as BYOK/local/self-managed and
     must not surface hosted-model credits, in-app trial starts, or generic
     managed-model claims.
-22. Keep sparkline scrubbing source-local and sibling-sync timestamp-based. The chart a user is actively scrubbing in `frontend-modern/src/components/shared/InteractiveSparkline.tsx` and `frontend-modern/src/components/shared/useInteractiveSparklineState.ts` must keep its dashed hover cursor on the real local mouse `x`, while sibling cards may map the shared hover timestamp onto their own timelines. Shared cursor sync must not snap the source chart back onto the nearest sample timestamp, the rendered SVG/canvas hover cursor must bind to the actual numeric cursor coordinate rather than a boolean guard state, the time cursor must span the chart viewport instead of collapsing to the series height, and the hover tooltip must track the pointer instead of anchoring to the chart top edge while following the active theme rather than a hardcoded dark shell. The hover tooltip must stay side-offset from the active scrub cursor and flip to the available side near viewport edges so it does not cover the highlighted guide or graph point.
 23. Keep shared contextual focus canonical after adoption. Once a summary or table surface enters route-backed contextual focus, future additions must extend `frontend-modern/src/components/shared/contextualFocus.ts` and its guardrail tests rather than forking another helper for workload IDs, resource IDs, or scroll-preserving same-route selection.
 24. Keep shared infrastructure/resource selectors on the canonical agent-facet
     truth. Shared primitives and settings-facing selector helpers must treat
@@ -3903,12 +3922,14 @@ production table, router and styles; it does not qualify full-app scrolling.
 26. Keep the authenticated app root aligned with that same first-session path.
     That same shared-primitive ownership now includes contextual row focus.
     `frontend-modern/src/components/shared/contextualFocus.ts` is the canonical
-    owner for interactive-series filtering, focused-label lookup, active-series
-    resolution, and nearest-scrollable-ancestor preservation across page-scoped
-    summary surfaces. Dashboard row focus, infrastructure summary emphasis,
-    storage summary emphasis, and workloads summary emphasis must all route through
-    that helper instead of maintaining page-local copies of the same hover/focus
-    rules.
+    owner for nearest-scrollable-ancestor preservation, off-screen element
+    reveal, and inline-detail lookup and reveal, while page/group/entity scope
+    resolution belongs to
+    `frontend-modern/src/components/shared/summaryCardInteraction.ts` behind
+    `frontend-modern/src/components/shared/summaryTableFocus.ts`. Workloads and
+    Storage row focus and the Proxmox page's node-to-guests reveal must route
+    through those helpers instead of maintaining page-local copies of the same
+    hover/focus rules.
     `frontend-modern/src/App.tsx` must land authenticated `/` and `/login`
     handoffs through this subsystem's provider-first platform landing contract:
     the first visible provider/runtime platform wins, and the Machines surface
@@ -4900,6 +4921,16 @@ or not fully verified.
 The same empty-state helper must consume Patrol trust-history evidence so a
 historical regression reads as history review context, not as a current issue
 and not as a healthy all-clear.
+`frontend-modern/scripts/canonical-platform-audit.mjs` carries no Patrol
+summary-card rule. Its `canonical-patrol/no-local-summary-card-presentation`
+regex matched only text shaped like the deleted summary card's tint ternaries
+on `summaryStats().criticalFindings`, `warningFindings` and `fixedCount`. The
+Patrol state hook's `summaryStats` accessor has had no reader since that card
+was deleted, so the accessor and the rule are both gone.
+`frontend-modern/src/utils/patrolSummaryPresentation.ts` is off the audit
+allowlist too: it now holds only the recency and verification presenters,
+which no audit rule needs to exempt, so the audit scans it like any other
+module.
 The Patrol page renders no summary shell today. If one returns, the same
 hierarchy applies inside it: once its primary assessment strip states Patrol's
 current risk and verification basis,
@@ -5107,52 +5138,27 @@ Enter/Space work through the native button, and lifecycle actions do not bubble
 into collapse. Generic `Ask Assistant` and `Copy context` actions do not belong
 in object drawer headers: Assistant remains available through the global shell,
 and raw context export must not compete with the operational reading path.
-The shared interactive sparkline now follows that same split.
-`frontend-modern/src/components/shared/InteractiveSparkline.tsx` stays the
-render shell, `frontend-modern/src/components/shared/useInteractiveSparklineState.ts`
-owns hover state, RAF throttling, canvas draw scheduling, and resize lifecycle,
-and `frontend-modern/src/components/shared/interactiveSparklineModel.ts` owns
-sparkline downsampling, gap segmentation, axis-tick math, and hover-selection
-policy. Future sparkline work should extend those owners instead of pushing
-canvas scheduling or chart-shape math back into the shared component shell.
-That same sparkline boundary now also owns floating tooltip shell routing:
-local hover tooltips must derive viewport anchor coordinates from the shared
-runtime/model path, keep the tooltip beside rather than on top of the scrub
-cursor, and render through
-`frontend-modern/src/components/shared/TooltipPortal.tsx`, not as HTML
-`foreignObject` shells inside the `preserveAspectRatio="none"` chart SVG where
-cross-browser scaling can stretch the tooltip surface or drop its semantic
-shell styling.
-That same shared sparkline boundary now also owns active-series isolation
-metadata. The shell may expose `data-active-series-display` and
-`data-rendered-series-count` for proof and inspection, but only the shared
-runtime/model owners may decide whether a hovered or focused series is merely
-emphasized or fully isolated; feature shells must not fork their own row-hover
-line filtering.
+`frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx` and
+`frontend-modern/src/features/proxmox/BackupActivityChart.tsx` render their
+hover tooltips through `frontend-modern/src/components/shared/TooltipPortal.tsx`
+rather than as HTML `foreignObject` shells inside the chart SVG; the mini
+sparkline's SVG uses `preserveAspectRatio="none"`, where cross-browser scaling
+can stretch an embedded tooltip surface or drop its semantic shell styling.
 The retired dashboard overview route must not regain feature-local trend,
 KPI, problem-resource, or card shells. Workload-table and guest-row fallback
 copy that lives under `frontend-modern/src/components/Workloads/` must keep
 using `frontend-modern/src/utils/workloadEmptyStatePresentation.ts` and
 `frontend-modern/src/utils/workloadGuestPresentation.ts`. New route-level empty
-states, tone mapping, or compact issue copy must extend the shared
-`emptyStatePresentation`, `semanticTonePresentation`, and
-`problemResourcePresentation` helpers instead of reviving deleted
-dashboard-only KPI, metric, storage, recovery, or trend presentation helpers.
+states or tone mapping must extend the shared `emptyStatePresentation` and
+`semanticTonePresentation` helpers instead of reviving deleted dashboard-only
+KPI, metric, storage, recovery, problem-resource, or trend presentation
+helpers.
 That shell must also stay passive with respect to data ownership: future
 overview trend cards may render summary-range controls and operator-facing
 empty or error copy only after they have a governed owner, and they must not
 reintroduce route-local metrics-history fetch loops for CPU and memory
 sparklines; the infrastructure and workloads summary chart routes already own
 that chart contract.
-The shared density map now follows that same owner split.
-`frontend-modern/src/components/shared/DensityMap.tsx` stays the render shell,
-`frontend-modern/src/components/shared/useDensityMapState.ts` owns hover
-signals, canvas draw lifecycle, and resize handling, and
-`frontend-modern/src/components/shared/densityMapModel.ts` owns bucket/window
-math, hover target selection, focused-series tooltip detail, and density-cell
-opacity rules. Future density-map work should extend those owners instead of
-pushing canvas lifecycle, tooltip shaping, or chart math back into the shared
-shell.
 The shared trial banner is retired for self-hosted v6 GA. Future commercial
 notification work must start from the explicit Plans, hosted, activation,
 recovery, or support surfaces rather than reviving a global authenticated-shell
@@ -5270,7 +5276,19 @@ too. Every read of the clock returns the wall clock; the 30-second tick only
 tells readers to re-read, so a cell that mounts between ticks never measures
 from a stale time and a timestamp from the last few seconds never reads as a
 future time.
-The rule has one deliberate exception. The age of a latest reading (last used,
+Future times have their own formatter. `formatRelativeTime` is past-only: it
+reads a time ahead of `now` as "just now" (compact) or "0s ago", which is right
+for clock skew on something already observed and wrong for an expiry, a
+reminder or a schedule.
+Those go through `formatTimeUntil` (`frontend-modern/src/utils/format.ts`),
+which counts down ("in 3h", "in 1d"), rounds to the nearest unit so a duration
+just chosen reads as chosen, and returns `dueText` (default "now") once the
+time arrives. A countdown target does not change while its surface stays open,
+so the countdown passes `now` from the shared clock, as the Patrol suppression
+expiry and the Patrol findings reminder and snooze lines do. The replication
+Next sync column and the Patrol header's next-check `CountdownTimer` keep their
+own minute- and second-precision countdowns.
+The relative-age rule has one deliberate exception. The age of a latest reading (last used,
 last seen, last success, last checked) on data the surface reads once and does
 not re-read stays the age at read time, because a moving age over a snapshot
 that never refreshes claims the reading stopped when it may not have. Such a
@@ -5785,7 +5803,15 @@ the surface-alt detail row shell locally. The content shell must clip
 horizontal paint below the large breakpoint without becoming a scroll
 container, reset the parent table's `whitespace-nowrap` inheritance, and allow
 its descendants to shrink, then restore visible overflow for the static
-desktop layout. Long operator-state copy must wrap inside the shared row border
+desktop layout. Below that breakpoint the default content shell is capped at
+the table scroll shell's content-box inline size (`max-w-[100cqi]`; the shell
+is a size container), never a viewport estimate of the page chrome, so a phone
+drawer does not leave an empty strip beside its content (the retired
+`100vw-3.5rem` cap left 27px at 390px) and is never wider than the table's
+visible area. Callers that pass their own `contentClass` own their width.
+Fixed-layout cells clip overflow, so the sticky offset is inert and horizontal
+scrolling still moves the drawer with its cell.
+Long operator-state copy must wrap inside the shared row border
 instead of painting beneath adjacent controls or disappearing at the clip edge.
 When focused detail content is removed, `InlineDetailTableRow` restores focus
 to its current `aria-controls` disclosure with `preventScroll`; live refresh,
@@ -6170,14 +6196,6 @@ when local login is hidden behind SSO, and the `/docs/...` public-route contract
 keeps that destination readable without an authenticated session. The login
 surface must remain guidance-only: it may not expose secrets, imply an email
 reset flow, or create a browser-side authentication bypass.
-The shared summary strip primitives now follow that same owner split.
-`frontend-modern/src/components/shared/SummaryPanel.tsx` and
-`frontend-modern/src/components/shared/SummaryMetricCard.tsx` stay the render
-shells for summary-frame spacing and card density, while monitoring surfaces
-such as recovery, infrastructure, workloads, and storage only choose from the
-owned shared density modes instead of forking summary spacing with feature-
-local padding hacks. Future summary-density work should extend those shared
-primitives rather than hard-coding compact card chrome inside one surface.
 The shared tooltip now follows that same owner split.
 `frontend-modern/src/components/shared/Tooltip.tsx` stays the render shell and
 singleton API boundary, `frontend-modern/src/components/shared/useTooltipState.ts`
@@ -6376,11 +6394,6 @@ That same shared table boundary now owns CSP-safe fill rendering for metric
 bars: `frontend-modern/src/components/shared/ProgressBar.tsx` must render fill
 width through DOM attributes rather than inline width styles that break the
 public demo CSP.
-That same shared-boundary rule applies to summary density. The shared compact
-mode on `SummaryPanel.tsx` and `SummaryMetricCard.tsx` exists for genuinely
-dense monitoring surfaces, but pages that are trying to align with the normal
-Pulse monitoring scan path should stay on the default shared density instead of
-using page-local compact overrides by habit.
 That same recovery shell boundary now also owns one canonical top-level filter
 controller in
 `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`. Route-backed
@@ -6438,20 +6451,6 @@ rollups, points, or facets payloads arrive, it must keep that selected
 platform present in the option set so the shared `LabeledFilterSelect` shows
 the owned value immediately instead of flashing back to `All Platforms` until
 recovery data warms.
-`frontend-modern/src/utils/problemResourcePresentation.ts` now also belongs to
-that same dashboard overview boundary so the problem-resource severity contract
-stays shared with `ProblemResourcesTable.tsx` instead of floating as an
-unowned helper.
-Problem-resource table readability belongs to that same owner. Repeated rows
-may collapse only when they share the same governed display label, resource
-type, and problem signal; the header count and Pulse Brief counts must continue
-to represent the underlying affected resources, and grouped links must route to
-the broad owning surface rather than inventing a synthetic resource target.
-Problem Resources and Pulse Brief wording must not amplify generic
-status-shaped names such as `storage (offline)` into first-viewport prose or
-grouped-row sublabels; when the resource name is only a type plus status, the
-surface should summarize the type-level issue in operator language instead of
-repeating raw backend-shaped labels.
 The retired dashboard action queue must not be reintroduced as a compact
 Patrol or infrastructure issue panel. Patrol-owned runtime findings remain
 governed by `frontend-modern/src/utils/aiFindingPresentation.ts` and their
@@ -6661,6 +6660,11 @@ icon/content layout, and action-link chrome. The
 outdated-sensor notices, and the
 `platform-inline-notice-local-amber-shell` pattern guard blocks future
 `platformPage` files from reintroducing page-local amber notice shells.
+A notice's render predicate reads what its page hydrates on every tab the
+notice renders on. `collectOutdatedSensorSetupNodes` lists the PVE nodes that
+carry the registry's `proxmox.sensorSetupOutdated` verdict and takes no disk
+rows, because only the Proxmox Storage tab loads them; a predicate over them
+left the notice silent on Overview.
 
 Alert incident-event filter containers, labels, and chips must now route
 through the shared presentation helpers in
@@ -6818,6 +6822,9 @@ operator refresh controls generation-aware, timeout-bounded, and separate from
 background polling state, so a slow supporting intelligence read cannot make the
 Patrol stale-data Retry action spin indefinitely or stay disabled
 while Patrol findings and status remain visible.
+Neither the Patrol load and poll path (the store's `loadDashboardData` bundle)
+nor the Retry path's background supporting reads fetch the global
+learned-correlation list, which no Patrol surface shows.
 That same Patrol shell should make scoped trigger policy legible without
 another navigation step. `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`
 should keep actionable scoped-trigger state legible without promoting
@@ -7166,6 +7173,12 @@ shell stays in `frontend-modern/src/features/alerts/OverviewTab.tsx`, while
 alert stats, filtered ordering, and single/bulk acknowledge runtime behavior.
 Future overview control flow should extend that hook rather than restoring
 action timers or acknowledge mutations to the tab shell.
+The overview follows the shared-clock rule for relative ages: the alert card
+reads `useRelativeTimeNow` for its started age and the live reading's stale
+cut-off, and the hook reads it for the Last 24 Hours count. A hook-local
+minute signal used as "now" is a table-local interval under that rule; the
+hook keeps a minute interval only to refresh delivery diagnoses, a server read
+whose cadence is not tied to the age clock.
 Render-heavy overview ownership now lives in
 `frontend-modern/src/features/alerts/AlertOverviewStatsCards.tsx`,
 `frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx`,
@@ -7888,10 +7901,12 @@ renders above the chart.
 TrueNAS disk rows follow it too: the drawer's Temperature row reads
 "(last known)" with the reason as title and no heat tone, and the one-line
 summary leaves a retained reading out because it has no room for the reason.
-The Proxmox outdated sensor setup notice (`features/platformPage/sensorSetup.ts`)
-counts a SATA or SAS disk as having a temperature only when the reading is
-current, so a retained one cannot hide the notice for a disk Pulse cannot read
-now.
+The Proxmox outdated sensor setup notice reads the registry's per-node
+`proxmox.sensorSetupOutdated` verdict, which counts a SATA or SAS disk as having
+a temperature only when the reading was collected now
+(`diskinventory.TemperatureCollected` in
+`internal/unifiedresources/proxmox_sensor_setup.go`), so a retained one cannot
+hide the notice for a disk Pulse cannot read now.
 
 The focused browser proofs are
 `frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts`,

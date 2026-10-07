@@ -2303,6 +2303,16 @@ evidence of what the array was doing when the agent went quiet, but without
 live status colour. Where a retained rebuild percentage is shown, it reads
 "Rebuild was at N%" with no speed or progress bar, and a member that was not
 healthy names its state in its badge.
+A Pulse agent manually linked into a guest carries the same signal there.
+`AgentData.Stale` is always on the wire, because browsers merge agent facets
+field by field (`resourceStateAdapters.ts`) and would keep a resumed agent's
+omitted false as true; `TestAgentDataAlwaysSendsStale` pins it. That always
+present `stale` also marks a native agent facet, so one without `disks` has
+withdrawn them, and a native Proxmox VM facet's new guest-read outcome likewise
+drops `disks` it no longer reports; either way the other source's filesystems
+take over without a reload (`resourceStateAdapters.test.ts`). `VMView.DiskFromLinkedAgent` names the agent
+as the owner of a guest's selected disk metric, which the monitoring poller
+reads before it carries a Proxmox disk reading forward.
 For SMART disk
 temperatures on rows that still render, the provenance travels on
 `agent.sensors.smart[].collection`: the Machines temperature cell
@@ -2987,6 +2997,36 @@ or force every provider type back into the active route payload. Docker,
 Kubernetes, TrueNAS, and VMware surface contract tests pin their route query
 maps, and the shared hook test pins facet normalization.
 
+### Proxmox node verdicts over disks arrive on the node
+
+The Proxmox page hydrates one query per workflow, and only its Storage tab
+loads `physical_disk` rows, so a node verdict that depends on the node's disks
+is derived in the registry and carried on the node, never rebuilt in the page
+from disk rows. `ProxmoxData.SensorSetupOutdated` (`proxmox.sensorSetupOutdated`
+on REST and websocket rows) is that verdict for the outdated sensor setup
+notice. `refreshProxmoxSensorSetupLocked`
+(`internal/unifiedresources/proxmox_sensor_setup.go`) runs after
+`buildChildCounts` on every ingest path and gives every Proxmox node an
+explicit true or false (other resources omit it), because browser facet merges
+read an omitted field as a partial snapshot and would keep an earlier true. It
+is true when the node's temperature payload is available and in the legacy
+`sensors -j` format (`models.Temperature.LegacySensorsFormat`) and a disk whose
+canonical parent is the node has no reading collected now
+(`diskinventory.TemperatureCollected`) and a type whose temperature a PVE node
+gets only through SMART: `sata`, `sas`, or the `hdd` and `ssd` form factors
+Proxmox's own inventory reports. Proxmox also types a non-rotational USB device
+`ssd`, so a USB device without SMART counts. A retained reading does not count
+as current, including one kept while a host agent reports the disk in standby;
+a reading a linked host agent collects now clears the disk. NVMe disks never
+set it, because kernel hwmon reports them even on a legacy setup, and a host
+agent the registry has not linked to the node contributes no disks. The
+verdict reflects the registry's node and disk state at each ingest.
+`TestProxmoxNodeSensorSetupOutdatedFromItsDisks` and
+`TestProxmoxNodeSensorSetupOutdatedFollowsWhereTheReadingArrives` in
+`internal/unifiedresources/registry_test.go` pin the rule, the linked-agent
+case, the explicit false on the wire and the presented JSON;
+`resourceStateAdapters.test.ts` pins that a false clears a merged true.
+
 ### Canonical REST facets preserve realtime workload evidence
 
 The frontend REST projection retains the complete source-authored Proxmox
@@ -3431,6 +3471,20 @@ It owns probe status, incidents, history, evidence, and the outgoing `checks`
 relationship. The matched resource carries every correlated check in the canonical
 `availabilityChecks` facet, keyed by saved target id, while `availability`
 remains an additive singular compatibility summary selected from that set.
+The summary is the worst check: a confirmed outage first, then any other
+observed failure, then an unchecked, ambiguous or unresolved check, then a
+passing one, ties going to the first saved target id. A confirmed outage is an
+enabled check whose observed failures reach its failure threshold, with an
+unavailable aggregate when one is reported and an outcome that is not
+indeterminate. That is the gate the availability poller applies before it
+raises `availability_unreachable`, so a probe agent that stops reporting keeps
+its old failure count but confirms nothing. `availabilityOutageConfirmed` in
+`internal/unifiedresources/availability.go` holds that rule for both the
+ranking and `EvaluateResourceHealth`, which reads the summary. A confirmed
+outage on any attached check therefore makes the resource's health critical
+even when a check that sorts earlier has failed below its threshold, with the
+`availability_failed` reason unless a critical alert explains the verdict
+first.
 Adding a second explicit or unambiguously correlated check must retain both
 source-owned endpoint rows, project both facets onto the same resource, and
 emit one `checks` relationship per target from the check to that resource.
@@ -3540,6 +3594,24 @@ remain preferred over device fallback. Direct SATA, SAS, and NVMe fallbacks
 retain their historical device-scoped shape; controller members sharing one
 block path add controller/target scope so they cannot collapse into one
 resource. Topology correlation is parent-scoped and ambiguity fails closed.
+That scope is added once. A controller member without a usable serial or WWN
+keeps its history under a source ID that already names the member: the host
+agent's `HostSMARTDiskMetricID`, and the Proxmox `PhysicalDiskMetricID`, which
+returns `ProxmoxPhysicalDiskSourceID`. `PhysicalDiskMetaMetricID` therefore
+returns a fallback that already ends in the disk's own device, controller and
+target unchanged as the metrics target. It appends that topology only to a
+fallback without it: a Proxmox source ID from before members were scoped,
+which `PhysicalDiskMetricID` scopes the same way, or the canonical resource ID
+`PhysicalDiskView.MetricResourceID` falls back to. The suffix survives a merge
+because a member target only reaches a disk together with the controller the
+agent reported beside it (the multiplexed smartctl path sets both), and the
+Proxmox row copies both from that agent row. A registry rehydrated from
+persisted resources rebuilds the agent source ID in the same scoped shape
+(`seedAgentPhysicalDiskSourceIDLocked`). TrueNAS disks carry no controller
+target and keep their fallback. The reader used to append the topology to an
+already scoped source ID as well, so such a member's chart read a key no
+writer used. Proof: `TestPhysicalDiskMetaMetricIDScopesAControllerMemberOnce`,
+`TestIdentitylessControllerMembersReadTheirWritersHistory`.
 
 Host reports, monitoring models, registry merges, typed physical-disk views,
 API resources, websocket/REST snapshot merges, and storage presentation must
@@ -4552,26 +4624,29 @@ reconstructing a separate type-token summary in the emitter.
 The same AI resource-intelligence payload now also carries canonical
 correlation evidence from the shared detector, so the drawer can show learned
 edge patterns alongside the dependency relationships without rebuilding correlation
-reasoning from raw events. The Patrol intelligence page now also renders that
-correlation evidence through the shared
+reasoning from raw events. The drawer renders that correlation evidence
+through the shared
 `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
-card, so the same learned-edge list stays governed by one frontend surface
-instead of separate page-local implementations. That shared card also owns
+card, and is that card's only caller today; the Patrol page renders no learned
+correlations and the frontend does not load the global correlation list. Any later surface
+that shows learned edges must reuse that card instead of a page-local
+implementation. That shared card also owns
 the first-class relationship-map surface for canonical `resource.relationships`,
 the correlation ordering, and the truncation rule, so callers pass raw
 relationships and correlation lists instead of encoding their own sort or
 top-N behavior.
 Canonical parent edges now also originate in this subsystem: `ParentID` is
 folded into the facet relationship set through
-`ResourceRelationshipsWithCanonicalParent` before any drawer or Patrol
-consumer renders a relationship map, so pages do not rederive parent topology
+`ResourceRelationshipsWithCanonicalParent` before any consumer renders a
+relationship map, so pages do not rederive parent topology
 from raw resource fields or invent relationship-map fallbacks locally.
-The same surfaces now also render recent changes through the shared
+The drawer renders recent changes through the shared
 `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 card, so canonical timeline wording and ordering stay governed by one
 frontend feed instead of separate page-local loops. Callers may suppress
-resource-change metadata badges only for compact operator-context surfaces such
-as Patrol's supporting context; the shared card still owns headline/reason
+resource-change metadata badges only for compact operator-context surfaces;
+no caller does today, and the Patrol page renders no recent changes. The
+shared card still owns headline/reason
 dedupe so prefixed backend reasons do not render as duplicated visible copy.
 Assistant finding handoffs are part of that same timeline contract: when the AI
 runtime needs recent changes for product-originated handoff resources, it should
@@ -5310,7 +5385,8 @@ TrueNAS API and the agent on that box), and an unknown machine never splits a
 disk. A split (operator exclusion) recorded against any ID the disk can hold,
 unscoped, current or machine-scoped, keeps the observation on its
 source-specific ID, keyed to its machine when another machine's disk already
-holds that ID (agent disk source IDs are the bare serial). Once the identity
+holds that ID (an agent disk's source-specific ID hashes its bare serial or
+WWN, below). Once the identity
 spans machines the unscoped ID no longer names one disk, so a split recorded
 against it applies to every copy, erring towards an extra row rather than a
 merge the operator forbade, and a manual link recorded against it stops
@@ -5328,14 +5404,113 @@ same-serial disk first appears on another machine and back when it goes away,
 and alert-history rows owned under the unscoped ID do not follow a re-key; a
 disk two reporters share is scoped to its canonical parent when the identity
 first spans machines, which the fixed ingest order (snapshot sources, then
-supplemental records) and source priority decide; agent SMART and Unraid disk
-source IDs are the bare serial, so same-serial agent disks on different hosts
-share one `SourceAgent` mapping and only the last ingested keeps the agent
-source target; same-serial disks share one metrics history key; and across
-reporters, hostnames that normalize alike (default TrueNAS names, short names
-across domains) still join. `IdentityMatcher` keeps one resource per machine
-ID, so the registry indexes disks by hardware key (`physicalDisksByHardware`)
-to see every copy.
+supplemental records) and source priority decide; and across reporters,
+hostnames that normalize alike (default TrueNAS names, short names across
+domains) still join. `IdentityMatcher` keeps one resource per machine ID, so
+the registry indexes disks by hardware key (`physicalDisksByHardware`) to see
+every copy.
+An agent disk's source ID carries its host, because the registry keeps one
+resource per source ID: when it was the bare serial, same-serial agent disks on
+different hosts shared one `SourceAgent` mapping, every disk but the last
+ingested lost its agent source target, and a disk only the agent reports lost
+its metrics target and chart. `HostSMARTDiskSourceID` and
+`HostUnraidDiskSourceID` key a disk with a usable serial or WWN as
+`<agent ID>/physical-disk:<serial or WWN>`, which the SMART and Unraid
+observations of one disk share when both report its serial; a disk without
+hardware identity keeps its host/device/topology key. A registry seeded from
+unified resources rebuilds one key from the agent ID the host above the disk
+retains, directly or above its Unraid array or cache pool, and the merged
+disk's serial or WWN (`seedAgentPhysicalDiskSourceIDLocked`), so a rehydrated
+disk, which is what the resource API serves, keeps an agent source target,
+though not every key its observations ingest under (a SMART row missing the
+serial its Unraid row reports, or a host several agent IDs report from); with
+no agent host found, a disk with hardware identity seeds its bare serial or
+WWN. Canonical IDs do not move: a disk with hardware identity is keyed by it,
+and `SourceSpecificID` hashes an agent disk's bare serial or WWN without the
+host (`sourceSpecificIDKey`), so a disk split off onto its source-specific ID,
+and the exclusion that split it, keep the IDs recorded before the host joined
+the source ID. Every host's split copy shares that ID, so a split observation
+takes it keyed to its machine when another machine's disk holds it, and joins
+the holder on its own machine, whether the split reaches it through
+`physicalDiskIDForMachineLocked` or `findMatch`. A split therefore cannot
+separate observations of one disk that one machine reports under several agent
+IDs: they meet on that ID, as they met on one source key before. Disk history stays keyed by
+hardware identity, not host: `HostSMARTDiskMetricID`, like the Proxmox and
+TrueNAS writers and `PhysicalDiskMetaMetricID`, prefers the reported serial or
+WWN, so a drive keeps one SMART and I/O history across a move between hosts and
+across sources that report it by the same identifier, and both hosts of a
+dual-ported SAS disk chart the one drive. A host-scoped history key would
+orphan the stored history of every agent disk with hardware identity for the
+rare collision. Residual: distinct drives that share a usable serial on
+different hosts (cloned VM disks with an explicit serial, fixed-serial USB
+bridges) interleave their samples in one series, as they already merge into one
+disk on a single host. Proof:
+`TestSameSerialAgentDisksOnTwoHostsEachKeepTheirMetricsTarget`,
+`TestHostSMARTDiskSourceIDScopesHardwareIdentityToItsHost`,
+`TestRehydratedAgentDisksKeepTheirLiveSourceIDs`,
+`TestSplitAgentDisksOnTwoMachinesNeverOverwriteEachOther`.
+A SMART row that reports no serial, smartctl's standby row among them, takes
+the serial the host's Unraid inventory reports for the same disk
+(`hostSMARTDiskSerial` over `matchUnraidDisk`). The adapter shows that serial
+and the disk's metrics target reads it, so `HostSMARTDiskMetricID` resolves the
+same serial, and the disk I/O writer keys a device with no SMART reading by its
+Unraid serial (`HostUnraidDeviceMetricID`) before its Proxmox and host/device
+fallbacks. The writers used to key such a row on its WWN or host/device key,
+which the chart did not read, so the disk's SMART temperature and I/O history
+never appeared. The row's source ID stays its own (`HostSMARTDiskSourceID`
+reads only the row), so its SMART and Unraid observations still ingest under
+two keys onto one disk. Samples already written under the old key stay there:
+the chart did not read that key while the Unraid row named the disk (only
+Unraid OS reports an Unraid inventory, and it is never a Proxmox node whose
+disk row could replace the serial), and a device-keyed series can hold another
+disk's samples once device letters move. The key follows the inventory: while the host
+reports no Unraid row for the disk, the row's own key is both written and read.
+A row matches its Unraid row by device path alone, so a row on a path several
+of the host's SMART rows share, controller members behind one block device,
+takes no serial from it, and the I/O writer still files that device's counter
+under no member. The I/O writer's inventory fallback also skips a device
+several Unraid rows name, while a SMART row keeps the adapter's first match.
+A row's own serial is kept even when it is a placeholder, as the
+adapter keeps it, and the Unraid row then stays a disk of its own. Proof:
+`TestHostSMARTDiskMetricIDTakesTheSerialItsUnraidRowReports`,
+`TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports`.
+The adapters' disk temperature rule is shared with the agent disk history
+writer. `HostSMARTDiskTemperature` returns the temperature and collection state
+a SMART row's disk shows: the row's own reading, or, when it has none, its
+Unraid row's under `unraidDiskTemperatureStatus`. `matchUnraidDisk` finds that
+Unraid row by the SMART row's usable serial anywhere in the inventory before
+any device path, and a placeholder serial matches nothing. The fallback, like
+the serial a row without one takes (`hostSMARTDiskSerial`), comes only from an
+Unraid row that describes the row's disk (`unraidDiskDescribesSMARTRow`): one
+carrying the row's usable serial, or one naming the row's device path when the
+row is that whole kernel block device. A controller member, even the only one
+reported, and a row sharing its path with other SMART rows are not, because
+the Unraid row describes the block device as a whole. `HostUnraidDiskTemperature`
+returns what a disk built from an Unraid row alone shows, and
+`HostUnraidDiskMetricID` returns the key that disk's metrics target reads: its
+usable serial, else its `HostUnraidDiskSourceID`, and nothing for a row without
+a device, which is not ingested. The writer used to take only the SMART row's
+own reading, so a temperature shown from the Unraid inventory, for a disk whose
+SMART probe returned none or one excluded from SMART collection, was never
+charted. Proof: `TestAgentDiskChartsTheUnraidTemperatureItShows` and
+`TestHostUnraidDiskMetricIDMatchesItsDiskMetricsTarget`.
+`HostDiskTemperatureReadings` lists the reading each disk of a host agent shows
+for consumers that judge disk heat, the agent disk temperature alerts in
+`CheckHost`: one per SMART row the registry ingests (no virtual block device),
+then one per Unraid row whose disk key (`HostUnraidDiskMetricID`) no SMART row's
+`HostSMARTDiskMetricID` equals, the history writer's rule, with a row without a
+device skipped as the registry skips it. Rows with one key are one registry
+disk whatever device labels they carry, such as a controller member
+(`0 [megaraid,0]`) and its Unraid device (`sda`). When smartctl and Unraid
+report different usable serials for one device the registry shows both disks,
+and both are listed. Each reading is taken from the disk resource
+`resourceFromHostSMARTDisk` or `resourceFromHostUnraidPhysicalDisk` builds, so
+its temperature, collection state and disk type are the ones that row's disk
+shows. Unraid rows on different devices that share a key and no SMART row are
+one registry disk but keep a reading each, since alerts are keyed by device.
+Proof: `TestHostDiskTemperatureReadingsMatchTheDisksTheRegistryShows` compares
+each reading with the ingested disk, including two disks on one device and a
+controller member Unraid lists under its block device.
 That same canonical physical-disk view must also expose source-independent host
 context. When a disk is API-backed rather than node-backed, typed views should
 fall back to canonical host identity such as `identity.hostnames` instead of
@@ -5428,8 +5603,11 @@ should extend these unified-resource owners instead of rebuilding status or
 badge logic inside PMG, recovery, dashboard, or infrastructure-local views.
 The shared resource-runtime adapter boundary is also owned here now.
 `frontend-modern/src/utils/agentResources.ts` owns canonical actionable
-resource identities, agent-facet detection, cluster-name fallbacks, and
-resource-derived chart-key candidates. `frontend-modern/src/utils/resourcePlatformData.ts`
+resource identities, agent-facet detection, and cluster-name fallbacks. It no
+longer carries a resource-wide chart-key candidate list: workload table
+sparklines match chart series to rows through the chart-key candidates in
+`frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts`.
+`frontend-modern/src/utils/resourcePlatformData.ts`
 owns the typed extraction of platform-data fragments from unified resources,
 and `frontend-modern/src/utils/resourceStateAdapters.ts` owns canonical
 projection from unified resources into node/PBS/PMG runtime view models.
@@ -5449,12 +5627,14 @@ wording stays aligned with the drawer's recent-change cards and timeline.
 Timeline cards in that drawer surface change metadata when it is present, so
 the history view preserves the richer provenance already carried by the
 unified-resource model instead of flattening those fields away.
-The same Infrastructure resource-only links now also default through the
-shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
+The shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
-cards from the Patrol page, resource drawer, and problem-resource dashboard
-panels, so canonical resource-filter path construction stays owned by the
-shared summary cards rather than being duplicated per surface.
+cards keep resource links behind an optional `buildResourceHref` input with no
+default, following the 2026-05-16 cross-resource drilldown retirement above.
+The resource drawer passes none, so its change and correlation labels render
+as plain text; a surface that needs resource links must pass a platform-route
+builder into the shared card rather than rebuilding resource-filter paths per
+surface.
 Platform tables supply the resource-label resolver to the resource drawer
 through `PlatformResourceDetailTableRow`. `createPlatformResourceLabelResolver(...)`
 in `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
@@ -5945,7 +6125,12 @@ the reference and is never retried. An owned row records its alert's
 reference as `alert_resource_id`. A read by the reference returns the rows
 journaled under it plus the rows owned away from it, matched through the
 indexed alert identifier (`ProxmoxPhysicalDiskAlertIdentifiers`) and that
-recorded reference, and every count uses the same predicate. The Alerts
+recorded reference, and every count uses the same predicate. Those
+identifiers cover the health and wearout specs and the disk temperature
+metric spec (`<reference>::metric-threshold:diskTemperature`), since PVE disks
+also raise temperature alerts under the same reference
+(`TestProxmoxDiskTemperatureAlertRowsFollowRecordedHardwareIdentity` in
+`internal/unifiedresources/store_test.go`). The Alerts
 history Resource action therefore still lists every occurrence raised under
 the path, across the disks that held it, and alert-centric reads keep their
 occurrences (see the AI runtime contract's incident-history queries). Rows
@@ -6101,6 +6286,13 @@ presentation. `frontend-modern/src/components/Infrastructure/`
 placement, signal, and snapshot context through the canonical resource drawer
 and debug/source sections rather than introducing a VMware-only detail route,
 drawer tab, or provider-local investigation shell.
+The TrueNAS physical-disk drawer judges a current temperature reading by the
+disk temperature policy, like the TrueNAS storage table:
+`useResourceDetailDrawerDerivedState.ts` passes the alerts store's
+`getDiskTemperatureThresholds` into `buildTrueNASDetailSections`, and the
+Temperature row takes a warning tone only when `isPhysicalDiskRunningHot`
+says the reading reached its disk type's alert trigger. A retained reading
+keeps its muted last-known row, and without a resolver heat is not judged.
 That same infrastructure consumer boundary also owns source selection
 continuity. Settings infrastructure panels and platform/runtime pages must
 keep canonical sources such as `truenas` and `availability` present in their
@@ -6183,9 +6375,20 @@ pass and manual links both apply that function:
   the best of equal ones. A quiet source drops out of that decision.
 - Once every source is quiet, an `offline` verdict survives and any other
   verdict reads `warning`. The best of those wins.
-- A current facet sighting carries no verdict (the PBS host-agent association,
-  an availability check projected onto its target). It counts as `online` only
-  when no current source has a verdict, and reads `warning` once quiet.
+- A current facet sighting carries no verdict (the PBS host-agent association).
+  It counts as `online` only when no current source has a verdict, and reads
+  `warning` once quiet.
+- Availability checks projected onto a monitored resource rank like that facet,
+  but their shared sighting is not their verdict. `availabilityChecksProveOnline`
+  judges each check at the pass's `now` by its own evidence window
+  (`Evidence.ValidUntil`: two poll intervals for a single local check, the
+  probe report window for a remote or multi-location one). An enabled,
+  passing check with current evidence proves the resource answers and reads
+  `online` once one of the resource's own sources has gone quiet and none that
+  is current has a verdict. Every other check abstains, current or quiet: a
+  failing check proves only that one port or service does not answer, and a
+  pass whose evidence lapsed proves nothing now. A check's own row keeps the ordinary
+  rules.
 
 The stale pass used to read delivery as the verdict. A Proxmox node the cluster
 reported offline on a live poll came back `online` once its linked agent fell
@@ -6209,24 +6412,52 @@ online stays `online` when its linked agent stops reporting. A live agent keeps
 a node `online` when the Proxmox poll reports it offline, which the Proxmox
 nodes table reads with `connectionHealth: error` as a stale provider. When a
 guest's or container's only source goes quiet, a running one stays `warning`
-and a stopped one stays `offline`.
+and a stopped one stays `offline`. In each quiet case a projected availability
+check with current evidence lifts the resource to `online`, as described
+below.
 
 The sighting still reads `stale`, so health keeps its `telemetry_stale` reason
 and monitored-system reasons are unchanged. In-memory clones keep the verdicts,
 including a facet's missing one. A serialized copy carries none, so
 `IngestResources` gives each sighting of a copy that lost them all the stored
 resource status; a merged row's separate source verdicts do not survive that
-round trip. A manual link that joins two resources reported by one source keeps
+round trip, and a copy whose status a passing check supplied gives that status
+to every source. A manual link that joins two resources reported by one source keeps
 the fresher sighting. `registry_merge_policy_test.go` pins the node,
 poller-expired, guest, round-trip, copy, agent, Docker, Kubernetes,
 mixed-source and manual-link cases, and the aggregation table.
 
-Availability checks still count by delivery. With every source that has a
-verdict quiet, a current check keeps its target `online` even when the check
-fails, as it did before. Several checks share one sighting whose freshness
-comes from whichever check was projected last, so an availability verdict
-needs each check's own freshness, including local checks that miss their
-cadence, and has to survive manual links. That is left to a follow-up.
+Availability checks used to count by delivery too. With every source that
+has a verdict quiet, a current failing check kept a node `preserveOrExpireNodes`
+expired `online`, and a quiet one lifted it to `warning`. Several checks share
+one sighting whose freshness comes from whichever check was projected last, so
+a failing check that just ran could also vouch for another check's old pass.
+Each check is now judged by its own evidence. A failing probe no longer holds
+an expired node `online`, and it never makes a guest read stopped to the
+consumers that count `offline` as stopped (the workloads summary, the Proxmox
+page counts). The failure stays on the check's own row, which raises an
+outage incident once the check confirms one (past its failure threshold, from
+every location). A check observed from several locations relies on the poller
+ageing out a location that stopped running and lasting an available check's
+evidence only as long as its newest reachable path (monitoring.md), so one
+location's fresh failure cannot lend its freshness to another location's old
+pass.
+
+The verdict is read from the checks on the resource when status is
+aggregated. Projecting, re-running or retargeting a check also re-applies the
+stale pass's rule to every target it touches whose status that pass owns,
+because a check is not a delivery from the target's own sources and the
+resources API replays checks after its stale pass. The pass owns a status only
+through the target's own sightings: the checks' sighting going quiet neither
+hands it the target nor, once removed, takes the target away, so a target
+whose own sources have not gone quiet keeps the status they gave it. A check
+retargeted away therefore takes its verdict with it at once. A
+manual link keeps only the primary's own checks, so the merged resource is
+judged by the checks it shows and never by the linked resource's fresher
+sighting. `registry_test.go` pins the expired-node and quiet-guest cases, both
+projection orders, re-judging on check changes, ownership through the
+target's own sightings and the manual link; the aggregation table pins the
+check rules.
 
 ### Canonical object drawer hierarchy
 
@@ -6433,9 +6664,52 @@ conflict): the agent's row may be the slot's previous occupant, retained by a
 silent agent, and the join would hand the replacement that disk's serial,
 readings and canonical resource. A hardware identity match still joins on its
 own, and without a WWN on either side the path fallback stands. The seeded
-source mapping reused after a restart is a separate path this does not cover.
-`TestRegistrySASPathJoinRefusesContradictingWWN` covers the stale row and both
-same-disk shapes; monitoring's SMART merge applies the matching guard first.
+source mapping a rehydrated registry reuses applies the same refusal (next
+section). `TestRegistrySASPathJoinRefusesContradictingWWN` covers the stale
+row and both same-disk shapes; monitoring's SMART merge applies the matching
+guard first.
+
+### Seeded slot mapping refuses a replaced disk
+
+`ingestRecord` honours a source key's existing mapping, such as one
+`IngestResources` seeds from persisted unified resources, before any
+identity matching. Proxmox keys a disk by its slot
+(`ProxmoxPhysicalDiskSourceID`), so a disk swapped into the slot arrived
+under the previous disk's key, and `mergeInto` kept that disk's canonical ID
+and, where an agent report had been merged in, its serial, WWN, temperature
+and failed health. A Proxmox disk observation now refuses the mapping when
+the two carry hardware identities naming different disks
+(`proxmoxDiskSlotHoldsAnotherDisk`: `HardwareIdentityConflict` after
+`HardwareIdentityMatch`). Only fields reported on both sides count, so a
+missing serial or WWN, including Proxmox's literal `unknown`, is no evidence.
+Differing serials are no evidence when either side is SAS, because Proxmox
+may report the SAS address there (#1595), or when the mapped disk was merged
+with an agent report, whose serial `mergeInto` may have kept (collection
+status does not reliably say which serial it holds), unless Proxmox read the
+drive's own serial too, by the rule monitoring's
+`hostAgentSMARTSerialComparable` applies: NVMe on both sides, or an agent
+SATA disk under Proxmox vendor `ATA` that Proxmox does not type `usb`, not a
+SCSI designator or a USB bridge's serial. A refused key falls through to the linked-disk join,
+`findMatch` and `chooseNewID` like an unmapped one, except that none of them
+may merge it into the refused disk: an ID that lands on it is replaced with
+the key's source-specific ID. Agreement still wins, as it does in identity
+matching, so drives that share a serial they do not own, such as a USB
+bridge's, read as one disk: a second swap in the same enclosure joins the
+first replacement, which reported the same bridge serial. That belongs to
+identity matching, not this guard. The refused disk keeps its Proxmox
+facet and is not updated, so until the registry is rebuilt both disks answer
+to the slot's PVE alert reference, and canonical reference resolution treats
+that reference as ambiguous rather than handing it to either. A later
+rehydration may seed the slot key to the old disk again, and the refusal
+repeats. No current caller ingests Proxmox disk records over a seeded
+mapping: the monitor rebuilds a fresh registry each poll, and the resource
+API, host-continuity and Patrol registries seeded from unified resources do
+not replay Proxmox disk records. This closes the registry contract, not a
+reported symptom. `TestRegistrySeededSlotMappingRefusesReplacedDisk` covers
+SATA (with and without a new WWN), SAS, USB-enclosure and Proxmox-only
+replacements, plus eight same-disk controls (including a SCSI designator
+from an agent without collection status and a USB bridge serial under
+Proxmox vendor `ATA`), each through two rehydrations.
 
 ### Drawer tab selection survives a transient snapshot change (#1723)
 

@@ -507,7 +507,7 @@ describe('metricThresholds', () => {
         usage: 85,
         temperature: 80,
       });
-      expect(FACTORY_TRUENAS_DISK_DEFAULTS).toEqual({ temperature: 55 });
+      expect(FACTORY_TRUENAS_DISK_DEFAULTS).toEqual({ temperature: undefined });
       expect(FACTORY_VMWARE_DEFAULTS).toEqual({
         cpu: 80,
         memory: 85,

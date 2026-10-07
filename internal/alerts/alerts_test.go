@@ -784,6 +784,137 @@ func TestPulseRelaxedThresholdsIncreaseCpuTrigger(t *testing.T) {
 	}
 }
 
+// pulse-relaxed lifted an Off trigger to its floor like any low trigger, so a
+// relaxed guest with disk alerts off raised one at 96%. A config save then
+// re-judged it by the Off threshold and resolved it, and the next poll raised
+// it again. Relaxing a guest must not raise an alert its config turned off.
+func TestPulseRelaxedKeepsOffGuestThresholdOff(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.GuestDefaults = ThresholdConfig{
+		CPU:    &HysteresisThreshold{Trigger: 80, Clear: 75},
+		Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
+		Disk:   &HysteresisThreshold{Trigger: 0, Clear: 0},
+	}
+	m.mu.Unlock()
+
+	vm := models.VM{
+		ID:       "inst/qemu/105",
+		Name:     "relaxed-vm",
+		Node:     "node1",
+		Instance: "inst",
+		Status:   "running",
+		Memory:   models.Memory{Usage: 40},
+		Disk:     models.Disk{Usage: 96},
+		Tags:     []string{"pulse-relaxed"},
+	}
+
+	m.CheckGuest(vm, "inst")
+	if testHasActiveAlert(t, m, canonicalMetricStateID(vm.ID, "disk")) {
+		t.Fatalf("expected no disk alert on a relaxed guest whose disk threshold is off")
+	}
+}
+
+// A config save re-judges a relaxed guest's alert by the thresholds CheckGuest
+// raised it under. Reevaluation rebuilt the guest from alert metadata without
+// its tags, so an unset memory threshold, which pulse-relaxed sets to 92, read
+// as no threshold there: the save resolved the alert with a recovery
+// notification and the next poll raised it again. The tags are read back in
+// the shape a restart restores them.
+func TestConfigSaveJudgesRelaxedGuestAlertByRelaxedThresholds(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.GuestDefaults = ThresholdConfig{}
+	m.mu.Unlock()
+
+	vm := models.VM{
+		ID:       "inst/qemu/106",
+		Name:     "relaxed-vm",
+		Node:     "node1",
+		Instance: "inst",
+		Status:   "running",
+		Memory:   models.Memory{Usage: 95},
+		Tags:     []string{"pulse-relaxed"},
+	}
+	memoryAlertID := canonicalMetricStateID(vm.ID, "memory")
+
+	m.CheckGuest(vm, "inst")
+	alert := testRequireActiveAlert(t, m, memoryAlertID)
+	if alert.Threshold != 92 {
+		t.Fatalf("memory alert threshold = %v, want the relaxed 92", alert.Threshold)
+	}
+
+	m.mu.Lock()
+	raw, err := json.Marshal(alert.Metadata)
+	if err != nil {
+		m.mu.Unlock()
+		t.Fatalf("marshal metadata: %v", err)
+	}
+	var restored map[string]interface{}
+	if err := json.Unmarshal(raw, &restored); err != nil {
+		m.mu.Unlock()
+		t.Fatalf("unmarshal metadata: %v", err)
+	}
+	alert.Metadata = restored
+	m.mu.Unlock()
+	if _, ok := restored["tags"].([]interface{}); !ok {
+		t.Fatalf("restored tags = %T, want []interface{}", restored["tags"])
+	}
+
+	m.UpdateConfig(m.GetConfig())
+	if !testHasActiveAlert(t, m, memoryAlertID) {
+		t.Fatalf("expected a config save to keep a relaxed guest's memory alert over its relaxed trigger")
+	}
+}
+
+// pulse-relaxed lifts a guest's disk threshold, but a filesystem's own
+// override still decides that filesystem, while polling and on a config save.
+// Judged by the guest's relaxed floor on save, a filesystem alert over its
+// lower override resolved and the next poll raised it again.
+func TestConfigSaveKeepsRelaxedGuestFilesystemOverride(t *testing.T) {
+	m := newTestManager(t)
+	guestID := BuildGuestKey("pve1", "node1", 108)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.GuestDefaults = ThresholdConfig{
+		Disk: &HysteresisThreshold{Trigger: 90, Clear: 85},
+	}
+	m.config.Overrides = map[string]ThresholdConfig{
+		"guest-disk:guest:pve1:108/disk:boot-dev-vda1": {
+			Disk: &HysteresisThreshold{Trigger: 85, Clear: 80},
+		},
+	}
+	m.mu.Unlock()
+
+	vm := models.VM{
+		ID:       guestID,
+		VMID:     108,
+		Name:     "relaxed-fs",
+		Node:     "node1",
+		Instance: "pve1",
+		Status:   "running",
+		Disks: []models.Disk{
+			{Mountpoint: "/boot", Device: "/dev/vda1", Usage: 92, Total: 100, Used: 92, Free: 8},
+		},
+		Tags: []string{"pulse-relaxed"},
+	}
+	bootAlertID := canonicalMetricStateID(guestID+"-disk-boot-dev-vda1", "disk")
+
+	m.CheckGuest(vm, "pve1")
+	if !testHasActiveAlert(t, m, bootAlertID) {
+		t.Fatalf("expected a /boot alert over its 85%% override on a relaxed guest")
+	}
+	m.UpdateConfig(m.GetConfig())
+	if !testHasActiveAlert(t, m, bootAlertID) {
+		t.Fatalf("expected a config save to keep a relaxed guest's /boot alert over its own 85%% override")
+	}
+}
+
 func TestClearAlertMarksResolutionAndReturnsStatus(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
@@ -2754,6 +2885,101 @@ func TestCheckBackupsIgnoresVMIDs(t *testing.T) {
 	if !allowedExists {
 		t.Fatalf("expected backup alert for non-ignored VMID")
 	}
+}
+
+// Host and guest evaluation used to fill in the Clear of a disk override's
+// threshold after dropping m.mu, writing through the live config's pointer
+// while GetConfig cloned it under the read lock, and Docker evaluation read
+// m.config.DockerDefaults with no lock while UpdateConfig replaced m.config.
+// Evaluation now copies what it needs under m.mu. Run with -race.
+func TestAlertEvaluationLeavesTheLiveConfigToTheLock(t *testing.T) {
+	originalLogLevel := zerolog.GlobalLevel()
+	zerolog.SetGlobalLevel(zerolog.Disabled)
+	t.Cleanup(func() {
+		zerolog.SetGlobalLevel(originalLogLevel)
+	})
+
+	m := newTestManager(t)
+
+	host := models.Host{
+		ID:       "eval-lock",
+		Hostname: "eval-lock",
+		Status:   "online",
+		Disks:    []models.Disk{{Mountpoint: "/", Device: "/dev/sda1", Usage: 50, Total: 100, Used: 50, Free: 50}},
+	}
+	hostDiskOverrideID, _ := hostDiskResourceID(host, host.Disks[0])
+	vm := models.VM{
+		ID:       BuildGuestKey("pve1", "node1", 101),
+		VMID:     101,
+		Name:     "eval-lock",
+		Node:     "node1",
+		Instance: "pve1",
+		Status:   "running",
+		Disks:    []models.Disk{{Mountpoint: "/boot", Device: "/dev/vda1", Usage: 50, Total: 100, Used: 50, Free: 50}},
+	}
+	guestDiskOverrideID := "guest-disk:guest:pve1:101/disk:boot-dev-vda1"
+	dockerHost := models.DockerHost{
+		ID:          "eval-lock-docker",
+		Hostname:    "eval-lock-docker",
+		DisplayName: "eval-lock-docker",
+		Containers: []models.DockerContainer{{
+			ID:            "abcdef123456",
+			Name:          "web",
+			State:         "running",
+			CPUPercent:    10,
+			MemoryPercent: 10,
+			MemoryUsage:   100 << 20,
+			MemoryLimit:   1 << 30,
+		}},
+	}
+
+	// A disk override saved with only a trigger leaves Clear for evaluation
+	// to default.
+	withTriggerOnlyDiskOverrides := func(cfg AlertConfig) AlertConfig {
+		cfg.Enabled = true
+		cfg.ActivationState = ActivationActive
+		cfg.Overrides = map[string]ThresholdConfig{
+			hostDiskOverrideID:  {Disk: &HysteresisThreshold{Trigger: 90}},
+			guestDiskOverrideID: {Disk: &HysteresisThreshold{Trigger: 90}},
+		}
+		return cfg
+	}
+	m.UpdateConfig(withTriggerOnlyDiskOverrides(m.GetConfig()))
+
+	m.CheckHost(host)
+	m.CheckGuest(vm, "pve1")
+	live := m.GetConfig()
+	for _, id := range []string{hostDiskOverrideID, guestDiskOverrideID} {
+		if got := live.Overrides[id].Disk.Clear; got != 0 {
+			t.Fatalf("evaluating %s wrote clear %v into the live override", id, got)
+		}
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			// Resetting the overrides gives evaluation a Clear to fill again.
+			m.UpdateConfig(withTriggerOnlyDiskOverrides(m.GetConfig()))
+			m.UpdateConfig(m.GetConfig())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			_ = m.GetConfig()
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			m.CheckHost(host)
+			m.CheckGuest(vm, "pve1")
+			m.CheckDockerHost(dockerHost)
+		}
+	}()
+	wg.Wait()
 }
 
 func TestCheckDockerHostIgnoresContainersByPrefix(t *testing.T) {
@@ -6251,6 +6477,22 @@ func TestApplyRelaxedGuestThresholds(t *testing.T) {
 		}
 		if result.CPU.Clear != 3 {
 			t.Errorf("CPU.Clear = %v, want 3 (unchanged since < Trigger)", result.CPU.Clear)
+		}
+	})
+
+	t.Run("off thresholds stay off", func(t *testing.T) {
+		cfg := ThresholdConfig{
+			CPU:    &HysteresisThreshold{Trigger: 0, Clear: 0},
+			Memory: &HysteresisThreshold{Trigger: -1, Clear: -1},
+			Disk:   &HysteresisThreshold{Trigger: 0, Clear: 0},
+		}
+
+		result := applyRelaxedGuestThresholds(cfg)
+
+		for name, th := range map[string]*HysteresisThreshold{"CPU": result.CPU, "Memory": result.Memory, "Disk": result.Disk} {
+			if th == nil || th.Trigger > 0 {
+				t.Errorf("%s = %+v, want it to stay off", name, th)
+			}
 		}
 	})
 
@@ -12300,6 +12542,65 @@ func TestCheckEscalations(t *testing.T) {
 	})
 }
 
+// A config save re-judges open TrueNAS disk temperature alerts against the
+// threshold the next evaluation applies to each disk's type.
+func TestTrueNASDiskTemperatureAlertsReevaluatePerDiskType(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.TrueNASDiskDefaults = ThresholdConfig{}
+	configureUnifiedEvalManager(t, m, cfg)
+
+	nvme := trueNASTemperatureDisk("nvme0n1", "nvme", 72)
+	sata := trueNASTemperatureDisk("sda", "sata", 57)
+	checkTrueNASTemperatureDisk(t, m, nvme)
+	checkTrueNASTemperatureDisk(t, m, sata)
+	for _, disk := range []unifiedresources.Resource{nvme, sata} {
+		if _, firing := trueNASDiskTemperatureAlert(t, m, disk); !firing {
+			t.Fatalf("%s did not fire before the save: %v", disk.ID, alertKeys(m))
+		}
+	}
+
+	// Raising only the NVMe trigger resolves the NVMe alert and leaves the
+	// SATA alert, still over its own trigger, open.
+	m.mu.Lock()
+	m.config.DiskTempByType["nvme"] = HysteresisThreshold{Trigger: 75, Clear: 70}
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+	if _, firing := trueNASDiskTemperatureAlert(t, m, nvme); firing {
+		t.Fatalf("NVMe alert at 72C stayed open under a 75C NVMe trigger")
+	}
+	if _, firing := trueNASDiskTemperatureAlert(t, m, sata); !firing {
+		t.Fatalf("SATA alert at 57C resolved under its unchanged 55C trigger")
+	}
+}
+
+// An alert raised before it recorded its disk type is held to the lowest
+// per-type trigger, so a save never resolves an alert the next evaluation
+// raises again.
+func TestTrueNASDiskTemperatureAlertWithoutDiskTypeHeldAtLowestTrigger(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.TrueNASDiskDefaults = ThresholdConfig{}
+	cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 70, Clear: 65}
+	cfg.DiskTempByType = map[string]HysteresisThreshold{"nvme": {Trigger: 60, Clear: 55}}
+	configureUnifiedEvalManager(t, m, cfg)
+
+	nvme := trueNASTemperatureDisk("nvme0n1", "nvme", 66)
+	checkTrueNASTemperatureDisk(t, m, nvme)
+	alert, firing := trueNASDiskTemperatureAlert(t, m, nvme)
+	if !firing {
+		t.Fatalf("NVMe at 66C did not fire under a 60C NVMe trigger: %v", alertKeys(m))
+	}
+
+	m.mu.Lock()
+	delete(alert.Metadata, "diskType")
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+	if _, firing := trueNASDiskTemperatureAlert(t, m, nvme); !firing {
+		t.Fatalf("an alert without a disk type was resolved by the 70C agent default although its NVMe trigger is 60C")
+	}
+}
+
 func TestCleanupAlertsForNodes(t *testing.T) {
 	// t.Parallel()
 
@@ -12626,6 +12927,82 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 			t.Fatalf("resourceType = %v, want pmg", got)
 		}
 	})
+}
+
+// TestCleanupAlertsForNodesKeepsPlatformMetricAlerts pins that the Proxmox
+// node cleanup, which runs on every Proxmox poll, leaves Kubernetes, TrueNAS
+// and vSphere metric alerts alone. Their Node is a cluster or platform host,
+// never a Proxmox node, and their resourceType is a display label.
+func TestCleanupAlertsForNodesKeepsPlatformMetricAlerts(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	inputs := []*UnifiedResourceInput{
+		{ID: "physical-disk:truenas-main/sda", Type: "truenas-disk", Name: "sda", Node: "truenas-main", Instance: "TrueNAS", Temperature: &UnifiedResourceMetric{Value: 80, Percent: 80}},
+		{ID: "storage:truenas-main/pool:tank", Type: "truenas-pool", Name: "tank", Node: "truenas-main", Instance: "TrueNAS", Disk: &UnifiedResourceMetric{Percent: 95}},
+		{ID: "k8s:prod:pod:api", Type: "pod", Name: "api", Node: "k8s-node-1", Instance: "prod", CPU: &UnifiedResourceMetric{Percent: 99}},
+		{ID: "vmware:vc:vm:app-01", Type: "vmware-vm", Name: "app-01", Node: "esxi-01", Instance: "vc", CPU: &UnifiedResourceMetric{Percent: 99}},
+	}
+	for _, input := range inputs {
+		m.CheckUnifiedResource(input)
+	}
+	platformAlerts := alertKeys(m)
+	if len(platformAlerts) != len(inputs) {
+		t.Fatalf("expected one alert per platform resource, got %v", platformAlerts)
+	}
+
+	m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+
+	for _, alertID := range platformAlerts {
+		if _, exists := testLookupActiveAlert(t, m, alertID); !exists {
+			t.Fatalf("Proxmox node cleanup removed platform alert %q; remaining %v", alertID, alertKeys(m))
+		}
+	}
+
+	// The platform id alone keeps an alert whose label is not recognised.
+	m.mu.Lock()
+	labels := make(map[*Alert]interface{}, len(m.activeAlerts))
+	for _, alert := range m.activeAlerts {
+		labels[alert] = alert.Metadata["resourceType"]
+		alert.Metadata["resourceType"] = "Unrecognised"
+	}
+	m.mu.Unlock()
+	m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+	if got := alertKeys(m); len(got) != len(platformAlerts) {
+		t.Fatalf("platform alerts removed despite their platformType: %v", got)
+	}
+	m.mu.Lock()
+	for alert, label := range labels {
+		alert.Metadata["resourceType"] = label
+	}
+	m.mu.Unlock()
+
+	// A legacy-shaped alert whose metadata predates platformType is still kept
+	// by its display label.
+	m.mu.Lock()
+	for _, alert := range m.activeAlerts {
+		delete(alert.Metadata, alertPlatformTypeKey)
+	}
+	m.mu.Unlock()
+	m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+	if got := alertKeys(m); len(got) != len(platformAlerts) {
+		t.Fatalf("display-label platform alerts removed without platformType: %v", got)
+	}
+}
+
+// The cleanup still removes a Proxmox guest alert whose node left the estate.
+func TestCleanupAlertsForNodesStillRemovesMissingProxmoxNodeAlerts(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	m.CheckUnifiedResource(&UnifiedResourceInput{ID: "pve-gone:node-gone:101", Type: "vm", Name: "vm-101", Node: "node-gone", Instance: "pve-gone", CPU: &UnifiedResourceMetric{Percent: 99}})
+	if len(alertKeys(m)) != 1 {
+		t.Fatalf("expected the guest CPU alert, got %v", alertKeys(m))
+	}
+	m.CleanupAlertsForNodes(map[string]bool{"pve1": true})
+	if got := alertKeys(m); len(got) != 0 {
+		t.Fatalf("guest alert on a removed node survived cleanup: %v", got)
+	}
 }
 
 func TestCheckZFSPoolHealth(t *testing.T) {
@@ -22114,14 +22491,20 @@ func TestStaleCleanupKeepsThresholdAlertStillBeingEvaluated(t *testing.T) {
 
 // Resource history owns each PVE disk alert row by the hardware identity the
 // alert records, and reads by the path reference find those rows by alert
-// identifier. Both must match what CheckDiskHealth produces.
+// identifier. Both must match what CheckDiskHealth and
+// CheckProxmoxDiskTemperature produce.
 func TestCheckDiskHealthAlertsCarryHistoryOwnershipIdentity(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.config.MetricTimeThresholds = nil
+	m.mu.Unlock()
 	disk := proxmox.Disk{DevPath: "/dev/sdb", Model: "Crucial MX500", Serial: "2117E59AB123", WWN: "0x5002538f12345678",
 		Type: "ssd", Health: "FAILED", Wearout: 3}
 	for i := 0; i < 3; i++ {
 		m.CheckDiskHealth("lab", "pve1", disk)
+		m.CheckProxmoxDiskTemperature("lab", "pve1", ProxmoxDiskTemperatureReading{Disk: disk, Celsius: 80})
 	}
 
 	ref := unifiedresources.ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", disk.DevPath)
@@ -22140,5 +22523,189 @@ func TestCheckDiskHealthAlertsCarryHistoryOwnershipIdentity(t *testing.T) {
 		if alert.Metadata[unifiedresources.MetadataDiskSerial] != disk.Serial || alert.Metadata[unifiedresources.MetadataDiskWWN] != disk.WWN {
 			t.Fatalf("alert %q records serial %v and WWN %v", alert.ID, alert.Metadata[unifiedresources.MetadataDiskSerial], alert.Metadata[unifiedresources.MetadataDiskWWN])
 		}
+	}
+}
+
+func proxmoxTemperatureDisk(devPath, diskType string) proxmox.Disk {
+	return proxmox.Disk{DevPath: devPath, Model: "Test Disk", Serial: "SER-" + devPath, Type: diskType, Health: "PASSED"}
+}
+
+func proxmoxDiskTemperatureAlert(t *testing.T, m *Manager, devPath string) (*Alert, bool) {
+	t.Helper()
+	ref := unifiedresources.ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", devPath)
+	return testLookupActiveAlert(t, m, canonicalMetricStateID(ref, proxmoxDiskTemperatureMetric))
+}
+
+func proxmoxDiskTemperatureResolution(m *Manager, devPath string) (*models.AlertResolution, bool) {
+	ref := unifiedresources.ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", devPath)
+	id := canonicalMetricStateID(ref, proxmoxDiskTemperatureMetric)
+	for _, resolved := range m.GetRecentlyResolved() {
+		if resolved.ID == id {
+			return resolved.Resolution, true
+		}
+	}
+	return nil, false
+}
+
+// TestProxmoxDiskTemperatureAlertsFollowDiskTemperaturePolicy pins Proxmox disk
+// temperature alerts to the disk temperature policy that judges an agent's
+// disks, TrueNAS disks and the Physical Disks verdict.
+func TestProxmoxDiskTemperatureAlertsFollowDiskTemperaturePolicy(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	check := func(devPath, diskType string, celsius int) {
+		m.CheckProxmoxDiskTemperature("lab", "pve1", ProxmoxDiskTemperatureReading{Disk: proxmoxTemperatureDisk(devPath, diskType), Celsius: celsius})
+	}
+	check("/dev/nvme0n1", "nvme", 63)
+	check("/dev/nvme1n1", "nvme", 72)
+	check("/dev/sda", "sata", 56)
+	check("/dev/sdb", "sas", 63)
+
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/nvme0n1"); firing {
+		t.Fatalf("NVMe at 63C fired under its 70C trigger: %v", alertKeys(m))
+	}
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/sdb"); firing {
+		t.Fatalf("SAS at 63C fired under its 65C trigger: %v", alertKeys(m))
+	}
+	for devPath, trigger := range map[string]float64{"/dev/nvme1n1": 70, "/dev/sda": 55} {
+		alert, firing := proxmoxDiskTemperatureAlert(t, m, devPath)
+		if !firing {
+			t.Fatalf("%s did not fire: %v", devPath, alertKeys(m))
+		}
+		if alert.Threshold != trigger {
+			t.Fatalf("%s trigger = %v, want %v", devPath, alert.Threshold, trigger)
+		}
+		if alert.Type != proxmoxDiskTemperatureMetric || alert.Metadata["resourceType"] != proxmoxDiskResourceType {
+			t.Fatalf("%s alert type %q, resourceType %v", devPath, alert.Type, alert.Metadata["resourceType"])
+		}
+		if alert.Metadata["diskType"] == nil || alert.Metadata[unifiedresources.MetadataDiskSerial] != "SER-"+devPath {
+			t.Fatalf("%s metadata = %v", devPath, alert.Metadata)
+		}
+	}
+	if alert, _ := proxmoxDiskTemperatureAlert(t, m, "/dev/sda"); alert.Message != "Disk temperature at 56.0°C" {
+		t.Fatalf("message = %q", alert.Message)
+	}
+
+	// A raised NVMe trigger moves NVMe disks with it.
+	m.mu.Lock()
+	m.config.DiskTempByType["nvme"] = HysteresisThreshold{Trigger: 75, Clear: 70}
+	m.mu.Unlock()
+	check("/dev/nvme2n1", "nvme", 72)
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/nvme2n1"); firing {
+		t.Fatalf("NVMe at 72C fired under a 75C trigger")
+	}
+}
+
+// A disk the linked agent reports is the agent's: its open alert closes as
+// moved to the agent, and the disk never alerts twice. An excluded disk, or a
+// policy the agent Disk Temp default switched off, closes it as a plain clear.
+// A disk with no current reading keeps its alert.
+func TestProxmoxDiskTemperatureAlertOwnershipAndHolds(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+	disk := proxmoxTemperatureDisk("/dev/sda", "sata")
+	read := func(reading ProxmoxDiskTemperatureReading) {
+		reading.Disk = disk
+		m.CheckProxmoxDiskTemperature("lab", "pve1", reading)
+	}
+	firing := func() bool {
+		_, ok := proxmoxDiskTemperatureAlert(t, m, "/dev/sda")
+		return ok
+	}
+
+	read(ProxmoxDiskTemperatureReading{Celsius: 60})
+	if !firing() {
+		t.Fatalf("SATA at 60C did not fire: %v", alertKeys(m))
+	}
+	read(ProxmoxDiskTemperatureReading{Celsius: 0})
+	if !firing() {
+		t.Fatalf("a poll without a current reading resolved the alert")
+	}
+
+	read(ProxmoxDiskTemperatureReading{Celsius: 60, AgentOwned: true})
+	if firing() {
+		t.Fatalf("an agent-owned disk kept its Proxmox temperature alert")
+	}
+	if resolution, ok := proxmoxDiskTemperatureResolution(m, "/dev/sda"); !ok || resolution == nil || resolution.Reason != string(AlertResolutionMovedToAgent) {
+		t.Fatalf("handover resolution = %+v (resolved %v), want moved_to_agent", resolution, ok)
+	}
+	read(ProxmoxDiskTemperatureReading{Celsius: 80, AgentOwned: true})
+	if firing() {
+		t.Fatalf("an agent-owned disk raised a Proxmox temperature alert")
+	}
+
+	read(ProxmoxDiskTemperatureReading{Celsius: 60})
+	if !firing() {
+		t.Fatalf("the disk did not alert again once the agent stopped listing it")
+	}
+	read(ProxmoxDiskTemperatureReading{Celsius: 60, Excluded: true})
+	if firing() {
+		t.Fatalf("an excluded disk kept its temperature alert")
+	}
+
+	read(ProxmoxDiskTemperatureReading{Celsius: 60})
+	m.mu.Lock()
+	m.config.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 0, Clear: 0}
+	m.mu.Unlock()
+	read(ProxmoxDiskTemperatureReading{Celsius: 60})
+	if firing() {
+		t.Fatalf("a switched-off agent Disk Temp default kept the Proxmox disk alert")
+	}
+}
+
+// A Proxmox disk temperature warning waits out the factory stability window for
+// a noisy gauge, as agent and TrueNAS disk temperature warnings do; a critical
+// reading bypasses it.
+func TestProxmoxDiskTemperatureWarningWaitsOutStabilityWindow(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	m.UpdateConfig(cfg)
+	if delay := m.GetConfig().TimeThresholds[proxmoxDiskResourceType]; delay != 5 {
+		t.Fatalf("proxmox-disk delay = %d, want the 5s factory default", delay)
+	}
+	m.mu.RLock()
+	grace := m.getTimeThreshold("lab:pve1:disk:dev-sda", proxmoxDiskResourceType, proxmoxDiskTemperatureMetric)
+	m.mu.RUnlock()
+	if grace != defaultNoisyGaugeStabilitySeconds {
+		t.Fatalf("Proxmox disk temperature delay = %ds, want the %ds stability window", grace, defaultNoisyGaugeStabilitySeconds)
+	}
+
+	m.CheckProxmoxDiskTemperature("lab", "pve1", ProxmoxDiskTemperatureReading{Disk: proxmoxTemperatureDisk("/dev/sda", "sata"), Celsius: 57})
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/sda"); firing {
+		t.Fatalf("a 57C SATA warning fired before its stability window")
+	}
+	m.CheckProxmoxDiskTemperature("lab", "pve1", ProxmoxDiskTemperatureReading{Disk: proxmoxTemperatureDisk("/dev/sdb", "sata"), Celsius: 70})
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/sdb"); !firing {
+		t.Fatalf("a 70C SATA critical reading waited out the stability window")
+	}
+}
+
+// A config save re-judges an open Proxmox disk temperature alert against its
+// disk type's trigger, as the next poll does; one without a recorded disk type
+// is held to the lowest per-type trigger.
+func TestProxmoxDiskTemperatureAlertsReevaluatePerDiskType(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 70, Clear: 65}
+	configureUnifiedEvalManager(t, m, cfg)
+	m.CheckProxmoxDiskTemperature("lab", "pve1", ProxmoxDiskTemperatureReading{Disk: proxmoxTemperatureDisk("/dev/nvme0n1", "nvme"), Celsius: 72})
+	m.CheckProxmoxDiskTemperature("lab", "pve1", ProxmoxDiskTemperatureReading{Disk: proxmoxTemperatureDisk("/dev/sda", "sata"), Celsius: 57})
+	sata, ok := proxmoxDiskTemperatureAlert(t, m, "/dev/sda")
+	if !ok {
+		t.Fatalf("SATA at 57C did not fire: %v", alertKeys(m))
+	}
+
+	m.mu.Lock()
+	m.config.DiskTempByType["nvme"] = HysteresisThreshold{Trigger: 75, Clear: 70}
+	delete(sata.Metadata, "diskType")
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/nvme0n1"); firing {
+		t.Fatalf("NVMe alert at 72C survived a save raising its trigger to 75C")
+	}
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/sda"); !firing {
+		t.Fatalf("a SATA alert without a disk type was resolved by the 70C agent default although its trigger is 55C")
 	}
 }

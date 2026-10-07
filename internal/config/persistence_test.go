@@ -183,6 +183,123 @@ func TestSaveAlertConfig_NormalizesAgentDefaultsClear(t *testing.T) {
 	}
 }
 
+// A positive trigger at or below the 5-point hysteresis margin arrives from
+// the thresholds page with clear 0 (max(0, trigger-5)). It must keep a clear
+// below its trigger, never fall back to the factory clear: a 1% Machines CPU
+// default used to store {trigger: 1, clear: 75}.
+func TestSaveAlertConfig_LowTriggerKeepsClearBelowTrigger(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	cfg := alerts.AlertConfig{
+		Enabled:        true,
+		StorageDefault: alerts.HysteresisThreshold{Trigger: 3, Clear: 0},
+		NodeDefaults: alerts.ThresholdConfig{
+			Temperature: &alerts.HysteresisThreshold{Trigger: 4, Clear: 0},
+		},
+		AgentDefaults: alerts.ThresholdConfig{
+			CPU:    &alerts.HysteresisThreshold{Trigger: 1, Clear: 0},
+			Memory: &alerts.HysteresisThreshold{Trigger: 3, Clear: 0},
+			Disk:   &alerts.HysteresisThreshold{Trigger: 5, Clear: 0},
+		},
+	}
+
+	if err := cp.SaveAlertConfig(cfg); err != nil {
+		t.Fatalf("SaveAlertConfig: %v", err)
+	}
+
+	// The file itself must hold the pairs, not only the loaded config, so a
+	// load-time repair cannot mask a bad save.
+	data, err := os.ReadFile(filepath.Join(tempDir, "alerts.json"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var saved alerts.AlertConfig
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatalf("Unmarshal saved alerts.json: %v", err)
+	}
+
+	loaded, err := cp.LoadAlertConfig()
+	if err != nil {
+		t.Fatalf("LoadAlertConfig: %v", err)
+	}
+
+	for _, view := range []struct {
+		name string
+		cfg  *alerts.AlertConfig
+	}{{"saved", &saved}, {"loaded", loaded}} {
+		for name, tc := range map[string]struct {
+			got  *alerts.HysteresisThreshold
+			want alerts.HysteresisThreshold
+		}{
+			"agent cpu":    {view.cfg.AgentDefaults.CPU, alerts.HysteresisThreshold{Trigger: 1, Clear: 0}},
+			"agent memory": {view.cfg.AgentDefaults.Memory, alerts.HysteresisThreshold{Trigger: 3, Clear: 0}},
+			"agent disk":   {view.cfg.AgentDefaults.Disk, alerts.HysteresisThreshold{Trigger: 5, Clear: 0}},
+			"storage":      {&view.cfg.StorageDefault, alerts.HysteresisThreshold{Trigger: 3, Clear: 0}},
+		} {
+			if tc.got == nil || *tc.got != tc.want {
+				t.Errorf("%s %s = %+v, want %+v", view.name, name, tc.got, tc.want)
+			}
+		}
+	}
+	if got := loaded.NodeDefaults.Temperature; got == nil || *got != (alerts.HysteresisThreshold{Trigger: 4, Clear: 0}) {
+		t.Errorf("loaded node temperature = %+v, want {4 0}", got)
+	}
+}
+
+// An alerts.json written before the fix holds a clear above its trigger; it
+// loads repaired rather than serving the factory clear back to the UI.
+func TestLoadAlertConfig_RepairsStoredClearAboveTrigger(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := config.NewConfigPersistence(tempDir)
+	if err := cp.EnsureConfigDir(); err != nil {
+		t.Fatalf("EnsureConfigDir: %v", err)
+	}
+
+	raw := alerts.AlertConfig{
+		Enabled:        true,
+		StorageDefault: alerts.HysteresisThreshold{Trigger: 1, Clear: 80},
+		NodeDefaults: alerts.ThresholdConfig{
+			Temperature: &alerts.HysteresisThreshold{Trigger: 2, Clear: 75},
+		},
+		AgentDefaults: alerts.ThresholdConfig{
+			CPU:    &alerts.HysteresisThreshold{Trigger: 1, Clear: 75},
+			Memory: &alerts.HysteresisThreshold{Trigger: 50, Clear: 80},
+			Disk:   &alerts.HysteresisThreshold{Trigger: 90, Clear: 85},
+		},
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "alerts.json"), data, 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	loaded, err := cp.LoadAlertConfig()
+	if err != nil {
+		t.Fatalf("LoadAlertConfig: %v", err)
+	}
+
+	for name, tc := range map[string]struct {
+		got  *alerts.HysteresisThreshold
+		want alerts.HysteresisThreshold
+	}{
+		"agent cpu":        {loaded.AgentDefaults.CPU, alerts.HysteresisThreshold{Trigger: 1, Clear: 0}},
+		"agent memory":     {loaded.AgentDefaults.Memory, alerts.HysteresisThreshold{Trigger: 50, Clear: 45}},
+		"agent disk":       {loaded.AgentDefaults.Disk, alerts.HysteresisThreshold{Trigger: 90, Clear: 85}},
+		"node temperature": {loaded.NodeDefaults.Temperature, alerts.HysteresisThreshold{Trigger: 2, Clear: 0}},
+		"storage":          {&loaded.StorageDefault, alerts.HysteresisThreshold{Trigger: 1, Clear: 0}},
+	} {
+		if tc.got == nil || *tc.got != tc.want {
+			t.Errorf("%s = %+v, want %+v", name, tc.got, tc.want)
+		}
+	}
+}
+
 // TestSaveAlertConfig_AgentDefaultsZeroDisablesAlerting verifies that setting
 // Host Agent thresholds to 0 is preserved (fixes GitHub issue #864).
 // Setting a threshold to 0 should disable alerting for that metric.
@@ -397,7 +514,7 @@ func TestLoadAlertConfigAppliesDefaults(t *testing.T) {
 
 	raw := alerts.AlertConfig{
 		Enabled:                        false,
-		TimeThresholds:                 map[string]int{"guest": 0, "node": 0},
+		TimeThresholds:                 map[string]int{"guest": -1, "node": 0},
 		DockerIgnoredContainerPrefixes: []string{" Runner "},
 		SnapshotDefaults: alerts.SnapshotAlertConfig{
 			Enabled:         true,
@@ -432,10 +549,10 @@ func TestLoadAlertConfigAppliesDefaults(t *testing.T) {
 	}
 
 	if got := loaded.TimeThresholds["guest"]; got != 5 {
-		t.Fatalf("expected guest threshold default 5, got %d", got)
+		t.Fatalf("expected unset guest threshold default 5, got %d", got)
 	}
-	if got := loaded.TimeThresholds["node"]; got != 5 {
-		t.Fatalf("expected node threshold default 5, got %d", got)
+	if got := loaded.TimeThresholds["node"]; got != 0 {
+		t.Fatalf("expected node threshold 0 (no delay) to be kept, got %d", got)
 	}
 	if loaded.NodeDefaults.Temperature == nil {
 		t.Fatalf("expected node temperature defaults to be set")

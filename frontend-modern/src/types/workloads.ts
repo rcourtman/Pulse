@@ -60,6 +60,16 @@ export type WorkloadGuest = (VM | Container) & {
   agentId?: string;
   /** RAID arrays reported by the linked Pulse agent, not Proxmox virtual disks. */
   agentRaid?: HostRAIDArray[];
+  /**
+   * Set when the linked Pulse agent is past its reporting lease. Its RAID,
+   * network and filesystem readings are then its last report, not current.
+   */
+  agentStale?: boolean;
+  /**
+   * Set when `disks` came from the linked Pulse agent because the platform
+   * reported no guest filesystems, so the rows follow that agent's freshness.
+   */
+  disksFromAgent?: boolean;
   updateStatus?: DockerContainerUpdateStatus;
   // Server-evaluated capability refusals from the unified resource. The
   // update button reads this to disable itself with the refusal reason

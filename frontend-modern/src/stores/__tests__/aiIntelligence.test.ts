@@ -6,7 +6,7 @@ vi.mock('@/api/ai', () => ({
     getRemediationPlans: vi.fn(),
     getPendingApprovals: vi.fn(),
     getIntelligenceSummary: vi.fn(),
-    getCorrelations: vi.fn(),
+    getCircuitBreakerStatus: vi.fn(),
   },
 }));
 
@@ -593,35 +593,6 @@ describe('aiIntelligenceStore', () => {
     });
   });
 
-  it('loads the canonical correlations response', async () => {
-    vi.mocked(AIAPI.getCorrelations).mockResolvedValueOnce({
-      correlations: [
-        {
-          source_id: 'storage-1',
-          source_name: 'Storage 1',
-          source_type: 'storage',
-          target_id: 'vm-42',
-          target_name: 'VM 42',
-          target_type: 'vm',
-          event_pattern: 'disk_full -> restart',
-          occurrences: 2,
-          avg_delay: '1m30s',
-          confidence: 0.875,
-          last_seen: '2026-03-01T00:00:00Z',
-          description: 'Disk pressure often precedes restarts',
-        },
-      ],
-      count: 1,
-    });
-
-    await aiIntelligenceStore.loadCorrelations();
-
-    expect(aiIntelligenceStore.correlations).toMatchObject({
-      count: 1,
-    });
-    expect(aiIntelligenceStore.correlations?.correlations).toHaveLength(1);
-  });
-
   it('loads the canonical AI dashboard bundle', async () => {
     vi.mocked(AIAPI.getIntelligenceSummary).mockResolvedValueOnce({
       timestamp: '2026-03-01T00:00:00Z',
@@ -651,17 +622,27 @@ describe('aiIntelligenceStore', () => {
         incidents_tracked: 0,
       },
     });
-    vi.mocked(AIAPI.getCorrelations).mockResolvedValueOnce({
-      correlations: [],
-      count: 0,
-    });
+    vi.mocked(AIAPI.getCircuitBreakerStatus).mockResolvedValueOnce(null as never);
 
     await aiIntelligenceStore.loadDashboardData();
 
     expect(AIAPI.getIntelligenceSummary).toHaveBeenCalledTimes(1);
-    expect(AIAPI.getCorrelations).toHaveBeenCalledTimes(1);
     expect(aiIntelligenceStore.intelligenceSummary?.findings_count.total).toBe(0);
-    expect(aiIntelligenceStore.correlations?.count).toBe(0);
+    // These are every AIAPI read the bundle makes (Patrol findings come from
+    // the Patrol API module). It does not load the global learned-correlation
+    // list: no page renders it, and the resource drawer reads per-resource
+    // correlations from resource intelligence instead.
+    const aiReads = Object.entries(AIAPI)
+      .filter(([, read]) => vi.isMockFunction(read) && read.mock.calls.length > 0)
+      .map(([name]) => name)
+      .sort();
+    expect(aiReads).toEqual([
+      'getCircuitBreakerStatus',
+      'getIntelligenceSummary',
+      'getPendingApprovals',
+      'getUnifiedFindings',
+    ]);
+    expect(getPatrolFindings).toHaveBeenCalledTimes(1);
   });
 
   it('treats queued fixes without a live approval as findings needing attention', async () => {

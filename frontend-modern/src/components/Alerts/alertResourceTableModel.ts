@@ -101,7 +101,7 @@ export function hasCustomAlertResourceGlobalDefaults(
   return Object.keys(factoryDefaults).some((key) => {
     const current = globalDefaults[key];
     const factory = factoryDefaults[key];
-    return current !== undefined && current !== factory;
+    return current !== undefined && !alertResourceThresholdsEquivalent(current, factory);
   });
 }
 
@@ -208,10 +208,24 @@ export const ALERT_RESOURCE_METRIC_OFF_VALUE = -1;
  * The alert engine disables a metric whenever its trigger is `<= 0`
  * (`internal/alerts/canonical_metric.go`), so every editor surface has to read
  * `0` as Off too: older builds advertised `0` as the disable value and those
- * overrides are still on disk. New writes always use the canonical `-1`.
+ * overrides are still on disk. Editors always stage the canonical `-1`; the
+ * save payload writes an Off global default as `0`, because the backend reads
+ * a negative default as unset.
  */
 export function isAlertResourceMetricOff(value: number | undefined | null): boolean {
   return typeof value === 'number' && Number.isFinite(value) && value <= 0;
+}
+
+/**
+ * Whether two thresholds alert the same way. Every value `<= 0` is Off, and a
+ * global default saves Off as `0` while the editors and factory defaults use
+ * `-1`, so the two compare equal.
+ */
+export function alertResourceThresholdsEquivalent(
+  left: number | undefined,
+  right: number | undefined,
+): boolean {
+  return left === right || (isAlertResourceMetricOff(left) && isAlertResourceMetricOff(right));
 }
 
 /**
@@ -228,6 +242,49 @@ export function resolveAlertResourceMetricEnableValue(
     return getAlertResourceEnabledDefault(metric);
   }
   return undefined;
+}
+
+/**
+ * A global default that may stay unset because another setting decides it,
+ * such as TrueNAS disk temperature following Disk temperature by type. Unset,
+ * the cell is empty with `label` as its placeholder and `title` explaining
+ * where the value comes from. `off` says the other setting is itself off, so
+ * the unset cell reads Off and switching it on has to stage `enableValue`.
+ */
+export interface AlertResourceGlobalDefaultFallback {
+  label: string;
+  title: string;
+  off?: boolean;
+  enableValue?: number;
+}
+
+export interface AlertResourceGlobalDefaultCell {
+  /** Unset and decided by the fallback. */
+  follows: boolean;
+  isOff: boolean;
+  /** Value staged when the cell is switched back on from Off. */
+  enableValue: number | undefined;
+}
+
+/**
+ * State of one Global Defaults metric cell. An unset default is Off, as the
+ * alert engine reads it, unless the metric has a fallback; then it reads as
+ * the fallback does. Switching it on from Off returns it to unset when the
+ * fallback is on, and stages an explicit value when the fallback is off,
+ * since unset would still be off.
+ */
+export function resolveAlertResourceGlobalDefaultCell(
+  metric: string,
+  value: number | undefined,
+  fallback: AlertResourceGlobalDefaultFallback | undefined,
+): AlertResourceGlobalDefaultCell {
+  const follows = value === undefined && fallback !== undefined;
+  const explicitEnableValue = fallback?.enableValue ?? getAlertResourceEnabledDefault(metric);
+  return {
+    follows,
+    isOff: follows ? Boolean(fallback?.off) : isAlertResourceMetricOff(value ?? 0),
+    enableValue: fallback && !fallback.off ? undefined : explicitEnableValue,
+  };
 }
 
 export function getAlertResourceMetricDelayOverride(

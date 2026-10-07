@@ -647,7 +647,6 @@ export function usePatrolIntelligenceState() {
       aiIntelligenceStore.loadIntelligenceSummary(),
       aiIntelligenceStore.loadFindings(),
       aiIntelligenceStore.loadCircuitBreakerStatus(),
-      aiIntelligenceStore.loadCorrelations(),
     ]);
   }
 
@@ -692,24 +691,6 @@ export function usePatrolIntelligenceState() {
     await recordPatrolControlStarterActivity();
     window.history.replaceState(window.history.state, '', nextPath);
   }
-
-  const summaryStats = () => {
-    const patrolFindings = allPatrolFindings();
-    const activeFindings = patrolFindings.filter((finding) => finding.status === 'active');
-
-    return {
-      criticalFindings: activeFindings.filter((finding) => finding.severity === 'critical').length,
-      warningFindings: activeFindings.filter((finding) => finding.severity === 'warning').length,
-      totalActive: activeFindings.length,
-      fixedCount: patrolFindings.filter(
-        (finding) =>
-          finding.investigationOutcome === 'fix_verified' ||
-          finding.investigationOutcome === 'fix_executed' ||
-          finding.investigationOutcome === 'resolved',
-      ).length,
-      hasAnyPatrolFindings: patrolFindings.length > 0,
-    };
-  };
 
   const activePatrolFindings = () =>
     allPatrolFindings().filter((finding) => finding.status === 'active');
@@ -839,7 +820,6 @@ export function usePatrolIntelligenceState() {
     showBlockedBanner,
     showReadinessBanner,
     shouldShowPatrolSetupOnly,
-    summaryStats,
     triggerPatrolDisabledReason,
   };
 }
