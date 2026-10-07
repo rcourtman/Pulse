@@ -3732,6 +3732,9 @@ build_from_source() {
     local arch=""
     local go_arch=""
     local service_name=""
+    local binary_stage=""
+    local version_output=""
+    local source_revision=""
 
     print_info "Building Pulse from source (branch: $branch)..."
 
@@ -3848,27 +3851,52 @@ build_from_source() {
         return 1
     fi
 
+    # A successful build command alone does not admit its executable. Prepare
+    # it on the destination filesystem before stopping the running service,
+    # just as for signed archives. Source versions may be development builds.
+    if ! mkdir -p "$INSTALL_DIR/bin" || ! binary_stage=$(mktemp -d "$INSTALL_DIR/bin/.pulse-stage-XXXXXX"); then
+        print_error "Could not stage the built Pulse binary; Pulse has not been stopped"
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$temp_build"
+        return 1
+    fi
+    if ! cp pulse "$binary_stage/pulse" || ! chmod 755 "$binary_stage/pulse" || ! chown pulse:pulse "$binary_stage/pulse"; then
+        print_error "Could not prepare the built Pulse binary; Pulse has not been stopped"
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$binary_stage" "$temp_build"
+        return 1
+    fi
+    if ! version_output=$(timeout 5 "$binary_stage/pulse" --version 2>/dev/null) || [[ -z "${version_output//[[:space:]]/}" ]]; then
+        print_error "Built Pulse binary could not report its version; Pulse has not been stopped"
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$binary_stage" "$temp_build"
+        return 1
+    fi
+    if ! source_revision=$(git rev-parse --short HEAD) || [[ -z "$source_revision" ]]; then
+        print_error "Could not identify the source build; Pulse has not been stopped"
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$binary_stage" "$temp_build"
+        return 1
+    fi
+
     service_name=$(detect_service_name)
+    PULSE_WAS_ACTIVE="false"
     if ! stop_pulse_for_replacement "$service_name"; then
         cd "$original_dir" >/dev/null 2>&1 || true
-        rm -rf "$temp_build"
+        rm -rf "$binary_stage" "$temp_build"
         return 1
     fi
 
-    mkdir -p "$INSTALL_DIR/bin" "$INSTALL_DIR/scripts"
-
-    if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
-        mv "$INSTALL_DIR/bin/pulse" "$INSTALL_DIR/bin/pulse.old" 2>/dev/null || true
-    fi
-
-    if ! cp pulse "$INSTALL_DIR/bin/pulse"; then
-        print_error "Failed to copy built Pulse binary"
-        [[ -f "$INSTALL_DIR/bin/pulse.old" ]] && mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
+    if ! mv -fT "$binary_stage/pulse" "$INSTALL_DIR/bin/pulse"; then
+        print_error "Failed to replace built Pulse; the previous binary is unchanged"
         cd "$original_dir" >/dev/null 2>&1 || true
-        rm -rf "$temp_build"
+        rm -rf "$binary_stage" "$temp_build"
+        recover_pulse_after_failed_replacement "$service_name"
         return 1
     fi
-    chmod +x "$INSTALL_DIR/bin/pulse"
+    rm -rf "$binary_stage"
+
+    mkdir -p "$INSTALL_DIR/scripts"
 
     for script_name in install-container-agent.sh install-docker.sh install.sh install.ps1; do
         if [[ -f "scripts/$script_name" ]]; then
@@ -3879,12 +3907,11 @@ build_from_source() {
 
     install_binary_symlink "$INSTALL_DIR/bin/pulse" "$BINARY_LINK_PATH"
 
-    echo "$branch-$(git rev-parse --short HEAD)" > "$INSTALL_DIR/VERSION"
+    echo "$branch-$source_revision" > "$INSTALL_DIR/VERSION"
     echo "$branch" > "$BUILD_FROM_SOURCE_MARKER"
 
     chown -R pulse:pulse "$INSTALL_DIR" 2>/dev/null || true
     chown pulse:pulse "$BUILD_FROM_SOURCE_MARKER" 2>/dev/null || true
-    rm -f "$INSTALL_DIR/bin/pulse.old"
 
     cd "$original_dir" >/dev/null 2>&1 || true
     rm -rf "$temp_build"

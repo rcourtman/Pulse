@@ -35,7 +35,7 @@ with the existing five-second command bound and read back; only `inactive`
 admits replacement. A failed unit does not imply prior workload liveness.
 
 Failed/timed-out reads or stops, transitional states and malformed/empty results
-refuse replacement without an automatic restart or retry. The archive path
+refuse replacement without an automatic restart or retry. Both replacement paths
 atomically renames its fully prepared executable over the live path, rather than
 moving away the old executable or retrying extraction after deleting it. A
 failed rename leaves the previous binary and metadata intact; only a service
@@ -44,12 +44,25 @@ readback. An inactive/failed service is not started by this failure recovery.
 Recovery cannot turn the failed update into success. Successful replacement
 preserves prior-active attribution for the existing post-update liveness check.
 
+The opt-in source-build path also stages the compiled executable, its mode and
+owner on the destination filesystem before stopping Pulse. It requires a
+successful five-second-bounded, nonblank `--version` result and a nonempty
+source revision before admission; development versions need not match a release
+tag. Build or staging faults preserve the running service and installed bytes,
+modes, VERSION, source-build marker and configuration. Its single atomic rename
+uses the same prior-active-only failure recovery. It must not move aside the
+live executable, copy over it or remove a pre-existing `pulse.old` recovery file.
+Source-build temporary directories are removed on admission, stop and rename
+failures. This does not add signed-release trust to an opt-in source build.
+
 `scripts/tests/test_server_installer_stop.py` now executes the actual archive
 installer with real tar/copy/rename bytes and fixture-only signing/architecture,
 service and ownership boundaries. Download/local admission failures, partial
 staging copies, version exits/timeouts, uncertain stops, atomic rename faults,
 prior-active-only recovery/readback and retained bytes/modes/configuration are
-checked, along with source-build and all three manual staging-failure flows.
+checked, along with source-build admission/atomic-rename/recovery faults and all
+three manual staging-failure flows. The source ordering and no-live-copy
+obligations are also checked in `TestRootInstallScriptStagesUpdateBeforeStoppingService`.
 The existing root-installer ordering and update-resilience tests remain
 independent controls. These ordinary-user fixtures do not establish signature
 cryptography, native systemd/installed upgrade acceptance, ancillary-agent
