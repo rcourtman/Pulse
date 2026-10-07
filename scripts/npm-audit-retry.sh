@@ -231,9 +231,11 @@ else:
 
 report_file="$(mktemp)"
 # A watchdog stopped before its subshell initialises can run this inherited
-# EXIT trap. Only the invoking shell owns cleanup: the captured verdict must
-# remain available after the watchdog is stopped, on Bash 3.2 as well as 5.x.
-trap 'if [ "$BASH_SUBSHELL" -eq 0 ]; then rm -f "${report_file}"; fi' EXIT
+# EXIT trap with the parent's BASH_SUBSHELL value. $$ is inherited too. Ask a
+# direct child shell for its actual parent PID instead of trusting that counter:
+# only the original invoking process may remove the captured verdict. PPID in
+# /bin/sh also works on native Bash 3.2, where BASHPID is unavailable.
+trap 'if /bin/sh -c "[ \"\$PPID\" = \"\$1\" ]" sh "$$"; then rm -f "${report_file}"; fi' EXIT
 
 attempt=1
 delay="${DELAY}"

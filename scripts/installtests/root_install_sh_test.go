@@ -817,8 +817,8 @@ func TestPrereleaseUpdateCopyUsesPreviewFraming(t *testing.T) {
 		t.Fatalf("read pulse-auto-update.sh: %v", err)
 	}
 	autoUpdateScript := string(autoUpdate)
-	if !strings.Contains(autoUpdateScript, `Prerelease channel detected; unattended auto-updates run only on stable`) {
-		t.Fatalf("pulse-auto-update.sh missing prerelease channel log message")
+	if !strings.Contains(autoUpdateScript, `Non-stable channel detected; unattended auto-updates run only on stable`) {
+		t.Fatalf("pulse-auto-update.sh missing non-stable channel log message")
 	}
 	if strings.Contains(autoUpdateScript, `RC channel detected; unattended auto-updates run only on stable`) {
 		t.Fatalf("pulse-auto-update.sh preserved stale release-candidate channel log message")

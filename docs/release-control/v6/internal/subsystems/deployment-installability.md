@@ -15,6 +15,44 @@
 
 ## Purpose
 
+### Audit report cleanup belongs to the original invoking process
+
+The npm audit wrapper retains a captured advisory until the parent classifies
+it. An early-stopped watchdog can inherit the parent's zero subshell counter;
+that counter alone cannot authorise report deletion. The EXIT hook instead
+asks a direct `/bin/sh` child whether its actual parent PID is the invoking
+script's PID. This keeps the report in an inherited trap while retaining parent
+cleanup on Linux and native Bash 3.2. Strict findings still fail; unchanged-graph
+findings still warn with their captured detail. No advisory policy, endpoint,
+retry budget or severity threshold changes.
+
+`TestNpmAuditReportCleanupRemainsParentOwned` executes the actual hook with
+normal and pre-initialisation child counters, rejects the prior counter-only
+and unconditional hooks, and checks parent cleanup. The existing native-scope
+argument controls continue to require findings, exact argv and a single audit.
+
+### Community auto-updates require a verified installed edition
+
+Before release discovery or installation, the unattended updater requires a
+regular executable in the primary or, only when absent, legacy binary path.
+Its `--version` probe must exit successfully within five seconds, with a
+one-second KILL backstop. A `Pulse Pro` first line leaves the paid runtime
+untouched; only the public `Pulse vX.Y.Z` version format admits community
+updates. Failed, missing, non-executable or unrecognised binaries stop with a
+manual-recovery message. A VERSION file is not edition evidence, and a broken
+primary executable cannot defer to a legacy community executable. Probe output
+is not included in the error message. Signed assets, consent and rollback
+requirements remain unchanged.
+
+`scripts/installtests/pulse_auto_update_consent_test.go` also executes this
+edition boundary: primary/legacy precedence, successful and failed version
+output, a real TERM-resistant probe deadline, and the actual `main` flow's
+release-discovery/installer boundary with a plausible VERSION fallback.
+`TestAutoUpdateEditionGateStopsMainBeforeDownloads` proves that unknown and Pro
+editions cause no release read or installer action, while a recognised community
+binary still reaches both. These ordinary-user shell fixtures do not establish
+installed systemd, paid customer or native update acceptance.
+
 ### Unattended update consent comes from complete configuration
 
 When `system.json` exists, the unattended updater requires one complete JSON

@@ -140,15 +140,29 @@ get_current_version() {
 # Pro installs update in-app through the license server download broker, or
 # manually via https://pulserelay.pro/download.html + install.sh --archive.
 installed_binary_is_pulse_pro() {
-    local binary=""
-    if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
+    local binary="" version_output="" first_line=""
+    # 0 = Pro (leave it alone), 1 = verified community, 2 = unknown (stop).
+    # A VERSION file cannot identify the edition, and a broken primary binary
+    # must not fall back to an unrelated legacy executable.
+    if [[ -e "$INSTALL_DIR/bin/pulse" || -L "$INSTALL_DIR/bin/pulse" ]]; then
         binary="$INSTALL_DIR/bin/pulse"
-    elif [[ -f "$INSTALL_DIR/pulse" ]]; then
+    elif [[ -e "$INSTALL_DIR/pulse" || -L "$INSTALL_DIR/pulse" ]]; then
         binary="$INSTALL_DIR/pulse"
     else
+        return 2
+    fi
+    if [[ ! -f "$binary" || ! -x "$binary" ]] ||
+       ! version_output=$(timeout --kill-after=1 5 "$binary" --version 2>/dev/null); then
+        return 2
+    fi
+    first_line=${version_output%%$'\n'*}
+    if [[ "$first_line" == 'Pulse Pro '* ]]; then
+        return 0
+    fi
+    if [[ "$first_line" =~ ^Pulse\ v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
         return 1
     fi
-    "$binary" --version 2>/dev/null | head -1 | grep -q '^Pulse Pro '
+    return 2
 }
 
 # Determine whether a tag is a semver pre-release.
@@ -614,10 +628,16 @@ main() {
         exit 0
     fi
 
-    # Never replace the Pulse Pro binary with a public community build
+    # Never replace a Pro or unidentified binary with a public community build.
     if installed_binary_is_pulse_pro; then
         log info "Pulse Pro binary detected; unattended community updates are disabled. Pro installs update in-app (license server download broker) or via https://pulserelay.pro/download.html"
         exit 0
+    else
+        local edition_status=$?
+        if [[ "$edition_status" != 1 ]]; then
+            log error "Cannot verify installed Pulse edition; no unattended update attempted. Use the matching signed archive for manual recovery."
+            exit 1
+        fi
     fi
 
     # Get current version
