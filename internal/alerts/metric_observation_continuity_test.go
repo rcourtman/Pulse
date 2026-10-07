@@ -274,14 +274,20 @@ func TestMetricObservationGapRestartsRecovery(t *testing.T) {
 			t.Run(route+"/"+gap, func(t *testing.T) {
 				m, elapsed := continuityManager(t, false)
 				id, metric, observe := continuityObserver(t, m, route, gap)
-				observe(95, false) // Critical evidence retains its legacy immediate activation.
+				observe(95, false)
+				// Storage's usage rule retains its configured sustained-for delay.
+				// Establish a firing occurrence before testing recovery timing.
+				if route == "storage" {
+					elapsed.Store(int64(time.Minute))
+					observe(95, false)
+				}
 				if len(m.GetActiveAlerts()) != 1 {
-					t.Fatal("critical control did not fire immediately")
+					t.Fatal("breaching control did not establish a firing occurrence")
 				}
 				if err := m.AcknowledgeAlert(m.GetActiveAlerts()[0].ID, "operator"); err != nil {
 					t.Fatal(err)
 				}
-				elapsed.Store(int64(10 * time.Second))
+				elapsed.Store(int64(70 * time.Second))
 				observe(10, false)
 				incident, _ := continuityIncident(m, id, metric)
 				if incident.RecoverySince.IsZero() {

@@ -1748,7 +1748,7 @@ func TestStorageConnectivityObservationGaps(t *testing.T) {
 			before := testRequireActiveAlert(t, m, id).Clone()
 			s.Status = gap
 			m.CheckStorage(s)
-			if !reflect.DeepEqual(before, testRequireActiveAlert(t, m, id)) || m.GetResolvedAlert(id) != nil {
+			if !reflect.DeepEqual(before, testRequireActiveAlert(t, m, id).Clone()) || m.GetResolvedAlert(id) != nil {
 				t.Fatal("missing connectivity changed acknowledged occurrence")
 			}
 			s.Status = "available"
