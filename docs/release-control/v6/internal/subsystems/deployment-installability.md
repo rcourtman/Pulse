@@ -15,6 +15,35 @@
 
 ## Purpose
 
+### Server removal requires every affected unit to be quiescent
+
+Both the existing-installation menu and `--uninstall` must stop and disable the
+instance's update timer, in-flight update service and server before deleting any
+server executable, configuration, persistent data or unit file. Default-instance
+removal also reconciles both historical server names; an explicit instance name
+must not touch another server's units. An applicable local sensor-proxy footprint
+is quiesced before server deletion, and checked again before its own removal.
+
+Bounded systemd reads must establish known load state, explicit inactivity and
+non-enabled unit-file state. A genuinely absent inactive unit is a no-op. Failed,
+empty, transitional, still-active or still-enabled observations, ignored stop or
+disable, and unknown load/enablement state block deletion. All targets are read
+back again after the stop sequence. No uncertain or partially stopped sequence
+is automatically restarted; diagnostics require service-state reconciliation.
+Configuration-removal consent in the menu is unchanged. This does not redesign
+`--reset`, grant host execution or establish installed recovery.
+
+`TestRootInstallRemovalPreservesFilesOnUnconfirmedUnits`,
+`TestRootInstallRemovalQuiescesUpdaterAndAliases` and
+`TestRootInstallRemovalKeepsOtherInstanceUntouched` exercise both actual sourced
+entrypoints with stateful, per-test systemd doubles and confined file removals.
+These include timer reactivation/re-enablement, the in-flight updater, default
+aliases, masked/failed/inactive/absent units and local legacy stop refusal.
+A failed legacy-key rename also propagates when invoked conditionally, preserving
+the original key file rather than reporting completion after an ignored error.
+`TestRootInstallSensorProxyCleanupRejectsFailedKeyReplacement` executes that
+boundary. Native systemd/removal acceptance remains separate from source fixtures.
+
 ### Legacy installer identity recovery is a whole-file decision
 
 An installer recovering a pre-descriptor-helper agent-ID file accepts exactly
