@@ -5,6 +5,9 @@ internal/api/licensing_bridge.go
 internal/api/licensing_handlers.go
 internal/api/magic_link.go
 internal/api/reporting_runtime_snapshot.go
+# Shared subject enrichment behind the existing reporting admin binder/gates;
+# not a new paid endpoint or entitlement implementation. Exact path only.
+internal/api/reporting_subject_alerts.go
 internal/api/router.go
 internal/api/router_routes_auth_security.go
 internal/api/router_routes_cloud.go

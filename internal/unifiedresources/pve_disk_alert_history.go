@@ -1,6 +1,8 @@
 package unifiedresources
 
 import (
+	"iter"
+	"maps"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
@@ -125,6 +127,31 @@ func (rr *ResourceRegistry) proxmoxDiskAlertOwner(ref string, metadata map[strin
 	if rr == nil {
 		return ""
 	}
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+	return proxmoxDiskAlertOwner(ref, metadata, maps.All(rr.resources))
+}
+
+// ProxmoxPhysicalDiskAlertOwner applies the journal's recorded-hardware
+// ownership rule to an immutable unified snapshot. Reports use this same
+// decision, including WWN disambiguation and identity-less path fallback,
+// instead of rebinding a current device path or inventing another matcher.
+// It returns an empty ID for an invalid reference or ambiguous ownership.
+func ProxmoxPhysicalDiskAlertOwner(ref string, metadata map[string]any, resources []Resource) string {
+	if !isProxmoxPhysicalDiskAlertReference(ref) {
+		return ""
+	}
+	return proxmoxDiskAlertOwner(ref, metadata, func(yield func(string, *Resource) bool) {
+		for i := range resources {
+			if !yield(resources[i].ID, &resources[i]) {
+				return
+			}
+		}
+	})
+}
+
+// resources must be repeatable: a second read guards a derived ID collision.
+func proxmoxDiskAlertOwner(ref string, metadata map[string]any, resources iter.Seq2[string, *Resource]) string {
 	serial, _ := metadata[MetadataDiskSerial].(string)
 	wwn, _ := metadata[MetadataDiskWWN].(string)
 	serial, wwn = strings.TrimSpace(serial), strings.TrimSpace(wwn)
@@ -135,10 +162,8 @@ func (rr *ResourceRegistry) proxmoxDiskAlertOwner(ref string, metadata map[strin
 		machineID = wwn
 	}
 
-	rr.mu.RLock()
-	defer rr.mu.RUnlock()
 	var matches, sameWWN []string
-	for id, resource := range rr.resources {
+	for id, resource := range resources {
 		if resource == nil || CanonicalResourceType(resource.Type) != ResourceTypePhysicalDisk || resource.PhysicalDisk == nil {
 			continue
 		}
@@ -166,8 +191,10 @@ func (rr *ResourceRegistry) proxmoxDiskAlertOwner(ref string, metadata map[strin
 		return ""
 	}
 	derived := MachineIdentityCanonicalID(ResourceTypePhysicalDisk, machineID)
-	if rr.resources[derived] != nil {
-		return ""
+	for id, resource := range resources {
+		if id == derived && resource != nil {
+			return ""
+		}
 	}
 	return derived
 }

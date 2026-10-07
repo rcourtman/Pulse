@@ -13,6 +13,41 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
+// The snapshot entry point shares the registry's journal ownership, without
+// mutating either the snapshot or the alert's recorded metadata.
+func TestProxmoxDiskAlertSnapshotOwnershipMatchesRegistry(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.resources = map[string]*Resource{
+		"disk-a": {ID: "disk-a", Type: ResourceTypePhysicalDisk,
+			PhysicalDisk: &PhysicalDiskMeta{Serial: "unknown", WWN: "naa.5000c500a1b2c3d4", DevPath: "/dev/sdz"}},
+		"disk-b": {ID: "disk-b", Type: ResourceTypePhysicalDisk,
+			PhysicalDisk: &PhysicalDiskMeta{Serial: "unknown", WWN: "0x5000c500000000b2", DevPath: "/dev/sda"}},
+	}
+	var snapshot []Resource
+	for _, resource := range rr.resources {
+		snapshot = append(snapshot, *resource)
+	}
+	ref := ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", "/dev/sda")
+	for _, tc := range []struct{ name, serial, wwn, want string }{
+		{"moved hardware without PVE facet", "unknown", "wwn-0x5000c500a1b2c3d4", "disk-a"},
+		{"placeholder is not hardware", "unknown", "", ""},
+		{"second hardware", "unknown", "5000c500000000b2", "disk-b"},
+		{"derived absent hardware", "NEW00001", "", MachineIdentityCanonicalID(ResourceTypePhysicalDisk, "NEW00001")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			metadata := map[string]any{MetadataDiskSerial: tc.serial, MetadataDiskWWN: tc.wwn}
+			before, _ := json.Marshal(snapshot)
+			if got := ProxmoxPhysicalDiskAlertOwner(ref, metadata, snapshot); got != tc.want || got != rr.proxmoxDiskAlertOwner(ref, metadata) {
+				t.Fatalf("snapshot owner = %q, registry = %q, want %q", got, rr.proxmoxDiskAlertOwner(ref, metadata), tc.want)
+			}
+			after, _ := json.Marshal(snapshot)
+			if string(before) != string(after) || metadata[MetadataDiskSerial] != tc.serial || metadata[MetadataDiskWWN] != tc.wwn {
+				t.Fatal("ownership read mutated snapshot or recorded identity")
+			}
+		})
+	}
+}
+
 func TestProxmoxGuestReadAdmissionReplacesPreviousFacet(t *testing.T) {
 	rr := NewRegistry(nil)
 	vm := models.VM{ID: "pve:node:105", Instance: "pve", Node: "node", VMID: 105, Type: "qemu", Status: "running", Name: "guest", LastSeen: time.Now(), Disk: models.Disk{Total: 100, Used: 30, Usage: 30}}

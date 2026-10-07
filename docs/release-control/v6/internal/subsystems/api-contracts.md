@@ -9796,14 +9796,64 @@ aggregate, health card, table and resource blocks, and the fleet heuristic
 recommends checking the agent it moved to. "Triggered and resolved" counts
 recoveries only, and the report narrator's payload marks a covered handover
 with `successor_alert_listed` so the model describes the condition once.
-Reports requested as `agent`, which is how the Reports picker addresses every
-Proxmox node and standalone agent in v6, carry no alert rows yet:
-`enrichReportRequest` enriches node, VM and container reports only, so an
-agent report's deterministic verdict ignores its machine's alerts (HEALTHY,
-or NO DATA without metrics). The rule above reaches those reports once they
-attach the machine's alerts. The fleet heuristic offers its all-clear
-pattern and "No fleet-wide action required" only while no alert, moved
-ones included, is active.
+The fleet heuristic offers its all-clear pattern and "No fleet-wide action
+required" only while no alert, moved ones included, is active.
+Reports requested as `agent`, which is how the Reports picker addresses
+every Proxmox node and standalone Pulse agent in v6, attach the machine's
+alerts through `enrichAgentReport` in
+`internal/api/reporting_subject_alerts.go`. `reportAlertScopeFor` builds a
+subject's alert identities from its unified resource, never from host or
+node names, and an alert belongs to the report of each resource whose
+identity it was raised under. For a machine that is the requested unified
+ID, the metrics-target ID, the linked Proxmox node's source ID
+(`<instance>-<node>`, the node's own alerts) and, when the agent source is
+present, the Pulse agent's `agent:<host>` alerts with every component child
+the agent raises under that identity (`agent:<host>/disk:...`, disk
+temperature, SMART, RAID, the Unraid array, custom sensors). When the alert
+engine records a node alert's handover to the agent (`moved_to_agent`), the
+moved alert and the agent's own alert for that metric land in one report,
+where the rule above counts them once
+(`TestContract_AgentReportCountsAMovedNodeAlertOnce`). Guests, containers,
+Proxmox storage pools and physical disks raise alerts under their own
+identities, so those stay on their own reports, and a same-named node in
+another cluster never leaks in
+(`TestContract_AgentReportAttachesTheMachinesOwnAlerts`). The one alert
+raised under two identities is the agent's Unraid array alert
+(`agent:<host>/storage:unraid-array`), which appears on both the machine's
+and the array's report. The agent report also fills resource details from
+the resource's Proxmox and agent payloads and lists the storage pools and
+physical disks whose unified parent is the machine through the node
+report's row builders, so a disk shows only a collected temperature,
+coloured by the alert thresholds. Every other type
+without a dedicated enricher attaches the alerts in its scope: the unified
+and metrics-target IDs; `alerts.DockerHostResourceID`,
+`DockerContainerResourceID` and `DockerServiceResourceID` for Docker
+runtimes, containers (by name when they have no ID) and Swarm services; a Proxmox storage pool's source ID with its ZFS pool and device
+children; and the Proxmox health and wearout alerts on a disk's device-path
+reference (`ProxmoxPhysicalDiskAlertResourceID`) through the journal's shared
+recorded-hardware ownership decision (`ProxmoxPhysicalDiskAlertOwner`), not
+through the current device path. Usable serials and WWNs match through
+`diskinventory.HardwareIdentityMatch`, rejecting placeholders and retaining
+cross-source framing. A uniquely shared WWN decides duplicate serials;
+otherwise ambiguous identities are excluded. A row without usable identity
+matches only the single identity-less disk at its exact path. Earlier paths
+and nodes still reach the hardware that owns the alert; a replacement or
+path-shaped metrics alias never overrides ownership. The reference's canonical
+health/wearout alert identifier must also agree
+(`TestReportPhysicalDiskAlertsFollowRecordedHardware`)
+(`TestContract_UnenrichedReportTypesAttachTheSubjectsAlerts`). The legacy
+`node` enricher keeps its name-based match for direct API callers.
+
+`reporting_subject_alerts.go` is an exact shared-default-pipeline exception in
+the Go and shell repository-boundary classifiers, not new migration debt. It
+registers no route, changes no entitlement and imports no private licensing
+implementation. The existing reporting admin binder and execution/scheduling
+licence gates remain in place. `reporting_boundary_test.go` and
+`scripts/repo-boundary-regression.py` run the real Go and shell classifiers
+against the helper, unreviewed neighbouring filenames and private imports:
+neither a prefix exemption nor a licensing-import exemption is allowed. The
+boundary workflow runs the shell controls after installing its declared ripgrep
+dependency; the Go/API suite requires no new external tool.
 Multi-resource fleet reports (`engine.GenerateMulti`) now also carry an
 optional fleet-level narrative through a distinct
 `pkg/reporting.FleetNarrator` interface, kept separate from the

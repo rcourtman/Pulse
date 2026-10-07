@@ -1509,6 +1509,16 @@ recovery scope, or a storage/recovery-owned secret source.
    handover resolution (moved to a Pulse agent, not recovered). That changes
    how a report states alert health only; it opens no storage, backup or
    recovery path, and report backups still come from the recovery store.
+   Machine (`agent`) reports now list the storage pools and physical disks
+   whose unified parent is the machine, through the same row builders as
+   node reports. Storage reports attach their pool's own alerts (the Proxmox
+   source ID plus ZFS pool and device children, or the agent's alert on an
+   Unraid array), and physical-disk reports attach the Proxmox health and
+   wearout alerts owned by the disk's recorded hardware through the journal's
+   shared serial/WWN and ambiguity rules, including earlier paths, rather
+   than inheriting a replacement's current path. All of it reads the existing unified storage
+   and disk projections only; it opens no storage, backup or recovery path
+   and grants no storage action.
    Update-plan readiness payloads and apply-route readiness enforcement are
    adjacent shared API context only. Storage and recovery surfaces may observe
    the resulting update state if a future settings flow links to recovery

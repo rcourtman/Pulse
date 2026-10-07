@@ -2832,6 +2832,13 @@ agent inventory, registration state, or command-channel readiness.
    recovered. That is report presentation only: the report never decides
    agent linkage, ownership of a metric, or agent freshness, and it adds no
    lifecycle state.
+   Reports on an `agent` resource (`internal/api/reporting_subject_alerts.go`)
+   read the agent's host ID from the unified resource's agent payload, only
+   when the agent source is present, to attach that agent's `agent:<host>`
+   alerts and component children beside the linked node's alerts. The
+   report reads linkage the registry already resolved; it never links,
+   unlinks, identifies or authorizes an agent, and it adds no lifecycle
+   state.
    The same isolation rule applies to Patrol investigation-record propagation
    through shared AI intelligence handlers and `internal/api/router.go`:
    lifecycle surfaces may observe the resulting resource context, but they must
