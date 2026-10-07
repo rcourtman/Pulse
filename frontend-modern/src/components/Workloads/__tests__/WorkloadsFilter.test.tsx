@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { WorkloadsFilter } from '../WorkloadsFilter';
 import workloadsFilterSource from '../WorkloadsFilter.tsx?raw';
 import {
@@ -328,6 +329,39 @@ describe('WorkloadsFilter', () => {
         />
       ));
       expect(screen.queryByTestId('workload-history-hover-hint')).not.toBeInTheDocument();
+    });
+
+    it('keeps the cleared history hint box so the guest table does not move under the pointer', () => {
+      const [hintVisible, setHintVisible] = createSignal(true);
+      const [displayMode, setDisplayMode] = createSignal<'bars' | 'sparklines'>('bars');
+      const { unmount } = render(() => (
+        <WorkloadsFilter
+          {...makeProps({
+            metricDisplayMode: displayMode,
+            metricHoverMode: () => 'history',
+            metricHistoryRange: () => '1h',
+            setMetricHistoryRange: vi.fn(),
+            metricHistoryHintVisible: hintVisible,
+          })}
+        />
+      ));
+
+      const hint = screen.getByTestId('workload-history-hover-hint');
+      expect(hint).not.toHaveClass('invisible');
+
+      // The first populated row preview marks the hint seen while the pointer
+      // is still over a guest row.
+      setHintVisible(false);
+      expect(screen.getByTestId('workload-history-hover-hint')).toBe(hint);
+      expect(hint).toHaveClass('invisible');
+      expect(hint).toHaveTextContent('Hover a guest to preview history');
+
+      // Leaving history hover releases the box instead of leaving a gap.
+      setDisplayMode('sparklines');
+      expect(screen.queryByTestId('workload-history-hover-hint')).not.toBeInTheDocument();
+      setDisplayMode('bars');
+      expect(screen.queryByTestId('workload-history-hover-hint')).not.toBeInTheDocument();
+      unmount();
     });
 
     it('restores detailed bar hover and hides the inactive history range', () => {

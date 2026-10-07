@@ -3,11 +3,14 @@ package ai
 import (
 	"errors"
 	"fmt"
+	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	recoverymodel "github.com/rcourtman/pulse-go-rewrite/internal/recovery/model"
 )
@@ -223,7 +226,7 @@ func projectAttentionAlert(
 	freshness, completeness := summarizeAttentionEvidence(record.State, evidence, now)
 	resourceName := firstAttentionText(alert.ResourceName, alert.Instance, record.SubjectResourceID)
 	title := attentionTitle(alert, resourceName)
-	summary := firstAttentionText(alert.Message, record.ImpactSummary, title)
+	summary := firstAttentionText(heldMetricAlertSummary(alert, now), alert.Message, record.ImpactSummary, title)
 
 	related := make([]AttentionResource, 0, len(record.RelatedResourceIDs))
 	for _, resourceID := range canonicalAttentionIDs(record.RelatedResourceIDs) {
@@ -633,6 +636,190 @@ func attentionResourceType(alert alerts.Alert) string {
 		}
 	}
 	return ""
+}
+
+// attentionMetricStatusStaleAfter matches the frontend's
+// METRIC_ALERT_STATUS_STALE_MS: an older evaluation is no longer "now".
+const attentionMetricStatusStaleAfter = 10 * time.Minute
+
+// heldMetricAlertSummary describes a threshold alert that is still open below
+// its trigger from the evaluator's live status, in the words the frontend's
+// metric alert presentation uses. The alert's Message keeps the last reading
+// that met the trigger, so on its own it reports a value the resource may no
+// longer have. A breaching alert keeps its Message, which tracks the current
+// breach, and a missing or stale status returns "" so the caller falls back
+// to it.
+func heldMetricAlertSummary(alert alerts.Alert, now time.Time) string {
+	status := alert.MetricStatus
+	if status == nil {
+		return ""
+	}
+	if status.Phase != models.MetricAlertPhaseLatched && status.Phase != models.MetricAlertPhaseRecovering {
+		return ""
+	}
+	if !attentionFinite(status.Value) || !attentionFinite(status.Trigger) || !attentionFinite(status.Recovery) {
+		return ""
+	}
+	if status.ObservedAt.IsZero() || now.Sub(status.ObservedAt) > attentionMetricStatusStaleAfter {
+		return ""
+	}
+
+	reading := attentionMetricReading(alert, status)
+	recovery := formatAttentionMetricValue(status.Recovery, status.Unit)
+	delay := status.RecoveryDelaySeconds
+	if status.Phase == models.MetricAlertPhaseRecovering {
+		if delay <= 0 {
+			return fmt.Sprintf("%s now, recovering. Clears at %s or lower.", reading, recovery)
+		}
+		progress := ""
+		if elapsed := status.RecoveryElapsedSeconds; elapsed > 0 {
+			progress = ", " + formatAttentionElapsed(min(elapsed, delay)) + " so far"
+		}
+		return fmt.Sprintf("%s now, recovering. Clears after %s at %s or lower%s.",
+			reading, formatAttentionSeconds(delay), recovery, progress)
+	}
+	hold := ""
+	if delay > 0 {
+		hold = " and stays there for " + formatAttentionSeconds(delay)
+	}
+	return fmt.Sprintf("%s now, back under the %s alert level. Stays open until it reaches %s or lower%s.",
+		reading, formatAttentionMetricValue(status.Trigger, status.Unit), recovery, hold)
+}
+
+func attentionMetricReading(alert alerts.Alert, status *models.MetricAlertStatus) string {
+	label := attentionMetricLabel(alert)
+	value := formatAttentionMetricValue(status.Value, status.Unit)
+	if status.EvaluationWindowSeconds <= 0 {
+		return label + " " + value
+	}
+	latest := ""
+	if status.RawValue != nil && attentionFinite(*status.RawValue) {
+		latest = ", latest " + formatAttentionMetricValue(*status.RawValue, status.Unit)
+	}
+	return fmt.Sprintf("%s averaged %s over %s%s",
+		label, value, formatAttentionSeconds(status.EvaluationWindowSeconds), latest)
+}
+
+// attentionMetricLabel names the metric the way the alert type label does. A
+// guest raises one disk alert per disk, all named after the guest, so a disk
+// reading also names its disk, as the alert message does.
+func attentionMetricLabel(alert alerts.Alert) string {
+	var label string
+	switch alert.Type {
+	case "cpu":
+		label = "CPU"
+	case "memory":
+		label = "Memory"
+	case "disk", "disk-usage":
+		label = "Disk"
+	case "usage":
+		label = "Usage"
+	case "diskRead":
+		label = "Disk Read"
+	case "diskWrite":
+		label = "Disk Write"
+	case "networkIn":
+		label = "Network In"
+	case "networkOut":
+		label = "Network Out"
+	case "temperature", "disk_temperature", "diskTemperature":
+		label = "Temperature"
+	default:
+		label = firstAttentionText(alert.Type, "Reading")
+	}
+	if alert.Type == "disk" {
+		if disk, ok := alert.Metadata["label"].(string); ok && strings.TrimSpace(disk) != "" {
+			label += " (" + strings.TrimSpace(disk) + ")"
+		}
+	}
+	return label
+}
+
+func formatAttentionMetricValue(value float64, unit string) string {
+	switch unit {
+	case "°C":
+		return formatAttentionDecimal(attentionRoundHalfUp(value), 0) + "°C"
+	case "%":
+		if math.Abs(value) >= 10 {
+			return formatAttentionDecimal(attentionRoundHalfUp(value), 0) + "%"
+		}
+		return formatAttentionDecimal(value, 1) + "%"
+	case "":
+		return formatAttentionDecimal(value, 1)
+	default:
+		return formatAttentionDecimal(value, 1) + " " + unit
+	}
+}
+
+// formatAttentionDecimal rounds like the frontend's Number(value.toFixed(n)):
+// from the float's exact value, so 2.55 (stored just under it) reads 2.5, and
+// an exact tie such as 4.25 rounds away from zero where FormatFloat would
+// round it to even. No trailing ".0".
+func formatAttentionDecimal(value float64, places int) string {
+	scale := math.Pow10(places)
+	scaled := value * scale
+	var rounded float64
+	if math.FMA(value, scale, -scaled) == 0 && math.Abs(scaled-math.Trunc(scaled)) == 0.5 {
+		rounded = math.Round(scaled) / scale
+	} else {
+		parsed, err := strconv.ParseFloat(strconv.FormatFloat(value, 'f', places, 64), 64)
+		if err != nil {
+			parsed = value
+		}
+		rounded = parsed
+	}
+	if rounded == 0 {
+		rounded = 0 // a template literal prints -0 as "0"
+	}
+	return strconv.FormatFloat(rounded, 'f', -1, 64)
+}
+
+// attentionRoundHalfUp rounds like JavaScript's Math.round: ties go toward
+// positive infinity, so -10.5 rounds to -10 where math.Round gives -11.
+func attentionRoundHalfUp(value float64) float64 {
+	floor := math.Floor(value)
+	if value-floor >= 0.5 {
+		return floor + 1
+	}
+	return floor
+}
+
+func formatAttentionSeconds(seconds int) string {
+	plural := func(n float64, unit string) string {
+		if n == 1 {
+			return "1 " + unit
+		}
+		return strconv.FormatFloat(n, 'f', -1, 64) + " " + unit + "s"
+	}
+	switch {
+	case seconds < 60:
+		return plural(float64(seconds), "second")
+	case seconds < 3600:
+		return plural(math.Round(float64(seconds)/60), "minute")
+	default:
+		hours, err := strconv.ParseFloat(formatAttentionDecimal(float64(seconds)/3600, 1), 64)
+		if err != nil {
+			hours = float64(seconds) / 3600
+		}
+		return plural(hours, "hour")
+	}
+}
+
+// formatAttentionElapsed rounds progress down, so a run four minutes and
+// fifty seconds into a five minute delay does not read as finished.
+func formatAttentionElapsed(seconds int) string {
+	switch {
+	case seconds < 60:
+		return formatAttentionSeconds(seconds)
+	case seconds < 3600:
+		return formatAttentionSeconds(seconds / 60 * 60)
+	default:
+		return formatAttentionSeconds(seconds / 360 * 360)
+	}
+}
+
+func attentionFinite(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0)
 }
 
 func firstAttentionText(values ...string) string {

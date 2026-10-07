@@ -8,6 +8,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/stretchr/testify/assert"
 )
@@ -466,7 +467,7 @@ func TestGetHostAgentTemperature(t *testing.T) {
 		}
 		m.state.UpsertHost(host)
 
-		result := m.getHostAgentTemperatureByID("node-123", "different-name")
+		result := m.getHostAgentTemperatureForNode(models.Node{ID: "node-123", Name: "different-name"})
 		assert.NotNil(t, result)
 		assert.Equal(t, 60.0, result.CPUPackage)
 	})
@@ -484,7 +485,7 @@ func TestGetHostAgentTemperature(t *testing.T) {
 		}
 		m.state.UpsertHost(host)
 
-		result := m.getHostAgentTemperatureByID("node-smart-only", "different-name")
+		result := m.getHostAgentTemperatureForNode(models.Node{ID: "node-smart-only", Name: "different-name"})
 		assert.NotNil(t, result)
 		assert.True(t, result.Available)
 		assert.True(t, result.HasSMART)
@@ -573,115 +574,142 @@ func TestConvertHostSensorsToTemperature_ExtraBranches(t *testing.T) {
 	})
 }
 
-func TestGetClusterSensorTemperature(t *testing.T) {
-	m := &Monitor{
+// readStateMonitor returns a monitor whose unified read state is the registry
+// projection of nodes and hosts, as the poller sees it. Nodes are linked back to
+// the hosts linked to them, as the agent linker leaves them.
+func readStateMonitor(nodes []models.Node, hosts []models.Host) *Monitor {
+	for i := range nodes {
+		for _, host := range hosts {
+			if host.LinkedNodeID == nodes[i].ID {
+				nodes[i].LinkedAgentID = host.ID
+			}
+		}
+	}
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	adapter.PopulateFromSnapshot(models.StateSnapshot{Nodes: nodes, Hosts: hosts})
+	return &Monitor{
 		state:               models.NewState(),
+		resourceStore:       adapter,
 		clusterSensorsCache: make(map[string]clusterSensorsCacheEntry),
+	}
+}
+
+func readStateTestNode(instance, name string) models.Node {
+	return models.Node{ID: instance + "-" + name, Instance: instance, Name: name, Status: "online", LastSeen: time.Now()}
+}
+
+func reportingTestHost(id, hostname, linkedNodeID string, cpuPackage float64) models.Host {
+	host := models.Host{ID: id, Hostname: hostname, Status: "online", LinkedNodeID: linkedNodeID, IntervalSeconds: 30, LastSeen: time.Now()}
+	if cpuPackage > 0 {
+		host.Sensors = models.HostSensorSummary{TemperatureCelsius: map[string]float64{"cpu_package": cpuPackage}}
+	}
+	return host
+}
+
+func clusterSensorReport(nodeName string, cpuPackage float64) []agentshost.ClusterNodeSensors {
+	return []agentshost.ClusterNodeSensors{{
+		NodeName: nodeName,
+		Sensors:  agentshost.Sensors{TemperatureCelsius: map[string]float64{"cpu_package": cpuPackage, "cpu_core_0": cpuPackage - 3}},
+	}}
+}
+
+func TestGetClusterSensorTemperature(t *testing.T) {
+	m := readStateMonitor(
+		[]models.Node{readStateTestNode("pve1", "node1"), readStateTestNode("pve1", "node2"), readStateTestNode("pve1", "MyNode"), readStateTestNode("pve1", "stale-node")},
+		[]models.Host{reportingTestHost("agent-node1", "node1", "pve1-node1", 0), reportingTestHost("agent-unlinked", "elsewhere", "", 0)},
+	)
+	lookup := func(nodeID, nodeName string) *models.Temperature {
+		readState := m.GetUnifiedReadStateOrSnapshot()
+		polled := models.Node{ID: nodeID, Name: nodeName}
+		slot := m.polledNodeSlot(readState.Hosts(), readState.Nodes(), polled)
+		return m.getClusterSensorTemperature(readState.Hosts(), readState.Nodes(), polled, slot)
 	}
 
 	t.Run("empty cache returns nil", func(t *testing.T) {
-		result := m.getClusterSensorTemperature("node1")
-		assert.Nil(t, result)
+		assert.Nil(t, lookup("pve1-node2", "node2"))
 	})
 
 	t.Run("cached data returned", func(t *testing.T) {
-		m.clusterSensorsCache["node2"] = clusterSensorsCacheEntry{
-			sensors: models.HostSensorSummary{
-				TemperatureCelsius: map[string]float64{
-					"cpu_package": 58.0,
-					"cpu_core_0":  55.0,
-				},
-			},
-			updatedAt: time.Now(),
-		}
+		m.applyClusterSensors("agent-node1", clusterSensorReport("node2", 58), time.Now())
 
-		result := m.getClusterSensorTemperature("node2")
-		assert.NotNil(t, result)
-		assert.Equal(t, 58.0, result.CPUPackage)
-		assert.True(t, result.HasCPU)
+		result := lookup("pve1-node2", "node2")
+		if assert.NotNil(t, result) {
+			assert.Equal(t, 58.0, result.CPUPackage)
+			assert.True(t, result.HasCPU)
+		}
 	})
 
 	t.Run("stale data returns nil", func(t *testing.T) {
-		m.clusterSensorsCache["stale-node"] = clusterSensorsCacheEntry{
-			sensors: models.HostSensorSummary{
-				TemperatureCelsius: map[string]float64{"cpu_package": 50.0},
-			},
-			updatedAt: time.Now().Add(-5 * time.Minute), // older than 2min threshold
-		}
+		m.applyClusterSensors("agent-node1", clusterSensorReport("stale-node", 50), time.Now().Add(-3*time.Minute)) // older than 2min threshold
 
-		result := m.getClusterSensorTemperature("stale-node")
-		assert.Nil(t, result)
+		assert.Nil(t, lookup("pve1-stale-node", "stale-node"))
 	})
 
 	t.Run("case insensitive lookup", func(t *testing.T) {
-		m.clusterSensorsCache["mynode"] = clusterSensorsCacheEntry{
-			sensors: models.HostSensorSummary{
-				TemperatureCelsius: map[string]float64{"cpu_package": 60.0},
-			},
-			updatedAt: time.Now(),
-		}
+		m.applyClusterSensors("agent-node1", clusterSensorReport("mynode", 60), time.Now())
 
-		result := m.getClusterSensorTemperature("MyNode")
-		assert.NotNil(t, result)
-		assert.Equal(t, 60.0, result.CPUPackage)
+		result := lookup("pve1-MyNode", "MyNode")
+		if assert.NotNil(t, result) {
+			assert.Equal(t, 60.0, result.CPUPackage)
+		}
+	})
+
+	t.Run("reading from an unlinked agent serves no node", func(t *testing.T) {
+		m.applyClusterSensors("agent-unlinked", clusterSensorReport("node1", 40), time.Now())
+
+		assert.Nil(t, lookup("pve1-node1", "node1"))
+	})
+
+	t.Run("node of another connection returns nil", func(t *testing.T) {
+		assert.Nil(t, lookup("", "node2"))
+		assert.Nil(t, lookup("pve9-node2", "node2"))
+	})
+
+	t.Run("node not yet in the read state is scoped by its own connection", func(t *testing.T) {
+		m.applyClusterSensors("agent-node1", clusterSensorReport("node9", 47), time.Now())
+		readState := m.GetUnifiedReadStateOrSnapshot()
+		polled := readStateTestNode("pve1", "node9")
+		result := m.getClusterSensorTemperature(readState.Hosts(), readState.Nodes(), polled, m.polledNodeSlot(readState.Hosts(), readState.Nodes(), polled))
+		if assert.NotNil(t, result) {
+			assert.Equal(t, 47.0, result.CPUPackage)
+		}
 	})
 
 	t.Run("empty node name returns nil", func(t *testing.T) {
-		result := m.getClusterSensorTemperature("")
-		assert.Nil(t, result)
+		assert.Nil(t, lookup("pve1-node2", ""))
 	})
 }
 
 func TestGetHostAgentTemperatureByID_ClusterFallback(t *testing.T) {
-	m := &Monitor{
-		state:               models.NewState(),
-		clusterSensorsCache: make(map[string]clusterSensorsCacheEntry),
-	}
+	m := readStateMonitor(
+		[]models.Node{readStateTestNode("pve1", "sibling"), readStateTestNode("pve1", "orphan-node")},
+		[]models.Host{reportingTestHost("agent-sibling", "sibling", "pve1-sibling", 0)},
+	)
 
-	// No host agent, but cluster cache has data
-	m.clusterSensorsCache["orphan-node"] = clusterSensorsCacheEntry{
-		sensors: models.HostSensorSummary{
-			TemperatureCelsius: map[string]float64{
-				"cpu_package": 62.0,
-			},
-		},
-		updatedAt: time.Now(),
-	}
+	// No host agent on the node, but a sibling's agent collected its sensors
+	m.applyClusterSensors("agent-sibling", clusterSensorReport("orphan-node", 62), time.Now())
 
-	result := m.getHostAgentTemperatureByID("", "orphan-node")
-	assert.NotNil(t, result, "should fall back to cluster sensor cache")
-	assert.Equal(t, 62.0, result.CPUPackage)
+	result := m.getHostAgentTemperatureForNode(models.Node{ID: "pve1-orphan-node", Name: "orphan-node"})
+	if assert.NotNil(t, result, "should fall back to cluster sensor cache") {
+		assert.Equal(t, 62.0, result.CPUPackage)
+	}
 }
 
 func TestGetHostAgentTemperatureByID_LocalAgentTakesPriority(t *testing.T) {
-	m := &Monitor{
-		state:               models.NewState(),
-		clusterSensorsCache: make(map[string]clusterSensorsCacheEntry),
-	}
-
-	// Both local agent and cluster cache have data for the same node
-	m.state.UpsertHost(models.Host{
-		ID:       "host-local",
-		Hostname: "shared-node",
-		Sensors: models.HostSensorSummary{
-			TemperatureCelsius: map[string]float64{
-				"cpu_package": 70.0, // local agent reports 70
-			},
+	m := readStateMonitor(
+		[]models.Node{readStateTestNode("pve1", "sibling"), readStateTestNode("pve1", "shared-node")},
+		[]models.Host{
+			reportingTestHost("agent-sibling", "sibling", "pve1-sibling", 0),
+			reportingTestHost("host-local", "shared-node", "pve1-shared-node", 70), // local agent reports 70
 		},
-		LastSeen: time.Now(),
-	})
-	m.clusterSensorsCache["shared-node"] = clusterSensorsCacheEntry{
-		sensors: models.HostSensorSummary{
-			TemperatureCelsius: map[string]float64{
-				"cpu_package": 55.0, // cluster cache says 55
-			},
-		},
-		updatedAt: time.Now(),
-	}
+	)
+	// Both the local agent and the cluster cache have data for the same node
+	m.applyClusterSensors("agent-sibling", clusterSensorReport("shared-node", 55), time.Now()) // cluster cache says 55
 
-	result := m.getHostAgentTemperatureByID("", "shared-node")
-	assert.NotNil(t, result)
-	assert.Equal(t, 70.0, result.CPUPackage, "local agent data should take priority over cluster cache")
+	result := m.getHostAgentTemperatureForNode(models.Node{ID: "pve1-shared-node", Name: "shared-node"})
+	if assert.NotNil(t, result) {
+		assert.Equal(t, 70.0, result.CPUPackage, "local agent data should take priority over cluster cache")
+	}
 }
 
 // An agent that stops reporting keeps its last sensors in state. Past the
@@ -689,45 +717,23 @@ func TestGetHostAgentTemperatureByID_LocalAgentTakesPriority(t *testing.T) {
 // linked node as a live reading; the cluster cache (with its own recency) is
 // still consulted.
 func TestGetHostAgentTemperatureByID_IgnoresAgentPastReportingLease(t *testing.T) {
-	m := &Monitor{
-		state:               models.NewState(),
-		clusterSensorsCache: make(map[string]clusterSensorsCacheEntry),
-	}
-	m.state.UpsertHost(models.Host{
-		ID:              "host-silent",
-		Hostname:        "silent-node",
-		LinkedNodeID:    "node-silent",
-		IntervalSeconds: 30,
-		Sensors: models.HostSensorSummary{
-			TemperatureCelsius: map[string]float64{"cpu_package": 95.0},
-		},
-		LastSeen: time.Now().Add(-hostAgentHealthWindow(30) - time.Minute),
-	})
+	nodes := []models.Node{readStateTestNode("pve1", "silent-node"), readStateTestNode("pve1", "sibling")}
+	sibling := reportingTestHost("agent-sibling", "sibling", "pve1-sibling", 0)
+	silent := reportingTestHost("host-silent", "silent-node", "pve1-silent-node", 95)
+	silent.LastSeen = time.Now().Add(-hostAgentHealthWindow(30) - time.Minute)
+	m := readStateMonitor(nodes, []models.Host{silent, sibling})
 
-	assert.Nil(t, m.getHostAgentTemperatureByID("node-silent", "silent-node"),
+	assert.Nil(t, m.getHostAgentTemperatureForNode(models.Node{ID: "pve1-silent-node", Name: "silent-node"}),
 		"a silent agent's retained sensors must not be presented as a current reading")
 
-	m.clusterSensorsCache["silent-node"] = clusterSensorsCacheEntry{
-		sensors: models.HostSensorSummary{
-			TemperatureCelsius: map[string]float64{"cpu_package": 58.0},
-		},
-		updatedAt: time.Now(),
-	}
-	if result := m.getHostAgentTemperatureByID("node-silent", "silent-node"); assert.NotNil(t, result) {
+	m.applyClusterSensors("agent-sibling", clusterSensorReport("silent-node", 58), time.Now())
+	if result := m.getHostAgentTemperatureForNode(models.Node{ID: "pve1-silent-node", Name: "silent-node"}); assert.NotNil(t, result) {
 		assert.Equal(t, 58.0, result.CPUPackage, "a recent cluster-cache reading still serves the node")
 	}
 
-	m.state.UpsertHost(models.Host{
-		ID:              "host-silent",
-		Hostname:        "silent-node",
-		LinkedNodeID:    "node-silent",
-		IntervalSeconds: 30,
-		Sensors: models.HostSensorSummary{
-			TemperatureCelsius: map[string]float64{"cpu_package": 71.0},
-		},
-		LastSeen: time.Now(),
-	})
-	if result := m.getHostAgentTemperatureByID("node-silent", "silent-node"); assert.NotNil(t, result) {
+	reporting := reportingTestHost("host-silent", "silent-node", "pve1-silent-node", 71)
+	m.resourceStore.(*unifiedresources.MonitorAdapter).PopulateFromSnapshot(models.StateSnapshot{Nodes: nodes, Hosts: []models.Host{reporting, sibling}})
+	if result := m.getHostAgentTemperatureForNode(models.Node{ID: "pve1-silent-node", Name: "silent-node"}); assert.NotNil(t, result) {
 		assert.Equal(t, 71.0, result.CPUPackage, "a reporting agent's reading is used again")
 	}
 }
@@ -804,7 +810,7 @@ func TestGetHostAgentTemperatureByID_UsesUnifiedReadState(t *testing.T) {
 		resourceStore: unifiedresources.NewMonitorAdapter(registry),
 	}
 
-	result := m.getHostAgentTemperatureByID("node-readstate", "ignored")
+	result := m.getHostAgentTemperatureForNode(models.Node{ID: "node-readstate", Name: "ignored"})
 	assert.NotNil(t, result)
 	assert.Equal(t, 71.0, result.CPUPackage)
 	if assert.Len(t, result.SMART, 1) {

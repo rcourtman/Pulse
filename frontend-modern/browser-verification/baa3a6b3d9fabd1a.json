@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "base_sha": "9aaac4d3e502c01913fb3637d0997b0ce03a8b7b",
+  "verified_at": "2026-10-06T19:32:29Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/MetricDisplayModeSegmentedControl.tsx",
+    "frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx",
+    "frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts",
+    "frontend-modern/src/utils/format.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "3e7b1583b1c2ff5db07aaaa59006684f2e8c7d71d035f1ba29c03be28ae3bcd9",
+    "frontend-modern/src/components/Workloads/MetricDisplayModeSegmentedControl.tsx": "fc4af4a98de6ddae1b26033ad102398cb598975bae0619cba134610d8102e2d9",
+    "frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx": "3afd872c9633430d60f8782b33501d941ccdef8f58f28a65cecf5ca7845c6523",
+    "frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts": "b2fbcd169b0d7bacb8045ad4c134e6ddb5addc7ce6c4d0ac4a3c6673b85f462f",
+    "frontend-modern/src/utils/format.ts": "30ce3873607bdf03e34307f56e561c191957304b7e07b780afb2bbb9bd554d98"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1920,
+      "height": 1000
+    },
+    {
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 768,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Private mock stack (backend + Vite on 7735/5253) built from main plus this change; before captures taken on the same stack before the edit, and the 1440 behaviour re-checked with main's versions of these files swapped back in",
+    "Before, bars mode at 1600 dark: hovering artifact-cache-310 swapped CPU, memory and disk for synchronized sparklines while Net I/O and Disk I/O stayed as static numbers",
+    "After, bars mode at 1600 dark and 1920 light: the same hover swaps all five cells; the I/O cells show both series with a compact coloured pair (e.g. ↓3.2M ↑2.2M, R1.4M W826K) and the svg labels carry the full rates; row stays 32px tall",
+    "After, pointer scrub on the CPU chart moves one cursor across all five charts, including both I/O charts",
+    "After, live update while scrubbing: with the Net I/O tooltip open on artifact-cache-310, a websocket snapshot changed the compact pair (↓2.8M to ↓3.7M) while all five chart nodes stayed mounted and the tooltip stayed open (before this change every live update remounted the lens charts)",
+    "After, idle I/O (history intercepted to 1-6 KB/s with one 80 KB/s disk write flush): both I/O lines sit within a pixel of the axis and the flush still shows as a bump instead of every blip filling the cell",
+    "After, Trends (sparklines) mode at 1600 dark: every running guest's I/O cell shows chart plus compact pair (736 charts, 256 rate pairs, 0 clipped), stopped dev-portal-312 keeps its dash",
+    "After, 768 dark and light: I/O columns are hidden by the layout as before; the lens and Trends still render CPU/memory/disk with 0 clipped cells",
+    "Pre-existing, not changed here: at 1440 the first-use history hint wraps and its dismissal shifts the table 36px, so the first lens opens on the next row (same on main)"
+  ],
+  "interactions": [
+    "Hovered guest rows with a fine pointer in bars mode and read data-history-lens-active, chart count and svg aria-labels",
+    "Moved the pointer across the CPU chart to scrub and confirmed cursor lines in all five charts",
+    "Tagged the five lens chart nodes, opened the Net I/O tooltip, waited for live updates and compared node tags, compact pair text and tooltip presence",
+    "Left the row and confirmed bars and I/O numbers returned",
+    "Switched View to sparklines via the metric display toggle and measured chart, pair and overflow counts",
+    "Intercepted /api/metrics-store/history for one guest to idle I/O values to inspect the scale floor",
+    "Traced pointerenter/pointerleave and row y at 1440 to explain the lens opening on the next row"
+  ]
+}

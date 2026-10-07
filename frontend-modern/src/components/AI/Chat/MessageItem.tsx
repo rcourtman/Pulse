@@ -691,14 +691,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                 <div class="flex items-center gap-2 py-1 text-sm text-muted">
                   <span class="flex gap-1" aria-hidden="true">
                     <span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce" />
-                    <span
-                      class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce"
-                      style="animation-delay: 120ms"
-                    />
-                    <span
-                      class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce"
-                      style="animation-delay: 240ms"
-                    />
+                    <span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce [animation-delay:120ms]" />
+                    <span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce [animation-delay:240ms]" />
                   </span>
                   <Show when={workflowStatusText()} fallback={<span>Thinking...</span>}>
                     <span>{workflowStatusText()}</span>

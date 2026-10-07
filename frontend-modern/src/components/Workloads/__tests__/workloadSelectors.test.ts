@@ -993,5 +993,63 @@ describe('workloadSelectors', () => {
         diskIO: { median: 3.5, mad: 3.5, max: 7, p97: 7, p99: 7, count: 2 },
       });
     });
+
+    it('reports zeroed stats when there are no workloads', () => {
+      const empty = { median: 0, mad: 0, max: 0, p97: 0, p99: 0, count: 0 };
+      expect(computeWorkloadIOEmphasis([])).toEqual({ network: empty, diskIO: empty });
+    });
+
+    it('takes the median absolute deviation and upper percentile for an odd sample', () => {
+      const guests = [2, 4, 6, 8, 100].map((networkIn, i) =>
+        makeGuest(i + 1, { networkIn, networkOut: 0 }),
+      );
+
+      // deviations from 6 are 4,2,0,2,94, so the MAD is 2; p97 and p99 land on
+      // index ceil(p * 5) - 1 = 4.
+      expect(computeWorkloadIOEmphasis(guests).network).toEqual({
+        median: 6,
+        mad: 2,
+        max: 100,
+        p97: 100,
+        p99: 100,
+        count: 5,
+      });
+    });
+
+    it('selects the 97th and 99th percentile samples from a large distribution', () => {
+      const guests = Array.from({ length: 100 }, (_, i) =>
+        makeGuest(i + 1, { networkIn: i + 1, networkOut: 0 }),
+      );
+
+      expect(computeWorkloadIOEmphasis(guests).network).toMatchObject({
+        median: 50.5,
+        max: 100,
+        p97: 97,
+        p99: 99,
+        count: 100,
+      });
+    });
+
+    it('drops non-finite throughput samples from the distribution', () => {
+      const guests = [
+        makeGuest(1, { networkIn: Number.NaN, networkOut: 0, diskRead: 0, diskWrite: 0 }),
+        makeGuest(2, {
+          networkIn: Number.POSITIVE_INFINITY,
+          networkOut: 0,
+          diskRead: 0,
+          diskWrite: 0,
+        }),
+        makeGuest(3, { networkIn: 10, networkOut: 0, diskRead: 0, diskWrite: 0 }),
+      ];
+
+      expect(computeWorkloadIOEmphasis(guests).network).toEqual({
+        median: 10,
+        mad: 0,
+        max: 10,
+        p97: 10,
+        p99: 10,
+        count: 1,
+      });
+    });
   });
 });

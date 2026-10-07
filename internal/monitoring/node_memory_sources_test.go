@@ -242,7 +242,6 @@ func TestPollPVENodePrefersLinkedHostDiskOverRootFS(t *testing.T) {
 		},
 		"healthy",
 		nil,
-		nil,
 	)
 	if err != nil {
 		t.Fatalf("pollPVENode() error = %v", err)

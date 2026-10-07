@@ -138,72 +138,8 @@
       ]
     },
     {
-      "path": "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
-      "rationale": "the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
       "path": "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
       "rationale": "resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
-      "rationale": "the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
-      "rationale": "the unified resource PBS section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx",
-      "rationale": "the unified resource PMG section is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
-      "rationale": "the unified resource service infrastructure card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
-      "rationale": "the unified resource table is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
-      "rationale": "unified resource service row shaping and I/O emphasis are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
-      "rationale": "unified resource table state derivation, sort-cycle policy, service sorting, and responsive column layout are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
       "subsystems": [
         "performance-and-scalability",
         "unified-resources"
@@ -215,22 +151,6 @@
       "subsystems": [
         "frontend-primitives",
         "performance-and-scalability"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
-      "rationale": "unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
-      "rationale": "unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
-      "subsystems": [
-        "performance-and-scalability",
-        "unified-resources"
       ]
     },
     {
@@ -7115,18 +7035,8 @@
         "pkg/metrics/"
       ],
       "owned_files": [
-        "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
         "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
-        "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
-        "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
         "frontend-modern/src/components/Infrastructure/useTableWindowing.ts",
-        "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
-        "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
         "frontend-modern/src/components/Workloads/DiskList.tsx",
         "frontend-modern/src/components/Workloads/diskListModel.ts",
         "frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx",
@@ -7284,18 +7194,8 @@
             "label": "Workloads hot-path proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
               "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
-              "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
-              "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
               "frontend-modern/src/components/Infrastructure/useTableWindowing.ts",
-              "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
-              "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
               "frontend-modern/src/components/Workloads/DiskList.tsx",
               "frontend-modern/src/components/Workloads/diskListModel.ts",
               "frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx",
@@ -7364,9 +7264,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",
-              "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
-              "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
+              "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/useTableWindowing.test.ts",
               "frontend-modern/src/components/Workloads/__tests__/AvailabilityProbeStatusCard.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/DiskList.test.tsx",
@@ -8094,7 +7992,6 @@
         "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
         "frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx",
         "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
-        "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
         "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
         "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx",
         "frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx",
@@ -8109,20 +8006,10 @@
         "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
         "frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx",
         "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
-        "frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
-        "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
-        "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
-        "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
         "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
         "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts",
         "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts",
         "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts",
-        "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
-        "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
         "frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx",
         "frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx",
         "frontend-modern/src/features/docker/DockerAlertsTable.tsx",
@@ -8302,7 +8189,6 @@
               "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
               "frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx",
               "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
-              "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
               "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
               "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx",
               "frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx",
@@ -8317,20 +8203,10 @@
               "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
               "frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx",
               "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
-              "frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx",
-              "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
-              "frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts",
-              "frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts",
               "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
               "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts",
               "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts",
               "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts",
-              "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
-              "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
               "frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx",
               "frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx",
               "frontend-modern/src/features/docker/DockerAlertsTable.tsx",
@@ -8409,7 +8285,6 @@
               "frontend-modern/src/components/Discovery/__tests__/AvailabilityProposalCard.test.tsx",
               "frontend-modern/src/components/Discovery/__tests__/availabilityProposalModel.test.ts",
               "frontend-modern/src/components/Discovery/__tests__/useDiscoveryFeatureAvailability.test.tsx",
-              "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceChangeSummary.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceCorrelationSummary.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.discovery.test.ts",
@@ -8419,11 +8294,8 @@
               "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerOperationalModel.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerTrueNASModel.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailMappers.test.ts",
+              "frontend-modern/src/components/Infrastructure/__tests__/ResourceFacetSummary.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceOperatorStateSection.test.ts",
-              "frontend-modern/src/components/Infrastructure/__tests__/ResourcePolicySummary.test.tsx",
-              "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
-              "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",
-              "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
               "frontend-modern/src/features/docker/__tests__/DockerAlertsTable.test.tsx",
               "frontend-modern/src/features/docker/__tests__/dockerContainerLifecycleActions.test.ts",

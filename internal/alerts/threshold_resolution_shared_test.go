@@ -1387,3 +1387,61 @@ func TestCheckMetricResolveRemovesCanonicallyKeyedAlert(t *testing.T) {
 		t.Fatal("expected a recently-resolved entry for the cleared alert")
 	}
 }
+
+// DiskTemperatureThreshold is the policy Patrol and the Physical Disks Health
+// verdict judge disk heat by, so it must resolve every disk type exactly as
+// CheckHost does: the per-type trigger the user set, else the agent default,
+// and nothing at all once the agent default is switched off.
+func TestDiskTemperatureThresholdMatchesCheckHostPolicy(t *testing.T) {
+	m := configureDiskTempTypeHostManager(t)
+
+	for diskType, want := range map[string]HysteresisThreshold{
+		"nvme":  {Trigger: 70, Clear: 65},
+		" NVMe": {Trigger: 70, Clear: 65},
+		"sas":   {Trigger: 65, Clear: 60},
+		"sata":  {Trigger: 55, Clear: 50},
+		"hdd":   {Trigger: 55, Clear: 50},
+		"":      {Trigger: 55, Clear: 50},
+	} {
+		if got := m.DiskTemperatureThreshold(diskType); got == nil || *got != want {
+			t.Errorf("DiskTemperatureThreshold(%q) = %+v, want %+v", diskType, got, want)
+		}
+		if got := DefaultDiskTemperatureThreshold(diskType); got == nil || *got != want {
+			t.Errorf("DefaultDiskTemperatureThreshold(%q) = %+v, want the factory %+v", diskType, got, want)
+		}
+	}
+
+	// A user who raised the NVMe trigger to 75 gets no alert at 72C, and the
+	// policy says the same disk is not hot.
+	m.mu.Lock()
+	m.config.DiskTempByType["nvme"] = HysteresisThreshold{Trigger: 75, Clear: 70}
+	m.mu.Unlock()
+	if got := m.DiskTemperatureThreshold("nvme"); got == nil || got.Trigger != 75 || got.Clear != 70 {
+		t.Fatalf("raised nvme threshold = %+v, want 75/70", got)
+	}
+	host := hostWithSMARTDiskTemp("host-temp-raised-nvme", "nvme", 72)
+	m.CheckHost(host)
+	if _, exists := testLookupActiveAlert(t, m, hostDiskTempAlertID(host)); exists {
+		t.Fatalf("expected no alert for nvme at 72C under a raised 75C trigger, active: %v", alertKeys(m))
+	}
+
+	// The returned threshold is a copy.
+	m.DiskTemperatureThreshold("nvme").Trigger = 1
+	if got := m.DiskTemperatureThreshold("nvme"); got.Trigger != 75 {
+		t.Fatalf("caller mutation reached the config: %+v", got)
+	}
+
+	m.mu.Lock()
+	m.config.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 0, Clear: 0}
+	m.mu.Unlock()
+	for _, diskType := range []string{"nvme", "sata", "hdd"} {
+		if got := m.DiskTemperatureThreshold(diskType); got == nil || got.Trigger > 0 {
+			t.Errorf("DiskTemperatureThreshold(%q) with disk temperature alerting off = %+v, want a disabled threshold", diskType, got)
+		}
+	}
+
+	var nilManager *Manager
+	if got := nilManager.DiskTemperatureThreshold("nvme"); got == nil || got.Trigger != 70 {
+		t.Fatalf("nil manager threshold = %+v, want the factory nvme 70", got)
+	}
+}

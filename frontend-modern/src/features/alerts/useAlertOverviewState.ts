@@ -38,7 +38,6 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
   const tickInterval = setInterval(() => setTick(Date.now()), 60_000);
   const activeAlerts = createMemo(() => Object.values(props.activeAlerts()));
   const {
-    effectiveAlerts: acknowledgedAlerts,
     unacknowledgedAlerts,
     processingAlerts,
     bulkAckProcessing,
@@ -55,7 +54,7 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
     processing: snoozeProcessingAlerts,
     handleSnooze,
     handleUnsnooze,
-  } = useAlertSnoozeState({ alerts: acknowledgedAlerts, updateAlert: props.updateAlert });
+  } = useAlertSnoozeState({ alerts: activeAlerts, updateAlert: props.updateAlert });
 
   onCleanup(() => {
     clearInterval(tickInterval);

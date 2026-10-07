@@ -15,6 +15,14 @@
 
 ## Purpose
 
+### Alert projections carry a volatile metric status — issue #2068
+
+`models.Alert` gains an optional `metricStatus` (`models.MetricAlertStatus`)
+beside the alert-engine metadata. It is a live evaluation snapshot owned by
+the alerts subsystem. Agent report admission, host continuity and
+re-enrollment never read or write it, and it is not persisted with agent or
+state records.
+
 ### Source-record lookup preserves report admission
 
 Host and Docker report admission still performs canonical host-view matching
@@ -288,6 +296,19 @@ not disable the local host, SMART, Ceph, or Proxmox reporting modules, alter
 agent enrollment or identity, or add remote command authority. The disabled
 path is pinned by `TestCollectClusterSensors_Disabled`; configuration parsing
 is pinned by `TestLoadConfigDisableClusterPeerSensorsFlag`.
+Pulse attributes peer readings to the agent that reported them. Peers are
+named by bare Proxmox node name, which a node of another connection can share,
+so monitoring keys its cluster sensor cache by reporting agent and node name.
+A reading serves a node only when the agent's currently linked node belongs to
+that node's connection, or to another connection with a fingerprint-proven view
+of the node (a cluster added twice); attribution follows the agent's link like
+its own sensors. An unlinked reporter's peer readings serve no node, nor do
+those of a reporter whose manual link names a node ID the read state does not
+hold. This reads
+the existing agent link and adds no identity, enrollment, link or command
+authority; the ingest path is pinned by
+`TestApplyHostReportScopesClusterSensorsToReportersConnection` in
+`internal/monitoring/monitor_host_agents_test.go`.
 On supported Linux systemd hosts, the opt-in safe runtime is a root-owned,
 unprivileged monitoring collector plus the no-network typed helper, with
 remediation installed only as the separate root-owned `pulse-agent-runner`.
@@ -734,6 +755,23 @@ agent's SMART temperature and I/O counters as last-known values but marks them
 report replaces them. Expiry is compare-and-set on the report time the offline
 sweep judged stale, so a report admitted between that judgement and the expiry
 is never expired.
+A legacy agent's report carries no collection state, so its expiry records
+`unavailable` without a source; monitoring's Proxmox-disk copy and the
+unified-resources registry both read that through
+`diskinventory.LegacyHostAgentStatus` (the `host_agent` source), so the
+withdrawal still supersedes the copy a Proxmox disk keeps once its host stops
+being polled.
+Unraid array-inventory temperatures follow the same lease: while the host is
+offline the unified-resources adapter reports them `unavailable` with the same
+reason (`models.HostAgentStoppedReportingReason`) and leaves them out of the
+disk's risk, and the metrics-history API does not return any such retained
+disk temperature as a live point.
+Downstream readers keep that distinction too. The disk temperature charts do
+not pad a series to now with the retained value. The AI chat context, Patrol and
+the AI disk tools present it only as a last-known value with its reason. The
+performance report and the reporting runtime snapshot leave it out of their
+disk tables. The performance report colours a collected reading by the
+tenant's alert disk temperature thresholds for the disk type, not a fixed line.
 
 An enabled availability target assigned to a host agent creates an
 agent-lifecycle lease for that exact target/agent pairing. First assignment
@@ -2736,6 +2774,11 @@ agent inventory, registration state, or command-channel readiness.
    enrollment, and reporting freshness flows may coexist with generated
    reports, but workspace logo material remains API/security/reporting
    ownership and must not become agent credential, install-token, or fleet
+   lifecycle state.
+   Report alert rows built there carry an alert's handover resolution, so a
+   node alert that moved to its linked Pulse agent reads as moved, not
+   recovered. That is report presentation only: the report never decides
+   agent linkage, ownership of a metric, or agent freshness, and it adds no
    lifecycle state.
    The same isolation rule applies to Patrol investigation-record propagation
    through shared AI intelligence handlers and `internal/api/router.go`:

@@ -3583,9 +3583,12 @@ func physicalDiskSummaryFromResource(resource unifiedresources.Resource) Physica
 		wearout := pd.Wearout
 		summary.LifeRemainingPercent = &wearout
 	}
-	if pd.Temperature > 0 {
-		temp := pd.Temperature
-		summary.Temperature = &temp
+	temperature := SplitDiskTemperature(pd.Temperature, pd.Collection)
+	if temperature.Collected > 0 {
+		summary.Temperature = &temperature.Collected
+	} else if temperature.LastKnown > 0 {
+		summary.LastKnownTemperature = &temperature.LastKnown
+		summary.LastKnownTemperatureReason = temperature.Reason
 	}
 	if pd.RPM > 0 {
 		rpm := pd.RPM

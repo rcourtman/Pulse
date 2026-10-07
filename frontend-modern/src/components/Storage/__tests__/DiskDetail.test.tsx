@@ -99,6 +99,10 @@ describe('DiskDetail', () => {
     expect(
       screen.getByText('Temperature is temporarily unavailable: collection deadline exceeded'),
     ).toBeInTheDocument();
+    // The retained value sits under its own label with no health tone.
+    expect(screen.queryByText('Temperature')).not.toBeInTheDocument();
+    expect(screen.getByText('Last known temperature')).toBeInTheDocument();
+    expect(screen.getByText('42°C')).toHaveClass('text-muted');
     expect(
       screen.getByText('Disk I/O is unsupported: per-member counters unavailable'),
     ).toBeInTheDocument();

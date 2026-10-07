@@ -3069,3 +3069,11 @@ paused-delivery banner strings in English, German and Spanish. This is alert
 presentation copy only: no API token name, scope preset, privacy disclosure,
 telemetry statement or security term changes, and no request, storage or
 authorization path moves.
+
+### Retained disk temperatures are not served as live history
+
+`/api/metrics-store/history` now omits a disk's `smart_temp` live point, and
+the mock-mode synthetic series derived from that reading, when the temperature
+was not collected by the current observation. This only withholds a value the
+caller was already authorized to read; the route, its authentication and scope
+checks, tenant resolution and response shape are unchanged.

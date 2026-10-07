@@ -19,6 +19,10 @@ const (
 	// MetadataAlertResolution is the reason code of a resolve that was not a
 	// recovery, such as "moved_to_agent". Ordinary recoveries omit it.
 	MetadataAlertResolution = "alert_resolution"
+	// MetadataAlertResourceID is the alert's own resource reference, recorded
+	// on a lifecycle row written under another resource because the row's
+	// hardware identity names it (see OwnedAlertReference).
+	MetadataAlertResourceID = "alert_resource_id"
 	MetadataCommand         = "command"
 	MetadataSuccess         = "success"
 	MetadataOutputExcerpt   = "output_excerpt"

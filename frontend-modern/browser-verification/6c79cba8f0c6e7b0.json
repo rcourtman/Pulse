@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "dcd409f9da0a7a7f35a2a4ad5a4354e0b1d3ee44",
+  "verified_at": "2026-10-07T10:52:19Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/resourceBadgePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/resourceBadgePresentation.ts": "ff0409fed88a69acf8acba49ab66a7fd46147d3ba65e8433f0f758fc50a405ca"
+  },
+  "routes": [
+    "/docker",
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production build of this tree on a private demo-mode mock stack (port 7697, fresh data dir)",
+    "Docker hosts table System column shows getInfrastructureSystemIdentityBadges-derived labels: Ubuntu, Alpine, Debian, and LXC with the \"Docker running inside Proxmox LXC <vmid>\" tooltip",
+    "Docker host inline drawer opens with its Overview/History/Manage tabs",
+    "Machines inline drawer header shows the type badge plus the system identity badge (Agent, Ubuntu 24.04 LTS)",
+    "Phone width: Docker hosts table hides the System column, Machines drawer header keeps both badges",
+    "No page errors; only console errors are the pre-existing inline-style CSP reports that PR 2642 fixes on main, which this base predates"
+  ],
+  "interactions": [
+    "Clicked the System column header: aria-sort became ascending and rows ordered Alpine, Debian, LXC, LXC, Ubuntu x3, matching the rendered badges",
+    "Expanded the first Docker host row through its disclosure button at both widths",
+    "Expanded the first Machines row through its disclosure button at both widths",
+    "Production bundle-size check passed with the same chunk set"
+  ]
+}

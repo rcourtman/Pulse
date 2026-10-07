@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -1286,7 +1287,7 @@ func TestCheckDockerContainerStateAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	m.CheckDockerHost(host)
 	m.CheckDockerHost(host)
 
-	resourceID := DockerResourceID(host.ID, "container-1")
+	resourceID := DockerContainerResourceID(host.ID, "container-1", "")
 	alert := activeAlert(t, m, "docker-container-state-"+resourceID)
 	if got := alert.Metadata["canonicalAlertKind"]; got != "discrete-state" {
 		t.Fatalf("canonicalAlertKind = %v, want discrete-state", got)
@@ -1591,5 +1592,189 @@ func TestUnifiedMetricNoisyWarningWaitsButCriticalFiresImmediately(t *testing.T)
 	}
 	if got := alert.Metadata["stabilityWindowSeconds"]; got != defaultNoisyGaugeStabilitySeconds {
 		t.Fatalf("stabilityWindowSeconds = %v, want %d", got, defaultNoisyGaugeStabilitySeconds)
+	}
+}
+
+// metricStatusClock drives a manager's wall and monotonic clocks together so
+// recovery runs measure exactly the time the test advances.
+type metricStatusClock struct {
+	now  time.Time
+	tick time.Duration
+}
+
+func (c *metricStatusClock) advance(d time.Duration) {
+	c.now = c.now.Add(d)
+	c.tick += d
+}
+
+func newMetricStatusTestManager(t *testing.T) (*Manager, *metricStatusClock) {
+	t.Helper()
+	m := newTestManager(t)
+	// Recently-resolved retention prunes against the real clock, so start there.
+	clock := &metricStatusClock{now: time.Now().UTC()}
+	m.now = func() time.Time { return clock.now }
+	m.intentClock = func() time.Duration { return clock.tick }
+	m.mu.Lock()
+	m.config.NodeDefaults.Temperature = &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.mu.Unlock()
+	return m, clock
+}
+
+// fireNodeTemperatureAlert holds a breaching reading until the factory
+// stability delay lets the alert open, as a real poll loop would.
+func fireNodeTemperatureAlert(t *testing.T, m *Manager, clock *metricStatusClock, celsius float64) *Alert {
+	t.Helper()
+	for attempt := 0; attempt < 40; attempt++ {
+		checkMetricStatusNode(m, celsius)
+		if alert := activeNodeTemperatureAlert(t, m); alert != nil {
+			return alert
+		}
+		clock.advance(30 * time.Second)
+	}
+	t.Fatalf("%v°C never opened the temperature alert", celsius)
+	return nil
+}
+
+func checkMetricStatusNode(m *Manager, celsius float64) {
+	m.CheckNode(models.Node{
+		ID:       "homelab-minipc",
+		Name:     "minipc",
+		Instance: "homelab",
+		Status:   "online",
+		CPU:      0.2,
+		Memory:   models.Memory{Usage: 40},
+		Disk:     models.Disk{Usage: 40},
+		Temperature: &models.Temperature{
+			Available:  true,
+			CPUPackage: celsius,
+		},
+	})
+}
+
+func activeNodeTemperatureAlert(t *testing.T, m *Manager) *Alert {
+	t.Helper()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	alert, ok := m.getActiveAlertNoLock(canonicalMetricStateID("homelab-minipc", "temperature"))
+	if !ok {
+		return nil
+	}
+	return alert.Clone()
+}
+
+func TestOpenTemperatureAlertReportsLiveReadingWhileItHolds(t *testing.T) {
+	m, clock := newMetricStatusTestManager(t)
+	// Buffered so a dispatch never blocks the evaluator; len() counts sends.
+	notified := make(chan struct{}, 64)
+	m.SetAlertCallback(func(*Alert) { notified <- struct{}{} })
+
+	fired := fireNodeTemperatureAlert(t, m, clock, 85)
+	status := fired.MetricStatus
+	if status == nil || status.Phase != models.MetricAlertPhaseBreaching || status.Value != 85 ||
+		status.Trigger != 80 || status.Recovery != 75 || status.Unit != "°C" {
+		t.Fatalf("breaching status = %+v", status)
+	}
+	if status.RecoveryDelaySeconds <= 0 {
+		t.Fatalf("temperature alerts carry a recovery delay, got %+v", status)
+	}
+	delay := time.Duration(status.RecoveryDelaySeconds) * time.Second
+	firedMessage, firedLastSeen, notifications := fired.Message, fired.LastSeen, len(notified)
+
+	// Between the clear and trigger levels the alert holds. The legacy
+	// snapshot keeps the breach; only the live status moves.
+	clock.advance(30 * time.Second)
+	checkMetricStatusNode(m, 78)
+	held := activeNodeTemperatureAlert(t, m)
+	if held == nil {
+		t.Fatal("78°C cleared an alert that should hold until 75°C")
+	}
+	if held.Value != 85 || held.Message != firedMessage || !held.LastSeen.Equal(firedLastSeen) {
+		t.Fatalf("hold rewrote the breach snapshot: value=%v message=%q lastSeen=%v", held.Value, held.Message, held.LastSeen)
+	}
+	if got := held.MetricStatus; got == nil || got.Phase != models.MetricAlertPhaseLatched || got.Value != 78 ||
+		!got.ObservedAt.Equal(clock.now) || got.RecoveryStartedAt != nil {
+		t.Fatalf("latched status = %+v", got)
+	}
+
+	// At or below the recovery level the recovery run starts.
+	clock.advance(30 * time.Second)
+	recoveryStart := clock.now
+	checkMetricStatusNode(m, 72)
+	if got := activeNodeTemperatureAlert(t, m).MetricStatus; got == nil ||
+		got.Phase != models.MetricAlertPhaseRecovering || got.Value != 72 ||
+		got.RecoveryStartedAt == nil || !got.RecoveryStartedAt.Equal(recoveryStart) || got.RecoveryElapsedSeconds != 0 {
+		t.Fatalf("recovery start status = %+v", got)
+	}
+	clock.advance(delay / 2)
+	checkMetricStatusNode(m, 75)
+	if got := activeNodeTemperatureAlert(t, m).MetricStatus; got == nil ||
+		got.Phase != models.MetricAlertPhaseRecovering || got.RecoveryElapsedSeconds != int(delay/2/time.Second) {
+		t.Fatalf("recovery progress status = %+v", got)
+	}
+
+	// A reading back above the recovery level resets the run.
+	clock.advance(30 * time.Second)
+	checkMetricStatusNode(m, 77)
+	if got := activeNodeTemperatureAlert(t, m).MetricStatus; got == nil ||
+		got.Phase != models.MetricAlertPhaseLatched || got.RecoveryStartedAt != nil || got.RecoveryElapsedSeconds != 0 {
+		t.Fatalf("status after recovery reset = %+v", got)
+	}
+	if got := len(notified); got != notifications {
+		t.Fatalf("holding and recovering sent %d notifications", got-notifications)
+	}
+
+	// A full recovery delay at or below 75°C resolves the alert.
+	checkMetricStatusNode(m, 72)
+	clock.advance(delay)
+	checkMetricStatusNode(m, 72)
+	if alert := activeNodeTemperatureAlert(t, m); alert != nil {
+		t.Fatalf("alert still open after a full recovery delay: %+v", alert.MetricStatus)
+	}
+	m.resolvedMutex.RLock()
+	defer m.resolvedMutex.RUnlock()
+	resolved := 0
+	for _, entry := range m.recentlyResolved {
+		if entry == nil || entry.Type != "temperature" {
+			continue
+		}
+		resolved++
+		if entry.MetricStatus != nil {
+			t.Fatalf("resolved record kept the live status of an open alert: %+v", entry.MetricStatus)
+		}
+	}
+	if resolved != 1 {
+		t.Fatalf("resolved temperature records = %d, want 1", resolved)
+	}
+}
+
+func TestBuildMetricAlertStatusCarriesWindowAndMonotonicRecovery(t *testing.T) {
+	observedAt := time.Date(2026, 10, 6, 10, 49, 0, 0, time.UTC)
+	status := buildMetricAlertStatus(metricStatusInput{
+		value:                74,
+		trigger:              80,
+		clear:                75,
+		recoveryDelaySeconds: 300,
+		unit:                 "%",
+		window:               metricWindowObservation{Value: 74, CurrentValue: 91, WindowSeconds: 600, Ready: true},
+		incident: reducer.Incident{
+			RecoverySince:         observedAt.Add(-10 * time.Minute),
+			RecoveryElapsed:       90 * time.Second,
+			RecoveryTicksSupplied: true,
+		},
+		observedAt: observedAt,
+	})
+	if status.Phase != models.MetricAlertPhaseRecovering || status.Value != 74 ||
+		status.RawValue == nil || *status.RawValue != 91 || status.EvaluationWindowSeconds != 600 {
+		t.Fatalf("windowed status = %+v", status)
+	}
+	// Elapsed time comes from the monotonic run, not wall-clock arithmetic.
+	if status.RecoveryElapsedSeconds != 90 {
+		t.Fatalf("recovery elapsed = %d, want 90", status.RecoveryElapsedSeconds)
+	}
+
+	// The reducer clears at the trigger when no clear level is configured.
+	noClear := buildMetricAlertStatus(metricStatusInput{value: 85, triggered: true, trigger: 80, observedAt: observedAt})
+	if noClear.Recovery != 80 || noClear.RawValue != nil {
+		t.Fatalf("status without clear level = %+v", noClear)
 	}
 }

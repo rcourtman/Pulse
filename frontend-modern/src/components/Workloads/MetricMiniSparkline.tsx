@@ -1,5 +1,6 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
+import { formatCompactSpeed } from '@/utils/format';
 
 import {
   buildMetricMiniSparklinePath,
@@ -8,8 +9,10 @@ import {
   getMetricMiniSparklineScale,
   getMetricMiniSparklineTimeRange,
   hasRenderableMetricSeries,
+  WORKLOAD_RATE_METRIC_GLYPHS,
   type MetricMiniSparklineHoverState,
   type WorkloadMetricSparklineSeries,
+  type WorkloadRateMetric,
 } from './workloadMetricHistoryModel';
 
 type MetricMiniSparklineValueLabelMode = 'inline' | 'tooltip' | 'hidden';
@@ -18,6 +21,8 @@ export type MetricMiniSparklineValueLabelContext = 'current' | 'last known';
 interface MetricMiniSparklineProps {
   series: WorkloadMetricSparklineSeries[];
   valueLabel?: string;
+  /** Visible inline value when it should read shorter than the accessible valueLabel. */
+  valueContent?: JSX.Element;
   valueLabelMode?: MetricMiniSparklineValueLabelMode;
   valueLabelContext?: MetricMiniSparklineValueLabelContext;
   title?: string;
@@ -29,10 +34,13 @@ interface MetricMiniSparklineProps {
   showTooltip?: boolean;
 }
 
-type MetricMiniSparklineTooltipState = MetricMiniSparklineHoverState & {
+interface MetricMiniSparklinePointer {
+  cursorRatio: number;
   tooltipX: number;
   tooltipY: number;
-};
+}
+
+type MetricMiniSparklineTooltipState = MetricMiniSparklineHoverState & MetricMiniSparklinePointer;
 
 const SPARKLINE_VIEWBOX_WIDTH = 96;
 const SPARKLINE_PLOT_X_PADDING = 1;
@@ -72,9 +80,16 @@ export const MetricMiniSparkline: Component<MetricMiniSparklineProps> = (props) 
   const showInlineValue = createMemo(
     () => valueLabelMode() === 'inline' || (valueLabelMode() === 'tooltip' && !hasLine()),
   );
-  const [hoveredState, setHoveredState] = createSignal<MetricMiniSparklineTooltipState | null>(
-    null,
-  );
+  // Keep only where the pointer is. The tooltip's point and values derive from
+  // the current series, so a live update under an open tooltip re-reads it
+  // instead of showing the snapshot taken at the last mouse move.
+  const [pointer, setPointer] = createSignal<MetricMiniSparklinePointer | null>(null);
+  const hoveredState = createMemo<MetricMiniSparklineTooltipState | null>(() => {
+    const current = pointer();
+    if (!current) return null;
+    const state = computeMetricMiniSparklineHoverState(props.series, current.cursorRatio, 1);
+    return state ? { ...state, tooltipX: current.tooltipX, tooltipY: current.tooltipY } : null;
+  });
   const synchronizedState = createMemo(() => {
     const ratio = props.cursorRatio;
     if (ratio === null || ratio === undefined) return null;
@@ -102,7 +117,7 @@ export const MetricMiniSparkline: Component<MetricMiniSparklineProps> = (props) 
   );
   const handleMouseMove: JSX.EventHandler<SVGSVGElement, MouseEvent> = (event) => {
     if (!hasLine()) {
-      setHoveredState(null);
+      setPointer(null);
       props.onCursorRatioChange?.(null);
       return;
     }
@@ -113,10 +128,10 @@ export const MetricMiniSparkline: Component<MetricMiniSparklineProps> = (props) 
       event.clientX - rect.left,
       rect.width,
     );
-    setHoveredState(
+    setPointer(
       next
         ? {
-            ...next,
+            cursorRatio: next.cursorRatio,
             tooltipX: event.clientX,
             tooltipY: rect.top,
           }
@@ -125,7 +140,7 @@ export const MetricMiniSparkline: Component<MetricMiniSparklineProps> = (props) 
     props.onCursorRatioChange?.(next?.cursorRatio ?? null);
   };
   const handleMouseLeave = () => {
-    setHoveredState(null);
+    setPointer(null);
     props.onCursorRatioChange?.(null);
   };
   const showTooltip = createMemo(() => (props.showTooltip ?? true) && hoveredState());
@@ -179,7 +194,7 @@ export const MetricMiniSparkline: Component<MetricMiniSparklineProps> = (props) 
       </svg>
       <Show when={showInlineValue()}>
         <span class="block max-w-22 overflow-hidden text-ellipsis whitespace-nowrap text-right text-[10px] font-medium tabular-nums text-base-content">
-          {displayLabel()}
+          {props.valueContent ?? displayLabel()}
         </span>
       </Show>
       <Show when={showTooltip()}>
@@ -215,3 +230,28 @@ export const MetricMiniSparkline: Component<MetricMiniSparklineProps> = (props) 
     </div>
   );
 };
+
+interface MetricMiniSparklineRatePairProps {
+  metric: WorkloadRateMetric;
+  values: readonly [number, number];
+}
+
+/**
+ * Current in/out (or read/write) rates compact enough to sit beside a rate
+ * sparkline. The full rates belong in the chart's valueLabel, which carries
+ * them to assistive technology, so this abbreviation stays out of that tree.
+ */
+export const MetricMiniSparklineRatePair: Component<MetricMiniSparklineRatePairProps> = (props) => (
+  <span aria-hidden="true" data-metric-rate-pair="true" class="inline-flex items-center gap-1">
+    <For each={WORKLOAD_RATE_METRIC_GLYPHS[props.metric]}>
+      {(entry, index) => (
+        <span class="inline-flex items-center gap-px">
+          <span class={entry.mono ? 'font-mono' : undefined} style={{ color: entry.color }}>
+            {entry.glyph}
+          </span>
+          {formatCompactSpeed(props.values[index()])}
+        </span>
+      )}
+    </For>
+  </span>
+);

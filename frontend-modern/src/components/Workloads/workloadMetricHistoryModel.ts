@@ -80,7 +80,35 @@ export const WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE: WorkloadTableMetricHistoryRan
 // when an operator changes range on a large estate.
 export const WORKLOAD_TABLE_HISTORY_MAX_POINTS = 36;
 export const MIN_PERCENT_SCALE_CEILING = 5;
+// Rate sparklines scale to their own peak, so without a floor a guest moving
+// between 2 KB/s and 6 KB/s draws the same full-height spike as one hitting
+// 500 MB/s. Background chatter stays near the axis below this ceiling.
+export const MIN_RATE_SCALE_CEILING = 100 * 1024;
 export const WORKLOAD_TABLE_HISTORY_POLL_MS = 30_000;
+
+export type WorkloadRateMetric = Extract<WorkloadTableMetric, 'netIo' | 'diskIo'>;
+
+export interface WorkloadRateMetricGlyph {
+  glyph: string;
+  color: string;
+  mono: boolean;
+}
+
+// The glyphs the rate cells already use at rest, coloured like the series they
+// label, so a compact value pair beside a chart also serves as its legend.
+export const WORKLOAD_RATE_METRIC_GLYPHS: Record<
+  WorkloadRateMetric,
+  readonly [WorkloadRateMetricGlyph, WorkloadRateMetricGlyph]
+> = {
+  netIo: [
+    { glyph: '↓', color: NET_IN_COLOR, mono: false },
+    { glyph: '↑', color: NET_OUT_COLOR, mono: false },
+  ],
+  diskIo: [
+    { glyph: 'R', color: DISK_READ_COLOR, mono: true },
+    { glyph: 'W', color: DISK_WRITE_COLOR, mono: true },
+  ],
+};
 
 export const WORKLOAD_TABLE_HISTORY_INFRA_METRICS = [
   'cpu',
@@ -321,6 +349,13 @@ export const getMetricMiniSparklineScale = (
     return {
       minValue: 0,
       maxValue: Math.min(100, Math.max(MIN_PERCENT_SCALE_CEILING, maxValue * 1.15)),
+    };
+  }
+
+  if (unit === 'B/s') {
+    return {
+      minValue: 0,
+      maxValue: Math.max(MIN_RATE_SCALE_CEILING, maxValue * 1.15),
     };
   }
 

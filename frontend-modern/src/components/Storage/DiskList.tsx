@@ -13,9 +13,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
-import { useAlertsActivation } from '@/stores/alertsActivation';
 import { formatBytes } from '@/utils/format';
-import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
+import { getTemperatureTextClass } from '@/utils/temperature';
 import {
   PHYSICAL_DISK_CELL_DEVICE_CLASS,
   PHYSICAL_DISK_CELL_DISK_CLASS,
@@ -63,6 +62,7 @@ import {
   PHYSICAL_DISK_NAME_WRAP_CLASS,
   PHYSICAL_DISK_SIZE_VALUE_CLASS,
   PHYSICAL_DISK_TEMPERATURE_CLASS,
+  PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS,
   PHYSICAL_DISK_VALUE_TEXT_CLASS,
   PHYSICAL_DISK_TABLE_BODY_CLASS,
   PHYSICAL_DISK_TABLE_CLASS,
@@ -76,6 +76,7 @@ import {
   getPhysicalDiskEmptyStatePresentation,
   getPhysicalDiskHealthCompactLabel,
   getPhysicalDiskHealthStatus,
+  getPhysicalDiskTemperatureThresholds,
   getPhysicalDiskHealthSummary,
   getPhysicalDiskHostLabel,
   getPhysicalDiskLifeLabel,
@@ -83,6 +84,7 @@ import {
   getPhysicalDiskParentLabel,
   getPhysicalDiskRoleLabel,
   getPhysicalDiskTableLayoutModeForContainer,
+  getPhysicalDiskTemperaturePresentation,
   isPhysicalDiskColumnVisible,
   type PhysicalDiskTableColumnId,
 } from '@/features/storageBackups/diskPresentation';
@@ -130,7 +132,6 @@ export const DiskList: Component<DiskListProps> = (props) => {
   };
   const columnStyle = (columnId: PhysicalDiskTableColumnId) =>
     getPhysicalDiskColumnWidthStyle(layoutMode(), columnId);
-  const { getDiskTemperatureThresholds } = useAlertsActivation();
   const model = useDiskListModel({
     disks: () => props.disks,
     nodes: () => props.nodes,
@@ -335,6 +336,9 @@ export const DiskList: Component<DiskListProps> = (props) => {
                 const status = createMemo(() => getPhysicalDiskHealthStatus(data()));
                 const hostLabel = createMemo(() => getPhysicalDiskHostLabel(data(), disk));
                 const healthSummary = createMemo(() => getPhysicalDiskHealthSummary(status()));
+                const temperature = createMemo(() =>
+                  getPhysicalDiskTemperaturePresentation(data()),
+                );
                 const healthCompactLabel = createMemo(() =>
                   getPhysicalDiskHealthCompactLabel(status().label),
                 );
@@ -509,18 +513,31 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         data-storage-column="temp"
                       >
                         <Show
-                          when={data().temperature > 0}
+                          when={temperature()}
                           fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
                         >
-                          <span
-                            class={`${PHYSICAL_DISK_TEMPERATURE_CLASS} ${getTemperatureTextClass(
-                              data().temperature,
-                              getDiskTemperatureThresholds(data().type),
-                              'diskTemperature',
-                            )}`}
-                          >
-                            {formatTemperature(data().temperature)}
-                          </span>
+                          {(reading) => (
+                            <span
+                              class={`${PHYSICAL_DISK_TEMPERATURE_CLASS} ${
+                                reading().current
+                                  ? getTemperatureTextClass(
+                                      data().temperature,
+                                      getPhysicalDiskTemperatureThresholds(data()),
+                                      'diskTemperature',
+                                    )
+                                  : PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS
+                              }`}
+                              title={reading().title}
+                              data-temperature-reading={
+                                reading().current ? 'current' : 'last-known'
+                              }
+                            >
+                              {reading().label}
+                              <Show when={!reading().current}>
+                                <span class="sr-only">, last known</span>
+                              </Show>
+                            </span>
+                          )}
                         </Show>
                       </TableCell>
 

@@ -93,14 +93,52 @@ func normalizeHardwareID(value string) string {
 	return value
 }
 
+// normalizeHardwareWWN is normalizeHardwareID for a value reported as a WWN.
+// The host agent also spells smartctl's NAA 5 WWN as unpadded naa-oui-id hex
+// fields, which only a WWN field can carry, so only WWNs are re-padded.
+func normalizeHardwareWWN(value string) string {
+	value = normalizeHardwareID(value)
+	if expanded, ok := expandNAA5FieldWWN(value); ok {
+		return expanded
+	}
+	return value
+}
+
+// expandNAA5FieldWWN rewrites the host agent's "5-c50-a1b2c3d4" spelling of a
+// NAA 5 WWN (4-bit NAA, 24-bit OUI, 36-bit vendor ID, each printed as unpadded
+// hex) into the 16-digit form udev and PVE report, "5000c500a1b2c3d4".
+// Anything that does not fit those field widths is left alone.
+func expandNAA5FieldWWN(value string) (string, bool) {
+	fields := strings.Split(value, "-")
+	if len(fields) != 3 || fields[0] != "5" ||
+		len(fields[1]) > 6 || len(fields[2]) > 9 ||
+		!isLowerHex(fields[1]) || !isLowerHex(fields[2]) {
+		return "", false
+	}
+	return "5" + strings.Repeat("0", 6-len(fields[1])) + fields[1] +
+		strings.Repeat("0", 9-len(fields[2])) + fields[2], true
+}
+
+func isLowerHex(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, char := range value {
+		if (char < '0' || char > '9') && (char < 'a' || char > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
 // HardwareIdentityMatch reports whether two disk observations carry the same
 // stable hardware identity. Serial and WWN are folded together because
 // sources disagree on which field holds the durable identifier: PVE reports a
 // RAID array volume's NAA identifier as its serial while smartctl reports the
 // same value as a naa.-prefixed WWN with no serial at all.
 func HardwareIdentityMatch(leftSerial, leftWWN, rightSerial, rightWWN string) bool {
-	left := [2]string{normalizeHardwareID(leftSerial), normalizeHardwareID(leftWWN)}
-	right := [2]string{normalizeHardwareID(rightSerial), normalizeHardwareID(rightWWN)}
+	left := [2]string{normalizeHardwareID(leftSerial), normalizeHardwareWWN(leftWWN)}
+	right := [2]string{normalizeHardwareID(rightSerial), normalizeHardwareWWN(rightWWN)}
 	for _, l := range left {
 		if l == "" {
 			continue

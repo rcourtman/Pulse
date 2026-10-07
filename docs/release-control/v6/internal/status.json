@@ -97,11 +97,6 @@
         },
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
           "path": "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
           "kind": "file"
         },
@@ -5668,22 +5663,7 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
           "path": "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
           "kind": "file"
         },
         {
@@ -5923,7 +5903,7 @@
         },
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx",
+          "path": "frontend-modern/src/hooks/useUnifiedResources.ts",
           "kind": "file"
         },
         {

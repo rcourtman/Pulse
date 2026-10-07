@@ -5,7 +5,7 @@ import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
-import { apiFetch } from '@/utils/apiClient';
+import { apiErrorFromResponse, apiFetch } from '@/utils/apiClient';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   PlatformTableToolbar,
@@ -264,10 +264,15 @@ export const compactReplicationNextSyncText = (text: string, tone: NextSyncTone)
   return text.replace(/^in /, '');
 };
 
-export async function fetchReplicationJobs(): Promise<ReplicationJob[]> {
-  const response = await apiFetch('/api/replication/jobs?platform=proxmox-pve');
+export async function fetchReplicationJobs(signal?: AbortSignal): Promise<ReplicationJob[]> {
+  const response = await apiFetch('/api/replication/jobs?platform=proxmox-pve', { signal });
   if (!response.ok) {
-    throw new Error(`Failed to load replication jobs (${response.status})`);
+    // A structured error keeps the HTTP status, so a 401/403 withdraws the
+    // jobs as an access failure instead of being retained as an outage.
+    throw await apiErrorFromResponse(
+      response,
+      `Failed to load replication jobs (${response.status})`,
+    );
   }
   const payload = (await response.json()) as ReplicationJobsResponse;
   return Array.isArray(payload?.data) ? payload.data : [];

@@ -1,6 +1,7 @@
 import { For, Show, createMemo, createResource, type Component } from 'solid-js';
 import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
 import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
+import { getAlertAttentionCopy } from '@/features/alerts/metricAlertPresentation';
 import type { Alert } from '@/types/api';
 import { Card } from '@/components/shared/Card';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
@@ -351,7 +352,7 @@ export const ProxmoxMailGatewayDrawer: Component<{
       <DrawerAttentionSection
         items={(props.alerts ?? []).map((alert) => ({
           id: alert.id,
-          message: alert.message,
+          ...getAlertAttentionCopy(alert),
           subject: name(),
           metric: alertTypeDisplayLabel(alert.type),
           severity: alert.level,

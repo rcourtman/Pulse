@@ -21,6 +21,7 @@ import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
+import { getMetricAlertPresentation } from '@/features/alerts/metricAlertPresentation';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { SUMMARY_ROW_ACTION_BUTTON_FOCUS_CLASS } from '@/components/shared/summaryInteractionA11y';
@@ -257,12 +258,13 @@ export const ProxmoxNodesTable: Component<{
     nodePreview.toggle();
   };
 
-  // Use the same canonical history reader the workloads table uses; cache
-  // keys collide so the two readers dedupe their fetches.
+  // Use the same canonical history reader the workloads table uses. This
+  // table draws node rows only, so it polls the infrastructure summary and
+  // leaves the guest history to the workloads table below.
   const metricHistory = useWorkloadTableMetricHistory({
     enabled: isSparklineMode,
     range: () => props.metricHistoryRange?.() ?? '1h',
-    selectedNode: () => '',
+    series: 'nodes',
   });
 
   return (
@@ -451,6 +453,26 @@ export const ProxmoxNodesTable: Component<{
                 const alertResourceIds = () => hostOverrideIdCandidates(node);
                 const temperatureThresholds = () =>
                   alertsActivation.getMetricThresholds('node', 'temperature', alertResourceIds());
+                // The node's own temperature alert holds after the reading dips
+                // under its trigger; the cell keeps the alert's tone and says why
+                // instead of reading green beside a warning row.
+                const temperatureAlert = createMemo(() =>
+                  getAlertsForResource(alertResourceIds(), activeAlerts, alertsEnabled()).find(
+                    (alert) => alert.type === 'temperature',
+                  ),
+                );
+                const temperatureAlertSeverity = () => {
+                  const alert = temperatureAlert();
+                  if (!alert || alert.acknowledged) return null;
+                  return alert.level === 'critical' ? 'critical' : 'warning';
+                };
+                const temperatureAlertTitle = () => {
+                  const alert = temperatureAlert();
+                  const presentation = alert ? getMetricAlertPresentation(alert) : null;
+                  return presentation
+                    ? `${presentation.summary}. ${presentation.detail}`
+                    : alert?.message;
+                };
                 const cpuThresholds = () =>
                   alertsActivation.getMetricThresholds('node', 'cpu', alertResourceIds());
                 const memoryThresholds = () =>
@@ -729,6 +751,8 @@ export const ProxmoxNodesTable: Component<{
                             <TemperatureGauge
                               value={temperature() as number}
                               thresholds={temperatureThresholds()}
+                              alertSeverity={temperatureAlertSeverity()}
+                              title={temperatureAlertTitle()}
                             />
                           </Show>
                         </TableCell>

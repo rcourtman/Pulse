@@ -799,6 +799,189 @@ describe('PatrolAttentionWorkbench', () => {
     ).toBeInTheDocument();
   });
 
+  it('keeps a reviewed issue reviewed when its suppression ends early', async () => {
+    // Ending the suppression restores Acknowledged, not active attention, so
+    // nothing on the way in or out may promise the decision inbox.
+    const reviewed = item({ state: 'acknowledged' });
+    const suppressed = item({ state: 'suppressed' });
+    const acknowledgement = { at: evaluatedAt, by: 'admin' };
+    const reviewedDetail = detail(reviewed);
+    reviewedDetail.operationalRecord.acknowledgement = acknowledgement;
+    const suppressedDetail = detail(suppressed);
+    suppressedDetail.operationalRecord.acknowledgement = acknowledgement;
+    suppressedDetail.operationalRecord.suppression = {
+      at: evaluatedAt,
+      by: 'admin',
+      reason: 'Planned storage maintenance',
+      expiresAt: '2026-07-20T08:00:00Z',
+    };
+    let isSuppressed = false;
+    apiMocks.getList.mockImplementation((filter: string) => {
+      const responseSummary = summary(
+        isSuppressed ? { suppressedCount: 1 } : { acknowledgedCount: 1 },
+      );
+      return Promise.resolve(
+        listResponse(
+          filter === 'all' ? [isSuppressed ? suppressed : reviewed] : [],
+          responseSummary,
+        ),
+      );
+    });
+    apiMocks.getDetail.mockImplementation(() =>
+      Promise.resolve(isSuppressed ? suppressedDetail : reviewedDetail),
+    );
+    apiMocks.suppress.mockImplementation(() => {
+      isSuppressed = true;
+      return Promise.resolve({ success: true });
+    });
+    apiMocks.unsuppress.mockImplementation(() => {
+      isSuppressed = false;
+      return Promise.resolve({ success: true });
+    });
+    renderWorkbench();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reviewed and suppressed (1)' }));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open Database VM · Disk pressure',
+      }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Suppress temporarily' }));
+    expect(
+      screen.queryByRole('combobox', { name: 'Return it to active attention after' }),
+    ).not.toBeInTheDocument();
+    fireEvent.input(
+      screen.getByRole('textbox', {
+        name: 'Why is this safe to hide from active attention?',
+      }),
+      { target: { value: 'Planned storage maintenance' } },
+    );
+    fireEvent.change(screen.getByRole('combobox', { name: 'End suppression after' }), {
+      target: { value: String(60 * 60 * 1000) },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Suppress temporarily' }));
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Suppressed temporarily. 1 handled issue remains.',
+      ),
+    );
+
+    const endSuppression = await screen.findByRole('button', { name: 'End suppression' });
+    expect(
+      screen.queryByRole('button', { name: 'Return to active attention' }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(endSuppression);
+
+    await waitFor(() => expect(apiMocks.unsuppress).toHaveBeenCalledWith('record-1'));
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Suppression ended. It stays reviewed. 1 handled issue remains.',
+      ),
+    );
+    expect(screen.getByRole('status')).not.toHaveTextContent('decision inbox');
+    expect(
+      screen.getByRole('heading', { name: '1 reviewed or suppressed issue' }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: 'Return to decision inbox' }),
+    ).toBeInTheDocument();
+  });
+
+  it('returns an unreviewed issue to the decision inbox when its suppression ends early', async () => {
+    const active = item();
+    const suppressed = item({ state: 'suppressed' });
+    const suppressedDetail = detail(suppressed);
+    suppressedDetail.operationalRecord.suppression = {
+      at: evaluatedAt,
+      by: 'admin',
+      reason: 'Planned storage maintenance',
+      expiresAt: '2026-07-20T08:00:00Z',
+    };
+    let isSuppressed = true;
+    apiMocks.getList.mockImplementation((filter: string) => {
+      if (isSuppressed) {
+        return Promise.resolve(
+          listResponse(filter === 'all' ? [suppressed] : [], summary({ suppressedCount: 1 })),
+        );
+      }
+      return Promise.resolve(
+        listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+      );
+    });
+    apiMocks.getDetail.mockImplementation(() =>
+      Promise.resolve(isSuppressed ? suppressedDetail : detail(active)),
+    );
+    apiMocks.unsuppress.mockImplementation(() => {
+      isSuppressed = false;
+      return Promise.resolve({ success: true });
+    });
+    renderWorkbench();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reviewed and suppressed (1)' }));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open Database VM · Disk pressure',
+      }),
+    );
+    const returnToAttention = await screen.findByRole('button', {
+      name: 'Return to active attention',
+    });
+    expect(screen.queryByRole('button', { name: 'End suppression' })).not.toBeInTheDocument();
+    fireEvent.click(returnToAttention);
+
+    await waitFor(() => expect(apiMocks.unsuppress).toHaveBeenCalledWith('record-1'));
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Returned to decision inbox. No other handled issues remain.',
+    );
+    expect(
+      screen.getByRole('heading', { name: 'No reviewed or suppressed issues' }),
+    ).toBeInTheDocument();
+  });
+
+  it('announces the state the reload reports when the review changed after the detail loaded', async () => {
+    // The detail still carries the acknowledgement, but the review was removed
+    // elsewhere, so ending the suppression reopens the issue.
+    const active = item();
+    const suppressed = item({ state: 'suppressed' });
+    const staleDetail = detail(suppressed);
+    staleDetail.operationalRecord.acknowledgement = { at: evaluatedAt, by: 'admin' };
+    staleDetail.operationalRecord.suppression = {
+      at: evaluatedAt,
+      by: 'admin',
+      reason: 'Planned storage maintenance',
+      expiresAt: '2026-07-20T08:00:00Z',
+    };
+    let isSuppressed = true;
+    apiMocks.getList.mockImplementation((filter: string) =>
+      Promise.resolve(
+        isSuppressed
+          ? listResponse(filter === 'all' ? [suppressed] : [], summary({ suppressedCount: 1 }))
+          : listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+      ),
+    );
+    apiMocks.getDetail.mockImplementation(() =>
+      Promise.resolve(isSuppressed ? staleDetail : detail(active)),
+    );
+    apiMocks.unsuppress.mockImplementation(() => {
+      isSuppressed = false;
+      return Promise.resolve({ success: true });
+    });
+    renderWorkbench();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reviewed and suppressed (1)' }));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open Database VM · Disk pressure',
+      }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'End suppression' }));
+
+    await waitFor(() => expect(apiMocks.unsuppress).toHaveBeenCalledWith('record-1'));
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Returned to decision inbox. No other handled issues remain.',
+    );
+  });
+
   it('offers every lasting Patrol decision on the finding that mirrors the alert', async () => {
     const active = item();
     apiMocks.getList.mockResolvedValue(
