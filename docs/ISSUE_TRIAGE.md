@@ -57,6 +57,24 @@ well as the original title and screenshots before choosing diagnostics. When a
 report shifts to a different target, retain both topics rather than assuming
 the new symptom is the original defect or a duplicate.
 
+For reports involving several hosts or clusters, preserve which nodes share a
+cluster, which belong to independent installations, whether node names or guest
+IDs (VMIDs) repeat, and whether they share a backup destination. Display names
+and VMIDs are not globally unique; a distinct Pulse display name alone does not
+prove that every reading is isolated. Use consistent aliases for private names
+and addresses across the description, screenshots and logs, preserving which
+values repeat: cluster A/node 1 and standalone B/node 1 are distinct targets with
+the same native node name. Do not infer that a backup or agent belongs to one
+installation from a matching name or VMID alone, or classify a new report as a
+duplicate just because those identifiers overlap.
+
+Use relationships already supplied in the full thread and attachments. Unknown
+relationships remain unknown; do not ask for public hostnames, addresses or a
+configuration dump, or add, rename, remove or re-enrol anything to obtain this
+context. Existing reports need no refile. Retain every affected surface (for
+example, node errors, backup status and Docker monitoring); recovery in one does
+not establish recovery in the others.
+
 Missing readings and an unresponsive workload need different investigation and
 recovery paths. Use the reporter's existing observations of the workload's usual
 UI, not Pulse's displayed connection status, to distinguish them where possible.
