@@ -837,18 +837,54 @@ inside the Pulse container, not on the Proxmox host. Adjust the time window to
 the original incident and substitute your actual service or container name
 (`pulse-backend` on some older systemd installs). These examples read at most
 200 records from the last 15 minutes; they do not follow the log or send a test.
+Each requires **GNU `timeout`** and gives the reader eight seconds plus a
+one-second termination grace. If it is unavailable, stop rather than running
+an unbounded substitute. These are Bash examples; the enclosing subshell keeps
+an unavailable read from exiting your interactive shell.
 
 ```bash
 # systemd / Proxmox LXC
-journalctl -u pulse --since '15 minutes ago' --lines 200 --no-pager
+(
+command -v timeout >/dev/null 2>&1 || {
+  printf 'Log read unavailable: GNU timeout is required; no unbounded fallback.\n' >&2
+  exit 1
+}
+if pulse_logs=$(timeout --signal=TERM --kill-after=1s 8s journalctl -u pulse --since '15 minutes ago' --lines 200 --no-pager 2>&1); then
+  if [ -n "$pulse_logs" ]; then
+    printf '%s\n' "$pulse_logs"
+  fi
+else
+  pulse_log_status=$?
+  printf 'Log read unavailable (exit %s); no partial excerpt shown.\n' "$pulse_log_status" >&2
+  exit "$pulse_log_status"
+fi
+)
 ```
 
 ```bash
 # Docker
-docker logs --since 15m --tail 200 pulse
+(
+command -v timeout >/dev/null 2>&1 || {
+  printf 'Log read unavailable: GNU timeout is required; no unbounded fallback.\n' >&2
+  exit 1
+}
+if pulse_logs=$(timeout --signal=TERM --kill-after=1s 8s docker logs --since 15m --tail 200 pulse 2>&1); then
+  if [ -n "$pulse_logs" ]; then
+    printf '%s\n' "$pulse_logs"
+  fi
+else
+  pulse_log_status=$?
+  printf 'Log read unavailable (exit %s); no partial excerpt shown.\n' "$pulse_log_status" >&2
+  exit "$pulse_log_status"
+fi
+)
 ```
 
-Docker can write application logs to either stdout or stderr; inspect both.
+Application logs can be written to stdout or stderr; these commands collect
+both into one local excerpt, without preserving stdout/stderr attribution,
+and display it **only after the reader completes successfully**.
+A failed or timed-out read displays only an unavailable message and its exit
+code, not a partial excerpt that could be mistaken for complete evidence.
 Do not pipe the reader into `grep email`: it can miss SMTP or webhook errors
 and hide a failed read behind a matching partial line. A nonzero reader exit,
 access error or missing service/container is a failed read, not “no delivery
@@ -876,29 +912,61 @@ Replace `abc123` below with the response's ID. Run only the command for your
 deployment, on the Pulse host using an account authorised to read its logs.
 These examples limit collection to the last 15 minutes and 1,000 lines; adjust
 the time window to the original incident rather than repeating the failed action.
+Like the notification-log examples above, these require **GNU `timeout`**,
+allow eight seconds plus a one-second termination grace, and search **only a
+successfully completed read**. A deadline or failure shows no partial match;
+missing `timeout` does not fall back to an unbounded reader.
 
 ```bash
 # systemd / Proxmox LXC
-set -o pipefail
+(
+command -v timeout >/dev/null 2>&1 || {
+  printf 'Log read unavailable: GNU timeout is required; no unbounded fallback.\n' >&2
+  exit 1
+}
 REQUEST_ID='abc123'
-journalctl -u pulse --since '15 minutes ago' --lines 1000 --no-pager |
-  grep -F -- "$REQUEST_ID"
+if pulse_logs=$(timeout --signal=TERM --kill-after=1s 8s journalctl -u pulse --since '15 minutes ago' --lines 1000 --no-pager 2>&1); then
+  if [ -n "$pulse_logs" ]; then
+    printf '%s\n' "$pulse_logs" | grep -F -- "$REQUEST_ID"
+  else
+    exit 1
+  fi
+else
+  pulse_log_status=$?
+  printf 'Log read unavailable (exit %s); no partial excerpt shown.\n' "$pulse_log_status" >&2
+  exit "$pulse_log_status"
+fi
+)
 ```
 
 ```bash
 # Docker
+(
+command -v timeout >/dev/null 2>&1 || {
+  printf 'Log read unavailable: GNU timeout is required; no unbounded fallback.\n' >&2
+  exit 1
+}
 REQUEST_ID='abc123'
-if pulse_logs=$(docker logs --since 15m --tail 1000 pulse 2>&1); then
-  printf '%s\n' "$pulse_logs" | grep -F -- "$REQUEST_ID"
+if pulse_logs=$(timeout --signal=TERM --kill-after=1s 8s docker logs --since 15m --tail 1000 pulse 2>&1); then
+  if [ -n "$pulse_logs" ]; then
+    printf '%s\n' "$pulse_logs" | grep -F -- "$REQUEST_ID"
+  else
+    exit 1
+  fi
 else
-  printf '%s\n' "$pulse_logs" >&2
-  false
+  pulse_log_status=$?
+  printf 'Log read unavailable (exit %s); no partial excerpt shown.\n' "$pulse_log_status" >&2
+  exit "$pulse_log_status"
 fi
+)
 ```
 
 A log-reader failure is not an empty search result: resolve any access or
-container/service error locally first. Even a successful read with no match
-does not prove the request succeeded. At the default log level, this middleware
+container/service error locally first. Exit **124** means the reader exceeded
+the deadline; **137** can mean the termination grace also elapsed. Neither
+establishes that Pulse itself is hung. Do not restart Pulse or Docker, enable
+Debug, widen collection or repeat the failed action merely to obtain logs.
+Even a successful read with no match does not prove the request succeeded. At the default log level, this middleware
 logs HTTP 5xx failures but not successful requests; HTTP 4xx failures are logged
 at debug level. The selected window, retained logs or deployment may also differ.
 Keep the original response status, time and ID even when there is no matching log;

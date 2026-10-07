@@ -7,13 +7,11 @@ not prove native installation, notification delivery or automatic redaction.
 
 from __future__ import annotations
 
-import json
-import os
 from pathlib import Path
 import re
-import subprocess
-import tempfile
 import unittest
+
+from test_troubleshooting_logs import exercise_log_recipe
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -41,32 +39,14 @@ def recipes() -> dict[str, str]:
     return {"docker" if "# Docker" in block else "journalctl": block for block in blocks}
 
 
-READER = '''#!/usr/bin/env python3
-import json, os, pathlib, sys
-pathlib.Path(os.environ['READER_ARGV']).write_text(json.dumps(sys.argv[1:]))
-sys.stdout.write(os.environ.get('LOG_STDOUT', ''))
-sys.stderr.write(os.environ.get('LOG_STDERR', ''))
-sys.exit(int(os.environ.get('READER_EXIT', '0')))
-'''
-
-
 class NotificationTroubleshootingDocsTest(unittest.TestCase):
     def exercise(self, reader: str, *, stdout: str = "", stderr: str = "",
-                 exit_code: int = 0, recipe: str | None = None):
-        with tempfile.TemporaryDirectory() as temporary:
-            directory = Path(temporary)
-            command = directory / reader
-            command.write_text(READER, encoding="utf-8")
-            command.chmod(0o700)
-            argv = directory / "argv.json"
-            env = dict(os.environ, PATH=f"{directory}:{os.environ['PATH']}",
-                       READER_ARGV=str(argv), LOG_STDOUT=stdout, LOG_STDERR=stderr,
-                       READER_EXIT=str(exit_code))
-            copied = recipe if recipe is not None else recipes()[reader]
-            result = subprocess.run(["bash", "-c", copied], env=env,
-                                    capture_output=True, text=True, timeout=5)
-            self.assertTrue(argv.exists(), "copied command did not invoke its log reader")
-            return result, json.loads(argv.read_text())
+                 exit_code: int = 0, recipe: str | None = None, **settings):
+        copied = recipe if recipe is not None else recipes()[reader]
+        result, argv = exercise_log_recipe(reader, copied, stdout=stdout, stderr=stderr,
+                                          exit_code=exit_code, **settings)
+        self.assertEqual(argv is None, bool(settings.get("missing_timeout")))
+        return result, argv
 
     def test_shipped_document_matches_the_tested_source(self):
         self.assertEqual(DOC.read_bytes(),
@@ -84,13 +64,17 @@ class NotificationTroubleshootingDocsTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(argv, expected[reader])
                 self.assertEqual(result.stdout, SMTP_ERROR + WEBHOOK_ERROR)
-                self.assertNotRegex(copied, r"[|<>]|\b(?:grep|curl|inspect|restart|printenv)\b|--follow|--token")
+                self.assertNotRegex(copied, r"\b(?:grep|curl|inspect|restart|printenv)\b|--follow|--token")
+                self.assertIn("--signal=TERM --kill-after=1s 8s", copied)
 
     def test_docker_application_logs_on_both_streams_remain_visible(self):
         result, _ = self.exercise("docker", stdout=WEBHOOK_ERROR, stderr=SMTP_ERROR)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, WEBHOOK_ERROR)
-        self.assertEqual(result.stderr, SMTP_ERROR)
+        # Independently buffered streams have no total ordering. Both records
+        # must survive, without inventing chronological order across streams.
+        self.assertCountEqual(result.stdout.splitlines(),
+                              (WEBHOOK_ERROR + SMTP_ERROR).splitlines())
+        self.assertEqual(result.stderr, "")
 
     def test_reader_failure_keeps_its_exit_even_after_a_partial_email_log(self):
         for reader in recipes():
@@ -99,8 +83,32 @@ class NotificationTroubleshootingDocsTest(unittest.TestCase):
                     result, _ = self.exercise(reader, stdout=output,
                                               stderr="synthetic reader access failure\n", exit_code=2)
                     self.assertEqual(result.returncode, 2)
-                    self.assertEqual(result.stdout, output)
-                    self.assertEqual(result.stderr, "synthetic reader access failure\n")
+                    self.assertEqual(result.stdout, "")
+                    self.assertIn("Log read unavailable (exit 2)", result.stderr)
+                    self.assertNotIn("synthetic reader access failure", result.stderr)
+
+    def test_hung_readers_withhold_partial_excerpts_and_stop_by_deadline(self):
+        for reader in recipes():
+            with self.subTest(reader=reader):
+                result, _ = self.exercise(reader, stdout=PARTIAL_EMAIL_LOG, hang="term")
+                self.assertEqual(result.returncode, 124, result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("Log read unavailable", result.stderr)
+
+    def test_reader_ignoring_term_is_killed_after_one_second_grace(self):
+        result, _ = self.exercise("docker", stdout=PARTIAL_EMAIL_LOG, hang="ignore-term")
+        self.assertEqual(result.returncode, 137, result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("Log read unavailable (exit 137)", result.stderr)
+
+    def test_missing_timeout_does_not_run_a_reader_or_unbounded_fallback(self):
+        for reader in recipes():
+            with self.subTest(reader=reader):
+                result, argv = self.exercise(reader, missing_timeout=True)
+                self.assertIsNone(argv)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("no unbounded fallback", result.stderr)
 
     def test_successful_empty_read_is_not_documented_as_healthy_delivery(self):
         for reader in recipes():
@@ -114,7 +122,7 @@ class NotificationTroubleshootingDocsTest(unittest.TestCase):
         # disclosure boundary must survive edits to the copied recipe.
         for reader in recipes():
             result, _ = self.exercise(reader, stderr=SYNTHETIC_SECRET + "\n")
-            self.assertIn(SYNTHETIC_SECRET, result.stderr)
+            self.assertIn(SYNTHETIC_SECRET, result.stdout)
         text = " ".join(section("Inspect Notification Logs").split())
         for boundary in ("not sanitised", "Do not post them wholesale", "manually redacted",
                          "anything echoed by the provider", "Never upload full environments",
