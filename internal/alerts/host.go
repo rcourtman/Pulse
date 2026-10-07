@@ -172,7 +172,48 @@ func (m *Manager) resolveHostAlertThresholdsNoLock(alert *Alert, resourceID stri
 			thresholds.DiskTemperature = m.lowestHostDiskTemperatureThresholdNoLock(thresholds.DiskTemperature)
 		}
 	}
+	// A filesystem alert is judged by the threshold CheckHost evaluates that
+	// filesystem against, so a config save does not resolve an alert its
+	// override or per-type fill threshold still holds. A disabled filesystem
+	// resolves with no threshold, as CheckHost clears it.
+	if alert != nil && alert.Type == "disk" && isHostFilesystemResourceID(resourceID) {
+		thresholds.Disk, _ = m.hostDiskUsageThresholdNoLock(strings.TrimSpace(resourceID), metadataStringValue(alert.Metadata, "device"), thresholds.Disk)
+	}
 	return thresholds
+}
+
+// isHostFilesystemResourceID reports whether resourceID names one agent
+// filesystem ("agent:<host>/disk:<label>") rather than the host itself.
+func isHostFilesystemResourceID(resourceID string) bool {
+	_, child, ok := strings.Cut(stripHostResourcePrefix(resourceID), "/")
+	return ok && strings.HasPrefix(child, "disk:")
+}
+
+// hostDiskUsageThresholdNoLock resolves the usage threshold one agent
+// filesystem is judged by: the filesystem's own override, then the fill
+// threshold for its hardware type while the host's disk alerting is on, then
+// the host's disk threshold. disabled reports an override that switches the
+// filesystem's alerts off, and then the threshold is nil. CheckHost and
+// config-save reevaluation both resolve through it. An override or per-type
+// threshold is returned as an owned copy, so normalizing it never writes into
+// the live config. Callers must hold m.mu.
+func (m *Manager) hostDiskUsageThresholdNoLock(diskResourceID, device string, hostDisk *HysteresisThreshold) (threshold *HysteresisThreshold, disabled bool) {
+	if override, ok := m.config.Overrides[diskResourceID]; ok {
+		if override.Disabled {
+			return nil, true
+		}
+		if override.Disk != nil {
+			return ensureHysteresisThreshold(cloneThreshold(override.Disk)), false
+		}
+	}
+	if hostDisk != nil && hostDisk.Trigger > 0 {
+		if hwType := inferDiskHardwareType(device); hwType != "" {
+			if byType, ok := m.config.DiskFillByType[hwType]; ok {
+				return &byType, false
+			}
+		}
+	}
+	return hostDisk, false
 }
 
 func sanitizeHostComponent(value string) string {
@@ -450,41 +491,12 @@ func (m *Manager) CheckHost(host models.Host) {
 		diskResourceID, diskName := hostDiskResourceID(host, disk)
 		seenDisks[diskResourceID] = struct{}{}
 
-		// Check for disk-specific override. The copy's Disk still points into
-		// the live config, so own it before ensureHysteresisThreshold fills Clear.
 		m.mu.RLock()
-		diskOverride, hasDiskOverride := m.config.Overrides[diskResourceID]
-		diskOverride.Disk = cloneThreshold(diskOverride.Disk)
+		effectiveDiskThreshold, diskDisabled := m.hostDiskUsageThresholdNoLock(diskResourceID, disk.Device, thresholds.Disk)
 		m.mu.RUnlock()
-
-		// Determine the effective disk threshold
-		var effectiveDiskThreshold *HysteresisThreshold
-		if hasDiskOverride {
-			// If disk is disabled via override, skip alerting
-			if diskOverride.Disabled {
-				m.clearAlert(canonicalMetricStateID(diskResourceID, "disk"))
-				continue
-			}
-			// Use disk-specific threshold if set
-			if diskOverride.Disk != nil {
-				effectiveDiskThreshold = ensureHysteresisThreshold(diskOverride.Disk)
-			}
-		}
-		// Per-type override: consult DiskFillByType if hardware type is inferable
-		// from the device path and no disk-specific override applied above.
-		if effectiveDiskThreshold == nil && thresholds.Disk != nil && thresholds.Disk.Trigger > 0 {
-			if hwType := inferDiskHardwareType(disk.Device); hwType != "" {
-				m.mu.RLock()
-				if th, ok := m.config.DiskFillByType[hwType]; ok {
-					t := th
-					effectiveDiskThreshold = &t
-				}
-				m.mu.RUnlock()
-			}
-		}
-		// Fall back to host-level threshold
-		if effectiveDiskThreshold == nil {
-			effectiveDiskThreshold = thresholds.Disk
+		if diskDisabled {
+			m.clearAlert(canonicalMetricStateID(diskResourceID, "disk"))
+			continue
 		}
 
 		// Skip if no threshold configured (nil)

@@ -545,7 +545,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				continue
 			}
 
-			guestThresholds := m.getGuestThresholds(guestSnapshotFromAlert(alert, resourceID), resourceID)
+			guestThresholds := m.resolveGuestAlertThresholdsNoLock(alert, resourceID)
 			if guestThresholds.Disabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue

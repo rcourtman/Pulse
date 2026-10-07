@@ -3163,6 +3163,34 @@ in place, is gone. `internal/alerts/alerts_test.go`
 evaluation against `GetConfig()` and `UpdateConfig(GetConfig())` under
 `-race`.
 
+### Config-save reevaluation judges a filesystem alert by its own threshold
+
+`UpdateConfig` re-judges every active alert, and a filesystem usage alert's
+threshold resolves through the same per-filesystem helper its evaluator uses.
+`hostDiskUsageThresholdNoLock` resolves an agent filesystem
+(`agent:<host>/disk:<label>`): its own override, then the `DiskFillByType`
+threshold for a hardware type inferred from the device while the host's disk
+alerting is on, then the host's disk threshold. `guestDiskUsageThresholdNoLock`
+resolves a guest filesystem (`<guestID>-disk-<key>`): its `guest-disk:`
+override, then the guest's disk threshold. `CheckHost` and `CheckGuest` call
+them under the read lock, and `resolveHostAlertThresholdsNoLock` and
+`resolveGuestAlertThresholdsNoLock` call them for reevaluation. Both return an
+override or per-type threshold as an owned copy. A guest filesystem alert
+resolves its guest's threshold, override and identity-based custom rules by the
+canonical `instance:node:vmid` guest ID that `parseGuestAlertIdentity` reads
+from its resource ID. Custom rules that filter on live metrics still see no
+readings there, as for every reevaluated guest alert. Reevaluation used to
+judge agent filesystems by the host threshold, and guest filesystems without
+their `guest-disk:` override or the guest's own override, because the
+filesystem's resource ID names no guest. Any settings save resolved an alert a
+per-disk threshold of 70 raised at 80 under a default of 90, notifying
+recovery, and the next poll raised it again as a new alert.
+`internal/alerts/threshold_resolution_shared_test.go`
+`TestConfigSaveJudgesFilesystemAlertsByTheirOwnThreshold` covers an agent
+filesystem override, an NVMe fill threshold, a guest filesystem override and a
+guest override: an unchanged save must keep the alert, and a save lifting the
+trigger above the reading must resolve it.
+
 ### Versioned alert-intent policy
 
 The alerts runtime owns one versioned alert-intent document and its durable
