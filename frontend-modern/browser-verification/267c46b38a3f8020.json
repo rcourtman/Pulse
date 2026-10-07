@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "dcd409f9da0a7a7f35a2a4ad5a4354e0b1d3ee44",
+  "verified_at": "2026-10-07T10:47:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx",
+    "frontend-modern/src/utils/resourcePolicyPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx": "deleted",
+    "frontend-modern/src/utils/resourcePolicyPresentation.ts": "6737afe76a7c7cc10e8d57e133c4a1e08855bf01e762677bba871e91856b7535"
+  },
+  "routes": [
+    "/settings/security-data-handling",
+    "/patrol",
+    "/truenas/storage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production build of this tree (base dcd409f9da, PR 2649 head) served by a private PULSE_MOCK_MODE backend on :7687 with admin bypass and telemetry off; /api/resources/stats posture: 1773 resources, all four sensitivities, all three routing scopes and all five redaction hints",
+    "Production vite build of this tree is byte-identical to the build of the base commit (same asset names, diff -r clean), so the shipped bundle is unchanged; check-bundle-size.mjs passes with no .bundlesize.json change",
+    "Settings Resource Privacy (Data Handling) panel, the live consumer of the util's labels and orderings: sensitivity Public/Internal/Sensitive/Restricted, routing Cloud Summary/Local First/Local Only and redaction Hostname/IP Address/Platform ID/Alias/Path render in canonical order with the mock counts (1,773 governed)",
+    "Patrol page loads and contains no posture card text (Data Governance, governed resources, policy-covered resources)",
+    "TrueNAS Storage, pool archive (sensitive, local-first) resource drawer: Platform details expanded, Context shown, Governance rows read Sensitivity Sensitive, Routing Local First, Redactions 3, Redaction labels Hostname/Platform ID/Alias plus the governed Safe Summary",
+    "No page errors; console showed only CSP inline-style refusals that predate this change (the base lacks PR 2642, which moved those static styles to classes on main) and that occur identically on the byte-identical base build"
+  ],
+  "interactions": [
+    "Direct navigation to /settings/security-data-handling and /patrol at each viewport",
+    "On /truenas/storage clicked the archive pool row to open the resource drawer, expanded Platform details via its summary, then clicked Show context",
+    "Repeated the full pass at 1440x900 and 390x844 with Playwright (headless Chromium)"
+  ]
+}

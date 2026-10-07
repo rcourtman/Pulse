@@ -2123,10 +2123,10 @@ That same summary card now keeps recent changes and learned correlations
 primary while leaving the broader learning counters as backend coverage, so
 the page does not present telemetry-style counts as a headline intelligence
 story.
-That Patrol summary card now also includes the canonical data-governance
-posture snapshot from the shared AI summary payload, so the visible page can
-show the same sensitivity, routing, and redaction distribution that the
-runtime derives from unified resources.
+The shared AI summary payload also carries the canonical data-governance
+posture snapshot that the runtime derives from unified resources, but the
+Patrol page does not render its sensitivity, routing, and redaction
+distribution; the posture rule below governs any return of those counts.
 The resource drawer now carries canonical dependency and dependent
 correlation context plus canonical correlation evidence through the
 resource-intelligence payload, so the resource-level AI card can surface
@@ -2198,13 +2198,14 @@ cards now own the canonical Infrastructure resource-link default, so the
 Patrol page and resource drawer inherit resource-filter href construction
 through the shared summary cards instead of rebuilding local wrappers in each
 surface.
-The Patrol intelligence page now also renders the canonical
-`frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
-card, so the data-governance posture counts stay rendered from one governed
-frontend component on the page instead of being duplicated in the resource
-drawer.
+The Patrol intelligence page renders no data-governance posture counts: they
+left the page with its supporting-context block, and the shared posture card
+that rendered them has been removed. If Patrol shows posture counts again, it
+must render them through one shared unified-resource component instead of a
+Patrol-local count loop, and the resource drawer keeps only per-resource
+policy lines.
 That same Patrol summary surface now keeps health and findings primary while
-making recent changes, learned correlations, and policy posture available only
+making recent changes and learned correlations available only
 through the on-demand `Details` context inspector, so expansion
 lane concepts stay available for deeper investigation without reading as the
 headline Patrol product story.
