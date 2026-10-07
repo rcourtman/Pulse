@@ -19,8 +19,8 @@ function renderGuide(name: string): HTMLElement {
   return article;
 }
 
-function unavailableSection(article: HTMLElement): HTMLElement {
-  const heading = article.querySelector('#truenas-service-unavailable');
+function sectionAt(article: HTMLElement, id: string): HTMLElement {
+  const heading = article.querySelector(id);
   expect(heading).not.toBeNull();
   const section = document.createElement('section');
   for (let next = heading!.nextElementSibling; next; next = next.nextElementSibling) {
@@ -29,6 +29,9 @@ function unavailableSection(article: HTMLElement): HTMLElement {
   }
   return section;
 }
+
+const unavailableSection = (article: HTMLElement): HTMLElement =>
+  sectionAt(article, '#truenas-service-unavailable');
 
 const prose = (section: HTMLElement): string =>
   (section.textContent ?? '').replace(/\s+/g, ' ').trim();
@@ -91,5 +94,48 @@ describe('shipped TrueNAS error diagnosis', () => {
     const pollingLink = unavailableSection(guide).querySelector('a[href="#stale-truenas-data"]');
     expect(pollingLink?.textContent).toBe('polling checks');
     expect(guide.querySelector('#stale-truenas-data')?.textContent).toBe('Stale TrueNAS data');
+  });
+
+  it('takes NAS diagnosis to the shared bounded readers, without an unsafe copied alternative', () => {
+    const nas = sectionAt(renderGuide('TRUENAS'), '#no-data-appearing-after-adding-connection');
+    const link = nas.querySelector<HTMLAnchorElement>(
+      'a[href="/docs/TROUBLESHOOTING#inspect-notification-logs"]',
+    );
+    expect(link?.textContent).toBe('bounded Pulse log readers');
+    expect(nas.querySelector('pre')).toBeNull();
+    const target = sectionAt(renderGuide('TROUBLESHOOTING'), new URL(link!.href).hash);
+    const commands = [...target.querySelectorAll('pre code')].map((node) => node.textContent!);
+    expect(commands).toHaveLength(2);
+    for (const command of commands) {
+      expect(command).toContain('--signal=TERM --kill-after=1s 8s');
+      expect(command).toContain('no partial excerpt shown');
+      expect(command).toContain('no unbounded fallback');
+      expect(command).not.toMatch(/grep|--follow|restart|curl/);
+    }
+    expect(commands[0]).toContain('journalctl -u pulse');
+    expect(commands[1]).toContain('docker logs');
+  });
+
+  it('keeps NAS-specific host, deadline and disclosure boundaries beside the reader link', () => {
+    const text = prose(
+      sectionAt(renderGuide('TRUENAS'), '#no-data-appearing-after-adding-connection'),
+    );
+    for (const boundary of [
+      'no request ID is required',
+      'inside the Pulse container',
+      'not on the Proxmox host or the TrueNAS appliance',
+      'eight-second deadline and one-second termination grace',
+      'record limit alone does not bound a hung reader',
+      'do not use an unbounded substitute',
+      'only after a successful read',
+      'withholds partial output',
+      'successful empty read is inconclusive',
+      'Do not enable Debug or repeat the failing action',
+      'not sanitised',
+      'not the whole excerpt',
+      'makes live API and guest-agent requests',
+    ]) {
+      expect(text).toContain(boundary);
+    }
   });
 });
