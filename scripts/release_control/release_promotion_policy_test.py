@@ -1910,6 +1910,58 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 ):
                     self.assertIn(precaution, triage)
 
+    def test_cross_installation_intake_preserves_relationships_without_private_identity(self) -> None:
+        for name, summary_id in (
+            ("bug_report.yml", "bug_description"),
+            ("v6_rc_feedback.yml", "summary"),
+        ):
+            with self.subTest(form=name):
+                form = yaml.load(read(f".github/ISSUE_TEMPLATE/{name}"), Loader=UniqueKeyLoader)
+                fields = {field["id"]: field for field in form["body"] if "id" in field}
+                self.assertEqual(len(fields), sum("id" in field for field in form["body"]))
+                summary = fields[summary_id]
+                self.assertEqual(summary["type"], "textarea")
+                self.assertTrue(summary["validations"]["required"])
+                self.assertNotIn("render", summary["attributes"])
+                prose = normalize_ws(summary["attributes"]["description"])
+                for distinction in (
+                    "For reports involving several hosts or clusters",
+                    "which nodes share a cluster", "independent installations",
+                    "whether node names or guest IDs (VMIDs) repeat",
+                    "share a backup destination", "consistent aliases for private names and addresses",
+                    "across the description, screenshots and logs", "preserve which values repeat",
+                    "cluster A/node 1 and standalone B/node 1", "Use existing observations",
+                    'write "unknown"', "do not add, rename, remove or re-enrol anything just to answer",
+                ):
+                    self.assertIn(distinction, prose)
+                # The conditional context belongs in the existing report, not a new
+                # required identity field or a request to collect a configuration.
+                self.assertNotIn("topology", fields)
+                self.assertNotIn("hostname", fields)
+                self.assertFalse(fields["environment"]["validations"]["required"])
+
+        documents = ("docs/ISSUE_TRIAGE.md", "frontend-modern/public/docs/ISSUE_TRIAGE.md")
+        self.assertEqual(read(documents[0]), read(documents[1]))
+        for document in documents:
+            with self.subTest(document=document):
+                prose = normalize_ws(read(document))
+                for distinction in (
+                    "which nodes share a cluster", "independent installations",
+                    "whether node names or guest IDs (VMIDs) repeat", "share a backup destination",
+                    "Display names and VMIDs are not globally unique",
+                    "distinct Pulse display name alone does not prove",
+                    "consistent aliases for private names and addresses",
+                    "preserving which values repeat", "same native node name",
+                    "Do not infer that a backup or agent belongs",
+                    "duplicate just because those identifiers overlap",
+                    "full thread and attachments", "Unknown relationships remain unknown",
+                    "do not ask for public hostnames, addresses or a configuration dump",
+                    "add, rename, remove or re-enrol anything", "Existing reports need no refile",
+                    "node errors, backup status and Docker monitoring",
+                    "recovery in one does not establish recovery in the others",
+                ):
+                    self.assertIn(distinction, prose)
+
     def test_demo_site_copy_points_at_current_release_packet_index(self) -> None:
         demo_copy = read("docs/releases/V6_RC_DEMO_SITE_COPY.md")
         self.assertIn("docs/RELEASE_NOTES.md", demo_copy)

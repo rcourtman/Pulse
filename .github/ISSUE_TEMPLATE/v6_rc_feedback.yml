@@ -132,6 +132,9 @@ body:
       description: |
         Describe the problem, friction, or feedback and where you see it. Distinguish the affected target (for example, a VM, LXC, Docker container, NAS or Pulse itself) from how the Pulse server is installed.
         For missing readings, say whether the affected workload's usual UI was still responsive when the problem occurred. Use existing observations; write "unknown" if you cannot safely tell. Do not run another update, backup or guest-agent probe just to answer.
+
+        For reports involving several hosts or clusters, say which nodes share a cluster, which belong to independent installations, whether node names or guest IDs (VMIDs) repeat, and whether they share a backup destination.
+        Use consistent aliases for private names and addresses across the description, screenshots and logs; preserve which values repeat (for example, cluster A/node 1 and standalone B/node 1). Use existing observations, or write "unknown"; do not add, rename, remove or re-enrol anything just to answer.
       placeholder: Pulse upgraded cleanly, but the new storage filters are hard to understand and I could not find the previous view quickly.
     validations:
       required: true
