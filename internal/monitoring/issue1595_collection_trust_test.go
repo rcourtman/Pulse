@@ -362,7 +362,7 @@ func TestWriteHostSMARTMetricsRecordsOnlyCollectedTemperatures(t *testing.T) {
 		{host.Sensors.SMART[3], 0},
 		{host.Sensors.SMART[4], 0},
 	} {
-		id := unifiedresources.HostSMARTDiskSourceID(host, tc.disk)
+		id := unifiedresources.HostSMARTDiskMetricID(host, tc.disk)
 		points, err := store.Query("disk", id, "smart_temp", now.Add(-time.Minute), now.Add(time.Minute), 0)
 		if err != nil {
 			t.Fatal(err)

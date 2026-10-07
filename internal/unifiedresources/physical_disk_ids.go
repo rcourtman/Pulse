@@ -21,7 +21,17 @@ func PreferredPhysicalDiskMetricID(serial, wwn, fallback string) string {
 	return strings.TrimSpace(fallback)
 }
 
+// HostSMARTDiskSourceID returns the registry source ID of a disk a host agent
+// reports through SMART.
 func HostSMARTDiskSourceID(host models.Host, disk models.HostDiskSMART) string {
+	return HostSMARTDiskMetricID(host, disk)
+}
+
+// HostSMARTDiskMetricID returns the history key a host agent's SMART and disk
+// I/O metrics are written under. Like every physical-disk source, it prefers
+// the drive's serial or WWN, so a disk keeps one history across sources and
+// hosts; see PreferredPhysicalDiskMetricID.
+func HostSMARTDiskMetricID(host models.Host, disk models.HostDiskSMART) string {
 	device := normalizePhysicalDiskDeviceToken(disk.Device)
 	return diskinventory.PreferredID(
 		disk.Serial,

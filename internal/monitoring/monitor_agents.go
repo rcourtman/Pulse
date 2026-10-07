@@ -4082,7 +4082,7 @@ func (m *Monitor) writeHostSMARTMetrics(host models.Host, now time.Time) {
 	}
 
 	for _, disk := range host.Sensors.SMART {
-		resourceID := unifiedresources.HostSMARTDiskSourceID(host, disk)
+		resourceID := unifiedresources.HostSMARTDiskMetricID(host, disk)
 		if resourceID == "" {
 			continue
 		}
@@ -4234,7 +4234,7 @@ func hostDiskIOMetricResourceID(host models.Host, io models.DiskIO, proxmoxDisks
 			continue
 		}
 		if strings.EqualFold(normalizeHostDiskDevice(disk.Device), device) {
-			candidate := unifiedresources.HostSMARTDiskSourceID(host, disk)
+			candidate := unifiedresources.HostSMARTDiskMetricID(host, disk)
 			if smartMetricID != "" && smartMetricID != candidate {
 				// Multiple controller members share this kernel block path.
 				// The counter belongs to the aggregate device, not any member.
