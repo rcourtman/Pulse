@@ -7883,6 +7883,23 @@ When the cell's value is a retained host-agent SMART temperature, it renders
 muted with a dotted underline and screen-reader "last known", as does a
 retained value in the guest card. Tooltip and Thermals rows say "(last known)",
 and the Thermals row carries the collection reason as its title.
+The shared drawer History reads the same decision. For a physical disk,
+`resourceDetailDrawerMetricsHistoryModel.ts` takes the reading from
+`physicalDisk.temperature`, beside the collection state that qualifies it,
+because websocket rows carry no top-level `temperature` for a disk. When that
+state is set and is not `available` (an empty or absent state predates the
+contract and stays current), `getResourceMetricsHistoryCurrentMetrics` offers
+no current `smart_temp`. A positive retained reading then reaches
+`getResourceMetricsHistoryDeferredMetrics` as a deferred metric: with no
+history points the legend says "last known", never "current", and the reason
+renders above the chart.
+TrueNAS disk rows follow it too: the drawer's Temperature row reads
+"(last known)" with the reason as title and no heat tone, and the one-line
+summary leaves a retained reading out because it has no room for the reason.
+The Proxmox outdated sensor setup notice (`features/platformPage/sensorSetup.ts`)
+counts a SATA or SAS disk as having a temperature only when the reading is
+current, so a retained one cannot hide the notice for a disk Pulse cannot read
+now.
 
 The focused browser proofs are
 `frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts`,

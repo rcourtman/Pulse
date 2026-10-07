@@ -1,5 +1,6 @@
 import type { Resource } from '@/types/resource';
 import { matchesPhysicalDiskNode } from '@/components/Storage/diskResourceUtils';
+import { isPhysicalDiskTemperatureCurrent } from '@/features/storageBackups/diskTemperaturePresentation';
 
 // Disk transports whose temperatures only arrive via SMART (the pulse-sensors
 // wrapper). NVMe temps come from kernel hwmon and work even on legacy setups.
@@ -18,7 +19,9 @@ const isSMARTOnlyDiskWithoutTemperature = (disk: Resource): boolean => {
   if (!meta) return false;
   const diskType = (meta.diskType || '').trim().toLowerCase();
   if (!SMART_ONLY_DISK_TYPES.has(diskType)) return false;
-  return (meta.temperature ?? 0) <= 0;
+  // A last known temperature kept for a disk that could not be read now, such
+  // as after a linked host agent stopped reporting, is not one arriving.
+  return (meta.temperature ?? 0) <= 0 || !isPhysicalDiskTemperatureCurrent(meta.collection);
 };
 
 // Flags PVE nodes whose SSH temperature monitoring still runs the pre-rc.6

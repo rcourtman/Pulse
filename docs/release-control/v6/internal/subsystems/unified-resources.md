@@ -1122,6 +1122,13 @@ for the Physical Disks verdict. The heat reason follows any native TrueNAS
 alert text, and a hot disk's status dot turns warning though its source state
 stays `online`, because phones show only the dot.
 `truenasPageModel.test.ts` and `TrueNASStorageTopologyTable.test.tsx` pin it.
+The Temp column reads the same collection state through
+`getPhysicalDiskTemperaturePresentation`. A disk temperature that is not
+current, such as a host agent's last reading kept on a merged disk row after
+the agent stopped reporting, renders as last known: muted, with its reason as
+the title and screen-reader "last known" text. The Temp sort ranks it as no
+reading, and the tree sort orders each sibling group, so a retained value
+never leads its group hottest first.
 The vSphere Datastores and Networks tables follow the same exception-first
 Health column. `getVmwareDatastoreIssue` and `getVmwareNetworkIssue` return
 nothing for a green row; otherwise the reasons are, in order, an impaired
