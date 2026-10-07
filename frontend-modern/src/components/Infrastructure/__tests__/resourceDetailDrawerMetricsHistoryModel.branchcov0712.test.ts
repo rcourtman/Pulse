@@ -513,6 +513,66 @@ describe('getResourceMetricsHistoryCurrentMetrics branch coverage', () => {
     });
   });
 
+  it('offers a retained physical disk temperature only as last known, with its reason', () => {
+    // useUnifiedResources copies physicalDisk.temperature onto the resource.
+    // A disk in standby keeps its last reading under an unavailable state, so
+    // with no history points the chart must not label it current.
+    const disk = (state?: 'available' | 'unavailable', temperature = 47) =>
+      baseResource({
+        type: 'physical_disk',
+        metricsTarget: { resourceType: 'disk', resourceId: 'SERIAL-1' },
+        temperature,
+        physicalDisk: {
+          devPath: '/dev/sdb',
+          temperature,
+          collection: state
+            ? { temperature: { state, source: 'smartctl', reason: 'disk is in standby' } }
+            : undefined,
+        },
+      });
+
+    expect(getResourceMetricsHistoryCurrentMetrics(disk('unavailable'))).toMatchObject({
+      smart_temp: undefined,
+      temperature: undefined,
+    });
+    expect(getResourceMetricsHistoryDeferredMetrics(disk('unavailable')).smart_temp).toEqual({
+      lastKnownValue: 47,
+      message: 'Last known reading, not current: disk is in standby.',
+    });
+    // An unavailable state with no retained reading has nothing to offer.
+    expect(getResourceMetricsHistoryCurrentMetrics(disk('unavailable', 0)).smart_temp).toBe(
+      undefined,
+    );
+    expect(getResourceMetricsHistoryDeferredMetrics(disk('unavailable', 0)).smart_temp).toBe(
+      undefined,
+    );
+
+    for (const current of [disk('available'), disk()]) {
+      expect(getResourceMetricsHistoryCurrentMetrics(current).smart_temp).toBe(47);
+      expect(getResourceMetricsHistoryDeferredMetrics(current).smart_temp).toBeUndefined();
+    }
+
+    // Websocket rows carry the reading only on physicalDisk, beside its state.
+    const websocketRow = (state: 'available' | 'unavailable') => {
+      const row = disk(state);
+      delete row.temperature;
+      return row;
+    };
+    expect(getResourceMetricsHistoryCurrentMetrics(websocketRow('available')).smart_temp).toBe(47);
+    expect(
+      getResourceMetricsHistoryCurrentMetrics(websocketRow('unavailable')).smart_temp,
+    ).toBeUndefined();
+    expect(
+      getResourceMetricsHistoryDeferredMetrics(websocketRow('unavailable')).smart_temp,
+    ).toMatchObject({ lastKnownValue: 47 });
+
+    // A top-level value never stands in for the disk's own missing reading,
+    // which the disk's collection state could not qualify.
+    const unpaired = disk('available');
+    delete unpaired.physicalDisk!.temperature;
+    expect(getResourceMetricsHistoryCurrentMetrics(unpaired).smart_temp).toBeUndefined();
+  });
+
   it('uses the source-aware host subset for API-only Proxmox node targets', () => {
     const resource = baseResource({
       type: 'agent',

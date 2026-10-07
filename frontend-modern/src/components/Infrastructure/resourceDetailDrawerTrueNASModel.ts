@@ -20,6 +20,7 @@ import {
   type DetailSection,
   type DetailValueTone,
 } from '@/components/shared/detailSectionModel';
+import { getPhysicalDiskTemperaturePresentation } from '@/features/storageBackups/diskTemperaturePresentation';
 import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
 
 export type ResourceDetailDrawerTrueNASRowTone = DetailValueTone;
@@ -49,11 +50,6 @@ const normalizeDelimitedLabel = (value?: string): string | null => {
 const formatPercent = (percent?: number): string | null => {
   if (typeof percent !== 'number' || !Number.isFinite(percent)) return null;
   return `${percent.toFixed(percent >= 10 ? 1 : 2)}%`;
-};
-
-const formatTemperature = (celsius?: number): string | null => {
-  if (typeof celsius !== 'number' || !Number.isFinite(celsius) || celsius <= 0) return null;
-  return `${celsius.toFixed(0)}°C`;
 };
 
 const formatDurationSeconds = (seconds?: number): string | null => {
@@ -396,6 +392,35 @@ const formatDiskHours = (hours?: number): string | null => {
   return `${formatDetailIntegerValue(value) ?? value.toFixed(0)}h`;
 };
 
+const diskTemperature = (disk: ResourcePhysicalDiskMeta) =>
+  getPhysicalDiskTemperaturePresentation({
+    temperature: disk.temperature ?? 0,
+    collection: disk.collection,
+  });
+
+// A retained reading, such as a silent host agent's on a merged disk row, is
+// not current: it takes no heat tone and its title says why.
+const diskTemperatureRow = (
+  disk: ResourcePhysicalDiskMeta,
+): ResourceDetailDrawerTrueNASRow | null => {
+  const reading = diskTemperature(disk);
+  if (!reading) return null;
+  if (!reading.current) {
+    return row('Temperature', `${reading.label} (last known)`, {
+      title: reading.title,
+      tone: 'muted',
+    });
+  }
+  return row('Temperature', reading.label, {
+    tone: (disk.temperature ?? 0) >= 55 ? 'warning' : 'default',
+  });
+};
+
+const currentDiskTemperatureLabel = (disk: ResourcePhysicalDiskMeta): string | null => {
+  const reading = diskTemperature(disk);
+  return reading?.current ? reading.label : null;
+};
+
 const buildTrueNASDiskSections = (
   resource: Resource,
   disk: ResourcePhysicalDiskMeta,
@@ -414,9 +439,7 @@ const buildTrueNASDiskSections = (
 
   const healthRows = compactRows([
     row('Health', normalizeDelimitedLabel(disk.health), { tone: diskStateTone(disk) }),
-    row('Temperature', formatTemperature(disk.temperature), {
-      tone: disk.temperature && disk.temperature >= 55 ? 'warning' : 'default',
-    }),
+    diskTemperatureRow(disk),
     row(
       'Wearout',
       disk.wearout === undefined || disk.wearout < 0 ? null : formatPercent(disk.wearout),
@@ -795,7 +818,8 @@ export const buildTrueNASDetailsSummary = (resource: Resource): string | null =>
       diskTypeLabel(disk.diskType),
       normalizeDelimitedLabel(disk.health),
       formatDetailBytesValue(disk.sizeBytes),
-      formatTemperature(disk.temperature),
+      // The summary has no room to say a retained reading is not current.
+      currentDiskTemperatureLabel(disk),
     ].filter((value): value is string => Boolean(value));
     return summary.length > 0 ? summary.join(', ') : null;
   }

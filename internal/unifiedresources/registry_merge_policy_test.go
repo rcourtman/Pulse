@@ -712,18 +712,30 @@ func TestIngestResourcesKeepsAFacetSightingWithoutAVerdict(t *testing.T) {
 
 // aggregateStatus is the one rule the stale pass and manual links apply.
 // Current sources decide by their own verdicts in chooseStatus's priority
-// order; quiet sources only decide when no source is current.
+// order; quiet sources only decide when no source is current. Availability
+// checks on a monitored resource are judged by their own evidence, not their
+// shared sighting.
 func TestAggregateStatusReadsSourceVerdictsNotDelivery(t *testing.T) {
+	now := time.Now().UTC()
+	lapsed := now.Add(-10 * time.Minute)
 	current := func(reported ResourceStatus) SourceStatus {
 		return SourceStatus{Status: "online", reported: reported}
 	}
 	quiet := func(reported ResourceStatus) SourceStatus {
 		return SourceStatus{Status: "stale", reported: reported}
 	}
+	check := func(passing bool, checkedAt time.Time) []AvailabilityData {
+		return []AvailabilityData{{
+			TargetID: "probe-1", Enabled: true, Available: passing, LastChecked: &checkedAt,
+			Evidence: availabilityProbeEvidence(t, "probe-1", checkedAt),
+		}}
+	}
 	for _, tc := range []struct {
-		name      string
-		sightings map[DataSource]SourceStatus
-		want      ResourceStatus
+		name         string
+		resourceType ResourceType
+		sightings    map[DataSource]SourceStatus
+		checks       []AvailabilityData
+		want         ResourceStatus
 	}{
 		{
 			name:      "live poll reports offline, agent quiet",
@@ -767,8 +779,56 @@ func TestAggregateStatusReadsSourceVerdictsNotDelivery(t *testing.T) {
 		},
 		{
 			name:      "a facet without a verdict never outranks a current verdict",
-			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusOffline), SourceAvailability: current("")},
+			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusOffline), SourcePBS: current("")},
 			want:      StatusOffline,
+		},
+		{
+			name:      "a current failing check abstains",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOffline), SourceAvailability: current("")},
+			checks:    check(false, now),
+			want:      StatusOffline,
+		},
+		{
+			name:      "a quiet failing check abstains rather than lifting an offline verdict to warning",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOffline), SourceAvailability: quiet("")},
+			checks:    check(false, lapsed),
+			want:      StatusOffline,
+		},
+		{
+			name:      "a passing check whose evidence lapsed abstains under a current sighting",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOnline), SourceAvailability: current("")},
+			checks:    check(true, lapsed),
+			want:      StatusWarning,
+		},
+		{
+			name:      "a passing check with current evidence proves the target answers under a quiet sighting",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: quiet(StatusOffline), SourceAvailability: quiet("")},
+			checks:    check(true, now),
+			want:      StatusOnline,
+		},
+		{
+			name:      "a passing check never lifts a resource whose own sources have not gone quiet",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: {Status: "unknown"}, SourceAvailability: current("")},
+			checks:    check(true, now),
+			want:      StatusUnknown,
+		},
+		{
+			name:      "a passing check never outranks a current verdict",
+			sightings: map[DataSource]SourceStatus{SourceProxmox: current(StatusOffline), SourceAvailability: current("")},
+			checks:    check(true, now),
+			want:      StatusOffline,
+		},
+		{
+			name:         "a check's own row keeps its quiet verdict",
+			resourceType: ResourceTypeNetworkEndpoint,
+			sightings:    map[DataSource]SourceStatus{SourceAvailability: quiet(StatusOffline)},
+			want:         StatusOffline,
+		},
+		{
+			name:         "a check's own row keeps its current verdict",
+			resourceType: ResourceTypeNetworkEndpoint,
+			sightings:    map[DataSource]SourceStatus{SourceAvailability: current(StatusWarning)},
+			want:         StatusWarning,
 		},
 		{
 			name:      "current unknown verdict leaves the quiet sources to decide",
@@ -782,7 +842,8 @@ func TestAggregateStatusReadsSourceVerdictsNotDelivery(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := aggregateStatus(&Resource{SourceStatus: tc.sightings}); got != tc.want {
+			resource := &Resource{Type: tc.resourceType, SourceStatus: tc.sightings, AvailabilityChecks: tc.checks}
+			if got := aggregateStatus(resource, now); got != tc.want {
 				t.Fatalf("aggregateStatus = %q, want %q", got, tc.want)
 			}
 		})

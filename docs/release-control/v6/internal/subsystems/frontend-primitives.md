@@ -6666,6 +6666,11 @@ icon/content layout, and action-link chrome. The
 outdated-sensor notices, and the
 `platform-inline-notice-local-amber-shell` pattern guard blocks future
 `platformPage` files from reintroducing page-local amber notice shells.
+A notice's render predicate reads what its page hydrates on every tab the
+notice renders on. `collectOutdatedSensorSetupNodes` lists the PVE nodes that
+carry the registry's `proxmox.sensorSetupOutdated` verdict and takes no disk
+rows, because only the Proxmox Storage tab loads them; a predicate over them
+left the notice silent on Overview.
 
 Alert incident-event filter containers, labels, and chips must now route
 through the shared presentation helpers in
@@ -7886,6 +7891,25 @@ When the cell's value is a retained host-agent SMART temperature, it renders
 muted with a dotted underline and screen-reader "last known", as does a
 retained value in the guest card. Tooltip and Thermals rows say "(last known)",
 and the Thermals row carries the collection reason as its title.
+The shared drawer History reads the same decision. For a physical disk,
+`resourceDetailDrawerMetricsHistoryModel.ts` takes the reading from
+`physicalDisk.temperature`, beside the collection state that qualifies it,
+because websocket rows carry no top-level `temperature` for a disk. When that
+state is set and is not `available` (an empty or absent state predates the
+contract and stays current), `getResourceMetricsHistoryCurrentMetrics` offers
+no current `smart_temp`. A positive retained reading then reaches
+`getResourceMetricsHistoryDeferredMetrics` as a deferred metric: with no
+history points the legend says "last known", never "current", and the reason
+renders above the chart.
+TrueNAS disk rows follow it too: the drawer's Temperature row reads
+"(last known)" with the reason as title and no heat tone, and the one-line
+summary leaves a retained reading out because it has no room for the reason.
+The Proxmox outdated sensor setup notice reads the registry's per-node
+`proxmox.sensorSetupOutdated` verdict, which counts a SATA or SAS disk as having
+a temperature only when the reading was collected now
+(`diskinventory.TemperatureCollected` in
+`internal/unifiedresources/proxmox_sensor_setup.go`), so a retained one cannot
+hide the notice for a disk Pulse cannot read now.
 
 The focused browser proofs are
 `frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts`,
