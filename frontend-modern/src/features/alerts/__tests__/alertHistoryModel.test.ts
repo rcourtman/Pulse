@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
@@ -11,6 +11,7 @@ import {
   buildSelectedBucketDetails,
   formatAlertHistoryDuration,
   getAlertBucketDurationLabel,
+  getAlertHistoryRowCopy,
   type HistoryItem,
 } from '../alertHistoryModel';
 
@@ -118,5 +119,116 @@ describe('alertHistoryModel', () => {
     });
 
     expect(sorted.map((item) => item.id)).toEqual(['newest', 'alpha', 'mid', 'zeta']);
+  });
+});
+
+// minipc on 2026-10-06: the node temperature alert opened at 95°C, the node
+// then read 78°C under its 80°C trigger, and the History row for the open
+// alert still said "Node temperature at 95.0°C".
+describe('alert history rows for held threshold alerts', () => {
+  const NOW = Date.parse('2026-10-06T19:00:00Z');
+  const heldAlert = (status?: Partial<NonNullable<Alert['metricStatus']>>): Alert =>
+    ({
+      id: 'homelab-minipc::metric-threshold:temperature',
+      type: 'temperature',
+      level: 'warning',
+      resourceId: 'homelab-minipc',
+      resourceName: 'minipc',
+      node: 'minipc',
+      instance: 'homelab',
+      message: 'Node temperature at 95.0°C',
+      value: 95,
+      threshold: 80,
+      startTime: '2026-10-06T18:30:00Z',
+      lastSeen: '2026-10-06T18:40:00Z',
+      acknowledged: false,
+      metricStatus: status
+        ? {
+            phase: 'latched',
+            value: 78,
+            unit: '°C',
+            observedAt: new Date(NOW - 10_000).toISOString(),
+            trigger: 80,
+            recovery: 75,
+            recoveryDelaySeconds: 300,
+            ...status,
+          }
+        : undefined,
+    }) as Alert;
+  const build = (activeAlerts: Record<string, Alert>, alertHistory: Alert[] = []) =>
+    buildAlertHistoryItems({
+      activeAlerts,
+      alertHistory,
+      getResource: () => undefined,
+      allResources: [],
+      now: NOW,
+    });
+
+  it('leads the open row with the live reading and keeps the breach for hover', () => {
+    const alert = heldAlert({ phase: 'latched', value: 78 });
+    const [item] = build({ [alert.id]: alert });
+
+    // The record itself is unchanged: search and the Assistant handoff read it.
+    expect(item.description).toBe('Node temperature at 95.0°C');
+    const copy = getAlertHistoryRowCopy(item, () => NOW);
+    expect(copy.text).toBe('Temperature 78°C now, back under the 80°C alert level');
+    expect(copy.detail).toBe(
+      'Stays open until it reaches 75°C or lower and stays there for 5 minutes.',
+    );
+    expect(copy.lastBreach).toMatch(/^Last reading at or above 80°C: 95°C, /);
+    expect(copy.title.split('\n')).toEqual([copy.text, copy.detail, copy.lastBreach]);
+  });
+
+  it('says a recovering open row is recovering, with its progress', () => {
+    const alert = heldAlert({ phase: 'recovering', value: 72, recoveryElapsedSeconds: 130 });
+    const copy = getAlertHistoryRowCopy(build({ [alert.id]: alert })[0], () => NOW);
+    expect(copy.text).toBe('Temperature 72°C now, recovering');
+    expect(copy.detail).toBe('Clears after 5 minutes at 75°C or lower, 2 minutes so far.');
+  });
+
+  it('stops calling a reading "now" once evaluations stop', () => {
+    const alert = heldAlert({ phase: 'latched', value: 78 });
+    const [item] = build({ [alert.id]: alert });
+    const copy = getAlertHistoryRowCopy(item, () => NOW + 15 * 60 * 1000);
+    expect(copy.text).toMatch(/^Last reading: Temperature 78°C, /);
+    expect(copy.text).not.toContain('now');
+  });
+
+  it('keeps the recorded message on closed rows and open rows without a live status', () => {
+    const open = heldAlert();
+    const closed = {
+      ...heldAlert({ phase: 'latched', value: 78 }),
+      id: 'homelab-minipc::metric-threshold:cpu',
+      message: 'Resolved: Node temperature at 74.0°C',
+    };
+    const clock = vi.fn(() => NOW);
+    const items = build({ [open.id]: open }, [closed]);
+    const openItem = items.find((item) => item.id === open.id)!;
+    const closedItem = items.find((item) => item.id === closed.id)!;
+
+    expect(closedItem.status).toBe('resolved');
+    expect(closedItem.liveAlert).toBeUndefined();
+    expect(getAlertHistoryRowCopy(closedItem, clock)).toEqual({
+      text: 'Resolved: Node temperature at 74.0°C',
+      title: 'Resolved: Node temperature at 74.0°C',
+    });
+    // Closed rows never read the clock, so they do not re-render on its tick.
+    expect(clock).not.toHaveBeenCalled();
+    expect(getAlertHistoryRowCopy(openItem, clock)).toEqual({
+      text: 'Node temperature at 95.0°C',
+      title: 'Node temperature at 95.0°C',
+    });
+  });
+
+  it('gives Pulse system alerts no live reading', () => {
+    const alert = {
+      ...heldAlert({ phase: 'latched', value: 78 }),
+      id: 'pulse-system::storage',
+      metadata: { systemAlert: true },
+    } as Alert;
+    const [item] = build({ [alert.id]: alert });
+    expect(item.systemAlert).toBe(true);
+    expect(item.liveAlert).toBeUndefined();
+    expect(getAlertHistoryRowCopy(item, () => NOW).text).toBe('Node temperature at 95.0°C');
   });
 });

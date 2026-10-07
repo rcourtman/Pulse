@@ -549,6 +549,10 @@ describe('tab path helpers', () => {
     expect(alertHistoryTableAlertRowSource).toContain('export function AlertHistoryTableAlertRow');
     expect(alertHistoryTableAlertRowSource).toContain('IncidentTimelinePanel');
     expect(alertHistoryTableAlertRowSource).toContain('AlertHistoryItemActions');
+    // An open threshold alert's row leads with its live reading, not the
+    // breach message it opened with (#2068).
+    expect(alertHistoryTableAlertRowSource).toContain('getAlertHistoryRowCopy(props.alert, now)');
+    expect(alertHistoryTableAlertRowSource).not.toContain('{props.alert.description}');
     expect(alertHistoryItemActionsSource).toContain('InvestigateAlertButton');
     expect(alertHistoryAdministrationCardSource).toContain(
       'export function AlertHistoryAdministrationCard',
