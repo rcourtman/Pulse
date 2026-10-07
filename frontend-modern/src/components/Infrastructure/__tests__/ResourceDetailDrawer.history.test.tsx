@@ -916,6 +916,66 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(panel.queryByText('Runs on')).toBeNull();
   });
 
+  it('labels an alert that moved to its Pulse agent as a move, not a recovery', async () => {
+    const summary =
+      'Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading.';
+    facetBundleMock.getFacetBundle.mockResolvedValueOnce({
+      recentChanges: [
+        {
+          id: 'change-moved',
+          observedAt: '2026-10-06T15:00:00Z',
+          occurredAt: '2026-10-06T15:00:00Z',
+          resourceId: 'node:pve1',
+          kind: 'alert_resolved',
+          sourceType: 'heuristic',
+          confidence: 'high',
+          reason: summary,
+          metadata: {
+            alert_identifier: 'pve1-memory',
+            alert_type: 'memory',
+            alert_resolution: 'moved_to_agent',
+          },
+        },
+        {
+          id: 'change-recovered',
+          observedAt: '2026-10-06T14:00:00Z',
+          resourceId: 'node:pve1',
+          kind: 'alert_resolved',
+          sourceType: 'heuristic',
+          confidence: 'high',
+          reason: 'Alert resolved: Node CPU at 91%',
+          metadata: { alert_identifier: 'pve1-cpu', alert_type: 'cpu' },
+        },
+      ],
+      counts: { recentChanges: 2, recentChangeKinds: { alert_resolved: 2 } },
+    });
+
+    render(() => (
+      <ResourceDetailDrawer
+        resource={baseResource({
+          id: 'node:pve1',
+          type: 'agent',
+          name: 'pve1',
+          displayName: 'pve1',
+          platformType: 'proxmox-pve',
+          platformData: { sources: ['proxmox', 'agent'] },
+        })}
+      />
+    ));
+
+    await screen.findByText('Change history');
+    const panel = within(screen.getByTestId('resource-change-history-section'));
+    const movedReason = await panel.findByText(summary);
+    const movedEntry = movedReason.parentElement as HTMLElement;
+    expect(within(movedEntry).getByText('Alert moved')).toBeInTheDocument();
+    expect(within(movedEntry).queryByText('Alert resolved')).toBeNull();
+
+    // An ordinary recovery keeps its kind label.
+    const recoveredEntry = panel.getByText('Alert resolved: Node CPU at 91%')
+      .parentElement as HTMLElement;
+    expect(within(recoveredEntry).getByText('Alert resolved')).toBeInTheDocument();
+  });
+
   it('surfaces resource-scoped action history from the canonical action audit API', async () => {
     actionAuditMock.listActionAudits.mockResolvedValueOnce({
       available: true,

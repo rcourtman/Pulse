@@ -2765,6 +2765,11 @@ agent inventory, registration state, or command-channel readiness.
    reports, but workspace logo material remains API/security/reporting
    ownership and must not become agent credential, install-token, or fleet
    lifecycle state.
+   Report alert rows built there carry an alert's handover resolution, so a
+   node alert that moved to its linked Pulse agent reads as moved, not
+   recovered. That is report presentation only: the report never decides
+   agent linkage, ownership of a metric, or agent freshness, and it adds no
+   lifecycle state.
    The same isolation rule applies to Patrol investigation-record propagation
    through shared AI intelligence handlers and `internal/api/router.go`:
    lifecycle surfaces may observe the resulting resource context, but they must

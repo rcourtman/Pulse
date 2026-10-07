@@ -15,7 +15,9 @@ import type {
 } from '@/stores/aiChat';
 import type { ResourceChange } from '@/types/resource';
 import {
+  formatResourceChangeHeadline,
   formatResourceChangeKind,
+  getResourceChangeAlertResolution,
   sortResourceChangesByObservedAt,
 } from '@/utils/resourceChangePresentation';
 import {
@@ -1736,6 +1738,12 @@ function formatAssessmentCorrelationContextLine(
 }
 
 function formatAssessmentRecentChangeSummary(change: ResourceChange): string {
+  // An alert that closed without recovering (moved to its Pulse agent) is
+  // told in the alert engine's words, never as "Alert resolved".
+  if (getResourceChangeAlertResolution(change)) {
+    return truncateContextText(formatResourceChangeHeadline(change), 160);
+  }
+
   const kind = formatResourceChangeKind(change.kind);
   if (isCommandBearingResourceChange(change)) {
     return `${kind}: execution event recorded`;

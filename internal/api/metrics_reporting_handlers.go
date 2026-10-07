@@ -756,6 +756,37 @@ func reportSubjectIDMatches(req *reporting.MetricReportRequest, candidateID stri
 	return req.MetricsResourceID != "" && candidateID == req.MetricsResourceID
 }
 
+// reportActiveAlertInfo is the report row for an open alert.
+func reportActiveAlertInfo(alert models.Alert) reporting.AlertInfo {
+	return reporting.AlertInfo{
+		Type:       alert.Type,
+		Level:      alert.Level,
+		Message:    alert.Message,
+		Value:      alert.Value,
+		Threshold:  alert.Threshold,
+		StartTime:  alert.StartTime,
+		ResourceID: alert.ResourceID,
+	}
+}
+
+// reportResolvedAlertInfo is the report row for a recently resolved alert. It
+// keeps the alert's resolution, so a node alert that moved to its Pulse agent
+// is never reported as a recovery.
+func reportResolvedAlertInfo(resolved models.ResolvedAlert) reporting.AlertInfo {
+	info := reportActiveAlertInfo(resolved.Alert)
+	resolvedTime := resolved.ResolvedTime
+	info.ResolvedTime = &resolvedTime
+	if resolution := resolved.Resolution; resolution != nil {
+		info.Resolution = &reporting.AlertResolution{
+			Reason:              resolution.Reason,
+			SuccessorResourceID: resolution.SuccessorResourceID,
+			SuccessorName:       resolution.SuccessorName,
+			Summary:             resolution.Summary,
+		}
+	}
+	return info
+}
+
 // enrichNodeReport adds node-specific data to the report request
 func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest, snapshot reportingEnrichmentSnapshot, start, end time.Time) {
 	// Find the node
@@ -797,29 +828,13 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 	// Find alerts for this node
 	for _, alert := range snapshot.ActiveAlerts {
 		if reportSubjectIDMatches(req, alert.ResourceID) || alert.Node == node.Name {
-			req.Alerts = append(req.Alerts, reporting.AlertInfo{
-				Type:      alert.Type,
-				Level:     alert.Level,
-				Message:   alert.Message,
-				Value:     alert.Value,
-				Threshold: alert.Threshold,
-				StartTime: alert.StartTime,
-			})
+			req.Alerts = append(req.Alerts, reportActiveAlertInfo(alert))
 		}
 	}
 	for _, resolved := range snapshot.RecentlyResolved {
 		if (reportSubjectIDMatches(req, resolved.ResourceID) || resolved.Node == node.Name) &&
 			resolved.ResolvedTime.After(start) && resolved.ResolvedTime.Before(end) {
-			resolvedTime := resolved.ResolvedTime
-			req.Alerts = append(req.Alerts, reporting.AlertInfo{
-				Type:         resolved.Type,
-				Level:        resolved.Level,
-				Message:      resolved.Message,
-				Value:        resolved.Value,
-				Threshold:    resolved.Threshold,
-				StartTime:    resolved.StartTime,
-				ResolvedTime: &resolvedTime,
-			})
+			req.Alerts = append(req.Alerts, reportResolvedAlertInfo(resolved))
 		}
 	}
 
@@ -959,29 +974,13 @@ func (h *ReportingHandlers) enrichVMReport(ctx context.Context, orgID string, re
 	// Find alerts for this VM
 	for _, alert := range snapshot.ActiveAlerts {
 		if reportSubjectIDMatches(req, alert.ResourceID) {
-			req.Alerts = append(req.Alerts, reporting.AlertInfo{
-				Type:      alert.Type,
-				Level:     alert.Level,
-				Message:   alert.Message,
-				Value:     alert.Value,
-				Threshold: alert.Threshold,
-				StartTime: alert.StartTime,
-			})
+			req.Alerts = append(req.Alerts, reportActiveAlertInfo(alert))
 		}
 	}
 	for _, resolved := range snapshot.RecentlyResolved {
 		if reportSubjectIDMatches(req, resolved.ResourceID) &&
 			resolved.ResolvedTime.After(start) && resolved.ResolvedTime.Before(end) {
-			resolvedTime := resolved.ResolvedTime
-			req.Alerts = append(req.Alerts, reporting.AlertInfo{
-				Type:         resolved.Type,
-				Level:        resolved.Level,
-				Message:      resolved.Message,
-				Value:        resolved.Value,
-				Threshold:    resolved.Threshold,
-				StartTime:    resolved.StartTime,
-				ResolvedTime: &resolvedTime,
-			})
+			req.Alerts = append(req.Alerts, reportResolvedAlertInfo(resolved))
 		}
 	}
 
@@ -1238,29 +1237,13 @@ func (h *ReportingHandlers) enrichContainerReport(ctx context.Context, orgID str
 	// Find alerts for this container
 	for _, alert := range snapshot.ActiveAlerts {
 		if reportSubjectIDMatches(req, alert.ResourceID) {
-			req.Alerts = append(req.Alerts, reporting.AlertInfo{
-				Type:      alert.Type,
-				Level:     alert.Level,
-				Message:   alert.Message,
-				Value:     alert.Value,
-				Threshold: alert.Threshold,
-				StartTime: alert.StartTime,
-			})
+			req.Alerts = append(req.Alerts, reportActiveAlertInfo(alert))
 		}
 	}
 	for _, resolved := range snapshot.RecentlyResolved {
 		if reportSubjectIDMatches(req, resolved.ResourceID) &&
 			resolved.ResolvedTime.After(start) && resolved.ResolvedTime.Before(end) {
-			resolvedTime := resolved.ResolvedTime
-			req.Alerts = append(req.Alerts, reporting.AlertInfo{
-				Type:         resolved.Type,
-				Level:        resolved.Level,
-				Message:      resolved.Message,
-				Value:        resolved.Value,
-				Threshold:    resolved.Threshold,
-				StartTime:    resolved.StartTime,
-				ResolvedTime: &resolvedTime,
-			})
+			req.Alerts = append(req.Alerts, reportResolvedAlertInfo(resolved))
 		}
 	}
 

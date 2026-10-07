@@ -4686,9 +4686,14 @@ metadata when it projects from the canonical timeline).
 `TestService_buildAlertContext_HandoverIsNotARecovery`,
 `TestExecuteListResolvedAlertsReportsHandover` and
 `TestIncidentStore_HandoverCloseIsNotARecovery` pin it. Performance reports
-(`pkg/reporting`, the report narrator) do not carry the resolution yet: a
-report generated within the five-minute recently-resolved window after a
-handover still lists that alert as resolved. The projection also collapses open/resolved churn:
+carry the resolution too: the report narrator sends such an alert with
+`resolved: false` and the engine's summary as `resolution`, plus
+`successor_alert_listed` when the same report lists the alert the resource
+it moved to raised for that metric. Its system prompt forbids counting the
+alert as resolved or calling the resource healthy on its account, and tells
+the model to describe a covered condition once, from the successor's alert
+(`TestBuildReportNarratorPayload_HandoverIsNotARecovery`). The
+deterministic verdict lives in `pkg/reporting` (see api-contracts). The projection also collapses open/resolved churn:
 when a record's timeline holds at least four open-to-resolved or
 resolved-to-open transitions inside the last 24 hours, the item carries a
 `flapping` summary (transition count, window, first and latest transition) and

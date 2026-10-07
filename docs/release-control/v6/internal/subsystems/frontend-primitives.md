@@ -7174,6 +7174,12 @@ row carries the account in the badge title and the phone card renders it under
 the message, while `getAlertHistoryStatusPresentation` and
 `getAlertResolutionDetail` in `utils/alertIncidentPresentation.ts` own the
 wording.
+Resource-change readers follow the same split: `getResourceChangePresentation`
+and `formatResourceChangeHeadline` in `utils/resourceChangePresentation.ts`
+own the `Alert moved` label, its neutral-blue tone and the summary headline
+for an `alert_resolved` change with `alert_resolution` metadata, and the
+Patrol assessment handoff consumes that headline instead of composing its own
+kind prefix.
 `frontend-modern/src/features/alerts/useAlertHistoryState.ts` re-exposes the
 `getResource` resolver it is already given, and
 `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx` reads it
