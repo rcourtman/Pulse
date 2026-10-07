@@ -1777,6 +1777,9 @@ func TestSilentLinkedAgentStopsRefreshingNodeTemperatureAlert(t *testing.T) {
 func TestMonitorReportedAgentHandoverUsesActualMetricOwner(t *testing.T) {
 	manager := alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
 	t.Cleanup(manager.Stop)
+	// Match the monitoring bootstrap: ephemeral managers otherwise have no
+	// durable event log, so AlertEvents cannot prove the served History route.
+	manager.EnableEventLog()
 	cfg := manager.GetConfig()
 	cfg.Enabled = true
 	cfg.ActivationState = alerts.ActivationPending
@@ -1803,6 +1806,9 @@ func TestMonitorReportedAgentHandoverUsesActualMetricOwner(t *testing.T) {
 	manager.CheckNode(node)
 	opened := manager.GetActiveAlerts()
 	require.Len(t, opened, 2)
+	fired, err := manager.AlertEvents(eventlog.Filter{Types: []string{eventlog.TypeFired}})
+	require.NoError(t, err)
+	require.Len(t, fired, 2, "control must record both original node occurrences")
 	cpuAgent := models.Host{ID: "agent-a", Hostname: "node", DisplayName: "CPU reader", Status: "online", LinkedNodeID: node.ID, CPUUsage: 50}
 	memoryAgent := models.Host{ID: "agent-b", Hostname: "node", DisplayName: "Memory reader", Status: "online", LinkedNodeID: node.ID, Memory: node.Memory}
 	manager.CheckHost(cpuAgent)
