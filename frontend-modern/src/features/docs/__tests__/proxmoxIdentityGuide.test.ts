@@ -34,8 +34,7 @@ function sectionAt(article: HTMLElement, fragment: string): HTMLElement {
 
 const identitySection = (): HTMLElement =>
   sectionAt(renderGuide('TROUBLESHOOTING'), identityFragment);
-const prose = (section: Element): string =>
-  (section.textContent ?? '').replace(/\s+/g, ' ').trim();
+const prose = (section: Element): string => (section.textContent ?? '').replace(/\s+/g, ' ').trim();
 
 describe('shipped cross-installation Proxmox identity guidance', () => {
   it('separates multi-installation support, cosmetic names and repair', () => {
