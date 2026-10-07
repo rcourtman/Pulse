@@ -211,92 +211,51 @@ pick_highest_stable_tag() {
     echo "$best"
 }
 
-# Get latest stable release from GitHub
+# Get latest stable release from GitHub. Maturity and tag must come from the
+# same complete release object, independent of JSON whitespace or field order.
 get_latest_stable_version() {
-    local latest_version=""
-    local release_json=""
-    local is_prerelease_flag=""
-
-    # Primary: highest stable version across the release list. GitHub's
-    # /releases/latest points at the most recently *created* stable release,
-    # and this repo interleaves v5-line maintenance releases with v6 releases
-    # (v5.1.36 shipped the day before v6.0.5) — so "latest" can be an older
-    # version line, which would strand v6 installs until the next v6 release.
-    #
-    # Each tag is only a candidate when its own release object says
-    # draft=false and prerelease=false (field order per object is
-    # tag_name → draft → prerelease, with body last, so a pending tag is
-    # confirmed or discarded before the next object's tag_name resets it).
-    # pick_highest_stable_tag then re-applies the fail-closed shape check.
-    local releases_json=""
-    releases_json=$(curl -s "https://api.github.com/repos/$GITHUB_REPO/releases?per_page=30" || true)
-    if [[ -n "$releases_json" ]] && [[ "$releases_json" != *"rate limit"* ]]; then
-        local line="" pending_tag="" stable_tags=""
-        while IFS= read -r line; do
-            if [[ "$line" == *'"tag_name":'* ]]; then
-                pending_tag=$(printf '%s' "$line" | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/')
-            fi
-            if [[ "$line" == *'"draft": true'* ]] || [[ "$line" == *'"draft":true'* ]]; then
-                pending_tag=""
-            fi
-            if [[ "$line" == *'"prerelease":'* ]]; then
-                if [[ -n "$pending_tag" ]] && { [[ "$line" == *'"prerelease": false'* ]] || [[ "$line" == *'"prerelease":false'* ]]; }; then
-                    stable_tags+="$pending_tag"$'\n'
-                fi
-                pending_tag=""
-            fi
-        done <<< "$releases_json"
-        latest_version=$(printf '%s' "$stable_tags" | pick_highest_stable_tag)
-        if [[ -n "$latest_version" ]]; then
-            echo "$latest_version"
-            return 0
-        fi
-    fi
-
-    # Fallback: latest stable release (not pre-releases). `/releases/latest`
-    # already skips prereleases on GitHub's side, but we still parse and
-    # enforce the `prerelease` flag ourselves as a second line of defense.
-    release_json=$(curl -s "https://api.github.com/repos/$GITHUB_REPO/releases/latest" || true)
-
-    if [[ -n "$release_json" ]] && [[ "$release_json" != *"rate limit"* ]]; then
-        latest_version=$(echo "$release_json" | \
-            grep '"tag_name":' | \
-            head -1 | \
-            sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/' || true)
-        is_prerelease_flag=$(echo "$release_json" | \
-            grep '"prerelease":' | \
-            head -1 | \
-            sed -E 's/.*"prerelease":[[:space:]]*(true|false).*/\1/' || true)
-
-        # Refuse if the API explicitly flags this release as a prerelease.
-        if [[ "$is_prerelease_flag" == "true" ]]; then
-            log error "GitHub /releases/latest returned a prerelease ($latest_version); refusing on stable channel"
-            echo ""
-            return 0
-        fi
-    fi
-
-    # Check if we got rate limited or failed
-    if [[ -z "$latest_version" ]] || [[ "$latest_version" == *"rate limit"* ]]; then
-        # Try direct GitHub latest URL as fallback
-        latest_version=$(curl -sI "https://github.com/$GITHUB_REPO/releases/latest" | \
-            grep -i '^location:' | \
-            sed -E 's|.*tag/([^[:space:]]+).*|\1|' | \
-            tr -d '\r' || true)
-    fi
-
-    # Final belt-and-braces: never hand back a prerelease-shaped tag even
-    # if an upstream path told us it was stable. The channel-pinning policy
-    # lives in the Go server (EffectiveAutoUpdateEnabled gates this timer on
-    # stable only); refusing prerelease tag shapes here ensures the unattended
-    # script cannot cross the major-version boundary on a corrupted API reply.
-    if [[ -n "$latest_version" ]] && is_prerelease_tag "$latest_version"; then
-        log error "GitHub returned prerelease-shaped tag ($latest_version) as latest; refusing on stable channel"
+    local endpoint="" release_json="" stable_tags="" latest_version=""
+    if ! command -v jq >/dev/null 2>&1; then
+        log error "jq is required to verify release metadata; no unattended update attempted"
         echo ""
         return 0
     fi
 
-    echo "${latest_version:-}"
+    # Prefer the highest stable in the list, not GitHub's creation ordering.
+    # If that read is unusable, /latest is a separate metadata-confirmed path.
+    # A redirect alone cannot prove draft/prerelease status and is not used.
+    for endpoint in 'releases?per_page=30' 'releases/latest'; do
+        if ! release_json=$(curl --disable --fail --silent --show-error \
+            --connect-timeout 5 --max-time 20 --proto '=https' \
+            "https://api.github.com/repos/$GITHUB_REPO/$endpoint"); then
+            continue
+        fi
+        # Slurp before selecting: truncated or concatenated JSON must not
+        # leak a previously parsed tag. Ignore only ineligible release objects;
+        # do not borrow missing flags from siblings, nested data or body text.
+        if ! stable_tags=$(jq -er -s --arg endpoint "$endpoint" '
+            if length != 1 then error("expected one release document") else .[0] end
+            | if $endpoint == "releases/latest" then
+                if type == "object" then [.] else error("expected a release object") end
+              else
+                if type == "array" then . else error("expected a release list") end
+              end
+            | if all(.[]; type == "object") then . else error("invalid release entry") end
+            | .[]
+            | select(.draft == false and .prerelease == false)
+            | select((.tag_name | type) == "string")
+            | .tag_name
+            | select(test("\\Av?[0-9]+\\.[0-9]+\\.[0-9]+\\z"))
+        ' <<< "$release_json" 2>/dev/null); then
+            continue
+        fi
+        latest_version=$(printf '%s\n' "$stable_tags" | pick_highest_stable_tag)
+        if [[ -n "$latest_version" ]]; then
+            echo "$latest_version"
+            return 0
+        fi
+    done
+    echo ""
 }
 
 # Compare versions (returns 0 if v1 > v2, 1 if v1 <= v2)
