@@ -424,6 +424,11 @@ If the same backup remains listed twice, report those redacted distinctions and
 whether each entry came from direct PBS or PVE passthrough. Do not delete backups
 or change retention to hide a display problem.
 
+If overlapping VMIDs also coincide with wrong-node errors or lost agent-backed
+Docker monitoring after adding another Proxmox connection, use the
+[cross-installation identity checks](TROUBLESHOOTING.md#monitoring-is-mixed-between-proxmox-installations).
+A duplicate-backup check alone does not resolve those other symptoms.
+
 ---
 
 ## Data Source Indicator

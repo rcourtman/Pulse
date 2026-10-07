@@ -336,6 +336,20 @@ PULSE_AGENT_CONNECT_URL=https://agents.example.com:7656
 
 Agents then post telemetry to `https://agents.example.com:7656/api/agents/agent/report` and establish their command channel at `wss://agents.example.com:7656/api/agent/ws`, while the web UI and management API remain reachable only on the private `FRONTEND_PORT` listener. If command execution is enabled, both routes must traverse the same proxy/firewall path; a successful report does not prove that the WebSocket is admitted.
 
+### Multiple Proxmox installations
+
+Pulse is intended to monitor multiple Proxmox clusters and standalone nodes
+through separate saved Proxmox connections. Native node names and VMIDs can
+repeat across independent installations; a matching name or VMID alone does
+not identify the same resource.
+
+A distinct Pulse connection name helps you recognise the saved connection.
+Neither that label nor a [cluster member display name](#proxmox-cluster-node-display-names)
+renames the native Proxmox node or VMID, or repairs incorrect attribution.
+If node errors, backup status or agent-backed Docker monitoring become mixed
+after adding a connection, use the [cross-installation identity checks](TROUBLESHOOTING.md#monitoring-is-mixed-between-proxmox-installations).
+Do not rename production nodes or repeat the addition as a diagnostic.
+
 ### Proxmox Cluster Node Display Names
 
 Nodes discovered through one Proxmox VE cluster connection can have an
