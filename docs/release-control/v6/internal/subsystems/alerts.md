@@ -525,7 +525,7 @@ active-state and intent-policy linkage while persisting through the stable
 A per-metric threshold is off whenever its trigger is `<= 0`. That boundary is
 engine truth (`internal/alerts/canonical_metric.go`,
 `internal/alerts/config_runtime.go`), not a display convention: `-1` is the
-value Pulse writes, and `0` disables the metric just as completely because
+value the editors stage, and `0` disables the metric just as completely because
 earlier builds advertised `0` as the disable value and those overrides are still
 on disk. Every threshold editor reads that same `<= 0` rule through
 `frontend-modern/src/components/Alerts/alertResourceTableModel.ts` rather than
@@ -543,7 +543,28 @@ the metric's enabled default instead, and only clears the override when the
 inherited default is already enabled. Editors must also not manufacture an off
 state out of an empty input: a cleared box is mid-edit, and coercing it to `0`
 disabled the metric in the engine while the row still showed On. Disabling is
-the toggle's job, and the toggle writes the canonical `-1`.
+the toggle's job, and the toggle stages the canonical `-1`.
+
+The save path writes the backend's default contract, not the editors' sentinel.
+Alert config normalization reads a negative trigger on a global default as
+unset and restores the factory threshold, so `buildAlertsConfigurationPayload`
+in `frontend-modern/src/features/alerts/alertsConfigurationModel.ts` writes
+every Off global default as trigger `0`. Sending the staged `-1` through made
+every Off default with a positive factory threshold come back On at that
+threshold after save and reload; only guest and node CPU, memory and disk
+escaped, because normalization leaves them alone. Overrides keep `-1`, which
+the override path stores as written. Because `-1` and `0` are the same
+setting, the Global Defaults "Custom" badge compares Off values as equal
+rather than by raw number, so the factory `-1` I/O defaults do not read
+Custom against a saved `0`. An unset factory value stays distinct from Off,
+since unset can mean the default follows another setting. A row's
+custom-threshold marker keeps comparing raw values: it drives the row's revert
+control and override removal, so an explicit `-1` override must stay visible
+against an Off default even though both alert the same way.
+`frontend-modern/src/features/alerts/__tests__/alertsConfigurationModel.test.ts`
+pins the payload for every section, and
+`internal/alerts/config_defaults_off_test.go` pins that a zero default stays
+off through `UpdateConfig` and raises no alert.
 
 External availability-probe reporting loss owns one canonical
 `external-probe-unavailable` alert per assigned agent, not one alert per target.
@@ -2597,8 +2618,10 @@ Metric enablement is an explicit On/Off interaction in row, global-default,
 mobile, and bulk editors. Enabled numeric inputs accept positive trigger values
 only and user-facing copy must not expose the persisted disable sentinel.
 Internally, the canonical `<= 0` read rule remains intact for legacy data, while
-new Off actions write `-1`, so existing configuration and the API contract
-continue to round-trip without making `0` a second customer-facing disable path.
+new Off actions stage `-1` (saved as trigger `0` on global defaults, which the
+backend otherwise resets to factory), so existing configuration and the API
+contract continue to round-trip without making `0` a second customer-facing
+disable path.
 Within the Proxmox tab, render-heavy ownership now further routes through
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxNodesSection.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxPBSSection.tsx`,
