@@ -303,6 +303,36 @@ func TestAISettingsHandler_GetAIService_MultiTenantProviders(t *testing.T) {
 	}
 }
 
+// Report GETs read Patrol findings through ExistingAIService, so it must never
+// construct a tenant service: construction can list provider models and start
+// background discovery.
+func TestAISettingsHandler_ExistingAIServiceNeverConstructs(t *testing.T) {
+	handler := NewAISettingsHandler(config.NewMultiTenantPersistence(t.TempDir()), nil, nil)
+	t.Cleanup(handler.StopServices)
+	tenant := context.WithValue(context.Background(), OrgIDContextKey, "tenant-1")
+
+	if svc := handler.ExistingAIService(tenant); svc != nil {
+		t.Fatalf("expected no service before the tenant's first GetAIService, got %p", svc)
+	}
+	handler.aiServicesMu.RLock()
+	built := len(handler.aiServices)
+	handler.aiServicesMu.RUnlock()
+	if built != 0 {
+		t.Fatalf("ExistingAIService constructed %d tenant services, want 0", built)
+	}
+
+	created := handler.GetAIService(tenant)
+	if created == nil {
+		t.Fatal("expected GetAIService to construct the tenant service")
+	}
+	if got := handler.ExistingAIService(tenant); got != created {
+		t.Fatalf("expected the running tenant service %p, got %p", created, got)
+	}
+	if got, want := handler.ExistingAIService(context.Background()), handler.GetAIService(context.Background()); got != want {
+		t.Fatalf("expected the default service %p, got %p", want, got)
+	}
+}
+
 func TestAISettingsHandler_GetAIService_UsesTenantReadState(t *testing.T) {
 	tmp := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(tmp)

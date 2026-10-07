@@ -7639,6 +7639,16 @@ bounded and classified temperature nodes, and leaves the host report intact
 when the helper is absent or incompatible. It does not treat Windows ACPI
 thermal zones as hardware sensor evidence, accept remote provider locations,
 or grant Pulse hardware-control authority.
+### Single-resource report AI narration requires POST
+
+`internal/api/metrics_reporting_handlers.go`, `internal/api/router.go` and
+`internal/api/ai_handlers.go` changed only how `/api/admin/reports/generate`
+reads its fields (a `POST` JSON body or `GET` query parameters), which of those
+may use the tenant's AI narrator (`POST` only), and how a `GET` finds Patrol
+findings (`ExistingAIService`, which never constructs a tenant AI service). No
+agent registration, enrolment, install, update, removal or report ingest path
+changed.
+
 ### Agent profile adoption is reported as a count only
 
 The usage telemetry snapshot reads `LoadAgentProfiles` and reports

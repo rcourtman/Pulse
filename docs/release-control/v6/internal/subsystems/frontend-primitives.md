@@ -4828,6 +4828,13 @@ performance-report transport (`/api/reporting` and `/api/reporting/generate-mult
 so the reporting panel does not go dead on mixed-version installs, but that
 compatibility path is intentionally report-only and must not invent the newer
 catalog-owned VM inventory export surface.
+`reportingPanelModel.ts` picks the single-resource transport from the catalog's
+`performanceReport.singleResourceMethod`: `POST` sends the request fields as a
+JSON body, which is the only transport the server lets narrate a PDF with Pulse
+Assistant, and `GET` sends the same fields as query parameters.
+`reportingCatalogModel.ts` reads a missing field as `GET`, the only method a
+backend that predates the field accepts, and the legacy compatibility catalog
+names `GET` for `/api/reporting`. Fleet reports stay `POST` on every backend.
 `ReportingPanel.tsx` must therefore treat `vmInventoryExport` as optional when
 it renders a governed reporting catalog. A legacy compatibility catalog with no
 inventory export still owns a valid enabled reporting surface and must continue
