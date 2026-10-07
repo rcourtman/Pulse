@@ -568,6 +568,12 @@ func standalonePVEEndpointMatchProven(standalone, cluster PVEInstance, endpoint 
 	if key == "" {
 		return false
 	}
+	// The instance pin applies only to its saved authority, not every member.
+	// When that authority is the candidate, it also vetoes an endpoint whose
+	// own discovery pin is still unknown.
+	if key == normalizePVEEndpointIdentity(cluster.Host) && ProxmoxFingerprintsConflict(standalone.Fingerprint, cluster.Fingerprint) {
+		return false
+	}
 	for _, address := range []string{endpoint.Host, endpoint.IP, endpoint.IPOverride} {
 		if ipKey := endpointHostIdentityIP(address); ipKey != "" && key == ipKey {
 			return true

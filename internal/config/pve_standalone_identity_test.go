@@ -7,8 +7,8 @@ import (
 
 func TestConsolidatePVEStandaloneRequiresEndpointProof(t *testing.T) {
 	for _, tc := range []struct {
-		name, standaloneHost, clusterHost, endpointHost, ip, override, standaloneFP, endpointFP string
-		merge                                                                                   bool
+		name, standaloneHost, clusterHost, endpointHost, ip, override, standaloneFP, endpointFP, clusterFP string
+		merge                                                                                              bool
 	}{
 		{name: "discovered short member hostname is not identity", standaloneHost: "pmx1", clusterHost: "https://home.example:8006", endpointHost: "https://pmx1:8006"},
 		{name: "discovered full member hostname is not saved authority", standaloneHost: "pmx1.example", clusterHost: "https://home.example:8006", endpointHost: "https://pmx1.example:8006"},
@@ -22,11 +22,13 @@ func TestConsolidatePVEStandaloneRequiresEndpointProof(t *testing.T) {
 		{name: "operator override address", standaloneHost: "10.0.0.5", endpointHost: "https://pmx1:8006", override: "10.0.0.5", merge: true},
 		{name: "same address different certificate", standaloneHost: "10.0.0.5", endpointHost: "https://pmx1:8006", ip: "10.0.0.5", standaloneFP: "aaaa", endpointFP: "bbbb"},
 		{name: "same saved authority different certificate", standaloneHost: "pmx1", clusterHost: "https://pmx1:8006", endpointHost: "https://pmx1:8006", standaloneFP: "aaaa", endpointFP: "bbbb"},
+		{name: "saved named authority has conflicting pin", standaloneHost: "pmx1", clusterHost: "https://pmx1:8006", endpointHost: "https://pmx1:8006", standaloneFP: "aaaa", clusterFP: "bbbb"},
+		{name: "saved address authority has conflicting pin", standaloneHost: "10.0.0.5", clusterHost: "https://10.0.0.5:8006", endpointHost: "https://10.0.0.5:8006", standaloneFP: "aaaa", clusterFP: "bbbb"},
 		{name: "no endpoint overlap despite shared certificate", standaloneHost: "standalone", endpointHost: "https://pmx1:8006", standaloneFP: "aaaa", endpointFP: "aaaa"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			input := []PVEInstance{
-				{Name: "Home", Host: tc.clusterHost, IsCluster: true, ClusterName: "Home", TokenName: "home-token", ClusterEndpoints: []ClusterEndpoint{{NodeName: "pmx1", Host: tc.endpointHost, IP: tc.ip, IPOverride: tc.override, Fingerprint: tc.endpointFP}}},
+				{Name: "Home", Host: tc.clusterHost, Fingerprint: tc.clusterFP, IsCluster: true, ClusterName: "Home", TokenName: "home-token", ClusterEndpoints: []ClusterEndpoint{{NodeName: "pmx1", Host: tc.endpointHost, IP: tc.ip, IPOverride: tc.override, Fingerprint: tc.endpointFP}}},
 				{Name: "Hetzner pmx1", Host: tc.standaloneHost, Fingerprint: tc.standaloneFP, TokenName: "standalone-token", GuestURL: "https://standalone.example"},
 			}
 			before := clonePVEInstances(input)
