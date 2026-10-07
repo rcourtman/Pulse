@@ -29,6 +29,10 @@ already an installer dependency; manual updates remain available if its optional
 installation failed. The legacy no-configuration, enabled-timer opt-in and the
 independent disabled-timer gate remain unchanged.
 
+The standalone `scripts/installtests/pulse_auto_update_consent_test.go` remains
+part of the ordinary installer suite and can also run with
+`cd scripts/installtests && go test -race pulse_auto_update_consent_test.go`,
+without the installer package's application imports or local listeners.
 `TestAutoUpdateRequiresCompleteTopLevelConsent` executes the actual shell gate
 against valid and adverse configuration bytes, including padded RC and nested
 opt-in. `TestAutoUpdateConsentKeepsTimerAndParserBoundaries` checks legacy timer
