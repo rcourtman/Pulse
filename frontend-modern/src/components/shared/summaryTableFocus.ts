@@ -1,4 +1,11 @@
-import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  untrack,
+  type Accessor,
+} from 'solid-js';
 import { findInlineDetailElement, revealInlineDetailInViewport } from './contextualFocus';
 import {
   resolveSummaryActiveSeriesId,
@@ -163,13 +170,9 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
     });
   });
 
-  createEffect(() => {
-    const focusedId = normalizeSeriesId(focusedSeriesId());
-    const root = tableRoot();
-    if (!focusedId || !root || typeof window === 'undefined') {
-      return;
-    }
-
+  // Runs inside the reveal effect below with tracking off, so the cleanup it
+  // registers still belongs to that effect run.
+  const revealFocusedSeries = (root: HTMLElement, focusedId: string) => {
     options.revealActiveSeries?.(focusedId);
 
     let settled = false;
@@ -187,6 +190,7 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
       }
       observer?.disconnect();
     };
+    onCleanup(cleanup);
 
     const settleReveal = (remainingFrames: number) => {
       if (settled) {
@@ -254,8 +258,21 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
     timeoutId = window.setTimeout(() => {
       cleanup();
     }, 1200);
+  };
 
-    onCleanup(cleanup);
+  // Reveal once per deliberate focus change. The effect subscribes to the
+  // focused id and table root only: the consumer's reveal callback reads live
+  // table state (group maps, expanded groups) that changes on every update or
+  // collapse, and a re-run would pull the page back to the row or reopen a
+  // group the operator just closed.
+  const revealSeriesId = createMemo(() => normalizeSeriesId(focusedSeriesId()));
+  createEffect(() => {
+    const focusedId = revealSeriesId();
+    const root = tableRoot();
+    if (!focusedId || !root || typeof window === 'undefined') {
+      return;
+    }
+    untrack(() => revealFocusedSeries(root, focusedId));
   });
 
   createEffect(() => {

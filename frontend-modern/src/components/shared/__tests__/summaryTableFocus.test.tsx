@@ -145,6 +145,96 @@ describe('useSummaryPageInteractionState', () => {
     expect(scrollTo).toHaveBeenCalledWith({ top: 456, behavior: 'smooth' });
   });
 
+  it('reveals once per focus change, not when state its reveal callback reads changes', () => {
+    const [focusedSeriesId, setFocusedSeriesId] = createSignal<string | null>('pool-alpha');
+    const groupKeyEntries: Array<[string, string]> = [
+      ['pool-alpha', 'node-a'],
+      ['pool-beta', 'node-b'],
+    ];
+    const [groupKeys, setGroupKeys] = createSignal(new Map(groupKeyEntries));
+    const [expandedGroups, setExpandedGroups] = createSignal(new Set(['node-a']));
+    const scrollTo = vi.fn();
+    const root = document.createElement('div');
+
+    Object.defineProperty(window, 'scrollTo', {
+      configurable: true,
+      value: scrollTo,
+    });
+    vi.stubGlobal('scrollY', 0);
+
+    for (const [index, id] of ['pool-alpha', 'pool-beta'].entries()) {
+      const row = document.createElement('div');
+      const detail = document.createElement('div');
+      row.setAttribute('data-summary-series-id', id);
+      row.getBoundingClientRect = vi.fn(() => buildRect(680 + index * 300, 40));
+      detail.setAttribute('data-inline-detail-for', id);
+      detail.getBoundingClientRect = vi.fn(() => buildRect(724 + index * 300, 220));
+      root.append(row, detail);
+    }
+    document.body.appendChild(root);
+
+    // Mirrors Storage: reopen the focused row's collapsed group.
+    const revealActiveSeries = vi.fn((seriesId: string) => {
+      const groupKey = groupKeys().get(seriesId);
+      if (groupKey && !expandedGroups().has(groupKey)) {
+        setExpandedGroups((current) => new Set(current).add(groupKey));
+      }
+    });
+
+    const { result } = renderHook(() =>
+      useSummaryPageInteractionState({
+        focusedSeriesId,
+        revealActiveSeries,
+      }),
+    );
+
+    result.setTableRootRef(root);
+
+    expect(revealActiveSeries).toHaveBeenCalledTimes(1);
+    const scrollsAfterFocus = scrollTo.mock.calls.length;
+    expect(scrollsAfterFocus).toBeGreaterThan(0);
+
+    // A live update rebuilds the lookup the callback read; focus is unchanged.
+    setGroupKeys(new Map(groupKeyEntries));
+
+    expect(revealActiveSeries).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledTimes(scrollsAfterFocus);
+
+    // The operator collapses the focused row's group, and it stays collapsed.
+    setExpandedGroups(new Set<string>());
+
+    expect(revealActiveSeries).toHaveBeenCalledTimes(1);
+    expect(expandedGroups().has('node-a')).toBe(false);
+
+    setFocusedSeriesId('pool-beta');
+
+    expect(revealActiveSeries).toHaveBeenCalledTimes(2);
+    expect(revealActiveSeries).toHaveBeenLastCalledWith('pool-beta');
+    expect(expandedGroups().has('node-b')).toBe(true);
+    expect(scrollTo.mock.calls.length).toBeGreaterThan(scrollsAfterFocus);
+  });
+
+  it('does not re-reveal when a derived focus accessor recomputes the same id', () => {
+    const [metricIds, setMetricIds] = createSignal(new Map([['row-a', 'pool-alpha']]));
+    const revealActiveSeries = vi.fn();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+
+    const { result } = renderHook(() =>
+      useSummaryPageInteractionState({
+        focusedSeriesId: () => metricIds().get('row-a') ?? null,
+        revealActiveSeries,
+      }),
+    );
+
+    result.setTableRootRef(root);
+    expect(revealActiveSeries).toHaveBeenCalledTimes(1);
+
+    setMetricIds(new Map([['row-a', 'pool-alpha']]));
+
+    expect(revealActiveSeries).toHaveBeenCalledTimes(1);
+  });
+
   it('clears pinned scope when operators click table whitespace on a clear surface', () => {
     const [focusedSeriesId] = createSignal<string | null>('workload-a');
     const clearPinnedScope = vi.fn();

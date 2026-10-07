@@ -4377,7 +4377,26 @@ which reopens a focused pool's collapsed owning group, and a pinned pool-group
 header that sits off-screen scrolls into view through the same bridge. Focus
 only ever names a row in the active pools or disks view, so the callback never
 switches views; the view-switching branches that served the retired jump to
-the active row are gone.
+the active row are gone. Reveal runs once per deliberate focus change: the
+bridge starts a reveal only when the focused series id or the table root
+element changes, and runs the callback and the inline-detail scroll untracked,
+so the storage state the callback reads (the pool-to-group lookup that every
+live update rebuilds, the expanded group set) never starts another. A live
+update therefore cannot pull the page back to an open pool the operator
+scrolled away from, and collapsing the open pool's group does not bounce it
+back open. Filter changes do not re-run the callback either, so a focused
+pool whose row stays filtered out past the reveal's short retry window is not
+revealed when the filter later clears; storage filters live in the URL and a
+storage link without filter parameters resets them, so only a link carrying a
+filter that excludes its own pool reaches that case.
+`frontend-modern/src/components/Storage/useStorageExpansionState.ts` stores
+only the groups the operator collapsed and derives the expanded set from the
+current group keys, so a group that appears later opens by default and a
+collapsed group stays collapsed across live updates until the operator reopens
+it, focus moves to one of its pools, or the grouping changes. Group keys are
+bare labels, so a grouping change clears the collapsed set rather than letting
+a label carry collapse state into another grouping or hide the headerless
+ungrouped `All` group.
 That same reveal contract now also owns inline-detail expansion. When a pool or
 disk row is deliberately focused and its inline detail opens on the storage
 page, the detail row must publish the same canonical summary series ID through

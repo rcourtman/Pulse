@@ -1367,6 +1367,9 @@ describe('shared primitive guardrails', () => {
     expect(summaryTableFocusSource).toContain('findInlineDetailElement');
     expect(summaryTableFocusSource).toContain('revealInlineDetailInViewport');
     expect(summaryTableFocusSource).toContain('MutationObserver');
+    expect(summaryTableFocusSource).toContain(
+      'untrack(() => revealFocusedSeries(root, focusedId))',
+    );
     expect(summaryTableFocusSource).toContain('clearPinnedScope?: () => void;');
     expect(summaryTableFocusSource).toContain('onEscapeClear?: () => void;');
     expect(summaryTableFocusSource).toContain('setClearSurfaceRootRef');

@@ -75,6 +75,8 @@ let wsState: any = {
 const reconnectSpy = vi.fn();
 
 let hookResources: Resource[] = [];
+// Bump to deliver hookResources as a live update to an already rendered page.
+const [hookResourcesVersion, setHookResourcesVersion] = createSignal(0);
 let hookLoading = false;
 let hookError: unknown = undefined;
 let alertsDetectionEnabled = true;
@@ -344,8 +346,12 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
     mutate: vi.fn(),
   }),
   useUnifiedResources: (options?: { cacheKey?: string }) => ({
-    resources: () =>
-      options?.cacheKey === 'storage-page' ? [...nodeResources, ...hookResources] : nodeResources,
+    resources: () => {
+      hookResourcesVersion();
+      return options?.cacheKey === 'storage-page'
+        ? [...nodeResources, ...hookResources]
+        : nodeResources;
+    },
     loading: () => (options?.cacheKey === 'storage-page' ? hookLoading : false),
     error: () => (options?.cacheKey === 'storage-page' ? hookError : undefined),
     refetch: vi.fn(),
@@ -875,6 +881,73 @@ describe('Storage', () => {
       'aria-selected',
       'true',
     );
+  });
+
+  it('does not scroll back to an open pool when a live update rebuilds the pools', async () => {
+    const scrollTo = vi.fn();
+    const originalScrollTo = Object.getOwnPropertyDescriptor(window, 'scrollTo');
+    Object.defineProperty(window, 'scrollTo', { configurable: true, value: scrollTo });
+    hookResources = [
+      buildStorageResource('storage-1', 'Node-Store', 'pve1'),
+      buildStorageResource('storage-2', 'Edge-Store', 'pve2'),
+    ];
+    mockLocationSearch = '?group=node';
+
+    try {
+      render(() => <Storage />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Expand Node-Store' }));
+      await waitFor(() => {
+        expect(document.querySelector('tr[data-inline-detail-for]')).toBeTruthy();
+        expect(scrollTo).toHaveBeenCalled();
+      });
+      // Count only once the reveal's settle frames stop scrolling.
+      let previousScrolls = -1;
+      while (scrollTo.mock.calls.length !== previousScrolls) {
+        previousScrolls = scrollTo.mock.calls.length;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      const scrollsAfterFocus = scrollTo.mock.calls.length;
+
+      hookResources = hookResources.map((resource) => ({ ...resource, lastSeen: Date.now() }));
+      setHookResourcesVersion((version) => version + 1);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(screen.getByRole('button', { name: 'Collapse Node-Store' })).toBeInTheDocument();
+      expect(scrollTo).toHaveBeenCalledTimes(scrollsAfterFocus);
+    } finally {
+      if (originalScrollTo) {
+        Object.defineProperty(window, 'scrollTo', originalScrollTo);
+      }
+    }
+  });
+
+  it('keeps the group of an open pool collapsed across live updates', async () => {
+    hookResources = [
+      buildStorageResource('storage-1', 'Node-Store', 'pve1'),
+      buildStorageResource('storage-2', 'Edge-Store', 'pve2'),
+    ];
+    mockLocationSearch = '?group=node';
+
+    render(() => <Storage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Expand Node-Store' }));
+    await waitFor(() => {
+      expect(document.querySelector('tr[data-inline-detail-for]')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse pve1' }));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(screen.queryByText('Node-Store')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Expand pve1' })).toBeInTheDocument();
+
+    hookResources = hookResources.map((resource) => ({ ...resource, lastSeen: Date.now() }));
+    setHookResourcesVersion((version) => version + 1);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(screen.queryByText('Node-Store')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Expand pve1' })).toBeInTheDocument();
   });
 
   it('clears pinned storage group scope from the content-card header action', async () => {
