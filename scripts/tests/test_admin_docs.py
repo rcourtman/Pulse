@@ -10,11 +10,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
-import stat
 import tempfile
 import unittest
 
-from test_api_auth_docs import ROOT, TEST_TOKEN, exercise_curl, recording_server
+from test_api_auth_docs import (ROOT, TEST_TOKEN, exercise_curl, recording_server,
+                                private_recording_server, request_helper)
 
 
 DOCS = ROOT / "docs"
@@ -44,9 +44,9 @@ EXPECTED = {
     ),
     "AUDIT_LOGGING": (
         ("GET", "/api/audit?limit=50", None),
-        ("GET", "/api/audit?event=login&startTime=2026-01-01T00:00:00Z&endTime=2026-01-31T23:59:59Z&success=false", None),
+        ("GET", "/api/audit?limit=50&event=login&startTime=2026-01-01T00:00:00Z&endTime=2026-01-31T23:59:59Z&success=false", None),
         ("GET", "/api/audit/summary", None),
-        ("GET", "/api/audit/export", None),
+        ("GET", "/api/audit/export?event=login&startTime=2026-01-01T00:00:00Z&endTime=2026-01-31T23:59:59Z", None),
         ("GET", "/api/audit/6b3c9c3c-9a2f-4b3c-9a3b-3d0e8c5c5d45/verify", None),
     ),
     "MULTI_TENANT": (
@@ -61,9 +61,17 @@ def recipes(name: str) -> list[str]:
     for block in re.findall(r"```bash\n(.*?)```", (DOCS / f"{name}.md").read_text(), re.DOTALL):
         # The audit read examples share a fence but are independent operations.
         for step in re.split(r"\n(?=# )", block):
-            if "curl " in step:
+            if "curl " in step or "pulse_api " in step:
                 requests.append(step)
     return requests
+
+
+def executable_recipe(name: str, step: str) -> str:
+    # Use the actual shared helper, not a test-only safe client. Legacy curl
+    # snippets remain executable so the parent control can expose their leak.
+    if name == "AUDIT_LOGGING" and "pulse_api " in step:
+        return request_helper() + "\n" + step
+    return step
 
 
 class AdminDocsTest(unittest.TestCase):
@@ -75,7 +83,11 @@ class AdminDocsTest(unittest.TestCase):
                 for step in steps:
                     self.assertNotRegex(step, r"(?:\b\w*TOKEN=|Authorization:|X-API-Token:|Bearer\s|--cookie\b)")
                     self.assertNotRegex(step, r"(?:--insecure|--verbose|--trace\S*|--location|\s-k\b)")
-                    self.assertIn('curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header"', step)
+                    if name == "AUDIT_LOGGING":
+                        self.assertIn("pulse_api GET ", step)
+                        self.assertNotIn("curl ", step)
+                    else:
+                        self.assertIn('curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header"', step)
                     if re.search(r"--request (POST|PUT)", step):
                         self.assertIn("--data-binary @-", step)
                         self.assertIn("<<'JSON'", step)
@@ -91,7 +103,9 @@ class AdminDocsTest(unittest.TestCase):
         for boundary in ("full-access (`*`)", "bound to an authorised administrator", "cannot be modified or deleted", "self-escalation", "complete list", "URL-encode"):
             self.assertIn(boundary, rbac)
         audit = (DOCS / "AUDIT_LOGGING.md").read_text()
-        for boundary in ("audit:read", "audit_logging", "private directory", "redacted error", "does not reuse filters"):
+        for boundary in ("audit:read", "audit_logging", "private directory", "redacted excerpt", "does not reuse filters",
+                         "in the same Bash session", "not an installed Pulse command", "not list pagination",
+                         "ignores malformed time filters", "partial file", "does not follow redirects or retry"):
             self.assertIn(boundary, audit)
         org = (DOCS / "MULTI_TENANT.md").read_text()
         for boundary in ("session-based user authentication", "403 session_required", "CSRF", "settings:read", "organization binding", "pending invitation", "accept the share", "accessRole"):
@@ -113,7 +127,7 @@ class AdminDocsTest(unittest.TestCase):
                     for step, (method, path, body) in zip(steps, operations):
                         with self.subTest(guide=name, method=method, path=path, header=key), tempfile.TemporaryDirectory(prefix="admin docs ") as temporary:
                             before = len(requests)
-                            result = exercise_curl(self, Path(temporary), f"{key}: {value}", port, step)
+                            result = exercise_curl(self, Path(temporary), f"{key}: {value}", port, executable_recipe(name, step))
                             self.assertEqual(result.returncode, 0, result.stderr.decode())
                             self.assertEqual(len(requests), before + 1, "a copied step sends exactly one request")
                             sent_path, headers, sent_method, sent_body = requests[-1]
@@ -134,28 +148,62 @@ class AdminDocsTest(unittest.TestCase):
                     for step in recipes(name):
                         with self.subTest(status=status, guide=name), tempfile.TemporaryDirectory() as temporary:
                             before = len(requests)
-                            result = exercise_curl(self, Path(temporary), f"X-API-Token: {TEST_TOKEN}", port, step)
+                            result = exercise_curl(self, Path(temporary), f"X-API-Token: {TEST_TOKEN}", port, executable_recipe(name, step))
                             self.assertEqual(result.returncode, 22, result.stderr.decode())
                             self.assertEqual(len(requests), before + 1)
                             self.assertNotIn(b"Saved private export", result.stdout)
                             # curl preserves an error body, in stdout or the requested file.
                             exports = list(Path(temporary).glob("*/audit-export.json"))
-                            output = exports[0].read_bytes() if exports else result.stdout
+                            if name == "AUDIT_LOGGING":
+                                responses = list((Path(temporary) / ".config/pulse").glob("api-response.*"))
+                                self.assertEqual(len(responses), 1)
+                                output = responses[0].read_bytes()
+                                self.assertNotIn(b'{"fixture":true}', result.stdout)
+                            else:
+                                output = exports[0].read_bytes() if exports else result.stdout
                             self.assertIn(b'{"fixture":true}', output)
 
-    def test_audit_export_creates_a_private_new_directory_and_file(self):
-        step = next(step for step in recipes("AUDIT_LOGGING") if "/api/audit/export" in step)
-        with recording_server() as (port, _), tempfile.TemporaryDirectory() as temporary:
+    def test_audit_reads_keep_private_success_bodies_in_new_owner_only_files(self):
+        self.assertEqual(len(recipes("AUDIT_LOGGING")), len(EXPECTED["AUDIT_LOGGING"]))
+        with private_recording_server() as (port, requests), tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
-            for _ in range(2):
-                result = exercise_curl(self, home, f"X-API-Token: {TEST_TOKEN}", port, step)
-                self.assertEqual(result.returncode, 0, result.stderr.decode())
-                output = Path(result.stdout.decode().strip().removeprefix("Saved private export to "))
-                self.assertEqual(output.parent.parent, home)
-                self.assertEqual(stat.S_IMODE(output.parent.stat().st_mode), 0o700)
-                self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o600)
-                self.assertEqual(json.loads(output.read_bytes()), {"fixture": True})
-            self.assertEqual(len(list(home.glob("*/audit-export.json"))), 2)
+            for header in (f"X-API-Token: {TEST_TOKEN}", f"Authorization: Bearer {TEST_TOKEN}"):
+                for step, (method, path, _) in zip(recipes("AUDIT_LOGGING"), EXPECTED["AUDIT_LOGGING"]):
+                    with self.subTest(path=path, header=header.split(":")[0]):
+                        before = len(requests)
+                        result = exercise_curl(self, home, header, port,
+                                               executable_recipe("AUDIT_LOGGING", step), private_response=True)
+                        self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual(len(requests), before + 1)
+                        self.assertEqual((requests[-1][2], requests[-1][0]), (method, path))
+                        self.assertIn(b"HTTP 200", result.stdout)
+            # One already-retained response plus ten distinct new responses.
+            self.assertEqual(len(list((home / ".config/pulse").glob("api-response.*"))), 11)
+
+    def test_audit_reads_keep_private_http_error_bodies_and_fail(self):
+        self.assertEqual(len(recipes("AUDIT_LOGGING")), len(EXPECTED["AUDIT_LOGGING"]))
+        for status in (400, 401, 402, 403, 500, 503):
+            with private_recording_server(status) as (port, requests):
+                for step in recipes("AUDIT_LOGGING"):
+                    with self.subTest(status=status, step=step), tempfile.TemporaryDirectory() as temporary:
+                        before = len(requests)
+                        result = exercise_curl(self, Path(temporary), f"X-API-Token: {TEST_TOKEN}", port,
+                                               executable_recipe("AUDIT_LOGGING", step), private_response=True)
+                        self.assertEqual(result.returncode, 22, result.stderr.decode())
+                        self.assertEqual(len(requests), before + 1)
+                        self.assertIn(f"HTTP {status}".encode(), result.stdout)
+
+    def test_audit_reads_refuse_redirect_success_and_incomplete_transfers(self):
+        self.assertEqual(len(recipes("AUDIT_LOGGING")), len(EXPECTED["AUDIT_LOGGING"]))
+        for status, partial, expected_exit in ((302, False, 1), (200, True, 18)):
+            with private_recording_server(status, partial) as (port, requests):
+                for step in recipes("AUDIT_LOGGING"):
+                    with self.subTest(status=status, partial=partial, step=step), tempfile.TemporaryDirectory() as temporary:
+                        before = len(requests)
+                        result = exercise_curl(self, Path(temporary), f"X-API-Token: {TEST_TOKEN}", port,
+                                               executable_recipe("AUDIT_LOGGING", step), private_response=True)
+                        self.assertEqual(result.returncode, expected_exit, result.stderr.decode())
+                        self.assertEqual(len(requests), before + 1, "must not follow redirects or retry partial reads")
 
 
 if __name__ == "__main__":
