@@ -223,6 +223,9 @@ func TestPaidDomainBoundaryAudit(t *testing.T) {
 		// defaults (the enterprise fork silently drifted and was removed),
 		// internal/api is the canonical home for the report pipeline.
 		"reporting_availability.go": true,
+		// Subject identity/alert enrichment for that same default pipeline.
+		// This exact helper adds no endpoint, entitlement or private import.
+		"reporting_subject_alerts.go": true,
 	}
 
 	for name := range goFiles {

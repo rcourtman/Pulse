@@ -807,7 +807,15 @@ func TestProxmoxDiskAlertOwnerDecisions(t *testing.T) {
 		ref := ProxmoxPhysicalDiskAlertResourceID("lab", tc.node, tc.device)
 		got := registry.proxmoxDiskAlertOwner(ref, map[string]any{MetadataDiskSerial: tc.serial, MetadataDiskWWN: tc.wwn})
 		require.Equal(t, tc.want, got, tc.name)
+		// Reports consume an immutable snapshot, not the live registry. Both
+		// entry points must make the exact same recorded-hardware decision.
+		var snapshot []Resource
+		for _, resource := range registry.resources {
+			snapshot = append(snapshot, *resource)
+		}
+		require.Equal(t, tc.want, ProxmoxPhysicalDiskAlertOwner(ref, map[string]any{MetadataDiskSerial: tc.serial, MetadataDiskWWN: tc.wwn}, snapshot), tc.name)
 	}
+	require.Empty(t, ProxmoxPhysicalDiskAlertOwner("not-a-PVE-reference", map[string]any{MetadataDiskSerial: "ZA1A2B3C"}, nil))
 }
 
 // A read by a PVE disk alert reference reaches the rows owned away from it

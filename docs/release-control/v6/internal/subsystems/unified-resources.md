@@ -5963,7 +5963,15 @@ over the path, and disk alerts are evaluated before their poll's disks reach
 the registry. A binding belongs to the reference string and would carry every
 row and every read of the path to whichever disk held it last. Each lifecycle
 row is owned on its own instead (`proxmoxDiskAlertOwner` in
-`internal/unifiedresources/pve_disk_alert_history.go`). The alert records the
+`internal/unifiedresources/pve_disk_alert_history.go`). The same ownership
+decision is exposed on immutable unified snapshots by
+`ProxmoxPhysicalDiskAlertOwner` for subject reports; the registry and snapshot
+entry points share the implementation, including ambiguity, moved paths,
+identity-less fallback and derived-ID collision checks
+(`TestProxmoxDiskAlertOwnerDecisions`). Reporting admits only the reference's
+canonical health/wearout alert identifiers and keeps resolution-window bounds
+(`TestReportPhysicalDiskAlertsFollowRecordedHardware` in `internal/api`).
+The alert records the
 evaluated disk's serial and WWN (`disk_serial`, `disk_wwn`), and
 `MonitorAdapter.RecordChange` writes the row under the one physical disk the
 registry knows by that hardware identity (`diskinventory.HardwareIdentityMatch`),
