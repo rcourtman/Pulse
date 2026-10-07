@@ -13355,15 +13355,18 @@ func TestContract_MetricsHistoryLivePointOnlyWhileSourceReports(t *testing.T) {
 	setUnexportedField(t, monitor, "metricsStore", store)
 	router := &Router{monitor: monitor}
 
-	// Row status alone cannot tell a lapse from a warning: the stale pass
-	// shows the unreachable node as warning, and the reporting agent's
-	// degraded array gives its merged node the same status.
+	// Preserve the source's own verdict through the stale pass (#2634): a
+	// poller-expired node stays offline, not warning. A reporting degraded
+	// array is warning, an unobserved member is unknown, and a live node stays
+	// online after its linked agent's lease expires. None of those verdicts
+	// turns a retained metric into a newly observed reading.
 	nodeStatus := make(map[string]string)
 	for _, node := range monitor.NodesSnapshot() {
 		nodeStatus[node.ID] = node.Status
 	}
-	if nodeStatus["pve-unreachable"] != "warning" || nodeStatus["pve-raid"] != "warning" || nodeStatus["pve-merged"] != "online" {
-		t.Fatalf("node statuses = %v, want the unreachable and degraded-array nodes as warning and the merged node online", nodeStatus)
+	if nodeStatus["pve-unreachable"] != "offline" || nodeStatus["pve-down"] != "offline" || nodeStatus["pve-unobserved"] != "unknown" ||
+		nodeStatus["pve-raid"] != "warning" || nodeStatus["pve-merged"] != "online" {
+		t.Fatalf("node statuses = %v, want expired/down nodes offline, unobserved unknown, degraded array warning and live merged node online", nodeStatus)
 	}
 
 	history := func(query string) (metricsHistoryResponse, map[string]json.RawMessage) {
