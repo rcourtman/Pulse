@@ -590,6 +590,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 		risk := unifiedresources.StorageRiskFromAssessment(assessment)
 		incidents := incidentAssignments.Pools[strings.TrimSpace(pool.Name)]
 		zfsPool := zfsPoolFromPool(pool)
+		poolStatus := statusFromPool(pool)
 		poolSourceID := scopedPoolSourceID(systemSourceID, pool.Name)
 		records = append(records, unifiedresources.IngestRecord{
 			SourceID:               poolSourceID,
@@ -598,14 +599,19 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 			Resource: unifiedresources.Resource{
 				Type:      unifiedresources.ResourceTypeStorage,
 				Name:      pool.Name,
-				Status:    unifiedresources.IncidentsStatus(statusFromPool(pool), incidents),
+				Status:    unifiedresources.IncidentsStatus(poolStatus, incidents),
 				LastSeen:  collectedAt,
 				UpdatedAt: collectedAt,
 				Metrics: &unifiedresources.ResourceMetrics{
 					Disk: diskMetric(pool.TotalBytes, pool.UsedBytes),
 				},
+				// TrueNAS has no disabled state for an imported pool, so
+				// Enabled is always true; Active follows whether the pool is
+				// usable now.
 				Storage: &unifiedresources.StorageMeta{
 					Type:              "zfs-pool",
+					Enabled:           true,
+					Active:            poolStatus != unifiedresources.StatusOffline,
 					IsZFS:             true,
 					Platform:          "truenas",
 					Topology:          "pool",
@@ -654,6 +660,8 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 				},
 				Storage: &unifiedresources.StorageMeta{
 					Type:       "zfs-dataset",
+					Enabled:    true,
+					Active:     dataset.Mounted && !dataset.Locked,
 					IsZFS:      true,
 					Platform:   "truenas",
 					Topology:   "dataset",
