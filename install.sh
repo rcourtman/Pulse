@@ -628,6 +628,21 @@ stop_pulse_for_replacement() {
     esac
 }
 
+# Called only after a confirmed stop and a failed atomic rename. The previous
+# executable is still in place. An uncertain stop never reaches this recovery,
+# and an intentionally inactive/failed service must not be started for the user.
+recover_pulse_after_failed_replacement() {
+    local service_name="$1"
+    [[ "$PULSE_WAS_ACTIVE" == "true" ]] || return 0
+    if safe_systemctl start "$service_name" && wait_for_service_active "$service_name" 20; then
+        PULSE_WAS_ACTIVE="false"
+        print_info "Previous Pulse binary is running again; the update failed"
+    else
+        print_error "The update failed and the previous Pulse service could not be confirmed running. Check systemctl status $service_name before retrying."
+        return 1
+    fi
+}
+
 # Detect existing service name (pulse or pulse-backend)
 detect_service_name() {
     if [[ "$SERVICE_NAME_EXPLICIT" == "true" ]]; then
@@ -3326,7 +3341,9 @@ install_pulse_archive() {
     local expected_release="${2:-}"
     local signature_path="${archive_path}.sshsig"
     local temp_extract=""
-    local temp_extract2=""
+    local binary_stage=""
+    local version_output=""
+    local service_name=""
     local installed_version=""
     local pulse_binary_path=""
     local target_arch=""
@@ -3356,7 +3373,10 @@ install_pulse_archive() {
         expected_release=$(infer_release_from_archive_name "$archive_path" 2>/dev/null || true)
     fi
 
-    temp_extract=$(mktemp -d /tmp/pulse-extract-XXXXXX)
+    if ! temp_extract=$(mktemp -d /tmp/pulse-extract-XXXXXX); then
+        print_error "Could not prepare archive extraction; Pulse has not been stopped"
+        return 1
+    fi
     # --no-same-owner: do not honor uid/gid stored in the archive (extract as root, owned by root)
     # --no-overwrite-dir: refuse to replace existing directory metadata with archive entries
     if ! tar --no-same-owner --no-overwrite-dir -xzf "$archive_path" -C "$temp_extract"; then
@@ -3384,33 +3404,52 @@ install_pulse_archive() {
         return 1
     fi
 
-    mkdir -p "$INSTALL_DIR/bin"
-
-    if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
-        mv "$INSTALL_DIR/bin/pulse" "$INSTALL_DIR/bin/pulse.old" 2>/dev/null || true
-    fi
-
-    if ! cp "$pulse_binary_path" "$INSTALL_DIR/bin/pulse"; then
-        print_error "Failed to copy new binary to $INSTALL_DIR/bin/pulse"
-        [[ -f "$INSTALL_DIR/bin/pulse.old" ]] && mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
+    # Prepare the final executable on the destination filesystem while the old
+    # service keeps running. Copy/permissions/version failures must not create
+    # an outage, and rename must never expose a partially copied live binary.
+    if ! mkdir -p "$INSTALL_DIR/bin" || ! binary_stage=$(mktemp -d "$INSTALL_DIR/bin/.pulse-stage-XXXXXX"); then
+        print_error "Could not stage the Pulse binary; Pulse has not been stopped"
         rm -rf "$temp_extract"
         return 1
     fi
-
-    if [[ ! -f "$INSTALL_DIR/bin/pulse" ]]; then
-        print_error "Binary installation failed - file not found after copy"
-        [[ -f "$INSTALL_DIR/bin/pulse.old" ]] && mv "$INSTALL_DIR/bin/pulse.old" "$INSTALL_DIR/bin/pulse"
-        rm -rf "$temp_extract"
+    if ! cp "$pulse_binary_path" "$binary_stage/pulse" || ! chmod 755 "$binary_stage/pulse" || ! chown pulse:pulse "$binary_stage/pulse"; then
+        print_error "Could not prepare the Pulse binary; Pulse has not been stopped"
+        rm -rf "$binary_stage" "$temp_extract"
         return 1
     fi
+    if ! version_output=$(timeout 5 "$binary_stage/pulse" --version 2>/dev/null); then
+        print_error "Staged Pulse binary could not report its version; Pulse has not been stopped"
+        rm -rf "$binary_stage" "$temp_extract"
+        return 1
+    fi
+    installed_version=$(printf '%s\n' "$version_output" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || true)
+    if [[ -z "$installed_version" || ( -n "$expected_release" && "$installed_version" != "$expected_release" ) ]]; then
+        print_error "Staged Pulse version ${installed_version:-unknown} does not match ${expected_release:-a release version}; Pulse has not been stopped"
+        rm -rf "$binary_stage" "$temp_extract"
+        return 1
+    fi
+
+    service_name=$(detect_service_name)
+    PULSE_WAS_ACTIVE="false"
+    if ! stop_pulse_for_replacement "$service_name"; then
+        rm -rf "$binary_stage" "$temp_extract"
+        return 1
+    fi
+
+    # Both paths are on the same filesystem. If rename fails the old binary is
+    # untouched; do not move it aside, delete it or re-extract an admitted file.
+    if ! mv -fT "$binary_stage/pulse" "$INSTALL_DIR/bin/pulse"; then
+        print_error "Failed to replace Pulse; the previous binary is unchanged"
+        rm -rf "$binary_stage" "$temp_extract"
+        recover_pulse_after_failed_replacement "$service_name"
+        return 1
+    fi
+    rm -rf "$binary_stage"
 
     install_additional_agent_binaries "$expected_release" "$temp_extract"
     deploy_agent_scripts "$temp_extract"
-
-    chmod +x "$INSTALL_DIR/bin/pulse"
     chown -R pulse:pulse "$INSTALL_DIR"
 
-    rm -f "$INSTALL_DIR/bin/pulse.old"
     print_success "Pulse binary installed to $INSTALL_DIR/bin/pulse"
     install_binary_symlink "$INSTALL_DIR/bin/pulse" "$BINARY_LINK_PATH"
 
@@ -3418,43 +3457,7 @@ install_pulse_archive() {
         cp "$temp_extract/VERSION" "$INSTALL_DIR/VERSION"
         chown pulse:pulse "$INSTALL_DIR/VERSION"
     fi
-
-    installed_version=$("$INSTALL_DIR/bin/pulse" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || echo "unknown")
-    if [[ -n "$expected_release" && "$installed_version" != "$expected_release" ]]; then
-        print_warn "Version verification issue: Expected $expected_release but binary reports $installed_version"
-        print_info "This can happen if the binary wasn't properly replaced. Trying to fix..."
-
-        rm -f "$INSTALL_DIR/bin/pulse"
-        temp_extract2=$(mktemp -d /tmp/pulse-extract2-XXXXXX)
-        if ! tar --no-same-owner --no-overwrite-dir -xzf "$archive_path" -C "$temp_extract2"; then
-            print_warn "Failed to re-extract archive for version verification retry"
-        else
-            pulse_binary_path=$(find_pulse_binary_in_dir "$temp_extract2" 2>/dev/null || true)
-            if [[ -n "$pulse_binary_path" ]]; then
-                cp -f "$pulse_binary_path" "$INSTALL_DIR/bin/pulse"
-            fi
-
-            install_additional_agent_binaries "$expected_release" "$temp_extract2"
-            deploy_agent_scripts "$temp_extract2"
-
-            chmod +x "$INSTALL_DIR/bin/pulse"
-            chown -R pulse:pulse "$INSTALL_DIR"
-        fi
-        rm -rf "$temp_extract2"
-
-        installed_version=$("$INSTALL_DIR/bin/pulse" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || echo "unknown")
-        if [[ "$installed_version" == "$expected_release" ]]; then
-            print_success "Version issue resolved - now running $installed_version"
-        else
-            print_warn "Version mismatch persists. You may need to restart the service or reboot."
-        fi
-    elif [[ -n "$expected_release" ]]; then
-        print_success "Version verified: $installed_version"
-    elif [[ "$installed_version" != "unknown" ]]; then
-        print_success "Version installed: $installed_version"
-    else
-        print_warn "Installed Pulse version could not be verified"
-    fi
+    print_success "Version verified: $installed_version"
 
     restore_selinux_contexts
     rm -rf "$temp_extract"
@@ -3543,15 +3546,8 @@ download_pulse() {
             exit 1
         fi
 
-        # Stage first, then require a confirmed stop before any binary replacement.
-        EXISTING_SERVICE=$(detect_service_name)
-        if ! stop_pulse_for_replacement "$EXISTING_SERVICE"; then
-            if [[ "$archive_from_temp" == "true" ]]; then
-                rm -f "$archive_path" "${archive_path}.sshsig"
-            fi
-            exit 1
-        fi
-
+        # Archive admission and destination staging own the confirmed stop:
+        # local signature/content/architecture/version failures leave Pulse up.
         if ! install_pulse_archive "$archive_path" "$expected_release"; then
             if [[ "$archive_from_temp" == "true" ]]; then
                 rm -f "$archive_path" "${archive_path}.sshsig"
