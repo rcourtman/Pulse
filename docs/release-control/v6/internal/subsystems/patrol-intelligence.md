@@ -1567,17 +1567,18 @@ suppress stale healthy summary headlines such as `Health A · 100/100` even if
 the last summary payload still looks healthy. Legacy `/ai` entry points must
 redirect into that same Patrol-owned shell rather than preserving a second
 canonical route.
-That same browser proof now covers the Patrol control and advanced-settings
-split. The advanced Patrol settings drawer must stay within the desktop
-viewport, avoid duplicating the inline Patrol control policy, expose
-provider/model, schedule, trigger, and user-level model checks directly, and surface
-the backend's concrete license/validation reason when a settings change is
-rejected instead of replacing it with a generic `Failed to save advanced
-settings` toast. That inline failure no longer
-opens Assistant. If it does again, the handoff is model-only explanation
-context: raw command, script, credential, and provider-detail payloads stay
-redacted, Assistant opens with `autonomousMode:false`, and the Patrol control
-panel closes so the operator is not left behind an overlapping popover.
+That same browser proof now covers where Patrol settings are saved. The
+Patrol page has no settings drawer or popover: Patrol schedule, triggers, and
+the Patrol model override live on Settings > Pulse Intelligence > Patrol
+(`Save Patrol settings`), and providers and the shared default model on
+Settings > Provider & Models. A rejected save there raises an error
+notification carrying the backend's concrete license/validation reason
+instead of generic fallback copy, and it offers no Assistant handoff. If a
+Patrol settings popover or an Assistant handoff from a settings failure
+returns, the handoff is model-only explanation context: raw command, script,
+credential, and provider-detail payloads stay redacted, Assistant opens with
+`autonomousMode:false`, and the popover closes so the operator is not left
+behind it.
 Patrol-control save-failure sessions saved by earlier builds keep the
 compatible `handoff_metadata.kind=patrol_configuration_failure` plus only the
 runtime-failure boolean needed for drawer/session presentation, so they restore

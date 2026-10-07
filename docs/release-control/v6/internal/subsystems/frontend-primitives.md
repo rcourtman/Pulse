@@ -3144,33 +3144,30 @@ Agent`), with the plain-language source phrase available through accessible
     operator action or selected Patrol context, uses distinct monitor labels,
     and does not become a nested card, generic dashboard strip, trust summary,
     or duplicate Patrol empty-work list. The
-    Patrol schedule and model drawer is part of that shared
-    feature-presentation boundary: it must stay viewport-bounded, expose an
-    accessible dialog label, keep the four-level control policy on the default
-    Patrol header, and keep provider model, schedule, trigger tuning, and
-    readiness validation inside the secondary disclosure. Backend save rejection reasons must pass
-    through as inline dialog state instead of being replaced with generic toast
-    copy, and that advanced disclosure must open when the inline state exists.
-    When the failure includes
-    Patrol readiness context, the inline state must expose the provider, model,
-    and readiness summary next to a direct provider-settings action instead of
-    hiding that diagnosis behind Assistant alone. The provider-model selector in
-    that popover must stay bound to the shared runtime settings/model catalog
-    even when the popover mounts after async catalog loading, but the full
-    catalog must stay behind an explicit change action so the default advanced
-    drawer leads with the current effective model summary rather than a raw
-    provider route list. A saved direct-provider Patrol model still renders as
-    that model instead of visually falling back to the default selection.
-    Successful provider-model saves that return a not-ready Patrol
-    readiness snapshot must use that same inline surface with `needs attention`
-    wording, and any Assistant handoff from that state describes a saved
-    configuration issue rather than a failed save. When governed fixes are locked, the same Patrol state
-    owner must clear stale full-mode unlock state before persisting the
-    monitor-only autonomy payload, so disabled paid controls cannot leak stale
-    permission into a save. If that inline state opens Assistant, the Patrol
-    feature must hand off
-    a source-named, model-only briefing and close the popover so the shared
-    Assistant drawer is not visually hidden behind feature chrome. When a
+    Patrol page keeps the four-level control policy on its header and has no
+    schedule and model drawer: schedule, trigger tuning, and the Patrol model
+    override live on Settings > Pulse Intelligence > Patrol, and providers and
+    the shared default model on Settings > Provider & Models. Those saves
+    report through the shared notification toasts, not inline state: a
+    rejected save raises an error toast carrying the backend's concrete reason
+    rather than generic fallback copy, and a saved response whose Patrol
+    readiness is not ready or degraded raises a warning toast naming the
+    readiness summary, provider, and model instead of a success toast. On the
+    Patrol page, an on/off save whose response reports Patrol not ready raises
+    a fixed warning toast, and a failed Patrol mode save raises an error toast
+    and restores the previous mode; neither renders inline save-failure state
+    or offers an Assistant handoff. If a Patrol settings popover or inline
+    save-failure state returns, it must stay viewport-bounded, expose an
+    accessible dialog label, bind any model selector to the shared runtime
+    settings and model catalog, show readiness context (provider, model,
+    summary) next to a direct provider-settings action rather than behind
+    Assistant alone, and describe a saved but not ready response as a saved
+    configuration issue rather than a failed save. An Assistant handoff from it
+    must send a source-named, model-only briefing and close the popover so the
+    shared Assistant drawer is not visually hidden behind feature chrome. When
+    governed fixes are locked, the Patrol state owner must clear stale
+    full-mode unlock state before persisting the monitor-only autonomy payload,
+    so disabled paid controls cannot leak stale permission into a save. When a
     restored Patrol assessment session is attached, the shared Assistant drawer
     empty state must
     stay aligned with that source-named briefing and must not render generic

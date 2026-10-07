@@ -62,7 +62,6 @@ import {
   patrolAssistantFindingHandoffRequiresApprovalMode,
   type PatrolAssistantApprovalBriefingInput,
   type PatrolAssistantFindingHandoff,
-  type PatrolConfigurationFailureInput,
 } from './patrolInvestigationContextModel';
 import { schedulePatrolRunAcceptanceReconciliation } from './patrolRunAcceptance';
 
@@ -141,19 +140,6 @@ export const patrolStartFailureMessage = (error: unknown): string =>
     ? `Could not reach Pulse to start Patrol: ${patrolErrorMessage(error, 'network request failed')}`
     : patrolErrorMessage(error, 'Pulse rejected the Patrol run');
 
-const buildReadinessDetails = (
-  readiness: NonNullable<AISettings['patrol_readiness']>,
-): Record<string, string> => {
-  const details: Record<string, string> = {
-    status: readiness.status,
-  };
-  if (readiness.cause?.trim()) details.cause = readiness.cause.trim();
-  if (readiness.summary?.trim()) details.summary = readiness.summary.trim();
-  if (readiness.provider?.trim()) details.provider = readiness.provider.trim();
-  if (readiness.model?.trim()) details.model = readiness.model.trim();
-  return details;
-};
-
 export function resolvePatrolAutonomyLevelForSave(
   level: PatrolAutonomyLevel,
   fullModeUnlocked: boolean,
@@ -184,52 +170,16 @@ export function resolvePatrolAutonomySettingsForSave({
   };
 }
 
-export function buildPatrolSettingsReadinessFailure({
-  settings,
-  message,
-  autonomyLevel,
-  fullModeUnlocked,
-  investigationBudget,
-  investigationTimeoutSec,
-  runtimeState,
-  blockedReason,
-  blockedCause,
-}: {
-  settings: AISettings | null | undefined;
-  message?: string;
-  autonomyLevel?: string;
-  fullModeUnlocked?: boolean;
-  investigationBudget?: number;
-  investigationTimeoutSec?: number;
-  runtimeState?: string;
-  blockedReason?: string;
-  blockedCause?: string;
-}): PatrolConfigurationFailureInput | null {
-  const readiness = settings?.patrol_readiness;
-  if (!readiness || readiness.status !== 'not_ready') return null;
-
-  return {
-    message:
-      message || readiness.summary || 'Patrol settings were saved, but Patrol is not ready to run.',
-    code: 'patrol_readiness_not_ready',
-    status: 409,
-    saved: true,
-    details: buildReadinessDetails(readiness),
-    autonomyLevel,
-    fullModeUnlocked,
-    investigationBudget,
-    investigationTimeoutSec,
-    readiness: {
-      status: readiness.status,
-      cause: readiness.cause,
-      summary: readiness.summary,
-      provider: readiness.provider,
-      model: readiness.model,
-    },
-    runtimeState,
-    blockedReason,
-    blockedCause,
-  };
+/**
+ * A Patrol on/off save whose response reports Patrol not ready was still
+ * saved, so it raises a warning rather than an error.
+ */
+export function getPatrolSavedReadinessWarning(
+  settings: AISettings | null | undefined,
+): string | null {
+  return settings?.patrol_readiness?.status === 'not_ready'
+    ? 'Patrol setting was saved, but Patrol is not ready to run.'
+    : null;
 }
 
 /**
@@ -380,26 +330,6 @@ export function usePatrolIntelligenceState() {
     applyPatrolAISettings(aiRuntimeSettings());
   });
 
-  const surfaceSavedPatrolReadinessIssue = (
-    settings: AISettings | null | undefined,
-    message?: string,
-  ) => {
-    const failure = buildPatrolSettingsReadinessFailure({
-      settings,
-      message,
-      autonomyLevel: autonomyLevel(),
-      fullModeUnlocked: fullModeUnlocked(),
-      investigationBudget: investigationBudget(),
-      investigationTimeoutSec: investigationTimeout(),
-      runtimeState: runtimeState(),
-      blockedReason: blockedReason(),
-      blockedCause: patrolStatus()?.blocked_cause,
-    });
-    if (failure) {
-      notificationStore.warning(failure.message);
-    }
-  };
-
   async function handleTogglePatrol() {
     if (isTogglingPatrol()) return;
     setIsTogglingPatrol(true);
@@ -419,10 +349,10 @@ export function usePatrolIntelligenceState() {
       } else {
         setPatrolEnabledLocal(newValue);
       }
-      surfaceSavedPatrolReadinessIssue(
-        data,
-        'Patrol setting was saved, but Patrol is not ready to run.',
-      );
+      const readinessWarning = getPatrolSavedReadinessWarning(data);
+      if (readinessWarning) {
+        notificationStore.warning(readinessWarning);
+      }
       if (refetchPatrolStatus) {
         refetchPatrolStatus();
       }

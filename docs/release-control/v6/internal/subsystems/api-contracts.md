@@ -4020,12 +4020,16 @@ the authoritative analysis outcome.
    `/api/settings/ai/update` may save a selected Patrol provider/model even
    when that model is not ready for tool-backed Patrol execution, but it must
    echo `patrol_readiness` with stable `cause` metadata and execution routes
-   must continue to fail closed before model calls. Frontend Patrol settings
+   must continue to fail closed before model calls. Frontend settings
    consumers must surface that saved-but-not-ready response as a saved
-   configuration issue with the echoed provider, model, cause, and summary
-   instead of reporting the successful save as a failed save or hiding the
-   readiness blocker behind a generic notification; and the structured
-   investigation-record contract, so unified findings may
+   configuration issue rather than a failed save, and never as inline failure
+   state: every Pulse Intelligence settings page (Provider & Models, Patrol,
+   Assistant, Service context) raises a warning notification naming the echoed
+   summary, provider, and model, while the Patrol page's on/off save raises a
+   fixed not-ready warning and leaves the diagnosis to the page's own readiness
+   surfaces, such as the readiness banner that names the summary, provider,
+   and model while the header offers `Fix setup` when Patrol is active; and
+   the structured investigation-record contract, so unified findings may
    expose `investigation_record` only through the shared
    `aicontracts.InvestigationRecord` payload shape, with frontend API types
    and backend contract tests updated in the same slice as any field change.

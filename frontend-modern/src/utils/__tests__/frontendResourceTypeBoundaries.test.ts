@@ -3610,7 +3610,7 @@ describe('frontend resource type boundaries', () => {
     expect(patrolIntelligenceStateSource).toMatch(
       /import\s*\{[^}]*\bbuildPatrolAssistantFindingHandoffFromUnifiedFinding\b[^}]*\}\s*from '\.\/patrolInvestigationContextModel';/,
     );
-    expect(patrolIntelligenceStateSource).toContain('buildPatrolSettingsReadinessFailure');
+    expect(patrolIntelligenceStateSource).toContain('getPatrolSavedReadinessWarning');
     expect(patrolIntelligenceStateSource).not.toContain('recent_changes?.length');
     expect(patrolIntelligenceStateSource).not.toContain('governed resource${');
     expect(patrolInvestigationContextModelSource).toContain(
