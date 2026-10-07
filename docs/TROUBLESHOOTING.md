@@ -604,8 +604,9 @@ alert was generated, routed or delivered to the intended recipient.
   configured destinations and a successful test do not enable real delivery.
   Turn delivery on there only when you intend to send alerts.
 - Check the affected alert, the destination's **Enabled** state, minimum alert
-  severity and tag filters. Review quiet hours and any mute, acknowledgement or
-  maintenance policy before treating an absent attempt as a transport failure.
+  severity and tag filters. Review the [quiet-hours schedule](CONFIGURATION.md#quiet-hours-and-notification-holds)
+  and any mute, acknowledgement or maintenance policy before treating an absent
+  attempt as a transport failure.
 - Use **Recent delivery activity** to correlate the original alert, destination
   and absolute timestamp, including held-notification reasons. An empty window
   is not proof of healthy delivery; an **unavailable** read is not an empty log.

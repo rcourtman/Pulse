@@ -508,8 +508,42 @@ This tolerance delays activation; it does not disable powered-off monitoring.
 Use the existing guest offline-alert toggle when a guest should never produce
 powered-off alerts.
 
+### Quiet hours and notification holds
+
+Open **Alerts → Schedule → Quiet hours** to enable a notification quiet period.
+Choose the start and end times, an IANA timezone such as `Europe/London`, and
+**Quiet days**. No selected days means no quiet period, even when enabled.
+Times are interpreted in the selected timezone, not your browser's timezone.
+
+Quiet hours hold **non-critical notifications**; they do not stop monitoring,
+clear the alert or confirm recovery. Critical notifications remain eligible
+unless you explicitly select their **Suppress categories** (Performance,
+Storage or Offline). Selecting a category also holds its critical
+notifications, including urgent failures; leave it unchecked when those must
+still reach you. Other routing, mute and delivery policies still apply.
+
+A window can cross midnight. Days refer to the **current local calendar day**:
+with only Monday selected, `22:00`–`06:00` covers Monday's early morning and
+late evening, not Tuesday's early morning. Select Tuesday too if that part of
+the night must be quiet. The configured end minute is included: an end of
+`06:00` remains quiet through `06:00:59`.
+
+Eligible queued notifications are held for re-evaluation when the quiet period
+ends. This is not a promise to send every held item at that instant: current
+alert state, destination settings, other policies and provider failures still
+matter. Use [Recent delivery activity](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing)
+to distinguish a quiet-hours hold from a failed delivery; a settings Test skips
+the queue and does not validate this schedule. Do not create an outage to test
+it.
+
+The example below makes every day quiet from `22:00` through the `06:00` end
+minute in `Europe/London`, while leaving critical categories unsuppressed.
+Quiet hours are **off by default**. This is an illustrative excerpt, not a
+complete `alerts.json`: prefer the UI, and preserve existing rules and settings
+rather than replacing the file with this example.
+
 <details>
-<summary><strong>Manual Configuration (JSON)</strong></summary>
+<summary><strong>Manual Configuration (JSON excerpt)</strong></summary>
 
 ```json
 {
@@ -521,7 +555,22 @@ powered-off alerts.
     "quietHours": {
       "enabled": true,
       "start": "22:00",
-      "end": "06:00"
+      "end": "06:00",
+      "timezone": "Europe/London",
+      "days": {
+        "monday": true,
+        "tuesday": true,
+        "wednesday": true,
+        "thursday": true,
+        "friday": true,
+        "saturday": true,
+        "sunday": true
+      },
+      "suppress": {
+        "performance": false,
+        "storage": false,
+        "offline": false
+      }
     }
   }
 }
