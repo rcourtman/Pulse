@@ -6038,9 +6038,11 @@ func (m *Monitor) syncUnifiedPhysicalDiskMetrics(store ResourceStoreInterface) {
 			Collection:      diskinventory.CloneStatus(resource.PhysicalDisk.Collection),
 			LastChecked:     resource.LastSeen,
 		}
-		if disk.Serial == "" {
-			disk.ID = targetID
-		}
+		// Write under the key readers resolve. PhysicalDiskMetricID keys on a
+		// usable serial or WWN, which the target already equals, and
+		// otherwise on disk.ID, so a placeholder serial must not leave the
+		// canonical resource ID there.
+		disk.ID = targetID
 		// Anchor to the source observation time so a read-side registry rebuild
 		// re-issuing the same snapshot maps to one sample instead of a fresh
 		// wall-clock row (#1966).

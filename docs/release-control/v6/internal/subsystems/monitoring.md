@@ -1690,6 +1690,39 @@ or promote a serial from a stale SMART row it matched by device path.
 Negative percentage-used counters remain unknown; values above 100 clamp to
 exhausted before deriving remaining life, so invalid or over-limit controller
 data cannot wrap into a fabricated healthy value.
+QEMU's default disk serials are placeholders too. A virtual disk configured
+without a serial reports one built from its drive ID or a per-VM counter, the
+same on every VM built the same way: a SCSI disk's udev `ID_SERIAL_SHORT`,
+which Proxmox's `disks/list` passes through as the serial, is `drive-scsi0`
+under Proxmox, `drive-scsi0-0-0-0` under libvirt, and QEMU's automatic drive
+ID for a `-drive` given none (`scsi0-hd0` for `if=scsi`, `none0` for
+`if=none`), and an ATA disk's serial is `QM` plus a five-digit counter.
+`diskinventory.IsUsableHardwareID` rejects exactly those shapes (`drive-scsi`
+plus digits with at most three `-digits` groups, `scsi<n>-hd<n>`, `none<n>`,
+and `QM` plus five digits), so a real serial that only shares a prefix, such
+as `DRIVE-ASSET123` or `QM0001`, stays identity. It also
+strips `naa.`, `eui.`, `wwn-` and `0x` framing before its all-zero and all-F
+test, so `0x0000000000000000` is a placeholder as well. Before this rule every
+node of a nested Proxmox cluster minted one `machine:drive-scsi0` canonical
+disk and one SMART series for its first disk, and all but one node lost that
+disk from inventory (`TestNestedProxmoxDefaultQEMUSerialsStayPerNode`,
+`TestIsUsableHardwareIDRejectsQEMUDefaultDiskSerials`). The TrueNAS provider
+applies the same rule: a disk takes its serial as canonical identity only when
+the serial is usable, and a disk without a usable serial is keyed on its
+source ID by native TrueNAS disk history and by the unified SMART writer for
+disks without a native writer, which is the key the registry's metrics target
+resolves for it. QEMU serials used to be accepted, so those disks shared one
+key. A serial that was already rejected, such as `UNKNOWN`, had the opposite
+problem: native history used TrueNAS's own disk identifier and the writer used
+the canonical resource ID, so neither reached the chart
+(`TestTrueNASPlaceholderDiskSerialsStayPerApplianceAndShareOneHistoryKey`,
+`TestProviderPlaceholderDiskSerialsKeyNeitherIdentityNorHistory`). Upgrade
+effect: a disk reporting one of these values changes canonical ID and SMART
+metric key once. Samples recorded under the old key are not carried over,
+because that key mixed every disk that shared the value. Path-shaped alert
+references (Proxmox disk health and wearout, host-agent SMART) are unaffected;
+anything keyed on the old canonical ID or metric key starts again under the
+new one.
 Proxmox cluster API polling has one configured connection authority: the
 operator-saved `PVEInstance.Host` and its single credential set. Auto-discovered
 member/corosync addresses remain ordered failover candidates and direct
