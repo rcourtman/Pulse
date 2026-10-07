@@ -1,16 +1,21 @@
 package monitoring
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 type issue1595TopologyFixture struct {
@@ -365,5 +370,245 @@ func TestWriteHostSMARTMetricsRecordsOnlyCollectedTemperatures(t *testing.T) {
 		if len(points) != tc.want {
 			t.Fatalf("%s: temperature samples = %d, want %d", tc.disk.Serial, len(points), tc.want)
 		}
+	}
+}
+
+// A SMART row found only by device path may describe the slot's previous
+// occupant. It is refused when its identity contradicts the Proxmox disk's,
+// judged only on what both producers report like for like: WWNs for every
+// disk, serials only where Proxmox's serial is the drive's own, for NVMe and
+// for disks the kernel reaches through libata (vendor "ATA"). A SAS disk's
+// Proxmox serial may be a transport address and a USB bridge's is its own.
+// Reporter spellings of one identity (udev's underscores, a T10 designator
+// ending with the drive serial, the agent's NAA fields, udev's 64-bit NAA 6
+// prefix) are not disagreement.
+func TestHostAgentSMARTMergeRefusesPathMatchAcrossContradictingIdentity(t *testing.T) {
+	type mergeCase struct {
+		name  string
+		disk  models.PhysicalDisk
+		smart models.HostDiskSMART
+		// others are further rows on the same path, which make it ambiguous.
+		others []models.HostDiskSMART
+		merged bool
+		serial string
+	}
+	smartctlSerial := &diskinventory.CollectionStatus{Serial: diskinventory.Available("smartctl")}
+	pveDisk := func(device, vendor, serial, wwn, diskType string) models.PhysicalDisk {
+		return models.PhysicalDisk{
+			ID: "pve1-node1-" + device, Node: "node1", Instance: "pve1", DevPath: "/dev/" + device,
+			Vendor: vendor, Serial: serial, WWN: wwn, Type: diskType, Health: "PASSED",
+		}
+	}
+	smartRow := func(device, serial, wwn, diskType string) models.HostDiskSMART {
+		return models.HostDiskSMART{
+			Device: "/dev/" + device, Serial: serial, WWN: wwn, Type: diskType,
+			Health: "FAILED", Temperature: 47, Collection: diskinventory.CloneStatus(smartctlSerial),
+		}
+	}
+	for _, tc := range []mergeCase{
+		{
+			name:  "SAS replacement beside a stale row with another WWN",
+			disk:  pveDisk("sda", "SEAGATE", "5000c500b0000001", "0x5000c500b0000001", "unknown"),
+			smart: smartRow("sda", "ZR5OLD0001", "naa.5000c500a0000001", "sas"),
+		},
+		{
+			name:  "SATA replacement beside a stale row with another serial",
+			disk:  pveDisk("sdb", "ATA", "WD-NEW0001", "", "hdd"),
+			smart: smartRow("sdb", "WD-OLD0001", "", "sata"),
+		},
+		{
+			name:   "same SAS disk whose agent row has no WWN",
+			disk:   pveDisk("sdc", "SEAGATE", "5000c500a0000003", "0x5000c500a0000003", "unknown"),
+			smart:  smartRow("sdc", "ZR5TESTA0003", "", "sas"),
+			merged: true, serial: "ZR5TESTA0003",
+		},
+		{
+			name:   "same SAS disk renamed, agent WWN in smartctl NAA fields",
+			disk:   pveDisk("sdd", "SEAGATE", "5000c500a0000004", "0x5000c500a0000004", "unknown"),
+			smart:  smartRow("sdx", "ZR5TESTA0004", "5-c50-a0000004", "sas"),
+			merged: true, serial: "ZR5TESTA0004",
+		},
+		{
+			name:   "same disk with udev's spelling of the serial",
+			disk:   pveDisk("sde", "ATA", "WD-WX_1234", "", "hdd"),
+			smart:  smartRow("sde", "WD-WX 1234", "", "sata"),
+			merged: true, serial: "WD-WX_1234",
+		},
+		{
+			name:  "NVMe replacement whose serial looks like a SAS address",
+			disk:  pveDisk("nvme0n1", "", "50026B7282A0FB69", "", "nvme"),
+			smart: smartRow("nvme0n1", "50026B7282A0FB11", "", "nvme"),
+		},
+		{
+			name:  "ambiguous path where only one row contradicts",
+			disk:  pveDisk("sdg", "ATA", "WD-NEW0007", "", "hdd"),
+			smart: smartRow("sdg", "WD-OLD0007", "", "sata"),
+			others: []models.HostDiskSMART{
+				smartRow("sdg", "", "", "sata"),
+			},
+		},
+		{
+			name:   "same disk in a USB enclosure whose serial udev reports",
+			disk:   pveDisk("sdh", "JMicron", "000000000000000F1E2D", "", "usb"),
+			smart:  smartRow("sdh", "WD-WX0008", "", "sata"),
+			merged: true, serial: "000000000000000F1E2D",
+		},
+		{
+			name:   "same SSD in a USB enclosure Proxmox types ssd",
+			disk:   pveDisk("sdj", "ASMT", "00000000000000000009", "", "ssd"),
+			smart:  smartRow("sdj", "S3Z9NB0K123456X", "", "sata"),
+			merged: true, serial: "00000000000000000009",
+		},
+		{
+			name:   "same disk behind a T10 designator ending with its serial",
+			disk:   pveDisk("sdi", "ATA", "ATA_ST4000NM000A-2HZ_ZC1ABCDE", "", "unknown"),
+			smart:  smartRow("sdi", "ZC1ABCDE", "", "sata"),
+			merged: true, serial: "ATA_ST4000NM000A-2HZ_ZC1ABCDE",
+		},
+		{
+			name:   "same NAA 6 volume with udev's 64-bit WWN",
+			disk:   pveDisk("sdf", "HP", "PDNLH0BRH8V0AB", "0x600508b1001c4d5e", "hdd"),
+			smart:  smartRow("sdf", "", "naa.600508b1001c4d5e7f8a9b0c1d2e3f40", "scsi"),
+			merged: true, serial: "PDNLH0BRH8V0AB",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := mergeHostAgentSMARTIntoDisks(
+				[]models.PhysicalDisk{tc.disk},
+				[]models.Node{{Name: "node1", LinkedAgentID: "agent-1"}},
+				[]models.Host{{ID: "agent-1", Sensors: models.HostSensorSummary{
+					SMART: append([]models.HostDiskSMART{tc.smart}, tc.others...),
+				}}},
+			)[0]
+			if !tc.merged {
+				if got.Serial != tc.disk.Serial || got.WWN != tc.disk.WWN || got.Type != tc.disk.Type ||
+					got.Temperature != 0 || got.Health != "PASSED" {
+					t.Fatalf("contradicting row was merged into the disk: %+v", got)
+				}
+				return
+			}
+			if got.Serial != tc.serial || got.Temperature != 47 || got.Health != "FAILED" {
+				t.Fatalf("same disk's row was not merged: serial %q (want %q), temperature %d, health %q",
+					got.Serial, tc.serial, got.Temperature, got.Health)
+			}
+		})
+	}
+}
+
+// Proxmox's disk inventory reports a serial or WWN udev cannot read as the
+// literal "unknown". The poller records it as unreported rather than as a
+// collected serial; the disk's identity keys were already blind to it.
+func TestProxmoxUnknownDiskIdentityIsRecordedAsUnreported(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	state := models.NewState()
+	state.UpdateNodesForInstance("pve1", []models.Node{{
+		ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online", LastSeen: time.Now(),
+	}})
+	alertManager := alerts.NewManager()
+	t.Cleanup(alertManager.Stop)
+	m := &Monitor{
+		state: state, alertManager: alertManager,
+		startTime: time.Now().Add(-time.Hour), lastPhysicalDiskPoll: make(map[string]time.Time),
+	}
+	// A record from before the placeholder was recorded as unreported must
+	// not carry it back in as the disk's last known serial.
+	state.UpdatePhysicalDisks("pve1", []models.PhysicalDisk{{
+		ID:   unifiedresources.ProxmoxPhysicalDiskSourceID("pve1", "node1", "/dev/sdb", "", ""),
+		Node: "node1", Instance: "pve1", DevPath: "/dev/sdb", Serial: "unknown", WWN: "unknown",
+		Collection: &diskinventory.CollectionStatus{Serial: diskinventory.Available("proxmox_disks")},
+	}})
+	client := &slotDiskPVEClient{}
+	client.setDisk(proxmox.Disk{
+		DevPath: "/dev/sdb", Model: "USB3.0 Bridge", Serial: "unknown", WWN: "unknown",
+		Type: "hdd", Health: "PASSED", Wearout: 100, Size: 1000204886016,
+	})
+	started := time.Now()
+	m.maybePollPhysicalDisksAsync(context.Background(), "pve1", &config.PVEInstance{}, client,
+		[]proxmox.Node{{Node: "node1", Status: "online"}}, map[string]string{"node1": "online"}, nil)
+	deadline := started.Add(3 * time.Second)
+	for disks := state.GetSnapshot().PhysicalDisks; len(disks) != 1 || disks[0].LastChecked.Before(started); disks = state.GetSnapshot().PhysicalDisks {
+		if time.Now().After(deadline) {
+			t.Fatal("physical disk poll did not land in state")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	got := state.GetSnapshot().PhysicalDisks[0]
+	if got.Serial != "" || got.WWN != "" {
+		t.Fatalf("placeholder identity recorded as reported: serial %q, wwn %q", got.Serial, got.WWN)
+	}
+	if got.Collection == nil || got.Collection.Serial.State != diskinventory.FieldMissing {
+		t.Fatalf("serial collection = %+v, want missing", got.Collection)
+	}
+	placeholder := got
+	placeholder.Serial, placeholder.WWN = "unknown", "unknown"
+	if unifiedresources.PhysicalDiskMetricID(got) != unifiedresources.PhysicalDiskMetricID(placeholder) {
+		t.Fatalf("metric key moved: %q, was %q",
+			unifiedresources.PhysicalDiskMetricID(got), unifiedresources.PhysicalDiskMetricID(placeholder))
+	}
+}
+
+// The registry joins a Proxmox disk to its linked agent's disk on the same
+// path when the agent reports SAS, because Proxmox puts the SAS address in
+// the serial (#1595). A WWN naming another disk refuses that join: the agent's
+// row may be the slot's previous occupant, retained by a silent agent, and the
+// join used to hand the replacement that disk's serial, readings and canonical
+// resource.
+func TestRegistrySASPathJoinRefusesContradictingWWN(t *testing.T) {
+	const replacementWWN = "0x5000c500bbbb0002"
+	for _, tc := range []struct {
+		name     string
+		agentWWN string
+		joined   bool
+	}{
+		{name: "retained row of the previous occupant", agentWWN: "5-c50-aaaa0001"},
+		{name: "same disk in the agent's WWN spelling", agentWWN: "5-c50-bbbb0002", joined: true},
+		{name: "same disk without an agent WWN", agentWWN: "", joined: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now()
+			node := models.Node{
+				ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online",
+				LastSeen: now, LinkedAgentID: "agent-1",
+			}
+			host := models.Host{
+				ID: "agent-1", Hostname: "node1", LinkedNodeID: "pve1-node1", Status: "online", LastSeen: now,
+				Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+					Device: "/dev/sdb", Serial: "ZR5AGENT0001", WWN: tc.agentWWN, Type: "sas",
+					Health: "FAILED", Temperature: 52,
+					Collection: &diskinventory.CollectionStatus{
+						Serial:      diskinventory.Available("smartctl"),
+						Temperature: diskinventory.Available("smartctl"),
+					},
+				}}},
+			}
+			replacement := models.PhysicalDisk{
+				ID: "pve1-node1--dev-sdb", Node: "node1", Instance: "pve1", DevPath: "/dev/sdb",
+				Serial: strings.TrimPrefix(replacementWWN, "0x"), WWN: replacementWWN, Type: "unknown",
+				Health: "PASSED", Wearout: -1, LastChecked: now,
+			}
+			registry := unifiedresources.NewRegistry(nil)
+			registry.IngestSnapshot(models.StateSnapshot{
+				Nodes: []models.Node{node}, Hosts: []models.Host{host}, PhysicalDisks: []models.PhysicalDisk{replacement},
+			})
+
+			var proxmoxDisk *unifiedresources.Resource
+			disks := registry.ListByType(unifiedresources.ResourceTypePhysicalDisk)
+			for index := range disks {
+				if hasIssue1595Source(disks[index].Sources, unifiedresources.SourceProxmox) {
+					proxmoxDisk = &disks[index]
+				}
+			}
+			if proxmoxDisk == nil || proxmoxDisk.PhysicalDisk == nil {
+				t.Fatalf("no canonical Proxmox disk among %d disks", len(disks))
+			}
+			joined := hasIssue1595Source(proxmoxDisk.Sources, unifiedresources.SourceAgent)
+			if joined != tc.joined || (tc.joined && len(disks) != 1) || (!tc.joined && len(disks) != 2) {
+				t.Fatalf("joined = %v with %d disks, want joined = %v", joined, len(disks), tc.joined)
+			}
+			if !tc.joined && (proxmoxDisk.PhysicalDisk.Serial == "ZR5AGENT0001" ||
+				proxmoxDisk.PhysicalDisk.Temperature != 0 || proxmoxDisk.PhysicalDisk.Health == "FAILED") {
+				t.Fatalf("replacement took the retained row's identity or readings: %+v", proxmoxDisk.PhysicalDisk)
+			}
+		})
 	}
 }

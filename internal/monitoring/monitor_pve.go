@@ -1105,8 +1105,8 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 					DevPath:  disk.DevPath,
 					Model:    disk.Model,
 					Vendor:   disk.Vendor,
-					Serial:   disk.Serial,
-					WWN:      disk.WWN,
+					Serial:   proxmoxReportedDiskIdentity(disk.Serial),
+					WWN:      proxmoxReportedDiskIdentity(disk.WWN),
 					Type:     disk.Type,
 					Size:     disk.Size,
 					Health:   normalizeProxmoxDiskHealth(disk.Health),
@@ -1121,7 +1121,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 					},
 					LastChecked: time.Now(),
 				}
-				if strings.TrimSpace(disk.Serial) != "" {
+				if strings.TrimSpace(physicalDisk.Serial) != "" {
 					physicalDisk.Collection.Serial = diskinventory.Available("proxmox_disks")
 				} else {
 					physicalDisk.Collection.Serial = diskinventory.Missing("proxmox_disks", "disk serial was not reported")
@@ -1218,6 +1218,22 @@ func normalizeProxmoxDiskHealth(health string) string {
 	default:
 		return trimmed
 	}
+}
+
+// proxmoxUnreportedDiskIdentity is what PVE's disk inventory
+// (PVE::Diskmanage) writes into a disk's serial and wwn when udev has none.
+const proxmoxUnreportedDiskIdentity = "unknown"
+
+// proxmoxReportedDiskIdentity records PVE's placeholder for an unreported
+// serial or WWN as empty. Kept verbatim, the placeholder read as a collected
+// serial, so the disk's collection state hid the gap and the linked host
+// agent's serial or WWN never filled it. Identity keys are unaffected:
+// diskinventory.IsUsableHardwareID already rejected the placeholder.
+func proxmoxReportedDiskIdentity(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), proxmoxUnreportedDiskIdentity) {
+		return ""
+	}
+	return value
 }
 
 // physicalDisksFromHostAgentSMART builds PhysicalDisk entries for a node from
@@ -1371,8 +1387,11 @@ func preserveUnavailablePhysicalDiskEvidence(current, previous models.PhysicalDi
 	if current.Collection == nil {
 		return current
 	}
+	// Only an identity is worth keeping: a record from before Proxmox's
+	// "unknown" was recorded as unreported would otherwise restore it.
 	if current.Collection.Serial.State != diskinventory.FieldAvailable &&
-		strings.TrimSpace(current.Serial) == "" {
+		strings.TrimSpace(current.Serial) == "" &&
+		diskinventory.IsUsableHardwareID(previous.Serial) {
 		current.Serial = previous.Serial
 	}
 	if current.Collection.Temperature.State != diskinventory.FieldAvailable &&

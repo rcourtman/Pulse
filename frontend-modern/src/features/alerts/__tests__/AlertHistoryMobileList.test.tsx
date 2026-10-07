@@ -6,6 +6,11 @@ import { aiChatStore } from '@/stores/aiChat';
 import { AlertHistoryMobileList } from '../AlertHistoryMobileList';
 import type { AlertHistoryState } from '../useAlertHistoryState';
 
+// Open rows offer the Assistant investigation, which needs the router.
+vi.mock('@/components/Alerts/InvestigateAlertButton', () => ({
+  InvestigateAlertButton: () => null,
+}));
+
 function createState() {
   const alert = {
     id: 'alert-1',
@@ -136,6 +141,59 @@ describe('AlertHistoryMobileList', () => {
       screen.getByRole('dialog', { name: 'Resource incidents for pve-production-01' }),
     ).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { name: 'Resource incidents' })).toHaveLength(1);
+  });
+
+  it('leads an open threshold alert with its live reading and keeps the breach visible', () => {
+    const { state, setGroupedAlerts } = createState();
+    const observedAt = new Date(Date.now() - 10_000).toISOString();
+    setGroupedAlerts([
+      {
+        label: 'Today (August 4th)',
+        fullLabel: 'Today, August 4th 2026',
+        alerts: [
+          {
+            id: 'minipc::metric-threshold:temperature',
+            source: 'alert',
+            resourceId: 'node-1',
+            resourceName: 'minipc',
+            resourceType: 'node',
+            title: 'Temperature',
+            description: 'Node temperature at 95.0°C',
+            severity: 'warning',
+            status: 'active',
+            duration: '30m',
+            startTime: '2026-08-04T14:30:00.000Z',
+            node: 'minipc',
+            nodeDisplayName: 'minipc',
+            rawAlertType: 'temperature',
+            liveAlert: {
+              type: 'temperature',
+              value: 95,
+              lastSeen: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+              metricStatus: {
+                phase: 'latched',
+                value: 78,
+                unit: '°C',
+                observedAt,
+                trigger: 80,
+                recovery: 75,
+                recoveryDelaySeconds: 300,
+              },
+            },
+          } as never,
+        ],
+      },
+    ]);
+
+    render(() => <AlertHistoryMobileList state={state} />);
+
+    expect(screen.getByText('Temperature 78°C now, back under the 80°C alert level')).toBeVisible();
+    expect(
+      screen.getByText('Stays open until it reaches 75°C or lower and stays there for 5 minutes.'),
+    ).toBeVisible();
+    // A phone has no hover, so the last breach stays on the card.
+    expect(screen.getByText(/^Last reading at or above 80°C: 95°C, /)).toBeVisible();
+    expect(screen.queryByText('Node temperature at 95.0°C')).toBeNull();
   });
 
   it('keeps resource investigation scrolling outside the virtualized history row', async () => {

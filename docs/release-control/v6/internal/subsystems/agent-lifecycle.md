@@ -237,6 +237,17 @@ state; the monitoring readback requires an actual Proxmox source observation.
 This leaves Agent source identity, report admission and command authority
 unchanged. The repeated-cycle regression is
 `TestPhysicalDiskSkippedPollDoesNotPromoteAgentOnlySMARTToPVEInventory`.
+A linked Agent's SMART row that matches a PVE disk only by device path is
+refused when its WWN contradicts the disk's, or its serial does where both
+producers read the drive's own serial (NVMe, and disks presented with SCSI
+vendor `ATA`),
+and the registry's SAS path join refuses a contradicting WWN, so a silent
+Agent's retained row for a swapped-out disk lends the replacement neither its
+serial, and with it the old disk's canonical resource, nor its readings.
+Without comparable identity (a SAS, SCSI or USB replacement with no WWN on one
+side) the row still matches. Report admission and the SMART wire contract are
+unchanged; the regression is
+`TestHostAgentSMARTRowForSwappedOutDiskDoesNotLendItsIdentity`.
 
 Assistant historical metric wiring uses the current monitor's retained store
 and registry metrics coordinates. Historical reads do not alter enrollment,

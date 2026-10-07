@@ -7,6 +7,7 @@ import type {
   AttentionListResponse,
   AttentionSummary,
 } from '@/api/patrolAttention';
+import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 
 const apiMocks = vi.hoisted(() => ({
   getList: vi.fn(),
@@ -477,6 +478,45 @@ describe('PatrolAttentionWorkbench', () => {
       'sm:min-h-0',
     );
     expect(window.location.search).toBe('?attention=record-1');
+  });
+
+  it('keeps the open detail transition, evidence and acknowledgement ages moving', async () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+      now: Date.parse('2026-07-19T08:10:00Z'),
+    });
+    const active = item({ state: 'acknowledged' });
+    const opened = detail(active);
+    opened.timeline[0].at = '2026-07-19T08:03:00Z';
+    opened.evidence[0].observedAt = '2026-07-19T08:05:00Z';
+    opened.operationalRecord.acknowledgement = { by: 'admin', at: '2026-07-19T08:07:00Z' };
+    apiMocks.getList.mockResolvedValue(
+      listResponse([active], summary({ activeCount: 1, acknowledgedCount: 1, calm: false })),
+    );
+    apiMocks.getDetail.mockResolvedValue(opened);
+
+    try {
+      renderWorkbench();
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Open Database VM · Disk pressure' }),
+      );
+      const detailRegion = await screen.findByRole('complementary', {
+        name: 'Database VM · Disk pressure',
+      });
+      await waitFor(() => expect(detailRegion).toHaveTextContent('7m ago'));
+      expect(detailRegion).toHaveTextContent('5m ago');
+      expect(detailRegion).toHaveTextContent('3m ago');
+
+      // The detail is not re-read: its records never change and only the
+      // clock moves.
+      vi.advanceTimersByTime(2 * 60 * 2 * RELATIVE_TIME_TICK_MS);
+
+      expect(detailRegion).not.toHaveTextContent(/[357]m ago/);
+      expect(detailRegion.textContent?.match(/2h ago/g)?.length).toBeGreaterThanOrEqual(3);
+      expect(apiMocks.getDetail).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('keeps the detail header and queue controls pinned while a long decision scrolls', async () => {

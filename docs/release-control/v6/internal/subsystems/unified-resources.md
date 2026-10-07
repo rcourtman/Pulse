@@ -1121,6 +1121,13 @@ for the Physical Disks verdict. The heat reason follows any native TrueNAS
 alert text, and a hot disk's status dot turns warning though its source state
 stays `online`, because phones show only the dot.
 `truenasPageModel.test.ts` and `TrueNASStorageTopologyTable.test.tsx` pin it.
+The Temp column reads the same collection state through
+`getPhysicalDiskTemperaturePresentation`. A disk temperature that is not
+current, such as a host agent's last reading kept on a merged disk row after
+the agent stopped reporting, renders as last known: muted, with its reason as
+the title and screen-reader "last known" text. The Temp sort ranks it as no
+reading, and the tree sort orders each sibling group, so a retained value
+never leads its group hottest first.
 The vSphere Datastores and Networks tables follow the same exception-first
 Health column. `getVmwareDatastoreIssue` and `getVmwareNetworkIssue` return
 nothing for a green row; otherwise the reasons are, in order, an impaired
@@ -5288,6 +5295,48 @@ serial or WWN only inside a compatible physical-disk parent scope; when those
 identifiers are absent or placeholders, host/device/topology fallback identity
 is authoritative. An exact seeded source mapping may be reused after restart
 only when its resource type and parent scope still agree.
+A usable serial or WWN identifies a disk on one machine only, and the canonical
+ID a new disk takes must honour that, not just matching. Dual-ported SAS
+shelves, cloned VMs with an explicit serial, fixed-serial USB bridges and
+TrueNAS systems report one identifier on several machines, and merging them on
+a hardware-keyed ID collision dropped every machine but the last from
+inventory. `physicalDiskIDForMachineLocked` resolves each disk's parent to its
+machine (the nearest host ancestor, so a TrueNAS pool or Unraid array counts as
+its system or host) and treats two disks carrying one identity as different
+machines only on evidence: one reporter placing the identity on two machines
+(for a single-source disk rehydrated without per-source parents, its own
+parent), or differing machines whose hostnames share nothing. Reporters on one
+machine still join across grouping parents and unmerged host resources (the
+TrueNAS API and the agent on that box), and an unknown machine never splits a
+disk. A split (operator exclusion) recorded against any ID the disk can hold,
+unscoped, current or machine-scoped, keeps the observation on its
+source-specific ID, keyed to its machine when another machine's disk already
+holds that ID (agent disk source IDs are the bare serial). Once the identity
+spans machines the unscoped ID no longer names one disk, so a split recorded
+against it applies to every copy, erring towards an extra row rather than a
+merge the operator forbade, and a manual link recorded against it stops
+applying. More than one joinable disk joins none, except that the holder of the
+unscoped ID keeps it. Once an identity spans machines, every copy not split off
+onto its source-specific ID takes the identity keyed to the machine of its
+canonical parent at that point, and the holder of the unscoped ID is re-keyed
+with its source mappings, retired-ID claims and relationship endpoints.
+Machines may be ingested in any order, and the unscoped ID never passes between
+disks that coexist on different machines. A disk only one machine reports keeps
+its unscoped ID, apart from observations an operator split off. Residuals: like
+any serial-keyed ID, the unscoped ID still passes to a same-serial disk that
+appears once the previous holder is gone; a disk's ID changes when a
+same-serial disk first appears on another machine and back when it goes away,
+and alert-history rows owned under the unscoped ID do not follow a re-key; a
+disk two reporters share is scoped to its canonical parent when the identity
+first spans machines, which the fixed ingest order (snapshot sources, then
+supplemental records) and source priority decide; agent SMART and Unraid disk
+source IDs are the bare serial, so same-serial agent disks on different hosts
+share one `SourceAgent` mapping and only the last ingested keeps the agent
+source target; same-serial disks share one metrics history key; and across
+reporters, hostnames that normalize alike (default TrueNAS names, short names
+across domains) still join. `IdentityMatcher` keeps one resource per machine
+ID, so the registry indexes disks by hardware key (`physicalDisksByHardware`)
+to see every copy.
 That same canonical physical-disk view must also expose source-independent host
 context. When a disk is API-backed rather than node-backed, typed views should
 fall back to canonical host identity such as `identity.hostnames` instead of
@@ -6375,6 +6424,22 @@ separate conflicting IDs, devices, hosts and controller members; the linked-disk
 ambiguity test rejects multiple opposite-source candidates in both directions.
 These are synthetic source proofs, not appliance acceptance or a claim about
 which collector produced a reporter's row.
+
+### Linked SAS path join refuses a contradicting WWN
+
+`resolveLinkedPhysicalDisk` falls back to joining a Proxmox disk to its linked
+agent's disk on the same path when the agent reports SAS, because Proxmox may
+report a SAS address as the serial (#1595). That path fallback is refused when
+both sides carry WWNs that name different disks
+(`diskinventory.HardwareIdentityConflict`, under which the agent's NAA field
+spelling equals the Proxmox WWN and udev's 64-bit NAA 6 prefix is no
+conflict): the agent's row may be the slot's previous occupant, retained by a
+silent agent, and the join would hand the replacement that disk's serial,
+readings and canonical resource. A hardware identity match still joins on its
+own, and without a WWN on either side the path fallback stands. The seeded
+source mapping reused after a restart is a separate path this does not cover.
+`TestRegistrySASPathJoinRefusesContradictingWWN` covers the stale row and both
+same-disk shapes; monitoring's SMART merge applies the matching guard first.
 
 ### Drawer tab selection survives a transient snapshot change (#1723)
 

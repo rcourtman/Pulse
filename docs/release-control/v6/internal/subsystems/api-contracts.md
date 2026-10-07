@@ -4859,6 +4859,12 @@ clients must not treat their absence as evidence of stability.
 `frontend-modern/src/api/patrolAttention.ts` (`AttentionFlapping`) and
 `frontend-modern/src/api/patrol.ts` (`FindingFlapping`, `mirrors_alert_*`)
 are the typed client boundary.
+The Patrol page's paused banner, selected-run banner and attention detail
+measure their ages (`blocked_at`, a run's `started_at`, acknowledgement,
+transition and evidence times) from the frontend-primitives shared
+relative-time clock. That is presentation over the same `GET
+/api/ai/patrol/status`, run history and `GET /api/ai/patrol/attention/{id}`
+payloads: no field, request or polling cadence changes.
 
 ### Resource-list facets preserve scoped navigation evidence
 

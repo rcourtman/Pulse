@@ -435,7 +435,7 @@ func TestMergeHostAgentSMARTIntoDisks_PreservesExistingProxmoxIdentity(t *testin
 			DevPath:      "/dev/sdb",
 			Model:        "Proxmox Model",
 			Serial:       "PVE-SERIAL",
-			WWN:          "pve-wwn",
+			WWN:          "0x5000c500a1b2c3d4",
 			Type:         "sas",
 			Size:         100,
 			Health:       "PASSED",
@@ -453,7 +453,7 @@ func TestMergeHostAgentSMARTIntoDisks_PreservesExistingProxmoxIdentity(t *testin
 						Device:      "/dev/sdb",
 						Model:       "Agent Model",
 						Serial:      "AGENT-SERIAL",
-						WWN:         "agent-wwn",
+						WWN:         "5-c50-a1b2c3d4", // the same disk, in smartctl's spelling
 						Type:        "sata",
 						SizeBytes:   200,
 						Temperature: 35,
@@ -466,7 +466,7 @@ func TestMergeHostAgentSMARTIntoDisks_PreservesExistingProxmoxIdentity(t *testin
 	}
 
 	got := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)[0]
-	if got.Model != "Proxmox Model" || got.Serial != "PVE-SERIAL" || got.WWN != "pve-wwn" || got.Type != "sas" {
+	if got.Model != "Proxmox Model" || got.Serial != "PVE-SERIAL" || got.WWN != "0x5000c500a1b2c3d4" || got.Type != "sas" {
 		t.Fatalf("existing Proxmox identity was overwritten: %+v", got)
 	}
 	if got.Size != 100 || got.Temperature != 41 || got.StorageGroup != "api-pool" {

@@ -43,6 +43,15 @@ card's left column (status icon and text) keeps a 16rem floor and the text
 breaks long words, so the action buttons wrap instead of squeezing the reading
 to its longest word beside them.
 
+### History rows read held alerts through the same helper — issue #2068
+
+`AlertHistoryTableAlertRow` and `AlertHistoryMobileList` take their message
+copy from `getAlertHistoryRowCopy` in `features/alerts/alertHistoryModel.ts`,
+which wraps the same `metricAlertPresentation.ts` helper for an active row's
+`liveAlert`. It reads the `useRelativeTimeNow` clock only for rows with a live
+alert, so a reading that stops updating turns stale on screen while closed
+rows never re-render on the tick.
+
 ### Canonical drawer History preserves guest read provenance
 
 The shared resource drawer passes selected memory observation state/source/time
@@ -5240,6 +5249,17 @@ too. Every read of the clock returns the wall clock; the 30-second tick only
 tells readers to re-read, so a cell that mounts between ticks never measures
 from a stale time and a timestamp from the last few seconds never reads as a
 future time.
+The rule has one deliberate exception. The age of a latest reading (last used,
+last seen, last success, last checked) on data the surface reads once and does
+not re-read stays the age at read time, because a moving age over a snapshot
+that never refreshes claims the reading stopped when it may not have. Such a
+surface either re-reads the snapshot in the background, as Proxmox replication
+and the external watchdog panel do, or keeps the read-time age, as the Patrol
+attention detail does for Last seen. The external watchdog panel orders its
+re-reads by request, so a slow or hung read can neither pin it to an older
+snapshot nor overwrite a newer outcome while its ages keep moving. An
+immutable event time (when a delivery was attempted, a transition happened, a
+policy was set) ages correctly over any snapshot and reads the clock.
 Read-only metadata badges follow the same primitive-owned shell rule.
 `frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
 outlined appearances, compact sizing, shape, typed tone vocabulary, fit
@@ -7827,6 +7847,23 @@ When the cell's value is a retained host-agent SMART temperature, it renders
 muted with a dotted underline and screen-reader "last known", as does a
 retained value in the guest card. Tooltip and Thermals rows say "(last known)",
 and the Thermals row carries the collection reason as its title.
+The shared drawer History reads the same decision. For a physical disk,
+`resourceDetailDrawerMetricsHistoryModel.ts` takes the reading from
+`physicalDisk.temperature`, beside the collection state that qualifies it,
+because websocket rows carry no top-level `temperature` for a disk. When that
+state is set and is not `available` (an empty or absent state predates the
+contract and stays current), `getResourceMetricsHistoryCurrentMetrics` offers
+no current `smart_temp`. A positive retained reading then reaches
+`getResourceMetricsHistoryDeferredMetrics` as a deferred metric: with no
+history points the legend says "last known", never "current", and the reason
+renders above the chart.
+TrueNAS disk rows follow it too: the drawer's Temperature row reads
+"(last known)" with the reason as title and no heat tone, and the one-line
+summary leaves a retained reading out because it has no room for the reason.
+The Proxmox outdated sensor setup notice (`features/platformPage/sensorSetup.ts`)
+counts a SATA or SAS disk as having a temperature only when the reading is
+current, so a retained one cannot hide the notice for a disk Pulse cannot read
+now.
 
 The focused browser proofs are
 `frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts`,
