@@ -72,11 +72,19 @@ elif name == 'ps':
     print(os.environ.get(f'PROCESS_{count}', '4321 Sat Oct 3 00:00:00 2026'))
     sys.exit(int(os.environ.get('PS_EXIT', '0')))
 elif name == 'awk':
-    assert args[-1] == '/proc/4321/stat'
-    # comm may contain spaces and right parentheses. Starttime is field 22.
-    ticks = os.environ.get(f'TICKS_{count}', '10000')
-    fixture = root / f'stat-{count}'
-    fixture.write_text('4321 (private ) worker) S ' + ' '.join(['0'] * 18 + [ticks]) + '\\n')
+    if args[-1] == '/proc/4321/io':
+        index = sum(call['name'] == name and call['args'][-1] == args[-1] for call in previous)
+        fixture = root / ('missing' if os.environ.get('IO_MISSING') else f'io-{index}')
+    else:
+        assert args[-1] == '/proc/4321/stat'
+        index = sum(call['name'] == name and call['args'][-1] == args[-1] for call in previous)
+        # comm may contain spaces and right parentheses. Starttime is field 22.
+        ticks = os.environ.get(f'TICKS_{index}', '10000')
+        fixture = root / f'stat-{index}'
+        fixture.write_text('4321 (private ) worker) S ' + ' '.join(['0'] * 18 + [ticks]) + '\\n')
+    if os.environ.get('AWK_EXIT'):
+        print('private permission error', file=sys.stderr)
+        sys.exit(int(os.environ['AWK_EXIT']))
     sys.exit(subprocess.run([os.environ['REAL_AWK'], *args[:-1], str(fixture)]).returncode)
 elif name == 'sudo':
     assert args[0] in ('awk', '-n')
@@ -173,9 +181,11 @@ class PerformanceTroubleshootingDocsTest(unittest.TestCase):
         result, calls = self.exercise("systemd")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual([c["name"] for c in calls],
-                         ["systemctl", "ps", "awk", "date", "sudo", "systemctl", "ps", "awk",
-                          "sleep", "systemctl", "ps", "awk", "date", "sudo", "systemctl", "ps", "awk"])
-        self.assertEqual([c["args"][0:2] for c in calls if c["name"] == "sudo"], [["-n", "awk"]] * 2)
+                         ["systemctl", "ps", "awk", "date", "awk", "systemctl", "ps", "awk",
+                          "sleep", "systemctl", "ps", "awk", "date", "awk", "systemctl", "ps", "awk"])
+        self.assertFalse(any(c["name"] == "sudo" for c in calls))
+        self.assertEqual([c["args"][-1] for c in calls if c["name"] == "awk"],
+                         ["/proc/4321/stat", "/proc/4321/io", "/proc/4321/stat"] * 2)
         for value in (PROCESS_IDENTITY, "start ticks=10000", "write_bytes: 1000",
                       "write_bytes: 13000", "cancelled_write_bytes: 20", "cancelled_write_bytes: 30"):
             self.assertIn(value, result.stdout)
@@ -191,7 +201,7 @@ class PerformanceTroubleshootingDocsTest(unittest.TestCase):
 
     def test_failed_or_empty_identity_does_not_publish_counters(self):
         for settings in ({"SYSTEMCTL_EXIT": "3"}, {"PS_EXIT": "4"}, {"PROCESS_0": ""},
-                         {"TICKS_0": ""}, {"TICKS_0": "bad"}, {"IO_MISSING": "1"}, {"SUDO_EXIT": "5"}):
+                         {"TICKS_0": ""}, {"TICKS_0": "bad"}, {"IO_MISSING": "1"}, {"AWK_EXIT": "5"}):
             with self.subTest(settings=settings):
                 result, calls = self.exercise("systemd", **settings)
                 self.assert_unavailable(result)
@@ -307,10 +317,10 @@ class PerformanceTroubleshootingDocsTest(unittest.TestCase):
                        "not bytes per second", "not a recent sampling window", "different scopes",
                        "inside the Pulse container", "does not make that data a clean", "Do not enable Debug",
                        "remove database indexes", "tmpfs", "Do not post databases", "manually redacted error",
-                       "no partial identity", "no unbounded fallback", "full container ID", "sudo -n"):
+                       "no partial identity", "no unbounded fallback", "full container ID", "does not elevate privileges"):
             self.assertIn(phrase, guide)
         for copied in recipes().values():
-            self.assertNotRegex(copied, r"\b(?:restart|rm|truncate|sqlite3|curl|printenv)\b|--follow|--token|(?:^|[;\n])\s*kill\b")
+            self.assertNotRegex(copied, r"\b(?:sudo|restart|rm|truncate|sqlite3|curl|printenv)\b|--follow|--token|(?:^|[;\n])\s*kill\b")
 
 
 if __name__ == "__main__":

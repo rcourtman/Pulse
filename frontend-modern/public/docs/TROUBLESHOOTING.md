@@ -510,9 +510,10 @@ For a responsive **Linux systemd / Proxmox LXC** install, the following reads
 two process-I/O samples, waiting 60 seconds between them. Run it inside the
 Pulse container for LXC, not on the Proxmox host. Substitute the actual service
 name (`pulse-backend` on some older installs) in both `systemctl` calls. Use an
-account authorised to read the process counters; `sudo -n` must already allow
-this read without prompting. Do not change privileges to make it pass; no
-service restart or database access is needed.
+account already permitted to read the process counters. The collector does not
+elevate privileges or prompt: an unprivileged deadline cannot reliably stop a
+privileged reader. If access is denied, stop rather than changing privileges
+to make it pass; no service restart or database access is needed.
 
 ```bash
 # systemd / Proxmox LXC: bounded process-write samples
@@ -536,7 +537,7 @@ read_sample() {
     END { if (found != 1) exit 1 }
   ' "/proc/$pid/stat")
   timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-  counters=$(sudo -n awk '
+  counters=$(awk '
     $1 == "write_bytes:" || $1 == "cancelled_write_bytes:" {
       if (NF != 2 || $2 !~ /^[0-9]+$/ || seen[$1]++) exit 1
       print; fields++
