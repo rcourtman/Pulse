@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
@@ -978,5 +980,144 @@ func TestPreviousPhysicalDiskEvidenceRejectsSlotMatchAcrossConflictingIdentity(t
 				t.Fatalf("same disk evidence: serial %q (want %q), temperature %d, pool %q", got.Serial, tc.wantSerial, got.Temperature, got.StorageGroup)
 			}
 		})
+	}
+}
+
+// QEMU gives a virtual disk without a configured serial a default one built
+// from its drive ID or a per-VM counter, so every VM built the same way
+// reports the same value. Proxmox's disks/list serial is udev's
+// ID_SERIAL_SHORT, which for a nested Proxmox node's first SCSI disk is
+// "drive-scsi0" on every node. Treated as hardware identity, the registry
+// minted one canonical disk for the whole cluster and every node but one lost
+// its disk from inventory.
+func TestNestedProxmoxDefaultQEMUSerialsStayPerNode(t *testing.T) {
+	now := time.Now()
+	snapshot := models.StateSnapshot{}
+	for _, node := range []string{"pve1", "pve2", "pve3"} {
+		snapshot.Nodes = append(snapshot.Nodes, models.Node{
+			ID: "lab-" + node, Name: node, Instance: "lab", Status: "online", LastSeen: now,
+		})
+		for _, disk := range []struct{ devPath, serial string }{
+			{"/dev/sda", "drive-scsi0"},
+			{"/dev/sdb", "QM00005"},
+			{"/dev/sdc", "drive-scsi0-0-0-1"},
+		} {
+			snapshot.PhysicalDisks = append(snapshot.PhysicalDisks, models.PhysicalDisk{
+				ID:       unifiedresources.ProxmoxPhysicalDiskSourceID("lab", node, disk.devPath, "", ""),
+				Instance: "lab", Node: node, DevPath: disk.devPath, Model: "QEMU HARDDISK",
+				Serial: disk.serial, Type: "hdd", Health: "PASSED", Size: 34359738368, LastChecked: now,
+			})
+		}
+	}
+
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	adapter.PopulateFromSnapshot(snapshot)
+	views := adapter.PhysicalDisks()
+	if len(views) != len(snapshot.PhysicalDisks) {
+		t.Fatalf("canonical physical disks = %d, want %d (one per node and device)", len(views), len(snapshot.PhysicalDisks))
+	}
+	seenSlots := make(map[string]bool, len(views))
+	seenMetricIDs := make(map[string]bool, len(views))
+	for _, view := range views {
+		seenSlots[view.Node()+":"+view.DevPath()] = true
+		seenMetricIDs[view.MetricResourceID()] = true
+	}
+	if len(seenSlots) != len(snapshot.PhysicalDisks) {
+		t.Fatalf("canonical disks cover %d node/device slots, want %d: %v", len(seenSlots), len(snapshot.PhysicalDisks), seenSlots)
+	}
+	if len(seenMetricIDs) != len(snapshot.PhysicalDisks) {
+		t.Fatalf("canonical disks resolve %d metric keys, want one per disk: %v", len(seenMetricIDs), seenMetricIDs)
+	}
+	writerIDs := make(map[string]bool, len(snapshot.PhysicalDisks))
+	for _, disk := range snapshot.PhysicalDisks {
+		writerIDs[unifiedresources.PhysicalDiskMetricID(disk)] = true
+	}
+	if len(writerIDs) != len(snapshot.PhysicalDisks) {
+		t.Fatalf("SMART metric series = %d, want one per disk: %v", len(writerIDs), writerIDs)
+	}
+	for writerID := range writerIDs {
+		if !seenMetricIDs[writerID] {
+			t.Fatalf("SMART writer key %q is not a key readers resolve: %v", writerID, seenMetricIDs)
+		}
+	}
+
+	// The host agent inside each nested node reads the same ATA default
+	// through smartctl.
+	agentIDs := make(map[string]bool, 3)
+	for _, host := range []string{"agent-pve1", "agent-pve2", "agent-pve3"} {
+		agentIDs[unifiedresources.HostSMARTDiskSourceID(models.Host{ID: host}, models.HostDiskSMART{Device: "sdb", Serial: "QM00005"})] = true
+	}
+	if len(agentIDs) != 3 {
+		t.Fatalf("host agent disk source IDs = %v, want one per host", agentIDs)
+	}
+}
+
+// A TrueNAS VM's virtual disks report QEMU's default serial, the same on
+// every appliance built the same way, and other appliances report "UNKNOWN".
+// Neither may merge disks across appliances, and the SMART writer must file
+// history under the key the chart reader resolves, the disk's source ID,
+// rather than under the canonical resource ID.
+func TestTrueNASPlaceholderDiskSerialsStayPerApplianceAndShareOneHistoryKey(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	collectedAt := time.Now().UTC().Truncate(time.Second)
+	var records []unifiedresources.IngestRecord
+	diskCount := 0
+	for _, hostname := range []string{"truenas-a", "truenas-b"} {
+		fixtures := truenas.DefaultFixtures()
+		fixtures.CollectedAt = collectedAt
+		fixtures.System.CollectedAt = collectedAt
+		fixtures.System.Hostname = hostname
+		fixtures.System.MachineID = hostname + "-machine-id"
+		for i := range fixtures.Disks {
+			fixtures.Disks[i].Serial = "drive-scsi" + strconv.Itoa(i)
+		}
+		fixtures.Disks[0].Serial = "UNKNOWN"
+		diskCount += len(fixtures.Disks)
+		records = append(records, truenas.NewProvider(fixtures).Records()...)
+	}
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceTrueNAS: records,
+	})
+	monitor := &Monitor{resourceStore: resourceStore, metricsStore: store}
+	monitor.syncUnifiedPhysicalDiskMetrics(resourceStore)
+
+	disks := 0
+	keys := make(map[string]string, diskCount)
+	for _, resource := range resourceStore.GetAll() {
+		if resource.Type != unifiedresources.ResourceTypePhysicalDisk || resource.PhysicalDisk == nil {
+			continue
+		}
+		disks++
+		target := resourceStore.MetricsTargetForResource(resource.ID)
+		if target == nil || target.ResourceType != "disk" || target.ResourceID == "" {
+			t.Fatalf("disk %s metrics target = %+v", resource.ID, target)
+		}
+		if other, shared := keys[target.ResourceID]; shared {
+			t.Fatalf("disks %s and %s share metric key %q", other, resource.ID, target.ResourceID)
+		}
+		keys[target.ResourceID] = resource.ID
+		if resource.PhysicalDisk.Temperature <= 0 {
+			continue
+		}
+		points, err := store.Query("disk", target.ResourceID, "smart_temp", collectedAt.Add(-time.Minute), time.Now().Add(time.Minute), 0)
+		if err != nil {
+			t.Fatalf("store.Query(%q) error = %v", target.ResourceID, err)
+		}
+		if len(points) == 0 {
+			t.Fatalf("disk %s (serial %q): no SMART history under the reader's key %q", resource.ID, resource.PhysicalDisk.Serial, target.ResourceID)
+		}
+	}
+	if disks != diskCount {
+		t.Fatalf("canonical TrueNAS disks = %d, want %d (one per appliance and device)", disks, diskCount)
 	}
 }

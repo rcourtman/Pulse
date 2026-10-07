@@ -1393,6 +1393,75 @@ func TestProviderPhysicalDiskTemperatureHistoryUsesCanonicalMetricIDs(t *testing
 	}
 }
 
+// A placeholder serial ("UNKNOWN", or QEMU's drive-scsi0 for a TrueNAS VM's
+// virtual disk) names no one disk. The disk must not take it as canonical
+// identity, and its native history must land on the key the registry
+// resolves for it, the disk's source ID, or the chart never finds it.
+func TestProviderPlaceholderDiskSerialsKeyNeitherIdentityNorHistory(t *testing.T) {
+	for _, serial := range []string{"drive-scsi0", "UNKNOWN"} {
+		t.Run(serial, func(t *testing.T) {
+			fixtures := DefaultFixtures()
+			fixtures.Disks[0].Serial = serial
+			diskName := fixtures.Disks[0].Name
+			now := time.Date(2026, 3, 29, 20, 0, 0, 0, time.UTC)
+			fetcher := &controllableStubFetcher{
+				snapshot: &fixtures,
+				diskHistory: map[string][]TimeSeriesPoint{
+					diskName: {
+						{Timestamp: now.Add(-time.Hour), Value: 31},
+						{Timestamp: now, Value: 33},
+					},
+				},
+			}
+			provider := NewLiveProviderForConnection(fetcher, "conn-1")
+			if err := provider.Refresh(context.Background()); err != nil {
+				t.Fatalf("Refresh() error = %v", err)
+			}
+
+			records := provider.Records()
+			registry := unifiedresources.NewRegistry(unifiedresources.NewMemoryStore())
+			registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
+			for _, record := range records {
+				if record.Resource.Type != unifiedresources.ResourceTypePhysicalDisk || record.Resource.Name != diskName {
+					continue
+				}
+				if record.Identity.MachineID != "" {
+					t.Fatalf("placeholder serial %q keyed disk identity %q", serial, record.Identity.MachineID)
+				}
+				// Its canonical ID now follows the source ID, so the
+				// hostname-keyed ID it had before connection scoping
+				// must be listed as superseded, as for a serial-less disk.
+				if len(record.SupersededCanonicalIDs) == 0 {
+					t.Fatalf("placeholder serial %q disk lists no superseded canonical IDs", serial)
+				}
+			}
+			for _, key := range trueNASDiskHistoryLookupKeys(fixtures.Disks[0]) {
+				if key == serial {
+					t.Fatalf("placeholder serial %q routes native history lookups", serial)
+				}
+			}
+			resourceID := ""
+			for _, resource := range registry.List() {
+				if resource.Type == unifiedresources.ResourceTypePhysicalDisk && resource.Name == diskName {
+					resourceID = resource.ID
+				}
+			}
+			target := registry.MetricsTarget(resourceID)
+			if target == nil || target.ResourceID == "" || target.ResourceID == serial {
+				t.Fatalf("metrics target for %s = %+v, want the disk's source ID", diskName, target)
+			}
+
+			history, err := provider.PhysicalDiskTemperatureHistory(context.Background(), 4*time.Hour)
+			if err != nil {
+				t.Fatalf("PhysicalDiskTemperatureHistory() error = %v", err)
+			}
+			if points := history[target.ResourceID]; len(points) != 2 {
+				t.Fatalf("native history under metrics target %q = %+v, history %+v", target.ResourceID, points, history)
+			}
+		})
+	}
+}
+
 func TestProviderSystemMetricHistoryUsesCanonicalAgentMetricIDs(t *testing.T) {
 	fixtures := DefaultFixtures()
 	now := time.Date(2026, 3, 29, 20, 0, 0, 0, time.UTC)
