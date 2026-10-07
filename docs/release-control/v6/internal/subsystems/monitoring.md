@@ -1855,11 +1855,33 @@ a live report or poll already past its mock-mode check when mock mode is
 switched on can still evaluate after that clear, and its alerts can persist
 until mock mode is left.
 
-The fence and the clear are per monitor while the mode is process-wide. A
-tenant monitor other than the one `SetMockMode` was called on neither drains
-nor clears, so fixture alerts it raised outlive the switch as they did before
-the fence; switching mock mode with several tenant monitors running is not
-covered.
+The mode is process-wide while each monitor keeps its own fence, alert manager,
+fixture agents and state, and the server runs one monitor per organization, so
+`SetMockMode` switches every running monitor, whichever tenant's monitor it is
+called on (the mock-mode API calls the requesting tenant's, the demo-fixture
+licence sync the default organization's). `Start` joins a process-wide set of
+running monitors under `mockModeSwitchMu`, and leaves it when its loop returns.
+A switch flips the mode once, then ends each monitor's epoch, waits for its
+admitted calls, clears its alerts, forgets its fixture agents when leaving mock
+mode and resets its state, and only then restarts the mode-dependent runtime of
+each monitor in the set. `Start` sets its runtime context before it joins and
+chooses the mock metrics sampler or discovery while it joins, under the same
+lock, so no switch lands between reading the mode and starting the runtime for
+it, and a switch that reaches a monitor not yet joined leaves the runtime to
+its `Start`. A monitor that missed switches between `New` and `Start` first
+leaves what it holds: `New` records the mode and the number of switches made so
+far, and `Start` compares both, so even a round trip that brought the flag back
+drops the fixture alerts a read path raised meanwhile, as well as the live
+alerts `New` restored outside mock mode. A monitor that is not running is
+switched only when the switch is made through it; a call for the mode the flag
+already holds still moves any reached monitor whose alerts belong to the other
+mode, and leaves the rest alone.
+
+Release builds reach several tenant monitors in mock mode only on an instance
+running `DemoMode` with the `demo_fixtures` entitlement (release
+`ValidateEnablement` refuses mock fixtures otherwise) and with more than one
+organization's monitor running; the licence sync switches only for the
+default organization.
 
 The proofs park a real evaluation at a fixed point, switch modes and release
 it. `TestLeavingMockModeRefusesTheRestOfAnInFlightPass` holds a mock pass at its
@@ -1889,7 +1911,25 @@ previous-state carry returns fixture nodes or guests. All eight are in
 `TestStoreRefreshTakesItsMockModeScopeBeforeReadingState` in
 `internal/monitoring/canonical_guardrails_test.go` rejects a call that reads
 state in an argument ahead of `m.mockModeFence.begin()` and pins the
-end-epoch-then-clear order in `SetMockMode`.
+end-epoch-then-clear order in `endMockModeEpoch`, which `SetMockMode` runs for
+every monitor it reaches.
+
+`TestLeavingMockModeClearsEveryRunningTenantMonitor` and
+`TestEnteringMockModeClearsEveryRunningTenantMonitor` start the default and one
+other tenant monitor through `MultiTenantMonitor`, wait until both have joined,
+raise alerts in both, switch through one of them and check both. Against a
+switch that reached only its own monitor, the default monitor kept its fixture
+alerts (69 to 104 across runs) and all 69 fixture agents after leaving mock
+mode through the other tenant, and that tenant kept its live alert after mock
+mode was entered through the default monitor. `TestMonitorStartedAfterAMockModeSwitchLeavesTheModeItWasBuiltIn`
+fails if `Start` joins without leaving the mode its monitor was built in, and
+`TestSetMockModeAlignsAMonitorWhoseModeTheFlagAlreadyHolds` fails if a call for
+the flag's current mode returns without moving such a monitor, and
+`TestMockModeSwitchLeavesAnUnjoinedMonitorsRuntimeToItsStart` fails if a switch
+starts the runtime of a monitor whose `Start` has not joined, and
+`TestMonitorStartedAfterAMockModeRoundTripDropsWhatItRaisedMeanwhile` fails if
+`Start` compares only the mode. All six are in
+`internal/monitoring/monitor_mock_alerts_test.go`.
 
 The disk evaluation runs on the mock alert tick, not the poller's disk
 interval (five minutes by default, `PhysicalDiskPollingMinutes` per instance).
