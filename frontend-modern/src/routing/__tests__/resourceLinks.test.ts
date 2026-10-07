@@ -39,7 +39,6 @@ import {
   PROXMOX_BACKUPS_DEFAULT_VIEW,
   PROXMOX_DEFAULT_TAB,
   PROXMOX_PATH,
-  RECOVERY_QUERY_PARAMS,
   SETTINGS_API_ACCESS_PATH,
   STANDALONE_DEFAULT_TAB,
   STANDALONE_PATH,
@@ -51,7 +50,6 @@ import {
   buildDockerPath,
   buildDockerRouteSearch,
   buildKubernetesPath,
-  buildRecoveryRouteSearch,
   buildProxmoxPath,
   buildProxmoxBackupsPath,
   buildStandalonePath,
@@ -59,7 +57,6 @@ import {
   buildTrueNASPath,
   buildVmwarePath,
   buildWorkloadsRouteSearch,
-  parseRecoveryLinkSearch,
   parsePatrolAttentionItemId,
   parsePatrolControlStarter,
   parsePatrolOperationsLoopStarter,
@@ -68,6 +65,7 @@ import {
   STORAGE_QUERY_PARAMS,
   WORKLOADS_QUERY_PARAMS,
 } from '@/routing/resourceLinks';
+import * as resourceLinks from '@/routing/resourceLinks';
 
 describe('resource link routing contract', () => {
   it('keeps Patrol links on the canonical Patrol route', () => {
@@ -276,14 +274,20 @@ describe('resource link routing contract', () => {
   });
 
   it('does not expose retired aggregate route builders', () => {
-    const linkExports = {
-      buildWorkloadsRouteSearch,
-      buildStorageRouteSearch,
-      buildRecoveryRouteSearch,
-    };
-    expect(linkExports).not.toHaveProperty('buildWorkloadsPath');
-    expect(linkExports).not.toHaveProperty('buildStoragePath');
-    expect(linkExports).not.toHaveProperty('buildRecoveryPath');
+    expect(resourceLinks).not.toHaveProperty('buildWorkloadsPath');
+    expect(resourceLinks).not.toHaveProperty('buildStoragePath');
+    expect(resourceLinks).not.toHaveProperty('buildRecoveryPath');
+  });
+
+  it('keeps no recovery query serializer after the aggregate Recovery page', () => {
+    // The aggregate Recovery page and its route-state owner were deleted on
+    // 2026-05-26. The Proxmox Backups tab owns its query through
+    // PROXMOX_BACKUPS_QUERY_PARAMS and the TrueNAS Protection tab keeps its
+    // filters out of the URL, so a shared recovery serializer has no reader.
+    expect(resourceLinks).not.toHaveProperty('RECOVERY_QUERY_PARAMS');
+    expect(resourceLinks).not.toHaveProperty('buildRecoveryRouteSearch');
+    expect(resourceLinks).not.toHaveProperty('parseRecoveryLinkSearch');
+    expect(Object.keys(resourceLinks).filter((name) => /recovery/i.test(name))).toEqual([]);
   });
 
   it('builds and parses storage query params', () => {
@@ -336,108 +340,8 @@ describe('resource link routing contract', () => {
     expect(parseStorageLinkSearch('?source=proxmox')).toMatchObject({ source: 'proxmox-pve' });
   });
 
-  it('builds and parses recovery query params', () => {
-    const search = buildRecoveryRouteSearch({
-      view: 'events',
-      platform: 'proxmox-pbs',
-      state: 'stale',
-      stale: '1',
-      range: '7',
-      cluster: 'cluster-main',
-      day: '2026-02-13',
-      namespace: 'tenant-a',
-      mode: 'remote',
-      itemType: 'vm',
-      status: 'failed',
-      verification: 'verified',
-      scope: 'workload',
-      node: 'cluster-main-pve1',
-      query: 'node:pve1',
-    });
-    const url = new URL(search, 'http://localhost/truenas/protection');
-    expect(url.pathname).toBe('/truenas/protection');
-    expect(url.searchParams.get('view')).toBe('events');
-    expect(url.searchParams.get('platform')).toBe('proxmox-pbs');
-    expect(url.searchParams.get('state')).toBe('stale');
-    expect(url.searchParams.get('stale')).toBe('1');
-    expect(url.searchParams.get('range')).toBe('7');
-    expect(url.searchParams.get('cluster')).toBe('cluster-main');
-    expect(url.searchParams.get('day')).toBe('2026-02-13');
-    expect(url.searchParams.get('namespace')).toBe('tenant-a');
-    expect(url.searchParams.get('mode')).toBe('remote');
-    expect(url.searchParams.get('itemType')).toBe('vm');
-    expect(url.searchParams.get('scope')).toBe('workload');
-    expect(url.searchParams.get('status')).toBe('failed');
-    expect(url.searchParams.get('verification')).toBe('verified');
-    expect(url.searchParams.get('node')).toBe('cluster-main-pve1');
-    expect(url.searchParams.get('q')).toBe('node:pve1');
-
-    const parsed = parseRecoveryLinkSearch(search);
-    expect(parsed).toEqual({
-      rollupId: '',
-      view: 'events',
-      platform: 'proxmox-pbs',
-      state: 'stale',
-      stale: '1',
-      range: '7',
-      cluster: 'cluster-main',
-      day: '2026-02-13',
-      namespace: 'tenant-a',
-      mode: 'remote',
-      itemType: 'vm',
-      scope: 'workload',
-      status: 'failed',
-      verification: 'verified',
-      node: 'cluster-main-pve1',
-      query: 'node:pve1',
-    });
-
-    expect(RECOVERY_QUERY_PARAMS.platform).toBe('platform');
-    expect(RECOVERY_QUERY_PARAMS.view).toBe('view');
-    expect(RECOVERY_QUERY_PARAMS.state).toBe('state');
-    expect(RECOVERY_QUERY_PARAMS.stale).toBe('stale');
-    expect(RECOVERY_QUERY_PARAMS.range).toBe('range');
-    expect(RECOVERY_QUERY_PARAMS.cluster).toBe('cluster');
-    expect(RECOVERY_QUERY_PARAMS.day).toBe('day');
-    expect(RECOVERY_QUERY_PARAMS.namespace).toBe('namespace');
-    expect(RECOVERY_QUERY_PARAMS.mode).toBe('mode');
-    expect(RECOVERY_QUERY_PARAMS.itemType).toBe('itemType');
-    expect(RECOVERY_QUERY_PARAMS.scope).toBe('scope');
-    expect(RECOVERY_QUERY_PARAMS.verification).toBe('verification');
-    expect(RECOVERY_QUERY_PARAMS.query).toBe('q');
-
+  it('exposes the mail gateway thresholds path', () => {
     expect(PMG_THRESHOLDS_PATH).toBe('/alerts/thresholds/mail-gateway');
-  });
-
-  it('canonicalizes recovery platform aliases when building and parsing links', () => {
-    expect(buildRecoveryRouteSearch({ platform: 'pbs', mode: 'remote' })).toBe(
-      '?platform=proxmox-pbs&mode=remote',
-    );
-    const parsed = parseRecoveryLinkSearch('?provider=proxmox&mode=local');
-    expect(parsed).toMatchObject({
-      platform: 'proxmox-pve',
-      mode: 'local',
-    });
-    expect(buildRecoveryRouteSearch(parsed)).toBe('?platform=proxmox-pve&mode=local');
-    expect(parseRecoveryLinkSearch('?itemType=proxmox-vm')).toMatchObject({
-      itemType: 'vm',
-    });
-  });
-
-  it('canonicalizes stale-only recovery route flags to the owned query shape', () => {
-    expect(buildRecoveryRouteSearch({ stale: 'true', platform: 'proxmox-pve' })).toBe(
-      '?platform=proxmox-pve&stale=1',
-    );
-    expect(parseRecoveryLinkSearch('?stale=%201%20')).toMatchObject({ stale: '1' });
-  });
-
-  it('preserves explicit recovery chart range values in route state', () => {
-    const search = buildRecoveryRouteSearch({ range: '30', platform: 'proxmox-pve' });
-    const url = new URL(search, 'http://localhost/proxmox/backups');
-    expect(url.pathname).toBe('/proxmox/backups');
-    expect(url.searchParams.get('platform')).toBe('proxmox-pve');
-    expect(url.searchParams.get('range')).toBe('30');
-    expect(parseRecoveryLinkSearch('?range=90')).toMatchObject({ range: '90' });
   });
 
   it('deep-links one stable Patrol attention item without changing the route owner', () => {

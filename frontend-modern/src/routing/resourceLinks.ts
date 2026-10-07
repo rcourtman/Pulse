@@ -1,6 +1,5 @@
 import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { normalizeStorageSourceKey } from '@/utils/storageSources';
-import { normalizeRecoveryItemTypeQueryValue } from '@/utils/recoveryItemTypePresentation';
 import { canonicalizeWorkloadFilterType } from '@/utils/workloads';
 
 export const WORKLOADS_QUERY_PARAMS = {
@@ -108,32 +107,7 @@ export const STORAGE_QUERY_PARAMS = {
   summaryGroup: 'summaryGroup',
 } as const;
 
-export const RECOVERY_QUERY_PARAMS = {
-  rollupId: 'rollupId',
-  view: 'view',
-  platform: 'platform',
-  state: 'state',
-  stale: 'stale',
-  range: 'range',
-  cluster: 'cluster',
-  day: 'day',
-  namespace: 'namespace',
-  mode: 'mode',
-  itemType: 'itemType',
-  scope: 'scope',
-  status: 'status',
-  verification: 'verification',
-  node: 'node',
-  query: 'q',
-} as const;
-
 const normalizeQueryValue = (value: string | null | undefined): string => (value || '').trim();
-const normalizeQueryBooleanFlag = (value: string | null | undefined): string => {
-  const normalized = normalizeQueryValue(value).toLowerCase();
-  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
-    ? '1'
-    : '';
-};
 
 const normalizeWorkloadsType = (value: string | null | undefined): string =>
   canonicalizeWorkloadFilterType(normalizeQueryValue(value));
@@ -177,27 +151,6 @@ type StorageLinkOptions = {
   order?: string | null;
   summaryGroup?: string | null;
 };
-
-type RecoveryLinkOptions = {
-  rollupId?: string | null;
-  view?: string | null;
-  platform?: string | null;
-  state?: string | null;
-  stale?: string | null;
-  range?: string | null;
-  cluster?: string | null;
-  day?: string | null;
-  namespace?: string | null;
-  mode?: string | null;
-  itemType?: string | null;
-  scope?: string | null;
-  status?: string | null;
-  verification?: string | null;
-  node?: string | null;
-  query?: string | null;
-};
-
-const RECOVERY_LEGACY_PLATFORM_QUERY_PARAM = 'provider';
 
 export const parseWorkloadsLinkSearch = (search: string) => {
   const params = new URLSearchParams(search);
@@ -397,73 +350,6 @@ export const buildStorageRouteSearch = (options: StorageLinkOptions = {}): strin
   if (sort) params.set(STORAGE_QUERY_PARAMS.sort, sort);
   if (order) params.set(STORAGE_QUERY_PARAMS.order, order);
   if (summaryGroup) params.set(STORAGE_QUERY_PARAMS.summaryGroup, summaryGroup);
-
-  return serializedRouteSearch(params);
-};
-
-export const parseRecoveryLinkSearch = (search: string) => {
-  const params = new URLSearchParams(search);
-
-  return {
-    rollupId: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.rollupId)),
-    view: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.view)),
-    platform: normalizeSourcePlatformQueryValue(
-      firstNonEmpty([
-        params.get(RECOVERY_QUERY_PARAMS.platform),
-        params.get(RECOVERY_LEGACY_PLATFORM_QUERY_PARAM),
-      ]),
-    ),
-    state: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.state)),
-    stale: normalizeQueryBooleanFlag(params.get(RECOVERY_QUERY_PARAMS.stale)),
-    range: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.range)),
-    cluster: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.cluster)),
-    day: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.day)),
-    namespace: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.namespace)),
-    mode: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.mode)),
-    itemType: normalizeRecoveryItemTypeQueryValue(params.get(RECOVERY_QUERY_PARAMS.itemType)),
-    scope: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.scope)),
-    status: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.status)),
-    verification: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.verification)),
-    node: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.node)),
-    query: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.query)),
-  };
-};
-
-export const buildRecoveryRouteSearch = (options: RecoveryLinkOptions = {}): string => {
-  const params = new URLSearchParams();
-  const rollupId = normalizeQueryValue(options.rollupId);
-  const view = normalizeQueryValue(options.view);
-  const platform = normalizeSourcePlatformQueryValue(options.platform);
-  const state = normalizeQueryValue(options.state);
-  const stale = normalizeQueryBooleanFlag(options.stale);
-  const range = normalizeQueryValue(options.range);
-  const cluster = normalizeQueryValue(options.cluster);
-  const day = normalizeQueryValue(options.day);
-  const namespace = normalizeQueryValue(options.namespace);
-  const mode = normalizeQueryValue(options.mode);
-  const itemType = normalizeRecoveryItemTypeQueryValue(options.itemType);
-  const scope = normalizeQueryValue(options.scope);
-  const status = normalizeQueryValue(options.status);
-  const verification = normalizeQueryValue(options.verification);
-  const node = normalizeQueryValue(options.node);
-  const query = normalizeQueryValue(options.query);
-
-  if (rollupId) params.set(RECOVERY_QUERY_PARAMS.rollupId, rollupId);
-  if (view) params.set(RECOVERY_QUERY_PARAMS.view, view);
-  if (platform) params.set(RECOVERY_QUERY_PARAMS.platform, platform);
-  if (state) params.set(RECOVERY_QUERY_PARAMS.state, state);
-  if (stale) params.set(RECOVERY_QUERY_PARAMS.stale, stale);
-  if (range) params.set(RECOVERY_QUERY_PARAMS.range, range);
-  if (cluster) params.set(RECOVERY_QUERY_PARAMS.cluster, cluster);
-  if (day) params.set(RECOVERY_QUERY_PARAMS.day, day);
-  if (namespace) params.set(RECOVERY_QUERY_PARAMS.namespace, namespace);
-  if (mode) params.set(RECOVERY_QUERY_PARAMS.mode, mode);
-  if (itemType) params.set(RECOVERY_QUERY_PARAMS.itemType, itemType);
-  if (scope) params.set(RECOVERY_QUERY_PARAMS.scope, scope);
-  if (status) params.set(RECOVERY_QUERY_PARAMS.status, status);
-  if (verification) params.set(RECOVERY_QUERY_PARAMS.verification, verification);
-  if (node) params.set(RECOVERY_QUERY_PARAMS.node, node);
-  if (query) params.set(RECOVERY_QUERY_PARAMS.query, query);
 
   return serializedRouteSearch(params);
 };

@@ -3200,9 +3200,10 @@ in the same pass. The K8s Namespaces and Deployments drawer "Open Pods" /
 route to `/kubernetes/workloads` rather than building
 retired aggregate workload URLs; the legacy context/namespace query filter
 does not carry forward because the new Kubernetes Workloads tab does not
-consume those parameters. Workloads, storage, and recovery route-state helpers
-in `frontend-modern/src/routing/resourceLinks.ts` now serialize query state
-only; the owning platform/runtime route supplies the pathname. New drawer or
+consume those parameters. The workloads and storage route-state helpers in
+`frontend-modern/src/routing/resourceLinks.ts` serialize query state only, and
+the owning platform/runtime route supplies the pathname; the recovery
+serializer was deleted once nothing read it. New drawer or
 correlation surfaces must anchor on platform routes (or stay-in-place drawer
 expansion) instead of resurrecting the retired top-level paths.
 The Proxmox Backups route-state vocabulary includes the opaque `location`
@@ -3224,8 +3225,9 @@ recreate raw labelled `<select>` controls for those filters locally.
 The Proxmox platform page is a route-level consumer of canonical unified
 resources, not a new resource source. It filters the existing resource snapshot
 to Proxmox VE, Backup Server, Mail Gateway, storage, disk, and workload rows,
-then composes the existing Workloads, Storage, Recovery, and infrastructure
-table owners. Proxmox host row version, uptime, temperature, CPU, memory, disk,
+then composes the existing Workloads and Storage surfaces, its own Backups
+tab tables, and the infrastructure table owners; no Recovery surface exists to
+compose. Proxmox host row version, uptime, temperature, CPU, memory, disk,
 network I/O, and disk I/O presentation must derive from canonical resource
 facets and the shared `nodeFromResource` adapter; platform pages must not
 rebuild resource identity, merge policy, or metric-target inference locally.
@@ -4783,32 +4785,30 @@ canonical workload identity (`<instance>:<node>:<vmid>`) in the shared
 `resource` query rather than an opaque unified-resource id, so direct route
 loads and cross-surface drill-downs reopen the correct workload drawer instead
 of landing on an unselected table state.
-That same routing contract now also owns recovery route-state vocabulary for
-unified resources without restoring the retired `/recovery` top-level route.
-Infrastructure drawers and other cross-surface consumers must carry canonical
-`platform` and `node` query state into an owning platform/runtime route instead
-of rebuilding drawer-local recovery links, assuming only PBS services can
-expose recovery handoffs from infrastructure, or sending operators to a
-standalone aggregate workspace URL.
-When shared recovery links include protected-inventory posture, they must use
-the recovery-owned `state` query instead of overloading event `status`. Event
-outcome `status` remains recovery-history state, and compatibility input such
-as legacy `stale=1` must be normalized by the recovery route owner before
-cross-surface links are rebuilt.
-That same shared routing boundary now also owns alert-investigation handoffs.
-Resource-incident panels and other alert-side resource drill-down consumers
-must route operators back through canonical infrastructure resource detail and
-then into platform-owned workload, storage, and recovery surfaces via
-`frontend-modern/src/routing/resourceLinks.ts` route-state vocabulary, instead
-of treating alert investigation as a provider-local dead end, freezing
-per-surface route strings outside the unified-resource contract, or reviving
+Unified resources carry no recovery route-state vocabulary. The recovery
+query serializer (`RECOVERY_QUERY_PARAMS`, `parseRecoveryLinkSearch`,
+`buildRecoveryRouteSearch`) was deleted from
+`frontend-modern/src/routing/resourceLinks.ts` after the aggregate Recovery page
+that read it went on 2026-05-26, and the protected-inventory `state`, event
+`status`, and legacy `stale=1` rules went with it. Infrastructure drawers and
+other cross-surface consumers that expose recovery context must land in the
+owning platform tab (the Proxmox Backups tab or the TrueNAS Protection tab)
+instead of rebuilding drawer-local recovery links, assuming only PBS services
+can expose recovery from infrastructure, or sending operators to a standalone
+aggregate workspace URL.
+Alert investigation offers no resource cross-jump links. The
+resource-incident panel names its resource through the unified-resource lookup
+and links to no other surface (its Pulse Assistant handoff aside): its
+cross-jump chips were retired on 2026-05-16, and an alert card's single
+resource link opens the owning platform page. Alert-side consumers must not freeze
+per-surface route strings outside the unified-resource contract or revive
 retired aggregate workspace URLs.
-That same routing contract also owns Patrol finding handoffs. Expanded
-Patrol-finding rows and scoped-run finding snapshots must resolve the backing
-unified resource and surface the same platform-owned workload/storage/recovery
-route-state vocabulary there, including exact workload and physical-disk route
-state when the selected resource is itself the workload or disk, instead of
-stopping at finding text, rebuilding patrol-local route strings, or reviving
+Patrol findings stay in place the same way: expanded Patrol-finding rows
+carry the finding's own primary action and manual controls rather than
+surface-link chips, and
+`frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts` keeps
+`buildResolvedResourceSurfaceLinks` and `useResources()` out of the panel. A
+future finding handoff must not rebuild patrol-local route strings or revive
 retired aggregate workspace URLs.
 That drawer shell now routes its canonical timeline filter, facet-bundle, and
 resource-intelligence state through
@@ -5672,50 +5672,14 @@ contract for reporting/ignored infrastructure state; future settings-row
 grouping or reporting-surface scope changes must be routed through that backend
 projection instead of teaching the frontend to reinterpret raw resource facets
 or removed-runtime arrays locally.
-Canonical route-state helpers must also preserve recovery-specific drill-down
-state when they serialize governed resource views. Recovery timeline day
-selection is part of the durable route-state contract, so recovery query state
-must round-trip the selected day inside an owning platform/runtime route
-instead of dropping it as transient local UI state or restoring `/recovery`.
-The same recovery route-state contract also applies to the selected timeline
-range: canonical recovery query state must preserve explicit non-default chart
-windows such as `7d`, `90d`, and `1y` so recovery drill-down transport does
-not widen back to the default `30d` window on reload or shared navigation.
-That same shared recovery route-state contract also owns the primary recovery
-workspace selection. When an operator explicitly switches between protected
-items and recovery events, canonical recovery query state must round-trip that
-`view` selection unless the active `rollupId` or selected day already implies
-the default recovery-events workspace.
-That same shared recovery route helper contract now also owns canonical
-protected-inventory posture encoding. Visible recovery inventory filters must
-round-trip through the owned `state=<value>` query form instead of leaking ad
-hoc booleans, overloading event `status`, or disappearing from shared links on
-reload. Legacy `stale=1` may be parsed only as compatibility input that
-rewrites to canonical inventory state.
-That same route-state contract now also owns the canonical recovery `itemType`
-query. Recovery query state must round-trip a provider-neutral item category
-such as `vm`, `dataset`, or `pvc`, and
-`frontend-modern/src/routing/resourceLinks.ts` may canonicalize provider-native
-aliases like `proxmox-vm` into that shared vocabulary during parse/build, but
-recovery route state must not drift back to raw platform-specific
-`subjectType` values in shared navigation.
-That same route-state contract also owns the canonical recovery `platform`
-query. Recovery query state must emit `platform=<owned-source-key>` as the
-shared operator-facing shape, while accepted legacy `provider` aliases may be
-parsed only as compatibility input that rewrites back to canonical platform
-route state. `frontend-modern/src/routing/resourceLinks.ts` must not keep
-legacy `provider` as a first-class build option once parse-time compatibility
-has converted it back to canonical recovery route state.
-Recovery-linked consumers that decode `/api/recovery/*` payloads must likewise
-prefer canonical `platform` / `platforms` response fields over legacy
-`provider` aliases, so unified resource drill-downs and shared recovery links
-carry the same platform vocabulary on both route and payload boundaries.
-That same shared drill-down contract also owns which primary recovery workspace
-an upstream surface is targeting. Infrastructure service links that open
-platform-level recovery activity must emit canonical recovery route state with
-`view=events` inside an owning platform/runtime destination instead of
-inheriting the inventory default, and those entry links should describe the
-destination as recovery events rather than platform-specific backup wording.
+No shared helper serializes recovery drill-down state any more: the
+recovery timeline day, chart range, workspace `view`, inventory `state`,
+`itemType`, and `platform` route-state rules served the deleted aggregate
+Recovery page. The Proxmox Backups tab owns its own day selection through
+`PROXMOX_BACKUPS_QUERY_PARAMS.day`; its chart range is component state. Readers
+of `/api/recovery/*` payloads must still prefer canonical `platform` /
+`platforms` response fields over legacy `provider` aliases, which
+`frontend-modern/src/utils/recoveryPlatformModel.ts` rewrites at decode time.
 Shared API consumers now also depend on a single registry-list snapshot per
 request when deriving canonical type aggregations for resource list and stats
 responses. Re-reading `registry.List()` for the same `/api/resources` request

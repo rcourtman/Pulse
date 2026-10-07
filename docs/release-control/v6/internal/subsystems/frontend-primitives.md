@@ -2635,7 +2635,7 @@ not a replacement status card, CTA band, or page-local nested card.
    drifting off-screen from page-local flex behavior. The shared action rail
    must align to the trailing edge at wrapped desktop widths and remain
    separate from the filter-control wrap zone instead of waiting for a wide
-   breakpoint, so Recovery events, Workloads, Storage, Infrastructure, and
+   breakpoint, so Workloads, Storage, Infrastructure, and
    future dense toolbars do not strand Filter/Columns/Reset actions as an
    isolated second-row fragment. Shared `FilterToolbarPanel` owns
    default filter-popover geometry, and `FilterToolbar` owns the shared chart
@@ -4469,10 +4469,13 @@ and `getActiveTabForPath` matcher must not recognize aggregate workspace URLs
 as owned shell destinations. New palette commands and shortcut chords must
 flow through the same shell owners; do not reintroduce hidden platform
 families or retired top-level aggregate routes by reanimating legacy paths.
-The shared route-state helpers follow the same boundary: workload, storage,
-and recovery helpers in `frontend-modern/src/routing/resourceLinks.ts` may
-build query strings for an already-owned platform/runtime route, but must not
-export pathname builders for `/workloads`, `/storage`, or `/recovery`.
+The shared route-state helpers follow the same boundary: the workload and
+storage helpers in `frontend-modern/src/routing/resourceLinks.ts` may build
+query strings for an already-owned platform/runtime route, but must not export
+pathname builders for `/workloads`, `/storage`, or `/recovery`. The module
+exports no recovery query serializer: the Proxmox Backups tab owns its query
+through `PROXMOX_BACKUPS_QUERY_PARAMS`, and the TrueNAS Protection tab keeps
+its search, status filter, and sort out of the URL.
 
 The shared table chrome now allows `TableCardHeader` to expose a right-aligned
 action slot, currently used by the Workloads/Proxmox metric display control.
@@ -5958,8 +5961,8 @@ pages that need workspace tabs or count chips next to search should route that
 through the shared `searchLeading` slot instead of recreating a second local
 header strip above the control bar.
 
-Pages that filter a list-of-resources surface (Infrastructure, Workloads,
-Storage, Recovery Protection coverage, Recovery events) compose the chip-based
+Pages that filter a list-of-resources surface (Workloads, Storage, and the
+Proxmox Backups tab) compose the chip-based
 `frontend-modern/src/components/shared/FilterBar/FilterBar.tsx` shell instead
 of `PageControls`. Each page declares a `FilterDef[]` catalog (label, options,
 value, defaultValue, group); `FilterBar` renders chips for active filters and
@@ -5975,9 +5978,9 @@ than passing an empty conditional wrapper that leaves a dead View trigger.
 Contextual frequent actions may use `leadingControls`, while table counters,
 active trend ranges, and other persistent orientation readouts may use
 `trailingControls`. Platform tables inherit the same ownership through
-`PlatformTableToolbar`. Recovery is event-first and does not use equal
-workspace subtabs for protected rollups versus event history; Storage subtabs
-(Pools / Physical Disks) sit above the bar as navigation, not filters.
+`PlatformTableToolbar`. View switches sit above the bar as navigation, not
+filters: the Proxmox Backups tab's `By date` / `Coverage` `PlatformSectionTabs` and
+the Storage subtabs (Pools / Physical Disks).
 `FilterBar` owns committed infrastructure search terms as removable pills,
 separate from its consumer-owned structured `FilterDef` chips. An exact
 infrastructure completion or a recognized abbreviated query clears the draft
@@ -6270,7 +6273,7 @@ an absent list as an empty audit history.
 That shared filter-option primitive is also the canonical owner for default
 `All <scope>` option wording wherever a product surface exposes filter selects
 or segmented filter choices. Workloads filters, storage source
-filters, recovery history and platform/type filters, Kubernetes namespace
+filters, Kubernetes namespace
 drawers, resource-change timeline filters, and alert configuration options must
 call `frontend-modern/src/components/shared/filterOptionPresentation.ts` through
 their nearest presentation/model owner instead of hard-coding page-local `All
@@ -6365,18 +6368,13 @@ landing fallback. Shared desktop and mobile navigation must tolerate a missing
 active tab for those paths while still highlighting canonical active routes
 such as Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Machines, Alerts,
 Patrol, and Settings.
-The recovery feature shell now also depends on the shared
-`frontend-modern/src/components/shared/Subtabs.tsx` primitive for its primary
-protected-items versus recovery-events workspace switch. The recovery lane may
-own the active view and route-state semantics, but the top-level tab framing
-must stay on the canonical shared subtabs control instead of reviving a
-recovery-local switcher pattern. When recovery embeds that switcher inside the
-page shell, it should follow the same ordering already used by storage: shared
-subtabs row first, shared controls card second, and data card after that. The
-contained styling should come from the same canonical subtabs shell, list, and
-button class treatment already used by established Pulse surfaces rather than
-from a recovery-only variant boundary, adjacent chip row, or recovery-local
-filter-row embedding.
+Recovery has no workspace switch of its own: the protected-items versus
+recovery-events `Subtabs` switch left with the aggregate Recovery page on
+2026-05-26. The Proxmox Backups tab switches between `/proxmox/backups/date`
+and `/proxmox/backups/coverage` through the shared `PlatformSectionTabs`
+row above its `FilterBar`, and the TrueNAS Protection tab is a single table.
+A future recovery view switch belongs on those platform-page primitives, not
+on a recovery-local switcher, chip row, or filter-row embedding.
 The shared table primitives now also need to preserve caller-owned separator
 styling. `TableHeader` and `TableBody` may provide canonical default borders
 and dividers, but when a caller supplies explicit border or divide classes the
@@ -6397,63 +6395,38 @@ That same shared table boundary now owns CSP-safe fill rendering for metric
 bars: `frontend-modern/src/components/shared/ProgressBar.tsx` must render fill
 width through DOM attributes rather than inline width styles that break the
 public demo CSP.
-That same recovery shell boundary now also owns one canonical top-level filter
-controller in
-`frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`. Route-backed
-recovery filters such as the provider-neutral `itemType` selector must be
-derived, normalized, and fanned out to inventory, history, activity, facets,
-and series consumers from that shared state owner rather than being recreated
-as page-local toolbar state inside individual recovery sections.
-That same shared recovery filter boundary also owns canonical recovery
-item-type derivation through
-`frontend-modern/src/utils/recoveryItemTypePresentation.ts`. Recovery shell
-state, tables, summaries, and point-detail surfaces must resolve rollup and
-point item types through the shared presenter helpers instead of repeating
-`display.itemType` / `subjectType` / `subjectRef.type` fallback chains in
-page-local consumers.
-That same shared recovery decode boundary also owns canonical recovery display
-shape. `frontend-modern/src/utils/recoveryPlatformModel.ts`,
-`frontend-modern/src/hooks/useRecoveryPoints.ts`, and
-`frontend-modern/src/hooks/useRecoveryRollups.ts` must normalize legacy
-transport display aliases like `subjectLabel` and `subjectType` into canonical
-runtime `itemLabel` and `itemType` fields before recovery presenters consume
-the model.
-The same shared recovery-column boundary must keep legacy `subject` and
-`source` column ids at migration-only scope once
-`frontend-modern/src/hooks/useColumnVisibility.ts` owns alias rewrites.
-Recovery table runtime helpers and render switches should operate on canonical
-`item` and `platform` ids rather than carrying the deleted ids as live cases.
-That same shared recovery state owner now also keeps `platform` as the
-canonical route and transport filter name for operator-facing recovery links,
-while any accepted legacy `provider` aliases remain parser compatibility only.
-Caller-facing shared recovery route builders must therefore stay
-platform-first as well: compatibility `provider` aliases may be accepted while
-parsing legacy links, but they should not remain a first-class input on new
-recovery link construction helpers.
-Recovery frontend decode and derived option builders must treat payload
-`platform` / `platforms` as the canonical response fields and only fall back
-to legacy `provider` / `providers` aliases for compatibility, so route,
-filter, and table state do not keep backend-era vocabulary alive as the
-default client model.
-That normalization belongs at the shared recovery transport boundary in
-`frontend-modern/src/hooks/useRecoveryPoints.ts` and
-`frontend-modern/src/hooks/useRecoveryRollups.ts`, not in individual tables,
-drawers, or summary cards. Recovery components should receive canonical
-platform-first runtime models rather than re-deriving legacy alias fallback
-locally.
-Recovery section owners under `frontend-modern/src/components/Recovery/` must
-consume that shared `platform` filter surface directly. They must not keep
-recovery-local `provider` route/query vocabulary alive behind renamed labels,
-or the UI will drift back to backend-shaped navigation even when the copy says
-`Platform`.
-That same shared recovery filter owner must also preserve route-owned platform
-visibility while transport-backed options are still hydrating. If
-`frontend-modern/src/features/recovery/useRecoverySurfaceState.ts` restores a
-canonical `platform` selection such as `truenas` from the route before the
-rollups, points, or facets payloads arrive, it must keep that selected
-platform present in the option set so the shared `LabeledFilterSelect` shows
-the owned value immediately instead of flashing back to `All Platforms` until
-recovery data warms.
+Recovery has no shell, filter controller, route serializer, or column model
+left for frontend primitives to govern. The aggregate Recovery page, its
+section owners under `frontend-modern/src/components/Recovery/`, and its state
+owner `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts` were
+deleted on 2026-05-26 together with the rollup, facet, and series hooks
+(`useRecoveryRollups.ts`, `useRecoveryPointsFacets.ts`,
+`useRecoveryPointsSeries.ts`), and the recovery query serializer and
+`recoveryItemTypePresentation.ts` that only it read have been deleted since.
+Recovery rows render in two platform-owned tabs built from the shared
+platform-page primitives: the Proxmox Backups tab and the TrueNAS Protection
+tab.
+The Proxmox Backups tab parses `/api/backups/pve` and `/api/backups/pbs`
+inside `ProxmoxBackupsTable.tsx` and reads posture through
+`frontend-modern/src/hooks/useProtectionPostures.ts`. The TrueNAS Protection
+tab reads recovery points, and what binds that path is the decode boundary.
+`frontend-modern/src/utils/recoveryPlatformModel.ts` maps legacy transport
+aliases onto the canonical runtime model: `provider` to `platform`,
+`subjectResourceId` to `itemResourceId`, `subjectRef` to `itemRef`, and
+`display.subjectLabel` / `display.subjectType` to `display.itemLabel` /
+`display.itemType`. `frontend-modern/src/hooks/useRecoveryPoints.ts`, the
+only recovery-points reader, applies `normalizeRecoveryPointsResponse` to
+every `/api/recovery/points` response, so the TrueNAS Protection tab receives
+platform-first, item-first points. The `display.subjectLabel`,
+`display.subjectType`, and `subjectRef` fallbacks that
+`TrueNASProtectionTable.tsx` and `truenasPageModel.ts` still read are dead on
+that path, because normalized points never carry those fields; new recovery
+code reads the canonical fields only. New recovery filters, links, or view
+switches belong to the platform tab that owns the rows, on the platform-page primitives, rather than in a revived
+cross-platform recovery shell or a shared recovery serializer in
+`frontend-modern/src/routing/resourceLinks.ts`. The rollup normalizer
+(`normalizeRecoveryRollupsResponse`) has had no production reader since
+`useRecoveryRollups.ts` was deleted.
 The retired dashboard action queue must not be reintroduced as a compact
 Patrol or infrastructure issue panel. Patrol-owned runtime findings remain
 governed by `frontend-modern/src/utils/aiFindingPresentation.ts` and their
@@ -7421,20 +7394,19 @@ customer-facing action copy, while
 provider labels, empty states, and action/status messaging. Future settings
 copy changes in those areas should extend these helpers instead of inlining
 panel-local strings inside the shell or reactive state owners.
-Shared infrastructure action-link framing now also owns recovery entry wording
-for service resources. `frontend-modern/src/components/Infrastructure/serviceDetailLinks.ts`
-must keep platform-service recovery links on canonical recovery-events
-framing and route state, so upstream service surfaces do not drift back to
-PBS-backup wording or inherit the page-default inventory workspace when they
-are actually deep-linking into recovery activity.
-That same shared primitive boundary also owns resource handoff chip framing for
-cross-surface investigation UI. Alerts, Patrol, and similar feature shells may
-choose which governed surfaces to show, but they must build those links through
-the shared resolved-resource route helpers in
-`frontend-modern/src/routing/resourceLinks.ts` instead of freezing raw route
-strings, local link dedupe, or provider-specific link chips inside feature
-panels. Shared chip styling belongs in the feature shell; canonical href and
-label truth belongs in the shared route helper.
+Shared infrastructure action-link framing owns service-resource action links.
+`frontend-modern/src/components/Infrastructure/serviceDetailLinks.ts` returns
+only the PMG thresholds link today: the PBS recovery-events link it used to
+build was retired with the platform-first route migration, and PBS backups are
+reached through the Proxmox Backups tab. A future service recovery link must
+target the platform tab that owns those rows rather than a recovery-events
+workspace.
+Alerts, Patrol, and similar feature shells render no resource handoff chips
+since the cross-jump strips were retired on 2026-05-16 (see the retired-helper
+note above). A future cross-surface link must take its href and label from a
+route helper in `frontend-modern/src/routing/resourceLinks.ts` instead of
+freezing raw route strings, local link dedupe, or provider-specific link chips
+inside a feature panel; chip styling belongs in the feature shell.
 That same shared primitive boundary now also owns persisted column-identity
 migration for governed surfaces. When a v6 surface canonicalizes saved column
 IDs, `frontend-modern/src/hooks/useColumnVisibility.ts` must accept explicit

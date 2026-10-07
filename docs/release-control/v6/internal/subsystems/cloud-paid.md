@@ -1583,9 +1583,10 @@ follow the same canonical home. The hosted bootstrap / activation / recovery
 routes (`/pricing`, `/preview/setup-complete`, `/login`, settings panels
 under `/settings/...`) are unchanged. Pricing-handoff and hosted-signup
 upgrade paths must use platform routes as their canonical "back to product"
-destination instead of the retired top-level Infrastructure route; aggregate
-Workloads / Storage / Recovery pages are product workspaces, not hosted
-acquisition destinations. The Docker / Podman runtime route remains `/docker`
+destination instead of the retired top-level Infrastructure route. Platform
+pages are product workspaces, not hosted acquisition destinations, and the
+retired aggregate Workloads / Storage / Recovery pages are not destinations at
+all. The Docker / Podman runtime route remains `/docker`
 for search familiarity, but the shell may label the
 destination as Docker so it reads as the recognizable container runtime lens
 rather than an owning infrastructure platform.

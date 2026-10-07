@@ -7822,7 +7822,6 @@
         "frontend-modern/src/types/recovery.ts",
         "frontend-modern/src/utils/recoveryArtifactModePresentation.ts",
         "frontend-modern/src/utils/recoveryDatePresentation.ts",
-        "frontend-modern/src/utils/recoveryItemTypePresentation.ts",
         "frontend-modern/src/utils/recoveryOutcomePresentation.ts",
         "frontend-modern/src/utils/recoveryTimelineChartPresentation.ts",
         "frontend-modern/src/utils/recoveryTimelinePresentation.ts",
@@ -7867,7 +7866,6 @@
               "frontend-modern/src/types/recovery.ts",
               "frontend-modern/src/utils/recoveryArtifactModePresentation.ts",
               "frontend-modern/src/utils/recoveryDatePresentation.ts",
-              "frontend-modern/src/utils/recoveryItemTypePresentation.ts",
               "frontend-modern/src/utils/recoveryOutcomePresentation.ts",
               "frontend-modern/src/utils/recoveryTimelineChartPresentation.ts",
               "frontend-modern/src/utils/recoveryTimelinePresentation.ts"

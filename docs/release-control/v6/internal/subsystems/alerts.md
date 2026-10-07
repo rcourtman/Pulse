@@ -2642,7 +2642,7 @@ table subgroup-row contract. `AlertHistoryTableGroupRow` and grouped rows in
 `AlertResourceTableDesktop` must route their date/resource group bands through
 `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` instead
 of local `bg-surface-alt` fills, so alert subgroup hierarchy stays visually
-consistent with Infrastructure, Workloads, Storage, and Recovery tables.
+consistent with Infrastructure, Workloads, and Storage tables.
 Alert history table shells must also rely on the shared `TableCard` frame and
 the shared `Table` primitive for horizontal overflow rather than adding
 alert-local bordered or `overflow-x-auto` wrappers inside the history section.
@@ -3136,21 +3136,22 @@ issue sequential route writes. That reset removes all three query parameters
 in one navigation and clears any transient chart-bucket selection, so a
 search-only result set remains visibly resettable and an older URL write
 cannot resurrect another filter.
-That same history surface now also owns the canonical resource-incident
-handoff. `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`
-must treat the selected incident resource as a unified-resource consumer,
-linking back into canonical infrastructure/resource detail first and then into
-shared workloads, storage, and recovery surfaces through
-`frontend-modern/src/routing/resourceLinks.ts` rather than leaving the panel
-as a dead-end investigation card or rebuilding provider-local route strings for
-platforms such as TrueNAS.
-That same alert handoff must now stay on the shared resolved-resource link
-builder. `AlertResourceIncidentsPanel.tsx` must resolve its chip set through
-`buildResolvedResourceSurfaceLinks(...)`, which owns exact unified-resource
-handoffs plus the infrastructure fallback when alert history still references a
-resource ID before the backing unified record has hydrated. Future incident-link
-work must not reintroduce local infrastructure-link assembly, local dedupe, or
-provider-local route strings inside the alert feature shell.
+That same history surface also owns the resource-incident panel, and the panel
+links nowhere. `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`
+names the selected resource through the unified-resource lookup it is given
+(`getResource`, falling back to the history state's lookup) and
+`getPreferredInfrastructureDisplayName`, and shows the resource name the
+selected history row carried while no unified record matches. It imports nothing from
+`frontend-modern/src/routing/resourceLinks.ts`, and it offers no resource
+cross-jump links: investigation continues in place through the incident
+timeline cards or hands off to Pulse Assistant through
+`IncidentAssistantHandoffButton`, as the retired cross-jump chip note above
+describes. Future incident-link work
+must not reintroduce a chip set, local infrastructure-link assembly, or
+provider-local route strings inside the alert feature shell;
+`frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts` pins the panel
+free of `buildResolvedResourceSurfaceLinks`, `buildResourceSurfaceLinksForResource`,
+and `buildInfrastructureResourceLink`.
 
 Alert configuration load/save state, notification config reloads, and threshold
 override normalization now route through

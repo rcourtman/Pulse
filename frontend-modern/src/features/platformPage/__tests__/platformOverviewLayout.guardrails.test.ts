@@ -35,6 +35,7 @@ import kubernetesStorageTableSource from '@/features/kubernetes/KubernetesStorag
 // The backups page owns the scope controls and delegates dense table rendering
 // to current per-view components; the shared-primitive guardrail follows those
 // current table owners.
+import proxmoxBackupsTableSource from '@/features/proxmox/ProxmoxBackupsTable.tsx?raw';
 import proxmoxBackupServersTableSource from '@/features/proxmox/ProxmoxBackupServersTable.tsx?raw';
 import proxmoxCoverageTableSource from '@/features/proxmox/ProxmoxCoverageTable.tsx?raw';
 import proxmoxRecoverableTableSource from '@/features/proxmox/ProxmoxRecoverableTable.tsx?raw';
@@ -741,6 +742,32 @@ describe('platform overview layout guardrails', () => {
     );
     expect(agentMachineTableModelSource).toMatch(
       /id:\s*'disk'[\s\S]{0,80}?label:\s*'Disk'[\s\S]{0,80}?kind:\s*'metric-bar'/,
+    );
+  });
+
+  it('keeps recovery view and filter state with the platform tab that owns the rows', () => {
+    // No aggregate Recovery page or shared recovery serializer exists, so each
+    // platform tab owns its recovery state (storage-recovery forbidden path 9).
+    // The Proxmox Backups view switch is navigation above the filter bar.
+    const sectionTabsAt = proxmoxBackupsTableSource.indexOf('<PlatformSectionTabs');
+    const filterBarAt = proxmoxBackupsTableSource.indexOf('<FilterBar');
+    expect(sectionTabsAt).toBeGreaterThan(-1);
+    expect(filterBarAt).toBeGreaterThan(sectionTabsAt);
+    // Its activity day is route state; its chart range is component state.
+    expect(proxmoxBackupsTableSource).toMatch(
+      /setSearchParams\(\{\s*\[PROXMOX_BACKUPS_QUERY_PARAMS\.day\]: value \|\| null \}/,
+    );
+    expect(proxmoxBackupsTableSource).toContain('createSignal<BackupActivityRangeDays>(30)');
+    expect(proxmoxBackupsTableSource).not.toMatch(/PROXMOX_BACKUPS_QUERY_PARAMS\.range\b/);
+    for (const call of proxmoxBackupsTableSource.match(/setSearchParams\([^;]*/g) ?? []) {
+      expect(call).not.toMatch(/\brange\b|chartRange/);
+    }
+    // The TrueNAS Protection table keeps search, status and sort out of the URL.
+    expect(truenasProtectionTableSource).not.toContain('useSearchParams');
+    expect(truenasProtectionTableSource).not.toContain('@/routing/resourceLinks');
+    expect(truenasProtectionTableSource).toContain('createPlatformTableFilterState({');
+    expect(truenasProtectionTableSource).toMatch(
+      /createPlatformTableSortState\(\{\s*storageKey: 'truenasProtection'/,
     );
   });
 });

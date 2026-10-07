@@ -573,29 +573,28 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 9. `frontend-modern/src/types/recovery.ts`
 10. `frontend-modern/src/utils/recoveryDatePresentation.ts`
 11. `frontend-modern/src/utils/recoveryTimelinePresentation.ts`
-12. `frontend-modern/src/utils/recoveryItemTypePresentation.ts`
-13. `frontend-modern/src/utils/textPresentation.ts`
-14. `frontend-modern/src/utils/storageSummaryCache.ts`
-15. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
-16. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
-17. `frontend-modern/src/features/proxmox/BackupActivityChart.tsx`
-18. `frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts`
-19. `frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts`
-20. `frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx`
-21. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx`
-22. `frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx`
-23. `frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
-24. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx`
-25. `frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx`
-26. `frontend-modern/src/features/proxmox/proxmoxBackupSourcePresentation.ts`
-27. `internal/recovery/model/posture.go`
-28. `internal/recovery/posture.go`
-29. `internal/recovery/store/store_posture.go`
-30. `frontend-modern/src/hooks/useProtectionPostures.ts`
-31. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx`
-32. `internal/mock/recovery_points.go`
-33. `frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts`
-34. `frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts`
+12. `frontend-modern/src/utils/textPresentation.ts`
+13. `frontend-modern/src/utils/storageSummaryCache.ts`
+14. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
+15. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
+16. `frontend-modern/src/features/proxmox/BackupActivityChart.tsx`
+17. `frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts`
+18. `frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts`
+19. `frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx`
+20. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx`
+21. `frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx`
+22. `frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
+23. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx`
+24. `frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx`
+25. `frontend-modern/src/features/proxmox/proxmoxBackupSourcePresentation.ts`
+26. `internal/recovery/model/posture.go`
+27. `internal/recovery/posture.go`
+28. `internal/recovery/store/store_posture.go`
+29. `frontend-modern/src/hooks/useProtectionPostures.ts`
+30. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx`
+31. `internal/mock/recovery_points.go`
+32. `frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts`
+33. `frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts`
 
 ## Shared Boundaries
 
@@ -2184,7 +2183,7 @@ recovery scope, or a storage/recovery-owned secret source.
     recovery, SMART, or cleanup action.
 22. Keep backend-native platform configuration reads on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app config for Assistant, storage and recovery may use that runtime shape during investigation, but they must not grow a parallel recovery-local config transport or provider-shaped configuration payload.
 23. Keep provider-backed poll cadence and settings-runtime health on the adjacent platform-connections contract. When shared `internal/api/` and poller wiring expose TrueNAS last-sync status, failure summaries, discovered contribution counts, manual saved-test status refresh, or platform handoff links in settings, storage and recovery may consume the resulting datasets, apps, disks, and recovery artifacts but must not redefine those settings-runtime health semantics or connection-level handoffs in storage/recovery-local transport or page flows.
-24. Keep recovery filter/query state on the shared route-state parsing contract without restoring standalone recovery navigation. When platform pages or other embedded owners expose TrueNAS recovery context, they may reuse the canonical recovery query vocabulary with owned `platform` and `node` fields, but they must land inside an owning platform/runtime route instead of inventing drawer-local recovery URLs, treating PBS services as the only recovery path, or sending operators to the retired Recovery aggregate route.
+24. Keep recovery context inside the platform tab that owns it without restoring standalone recovery navigation. TrueNAS recovery context lives on the TrueNAS Protection tab and Proxmox recovery context on the Proxmox Backups tab; no shared recovery query vocabulary exists to reuse. A surface that exposes recovery context must land inside an owning platform/runtime route instead of inventing drawer-local recovery URLs, treating PBS services as the only recovery path, or sending operators to the retired Recovery aggregate route.
     That same shared route-helper boundary also owns exact workload handoffs
     when storage or recovery surfaces send operators back to node-scoped
     workloads for investigation context. Proxmox VM and system-container links
@@ -2196,7 +2195,7 @@ recovery scope, or a storage/recovery-owned secret source.
     Patrol control anchor, must stay owned by their product surface and
     must not be reused as recovery entry points or storage/recovery navigation
     aliases.
-25. Keep alert-side recovery drill-ins on that same embedded-owner route-state contract. When alert investigation surfaces such as resource-incident panels expose recovery follow-up links for TrueNAS or future API-backed platforms, they must route through an owning platform/runtime destination using canonical recovery query vocabulary instead of freezing alert-local recovery URLs, reviving the retired Recovery aggregate route, or introducing another provider-shaped recovery handoff vocabulary.
+25. Keep alert-side recovery follow-up inside the owning platform tab. The resource-incident panel offers no recovery links today, and no shared recovery query vocabulary exists. A future alert-side recovery follow-up for TrueNAS or another API-backed platform must open the platform tab that owns those rows instead of freezing alert-local recovery URLs or reviving the retired Recovery aggregate route.
 26. Keep VMware onboarding runtime and recovery semantics separate on that same adjacent platform-connections contract. When `internal/api/router.go`, `internal/api/router_routes_registration.go`, or `internal/api/vmware_handlers.go` evolve VMware connection CRUD, poller-owned `poll` / `observed` summary payloads, saved-test refresh, or observed datastore/VM snapshot visibility, storage and recovery may consume the resulting shared context but must not treat those onboarding/runtime payloads as canonical recovery artifacts, restore capability, or recovery-local control transport.
     A successful VMware connection test with `degraded` optional signal or
     performance diagnostics remains connection-readiness context only; storage
@@ -2553,27 +2552,11 @@ take a correctness dependency on its contents.
 6. Letting whitespace-padded storage route params hydrate non-canonical page state; shared storage URLs must trim and normalize `tab`, `source`, `status`, `node`, `group`, `sort`, `order`, `query`, and deep-link `resource` before the page model consumes them so pasted or hand-edited links resolve to the same canonical state as UI-authored routes without dropping adjacent unmanaged params
 7. Letting storage `source` aliases or case drift survive in canonical route state; shared storage URLs must rewrite pasted values like `PVE`, `pbs`, or `ALL` to the owned source option values (for example `proxmox-pve`) or the canonical unset state so copied links match the same source filter values the storage toolbar presents
 8. Letting explicit storage `all` sentinels survive in canonical route state; shared storage URLs must collapse case- or whitespace-variant `all` values for the managed `node` filter back to the canonical unset state so copied links do not preserve a fake active node filter
-9. Letting whitespace-padded recovery timeline params fall off canonical route state; shared recovery URLs must trim and normalize `day`, `range`, `scope`, `status`, `verification`, `cluster`, `node`, `namespace`, `itemType`, and adjacent history filters before the page model validates them so pasted or hand-edited links resolve to the same canonical timeline and filter state as UI-authored routes
-10. Letting explicit recovery `all` sentinels survive in canonical route state; shared recovery URLs must collapse case- or whitespace-variant `all` values for `cluster`, `node`, `namespace`, and `itemType` back to the canonical unset route state so copied links do not preserve fake active filters
-11. Letting non-canonical recovery platform values survive in route or transport state; shared recovery URLs must collapse unsupported or fake `platform` values back to the canonical unset state, and only owned source-platform options or canonical legacy aliases may reach rollups, points, series, and facets transport filters
-    11c. Letting route-owned recovery platform selections disappear while filter options are still hydrating; the recovery page state owner must keep the current canonical `platform` query value present in the platform option set until transport-backed facets and records arrive so shared filter selects keep the user-visible TrueNAS or other owned platform selection instead of flashing back to `All platforms`
-    11d. Letting recovery filter default labels drift between protected inventory and recovery events; both recovery filter surfaces must consume the shared `recoveryTablePresentation` labels (`All item types`, `All platforms`, and `Any item`) instead of hard-coding title-case local variants.
-    11a. Letting adjacent workload route-state changes in shared `frontend-modern/src/routing/resourceLinks.ts` perturb recovery parse/build semantics; expanding canonical workload platform scoping must not alter the owned recovery `platform` and `itemType` vocabulary, legacy alias rewrites, or recovery drill-down workspace selection
-    11b. Letting adjacent storage route-state additions in shared `frontend-modern/src/routing/resourceLinks.ts` perturb recovery route semantics; expanding canonical storage deep links for unified resources must not reuse recovery-owned query names or alter the owned recovery parse/build contract while those surfaces continue sharing the same route-helper module
-    11e. Letting adjacent platform-route additions in shared `frontend-modern/src/routing/resourceLinks.ts` perturb storage or recovery route semantics; adding canonical `/standalone/machines`, `/standalone/availability`, or other platform paths must not reuse storage/recovery query names, alter storage or recovery parse/build behavior, or convert agent-platform membership into storage/recovery ownership
-    11f. Letting adjacent Patrol control starter route state in shared `frontend-modern/src/routing/resourceLinks.ts` perturb storage or recovery route semantics; `patrolControlStarter=patrol_control` is a first-party Patrol control handoff flag only, legacy `operationsLoopStarter=patrol_control`, `operationsLoopStarter=patrol_autonomy`, and `operationsLoopStarter=pulse_pro_activation` are only compatibility aliases, and storage/recovery parse-build contracts must not consume any of them as recovery state, storage focus, platform scope, or proof of backup/recovery posture
-    11g. Letting adjacent Pulse Intelligence external-agent setup anchors in shared `frontend-modern/src/routing/resourceLinks.ts` perturb storage or recovery route semantics; `/settings/pulse-intelligence/assistant#external-agent-setup` is the canonical external-agent setup hash, `/settings/security/api#external-agent-setup` and `/settings/security/api#pulse-mcp-setup` are legacy compatibility hashes, and storage/recovery parse-build contracts must not consume any of them as recovery state, storage focus, platform scope, or proof of backup/recovery posture
-    11h. Letting the Kubernetes platform page's route-local `cluster` scope perturb recovery's separate `cluster` filter merely because both constants live in shared `frontend-modern/src/routing/resourceLinks.ts`; `/kubernetes` may serialize `cluster=<clusterId>` for native inventory scoping, while `/recovery` continues to normalize and transport its own protected-item cluster vocabulary through the recovery parser/builders, with neither surface importing the other's option set or state owner
-12. Letting protected-inventory protection posture overload recovery-event outcome filtering; the protected inventory protection-state control must drive the route-backed `state` field and local rollup posture filtering, while the recovery events `status` field remains the canonical outcome filter for points, series, and facets transport filters
-13. Letting visible protected-item filters fall out of shared recovery links; protected inventory state such as stale, failed, warning, running, unknown, healthy, and never-succeeded must restore from the canonical recovery URL and rewrite to the owned `state=<value>` route form, with legacy `stale=1` accepted only as compatibility input
-14. Reintroducing stacked full-width recovery tables as the primary desktop layout; the governed recovery surface must expose one primary data region at a time with recovery events as the default workspace and protection coverage as an explicit secondary review so Pulse does not collapse back into a single-platform backup screen
-15. Letting secondary recovery workspace state drift out of canonical route state; explicit `view=inventory` protection-coverage links must round-trip, while default recovery-events state should serialize without a redundant `view=events` query unless compatibility input is being normalized
-16. Treating a selected protected-item rollup as row-click-only or header-only state instead of a canonical history filter; when a protected-item row focuses recovery history, the governed recovery events controls must surface that focus inside the shared filter surface through the same user-creatable item filter control, count it with the rest of the active filters, and let the same filter reset path clear it
-17. Letting recovery-event focus leak as hidden state on the protection coverage surface; opening coverage must clear event-only `rollupId` and `day` context, and coverage drill-ins must open recovery events without preserving an invisible day filter that can make valid history look empty.
-18. Letting the recovery details panel lead with transport-shaped payloads; operator-facing details must summarize outcome, artifact, target, restore readiness, and readable metadata labels first, while raw JSON and provider-specific keys stay behind an explicitly technical disclosure.
-19. Letting protection coverage navigation bypass the canonical recovery workspace and route-state owner; coverage actions may focus stale inventory, attention inventory, or all protected items, but they must not mutate local-only filter state or revive passive posture-counter cards as the navigation owner.
-20. Letting storage or recovery surfaces invoke retired self-hosted trial acquisition; `POST /api/license/trial/start` and `/auth/trial-activate` must stay closed on the ordinary self-hosted router, and storage/recovery-adjacent billing or support handoffs must not treat trial activation as recovery identity, restore proof, or backup transport state.
-21. Treating an `AvailabilityData` facet on a storage resource as backup, protection, or recovery evidence; an agentless probe attached to a NAS, PBS, or datastore resource is monitoring reachability, not backup success, snapshot health, or restore readiness. Storage and recovery must read protection status from the canonical backup and storage resources, not from the availability probe facet.
+9. Reintroducing an aggregate cross-platform Recovery page, a recovery route-state owner, or a shared recovery query serializer in `frontend-modern/src/routing/resourceLinks.ts` without a governed product decision. The aggregate page (`frontend-modern/src/components/Recovery/` with its state owner `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`) was deleted on 2026-05-26, and `RECOVERY_QUERY_PARAMS`, `parseRecoveryLinkSearch`, and `buildRecoveryRouteSearch` were deleted once nothing read them. Recovery rows render in the platform-owned Proxmox Backups and TrueNAS Protection tabs; the Proxmox Backups tab owns its route state through the `/proxmox/backups/:view` segment and `PROXMOX_BACKUPS_QUERY_PARAMS`, and the TrueNAS Protection tab keeps its search and status filter in component state and its sort in local storage, outside the URL.
+10. Letting adjacent route state in shared `frontend-modern/src/routing/resourceLinks.ts` reuse storage or Proxmox Backups query names or alter their parse/build behavior. Workload platform scoping, unified-resource storage deep links, `buildStandalonePath()` platform paths, the Kubernetes page's route-local `KUBERNETES_QUERY_PARAMS.cluster` scope, the Patrol control starter (`patrolControlStarter=patrol_control`, with legacy `operationsLoopStarter=patrol_control`, `operationsLoopStarter=patrol_autonomy`, and `operationsLoopStarter=pulse_pro_activation` as compatibility aliases only), and the Pulse Intelligence external-agent setup anchors (`/settings/pulse-intelligence/assistant#external-agent-setup`, with `/settings/security/api#external-agent-setup` and `/settings/security/api#pulse-mcp-setup` as legacy compatibility hashes) share that module, and none of them is recovery state, storage focus, platform scope, or proof of backup or recovery posture.
+11. Letting recovery row details on the Proxmox Backups or TrueNAS Protection tabs lead with transport-shaped payloads; operator-facing details must summarize outcome, artifact, target, and readable metadata labels first, and raw JSON or provider-specific keys must not lead the primary detail.
+12. Letting storage or recovery surfaces invoke retired self-hosted trial acquisition; `POST /api/license/trial/start` and `/auth/trial-activate` must stay closed on the ordinary self-hosted router, and storage/recovery-adjacent billing or support handoffs must not treat trial activation as recovery identity, restore proof, or backup transport state.
+13. Treating an `AvailabilityData` facet on a storage resource as backup, protection, or recovery evidence; an agentless probe attached to a NAS, PBS, or datastore resource is monitoring reachability, not backup success, snapshot health, or restore readiness. Storage and recovery must read protection status from the canonical backup and storage resources, not from the availability probe facet.
 
 ## Completion Obligations
 
@@ -2715,7 +2698,7 @@ canonical pre-handler authorization proof covering both transfer routes.
    is likewise API/AI-owned transport: storage and recovery may consume the
    resulting incident context, but must not define storage-local approval
    argument keys or bypass the shared `internal/agentcapabilities` helper.
-5. Keep recovery history table width budgeting derived from the canonical column specs in `frontend-modern/src/utils/recoveryTablePresentation.ts`, not from raw visible-column counts, so normalized subject labels and optional column sets cannot drift the right-edge badges and controls off-screen. Storage-pool, physical-disk, backup-server, coverage, and recoverable-artifact compact models must follow the same source-owned budgeting rule: expose three to five semantically distinct phone fields, allow a sixth only when measured content remains legible, fix identity at the shared 30-percent track, use explicit compact labels for narrow evidence fields, and normalize the selected tracks to the container without a horizontal rail. A status already conveyed by the identity indicator must not consume a duplicate phone column. Desktop column sets and storage/recovery evidence semantics must remain unchanged.
+5. Keep storage and recovery table width budgeting source-owned rather than derived from raw visible-column counts, so long item labels and optional column sets cannot drift the right-edge badges and controls off-screen. Storage-pool, physical-disk, backup-server, coverage, and recoverable-artifact compact models must expose three to five semantically distinct phone fields, allow a sixth only when measured content remains legible, fix identity at the shared 30-percent track, use explicit compact labels for narrow evidence fields, and normalize the selected tracks to the container without a horizontal rail. A status already conveyed by the identity indicator must not consume a duplicate phone column. Desktop column sets and storage/recovery evidence semantics must remain unchanged.
    Below 360 pixels of content width, those models must promote identity to 40
    percent and may demote the lowest-priority field through the shared
    `platform-table-narrow-hidden`/source-owned layout contract rather than
@@ -2894,24 +2877,33 @@ canonical pre-handler authorization proof covering both transfer routes.
     Touch users still must not inherit
     synthetic hover branches, and storage must not keep a special trailing
     expand column once the shared leading action contract exists.
-    Static subgroup header emphasis for storage group rows and recovery history
-    day headers must also route through
-    `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` and
-    the shared `.grouped-table-row` CSS contract in `frontend-modern/src/index.css`,
-    rather than storage- or recovery-local background classes or left-accent
-    marker variants.
+    Static subgroup header emphasis for storage group rows must also route
+    through `frontend-modern/src/components/shared/groupedTableRowPresentation.ts`
+    and the shared `.grouped-table-row` CSS contract in
+    `frontend-modern/src/index.css`, rather than storage-local background
+    classes or left-accent marker variants. The recovery history day headers
+    this rule also named went with the aggregate Recovery page; the Proxmox
+    Backups date feed's day dividers (`ProxmoxRecoverableTable.tsx`) style
+    their cell directly because a cell-level background renders reliably
+    across table layout engines.
     Storage pool rows must also keep sizing and alert accents on canonical
     class/data-attribute presentation rather than row-local inline style maps,
     so the public storage page stays CSP-safe under both normal and
     alert-highlighted demo/runtime states.
-21. Keep recovery transport refreshes inside the recovery-owned feature state.
-    `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts` and the
-    recovery data hooks may retain the last fulfilled rollups, points, facets,
-    and series while the next request is in flight through
-    the shared `frontend-modern/src/hooks/createNonSuspendingQuery.ts`, but
-    that retained-value behavior must stay route-owned and filter-owned through
-    the canonical recovery state model instead of recreating page-local
-    suspense escape hatches in `Recovery.tsx` or the recovery sections.
+21. Keep recovery transport refreshes on the shared non-suspending query.
+    Every recovery read retains its last fulfilled response while the next
+    request is in flight through
+    `frontend-modern/src/hooks/createNonSuspendingQuery.ts`:
+    `frontend-modern/src/hooks/useRecoveryPoints.ts` (the TrueNAS Protection
+    tab's points) and `frontend-modern/src/hooks/useProtectionPostures.ts`
+    poll every 30 seconds, and `ProxmoxBackupsTable.tsx` reads
+    `/api/backups/pve` and `/api/backups/pbs` through the same primitive.
+    The points and posture reads stay keyed by the query or resource IDs
+    their tab passes, and the PVE and PBS inventory reads by fixed source
+    keys, instead of recreating page-local suspense escape hatches or a second
+    refetch state in the platform tables. The aggregate Recovery page's state owner, which
+    this item used to name, was deleted on 2026-05-26 with the rollup, facet,
+    and series hooks.
 22. Keep storage/recovery-adjacent resource metadata on the shared unified
     resource contract. When canonical storage resources expose provider-backed
     identity such as Proxmox storage `pool`, storage and recovery consumers
@@ -3487,16 +3479,20 @@ Future cross-surface storage or recovery affordances must compose against
 the embedded `StorageSurface` / `RecoverySurface` consumers rather than
 reintroducing top-level URL builders.
 The remaining storage and recovery route builders in
-`frontend-modern/src/routing/resourceLinks.ts` are query-state serializers, not
-destination builders: callers must append `buildStorageRouteSearch()` or
-`buildRecoveryRouteSearch()` to the current platform-owned pathname such as
-`/proxmox/storage`, `/proxmox/backups`, or `/truenas/protection`. They must not
-emit `/storage` or `/recovery` as hidden compatibility paths.
+`frontend-modern/src/routing/resourceLinks.ts` come down to one query-state
+serializer, not a destination builder: `buildStorageRouteSearch()` is appended
+to the current platform-owned pathname, today only by the Storage surface's
+own filter state on the Proxmox Storage tab, and must not emit `/storage` as a
+hidden compatibility path. The recovery serializer (`RECOVERY_QUERY_PARAMS`,
+`parseRecoveryLinkSearch`, `buildRecoveryRouteSearch`) was deleted once
+nothing read it: the Proxmox Backups tab keeps its view in the
+`/proxmox/backups/:view` segment and its filters in
+`PROXMOX_BACKUPS_QUERY_PARAMS`, and nothing emits `/recovery`.
 Adjacent route-query constants for other platform surfaces, including
 `STANDALONE_QUERY_PARAMS`, must remain namespaced and must not be reused as
 storage source, node, resource, workspace, rollup, or day state. Adding a
 shareable filter query to another surface must not broaden or reinterpret the
-storage and recovery serializer contract.
+storage serializer contract or the Proxmox Backups query.
 
 Storage and Recovery can now be embedded by a platform page in table-only mode
 with a forced platform source/filter. Proxmox uses that embedding for
@@ -3739,11 +3735,15 @@ Storage physical-disk requirements copy now consumes the shared
 Infrastructure target label. Disk-health guidance may refer to Proxmox node
 requirements, but it must not revive removed nested Pulse settings paths such
 as `Settings → Infrastructure → Proxmox`.
-Recovery item-type labels now route through
-`frontend-modern/src/utils/recoveryItemTypePresentation.ts`. Recovery surfaces
-must not render a bare `Cluster` item type for Kubernetes protected subjects;
-use the canonical `K8s Cluster` label so protected inventory and event filters
-do not confuse Kubernetes clusters with Proxmox clusters or table grouping.
+The cross-platform recovery item-type columns and filters went with the
+aggregate Recovery page on 2026-05-26, and
+`frontend-modern/src/utils/recoveryItemTypePresentation.ts` was deleted once
+its last reader, the recovery query serializer, was. The Proxmox Backups
+tables label workload types (`VM`, `LXC`, `Host`, or `Guest`) from
+`frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts`. A future
+cross-platform recovery item-type label must not render a bare `Cluster` for
+Kubernetes protected items; it uses `K8s Cluster` so Kubernetes clusters are
+not confused with Proxmox clusters or table grouping.
 
 This subsystem now sits under the dedicated storage and recovery lane so the
 operator-facing storage page, recovery timeline, and recovery-point persistence
@@ -4321,12 +4321,8 @@ controls, so those headings must not duplicate that interaction with buttons,
 their real button and `aria-sort` semantics, but their visible direction marker
 must come from the frontend-primitives-owned `tableSortPresentation.ts` helper;
 only the active backup sort column displays its direction.
-Recovery all-history, all-item-type, and all-platform defaults follow the same
-shared filter-option contract through
-`frontend-modern/src/utils/recoveryTablePresentation.ts`, so recovery history
-and protected-item tables do not invent separate default-filter wording.
 Physical-disk role and group filter defaults plus disk-type display labels
-must likewise come from `frontend-modern/src/features/storageBackups/diskPresentation.ts`;
+must come from `frontend-modern/src/features/storageBackups/diskPresentation.ts`;
 storage pages must not reintroduce local `All Roles`, `All Groups`, or
 `NVME Disk` strings that drift away from the shared filter-label and hardware
 acronym presentation contract.
@@ -4396,9 +4392,9 @@ That same recovery boundary now also assumes mock recovery context is projected
 from one canonical mock graph. `internal/mock/recovery_points.go` may synthesize
 inventory-only recovery artifacts for supported mock platforms, but those
 subjects must derive from the shared `internal/mock/fixture_graph.go` owner
-instead of a separate hardcoded recovery cache, so recovery filters, rollups,
-and shared route handoffs see the same platform set as settings and
-infrastructure.
+instead of a separate hardcoded recovery cache, so recovery points, rollups,
+and the platform tabs that read them see the same platform set as settings
+and infrastructure.
 That same graph-owned mock boundary also owns demo-readiness for storage and
 recovery surfaces. Mock seeded history and provider-backed storage/recovery
 counts must come from the same canonical fixture graph so
@@ -4485,92 +4481,39 @@ That same shared helper layer also now assumes the Pulse Mobile relay runtime
 credential reaches only the explicit backend-owned route inventory, so
 storage- and recovery-adjacent transport work cannot accidentally widen that
 credential into a broader AI access bundle by touching neighboring routes.
-The recovery frontend now also separates that ownership more explicitly:
-`frontend-modern/src/features/recovery/useRecoverySurfaceState.ts` owns
-canonical route parsing, filter/query state, transport hook inputs, and URL
-synchronization, while `frontend-modern/src/components/Recovery/Recovery.tsx`
-is the composition root for the operator-facing recovery surface and the split
-section owners under `frontend-modern/src/components/Recovery/` hold the
-protection coverage, activity, and history presentation layers. The history
-surface is further split so `RecoveryHistorySection.tsx` owns the toolbar and
-controller boundary, `useRecoveryHistorySectionState.ts` owns local section UI
-state, and `RecoveryHistoryTable.tsx` owns the row/detail renderer.
-That composition root now also owns one primary recovery workspace rather than
-stacking protection-coverage and event-history tables on the same desktop page.
-The governed default is event-first so operators land on concrete
-backup/snapshot/replication history, while the header action and compatibility
-`view=inventory` links open the secondary protection coverage review.
-That same operator-facing workspace must lead with current protection status
-rather than only the latest backup outcome. Protection coverage should surface
-stale, never-succeeded, failed, warning, and running rollups as the primary
-monitoring status so an item with an old successful point does not scan as
-healthy when it still needs operator attention.
-That same workspace contract also keeps Pulse's provider-neutral recovery model
-explicit in the page language: recovery sections should talk about protected
-items, recovery events, and latest points so PBS backups, TrueNAS snapshots,
-Kubernetes artifacts, and future providers all fit the same first-class UI
-frame without removing the source badges and row-level cues that make Proxmox
-operators productive.
+No aggregate Recovery page exists. Its composition root
+`frontend-modern/src/components/Recovery/Recovery.tsx`, the section owners
+beside it (`RecoveryActivitySection.tsx`, `RecoveryHistorySection.tsx`,
+`RecoveryHistoryTable.tsx`, `RecoveryProtectedInventorySection.tsx`,
+`RecoveryPointDetails.tsx`, `useRecoveryHistorySectionState.ts`), and its
+route-state owner `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`
+were deleted on 2026-05-26, and the event-first workspace, the secondary
+protection-coverage review, and the `view=inventory` / `view=events` route
+state went with them. Recovery rows render only in platform-owned tabs: the
+Proxmox Backups tab, whose `/proxmox/backups/date` and
+`/proxmox/backups/coverage` views are described under "Proxmox backup views
+use canonical workflow routes", and the TrueNAS Protection tab, whose
+`TrueNASProtectionTable.tsx` lists the points `useRecoveryPoints` returns with
+the `truenas` platform forced. Bringing back a cross-platform recovery page is
+a product decision that needs its own governed contract, not an extension of
+either tab.
 License recovery stays reachable through the direct Plans & Billing route.
 `SelfHostedCommercialRecoverySection` inside `ProLicensePanel.tsx` remains
 available for explicit activation and recovery even when the ordinary free
 self-hosted navigation hides commercial surfaces. Recovery flows must not
 acquire proactive commercial prompts of their own.
-Operator-facing filter and detail labels should likewise prefer `platform`
-wording over implementation-facing `provider` wording, so the recovery surface
-describes the monitored platform families Pulse covers rather than exposing
-backend transport vocabulary as the primary UI model.
-That same operator-facing vocabulary should also prefer `item` over backend
-`subject` wording, and `platform` over generic `source` wording, across the
-primary recovery headers, tables, filter controls, and detail metadata labels.
-The data model can keep its internal subject/provider fields, but the page
-frame that operators read should present one consistent protected-item and
-platform model from summary through drill-in. Shared recovery URLs and
-transport filters should likewise treat `platform` as the canonical
-operator-facing query field, with legacy `provider` aliases accepted only as
-compatibility input that rewrites back to canonical `platform` route state.
-Shared recovery link builders should therefore accept canonical `platform`
-inputs only; legacy `provider` belongs at parse-time compatibility boundaries,
-not in new caller-facing recovery route helpers.
-Cross-surface recovery drill-in links must also target the correct primary
-workspace without relying on legacy inventory-first defaults. When a platform
-service surface such as PBS links into recovery activity, that shared entry
-point should land on the default recovery events workspace and describe the
-destination as recovery events rather than reverting to PBS-backup wording.
+Operator-facing recovery labels prefer `platform` over implementation-facing
+`provider` and `item` over backend `subject`; the transport and data model may
+keep subject/provider fields only as compatibility aliases. No shared recovery
+query state exists any more (the Proxmox Backups tab's own query is its
+`PROXMOX_BACKUPS_QUERY_PARAMS`), so a future cross-platform recovery filter or
+link must treat `platform` as its canonical query field and accept legacy
+`provider` only as parse-time compatibility input.
 That same recovery contract should keep response payloads canonical as well:
 recovery points and protected rollups should expose `platform` and
 `platforms` as the primary transport fields, while any legacy
-`provider` / `providers` aliases stay compatibility-only so the page does not
-silently drift back to backend-shaped vocabulary during decode.
-That same shared recovery table contract should keep its runtime column model
-canonical as well. Recovery inventory and event-history columns should use
-`item` and `platform` identities rather than preserving `subject` and `source`
-as the primary runtime model, and any saved legacy column IDs must migrate at
-the shared column-visibility boundary instead of forcing recovery renderers to
-carry deleted column identities indefinitely. Once that migration exists,
-recovery tables and shared table presenters should not continue accepting
-legacy `subject` and `source` ids in the live runtime path.
-That same runtime-helper contract should prefer `item` terminology in shared
-recovery presenters too. Helper exports that resolve labels or item-type badges
-should expose canonical item-facing names, while any retained `subject` aliases
-remain compatibility wrappers instead of the primary runtime boundary.
-That same shared badge contract applies to table rendering too. Recovery item
-type cells should use the same compact monitoring-table badge base that
-workloads uses for `VM` and `Container`, rather than copying only the colors
-and drifting on padding or visual weight.
-The same rule applies inside recovery-owned helpers and selectors. Shared
-summary helpers and platform filter renderers should use canonical `item` and
-`platform` naming internally once compatibility boundaries already exist,
-rather than keeping fresh `subject` or `provider` terminology alive in the
-live recovery runtime path.
-The same runtime vocabulary rule applies to cross-section recovery props too.
-Live page-to-section boundaries should carry item-focused names like
-`selectedHistoryItemLabel` instead of preserving `subject` labels after the
-shared recovery presenters already expose canonical item terminology.
-That same rule applies to recovery detail helpers. Provider-specific helper
-names like `isPbsProvider` should become platform-specific helpers like
-`isPbsPlatform` once the runtime recovery model is already canonically
-platform-first.
+`provider` / `providers` aliases stay compatibility-only so frontend decode
+does not silently drift back to backend-shaped vocabulary.
 The same canonical boundary applies to linked-resource identifiers. Recovery
 API payloads, query filters, and normalized frontend runtime models should use
 `itemResourceId` as the canonical field while accepting or emitting
@@ -4579,11 +4522,6 @@ That same canonical boundary also applies to external item references. Recovery
 API payloads and normalized frontend runtime models should use `itemRef` as
 the canonical item-reference field while treating `subjectRef` only as a
 compatibility alias during the transition.
-That same presenter boundary should also own canonical item-type derivation.
-Recovery surfaces must resolve rollup and point item types through one shared
-item-type helper instead of repeating `display.itemType` / `subjectType` /
-`subjectRef.type` fallback chains across state, summary, details, and table
-renderers.
 That same recovery-store decode boundary must fail soft on malformed persisted
 metadata. If a stored recovery row contains bad `subject_ref_json`,
 `repository_ref_json`, or `details_json`, the list endpoints should log and
@@ -4633,60 +4571,33 @@ derivation — sweeping protection-posture rows stranded under retired
 subject keys — so a live migration or a canonical-ID era change never forks
 one guest's protected item into stale and fresh rows. Rows without a
 recomputable guest identity keep their stored keys unchanged.
-That same hook-boundary normalization also owns the runtime recovery display
-model. Canonical recovery points and rollups must expose `display.itemLabel`
-and `display.itemType` to recovery consumers, while legacy transport fields
-such as `subjectLabel` and `subjectType` remain decode-only compatibility
-aliases in the shared normalization layer instead of leaking into runtime
-presenters.
+The frontend decode boundary owns the runtime recovery display model:
+`frontend-modern/src/utils/recoveryPlatformModel.ts`, which
+`frontend-modern/src/hooks/useRecoveryPoints.ts` applies to every response,
+exposes `display.itemLabel` and `display.itemType` to recovery consumers, while
+legacy transport fields such as `subjectLabel` and `subjectType` remain
+decode-only compatibility aliases in that normalization layer instead of
+leaking into tables.
 That same canonical item-label boundary must prefer recognizable protected-item
 names over raw entity IDs. When unresolved Proxmox-backed recovery points only
 have a VMID/CTID in the subject ref but still carry a richer backup comment or
 notes label, the canonical recovery index and store backfill must promote that
 human-readable label into the persisted subject/item label instead of leaving
 protected inventory rows to lead with bare numeric IDs.
-That same operator-facing row-identity rule should still preserve the governed
-entity identifier as secondary context when it exists. Recovery inventory and
-event rows should lead with the canonical item name, then show a muted
-secondary compact `VMID`/`CTID`/`ID` cue when `display.entityIdLabel` is
-available, so operators can disambiguate familiar names without turning the
-primary scan path back into raw numeric identifiers or bloating the table with
-an extra recovery-only identity row.
-That same shared presentation layer also owns the distinction between
-aggregate recovery-method language and single-record recovery-method language.
-Timeline legends and daily breakdowns must use aggregate labels such as
-`Snapshots`, `Local Copies`, and `Remote Copies`, while event rows, filters,
-and point details must use the singular operator-facing forms `Snapshot`,
-`Local Copy`, and `Remote Copy`. Recovery point detail summaries must also
-humanize backend fields like kind, mode, outcome, and boolean state into
-operator-facing labels such as `Point Type`, `Method`, `Outcome`, `Verified`,
-and `Encrypted` instead of leaking raw transport values like `backup`,
-`remote`, or lowercase outcome tokens into the primary drawer surface.
-That primary workspace selection now also lives in canonical recovery route
-state through `frontend-modern/src/routing/resourceLinks.ts` and
-`frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`, so copied
-links and browser restores reopen explicit protection-coverage state instead
-of silently falling back to page-local UI state. Focused recovery routes with
-an active `rollupId` or `day` remain recovery-events-first by default, and
-default event routes should omit redundant `view=events` query state.
-That same shared route-helper contract now also has to preserve exact storage
-and recovery handoffs for unified resources discovered outside the storage or
-recovery pages. When alerts, Patrol, or infrastructure drawers route a
-TrueNAS-backed disk, app, or system into an owning platform/runtime surface,
-the shared helper must keep the owned `source`, `node`, `platform`, `view`,
-and exact `resource` semantics intact instead of collapsing those handoffs
-back to provider-local URLs, retired aggregate workspace routes, or generic
-top-level tabs.
-That history table layout now also derives its minimum width from the same
-canonical column-width spec that owns the header sizing in
-`frontend-modern/src/utils/recoveryTablePresentation.ts`, so longer governed
-subject labels do not force the trailing outcome/status columns off-screen by
-budget drift.
-That same recovery product proof surface now also includes a browser-level
-desktop layout guard in `tests/integration/tests/17-recovery-layout.spec.ts`,
-which opens the recovery page against deterministic recovery payloads and
-fails when the history table needs horizontal scrolling or lets the outcome
-column drift outside the visible wrapper at desktop width.
+Alerts, Patrol, and resource drawers hand no resources into storage or
+recovery surfaces today: their cross-jump chips were retired on 2026-05-16,
+and `buildStorageRouteSearch()` is read only by the Storage surface's own
+filter state. A future handoff of a TrueNAS-backed disk, app, or system into
+an owning platform tab must keep the owned `source`, `node`, `platform`,
+`view`, and exact `resource` semantics instead of collapsing to provider-local
+URLs, retired aggregate workspace routes, or generic top-level tabs.
+The recovery product proof surface's browser-level layout guard is
+`tests/integration/tests/17-proxmox-backups-layout.spec.ts`. Against the
+mock-mode dataset it checks that selecting an activity day keeps the operator
+on `/proxmox/backups` with an `N of M backups` count, and that a one-year
+activity range keeps the page inside the horizontal viewport with the PBS
+servers table's trailing column inside its wrapper; the activity chart may
+scroll inside its own card.
 That same shared `internal/api/` dependency now also assumes tenant-scoped
 resource handlers seed registries from canonical unified resources only:
 recovery- and storage-adjacent API helpers may not fall back to raw tenant
@@ -4872,383 +4783,72 @@ The storage page's readiness now stays route-owned as well:
 loading, reconnect, and disconnect presentation from the storage unified-resource
 fetch contract before consulting websocket churn so the storage surface does
 not present healthy REST-backed data as down or stale.
-Meanwhile,
-`frontend-modern/src/components/Recovery/` and the recovery hooks define the
-event timeline, protection-coverage review, and recovery-history UX. The
-governed page frame is event-first: operators land directly on concrete
-backup/snapshot/replication history, with `RecoveryActivitySection.tsx` acting
-as compact orientation for the visible event table. The former decorative
-recovery summary-card strip is retired because workloads already owns the
-object-level "has a backup" scan, while Recovery owns concrete recovery events
-and an explicit secondary protection-coverage review.
-That top recovery frame must rely on solid elevated operator panels and border
-hierarchy rather than decorative gradients so the page reads like a monitoring
-workspace instead of a marketing-style dashboard shell. The page must stay
-compact enough to keep the activity chart and primary event table in the first
-scroll window instead of stacking dashboard-like slabs above the work surface.
-Protection coverage remains a secondary review, opened through the explicit
-header action or canonical compatibility route state when the operator needs to
-audit stale, failed, warning, running, unknown, or never-succeeded items. It
-must expose a reciprocal page-header action back to Recovery events, so opening
-coverage never leaves the operator dependent on the global Recovery nav item or
-small table chrome to return to the primary page. It must not return as an
-equal-weight subtab or a top-level posture-card action strip without a separate
-governed product decision.
-Recovery is also intentionally outside the interactive page/group/entity
-summary-scope contract that the workloads and storage tables use. The recovery
-route must not adopt `summaryCardInteraction.ts`, `summaryTableFocus.ts`,
-row-driven summary scope, or a summary card strip simply because adjacent
-monitoring pages use those primitives. Recovery may still show
-coverage breadth and platform context inside the Protection coverage table and
-event filters, but the page must read item-first so the unified recovery model
-is not visually anchored to one platform family.
-That same item-first rule also applies to the protection coverage table:
-`RecoveryProtectedInventorySection.tsx` must surface protected item type as a
-first-class column in the main inventory grid rather than leaving platform as
-the only structural classifier beside the item label. Platform badges remain
-important supporting operator context, especially for Proxmox-heavy fleets,
-but the table frame itself must make protected item class explicit.
-That same inventory contract must keep the protected-items grid operationally
-bounded. The governed desktop recovery surface should not dump the entire
-protected estate into one endless slab; it should page or otherwise bound the
-primary inventory table so the workspace, filters, and adjacent activity panel
-remain readable as one monitoring surface instead of dissolving into a raw list
-dump.
-That same protected-inventory surface should carry compact operator orientation
-inside the table shell itself. `RecoveryProtectedInventorySection.tsx` should
-expose the current bounded range, page, and sort state near the primary grid,
-and the first column should carry enough secondary item metadata to read as a
-monitored inventory row rather than a bare export line.
-That same hierarchy rule also applies to the activity timeline. The governed
-recovery surface should not append `RecoveryActivitySection.tsx` underneath the
-default protected-items view as if trend telemetry were a second page bolted
-onto inventory. The timeline owns recovery-event day selection, so it belongs
-inside the `Recovery events` workspace and should read as history analysis for
-the selected window rather than as a second copy of the page-level posture
-summary.
-The same owned vocabulary applies to recovery events as well:
-`frontend-modern/src/utils/recoveryTablePresentation.ts` must keep the
-history-table `type` column labeled as `Item Type` within recovery surfaces so
-event history does not fall back to a generic shared `Type` header once the
-recovery lane has already established item-first operator vocabulary.
-That same item-first vocabulary must carry through the point-details drawer:
-when a recovery point includes canonical item-class metadata,
-`RecoveryPointDetails.tsx` must surface it as `Item Type` in the summary grid
-instead of jumping directly from item identity to platform and point-method
-metadata.
-That same shared presentation layer also owns recovery placement vocabulary.
-Cluster, node, and namespace facets remain valid supporting filters for
-Proxmox-heavy and Kubernetes-heavy operators, but the governed recovery
-surface must present them through platform-neutral labels such as
-`Cluster / Site`, `Host / Agent`, and `Namespace / Group` across advanced
-filters, active chips, table headers, column-picker entries, and point
-details so the page treats placement as optional context inside a
-multi-platform recovery model rather than a Proxmox-native spine. When
-normalized display labels are present, the visible history rows must prefer
-those labels over raw transport values for the same placement dimensions.
-The recovery table presentation helper now owns the canonical subject-type
-label fallback for recovery rows and delegates its title-casing to the shared
-`frontend-modern/src/utils/textPresentation.ts` helper rather than keeping a
-local recovery-only formatter, so subject and outcome labels stay aligned with
-the shared frontend label contract. Protected-inventory and recovery-event
-filters, table headers, and column-picker labels must use that helper for
-artifact fields such as `Item Type`, so the recovery tabs do not drift into
-near-identical page-local casing.
-That same recovery drill-in surface now also keeps provider-specific metadata
-inside a provider-neutral detail shell through
-`frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`, so PBS
-datastore and verification enrichments remain available without presenting the
-details drawer as a PBS-only surface.
-The point-details drawer also owns restore-safe operator guidance. It may
-surface restore readiness, verification provenance, and chain coverage for the
-selected point, but it must stay read-side until the backend exposes a governed
-restore execution contract. The drawer must not present a freestanding restore
-runbook or next-action path that reads as an approved restore workflow; target
-confirmation and isolated test-restore planning belong in a future governed
-action or restore flow, not in the evidence drawer. Chain context must be
-derived from the current recovery result set only when at least two concrete
-stages are visible, so mixed PVE/PBS/TrueNAS history can explain adjacent local
-snapshot, local copy, and remote copy stages without filling the drawer with
-missing-only cards. Raw transport IDs, provider refs, provider task IDs, and
-raw JSON copy actions belong behind `Technical details`; the primary drawer
-should keep human metadata, recorded verification provenance, target health,
-and collapsed file lists without repeating the same verification fact in
-provider-specific sections or rendering empty verifier/evidence placeholders
-when no verification record exists. Verification provenance should translate
-provider states such as PBS catalog `ok` into operator language instead of
-surfacing raw transport status tokens. Container recovery points should present
-container ids with operator vocabulary such as `CTID`, and duplicated placement
-or target values should not be repeated under lower-priority metadata labels.
-Provider-specific metadata must not recast the event drawer itself as if PBS
-were the native recovery model. Provider-owned repository data should sit under
-target-oriented wording such as `Target Details`, `Repository owner`, and
-`Target Health`; when target-specific technical labels are surfaced, they
-should prefer neutral wording such as `Target Ref` and `Target Resource`.
-Those transport hooks are direct governed runtime surfaces, not just page
-implementation detail: `frontend-modern/src/hooks/useRecoveryPoints.ts`,
-`frontend-modern/src/hooks/useRecoveryPointsFacets.ts`,
-`frontend-modern/src/hooks/useRecoveryPointsSeries.ts`, and
-`frontend-modern/src/hooks/useRecoveryRollups.ts` must stay on the explicit
-`recovery-product-surface` proof path instead of inheriting release-control
-coverage only through a retired standalone Recovery page shell.
-Those same hooks now also own recovery transport normalization at the frontend
-boundary: raw compatibility fields such as `provider` / `providers` may be
-accepted from older `/api/recovery/*` payloads, but the runtime values they
-return to the rest of the recovery UI must be canonical `platform` /
-`platforms` models.
+Recovery has no page frame of its own. The event timeline, protection-coverage
+review, recovery-history table, point-details drawer, activity strip, and the
+recovery table, filter-chip, status, record, action, issue, and empty-state
+presenters that served them were deleted with the aggregate Recovery page on
+2026-05-26 (its summary strip had gone on 2026-05-14), along with
+`useRecoveryRollups.ts`,
+`useRecoveryPointsFacets.ts`, and `useRecoveryPointsSeries.ts`. The rules that
+governed that frame's layout, density, workspace order, and default columns
+have no surface to bind. Recovery evidence now reads through two
+platform-owned tabs built on the shared platform-page table primitives: the
+Proxmox Backups tab (`ProxmoxBackupsTable.tsx` and its activity chart, date
+feed, coverage, recoverable-artifact, and backup-server tables) and the
+TrueNAS Protection tab (`TrueNASProtectionTable.tsx`). Neither adopts the
+interactive summary-scope primitives (`summaryCardInteraction.ts`,
+`summaryTableFocus.ts`) or a summary card strip.
+Recovery row details on those tabs stay read-side until the backend exposes a
+governed restore execution contract. They may show verification and target
+facts for the selected row, but must not present a freestanding restore
+runbook or next-action path that reads as an approved restore workflow.
+The Proxmox Backups activity chart keeps long ranges contained:
+`BackupActivityChart.tsx` sizes the plot through
+`getRecoveryTimelineChartMinWidthPx` (2,560 pixels for a year) and scrolls
+inside its own card, so the page itself never overflows horizontally;
+`tests/integration/tests/17-proxmox-backups-layout.spec.ts` asserts that at
+desktop width.
+The recovery transport hooks are direct governed runtime surfaces, not page
+implementation detail: `frontend-modern/src/hooks/useRecoveryPoints.ts` and
+`frontend-modern/src/hooks/useProtectionPostures.ts` stay on the explicit
+`recovery-product-surface` proof path, as do the shared recovery helpers that
+survived the page: `frontend-modern/src/types/recovery.ts`,
+`frontend-modern/src/utils/recoveryDatePresentation.ts`,
+`frontend-modern/src/utils/recoveryOutcomePresentation.ts`,
+`frontend-modern/src/utils/recoveryArtifactModePresentation.ts`,
+`frontend-modern/src/utils/recoveryTimelinePresentation.ts`, and
+`frontend-modern/src/utils/recoveryTimelineChartPresentation.ts`. They must not
+inherit release-control coverage only through the platform tabs that render
+them.
+`useRecoveryPoints.ts` also owns recovery transport normalization at the
+frontend boundary: raw compatibility fields such as `provider` may still
+arrive from older `/api/recovery/points` payloads, but the points it returns
+are canonical `platform` models.
 The retired dashboard recovery and storage entry points must stay removed:
 `useDashboardRecovery`, `DashboardRecoveryStatusPanel`,
 `DashboardStoragePanel`, dashboard storage/recovery presentation helpers, and
 dashboard widget orchestration must not return as direct proof surfaces. New
-storage or recovery summary proof must attach to the owning Storage,
-Recovery, Infrastructure drawer, or shared summary component instead of
-borrowing coverage through a broader dashboard shell.
-The shared recovery type contract must be pinned the same way:
-`frontend-modern/src/types/recovery.ts` must stay on the explicit
-`recovery-product-surface` proof path instead of riding indirectly on route or
-component coverage.
-That same direct proof rule applies to the shared recovery date helper:
-`frontend-modern/src/utils/recoveryDatePresentation.ts` must stay on the
-explicit `recovery-product-surface` proof path instead of inheriting coverage
-only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery status helper:
-`frontend-modern/src/utils/recoveryStatusPresentation.ts` must stay on the
-explicit `recovery-product-surface` proof path instead of inheriting coverage
-only through pages or higher-level recovery components.
-The default protected-inventory recovery route must also keep its primary
-table shell on class-driven sizing (`table-fixed` plus owned width classes)
-instead of inline `table-layout` / `min-width` styles, so the public recovery
-surface stays CSP-safe without drifting from the shared table contract.
-That same direct proof rule also applies to the shared recovery record helper:
-`frontend-modern/src/utils/recoveryRecordPresentation.ts` must stay on the
-explicit `recovery-product-surface` proof path instead of inheriting coverage
-only through pages or higher-level recovery components.
-That shared recovery record contract now also includes rollup-side display
-payload continuity: the recovery backend must preserve the latest normalized
-subject label on rollups, and recovery UI helpers must prefer that canonical
-display label before raw subject ids whenever the live unified-resource map is
-missing or only resolves to opaque machine identifiers.
-That same direct proof rule also applies to the shared recovery outcome helper:
-`frontend-modern/src/utils/recoveryOutcomePresentation.ts` must stay on the
-explicit `recovery-product-surface` proof path instead of inheriting coverage
-only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery action helper:
-`frontend-modern/src/utils/recoveryActionPresentation.ts` must stay on the
-explicit `recovery-product-surface` proof path instead of inheriting coverage
-only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery artifact mode
-helper: `frontend-modern/src/utils/recoveryArtifactModePresentation.ts` must
-stay on the explicit `recovery-product-surface` proof path instead of
-inheriting coverage only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery empty-state
-helper: `frontend-modern/src/utils/recoveryEmptyStatePresentation.ts` must stay
-on the explicit `recovery-product-surface` proof path instead of inheriting
-coverage only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery filter-chip
-helper: `frontend-modern/src/utils/recoveryFilterChipPresentation.ts` must stay
-on the explicit `recovery-product-surface` proof path instead of inheriting
-coverage only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery issue helper:
-`frontend-modern/src/utils/recoveryIssuePresentation.ts` must stay on the
-explicit `recovery-product-surface` proof path instead of inheriting coverage
-only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery table helper:
-`frontend-modern/src/utils/recoveryTablePresentation.ts` must stay on the
-explicit `recovery-product-surface` proof path instead of inheriting coverage
-only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery timeline-chart
-helper: `frontend-modern/src/utils/recoveryTimelineChartPresentation.ts` must
-stay on the explicit `recovery-product-surface` proof path instead of
-inheriting coverage only through pages or higher-level recovery components.
-That same direct proof rule also applies to the shared recovery timeline
-helper: `frontend-modern/src/utils/recoveryTimelinePresentation.ts` must stay
-on the explicit `recovery-product-surface` proof path instead of inheriting
-coverage only through pages or higher-level recovery components.
-
-Those recovery transport surfaces now also share one normalized filter
-contract: protection rollups, point history, facets, and chart series must
-all honor the same canonical `platform`, canonical `itemType`, cluster, node, namespace,
-workload-scope, verification, and route-backed free-text `q` filter so the
-protection coverage list cannot drift from the timeline and facet state under the
-same active recovery view. That same recovery filter contract now depends on
-the canonical recovery index carrying a normalized `itemType` instead of
-forcing each UI surface to re-derive protected item classes from raw
+storage or recovery summary proof must attach to the owning Storage surface,
+platform tab, or shared summary component instead of borrowing coverage
+through a broader dashboard shell.
+The recovery backend preserves rollup-side display payload continuity: it keeps
+the latest normalized subject label on rollups, so a reader can prefer that
+canonical display label over raw subject ids whenever the live
+unified-resource map is missing or only resolves to opaque machine
+identifiers.
+The `/api/recovery/*` transports share one normalized filter contract:
+protection rollups, point history, facets, and chart series all honor the same
+canonical `platform`, canonical `itemType`, cluster, node, namespace,
+workload-scope, verification, and free-text `q` filters, so any two of them
+read under the same filters describe the same items. That filter contract
+depends on the canonical recovery index carrying a normalized `itemType`
+instead of forcing each reader to re-derive protected item classes from raw
 provider-native `subjectType` values.
-That same recovery product surface keeps the primary workspace visually ahead
-of secondary analytics: `frontend-modern/src/components/Recovery/Recovery.tsx`
-must lead directly into the route-backed recovery events workspace, with
-recovery events owning both the activity timeline and the event table together.
-Protection coverage opens only through the explicit header action or
-compatibility route state. The activity timeline remains required even when
-point-history loading fails, but it belongs to the events workspace rather than
-hanging beside coverage as a competing page-level peer.
-That same recovery product surface must not reintroduce a four-card posture,
-freshness, coverage, or activity strip as decorative orientation. Workloads is
-the better object-level place to scan whether a resource has backup coverage;
-Recovery should reserve its first viewport for concrete recovery history and
-only expose coverage rollups when the operator asks for the secondary review.
-That same page-level ownership applies to the recovery time window. The
-canonical range selector now lives inside `RecoveryActivitySection.tsx` because
-it controls the event timeline and the event query window, not a page-level KPI
-strip. Range changes must clear selected-day focus and return the events table
-to page one through the route-state owner so the chart and table remain aligned.
-That same activity-section contract should stay compact and scan-first:
-recovery-point volume, active-day count, stale count, and average rate may
-appear as concise inline readouts beside the chart controls, but not as separate
-top-level metric cards or nested mini-panels. The activity strip must also avoid
-interpreted anomaly callouts such as "lowest active day" unless the recovery
-model has canonical schedule expectations that make the signal actionable.
-Item-type labels should continue to render through canonical workload/resource
-badge classes in the event and coverage tables instead of adding recovery-only
-wrapper chrome around VM, container, or other resource badges.
-That same event-first shell rule should hand straight from the activity section
-into the active events workspace without an extra page-local spacer band,
-default tab row, or duplicate status strip that makes the surface softer than
-storage or workloads.
-That same scan-first rule applies to the secondary coverage surface. Recovery
-should not show equal workspace tab labels and then repeat the same workspace
-count as standalone text; protection coverage cues should focus on issues,
-drill-in context, and active filters.
-That same coverage surface should also follow the established monitoring-table
-scan pattern in its first column. Coverage rows should lead with a clear
-status cue, the primary item name, and compact badge-backed item/platform
-context instead of relying on recovery-only rails or plain-text metadata lines
-that make the table read like a report instead of an operational grid.
-That same triage rule applies to the coverage sort. Protection coverage should
-open with attention-state rollups first instead of defaulting to
-newest-successful backups, so operators land on failed, never-succeeded, stale,
-warning, and running items before the healthy catalog.
-That same row contract should avoid duplicating context that already has a
-dedicated column. When `Item Type` and `Platform` columns are visible, the
-primary item cell should not restate those same badges on desktop; duplicate
-context belongs only as a small-screen fallback when those columns collapse.
-That same scan rule applies to the supporting columns themselves. Recovery
-tables should keep one dominant identity cue and one canonical platform cue.
-`Item Type` should use the same shared workload/resource badge treatment that
-other Pulse tables use for `VM` and `Container`, while `Method` and similar
-supporting fields stay on restrained metadata text instead of turning every
-adjacent column into another colored badge.
-That same item-identity contract also applies to synthetic Proxmox task
-recovery points. When the persisted subject label is just a raw
-`pve-task:*`/`UPID:*` identifier or `vmid=0`, the canonical recovery index
-should derive a readable task label and `task` item type from point details so
-recovery tables scan by operator meaning instead of transport IDs.
-That same coverage surface should stay on the flat monitoring-table pattern
-already used elsewhere in Pulse. Protection coverage should surface posture through
-row-level status cues, outcome pills, and filters rather than inserting extra
-`Needs Attention` / `Healthy Coverage` section rows that add height and turn
-the table into a recovery-only grouped report.
-That same protection-coverage table should also avoid recovery-local pagination
-chrome. The workspace already holds the filtered rollups client-side, so it
-should read as one continuous monitoring table with a simple coverage-item
-count instead of introducing `Prev` / `Next` buttons and page counters that do
-not match the canonical Pulse scan pattern.
-That same table-shell contract must avoid duplicate framing once the summary
-action has established the secondary coverage workspace.
-`RecoveryProtectedInventorySection.tsx` should keep page/count/sort
-orientation inside a slim table-shell status row and let the filter strip lead
-directly into the grid instead of reintroducing a second large inventory header
-card above the same table.
-That same shell rule should also avoid low-signal bookkeeping above the grid.
-The protected-items status row should surface the active workspace, protected
-item count, and issue cues, but page-number and sort-direction bookkeeping
-belongs in the table chrome itself rather than competing with the primary scan
-path before operators even reach the rows.
-That same table density rule also applies to recovery table chrome and filter
-rows. Recovery inventory and event tables should use the same restrained
-title-case header typography, compact control heights, and thin row density as
-the established Pulse monitoring tables instead of drifting into report-style
-uppercase headers or oversized filter chrome.
-That same protected-items table contract should stay on the canonical shared
-table separator treatment used by the rest of Pulse. Recovery inventory should
-use the standard shared header/body dividers and avoid both local suppression
-of those separators and local duplicate row or header borders that make the
-lines read heavier than other monitoring tables.
-That same workspace-shell rule should also avoid a dedicated recovery-only
-status strip above the control bar. Recovery should use an event-first handoff:
-activity context, a shared controls card, then a data card. Protection coverage
-may use its own shared controls card and table when explicitly opened, but
-Recovery should not collapse controls and content back into one fused workspace
-slab or bury secondary workspace navigation inside the filter row.
-That same strip should not repeat page-level counts or posture cues as a
-replacement for the retired summary strip. Protection coverage controls should
-stay focused on drill-in context and active filters instead of echoing page-wide
-posture pills above the same table.
-That same workspace handoff should stay on shared primitive styling too.
-Recovery events and protection coverage should keep using shared `FilterBar`,
-`TableCard`, and `TableCardHeader` primitives instead of inventing a
-recovery-only variant or recovery-only class stack.
-That same canonical-row rule also means the subtabs row should stand on its own
-full-width shell instead of sharing a flex line with recovery-only chips or
-adjacent badges that break the storage-style border and spacing treatment.
-That same shared page-controls contract applies to recovery search width too.
-The protected-items and recovery-events workspaces should keep the search field
-on the standard full-width shared search row, and any counts or utility cues
-should live in the toolbar actions instead of narrowing the search row through
-recovery-local grid overrides or width hacks. Protected-items controls should
-also use the same shared `Reset all` page-controls action pattern as storage
-and workloads when visible filters are active, instead of forcing operators to
-clear each inventory filter manually.
-That same handoff should keep Recovery free of a first-viewport summary card
-strip unless a new governed product decision reintroduces a first-viewport
-summary owner. The current route should spend its top-level density budget on
-the activity section, compact controls, and one primary data card.
-That same shell rule applies to the recovery-events workspace.
-`RecoveryHistorySection.tsx` should use the same slim status-row-plus-filter-row
-pattern as the protected inventory surface, not a separate large titled header
-bar plus another full toolbar slab. Event filter labels should also stay on the
-canonical short Pulse vocabulary like `Platform` and `Status` instead of
-recovery-only variants such as `History platform` or `History status`. Both
-recovery toolbars should also stay on compact shared select sizing instead of
-inflating the row with recovery-local min-width overrides that make the
-controls denser and wider than storage for the same amount of operator input.
-That same events-workspace rule should keep the activity strip as orientation
-for the event list rather than burying it at the bottom. The events workspace
-should move from the subtabs row to `RecoveryActivitySection.tsx`, then shared
-controls, then the recovery history table as sibling sections, so the timeline
-frames the event list without turning the page back into stacked primary
-tables or embedding the activity strip inside the history card.
-That same events-shell contract should avoid repeating page-state bookkeeping
-ahead of the history grid. Recovery events should keep the toolbar utility area
-focused on actual controls like advanced filters and column visibility instead
-of passive `day groups` narration; day grouping should stay legible through the
-history surface itself, while current page and other table bookkeeping remain
-in the table footer instead of competing with the scan path above the filters.
-That same activity panel should stay compact and analytical rather than
-becoming a second dashboard header. `RecoveryActivitySection.tsx` should keep a
-single slim telemetry header, compact active-filter chips, a shorter chart
-frame, reduced vertical insets, and a smaller legend footprint so the events
-workspace hands off quickly from activity context to the history table instead
-of spending a disproportionate slice of the screen on chart chrome. The range
-picker and legend should share one compact control row, and the activity strip
-should not burn a separate descriptive subtitle row once the headline metrics
-already explain the chart context.
-That same timeline contract must keep long-range activity fully constrained to
-the card width. Extended ranges such as `365d` should compress their day
-columns to fit the available plot width instead of carrying per-column minimum
-widths that make the chart overflow its containing card.
-That telemetry header should also avoid derivative pace rows once the chart
-already carries the rhythm. Total points, active days, and issue cues can
-stay, but average-per-day style readouts should not re-expand the strip into a
-second mini report above the event table.
-That same events-table contract should also keep the default column set on a
-monitoring-style scan path rather than a report-export path. Recovery events
-should default to the concise columns operators need to triage quickly, while
-secondary fields such as verification, size, target, and details remain
-available through the shared column picker instead of crowding the baseline
-desktop view. When the responsive event table collapses columns on mobile, the
-primary item cell must retain enough method, platform, target, and verification
-context to preserve restore-readiness meaning rather than hiding all secondary
-evidence behind desktop-only columns in the desktop grid.
-That same event-row scan rule should mirror the protected-items table in the
-primary identity cell. `RecoveryHistoryTable.tsx` should lead each event row
-with a compact outcome status cue plus the canonical item name, so operators
-can scan event health by row without relying only on the far-right outcome
-column.
-That same density rule should also keep history grouping and badges restrained.
-Day-group headers should read as slim dividers instead of banner rows, and
-platform/method/outcome pills should stay compact enough that the event grid
-still scans like a monitoring table rather than a report export.
+The same item-identity contract applies to synthetic Proxmox task recovery
+points. When the persisted subject label is just a raw `pve-task:*`/`UPID:*`
+identifier or `vmid=0`, the canonical recovery index should derive a readable
+task label and `task` item type from point details so recovery rows scan by
+operator meaning instead of transport IDs.
 That shared unified-resource dependency now also includes policy-governed
 resource metadata on the frontend decode path: storage and recovery surfaces
 that route through `frontend-modern/src/hooks/useUnifiedResources.ts` must
@@ -5804,29 +5404,12 @@ and proof surface describe one /api/auto-register path instead of a fake
 /api/auto-register/secure sibling, so adjacent transport and governed
 evidence do not drift onto a route split that the runtime does not actually
 expose.
-That same filter contract applies to the advanced history facets transport as a
-whole: changing node or namespace filters must narrow the facets request too,
-so node and namespace option sets cannot drift back to the broader chart window
-while the visible history table is already scoped to a smaller recovery slice.
-That same narrowing rule now also applies when a timeline day is selected: the
-facets request must use the same narrowed day window as the points request so
-node and namespace option sets stay coherent with the visible history slice
-instead of showing options from the full chart range while the table is already
-scoped to a single day.
-The recovery timeline drill-down now also treats day selection as a real
-history transport boundary: choosing a day in the "Backups By Date" chart must
-narrow the point-history request window to that selected local day rather than
-only updating local selection chrome while the table remains on the broader
-chart window.
-That selected-day boundary must also be durable route state: the recovery URL
-must preserve the active timeline day so reload, navigation, and shared links
-reconstruct the same point-history window instead of silently widening back to
-the broader chart range.
-That same route continuity rule also applies to the selected chart window
-itself: changing the recovery timeline range to `7d`, `90d`, or `1y` must stay
-in canonical recovery route state so reload, navigation, and shared links
-reconstruct the same rollup and series transport window instead of widening
-back to the default `30d` range.
+The facet, point-window, and range route-state rules that served the deleted
+Recovery page's history table no longer have a reader. Day and range selection
+now belong to the Proxmox Backups activity chart: choosing a day filters the
+date feed in place and writes `PROXMOX_BACKUPS_QUERY_PARAMS.day`, so reload and
+shared links reopen the same day, while the chart range (`7d`, `30d`, `90d`,
+`1y`) is component state that starts at 30 days and is not written to the URL.
 
 This lane intentionally depends on other governed boundaries instead of
 overreaching into them. API transport and payload contract ownership remain in
@@ -6084,10 +5667,9 @@ collector, agent-id/device fallback stream, or separate "real-time" history
 store once monitoring and `/api/metrics-store/history` already own the disk
 timeline.
 The same shell/runtime split now applies to websocket consumers:
-`frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx` and
 `frontend-modern/src/components/Storage/useStoragePageResources.ts` may consume
 websocket state only through `frontend-modern/src/contexts/appRuntime.ts`.
-They must not import `@/App` or create storage/recovery-local shell coupling,
+It must not import `@/App` or create storage/recovery-local shell coupling,
 because provider placement remains app-shell-owned and storage/recovery
 surfaces must stay lazy-load safe.
 The Storage page also keeps large-estate hydration and rendering bounded at
