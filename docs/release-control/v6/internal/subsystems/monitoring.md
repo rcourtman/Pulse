@@ -558,7 +558,10 @@ completed. A cold cache cannot override another owner's reservation or an early
 failure's backoff. A denied reservation returns only previously retained
 identity (or none), without creating fresh evidence, a transport deferral or a
 new retry deadline. Other keys remain independent; completion releases only
-in-flight ownership and preserves normal refresh/backoff scheduling.
+in-flight ownership and preserves normal refresh/backoff scheduling. Deliberate
+cache invalidation on agent unavailability also discards its obsolete scheduling
+deadline, so a later available poll can begin a fresh metadata lifecycle; it
+never discards an outstanding fetch owner or the shared Proxmox command fence.
 
 `guest_metadata_reservation_test.go` exercises real HTTP enrichment with cold
 and retained caches, active and expired scheduling holds, early unverified-lock

@@ -203,3 +203,32 @@ func TestGuestMetadataColdCacheHonoursEarlyBackoff(t *testing.T) {
 		})
 	}
 }
+
+func TestGuestMetadataInvalidationKeepsActiveOwnership(t *testing.T) {
+	key := guestMetadataCacheKey("reservation", "node", 105)
+	other := guestMetadataCacheKey("independent", "node", 105)
+	future := time.Now().Add(time.Hour)
+	m := &Monitor{guestMetadataCache: map[string]guestMetadataCacheEntry{key: {osName: "old"}, other: {osName: "independent"}}, guestMetadataLimiter: map[string]time.Time{other: future}}
+	if !m.tryReserveGuestMetadataFetch(key, time.Now()) {
+		t.Fatal("owner could not reserve metadata")
+	}
+	m.clearGuestMetadataCache("reservation", "node", 105)
+	if _, exists := m.guestMetadataCache[key]; exists {
+		t.Error("invalidated metadata was retained")
+	}
+	if _, exists := m.guestMetadataLimiter[key]; exists {
+		t.Error("obsolete scheduling deadline survived invalidation")
+	}
+	if m.tryReserveGuestMetadataFetch(key, time.Now()) {
+		t.Fatal("invalidation admitted another in-flight metadata writer")
+	}
+	if m.guestMetadataCache[other].osName != "independent" || !m.guestMetadataLimiter[other].Equal(future) {
+		t.Error("invalidation crossed installation boundaries")
+	}
+	m.releaseGuestMetadataFetch(key)
+	assertMetadataReservationReleased(t, m)
+	if !m.tryReserveGuestMetadataFetch(key, time.Now()) {
+		t.Error("invalidated metadata did not allow a fresh lifecycle after completion")
+	}
+	m.releaseGuestMetadataFetch(key)
+}

@@ -482,6 +482,12 @@ func (m *Monitor) clearGuestMetadataCache(instanceName, nodeName string, vmid in
 		delete(m.guestMetadataCache, key)
 	}
 	m.guestMetadataMu.Unlock()
+	// Deliberate invalidation when the agent is unavailable starts a new
+	// metadata lifecycle. Do not carry its obsolete refresh/backoff deadline
+	// into a later available poll, or discard an outstanding fetch's ownership.
+	m.guestMetadataLimiterMu.Lock()
+	delete(m.guestMetadataLimiter, key)
+	m.guestMetadataLimiterMu.Unlock()
 }
 
 func cloneStringSlice(src []string) []string {
