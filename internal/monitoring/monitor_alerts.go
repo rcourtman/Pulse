@@ -716,6 +716,14 @@ func (m *Monitor) checkMockAlerts() {
 		m.alertManager.CheckStorageWithCapacityTrend(storage, m.storageCapacityTrend(storage, time.Now()))
 	}
 
+	// Check alerts for physical disks. Live disks are evaluated by the
+	// physical disk poller, which only polls configured Proxmox instances, and
+	// the fixture deliberately keeps a FAILED cohort and worn SSDs, so without
+	// this pass the estate shows failing disks with no disk-health or
+	// disk-wearout alert.
+	log.Debug().Int("diskCount", len(state.PhysicalDisks)).Msg("checking physical disk alerts")
+	m.checkMockPhysicalDiskAlerts(state.PhysicalDisks, state.Nodes, state.Hosts)
+
 	// Check alerts for PBS instances
 	log.Debug().Int("pbsCount", len(state.PBSInstances)).Msg("checking PBS alerts")
 	for _, pbsInst := range state.PBSInstances {
@@ -814,4 +822,39 @@ func (m *Monitor) checkMockDockerHostAlerts(host models.DockerHost) {
 		return
 	}
 	m.alertManager.CheckDockerHost(host)
+}
+
+// checkMockPhysicalDiskAlerts applies the physical disk poller's alert
+// boundary to fixture disks. The poller only evaluates disks on nodes it
+// reached, so a disk on a node that is not online keeps whatever alert it
+// had, and a device matched by the linked agent's --disk-exclude patterns is
+// evaluated as healthy. The poller's wait for host-agent links to settle after
+// a restart does not apply: fixture links and exclusions are complete from the
+// first pass.
+func (m *Monitor) checkMockPhysicalDiskAlerts(disks []models.PhysicalDisk, nodes []models.Node, hosts []models.Host) {
+	type nodeKey struct{ instance, name string }
+
+	excludeByHost := make(map[string][]string, len(hosts))
+	for _, host := range hosts {
+		if len(host.DiskExclude) > 0 {
+			excludeByHost[host.ID] = host.DiskExclude
+		}
+	}
+	onlineNodes := make(map[nodeKey]bool, len(nodes))
+	excludeByNode := make(map[nodeKey][]string)
+	for _, node := range nodes {
+		key := nodeKey{instance: node.Instance, name: node.Name}
+		onlineNodes[key] = node.Status == "online"
+		if patterns := excludeByHost[node.LinkedAgentID]; node.LinkedAgentID != "" && len(patterns) > 0 {
+			excludeByNode[key] = patterns
+		}
+	}
+
+	for _, disk := range disks {
+		key := nodeKey{instance: disk.Instance, name: disk.Node}
+		if !onlineNodes[key] {
+			continue
+		}
+		m.checkPhysicalDiskAlerts(disk.Instance, disk, excludeByNode[key])
+	}
 }
