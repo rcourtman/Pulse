@@ -3303,7 +3303,7 @@ a new API state machine, queue contract, or verification-accounting field.
    and the `/api/ai/intelligence/changes` route plus `internal/api/contract_test.go`, so the canonical recent-changes endpoint stays on the same intelligence facade and contract snapshot instead of bypassing the shared timeline source
    and the canonical policy-posture snapshot derived from unified resources, so sensitivity, routing, and redaction counts stay owned by the same AI summary contract instead of being reconstructed as a page-local governance rollup
    and the resource-intelligence payload carried by the drawer AI card, so the resource-detail surface stays on one canonical intelligence contract instead of introducing a separate detail endpoint
-   and the learned-correlation payload loaded into the shared AI intelligence store, so the Patrol intelligence page and the AI summary page consume the same governed correlation slice instead of each page fetching its own copy
+   and the global learned-correlation route `/api/ai/intelligence/correlations`, which has no frontend client today: no page renders that list, so the shared AI intelligence store neither loads nor holds it and the resource drawer reads per-resource correlations from the resource-intelligence payload; a surface that later renders the global list must add one store-owned load instead of a page-local fetch
    and the shared dashboard-load bundle inside `frontend-modern/src/stores/aiIntelligence.ts`, so the page orchestration stays on the store-owned bundle instead of enumerating the AI fetches inline
    and the Patrol page refresh lifecycle in `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, so slow or stalled secondary reads from that shared dashboard-load bundle may continue resolving in the background while the operator-facing Patrol refresh control remains generation-aware, timeout-bounded, and reusable once Patrol findings and status are already visible
    and the Patrol header support drawer in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, so API-owned Patrol status and trigger facts can feed a secondary Schedule & model surface without turning provider model, schedule, trigger tuning, or background-only runtime-policy pauses into the primary Patrol control decision
@@ -7316,11 +7316,13 @@ The same AI resource-intelligence payload now also carries dependency and
 dependent correlation arrays plus correlation evidence, so the drawer can render
 canonical correlation context from the shared AI contract instead of inferring it
 from the relationship facet payload alone.
-The same AI frontend client now also loads `/api/ai/intelligence/correlations`
-through the shared `frontend-modern/src/stores/aiIntelligence.ts` store for
-the Patrol intelligence page and the AI summary page, so the
-learned-correlation list is governed by the same API contract that backs the
-resource drawer's correlation evidence instead of being fetched as page-local state.
+The frontend does not load `/api/ai/intelligence/correlations`. No page renders
+the global learned-correlation list, so `frontend-modern/src/api/ai.ts` carries
+no client for it, and neither the dashboard load bundle in
+`frontend-modern/src/stores/aiIntelligence.ts` nor the Patrol refresh path
+fetches it. The resource drawer's correlation evidence comes from the
+resource-intelligence payload above. The route stays an API surface behind the
+`ai:execute` scope.
 That correlations route now reads through the canonical AI intelligence
 facade first, so the handler and its payload keep the detector behind one
 shared access layer instead of routing directly to Patrol-local correlation

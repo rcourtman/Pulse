@@ -6823,6 +6823,9 @@ operator refresh controls generation-aware, timeout-bounded, and separate from
 background polling state, so a slow supporting intelligence read cannot make the
 shared Patrol header Refresh Patrol action spin indefinitely or stay disabled
 while Patrol findings and status remain visible.
+Neither the Patrol load and poll path (the store's `loadDashboardData` bundle)
+nor the Retry path's background supporting reads fetch the global
+learned-correlation list, which no Patrol surface shows.
 That same Patrol shell should make scoped trigger policy legible without
 another navigation step. `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`
 should keep actionable scoped-trigger state legible without promoting

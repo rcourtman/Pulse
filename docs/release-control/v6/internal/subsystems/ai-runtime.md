@@ -6729,6 +6729,11 @@ seed prompt correlations now flow through the shared AI intelligence facade
 first, so the detector remains an implementation detail behind one canonical
 correlation access path instead of being routed directly by handlers or prompt
 builders.
+The browser does not read the global learned-correlation list:
+`frontend-modern/src/api/ai.ts` carries no client for
+`/api/ai/intelligence/correlations`, and neither the shared AI intelligence
+store nor the Patrol page loads it, because no page renders it. The resource
+drawer reads per-resource correlations from the resource-intelligence payload.
 AI-facing policy metadata must also be cloned through the shared unified-
 resource policy helper so chat and tools consumers do not maintain their own
 policy copy logic. Chat mention prefetch now calls that shared helper directly
