@@ -230,6 +230,49 @@ export function resolveAlertResourceMetricEnableValue(
   return undefined;
 }
 
+/**
+ * A global default that may stay unset because another setting decides it,
+ * such as TrueNAS disk temperature following Disk temperature by type. Unset,
+ * the cell is empty with `label` as its placeholder and `title` explaining
+ * where the value comes from. `off` says the other setting is itself off, so
+ * the unset cell reads Off and switching it on has to stage `enableValue`.
+ */
+export interface AlertResourceGlobalDefaultFallback {
+  label: string;
+  title: string;
+  off?: boolean;
+  enableValue?: number;
+}
+
+export interface AlertResourceGlobalDefaultCell {
+  /** Unset and decided by the fallback. */
+  follows: boolean;
+  isOff: boolean;
+  /** Value staged when the cell is switched back on from Off. */
+  enableValue: number | undefined;
+}
+
+/**
+ * State of one Global Defaults metric cell. An unset default is Off, as the
+ * alert engine reads it, unless the metric has a fallback; then it reads as
+ * the fallback does. Switching it on from Off returns it to unset when the
+ * fallback is on, and stages an explicit value when the fallback is off,
+ * since unset would still be off.
+ */
+export function resolveAlertResourceGlobalDefaultCell(
+  metric: string,
+  value: number | undefined,
+  fallback: AlertResourceGlobalDefaultFallback | undefined,
+): AlertResourceGlobalDefaultCell {
+  const follows = value === undefined && fallback !== undefined;
+  const explicitEnableValue = fallback?.enableValue ?? getAlertResourceEnabledDefault(metric);
+  return {
+    follows,
+    isOff: follows ? Boolean(fallback?.off) : isAlertResourceMetricOff(value ?? 0),
+    enableValue: fallback && !fallback.off ? undefined : explicitEnableValue,
+  };
+}
+
 export function getAlertResourceMetricDelayOverride(
   metricDelaySeconds: Record<string, number> | undefined,
   metric: string,

@@ -35,6 +35,12 @@ type alertPolicyQuery struct {
 	// StorageAliases are the storage resource's alias IDs, honored by the
 	// storage override lookup.
 	StorageAliases []string
+	// DiskType is a physical disk's type ("nvme", "sas", "sata"), which
+	// picks its disk temperature threshold. DiskTypeUnknown marks a disk
+	// whose type was never recorded, such as an alert persisted before it
+	// carried one; it is judged against the lowest per-type trigger.
+	DiskType        string
+	DiskTypeUnknown bool
 }
 
 // EffectiveAlertPolicy is the resolved policy for one resource.
@@ -116,6 +122,9 @@ func (m *Manager) effectiveAlertPolicyNoLock(q alertPolicyQuery) EffectiveAlertP
 	policy.AllDisabled, policy.OfflineDisabled = m.alertPolicyTypeSwitchesNoLock(q.TypeKey)
 
 	thresholds := m.defaultThresholdsForResourceType(q.TypeKey)
+	if q.TypeKey == "truenas-disk" {
+		thresholds.Temperature = m.trueNASDiskTemperatureDefaultNoLock(q.DiskType, q.DiskTypeUnknown)
+	}
 	switch {
 	case isGuestThresholdResourceType(q.TypeKey):
 		thresholds = m.customRuleThresholdsNoLock(thresholds, q.Guest)

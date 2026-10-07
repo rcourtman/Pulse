@@ -2116,6 +2116,18 @@ the same record; the table renders defaults once, in both desktop table and
 narrow card layouts, and per-section metric columns must resolve to metric
 keys the shared column normalizer produces so the defaults editor reads and
 writes the same record keys the section persists.
+A global default that another setting decides while it is unset passes a
+`globalDefaultFallbacks` entry for that metric (label, title, whether the other
+setting is itself off, and the value switching on stages when it is). The
+TrueNAS Disks temperature uses it to read `By type`, following Disk
+temperature by type, with `features/alerts/thresholds/trueNASDiskTemperature.ts`
+giving each disk row its type's trigger from the unsaved editor state.
+`resolveAlertResourceGlobalDefaultCell` decides the cell for both layouts:
+unset follows the fallback, switching on from Off returns to unset unless the
+fallback is off, and an unset default with no fallback stays Off as the engine
+reads it. `ResourceTable.tsx` hands its props to the shared table state through
+getters, so the Custom badge and reset control follow defaults that load after
+the table mounts.
 Platform sub-routes that add native provider inventory must stay on the shared
 platform page and table primitives. The vSphere Networks surface routes through
 `/vmware/networks`, the shared platform tab model, the command palette

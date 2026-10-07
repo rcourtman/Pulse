@@ -409,7 +409,17 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
-			thresholds := m.resolveResourceThresholds(primaryResourceType, resourceID)
+			query := alertPolicyQuery{TypeKey: primaryResourceType, ResourceID: resourceID}
+			if primaryResourceType == "truenas-disk" {
+				// Judge the alert against its disk type's threshold, as the
+				// next evaluation will. An alert raised before it recorded a
+				// disk type is held to the lowest per-type trigger, so a save
+				// never resolves an alert its type would raise again.
+				diskType, known := alert.Metadata["diskType"].(string)
+				query.DiskType = diskType
+				query.DiskTypeUnknown = !known
+			}
+			thresholds := m.effectiveAlertPolicyNoLock(query).Thresholds
 			if thresholds.Disabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue

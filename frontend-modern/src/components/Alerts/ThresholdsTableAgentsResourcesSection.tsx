@@ -82,9 +82,9 @@ export function ThresholdsTableAgentsResourcesSection(props: ThresholdsTableSect
           <Card padding="md" tone="card" class="mt-4">
             <h3 class="text-sm font-semibold text-base-content">Disk temperature by type</h3>
             <p class="mt-1 text-xs text-muted">
-              Alert trigger in °C for each disk type. Warning colors start 5°C below the trigger.
-              Setting a Disk Temp override on a host above replaces these for all of that host's
-              disks.
+              Alert trigger in °C for each disk type, for agent and TrueNAS disks. Warning colors
+              start 5°C below the trigger. A Disk Temp override on a host above replaces these for
+              all of that host's disks, and a TrueNAS Disks value replaces them for TrueNAS disks.
             </p>
             <div class="mt-4 grid gap-4 sm:grid-cols-3">
               <For each={DISK_TEMP_TYPE_FIELDS}>

@@ -106,9 +106,11 @@ func defaultAlertConfig() AlertConfig {
 			NetworkIn:   &HysteresisThreshold{Trigger: 0, Clear: 0},
 			NetworkOut:  &HysteresisThreshold{Trigger: 0, Clear: 0},
 		},
-		TrueNASDiskDefaults: ThresholdConfig{
-			Temperature: &HysteresisThreshold{Trigger: 55, Clear: 50},
-		},
+		// TrueNAS disk temperature is unset: each disk follows the disk
+		// temperature policy for its type (DiskTempByType) until the user
+		// saves a TrueNAS-wide value.
+		TrueNASDiskDefaults:          ThresholdConfig{},
+		TrueNASDiskTemperatureByType: true,
 		VMwareDefaults: ThresholdConfig{
 			CPU:        &HysteresisThreshold{Trigger: 80, Clear: 75},
 			Memory:     &HysteresisThreshold{Trigger: 85, Clear: 80},

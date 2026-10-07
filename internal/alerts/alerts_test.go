@@ -12628,6 +12628,65 @@ func TestCleanupAlertsForNodes(t *testing.T) {
 	})
 }
 
+// A config save re-judges open TrueNAS disk temperature alerts against the
+// threshold the next evaluation applies to each disk's type.
+func TestTrueNASDiskTemperatureAlertsReevaluatePerDiskType(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.TrueNASDiskDefaults = ThresholdConfig{}
+	configureUnifiedEvalManager(t, m, cfg)
+
+	nvme := trueNASTemperatureDisk("nvme0n1", "nvme", 72)
+	sata := trueNASTemperatureDisk("sda", "sata", 57)
+	checkTrueNASTemperatureDisk(t, m, nvme)
+	checkTrueNASTemperatureDisk(t, m, sata)
+	for _, disk := range []unifiedresources.Resource{nvme, sata} {
+		if _, firing := trueNASDiskTemperatureAlert(t, m, disk); !firing {
+			t.Fatalf("%s did not fire before the save: %v", disk.ID, alertKeys(m))
+		}
+	}
+
+	// Raising only the NVMe trigger resolves the NVMe alert and leaves the
+	// SATA alert, still over its own trigger, open.
+	m.mu.Lock()
+	m.config.DiskTempByType["nvme"] = HysteresisThreshold{Trigger: 75, Clear: 70}
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+	if _, firing := trueNASDiskTemperatureAlert(t, m, nvme); firing {
+		t.Fatalf("NVMe alert at 72C stayed open under a 75C NVMe trigger")
+	}
+	if _, firing := trueNASDiskTemperatureAlert(t, m, sata); !firing {
+		t.Fatalf("SATA alert at 57C resolved under its unchanged 55C trigger")
+	}
+}
+
+// An alert raised before it recorded its disk type is held to the lowest
+// per-type trigger, so a save never resolves an alert the next evaluation
+// raises again.
+func TestTrueNASDiskTemperatureAlertWithoutDiskTypeHeldAtLowestTrigger(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.TrueNASDiskDefaults = ThresholdConfig{}
+	cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 70, Clear: 65}
+	cfg.DiskTempByType = map[string]HysteresisThreshold{"nvme": {Trigger: 60, Clear: 55}}
+	configureUnifiedEvalManager(t, m, cfg)
+
+	nvme := trueNASTemperatureDisk("nvme0n1", "nvme", 66)
+	checkTrueNASTemperatureDisk(t, m, nvme)
+	alert, firing := trueNASDiskTemperatureAlert(t, m, nvme)
+	if !firing {
+		t.Fatalf("NVMe at 66C did not fire under a 60C NVMe trigger: %v", alertKeys(m))
+	}
+
+	m.mu.Lock()
+	delete(alert.Metadata, "diskType")
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+	if _, firing := trueNASDiskTemperatureAlert(t, m, nvme); !firing {
+		t.Fatalf("an alert without a disk type was resolved by the 70C agent default although its NVMe trigger is 60C")
+	}
+}
+
 func TestCheckZFSPoolHealth(t *testing.T) {
 	// t.Parallel()
 	poolStateAlertID := buildCanonicalStateID("local-zfs/zfs-pool:rpool", "local-zfs/zfs-pool:rpool-state")

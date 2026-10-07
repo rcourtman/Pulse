@@ -442,8 +442,34 @@ func NormalizeTrueNASDefaults(config *AlertConfig) {
 	config.TrueNASDefaults.NetworkIn = normalizeThresholdPointer(config.TrueNASDefaults.NetworkIn, 0, 0, "truenas.networkIn")
 	config.TrueNASDefaults.NetworkOut = normalizeThresholdPointer(config.TrueNASDefaults.NetworkOut, 0, 0, "truenas.networkOut")
 
-	config.TrueNASDiskDefaults.Temperature = normalizeThresholdPointer(config.TrueNASDiskDefaults.Temperature, 55, 50, "truenas.disk.temperature")
+	config.TrueNASDiskDefaults.Temperature = normalizeTrueNASDiskTemperature(config.TrueNASDiskDefaults.Temperature, config.TrueNASDiskTemperatureByType)
+	config.TrueNASDiskTemperatureByType = true
 }
+
+// normalizeTrueNASDiskTemperature keeps the TrueNAS Disks temperature default
+// unset unless the user chose one. Unset, each TrueNAS disk follows the disk
+// temperature policy for its type. Before that, the factory default was a
+// flat 55/50 and the thresholds page wrote it back on every save, so in a
+// config written before (byType false) a stored 55/50 marks a value nobody
+// chose and is migrated to unset. Any other value is the user's TrueNAS-wide
+// choice and is kept, 0 meaning off. Once byType is set, 55 is a choice too.
+func normalizeTrueNASDiskTemperature(current *HysteresisThreshold, byType bool) *HysteresisThreshold {
+	if current == nil || current.Trigger < 0 {
+		return nil
+	}
+	if !byType && current.Trigger == legacyTrueNASDiskTemperatureTrigger &&
+		(current.Clear == legacyTrueNASDiskTemperatureClear || current.Clear <= 0) {
+		return nil
+	}
+	return normalizeThresholdPointer(current, 0, 0, "truenas.disk.temperature")
+}
+
+// The flat TrueNAS disk temperature factory default before TrueNAS disks
+// followed the disk temperature policy.
+const (
+	legacyTrueNASDiskTemperatureTrigger = 55
+	legacyTrueNASDiskTemperatureClear   = 50
+)
 
 func NormalizeVMwareDefaults(config *AlertConfig) {
 	config.VMwareDefaults.CPU = normalizeThresholdPointer(config.VMwareDefaults.CPU, 80, 75, "vmware.cpu")

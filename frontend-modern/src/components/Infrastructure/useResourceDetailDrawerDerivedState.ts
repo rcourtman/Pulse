@@ -23,6 +23,7 @@ import {
 } from '@/utils/resourceIdentity';
 import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import {
   getResourcePolicyBadges,
   getResourcePolicyGovernedSummary,
@@ -381,7 +382,10 @@ export const useResourceDetailDrawerDerivedState = (
   const vmwareDetailsSummary = createMemo(() =>
     buildVMwareDetailsSummary(resource().type, vmwareData()),
   );
-  const trueNASDetailSections = createMemo(() => buildTrueNASDetailSections(resource()));
+  const { getDiskTemperatureThresholds } = useAlertsActivation();
+  const trueNASDetailSections = createMemo(() =>
+    buildTrueNASDetailSections(resource(), getDiskTemperatureThresholds),
+  );
   const hasTrueNASDetails = createMemo(() => trueNASDetailSections().length > 0);
   const trueNASDetailsSummary = createMemo(() => buildTrueNASDetailsSummary(resource()));
   const kubernetesDetailSections = createMemo(() => buildKubernetesDetailSections(resource()));
