@@ -3860,15 +3860,13 @@ production table, router and styles; it does not qualify full-app scrolling.
     finding-presentation destinations such as the Patrol provider-settings
     route, while `patrol_autonomy` and legacy Pro activation URLs remain parser
     aliases only and verified review links use the plain Patrol history anchor.
-    UI surfaces must not duplicate the `patrolControlStarter` query string or
-    write Patrol control or legacy entry-point starter telemetry from local
-    click handlers.
     The Patrol finding-to-Assistant handoff has one owner,
     `frontend-modern/src/components/AI/FindingsPanel.tsx`; the Patrol state
     hook keeps no second copy of it, and the Patrol workspace passes no
     handoff callback because nothing on the page reacts to a handoff.
-19. Keep shared summary-card emphasis coherent. When shared summary primitives enter an `inactive` state, `SummaryMetricCard`, `InteractiveSparkline`, and `DensityMap` must all demote background context together so storage, infrastructure, and workloads read as one interaction model instead of mixing page-local opacity, sticky-shell, or highlight rules.
-20. Keep density-map summaries overview-first. When a shared summary density map receives row focus or chart-hover emphasis, `frontend-modern/src/components/shared/DensityMap.tsx`, `frontend-modern/src/components/shared/useDensityMapState.ts`, and `frontend-modern/src/components/shared/densityMapModel.ts` must preserve the multi-entity overview rows and keep focused-entity detail in the hover tooltip instead of swapping the card into a single-series chart, dimming the rest of the map into unusable background noise, duplicating cursor-value tooltip copy, or adding persistent card chrome that steals heatmap space. The card body must stay overview-first; the tooltip may carry the active entity identity, current value, and peak, shared tooltip shells must follow semantic surface tokens instead of forcing a dark palette in light mode, the tooltip header must let long entity names consume the available width before truncating rather than clipping against an arbitrary fixed label cap, numeric metric readouts such as `16.9 MB/s` or `37.4 MB/s` must stay single-line instead of wrapping the unit onto a second row, and density-map detail that cannot fit cleanly inside the canonical tooltip shell must be omitted rather than introducing tooltip-specific chrome or a secondary chart inside the hover surface.
+    UI surfaces must not duplicate the `patrolControlStarter` query string or
+    write Patrol control or legacy entry-point starter telemetry from local
+    click handlers.
 21. Keep retired self-hosted hosted-model and trial acquisition surfaces out of
     normal v6 GA runtime. Shared shells and helper-driven badges may continue to
     parse legacy payload fields, but ordinary self-hosted Assistant, Patrol, and
