@@ -464,7 +464,8 @@ class VMDiskHelpTest(unittest.TestCase):
             "systemctl show pulse-update.timer pulse-update.service \\\n"
             "  --property=Id,LoadState,ActiveState,MainPID",
             "sudo systemctl stop pulse.service\n"
-            "systemctl show pulse.service --property=LoadState,ActiveState,MainPID",
+            "systemctl show pulse.service \\\n"
+            "  --property=LoadState,ActiveState,MainPID,Result,ExecMainCode,ExecMainStatus",
             "sudo systemctl start pulse.service\nsystemctl is-active pulse.service",
             "sudo systemctl start pulse-update.timer\nsystemctl is-active pulse-update.timer",
         ])
@@ -478,6 +479,7 @@ class VMDiskHelpTest(unittest.TestCase):
                           "systemctl restart pulse.service"),
             guide.replace("sudo systemctl stop pulse.service", "sudo systemctl restart pulse.service"),
             guide.replace("sudo systemctl start pulse-update.timer", "qm agent 100 ping"),
+            guide.replace(",Result,ExecMainCode,ExecMainStatus", ""),
             guide + "\n```bash\nsystemctl stop pulse.service\n```\n",
             guide.replace("sudo bash ./scripts/test-vm-disk.sh 100", "curl https://example.invalid"),
         ]
@@ -496,6 +498,19 @@ class VMDiskHelpTest(unittest.TestCase):
             self.assertIn(phrase, guide)
         self.assert_guide_commands(guide)
         self.assertNotIn("GUEST_AGENT_FSINFO_TIMEOUT=", guide)
+
+    def test_shutdown_readback_is_not_guest_request_completion_or_a_forced_stop(self):
+        precaution = " ".join(guide_section(
+            DOC.read_text(), "Pause Pulse for a planned freeze-enabled backup"
+        ).split())
+        for phrase in (
+            "`Result=success`", "`ExecMainCode=1`", "`ExecMainStatus=0`",
+            "Do not force-kill Pulse or clear its failed state",
+            "an old exit result is not evidence of a new shutdown",
+            "Stopping Pulse does not cancel a guest-agent request already issued",
+            "If their state is unknown, do not start the backup",
+        ):
+            self.assertIn(phrase, precaution)
 
 
 if __name__ == "__main__":
