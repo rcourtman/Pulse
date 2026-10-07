@@ -17,6 +17,24 @@
 
 ## Purpose
 
+### Automatic system-mount exclusions respect directory boundaries
+
+The shared filesystem filter excludes a named system directory and its
+descendants, not independent local mounts with the same text prefix. Volumes
+such as `/snapshots`, `/runtime` and `/var/lib/docker-data` remain eligible for
+capacity, current usage and ordinary alert evaluation without an explicit
+include override. Genuine system directories, virtual/read-only/remote types
+and container layers remain excluded. Explicit operator wildcard/exact excludes
+and include precedence are unchanged; guest commands and their safety admission
+are untouched.
+
+`mount_boundary_test.go` in `pkg/fsfilters` and `internal/hostmetrics` cover the
+directory boundary, real pre-usage collector admission and skip/override
+controls. `filesystem_mount_boundary_test.go` carries local mount counters
+through QGA aggregation and both report/state/canonical-read paths, and host
+usage alert onset/recovery. These synthetic controls do not establish native
+guest polling, installed agent recovery or completion of a reported incident.
+
 ### QEMU Windows capacity is owned by the volume, not the physical drive
 
 The guest filesystem aggregate uses the reported Windows volume GUID when

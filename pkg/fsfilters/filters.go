@@ -164,7 +164,10 @@ func ShouldSkipFilesystem(fsType, mountpoint string, totalBytes, usedBytes uint6
 
 	// Check special mountpoint prefixes
 	for _, prefix := range specialMountPrefixes {
-		if strings.HasPrefix(mountpoint, prefix) {
+		// These identify directories, not arbitrary string prefixes. A local
+		// /snapshots or /runtime volume is not a child of /snap or /run.
+		directory := strings.TrimSuffix(prefix, "/")
+		if mountpoint == directory || strings.HasPrefix(mountpoint, directory+"/") {
 			reasons = append(reasons, "special-mountpoint")
 			break
 		}
