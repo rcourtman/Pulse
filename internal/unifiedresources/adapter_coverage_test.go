@@ -1051,7 +1051,8 @@ func TestMetricPercent(t *testing.T) {
 // derives their state from the host's reporting lease and the disk's spin
 // state. The native row and a SMART row that borrows the inventory reading
 // both carry it, and a SMART row with its own reading keeps the agent's state.
-// A withdrawn reading never counts as heat in the disk's risk.
+// Disk risk never judges heat in any state: the alert disk temperature policy
+// owns that.
 func TestUnraidDiskTemperatureFollowsTheHostLease(t *testing.T) {
 	smartWithout := models.HostDiskSMART{Device: "/dev/sdc", Serial: "UNRAID-1", Collection: &diskinventory.CollectionStatus{
 		Serial:      diskinventory.Available("smartctl"),
@@ -1088,7 +1089,6 @@ func TestUnraidDiskTemperatureFollowsTheHostLease(t *testing.T) {
 			Temperature: 72, SpunDown: tc.spunDown}
 		host := models.Host{ID: "agent-tower", Hostname: "tower", Status: tc.status,
 			Unraid: &models.HostUnraidStorage{Disks: []models.HostUnraidDisk{inventory}}}
-		collected := tc.borrowed.State == diskinventory.FieldAvailable
 
 		native, _ := resourceFromHostUnraidPhysicalDisk(host, inventory)
 		got := native.PhysicalDisk
@@ -1099,8 +1099,8 @@ func TestUnraidDiskTemperatureFollowsTheHostLease(t *testing.T) {
 		if got.Temperature != 72 || nativeStatus != tc.native {
 			t.Fatalf("%s: Unraid row temperature=%d state=%+v, want 72 with %+v", tc.name, got.Temperature, nativeStatus, tc.native)
 		}
-		if hotRisk(got.Risk) != collected {
-			t.Fatalf("%s: Unraid row temperature risk = %v, want %v: %+v", tc.name, hotRisk(got.Risk), collected, got.Risk)
+		if hotRisk(got.Risk) {
+			t.Fatalf("%s: Unraid row risk judged its 72C temperature: %+v", tc.name, got.Risk)
 		}
 
 		borrowed, _ := resourceFromHostSMARTDisk(host, smartWithout)
@@ -1109,8 +1109,8 @@ func TestUnraidDiskTemperatureFollowsTheHostLease(t *testing.T) {
 			got.Collection.Serial != diskinventory.Available("smartctl") {
 			t.Fatalf("%s: SMART row borrowing the inventory reading: temperature=%d collection=%+v", tc.name, got.Temperature, got.Collection)
 		}
-		if hotRisk(got.Risk) != collected {
-			t.Fatalf("%s: borrowed temperature risk = %v, want %v: %+v", tc.name, hotRisk(got.Risk), collected, got.Risk)
+		if hotRisk(got.Risk) {
+			t.Fatalf("%s: SMART row risk judged the borrowed 72C temperature: %+v", tc.name, got.Risk)
 		}
 		if smartWithout.Collection.Temperature.State != diskinventory.FieldUnsupported {
 			t.Fatal("the adapter mutated the SMART row's own collection state")

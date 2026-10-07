@@ -261,6 +261,7 @@ type Service struct {
 	patrolAutopilotPolicy    func() unifiedresources.PatrolAutopilotServerPolicy
 	patrolObjectiveStore     *PatrolObjectiveStore
 	patrolService            *PatrolService        // Background AI monitoring service
+	thresholdProvider        ThresholdProvider     // User-configured alert thresholds; nil means factory defaults
 	metadataProvider         MetadataProvider      // Enables AI to update resource URLs
 	incidentStore            *memory.IncidentStore // Alert-scoped investigation memory; not the canonical durable resource history
 	chatService              ChatServiceProvider   // Chat service for investigation orchestrator
@@ -584,6 +585,9 @@ func (s *Service) initPatrolServiceLocked() {
 
 	s.patrolService = NewPatrolService(s, s.stateProvider)
 	s.patrolService.SetObjectiveStore(s.patrolObjectiveStore)
+	if s.thresholdProvider != nil {
+		s.patrolService.SetThresholdProvider(s.thresholdProvider)
+	}
 	if s.knowledgeStore != nil {
 		s.patrolService.SetKnowledgeStore(s.knowledgeStore)
 	}
@@ -831,9 +835,10 @@ func (s *Service) ClearCostHistory() error {
 // SetPatrolThresholdProvider sets the threshold provider for patrol
 // This should be called with an AlertThresholdAdapter to connect patrol to user-configured thresholds
 func (s *Service) SetPatrolThresholdProvider(provider ThresholdProvider) {
-	s.mu.RLock()
+	s.mu.Lock()
+	s.thresholdProvider = provider
 	patrol := s.patrolService
-	s.mu.RUnlock()
+	s.mu.Unlock()
 
 	if patrol != nil {
 		patrol.SetThresholdProvider(provider)

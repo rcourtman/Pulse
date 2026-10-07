@@ -14,12 +14,14 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog/log"
 )
@@ -333,6 +335,9 @@ type reportingEnrichmentSnapshot struct {
 	RecentlyResolved []models.ResolvedAlert
 	LegacyBackups    models.PVEBackups
 	Resources        []unifiedresources.Resource
+	// alertManager supplies the tenant's disk temperature thresholds. Nil
+	// means the factory alert configuration.
+	alertManager *alerts.Manager
 }
 
 func emptyReportingEnrichmentSnapshot() reportingEnrichmentSnapshot {
@@ -404,6 +409,7 @@ func (h *ReportingHandlers) getReportingEnrichmentSnapshot(ctx context.Context, 
 		RecentlyResolved: monitor.RecentlyResolvedSnapshot(),
 		LegacyBackups:    monitor.PVEBackupsSnapshot(),
 		Resources:        unifiedResources,
+		alertManager:     monitor.GetAlertManager(),
 	}
 	snapshot.normalizeCollections()
 	return snapshot, true
@@ -875,18 +881,49 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 				continue
 			}
 			pd := r.PhysicalDisk
+			temperatureWarning, temperatureCritical := reportDiskTemperatureThresholds(snapshot.alertManager, pd.DiskType)
 			req.Disks = append(req.Disks, reporting.DiskInfo{
-				Device:      pd.DevPath,
-				Model:       pd.Model,
-				Serial:      pd.Serial,
-				Type:        pd.DiskType,
-				Size:        pd.SizeBytes,
-				Health:      pd.Health,
-				Temperature: pd.Temperature,
-				WearLevel:   pd.Wearout,
+				Device:              pd.DevPath,
+				Model:               pd.Model,
+				Serial:              pd.Serial,
+				Type:                pd.DiskType,
+				Size:                pd.SizeBytes,
+				Health:              pd.Health,
+				Temperature:         reportDiskTemperature(*pd),
+				WearLevel:           pd.Wearout,
+				TemperatureWarning:  temperatureWarning,
+				TemperatureCritical: temperatureCritical,
 			})
 		}
 	}
+}
+
+// reportDiskTemperatureThresholds returns the alert disk temperature thresholds
+// a report colours a disk reading by: the clear value and the trigger, from
+// the same policy as disk temperature alerts and the Physical Disks Temp
+// column. Zero means disk temperature alerting is off for the disk.
+func reportDiskTemperatureThresholds(manager *alerts.Manager, diskType string) (float64, float64) {
+	threshold := manager.DiskTemperatureThreshold(diskType)
+	if threshold == nil || threshold.Trigger <= 0 {
+		return 0, 0
+	}
+	warning := threshold.Clear
+	if warning <= 0 || warning > threshold.Trigger {
+		warning = threshold.Trigger
+	}
+	return warning, threshold.Trigger
+}
+
+// reportDiskTemperature returns the disk temperature a report may tabulate:
+// one the current observation collected. Normalization may keep a last-known
+// temperature it did not collect (a disk in standby, a host agent past its
+// reporting lease); a report presents its values as measured, so that one is
+// left out (0, rendered as no reading) rather than shown as current.
+func reportDiskTemperature(pd unifiedresources.PhysicalDiskMeta) int {
+	if !diskinventory.TemperatureCollected(pd.Temperature, pd.Collection) {
+		return 0
+	}
+	return pd.Temperature
 }
 
 // enrichVMReport adds VM-specific data to the report request

@@ -35,7 +35,7 @@ func TestStorageRiskFromAssessment_CriticalConvertsReasons(t *testing.T) {
 		Level: storagehealth.RiskCritical,
 		Reasons: []storagehealth.Reason{
 			{Code: "pending_sectors", Severity: storagehealth.RiskCritical, Summary: "Bad sectors"},
-			{Code: "temperature_high", Severity: storagehealth.RiskWarning, Summary: "Hot disk"},
+			{Code: "reallocated_sectors", Severity: storagehealth.RiskWarning, Summary: "Reallocated sectors"},
 		},
 	})
 	if got == nil {
@@ -47,7 +47,7 @@ func TestStorageRiskFromAssessment_CriticalConvertsReasons(t *testing.T) {
 	if len(got.Reasons) != 2 {
 		t.Fatalf("expected 2 reasons, got %d", len(got.Reasons))
 	}
-	if got.Reasons[0].Code != "pending_sectors" || got.Reasons[1].Code != "temperature_high" {
+	if got.Reasons[0].Code != "pending_sectors" || got.Reasons[1].Code != "reallocated_sectors" {
 		t.Error("reasons should preserve order and codes")
 	}
 }

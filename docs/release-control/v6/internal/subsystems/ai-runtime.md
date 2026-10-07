@@ -288,6 +288,41 @@ exposing the source-specific ambiguous `wearout` name, and distinguishes it from
 `smart.percentageUsed` as consumed endurance. The regression proof is
 `internal/ai/tools/physical_disk_evidence_test.go`.
 
+Disk temperatures reach the model as current readings only when they were
+collected now. `tools.SplitDiskTemperature` classifies a physical disk
+temperature with `diskinventory.TemperatureCollected`. The physical-disk
+projection's `temperature` and the `disk_health` SMART row's `temperature`
+carry only a reading the current observation collected. A value normalization
+retained instead (a disk in standby, a host agent past its reporting lease)
+moves to `last_known_temperature` with `last_known_temperature_reason`. The
+same split feeds the AI chat context and Patrol. The "Physical Disks Needing
+Attention" list and Patrol's disk issue gate, triage flags and finding
+verification judge heat on the collected reading alone. Their text renders a
+retained value as "last known 41C (disk is in standby)". Proofs:
+`TestDiskToolsReportRetainedTemperatureAsLastKnown` in
+`internal/ai/tools/physical_disk_evidence_test.go`,
+`TestBuildUnifiedResourceContextJudgesDiskHeatOnCollectedTemperature` in
+`internal/ai/resource_context_test.go` and
+`TestPatrolPhysicalDiskRowsJudgeHeatOnCollectedTemperature` in
+`internal/ai/patrol_ai_more_test.go`.
+
+They judge that collected reading against the alert disk temperature policy,
+not a fixed line. `ThresholdProvider.GetDiskTemperatureThreshold(diskType)`
+(the alert manager's per-type trigger and clear) resolves each disk's limits
+once in `patrolPhysicalDiskRows`, and the run state carries the provider
+(`patrolRuntimeState.thresholdProvider`). With no provider the factory alert
+configuration applies. A disk is hot from its trigger: a triage warning, a disk
+issue and an AI chat "needing attention" entry, as its temperature alert and
+Physical Disks Running Hot verdict are. A disk-high finding recovers at or
+below the clear value (under the trigger when there is no band below it), as
+the alert does. With no current reading, a disk last seen hot leaves that
+verification unknown rather than recovered. Scoped runs keep the provider, and a
+provider set before Patrol starts is handed to it. Below the trigger Patrol flags nothing, so an NVMe at 63C stays
+quiet and a SATA disk at 56C is flagged. Proofs:
+`internal/ai/patrol_disk_temperature_test.go` and
+`TestAlertThresholdAdapter_DiskTemperatureFollowsAlertPolicy` in
+`internal/ai/alert_threshold_adapter_test.go`.
+
 Retained summaries disclose that point and bucket timestamps describe returned
 history inside the requested window. Their spacing does not measure collection
 uptime or explain missing history. Collector lifecycle and retention settings

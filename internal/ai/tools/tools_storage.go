@@ -402,11 +402,14 @@ func (e *PulseToolExecutor) executeGetDiskHealth(_ context.Context, _ map[string
 			// SMART data
 			if sensors := host.Sensors(); sensors != nil {
 				for _, disk := range sensors.SMART {
+					temperature := SplitDiskTemperature(disk.Temperature, disk.Collection)
 					hostHealth.SMART = append(hostHealth.SMART, SMARTDiskSummary{
-						Device:      disk.Device,
-						Model:       disk.Model,
-						Health:      disk.Health,
-						Temperature: disk.Temperature,
+						Device:                     disk.Device,
+						Model:                      disk.Model,
+						Health:                     disk.Health,
+						Temperature:                temperature.Collected,
+						LastKnownTemperature:       temperature.LastKnown,
+						LastKnownTemperatureReason: temperature.Reason,
 					})
 				}
 			}

@@ -5,6 +5,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -51,6 +52,9 @@ type mockThresholdProvider struct {
 	guestMem   float64
 	guestDisk  float64
 	storage    float64
+	// diskTemperature holds trigger/clear by disk type; a type it does not
+	// list resolves to the factory disk temperature policy.
+	diskTemperature map[string][2]float64
 }
 
 func (m *mockThresholdProvider) GetNodeCPUThreshold() float64     { return m.nodeCPU }
@@ -59,6 +63,15 @@ func (m *mockThresholdProvider) GetGuestCPUThreshold() float64    { return 0 }
 func (m *mockThresholdProvider) GetGuestMemoryThreshold() float64 { return m.guestMem }
 func (m *mockThresholdProvider) GetGuestDiskThreshold() float64   { return m.guestDisk }
 func (m *mockThresholdProvider) GetStorageThreshold() float64     { return m.storage }
+func (m *mockThresholdProvider) GetDiskTemperatureThreshold(diskType string) (float64, float64) {
+	if limits, ok := m.diskTemperature[diskType]; ok {
+		return limits[0], limits[1]
+	}
+	if threshold := alerts.DefaultDiskTemperatureThreshold(diskType); threshold != nil {
+		return threshold.Trigger, threshold.Clear
+	}
+	return 0, 0
+}
 
 type mockUnifiedResourceProvider struct {
 	UnifiedResourceProvider

@@ -1670,9 +1670,10 @@ func (g *PDFGenerator) writeDisksSection(pdf *fpdf.Fpdf, data *ReportData) {
 		tempStr := "-"
 		if disk.Temperature > 0 {
 			tempStr = fmt.Sprintf("%dC", disk.Temperature)
-			if disk.Temperature >= 60 {
+			switch diskTemperatureSeverity(disk) {
+			case "critical":
 				pdf.SetTextColor(colorDanger[0], colorDanger[1], colorDanger[2])
-			} else if disk.Temperature >= 50 {
+			case "warning":
 				pdf.SetTextColor(colorWarning[0], colorWarning[1], colorWarning[2])
 			}
 		}
@@ -2807,4 +2808,21 @@ func formatDuration(d time.Duration) string {
 		minWord = "minute"
 	}
 	return fmt.Sprintf("%d %s", minutes, minWord)
+}
+
+// diskTemperatureSeverity colours a disk reading by its alert disk temperature
+// thresholds: "critical" from the trigger, "warning" from the clear value, and
+// "" below it or when the disk carries no thresholds.
+func diskTemperatureSeverity(disk DiskInfo) string {
+	if disk.Temperature <= 0 || disk.TemperatureCritical <= 0 {
+		return ""
+	}
+	reading := float64(disk.Temperature)
+	if reading >= disk.TemperatureCritical {
+		return "critical"
+	}
+	if disk.TemperatureWarning > 0 && reading >= disk.TemperatureWarning {
+		return "warning"
+	}
+	return ""
 }
