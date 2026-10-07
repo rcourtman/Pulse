@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "a570d9f335cf8cd13a9df00a123a52234ec04a23",
+  "verified_at": "2026-10-07T07:58:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx",
+    "frontend-modern/src/features/alerts/AlertHistoryTableAlertRow.tsx",
+    "frontend-modern/src/features/alerts/alertHistoryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx": "71cf89c4a4bba27a8efdf3332260d033273185359c45eb01a6dcf7317cf1b53f",
+    "frontend-modern/src/features/alerts/AlertHistoryTableAlertRow.tsx": "b2b4199c76b0ccee79fad658bf91cb44174d5dbe5491942e846dc196af06e608",
+    "frontend-modern/src/features/alerts/alertHistoryModel.ts": "5e81adf1ad8c42224f250fbf9dc5e9b13fbfa0ed92b96802bb1af56cd139cbd6"
+  },
+  "routes": [
+    "/alerts/history?q=pve2",
+    "/alerts/history?q=95.0"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack built from this tree (main bea0cec8b9 + alert-card follow-up #2637 + this change), with an uncommitted generator overlay pinning pve2 CPU temperature; node temperature alert level 80\u00b0C, clear level 75\u00b0C, 5 minute recovery delay",
+    "History desktop row, held at 78\u00b0C: \"Temperature 78\u00b0C now, back under the 80\u00b0C alert level\", hover adds \"Stays open until it reaches 75\u00b0C or lower and stays there for 5 minutes.\" and \"Last reading at or above 80\u00b0C: 95\u00b0C\"; the breach message \"Node temperature at 95.0\u00b0C\" is not shown; light and dark",
+    "History phone card at 390px, held: live summary, clear rule and last breach as muted lines under it, no horizontal scroll, light and dark",
+    "History desktop row and phone card, recovering at 72\u00b0C: \"Temperature 72\u00b0C now, recovering\" with \"Clears after 5 minutes at 75\u00b0C or lower, 1 minute so far.\"",
+    "Search q=95.0 finds the held pve2 row through its recorded message while the row reads 72\u00b0C",
+    "Active non-threshold row (powered off) and resolved/acknowledged rows keep their recorded messages; no console errors on either route",
+    "Earlier pass on the pre-merge content (identical row code; the phone card now also carries main's moved-close line for closed rows): breaching at 95\u00b0C, Fahrenheit preference (172\u00b0F now, 176\u00b0F alert level, 203\u00b0F breach), resolved alert leaving the list"
+  ],
+  "interactions": [
+    "Walked pve2 temperature 95 -> 78 -> 72 via the control file",
+    "Read description cell text and hover titles (desktop) and card paragraphs (phone) with Playwright in each phase",
+    "Loaded the q=pve2 and q=95.0 search URLs and collected console errors",
+    "Captured light and dark screenshots at 1440x900 and 390x844"
+  ]
+}

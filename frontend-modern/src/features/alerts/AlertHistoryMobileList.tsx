@@ -1,5 +1,6 @@
 import { Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { aiChatStore } from '@/stores/aiChat';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 import { getAlertHistoryResourceTypeBadgeClass } from '@/utils/alertHistoryPresentation';
 import {
@@ -8,6 +9,7 @@ import {
 } from '@/utils/alertIncidentPresentation';
 
 import { AlertHistoryItemActions } from './AlertHistoryItemActions';
+import { getAlertHistoryRowCopy } from './alertHistoryModel';
 import { PlatformWindowedList } from '@/features/platformPage/PlatformWindowedList';
 import { getGroupSummaryLabel } from './AlertHistoryTableGroupRow';
 import {
@@ -30,6 +32,9 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
   const [investigation, setInvestigation] = createSignal<MobileAlertHistoryInvestigation | null>(
     null,
   );
+  // Open threshold alerts lead with their live reading, which turns stale when
+  // evaluations stop, so it rechecks on the shared clock.
+  const now = useRelativeTimeNow();
 
   const mobileItems = createMemo<AlertHistoryMobileItem[]>(() => {
     const items: AlertHistoryMobileItem[] = [];
@@ -199,6 +204,7 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
             const alert = item.alert;
             const rowKey = () => props.state.getIncidentRowKey(alert);
             const status = () => getAlertHistoryStatusPresentation(alert.status);
+            const descriptionCopy = () => getAlertHistoryRowCopy(alert, now);
 
             return (
               <article
@@ -228,7 +234,19 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
                   </div>
                 </div>
 
-                <p class="mt-2 text-xs leading-relaxed text-base-content">{alert.description}</p>
+                <p class="mt-2 text-xs leading-relaxed text-base-content">
+                  {descriptionCopy().text}
+                </p>
+                {/* A phone has no hover, so what clears the alert and its last
+                    breach stay visible under the live reading. */}
+                <Show when={descriptionCopy().detail}>
+                  {(detail) => <p class="mt-0.5 text-xs leading-relaxed text-muted">{detail()}</p>}
+                </Show>
+                <Show when={descriptionCopy().lastBreach}>
+                  {(lastBreach) => (
+                    <p class="mt-0.5 text-xs leading-relaxed text-muted">{lastBreach()}</p>
+                  )}
+                </Show>
                 <Show when={alert.closeDetail}>
                   {(detail) => <p class="mt-1 text-xs leading-relaxed text-muted">{detail()}</p>}
                 </Show>
