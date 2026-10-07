@@ -3860,7 +3860,16 @@ state supersede the availability it supplied earlier
 (`diskinventory.MergeReportedStatus`), so neither a skipped disk poll nor a
 host that is never disk-polled again can carry it forward. Expiry is
 compare-and-set on the report time the evaluation judged stale, so a report
-accepted in between is never expired. Every SMART temperature history writer
+accepted in between is never expired.
+A legacy agent (from before collection provenance) withdraws its readings
+without a source, so `hostAgentSMARTCollection` stamps its reading copied onto
+the Proxmox disk through `diskinventory.LegacyHostAgentStatus`, the same rule
+the unified-resources registry applies to match that withdrawal to the copy: a
+silent legacy agent's retained temperature is not collected on the canonical
+disk either, even when no disk poll refreshes the copy. Proof:
+`TestSilentLegacyAgentCanonicalDiskFollowsItsWithdrawal` in
+`internal/monitoring/physical_disk_roundtrip_test.go`.
+Every SMART temperature history writer
 records a temperature only when its current collection state is available (or
 predates collection state), so a retained reading has to keep its non-available
 state to stay out of history; a path that relabels a carried reading as
