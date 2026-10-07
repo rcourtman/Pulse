@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type { ApprovalRequest, InvestigationRecord } from '@/api/ai';
-import type { ResourceCorrelation } from '@/types/aiIntelligence';
 import type { PatrolRunRecord } from '@/api/patrol';
 import type { UnifiedFinding } from '@/stores/aiIntelligence';
 
@@ -14,7 +13,6 @@ import {
   buildPatrolAssistantProposedFixBriefingInput,
   buildPatrolAssistantProposedFixBriefingInputFromApproval,
   buildPatrolConfigurationFailureHandoff,
-  buildPatrolInvestigationContextSummary,
   buildPatrolInvestigationRecordPresentation,
   buildPatrolRunAssistantHandoff,
 } from '../patrolInvestigationContextModel';
@@ -24,72 +22,6 @@ import {
 // null/undefined optionals, error/failure states, alternate enum/variant
 // arms) identified via V8 branch coverage. They do not duplicate the happy
 // paths already pinned by the dev test.
-
-describe('buildPatrolInvestigationContextSummary (branch coverage)', () => {
-  it('uses the plural recent-change and singular policy-resource wording', () => {
-    expect(
-      buildPatrolInvestigationContextSummary({
-        recentChangesCount: 2,
-        correlations: null,
-        policyPosture: {
-          total_resources: 1,
-          sensitivity_counts: {},
-          routing_counts: {},
-        },
-      }),
-    ).toEqual({
-      recentChangeCount: 2,
-      correlationCount: 0,
-      governedResourceCount: 1,
-      hasContext: true,
-      summaryText: '2 recent changes · 1 policy-covered resource',
-    });
-  });
-
-  it('clamps non-finite and negative counts to zero with no context parts', () => {
-    expect(
-      buildPatrolInvestigationContextSummary({
-        recentChangesCount: Number.NEGATIVE_INFINITY,
-        correlations: { count: -3, correlations: [] },
-        policyPosture: {
-          total_resources: Number.NaN,
-          sensitivity_counts: {},
-          routing_counts: {},
-        },
-      }),
-    ).toEqual({
-      recentChangeCount: 0,
-      correlationCount: 0,
-      governedResourceCount: 0,
-      hasContext: false,
-      summaryText: '',
-    });
-  });
-
-  it('clamps a non-finite correlation count to the list length fallback', () => {
-    expect(
-      buildPatrolInvestigationContextSummary({
-        correlations: {
-          count: Number.POSITIVE_INFINITY,
-          correlations: [
-            {
-              source_id: 's',
-              target_id: 't',
-              event_pattern: 'p',
-              occurrences: 1,
-            } as unknown as ResourceCorrelation,
-          ],
-        },
-      }),
-    ).toEqual({
-      recentChangeCount: 0,
-      correlationCount: 1,
-      governedResourceCount: 0,
-      hasContext: true,
-      summaryText: '1 correlation',
-    });
-  });
-});
 
 describe('buildPatrolInvestigationRecordPresentation (branch coverage)', () => {
   it('returns the empty presentation for null and undefined records', () => {

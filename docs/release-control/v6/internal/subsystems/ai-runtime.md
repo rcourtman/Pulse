@@ -6851,13 +6851,11 @@ The related-resource correlation section now also comes from the shared
 correlation formatter in `internal/ai/correlation`, so resource chat and
 incident prompts reuse the same learned-edge wording instead of rebuilding a
 second patrol-local bullet format.
-The Patrol intelligence page now also fetches the learned correlation list
-from the canonical AI correlations endpoint, so the global AI surface and the
-resource drawer both expose the same learned edge evidence instead of only
-showing a correlation count. The same page and drawer now render that list
-through the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
-card, so the learned-correlation layout and edge wording stay aligned across
-both surfaces. That shared card also owns the correlation ordering and
+The Patrol intelligence page renders no learned correlations. The resource
+drawer renders its resource-scoped learned edges through the shared
+`frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
+card, so any surface that shows learned correlations keeps the same layout and
+edge wording. That shared card also owns the correlation ordering and
 truncation rule, so callers pass raw learned edges instead of page-specific
 top-N slices.
 Assistant finding handoffs now also receive a model-only finding briefing
@@ -6881,10 +6879,13 @@ and related context are policy-sanitized by the chat handoff runtime before
 prompt injection, so governed resource names, IDs, aliases, nodes, paths, and
 addresses are redacted or represented through the canonical AI-safe summary
 instead of leaking through product prose.
-The same page and drawer now also render their recent-change timeline through
-the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
-card, so the canonical recent-change layout and relative-time wording stay
-aligned across both surfaces instead of being rebuilt as page-local feeds.
+The Patrol page renders no recent-change timeline. The resource drawer renders
+its latest canonical change through the shared
+`frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
+card, and its `Change history` list through the shared
+`frontend-modern/src/utils/resourceChangePresentation.ts` helpers, so the
+canonical recent-change wording stays aligned instead of being rebuilt per
+surface.
 The Patrol intelligence seed context now also prefers the canonical
 unified-resource timeline before falling back to the patrol-local change
 detector, so deterministic patrol context and resource detail context share
@@ -6922,8 +6923,9 @@ silently dropping the summary block.
 The per-resource intelligence payload returned from
 `/api/ai/intelligence?resource_id=...` now carries recent changes,
 dependencies, dependents, correlations, and knowledge only; policy posture
-stays on the system-wide intelligence summary and the Patrol governance card
-instead of riding the resource-detail payload.
+stays on the system-wide intelligence summary instead of riding the
+resource-detail payload, and no frontend surface currently renders those
+posture counts.
 That same resource-intelligence payload also carries dependency and
 dependent correlation context from unified-resource correlations, so the drawer
 can show canonical correlation relationships without reconstructing them from the
@@ -6982,10 +6984,9 @@ slice that the prompt context uses.
 The system-wide `/api/ai/intelligence` summary should also surface the same
 canonical recent-change slice, alongside the count, so the aggregate payload
 and the prompt context stay aligned on the same shared timeline source.
-The frontend Patrol intelligence page now also consumes that canonical
-summary payload directly through the shared AI client and store, so the
-visible summary card stays aligned with the same recent-change slice that the
-runtime and API contracts expose.
+The frontend Patrol page reads that canonical summary payload through the
+shared AI client and store, but only for its overall health; it renders no
+summary card and no recent-change slice.
 The Patrol runtime now also exports a canonical `runtime_state` alongside
 `blocked_reason` in the Patrol status payload, so provider-availability and any
 legacy managed-credit block conditions remain part of the governed runtime
