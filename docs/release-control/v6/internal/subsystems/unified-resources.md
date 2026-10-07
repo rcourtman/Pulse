@@ -2803,7 +2803,9 @@ application resource-provider or WebSocket lifecycle.
     ID and drops the superseded pin row (`ApplyCanonicalIDSuccessions`
     in `internal/unifiedresources/canonical_id_succession.go`).
     Successions never fire while the old ID still belongs to a live
-    resource, never follow a contradicting machine key (a reinstalled
+    resource or to one a manual link folded into its primary (see
+    "Operator links reach record-ingested resources"), never follow a
+    contradicting machine key (a reinstalled
     machine mints fresh, it does not absorb the old host's operator
     state), and never rewrite change-journal rows. Known limitation:
     machine-keyless hosts whose history already merged under a collapsed
@@ -2884,8 +2886,9 @@ application resource-provider or WebSocket lifecycle.
     `ResourceRegistry.IngestRecords` applies the same
     `ApplyCanonicalIDSuccessions` semantics as pin-driven successions
     (operator state and action audits re-key, the superseded pin row
-    drops, never while the old ID belongs to a live resource, journal
-    rows never rewritten). Regression coverage:
+    drops, never while the old ID belongs to a live resource or one a
+    manual link folded into its primary, journal rows never rewritten).
+    Regression coverage:
     `TestRegistryIngestRecordsKeepsSameHostnameSystemsDistinct` /
     `TestIngestRecordsSucceedLegacyHostnameScopedCanonicalIDs` /
     `TestIngestRecordsDoNotCompleteTrueNASIdentityFromPins` in
@@ -6534,6 +6537,62 @@ them. Overview rows may still truncate identity; keyboard expansion exposes the
 full heading. This shared drawer rule applies across resource types. The 390px
 browser qualification checks heading fit and keyboard expansion; no data model,
 authorisation, action dispatch or resource admission contract changes.
+
+### Operator links reach record-ingested resources
+
+Every registry ingest path applies the operator's manual links: snapshot
+ingest, resource ingest and record ingest (`IngestRecords`,
+`IngestRecordsWithStaleThresholds` and the read-state overlay's record pass).
+Either side of a link can arrive only as a supplemental record, such as a
+vSphere or TrueNAS VM with a Pulse agent inside, or an agent on a TrueNAS host,
+and the monitor's rebuild ingests those records after the snapshot. While only
+snapshot and resource ingest applied links, the rebuilt registry behind the
+websocket broadcast and `/api/state` kept both rows. The resources API, which
+seeds through resource ingest, showed them merged, and so did the published
+inventory whenever an unrelated absent machine made continuity hydration
+clone the registry. Mock mode builds its unified view from fixtures without
+the link store, so links do not reach the mock broadcast; that boundary is
+separate.
+
+- The monitor adapter passes its configured stale thresholds to record
+  ingest, so a link joined there judges each side's metrics the way a
+  snapshot-time link does. Ordinary source merges into an existing row still
+  use the default thresholds on every ingest path.
+- Continuity records are the one record ingest that never joins links. A
+  saved enrollment only fills an absent machine, so it stays its own row
+  instead of lending its linked guest an offline verdict and an old agent
+  payload.
+- A link merge keeps the TrueNAS and vSphere payloads the primary lacks, so
+  an agent chosen as primary over a TrueNAS system still carries the
+  system's facet, and the system's pools re-parent to the merged row.
+- The registry remembers each resource a manual link folded into its
+  primary. A folded resource is still observed, so neither pin-driven nor
+  record-declared succession may succeed its ID. An agent-type primary
+  carries the folded resource's machine keys and is pinned with them, and
+  succeeding the folded ID re-keyed the link onto the primary itself, which
+  split the pair on the next rebuild. That already broke snapshot links whose
+  primary is a machine-keyless agent-type row, such as a Proxmox node.
+- Fold history is registry-local: resource seeding and overlay clones do not
+  carry it. A reference to the folded resource's canonical ID, such as an
+  availability check configured against an agent later linked into its
+  guest, does not resolve to the primary, so the check loses its target in
+  the broadcast as it already did in the resources API.
+
+`registry_merge_policy_test.go` pins the record links in both directions
+through two rebuilds and the live supplemental refresh, and checks that a
+registry seeded from the monitor's listing through resource ingest, as the
+resources API seeds, lists the same rows
+(`TestManualLinksJoinRecordIngestedResourcesInMonitorRebuild`). The same file
+pins the node case (`TestManualLinkKeepsItsEndpointsThroughIdentityPinPersistence`),
+record-declared succession (`TestRecordDeclaredSuccessionSparesALinkFoldedResource`)
+and both payloads (`TestManualLinkKeepsProviderPayloadsThePrimaryLacks`).
+`monitor_adapter_read_state_test.go`
+(`TestMonitorAdapterJoinsLinkedRecordsWithConfiguredStaleThresholds`) pins the
+thresholds on the rebuild, supplemental and overlay paths, and
+`internal/monitoring/issue1913_host_continuity_test.go`
+(`TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity`) pins the
+published inventory with no continuity, an unrelated absent machine and the
+linked agent's own saved enrollment.
 
 ### Provider link network corroboration
 

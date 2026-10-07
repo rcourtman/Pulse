@@ -400,6 +400,87 @@ func TestReadStateWithRecordsPreservesConfiguredStaleThresholds(t *testing.T) {
 	}
 }
 
+// A link whose side arrives as a record joins during record ingest, so it
+// must judge freshness by the adapter's thresholds as a snapshot-time link
+// does. Under a five-minute vSphere threshold a VM polled three minutes ago
+// is current, and its own memory reading outranks its in-guest agent's.
+func TestMonitorAdapterJoinsLinkedRecordsWithConfiguredStaleThresholds(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:        "host-app-guest",
+			Hostname:  "app-guest",
+			MachineID: "machine-app-guest",
+			Status:    "online",
+			LastSeen:  now,
+			Memory:    models.Memory{Total: 8 << 30, Used: 6 << 30, Free: 2 << 30, Usage: 75},
+		}},
+		LastUpdate: now,
+	}
+	vmRecords := []IngestRecord{{
+		SourceID: "vc-1:vm:vm-42",
+		Resource: Resource{
+			Type:       ResourceTypeVM,
+			Technology: "vmware",
+			Name:       "app-guest",
+			Status:     StatusOnline,
+			LastSeen:   now.Add(-3 * time.Minute),
+			Metrics:    &ResourceMetrics{Memory: &MetricValue{Percent: 40, Source: SourceVMware}},
+			VMware:     &VMwareData{ConnectionID: "vc-1", ManagedObjectID: "vm-42", EntityType: "vm"},
+		},
+	}}
+	thresholds := map[DataSource]time.Duration{SourceVMware: 5 * time.Minute}
+
+	unlinked := NewMonitorAdapter(NewRegistry(nil))
+	unlinked.PopulateSnapshotAndSupplemental(snapshot, map[DataSource][]IngestRecord{SourceVMware: vmRecords})
+	vms, hosts := unlinked.VMs(), unlinked.Hosts()
+	if len(vms) != 1 || len(hosts) != 1 {
+		t.Fatalf("unlinked estate = %d VMs, %d agents, want one of each", len(vms), len(hosts))
+	}
+	link := ResourceLink{ResourceA: vms[0].ID(), ResourceB: hosts[0].ID(), PrimaryID: hosts[0].ID()}
+
+	for _, path := range []struct {
+		name string
+		read func(adapter *MonitorAdapter) ReadState
+	}{
+		{"rebuild", func(adapter *MonitorAdapter) ReadState {
+			adapter.PopulateSnapshotAndSupplemental(snapshot, map[DataSource][]IngestRecord{SourceVMware: vmRecords})
+			return adapter
+		}},
+		{"supplemental", func(adapter *MonitorAdapter) ReadState {
+			adapter.PopulateFromSnapshot(snapshot)
+			adapter.PopulateSupplementalRecords(SourceVMware, vmRecords)
+			return adapter
+		}},
+		{"overlay", func(adapter *MonitorAdapter) ReadState {
+			adapter.PopulateFromSnapshot(snapshot)
+			return ReadStateWithRecords(adapter, SourceVMware, vmRecords)
+		}},
+	} {
+		t.Run(path.name, func(t *testing.T) {
+			store := NewMemoryStore()
+			if err := store.AddLink(link); err != nil {
+				t.Fatalf("add link: %v", err)
+			}
+			readState := path.read(NewMonitorAdapterWithStaleThresholds(NewRegistry(store), thresholds))
+
+			if hosts := readState.Hosts(); len(hosts) != 0 {
+				t.Fatalf("linked agent still listed standalone: %s", hosts[0].ID())
+			}
+			vms := readState.VMs()
+			if len(vms) != 1 || vms[0].ID() != link.ResourceA {
+				t.Fatalf("VMs = %d, want the linked VM %s", len(vms), link.ResourceA)
+			}
+			if vms[0].r.Metrics == nil || vms[0].r.Metrics.Memory == nil {
+				t.Fatal("linked VM lost its memory reading")
+			}
+			if memory := vms[0].r.Metrics.Memory; memory.Source != SourceVMware || memory.Percent != 40 {
+				t.Fatalf("linked VM memory = %.0f%% from %s, want vSphere's current 40%%", memory.Percent, memory.Source)
+			}
+		})
+	}
+}
+
 func TestHostContinuityCannotOverwriteCurrentResource(t *testing.T) {
 	now := time.Now().UTC()
 	for _, mode := range []string{"machine-identity", "source-identity", "future-timestamp", "provider-only"} {

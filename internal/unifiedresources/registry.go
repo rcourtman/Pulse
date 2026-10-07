@@ -95,6 +95,10 @@ type ResourceRegistry struct {
 	exclusions   map[string]struct{}
 	identityPins *identityPinIndex
 	pbsBackups   []models.PBSBackup
+	// linkMergedIDs holds the resources a manual link folded into their
+	// primary. They are still observed, so identity succession treats them
+	// as live.
+	linkMergedIDs map[string]struct{}
 	// supersededIndex maps record-declared retired canonical IDs to the live
 	// resource that superseded them, so references persisted under a retired
 	// ID (availability links, API reads) keep resolving. An empty value marks
@@ -611,10 +615,16 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 
 // IngestRecords ingests normalized records for a single source.
 func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRecord) {
-	rr.ingestRecords(source, records, false)
+	rr.ingestRecords(source, records, false, nil)
 }
 
-func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRecord, onlyMissing bool) {
+// IngestRecordsWithStaleThresholds ingests normalized records for a single
+// source and merges operator-linked resources with caller-owned thresholds.
+func (rr *ResourceRegistry) IngestRecordsWithStaleThresholds(source DataSource, records []IngestRecord, thresholds map[DataSource]time.Duration) {
+	rr.ingestRecords(source, records, false, thresholds)
+}
+
+func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRecord, onlyMissing bool, thresholds map[DataSource]time.Duration) {
 	var successions []CanonicalIDSuccession
 	supersededSeen := make(map[string]struct{})
 	for _, record := range records {
@@ -649,6 +659,16 @@ func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRec
 	rr.applyRecordSuccessions(successions)
 
 	rr.mu.Lock()
+	// Either side of an operator link can arrive as a record: a vSphere or
+	// TrueNAS VM with a Pulse agent inside, or an agent on a TrueNAS host.
+	// Snapshot and resource ingest apply the links, so record ingest must too,
+	// or the monitor's rebuilt registry keeps both rows while REST, which
+	// seeds from that registry, shows them merged. Continuity records only
+	// fill absent machines: a saved enrollment joined to its linked guest
+	// would lend the guest its offline verdict and old agent payload.
+	if !onlyMissing {
+		rr.applyManualLinks(thresholds)
+	}
 	rr.refreshStorageConsumersLocked()
 	rr.refreshPBSRollupsLocked()
 	rr.refreshStoragePostureLocked()
@@ -746,12 +766,25 @@ func (rr *ResourceRegistry) proxmoxGuestResourceIDForSourceRefLocked(ref string)
 	return uniqueID
 }
 
+// canonicalIDObservedLocked reports whether a canonical ID still names an
+// observed resource: a live row, or one a manual link folded into its primary.
+// Succeeding an observed ID would hand its operator rows, and the link that
+// folded it, to another resource.
+func (rr *ResourceRegistry) canonicalIDObservedLocked(id string) bool {
+	if _, live := rr.resources[id]; live {
+		return true
+	}
+	_, folded := rr.linkMergedIDs[id]
+	return folded
+}
+
 // applyRecordSuccessions re-keys operator-owned store rows from canonical IDs
 // that ingested records declared superseded (IngestRecord.SupersededCanonicalIDs)
 // onto the records' current canonical IDs. Mirrors the guards of pin-driven
-// successions in PersistIdentityPins: a superseded ID still held by a live
-// resource is skipped so a genuinely distinct sibling never has its rows
-// stolen. Re-runs are cheap no-ops once the old rows are gone.
+// successions in PersistIdentityPins: a superseded ID still observed, live or
+// folded into another resource by a manual link, is skipped so a genuinely
+// distinct sibling never has its rows stolen. Re-runs are cheap no-ops once
+// the old rows are gone.
 func (rr *ResourceRegistry) applyRecordSuccessions(successions []CanonicalIDSuccession) {
 	if len(successions) == 0 || rr.store == nil {
 		return
@@ -764,7 +797,7 @@ func (rr *ResourceRegistry) applyRecordSuccessions(successions []CanonicalIDSucc
 	rr.mu.RLock()
 	kept := make([]CanonicalIDSuccession, 0, len(successions))
 	for _, succession := range successions {
-		if _, live := rr.resources[succession.OldCanonicalID]; live {
+		if rr.canonicalIDObservedLocked(succession.OldCanonicalID) {
 			continue
 		}
 		kept = append(kept, succession)
@@ -4811,6 +4844,10 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 
 		rr.mergeResourceData(primary, other, thresholds)
 		delete(rr.resources, otherID)
+		if rr.linkMergedIDs == nil {
+			rr.linkMergedIDs = make(map[string]struct{})
+		}
+		rr.linkMergedIDs[otherID] = struct{}{}
 		rr.updateSourceMappings(otherID, primaryID)
 	}
 }
@@ -4875,6 +4912,12 @@ func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource
 	}
 	if primary.Ceph == nil {
 		primary.Ceph = other.Ceph
+	}
+	if primary.TrueNAS == nil {
+		primary.TrueNAS = other.TrueNAS
+	}
+	if primary.VMware == nil {
+		primary.VMware = other.VMware
 	}
 
 	// Manual links combine already-normalized resources. Preserve each metric's

@@ -337,8 +337,9 @@ func (index *identityPinIndex) successionsFor(pin ResourceIdentityPin) []Canonic
 // the new canonical ID before the pin write, so operator intent
 // (never-auto-remediate, maintenance windows) and action-audit history
 // survive the era change. Successions are skipped while the old canonical ID
-// still belongs to a live resource: a genuinely short-named host must not
-// have its rows stolen by an FQDN sibling. Change-journal rows are never
+// still belongs to a live resource, or to one a manual link folded into
+// another: a genuinely short-named host must not have its rows stolen by an
+// FQDN sibling. Change-journal rows are never
 // rewritten; EraIDs merges those at read time.
 func (rr *ResourceRegistry) PersistIdentityPins() {
 	if rr.store == nil {
@@ -358,7 +359,11 @@ func (rr *ResourceRegistry) PersistIdentityPins() {
 		}
 		pins = append(pins, pin)
 		for _, succession := range rr.identityPins.successionsFor(pin) {
-			if _, live := rr.resources[succession.OldCanonicalID]; live {
+			// A primary that absorbed a linked resource also carries its
+			// machine keys. That resource is still observed, and succeeding
+			// it would re-key the link onto the primary itself, splitting
+			// the pair again on the next rebuild.
+			if rr.canonicalIDObservedLocked(succession.OldCanonicalID) {
 				continue
 			}
 			successions = append(successions, succession)
