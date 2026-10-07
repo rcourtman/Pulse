@@ -28,6 +28,11 @@ func TestGuestAgentLockEvidenceRejectsAmbiguity(t *testing.T) {
 		{"null-lock", `{"data":{"lock": null }}`},
 		{"number-lock", `{"data":{"lock":0}}`},
 		{"object-lock", `{"data":{"lock":{}}}`},
+		{"invalid-utf8-config-key", "{\"data\":{\"na\xffme\":\"fixture\"}}"},
+		{"invalid-utf8-config-value", "{\"data\":{\"name\":\"fixture\xff\"}}"},
+		{"invalid-utf8-lock-key", "{\"data\":{\"lo\xffck\":\"backup\"}}"},
+		{"invalid-utf8-nested-value", "{\"data\":{\"lock\":\"\",\"nested\":{\"name\":\"fixture\xff\"}}}"},
+		{"invalid-utf8-overlong", "{\"data\":{\"name\":\"fixture\xc0\xaf\"}}"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -147,6 +152,8 @@ func TestGuestAgentLockEvidenceHealthyConfigAndSessionRecovery(t *testing.T) {
 		`{"data":{"lock":"","agent":1,"digest":"fixture","name":"fixture"}}`,
 		`{"data":{"lock":"  ","description":"backup; lock","scsi0":"fixture:disk","tags":"backup;ha"}}`,
 		`{"data":{"\u006cock":"","nested":{"data":"fixture","lock":"backup"}}}`, // Only the actual operation lock is authoritative.
+		`{"data":{"name":"café-東京-🖥","description":"backup; lock"}}`,
+		`{"data":{"lock":"","name":"replacement-�"}}`, // A real U+FFFD is valid UTF-8, not malformed wire bytes.
 	} {
 		t.Run(fmt.Sprintf("config-%d", len(body)), func(t *testing.T) {
 			var configs, commands, authentications atomic.Int32
