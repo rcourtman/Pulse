@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "d26a4837315b40b47a73dbf1ff1cb4c8d6075225",
+  "verified_at": "2026-10-06T15:52:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
+    "frontend-modern/src/utils/resourceChangePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx": "a7d8728f72de5b9acd73832064f037af97978b78859cb2c69a01e25f0750e6d5",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "f0f868d614ef70165b77e80f220cc5927936bdfcfa4eff3a8f18b728acaf5b52",
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts": "e172bfead859ece6f7f9998dcd765c6f348bbfc25214089d6ba1a150f30d6fec",
+    "frontend-modern/src/utils/resourceChangePresentation.ts": "5a8d67301975d89545c866116e1e0e7e633881b3b3ce4da37b825a46cf65265d"
+  },
+  "routes": [
+    "/proxmox/overview?agent=Production+West-pve1",
+    "/standalone/availability?view=fleet"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock stack (backend :7741 from this branch plus a local-only go build -overlay hook, Vite :5241 from this clone): the real alerts manager raised pve1 node memory and CPU alerts, the hook closed the memory alert through clearAlertWithResolution with a moved_to_agent resolution (successor pve1 (Host Agent)), and threshold restore recovered CPU normally; the monitor recorded both alert_resolved changes, the moved one with the engine summary as reason and alert_resolution metadata",
+    "Proxmox overview, West Production A inline drawer (table-row presentation): Overview and History tabs render, no change history section, no facets request; table-row drawers skip remote history by design and node alert changes are stored under the legacy node ID mock-cluster-1-pve1, so the move cannot appear in a node drawer today",
+    "Availability checks Fleet view, Rack UPS network card full drawer, with the two producer-made alert_resolved rows (plus their alert_fired rows) copied from mock-cluster-1-pve1 to this endpoint's canonical ID in unified_resources.db as a fixture: at 1280 the change history lists 'Alert moved' over 'Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading.' and the ordinary close still reads 'Alert resolved' over 'Alert resolved: Node cpu 5-minute average at 33.7% (current 33.7%)'",
+    "Same drawer at 375: both entries wrap inside the card, the moved entry is titled Alert moved, no horizontal page scroll; facet chips still read 'Alert resolved 2' because kind counts carry no metadata (documented in unified-resources)",
+    "Console: only the known private-port websocket rejection (ws://127.0.0.1:5241/ws, ALLOWED_ORIGINS lists 5173/7655), no errors from the drawer"
+  ],
+  "interactions": [
+    "Expanded West Production A on /proxmox/overview, opened its History tab and checked the DOM and network log for a change history section and a facets request",
+    "Switched Availability checks to the Fleet view through View preferences and opened the Rack UPS network card tile",
+    "Scrolled the change history to the Alert moved entry at 1280x900 and read every entry title and reason",
+    "Reloaded at 375x812, reopened the tile, read the entries and compared document width with the viewport"
+  ]
+}
