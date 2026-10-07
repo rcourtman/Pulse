@@ -7775,6 +7775,16 @@ bounded and classified temperature nodes, and leaves the host report intact
 when the helper is absent or incompatible. It does not treat Windows ACPI
 thermal zones as hardware sensor evidence, accept remote provider locations,
 or grant Pulse hardware-control authority.
+### Single-resource report AI narration requires POST
+
+`internal/api/metrics_reporting_handlers.go`, `internal/api/router.go` and
+`internal/api/ai_handlers.go` changed only how `/api/admin/reports/generate`
+reads its fields (a `POST` JSON body or `GET` query parameters), which of those
+may use the tenant's AI narrator (`POST` only), and how a `GET` finds Patrol
+findings (`ExistingAIService`, which never constructs a tenant AI service). No
+agent registration, enrolment, install, update, removal or report ingest path
+changed.
+
 ### Agent profile adoption is reported as a count only
 
 The usage telemetry snapshot reads `LoadAgentProfiles` and reports
@@ -8956,6 +8966,25 @@ in `internal/monitoring/monitor_host_agents_test.go`
 (`TestHostDiskIOMetricResourceIDFallbacks`) and
 `internal/monitoring/issue1595_collection_trust_test.go`
 (`TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports`).
+
+### Unraid temperatures chart agent disk history
+
+`internal/monitoring/monitor_agents.go` changed only so the SMART history
+writer charts the temperature a host agent's disk shows. A SMART row without
+its own reading shows the one the host's Unraid inventory reports for the disk,
+when that inventory row describes the disk (`HostSMARTDiskTemperature`), and a
+disk only the Unraid inventory reports,
+such as a member the agent's SMART collection skips under `--disk-exclude`,
+shows that row's reading (`HostUnraidDiskTemperature`). Both are now written
+as `smart_temp` under the key the disk's metrics target reads
+(`HostSMARTDiskMetricID`, `HostUnraidDiskMetricID`); a reading the disk does
+not show as collected, a spun-down disk's or an expired host's, is not. Agent
+registration, enrolment, install, update, removal, report identity and disk
+source IDs are unchanged. Focused proof lives in
+`internal/monitoring/monitor_host_agents_test.go`
+(`TestApplyHostReportChartsUnraidTemperatureOfDiskWithoutSMART`) and
+`internal/monitoring/issue1595_collection_trust_test.go`
+(`TestAgentDiskChartsTheUnraidTemperatureItShows`).
 
 ### Windows braced MachineGuid does not abort agent startup
 

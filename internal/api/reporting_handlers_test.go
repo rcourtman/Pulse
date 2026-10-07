@@ -75,13 +75,54 @@ func (p reportBrandLicenseProvider) Service(context.Context) *pkglicensing.Servi
 
 func TestReportingHandlers_MethodNotAllowed(t *testing.T) {
 	handler := NewReportingHandlers(nil, nil)
-	req := httptest.NewRequest(http.MethodPost, "/api/reporting", nil)
+	req := httptest.NewRequest(http.MethodPut, "/api/reporting", nil)
 	rr := httptest.NewRecorder()
 
 	handler.HandleGenerateReport(rr, req)
 
 	if rr.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rr.Code)
+	}
+	if got := rr.Header().Get("Allow"); got != "GET, POST" {
+		t.Fatalf("expected Allow GET, POST, got %q", got)
+	}
+}
+
+func TestReportingHandlers_GenerateReportRejectsInvalidPOSTBody(t *testing.T) {
+	engine := &stubReportingEngine{data: []byte("report"), contentType: "application/pdf"}
+	original := reporting.GetEngine()
+	reporting.SetEngine(engine)
+	t.Cleanup(func() { reporting.SetEngine(original) })
+
+	handler := NewReportingHandlers(nil, nil)
+	for name, body := range map[string]string{
+		"empty":          ``,
+		"unknown field":  `{"resourceType":"node","resourceId":"node-1","narrate":true}`,
+		"trailing value": `{"resourceType":"node","resourceId":"node-1"} {}`,
+		"query shape":    `resourceType=node&resourceId=node-1`,
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/api/reporting", strings.NewReader(body))
+		rr := httptest.NewRecorder()
+		handler.HandleGenerateReport(rr, req)
+		if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "invalid_body") {
+			t.Fatalf("%s: expected 400 invalid_body, got %d body=%s", name, rr.Code, rr.Body.String())
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/reporting?resourceType=node&resourceId=node-1", strings.NewReader(`{}`))
+	rr := httptest.NewRecorder()
+	handler.HandleGenerateReport(rr, req)
+	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "missing_params") {
+		t.Fatalf("POST must read fields from the body, not the query: got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	// A valid value followed by padding past the cap is too large, not malformed.
+	padded := `{"resourceType":"node","resourceId":"node-1"}` + strings.Repeat(" ", reportingMultiReportBodyMax)
+	req = httptest.NewRequest(http.MethodPost, "/api/reporting", strings.NewReader(padded))
+	rr = httptest.NewRecorder()
+	handler.HandleGenerateReport(rr, req)
+	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "body_too_large") {
+		t.Fatalf("expected 400 body_too_large for an oversized body, got %d body=%s", rr.Code, rr.Body.String())
 	}
 }
 

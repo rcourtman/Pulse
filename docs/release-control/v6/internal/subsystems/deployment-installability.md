@@ -6447,6 +6447,14 @@ summaries whose scope, format, and attachments the server fixes. The delivery
 surface (`/api/admin/reports/schedules`) and tenant-local storage are
 unchanged.
 
+### Provider docs name POST for single-resource reports
+
+`docs/MSP.md` and its shipped copy now give `POST /api/admin/reports/generate`
+for per-client single-resource reports and say a `GET` with query parameters
+still returns the report without the Pulse Assistant narrative, matching the
+server, which lets only `POST` narrate. Install, upgrade and provider bundle
+delivery are unchanged.
+
 ### Convergence log-reader compatibility (5 September 2026)
 
 Scheduled reconciliation run 33939926237 failed when `gh api` refused terminal

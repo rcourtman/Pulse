@@ -142,6 +142,19 @@ on component mount. Closing clears the registered input so later keyboard
 commands cannot target a detached composer. A handoff must leave Escape and
 keyboard input in Assistant, not the underlying alert search.
 
+### Process-wide memory ID ownership
+
+`internal/ai/memory` preserves random UUID incident and incident-event IDs from
+the reviewed occurrence repair. They have no shared mutable counter and do not
+reuse a local timestamp after restart. Existing persisted references remain valid.
+Remediation-record and context-memory IDs use the upstream package-wide atomic
+`Int64` sequences through `nextSequencedID` in `ids.go`, without wrapping at 1000.
+Their existing `<prefix><local second>-<n>` format remains; across restarts those
+four sequences still depend on the local timestamp and retain that limitation.
+`ids_test.go` checks all six actual formats and concurrent uniqueness, plus
+independent concurrent tenant-store recording under `-race`. The reviewed
+`incidents_identity_test.go` continues to pin UUID occurrence/event ownership.
+
 ### Canonical incident-history queries
 
 Incident context reads `IncidentStore.QueryIncidents`, whose page contains
@@ -7530,6 +7543,18 @@ prompt budget. Reporting is therefore an additive consumer of AI
 runtime, not a new ownership boundary, and the narrator/findings
 surfaces inherit the same governance the rest of the canonical AI
 runtime already enforces.
+Report narration is caller-requested spend, so on the single-resource HTTP
+route only `POST /api/admin/reports/generate` reaches it (fleet reports, from
+`POST .../generate-multi` or a report schedule, use the fleet narrator). The
+reporting narrator resolver goes through `AISettingsHandler.GetAIService`,
+which constructs a tenant service on first use and can then list provider
+models or start background discovery. A GET single-resource report never calls
+that resolver:
+it narrates deterministically and reads Patrol findings through
+`AISettingsHandler.ExistingAIService`, which returns only a service that is
+already running and never constructs one
+(`TestAISettingsHandler_ExistingAIServiceNeverConstructs`, and through the
+router's real wiring `TestContract_SingleReportGETDoesNotConstructTenantAIService`).
 
 The same canonical AI runtime now also owns the fleet-level report
 narrative through `report_fleet_narrator.go`. `Service` implements

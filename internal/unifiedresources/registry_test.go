@@ -2929,6 +2929,101 @@ func TestResourceRegistry_IngestSnapshotCreatesUnraidDisksWithoutSMART(t *testin
 	}
 }
 
+func TestHostDiskTemperatureReadingsMatchTheDisksTheRegistryShows(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	host := models.Host{
+		ID:       "host-tower",
+		Hostname: "tower",
+		Status:   "online",
+		LastSeen: now,
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{
+				// smartctl read this disk itself.
+				{Device: "sda", Model: "WDC A", Serial: "SER-A", Type: "sata", Temperature: 38},
+				// smartctl returned no temperature; Unraid read one.
+				{Device: "sdb", Model: "WDC B", Serial: "SER-B", Type: "sata"},
+				// smartctl and Unraid name this device with different serials.
+				{Device: "sde", Model: "Bridge E", Serial: "SER-E1", Type: "sata", Temperature: 41},
+				// The registry ingests no virtual device.
+				{Device: "zram0", Temperature: 70},
+				// A controller member Unraid lists under its block device.
+				{Device: "0 [megaraid,0]", Model: "Seagate F", Serial: "SER-F", Type: "sata", Controller: "0", Target: "megaraid,0", Temperature: 44},
+			},
+		},
+		Unraid: &models.HostUnraidStorage{
+			ArrayStarted: true,
+			ArrayState:   "STARTED",
+			Disks: []models.HostUnraidDisk{
+				{Name: "disk1", Device: "/dev/sda", Role: "data", Status: "online", Serial: "SER-A", Transport: "sata", Temperature: 36},
+				{Name: "disk2", Device: "/dev/sdb", Role: "data", Status: "online", Serial: "SER-B", Transport: "sata", Temperature: 47},
+				// No SMART row, as for a --disk-exclude match.
+				{Name: "disk3", Device: "/dev/nvme0n1", Role: "data", Status: "online", Model: "Samsung C", Serial: "SER-C", Transport: "nvme", Temperature: 52},
+				{Name: "disk4", Device: "/dev/sdd", Role: "data", Status: "online", Model: "WDC D", Serial: "SER-D", Transport: "sata", Temperature: 30, SpunDown: true},
+				{Name: "disk5", Device: "/dev/sde", Role: "data", Status: "online", Model: "WDC E", Serial: "SER-E2", Transport: "sata", Temperature: 43},
+				{Name: "disk7", Device: "/dev/sdf", Role: "data", Status: "online", Model: "Seagate F", Serial: "SER-F", Transport: "sata", Temperature: 44},
+				// An empty slot: the registry ingests no disk for it.
+				{Name: "disk6", Role: "data", Status: "missing"},
+			},
+		},
+	}
+
+	type want struct {
+		device      string
+		diskType    string
+		temperature int
+		collected   bool
+		unraidOnly  bool
+	}
+	wants := map[string]want{
+		"SER-A":  {device: "sda", diskType: "sata", temperature: 38, collected: true},
+		"SER-B":  {device: "sdb", diskType: "sata", temperature: 47, collected: true},
+		"SER-E1": {device: "sde", diskType: "sata", temperature: 41, collected: true},
+		"SER-F":  {device: "0 [megaraid,0]", diskType: "sata", temperature: 44, collected: true},
+		"SER-C":  {device: "nvme0n1", diskType: "nvme", temperature: 52, collected: true, unraidOnly: true},
+		"SER-D":  {device: "sdd", diskType: "sata", temperature: 30, unraidOnly: true},
+		"SER-E2": {device: "sde", diskType: "sata", temperature: 43, collected: true, unraidOnly: true},
+	}
+
+	readings := HostDiskTemperatureReadings(host)
+	if len(readings) != len(wants) {
+		t.Fatalf("expected %d readings, got %d: %+v", len(wants), len(readings), readings)
+	}
+	byKey := make(map[string]HostDiskTemperatureReading, len(readings))
+	for _, reading := range readings {
+		w, ok := wants[reading.MetricID]
+		if !ok {
+			t.Fatalf("unexpected reading %+v", reading)
+		}
+		if reading.Device != w.device || reading.DiskType != w.diskType || reading.Temperature != w.temperature ||
+			reading.Collected() != w.collected || reading.UnraidOnly != w.unraidOnly {
+			t.Fatalf("reading for %s = %+v (collected %v), want %+v", reading.MetricID, reading, reading.Collected(), w)
+		}
+		byKey[reading.MetricID] = reading
+	}
+
+	// The readings are the ones the disks the registry builds show, one each.
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{Hosts: []models.Host{host}})
+	disks := rr.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != len(wants) {
+		t.Fatalf("expected %d physical disks, got %d: %+v", len(wants), len(disks), disks)
+	}
+	for _, disk := range disks {
+		meta := disk.PhysicalDisk
+		if meta == nil {
+			t.Fatalf("physical disk without meta: %+v", disk)
+		}
+		reading, ok := byKey[meta.Serial]
+		if !ok {
+			t.Fatalf("registry disk %q has no reading", meta.Serial)
+		}
+		if meta.Temperature != reading.Temperature || meta.DiskType != reading.DiskType ||
+			diskinventory.TemperatureCollected(meta.Temperature, meta.Collection) != diskinventory.TemperatureCollected(reading.Temperature, reading.Collection) {
+			t.Fatalf("registry disk %q shows %dC %q (collection %+v), reading %+v", meta.Serial, meta.Temperature, meta.DiskType, meta.Collection, reading)
+		}
+	}
+}
+
 func TestResourceRegistry_IngestSnapshotCreatesUnraidStorageResource(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)

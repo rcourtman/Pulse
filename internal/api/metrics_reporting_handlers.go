@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -99,6 +100,7 @@ type ReportingHandlers struct {
 	mtMonitor                 *monitoring.MultiTenantMonitor
 	recoveryManager           *recoverymanager.Manager
 	narratorResolver          func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider)
+	existingFindingsResolver  func(ctx context.Context) reporting.FindingsProvider
 	settingsStore             reportingSystemSettingsStore
 	scheduleRunMu             sync.Mutex
 	commercialLicenseResolver func(ctx context.Context) *licenseService
@@ -166,6 +168,23 @@ func (h *ReportingHandlers) resolveNarrator(ctx context.Context) (reporting.Narr
 		return nil, nil, nil
 	}
 	return h.narratorResolver(ctx)
+}
+
+// SetExistingFindingsResolver wires the Patrol findings lookup that GET reports
+// use. Unlike the narrator resolver it must return only an AI service that is
+// already running, never construct one.
+func (h *ReportingHandlers) SetExistingFindingsResolver(resolver func(ctx context.Context) reporting.FindingsProvider) {
+	if h == nil {
+		return
+	}
+	h.existingFindingsResolver = resolver
+}
+
+func (h *ReportingHandlers) resolveExistingFindings(ctx context.Context) reporting.FindingsProvider {
+	if h == nil || h.existingFindingsResolver == nil {
+		return nil
+	}
+	return h.existingFindingsResolver(ctx)
 }
 
 func (h *ReportingHandlers) resolveReportBranding(ctx context.Context) reporting.ReportBranding {
@@ -300,28 +319,33 @@ func normalizePerformanceReportTimeRange(
 	return start, end, nil
 }
 
-func decodeMultiReportRequestBody(w http.ResponseWriter, r *http.Request) (multiReportRequestBody, bool) {
+// decodeReportingRequestBody strictly decodes one JSON report request body:
+// at most 1MB, no unknown fields, no trailing payload.
+func decodeReportingRequestBody[T any](w http.ResponseWriter, r *http.Request) (T, bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, reportingMultiReportBodyMax)
 
-	var body multiReportRequestBody
+	var body, zero T
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&body); err != nil {
+	err := decoder.Decode(&body)
+	if err == nil {
+		// Anything after the value is invalid, and reading past it can also
+		// hit the size cap.
+		if trailing := decoder.Decode(&struct{}{}); trailing != io.EOF {
+			err = errors.New("trailing payload")
+			if trailing != nil {
+				err = trailing
+			}
+		}
+	}
+	if err != nil {
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
 			writeErrorResponse(w, http.StatusBadRequest, "body_too_large", "Request body must be 1MB or less", nil)
-			return multiReportRequestBody{}, false
+			return zero, false
 		}
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_body", "Invalid request body", nil)
-		return multiReportRequestBody{}, false
-	}
-	if decoder.More() {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_body", "Invalid request body", nil)
-		return multiReportRequestBody{}, false
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_body", "Invalid request body", nil)
-		return multiReportRequestBody{}, false
+		return zero, false
 	}
 
 	return body, true
@@ -539,9 +563,67 @@ func (h *ReportingHandlers) listBackupsForReport(ctx context.Context, orgID stri
 	return out
 }
 
-// HandleGenerateReport generates a report
+// singleReportRequestBody carries the single-resource report fields. POST
+// sends them as a JSON body; GET sends the same names as query parameters.
+type singleReportRequestBody struct {
+	ResourceType string `json:"resourceType"`
+	ResourceID   string `json:"resourceId"`
+	Format       string `json:"format"`
+	Start        string `json:"start"`
+	End          string `json:"end"`
+	Title        string `json:"title"`
+	MetricType   string `json:"metricType"`
+}
+
+func singleReportRequestFromQuery(q url.Values) singleReportRequestBody {
+	return singleReportRequestBody{
+		ResourceType: q.Get("resourceType"),
+		ResourceID:   q.Get("resourceId"),
+		Format:       q.Get("format"),
+		Start:        q.Get("start"),
+		End:          q.Get("end"),
+		Title:        q.Get("title"),
+		MetricType:   q.Get("metricType"),
+	}
+}
+
+// reportGETNarrativeNote takes the place of the PDF's "Configure Pulse
+// Assistant" tip on a GET report, which stays deterministic whatever the
+// Assistant settings.
+const reportGETNarrativeNote = "Tip: This report was requested with GET, which never uses Pulse Assistant. Generate it from Settings, or request it with POST, to include AI narration when Pulse Assistant is configured."
+
+// getReportNarrator narrates GET single-resource reports with the
+// deterministic summary and never calls an AI provider.
+type getReportNarrator struct{}
+
+func (getReportNarrator) Narrate(ctx context.Context, in reporting.NarrativeInput) (reporting.Narrative, error) {
+	out, err := reporting.HeuristicNarrator{}.Narrate(ctx, in)
+	out.Source = reporting.NarrativeSourceHeuristic
+	out.Disclaimer = reportGETNarrativeNote
+	return out, err
+}
+
+// HandleGenerateReport generates a single-resource report. POST with a JSON
+// body is the canonical transport, used by the settings UI, and the only one
+// that may narrate a PDF with the tenant's Pulse Assistant, which spends AI
+// budget and records usage in the cost ledger. GET takes the same fields as
+// query parameters and always narrates deterministically: GET passes the
+// demo-mode guard and the CSRF check, and SameSite=Lax session cookies ride
+// cross-site top-level GET navigations, so a link must not be able to spend
+// that budget.
 func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	var params singleReportRequestBody
+	switch r.Method {
+	case http.MethodGet:
+		params = singleReportRequestFromQuery(r.URL.Query())
+	case http.MethodPost:
+		body, ok := decodeReportingRequestBody[singleReportRequestBody](w, r)
+		if !ok {
+			return
+		}
+		params = body
+	default:
+		w.Header().Set("Allow", "GET, POST")
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -553,15 +635,14 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 	}
 
 	definition := performanceReportDefinition()
-	q := r.URL.Query()
-	format, err := normalizePerformanceReportFormat(q.Get("format"), definition)
+	format, err := normalizePerformanceReportFormat(params.Format, definition)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_format", err.Error(), nil)
 		return
 	}
 
-	resourceTypeRaw := q.Get("resourceType")
-	resourceID := q.Get("resourceId")
+	resourceTypeRaw := params.ResourceType
+	resourceID := params.ResourceID
 	if resourceTypeRaw == "" || resourceID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_params", "resourceType and resourceId are required", nil)
 		return
@@ -584,8 +665,8 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 
 	metricType, title, err := normalizePerformanceReportOptionalFields(
 		definition,
-		q.Get("metricType"),
-		q.Get("title"),
+		params.MetricType,
+		params.Title,
 	)
 	if err != nil {
 		code := "invalid_metric_type"
@@ -599,8 +680,8 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 
 	start, end, err := normalizePerformanceReportTimeRange(
 		definition,
-		q.Get("start"),
-		q.Get("end"),
+		params.Start,
+		params.End,
 		time.Now(),
 	)
 	if err != nil {
@@ -628,9 +709,18 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 	// Wire the per-tenant AI narrator and Patrol findings provider when
 	// configured. Both are nil-safe at the engine layer; absence falls
 	// back to the heuristic narrator with no findings section. Single-
-	// resource reports do not use the FleetNarrator.
-	narrator, _, findings := h.resolveNarrator(r.Context())
-	req.Narrator = narrator
+	// resource reports do not use the FleetNarrator. Only POST resolves the
+	// AI service; GET narrates deterministically and reads findings only
+	// from an AI service that is already running.
+	var narrator reporting.Narrator
+	var findings reporting.FindingsProvider
+	if r.Method == http.MethodPost {
+		narrator, _, findings = h.resolveNarrator(r.Context())
+		req.Narrator = narrator
+	} else {
+		findings = h.resolveExistingFindings(r.Context())
+		req.Narrator = getReportNarrator{}
+	}
 	req.FindingsProvider = findings
 
 	data, contentType, err := engine.Generate(req)
@@ -647,6 +737,7 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 	log.Info().
 		Str("event", "reporting.single.generated").
 		Str("org_id", orgID).
+		Str("method", r.Method).
 		Str("resource_type", resourceType).
 		Str("metric_type", metricType).
 		Str("format", string(format)).
@@ -1144,7 +1235,7 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	body, ok := decodeMultiReportRequestBody(w, r)
+	body, ok := decodeReportingRequestBody[multiReportRequestBody](w, r)
 	if !ok {
 		return
 	}

@@ -621,6 +621,27 @@ describe('docsLinks', () => {
     expect(apiReference).not.toContain('Mobile Remote Access');
   });
 
+  it('documents POST as the only report transport that uses Pulse Assistant', () => {
+    const handler = readFileSync(
+      path.join(repoRoot, 'internal', 'api', 'metrics_reporting_handlers.go'),
+      'utf8',
+    );
+    expect(handler).toContain(
+      'if r.Method == http.MethodPost {\n\t\tnarrator, _, findings = h.resolveNarrator(r.Context())',
+    );
+    expect(handler).toContain('req.Narrator = getReportNarrator{}');
+    for (const guide of ['API.md', 'MSP.md']) {
+      const rootDoc = readFileSync(path.join(repoRoot, 'docs', guide), 'utf8');
+      expect(readFileSync(path.join(frontendRoot, 'public', 'docs', guide), 'utf8')).toBe(rootDoc);
+      expect(rootDoc).toContain('`POST /api/admin/reports/generate` (');
+    }
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    expect(apiReference).toContain('it never calls an AI provider');
+    expect(apiReference).toContain('`405` with `Allow: GET, POST`');
+    const msp = readFileSync(path.join(repoRoot, 'docs', 'MSP.md'), 'utf8');
+    expect(msp).not.toContain('`GET /api/admin/reports/generate` (single resource)');
+  });
+
   it('ships credential-free Proxmox setup instructions and a separate token prompt', () => {
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     const shipped = readFileSync(path.join(frontendRoot, 'public', 'docs', 'API.md'), 'utf8');

@@ -805,33 +805,7 @@ func (r *Router) setupRoutes() {
 	// tenant services are refreshed when Router.SetMonitor replaces a monitor.
 	r.configureMetadataProviderFactory()
 
-	// Wire the per-tenant AI narrator, fleet narrator, and Patrol
-	// findings provider into reporting. The AI service implements all
-	// three interfaces; when not configured for the tenant the engine
-	// falls back to the heuristic narrators with no findings section.
-	if r.reportingHandlers != nil {
-		settings := r.aiSettingsHandler
-		r.reportingHandlers.SetPatrolDigestResolver(func(ctx context.Context, days int) (ai.PatrolDigest, bool) {
-			if settings == nil {
-				return ai.PatrolDigest{}, false
-			}
-			return settings.BuildPatrolDigest(ctx, days)
-		})
-		r.reportingHandlers.SetNarratorResolver(func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
-			if settings == nil {
-				return nil, nil, nil
-			}
-			svc := settings.GetAIService(ctx)
-			if svc == nil {
-				return nil, nil, nil
-			}
-			cfg := svc.GetAIConfig()
-			if cfg == nil || !cfg.Enabled {
-				return nil, nil, nil
-			}
-			return svc, svc, svc
-		})
-	}
+	r.wireReportingAIResolvers()
 
 	// AI chat handler
 	r.aiHandler = NewAIHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
@@ -1029,6 +1003,50 @@ func (r *Router) setupRoutes() {
 
 	// Note: Frontend handler is handled manually in ServeHTTP to prevent redirect issues
 	// See issue #334 - ServeMux redirects empty path to "./" which breaks reverse proxies
+}
+
+// wireReportingAIResolvers connects reporting to the per-tenant AI service.
+func (r *Router) wireReportingAIResolvers() {
+	// Wire the per-tenant AI narrator, fleet narrator, and Patrol
+	// findings provider into reporting. The AI service implements all
+	// three interfaces; when not configured for the tenant the engine
+	// falls back to the heuristic narrators with no findings section.
+	if r.reportingHandlers != nil {
+		settings := r.aiSettingsHandler
+		r.reportingHandlers.SetPatrolDigestResolver(func(ctx context.Context, days int) (ai.PatrolDigest, bool) {
+			if settings == nil {
+				return ai.PatrolDigest{}, false
+			}
+			return settings.BuildPatrolDigest(ctx, days)
+		})
+		r.reportingHandlers.SetNarratorResolver(func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {
+			if settings == nil {
+				return nil, nil, nil
+			}
+			svc := settings.GetAIService(ctx)
+			if svc == nil {
+				return nil, nil, nil
+			}
+			cfg := svc.GetAIConfig()
+			if cfg == nil || !cfg.Enabled {
+				return nil, nil, nil
+			}
+			return svc, svc, svc
+		})
+		r.reportingHandlers.SetExistingFindingsResolver(func(ctx context.Context) reporting.FindingsProvider {
+			if settings == nil {
+				return nil
+			}
+			svc := settings.ExistingAIService(ctx)
+			if svc == nil {
+				return nil
+			}
+			if cfg := svc.GetAIConfig(); cfg == nil || !cfg.Enabled {
+				return nil
+			}
+			return svc
+		})
+	}
 }
 
 // CleanupTenant removes all per-tenant resources (RBAC, AI, License) for a deleted org.

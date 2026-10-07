@@ -135,7 +135,7 @@ func readStateWithRecords(readState ReadState, source DataSource, records []Inge
 	cloned := NewRegistry(registry.store)
 	thresholds := adapter.currentStaleThresholds()
 	cloned.IngestResourcesWithStaleThresholds(registry.List(), thresholds)
-	cloned.ingestRecords(source, records, onlyMissing)
+	cloned.ingestRecords(source, records, onlyMissing, thresholds)
 	overlay := NewMonitorAdapterWithStaleThresholds(cloned, thresholds)
 	if keyed {
 		adapter.overlays.store(registry, rebuiltAt, key, now, overlay)
@@ -450,7 +450,7 @@ func (a *MonitorAdapter) replaceRegistryLocked(snapshot models.StateSnapshot, re
 		if len(records) == 0 || strings.TrimSpace(string(source)) == "" {
 			continue
 		}
-		rebuilt.IngestRecords(source, records)
+		rebuilt.IngestRecordsWithStaleThresholds(source, records, staleThresholds)
 	}
 	// IngestSnapshot runs its stale pass before the record sources above are
 	// ingested, so record-sourced resources would otherwise keep their
@@ -665,7 +665,7 @@ func (a *MonitorAdapter) PopulateSupplementalRecords(source DataSource, records 
 		return
 	}
 	before := registry.List()
-	registry.IngestRecords(source, records)
+	registry.IngestRecordsWithStaleThresholds(source, records, a.currentStaleThresholds())
 	rebuiltAt := time.Now().UTC()
 	recordRegistryChanges(registry.store, before, registry.List(), rebuiltAt, nil, SourcePlatformEvent, changeSourceAdapterForDataSource(source))
 	registry.PersistIdentityPins()

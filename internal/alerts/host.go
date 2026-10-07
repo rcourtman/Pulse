@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 	"github.com/rs/zerolog/log"
 )
 
@@ -429,52 +430,93 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	if thresholds.DiskTemperature != nil && thresholds.DiskTemperature.Trigger > 0 {
+		// Each disk is judged on the temperature it shows: its SMART row's
+		// reading, or the one the host's Unraid inventory reports for it when
+		// the agent's probe returned none, and the inventory's reading for a
+		// disk only the inventory lists.
+		readings := unifiedresources.HostDiskTemperatureReadings(host)
+		seenDiskTemps := make(map[string]struct{}, len(readings))
+		excludedDiskTemps := make(map[string]struct{})
+		judgedDiskTemps := make(map[string]judgedHostDiskTemperature, len(readings))
+		judgedOrder := make([]string, 0, len(readings))
+		for _, disk := range readings {
+			tempResourceID := hostDiskTemperatureResourceID(host.ID, disk.Device)
+			// A disk the agent's --disk-exclude patterns match is out of
+			// monitoring, so the Unraid inventory's reading raises nothing
+			// for it either.
+			if disk.UnraidOnly && fsfilters.MatchesDeviceExclude(disk.Device, host.DiskExclude) {
+				excludedDiskTemps[tempResourceID] = struct{}{}
+				continue
+			}
+			// A listed disk in standby, or without a current temperature after
+			// a failed probe, is still present. Its alert holds until a fresh
+			// reading resolves it instead of clearing and re-raising.
+			seenDiskTemps[tempResourceID] = struct{}{}
+			if !disk.Collected() {
+				continue
+			}
+			m.mu.RLock()
+			threshold := m.hostDiskTemperatureThresholdNoLock(thresholds.DiskTemperature, diskTempOverridden, disk.DiskType)
+			m.mu.RUnlock()
+			// Sources that disagree on a disk's identity can show two disks
+			// on one device. Its alert judges the reading that stands highest
+			// against its own disk type's threshold.
+			candidate := judgedHostDiskTemperature{reading: disk, threshold: threshold}
+			if judged, ok := judgedDiskTemps[tempResourceID]; !ok {
+				judgedOrder = append(judgedOrder, tempResourceID)
+			} else if !candidate.outranks(judged) {
+				continue
+			}
+			judgedDiskTemps[tempResourceID] = candidate
+		}
+		for _, tempResourceID := range judgedOrder {
+			disk := judgedDiskTemps[tempResourceID].reading
+			effectiveTempThreshold := judgedDiskTemps[tempResourceID].threshold
+
+			tempResourceName := fmt.Sprintf("%s (%s Temp)", hostDisplayName(host), disk.Device)
+
+			diskTempMetadata := hostChildAlertMetadata(baseMetadata, hostDiskAlertResourceType)
+			diskTempMetadata["metric"] = "diskTemperature"
+			diskTempMetadata["device"] = disk.Device
+			diskTempMetadata["temperature"] = disk.Temperature
+			diskTempMetadata["model"] = disk.Model
+			diskTempMetadata["diskType"] = disk.DiskType
+			spec, err := buildCanonicalMetricSpec(tempResourceID, tempResourceName, unifiedresources.ResourceType("agent-disk"), "diskTemperature", effectiveTempThreshold)
+			if err != nil {
+				log.Warn().
+					Err(err).
+					Str("resourceID", tempResourceID).
+					Str("host", resourceName).
+					Str("device", disk.Device).
+					Msg("Skipping invalid canonical host disk temperature metric spec")
+				m.interruptHostDiskTemperatureRun(tempResourceID)
+				continue
+			}
+
+			m.checkMetricWithCanonicalSpec(spec, tempResourceName, nodeName, disk.Device, "agent", float64(disk.Temperature), effectiveTempThreshold, &metricOptions{Metadata: diskTempMetadata})
+			m.rememberHostDiskTemperaturePending(host, models.HostDiskSMART{Type: disk.DiskType}, tempResourceID)
+		}
+		// A present disk without any collected source interrupts pending timing.
+		// Another usable source for the same device keeps its run continuous.
+		for tempResourceID := range seenDiskTemps {
+			if _, observed := judgedDiskTemps[tempResourceID]; !observed {
+				m.interruptHostDiskTemperatureRun(tempResourceID)
+			}
+		}
+		// An excluded disk's alert from before the exclusion resolves now,
+		// whatever the SMART list holds, unless another listed disk shares it.
+		for tempResourceID := range seenDiskTemps {
+			delete(excludedDiskTemps, tempResourceID)
+		}
+		m.clearHostDiskTemperatureResources(excludedDiskTemps)
 		// An empty SMART list means collection failed or is unsupported for
 		// this report, not that every disk left, so existing alerts are held.
 		if len(host.Sensors.SMART) > 0 {
-			seenDiskTemps := make(map[string]struct{}, len(host.Sensors.SMART))
-			for _, disk := range host.Sensors.SMART {
-				// A listed disk in standby, or without a temperature after a
-				// failed probe, is still present. Its alert holds until a fresh
-				// reading resolves it instead of clearing and re-raising.
-				tempResourceID := hostDiskTemperatureResourceID(host.ID, disk.Device)
-				seenDiskTemps[tempResourceID] = struct{}{}
-				if hostDiskTemperatureObserved(disk) {
-					m.mu.RLock()
-					effectiveTempThreshold := m.hostDiskTemperatureThresholdNoLock(thresholds.DiskTemperature, diskTempOverridden, disk.Type)
-					m.mu.RUnlock()
-
-					tempResourceName := fmt.Sprintf("%s (%s Temp)", hostDisplayName(host), disk.Device)
-
-					diskTempMetadata := hostChildAlertMetadata(baseMetadata, hostDiskAlertResourceType)
-					diskTempMetadata["metric"] = "diskTemperature"
-					diskTempMetadata["device"] = disk.Device
-					diskTempMetadata["temperature"] = disk.Temperature
-					diskTempMetadata["model"] = disk.Model
-					diskTempMetadata["diskType"] = disk.Type
-					spec, err := buildCanonicalMetricSpec(tempResourceID, tempResourceName, unifiedresources.ResourceType("agent-disk"), "diskTemperature", effectiveTempThreshold)
-					if err != nil {
-						log.Warn().
-							Err(err).
-							Str("resourceID", tempResourceID).
-							Str("host", resourceName).
-							Str("device", disk.Device).
-							Msg("Skipping invalid canonical host disk temperature metric spec")
-						m.interruptHostDiskTemperatureRun(tempResourceID)
-						continue
-					}
-
-					m.checkMetricWithCanonicalSpec(spec, tempResourceName, nodeName, disk.Device, "agent", float64(disk.Temperature), effectiveTempThreshold, &metricOptions{Metadata: diskTempMetadata})
-					m.rememberHostDiskTemperaturePending(host, disk, tempResourceID)
-				} else {
-					m.interruptHostDiskTemperatureRun(tempResourceID)
-				}
-			}
 			// A disk missing from consecutive non-empty reports was removed,
 			// replaced or renamed, so no later reading will resolve its alert.
 			m.cleanupHostDiskTemperatureAlerts(host.ID, seenDiskTemps)
 		} else {
-			m.interruptHostDiskTemperatureRuns(host.ID)
+			m.interruptHostDiskTemperatureRunsExcept(host.ID, seenDiskTemps)
 		}
 	} else {
 		// Disk temperature alerting is off for this host, so no later reading

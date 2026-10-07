@@ -84,9 +84,17 @@ func (m *Manager) interruptHostDiskTemperatureRun(resourceID string) {
 }
 
 func (m *Manager) interruptHostDiskTemperatureRuns(hostID string) {
+	m.interruptHostDiskTemperatureRunsExcept(hostID, nil)
+}
+
+// Live shared SMART/Unraid rows are not observation gaps when SMART is empty.
+func (m *Manager) interruptHostDiskTemperatureRunsExcept(hostID string, observed map[string]struct{}) {
 	m.mu.Lock()
 	changed := false
 	for resourceID := range m.hostDiskTemperatureTrackedResourcesNoLock() {
+		if _, present := observed[resourceID]; present {
+			continue
+		}
 		if strings.HasPrefix(resourceID, hostDiskTemperatureResourcePrefix(hostID)) {
 			changed = m.interruptHostDiskTemperatureRunNoLock(resourceID) || changed
 		}

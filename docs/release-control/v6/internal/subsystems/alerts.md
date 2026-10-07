@@ -2090,6 +2090,61 @@ alert. `shouldPreserveAlertOutsideNodeCleanup` now keeps any alert carrying
 `internal/alerts/alerts_test.go` pins both signals, and its
 sibling pins that a guest alert on a removed Proxmox node is still removed.
 
+### Agent disk temperature alerts judge the reading the disk shows
+
+`CheckHost` judges each agent disk on the temperature, collection state and
+disk type the disk shows, read by `unifiedresources.HostDiskTemperatureReadings`
+from the same adapters the registry builds the disks with. A SMART row shows its
+own reading or, when the agent's probe returned none, the one the host's Unraid
+inventory reports for that disk (`HostSMARTDiskTemperature`), and keeps its
+`agent:<host>/disk_temp:<device>` resource. An Unraid inventory row whose disk
+key no SMART row carries, a disk only the inventory lists, shows that row's
+reading (`HostUnraidDiskTemperature`) and its own transport as disk type, under
+its kernel block device token, the resource a plain Linux SMART row for the
+same device uses. A SMART row and an Unraid row with one key are one registry
+disk even under different device labels, such as a controller member
+(`0 [megaraid,0]`) and its Unraid device (`sda`), and alert once, under the
+SMART row's resource. When smartctl and Unraid name
+one device with different serials the registry shows two disks on it, and the
+device's one alert judges the reading that stands highest against its own disk
+type's threshold (`judgedHostDiskTemperature`): over its trigger first, then
+inside its recovery band, then the larger margin over the trigger, with a tie
+keeping the reading listed first.
+Before this `CheckHost` read only the SMART row's own field, while the Physical
+Disks Temp cell, the Running Hot verdict ("at or above its alert threshold")
+and Patrol judged the Unraid reading against the same trigger, so such a disk
+could read as at its alert threshold with no alert. Unraid's own warning and
+critical disk temperature notifications do not make this redundant: Pulse
+already alerts on the smartctl readings and array state of the same hosts,
+which Unraid also notifies on, and a user who routes alerts through Pulse sets
+these thresholds here.
+
+Only a reading collected now fires or resolves
+(`HostDiskTemperatureReading.Collected`: no standby row, and
+`diskinventory.TemperatureCollected`), so a spun-down disk holds the alert
+like a listed disk without a temperature. A disk only the
+inventory lists whose device matches the agent's `--disk-exclude` patterns
+(`fsfilters.MatchesDeviceExclude`) raises nothing, and an alert it raised before
+the exclusion resolves on the next report (`clearHostDiskTemperatureResources`),
+whatever the SMART list holds, unless another listed reading uses the same
+resource: `docs/UNIFIED_AGENT.md` documents exclusion as
+removing the disk from monitoring, and linked Proxmox hosts already judge an
+excluded disk healthy. A disk only the inventory lists is also judged in a
+report whose SMART list is empty, because the disk shows the inventory's
+reading in that report. The absence cleanup above still runs only on a
+non-empty SMART list, and such a report neither counts toward nor restarts a
+disk's three, so a disk that leaves the inventory while every report's SMART
+list stays empty keeps its alert until the 24-hour stale-alert sweep.
+`TestCheckHostJudgesTheUnraidTemperatureADiskShows` and
+`TestCheckHostHoldsUnraidDiskTemperatureAlertUntilAReadingOrDeparture` in
+`internal/alerts/host_unraid_lifecycle_test.go` pin the fallback, the
+inventory-only disk, the empty SMART list, two disks on one device (also of
+different types), a controller member under another device label, standby,
+exclusion, the disk type
+and host override thresholds, the holds, the handover to a SMART reading,
+departure, and the exclusion clear with and without SMART rows and beside a
+listed SMART row. `TestJudgedHostDiskTemperatureOutranks` pins the ranking.
+
 ### Configured flapping thresholds remain reachable
 
 Every accepted positive `FlappingThreshold`, including values above ten, must
@@ -4319,3 +4374,14 @@ pending intent, retaining the reviewed agent/node ownership semantics.
 through a configuration save and the next report without losing the occurrence;
 `TestConfigSaveJudgesFilesystemAlertsByTheirOwnThreshold` retains per-filesystem
 and per-type controls. This is source composition, not installed delivery proof.
+
+### Shared disk-temperature composition and pending ownership
+
+Host temperature evaluation retains the upstream shared SMART/Unraid reading and
+per-type threshold judgement, including Unraid-only disks and competing readings
+on one device. It also retains reviewed observation-gap interruption and pending
+host/link/type context for configuration saves. A live Unraid-only row is not an
+observation gap merely because SMART is empty; absent or uncollected rows still
+restart confirmation. `TestUnraidOnlyTemperatureRetainsPendingContinuity` checks
+continuous, spun-down, omitted and type-off intervals under both grace paths;
+existing SMART pending, override, departure and upstream Unraid controls remain.

@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
@@ -546,6 +547,303 @@ func TestConfigSaveKeepsAlertTheEvaluatorKeepsWithoutRecoveryBand(t *testing.T) 
 			m.CheckHost(host)
 			if _, exists := testLookupActiveAlert(t, m, alertID); !exists {
 				t.Fatalf("expected the next report to keep the alert, active: %v", alertKeys(m))
+			}
+		})
+	}
+}
+
+const unraidTempHostID = "host-unraid-temp"
+
+// unraidTempHost is an Unraid agent report with the given SMART rows and
+// Unraid inventory rows.
+func unraidTempHost(smart []models.HostDiskSMART, unraid ...models.HostUnraidDisk) models.Host {
+	host := hostWithSMARTDiskTemp(unraidTempHostID, "sata", 40)
+	host.Sensors.SMART = smart
+	host.Unraid = &models.HostUnraidStorage{ArrayStarted: true, ArrayState: "STARTED", Disks: unraid}
+	return host
+}
+
+func unraidTempAlertID(device string) string {
+	return canonicalMetricStateID(hostDiskTemperatureResourceID(unraidTempHostID, device), "diskTemperature")
+}
+
+func TestCheckHostJudgesTheUnraidTemperatureADiskShows(t *testing.T) {
+	cool := models.HostDiskSMART{Device: "sda", Model: "cool-disk", Serial: "COOL-1", Type: "sata", Temperature: 40}
+	coolUnraid := models.HostUnraidDisk{Name: "disk1", Device: "/dev/sda", Serial: "COOL-1", Transport: "sata", Temperature: 40}
+	hot := models.HostUnraidDisk{Name: "disk2", Device: "/dev/sdc", Model: "hot-disk", Serial: "HOT-1", Transport: "sata", Temperature: 60}
+
+	cases := []struct {
+		name      string
+		host      func() models.Host
+		configure func(m *Manager)
+		device    string
+		wantAlert bool
+		// quiet lists devices that must raise nothing.
+		quiet []string
+	}{
+		{
+			// smartctl returned no temperature, and the disk shows Unraid's.
+			name: "SMART row without a reading",
+			host: func() models.Host {
+				return unraidTempHost([]models.HostDiskSMART{
+					{Device: "sdc", Model: "hot-disk", Serial: "HOT-1", Type: "sata"},
+				}, hot)
+			},
+			device:    "sdc",
+			wantAlert: true,
+		},
+		{
+			name: "disk only the Unraid inventory lists",
+			host: func() models.Host {
+				return unraidTempHost([]models.HostDiskSMART{cool}, coolUnraid, hot)
+			},
+			device:    "sdc",
+			wantAlert: true,
+		},
+		{
+			name: "Unraid disk while the SMART list is empty",
+			host: func() models.Host {
+				return unraidTempHost(nil, coolUnraid, hot)
+			},
+			device:    "sdc",
+			wantAlert: true,
+		},
+		{
+			// smartctl and Unraid name the device with different serials, so
+			// two disks show on it; its alert judges the hotter reading.
+			name: "two disks shown on one device",
+			host: func() models.Host {
+				return unraidTempHost([]models.HostDiskSMART{
+					cool,
+					{Device: "sdc", Model: "bridge", Serial: "BRIDGE-9", Type: "sata", Temperature: 41},
+				}, coolUnraid, hot)
+			},
+			device:    "sdc",
+			wantAlert: true,
+		},
+		{
+			// 64C is under the sas trigger (65); 60C is over the sata one (55).
+			name: "two disks of different types on one device",
+			host: func() models.Host {
+				return unraidTempHost([]models.HostDiskSMART{
+					cool,
+					{Device: "sdc", Model: "bridge", Serial: "BRIDGE-9", Type: "sas", Temperature: 64},
+				}, coolUnraid, hot)
+			},
+			device:    "sdc",
+			wantAlert: true,
+		},
+		{
+			// A controller member and its Unraid device are one registry
+			// disk, alerted once under the member's own resource.
+			name: "controller member under another device label",
+			host: func() models.Host {
+				member := models.HostDiskSMART{Device: "0 [megaraid,0]", Model: "hot-disk", Serial: "HOT-1", Type: "sata", Controller: "0", Target: "megaraid,0", Temperature: 60}
+				return unraidTempHost([]models.HostDiskSMART{cool, member}, coolUnraid, hot)
+			},
+			device:    "0 [megaraid,0]",
+			wantAlert: true,
+			quiet:     []string{"sdc"},
+		},
+		{
+			name: "spun-down Unraid disk",
+			host: func() models.Host {
+				spunDown := hot
+				spunDown.SpunDown = true
+				return unraidTempHost([]models.HostDiskSMART{cool}, coolUnraid, spunDown)
+			},
+			device: "sdc",
+		},
+		{
+			name: "Unraid disk the agent excludes",
+			host: func() models.Host {
+				host := unraidTempHost([]models.HostDiskSMART{cool}, coolUnraid, hot)
+				host.DiskExclude = []string{"/dev/sdc"}
+				return host
+			},
+			device: "sdc",
+		},
+		{
+			// 65C is under the nvme trigger (70) and over the agent default (55).
+			name: "Unraid disk judged by its disk type",
+			host: func() models.Host {
+				nvme := hot
+				nvme.Transport = "nvme"
+				nvme.Temperature = 65
+				return unraidTempHost([]models.HostDiskSMART{cool}, coolUnraid, nvme)
+			},
+			device: "sdc",
+		},
+		{
+			name: "Unraid disk under a host override",
+			host: func() models.Host {
+				return unraidTempHost([]models.HostDiskSMART{cool}, coolUnraid, hot)
+			},
+			configure: func(m *Manager) {
+				m.config.Overrides[unraidTempHostID] = ThresholdConfig{DiskTemperature: &HysteresisThreshold{Trigger: 65, Clear: 60}}
+			},
+			device: "sdc",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := configureDiskTempTypeHostManager(t)
+			if tc.configure != nil {
+				m.mu.Lock()
+				tc.configure(m)
+				m.mu.Unlock()
+			}
+			m.CheckHost(tc.host())
+
+			alert, exists := testLookupActiveAlert(t, m, unraidTempAlertID(tc.device))
+			if exists != tc.wantAlert {
+				t.Fatalf("disk temperature alert for %s active = %v, want %v; active: %v", tc.device, exists, tc.wantAlert, alertKeys(m))
+			}
+			for _, device := range append([]string{"sda"}, tc.quiet...) {
+				if _, exists := testLookupActiveAlert(t, m, unraidTempAlertID(device)); exists {
+					t.Fatalf("%s raised a temperature alert, active: %v", device, alertKeys(m))
+				}
+			}
+			if !tc.wantAlert {
+				return
+			}
+			if alert.Value != 60 || alert.Metadata["temperature"] != 60 || alert.Metadata["diskType"] != "sata" || alert.Metadata["model"] != "hot-disk" {
+				t.Fatalf("alert value/metadata = %v/%v, want the 60C sata reading of hot-disk", alert.Value, alert.Metadata)
+			}
+		})
+	}
+}
+
+func TestCheckHostHoldsUnraidDiskTemperatureAlertUntilAReadingOrDeparture(t *testing.T) {
+	cool := models.HostDiskSMART{Device: "sda", Model: "cool-disk", Serial: "COOL-1", Type: "sata", Temperature: 40}
+	hot := models.HostUnraidDisk{Name: "disk2", Device: "/dev/sdc", Model: "hot-disk", Serial: "HOT-1", Transport: "sata", Temperature: 60}
+	alertID := unraidTempAlertID("sdc")
+	// CheckHost clears a disk's alert once three non-empty reports in a row
+	// omit it.
+	const absentReports = 3
+	active := func(m *Manager) bool {
+		_, exists := testLookupActiveAlert(t, m, alertID)
+		return exists
+	}
+	hotHost := func(t *testing.T) *Manager {
+		m := configureDiskTempTypeHostManager(t)
+		m.CheckHost(unraidTempHost([]models.HostDiskSMART{cool}, hot))
+		if !active(m) {
+			t.Fatalf("expected the Unraid reading to raise a disk temperature alert, active: %v", alertKeys(m))
+		}
+		return m
+	}
+
+	t.Run("listed without a reading", func(t *testing.T) {
+		m := hotHost(t)
+		spunDown := hot
+		spunDown.SpunDown = true
+		for i := 0; i < 4; i++ {
+			m.CheckHost(unraidTempHost([]models.HostDiskSMART{cool}, spunDown))
+		}
+		if !active(m) {
+			t.Fatalf("a spun-down disk still in the inventory lost its alert, active: %v", alertKeys(m))
+		}
+	})
+
+	t.Run("cooled reading resolves it", func(t *testing.T) {
+		m := hotHost(t)
+		cooled := hot
+		cooled.Temperature = 45
+		m.CheckHost(unraidTempHost([]models.HostDiskSMART{cool}, cooled))
+		if active(m) {
+			t.Fatalf("a 45C Unraid reading (clear 50) left the alert active: %v", alertKeys(m))
+		}
+	})
+
+	t.Run("smartctl reading takes over the same alert", func(t *testing.T) {
+		m := hotHost(t)
+		withSMART := []models.HostDiskSMART{cool, {Device: "sdc", Model: "hot-disk", Serial: "HOT-1", Type: "sata", Temperature: 62}}
+		m.CheckHost(unraidTempHost(withSMART, hot))
+		if !active(m) {
+			t.Fatalf("the disk's SMART row did not carry its Unraid-raised alert, active: %v", alertKeys(m))
+		}
+		withSMART[1].Temperature = 45
+		m.CheckHost(unraidTempHost(withSMART, hot))
+		if active(m) {
+			t.Fatalf("a 45C SMART reading left the alert active: %v", alertKeys(m))
+		}
+	})
+
+	t.Run("left the inventory", func(t *testing.T) {
+		m := hotHost(t)
+		for i := 1; i < absentReports; i++ {
+			m.CheckHost(unraidTempHost([]models.HostDiskSMART{cool}))
+			if !active(m) {
+				t.Fatalf("alert cleared after %d report(s) without the disk, want %d", i, absentReports)
+			}
+		}
+		m.CheckHost(unraidTempHost([]models.HostDiskSMART{cool}))
+		if active(m) {
+			t.Fatalf("alert outlived a disk gone from %d reports, active: %v", absentReports, alertKeys(m))
+		}
+	})
+
+	t.Run("excluded row on a device a SMART row lists", func(t *testing.T) {
+		m := hotHost(t)
+		excluded := unraidTempHost([]models.HostDiskSMART{
+			cool,
+			{Device: "sdc", Model: "bridge", Serial: "BRIDGE-9", Type: "sata", Temperature: 62},
+		}, hot)
+		excluded.DiskExclude = []string{"sdc"}
+		m.CheckHost(excluded)
+		if !active(m) {
+			t.Fatalf("the exclusion cleared an alert the device's SMART row still raises, active: %v", alertKeys(m))
+		}
+	})
+
+	// The disk is still listed but out of monitoring, so its alert resolves
+	// on the first report, even one with an empty SMART list.
+	for name, smart := range map[string][]models.HostDiskSMART{
+		"excluded after it fired":                   {cool},
+		"excluded after it fired, SMART list empty": nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := hotHost(t)
+			excluded := unraidTempHost(smart, hot)
+			excluded.DiskExclude = []string{"sdc"}
+			m.CheckHost(excluded)
+			if active(m) {
+				t.Fatalf("alert outlived the disk's exclusion from monitoring, active: %v", alertKeys(m))
+			}
+		})
+	}
+}
+
+func TestJudgedHostDiskTemperatureOutranks(t *testing.T) {
+	sata := &HysteresisThreshold{Trigger: 55, Clear: 50}
+	sas := &HysteresisThreshold{Trigger: 65, Clear: 60}
+	noBand := &HysteresisThreshold{Trigger: 55, Clear: 55}
+	off := &HysteresisThreshold{Trigger: 0}
+	judged := func(temperature int, threshold *HysteresisThreshold) judgedHostDiskTemperature {
+		return judgedHostDiskTemperature{
+			reading:   unifiedresources.HostDiskTemperatureReading{Temperature: temperature},
+			threshold: threshold,
+		}
+	}
+
+	cases := []struct {
+		name          string
+		first, second judgedHostDiskTemperature
+		secondWins    bool
+	}{
+		{name: "over its trigger beats a hotter reading under its own", first: judged(64, sas), second: judged(56, sata), secondWins: true},
+		{name: "in its recovery band beats one below its clear", first: judged(49, sata), second: judged(62, sas), secondWins: true},
+		{name: "no band means under the trigger is below it", first: judged(54, noBand), second: judged(51, sata), secondWins: true},
+		{name: "further over its trigger wins", first: judged(56, sata), second: judged(70, sas), secondWins: true},
+		{name: "a threshold that is off never wins", first: judged(40, sata), second: judged(90, off)},
+		{name: "a tie keeps the first", first: judged(60, sata), second: judged(60, sata)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.second.outranks(tc.first); got != tc.secondWins {
+				t.Fatalf("second outranks first = %v, want %v", got, tc.secondWins)
 			}
 		})
 	}
@@ -1464,5 +1762,64 @@ func TestHostSMARTRiskRestartAndGlobalPauseRestartDeparture(t *testing.T) {
 			}
 			f.resolved(t, f.healthID, f.wearID)
 		})
+	}
+}
+
+// Upstream's shared Unraid readings must retain reviewed pending-grace
+// ownership even when no SMART row exists; genuine gaps still restart grace.
+func TestUnraidOnlyTemperatureRetainsPendingContinuity(t *testing.T) {
+	for _, explicit := range []bool{false, true} {
+		for _, gap := range []string{"continuous", "spun-down", "omitted", "type-off"} {
+			t.Run(fmt.Sprintf("%s/explicit=%v", gap, explicit), func(t *testing.T) {
+				m, elapsed := continuityManager(t, explicit)
+				disk := models.HostUnraidDisk{Name: "disk1", Device: "sda", Serial: "CONTINUITY-1", Transport: "sata", Temperature: 85}
+				host := unraidTempHost(nil, disk)
+				id := hostDiskTemperatureResourceID(host.ID, "sda")
+				m.CheckHost(host)
+				if incident, ok := continuityIncident(m, id, "diskTemperature"); !ok || incident.State != reducer.StatePending {
+					t.Fatalf("no initial pending Unraid run: %+v %v", incident, ok)
+				}
+				elapsed.Store(int64(30 * time.Second))
+				switch gap {
+				case "continuous":
+					m.CheckHost(host)
+				case "spun-down":
+					host.Unraid.Disks[0].Temperature = 0
+					m.CheckHost(host)
+					host.Unraid.Disks[0] = disk
+				case "omitted":
+					host.Unraid.Disks = nil
+					m.CheckHost(host)
+					host.Unraid.Disks = []models.HostUnraidDisk{disk}
+				case "type-off":
+					cfg := m.GetConfig()
+					cfg.DiskTempByType = map[string]HysteresisThreshold{"sata": {Trigger: 0}}
+					m.UpdateConfig(cfg)
+					cfg.DiskTempByType = map[string]HysteresisThreshold{"sata": {Trigger: 80, Clear: 70}}
+					m.UpdateConfig(cfg)
+				}
+				elapsed.Store(int64(time.Minute))
+				m.CheckHost(host)
+				if gap == "continuous" {
+					if len(m.GetActiveAlerts()) != 1 {
+						t.Fatal("live Unraid-only reports lost continuous pending grace")
+					}
+					return
+				}
+				if len(m.GetActiveAlerts()) != 0 {
+					t.Fatal("Unraid gap inherited earlier pending grace")
+				}
+				elapsed.Store(int64(119 * time.Second))
+				m.CheckHost(host)
+				if len(m.GetActiveAlerts()) != 0 {
+					t.Fatal("fresh Unraid grace fired early")
+				}
+				elapsed.Store(int64(2 * time.Minute))
+				m.CheckHost(host)
+				if len(m.GetActiveAlerts()) != 1 {
+					t.Fatal("fresh continuous Unraid breach did not fire")
+				}
+			})
+		}
 	}
 }

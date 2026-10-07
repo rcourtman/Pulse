@@ -3003,7 +3003,18 @@ truthfulness, not native thaw, containing-release or workload acceptance.
     ingestion so canonical host IDs stay stable across restarts (see the
     unified-resources contract's durable identity-pin obligation). Rebuild
     paths added to the adapter must keep that persistence step; ephemeral
-    snapshot-bridge adapters stay read-only.
+    snapshot-bridge adapters stay read-only. The rebuild, the live
+    supplemental refresh and the read-state overlay ingest records with the
+    adapter's configured stale thresholds, because record ingest joins
+    operator links and the freshness gate of every metric merge, a link's or
+    a source's into an existing row, reads them (unified-resources contract,
+    "Operator links reach record-ingested resources"). Regression
+    coverage:
+    `TestMonitorAdapterJoinsLinkedRecordsWithConfiguredStaleThresholds` and
+    `TestMonitorAdapterSourceMergesUseConfiguredStaleThresholds` in
+    `internal/unifiedresources/monitor_adapter_read_state_test.go` and
+    `TestManualLinkToSupplementalGuestHoldsWithAndWithoutContinuity` in
+    `internal/monitoring/issue1913_host_continuity_test.go`.
 
 11. The TrueNAS provider projects pools with `Storage.Topology` fixed to
     `pool` and the ZFS data vdev layout in `Storage.VDevLayout`. The
@@ -5228,8 +5239,10 @@ timeline instead of creating a second drawer-only or mock-only disk history
 path.
 The SMART-resolved id is the serial the disk resource carries: when a SMART row
 reports none, `HostSMARTDiskMetricID` takes the one the host's Unraid inventory
-reports for that disk, as the unified-resources adapter does, unless several
-SMART rows share the disk's device path, and `hostDiskIOMetricResourceID` keys
+reports for that disk, as the unified-resources adapter does, unless the Unraid
+row does not describe the disk (`unraidDiskDescribesSMARTRow`: a controller
+member, or several SMART rows on the disk's device path), and
+`hostDiskIOMetricResourceID` keys
 a device with no non-standby SMART row by its Unraid serial
 (`HostUnraidDeviceMetricID`, which refuses a device several Unraid rows name)
 before the linked Proxmox node's disks and the `<host>:<device>` fallback.
@@ -5240,6 +5253,21 @@ their counter under no member.
 Proof:
 `TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports` and
 `TestHostDiskIOMetricResourceIDFallbacks`.
+The agent's `smart_temp` series holds the reading the disk resource shows,
+not only the SMART row's own. `writeHostSMARTMetrics` writes
+`HostSMARTDiskTemperature`, which falls back to the host's Unraid inventory
+reading when the row has none, and `writeHostUnraidDiskTemperatures` writes
+`HostUnraidDiskTemperature` under `HostUnraidDiskMetricID` for each Unraid row
+whose key is not one of the host's SMART rows' keys, such as a `--disk-exclude`
+member, so an Unraid reading never overwrites a SMART row's own at the same
+timestamp.
+Unraid rows sharing a key are one disk in the registry, which shows the latest
+of their readings, so the last row with a reading decides that key's single
+sample. `diskinventory.TemperatureCollected` keeps a spun-down disk's or an
+expired host's leftover reading out of history.
+Proof:
+`TestAgentDiskChartsTheUnraidTemperatureItShows` and
+`TestApplyHostReportChartsUnraidTemperatureOfDiskWithoutSMART`.
 That same monitoring-owned disk-health boundary also includes shared storage
 risk assessment in `internal/storagehealth/`. When providers or host agents
 emit structured storage topology such as Unraid per-disk state, the shared
