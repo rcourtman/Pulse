@@ -438,28 +438,23 @@ describe('Workloads platform-page embed contract', () => {
     expect(nodesTableSource).toContain("series: 'nodes',");
   });
 
-  it('lets platform pages move grouped host drawers to a dedicated host table owner', async () => {
+  it('keeps grouped host rows as dividers and host drawers on the platform hosts table', async () => {
     const stateSource = (await import('../useWorkloadsState.ts?raw')).default;
-    expect(stateSource).toContain("groupNodeDrawerMode?: 'inline' | 'disabled';");
-    expect(stateSource).toContain(
-      "groupNodeDrawerMode: () => props.groupNodeDrawerMode ?? 'inline',",
-    );
+    expect(stateSource).not.toContain('groupNodeDrawerMode');
+    expect(stateSource).not.toContain('summaryGroupScopes');
 
-    const tableSource = (await import('../WorkloadsTable.tsx?raw')).default;
-    expect(tableSource).toContain(`| 'groupNodeDrawerMode'`);
-    expect(tableSource).toContain('groupNodeDrawerMode={props.groupNodeDrawerMode}');
+    const selectionSource = (await import('../useWorkloadSelectionState.ts?raw')).default;
+    expect(selectionSource).not.toContain('hoveredGroupScope');
+    expect(selectionSource).not.toContain('focusedGroupScope');
 
     const panelSource = (await import('../WorkloadPanel.tsx?raw')).default;
-    expect(panelSource).toContain("props.groupNodeDrawerMode() === 'inline'");
-    expect(panelSource).toContain(
-      'onClick: canOpenNodeDrawer() ? handleGroupFocusToggle : undefined',
-    );
+    expect(panelSource).not.toContain('NodeDrawer');
+    expect(panelSource).not.toContain('handleGroupFocusToggle');
+    expect(panelSource).not.toContain('createSummaryInteractiveRowPreviewHandlers');
+    expect(panelSource).toContain("trProps={{ 'data-summary-group-id': groupKey }}");
 
-    const proxmoxPageSource = (await import('../../../features/proxmox/ProxmoxPageSurface.tsx?raw'))
-      .default;
     const proxmoxNodesSource = (await import('../../../features/proxmox/ProxmoxNodesTable.tsx?raw'))
       .default;
-    expect(proxmoxPageSource).toContain('groupNodeDrawerMode="disabled"');
     expect(proxmoxNodesSource).toContain('NodeDrawer');
     expect(proxmoxNodesSource).toContain('data-inline-node-detail-for={node.id}');
   });
@@ -1301,20 +1296,11 @@ describe('Workloads performance contract', () => {
       expect(workloadsSource).not.toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
       expect(workloadPanelSource).toContain('groupGuests().map(getCanonicalWorkloadId)');
       expect(workloadPanelSource).toContain('groupGuestById().get(keyedGuestId)');
-      expect(workloadPanelSource).toContain('buildWorkloadSummaryGroupScope');
       expect(workloadPanelSource).toContain('data-summary-group-id');
-      expect(workloadPanelSource).toContain('setHoveredWorkloadGroupScope');
-      expect(workloadPanelSource).toContain('getGroupedTableRowClass');
-      expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
+      expect(workloadPanelSource).not.toContain('setHoveredWorkloadGroupScope');
       expect(workloadPanelSource).toContain('getGroupedTableRowCellClass');
-      expect(workloadPanelSource).toContain('? getInteractiveGroupedTableRowClass()');
-      expect(workloadPanelSource).toContain(': getGroupedTableRowClass()');
-      expect(workloadPanelSource).toContain(
-        'onClick={canOpenNodeDrawer() ? handleGroupFocusToggle : undefined}',
-      );
-      expect(workloadPanelSource).toContain(
-        '{...(canOpenNodeDrawer() ? groupRowInteraction : {})}',
-      );
+      expect(workloadPanelSource).toContain('class={getGroupedTableRowClass()}');
+      expect(workloadPanelSource).not.toContain('getInteractiveGroupedTableRowClass');
       expect(workloadPanelSource).not.toContain('cursor-pointer bg-surface-alt');
       expect(workloadsWorkloadTableSource).not.toContain(
         'createMemo(() => getCanonicalWorkloadId(guest()))',
@@ -1593,11 +1579,10 @@ describe('Workloads performance contract', () => {
       expect(nodeDrawerModelSource).toContain('HOST_METRICS_HISTORY_GROUPS');
       expect(nodeDrawerModelSource).toContain("group.id !== 'disk-io'");
       expect(nodeDrawerModelSource).not.toContain("id: 'thermals'");
-      expect(workloadPanelSource).toContain('NodeDrawer');
-      expect(workloadPanelSource).toContain('data-inline-node-detail-for');
-      expect(workloadPanelSource).toContain('const selectedGuestId = props.selectedGuestId()');
-      expect(workloadPanelSource).toContain('props.setSelectedGuestId(null)');
-      expect(workloadPanelSource).toContain('selectedGuestId === null');
+      expect(workloadPanelSource).not.toContain('NodeDrawer');
+      expect(workloadPanelSource).not.toContain('data-inline-node-detail-for');
+      expect(workloadPanelSource).toContain('data-inline-detail-for={guestId()}');
+      expect(workloadPanelSource).toContain('onClose={() => props.setSelectedGuestId(null)}');
       expect(guestDrawerSource).not.toContain('const guestId = () =>');
       expect(guestDrawerSource).not.toContain('const infrastructureHref = () =>');
       expect(guestDrawerSource).not.toContain('Filesystems');
@@ -1720,19 +1705,15 @@ describe('Workloads performance contract', () => {
       expect(workloadPanelSource).toContain('NodeGroupHeader');
       expect(workloadPanelSource).toContain('GuestDrawer');
       expect(workloadPanelSource).toContain('groupGuests().map(getCanonicalWorkloadId)');
-      expect(workloadPanelSource).toContain('createSummaryInteractiveRowPreviewHandlers');
-      expect(workloadPanelSource).toContain('resolveSummaryGroupMemberInteractionState');
-      expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
+      expect(workloadPanelSource).not.toContain('createSummaryInteractiveRowPreviewHandlers');
+      expect(workloadPanelSource).not.toContain('resolveSummaryGroupMemberInteractionState');
       expect(workloadPanelSource).toContain('getGroupedTableRowCellClass');
       expect(workloadPanelSource).not.toContain('style={{');
       expect(workloadPanelSource).not.toContain('style={');
       expect(workloadPanelSource).not.toContain('kind="scope"');
       expect(workloadPanelSource).not.toContain('leadingAction={');
-      expect(workloadsSelectionStateSource).toContain('activeSummaryWorkloadGroupScope');
-      expect(workloadsSelectionStateSource).toContain('focusedSummaryWorkloadGroupScope');
-      expect(workloadsSelectionStateSource).toContain('setHoveredWorkloadGroupScope');
-      expect(workloadsWorkloadTableSource).toContain('focusedSummaryWorkloadGroupScope');
-      expect(workloadsWorkloadTableSource).toContain('hoveredSummaryWorkloadGroupScope');
+      expect(workloadsSelectionStateSource).not.toContain('WorkloadGroupScope');
+      expect(workloadsWorkloadTableSource).not.toContain('SummaryWorkloadGroupScope');
       expect(workloadPanelSource).not.toContain('TableHead');
     });
 

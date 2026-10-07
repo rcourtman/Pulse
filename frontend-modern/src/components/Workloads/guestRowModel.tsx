@@ -1,7 +1,6 @@
 import type { JSX } from 'solid-js';
 
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
-import type { SummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
 import {
   PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT,
   getPlatformTableWeightedColumnWidthStyle,
@@ -118,7 +117,6 @@ export interface GuestRowProps {
   onClick?: () => void;
   isExpanded?: boolean;
   isSummaryHighlighted?: boolean;
-  summaryGroupMemberState?: SummaryGroupMemberInteractionState;
   ioEmphasis?: WorkloadIOEmphasis;
   metricDisplayMode?: 'bars' | 'sparklines';
   metricHoverMode?: WorkloadsMetricHoverMode;

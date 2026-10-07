@@ -3052,10 +3052,11 @@ canonical WebSocket snapshot, including the public `vmware-vsphere` alias for
 the raw `vmware` source, rather than degrading a source-scoped page to periodic
 REST refreshes. VMware Overview passes that same source-scoped snapshot into
 the embedded Workloads state, so hosts and VMs share one inventory generation
-and one explicit refresh path. Beyond disabling the grouped host drawer, it
-passes no option that adds host metrics to grouped rows: the shared Workloads
-group row carries host identity only, and per-host stats stay in the page's
-own hosts table.
+and one explicit refresh path. It passes no option that adds host metrics to
+grouped rows: the shared Workloads group row carries host identity only, with
+no drawer, hover preview, or group pin, and per-host stats and details stay in
+the page's own hosts table. The Workloads route model no longer parses a
+`summaryGroup` param, because no group focus remains to hydrate.
 Its page-owned workload toolbar consumes the complete shared
 `getWorkloadsMetricFilterProps` binding, so vSphere VMs expose the same Bars,
 Trends, Details, History, range, and first-use discovery contract as every

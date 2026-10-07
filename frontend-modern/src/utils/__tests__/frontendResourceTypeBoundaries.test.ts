@@ -1414,7 +1414,7 @@ describe('frontend resource type boundaries', () => {
     expect(storageGroupRowSource).toContain('buildStorageGroupRowPresentation');
     expect(storageGroupRowSource).toContain('STORAGE_GROUP_ROW_CLASS');
     expect(storageGroupRowSource).not.toContain('cursor-pointer select-none bg-surface-alt');
-    expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
+    expect(workloadPanelSource).toContain('getGroupedTableRowClass()');
     expect(storageGroupPresentationSource).toContain(
       'export const getStorageGroupHealthCountPresentation',
     );

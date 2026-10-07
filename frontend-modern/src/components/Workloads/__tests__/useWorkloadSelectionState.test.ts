@@ -2,7 +2,6 @@ import { renderHook } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import type { WorkloadGuest } from '@/types/workloads';
 
 import { resolveWorkloadResourceSelection } from '../workloadSelectionModel';
@@ -10,7 +9,6 @@ import { useWorkloadSelectionState } from '../useWorkloadSelectionState';
 
 let locationSearch = '?resource=cluster-a:node-1:101';
 const navigateSpy = vi.fn();
-const emptySummaryGroupScopes = () => new Map<string, SummarySeriesGroupScope>();
 
 vi.mock('@solidjs/router', () => ({
   useLocation: () => ({
@@ -46,15 +44,11 @@ describe('useWorkloadSelectionState', () => {
     const { result } = renderHook(() =>
       useWorkloadSelectionState({
         filteredGuests,
-        summaryGroupScopes: emptySummaryGroupScopes,
       }),
     );
 
     expect(result.selectedGuestId()).toBe('cluster-a:node-1:101');
-    expect(resolveWorkloadResourceSelection(locationSearch)).toEqual({
-      resourceId: 'cluster-a:node-1:101',
-      summaryGroupId: null,
-    });
+    expect(resolveWorkloadResourceSelection(locationSearch)).toBe('cluster-a:node-1:101');
   });
 
   it('clears stale hovered workload ids when filtered guests change', () => {
@@ -71,7 +65,6 @@ describe('useWorkloadSelectionState', () => {
     const { result } = renderHook(() =>
       useWorkloadSelectionState({
         filteredGuests,
-        summaryGroupScopes: emptySummaryGroupScopes,
       }),
     );
 
@@ -89,15 +82,13 @@ describe('useWorkloadSelectionState', () => {
     const { result } = renderHook(() =>
       useWorkloadSelectionState({
         filteredGuests,
-        summaryGroupScopes: emptySummaryGroupScopes,
       }),
     );
 
     expect(result.selectedGuestId()).toBe('app-container:truenas-main:nextcloud');
-    expect(resolveWorkloadResourceSelection(locationSearch)).toEqual({
-      resourceId: 'app-container:truenas-main:nextcloud',
-      summaryGroupId: null,
-    });
+    expect(resolveWorkloadResourceSelection(locationSearch)).toBe(
+      'app-container:truenas-main:nextcloud',
+    );
   });
 
   it('opens workload row selection locally without route navigation', () => {
@@ -107,7 +98,6 @@ describe('useWorkloadSelectionState', () => {
     const { result } = renderHook(() =>
       useWorkloadSelectionState({
         filteredGuests,
-        summaryGroupScopes: emptySummaryGroupScopes,
       }),
     );
 
@@ -118,40 +108,28 @@ describe('useWorkloadSelectionState', () => {
     expect(navigateSpy).not.toHaveBeenCalled();
   });
 
-  it('clears pinned workload scope locally without mutating route filters', () => {
+  it('clears the pinned workload row locally without mutating route filters', () => {
     locationSearch =
-      '?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud&summaryGroup=docker-host%3Atruenas-main';
+      '?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud';
     const [filteredGuests] = createSignal<WorkloadGuest[]>([]);
-    const summaryScopes = () =>
-      new Map<string, SummarySeriesGroupScope>([
-        [
-          'docker-host:truenas-main',
-          {
-            id: 'docker-host:truenas-main',
-            label: 'TrueNAS Main (4 workloads)',
-            seriesIds: ['app-container:truenas-main:nextcloud'],
-          },
-        ],
-      ]);
 
     const { result } = renderHook(() =>
       useWorkloadSelectionState({
         filteredGuests,
-        summaryGroupScopes: summaryScopes,
       }),
     );
 
+    expect(result.selectedGuestId()).toBe('app-container:truenas-main:nextcloud');
     result.clearPinnedSummaryScope();
     vi.runAllTimers();
 
     expect(result.selectedGuestId()).toBeNull();
-    expect(result.focusedSummaryWorkloadGroupId()).toBeNull();
     expect(navigateSpy).not.toHaveBeenCalled();
   });
 
   it('routes Escape through workload scope clearing and additional page reset work', () => {
     locationSearch =
-      '?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud&summaryGroup=docker-host%3Atruenas-main';
+      '?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud';
     const [filteredGuests] = createSignal<WorkloadGuest[]>([]);
     const clearAdditionalPageStateOnEscape = vi.fn();
 
@@ -159,7 +137,6 @@ describe('useWorkloadSelectionState', () => {
       useWorkloadSelectionState({
         clearAdditionalPageStateOnEscape,
         filteredGuests,
-        summaryGroupScopes: emptySummaryGroupScopes,
       }),
     );
 
@@ -177,7 +154,6 @@ describe('useWorkloadSelectionState', () => {
     const { result } = renderHook(() =>
       useWorkloadSelectionState({
         filteredGuests,
-        summaryGroupScopes: emptySummaryGroupScopes,
       }),
     );
 
@@ -231,7 +207,6 @@ describe('useWorkloadSelectionState', () => {
     const { result } = renderHook(() =>
       useWorkloadSelectionState({
         filteredGuests,
-        summaryGroupScopes: emptySummaryGroupScopes,
       }),
     );
 
@@ -284,7 +259,8 @@ describe('useWorkloadSelectionState', () => {
     ).toBe(true);
   });
 
-  it('tracks hovered workload groups without letting them override entity selection outside scope', () => {
+  it('ignores a summaryGroup param because grouped rows no longer pin a group scope', () => {
+    locationSearch = '?summaryGroup=cluster-b&resource=cluster-a:node-1:101';
     const [filteredGuests] = createSignal<WorkloadGuest[]>([
       {
         id: 'cluster-a:node-1:101',
@@ -294,87 +270,18 @@ describe('useWorkloadSelectionState', () => {
         node: 'node-1',
         vmid: 101,
       } as unknown as WorkloadGuest,
-      {
-        id: 'cluster-b:node-2:202',
-        name: 'guest-2',
-        status: 'running',
-        instance: 'cluster-b',
-        node: 'node-2',
-        vmid: 202,
-      } as unknown as WorkloadGuest,
     ]);
-    const groupScope: SummarySeriesGroupScope = {
-      id: 'cluster-b',
-      label: 'Cluster B (1 workload)',
-      seriesIds: ['cluster-b:node-2:202'],
-    };
 
     const { result } = renderHook(() =>
       useWorkloadSelectionState({
         filteredGuests,
-        summaryGroupScopes: emptySummaryGroupScopes,
       }),
     );
+    vi.runAllTimers();
 
     expect(result.selectedGuestId()).toBe('cluster-a:node-1:101');
-    result.setHoveredWorkloadGroupScope(groupScope);
-
-    expect(result.activeSummaryWorkloadGroupScope()?.id).toBe('cluster-b');
-    expect(result.activeSummaryWorkloadId()).toBeNull();
-  });
-
-  it('shows the pinned-scope fallback only after a pinned workload group scrolls out of view', () => {
-    locationSearch = '?summaryGroup=cluster-a';
-    const [filteredGuests] = createSignal<WorkloadGuest[]>([
-      {
-        id: 'cluster-a:node-1:101',
-        name: 'guest-1',
-        status: 'running',
-        instance: 'cluster-a',
-        node: 'node-1',
-        vmid: 101,
-      } as unknown as WorkloadGuest,
-    ]);
-    const summaryScopes = () =>
-      new Map<string, SummarySeriesGroupScope>([
-        [
-          'cluster-a',
-          {
-            id: 'cluster-a',
-            label: 'Cluster A (1 workload)',
-            seriesIds: ['cluster-a:node-1:101'],
-          },
-        ],
-      ]);
-
-    let top = 120;
-    const { result } = renderHook(() =>
-      useWorkloadSelectionState({
-        filteredGuests,
-        summaryGroupScopes: summaryScopes,
-      }),
-    );
-
-    const tableWrapper = document.createElement('div');
-    const groupRow = document.createElement('div');
-    groupRow.dataset.summaryGroupId = 'cluster-a';
-    groupRow.getBoundingClientRect = vi.fn(() => ({
-      top,
-      bottom: top + 40,
-      left: 0,
-      right: 320,
-      width: 320,
-      height: 40,
-      x: 0,
-      y: top,
-      toJSON: () => ({}),
-    })) as unknown as typeof groupRow.getBoundingClientRect;
-    tableWrapper.appendChild(groupRow);
-    document.body.appendChild(tableWrapper);
-
-    result.setTableWrapperRef(tableWrapper as HTMLDivElement);
-
-    expect(result.focusedSummaryWorkloadGroupId()).toBe('cluster-a');
+    expect(result.activeSummaryWorkloadId()).toBe('cluster-a:node-1:101');
+    expect(Object.keys(result).filter((key) => /group/i.test(key))).toEqual([]);
   });
 
   it('clears row focus locally without leaving behind an inferred agent filter', () => {
@@ -384,7 +291,6 @@ describe('useWorkloadSelectionState', () => {
     const { result } = renderHook(() =>
       useWorkloadSelectionState({
         filteredGuests,
-        summaryGroupScopes: emptySummaryGroupScopes,
       }),
     );
 

@@ -13,7 +13,6 @@ export const WORKLOADS_QUERY_PARAMS = {
   // Canonical v6 agent filter query param.
   agent: 'agent',
   resource: 'resource',
-  summaryGroup: 'summaryGroup',
 } as const;
 
 export const STANDALONE_PATH = '/standalone';
@@ -156,7 +155,6 @@ type WorkloadsLinkOptions = {
   cluster?: string | null;
   agent?: string | null;
   resource?: string | null;
-  summaryGroup?: string | null;
 };
 
 type DockerLinkOptions = {
@@ -210,7 +208,6 @@ export const parseWorkloadsLinkSearch = (search: string) => {
     cluster: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.cluster)),
     agent: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.agent)),
     resource: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.resource)),
-    summaryGroup: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.summaryGroup)),
   };
 };
 
@@ -298,7 +295,6 @@ export const buildWorkloadsRouteSearch = (options: WorkloadsLinkOptions = {}): s
   const cluster = normalizeQueryValue(options.cluster);
   const agent = normalizeQueryValue(options.agent);
   const resource = normalizeQueryValue(options.resource);
-  const summaryGroup = normalizeQueryValue(options.summaryGroup);
   if (type) params.set(WORKLOADS_QUERY_PARAMS.type, type);
   if (platform) params.set(WORKLOADS_QUERY_PARAMS.platform, platform);
   if (runtime) params.set(WORKLOADS_QUERY_PARAMS.runtime, runtime);
@@ -307,7 +303,6 @@ export const buildWorkloadsRouteSearch = (options: WorkloadsLinkOptions = {}): s
   if (cluster) params.set(WORKLOADS_QUERY_PARAMS.cluster, cluster);
   if (agent) params.set(WORKLOADS_QUERY_PARAMS.agent, agent);
   if (resource) params.set(WORKLOADS_QUERY_PARAMS.resource, resource);
-  if (summaryGroup) params.set(WORKLOADS_QUERY_PARAMS.summaryGroup, summaryGroup);
   return serializedRouteSearch(params);
 };
 

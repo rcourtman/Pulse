@@ -22,7 +22,6 @@ describe('workloadUrlSyncModel', () => {
       cluster: '',
       agent: 'node-a',
       resource: 'guest-1',
-      summaryGroup: '',
     });
   });
 

@@ -475,7 +475,6 @@ function VmwareOverview(props: VmwareOverviewProps) {
     columnVisibilityStorageScope: VMWARE_WORKLOAD_COLUMN_VISIBILITY_SCOPE,
     additionalDefaultHiddenColumnIds: [...VMWARE_WORKLOAD_DEFAULT_HIDDEN_COLUMN_IDS],
     inventorySourcesQuery: props.inventorySourcesQuery,
-    groupNodeDrawerMode: 'disabled',
     metricDisplayMode: props.metricDisplayMode,
     onMetricDisplayModeChange: props.setMetricDisplayMode,
     metricHistoryRange: props.metricHistoryRange,
@@ -527,11 +526,7 @@ function VmwareOverview(props: VmwareOverviewProps) {
             platformFilter={undefined}
             {...getWorkloadsMetricFilterProps(workloadsState)}
             forcedPlatform={VMWARE_PLATFORM_FILTER}
-            pinnedSelectionActive={() =>
-              Boolean(
-                workloadsState.selectedGuestId() || workloadsState.focusedSummaryWorkloadGroupId(),
-              )
-            }
+            pinnedSelectionActive={() => Boolean(workloadsState.selectedGuestId())}
             onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}
           />
         </div>
@@ -544,7 +539,6 @@ function VmwareOverview(props: VmwareOverviewProps) {
         useWorkloads
         forcedPlatform={VMWARE_PLATFORM_FILTER}
         forcedViewMode="vm"
-        groupNodeDrawerMode="disabled"
         suppressFilterToolbar
         emptyStateTitle="No vSphere VMs"
         emptyStateDescription="Virtual machines appear here once the vCenter connection enumerates them."

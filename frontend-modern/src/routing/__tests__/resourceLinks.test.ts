@@ -248,7 +248,6 @@ describe('resource link routing contract', () => {
       cluster: '',
       agent: 'worker-1',
       resource: 'cluster-a:worker-1:101',
-      summaryGroup: '',
     });
 
     expect(WORKLOADS_QUERY_PARAMS.type).toBe('type');
@@ -259,7 +258,7 @@ describe('resource link routing contract', () => {
     expect(WORKLOADS_QUERY_PARAMS.cluster).toBe('cluster');
     expect(WORKLOADS_QUERY_PARAMS.agent).toBe('agent');
     expect(WORKLOADS_QUERY_PARAMS.resource).toBe('resource');
-    expect(WORKLOADS_QUERY_PARAMS.summaryGroup).toBe('summaryGroup');
+    expect(WORKLOADS_QUERY_PARAMS).not.toHaveProperty('summaryGroup');
   });
 
   it('canonicalizes legacy workloads type aliases when building route search', () => {

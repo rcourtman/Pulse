@@ -28,22 +28,20 @@ describe('buildWorkloadsRouteSearch branch coverage', () => {
     expect(buildWorkloadsRouteSearch({})).toBe('');
   });
 
-  it('emits the runtime, namespace, cluster, and summaryGroup params the sibling suite omits', () => {
+  it('emits the runtime, namespace, and cluster params the sibling suite omits', () => {
     expect(
       buildWorkloadsRouteSearch({
         runtime: 'containerd',
         namespace: 'kube-system',
         cluster: 'prod-us-east',
-        summaryGroup: 'compute',
       }),
-    ).toBe('?runtime=containerd&namespace=kube-system&cluster=prod-us-east&summaryGroup=compute');
+    ).toBe('?runtime=containerd&namespace=kube-system&cluster=prod-us-east');
   });
 
   it('verifies the omitted query-param keys map to the canonical names', () => {
     expect(WORKLOADS_QUERY_PARAMS.runtime).toBe('runtime');
     expect(WORKLOADS_QUERY_PARAMS.namespace).toBe('namespace');
     expect(WORKLOADS_QUERY_PARAMS.cluster).toBe('cluster');
-    expect(WORKLOADS_QUERY_PARAMS.summaryGroup).toBe('summaryGroup');
   });
 
   it('canonicalizes the "host" type alias to "agent" via canonicalizeWorkloadFilterType', () => {
@@ -69,10 +67,9 @@ describe('buildWorkloadsRouteSearch branch coverage', () => {
         cluster: '  cl-1  ',
         agent: '  ag-1  ',
         resource: '  res-1  ',
-        summaryGroup: '  sg-1  ',
       }),
     ).toBe(
-      '?type=pod&platform=kubernetes&runtime=cri-o&context=ctx-1&namespace=ns-1&cluster=cl-1&agent=ag-1&resource=res-1&summaryGroup=sg-1',
+      '?type=pod&platform=kubernetes&runtime=cri-o&context=ctx-1&namespace=ns-1&cluster=cl-1&agent=ag-1&resource=res-1',
     );
   });
 
@@ -87,7 +84,6 @@ describe('buildWorkloadsRouteSearch branch coverage', () => {
         cluster: '',
         agent: null,
         resource: undefined,
-        summaryGroup: '   ',
       }),
     ).toBe('');
   });

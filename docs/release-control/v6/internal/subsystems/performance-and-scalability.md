@@ -1092,11 +1092,13 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    mounted, report errors out of band, and must not rely on Solid
    `createResource` in a way that can bubble into the route-level Suspense
    fallback or the setup/welcome shell.
-   Workload row drawer expansion, local row focus, and summary group pinning
-   are local interaction state. Inbound Workloads deep links may hydrate
-   `resource` and `summaryGroup` into the focused row or group, but opening,
-   closing, or clearing an inline drawer must not write those params back to
-   route state, schedule router navigation, or trip the app-shell fallback.
+   Workload row drawer expansion and local row focus are local interaction
+   state. Inbound Workloads deep links may hydrate `resource` into the focused
+   row, but opening, closing, or clearing an inline drawer must not write that
+   param back to route state, schedule router navigation, or trip the
+   app-shell fallback. Workloads has no group focus, so it reads no
+   `summaryGroup` param: row expansion stopped writing it and no link builder
+   passes one, so its hydration was removed with the group pin.
    URL synchronization for Workloads stays limited to filter-owned scope in
    `frontend-modern/src/components/Workloads/useWorkloadUrlSync.ts`.
    The Workloads page may show a bounded partial-inventory banner when a
@@ -1473,13 +1475,16 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     `TableCardHeader` inside both the populated and filtered-empty table card.
     A platform page must not place a parallel floating title above its filters;
     the title/count band belongs to the same framed table surface as the rows.
-    `WorkloadPanel` owns the mutually exclusive host/guest drawer handoff:
-    clicking a grouped host row while a guest drawer is open must clear the
-    selected guest and keep/focus the host summary group so the node drawer can
-    replace the guest drawer. Platform pages that render a dedicated host
-    table above an embedded Workloads table may disable the grouped host drawer
-    through the explicit Workloads surface option, but standalone Workloads
-    must keep the inline grouped-row drawer as the default.
+    `WorkloadPanel` renders only the guest drawer. Grouped host rows are
+    static dividers: no click handler, hover preview, group pin, or inline
+    node drawer. They keep `data-summary-group-id` so a click on a divider
+    does not clear an open guest drawer. Host details open from the platform
+    page's own hosts table (`ProxmoxNodesTable` mounts `NodeDrawer`;
+    `VsphereHostsTable` owns its detail row). The former
+    `groupNodeDrawerMode` option defaulted to an inline grouped-row drawer
+    that only the retired standalone Workloads page used; both production
+    mounts passed `disabled`, so the option, the inline `NodeDrawer` mount
+    and the Workloads group hover/pin scope were removed.
     Compact icon headers inside `WorkloadTableHeader.tsx` may stay visually
     dense for responsive workload tables, but the icon must be decorative and
     the column label must remain present through an `sr-only` label so the
@@ -2003,7 +2008,10 @@ because both remaining production mounts (Proxmox and vSphere overview)
 set it unconditionally, so the non-compact path no longer rendered
 anywhere. A new embedded consumer that needs host
 stats beside its workloads must render its own hosts table rather than
-re-growing metric cells in the shared group row.
+re-growing metric cells in the shared group row. The same applies to host
+interaction: the group row has no drawer, hover preview, or pin, and the
+Workloads state no longer builds per-group summary scopes for every
+filtered-guest change.
 
 WorkloadsSurface stays monitoring-first. It must not render a persistent
 aggregate banner just because running VMs or system containers lack an
@@ -2066,7 +2074,7 @@ the hovered timestamp, so density does not remove point-in-time metric detail.
 Proxmox node thermals follow that same drawer-only rule: temperature remains a
 node-context metric, not a universal Workloads table column, and the node detail
 drawer may add one compact `Thermals` history group beside utilization and I/O
-only after a grouped node row is selected. Host-agent CPU temperature must be
+only after a node's drawer is opened from the Proxmox nodes table. Host-agent CPU temperature must be
 persisted into the same metrics-store history stream as other agent metrics,
 with current node temperature displayed only as a drawer-local current reading
 while history is still accumulating; it must not become a synthetic history
@@ -2106,7 +2114,7 @@ still reads nothing extra.
 The Proxmox node drawer overview should follow the existing guest drawer
 compact detail-section pattern and expose node-specific context such as platform,
 kernel, hardware, raw capacity, telemetry, and thermal facts rather than
-repeating the metric cells already visible in the grouped table row.
+repeating the metric cells already visible in the Proxmox nodes table row.
 Object drawers across workload, node, Docker, and unified-resource surfaces
 must keep their default render bounded to active attention plus a small
 additive context projection. Full provider-specific support workflows remain
@@ -2415,16 +2423,19 @@ nothing renders: the retired `Jump to row` visibility check did exactly that,
 costing 128 `getComputedStyle` calls across eight row hovers and 320 across
 ten scroll steps on the 12-node mock storage table, and none once removed.
 That same hot-path contract also owns the row-emphasis paint. Workload guest
-and group rows and storage pool, group, and disk rows must expose
+rows and storage pool, group, and disk rows must expose
 summary-linked activity through the shared `data-summary-row-active` marker and let the shared frontend
 primitive render the emphasis, instead of layering lane-local row-fill classes
 that diverge across pages or wash out inline metric bars.
-`frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts` must
-write workload selection back into the workloads route through the shared
-same-path route-state scheduler, but the actual shell-position handoff for
-query-only row focus must go through `frontend-modern/src/utils/appShellScrollRestoration.ts`
-plus the root `frontend-modern/src/App.tsx` shell so opening a focused
-workload does not look like a full page reload. The shared same-path scheduler must also own cleanup
+`frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts` keeps
+workload selection local and never writes it back into the route; an inbound
+`resource` link only hydrates it. Local row focus keeps the scroll position
+through `preserveScrollableAncestorVerticalOffset` in
+`frontend-modern/src/components/shared/contextualFocus.ts` and reveals the
+opened detail through `summaryTableFocus.ts`, so opening a focused workload
+does not look like a full page reload. The root `frontend-modern/src/App.tsx`
+shell applies a pending `frontend-modern/src/utils/appShellScrollRestoration.ts`
+restore only when the route itself changes. The shared same-path scheduler must also own cleanup
 for every deferred scroll-restore timeout and animation frame it creates, so
 route-state cleanup cannot leave hot-path replay work running after the owning
 surface unmounts.
@@ -2739,11 +2750,12 @@ can still lose the aggregate to a live agent while its own filesystem rows
 remain; such a guest stays on the Proxmox rule. The agent's OS, addresses and
 physical disk health carry no stale cue yet.
 Guest, node, and Docker-host drawer headers follow the same frontend-primitives dependency
-boundary for collapse: Workloads owns which inline row is selected and the
-close handler, while
+boundary for collapse: the owning table (Workloads for guests, the Proxmox
+nodes table for nodes, the Docker hosts table for Docker hosts) owns which
+inline row is selected and the close handler, while
 `frontend-modern/src/components/shared/ObjectDrawerHeader.tsx` owns the
 full-width semantic header button, phone target height, focus treatment, and
-collapse chevron. `WorkloadPanel` must pass the grouped node close handler into
+collapse chevron. `ProxmoxNodesTable` must pass its node close handler into
 `NodeDrawer`, the Docker hosts table must pass its close handler into
 `DockerHostDrawer`, and those shells must not fall back to a small icon-only
 collapse target or wrap interactive header actions inside a local button.

@@ -338,11 +338,6 @@ export function GuestRow(props: GuestRowProps) {
         }
         data-workload-alert-accent={alertAccentTone()}
         data-summary-series-id={guestId()}
-        data-summary-group-member-active={
-          props.summaryGroupMemberState && props.summaryGroupMemberState !== 'default'
-            ? props.summaryGroupMemberState
-            : undefined
-        }
         data-summary-row-active={props.isSummaryHighlighted && !props.isExpanded ? 'true' : 'false'}
         on:click={rowActionProps.onClick ? nativeRowClickTarget : undefined}
         on:mousedown={rowActionProps.onClick ? selectionGuard.onMouseDown : undefined}

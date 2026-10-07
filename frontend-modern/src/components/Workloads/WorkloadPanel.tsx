@@ -5,26 +5,18 @@ import {
   GROUPED_TABLE_ROW_BADGE_CLASS,
   getGroupedTableRowCellClass,
   getGroupedTableRowClass,
-  getInteractiveGroupedTableRowClass,
 } from '@/components/shared/groupedTableRowPresentation';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
-import { createSummaryInteractiveRowPreviewHandlers } from '@/components/shared/summaryInteractionA11y';
 import { buildSummaryDisclosureControlsId } from '@/components/shared/summaryInteractionA11y';
 import { TableBody, TableCell, TableRow } from '@/components/shared/Table';
 import { getAlertsForResource, getAlertStyles } from '@/utils/alerts';
 import { guestOverrideIdCandidates } from '@/features/alerts/guestOverrideIdentity';
 import { isNodeOnline } from '@/utils/status';
 import { getCanonicalWorkloadId, getWorkloadMetadataIdCandidates } from '@/utils/workloads';
-import {
-  resolveSummaryGroupMemberInteractionState,
-  type SummarySeriesGroupScope,
-} from '@/components/shared/summaryCardInteraction';
 
 import { GuestDrawer } from './GuestDrawer';
 import { GuestRow } from './GuestRow';
-import { NodeDrawer } from './NodeDrawer';
-import { buildWorkloadSummaryGroupScope } from './workloadSelectors';
 import { getWorkloadGuestMetadataRecord } from './workloadGuestMetadataRecord';
 import type { WorkloadsState } from './useWorkloadsState';
 
@@ -34,27 +26,19 @@ type WorkloadPanelProps = Pick<
   | 'alertsEnabled'
   | 'bottomSpacerHeight'
   | 'getGroupLabel'
-  | 'getNodeTemperatureThresholds'
   | 'groupedGuests'
   | 'groupedWindowing'
   | 'groupLabelBadges'
   | 'guestMetadata'
   | 'guestParentNodeMap'
-  | 'groupNodeDrawerMode'
   | 'groupingMode'
   | 'handleCustomUrlUpdate'
   | 'handleTagClick'
-  | 'activeSummaryWorkloadGroupScope'
   | 'activeSummaryWorkloadId'
-  | 'focusedSummaryWorkloadGroupScope'
-  | 'focusedSummaryWorkloadGroupId'
-  | 'hoveredSummaryWorkloadGroupScope'
   | 'nestedWorkloadContextByGuestId'
   | 'nodeByInstance'
   | 'search'
   | 'selectedGuestId'
-  | 'setFocusedWorkloadGroupScope'
-  | 'setHoveredWorkloadGroupScope'
   | 'setHoveredWorkloadId'
   | 'setSelectedGuestId'
   | 'setTableBodyRef'
@@ -100,52 +84,12 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
           );
           const groupGuestIds = createMemo(() => groupGuests().map(getCanonicalWorkloadId));
           const node = () => props.nodeByInstance()[groupKey];
-          const groupSummaryScope = createMemo<SummarySeriesGroupScope | null>(() => {
-            if (props.groupingMode() !== 'grouped') {
-              return null;
-            }
-            return buildWorkloadSummaryGroupScope(
-              groupKey,
-              fullGroupGuests(),
-              props.getGroupLabel(groupKey, fullGroupGuests()),
-            );
-          });
-          const isSummaryGroupHighlighted = createMemo(
-            () => props.activeSummaryWorkloadGroupScope()?.id === groupKey,
-          );
-          const shouldShowNodeDrawer = createMemo(
-            () =>
-              props.groupNodeDrawerMode() === 'inline' &&
-              Boolean(node()) &&
-              props.focusedSummaryWorkloadGroupId() === groupKey &&
-              props.selectedGuestId() === null,
-          );
-          const canOpenNodeDrawer = () => props.groupNodeDrawerMode() === 'inline';
-          const handleGroupHoverChange = (next: SummarySeriesGroupScope | null) => {
-            props.setHoveredWorkloadGroupScope(next);
-          };
-          const handleGroupFocusToggle = () => {
-            if (!canOpenNodeDrawer()) return;
-            const scope = groupSummaryScope();
-            const selectedGuestId = props.selectedGuestId();
-            const nextFocusedScope =
-              scope &&
-              props.focusedSummaryWorkloadGroupId() === scope.id &&
-              selectedGuestId === null
-                ? null
-                : scope;
-            if (nextFocusedScope && selectedGuestId !== null) {
-              props.setSelectedGuestId(null);
-            }
-            props.setFocusedWorkloadGroupScope(nextFocusedScope);
-          };
-          const groupRowInteraction = createSummaryInteractiveRowPreviewHandlers({
-            onPreview: () => handleGroupHoverChange(groupSummaryScope()),
-            onPreviewClear: () => handleGroupHoverChange(null),
-          });
 
           return (
             <>
+              {/* Group rows are identity-only dividers: host details open from the
+                  platform page's own hosts table. data-summary-group-id keeps a click
+                  on a divider from clearing an open guest drawer. */}
               <Show
                 when={
                   props.groupingMode() === 'grouped' && groupGuests()[0] === fullGroupGuests()[0]
@@ -154,20 +98,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                 <Show
                   when={node()}
                   fallback={
-                    <TableRow
-                      class={
-                        canOpenNodeDrawer()
-                          ? getInteractiveGroupedTableRowClass()
-                          : getGroupedTableRowClass()
-                      }
-                      data-summary-group-id={groupKey}
-                      data-summary-group-series-count={String(
-                        groupSummaryScope()?.seriesIds.length ?? 0,
-                      )}
-                      data-summary-row-active={isSummaryGroupHighlighted() ? 'true' : 'false'}
-                      onClick={canOpenNodeDrawer() ? handleGroupFocusToggle : undefined}
-                      {...(canOpenNodeDrawer() ? groupRowInteraction : {})}
-                    >
+                    <TableRow class={getGroupedTableRowClass()} data-summary-group-id={groupKey}>
                       <TableCell
                         colspan={props.totalColumns()}
                         class={getGroupedTableRowCellClass()}
@@ -197,44 +128,9 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                     node={node()!}
                     renderAs="tr"
                     colspan={props.totalColumns()}
-                    trClass={
-                      canOpenNodeDrawer()
-                        ? 'cursor-pointer select-none duration-150 [&>td>div]:flex-nowrap'
-                        : 'select-none duration-150 [&>td>div]:flex-nowrap'
-                    }
-                    trProps={{
-                      'aria-expanded': canOpenNodeDrawer()
-                        ? shouldShowNodeDrawer()
-                          ? 'true'
-                          : 'false'
-                        : undefined,
-                      'data-summary-group-id': groupKey,
-                      'data-summary-group-series-count': String(
-                        groupSummaryScope()?.seriesIds.length ?? 0,
-                      ),
-                      'data-summary-row-active': isSummaryGroupHighlighted() ? 'true' : 'false',
-                      onClick: canOpenNodeDrawer() ? handleGroupFocusToggle : undefined,
-                      ...(canOpenNodeDrawer() ? groupRowInteraction : {}),
-                    }}
+                    trClass="select-none duration-150 [&>td>div]:flex-nowrap"
+                    trProps={{ 'data-summary-group-id': groupKey }}
                   />
-                </Show>
-                <Show when={shouldShowNodeDrawer()}>
-                  <InlineDetailTableRow
-                    colspan={props.totalColumns()}
-                    data-inline-node-detail-for={groupKey}
-                  >
-                    <NodeDrawer
-                      node={node()!}
-                      onClose={() => props.setFocusedWorkloadGroupScope(null)}
-                      temperatureThresholds={props.getNodeTemperatureThresholds(node()!)}
-                      alerts={getAlertsForResource(
-                        [node()!.id],
-                        props.activeAlerts,
-                        props.alertsEnabled(),
-                        node()!.name,
-                      )}
-                    />
-                  </InlineDetailTableRow>
                 </Show>
               </Show>
               <For each={groupGuestIds()} fallback={<></>}>
@@ -284,11 +180,6 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                         }
                         isExpanded={props.selectedGuestId() === guestId()}
                         isSummaryHighlighted={props.activeSummaryWorkloadId() === guestId()}
-                        summaryGroupMemberState={resolveSummaryGroupMemberInteractionState({
-                          seriesId: guestId(),
-                          hoveredGroupScope: props.hoveredSummaryWorkloadGroupScope(),
-                          focusedGroupScope: props.focusedSummaryWorkloadGroupScope(),
-                        })}
                         ioEmphasis={props.workloadIOEmphasis()}
                         metricDisplayMode={props.workloadMetricDisplayMode()}
                         metricHoverMode={props.workloadMetricHoverMode()}
