@@ -4,14 +4,48 @@ Authenticate users via your existing reverse proxy (Authentik, Authelia, Cloudfl
 
 ## 🚀 Quick Start
 
-1.  **Generate Secret**: Create a strong random string.
-2.  **Configure Pulse**: Set these in your deployment's private configuration,
-    not a shell command, shared Compose file or repository:
-    ```dotenv
-    PROXY_AUTH_SECRET=your-random-secret
-    PROXY_AUTH_USER_HEADER=X-Authentik-Username
-    ```
-3.  **Configure Proxy**: Set the proxy to send `X-Proxy-Secret` and the user header.
+Proxy authentication delegates identity to your **existing authenticating proxy**;
+a shared header is not an identity-provider login. Complete the
+[header trust boundary](#-header-trust-boundary) before enabling it. Keep the
+existing administrator recovery path until the new login and access checks pass.
+
+1. **Decide who is an administrator.** Leaving `PROXY_AUTH_ROLE_HEADER` unset
+   makes **every proxy-authenticated user an administrator**. For mixed-access
+   users, configure a role header and the exact intended IdP admin group before
+   enabling proxy login. Do not remove role gating to resolve a denial.
+2. **Prepare private configuration.** Generate a strong unique shared secret
+   using your trusted secret-management tool. Store it in Pulse and the proxy's
+   private deployment configuration, not command arguments, shared Compose files
+   or a repository. For example, these are mappings, not working defaults:
+
+   ```dotenv
+   PROXY_AUTH_SECRET=<unique-private-shared-secret>
+   PROXY_AUTH_USER_HEADER=X-Authentik-Username
+   PROXY_AUTH_ROLE_HEADER=X-Authentik-Groups
+   PROXY_AUTH_ROLE_SEPARATOR=|
+   PROXY_AUTH_ADMIN_ROLE=<exact-idp-admin-group>
+   ```
+
+   Match the header names and separator to what your existing authenticator
+   actually emits. The `|` example is not correct for an IdP that emits
+   comma-separated groups. Never use the placeholder strings as credentials
+   or invent an admin group to make a user pass.
+3. **Complete the proxy boundary.** Require successful IdP authentication before
+   forwarding to Pulse. Replace client-supplied identity, role and secret headers
+   with trusted values; deny access if the authenticator is unavailable. A
+   headers-only middleware does not authenticate anyone. Restrict the backend
+   to the existing private proxy path, including any alternate published port.
+4. **Verify through the normal browser path.** Check an intended administrator,
+   an authenticated non-admin and a signed-out session separately. Signing in
+   does not prove the intended privilege; a non-admin must not gain settings
+   write access. A signed-out session must be challenged or refused by the
+   authenticating proxy, not admitted as a Pulse user. Use existing test accounts
+   and read-only observations, not settings changes or a new public backend.
+
+Apply deployment changes during a suitable maintenance window, preserving the
+current image, data, credentials and unrelated settings. A Docker environment
+change needs recreation/redeployment; a restart alone does not apply it. Follow
+[environment precedence](CONFIGURATION.md#common-overrides-environment-variables).
 
 ## ⚙️ Configuration
 
@@ -34,49 +68,51 @@ Running Pulse 5.x? Role gating behaves differently there and needs two extra ste
 
 Pulse trusts these headers completely — they *are* the identity and the privilege decision. Two deployment requirements make that safe, and both are yours to enforce:
 
-1. **Your proxy must _replace_ these headers, never append to them.** On every request the proxy has to discard any client-supplied copy of `X-Proxy-Secret`, your user header, and your role header, then set its own. Pulse reads the **first** value of a repeated header, so a client-supplied `X-Proxy-Roles: admin` that arrives ahead of your proxy's value wins — and because the proxy supplies the shared secret itself, the client never needs to know it. The examples below use nginx `proxy_set_header` and Traefik `customRequestHeaders`, which replace; be careful with anything that adds a header rather than setting it.
+1. **Your proxy must _replace_ these headers, never append to them.** On every request the proxy has to discard any client-supplied copy of `X-Proxy-Secret`, your user header, and your role header, then set its own. Pulse reads the **first** value of a repeated header, so a client-supplied `X-Proxy-Roles: admin` that arrives ahead of your proxy's value wins — and because the proxy supplies the shared secret itself, the client never needs to know it. Replacing only the secret is insufficient: the username and configured role header must also come from the successful authenticator, never from the client. Validate this at the proxy; a direct Pulse probe cannot prove it.
 2. **Pulse must not be reachable except through the proxy.** Anyone who can connect directly and knows `PROXY_AUTH_SECRET` can assert any username and any role. Bind Pulse to the proxy's network or to localhost.
 
 Neither of these can be enforced from inside Pulse: a forged header and a genuine one are indistinguishable once they arrive.
 
 ## 📦 Examples
 
-The secret values below are placeholders, not defaults. Replace them with the
-same strong unique secret in Pulse and the proxy, using private configuration
-files or your deployment's secret mechanism. Keep the rendered configuration
-and container environment private too; do not share `docker inspect` or
-resolved Compose output.
+These are integration requirements for an already configured authenticator,
+not complete provider deployment recipes. Follow your installed provider's
+version-specific documentation for its authentication middleware and trusted
+identity output. Keep its existing access policy and backend isolation; adding
+`X-Proxy-Secret` alone is not a secure setup.
 
 ### Authentik (with Traefik)
-**docker-compose.yml**:
-```yaml
-environment:
-  - PROXY_AUTH_SECRET=secure-secret
-  - PROXY_AUTH_USER_HEADER=X-Authentik-Username
-```
 
-**Traefik Middleware**:
-```yaml
-headers:
-  customRequestHeaders:
-    X-Proxy-Secret: "secure-secret"
-```
+The Pulse router must use the existing Authentik authentication middleware before
+trusted identity reaches Pulse. Map the authenticated username and groups to the
+same headers configured in Pulse, with the actual group separator. Strip inbound
+copies before authentication and replace them with the trusted result. A Traefik
+`headers.customRequestHeaders` entry that sets only `X-Proxy-Secret` does not
+configure Authentik, protect the route or sanitise the user/group headers. Do not
+add a static username or admin group as a shortcut.
 
 ### Authelia (Nginx)
-```nginx
-location / {
-    auth_request /authelia;
-    proxy_set_header X-Proxy-Secret "secure-secret";
-    proxy_set_header Remote-User $upstream_http_remote_user;
-    proxy_pass http://pulse:7655;
-}
-```
+
+Use the existing Authelia authorisation subrequest and explicitly capture its
+successful identity and group response for the upstream request. Merely adding
+`auth_request` and referencing `$upstream_http_remote_user` is not a complete
+identity mapping: the authenticated subrequest's output must be assigned with
+`auth_request_set` and used for the headers sent to Pulse. Replace all configured
+identity, role and secret headers; a failed or unavailable subrequest must not
+forward an authenticated request. Match Pulse's role separator to the actual
+Authelia group output, not the example separator above.
 
 ### Cloudflare Tunnel
-1.  **Zero Trust Dashboard**: Applications → Add Application.
-2.  **Settings**: HTTP Settings → HTTP Headers.
-3.  **Add Header**: `X-Proxy-Secret` = `your-secret`.
-4.  **Pulse Config**: `PROXY_AUTH_USER_HEADER=Cf-Access-Authenticated-User-Email`.
+
+A tunnel is a transport, not an Access policy. Require the existing Cloudflare
+Access application and its authenticated identity on every route to Pulse;
+protect alternate hostnames and keep direct backend access private. Pulse's proxy
+authentication does not validate a Cloudflare Access JWT: it checks the shared
+secret and configured identity/role headers. The trusted Access/connector path
+must establish identity and replace those headers before forwarding. Do not
+assume a client-supplied `Cf-Access-Authenticated-User-Email` or a static secret
+header proves a login. If no trusted role mapping is available, do not silently
+fall back to all-users-admin access.
 
 ## 🔧 Troubleshooting
 
@@ -117,11 +153,24 @@ prints only the HTTP status, not settings, cookies or credential-bearing logs:
   trap 'test ! -e "$header_file" || rm -- "$header_file"; rmdir -- "$probe_dir"' EXIT
   touch "$header_file"
   vi "$header_file"
-  curl --disable --silent --show-error --output /dev/null \
-    --write-out 'HTTP %{http_code}\n' --header "@$header_file" \
-    http://127.0.0.1:7655/api/system/settings
+  if status=$(curl --disable --silent --show-error --output /dev/null \
+    --connect-timeout 5 --max-time 10 \
+    --write-out '%{http_code}' --header "@$header_file" \
+    http://127.0.0.1:7655/api/system/settings); then
+    printf 'HTTP %s\n' "$status"
+  else
+    curl_exit=$?
+    printf 'Proxy probe unavailable (curl exit %s); no role result. Stop here.\n' "$curl_exit" >&2
+    exit "$curl_exit"
+  fi
 )
 ```
+
+The probe permits five seconds to connect and ten seconds in total, with no
+retry. A failed or timed-out transport prints no HTTP role result; retain the
+error and stop, rather than removing the deadline or repeating the request.
+The temporary header file is removed on exit, including an editor or curl
+failure. Cleanup does not revoke the shared secret.
 
 The loopback address applies only on the Pulse host with a loopback listener.
 Otherwise use its existing private backend address over HTTPS with certificate
