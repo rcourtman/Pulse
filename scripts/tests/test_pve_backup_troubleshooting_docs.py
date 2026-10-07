@@ -66,6 +66,8 @@ class PVEBackupTroubleshootingDocsTest(unittest.TestCase):
         for phrase in ("node, storage, guest type/ID and time", "Proxmox → Backups → By date",
                        "Coverage posture is a different reading", "distinct sources",
                        "failed, unavailable or partial read is not an empty inventory",
+                       "Keep connection/agent liveness separate from backup collection freshness",
+                       "existing collection timestamps where available",
                        "OK task does not prove guest thaw", "Do not run another backup or restore",
                        "outside backups", "without manual guest-agent probes",
                        "Keep token secrets, full ACL listings and private infrastructure details"):

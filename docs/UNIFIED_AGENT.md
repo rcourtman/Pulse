@@ -1181,9 +1181,10 @@ API collection is current. Guest-agent disk readings are not backup inventory.
    seen through PVE are distinct sources; see [PBS data sources](PBS.md#data-source-indicator)
    and [Recovery](RECOVERY.md#missing-or-inconsistent-evidence).
 3. **Inspect ordinary collection, not a new probe.** In **Settings →
-   Infrastructure**, check the affected PVE connection's existing status and
-   last successful collection, together with the original redacted error and
-   time. The server checks online nodes and queryable storage configured for
+   Infrastructure**, check the affected saved PVE connection and existing
+   status. Keep connection/agent liveness separate from backup collection
+   freshness; use existing collection timestamps where available, and retain
+   the original redacted error and time. The server checks online nodes and queryable storage configured for
    backup content. A failed, unavailable or partial read is not an empty
    inventory; a successful connection test is not proof of sustained collection.
 4. **Repair access only when the evidence supports it.** Ask the Proxmox
