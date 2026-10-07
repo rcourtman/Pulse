@@ -1867,6 +1867,61 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 self.assertEqual(evidence["attributes"]["label"], "Logs, screenshots, or diagnostics")
                 self.assertFalse(evidence.get("validations", {}).get("required", False))
 
+    def test_notification_report_context_is_optional_and_passive(self) -> None:
+        for name, evidence_id in (("bug_report.yml", "logs"), ("v6_rc_feedback.yml", "evidence")):
+            with self.subTest(form=name):
+                form = yaml.load(read(f".github/ISSUE_TEMPLATE/{name}"), Loader=UniqueKeyLoader)
+                fields = {field["id"]: field for field in form["body"] if "id" in field}
+                self.assertEqual(len(fields), sum("id" in field for field in form["body"]))
+                evidence = fields[evidence_id]
+                self.assertEqual(evidence["type"], "textarea")
+                self.assertFalse(evidence.get("validations", {}).get("required", False))
+                self.assertNotIn("render", evidence["attributes"])
+                # Keep the distinctions at the optional attachment point, not
+                # hidden in an introduction, link or new required field.
+                description = evidence["attributes"]["description"]
+                context = normalize_ws(description.split("For notification reports,", 1)[1]
+                                       .split("For CPU, memory or disk-write reports", 1)[0])
+                for distinction in (
+                    "already-observed **Test** result", "ordinary alert delivery",
+                    "single, grouped/digest or resolved", "destination type",
+                    "built-in or custom template", "original time", "redacted error",
+                    "missing host/resource context where known",
+                    "successful Test does not establish ordinary delivery or correct identity",
+                    "Use existing messages and queue details only", 'blank or "unknown" is valid',
+                    "Do not send a Test, trigger an alert, retry/replay a queued message",
+                    "clear the queue or change notification settings just to complete this report",
+                    "Keep destination addresses, webhook URLs, chat IDs, tokens",
+                    "full notification settings or payloads private",
+                ):
+                    self.assertIn(distinction, context)
+                self.assertTrue(fields["pulse_version"]["validations"]["required"])
+
+    def test_notification_triage_separates_evaluation_delivery_and_identity(self) -> None:
+        documents = ("docs/ISSUE_TRIAGE.md", "frontend-modern/public/docs/ISSUE_TRIAGE.md")
+        self.assertEqual(read(documents[0]), read(documents[1]))
+        for document in documents:
+            with self.subTest(document=document):
+                context = normalize_ws(read(document).split("For notification reports,", 1)[1]
+                                       .split("## Required disposition", 1)[0])
+                for distinction in (
+                    "successful Test does not establish ordinary delivery or correct identity",
+                    "consistent private aliases", "alert appearing in Pulse",
+                    "queued attempt", "recipient's actual message as separate observations",
+                    "subject or body still identifies the wrong resource",
+                    "including earlier comments", "rather than asking for the same facts again",
+                    "Queued messages can retain older settings",
+                    "current configuration screenshot does not establish",
+                    "Unknown evidence stays unknown", "existing reports need no refile",
+                    "Do not request another Test, induced alert, queue retry/replay",
+                    "queue clearing or notification-setting changes",
+                    "Keep destination addresses, webhook URLs, chat IDs, tokens",
+                    "full notification settings or payloads private",
+                    "missing notification alone does not prove that alert evaluation failed",
+                    "retain both symptoms",
+                ):
+                    self.assertIn(distinction, context)
+
     def test_report_intake_distinguishes_server_install_from_affected_target(self) -> None:
         for name, summary_id, install_id in (
             ("bug_report.yml", "bug_description", "install_type"),

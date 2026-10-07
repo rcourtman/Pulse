@@ -102,6 +102,26 @@ profiles, heap dumps, databases or full process command lines in a public
 thread; use locally reviewed counter summaries, without restarting, creating
 load or changing polling or retention just to measure.
 
+For notification reports, distinguish an already-observed **Test** result from
+ordinary alert delivery: single, grouped/digest or resolved. A successful Test
+does not establish ordinary delivery or correct identity. Retain the destination
+type, built-in or custom template, original time and redacted error or missing
+host/resource context where already known; consistent private aliases preserve
+which hosts or resources repeat. Keep an alert appearing in Pulse, its queued
+attempt and the recipient's actual message as separate observations. Delivery
+can succeed while the subject or body still identifies the wrong resource.
+
+Use existing messages and queue details, including earlier comments, rather
+than asking for the same facts again. Queued messages can retain older settings;
+a current configuration screenshot does not establish the settings of an older
+attempt. Unknown evidence stays unknown, and existing reports need no refile.
+Do not request another Test, induced alert, queue retry/replay, queue clearing or
+notification-setting changes just to complete a report. Keep destination
+addresses, webhook URLs, chat IDs, tokens and full notification settings or
+payloads private, even when an error or screenshot contains them. A missing
+notification alone does not prove that alert evaluation failed; retain both
+symptoms when the thread supplies evidence for each.
+
 ## Required disposition
 
 Before removing `needs-decomposition` or declaring a mixed report triaged:

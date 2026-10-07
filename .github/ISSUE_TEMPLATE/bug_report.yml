@@ -135,6 +135,9 @@ body:
         Add relevant redacted logs or a reviewed GitHub diagnostics export for connection and data failures; for visual failures, a screenshot or exact error may be enough. Prefer existing evidence when new collection is unsafe.
         Review files and screenshots locally; remove secrets and identifying details, including those echoed in errors, before attaching them here.
 
+        For notification reports, distinguish an already-observed **Test** result from ordinary alert delivery: single, grouped/digest or resolved. Give the destination type (such as email or Telegram), built-in or custom template, original time and redacted error or missing host/resource context where known. A successful Test does not establish ordinary delivery or correct identity.
+        Use existing messages and queue details only; blank or "unknown" is valid. Do not send a Test, trigger an alert, retry/replay a queued message, clear the queue or change notification settings just to complete this report. Keep destination addresses, webhook URLs, chat IDs, tokens and full notification settings or payloads private.
+
         For CPU, memory or disk-write reports, use existing readings or safe, passive observations. Say whether the reading covers the Pulse process, its container or the whole host, and give its units, measurement window and uptime. Include allocated CPUs or memory limit, fleet size, polling interval and open dashboards where relevant and known. A process-start CPU average is not a recent sampling window; database size is not a write rate.
         Existing screenshots are useful; write "unavailable" when safe collection is not possible. Do not restart, create load or change polling or retention just to measure. Do not attach raw profiles, heap dumps, databases or full process command lines; summarise only relevant counters after local review.
     validations:
