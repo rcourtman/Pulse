@@ -108,6 +108,25 @@ func continuityObserver(t *testing.T, m *Manager, route, gap string) (string, st
 			}
 			m.evaluateUnifiedMetrics(&UnifiedResourceInput{ID: id, Type: "vm", Name: "guest", Memory: sample}, ThresholdConfig{Memory: threshold}, nil)
 		}
+	case "storage":
+		id, metric = "site:node:backups", "usage"
+		return id, metric, func(value float64, missing bool) {
+			storage := models.Storage{ID: id, Name: "backups", Node: "node", Instance: "site", Status: "online",
+				Total: 1000, Used: int64(value * 10), Free: int64(1000 - value*10), Usage: value}
+			if missing {
+				switch gap {
+				case "offline", "unavailable":
+					storage.Status = gap
+				case "negative":
+					storage.Usage = -1
+				case "unconfirmed-zero":
+					storage.Usage = 0
+				default:
+					storage.Total, storage.Used, storage.Free, storage.Usage = 0, 0, 0, 0
+				}
+			}
+			m.CheckStorage(storage)
+		}
 	case "host":
 		id = "agent:host-105"
 		return id, metric, func(value float64, missing bool) {
@@ -184,10 +203,13 @@ func continuityObserver(t *testing.T, m *Manager, route, gap string) (string, st
 
 func TestMetricObservationGapRestartsActivation(t *testing.T) {
 	for _, explicit := range []bool{false, true} {
-		for _, route := range []string{"legacy", "canonical", "unified", "host", "guest-memory", "guest-aggregate", "guest-filesystem", "guest-filesystem-expired", "host-disk-temperature"} {
+		for _, route := range []string{"legacy", "canonical", "unified", "host", "storage", "guest-memory", "guest-aggregate", "guest-filesystem", "guest-filesystem-expired", "host-disk-temperature"} {
 			gaps := []string{"missing"}
 			if route == "legacy" || route == "canonical" {
 				gaps = []string{"NaN", "+Inf", "-Inf", "history-error", "history-empty", "history-gap", "history-NaN"}
+			}
+			if route == "storage" {
+				gaps = []string{"missing", "unconfirmed-zero", "negative", "offline", "unavailable"}
 			}
 			if route == "host-disk-temperature" {
 				gaps = []string{"empty", "omitted", "zero", "negative", "standby", "unavailable", "unsupported", "missing", "invalid-state", "expired", "legacy"}
@@ -237,10 +259,13 @@ func TestMetricObservationGapRestartsActivation(t *testing.T) {
 }
 
 func TestMetricObservationGapRestartsRecovery(t *testing.T) {
-	for _, route := range []string{"legacy", "canonical", "unified", "host", "guest-memory", "host-disk-temperature"} {
+	for _, route := range []string{"legacy", "canonical", "unified", "host", "storage", "guest-memory", "host-disk-temperature"} {
 		gaps := []string{"missing"}
 		if route == "legacy" || route == "canonical" {
 			gaps = []string{"NaN", "+Inf", "-Inf", "history-error", "history-empty", "history-gap", "history-NaN"}
+		}
+		if route == "storage" {
+			gaps = []string{"missing", "unconfirmed-zero", "negative", "offline", "unavailable"}
 		}
 		if route == "host-disk-temperature" {
 			gaps = []string{"empty", "omitted", "zero", "negative", "standby", "unavailable", "unsupported", "missing", "invalid-state", "expired", "legacy"}

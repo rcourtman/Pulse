@@ -3876,3 +3876,26 @@ It covers both families sharing a disk, interruption/reconfirmation, partial
 rule disablement, re-enablement, legacy/unknown causes, filesystem and host
 isolation, removal and node-link ownership. These are source lifecycle controls,
 not collector, smartctl, installed notification or native disk-recovery proof.
+
+### Storage observation gaps restart confirmation and timing
+
+An absent or `unknown` storage connectivity status interrupts activation,
+recovery confirmations and pending offline intent grace without resolving an
+existing outage or changing its acknowledgement. Capacity is independently
+observable while connectivity is unknown. Missing/unconfirmed-zero capacity,
+negative usage and offline/unavailable storage interrupt capacity activation,
+intent grace and recovery timing; they do not supply healthy capacity evidence.
+A confirmed empty store still supplies a genuine zero-usage recovery reading.
+Fresh observations must satisfy the existing full confirmation/delay after a
+gap. Interruption is scoped to the storage's canonical identity and applied to
+both live and shadow reducers; interrupted intent is checkpointed for restart.
+
+`TestStorageConnectivityObservationGaps` and
+`TestStorageConnectivityGapRestartsIntentGrace` exercise the real storage
+entry point, acknowledged occurrence retention, neighbour isolation, fresh
+reconfirmation and empty intent checkpoint. Storage routes in
+`TestMetricObservationGapRestartsActivation` and
+`TestMetricObservationGapRestartsRecovery` cover capacity gaps and explicit
+intent grace. Existing restart, empty-capacity and predictive-capacity controls
+remain required. These source controls are not native storage recovery or
+installed destination-delivery evidence.

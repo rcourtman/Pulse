@@ -1,7 +1,11 @@
 package alerts
 
 import (
+	"encoding/json"
 	"math"
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -1699,5 +1703,120 @@ func TestReleaseCanonicalMetricAlertClearsIntentPending(t *testing.T) {
 	m.mu.RUnlock()
 	if stillPending {
 		t.Fatalf("expected releasing the metric to clear its intent pending state")
+	}
+}
+
+// Missing storage observations break confirmation runs, not the occurrence.
+// Exercise the public evaluator and both live/shadow reducers, not seeded state.
+func TestStorageConnectivityObservationGaps(t *testing.T) {
+	for _, gap := range []string{"", "unknown", " UNKNOWN "} {
+		t.Run("activation/"+gap, func(t *testing.T) {
+			m := newShadowFeedManager(t)
+			s := models.Storage{ID: "storage-a", Name: "backups", Status: "offline"}
+			other := s
+			other.ID = "storage-ab"
+			id := canonicalConnectivityStateID(s.ID)
+			m.CheckStorage(s)
+			m.CheckStorage(other)
+			s.Status = gap
+			m.CheckStorage(s)
+			s.Status = "unavailable"
+			m.CheckStorage(s)
+			if testHasActiveAlert(t, m, id) {
+				t.Fatal("non-consecutive outage observations fired storage alert")
+			}
+			m.CheckStorage(other)
+			testRequireActiveAlert(t, m, canonicalConnectivityStateID(other.ID))
+			m.CheckStorage(s)
+			testRequireActiveAlert(t, m, id)
+			if m.ShadowDivergences() != 0 {
+				t.Fatal("storage interruption diverged from shadow")
+			}
+		})
+		t.Run("recovery/"+gap, func(t *testing.T) {
+			m := newShadowFeedManager(t)
+			s := models.Storage{ID: "storage-a", Name: "backups", Status: "offline"}
+			id := canonicalConnectivityStateID(s.ID)
+			for range 2 {
+				m.CheckStorage(s)
+			}
+			if err := m.AcknowledgeAlert(id, "operator"); err != nil {
+				t.Fatal(err)
+			}
+			s.Status = "available"
+			m.CheckStorage(s)
+			before := testRequireActiveAlert(t, m, id).Clone()
+			s.Status = gap
+			m.CheckStorage(s)
+			if !reflect.DeepEqual(before, testRequireActiveAlert(t, m, id)) || m.GetResolvedAlert(id) != nil {
+				t.Fatal("missing connectivity changed acknowledged occurrence")
+			}
+			s.Status = "available"
+			m.CheckStorage(s)
+			if !testHasActiveAlert(t, m, id) {
+				t.Fatal("non-consecutive healthy observations resolved storage outage")
+			}
+			m.CheckStorage(s)
+			if testHasActiveAlert(t, m, id) {
+				t.Fatal("fresh consecutive healthy observations failed to recover")
+			}
+			resolved := m.GetResolvedAlert(id)
+			if resolved == nil || !resolved.StartTime.Equal(before.StartTime) {
+				t.Fatal("confirmed recovery lost original occurrence")
+			}
+			if m.ShadowDivergences() != 0 {
+				t.Fatal("storage recovery diverged from shadow")
+			}
+		})
+	}
+}
+
+func TestStorageConnectivityGapRestartsIntentGrace(t *testing.T) {
+	m := newShadowFeedManager(t)
+	var tick time.Duration
+	m.intentClock = func() time.Duration { return tick }
+	doc := NewAlertIntentPolicyDocument()
+	doc.Defaults[string(AlertIntentSignalOffline)] = AlertIntentRule{GraceSeconds: intPointer(60)}
+	if err := m.LoadIntentPolicies(doc); err != nil {
+		t.Fatal(err)
+	}
+	s := models.Storage{ID: "storage-a", Name: "backups", Status: "offline"}
+	id := canonicalConnectivityStateID(s.ID)
+	m.CheckStorage(s)
+	tick = 40 * time.Second
+	m.CheckStorage(s)
+	s.Status = "unknown"
+	m.CheckStorage(s)
+	m.mu.RLock()
+	_, pending := m.intentPending[id]
+	_, ticking := m.intentRuntimeTicks[id]
+	m.mu.RUnlock()
+	if pending || ticking {
+		t.Error("missing status retained intent grace bookkeeping")
+	}
+	if err := m.SaveActiveAlerts(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(m.getAlertsDir(), intentPendingFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved []IntentPendingState
+	if err := json.Unmarshal(data, &saved); err != nil || len(saved) != 0 {
+		t.Fatalf("interrupted intent remained checkpointed: %s, %v", data, err)
+	}
+	s.Status = "offline"
+	for _, next := range []time.Duration{70, 90, 129} {
+		tick = next * time.Second
+		m.CheckStorage(s)
+		if testHasActiveAlert(t, m, id) {
+			t.Fatal("intent grace accrued across missing storage status")
+		}
+	}
+	tick = 130 * time.Second
+	m.CheckStorage(s)
+	testRequireActiveAlert(t, m, id)
+	if m.ShadowDivergences() != 0 {
+		t.Fatal("intent interruption diverged from shadow")
 	}
 }
