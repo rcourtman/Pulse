@@ -1781,6 +1781,9 @@ func TestMonitorReportedAgentHandoverUsesActualMetricOwner(t *testing.T) {
 	cfg.Enabled = true
 	cfg.ActivationState = alerts.ActivationPending
 	cfg.TimeThresholds = map[string]int{}
+	// Pin zero delay deliberately; config normalization restores factory type
+	// delays, and CPU (unlike critical memory) does not bypass that delay.
+	cfg.MetricTimeThresholds = map[string]map[string]int{"all": {"cpu": 0, "memory": 0}}
 	cfg.SuppressionWindow = 0
 	cfg.NodeDefaults.CPU = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
 	cfg.NodeDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 85, Clear: 80}
