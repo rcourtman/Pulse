@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	alertconfig "github.com/rcourtman/pulse-go-rewrite/internal/alerts/config"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
@@ -262,6 +263,15 @@ func shouldPreserveAlertOutsideNodeCleanup(alertID string, alert *Alert) bool {
 		return true
 	}
 	if alert.CanonicalKind == string(alertspecs.AlertSpecKindProviderIncident) {
+		return true
+	}
+	// Kubernetes, TrueNAS and vSphere metric alerts carry a display label such
+	// as "TrueNAS Disk" or "Kubernetes Pod" in resourceType, which the platform
+	// words below never matched, and a cluster or host in Node rather than a
+	// Proxmox node. Every Proxmox poll used to delete them silently, and the
+	// next evaluation raised them again as new alerts.
+	if metadataStringValue(alert.Metadata, alertPlatformTypeKey) != "" ||
+		isUnifiedModernPlatformAlertType(alertconfig.CanonicalAlertResourceType(alertMetadataResourceType(alert))) {
 		return true
 	}
 

@@ -1379,6 +1379,29 @@ describe('resourceStateAdapters unavailable memory contract', () => {
 });
 
 describe('incremental canonical resource snapshots', () => {
+  it('clears a node sensor setup verdict when the next snapshot sends false', () => {
+    // Facets merge field by field and an omitted field is read as a partial
+    // snapshot, so the registry sends every Proxmox node an explicit verdict.
+    const node = (sensorSetupOutdated?: boolean) =>
+      ({
+        id: 'agent-pve3',
+        type: 'agent',
+        name: 'pve3',
+        status: 'online',
+        sources: ['proxmox'],
+        proxmox: { nodeName: 'pve3', sensorSetupOutdated },
+      }) as unknown as Resource;
+
+    const [cleared] = mergeCanonicalResourceSnapshot([node(false)], [node(true)]);
+    expect(cleared?.proxmox?.sensorSetupOutdated).toBe(false);
+
+    const [omitted] = mergeCanonicalResourceSnapshot(
+      [{ ...node(), proxmox: { nodeName: 'pve3' } } as unknown as Resource],
+      [node(true)],
+    );
+    expect(omitted?.proxmox?.sensorSetupOutdated).toBe(true);
+  });
+
   it('preserves untouched row identity while refreshing changed resources', () => {
     const unchanged = {
       id: 'vm-unchanged',

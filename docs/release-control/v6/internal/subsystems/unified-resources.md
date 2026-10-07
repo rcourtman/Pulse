@@ -2987,6 +2987,36 @@ or force every provider type back into the active route payload. Docker,
 Kubernetes, TrueNAS, and VMware surface contract tests pin their route query
 maps, and the shared hook test pins facet normalization.
 
+### Proxmox node verdicts over disks arrive on the node
+
+The Proxmox page hydrates one query per workflow, and only its Storage tab
+loads `physical_disk` rows, so a node verdict that depends on the node's disks
+is derived in the registry and carried on the node, never rebuilt in the page
+from disk rows. `ProxmoxData.SensorSetupOutdated` (`proxmox.sensorSetupOutdated`
+on REST and websocket rows) is that verdict for the outdated sensor setup
+notice. `refreshProxmoxSensorSetupLocked`
+(`internal/unifiedresources/proxmox_sensor_setup.go`) runs after
+`buildChildCounts` on every ingest path and gives every Proxmox node an
+explicit true or false (other resources omit it), because browser facet merges
+read an omitted field as a partial snapshot and would keep an earlier true. It
+is true when the node's temperature payload is available and in the legacy
+`sensors -j` format (`models.Temperature.LegacySensorsFormat`) and a disk whose
+canonical parent is the node has no reading collected now
+(`diskinventory.TemperatureCollected`) and a type whose temperature a PVE node
+gets only through SMART: `sata`, `sas`, or the `hdd` and `ssd` form factors
+Proxmox's own inventory reports. Proxmox also types a non-rotational USB device
+`ssd`, so a USB device without SMART counts. A retained reading does not count
+as current, including one kept while a host agent reports the disk in standby;
+a reading a linked host agent collects now clears the disk. NVMe disks never
+set it, because kernel hwmon reports them even on a legacy setup, and a host
+agent the registry has not linked to the node contributes no disks. The
+verdict reflects the registry's node and disk state at each ingest.
+`TestProxmoxNodeSensorSetupOutdatedFromItsDisks` and
+`TestProxmoxNodeSensorSetupOutdatedFollowsWhereTheReadingArrives` in
+`internal/unifiedresources/registry_test.go` pin the rule, the linked-agent
+case, the explicit false on the wire and the presented JSON;
+`resourceStateAdapters.test.ts` pins that a false clears a merged true.
+
 ### Canonical REST facets preserve realtime workload evidence
 
 The frontend REST projection retains the complete source-authored Proxmox
@@ -3431,6 +3461,20 @@ It owns probe status, incidents, history, evidence, and the outgoing `checks`
 relationship. The matched resource carries every correlated check in the canonical
 `availabilityChecks` facet, keyed by saved target id, while `availability`
 remains an additive singular compatibility summary selected from that set.
+The summary is the worst check: a confirmed outage first, then any other
+observed failure, then an unchecked, ambiguous or unresolved check, then a
+passing one, ties going to the first saved target id. A confirmed outage is an
+enabled check whose observed failures reach its failure threshold, with an
+unavailable aggregate when one is reported and an outcome that is not
+indeterminate. That is the gate the availability poller applies before it
+raises `availability_unreachable`, so a probe agent that stops reporting keeps
+its old failure count but confirms nothing. `availabilityOutageConfirmed` in
+`internal/unifiedresources/availability.go` holds that rule for both the
+ranking and `EvaluateResourceHealth`, which reads the summary. A confirmed
+outage on any attached check therefore makes the resource's health critical
+even when a check that sorts earlier has failed below its threshold, with the
+`availability_failed` reason unless a critical alert explains the verdict
+first.
 Adding a second explicit or unambiguously correlated check must retain both
 source-owned endpoint rows, project both facets onto the same resource, and
 emit one `checks` relationship per target from the check to that resource.
@@ -6196,9 +6240,20 @@ pass and manual links both apply that function:
   the best of equal ones. A quiet source drops out of that decision.
 - Once every source is quiet, an `offline` verdict survives and any other
   verdict reads `warning`. The best of those wins.
-- A current facet sighting carries no verdict (the PBS host-agent association,
-  an availability check projected onto its target). It counts as `online` only
-  when no current source has a verdict, and reads `warning` once quiet.
+- A current facet sighting carries no verdict (the PBS host-agent association).
+  It counts as `online` only when no current source has a verdict, and reads
+  `warning` once quiet.
+- Availability checks projected onto a monitored resource rank like that facet,
+  but their shared sighting is not their verdict. `availabilityChecksProveOnline`
+  judges each check at the pass's `now` by its own evidence window
+  (`Evidence.ValidUntil`: two poll intervals for a single local check, the
+  probe report window for a remote or multi-location one). An enabled,
+  passing check with current evidence proves the resource answers and reads
+  `online` once one of the resource's own sources has gone quiet and none that
+  is current has a verdict. Every other check abstains, current or quiet: a
+  failing check proves only that one port or service does not answer, and a
+  pass whose evidence lapsed proves nothing now. A check's own row keeps the ordinary
+  rules.
 
 The stale pass used to read delivery as the verdict. A Proxmox node the cluster
 reported offline on a live poll came back `online` once its linked agent fell
@@ -6222,24 +6277,52 @@ online stays `online` when its linked agent stops reporting. A live agent keeps
 a node `online` when the Proxmox poll reports it offline, which the Proxmox
 nodes table reads with `connectionHealth: error` as a stale provider. When a
 guest's or container's only source goes quiet, a running one stays `warning`
-and a stopped one stays `offline`.
+and a stopped one stays `offline`. In each quiet case a projected availability
+check with current evidence lifts the resource to `online`, as described
+below.
 
 The sighting still reads `stale`, so health keeps its `telemetry_stale` reason
 and monitored-system reasons are unchanged. In-memory clones keep the verdicts,
 including a facet's missing one. A serialized copy carries none, so
 `IngestResources` gives each sighting of a copy that lost them all the stored
 resource status; a merged row's separate source verdicts do not survive that
-round trip. A manual link that joins two resources reported by one source keeps
+round trip, and a copy whose status a passing check supplied gives that status
+to every source. A manual link that joins two resources reported by one source keeps
 the fresher sighting. `registry_merge_policy_test.go` pins the node,
 poller-expired, guest, round-trip, copy, agent, Docker, Kubernetes,
 mixed-source and manual-link cases, and the aggregation table.
 
-Availability checks still count by delivery. With every source that has a
-verdict quiet, a current check keeps its target `online` even when the check
-fails, as it did before. Several checks share one sighting whose freshness
-comes from whichever check was projected last, so an availability verdict
-needs each check's own freshness, including local checks that miss their
-cadence, and has to survive manual links. That is left to a follow-up.
+Availability checks used to count by delivery too. With every source that
+has a verdict quiet, a current failing check kept a node `preserveOrExpireNodes`
+expired `online`, and a quiet one lifted it to `warning`. Several checks share
+one sighting whose freshness comes from whichever check was projected last, so
+a failing check that just ran could also vouch for another check's old pass.
+Each check is now judged by its own evidence. A failing probe no longer holds
+an expired node `online`, and it never makes a guest read stopped to the
+consumers that count `offline` as stopped (the workloads summary, the Proxmox
+page counts). The failure stays on the check's own row, which raises an
+outage incident once the check confirms one (past its failure threshold, from
+every location). A check observed from several locations relies on the poller
+ageing out a location that stopped running and lasting an available check's
+evidence only as long as its newest reachable path (monitoring.md), so one
+location's fresh failure cannot lend its freshness to another location's old
+pass.
+
+The verdict is read from the checks on the resource when status is
+aggregated. Projecting, re-running or retargeting a check also re-applies the
+stale pass's rule to every target it touches whose status that pass owns,
+because a check is not a delivery from the target's own sources and the
+resources API replays checks after its stale pass. The pass owns a status only
+through the target's own sightings: the checks' sighting going quiet neither
+hands it the target nor, once removed, takes the target away, so a target
+whose own sources have not gone quiet keeps the status they gave it. A check
+retargeted away therefore takes its verdict with it at once. A
+manual link keeps only the primary's own checks, so the merged resource is
+judged by the checks it shows and never by the linked resource's fresher
+sighting. `registry_test.go` pins the expired-node and quiet-guest cases, both
+projection orders, re-judging on check changes, ownership through the
+target's own sightings and the manual link; the aggregation table pins the
+check rules.
 
 ### Canonical object drawer hierarchy
 
@@ -6446,9 +6529,52 @@ conflict): the agent's row may be the slot's previous occupant, retained by a
 silent agent, and the join would hand the replacement that disk's serial,
 readings and canonical resource. A hardware identity match still joins on its
 own, and without a WWN on either side the path fallback stands. The seeded
-source mapping reused after a restart is a separate path this does not cover.
-`TestRegistrySASPathJoinRefusesContradictingWWN` covers the stale row and both
-same-disk shapes; monitoring's SMART merge applies the matching guard first.
+source mapping a rehydrated registry reuses applies the same refusal (next
+section). `TestRegistrySASPathJoinRefusesContradictingWWN` covers the stale
+row and both same-disk shapes; monitoring's SMART merge applies the matching
+guard first.
+
+### Seeded slot mapping refuses a replaced disk
+
+`ingestRecord` honours a source key's existing mapping, such as one
+`IngestResources` seeds from persisted unified resources, before any
+identity matching. Proxmox keys a disk by its slot
+(`ProxmoxPhysicalDiskSourceID`), so a disk swapped into the slot arrived
+under the previous disk's key, and `mergeInto` kept that disk's canonical ID
+and, where an agent report had been merged in, its serial, WWN, temperature
+and failed health. A Proxmox disk observation now refuses the mapping when
+the two carry hardware identities naming different disks
+(`proxmoxDiskSlotHoldsAnotherDisk`: `HardwareIdentityConflict` after
+`HardwareIdentityMatch`). Only fields reported on both sides count, so a
+missing serial or WWN, including Proxmox's literal `unknown`, is no evidence.
+Differing serials are no evidence when either side is SAS, because Proxmox
+may report the SAS address there (#1595), or when the mapped disk was merged
+with an agent report, whose serial `mergeInto` may have kept (collection
+status does not reliably say which serial it holds), unless Proxmox read the
+drive's own serial too, by the rule monitoring's
+`hostAgentSMARTSerialComparable` applies: NVMe on both sides, or an agent
+SATA disk under Proxmox vendor `ATA` that Proxmox does not type `usb`, not a
+SCSI designator or a USB bridge's serial. A refused key falls through to the linked-disk join,
+`findMatch` and `chooseNewID` like an unmapped one, except that none of them
+may merge it into the refused disk: an ID that lands on it is replaced with
+the key's source-specific ID. Agreement still wins, as it does in identity
+matching, so drives that share a serial they do not own, such as a USB
+bridge's, read as one disk: a second swap in the same enclosure joins the
+first replacement, which reported the same bridge serial. That belongs to
+identity matching, not this guard. The refused disk keeps its Proxmox
+facet and is not updated, so until the registry is rebuilt both disks answer
+to the slot's PVE alert reference, and canonical reference resolution treats
+that reference as ambiguous rather than handing it to either. A later
+rehydration may seed the slot key to the old disk again, and the refusal
+repeats. No current caller ingests Proxmox disk records over a seeded
+mapping: the monitor rebuilds a fresh registry each poll, and the resource
+API, host-continuity and Patrol registries seeded from unified resources do
+not replay Proxmox disk records. This closes the registry contract, not a
+reported symptom. `TestRegistrySeededSlotMappingRefusesReplacedDisk` covers
+SATA (with and without a new WWN), SAS, USB-enclosure and Proxmox-only
+replacements, plus eight same-disk controls (including a SCSI designator
+from an agent without collection status and a USB bridge serial under
+Proxmox vendor `ATA`), each through two rehydrations.
 
 ### Drawer tab selection survives a transient snapshot change (#1723)
 

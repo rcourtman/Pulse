@@ -375,6 +375,44 @@ describe('ProxmoxPageSurface contract', () => {
     expect(screen.queryByTestId('platform-outdated-agent-notice')).not.toBeInTheDocument();
   });
 
+  it('shows the outdated sensor setup notice on Overview without hydrating disks', () => {
+    const node = makeResource({
+      id: 'agent:pve3',
+      name: 'pve3',
+      displayName: 'pve3',
+      type: 'agent',
+      proxmox: {
+        nodeName: 'pve3',
+        temperatureDetails: { available: true, legacySensorsFormat: true },
+        sensorSetupOutdated: true,
+      },
+    });
+    // Like production, the Overview query returns nodes and guests only: the
+    // verdict has to arrive on the node, because no physical_disk rows do.
+    mockUseUnifiedResources.mockImplementation((options: { cacheKey?: string }) => ({
+      resources: () => (options.cacheKey === 'proxmox-overview' ? [node] : []),
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    }));
+
+    renderSurface();
+
+    const overviewOptions = mockUseUnifiedResources.mock.calls
+      .map(([options]) => options as { cacheKey?: string; query?: string })
+      .find((options) => options.cacheKey === 'proxmox-overview');
+    expect(overviewOptions?.query).toBeDefined();
+    expect(overviewOptions?.query).not.toContain('physical_disk');
+    expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-active', 'overview');
+    expect(screen.getByTestId('platform-outdated-sensor-setup-notice')).toHaveTextContent(
+      'pve3 is using an older temperature monitoring setup that cannot read SATA/SAS disk temperatures.',
+    );
+    expect(screen.getByRole('link', { name: 'Open Infrastructure settings' })).toHaveAttribute(
+      'href',
+      '/settings/infrastructure',
+    );
+  });
+
   it('folds estate topology into the existing nodes table header contract', () => {
     setResources([
       makeResource({
