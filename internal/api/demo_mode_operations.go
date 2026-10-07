@@ -1,6 +1,9 @@
 package api
 
-import "net/http"
+import (
+	"net/http"
+	"strings"
+)
 
 var publicDemoAdminOperationsPolicies = []publicDemoCommercialRoutePolicy{
 	{
@@ -43,6 +46,17 @@ var publicDemoAdminOperationsPolicies = []publicDemoCommercialRoutePolicy{
 		exposure: publicDemoCommercialExposureHidden,
 		matches:  readDemoCommercialPath("/api/discover"),
 	},
+	// Go runtime profiling. These routes are gated only on admin auth, which
+	// a demo login that is the configured admin passes, so every visitor could
+	// otherwise pull goroutine and heap dumps or the command line, or start
+	// CPU profiles and traces that cost the whole process. Hidden for every
+	// method, so a write probe such as the POST symbol lookup gets the same
+	// 404 instead of revealing the route.
+	{
+		route:    "/debug/pprof",
+		exposure: publicDemoCommercialExposureHidden,
+		matches:  familyDemoCommercialPath("/debug/pprof"),
+	},
 }
 
 func publicDemoAdminOperationsPolicyForRequest(
@@ -54,4 +68,16 @@ func publicDemoAdminOperationsPolicyForRequest(
 		}
 	}
 	return "", false
+}
+
+// familyDemoCommercialPath matches root and every path below it, for any
+// method.
+func familyDemoCommercialPath(root string) func(*http.Request) bool {
+	return func(r *http.Request) bool {
+		if r == nil || r.URL == nil {
+			return false
+		}
+		path := normalizeDemoCommercialPath(r.URL.Path)
+		return path == root || strings.HasPrefix(path, root+"/")
+	}
 }

@@ -7632,6 +7632,23 @@ read-only demo account. That same hidden read-side boundary includes `GET` and
 `HEAD` reads for `/api/admin/users` and manual discovery at `/api/discover`;
 public demo mode may block writes generically, but it must not reveal that
 admin-user inventory or manual-discovery read routes exist.
+The same policy hides the Go runtime profiling family for every method: on a
+`DEMO_MODE` instance the demo guard answers `/debug/pprof`, `/debug/pprof/`
+and every path below it with `404`, ahead of route authentication.
+`registerDebugRoutes` gates those handlers on `RequireAdmin` plus a
+`settings:read` scope that session logins skip, so a demo that signs visitors
+in as the configured admin would otherwise hand every visitor goroutine and
+heap dumps, the process command line, and CPU profiles, execution traces and
+forced garbage collection that cost the whole process. `PULSE_PPROF_DISABLED`
+still removes the routes on any instance.
+`TestPublicDemoAdminOperationsPolicyHidesEveryDebugRoute` fails when a literal
+route the parsed router files register under `/debug/`, with or without a
+method prefix, escapes that policy for any common method.
+`TestContract_DemoModeHidesPprofFromDemoAdminSession` in
+`internal/api/contract_test.go` signs in as that admin through the full
+router, proves the same session still reads `/debug/pprof/cmdline` below the
+demo guard, and gets `404` through it for eight pprof paths with `GET`,
+`HEAD`, `OPTIONS` and `POST`.
 That generic write block keys on the request method alone. The demo
 middleware admits `GET`, `HEAD` and `OPTIONS` plus the login, logout, AI
 execute and OIDC login/callback allowlist; HTTP/1.1 websocket handshakes for
