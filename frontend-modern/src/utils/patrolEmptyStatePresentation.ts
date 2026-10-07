@@ -5,7 +5,8 @@ import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation'
 import type { SemanticTone } from '@/utils/semanticTonePresentation';
 import type { IntelligenceHealthScore } from '@/types/aiIntelligence';
 import { getPatrolRunCoverageSummary, isPatrolRunHealthy } from '@/utils/patrolRunPresentation';
-import { getPatrolVerificationPresentation } from '@/utils/patrolSummaryPresentation';
+import type { PatrolRunCoverage } from '@/utils/patrolSummaryPresentation';
+import { getPatrolRunCoverage } from '@/utils/patrolSummaryPresentation';
 
 export function getInvestigationMessagesState(loading: boolean, hasMessages: boolean) {
   if (loading) {
@@ -86,53 +87,41 @@ function getHealthDegradedTone(overallHealth: IntelligenceHealthScore): Semantic
   return overallHealth.grade === 'D' || overallHealth.grade === 'F' ? 'error' : 'warning';
 }
 
+function hasCoverageFactor(overallHealth: IntelligenceHealthScore | undefined): boolean {
+  return Boolean(overallHealth?.factors.some((factor) => factor.category === 'coverage'));
+}
+
+// Run history decides coverage before the health summary does. The summary
+// keeps its `Recent Patrol errors` coverage factor until three clean full runs
+// lead its window or the errored runs leave it (summarizeRecentPatrolCoverage
+// in internal/ai/intelligence.go), so a clean full run that supersedes those
+// errors must outrank that factor, or the queue keeps asking for a check after
+// Patrol has already checked everything.
 function hasIncompleteCoverageEvidence(
   overallHealth: IntelligenceHealthScore | undefined,
-  runs: PatrolRunRecord[] | undefined,
+  runCoverage: PatrolRunCoverage,
 ): boolean {
-  if (overallHealth?.factors.some((factor) => factor.category === 'coverage')) {
-    return true;
+  if (runCoverage !== 'unproven') {
+    return runCoverage === 'incomplete';
   }
-
-  const verification = getPatrolVerificationPresentation({ runs });
-  return verification.tone === 'warning';
+  return hasCoverageFactor(overallHealth);
 }
 
-function shouldSuppressHealthyEmptyState(
-  overallHealth: IntelligenceHealthScore | undefined,
-  runs: PatrolRunRecord[] | undefined,
+// Once run history proves coverage, a grade that only the coverage factor
+// lowered is not degraded health.
+function hasDegradedHealth(
+  overallHealth: IntelligenceHealthScore,
+  runCoverage: PatrolRunCoverage,
 ): boolean {
-  if (hasIncompleteCoverageEvidence(overallHealth, runs)) {
-    return true;
-  }
-
-  if (!overallHealth) {
+  if (overallHealth.grade === 'A') {
     return false;
   }
-
-  return overallHealth.grade !== 'A';
-}
-
-function getDegradedPatrolEmptyStateBody(
-  overallHealth: IntelligenceHealthScore | undefined,
-  runs: PatrolRunRecord[] | undefined,
-): string {
-  if (hasIncompleteCoverageEvidence(overallHealth, runs)) {
-    return DEGRADED_COVERAGE_EMPTY_STATE_BODY;
+  if (runCoverage !== 'complete') {
+    return true;
   }
-
-  return DEGRADED_HEALTH_EMPTY_STATE_BODY;
-}
-
-function getDegradedPatrolEmptyStateTitle(
-  overallHealth: IntelligenceHealthScore | undefined,
-  runs: PatrolRunRecord[] | undefined,
-): string {
-  if (hasIncompleteCoverageEvidence(overallHealth, runs)) {
-    return PATROL_QUEUE_RECHECK_TITLE;
-  }
-
-  return PATROL_QUEUE_REVIEW_TITLE;
+  return overallHealth.factors.some(
+    (factor) => factor.category !== 'coverage' && factor.impact < 0,
+  );
 }
 
 function hasHistoricalRegressions(count: number | undefined): boolean {
@@ -189,6 +178,7 @@ export function getPatrolFindingsEmptyState(args: {
   coverageStale?: boolean;
   runs?: PatrolRunRecord[];
   runSnapshot?: PatrolRunSnapshotEmptyStateArgs;
+  nowMs?: number;
 }): PatrolFindingsEmptyStateCopy {
   if (
     args.filter === 'all' &&
@@ -239,11 +229,20 @@ export function getPatrolFindingsEmptyState(args: {
     };
   }
 
-  if (shouldSuppressHealthyEmptyState(args.overallHealth, args.runs)) {
+  const runCoverage = getPatrolRunCoverage(args.runs, args.nowMs);
+  if (hasIncompleteCoverageEvidence(args.overallHealth, runCoverage)) {
     return {
-      title: getDegradedPatrolEmptyStateTitle(args.overallHealth, args.runs),
-      body: getDegradedPatrolEmptyStateBody(args.overallHealth, args.runs),
+      title: PATROL_QUEUE_RECHECK_TITLE,
+      body: DEGRADED_COVERAGE_EMPTY_STATE_BODY,
       tone: args.overallHealth ? getHealthDegradedTone(args.overallHealth) : 'warning',
+    };
+  }
+
+  if (args.overallHealth && hasDegradedHealth(args.overallHealth, runCoverage)) {
+    return {
+      title: PATROL_QUEUE_REVIEW_TITLE,
+      body: DEGRADED_HEALTH_EMPTY_STATE_BODY,
+      tone: getHealthDegradedTone(args.overallHealth),
     };
   }
 

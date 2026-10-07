@@ -843,20 +843,27 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    tolerance and otherwise allows two configured Patrol intervals before
    warning, so deliberately slower schedules are not mislabeled while an old
    default-schedule result cannot remain green indefinitely.
-   No assessment readout renders today, so nothing reconciles a coverage
-   caveat against run history: once runtime states (running, blocked,
-   disabled, unavailable) and stale coverage have taken precedence, the
-   current-findings empty state withholds the all-clear (`Check needed`)
-   whenever the overall-health summary carries any
-   `coverage` factor, including the backend `Recent Patrol errors` factor that
-   can outlast a successful full Patrol run until three consecutive clean full
-   runs lead the coverage window or the erroring runs leave it
-   (`summarizeRecentPatrolCoverage` in `internal/ai/intelligence.go`), and
-   whenever the latest completed full run ended with errors or only targeted or
-   follow-up runs completed. If an assessment readout returns, its coverage
-   caveat must reconcile against current run-history proof: a stale coverage
-   factor or prediction must not claim recent coverage is incomplete when the
-   latest completed full Patrol run successfully checked real resources.
+   Coverage caveats reconcile against run history before the health summary.
+   Once runtime states (running, blocked, disabled, unavailable) and stale
+   coverage have taken precedence, the current-findings empty state reads the
+   latest completed full Patrol run first (`getPatrolRunCoverage`). When that
+   run or any run after it ended with errors, or only targeted or follow-up
+   runs have completed, the empty state withholds the all-clear
+   (`Check needed`). When it ended
+   without errors, checked real resources, finished within the last 24 hours,
+   and no run after it failed, a `coverage` factor in the overall-health
+   summary does not withhold the all-clear, and a grade lowered by nothing but
+   coverage factors does not read as `Patrol needs review`. The backend keeps
+   its `Recent Patrol errors` factor until three consecutive clean full runs
+   lead its 24-hour coverage window or the erroring runs leave it
+   (`summarizeRecentPatrolCoverage` in `internal/ai/intelligence.go`), so
+   without that reconciliation a clean check would keep reading `Check needed`
+   until up to two more clean full runs followed it, about 12 hours at the
+   default 6-hour interval. The summary's coverage factor still decides
+   whenever run history cannot vouch for current coverage: no completed run,
+   or a clean full run that checked no resources or finished more than 24
+   hours ago. An assessment readout that returns must apply the same
+   reconciliation.
    Recency coverage copy comes from the shared presentation helper
    (`getPatrolRecencyPresentation`): `checked N resources` for the latest
    completed run with a positive count, whatever its type or error state. It
@@ -1709,8 +1716,8 @@ have had no production caller since the Patrol summary card was deleted
 (several lost theirs months earlier) and are gone;
 `frontend-modern/src/utils/patrolSummaryPresentation.ts` now owns only the
 header recency line (`getPatrolRecencyPresentation`) and the run-history
-verification posture the current-findings empty state reads
-(`getPatrolVerificationPresentation`). If a summary card, metric strip, or
+coverage verdict the current-findings empty state reads
+(`getPatrolRunCoverage`). If a summary card, metric strip, or
 assessment readout returns, it must derive its state from one shared
 Patrol-owned presenter rather than page-local logic, and keep these rules.
 A secondary metric strip must not render `No issues found` while the governed
@@ -1860,12 +1867,15 @@ split also applies to findings counts: the primary assessment card may keep
 health as supporting context, but active
 findings, warning counts, and critical counts belong to the supporting metric
 strip rather than being repeated as duplicate badges inside the primary card.
-Patrol renders no check summary today. `getPatrolVerificationPresentation`
-still classifies recent run history (a clean full check, a full check that
-ended with errors, only targeted or follow-up checks, or no completed check)
-and computes a same-day activity-mix label, but its only reader is the
-current-findings empty state, which uses just its warning tone to withhold the
-all-clear; the header recency line carries the visible coverage phrase. If a
+Patrol renders no check summary today. `getPatrolRunCoverage` reduces run
+history to the coverage verdict the current-findings empty state reads:
+complete (the latest completed full check ended cleanly, checked resources,
+finished within the last 24 hours, and no check after it failed), incomplete
+(it or a later check ended with errors, or only targeted or follow-up checks
+completed), or unproven. Nothing computes a same-day activity mix:
+`getPatrolActivityBreakdown` and its formatter went with the verification
+presenter that was their only caller. The header recency line carries the
+visible coverage phrase. If a
 check summary returns with that summary surface, it must explain what Patrol
 actually checked without turning coverage mechanics into the default product
 language: whether Patrol recently completed a clean broad check, only ran

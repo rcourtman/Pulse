@@ -3250,8 +3250,8 @@ a new API state machine, queue contract, or verification-accounting field.
 	   without adding a new API payload or page-level proof surface; those process details
 	   remain available in expanded context, selected run records, Assistant
 	   handoff context, or API diagnostics when they are actually needed
-	   and the Patrol verification posture derived from run history (`getPatrolVerificationPresentation`), which today only withholds the current-findings empty state's all-clear when the latest completed full patrol ended with errors or only targeted or follow-up runs completed; the page shows no aggregate verification-posture summary (expanded run-history entries still show each run's own scope and coverage), and any surface that adds one must take it from that run-history posture rather than page-local heuristics
-   and the same-day activity-mix label that posture computes from the same governed run history, which no surface renders today; one that does must explain a recent full patrol followed by alert-triggered or anomaly-triggered scoped work from that label instead of reconstructing the mix from page-local timing heuristics
+	   and the Patrol run-history coverage verdict (`getPatrolRunCoverage`), which the current-findings empty state reads before any overall-health `coverage` factor: a latest completed full patrol that ended with errors or was followed by a failed run, or only targeted or follow-up runs, withholds the all-clear, and a clean full patrol with non-zero `resources_checked` that completed within the last 24 hours, with no failed run after it, keeps a coverage factor from withholding it; the page shows no aggregate verification-posture summary (expanded run-history entries still show each run's own scope and coverage), and any surface that adds one must take it from that run-history verdict rather than page-local heuristics
+   and any same-day activity-mix explanation, which nothing computes or renders today; a surface that adds one must explain a recent full patrol followed by alert-triggered or anomaly-triggered scoped work from the same governed run history instead of reconstructing the mix from page-local timing heuristics
    and the Patrol status recency split, so `last_patrol_at` remains reserved for completed full Patrol sweeps while scoped runs and verification checks advance `last_activity_at` without claiming a fresh full-estate verification pass
    and the monitor-context Patrol coverage posture boundary, so Proxmox
    overview and other monitor-first launch pages must not consume API-owned
@@ -4167,13 +4167,18 @@ the authoritative analysis outcome.
    new API surface. The label stays optional when coverage is zero and reads
    `checked N resources` for any completed run, whatever its type or outcome;
    it never says verified.
-   The Patrol current-findings empty state does not reconcile AI summary
-   coverage factors against run history: outside runtime and stale-coverage
-   states, any `coverage` factor in `overall_health` withholds the all-clear,
-   even after a successful full run
-   with non-zero `resources_checked`, and run history adds its own caveat when
-   the latest completed full run ended with errors or only targeted or
-   follow-up runs completed.
+   The Patrol current-findings empty state reconciles AI summary coverage
+   factors against run history: outside runtime and stale-coverage states,
+   the latest completed full run decides first. One that ended with errors
+   or was followed by a failed run, or only targeted or follow-up runs,
+   withholds the all-clear. A clean one
+   with non-zero `resources_checked` that completed within the last 24 hours,
+   with no failed run after it, lets the all-clear stand even while
+   `overall_health` still carries a `coverage` factor such as `Recent Patrol
+   errors` (which the backend keeps until three consecutive clean full runs
+   lead its window or the errored runs leave it), and a grade lowered only by
+   coverage factors does not read as degraded health. In every other case a
+   `coverage` factor still withholds the all-clear.
    and the Assistant finding-context request contract, so `/api/ai/chat`
    payloads carrying `finding_id` may hydrate a structured investigation
    summary from the unified finding, but raw action commands must stay

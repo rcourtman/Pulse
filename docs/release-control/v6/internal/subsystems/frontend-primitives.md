@@ -6810,9 +6810,13 @@ run history it uses `Last check` for the `last_patrol_at` full-sweep transport
 fact and `Last activity` when `last_activity_at` is newer, and it never
 collapses them into a generic `Last run` label. Its coverage phrase reads
 `checked N resources` and never says `verified`.
-If a summary shell returns, it should not present `Recent coverage is
-incomplete` when run history shows a successful full patrol with non-zero
-resource coverage.
+The current-findings empty state already applies that run-history rule
+through `getPatrolRunCoverage`: a successful latest full patrol with non-zero
+resource coverage, completed within the last 24 hours with no failed run
+after it, keeps an overall-health `coverage` factor from turning the empty
+queue into `Check needed` or `Patrol needs review`. If a summary shell
+returns, it must not present `Recent coverage is incomplete` in that state
+either.
 That same Patrol shell ownership includes refresh affordance state:
 `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` must keep
 operator refresh controls generation-aware, timeout-bounded, and separate from

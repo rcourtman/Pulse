@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import type { PatrolRunRecord, PatrolTriggerStatus } from '@/api/patrol';
 import {
-  formatPatrolActivityBreakdown,
-  getPatrolActivityBreakdown,
   getPatrolLatestRunPresentation,
   getPatrolRunCoverageSummary,
   getPatrolRunOperatorRecordPresentation,
@@ -11,9 +9,6 @@ import {
   getPatrolRunResourcesHeading,
   getPatrolTriggerStatusSummary,
 } from '@/utils/patrolRunPresentation';
-import type { PatrolActivityBreakdown } from '@/utils/patrolRunPresentation';
-
-const REFERENCE_DATE = new Date('2026-03-12T12:00:00Z');
 
 const makeRun = (overrides: Partial<PatrolRunRecord> = {}): PatrolRunRecord => ({
   id: 'run-1',
@@ -404,85 +399,6 @@ describe('getPatrolRunRecordSummaryPresentation (branch coverage)', () => {
   });
 });
 
-describe('formatPatrolActivityBreakdown (branch coverage)', () => {
-  it('formats alert-cleared segment', () => {
-    expect(
-      formatPatrolActivityBreakdown({
-        totalRuns: 1,
-        fullPatrols: 0,
-        verificationChecks: 0,
-        alertTriggeredRuns: 0,
-        anomalyTriggeredRuns: 0,
-        alertClearedRuns: 1,
-        otherScopedRuns: 0,
-        newFindings: 0,
-      } satisfies PatrolActivityBreakdown),
-    ).toBe('1 alert-cleared check');
-  });
-
-  it('formats verification segment', () => {
-    expect(
-      formatPatrolActivityBreakdown({
-        totalRuns: 1,
-        fullPatrols: 0,
-        verificationChecks: 1,
-        alertTriggeredRuns: 0,
-        anomalyTriggeredRuns: 0,
-        alertClearedRuns: 0,
-        otherScopedRuns: 0,
-        newFindings: 0,
-      } satisfies PatrolActivityBreakdown),
-    ).toBe('1 follow-up check');
-  });
-
-  it('formats other-scoped segment', () => {
-    expect(
-      formatPatrolActivityBreakdown({
-        totalRuns: 1,
-        fullPatrols: 0,
-        verificationChecks: 0,
-        alertTriggeredRuns: 0,
-        anomalyTriggeredRuns: 0,
-        alertClearedRuns: 0,
-        otherScopedRuns: 1,
-        newFindings: 0,
-      } satisfies PatrolActivityBreakdown),
-    ).toBe('1 targeted check');
-  });
-
-  it('returns empty string when all segments are zero', () => {
-    expect(
-      formatPatrolActivityBreakdown({
-        totalRuns: 0,
-        fullPatrols: 0,
-        verificationChecks: 0,
-        alertTriggeredRuns: 0,
-        anomalyTriggeredRuns: 0,
-        alertClearedRuns: 0,
-        otherScopedRuns: 0,
-        newFindings: 0,
-      } satisfies PatrolActivityBreakdown),
-    ).toBe('');
-  });
-
-  it('renders all segments in canonical order with plurals', () => {
-    expect(
-      formatPatrolActivityBreakdown({
-        totalRuns: 8,
-        fullPatrols: 2,
-        verificationChecks: 2,
-        alertTriggeredRuns: 2,
-        anomalyTriggeredRuns: 1,
-        alertClearedRuns: 1,
-        otherScopedRuns: 1,
-        newFindings: 0,
-      } satisfies PatrolActivityBreakdown),
-    ).toBe(
-      '2 full checks, 2 alert-triggered checks, 1 anomaly-triggered check, 1 alert-cleared check, 2 follow-up checks, 1 targeted check',
-    );
-  });
-});
-
 describe('getPatrolTriggerStatusSummary (branch coverage)', () => {
   it('returns undefined when status is undefined', () => {
     expect(getPatrolTriggerStatusSummary(undefined)).toBeUndefined();
@@ -549,135 +465,6 @@ describe('getPatrolTriggerStatusSummary (branch coverage)', () => {
     ).toBe(
       'A Patrol run is already in progress. New automatic and manual runs are paused until it finishes.',
     );
-  });
-});
-
-describe('getPatrolActivityBreakdown + isSameLocalDay (branch coverage)', () => {
-  it('counts alert-cleared triggered scoped runs', () => {
-    const result = getPatrolActivityBreakdown(
-      [
-        makeRun({
-          id: 'cleared-1',
-          type: 'scoped',
-          trigger_reason: 'alert_cleared',
-        }),
-      ],
-      REFERENCE_DATE,
-    );
-    expect(result.alertClearedRuns).toBe(1);
-    expect(result.totalRuns).toBe(1);
-  });
-
-  it('counts verification-type runs as follow-up checks', () => {
-    const result = getPatrolActivityBreakdown(
-      [
-        makeRun({
-          id: 'verif-1',
-          type: 'verification',
-          trigger_reason: 'alert_fired',
-        }),
-      ],
-      REFERENCE_DATE,
-    );
-    expect(result.verificationChecks).toBe(1);
-    expect(result.alertTriggeredRuns).toBe(0);
-  });
-
-  it('counts unknown trigger reasons as other scoped runs', () => {
-    const result = getPatrolActivityBreakdown(
-      [
-        makeRun({
-          id: 'manual-1',
-          type: 'scoped',
-          trigger_reason: 'manual',
-        }),
-      ],
-      REFERENCE_DATE,
-    );
-    expect(result.otherScopedRuns).toBe(1);
-  });
-
-  it('counts scoped runs with no trigger reason as other scoped runs', () => {
-    const result = getPatrolActivityBreakdown(
-      [
-        makeRun({
-          id: 'no-trigger',
-          type: 'scoped',
-          trigger_reason: undefined,
-        }),
-      ],
-      REFERENCE_DATE,
-    );
-    expect(result.otherScopedRuns).toBe(1);
-  });
-
-  it('skips runs on a different local day', () => {
-    const result = getPatrolActivityBreakdown(
-      [
-        makeRun({
-          id: 'yesterday',
-          started_at: '2026-03-11T10:00:00Z',
-          completed_at: '2026-03-11T10:01:00Z',
-          type: 'patrol',
-        }),
-      ],
-      REFERENCE_DATE,
-    );
-    expect(result.totalRuns).toBe(0);
-    expect(result.fullPatrols).toBe(0);
-  });
-
-  it('skips runs with an invalid started_at timestamp (isSameLocalDay invalid-date branch)', () => {
-    const result = getPatrolActivityBreakdown(
-      [
-        makeRun({
-          id: 'bad-date',
-          started_at: 'not-a-valid-date',
-        }),
-      ],
-      REFERENCE_DATE,
-    );
-    expect(result.totalRuns).toBe(0);
-  });
-
-  it('skips runs with an empty started_at string (isSameLocalDay empty-timestamp branch)', () => {
-    const result = getPatrolActivityBreakdown(
-      [
-        makeRun({
-          id: 'empty-date',
-          started_at: '',
-        } as unknown as PatrolRunRecord),
-      ],
-      REFERENCE_DATE,
-    );
-    expect(result.totalRuns).toBe(0);
-  });
-
-  it('clamps negative new_findings to zero', () => {
-    const result = getPatrolActivityBreakdown(
-      [
-        makeRun({
-          id: 'neg-findings',
-          type: 'patrol',
-          new_findings: -5,
-        }),
-      ],
-      REFERENCE_DATE,
-    );
-    expect(result.totalRuns).toBe(1);
-    expect(result.newFindings).toBe(0);
-  });
-
-  it('accumulates new findings across multiple same-day runs', () => {
-    const result = getPatrolActivityBreakdown(
-      [
-        makeRun({ id: 'a', type: 'patrol', new_findings: 2 }),
-        makeRun({ id: 'b', type: 'patrol', new_findings: 3 }),
-      ],
-      REFERENCE_DATE,
-    );
-    expect(result.newFindings).toBe(5);
-    expect(result.fullPatrols).toBe(2);
   });
 });
 

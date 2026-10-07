@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "421d1e5423e5b83b7923ea8c3b133ad520cd5f60",
+  "verified_at": "2026-10-07T16:15:25Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/patrolEmptyStatePresentation.ts",
+    "frontend-modern/src/utils/patrolRunPresentation.ts",
+    "frontend-modern/src/utils/patrolSummaryPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/patrolEmptyStatePresentation.ts": "8e898df44f5a49293290bcc853096bbd8822c3a686193390df3e0e46b06a26ef",
+    "frontend-modern/src/utils/patrolRunPresentation.ts": "a3bce8de3270dfdc3f9a38b3b9d285c2d938f2a4f952f60174ba4689ce7a71c3",
+    "frontend-modern/src/utils/patrolSummaryPresentation.ts": "6c9dab2e7009cd3a05125f7bf131c45e0560f97d37953fc799cbf9349a7bf9f3"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol (Activity > Finding options and history > Open work)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production builds (vite build into internal/api/frontend-modern/dist, go build) of the parent tree (421d1e5423) and this tree, each on a private DEMO_MODE mock stack with a fresh data dir; the same Playwright script ran against both, with findings, run history and overall_health stubbed via page.route.",
+    "Open work empty state, this tree: grade A + 'Recent Patrol errors' coverage factor after a clean full run (1377 resources) with an older errored run -> 'No current issues / Checked 1377 resources.' (parent: 'Check needed'); same at grade C with impact -0.3 -> 'No current issues' (parent: 'Check needed'); coverage factor plus a prediction factor at grade C -> 'Patrol needs review' (parent: 'Check needed').",
+    "Caveat still surfaces in this tree and the parent: latest full run ended with errors, clean full run with 0 resources, only a targeted run, a failed targeted run after the clean full run (with the factor), and a 49-hour-old clean full run followed by a fresh targeted run under a 'Patrol coverage incomplete' factor -> 'Check needed / Run Patrol to check everything and refresh open work.'",
+    "Failed targeted run after the clean full run with no coverage factor: this tree 'Check needed', parent 'No current issues' (intended change).",
+    "Clean full run with no factors -> 'No current issues / Checked 1377 resources.' in both trees.",
+    "No horizontal overflow and no console errors in any of the 22 scenario x viewport cases per tree."
+  ],
+  "interactions": [
+    "Demo sign-in, navigate to /patrol, open the Activity tab, expand 'Finding options and history', read the Open work empty state; desktop mouse and phone touch contexts.",
+    "Check now from the header while the latest full run had errors and the factor was present (POST /api/ai/patrol/run stubbed, the new clean run then returned by run history, factor kept as the backend keeps it): this tree changed 'Check needed' to 'No current issues / Checked 1377 resources.' after acceptance reconciliation; the parent stayed 'Check needed'.",
+    "Screenshots of every empty state captured and inspected at both widths."
+  ]
+}
