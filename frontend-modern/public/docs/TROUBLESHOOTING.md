@@ -281,6 +281,9 @@ restore, not by overwriting today's history. Follow
 
 #### Agent fleet update or identity issue
 
+- If readings became mixed after adding another Proxmox installation, start
+  with the [cross-installation identity checks](#monitoring-is-mixed-between-proxmox-installations),
+  not an agent update or re-enrolment command.
 - Open an outdated-agent notice or
   `/settings/infrastructure?agentDoctor=1` to open **Agent Doctor** and
   copy the platform-specific command for each reported host. This is a manual
@@ -385,6 +388,47 @@ Coverage posture. Use the [backup health checks](PBS.md#backups-are-visible-but-
 to compare one affected row's explanation, Job, History and Access with the
 matching native PBS record. Do not run a new backup, restart or clear history
 just to diagnose the disagreement.
+
+#### Monitoring is mixed between Proxmox installations
+
+Pulse is intended to monitor [multiple Proxmox installations](CONFIGURATION.md#multiple-proxmox-installations).
+Separate installations can reuse native node names and VMIDs. A distinct
+Pulse connection label or display name is not a repair for wrong attribution.
+
+If adding a connection led to node errors on the wrong node, unavailable
+backup status for overlapping VMIDs, or lost agent-backed Docker monitoring,
+treat each as an unresolved symptom. One restored view does not establish
+that the others recovered. Use **existing observations only**; if you already
+repaired the setup, keep that working setup and the original sequence rather
+than undoing the repair or repeating the addition.
+
+| Affected reading | Safe comparison | What it does not prove |
+| --- | --- | --- |
+| Node errors | Compare the affected node and observation time with that installation's own Proxmox view. | A similar node name or a different Pulse label does not establish which installation owns the error. |
+| Guest backup status | Compare one affected guest with the matching native Proxmox/PBS record: owning installation, guest type/VMID, datastore, namespace and backup time. Follow the [PBS evidence checks](PBS.md#backups-are-visible-but-coverage-says-unprotected). | The same VMID or a visible backup from another installation does not establish protection for this guest. |
+| Agent-backed Docker monitoring | In **Settings → Infrastructure → Agent Doctor**, inspect the affected host's existing **Last seen** and **Identity evidence**, including **Connection** and **Hostname** where available. Compare with the known Docker host, not a similar guest name. | Recent agent contact or a Healthy badge does not prove that the correct host's containers are visible or correctly attributed. Missing evidence is unknown, not proof that the agent stopped. |
+
+While attribution is uncertain, use each installation's own Proxmox/PBS
+views for node errors and backup status, and the Docker host's existing runtime
+view for container status. Do not make backup, restore or workload changes
+from a potentially misattributed Pulse reading.
+
+For a report, give the running server/agent versions, the original sequence,
+which of the three symptoms remain, and one affected pair's expected versus
+displayed origin and observation times where available. Use **consistent
+placeholders** such as `site-A`, `site-B`, `node-X` and `guest-100` across every
+view; say explicitly when the native names or VMIDs are equal. Keep actual
+addresses, hostnames, connection IDs and machine identities private. Do not
+share a full Agent Doctor report, configuration, API response, HAR export,
+token or unredacted screenshot. Unavailable original evidence can be reported
+as unavailable; do not recreate the incident to obtain it.
+
+Do not rename production nodes, change VMIDs or machine IDs, delete/re-add
+connections, re-enrol agents, rotate tokens, restart services or clear History
+just to diagnose this disagreement. Do not run live diagnostics, guest-agent
+probes, a new backup or a restore as an identity test. An OK backup does not
+prove thaw; a frozen or unresponsive guest needs the separate
+[backup safety procedure](VM_DISK_MONITORING.md#backup-safety), not these display checks.
 
 #### Temperature data missing
 - Compare the affected host's active agent version, last report, sensor and

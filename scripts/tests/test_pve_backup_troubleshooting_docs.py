@@ -20,6 +20,42 @@ def backup_section():
 
 
 class PVEBackupTroubleshootingDocsTest(unittest.TestCase):
+    def test_multi_installation_help_is_mirrored_and_keeps_cosmetic_names_separate(self):
+        for name in ("CONFIGURATION.md", "TROUBLESHOOTING.md", "PBS.md"):
+            with self.subTest(guide=name):
+                self.assertEqual((ROOT / "docs" / name).read_bytes(),
+                                 (ROOT / "frontend-modern/public/docs" / name).read_bytes())
+        config = (ROOT / "docs/CONFIGURATION.md").read_text()
+        section = config.split("### Multiple Proxmox installations\n", 1)[1].split("\n### ", 1)[0]
+        text = " ".join(section.split())
+        self.assertIn("intended to monitor multiple Proxmox clusters and standalone nodes", text)
+        self.assertIn("matching name or VMID alone does not identify the same resource", text)
+        self.assertIn("repairs incorrect attribution", text)
+        self.assertIn("TROUBLESHOOTING.md#monitoring-is-mixed-between-proxmox-installations", text)
+        # Static evidence of existing multi-instance intent, not native recovery.
+        helpers = (ROOT / "internal/monitoring/monitor_helpers.go").read_text()
+        self.assertIn('fmt.Sprintf("%s:%s:%d", instanceName, node, vmid)', helpers)
+        collector = (ROOT / "internal/monitoring/monitor_backups.go").read_text()
+        self.assertIn("vm.Instance() == instanceName", collector)
+        self.assertIn("vm.Instance == instanceName", collector)
+
+    def test_cross_installation_comparison_uses_existing_visible_agent_evidence(self):
+        trouble = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
+        section = trouble.split("#### Monitoring is mixed between Proxmox installations\n", 1)[1].split("\n#### ", 1)[0]
+        text = " ".join(section.split())
+        self.assertNotIn("```", section)
+        for boundary in ("existing observations only", "One restored view does not establish",
+                         "Keep actual addresses, hostnames, connection IDs and machine identities private",
+                         "Do not share a full Agent Doctor report", "Do not rename production nodes",
+                         "re-enrol agents", "Do not run live diagnostics, guest-agent probes"):
+            self.assertIn(boundary, text)
+        model = (ROOT / "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts").read_text()
+        for field in ("Connection: ${connection.id}", "Hostname: ${connection.agentIdentity.hostname}"):
+            self.assertIn(field, model)
+        page = (ROOT / "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx").read_text()
+        for label in ("Identity evidence", "Last seen", "Healthy"):
+            self.assertIn(label, page)
+
     def test_shipped_help_matches_source(self):
         self.assertEqual((ROOT / "docs" / GUIDE).read_bytes(),
                          (ROOT / "frontend-modern/public/docs" / GUIDE).read_bytes())
