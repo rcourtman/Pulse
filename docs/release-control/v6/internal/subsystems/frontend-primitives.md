@@ -22,6 +22,27 @@
 
 All drawer History fallbacks must distinguish current observations from retained, unavailable or freshness-unknown guest readings, using original memory evidence and filesystem read reasons.
 
+### Drawer attention detail line and temperature alert floor — issue #2068
+
+`DrawerAttentionSection` items accept an optional `detail` (a muted second
+line) and `title` (hover text). `TemperatureGauge` accepts `alertSeverity`
+and `title`, and `getTemperatureTextClass` treats an open alert's severity as
+a floor: a reading that has dipped under an open alert's trigger keeps the
+alert's tone, while the reading still wins when it is worse.
+
+### Alert card and incident panel format held alerts through one helper — issue #2068
+
+`AlertOverviewAlertCard` and `AlertResourceIncidentsPanel` describe an open
+threshold alert through `features/alerts/metricAlertPresentation.ts`
+(summary, clear rule, `alertLevel` and `clearLevel`) instead of their own unit
+guesses or the breach message. `useAlertHistoryState` exposes its active-alert
+accessor so the incident panel matches its open occurrence to the live alert
+without a second store read, and the panel reads `useRelativeTimeNow` so a
+reading that stops updating turns stale on screen. From the `sm` breakpoint the
+card's left column (status icon and text) keeps a 16rem floor and the text
+breaks long words, so the action buttons wrap instead of squeezing the reading
+to its longest word beside them.
+
 ### Canonical drawer History preserves guest read provenance
 
 The shared resource drawer passes selected memory observation state/source/time
@@ -404,6 +425,12 @@ disk header and tooltips. Structured ZFS scan activity supplies a compact badge
 only during reported rebuild activity; its complete provider summary remains
 available. Stable disk History catalog/organisation/access ownership is unchanged.
 
+The physical-disk verdict words and their phone forms are `Needs Attention`
+(`Attention`), `Running Hot` (`Hot`) and `Replace Now` (`Replace`), all from
+`getPhysicalDiskHealthCompactLabel` in `diskPresentation.ts`. `Running Hot` is
+red and starts at the disk's alert trigger, from the same thresholds object
+that colours its Temp cell (`getPhysicalDiskTemperatureThresholds`).
+
 Controller expansions carry the supplied kind-specific targets, absolute times,
 duration and cluster/namespace when the phone row omits those columns. Proxmox
 coverage distinguishes independent backups from guest-local snapshots; By date
@@ -498,6 +525,22 @@ boundary is local to DisksCard, not a global scrollbar styling requirement.
 SharedPrimitives.guardrails.test.ts protects this composition; component tests
 preserve mount counts and totals. The disk-mounts qualification fixture checks
 short/long lists, themes and keyboard reachability with production CSS.
+
+### Retained disk usage
+
+DisksCard takes an optional `lastKnownReason` for usage figures that are
+retained rather than current. The machine drawer passes the host-agent
+stopped-reporting reason when `agent.stale` is set, the same signal that marks
+its Thermals rows "(last known)". The card keeps every figure, because a disk
+that filled before the machine went quiet is evidence. The total and each mount
+read "Last known N%" with used and total bytes, in muted text titled "Last known
+reading, not current: <reason>". Threshold text colour, the aggregate
+`StackedDiskBar` and the per-mount bars are dropped, as the guest drawer does
+for retained filesystem rows. Mount rows may wrap, with the label capped at the
+row width, so on a phone a long mountpoint takes its own line instead of
+squeezing the figures out of the card. `DisksCard.test.tsx` covers both
+readings and SharedPrimitives.guardrails.test.ts pins the branch and the drawer
+wiring.
 
 ### Ollama credential editing
 The provider panel exposes the existing Basic Auth configuration. Saved passwords
@@ -666,20 +709,27 @@ existing picker unchanged.
 
 The default Workloads metric presentation keeps compact progress bars at rest.
 A fine-pointer preview or keyboard focus on one guest row replaces CPU, memory,
-and disk together with the existing `MetricMiniSparkline` presentation without
-changing row height; touch pointer entry does not trigger this transient lens,
-and the persistent Trends View choice remains the touch-accessible fallback.
+disk, Net I/O, and Disk I/O together with the existing `MetricMiniSparkline`
+presentation without changing row height; touch pointer entry does not trigger
+this transient lens, and the persistent Trends View choice remains the
+touch-accessible fallback. Both I/O cells render through one rate renderer in
+the lens and in Trends: the chart keeps a compact current pair beside it
+(`MetricMiniSparklineRatePair`, the at-rest ↓/↑ and R/W glyphs coloured like
+the series they label) while the full rates stay in the chart's accessible
+label, and a stopped guest or unavailable I/O keeps its dash.
 The active chart owns its local tooltip while its normalized cursor position is
 shared across sibling charts in that guest row, so every guide represents the
 same relative point in the selected history range. Leaving the row clears the
-cursor and restores all three bars together. The lens mounts with a short
+cursor and restores the bars and I/O readouts together. The lens mounts with a short
 reduced-motion-safe fade and must not leave both bar and chart semantics in the
 accessibility tree simultaneously.
-Bar mode resolves history only for that active guest through its canonical
-metrics target and the selected compact range; it must not start an
-estate-wide chart request merely because the range changes. The active request
-key is stable across equivalent live guest snapshots, and leaving the row or
-selecting another range aborts superseded browser work. Persistent Trends may
+Bar mode resolves history per guest through each guest's canonical metrics
+target and the selected compact range, warming only a bounded window of
+mounted and adjacent rows with the active guest first; it must not start an
+estate-wide chart request merely because the range changes. The request key is
+stable across equivalent live guest snapshots, and selecting another range
+aborts superseded browser work. Leaving a row does not cancel its read, which
+settles into the bounded row cache. Persistent Trends may
 retain the shared estate reader, but range changes must clear prior-range data
 unless an exact-key cache entry exists.
 
@@ -2898,9 +2948,9 @@ Agent`), with the plain-language source phrase available through accessible
    `pveVersion` or a Pulse Agent report whose OS identity resolves to Unraid or
    Proxmox VE. They must omit the version rather than showing unrelated
    collector OS versions, such as Debian 12, beside an API-backed PVE badge.
-   Shared row primitives that render Proxmox node identity, including
-   `frontend-modern/src/components/shared/NodeGroupHeader.tsx`, must route raw
-   PVE manager payloads through
+   Surfaces that render Proxmox node versions, including the Proxmox page
+   model at `frontend-modern/src/features/proxmox/proxmoxPageModel.ts`, must
+   route raw PVE manager payloads through
    `frontend-modern/src/utils/proxmoxVersion.ts` rather than inlining
    page-local parsing or falling back to unrelated agent OS versions.
    System title metadata must apply the same identity rule: once the primary
@@ -3276,9 +3326,9 @@ default` instead of fusing provider and badge text such as
     Platform-first top-level pages registered through
     `frontend-modern/src/App.tsx` must stay chrome-only and route through the
     canonical app shell: each per-platform surface owns navigation and sub-tab
-    chrome, then embeds the canonical `WorkloadsSurface`, `StorageSurface`,
-    `RecoverySurface`, or `UnifiedResourceTable` in `embedded tableOnly` mode
-    with a forced platform or source filter. Per-platform features must not
+    chrome, then embeds the canonical `WorkloadsSurface`, `StorageSurface`, or
+    `RecoverySurface` in `embedded tableOnly` mode with a forced platform or
+    source filter. Per-platform features must not
     fork their own table primitives, header layouts, or summary cards when a
     shared canonical surface already exists; new shared platform-page
     primitives live under `frontend-modern/src/features/platformPage/` so the
@@ -4382,12 +4432,14 @@ The shared table chrome now allows `TableCardHeader` to expose a right-aligned
 action slot, currently used by the Workloads/Proxmox metric display control.
 That slot belongs to the table header band and must not reintroduce nested
 cards or page-local toolbar wrappers inside `TableCard`. Proxmox host grouping
-also extends the shared `NodeGroupHeader` row pattern: host metrics may align
-with workload table columns, but the shared primitive owns the header/table
-shell boundary rather than platform pages copying their own card headers.
-Compact PVE version text in that header must come from the shared Proxmox
-version formatter so raw `pve-manager/...` payloads and platform-page host
-version cells stay consistent.
+also extends the shared `NodeGroupHeader` row pattern, which owns the
+header/table shell boundary rather than platform pages copying their own card
+headers. `frontend-modern/src/components/shared/NodeGroupHeader.tsx` renders
+node identity only (status dot, linked name, cluster and agent badges); in
+table-row mode that identity sits in one cell spanning the table. It carries no
+per-column cell renderer and no inline
+version, temperature, or uptime facts: host metrics and versions belong to the
+platform page's host table, so a group row must not duplicate them.
 Mobile navigation now recognizes `proxmox` as a first-class platform tab in
 the shared priority model so app-shell ordering remains centralized.
 
@@ -4649,6 +4701,21 @@ Each query run receives an `AbortSignal`; changing the source, resetting the
 query, or unmounting its owner must abort the superseded browser request before
 starting replacement work. Consumers must forward that signal through their
 API/cache layer when the transport supports cancellation.
+A poll (`pollMs`) does not replace a read that an earlier poll started while
+that read is still in flight; it skips the tick. The API answers 429 with
+`Retry-After: 60` and `apiFetch` honours up to two minutes, so a polled read
+slower than the poll interval would otherwise be discarded on every tick and
+never settle. Any other read (a refresh, a source change, a remount
+revalidation) stays replaceable at the next tick, so a slow or hung refresh is
+replaced at most once before polling protects its replacement. A polled read
+still in flight at the first poll tick at or after `STALLED_QUERY_READ_MS` (150
+seconds) is presumed stalled: that tick replaces it and settles it as a failed
+read, clearing `loading`, setting `resolvedOnce` and publishing a timed-out
+`error`, so no consumer is left waiting on a read that never returns. Each
+consumer renders that failure as it renders any other (the Proxmox Replication
+table shows its error and Retry; workload sparklines keep retained series). A
+transport that always takes longer than that deadline plus one poll interval
+never publishes.
 The settings reporting shell now also owns a deliberate split between
 historical performance reports and current-state VM inventory export.
 `frontend-modern/src/components/Settings/ReportingPanel.tsx`,
@@ -5210,20 +5277,10 @@ cells: a value formatted through `formatPlatformTableRelativeTimeValue` or
 and tooltips, an open drawer's summary rows and annotations) passes `now` from
 the owning component's `useRelativeTimeNow`, and a countdown or freshness band
 derived from the same time (replication Next sync, backup age bands) reads it
-too. The clock can trail the wall clock by up to one tick, so a check that
-treats a future time as invalid (the backup age band) measures from the later
-of the two.
-The rule has one deliberate exception. The age of a latest reading (last used,
-last seen, last success, last checked) on data the surface reads once and does
-not re-read stays the age at read time, because a moving age over a snapshot
-that never refreshes claims the reading stopped when it may not have. Such a
-surface either re-reads the snapshot in the background, as Proxmox replication
-and the external watchdog panel do, or keeps the read-time age, as the Patrol
-attention detail does for Last seen. The external watchdog panel orders its
-re-reads by request, so a slow or hung read can neither pin it to an older
-snapshot nor overwrite a newer outcome while its ages keep moving. An immutable event time (when a delivery
-was attempted, a transition happened, a policy was set) ages correctly over any
-snapshot and reads the clock.
+too. Every read of the clock returns the wall clock; the 30-second tick only
+tells readers to re-read, so a cell that mounts between ticks never measures
+from a stale time and a timestamp from the last few seconds never reads as a
+future time.
 Read-only metadata badges follow the same primitive-owned shell rule.
 `frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
 outlined appearances, compact sizing, shape, typed tone vocabulary, fit
@@ -5311,6 +5368,18 @@ That tooltip owner now also holds the CSP-safe hover contract: chart tooltips
 must render inside the chart surface with model-owned layout and SVG/attribute
 positioning, not through fixed portals or inline `left`/`top` style attributes
 that violate the public demo CSP.
+The same CSP rule binds every runtime component, not only these owners. Solid
+compiles a static `style` value (a `style="..."` string, or any literal entry
+of a `style={{ ... }}` object) into the element's template HTML, and the
+production `style-src 'self' 'nonce-...'` policy reports each one as a
+`style-src-attr` violation when that template is parsed. Static styling must be
+a class: a Tailwind utility, or an arbitrary property such as the
+`[overflow-anchor:none]` on drawer tab panels. Only dynamic values may use
+`style`, because Solid applies those through CSSOM.
+`frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts`
+compiles every runtime `.tsx` that mentions `style` with the client-build Solid
+preset and fails on any `style` attribute or `<style>` element in the
+resulting templates, including nested `<template>` content.
 Tooltip shell chrome must follow semantic surface, text, and border tokens
 rather than hardcoded dark palette utilities so light and dark themes share one
 primitive-owned contrast contract.
@@ -5573,6 +5642,14 @@ Standalone, TrueNAS, and vSphere platform tables and their table-model helpers
 must compose those helpers instead of declaring local `metricFallback` /
 `finiteMetric` helpers or inlining centered muted dash fallback markup in
 metric cells.
+A row whose status indicator is `danger` (offline) blanks every reading from
+its last report, not only the metric bars. Proxmox node rows already gate
+uptime and temperature on online. The Machines table gates its Uptime and
+Temperature cells, and the Docker hosts table its temperature cell, on the same
+check. A machine another source keeps up stays rendered, since its cell may
+carry that source's current reading. Numeric cells keep their own
+right-aligned empty dash; the centred `PlatformTableMetricFallback` marker
+stays specific to metric-bar cells.
 Platform table metric severity coloring is alert-backed, not hardcoded. The
 Docker host and container, Proxmox node, Kubernetes cluster and node, TrueNAS
 system and app, and vSphere host tables must resolve display thresholds
@@ -6295,16 +6372,10 @@ layering on the default. Tables therefore state the padding they want in their
 own classes or presentation constants instead of carrying `!px-*` overrides to
 beat the primitive. `Table.test.tsx` pins the base, single-side, important,
 `p-*`, prefixed-only and reactive cases.
-That same shared table boundary now owns CSP-safe sizing for infrastructure
-tables and metric bars. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-and `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
-must express table layout and column sizing as shared class/attribute
-presentation instead of inline `style=` maps, and
-`frontend-modern/src/components/shared/ProgressBar.tsx` must render fill width
-through DOM attributes rather than inline width styles. Infrastructure host and
-service tables may still vary by breakpoint and column family, but they must do
-so through the shared presentation owner instead of lane-local style objects
-that break the public demo CSP.
+That same shared table boundary now owns CSP-safe fill rendering for metric
+bars: `frontend-modern/src/components/shared/ProgressBar.tsx` must render fill
+width through DOM attributes rather than inline width styles that break the
+public demo CSP.
 That same shared-boundary rule applies to summary density. The shared compact
 mode on `SummaryPanel.tsx` and `SummaryMetricCard.tsx` exists for genuinely
 dense monitoring surfaces, but pages that are trying to align with the normal
@@ -6394,6 +6465,11 @@ rebuilding it per surface. The overview shell must compose
 acknowledge/restore behavior rather than keeping duplicate API and notification
 logic inline in `useAlertOverviewState.ts` or a revived dashboard recent-alert
 panel.
+That hook takes the shared alert store's required `updateAlert` and keeps no
+acknowledgement override: the store holds the optimistic state until the server
+confirms it, while a second copy in the hook outlived that confirmation and hid
+a later unacknowledge from another session until reload. Snooze state reads the
+same store alerts.
 The same feature-owner rule now applies to the alert scheduling surface:
 `frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx` must remain the
 schedule render shell, while
@@ -7131,6 +7207,12 @@ row carries the account in the badge title and the phone card renders it under
 the message, while `getAlertHistoryStatusPresentation` and
 `getAlertResolutionDetail` in `utils/alertIncidentPresentation.ts` own the
 wording.
+Resource-change readers follow the same split: `getResourceChangePresentation`
+and `formatResourceChangeHeadline` in `utils/resourceChangePresentation.ts`
+own the `Alert moved` label, its neutral-blue tone and the summary headline
+for an `alert_resolved` change with `alert_resolution` metadata, and the
+Patrol assessment handoff consumes that headline instead of composing its own
+kind prefix.
 `frontend-modern/src/features/alerts/useAlertHistoryState.ts` re-exposes the
 `getResource` resolver it is already given, and
 `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx` reads it
@@ -7783,6 +7865,25 @@ candidates. Domain ownership stays with Patrol intelligence, storage recovery,
 alerts, and unified resources; the primitive layer owns consistent rendering,
 accessibility, and handoff behavior only.
 
+The same storage presenters own the last-known disk temperature treatment. A
+temperature whose collection state is not `available` renders through
+`PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS` (muted, dotted underline, help
+cursor) with its reason as the title and screen-reader "last known" text,
+never through the threshold colour classes, so a retained reading cannot look
+hot or healthy. Table, drawer and pool surfaces share that one decision in
+`frontend-modern/src/features/storageBackups/diskPresentation.ts` rather than
+each re-reading `collection.temperature`.
+That decision and its class now live in the small
+`frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts`
+module, which `diskPresentation.ts` re-exports, so the Machines table and the
+machine drawer's Thermals rows apply the same treatment without pulling the
+Storage presenter into their chunks. Those surfaces and the guest drawer's
+Physical Disks card import it directly.
+When the cell's value is a retained host-agent SMART temperature, it renders
+muted with a dotted underline and screen-reader "last known", as does a
+retained value in the guest card. Tooltip and Thermals rows say "(last known)",
+and the Thermals row carries the collection reason as its title.
+
 The focused browser proofs are
 `frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts`,
 `frontend-modern/src/components/Storage/__tests__/DiskDetail.test.tsx`,
@@ -7959,6 +8060,15 @@ Rendered table proof belongs in
 `frontend-modern/src/features/standalone/__tests__/AgentsMachinesTable.test.tsx`;
 drawer grouping and fallback proof belongs in
 `frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerMetricsHistoryModel.branchcov0712.test.ts`.
+
+### The Proxmox nodes table reads node history only
+
+`frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx` draws its Trends
+sparklines through `useWorkloadTableMetricHistory` with `series: 'nodes'`, so
+it polls the infrastructure summary and no guest history. The embedded
+workloads table below it owns guest history and passes `series: 'guests'`.
+`ProxmoxNodesTable.test.tsx` pins the option; the per-page polling budget
+belongs to performance-and-scalability.
 
 ### Proxmox Storage reuses the shared product-family source scope
 
