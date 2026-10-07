@@ -36,7 +36,7 @@ admits replacement. A failed unit does not imply prior workload liveness.
 
 Failed/timed-out reads or stops, transitional states and malformed/empty results
 refuse replacement without an automatic restart or retry. Both replacement paths
-atomically renames its fully prepared executable over the live path, rather than
+atomically rename their fully prepared executable over the live path, rather than
 moving away the old executable or retrying extraction after deleting it. A
 failed rename leaves the previous binary and metadata intact; only a service
 confirmed stopped after being `active` is started again, with bounded active
