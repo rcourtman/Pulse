@@ -38,6 +38,9 @@ against valid and adverse configuration bytes, including padded RC and nested
 opt-in. `TestAutoUpdateConsentKeepsTimerAndParserBoundaries` checks legacy timer
 consent, missing parser and nonregular configuration. These are source-level
 ordinary-user fixtures, not installed timer/systemd or update acceptance.
+The registry binds the standalone verifier only to the unattended updater's
+runtime policy. It cannot satisfy the archive, PowerShell, Docker or other
+installer policies; their existing exact verification obligations remain.
 
 ### Server replacement requires admitted bytes and a confirmed inactive service
 

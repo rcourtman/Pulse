@@ -906,7 +906,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
-    def test_auto_update_script_change_uses_deployment_script_policy(self):
+    def test_auto_update_script_change_uses_unattended_update_policy(self):
         required = infer_impacted_subsystems(["scripts/pulse-auto-update.sh"])
         self.assertEqual(set(required), {"deployment-installability"})
 
@@ -923,21 +923,59 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             installability["verification_requirements"],
             [
                 {
-                    "id": "deployment-script-runtime",
-                    "label": "deployment script runtime proof",
+                    "id": "unattended-update-runtime",
+                    "label": "unattended updater runtime proof",
                     "touched_runtime_files": ["scripts/pulse-auto-update.sh"],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
-                        "scripts/installtests/install_docker_sh_test.go",
-                        "scripts/installtests/install_ps1_test.go",
-                        "scripts/installtests/install_sh_test.go",
+                        "scripts/installtests/pulse_auto_update_consent_test.go",
                         "scripts/installtests/pulse_auto_update_test.go",
-                        "scripts/installtests/root_install_sh_test.go",
                     ],
                 }
             ],
         )
+
+    def test_standalone_consent_proof_is_confined_to_unattended_updater(self):
+        rule = next(
+            rule for rule in load_subsystem_rules()
+            if rule["id"] == "deployment-installability"
+        )
+        proof = "scripts/installtests/pulse_auto_update_consent_test.go"
+        update_requirement = build_verification_requirements(
+            rule, ["scripts/pulse-auto-update.sh"]
+        )[0]
+        self.assertEqual(update_requirement["id"], "unattended-update-runtime")
+        self.assertEqual(
+            staged_verification_files_for_requirement(rule, update_requirement, [proof]),
+            [proof],
+        )
+        for unmatched in [[], ["scripts/installtests/unrelated_test.go"]]:
+            with self.subTest(unmatched=unmatched):
+                self.assertEqual(
+                    staged_verification_files_for_requirement(
+                        rule, update_requirement, unmatched
+                    ),
+                    [],
+                )
+        for runtime in [
+            "install.sh",
+            "scripts/install.ps1",
+            "scripts/install-docker.sh",
+            "scripts/install-container-agent.sh",
+            "docker-compose.yml",
+        ]:
+            with self.subTest(runtime=runtime):
+                requirements = build_verification_requirements(rule, [runtime])
+                self.assertTrue(requirements)
+                for requirement in requirements:
+                    self.assertNotEqual(requirement["id"], "unattended-update-runtime")
+                    self.assertEqual(
+                        staged_verification_files_for_requirement(
+                            rule, requirement, [proof]
+                        ),
+                        [],
+                    )
 
     def test_vite_config_change_uses_frontend_build_output_policy(self):
         required = infer_impacted_subsystems(["frontend-modern/vite.config.ts"])

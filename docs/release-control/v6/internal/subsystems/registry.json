@@ -4954,6 +4954,20 @@
             ]
           },
           {
+            "id": "unattended-update-runtime",
+            "label": "unattended updater runtime proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/pulse-auto-update.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/installtests/pulse_auto_update_consent_test.go",
+              "scripts/installtests/pulse_auto_update_test.go"
+            ]
+          },
+          {
             "id": "deployment-script-runtime",
             "label": "deployment script runtime proof",
             "match_prefixes": [],
@@ -4962,8 +4976,7 @@
               "install.sh",
               "scripts/install-container-agent.sh",
               "scripts/install-docker.sh",
-              "scripts/install.ps1",
-              "scripts/pulse-auto-update.sh"
+              "scripts/install.ps1"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
