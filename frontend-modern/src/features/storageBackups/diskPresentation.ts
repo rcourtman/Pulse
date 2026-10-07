@@ -76,9 +76,10 @@ export interface PhysicalDiskPresentationData {
   target?: string;
   temperature: number;
   /**
-   * The alert disk temperature thresholds for this disk's type. The Temp cell
-   * colours the reading by them and the Health verdict judges heat by them.
-   * Absent means the factory thresholds for the type.
+   * The alert disk temperature thresholds for this disk's type, or the Disk
+   * Temp override of the machine whose agent reports it. The Temp cell colours
+   * the reading by them and the Health verdict judges heat by them. Absent
+   * means the factory thresholds for the type.
    */
   temperatureThresholds?: MetricDisplayThresholds | null;
   rpm: number;
@@ -410,13 +411,22 @@ export function getPhysicalDiskHostLabel(
 }
 
 /**
- * Resolves the alert disk temperature thresholds for a disk type. Callers with
- * the user's alert configuration pass `getDiskTemperatureThresholds` from the
- * alerts activation store; the default is the factory configuration.
+ * Resolves the alert disk temperature thresholds for a disk type, under the
+ * alert override keys of the machine whose agent reports the disk. Callers
+ * with the user's alert configuration pass `getDiskTemperatureThresholds` from
+ * the alerts activation store; the default is the factory configuration.
  */
 export type PhysicalDiskTemperatureThresholdResolver = (
   diskType: string,
+  alertResourceIds?: string[],
 ) => MetricDisplayThresholds | null;
+
+/**
+ * Returns the alert override keys of the machine whose agent reports a disk,
+ * so that machine's Disk Temp override judges the disk's heat. Empty when no
+ * agent reports it.
+ */
+export type PhysicalDiskAlertResourceIdResolver = (disk: Resource) => string[];
 
 const resolveFactoryDiskTemperatureThresholds: PhysicalDiskTemperatureThresholdResolver = (
   diskType,
@@ -433,6 +443,7 @@ export const getPhysicalDiskTemperatureThresholds = (
 export function extractPhysicalDiskPresentationData(
   resource: Resource,
   resolveTemperatureThresholds: PhysicalDiskTemperatureThresholdResolver = resolveFactoryDiskTemperatureThresholds,
+  alertResourceIds: string[] = [],
 ): PhysicalDiskPresentationData {
   const pd = resource.physicalDisk || ((resource.platformData as any)?.physicalDisk ?? {});
   const diskNode = getPhysicalDiskNodeIdentity(resource);
@@ -467,7 +478,7 @@ export function extractPhysicalDiskPresentationData(
     health: pd.health || 'UNKNOWN',
     wearout: pd.wearout ?? -1,
     temperature: pd.temperature ?? 0,
-    temperatureThresholds: resolveTemperatureThresholds(pd.diskType || ''),
+    temperatureThresholds: resolveTemperatureThresholds(pd.diskType || '', alertResourceIds),
     rpm: pd.rpm ?? 0,
     used: pd.used || '',
     storageRole: pd.storageRole,
@@ -541,10 +552,18 @@ export function getPhysicalDiskCollectionMessages(disk: PhysicalDiskPresentation
 export function buildPhysicalDiskPresentationDataMap(
   disks: Resource[],
   resolveTemperatureThresholds?: PhysicalDiskTemperatureThresholdResolver,
+  getAlertResourceIds?: PhysicalDiskAlertResourceIdResolver,
 ): Map<string, PhysicalDiskPresentationData> {
   const map = new Map<string, PhysicalDiskPresentationData>();
   for (const disk of disks || []) {
-    map.set(disk.id, extractPhysicalDiskPresentationData(disk, resolveTemperatureThresholds));
+    map.set(
+      disk.id,
+      extractPhysicalDiskPresentationData(
+        disk,
+        resolveTemperatureThresholds,
+        getAlertResourceIds?.(disk),
+      ),
+    );
   }
   return map;
 }

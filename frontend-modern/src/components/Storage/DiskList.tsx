@@ -86,6 +86,7 @@ import {
   getPhysicalDiskTableLayoutModeForContainer,
   getPhysicalDiskTemperaturePresentation,
   isPhysicalDiskColumnVisible,
+  type PhysicalDiskAlertResourceIdResolver,
   type PhysicalDiskTableColumnId,
 } from '@/features/storageBackups/diskPresentation';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
@@ -98,6 +99,8 @@ import { useDiskListModel } from './useDiskListModel';
 
 interface DiskListProps {
   disks: Resource[];
+  /** Alert override keys of the machine reporting each disk; absent means none. */
+  getDiskAlertResourceIds?: PhysicalDiskAlertResourceIdResolver;
   nodes: Resource[];
   selectedNode: string | null;
   sourceFilter?: string;
@@ -134,6 +137,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
     getPhysicalDiskColumnWidthStyle(layoutMode(), columnId);
   const model = useDiskListModel({
     disks: () => props.disks,
+    getDiskAlertResourceIds: (disk) => props.getDiskAlertResourceIds?.(disk) ?? [],
     nodes: () => props.nodes,
     selectedNode: () => props.selectedNode,
     sourceFilter: () => props.sourceFilter ?? 'all',
@@ -569,7 +573,11 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           colSpan={9}
                           class={PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS}
                         >
-                          <DiskDetail disk={disk} nodes={props.nodes} />
+                          <DiskDetail
+                            disk={disk}
+                            nodes={props.nodes}
+                            alertResourceIds={props.getDiskAlertResourceIds?.(disk)}
+                          />
                         </TableCell>
                       </TableRow>
                     </Show>

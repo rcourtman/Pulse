@@ -1,6 +1,10 @@
-import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AlertsAPI } from '@/api/alerts';
+import { useAlertsActivation } from '@/stores/alertsActivation';
+import { eventBus } from '@/stores/events';
+import type { AlertConfig } from '@/types/alerts';
 import type { Resource } from '@/types/resource';
 import { GuestPhysicalDisks } from '../GuestPhysicalDisks';
 
@@ -81,6 +85,38 @@ describe('GuestPhysicalDisks', () => {
     expect(within(card).getByText('Pending Sectors')).toBeInTheDocument();
     expect(within(card).getByText('CRC Errors')).toBeInTheDocument();
     expect(within(card).getAllByTestId('guest-physical-disk')).toHaveLength(1);
+  });
+
+  it("judges the guest's disks by its own agent's Disk Temp override", async () => {
+    const getConfig = vi.spyOn(AlertsAPI, 'getConfig').mockResolvedValue({
+      enabled: true,
+      activationState: 'active',
+      agentDefaults: { diskTemperature: { trigger: 55, clear: 50 } },
+      diskTempByType: { sata: { trigger: 55, clear: 50 } },
+      overrides: { 'host-guest-101': { diskTemperature: { trigger: 65, clear: 60 } } },
+    } as unknown as AlertConfig);
+    try {
+      queryState.resources = [
+        { ...disk, physicalDisk: { ...disk.physicalDisk!, temperature: 58 } } as Resource,
+      ];
+      await useAlertsActivation().refreshConfig();
+      const guestCard = render(() => (
+        <GuestPhysicalDisks parentId="vm-resource-101" alertResourceIds={['host-guest-101']} />
+      ));
+      // 58C passes the 55C SATA trigger but not the agent's 65C override.
+      await waitFor(() =>
+        expect(within(guestCard.container).getByText('Healthy')).toBeInTheDocument(),
+      );
+      guestCard.unmount();
+
+      const unmatched = render(() => (
+        <GuestPhysicalDisks parentId="vm-resource-101" alertResourceIds={['host-other']} />
+      ));
+      expect(within(unmatched.container).getByText('Running Hot')).toBeInTheDocument();
+    } finally {
+      getConfig.mockRestore();
+      eventBus.emit('org_switched', 'default');
+    }
   });
 
   it('does not add an empty storage card to an uninstrumented guest', () => {

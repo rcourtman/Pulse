@@ -7,6 +7,7 @@ import {
   buildPhysicalDiskRoleFilterOptions,
   extractPhysicalDiskPresentationData,
   filterAndSortPhysicalDisks,
+  type PhysicalDiskAlertResourceIdResolver,
   type PhysicalDiskPresentationData,
 } from '@/features/storageBackups/diskPresentation';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -14,6 +15,7 @@ import { matchesPhysicalDiskNode } from './diskResourceUtils';
 
 type UseDiskListModelOptions = {
   disks: () => Resource[];
+  getDiskAlertResourceIds?: PhysicalDiskAlertResourceIdResolver;
   nodes: () => Resource[];
   selectedNode: () => string | null;
   sourceFilter?: () => string;
@@ -30,16 +32,25 @@ export const useDiskListModel = (options: UseDiskListModelOptions) => {
   const { getDiskTemperatureThresholds } = useAlertsActivation();
 
   // Each disk's heat is judged by the user's alert disk temperature thresholds,
-  // so the presentation data recomputes when the alert configuration loads.
+  // under the Disk Temp override of the machine that reports it, so the
+  // presentation data recomputes when the alert configuration loads.
   const diskDataById = createMemo(() =>
-    buildPhysicalDiskPresentationDataMap(options.disks(), getDiskTemperatureThresholds),
+    buildPhysicalDiskPresentationDataMap(
+      options.disks(),
+      getDiskTemperatureThresholds,
+      options.getDiskAlertResourceIds,
+    ),
   );
   const roleFilterOptions = createMemo(() => buildPhysicalDiskRoleFilterOptions(options.disks()));
   const groupFilterOptions = createMemo(() => buildPhysicalDiskGroupFilterOptions(options.disks()));
 
   const getDiskData = (disk: Resource): PhysicalDiskPresentationData =>
     diskDataById().get(disk.id) ??
-    extractPhysicalDiskPresentationData(disk, getDiskTemperatureThresholds);
+    extractPhysicalDiskPresentationData(
+      disk,
+      getDiskTemperatureThresholds,
+      options.getDiskAlertResourceIds?.(disk),
+    );
 
   const selectedNodeResource = createMemo(
     () => options.nodes().find((node) => node.id === options.selectedNode()) ?? null,

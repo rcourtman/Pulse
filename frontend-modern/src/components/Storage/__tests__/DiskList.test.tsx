@@ -69,12 +69,14 @@ describe('DiskList', () => {
     nodes: Resource[];
     selectedNode: string | null;
     searchTerm: string;
+    getDiskAlertResourceIds?: (disk: Resource) => string[];
   }) =>
     render(() => {
       const [selectedDiskId, setSelectedDiskId] = createSignal<string | null>(null);
       return (
         <DiskList
           disks={props.disks}
+          getDiskAlertResourceIds={props.getDiskAlertResourceIds}
           nodes={props.nodes}
           selectedNode={props.selectedNode}
           searchTerm={props.searchTerm}
@@ -469,6 +471,48 @@ describe('DiskList', () => {
       await useAlertsActivation().refreshConfig();
       await waitFor(() => expect(row().getByText('Healthy')).toBeInTheDocument());
       expect(row().getByText('72°C')).toHaveClass('text-amber-600');
+    } finally {
+      getConfig.mockRestore();
+      eventBus.emit('org_switched', 'default');
+    }
+  });
+
+  it('judges each disk by the Disk Temp override of the machine that reports it', async () => {
+    const getConfig = vi.spyOn(AlertsAPI, 'getConfig').mockResolvedValue({
+      enabled: true,
+      activationState: 'active',
+      agentDefaults: { diskTemperature: { trigger: 55, clear: 50 } },
+      diskTempByType: { nvme: { trigger: 70, clear: 65 } },
+      overrides: {
+        'host-pve3': { diskTemperature: { trigger: 80, clear: 75 } },
+        'host-pve5': { disabled: true },
+      },
+    } as unknown as AlertConfig);
+    try {
+      const view = renderDiskList({
+        disks: [
+          buildDisk('nvme-pve3', 'pve3', { diskType: 'nvme', temperature: 72 }),
+          buildDisk('nvme-pve4', 'pve4', { diskType: 'nvme', temperature: 72 }),
+          buildDisk('nvme-pve5', 'pve5', { diskType: 'nvme', temperature: 72 }),
+        ],
+        nodes: [],
+        selectedNode: null,
+        searchTerm: '',
+        getDiskAlertResourceIds: (disk) => [`host-${disk.parentId?.replace('node-', '')}`],
+      });
+      const row = (id: string) =>
+        within(view.container.querySelector(`[data-row-id="${id}"]`) as HTMLElement);
+
+      await useAlertsActivation().refreshConfig();
+      // pve3's 80C override puts 72C under its warning band: healthy and green.
+      await waitFor(() => expect(row('nvme-pve3').getByText('Healthy')).toBeInTheDocument());
+      expect(row('nvme-pve3').getByText('72°C')).toHaveClass('text-green-600');
+      // pve4 has no override, so the 70C NVMe trigger judges its disk.
+      expect(row('nvme-pve4').getByText('Running Hot')).toBeInTheDocument();
+      expect(row('nvme-pve4').getByText('72°C')).toHaveClass('text-red-600');
+      // pve5's alerts are switched off, so its disk is never judged hot.
+      expect(row('nvme-pve5').queryByText('Running Hot')).not.toBeInTheDocument();
+      expect(row('nvme-pve5').getByText('Healthy')).toBeInTheDocument();
     } finally {
       getConfig.mockRestore();
       eventBus.emit('org_switched', 'default');

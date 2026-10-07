@@ -29,6 +29,7 @@ import {
 } from './guestDrawerModel';
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
 import { WORKLOAD_ACTION_AGENT_LABEL } from './workloadAgentReadiness';
+import { getWorkloadAlertResourceIdCandidates } from './workloadTopology';
 import { RaidCard } from '@/components/shared/cards/RaidCard';
 
 import type { GuestDrawerProps } from './guestDrawerModel';
@@ -326,7 +327,14 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         }
       >
         <Suspense fallback={null}>
-          <GuestPhysicalDisks parentId={props.guest.canonicalResourceId ?? props.guest.id} />
+          <GuestPhysicalDisks
+            parentId={props.guest.canonicalResourceId ?? props.guest.id}
+            alertResourceIds={[
+              ...(props.guest.agentId ? [props.guest.agentId] : []),
+              ...(props.guest.canonicalResourceId ? [props.guest.canonicalResourceId] : []),
+              ...getWorkloadAlertResourceIdCandidates(props.guest),
+            ]}
+          />
         </Suspense>
       </Show>
       <Show when={props.guest.agentRaid?.length}>

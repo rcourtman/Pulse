@@ -329,10 +329,17 @@ retained value as "last known 41C (disk is in standby)". Proofs:
 `internal/ai/patrol_ai_more_test.go`.
 
 They judge that collected reading against the alert disk temperature policy,
-not a fixed line. `ThresholdProvider.GetDiskTemperatureThreshold(diskType)`
-(the alert manager's per-type trigger and clear) resolves each disk's limits
-once in `patrolPhysicalDiskRows`, and the run state carries the provider
-(`patrolRuntimeState.thresholdProvider`). With no provider the factory alert
+not a fixed line. `ThresholdProvider.GetDiskTemperatureThreshold(host, diskType)`
+(the alert manager's `HostDiskTemperatureThreshold` trigger and clear) resolves
+each disk's limits once in `patrolPhysicalDiskRows` and in the AI chat context,
+for the host agent that reports the disk. `physicalDiskTemperatureHost` finds it
+by walking the disk's parent to the agent machine, through the pool for an
+Unraid disk, so that agent's Disk Temp override (or one inherited from its
+linked node or guest) replaces the per-type trigger, and an override or agent
+default that switches the host's alerts off leaves no heat to judge. A disk no
+agent reports gets the per-type policy. The global alerts switch and the agent
+alert-type switch stop `CheckHost` without changing this policy, as before.
+The run state carries the provider (`patrolRuntimeState.thresholdProvider`). With no provider the factory alert
 configuration applies. A disk is hot from its trigger: a triage warning, a disk
 issue and an AI chat "needing attention" entry, as its temperature alert and
 Physical Disks Running Hot verdict are. A disk-high finding recovers at or
@@ -341,8 +348,10 @@ the alert does. With no current reading, a disk last seen hot leaves that
 verification unknown rather than recovered. Scoped runs keep the provider, and a
 provider set before Patrol starts is handed to it. Below the trigger Patrol flags nothing, so an NVMe at 63C stays
 quiet and a SATA disk at 56C is flagged. Proofs:
-`internal/ai/patrol_disk_temperature_test.go` and
-`TestAlertThresholdAdapter_DiskTemperatureFollowsAlertPolicy` in
+`internal/ai/patrol_disk_temperature_test.go` (a real registry with one
+overridden agent in `TestPatrolJudgesAgentDisksByTheAgentDiskTemperatureOverride`),
+`TestAlertThresholdAdapter_DiskTemperatureFollowsAlertPolicy` and
+`TestAlertThresholdAdapter_DiskTemperatureHonoursHostOverrides` in
 `internal/ai/alert_threshold_adapter_test.go`.
 
 Retained summaries disclose that point and bucket timestamps describe returned
