@@ -639,6 +639,16 @@ func TestAutoUpdateBackupTransaction(t *testing.T) {
 		{name: "invalid_signature", fault: "invalid_signature", preflight: true},
 		{name: "installer_failure", outcome: "failure"},
 		{name: "wrong_version", outcome: "mismatch"},
+		{name: "failed_version_probe", outcome: "probe_failure"},
+		{name: "empty_version_probe", outcome: "probe_empty"},
+		{name: "unrecognised_version_brand", outcome: "probe_unknown"},
+		{name: "different_edition", outcome: "probe_pro"},
+		{name: "nonexecutable_replacement", outcome: "probe_nonexec"},
+		{name: "missing_replacement", outcome: "probe_missing"},
+		{name: "version_on_later_line", outcome: "probe_later_line"},
+		{name: "invalid_version_suffix", outcome: "probe_trailing"},
+		{name: "valid_build_details", outcome: "probe_details", success: true},
+		{name: "valid_unprefixed_version", outcome: "probe_unprefixed", success: true},
 		{name: "original_version_absent", outcome: "failure", noVersion: true},
 		{name: "extended_metadata", fault: "xattrs", outcome: "failure"},
 		{name: "legacy_layout_migration", outcome: "failure", layout: "legacy"},
@@ -745,6 +755,20 @@ chmod 700 "$PULSE_INSTALL_DIR/bin/pulse"
 if [[ -f "$PULSE_INSTALL_DIR/pulse" ]]; then printf 'changed legacy binary\n' > "$PULSE_INSTALL_DIR/pulse"; fi
 printf '%s\n' "$new_version" > "$PULSE_INSTALL_DIR/VERSION"
 chmod 600 "$PULSE_INSTALL_DIR/VERSION"
+# Keep the target VERSION sidecar even when the signed installer leaves an
+# unusable executable. The real post-install probe must trigger full rollback.
+case "$OUTCOME" in
+ probe_failure) printf '#!/bin/bash\necho "Pulse v6.5.0"; exit 1\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_empty) printf '#!/bin/bash\nexit 0\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_unknown) printf '#!/bin/bash\necho "Other v6.5.0 private-detail"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_pro) printf '#!/bin/bash\necho "Pulse Pro v6.5.0"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_nonexec) chmod 600 "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_missing) rm "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_later_line) printf '#!/bin/bash\nprintf "Other\\nPulse v6.5.0\\n"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_trailing) printf '#!/bin/bash\necho "Pulse v6.5.0-other!"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_details) printf '#!/bin/bash\nprintf "Pulse v6.5.0\\nBuilt: yesterday\\n"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+ probe_unprefixed) printf '#!/bin/bash\necho "Pulse 6.5.0"\n' > "$PULSE_INSTALL_DIR/bin/pulse" ;;
+esac
 if [[ "$OUTCOME" == symlink ]]; then
  rm "$PULSE_INSTALL_DIR/bin/pulse"
  ln -s "$FIXTURE_DIR/victim" "$PULSE_INSTALL_DIR/bin/pulse"

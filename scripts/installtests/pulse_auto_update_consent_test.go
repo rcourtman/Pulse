@@ -297,3 +297,87 @@ systemctl() { return 0; }
 		})
 	}
 }
+
+// VERSION is deliberately plausible in every fixture. Neither it nor a legacy
+// executable can rescue a present primary whose own version evidence is bad.
+func TestAutoUpdateVersionNeedsSuccessfulExecutable(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, legacy, want string
+		nonExecutable, directory bool
+	}{
+		{name: "community", body: "echo 'Pulse v6.5.0'", want: "v6.5.0"},
+		{name: "unprefixed", body: "echo 'Pulse 6.5.0'", want: "v6.5.0"},
+		{name: "build_details", body: "printf 'Pulse v6.5.0\\nBuilt: yesterday\\n'", want: "v6.5.0"},
+		{name: "preview", body: "echo 'Pulse v6.5.0-rc.1'", want: "v6.5.0-rc.1"},
+		{name: "legacy", legacy: "echo 'Pulse v6.5.0'", want: "v6.5.0"},
+		{name: "failed", body: "echo 'Pulse v6.5.0'; exit 1"},
+		{name: "empty", body: ":"},
+		{name: "pro", body: "echo 'Pulse Pro v6.5.0'"},
+		{name: "other_brand", body: "echo 'Other v6.5.0 private-detail'"},
+		{name: "later_line", body: "printf 'Other\\nPulse v6.5.0\\n'"},
+		{name: "invalid_suffix", body: "echo 'Pulse v6.5.0-extra!'"},
+		{name: "non_executable", body: "echo 'Pulse v6.5.0'", nonExecutable: true},
+		{name: "missing"},
+		{name: "bad_primary_over_legacy", body: "exit 1", legacy: "echo 'Pulse v6.5.0'"},
+		{name: "primary_directory", directory: true, legacy: "echo 'Pulse v6.5.0'"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.Mkdir(filepath.Join(dir, "bin"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			primary := filepath.Join(dir, "bin", "pulse")
+			if tc.directory {
+				if err := os.Mkdir(primary, 0700); err != nil {
+					t.Fatal(err)
+				}
+			} else if tc.body != "" {
+				mode := os.FileMode(0700)
+				if tc.nonExecutable {
+					mode = 0600
+				}
+				if err := os.WriteFile(primary, []byte("#!/bin/bash\n"+tc.body+"\n"), mode); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.legacy != "" {
+				if err := os.WriteFile(filepath.Join(dir, "pulse"), []byte("#!/bin/bash\n"+tc.legacy+"\n"), 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(dir, "VERSION"), []byte("v6.5.0\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.Command("bash", "-c", "set -euo pipefail\n"+extractAutoUpdateAdmissionFunction(t, "get_current_version")+"\nget_current_version\n")
+			cmd.Env = append(os.Environ(), "INSTALL_DIR="+dir)
+			out, err := cmd.CombinedOutput()
+			want := tc.want
+			if want == "" {
+				want = "unknown"
+			}
+			if err != nil || strings.TrimSpace(string(out)) != want {
+				t.Fatalf("version: %v, output %q; want %s", err, out, want)
+			}
+		})
+	}
+}
+
+func TestAutoUpdateVersionProbeHasHardDeadline(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "bin"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bin", "pulse"), []byte("#!/bin/bash\ntrap '' TERM\necho 'Pulse v6.5.0'\nexec sleep 60\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "VERSION"), []byte("v6.5.0\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("bash", "-c", extractAutoUpdateAdmissionFunction(t, "get_current_version")+"\nget_current_version\n")
+	cmd.Env = append(os.Environ(), "INSTALL_DIR="+dir)
+	start := time.Now()
+	out, err := cmd.CombinedOutput()
+	if err != nil || !strings.HasSuffix(string(out), "unknown\n") || time.Since(start) > 9*time.Second {
+		t.Fatalf("deadline: %v, duration %s, output %s", err, time.Since(start), out)
+	}
+}

@@ -115,23 +115,27 @@ check_auto_updates_enabled() {
     fi
 }
 
-# Get current version
+# Read version identity from the executable, never installation metadata. This
+# runs both before discovery and after installer success: a VERSION sidecar can
+# survive a failed replacement and cannot prove the new binary is usable.
 get_current_version() {
-    local version=""
-    
-    # Try to get version from binary
-    if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
-        version=$("$INSTALL_DIR/bin/pulse" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || true)
-    elif [[ -f "$INSTALL_DIR/pulse" ]]; then
-        version=$("$INSTALL_DIR/pulse" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || true)
+    local binary="" version_output="" first_line=""
+    if [[ -e "$INSTALL_DIR/bin/pulse" || -L "$INSTALL_DIR/bin/pulse" ]]; then
+        binary="$INSTALL_DIR/bin/pulse"
+    elif [[ -e "$INSTALL_DIR/pulse" || -L "$INSTALL_DIR/pulse" ]]; then
+        binary="$INSTALL_DIR/pulse"
     fi
-    
-    # Fallback to VERSION file
-    if [[ -z "$version" ]] && [[ -f "$INSTALL_DIR/VERSION" ]]; then
-        version=$(cat "$INSTALL_DIR/VERSION" 2>/dev/null | tr -d '\n' || true)
+    if [[ -z "$binary" || ! -f "$binary" || ! -x "$binary" ]] ||
+       ! version_output=$(timeout --kill-after=1 5 "$binary" --version 2>/dev/null); then
+        echo unknown
+        return 0
     fi
-    
-    echo "${version:-unknown}"
+    first_line=${version_output%%$'\n'*}
+    if [[ "$first_line" =~ ^Pulse\ v?([0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?)$ ]]; then
+        printf 'v%s\n' "${BASH_REMATCH[1]}"
+    else
+        echo unknown
+    fi
 }
 
 # The unattended updater installs public community builds. The separately
@@ -492,7 +496,7 @@ perform_update() {
         # Verify new version
         local installed_version
         installed_version=$(get_current_version)
-        if [[ "$installed_version" == "$new_version" ]]; then
+        if [[ "$installed_version" != "unknown" && "${installed_version#v}" == "${new_version#v}" ]]; then
             log info "Version verified: $installed_version"
 
             # If Pulse was running before the update, make sure it is running
