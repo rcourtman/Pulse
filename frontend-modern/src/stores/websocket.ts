@@ -422,7 +422,12 @@ export function createWebSocketStore(url: string) {
         clearPendingAck(id);
       }
 
-      setActiveAlerts(id, alert);
+      // Each payload is the server's whole alert. A plain path set would
+      // shallow-merge it, so a field the server now omits (metricStatus on an
+      // alert restored after a restart, ackTime/ackUser after an unacknowledge)
+      // would keep its old value. reconcile removes omitted keys and diffs
+      // nested values in place, so unchanged fields stay quiet.
+      setActiveAlerts(id, reconcile(alert));
     });
 
     setState('activeAlerts', Object.values(alertsMap));
@@ -1380,9 +1385,10 @@ export function createWebSocketStore(url: string) {
                 }
               });
 
-              // Add new resolved alerts
+              // Add new resolved alerts, replacing rather than merging (see
+              // applyActiveAlerts)
               Object.entries(newResolvedAlerts).forEach(([id, alert]) => {
-                setRecentlyResolved(id, alert);
+                setRecentlyResolved(id, reconcile(alert));
               });
 
               setState('recentlyResolved', Object.values(newResolvedAlerts));
@@ -1973,7 +1979,13 @@ export function createWebSocketStore(url: string) {
           }, 15000);
           pendingAckTimeouts.set(alertIdentifier, pendingTimeout);
         }
-        setActiveAlerts(alertIdentifier, { ...existingAlert, ...updates });
+        // Incoming payloads reconcile stored alerts in place, so store a copy
+        // of the update: an optimistic record can share nested objects with
+        // the record its caller keeps for rollback.
+        setActiveAlerts(alertIdentifier, {
+          ...existingAlert,
+          ...structuredClone(unwrap(updates)),
+        });
       }
     },
   };

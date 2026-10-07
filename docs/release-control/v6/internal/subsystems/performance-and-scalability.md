@@ -712,7 +712,13 @@ the store with reference-stable untouched items so the per-tick deep walk of
 the whole projection is gone. Active alerts travel the same keyed transport
 (`activeAlertsDelta`, replacing the ~37KB whole-array re-ship whenever any
 alert changed) while their application stays immediate per the alerts
-subsystem boundary. These projection baselines are socket-owned: an oversized
+subsystem boundary. Each committed alert is reconciled in place against its
+copy in the keyed active-alert store, so a reader of an unchanged alert there,
+or of an unchanged nested value such as its live `metricStatus` or `metadata`,
+is not notified although every commit carries freshly parsed objects; omitted
+fields are deleted rather than shallow-merged. The `state.activeAlerts` array
+is still replaced on every alert commit. These projection baselines are
+socket-owned: an oversized
 frame invalidates resources, connected infrastructure, and active alerts
 together, while REST recovery hydrates display state only. A later keyed delta
 without a socket baseline requests the throttled recovery path instead of

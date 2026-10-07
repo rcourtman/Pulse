@@ -584,3 +584,46 @@ func TestHistoryIdentityMonitorAdapterResolvesSubResourceReferences(t *testing.T
 	require.True(t, found)
 	require.Equal(t, storageID, deviceBinding)
 }
+
+// PVE disk health and wearout alerts reference the disk by instance, node and
+// device path. Operator mutes resolve that reference to the disk at the path
+// (#2112), but history never binds it: the path passes to a replacement disk
+// in the same slot, and a binding would carry every row journaled under the
+// reference, and every read of the reference, to whichever disk held the path
+// last.
+func TestHistoryIdentityLeavesProxmoxDiskAlertReferencesUnbound(t *testing.T) {
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	now := time.Now().UTC().Truncate(time.Second)
+	ref := ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", "/dev/sda")
+	event := func(id string, at time.Time) ResourceChange {
+		return ResourceChange{ID: id, ResourceID: ref, Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: at,
+			Metadata: map[string]any{"alert_type": "disk-health", "disk_serial": "ZA1A2B3C"}}
+	}
+	// Journaled before this process started, then raised live.
+	require.NoError(t, store.RecordChange(event("legacy", now.Add(-time.Hour))))
+	snapshot := proxmoxHistoryIdentitySnapshot(now)
+	snapshot.PhysicalDisks = []models.PhysicalDisk{{ID: ProxmoxPhysicalDiskSourceID("lab", "pve1", "/dev/sda", "", ""), Node: "pve1", Instance: "lab",
+		DevPath: "/dev/sda", Model: "Seagate ST2000DM008", Serial: "ZA1A2B3C", Type: "hdd", Health: "FAILED", Wearout: -1, LastChecked: now}}
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	adapter.PopulateFromSnapshot(snapshot)
+	registry := adapter.currentRegistry()
+	diskID, ok := registry.ResolveReferenceID(ref)
+	require.True(t, ok, "operator mutes resolve the reference to the disk")
+	require.Equal(t, ResourceTypePhysicalDisk, registry.resources[diskID].Type)
+	require.NoError(t, adapter.RecordChange(event("live", now)))
+
+	_, found, err := store.ResolveHistorySourceIdentity(ref)
+	require.NoError(t, err)
+	require.False(t, found)
+	got, err := store.GetRecentChanges(ref, time.Time{}, 10)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	for _, change := range got {
+		require.Equal(t, ref, change.ResourceID, change.ID)
+	}
+	got, err = store.GetRecentChangesFiltered(diskID, time.Time{}, 10, ResourceChangeFilters{Kinds: []ChangeKind{ChangeAlertFired}})
+	require.NoError(t, err)
+	require.Empty(t, got)
+}
