@@ -414,6 +414,14 @@ type ProxmoxData struct {
 	MemoryCache int64          `json:"memoryCache,omitempty"`
 	Memory      *models.Memory `json:"memory,omitempty"`
 	Lock        string         `json:"lock,omitempty"` // Proxmox lock state (e.g. "backup", "migrate", "snapshot")
+	// SensorSetupOutdated is derived by the registry, never ingested: the
+	// node's SSH temperature monitoring still runs the pre-rc.6 setup and a
+	// disk under it waits on a SMART temperature that setup cannot deliver
+	// (refreshProxmoxSensorSetupLocked). Every Proxmox node carries an
+	// explicit true or false, so clients that merge facets field by field
+	// replace a cleared verdict instead of keeping an earlier true; other
+	// resources omit it.
+	SensorSetupOutdated *bool `json:"sensorSetupOutdated,omitempty"`
 	// Internal link hint to a host agent resource.
 	LinkedAgentID string `json:"-"`
 }

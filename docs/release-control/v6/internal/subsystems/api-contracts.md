@@ -7651,6 +7651,17 @@ read-only demo account. That same hidden read-side boundary includes `GET` and
 `HEAD` reads for `/api/admin/users` and manual discovery at `/api/discover`;
 public demo mode may block writes generically, but it must not reveal that
 admin-user inventory or manual-discovery read routes exist.
+That generic write block keys on the request method alone. The demo
+middleware admits `GET`, `HEAD` and `OPTIONS` plus the login, logout, AI
+execute and OIDC login/callback allowlist; HTTP/1.1 websocket handshakes for
+`/ws` and `/api/agent/ws` are `GET` requests and connect through that read
+branch, so an `Upgrade: websocket` or `Connection: Upgrade` header never
+carries a `POST`, `PUT`, `PATCH` or `DELETE` past the guard. A demo deployment that signs
+visitors in as the configured admin, as the public demo does, has only this
+guard between that session and admin writes such as `/api/system/mock-mode`.
+`TestContract_DemoModeUpgradeHeadersDoNotExemptWrites` in
+`internal/api/contract_test.go` signs in as that admin through the full router
+and pins both halves.
 That shared infrastructure install boundary now also preserves copied shell
 command payload continuity: any privilege-escalation wrapper applied at
 `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
