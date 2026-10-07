@@ -24,16 +24,6 @@ const STATUS_LABELS: Record<string, string> = {
   stopped: 'Stopped',
 };
 
-export const STATUS_SORT_ORDER = [
-  'online',
-  'degraded',
-  'paused',
-  'offline',
-  'stopped',
-  'unknown',
-  'running',
-] as const;
-
 const normalize = (value?: string | null): string => (value || '').trim().toLowerCase();
 
 export const formatStatusLabel = (value?: string | null, fallback = 'Unknown'): string => {

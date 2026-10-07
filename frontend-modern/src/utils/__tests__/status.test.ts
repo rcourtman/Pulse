@@ -25,7 +25,6 @@ import {
   DEGRADED_HEALTH_STATUSES,
   STOPPED_CONTAINER_STATES,
   ERROR_CONTAINER_STATES,
-  STATUS_SORT_ORDER,
 } from '@/utils/status';
 
 describe('isNodeOnline', () => {
@@ -69,18 +68,6 @@ describe('status label helpers', () => {
     expect(getCanonicalStatusLabel('offline')).toBe('Offline');
     expect(getCanonicalStatusLabel('running')).toBe('Running');
     expect(getCanonicalStatusLabel('custom_state')).toBe('custom_state');
-  });
-
-  it('exports the canonical status sort order used by selectors', () => {
-    expect(Array.from(STATUS_SORT_ORDER)).toEqual([
-      'online',
-      'degraded',
-      'paused',
-      'offline',
-      'stopped',
-      'unknown',
-      'running',
-    ]);
   });
 
   it('returns a generic indicator for simple online/offline/warning states', () => {
