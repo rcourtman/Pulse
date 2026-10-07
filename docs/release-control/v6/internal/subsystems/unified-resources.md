@@ -2284,7 +2284,7 @@ and temperature facts must also compose the frontend-primitives
 desktop rows use the shared fixed label track so labels and values remain
 visually adjacent instead of spanning the full drawer width.
 A standalone host agent past its reporting lease reaches the Machines table as
-`offline`, as described in "A push reporter past its lease is offline". The
+`offline`, as described in "Status follows each source's own verdict". The
 offline metric fallback blanks its CPU, memory, disk, network, disk I/O, uptime
 and temperature cells. The machine drawer drops a silent agent's uptime and
 marks its non-disk Thermals rows "(last known)" with the reason as title,
@@ -6116,33 +6116,64 @@ to that boolean. Identity succession continues to rekey the same state row.
 round-trip persistence, attention suppression, and the retired remediation
 lock.
 
-### A push reporter past its lease is offline
+### Status follows each source's own verdict
 
-The host agent, Docker and Kubernetes collectors push their own reports, and
-the monitor marks the machine, Docker host or cluster offline only once its
-reporting lease runs out. Ingest records that verdict on the source's
-sighting, and `aggregateStatus` counts such a sighting as `offline` whatever
-its age. The stale pass used to rank the stale sighting above `offline`, so a
-silent standalone agent reached every consumer as `warning`. The Machines
-table then showed it amber with its last report rendered as current readings,
-while its own drawer led with a critical "Host is offline" alert. A Docker host
-was offline only until its sighting crossed the 120-second stale threshold,
-then flipped to `warning`. With this rule, such rows take the existing
-offline treatment: frontend danger gates, the health verdict's `offline`
-reason, offline filters and counts.
+A sighting's `SourceStatus.Status` describes delivery, not the resource:
+`online` means the source delivered recently and `stale` that it has gone
+quiet. Ingest records on each sighting the status that source reported for the
+resource, as an unexported verdict, and `aggregateStatus` reads it. The stale
+pass and manual links both apply that function:
 
-`SourceStatus.Status` keeps describing delivery freshness, so the sighting
-still reads `stale`. Health keeps its `telemetry_stale` reason, and
-monitored-system reasons are unchanged. A live source still carries a merged
-row: a Proxmox node whose linked agent stopped reporting stays `online` through
-the PVE poll. Pull sources (Proxmox, PBS, PMG, TrueNAS, vSphere) and the
-resources push collectors report about (guests, containers, pods, disks) keep
-the stale-to-warning rule. A JSON copy re-derives the unexported marker from
-its stored status in `IngestResources`, and a manual link that joins two
-resources reported by one source keeps the fresher sighting. The tests in
-`registry_merge_policy_test.go` pin the agent, Docker, Kubernetes,
-mixed-source, round-trip and manual-link cases, plus the boundaries that stay
-unchanged.
+- While any source with a verdict is current, only the current sources decide,
+  in the priority order `chooseStatus` uses at merge time. The highest-priority
+  verdict wins (agent, then Proxmox or vSphere, then Docker, then the rest), and
+  the best of equal ones. A quiet source drops out of that decision.
+- Once every source is quiet, an `offline` verdict survives and any other
+  verdict reads `warning`. The best of those wins.
+- A current facet sighting carries no verdict (the PBS host-agent association,
+  an availability check projected onto its target). It counts as `online` only
+  when no current source has a verdict, and reads `warning` once quiet.
+
+The stale pass used to read delivery as the verdict. A Proxmox node the cluster
+reported offline on a live poll came back `online` once its linked agent fell
+silent, which is what a powered-off machine's agent does. The Proxmox nodes
+table then put an amber dot beside its own "Offline" label, while the drawer
+led with a critical "Node is offline" alert. A node `preserveOrExpireNodes`
+expired after failed polls read `warning` ("Degraded"), and the stopped guests
+on it counted as needing attention. A silent standalone agent past its
+reporting lease reached every consumer as `warning`, with its last report
+rendered as current readings in the Machines table.
+
+The push reporters keep their lease meaning. The host agent, Docker and
+Kubernetes collectors mark the machine, Docker host or cluster offline only
+once its reporting lease runs out. An agent past its lease is `offline` and
+takes the existing offline treatment: frontend danger gates, the health
+verdict's `offline` reason, offline filters and counts. One that is late but
+inside its lease stays `warning`. A Docker host past its shorter lease stays
+offline after its sighting crosses the 120-second stale threshold. A live
+source still carries a merged row. A Proxmox node whose live poll reports it
+online stays `online` when its linked agent stops reporting. A live agent keeps
+a node `online` when the Proxmox poll reports it offline, which the Proxmox
+nodes table reads with `connectionHealth: error` as a stale provider. When a
+guest's or container's only source goes quiet, a running one stays `warning`
+and a stopped one stays `offline`.
+
+The sighting still reads `stale`, so health keeps its `telemetry_stale` reason
+and monitored-system reasons are unchanged. In-memory clones keep the verdicts,
+including a facet's missing one. A serialized copy carries none, so
+`IngestResources` gives each sighting of a copy that lost them all the stored
+resource status; a merged row's separate source verdicts do not survive that
+round trip. A manual link that joins two resources reported by one source keeps
+the fresher sighting. `registry_merge_policy_test.go` pins the node,
+poller-expired, guest, round-trip, copy, agent, Docker, Kubernetes,
+mixed-source and manual-link cases, and the aggregation table.
+
+Availability checks still count by delivery. With every source that has a
+verdict quiet, a current check keeps its target `online` even when the check
+fails, as it did before. Several checks share one sighting whose freshness
+comes from whichever check was projected last, so an availability verdict
+needs each check's own freshness, including local checks that miss their
+cadence, and has to survive manual links. That is left to a follow-up.
 
 ### Canonical object drawer hierarchy
 

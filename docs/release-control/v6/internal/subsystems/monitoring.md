@@ -3981,6 +3981,19 @@ offline. Node memory carry-over after a failed status read uses the poller's own
 validated `NodeMemorySnapshot`, not the read state, which holds the agent's
 reading on a node merged with a host agent, and keeps used, cache and free
 summing to the total.
+The poller's node verdicts reach the read state as its own. A cluster member
+`pollPVENode` reports offline on a live poll stays `offline` in
+`NodesSnapshot`, `/api/resources` and every read-state consumer when its linked
+host agent falls silent. A node `preserveOrExpireNodes` expires stays `offline`
+once its Proxmox sighting goes stale, unless another source says otherwise: a
+reporting agent or a current availability check keeps it `online`, and a quiet
+agent whose last verdict was not offline makes it `warning`. The registry's
+stale pass used to turn the first into `online` and the second into `warning`,
+because it read a sighting that had delivered recently as online
+(unified-resources, "Status follows each source's own verdict"). A node inside
+the offline grace keeps its `online` verdict and reads `warning` once its
+sighting goes stale. Node alerts were never affected, because `CheckNode` reads
+the poller's own `models.Node`.
 Legacy SSH temperature collection must also use the Pulse sensor-wrapper
 contract before falling back to raw lm-sensors output. `internal/monitoring/temperature.go`
 must request `/usr/local/sbin/pulse-sensors` when it exists, parse the wrapper
