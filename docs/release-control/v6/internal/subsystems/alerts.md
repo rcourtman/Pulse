@@ -1876,6 +1876,38 @@ override.
 `TestNormalizeTrueNASDiskTemperatureKeepsOnlyChosenValues` pins the
 saved-config migration.
 
+Proxmox physical disks alert on temperature under the same policy.
+`CheckProxmoxDiskTemperature` (`internal/alerts/proxmox_disk_temperature.go`)
+raises a `diskTemperature` metric alert under the disk's PVE alert reference
+(`ProxmoxPhysicalDiskAlertResourceID`, resource type `proxmox-disk`), judged by
+`proxmoxDiskTemperatureThresholdNoLock`: the disk type's `DiskTempByType` entry
+under the agent Disk Temp default, which switches it off for every type. It
+carries the disk's serial, WWN and `diskType` like the health and wearout
+alerts, so `ProxmoxPhysicalDiskAlertIdentifiers` lists its
+`<reference>::metric-threshold:diskTemperature` identifier for history
+ownership, and `reevaluateActiveAlertsLocked` re-judges it per disk type (the
+lowest per-type trigger when the type was never recorded) instead of falling
+through to guest thresholds that have no disk temperature. A disk a
+still-reporting linked agent lists in its SMART report is the agent's: its
+alert closes with the `moved_to_agent` resolution and `CheckHost` raises the
+agent's own. The handover happens on the next disk poll, so for that one
+interval an agent newly linked to a disk with an open PVE alert can hold its
+own alert beside it. A lapsed agent owns nothing, so the node's own readings
+keep alerting while its agent is silent. An
+excluded disk, or a policy switched off, closes the alert; a poll without a
+current reading holds it. Like the health and wearout alerts, a disk that
+leaves the inventory keeps its alert until the 24-hour stale sweep. The
+`proxmox-disk` alert delay defaults to the factory 5 seconds, so a warning
+waits out the same 300-second noisy-gauge stability window agent and TrueNAS
+disk temperature warnings do, and a critical reading bypasses it.
+`TestProxmoxDiskTemperatureAlertsFollowDiskTemperaturePolicy`,
+`TestProxmoxDiskTemperatureAlertOwnershipAndHolds`,
+`TestProxmoxDiskTemperatureWarningWaitsOutStabilityWindow`,
+`TestProxmoxDiskTemperatureAlertsReevaluatePerDiskType` and
+`TestCheckDiskHealthAlertsCarryHistoryOwnershipIdentity` in
+`internal/alerts/alerts_test.go` pin the policy, ownership, holds, re-judging
+and identifiers.
+
 ### Agent disk temperature alerts clear when their disk leaves the report
 
 `CheckHost` also clears a disk temperature alert, and drops its pending

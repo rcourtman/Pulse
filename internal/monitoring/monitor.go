@@ -512,6 +512,7 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 
 	// Build a map of node name to linked host's SMART data
 	smartByNodeName := make(map[string][]models.HostDiskSMART)
+	reportingNodeNames := make(map[string]bool)
 	for _, node := range nodes {
 		if node.LinkedAgentID == "" {
 			continue
@@ -521,6 +522,11 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 			continue
 		}
 		smartByNodeName[node.Name] = host.Sensors.SMART
+		// Only an agent still reporting owns its disks' temperature alerts;
+		// a silent one's retained rows still enrich the disk.
+		if !strings.EqualFold(strings.TrimSpace(host.Status), "offline") {
+			reportingNodeNames[node.Name] = true
+		}
 		log.Debug().
 			Str("nodeName", node.Name).
 			Str("hostAgentID", node.LinkedAgentID).
@@ -607,6 +613,11 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 		if matched == nil {
 			continue
 		}
+		// The linked agent reports this disk, so while it keeps reporting its
+		// CheckHost owns the disk's temperature alert and the PVE disk check
+		// stands aside. Once its lease lapses, CheckHost no longer alerts on
+		// the disk and the PVE check judges the node's own readings again.
+		updated[i].AgentSMARTReported = reportingNodeNames[updated[i].Node]
 
 		if strings.TrimSpace(updated[i].Model) == "" && strings.TrimSpace(matched.Model) != "" {
 			updated[i].Model = strings.TrimSpace(matched.Model)

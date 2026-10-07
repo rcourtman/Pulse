@@ -248,6 +248,18 @@ Without comparable identity (a SAS, SCSI or USB replacement with no WWN on one
 side) the row still matches. Report admission and the SMART wire contract are
 unchanged; the regression is
 `TestHostAgentSMARTRowForSwappedOutDiskDoesNotLendItsIdentity`.
+A PVE disk that a still-reporting linked Agent's SMART row matches is marked
+`AgentSMARTReported` (internal poll evidence on `models.PhysicalDisk`, never
+serialized); disks the poller builds from that report when the Proxmox disk
+query fails go through the same merge, and an Agent whose lease lapsed owns
+none. The Agent then owns the disk's temperature alert
+through `CheckHost`, and the PVE disk temperature check closes its own as
+moved to the Agent, so one disk never alerts twice. Report admission, the SMART
+wire contract and Agent authority are unchanged;
+`TestMergeHostAgentSMARTIntoDisksMarksDisksTheAgentReports` in
+`internal/monitoring/physical_disk_roundtrip_test.go` and
+`TestPhysicalDiskAgentSMARTReportedStaysInternal` in
+`internal/models/deepcopy_test.go` pin the marker.
 
 Assistant historical metric wiring uses the current monitor's retained store
 and registry metrics coordinates. Historical reads do not alter enrollment,

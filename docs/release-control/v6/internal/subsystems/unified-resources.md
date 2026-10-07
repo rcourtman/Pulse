@@ -5946,7 +5946,12 @@ the reference and is never retried. An owned row records its alert's
 reference as `alert_resource_id`. A read by the reference returns the rows
 journaled under it plus the rows owned away from it, matched through the
 indexed alert identifier (`ProxmoxPhysicalDiskAlertIdentifiers`) and that
-recorded reference, and every count uses the same predicate. The Alerts
+recorded reference, and every count uses the same predicate. Those
+identifiers cover the health and wearout specs and the disk temperature
+metric spec (`<reference>::metric-threshold:diskTemperature`), since PVE disks
+also raise temperature alerts under the same reference
+(`TestProxmoxDiskTemperatureAlertRowsFollowRecordedHardwareIdentity` in
+`internal/unifiedresources/store_test.go`). The Alerts
 history Resource action therefore still lists every occurrence raised under
 the path, across the disks that held it, and alert-centric reads keep their
 occurrences (see the AI runtime contract's incident-history queries). Rows

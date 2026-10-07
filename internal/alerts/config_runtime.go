@@ -427,6 +427,19 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			threshold = getThresholdForMetric(thresholds, metricType)
 		}
 
+		// A Proxmox disk temperature alert is judged by the disk temperature
+		// policy for its disk type, as CheckProxmoxDiskTemperature judges it.
+		// The node and guest policies below have no disk temperature, so a
+		// save would otherwise resolve an alert the next poll raises again.
+		if primaryResourceType == proxmoxDiskResourceType && metricType == proxmoxDiskTemperatureMetric {
+			diskType, known := alert.Metadata["diskType"].(string)
+			threshold = m.proxmoxDiskTemperatureThresholdNoLock(diskType, !known)
+			if threshold == nil || threshold.Trigger <= 0 {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
+			}
+		}
+
 		isAgentResource := alertResourceTypeKeysContain(resourceTypeKeys, "agent")
 		if !handledModernPlatformType && isAgentResource {
 			if allDisabled, _ := m.alertPolicyTypeSwitchesNoLock("agent"); allDisabled {

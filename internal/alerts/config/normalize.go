@@ -638,6 +638,10 @@ func NormalizeTimeThresholds(config *AlertConfig) {
 	ensureDelay("truenas-pool")
 	ensureDelay("truenas-dataset")
 	ensureDelay("truenas-disk")
+	// Proxmox disk temperature alerts: the factory stability window for a
+	// noisy gauge applies to this type's unchanged default, as it does to
+	// agent and TrueNAS disk temperatures.
+	ensureDelay("proxmox-disk")
 	ensureDelay("vmware-host")
 	ensureDelay("vmware-vm")
 	ensureDelay("vmware-datastore")
