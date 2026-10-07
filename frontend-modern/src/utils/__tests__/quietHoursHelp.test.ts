@@ -12,6 +12,19 @@ const article = (name: string): HTMLElement => {
   element.innerHTML = renderDocMarkdown(read(`docs/${name}.md`), name);
   return element;
 };
+const sectionArticle = (name: string, start: string, end: string): HTMLElement => {
+  const source = read(`docs/${name}.md`);
+  const startAt = source.indexOf(start);
+  const endAt = source.indexOf(end, startAt + start.length);
+  expect(startAt, 'linked section must exist in the actual shipped guide').toBeGreaterThan(-1);
+  expect(endAt).toBeGreaterThan(startAt);
+  const element = document.createElement('article');
+  // Keep the real heading as well as its contents, so target IDs still come
+  // from the production Markdown renderer; unrelated long recipes are not
+  // part of this link contract and need not be rendered in this case.
+  element.innerHTML = renderDocMarkdown(source.slice(startAt, endAt), name);
+  return element;
+};
 const quietHoursText = (): string => {
   const guide = read('docs/CONFIGURATION.md');
   const section = guide.split('### Quiet hours and notification holds')[1]?.split('<details>')[0];
@@ -78,8 +91,16 @@ describe('quiet-hours setup help', () => {
 
   it('connects troubleshooting and setup through real shipped section links', () => {
     const guides: Record<string, HTMLElement> = {
-      CONFIGURATION: article('CONFIGURATION'),
-      TROUBLESHOOTING: article('TROUBLESHOOTING'),
+      CONFIGURATION: sectionArticle(
+        'CONFIGURATION',
+        '### Quiet hours and notification holds',
+        '## Availability Checks',
+      ),
+      TROUBLESHOOTING: sectionArticle(
+        'TROUBLESHOOTING',
+        '#### Test succeeds but real alerts are missing',
+        '#### Recover retained delivery failures',
+      ),
     };
     for (const [from, to, fragment, label] of [
       [
