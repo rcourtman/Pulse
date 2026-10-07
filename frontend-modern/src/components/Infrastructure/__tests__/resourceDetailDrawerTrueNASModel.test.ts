@@ -361,6 +361,43 @@ describe('resourceDetailDrawerTrueNASModel', () => {
     ]);
   });
 
+  it('shows a retained disk temperature as last known, with its reason and no heat tone', () => {
+    // A TrueNAS disk merged with a host agent's row keeps the agent's last
+    // reading after the agent stops reporting. It is not current, so it must
+    // not read as a disk running hot now, nor sit in the summary as a reading.
+    const disk = (state: 'available' | 'unavailable') =>
+      baseResource({
+        type: 'physical_disk',
+        displayName: 'sdc',
+        platformScopes: ['truenas'],
+        physicalDisk: {
+          devPath: '/dev/sdc',
+          diskType: 'sata',
+          sizeBytes: 24 * 1024 ** 4,
+          health: 'PASSED',
+          temperature: 61,
+          collection: {
+            temperature: { state, source: 'agent', reason: 'host agent stopped reporting' },
+          },
+        },
+      });
+    const temperatureRow = (resource: Resource) =>
+      buildTrueNASDetailSections(resource)
+        .find((section) => section.label === 'Health')
+        ?.rows.find((row) => row.label === 'Temperature');
+
+    expect(temperatureRow(disk('unavailable'))).toMatchObject({
+      value: '61°C (last known)',
+      tone: 'muted',
+      title: 'Last known reading, not current: host agent stopped reporting',
+    });
+    expect(buildTrueNASDetailsSummary(disk('unavailable'))).toBe('SATA, Passed, 24.0 TB');
+
+    expect(temperatureRow(disk('available'))).toMatchObject({ value: '61°C', tone: 'warning' });
+    expect(temperatureRow(disk('available'))?.title).toBeUndefined();
+    expect(buildTrueNASDetailsSummary(disk('available'))).toBe('SATA, Passed, 24.0 TB, 61°C');
+  });
+
   it('shows the vdev layout as the storage kind while topology stays the pool discriminator', () => {
     // Regression guard for 599c8e634. `topology` is the cross-provider
     // discriminator ('pool' | 'dataset' | ...); the ZFS layout belongs in

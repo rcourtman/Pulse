@@ -14,6 +14,10 @@ import {
 import type { HostGPUSensor } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { getDiskPercent, getMemoryPercent } from '@/types/resource';
+import {
+  getPhysicalDiskTemperaturePresentation,
+  isPhysicalDiskTemperatureCurrent,
+} from '@/features/storageBackups/diskTemperaturePresentation';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { getMemoryObservationPresentation } from '@/utils/memoryObservation';
 import { getWorkloadGuestDiskStatusMessage } from '@/utils/workloadGuestPresentation';
@@ -174,6 +178,18 @@ const diskReadReason = (resource: Resource): string | undefined =>
     ? resource.proxmox?.diskStatusReason || undefined
     : undefined;
 
+// A physical disk's reading and its collection state both live on
+// physicalDisk, so read them only together: websocket rows carry no top-level
+// temperature for a disk, which only the REST mapper copies across. The
+// reading may be a last known one kept while the current observation could
+// not collect it, such as a disk in standby or a host agent past its
+// reporting lease, and is then never current.
+const resourceTemperature = (resource: Resource): number | undefined =>
+  resource.physicalDisk ? resource.physicalDisk.temperature : resource.temperature;
+
+const isResourceTemperatureCurrent = (resource: Resource): boolean =>
+  isPhysicalDiskTemperatureCurrent(resource.physicalDisk?.collection);
+
 export const getResourceMetricsHistoryDeferredMetrics = (
   resource: Resource,
 ): Record<string, GuestDrawerHistoryDeferredMetric> => {
@@ -197,6 +213,19 @@ export const getResourceMetricsHistoryDeferredMetrics = (
       message: getWorkloadGuestDiskStatusMessage(reason),
     };
   }
+  if (!isResourceTemperatureCurrent(resource)) {
+    const temperature = resourceTemperature(resource);
+    const retained = getPhysicalDiskTemperaturePresentation({
+      temperature: temperature ?? 0,
+      collection: resource.physicalDisk?.collection,
+    });
+    if (retained?.title) {
+      metrics.smart_temp = {
+        lastKnownValue: temperature,
+        message: `${retained.title}.`,
+      };
+    }
+  }
   return metrics;
 };
 
@@ -204,7 +233,9 @@ export const getResourceMetricsHistoryCurrentMetrics = (
   resource: Resource,
 ): Record<string, number | undefined> => {
   const diskPercent = resource.disk ? finiteMetric(getDiskPercent(resource)) : undefined;
-  const temperature = finiteMetric(resource.temperature);
+  const temperature = isResourceTemperatureCurrent(resource)
+    ? finiteMetric(resourceTemperature(resource))
+    : undefined;
   const memory = memoryReading(resource);
   return {
     cpu: finiteMetric(resource.cpu?.current),

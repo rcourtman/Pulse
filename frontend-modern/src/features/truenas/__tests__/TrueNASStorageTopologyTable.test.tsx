@@ -262,6 +262,69 @@ describe('TrueNASStorageTopologyTable', () => {
     ).toEqual(['sda', 'nvme0n1']);
   });
 
+  it('shows a retained disk temperature as last known and sorts it as no reading', async () => {
+    // A TrueNAS disk merged with a host agent's row keeps the agent's last
+    // reading after the agent stops reporting, under an unavailable state.
+    const disk = (id: string, temperature: number, state: 'available' | 'unavailable') =>
+      makeStorageResource({
+        id,
+        type: 'physical_disk',
+        name: id,
+        storage: undefined,
+        physicalDisk: {
+          devPath: `/dev/${id}`,
+          serial: `serial-${id}`,
+          diskType: 'sata',
+          temperature,
+          collection: {
+            temperature: { state, source: 'agent', reason: 'host agent stopped reporting' },
+          },
+        },
+      });
+    const resources = [
+      disk('sda', 64, 'unavailable'),
+      disk('sdb', 41, 'available'),
+      disk('sdc', 38, 'available'),
+    ];
+    const { container } = render(() => (
+      <TrueNASStorageTopologyTable
+        resources={resources}
+        scope={resources}
+        emptyIcon={<span />}
+        emptyTitle="No storage"
+        emptyDescription="No storage"
+        showToolbar={false}
+      />
+    ));
+    const row = (id: string) => container.querySelector(`[data-truenas-storage-resource="${id}"]`);
+    const order = () =>
+      [...container.querySelectorAll('[data-truenas-storage-resource]')].map((element) =>
+        element.getAttribute('data-truenas-storage-resource'),
+      );
+
+    try {
+      const retained = row('sda')?.querySelector('[data-temperature-reading="last-known"]');
+      expect(retained).toHaveTextContent('64.0°C, last known');
+      expect(retained).toHaveAttribute(
+        'title',
+        'Last known reading, not current: host agent stopped reporting',
+      );
+      expect(retained).toHaveClass('text-muted');
+      // 64C is over the factory SATA trigger, but a retained reading is not heat.
+      expect(row('sda')?.querySelector('[data-truenas-storage-health]')).toBeNull();
+      expect(row('sdb')?.querySelector('[data-temperature-reading="last-known"]')).toBeNull();
+      expect(row('sdb')).toHaveTextContent('41.0°C');
+
+      // Hottest first ranks current readings only; the retained one stays last.
+      await fireEvent.click(screen.getByRole('columnheader', { name: /Temp/ }));
+      expect(order()).toEqual(['sdb', 'sdc', 'sda']);
+      await fireEvent.click(screen.getByRole('columnheader', { name: /Temp/ }));
+      expect(order()).toEqual(['sdc', 'sdb', 'sda']);
+    } finally {
+      window.localStorage.clear();
+    }
+  });
+
   it('follows a disk temperature trigger the user raised in Alerts', async () => {
     const getConfig = vi.spyOn(AlertsAPI, 'getConfig').mockResolvedValue({
       enabled: true,
