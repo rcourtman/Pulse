@@ -1894,6 +1894,42 @@ controls in `internal/alerts/flapping_threshold_test.go` exercise both sweeps,
 drained and retained windows, dispatch callbacks and delivery diagnosis. These
 modeled-time controls are not installed notification-destination acceptance.
 
+### Default thresholds keep a positive trigger's clear below it
+
+PBS, node temperature, agent, Kubernetes, TrueNAS and vSphere global defaults
+go through `normalizeThresholdPointer` in `internal/alerts/config/normalize.go`
+from `UpdateConfig`. The shared persistence normalization in
+`internal/config/persistence.go` applies the same normalizer, through
+`NormalizeHysteresisThreshold`, to the agent, node temperature and storage
+pairs. A missing or negative threshold takes the factory default and a zero
+trigger is off. A positive trigger always keeps a clear below it: a missing
+clear sits five points under the trigger, floored at 0, and a clear at or
+above the trigger is repaired. Guest and node usage, storage and Docker
+defaults hold the same bound through `EnsureValidHysteresis` in
+`ValidateHysteresisThresholds`, `NormalizeStorageDefaults` and
+`NormalizeDockerThreshold`. The canonical per-type entries (`nvme`, `sata` and
+`hdd` in `DiskFillByType`; `nvme`, `sas` and `sata` in `DiskTempByType`, the
+types the thresholds page edits) keep a positive trigger and follow the same
+clear rule; a non-positive trigger resets the entry to its type default,
+because the page cannot switch a type off on its own. Other per-type keys are
+stored as written.
+
+The thresholds page sends `max(0, trigger - 5)`, so a 1-5% default arrives
+with clear 0 and must not fall back to the factory clear. Agent defaults used
+to do that, storing `{trigger: 1, clear: 75}` for a 1% Machines CPU default,
+and per-type disk entries replaced the whole pair, trigger included. The
+evaluator already ignored a clear at or above the trigger
+(`buildCanonicalMetricSpec` drops it and the reducer then clears at the
+trigger), so those alerts fired and resolved the same way; `/api/alerts/config`
+served the factory clear and firing alerts reported it as `clearThreshold`. A
+repaired pair above the margin, such as `{50, 80}` written through the API,
+now has a real recovery band at 45 where it used to clear at the trigger.
+`internal/alerts/config/normalize_low_trigger_clear_test.go` pins every
+default family and both per-type maps, `TestUpdateConfigKeepsLowTriggerClearBelowTrigger` in
+`internal/alerts/config_validation_test.go` pins the saved config and the
+firing alert's clear level, and the low-trigger and stored-clear tests in
+`internal/config/persistence_test.go` pin the written file and load repair.
+
 ### Monitor-only delivery is terminal
 
 Monitor-only alerts remain visible, but neither a firing nor a recovery
