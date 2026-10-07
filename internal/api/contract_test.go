@@ -5049,6 +5049,361 @@ func TestContract_VMInventoryExportCSVHeaders(t *testing.T) {
 	}
 }
 
+// reportAlertResourceIDs lists a report request's alert rows by resource ID,
+// sorted, so a test can state exactly which alerts a report attributes to
+// its subject.
+func reportAlertResourceIDs(req reporting.MetricReportRequest) []string {
+	ids := make([]string, 0, len(req.Alerts))
+	for _, alert := range req.Alerts {
+		ids = append(ids, alert.ResourceID)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// Every Proxmox node and standalone Pulse agent is an `agent` resource in v6,
+// and the Reports picker requests it as one. Its report must carry the
+// machine's own alerts, matched through the identities its unified resource
+// carries: the linked node's source ID, the agent's "agent:<host>" alerts and
+// their component children. Guests, storage pools and same-named nodes in
+// another cluster are not the machine.
+func TestContract_AgentReportAttachesTheMachinesOwnAlerts(t *testing.T) {
+	now := time.Now()
+	start := now.Add(-24 * time.Hour)
+	machineID := "agent-west-a"
+	memoryTotal, diskTotal := int64(64<<30), int64(1<<40)
+	storageTotal, storageUsed := int64(2<<40), int64(1<<40)
+	snapshot := reportingEnrichmentSnapshot{
+		Resources: []unifiedresources.Resource{
+			{
+				ID:      machineID,
+				Type:    unifiedresources.ResourceTypeAgent,
+				Name:    "West Production A",
+				Status:  unifiedresources.StatusOnline,
+				Uptime:  86400,
+				Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox, unifiedresources.SourceAgent},
+				Identity: unifiedresources.ResourceIdentity{
+					IPAddresses: []string{"192.0.2.10"},
+				},
+				Metrics: &unifiedresources.ResourceMetrics{
+					Memory: &unifiedresources.MetricValue{Total: &memoryTotal},
+					Disk:   &unifiedresources.MetricValue{Total: &diskTotal},
+				},
+				Proxmox: &unifiedresources.ProxmoxData{
+					SourceID:      "cluster-a-pve1",
+					NodeName:      "pve1",
+					Instance:      "cluster-a",
+					HostURL:       "https://pve1.example:8006",
+					PVEVersion:    "8.2.4",
+					KernelVersion: "6.8.12-1-pve",
+					ClusterName:   "cluster-a",
+					CPUInfo:       &unifiedresources.CPUInfo{Model: "Xeon E5-2680", Cores: 16, Sockets: 2},
+				},
+				Agent: &unifiedresources.AgentData{
+					AgentID:   "host-pve1",
+					OSName:    "Debian GNU/Linux",
+					OSVersion: "12",
+				},
+			},
+			{
+				ID:       "storage-west-a-zfs",
+				Type:     unifiedresources.ResourceTypeStorage,
+				Name:     "local-zfs",
+				Status:   unifiedresources.StatusOnline,
+				ParentID: &machineID,
+				Metrics: &unifiedresources.ResourceMetrics{
+					Disk: &unifiedresources.MetricValue{Total: &storageTotal, Used: &storageUsed, Percent: 50},
+				},
+				Storage: &unifiedresources.StorageMeta{Type: "zfspool", Content: "images"},
+				Proxmox: &unifiedresources.ProxmoxData{SourceID: "cluster-a-pve1-local-zfs"},
+			},
+			{
+				ID:           "physical-disk-west-a-nvme0",
+				Type:         unifiedresources.ResourceTypePhysicalDisk,
+				ParentID:     &machineID,
+				PhysicalDisk: &unifiedresources.PhysicalDiskMeta{DevPath: "/dev/nvme0n1", Model: "Samsung 990", DiskType: "nvme", Health: "PASSED", Temperature: 41},
+			},
+			{
+				// A disk in standby keeps its last-known temperature, which a
+				// report must not tabulate as measured.
+				ID:       "physical-disk-west-a-sdb",
+				Type:     unifiedresources.ResourceTypePhysicalDisk,
+				ParentID: &machineID,
+				PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+					DevPath: "/dev/sdb", DiskType: "hdd", Health: "PASSED", Temperature: 52,
+					Collection: &diskinventory.CollectionStatus{
+						Temperature: diskinventory.FieldStatus{State: diskinventory.FieldUnavailable, Reason: "standby"},
+					},
+				},
+			},
+			{
+				ID:       "vm-west-a-101",
+				Type:     unifiedresources.ResourceTypeVM,
+				ParentID: &machineID,
+			},
+		},
+		ActiveAlerts: []models.Alert{
+			// The node's own alert, keyed by the Proxmox source ID.
+			{ID: "node-cpu", Type: "cpu", Level: "critical", ResourceID: "cluster-a-pve1", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			// The agent's own alert and a filesystem it reports.
+			{ID: "agent-memory", Type: "memory", Level: "warning", ResourceID: "agent:host-pve1", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			{ID: "agent-disk", Type: "disk", Level: "warning", ResourceID: "agent:host-pve1/disk:/", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			// The agent raises its Unraid array alert under its own identity,
+			// so it belongs to the machine as well as to the array's report.
+			{ID: "agent-array", Type: "unraid-array", Level: "warning", ResourceID: "agent:host-pve1/storage:unraid-array", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			// A provider incident keyed by the unified ID.
+			{ID: "incident", Type: "resource-incident", Level: "warning", ResourceID: machineID, StartTime: now.Add(-time.Hour)},
+			// Not the machine: a guest, a storage pool, a same-named node in
+			// another cluster, and an agent whose host ID shares a prefix.
+			{ID: "guest", Type: "powered-off", Level: "warning", ResourceID: "cluster-a-pve1-101", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			{ID: "pool", Type: "zfs-pool-errors", Level: "warning", ResourceID: "cluster-a-pve1-local-zfs/zfs-pool:local-zfs", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			{ID: "other-cluster", Type: "cpu", Level: "critical", ResourceID: "cluster-b-pve1", Node: "pve1", StartTime: now.Add(-time.Hour)},
+			{ID: "other-agent", Type: "memory", Level: "critical", ResourceID: "agent:host-pve10", Node: "pve10", StartTime: now.Add(-time.Hour)},
+		},
+		RecentlyResolved: []models.ResolvedAlert{
+			{
+				Alert:        models.Alert{ID: "node-temp", Type: "temperature", Level: "warning", ResourceID: "cluster-a-pve1", Node: "pve1", StartTime: now.Add(-3 * time.Hour)},
+				ResolvedTime: now.Add(-2 * time.Hour),
+			},
+			{
+				Alert:        models.Alert{ID: "node-old", Type: "cpu", Level: "warning", ResourceID: "cluster-a-pve1", Node: "pve1", StartTime: now.Add(-50 * time.Hour)},
+				ResolvedTime: now.Add(-48 * time.Hour),
+			},
+		},
+	}
+
+	req := reporting.MetricReportRequest{ResourceType: "agent", ResourceID: machineID}
+	NewReportingHandlers(nil, nil).enrichReportRequest(context.Background(), "default", &req, snapshot, start, now)
+
+	wantAlerts := []string{"agent-west-a", "agent:host-pve1", "agent:host-pve1/disk:/", "agent:host-pve1/storage:unraid-array", "cluster-a-pve1", "cluster-a-pve1"}
+	if got := reportAlertResourceIDs(req); !reflect.DeepEqual(got, wantAlerts) {
+		t.Fatalf("agent report alerts = %v, want %v", got, wantAlerts)
+	}
+	for _, alert := range req.Alerts {
+		if alert.Type == "temperature" && (alert.ResolvedTime == nil || !alert.Recovered()) {
+			t.Fatalf("node alert resolved inside the window must read as a recovery, got %+v", alert)
+		}
+	}
+
+	res := req.Resource
+	if res == nil {
+		t.Fatal("agent report carries no resource details")
+	}
+	if res.Name != "West Production A" || res.Host != "https://pve1.example:8006" || res.PVEVersion != "8.2.4" ||
+		res.KernelVersion != "6.8.12-1-pve" || res.CPUModel != "Xeon E5-2680" || res.CPUCores != 16 || res.CPUSockets != 2 ||
+		res.MemoryTotal != memoryTotal || res.DiskTotal != diskTotal || res.Uptime != 86400 ||
+		res.OSName != "Debian GNU/Linux" || res.OSVersion != "12" || res.ClusterName != "cluster-a" ||
+		!reflect.DeepEqual(res.IPAddresses, []string{"192.0.2.10"}) {
+		t.Fatalf("agent report resource details = %+v", res)
+	}
+	if len(req.Storage) != 1 || req.Storage[0].Name != "local-zfs" || req.Storage[0].Type != "zfspool" || req.Storage[0].UsagePerc != 50 {
+		t.Fatalf("agent report storage = %+v", req.Storage)
+	}
+	// Disk rows share the node report's builder: only a collected temperature
+	// is tabulated, coloured by the disk temperature alert thresholds.
+	if len(req.Disks) != 2 {
+		t.Fatalf("agent report disks = %+v", req.Disks)
+	}
+	nvme, standby := req.Disks[0], req.Disks[1]
+	if nvme.Device != "/dev/nvme0n1" || nvme.Health != "PASSED" || nvme.Temperature != 41 ||
+		nvme.TemperatureCritical <= 0 || nvme.TemperatureWarning <= 0 || nvme.TemperatureWarning > nvme.TemperatureCritical {
+		t.Fatalf("collected disk row = %+v", nvme)
+	}
+	if standby.Device != "/dev/sdb" || standby.Temperature != 0 {
+		t.Fatalf("a retained disk temperature must not be reported as measured, got %+v", standby)
+	}
+}
+
+// A node alert that moved to the machine's Pulse agent and the agent's own
+// alert for that metric both belong to the machine's report, and the report
+// verdict counts the condition once.
+func TestContract_AgentReportCountsAMovedNodeAlertOnce(t *testing.T) {
+	now := time.Now()
+	machineID := "agent-west-a"
+	snapshot := reportingEnrichmentSnapshot{
+		Resources: []unifiedresources.Resource{{
+			ID:      machineID,
+			Type:    unifiedresources.ResourceTypeAgent,
+			Name:    "West Production A",
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox, unifiedresources.SourceAgent},
+			Proxmox: &unifiedresources.ProxmoxData{SourceID: "cluster-a-pve1", NodeName: "pve1"},
+			Agent:   &unifiedresources.AgentData{AgentID: "host-pve1"},
+		}},
+		ActiveAlerts: []models.Alert{{
+			ID: "agent-memory", Type: "memory", Level: "warning", ResourceID: "agent:host-pve1",
+			Message: "Agent memory at 94%", StartTime: now.Add(-time.Minute),
+		}},
+		RecentlyResolved: []models.ResolvedAlert{{
+			Alert: models.Alert{
+				ID: "node-memory", Type: "memory", Level: "warning", ResourceID: "cluster-a-pve1",
+				Message: "Node memory at 95%", StartTime: now.Add(-time.Hour),
+				Resolution: &models.AlertResolution{
+					Reason:              "moved_to_agent",
+					SuccessorResourceID: "agent:host-pve1",
+					SuccessorName:       "pve1 (Host Agent)",
+				},
+			},
+			ResolvedTime: now.Add(-2 * time.Minute),
+		}},
+	}
+
+	req := reporting.MetricReportRequest{ResourceType: "agent", ResourceID: machineID}
+	NewReportingHandlers(nil, nil).enrichReportRequest(context.Background(), "default", &req, snapshot, now.Add(-24*time.Hour), now)
+
+	if got := reportAlertResourceIDs(req); !reflect.DeepEqual(got, []string{"agent:host-pve1", "cluster-a-pve1"}) {
+		t.Fatalf("agent report alerts = %v", got)
+	}
+	narrative, err := reporting.HeuristicNarrator{}.Narrate(context.Background(), reporting.NarrativeInput{Alerts: req.Alerts})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if narrative.HealthStatus != "WARNING" || narrative.HealthMessage != "1 warning detected - review recommended" {
+		t.Fatalf("moved node alert and its successor must count once, got %q / %q", narrative.HealthStatus, narrative.HealthMessage)
+	}
+}
+
+// Report types without a dedicated enricher still list the alerts raised on
+// their subject: the unified ID, the metrics-target ID, and the IDs each
+// alert producer builds for a Docker runtime, a container or a storage pool's
+// ZFS components. Workloads under a runtime stay with their own reports.
+func TestContract_UnenrichedReportTypesAttachTheSubjectsAlerts(t *testing.T) {
+	now := time.Now()
+	resources := []unifiedresources.Resource{
+		{
+			// Docker runtimes are agent-typed internally and travel as
+			// docker-host.
+			ID:      "agent-docker-1",
+			Type:    unifiedresources.ResourceTypeAgent,
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
+			Docker:  &unifiedresources.DockerData{HostSourceID: "docker-host-1"},
+		},
+		{
+			ID:      "app-container-web",
+			Type:    unifiedresources.ResourceTypeAppContainer,
+			Name:    "web",
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
+			Docker:  &unifiedresources.DockerData{HostSourceID: "docker-host-1", ContainerID: "web-1"},
+		},
+		{
+			// A container reported without an ID is referenced by its name.
+			ID:      "app-container-sidecar",
+			Type:    unifiedresources.ResourceTypeAppContainer,
+			Name:    "sidecar",
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
+			Docker:  &unifiedresources.DockerData{HostSourceID: "docker-host-1"},
+		},
+		{
+			ID:      "storage-zfs",
+			Type:    unifiedresources.ResourceTypeStorage,
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+			Proxmox: &unifiedresources.ProxmoxData{SourceID: "cluster-a-pve1-local-zfs"},
+		},
+		{
+			ID:   "k8s-cluster-prod",
+			Type: unifiedresources.ResourceTypeK8sCluster,
+		},
+		{
+			ID:            "pmg-eu",
+			Type:          unifiedresources.ResourceTypePMG,
+			MetricsTarget: &unifiedresources.MetricsTarget{ResourceType: "agent", ResourceID: "pmg-main"},
+		},
+		{
+			ID:      "docker-service-web",
+			Type:    unifiedresources.ResourceTypeDockerService,
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
+			Docker:  &unifiedresources.DockerData{HostSourceID: "docker-host-1", ServiceID: "svc-1"},
+		},
+		{
+			// A service without an ID is named by the adapter's resource
+			// name, which the producer falls back to.
+			ID:      "docker-service-api",
+			Type:    unifiedresources.ResourceTypeDockerService,
+			Name:    "api",
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
+			Docker:  &unifiedresources.DockerData{HostSourceID: "docker-host-1"},
+		},
+		{
+			// A Pulse agent reports the Unraid array as storage keyed by
+			// its own source ID, which is the metrics target.
+			ID:            "storage-unraid",
+			Type:          unifiedresources.ResourceTypeStorage,
+			Sources:       []unifiedresources.DataSource{unifiedresources.SourceAgent},
+			MetricsTarget: &unifiedresources.MetricsTarget{ResourceType: "storage", ResourceID: "host-1/storage:unraid-array"},
+		},
+		{
+			ID:           "physical-disk-sda",
+			Type:         unifiedresources.ResourceTypePhysicalDisk,
+			Sources:      []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+			Proxmox:      &unifiedresources.ProxmoxData{Instance: "cluster-a", NodeName: "pve1"},
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{DevPath: "/dev/sda", Serial: "SER-B"},
+		},
+	}
+	active := func(resourceID string) models.Alert {
+		return models.Alert{ID: resourceID + "-alert", Type: "status", Level: "warning", ResourceID: resourceID, StartTime: now.Add(-time.Hour)}
+	}
+	// Proxmox disk alerts reference the device path, which a replacement disk
+	// in the same slot takes over, and record the serial of the disk they
+	// were raised on.
+	diskRef := unifiedresources.ProxmoxPhysicalDiskAlertResourceID("cluster-a", "pve1", "/dev/sda")
+	diskAlert := func(id, serial string) models.Alert {
+		alert := active(diskRef)
+		alert.ID, alert.Type, alert.Message = id, "disk-health", id
+		alert.Metadata = map[string]interface{}{"disk_serial": serial}
+		return alert
+	}
+	snapshot := reportingEnrichmentSnapshot{
+		Resources: resources,
+		ActiveAlerts: []models.Alert{
+			active(alerts.DockerHostResourceID("docker-host-1")),
+			active(alerts.DockerContainerResourceID("docker-host-1", "web-1", "web")),
+			active(alerts.DockerContainerResourceID("docker-host-1", "", "sidecar")),
+			active("cluster-a-pve1-local-zfs"),
+			active("cluster-a-pve1-local-zfs/zfs-pool:local-zfs"),
+			active("cluster-a-pve1-local-zfs/zfs-pool:local-zfs/device:sda2"),
+			active("cluster-a-pve1-local-zfs2"),
+			active("k8s-cluster-prod"),
+			active("pmg-main"),
+			active(alerts.DockerServiceResourceID("docker-host-1", "svc-1", "web")),
+			active(alerts.DockerServiceResourceID("docker-host-1", "", "api")),
+			active("agent:host-1/storage:unraid-array"),
+			diskAlert("disk-health-replacement", "SER-B"),
+			diskAlert("disk-health-predecessor", "SER-A"),
+		},
+	}
+
+	for _, tc := range []struct {
+		resourceType string
+		resourceID   string
+		want         []string
+	}{
+		{"docker-host", "agent-docker-1", []string{alerts.DockerHostResourceID("docker-host-1")}},
+		{"app-container", "app-container-web", []string{alerts.DockerContainerResourceID("docker-host-1", "web-1", "web")}},
+		{"app-container", "app-container-sidecar", []string{alerts.DockerContainerResourceID("docker-host-1", "", "sidecar")}},
+		{"storage", "storage-zfs", []string{
+			"cluster-a-pve1-local-zfs",
+			"cluster-a-pve1-local-zfs/zfs-pool:local-zfs",
+			"cluster-a-pve1-local-zfs/zfs-pool:local-zfs/device:sda2",
+		}},
+		{"k8s", "k8s-cluster-prod", []string{"k8s-cluster-prod"}},
+		{"pmg", "pmg-eu", []string{"pmg-main"}},
+		{"app-container", "docker-service-web", []string{alerts.DockerServiceResourceID("docker-host-1", "svc-1", "web")}},
+		{"app-container", "docker-service-api", []string{alerts.DockerServiceResourceID("docker-host-1", "", "api")}},
+		{"storage", "storage-unraid", []string{"agent:host-1/storage:unraid-array"}},
+		{"disk", "physical-disk-sda", []string{diskRef}},
+	} {
+		req := reporting.MetricReportRequest{ResourceType: tc.resourceType, ResourceID: tc.resourceID}
+		NewReportingHandlers(nil, nil).enrichReportRequest(context.Background(), "default", &req, snapshot, now.Add(-24*time.Hour), now)
+		if got := reportAlertResourceIDs(req); !reflect.DeepEqual(got, tc.want) {
+			t.Fatalf("%s report alerts = %v, want %v", tc.resourceType, got, tc.want)
+		}
+		// Only the alert naming the replacement disk's serial is its own;
+		// its predecessor's alert on the same path stays off its report.
+		if tc.resourceType == "disk" && req.Alerts[0].Message != "disk-health-replacement" {
+			t.Fatalf("disk report alert = %+v", req.Alerts[0])
+		}
+	}
+}
+
 func TestContract_ReportingCatalogJSONSnapshot(t *testing.T) {
 	handler := NewReportingHandlers(nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/catalog", nil)

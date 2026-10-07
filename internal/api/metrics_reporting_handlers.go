@@ -694,6 +694,10 @@ func (h *ReportingHandlers) enrichReportRequest(ctx context.Context, orgID strin
 		h.enrichVMReport(ctx, orgID, req, snapshot, start, end)
 	case "system-container", "oci-container":
 		h.enrichContainerReport(ctx, orgID, req, snapshot, start, end)
+	case "agent":
+		h.enrichAgentReport(req, snapshot, start, end)
+	default:
+		attachReportAlerts(req, snapshot, reportAlertScopeFor(req, findReportSubjectResource(req, snapshot)), start, end)
 	}
 }
 
@@ -849,41 +853,7 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 			if storageNode != node.Name {
 				continue
 			}
-
-			var total, used, available int64
-			var usagePerc float64
-			if r.Metrics != nil && r.Metrics.Disk != nil {
-				if r.Metrics.Disk.Total != nil {
-					total = *r.Metrics.Disk.Total
-				}
-				if r.Metrics.Disk.Used != nil {
-					used = *r.Metrics.Disk.Used
-				}
-				if total > 0 {
-					available = total - used
-				}
-				usagePerc = r.Metrics.Disk.Percent
-				if usagePerc == 0 && total > 0 {
-					usagePerc = (float64(used) / float64(total)) * 100
-				}
-			}
-
-			var storageType, content string
-			if r.Storage != nil {
-				storageType = r.Storage.Type
-				content = r.Storage.Content
-			}
-
-			req.Storage = append(req.Storage, reporting.StorageInfo{
-				Name:      r.Name,
-				Type:      storageType,
-				Status:    string(r.Status),
-				Total:     total,
-				Used:      used,
-				Available: available,
-				UsagePerc: usagePerc,
-				Content:   content,
-			})
+			req.Storage = append(req.Storage, reportStorageInfo(r))
 		case unifiedresources.ResourceTypePhysicalDisk:
 			if r.PhysicalDisk == nil {
 				continue
@@ -895,20 +865,7 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 			if diskNode != node.Name {
 				continue
 			}
-			pd := r.PhysicalDisk
-			temperatureWarning, temperatureCritical := reportDiskTemperatureThresholds(snapshot.alertManager, pd.DiskType)
-			req.Disks = append(req.Disks, reporting.DiskInfo{
-				Device:              pd.DevPath,
-				Model:               pd.Model,
-				Serial:              pd.Serial,
-				Type:                pd.DiskType,
-				Size:                pd.SizeBytes,
-				Health:              pd.Health,
-				Temperature:         reportDiskTemperature(*pd),
-				WearLevel:           pd.Wearout,
-				TemperatureWarning:  temperatureWarning,
-				TemperatureCritical: temperatureCritical,
-			})
+			req.Disks = append(req.Disks, reportDiskInfo(*r.PhysicalDisk, snapshot.alertManager))
 		}
 	}
 }
