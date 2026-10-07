@@ -3715,9 +3715,12 @@ production table, router and styles; it does not qualify full-app scrolling.
     IDs into setup payloads. The shared settings shell should let the backend
     resolve the effective BYOK model and then render that returned state rather
     than guessing a model in the modal.
-    Scoped Assistant handoffs must keep request-local execution overrides in
-    drawer context. Dashboard and other route-owned entry points may open the
-    Assistant drawer with source context and `autonomousMode:false`, but they
+    Scoped Assistant handoffs keep their approval-required disclosure in
+    drawer context: `autonomousMode:false` on `AIChatContext` is a drawer-only
+    flag the chat transport never sends, because `/api/ai/chat` sets
+    approval-required mode server-side for every request. Dashboard and other
+    route-owned entry points may open the
+    Assistant drawer with source context and that flag, but they
     must not infer a user task from an ordinary context-only open. Explicit
     labelled explanation actions use `aiChatStore.explain` and the shared
     explanation dispatcher, which captures the request context, waits for open
@@ -3783,7 +3786,7 @@ production table, router and styles; it does not qualify full-app scrolling.
     chips in the drawer and must not become another primitive path for raw
     approval, command, or rollback command payload text. Missing-detail
     queued-fix recovery actions must still provide the feature-owned Patrol
-    briefing and request-local approval-required posture rather than opening the
+    briefing and approval-required disclosure rather than opening the
     shared drawer as context-free generic Assistant chat. If a feature-owned
     expired-approval recovery action still has structured action artifact metadata,
     the shared drawer may receive only safe summary fields and command counts;
@@ -3810,16 +3813,16 @@ production table, router and styles; it does not qualify full-app scrolling.
     feature-owned finding handoff helper rather than hand-written prompt-only
     drawer opens: safe approval metadata, action artifact summaries, resource
     references, and bounded `handoff_actions` may enter the prompt and context,
-    but raw command text stays out and the scoped request must pass
-    `autonomousMode:false` instead of changing the user's persistent Assistant
-    control level. Patrol remediation-plan drawer handoffs must use the same
+    but raw command text stays out and the handoff must set the drawer's
+    `autonomousMode:false` disclosure instead of changing the user's persistent
+    Assistant control level. Patrol remediation-plan drawer handoffs must use the same
     primitive boundary: plan title/status/risk, step labels, and command counts
     may enter Assistant context; raw command and rollback command payloads must
     stay in the governed remediation/action panel. All Patrol finding
     discussion handoffs, including context-only findings without a live approval
-    or proposed fix, must pass `autonomousMode:false` as a request-local
-    override so the drawer shows approval-required posture without mutating the
-    persistent Assistant control setting.
+    or proposed fix, must set `autonomousMode:false` as that drawer-only flag
+    so the drawer shows the approval-required posture the server enforces,
+    without mutating the persistent Assistant control setting.
 14. Keep shared filter primitives coherent with source-owned option hydration.
     Active platform/runtime pages and Settings infrastructure surfaces must keep
     canonical options visible in shared filter controls even when current

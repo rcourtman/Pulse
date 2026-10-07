@@ -1961,7 +1961,7 @@ recovery scope, or a storage/recovery-owned secret source.
     resources always withheld) is not a storage/recovery restore approval, backup
     freshness, recovery-scope, or restore-command signal.
     Patrol finding chat handoff execution controls in `internal/api/ai_handler.go`
-    follow the same boundary: backend-forced `autonomous_mode:false` for
+    follow the same boundary: the backend-forced approval-required mode for
     `finding_id` handoffs with model-only Patrol briefing, resource, or action
     context is Assistant action-governance, not a storage/recovery approval,
     recovery freshness, or restore-command signal.
@@ -4276,8 +4276,8 @@ AI/runtime review identity only. Storage and recovery may display or link from
 the safe run ID, run type/status, runtime-failure flag, or scoped resource label
 as incident context, but they must not reinterpret it as backup freshness,
 restore proof, storage health authority, or recovery-local remediation state.
-Patrol finding handoffs that force approval-required Assistant mode from a
-non-empty `finding_id` follow the same adjacent API boundary: storage and
+Patrol finding handoffs, which the backend runs in approval-required
+Assistant mode from a non-empty `finding_id`, follow the same adjacent API boundary: storage and
 recovery may treat the resulting Assistant session as incident context, but
 must not reinterpret the finding ID or approval-required chat mode as backup
 freshness, restore authorization, storage remediation permission, or recovery

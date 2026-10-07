@@ -2544,8 +2544,9 @@ deriving an older display status from `workflowStatusHistory`.
    popup/dialog only; it must not also close the Assistant drawer.
    Failed-turn retry is part of that same local chat-runtime boundary: a
    retryable in-memory assistant error may replay the original user turn's
-   structured mentions, finding id, approval override, handoff resources,
-   handoff actions, and handoff metadata, but must not reconstruct scoped
+   structured mentions, finding id, model route, handoff context, handoff
+   resources, handoff actions, and handoff metadata (execution mode is not
+   part of that request; `/api/ai/chat` sets it), but must not reconstruct scoped
    context from prompt history or saved transcript prose. Provider/model route
    recovery is explicit user-visible recovery, not hidden chat execution. A
    failed turn may expose route-and-retry actions through the existing drawer
@@ -3537,7 +3538,7 @@ query...`, and `Reading storage...` before streamed tool arguments are
    browser-safe session summary, clear redo state when a new message or trim
    changes the transcript, and keep forked sessions independent from the source
    redo stack. The drawer must restore the removed prompt, structured mentions,
-   finding id, handoff metadata, approval/autonomous override, and selected
+   finding id, handoff context and metadata, and selected
    model route when available so the operator can edit and resend without
    reconstructing hidden context from transcript prose.
    Retry and regenerate are turn re-runs over the same undo boundary, not a
@@ -3792,8 +3793,10 @@ query...`, and `Reading storage...` before streamed tool arguments are
    dispatches the shared evidence-first explanation request through
    `frontend-modern/src/components/AI/Chat/hooks/useExplanationRequest.ts`.
    It preserves drafts and current work, captures the selected context before
-   asynchronous initialization, and uses normal send, queue, and retry handling
-   with request-local `autonomousMode:false`. It must not prescribe a diagnosis
+   asynchronous initialization, and uses normal send, queue, and retry handling.
+   The store marks that context `autonomousMode:false` so the drawer discloses
+   approval-required posture; the request itself carries no execution-mode
+   field, because `/api/ai/chat` sets that mode server-side. It must not prescribe a diagnosis
    or a tool sequence or grant action authority. The drawer
    presentation must stay compact: source, status, one primary subject, and an
    optional safe route link. It must not render Patrol-authored remediation
@@ -4607,10 +4610,11 @@ resolve canonical/source IDs and unique aliases before collection, reject
     completed, failed, expired, or otherwise historical action references must
     remain action context without being relabeled as requiring approval.
     When the Assistant drawer restores any session from that `handoff_summary`,
-    it must restore the scoped request-local approval boundary as well as the
-    safe visible briefing: the next chat turn must carry
-    `autonomous_mode:false` even when the summary is context-only and has no
-    queued action, while the visible badge/action copy must still reflect the
+    it must restore the scoped approval-required disclosure (the drawer-only
+    `autonomousMode:false` context flag) as well as the safe visible briefing,
+    even when the summary is context-only and has no queued action. The next
+    chat turn carries no execution-mode field; `/api/ai/chat` runs it
+    approval-required server-side. The visible badge/action copy must still reflect the
     actual last-known action state or Patrol assessment context instead of
     inventing a pending approval or restoring a Patrol recommendation. That
     restoration is success-bound: if the underlying session message load fails,
@@ -4644,8 +4648,8 @@ resolve canonical/source IDs and unique aliases before collection, reject
     model-context text parsing must not resurrect them as a legacy fallback.
     After that send succeeds, the drawer
     must clear those request payloads while preserving the safe visible
-    briefing and request-local
-    approval-required posture; later turns must rely on backend-owned session
+    briefing and the drawer's
+    approval-required disclosure; later turns must rely on backend-owned session
     model-context hydration and current canonical stores instead of resending
     stale browser handoff payloads. Patrol approval-row Assistant entries are
     still Patrol finding handoffs, not local prompt-only shortcuts: live
@@ -4657,34 +4661,38 @@ resolve canonical/source IDs and unique aliases before collection, reject
     Proposed-fix command text must stay out of both the persisted chat message
     and the model-only handoff context, and command payloads remain
     approval-context data, not conversational copy.
-    `/api/ai/chat` must also clamp Patrol finding handoffs to
-    approval-required mode when a request carries a non-empty `finding_id` or
-    resolves to model-only briefing, resource, or action context, by forcing the
-    request-local autonomous-mode override to false, even when a caller supplied
-    `autonomous_mode:true`. That clamp belongs to the
+    `/api/ai/chat` clamps every exchange to approval-required mode, Patrol
+    finding handoffs included: `ChatRequest` has no `autonomous_mode` field, so
+    caller JSON (a stale client's `autonomous_mode:true` included) is dropped at
+    decode, and `HandleChat` passes `AutonomousMode:false` into the chat service
+    whether or not the request carries a `finding_id` or model-only briefing,
+    resource, or action context. The browser sends no execution-mode field.
+    That clamp belongs to the
     backend/API execution boundary, does not mutate the user's persistent AI
     control setting, and prevents product-originated Patrol action context from
     becoming silent command authority.
-    The chat runtime must apply any request-local autonomous-mode override to
+    The chat runtime must apply that server-set request-local mode
+    (`chat.ExecuteRequest.AutonomousMode`) to
     both the per-request `AgenticLoop` and the cloned `PulseToolExecutor`;
-    persistent autonomous settings must not leak into scoped approval-required
-    handoffs through executor state. When such an override forces approval mode
+    persistent autonomous settings must not leak into approval-required
+    requests through executor state. When the request forces approval mode
     and the saved control level is autonomous, the executor clone must clamp its
     effective control level to controlled for that request only, so even
-    policy-allowed diagnostic commands require operator approval in scoped
-    handoffs without mutating the user's saved setting.
+    policy-allowed diagnostic commands require operator approval in public chat
+    without mutating the user's saved setting.
     The Assistant drawer may also render an attached context briefing for that
     handoff, but the briefing is runtime context visibility only: it must not
     mutate chat control settings, execute tools, or reveal raw command payloads.
     Resource-drawer Assistant entries use that same briefing path with
     `handoff_metadata.kind=resource_context`, a structured `handoff_resources`
-    reference, and `autonomous_mode:false`; they must not prefill or submit a
+    reference, and the drawer-only `autonomousMode:false` approval disclosure;
+    they must not prefill or submit a
     browser-authored prompt, and any rich resource facts must be hydrated by the
     backend context-pack path rather than reconstructed in the browser.
     Safe route-owned briefing actions may render as app links when the handoff
     includes an `actionHref`, but those links are navigation guidance only and
     do not grant tool execution or approval authority.
-    Request-local approval-required scoped handoffs must present that boundary
+    Scoped handoffs must present the approval-required boundary
     through compact source-named drawer state and the effective control label,
     so Patrol approval/finding handoffs and alert-investigation handoffs are
     named by their source rather than as generic dashboard briefs.
@@ -6950,19 +6958,22 @@ operator paragraph. Future overview or brief surfaces need a governed product
 owner first, must pass fact-bound structured context from owning Infrastructure,
 Workloads, Patrol, storage, recovery, and alert summaries, and must not let an
 unbounded prompt become a route's source of truth.
-Future route-to-Assistant handoffs must also keep their execution mode scoped
-to the request. When an overview brief opens Assistant, the drawer may prefill
-only governed prompt/context data, but the submitted chat request must set
-`autonomous_mode:false`, preserve the operator's persistent Assistant
-control-level setting, and disclose the temporary approval-required mode in
-the drawer instead of showing the generic Autonomous warning.
+Future route-to-Assistant handoffs inherit the server-set execution mode
+instead of carrying one. When an overview brief opens Assistant, the drawer may
+prefill only governed prompt/context data; the submitted chat request carries
+no execution-mode field (`/api/ai/chat` runs every request approval-required),
+the operator's persistent Assistant control-level setting stays untouched, and
+the drawer discloses the approval-required mode through the
+`autonomousMode:false` context flag instead of showing the generic Autonomous
+warning.
 Scoped Assistant handoffs that originate in owned product surfaces may also
 send bounded `handoff_context` text, structured `handoff_resources`, and safe
 structured `handoff_actions` through `frontend-modern/src/api/aiChat.ts` and
 `/api/ai/chat`. That context is model-only session metadata, not saved
 user-authored message text, and the backend must clamp the exchange to
 approval-required mode whenever such scoped handoff context, resources, or
-action references are present. Patrol finding IDs remain stricter: when
+action references are present (`HandleChat` currently clamps every exchange).
+Patrol finding IDs remain stricter: when
 `finding_id` resolves, backend-refreshed durable Patrol context remains the
 canonical authority; the handler may merge only a recognized same-finding
 Patrol product handoff section as secondary model-only briefing, and it must

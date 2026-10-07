@@ -2702,9 +2702,10 @@ a new API state machine, queue contract, or verification-accounting field.
    remediation-plan handoffs must use the same boundary for model-only
    context: plan status, risk, step labels, and command counts are allowed,
    while raw command and rollback command payloads remain in governed action
-   surfaces. Frontend Patrol finding-discussion handoffs must force a
-   request-local approval-required Assistant mode instead of inheriting the
-   user's persistent autonomous control setting; live approval, action artifact,
+   surfaces. Frontend Patrol finding-discussion handoffs run in the
+   approval-required Assistant mode that `/api/ai/chat` sets server-side for
+   every request, never the user's persistent autonomous control setting, and
+   send no execution-mode field of their own; live approval, action artifact,
    fix-outcome, and remediation-plan references only add structured action
    metadata, they are not the trigger for the boundary. Frontend-visible Patrol
    briefing payloads must stay compact and must not include suggested prompt
@@ -2712,7 +2713,7 @@ a new API state machine, queue contract, or verification-accounting field.
    recommendation metadata. Frontend queued-fix recovery handoffs
    where the live approval or action artifact payload is unavailable must still
    carry that Patrol-owned finding briefing, current `fix_queued` posture,
-   request-local approval-required mode, and model-only evidence context; they must
+   approval-required disclosure, and model-only evidence context; they must
    not degrade into generic Assistant investigation chat or imply that
    execution can proceed from missing command payloads. Expired-approval
    recovery handoffs may use a still-available structured action artifact payload
@@ -4293,7 +4294,7 @@ the authoritative analysis outcome.
    run-history consumers may pass a bounded `[Patrol Run Context]` block,
    scoped resource references, run outcome/coverage facts, sanitized analysis,
    and structured runtime failure summary/detail as model-only chat context
-   while forcing request-local approval-required mode and leaving retries,
+   under the server-set approval-required mode, leaving retries,
    configuration changes, and remediation authority outside the chat payload
    and the main Patrol page composition boundary, so once that governed
    secondary area exists inside the Current issues and history workspace the same payloads must not
@@ -7139,8 +7140,8 @@ unified-resource mentions as well; VMware network inventory does not create a
 provider-local mention family.
 That same `/api/ai/chat` payload boundary owns request-local execution mode,
 and the server sets it. `ChatRequest` in `internal/api/ai_handler.go` has no
-`autonomous_mode` field, so the `autonomous_mode:false` that scoped handoffs
-such as an explain-this-issue request still send is dropped at decode, and the
+`autonomous_mode` field, so a stale client's `autonomous_mode` is dropped at
+decode (the browser and the `internal/ai/eval` runner send none), and the
 handler passes approval-required mode into the chat service for every
 exchange; an Autonomous control level runs as Controlled for that request.
 That clamp is request-local and must not mutate the user's persistent AI
@@ -7180,8 +7181,9 @@ status, and a runtime-failure flag; the backend rebuilds their context), but the
 must not turn their evidence or proposed remedies into user-authored message
 text. Ordinary attachment is context only. A labelled Explain action may
 submit the shared user-selected explanation request over the existing chat
-transport, with the evidence kept in model-only handoff fields and
-`autonomous_mode:false`. This starts explanation/review and grants no new
+transport, with the evidence kept in model-only handoff fields and no
+execution-mode field, since the handler already runs it approval-required.
+This starts explanation/review and grants no new
 approval or execution authority. When a
 Patrol `finding_id` resolves,
 backend-refreshed durable finding context remains canonical; the handler may
@@ -7201,10 +7203,10 @@ recommendation fields from legacy handoffs.
 Patrol finding handoffs keep that clamp on their own path: when a request
 carries a non-empty `finding_id` or resolves to model-only Patrol briefing,
 resource, or action context, `internal/api/ai_handler.go` must clamp the
-request-local autonomous mode to false even if the caller supplied
+request-local autonomous mode to false even if a caller's JSON carries
 `autonomous_mode:true`. That server-side clamp is part of the public API
-contract because the frontend handoff setting is only advisory unless the
-backend preserves the approval-required boundary.
+contract because the drawer's `autonomousMode:false` flag is a disclosure only
+and never reaches the request.
 That same backend API boundary now also owns the negative space around
 assistant control. Wiring native TrueNAS app actions into
 `internal/api/router.go`, `internal/api/ai_handler.go`, or adjacent backend
@@ -8730,7 +8732,7 @@ briefings may reuse that same safe metadata for factual action labels and safety
 while approval command text remains inside the governed approval/remediation
 surface.
 Patrol approval-row Assistant handoffs must use the same safe metadata boundary
-and set `autonomousMode:false` for the request-local chat handoff; they must not
+and set the drawer's `autonomousMode:false` approval disclosure; they must not
 paste raw approval or action command text into a chat prompt.
 Patrol remediation-plan or action-artifact Assistant handoffs must pass only safe
 status, risk, description, and command-count posture as non-authoritative context

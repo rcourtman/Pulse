@@ -52,7 +52,7 @@ type TestStreamDispatch = (event: TestStreamEvent) => void;
 type TestStreamLifecycle = { onStreamOpen?: () => void };
 
 const latestStreamLifecycle = (): TestStreamLifecycle | undefined =>
-  mockChat.mock.calls.at(-1)?.[12] as TestStreamLifecycle | undefined;
+  mockChat.mock.calls.at(-1)?.[11] as TestStreamLifecycle | undefined;
 
 function dispatchTestStreamEvent(
   onEvent: (event: StreamEvent) => void,
@@ -606,7 +606,6 @@ describe('useChat', () => {
         [{ id: 'vm-100', name: 'web-1', type: 'vm', node: 'pve-1' }],
         'finding-42',
         {
-          autonomousMode: false,
           handoffContext: '[Patrol Finding Context]\nFinding ID: finding-42',
           handoffResources: [
             {
@@ -640,9 +639,8 @@ describe('useChat', () => {
       expect(retryCall[0]).toBe('check this resource');
       expect(retryCall[5]).toEqual([{ id: 'vm-100', name: 'web-1', type: 'vm', node: 'pve-1' }]);
       expect(retryCall[6]).toBe('finding-42');
-      expect(retryCall[7]).toBe(false);
-      expect(retryCall[8]).toBe('[Patrol Finding Context]\nFinding ID: finding-42');
-      expect(retryCall[9]).toEqual([
+      expect(retryCall[7]).toBe('[Patrol Finding Context]\nFinding ID: finding-42');
+      expect(retryCall[8]).toEqual([
         {
           id: 'vm-100',
           name: 'web-1',
@@ -650,14 +648,14 @@ describe('useChat', () => {
           node: 'pve-1',
         },
       ]);
-      expect(retryCall[10]).toEqual([
+      expect(retryCall[9]).toEqual([
         {
           findingId: 'finding-42',
           approvalId: 'approval-1',
           approvalStatus: 'pending',
         },
       ]);
-      expect(retryCall[11]).toEqual({
+      expect(retryCall[10]).toEqual({
         kind: 'patrol_finding',
       });
       dispose();
@@ -716,26 +714,11 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('passes a scoped autonomous-mode override to the API', async () => {
-      mockChat.mockResolvedValue(undefined);
-
-      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
-      await chat.sendMessage('summarize dashboard', undefined, undefined, {
-        autonomousMode: false,
-      });
-
-      const chatCall = mockChat.mock.calls[0];
-      expect(chatCall[0]).toBe('summarize dashboard');
-      expect(chatCall[7]).toBe(false);
-      dispose();
-    });
-
     it('passes model-only handoff context and resource references to the API', async () => {
       mockChat.mockResolvedValue(undefined);
 
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
       await chat.sendMessage('explain this incident', undefined, undefined, {
-        autonomousMode: false,
         handoffContext: '[Alert Incident Context]\nIncident ID: incident-1',
         handoffResources: [
           {
@@ -755,9 +738,8 @@ describe('useChat', () => {
       });
 
       const chatCall = mockChat.mock.calls[0];
-      expect(chatCall[7]).toBe(false);
-      expect(chatCall[8]).toBe('[Alert Incident Context]\nIncident ID: incident-1');
-      expect(chatCall[9]).toEqual([
+      expect(chatCall[7]).toBe('[Alert Incident Context]\nIncident ID: incident-1');
+      expect(chatCall[8]).toEqual([
         {
           id: 'storage-1',
           name: 'tank',
@@ -765,13 +747,14 @@ describe('useChat', () => {
           node: 'nas-1',
         },
       ]);
-      expect(chatCall[10]).toEqual([
+      expect(chatCall[9]).toEqual([
         {
           findingId: 'finding-1',
           approvalId: 'approval-1',
           approvalStatus: 'pending',
         },
       ]);
+      expect(chatCall).toHaveLength(12);
       dispose();
     });
 
@@ -1134,7 +1117,7 @@ describe('useChat', () => {
         'second',
         [{ id: 'vm-1', name: 'web-1', type: 'vm', node: 'pve-1' }],
         'finding-1',
-        { autonomousMode: false, handoffContext: 'scoped context' },
+        { handoffContext: 'scoped context' },
       );
 
       const queued = chat.queuedFollowUps()[0];
@@ -1146,7 +1129,7 @@ describe('useChat', () => {
         prompt: 'second',
         mentions: [{ id: 'vm-1', name: 'web-1', type: 'vm', node: 'pve-1' }],
         findingId: 'finding-1',
-        sendOptions: { autonomousMode: false, handoffContext: 'scoped context' },
+        sendOptions: { handoffContext: 'scoped context' },
       });
       expect(chat.queuedFollowUpCount()).toBe(0);
       expect(chat.messages().some((message) => message.content === 'second')).toBe(false);
@@ -1252,7 +1235,6 @@ describe('useChat', () => {
           _signal?: AbortSignal,
           _mentions?: ChatMention[],
           _findingId?: string,
-          _autonomousMode?: boolean,
           _handoffContext?: string,
           _handoffResources?: unknown[],
           _handoffActions?: unknown[],
@@ -3803,7 +3785,6 @@ describe('useChat', () => {
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess-undo' }));
       await chat.sendMessage('inspect vm-101', mentions, 'finding-101', {
         model: 'openrouter:deepseek/deepseek-chat',
-        autonomousMode: false,
         handoffContext: '[Patrol Finding Context]\nVM 101 has stale guest tools',
       });
 
@@ -3818,7 +3799,6 @@ describe('useChat', () => {
           mentions,
           findingId: 'finding-101',
           model: 'openrouter:deepseek/deepseek-chat',
-          autonomousMode: false,
           handoffContext: '[Patrol Finding Context]\nVM 101 has stale guest tools',
         },
       });

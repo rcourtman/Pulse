@@ -213,7 +213,7 @@ describe('aiChatStore', () => {
     });
   });
 
-  it('preserves scoped autonomous-mode overrides for context-only opens', () => {
+  it('preserves the drawer approval disclosure flag for context-only opens', () => {
     aiChatStore.open({
       targetType: 'dashboard',
       targetId: 'pulse-brief',

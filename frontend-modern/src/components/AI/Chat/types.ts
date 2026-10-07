@@ -156,7 +156,6 @@ export interface ChatMessageRequestContext {
   mentions?: ChatMention[];
   findingId?: string;
   model?: string;
-  autonomousMode?: boolean;
   handoffContext?: string;
   handoffResources?: ChatHandoffResource[];
   handoffActions?: ChatHandoffAction[];

@@ -1609,9 +1609,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (request.model) {
       sendOptions.model = request.model;
     }
-    if (typeof request.autonomousMode === 'boolean') {
-      sendOptions.autonomousMode = request.autonomousMode;
-    }
     if (request.handoffContext) {
       sendOptions.handoffContext = request.handoffContext;
     }
@@ -3504,9 +3501,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
         ? sendOptionsFromRestoredRequest(restoredDraft.request)
         : {};
     if (!queuedDraft && !restoredDraft) {
-      if (typeof ctx.autonomousMode === 'boolean') {
-        sendOptions.autonomousMode = ctx.autonomousMode;
-      }
       if (ctx.handoffContext && ctx.handoffContext.trim()) {
         sendOptions.handoffContext = ctx.handoffContext;
       }
@@ -3522,7 +3516,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
     const hasSendOptions =
       Boolean(sendOptions.model) ||
-      typeof sendOptions.autonomousMode === 'boolean' ||
       Boolean(sendOptions.handoffContext) ||
       Boolean(sendOptions.handoffResources?.length) ||
       Boolean(sendOptions.handoffActions?.length) ||

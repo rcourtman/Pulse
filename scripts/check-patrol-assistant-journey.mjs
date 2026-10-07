@@ -311,7 +311,7 @@ try {
       "Disk usage is 95 percent.",
     );
     expect(requests.at(-1).handoff_resources[0].id).toBe(resourceId);
-    expect(requests.at(-1).autonomous_mode).toBe(false);
+    expect(requests.at(-1)).not.toHaveProperty("autonomous_mode");
     await expect(
       page.getByText("No changes were made.", { exact: false }),
     ).toBeVisible();
@@ -386,7 +386,7 @@ try {
       "Source: Pulse Alerts active alert",
     );
     expect(requests.at(-1).handoff_resources.length).toBeGreaterThan(0);
-    expect(requests.at(-1).autonomous_mode).toBe(false);
+    expect(requests.at(-1)).not.toHaveProperty("autonomous_mode");
     await expect(
       page.getByText("No changes were made.", { exact: false }),
     ).toBeVisible();
@@ -476,7 +476,7 @@ try {
         expect(requests.at(-1).handoff_context).toContain(finding.id);
         expect(requests.at(-1).handoff_context).toContain(uncertainConclusion);
         expect(requests.at(-1).handoff_context).toContain(failedRead);
-        expect(requests.at(-1).autonomous_mode).toBe(false);
+        expect(requests.at(-1)).not.toHaveProperty("autonomous_mode");
         await expect(
           page
             .getByTestId("assistant-message-list")
