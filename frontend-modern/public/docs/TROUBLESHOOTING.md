@@ -623,8 +623,10 @@ alert was generated, routed or delivered to the intended recipient.
   Turn delivery on there only when you intend to send alerts.
 - Check the affected alert, the destination's **Enabled** state, minimum alert
   severity and tag filters. Review the [quiet-hours schedule](CONFIGURATION.md#quiet-hours-and-notification-holds)
-  and any mute, acknowledgement or maintenance policy before treating an absent
-  attempt as a transport failure.
+  and [acknowledgement or snooze](CONFIGURATION.md#acknowledge-and-snooze-existing-alerts),
+  plus any mute or maintenance policy, before treating an absent attempt as a
+  transport failure. In **Alerts → Overview**, use **Show acknowledged** to find
+  hidden incidents; **Resume** ends a snooze but does not remove acknowledgement.
 - Use **Recent delivery activity** to correlate the original alert, destination
   and absolute timestamp, including held-notification reasons. An empty window
   is not proof of healthy delivery; an **unavailable** read is not an empty log.
