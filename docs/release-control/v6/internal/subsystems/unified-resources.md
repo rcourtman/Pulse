@@ -6076,7 +6076,12 @@ the reference and is never retried. An owned row records its alert's
 reference as `alert_resource_id`. A read by the reference returns the rows
 journaled under it plus the rows owned away from it, matched through the
 indexed alert identifier (`ProxmoxPhysicalDiskAlertIdentifiers`) and that
-recorded reference, and every count uses the same predicate. The Alerts
+recorded reference, and every count uses the same predicate. Those
+identifiers cover the health and wearout specs and the disk temperature
+metric spec (`<reference>::metric-threshold:diskTemperature`), since PVE disks
+also raise temperature alerts under the same reference
+(`TestProxmoxDiskTemperatureAlertRowsFollowRecordedHardwareIdentity` in
+`internal/unifiedresources/store_test.go`). The Alerts
 history Resource action therefore still lists every occurrence raised under
 the path, across the disks that held it, and alert-centric reads keep their
 occurrences (see the AI runtime contract's incident-history queries). Rows
@@ -6232,6 +6237,13 @@ presentation. `frontend-modern/src/components/Infrastructure/`
 placement, signal, and snapshot context through the canonical resource drawer
 and debug/source sections rather than introducing a VMware-only detail route,
 drawer tab, or provider-local investigation shell.
+The TrueNAS physical-disk drawer judges a current temperature reading by the
+disk temperature policy, like the TrueNAS storage table:
+`useResourceDetailDrawerDerivedState.ts` passes the alerts store's
+`getDiskTemperatureThresholds` into `buildTrueNASDetailSections`, and the
+Temperature row takes a warning tone only when `isPhysicalDiskRunningHot`
+says the reading reached its disk type's alert trigger. A retained reading
+keeps its muted last-known row, and without a resolver heat is not judged.
 That same infrastructure consumer boundary also owns source selection
 continuity. Settings infrastructure panels and platform/runtime pages must
 keep canonical sources such as `truenas` and `availability` present in their

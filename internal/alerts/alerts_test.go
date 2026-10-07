@@ -12395,6 +12395,65 @@ func TestCheckEscalations(t *testing.T) {
 	})
 }
 
+// A config save re-judges open TrueNAS disk temperature alerts against the
+// threshold the next evaluation applies to each disk's type.
+func TestTrueNASDiskTemperatureAlertsReevaluatePerDiskType(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.TrueNASDiskDefaults = ThresholdConfig{}
+	configureUnifiedEvalManager(t, m, cfg)
+
+	nvme := trueNASTemperatureDisk("nvme0n1", "nvme", 72)
+	sata := trueNASTemperatureDisk("sda", "sata", 57)
+	checkTrueNASTemperatureDisk(t, m, nvme)
+	checkTrueNASTemperatureDisk(t, m, sata)
+	for _, disk := range []unifiedresources.Resource{nvme, sata} {
+		if _, firing := trueNASDiskTemperatureAlert(t, m, disk); !firing {
+			t.Fatalf("%s did not fire before the save: %v", disk.ID, alertKeys(m))
+		}
+	}
+
+	// Raising only the NVMe trigger resolves the NVMe alert and leaves the
+	// SATA alert, still over its own trigger, open.
+	m.mu.Lock()
+	m.config.DiskTempByType["nvme"] = HysteresisThreshold{Trigger: 75, Clear: 70}
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+	if _, firing := trueNASDiskTemperatureAlert(t, m, nvme); firing {
+		t.Fatalf("NVMe alert at 72C stayed open under a 75C NVMe trigger")
+	}
+	if _, firing := trueNASDiskTemperatureAlert(t, m, sata); !firing {
+		t.Fatalf("SATA alert at 57C resolved under its unchanged 55C trigger")
+	}
+}
+
+// An alert raised before it recorded its disk type is held to the lowest
+// per-type trigger, so a save never resolves an alert the next evaluation
+// raises again.
+func TestTrueNASDiskTemperatureAlertWithoutDiskTypeHeldAtLowestTrigger(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.TrueNASDiskDefaults = ThresholdConfig{}
+	cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 70, Clear: 65}
+	cfg.DiskTempByType = map[string]HysteresisThreshold{"nvme": {Trigger: 60, Clear: 55}}
+	configureUnifiedEvalManager(t, m, cfg)
+
+	nvme := trueNASTemperatureDisk("nvme0n1", "nvme", 66)
+	checkTrueNASTemperatureDisk(t, m, nvme)
+	alert, firing := trueNASDiskTemperatureAlert(t, m, nvme)
+	if !firing {
+		t.Fatalf("NVMe at 66C did not fire under a 60C NVMe trigger: %v", alertKeys(m))
+	}
+
+	m.mu.Lock()
+	delete(alert.Metadata, "diskType")
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+	if _, firing := trueNASDiskTemperatureAlert(t, m, nvme); !firing {
+		t.Fatalf("an alert without a disk type was resolved by the 70C agent default although its NVMe trigger is 60C")
+	}
+}
+
 func TestCleanupAlertsForNodes(t *testing.T) {
 	// t.Parallel()
 
@@ -22285,14 +22344,20 @@ func TestStaleCleanupKeepsThresholdAlertStillBeingEvaluated(t *testing.T) {
 
 // Resource history owns each PVE disk alert row by the hardware identity the
 // alert records, and reads by the path reference find those rows by alert
-// identifier. Both must match what CheckDiskHealth produces.
+// identifier. Both must match what CheckDiskHealth and
+// CheckProxmoxDiskTemperature produce.
 func TestCheckDiskHealthAlertsCarryHistoryOwnershipIdentity(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.config.MetricTimeThresholds = nil
+	m.mu.Unlock()
 	disk := proxmox.Disk{DevPath: "/dev/sdb", Model: "Crucial MX500", Serial: "2117E59AB123", WWN: "0x5002538f12345678",
 		Type: "ssd", Health: "FAILED", Wearout: 3}
 	for i := 0; i < 3; i++ {
 		m.CheckDiskHealth("lab", "pve1", disk)
+		m.CheckProxmoxDiskTemperature("lab", "pve1", ProxmoxDiskTemperatureReading{Disk: disk, Celsius: 80})
 	}
 
 	ref := unifiedresources.ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", disk.DevPath)
@@ -22311,5 +22376,189 @@ func TestCheckDiskHealthAlertsCarryHistoryOwnershipIdentity(t *testing.T) {
 		if alert.Metadata[unifiedresources.MetadataDiskSerial] != disk.Serial || alert.Metadata[unifiedresources.MetadataDiskWWN] != disk.WWN {
 			t.Fatalf("alert %q records serial %v and WWN %v", alert.ID, alert.Metadata[unifiedresources.MetadataDiskSerial], alert.Metadata[unifiedresources.MetadataDiskWWN])
 		}
+	}
+}
+
+func proxmoxTemperatureDisk(devPath, diskType string) proxmox.Disk {
+	return proxmox.Disk{DevPath: devPath, Model: "Test Disk", Serial: "SER-" + devPath, Type: diskType, Health: "PASSED"}
+}
+
+func proxmoxDiskTemperatureAlert(t *testing.T, m *Manager, devPath string) (*Alert, bool) {
+	t.Helper()
+	ref := unifiedresources.ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", devPath)
+	return testLookupActiveAlert(t, m, canonicalMetricStateID(ref, proxmoxDiskTemperatureMetric))
+}
+
+func proxmoxDiskTemperatureResolution(m *Manager, devPath string) (*models.AlertResolution, bool) {
+	ref := unifiedresources.ProxmoxPhysicalDiskAlertResourceID("lab", "pve1", devPath)
+	id := canonicalMetricStateID(ref, proxmoxDiskTemperatureMetric)
+	for _, resolved := range m.GetRecentlyResolved() {
+		if resolved.ID == id {
+			return resolved.Resolution, true
+		}
+	}
+	return nil, false
+}
+
+// TestProxmoxDiskTemperatureAlertsFollowDiskTemperaturePolicy pins Proxmox disk
+// temperature alerts to the disk temperature policy that judges an agent's
+// disks, TrueNAS disks and the Physical Disks verdict.
+func TestProxmoxDiskTemperatureAlertsFollowDiskTemperaturePolicy(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	check := func(devPath, diskType string, celsius int) {
+		m.CheckProxmoxDiskTemperature("lab", "pve1", ProxmoxDiskTemperatureReading{Disk: proxmoxTemperatureDisk(devPath, diskType), Celsius: celsius})
+	}
+	check("/dev/nvme0n1", "nvme", 63)
+	check("/dev/nvme1n1", "nvme", 72)
+	check("/dev/sda", "sata", 56)
+	check("/dev/sdb", "sas", 63)
+
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/nvme0n1"); firing {
+		t.Fatalf("NVMe at 63C fired under its 70C trigger: %v", alertKeys(m))
+	}
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/sdb"); firing {
+		t.Fatalf("SAS at 63C fired under its 65C trigger: %v", alertKeys(m))
+	}
+	for devPath, trigger := range map[string]float64{"/dev/nvme1n1": 70, "/dev/sda": 55} {
+		alert, firing := proxmoxDiskTemperatureAlert(t, m, devPath)
+		if !firing {
+			t.Fatalf("%s did not fire: %v", devPath, alertKeys(m))
+		}
+		if alert.Threshold != trigger {
+			t.Fatalf("%s trigger = %v, want %v", devPath, alert.Threshold, trigger)
+		}
+		if alert.Type != proxmoxDiskTemperatureMetric || alert.Metadata["resourceType"] != proxmoxDiskResourceType {
+			t.Fatalf("%s alert type %q, resourceType %v", devPath, alert.Type, alert.Metadata["resourceType"])
+		}
+		if alert.Metadata["diskType"] == nil || alert.Metadata[unifiedresources.MetadataDiskSerial] != "SER-"+devPath {
+			t.Fatalf("%s metadata = %v", devPath, alert.Metadata)
+		}
+	}
+	if alert, _ := proxmoxDiskTemperatureAlert(t, m, "/dev/sda"); alert.Message != "Disk temperature at 56.0°C" {
+		t.Fatalf("message = %q", alert.Message)
+	}
+
+	// A raised NVMe trigger moves NVMe disks with it.
+	m.mu.Lock()
+	m.config.DiskTempByType["nvme"] = HysteresisThreshold{Trigger: 75, Clear: 70}
+	m.mu.Unlock()
+	check("/dev/nvme2n1", "nvme", 72)
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/nvme2n1"); firing {
+		t.Fatalf("NVMe at 72C fired under a 75C trigger")
+	}
+}
+
+// A disk the linked agent reports is the agent's: its open alert closes as
+// moved to the agent, and the disk never alerts twice. An excluded disk, or a
+// policy the agent Disk Temp default switched off, closes it as a plain clear.
+// A disk with no current reading keeps its alert.
+func TestProxmoxDiskTemperatureAlertOwnershipAndHolds(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+	disk := proxmoxTemperatureDisk("/dev/sda", "sata")
+	read := func(reading ProxmoxDiskTemperatureReading) {
+		reading.Disk = disk
+		m.CheckProxmoxDiskTemperature("lab", "pve1", reading)
+	}
+	firing := func() bool {
+		_, ok := proxmoxDiskTemperatureAlert(t, m, "/dev/sda")
+		return ok
+	}
+
+	read(ProxmoxDiskTemperatureReading{Celsius: 60})
+	if !firing() {
+		t.Fatalf("SATA at 60C did not fire: %v", alertKeys(m))
+	}
+	read(ProxmoxDiskTemperatureReading{Celsius: 0})
+	if !firing() {
+		t.Fatalf("a poll without a current reading resolved the alert")
+	}
+
+	read(ProxmoxDiskTemperatureReading{Celsius: 60, AgentOwned: true})
+	if firing() {
+		t.Fatalf("an agent-owned disk kept its Proxmox temperature alert")
+	}
+	if resolution, ok := proxmoxDiskTemperatureResolution(m, "/dev/sda"); !ok || resolution == nil || resolution.Reason != string(AlertResolutionMovedToAgent) {
+		t.Fatalf("handover resolution = %+v (resolved %v), want moved_to_agent", resolution, ok)
+	}
+	read(ProxmoxDiskTemperatureReading{Celsius: 80, AgentOwned: true})
+	if firing() {
+		t.Fatalf("an agent-owned disk raised a Proxmox temperature alert")
+	}
+
+	read(ProxmoxDiskTemperatureReading{Celsius: 60})
+	if !firing() {
+		t.Fatalf("the disk did not alert again once the agent stopped listing it")
+	}
+	read(ProxmoxDiskTemperatureReading{Celsius: 60, Excluded: true})
+	if firing() {
+		t.Fatalf("an excluded disk kept its temperature alert")
+	}
+
+	read(ProxmoxDiskTemperatureReading{Celsius: 60})
+	m.mu.Lock()
+	m.config.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 0, Clear: 0}
+	m.mu.Unlock()
+	read(ProxmoxDiskTemperatureReading{Celsius: 60})
+	if firing() {
+		t.Fatalf("a switched-off agent Disk Temp default kept the Proxmox disk alert")
+	}
+}
+
+// A Proxmox disk temperature warning waits out the factory stability window for
+// a noisy gauge, as agent and TrueNAS disk temperature warnings do; a critical
+// reading bypasses it.
+func TestProxmoxDiskTemperatureWarningWaitsOutStabilityWindow(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	m.UpdateConfig(cfg)
+	if delay := m.GetConfig().TimeThresholds[proxmoxDiskResourceType]; delay != 5 {
+		t.Fatalf("proxmox-disk delay = %d, want the 5s factory default", delay)
+	}
+	m.mu.RLock()
+	grace := m.getTimeThreshold("lab:pve1:disk:dev-sda", proxmoxDiskResourceType, proxmoxDiskTemperatureMetric)
+	m.mu.RUnlock()
+	if grace != defaultNoisyGaugeStabilitySeconds {
+		t.Fatalf("Proxmox disk temperature delay = %ds, want the %ds stability window", grace, defaultNoisyGaugeStabilitySeconds)
+	}
+
+	m.CheckProxmoxDiskTemperature("lab", "pve1", ProxmoxDiskTemperatureReading{Disk: proxmoxTemperatureDisk("/dev/sda", "sata"), Celsius: 57})
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/sda"); firing {
+		t.Fatalf("a 57C SATA warning fired before its stability window")
+	}
+	m.CheckProxmoxDiskTemperature("lab", "pve1", ProxmoxDiskTemperatureReading{Disk: proxmoxTemperatureDisk("/dev/sdb", "sata"), Celsius: 70})
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/sdb"); !firing {
+		t.Fatalf("a 70C SATA critical reading waited out the stability window")
+	}
+}
+
+// A config save re-judges an open Proxmox disk temperature alert against its
+// disk type's trigger, as the next poll does; one without a recorded disk type
+// is held to the lowest per-type trigger.
+func TestProxmoxDiskTemperatureAlertsReevaluatePerDiskType(t *testing.T) {
+	m := newTestManager(t)
+	cfg := unifiedEvalBaseConfig()
+	cfg.AgentDefaults.DiskTemperature = &HysteresisThreshold{Trigger: 70, Clear: 65}
+	configureUnifiedEvalManager(t, m, cfg)
+	m.CheckProxmoxDiskTemperature("lab", "pve1", ProxmoxDiskTemperatureReading{Disk: proxmoxTemperatureDisk("/dev/nvme0n1", "nvme"), Celsius: 72})
+	m.CheckProxmoxDiskTemperature("lab", "pve1", ProxmoxDiskTemperatureReading{Disk: proxmoxTemperatureDisk("/dev/sda", "sata"), Celsius: 57})
+	sata, ok := proxmoxDiskTemperatureAlert(t, m, "/dev/sda")
+	if !ok {
+		t.Fatalf("SATA at 57C did not fire: %v", alertKeys(m))
+	}
+
+	m.mu.Lock()
+	m.config.DiskTempByType["nvme"] = HysteresisThreshold{Trigger: 75, Clear: 70}
+	delete(sata.Metadata, "diskType")
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/nvme0n1"); firing {
+		t.Fatalf("NVMe alert at 72C survived a save raising its trigger to 75C")
+	}
+	if _, firing := proxmoxDiskTemperatureAlert(t, m, "/dev/sda"); !firing {
+		t.Fatalf("a SATA alert without a disk type was resolved by the 70C agent default although its trigger is 55C")
 	}
 }

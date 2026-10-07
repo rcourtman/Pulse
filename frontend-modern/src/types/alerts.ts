@@ -147,6 +147,9 @@ export interface AlertConfig {
   kubernetesDefaults?: AlertThresholds;
   truenasDefaults?: AlertThresholds;
   truenasDiskDefaults?: AlertThresholds;
+  // Set on every config written since an unset truenasDiskDefaults
+  // temperature means each TrueNAS disk follows Disk temperature by type.
+  truenasDiskTemperatureByType?: boolean;
   vmwareDefaults?: AlertThresholds;
   snapshotDefaults?: SnapshotAlertConfig;
   backupDefaults?: BackupAlertConfig;

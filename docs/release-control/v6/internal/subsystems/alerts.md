@@ -1851,13 +1851,83 @@ A disk is hot from its trigger. Alerts and Patrol findings stay open until the
 reading falls to the clear value, or under the trigger when there is no band
 below it. The Physical Disks verdict and the TrueNAS Health cell judge only the
 current reading against the trigger. PDF reports colour disk temperatures by
-the same thresholds. Judges that still differ: TrueNAS disk temperature alerts
-use `TrueNASDiskDefaults.Temperature` (a flat 55/50), and the TrueNAS disk
-drawer tones the reading from a fixed 55C.
+the same thresholds.
 `TestDiskTemperatureThresholdMatchesCheckHostPolicy` in
 `internal/alerts/threshold_resolution_shared_test.go` pins per-type resolution, a raised
 NVMe trigger that `CheckHost` also honours, the copy, the disabled default and
 the nil manager.
+
+TrueNAS disk temperature alerts follow the policy too:
+`trueNASDiskTemperatureDefaultNoLock`
+(`internal/alerts/truenas_disk_temperature.go`) is the type-default tier of
+`effectiveAlertPolicyNoLock` for `truenas-disk`, so an unset
+`TrueNASDiskDefaults.Temperature` resolves per disk type (the
+`alertPolicyQuery.DiskType` the unified input carries from
+`PhysicalDisk.DiskType`). A TrueNAS-wide value the user saved under TrueNAS
+Disks replaces it for every TrueNAS disk, as a host Disk Temp override does for
+an agent's disks, 0 meaning off, and a per-disk override beats both. The alert
+records `diskType` so a config save re-judges it per type; one without it is
+held to the lowest per-type trigger. A retained reading
+(`diskinventory.TemperatureCollected` false) is no evidence and raises nothing.
+The factory value is unset. `normalizeTrueNASDiskTemperature` drops a stored
+55/50 only from a config without `TrueNASDiskTemperatureByType`, because the
+thresholds page wrote that flat factory value back on every save; the page
+writes the marker, so a 55 typed later is kept. Every config `GetConfig`
+returns carries the marker, so a client that reads and writes back keeps it.
+Without the marker (an old saved file, or a page loaded before the upgrade)
+55/50 is read as that unchosen factory value; a client building a config from
+scratch with an explicit TrueNAS-wide 55 has to send the marker. The TrueNAS
+Disks Global Defaults cell reads `By type` while unset
+(`globalDefaultFallbacks` on `ResourceTable`,
+`resolveAlertResourceGlobalDefaultCell`), or Off when the agent Disk Temp
+default switches the policy off, and switching it on then stages an explicit
+TrueNAS-wide 55 because unset would stay off. Each disk row inherits its type's
+trigger from the unsaved editor state (`resolveTrueNASDiskTemperatureDefault`).
+The TrueNAS disk drawer tones a current reading from the same per-type trigger
+(`getDiskTemperatureThresholds` passed into `buildTrueNASDetailSections`), so it
+no longer judges heat from a fixed 55C. Judges that still differ: the TrueNAS
+storage table and drawer do not apply a TrueNAS-wide value or per-disk
+override.
+`TestTrueNASDiskTemperatureAlertsFollowDiskTemperaturePolicy` and
+`TestTrueNASDiskTemperatureAlertIgnoresRetainedReading` in
+`internal/alerts/unified_eval_test.go` pin the tiers and retained readings;
+`TestTrueNASDiskTemperatureAlertsReevaluatePerDiskType` and
+`TestTrueNASDiskTemperatureAlertWithoutDiskTypeHeldAtLowestTrigger` in
+`internal/alerts/alerts_test.go` pin re-judging on a config save;
+`TestNormalizeTrueNASDiskTemperatureKeepsOnlyChosenValues` pins the
+saved-config migration.
+
+Proxmox physical disks alert on temperature under the same policy.
+`CheckProxmoxDiskTemperature` (`internal/alerts/proxmox_disk_temperature.go`)
+raises a `diskTemperature` metric alert under the disk's PVE alert reference
+(`ProxmoxPhysicalDiskAlertResourceID`, resource type `proxmox-disk`), judged by
+`proxmoxDiskTemperatureThresholdNoLock`: the disk type's `DiskTempByType` entry
+under the agent Disk Temp default, which switches it off for every type. It
+carries the disk's serial, WWN and `diskType` like the health and wearout
+alerts, so `ProxmoxPhysicalDiskAlertIdentifiers` lists its
+`<reference>::metric-threshold:diskTemperature` identifier for history
+ownership, and `reevaluateActiveAlertsLocked` re-judges it per disk type (the
+lowest per-type trigger when the type was never recorded) instead of falling
+through to guest thresholds that have no disk temperature. A disk a
+still-reporting linked agent lists in its SMART report is the agent's: its
+alert closes with the `moved_to_agent` resolution and `CheckHost` raises the
+agent's own. The handover happens on the next disk poll, so for that one
+interval an agent newly linked to a disk with an open PVE alert can hold its
+own alert beside it. A lapsed agent owns nothing, so the node's own readings
+keep alerting while its agent is silent. An
+excluded disk, or a policy switched off, closes the alert; a poll without a
+current reading holds it. Like the health and wearout alerts, a disk that
+leaves the inventory keeps its alert until the 24-hour stale sweep. The
+`proxmox-disk` alert delay defaults to the factory 5 seconds, so a warning
+waits out the same 300-second noisy-gauge stability window agent and TrueNAS
+disk temperature warnings do, and a critical reading bypasses it.
+`TestProxmoxDiskTemperatureAlertsFollowDiskTemperaturePolicy`,
+`TestProxmoxDiskTemperatureAlertOwnershipAndHolds`,
+`TestProxmoxDiskTemperatureWarningWaitsOutStabilityWindow`,
+`TestProxmoxDiskTemperatureAlertsReevaluatePerDiskType` and
+`TestCheckDiskHealthAlertsCarryHistoryOwnershipIdentity` in
+`internal/alerts/alerts_test.go` pin the policy, ownership, holds, re-judging
+and identifiers.
 
 ### Agent disk temperature alerts clear when their disk leaves the report
 
