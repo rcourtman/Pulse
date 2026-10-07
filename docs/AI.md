@@ -494,6 +494,122 @@ When control level is **Controlled**, write actions pause for approval:
 
 ---
 
+## Weekly summary and email
+
+Pulse's **This week** summary adds up retained Patrol activity over the last
+seven days. Open **Patrol → Activity** to read it; use **Settings → Reporting**
+to schedule the same summary by email. The card, weekly email and **Report type**
+selector are included in **v6.5.0**. An older build can lack these controls.
+
+This is a summary of recorded activity, not a complete audit or proof that every
+resource is healthy. Use individual findings, run history and **Actions** for
+the result of a particular investigation or fix.
+
+### Read the summary
+
+The card normally says **Last 7 days**: a rolling window, not a calendar week.
+If it says **Since … (older runs are no longer kept)**, its run history covers
+only part of that window. Refreshing the card reads existing records; it does
+not run Patrol or recover missing history.
+
+| Line | What it means and what to check |
+| --- | --- |
+| **Patrol runs** | Retained runs, checks and failures in the window. The resource count is the largest number checked in one run, not a count of distinct resources across the week. Read run history for failed or missing checks. |
+| **New issues** | New-finding totals recorded by those runs. The open severity counts concern findings detected within the window; older open findings are not included. Check the full findings list before concluding that nothing needs attention. |
+| **Issues resolved** | Recorded automatic resolutions plus manual resolutions still retained. Dismissed and muted findings are described separately. A cleared finding does not establish that an action ran or was independently verified. |
+| **Investigated** | Recorded investigation outcomes on retained findings. “Fix run, result unknown” is not a verified fix; open the finding for its result and remaining work. |
+| **Fixes run** | Actions recorded as successfully executed. “Verified afterwards” is a separate count; review failed actions and waiting approvals in **Actions**. Do not run an action again merely to increase the count. |
+| **Estimated spend** | Recorded Patrol model calls and their estimated USD cost, not an invoice or all Assistant usage. If some calls have no known price, the displayed amount is incomplete, not a zero-cost result. Check [Cost Tracking](AI.md#cost-tracking). |
+
+The displayed mode is Patrol's **current** mode, not a history of mode changes.
+Watch-only mode can explain why investigations or fixes were not performed,
+but changing mode is not a repair for an empty summary.
+
+### Schedule the weekly email
+
+Scheduling requires the **advanced reporting** entitlement and an account
+allowed to manage report schedules. Reading the Patrol card does not itself
+grant scheduling access. See [Plans and entitlements](PULSE_PRO.md).
+
+1. Check that email notifications are **enabled and configured** under
+   **Alerts → Notifications**. Listing recipients on a schedule does not
+   configure a mail provider or enable email.
+2. Open **Settings → Reporting**, choose **Create schedule**, then set
+   **Report type** to **Patrol weekly summary**.
+3. Enter a schedule name, weekday, time and an IANA **Timezone**, such as
+   `Europe/London`. The summary is weekly, covers the last seven days, and is
+   sent as HTML and plain text email. It is not a PDF/CSV attachment, a
+   resource/tag-filtered report, or a saved disk copy.
+4. Set **Email recipients** deliberately. Blank uses the existing email
+   notification recipients; if none are configured, delivery can fall back
+   to the sender address. Use explicit authorised recipients to avoid that
+   ambiguity. The email can contain resource names, findings and costs.
+5. Save with **Enabled** selected for automatic runs. **Run now** sends a real
+   email; it is not a preview or a test of future scheduled delivery. Use it
+   only when those recipients should receive the summary.
+
+The Report type choice appears when the session reports AI as enabled. An
+existing summary keeps its type when edited after AI is switched off. If the
+choice is missing, check the installed version, current workspace, AI settings
+and reporting access; do not change Patrol's autonomy mode, re-enrol agents or
+create an API token just to reveal it.
+
+### Check a missing email or empty summary
+
+- **No recorded runs:** check Patrol's enabled state, configured provider,
+  ordinary run history and errors. “Patrol has not run” can also reflect an
+  unavailable Patrol service, not proof that the environment had no problems.
+  Do not force a run, restart Pulse or change retention just to fill the card.
+- **Failed schedule:** read **Last run** and the saved error in Reporting. On
+  a narrow screen, use the same signed-in page at a wider viewport to see
+  that column. A missing Patrol service and missing email configuration are
+  different failures. Preserve the original error; do not repeatedly use
+  Run now or send synthetic alerts to diagnose them.
+- **Run marked OK but no email received:** that status means Pulse's sender
+  returned success, not that the message reached the recipient's inbox.
+  Check the selected recipients and the mail provider's delivery or rejection
+  record, then the mailbox's filtering. A successful alert Test does not prove
+  that this schedule ran or used the intended recipients.
+- **Email links missing:** links depend on the configured Pulse public URL.
+  Open Patrol in your existing authenticated browser; do not make Pulse
+  publicly accessible or disable TLS to make an email link work.
+
+Keep full mail errors, recipient addresses, credentials and exports private.
+Share only a locally reviewed, redacted error and the relevant schedule time
+and outcome; see [Getting Help](TROUBLESHOOTING.md#-getting-help).
+
+### Honest limits of the data
+
+- Run history retains at most **100 runs**. Event-triggered activity can
+  exhaust it before seven days. The partial-window notice concerns run
+  retention only; its absence does not certify all other lines as complete.
+- Resolved findings can be purged after **24 hours**, and dismissed findings
+  after **30 days**. Manual resolutions, dismissals and investigation outcomes
+  on purged findings can disappear from these totals. Automatic resolution
+  totals come from retained runs, so the lines need not reconcile exactly.
+- Actions have their own retained audit records, but the digest reads a bounded
+  set and can show an empty action line when that source is unavailable.
+  Check **Actions** itself; zero in this summary is not proof that no action
+  took place. Pending approvals can include actions created before the window.
+- Model spend depends on recorded usage and known prices. This summary cannot
+  establish that caching, a budget limit or a provider's bill is correct.
+
+### API
+
+For an existing authenticated integration, `GET /api/ai/patrol/digest` requires
+`ai:execute` scope. Optional `days` is an integer from **1 to 30**, default
+**7**; invalid values return 400. Scheduled email always uses seven days.
+The response groups `window`, `mode`, `runs`, `findings`, `investigations`,
+`actions`, `alerts` and `spend`. `window.history_complete` and
+`window.history_since` describe the run-retention limitation above, not a
+whole-report completeness guarantee.
+
+A zero response can be returned when the Patrol service is unavailable.
+Authentication, scope or transport errors are not a zero result. Prefer the
+signed-in card for a one-off check; never extract a session cookie or put an
+API token in a command, URL or public report. See [API authentication](API.md#-authentication)
+for the private header-file approach when an integration needs it.
+
 ## Configuration
 
 Configure providers in the UI: **Settings → Pulse Intelligence → Provider & Models**
