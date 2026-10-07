@@ -6205,6 +6205,13 @@ When a shared portal tooltip is already visible, that same owner must
 reschedule positioning on live coordinate and viewport changes so chart hover
 tooltips keep following the active pointer instead of sticking to their first
 anchor.
+Only a visible tooltip holds a window resize listener. Hidden instances (one
+per metric bar or sparkline on every table row) and portals suppressed on a
+touch device register none and re-read the viewport when they open, so the
+listener count no longer grows with rows. `TooltipPortal.test.tsx` proves that
+hidden and touch-suppressed portals add no listener, that an open one re-clamps
+on a window resize, and that one opened after an unheard resize starts from the
+live viewport.
 Floating hover tooltips are a fine-pointer interaction only. The shared
 tooltip hook, portal, and singleton API must suppress them when the primary
 device reports no hover capability or a coarse pointer, because touch browsers

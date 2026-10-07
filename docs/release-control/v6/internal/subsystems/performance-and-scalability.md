@@ -1788,6 +1788,22 @@ final measurements and host-load limitation remain recorded in
 `records/resource-payload-static-metadata-2026-08-24.md`. They do not establish
 a controlled performance improvement or satisfy the open SLO qualification.
 
+### Window resize listeners do not grow with rows
+
+Table rows must not each register a window `resize` listener.
+`frontend-modern/src/hooks/useBreakpoint.ts` keeps one module-level width
+signal, fed by a single rAF-debounced listener while at least one caller is
+mounted, and a new caller starts from the live `innerWidth`. Shared tooltip
+state in `frontend-modern/src/components/shared/useTooltipState.ts` listens
+only while its tooltip is visible. Measured on 2026-10-07 on a mock-mode
+`/proxmox` page with 140 workload rows at 1440 px, the active listener count
+fell from 859 (699 tooltip instances, 156 breakpoint callers) to 5; at 390 px
+with 36 rows it fell from 203 to 5. An open tooltip adds one listener and
+removes it on close, and crossing the phone breakpoint in either direction
+still switches the workload table and row layout. `useBreakpoint.test.ts`
+proves one listener for 50 callers, that back-to-back resizes leave one pending
+frame, and that every caller crosses a breakpoint when that frame runs.
+
 ### Large API responses negotiate gzip without corrupting edge cases
 
 The main listener compresses eligible JSON and frontend text assets for

@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "36d3f8c5571daa1e041abf41c4f7c394ca14111f",
+  "verified_at": "2026-10-07T22:02:19Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/useTooltipState.ts",
+    "frontend-modern/src/hooks/useBreakpoint.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/useTooltipState.ts": "d3726fcd6498be9d1ca56d6116a741f1000e0ba4e645b3c0eee009b5017ec494",
+    "frontend-modern/src/hooks/useBreakpoint.ts": "e2f67292f467ea5f1fb3d36db1abee117c87e68f481f29aeb20e9cf3f764d865"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock-mode stack on this branch (backend :7901, Vite :5401), headless Chromium with an init script wrapping EventTarget add/removeEventListener to track live window resize listeners by registering stack frame",
+    "Before (origin/main 77d2119792), 1440x900, 140 workload rows: 859 active resize listeners (699 from useTooltipState useTooltipLayoutState, 156 from useBreakpoint, 4 page-level); one dispatched resize ran 859 callbacks",
+    "Before, 390x844, 36 rows: 203 active (153 tooltip, 46 useBreakpoint, 4 page-level); 203 callbacks per resize",
+    "After, 1440x900, 140 rows: 5 active (1 retainViewportWidthListener in useBreakpoint plus the 4 page-level listeners); 5 callbacks per resize; unchanged after scrolling the table",
+    "After, 390x844, 36 rows: 5 active, 5 callbacks per resize",
+    "After, open memory sparkline tooltip on a workload row: active count 6 while open; after resizing to 1440x700 and then 1380x640 the tooltip stayed open, its svg viewBox read '0 0 1440 700' then '0 0 1380 640' and it stayed inside the viewport; after moving the pointer away the tooltip closed and the count returned to 5",
+    "After, breakpoint crossing 1440 -> 390 -> 1440 and 390 -> 1440 -> 390: the workload table class switched workload-table--desktop <-> workload-table--mobile and every row's name cell style switched 'width: 27.6596%' <-> 'width: 38%' each way; listener count stayed 5 throughout; no page errors"
+  ],
+  "interactions": [
+    "Loaded /proxmox at 1440x900 and at 390x844, counted active window resize listeners and their registering sources, dispatched one synthetic resize and counted callbacks",
+    "Scrolled the workload table down in twelve 600px steps and back to the top, recounted listeners",
+    "Hovered row cells right to left until the memory sparkline tooltip opened, resized the window twice while it stayed open, moved the pointer away to close it, recounted listeners",
+    "Resized the viewport across the md breakpoint (desktop to phone and back, phone to desktop and back) and read the workload table mode and row layout after each step"
+  ]
+}

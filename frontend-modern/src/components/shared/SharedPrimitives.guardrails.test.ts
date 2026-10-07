@@ -8412,6 +8412,11 @@ describe('shared primitive guardrails', () => {
     expect(tooltipStateSource).toContain('resolveTooltipPosition');
     expect(tooltipStateSource).toContain('sanitizeTooltipContent');
     expect(tooltipStateSource).toContain('supportsHoverTooltips');
+    // Hidden tooltips sit on every table row; only an open one may hold a
+    // window resize listener (TooltipPortal.test.tsx proves the behaviour).
+    expect(tooltipStateSource).toMatch(
+      /if \(typeof window === 'undefined' \|\| !options\.visible\(\)\) return;\s*updateViewport\(\);\s*const handleResize/,
+    );
 
     expect(sharedTooltipHookSource).toContain('supportsHoverTooltips');
     expect(hoverCapabilitySource).toContain('(hover: hover) and (pointer: fine)');
