@@ -10,6 +10,7 @@ import { TechnicalDetailsSection } from '@/components/shared/TechnicalDetailsDis
 import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
 import type { Alert } from '@/types/api';
 import { AvailabilityProbeStatusCards } from '@/components/Infrastructure/AvailabilityProbeStatusCard';
+import { HOST_AGENT_STOPPED_REPORTING_REASON } from '@/components/Infrastructure/resourceDetailMappers';
 import type { DiscoveryIdentifiedSummary } from '@/utils/discoveryPresentation';
 import { formatBytes } from '@/utils/format';
 import { getShippedDocUrl } from '@/utils/docsLinks';
@@ -80,6 +81,10 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       ageClass: props.backupPresentation?.ageClass,
     });
   const guestReadPresentation = () => getGuestDrawerGuestReadPresentation(props.guest);
+  // A linked Pulse agent past its reporting lease leaves its last report on
+  // the guest, so its RAID, network and filesystem rows read as last known.
+  const agentLastKnownReason = () =>
+    props.guest.agentStale ? HOST_AGENT_STOPPED_REPORTING_REASON : undefined;
   const coverageLabel = () => {
     if (props.hasWorkloadActionAgent) return WORKLOAD_ACTION_AGENT_LABEL;
     if (props.hasAgentInfo) return `${props.agentHeading} observed`;
@@ -148,9 +153,22 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         props.guest.vmware?.datacenterName ||
         props.guest.vmware?.clusterName,
       );
-    const diskReason = isGuestDrawerVM(props.guest) ? props.guest.diskStatusReason : undefined;
-    const diskReadState =
-      props.guest.telemetryAvailability?.disk === false
+    // Rows the linked Pulse agent supplied follow that agent's freshness, not
+    // the Proxmox reason for its own guest reads. A stopped guest has no
+    // current filesystems from either source, with or without the Proxmox
+    // vm-stopped reason, which it gives only for a guest with allocated disk.
+    const vmDiskReason = isGuestDrawerVM(props.guest) ? props.guest.diskStatusReason : undefined;
+    const agentDisks = props.guest.disksFromAgent === true;
+    const agentDisksStopped =
+      agentDisks && (props.guest.status === 'stopped' || vmDiskReason === 'vm-stopped');
+    const diskReason = agentDisks ? undefined : vmDiskReason;
+    const diskReadState = agentDisks
+      ? agentDisksStopped
+        ? 'unavailable'
+        : agentLastKnownReason()
+          ? 'last-known'
+          : 'current'
+      : props.guest.telemetryAvailability?.disk === false
         ? 'unavailable'
         : diskReason
           ? diskReason.startsWith('prev-')
@@ -160,11 +178,19 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
     const diskRows = (props.guest.disks ?? []).map((disk, index) =>
       buildWorkloadsDiskPresentation(disk, index, props.diskThresholds, diskReadState),
     );
-    const diskStatusMessage = diskReason
-      ? getWorkloadGuestDiskStatusMessage(diskReason)
-      : diskReadState === 'unavailable'
-        ? 'Filesystem usage is unavailable.'
-        : null;
+    const diskStatusMessage = agentDisks
+      ? agentDisksStopped
+        ? isGuestDrawerVM(props.guest)
+          ? getWorkloadGuestDiskStatusMessage('vm-stopped')
+          : 'Filesystem usage is unavailable.'
+        : agentLastKnownReason()
+          ? 'Using last known disk stats. The Pulse Agent in this guest stopped reporting.'
+          : null
+      : diskReason
+        ? getWorkloadGuestDiskStatusMessage(diskReason)
+        : diskReadState === 'unavailable'
+          ? 'Filesystem usage is unavailable.'
+          : null;
 
     return compactDetailSections([
       discovery
@@ -187,7 +213,13 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         rows: compactDetailRows([
           props.guest.cpus ? makeDetailRow('CPUs', `${props.guest.cpus}`) : null,
           props.hasAgentInfo
-            ? makeDetailRow(props.agentHeading, props.agentLabel, { title: props.agentTitle })
+            ? agentLastKnownReason()
+              ? makeDetailRow(props.agentHeading, `${props.agentLabel} · stopped reporting`, {
+                  title: `${props.agentTitle} has stopped reporting. Its readings here are its last report.`,
+                  tone: 'warning',
+                  wrap: true,
+                })
+              : makeDetailRow(props.agentHeading, props.agentLabel, { title: props.agentTitle })
             : null,
         ]),
       },
@@ -282,8 +314,16 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       props.hasNetworkInterfaces
         ? {
             label: 'Network',
-            rows: compactDetailRows(
-              props.networkInterfaces.slice(0, 4).map((iface, index) => {
+            rows: compactDetailRows([
+              // Only the linked Pulse agent reports guest interfaces.
+              makeDetailRow(
+                'Status',
+                agentLastKnownReason()
+                  ? 'Using last known interface details. The Pulse Agent in this guest stopped reporting.'
+                  : null,
+                { layout: 'stacked', wrap: true },
+              ),
+              ...props.networkInterfaces.slice(0, 4).map((iface, index) => {
                 const addresses = iface.addresses ?? [];
                 const hasTraffic = (iface.rxBytes ?? 0) > 0 || (iface.txBytes ?? 0) > 0;
                 const detail = [
@@ -301,11 +341,12 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                   iface.name || `Interface ${index + 1}`,
                   detail || 'No details',
                   {
+                    tone: agentLastKnownReason() ? 'muted' : undefined,
                     wrap: true,
                   },
                 );
               }),
-            ),
+            ]),
           }
         : null,
     ]);
@@ -348,7 +389,11 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         </Suspense>
       </Show>
       <Show when={props.guest.agentRaid?.length}>
-        <RaidCard arrays={props.guest.agentRaid} title="Guest RAID" />
+        <RaidCard
+          arrays={props.guest.agentRaid}
+          title="Guest RAID"
+          lastKnownReason={agentLastKnownReason()}
+        />
       </Show>
 
       <div class="space-y-3">

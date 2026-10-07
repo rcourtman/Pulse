@@ -1602,6 +1602,157 @@ describe('GuestDrawer', () => {
     });
   });
 
+  // ── In-guest Pulse Agent readings ──
+
+  describe('In-guest Pulse Agent readings', () => {
+    // Proxmox read no guest filesystems, so these rows came from the agent.
+    const makeAgentGuest = (overrides: Partial<WorkloadGuest> = {}) =>
+      makeGuest({
+        agentVersion: '6.4.5',
+        agentKind: 'pulse',
+        disksFromAgent: true,
+        diskStatusReason: 'agent-not-running',
+        disks: [{ total: 100, used: 75, free: 25, usage: 75, mountpoint: '/' }],
+        networkInterfaces: [{ name: 'eth0', addresses: ['192.168.1.5'], rxBytes: 1024 }],
+        agentRaid: [
+          {
+            device: '/dev/md1',
+            name: 'data',
+            level: 'raid5',
+            state: 'clean, degraded, recovering',
+            totalDevices: 3,
+            activeDevices: 2,
+            workingDevices: 3,
+            failedDevices: 1,
+            spareDevices: 0,
+            devices: [{ device: 'sdd1', state: 'faulty', slot: 1 }],
+            rebuildPercent: 42,
+            rebuildSpeed: '118M/sec',
+          },
+        ],
+        ...overrides,
+      });
+
+    it("reads a silent in-guest agent's RAID, network and filesystems as last known", () => {
+      render(() => <GuestDrawer guest={makeAgentGuest({ agentStale: true })} onClose={vi.fn()} />);
+
+      expect(technicalDetails().getByText('Pulse 6.4.5 · stopped reporting')).toHaveAttribute(
+        'title',
+        'Pulse Agent 6.4.5 has stopped reporting. Its readings here are its last report.',
+      );
+      expect(
+        technicalDetails().getByText(
+          'Using last known disk stats. The Pulse Agent in this guest stopped reporting.',
+        ),
+      ).toBeInTheDocument();
+      expect(technicalDetails().getByText(/^Last known 75%/)).toBeInTheDocument();
+      expect(
+        technicalDetails().queryByRole('progressbar', { name: 'Filesystem / utilization' }),
+      ).toBeNull();
+      expect(
+        technicalDetails().getByText(
+          'Using last known interface details. The Pulse Agent in this guest stopped reporting.',
+        ),
+      ).toBeInTheDocument();
+      expect(
+        technicalDetails()
+          .getByText(/^192\.168\.1\.5/)
+          .closest('td'),
+      ).toHaveClass('text-muted');
+      // Proxmox's guest-read reason does not describe rows the agent supplied.
+      expect(technicalDetails().queryByText(/qemu-guest-agent/)).toBeNull();
+
+      const array = screen.getByTestId('raid-card-array');
+      expect(array).toHaveAttribute('data-raid-reading', 'last-known');
+      expect(within(array).getByTestId('raid-card-state')).toHaveAttribute(
+        'title',
+        'Last known reading, not current: host agent stopped reporting',
+      );
+      expect(within(array).getByTestId('raid-card-rebuild')).toHaveTextContent(
+        'Rebuild was at 42%',
+      );
+    });
+
+    it('keeps a live in-guest agent current when Proxmox has no guest reads', () => {
+      render(() => <GuestDrawer guest={makeAgentGuest()} onClose={vi.fn()} />);
+
+      expect(technicalDetails().getByText('Pulse 6.4.5')).toBeInTheDocument();
+      expect(
+        technicalDetails().getByRole('progressbar', { name: 'Filesystem / utilization' }),
+      ).toHaveAttribute('aria-valuenow', '75');
+      expect(technicalDetails().queryByText(/Last known|qemu-guest-agent/)).toBeNull();
+      expect(screen.getByTestId('raid-card-array')).toHaveAttribute('data-raid-reading', 'current');
+      expect(screen.getByTestId('raid-card-rebuild')).toHaveTextContent('Rebuild: 42% · 118M/sec');
+    });
+
+    it("keeps Proxmox's own guest filesystems current under a silent agent", () => {
+      render(() => (
+        <GuestDrawer
+          guest={makeAgentGuest({
+            agentStale: true,
+            disksFromAgent: undefined,
+            diskStatusReason: undefined,
+          })}
+          onClose={vi.fn()}
+        />
+      ));
+
+      expect(
+        technicalDetails().getByRole('progressbar', { name: 'Filesystem / utilization' }),
+      ).toHaveAttribute('aria-valuenow', '75');
+      expect(technicalDetails().queryByText(/Using last known disk stats/)).toBeNull();
+      expect(screen.getByTestId('raid-card-array')).toHaveAttribute(
+        'data-raid-reading',
+        'last-known',
+      );
+    });
+
+    // Proxmox gives vm-stopped only for a guest with allocated disk, so the
+    // guest's own stopped status must hold the rows too.
+    it.each([
+      ['with the Proxmox reason', 'vm-stopped'],
+      ['without a Proxmox reason', undefined],
+    ])(
+      "reads a stopped guest's agent filesystems as unavailable before the lease lapses, %s",
+      (_label, diskStatusReason) => {
+        render(() => (
+          <GuestDrawer
+            guest={makeAgentGuest({ status: 'stopped', diskStatusReason })}
+            onClose={vi.fn()}
+          />
+        ));
+
+        expect(
+          technicalDetails().getByText(
+            'Guest filesystem stats unavailable while the VM is stopped.',
+          ),
+        ).toBeInTheDocument();
+        expect(technicalDetails().getByText(/^Usage unavailable/)).toBeInTheDocument();
+        expect(
+          technicalDetails().queryByRole('progressbar', { name: 'Filesystem / utilization' }),
+        ).toBeNull();
+      },
+    );
+
+    it('follows the agent between silent and reporting while the drawer stays open', () => {
+      const [guest, setGuest] = createSignal(makeAgentGuest());
+      render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+      expect(screen.getByTestId('raid-card-array')).toHaveAttribute('data-raid-reading', 'current');
+
+      setGuest({ ...guest(), agentStale: true });
+      expect(screen.getByTestId('raid-card-array')).toHaveAttribute(
+        'data-raid-reading',
+        'last-known',
+      );
+      expect(technicalDetails().getByText('Pulse 6.4.5 · stopped reporting')).toBeInTheDocument();
+      expect(technicalDetails().getByText(/^Last known 75%/)).toBeInTheDocument();
+
+      setGuest({ ...guest(), agentStale: undefined });
+      expect(screen.getByTestId('raid-card-array')).toHaveAttribute('data-raid-reading', 'current');
+      expect(technicalDetails().queryByText(/stopped reporting|Last known/)).toBeNull();
+    });
+  });
+
   // ── WebInterfaceUrlField ──
 
   describe('WebInterfaceUrlField', () => {

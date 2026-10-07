@@ -2759,6 +2759,24 @@ must remain distinguishable without hover. Workloads supplies this row metadata,
 not local table CSS or a duplicate renderer; non-filesystem rows keep the compact
 default. Verification covers the opt-in at this composition boundary and actual
 long-path wrapping in the shared renderer's browser proof.
+A guest's linked Pulse Agent can stop reporting while Proxmox keeps polling the
+VM. `useWorkloads` copies `resource.agent.stale` onto the row as `agentStale`,
+and sets `disksFromAgent` when Proxmox reported no guest filesystems and the
+agent's own `disks` filled in. When that agent is stale, `GuestDrawerOverview.tsx`
+reads the Guest RAID card as last known through the shared `RaidCard`
+`lastKnownReason` prop with `HOST_AGENT_STOPPED_REPORTING_REASON`, puts a status
+line over muted Network rows, reads agent-supplied Filesystems rows through the
+existing `last-known` disk read state, and marks the Pulse Agent row as stopped
+reporting. Agent-supplied filesystem rows follow the agent's freshness rather
+than the Proxmox `diskStatusReason`, which describes Proxmox's own guest reads,
+so a live agent's rows keep their usage and bars. Those rows read as
+unavailable once the guest is stopped, whether its status or the Proxmox
+`vm-stopped` reason says so, and Proxmox's own guest filesystems keep their
+Proxmox read state. The two flags ride the existing row mapping and
+add no query or poll; `GuestDrawer.test.tsx` and `useWorkloads.test.ts` pin
+both sources. The workload table's disk cell and the drawer History still read
+the aggregate disk metric and the Proxmox reason, and the agent's OS, addresses
+and physical disk health carry no stale cue yet.
 Guest, node, and Docker-host drawer headers follow the same frontend-primitives dependency
 boundary for collapse: Workloads owns which inline row is selected and the
 close handler, while
