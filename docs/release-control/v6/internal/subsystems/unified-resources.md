@@ -3493,6 +3493,19 @@ both REST and realtime paths, including plural `availabilityChecks` on matched
 resources: a thin `network-endpoint` update with
 availability data is still `platformType=availability`, `sourceType=api`, and
 must not regress to a generic platform badge in infrastructure rows or drawers.
+The display merge replaces, never field-merges, the availability summary, its
+`platformData.availability` mirror and the `availabilityChecks` set. REST rows
+and the realtime baseline the store rebuilds from merge-patch deltas carry
+whole check records whose failure, location, application-outcome and
+certificate fields are omitempty, so a recovered check must drop its old
+failure count and error, and a summary that switches to another attached check
+must not inherit the previous check's port, path, certificate, aggregate state
+or last success. Only a row that omits the facet entirely keeps the last one,
+while `availability` stays a listed source; when the source leaves, the
+summary and both `platformData` mirrors leave with it, so canonicalization
+cannot promote a deleted check set back. `resourceStateAdapters.test.ts` pins
+the snapshot, delta and withdrawal merges and `websocket-unified.test.ts` pins
+the server merge-patch deletion path.
 Infrastructure row presentation must also consume that availability payload as
 operator evidence, not only as badge identity. Any resource row carrying an
 availability facet—whether a standalone `network-endpoint` or a known

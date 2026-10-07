@@ -177,10 +177,13 @@ const mergePlatformData = (
       delete merged[key];
       continue;
     }
+    // The availability mirror is a whole check record, like the top-level facet.
     const nested =
       key === 'proxmox'
         ? mergeProxmoxFacet(asRecord(incoming[key]), asRecord(existing[key]))
-        : mergeRecord(asRecord(incoming[key]), asRecord(existing[key]));
+        : key === 'availability'
+          ? (asRecord(incoming[key]) ?? asRecord(existing[key]))
+          : mergeRecord(asRecord(incoming[key]), asRecord(existing[key]));
     if (key === 'docker') {
       if (hasDockerFacetEvidence(nested)) {
         merged[key] = nested;
@@ -192,6 +195,11 @@ const mergePlatformData = (
     if (nested) {
       merged[key] = nested;
     }
+  }
+  // The plural check mirror is not a record, but canonicalization promotes it
+  // to the top level, so it follows the same availability source gate.
+  if (!shouldKeepSourceFacet(incomingSources, 'availability')) {
+    delete merged.availabilityChecks;
   }
 
   for (const key of [
@@ -898,6 +906,21 @@ const mergeCanonicalSourceFacet = <T extends JsonRecord>(
       : mergeRecord(incomingFacet, existingFacet)
     : incomingFacet;
 
+// Availability summaries and checks are whole check records: REST rows and
+// the websocket baseline rebuilt from merge-patch deltas carry the complete
+// check, and its failure, location and certificate fields are omitempty on
+// wire. A present facet replaces the previous one, so a recovered check or a
+// new summary target never inherits stale fields; only a row omitting the
+// facet keeps the last one.
+const replaceCanonicalSourceFacet = <T>(
+  incomingFacet: T | undefined,
+  existingFacet: T | undefined,
+  incomingSources: string[] | undefined,
+  ...sourceCandidates: string[]
+): T | undefined =>
+  incomingFacet ??
+  (shouldKeepSourceFacet(incomingSources, ...sourceCandidates) ? existingFacet : undefined);
+
 // A missing field alone can be a partial snapshot. Explicit unavailable raw
 // evidence plus no canonical metric means the producer has withdrawn memory;
 // retaining the previous display metric would hide that state.
@@ -978,17 +1001,18 @@ export const mergeCanonicalResource = (incoming: Resource, existing?: Resource):
       incomingSources,
       'truenas',
     ) as Resource['truenas'],
-    availability: mergeCanonicalSourceFacet(
-      incoming.availability as JsonRecord | undefined,
-      existingCanonical.availability as JsonRecord | undefined,
+    availability: replaceCanonicalSourceFacet(
+      incoming.availability,
+      existingCanonical.availability,
       incomingSources,
       'availability',
-    ) as Resource['availability'],
-    availabilityChecks:
-      incoming.availabilityChecks ??
-      (shouldKeepSourceFacet(incomingSources, 'availability')
-        ? existingCanonical.availabilityChecks
-        : undefined),
+    ),
+    availabilityChecks: replaceCanonicalSourceFacet(
+      incoming.availabilityChecks,
+      existingCanonical.availabilityChecks,
+      incomingSources,
+      'availability',
+    ),
     storage: mergeRecord(
       incoming.storage as JsonRecord | undefined,
       existingCanonical.storage as JsonRecord | undefined,

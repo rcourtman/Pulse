@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "5c5519790022a7aa4a0889c97f21b098fbb15496",
+  "verified_at": "2026-10-07T13:22:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "de7be12022b7630f4a004453f44bc11d1ba851e441aecb8076c33188cd5a3c2f"
+  },
+  "routes": [
+    "/standalone/availability"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private non-mock stack (backend on 7759, Vite on 5279 serving this adapter) with one real HTTP availability check polled every 10s against a local server switched between 503 and 200; resource deltas arrive over the live websocket in a visible headless Chromium page (Playwright 1.56.1).",
+    "Before the fix (origin/main adapter on the same stack): after the check recovered, REST returned available true with no consecutiveFailures/lastError, but the row kept FAILURES '32 in a row' beside a green '4 ms' result and Last healthy 'just now'; at 390px the row tooltip still read '2/2 failures - http probe returned status 503' and '2 failed checks in a row'.",
+    "With this content at 1440px and 390px: the same in-session 503 -> 200 transition shows FAILURES '\u2014' and a fresh latency result, no stale 503/failure text in page text or title tooltips, and the expanded drawer's Availability card shows 'Up', the fresh latency and 1/1 reporting.",
+    "Summary-target switching and source withdrawal on a machine with attached checks are covered by adapter tests only (no agent-attached checks on this stack).",
+    "This is not a multi-location agent probe, certificate, installed-build or release acceptance."
+  ],
+  "interactions": [
+    "Loaded /standalone/availability while the check was failing, flipped the local endpoint to 200 without reloading, waited for two successful poll ticks, then expanded the check row with a mouse click and inspected row text, title tooltips and the drawer.",
+    "Ran the pass at 1440x900 and 390x844 for both the unfixed adapter and this content; screenshots inspected for both widths."
+  ]
+}

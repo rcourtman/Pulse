@@ -2285,6 +2285,94 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
+  it('clears availability summary fields a resource delta deletes', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+
+      emitMessage({
+        type: 'initialState',
+        data: {
+          connectedInfrastructure: [],
+          resources: [
+            {
+              id: 'network-endpoint-shop',
+              type: 'network-endpoint',
+              name: 'Shop HTTPS',
+              platformType: 'availability',
+              sourceType: 'api',
+              sources: ['availability'],
+              status: 'offline',
+              lastSeen: 100,
+              availability: {
+                targetId: 'shop-https',
+                address: 'shop.example.test',
+                protocol: 'https',
+                path: '/health',
+                applicationOutcome: 'failed',
+                applicationStatusCode: 503,
+                applicationFailureCode: 'http_status',
+                enabled: true,
+                available: false,
+                consecutiveFailures: 3,
+                lastError: 'HTTP 503 Service Unavailable',
+                failureThreshold: 3,
+              },
+            },
+          ],
+          lastUpdate: 100,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+
+      // The server's JSON merge patch for a recovered check: omitempty fields
+      // the new snapshot no longer carries arrive as explicit null deletions.
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          resourceDelta: {
+            upserts: [
+              {
+                id: 'network-endpoint-shop',
+                status: 'online',
+                lastSeen: 200,
+                availability: {
+                  applicationOutcome: 'passed',
+                  applicationStatusCode: 200,
+                  applicationFailureCode: null,
+                  available: true,
+                  consecutiveFailures: null,
+                  lastError: null,
+                  latencyMillis: 41,
+                },
+              },
+            ],
+          },
+        },
+      });
+
+      const endpoint = store.state.resources.find(
+        (resource) => resource.id === 'network-endpoint-shop',
+      );
+      expect(endpoint?.availability).toEqual({
+        targetId: 'shop-https',
+        address: 'shop.example.test',
+        protocol: 'https',
+        path: '/health',
+        applicationOutcome: 'passed',
+        applicationStatusCode: 200,
+        enabled: true,
+        available: true,
+        latencyMillis: 41,
+        failureThreshold: 3,
+      });
+    } finally {
+      dispose();
+    }
+  });
+
   it('accepts canonical alertResolved websocket payloads', async () => {
     const { store, dispose } = await createStoreHarness();
     try {
