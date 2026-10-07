@@ -4,7 +4,6 @@ import { createEffect, createSignal, type Accessor } from 'solid-js';
 import { preserveScrollableAncestorVerticalOffset } from '@/components/shared/contextualFocus';
 import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
 import type { WorkloadGuest } from '@/types/workloads';
-import { capturePendingAppShellRestoreTop } from '@/utils/appShellScrollRestoration';
 import {
   workloadsHasHoveredWorkload,
   resolveWorkloadResourceSelection,
@@ -58,15 +57,12 @@ export function useWorkloadSelectionState(options: UseWorkloadsSelectionStateOpt
     summaryInteraction.setClearSurfaceRootRef(element);
   };
 
-  const setSelectedGuestIdState = (id: string | null) => {
+  // Row focus is local: it never navigates, so it must not stage an app-shell
+  // restore that the next unrelated route change would replay.
+  const setSelectedGuestId = (id: string | null) => {
     preserveScrollableAncestorVerticalOffset(tableWrapperRef(), () => {
       setSelectedGuestIdRaw(id);
     });
-  };
-
-  const setSelectedGuestId = (id: string | null) => {
-    capturePendingAppShellRestoreTop();
-    setSelectedGuestIdState(id);
   };
 
   createEffect(() => {
@@ -74,14 +70,14 @@ export function useWorkloadSelectionState(options: UseWorkloadsSelectionStateOpt
     const resourceId = resolveWorkloadResourceSelection(location.search);
     if (!resourceId) {
       if (handledResourceId() !== null) {
-        setSelectedGuestIdState(null);
+        setSelectedGuestId(null);
         setHandledResourceId(null);
       }
       return;
     }
 
     if (resourceId !== handledResourceId()) {
-      setSelectedGuestIdState(resourceId);
+      setSelectedGuestId(resourceId);
       setHandledResourceId(resourceId);
     }
   });

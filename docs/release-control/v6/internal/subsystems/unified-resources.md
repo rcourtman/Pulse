@@ -4110,10 +4110,13 @@ inline drawer through local component state, most through
 while the Docker hosts and Proxmox nodes tables keep their own selection
 signal, and write no route state. An infrastructure table that moves drawer selection
 into route state must tag the opened detail with the canonical active resource
-ID; direct toggles of a row already in view must capture the current
-`.app-scroll-shell` position through
-`frontend-modern/src/utils/appShellScrollRestoration.ts`, so the remounted root
-shell in `frontend-modern/src/App.tsx` stays anchored, and then hand off to the
+ID; its route write must go through the shared same-path route-state scheduler
+in `frontend-modern/src/utils/routeStateNavigation.ts`, which alone stages the
+`.app-scroll-shell` position in
+`frontend-modern/src/utils/appShellScrollRestoration.ts` at the moment it
+navigates, so the root shell in `frontend-modern/src/App.tsx` stays anchored.
+The row toggle itself stages nothing: the root shell applies a staged position
+on the next route change, whatever caused it. The table must then hand off to the
 shared summary-table/contextual-focus helpers when the opened drawer would fall
 below the fold. That reveal scrolls only enough to keep the row header plus the
 start of the detail visible, never leaving the drawer clipped or hard-centering

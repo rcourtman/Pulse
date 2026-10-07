@@ -2435,7 +2435,13 @@ through `preserveScrollableAncestorVerticalOffset` in
 opened detail through `summaryTableFocus.ts`, so opening a focused workload
 does not look like a full page reload. The root `frontend-modern/src/App.tsx`
 shell applies a pending `frontend-modern/src/utils/appShellScrollRestoration.ts`
-restore only when the route itself changes. The shared same-path scheduler must also own cleanup
+restore on the next route change, whatever caused it, so only the shared
+same-path route-state scheduler may stage one, from the shell position at the
+moment it navigates. Local row focus stages none: a position staged without a
+navigation waits for an unrelated one, and before this rule a Type filter
+change made at the top of the Proxmox overview jumped the shell back down to
+the row toggled earlier, because the scheduler stages nothing from scrollTop 0.
+The shared same-path scheduler must also own cleanup
 for every deferred scroll-restore timeout and animation frame it creates, so
 route-state cleanup cannot leave hot-path replay work running after the owning
 surface unmounts.
@@ -2455,10 +2461,9 @@ That same hot-path ownership now also covers deliberate inline-detail reveal.
 When a focused workload or infrastructure row opens its inline detail, the hot
 path may preserve scroll across same-route state writes, but the actual reveal
 must still flow through the shared contextual-focus and summary-table helpers.
-Direct row toggles that already have the row in view must capture the current
-app-shell scroll position before the focus write and let the remounted root
-shell restore that position, so the interaction stays anchored instead of
-looking like a full refresh. Once the drawer is mounted, the shared reveal
+Direct row toggles that already have the row in view stay anchored through
+that contextual-focus offset preservation, not through a staged app-shell
+restore, so the interaction does not look like a full refresh. Once the drawer is mounted, the shared reveal
 helper must still take over whenever the opened detail would land below the
 fold, marking that movement as deliberate so route-state restore does not
 replay over it and then scrolling only enough to keep the row header plus the

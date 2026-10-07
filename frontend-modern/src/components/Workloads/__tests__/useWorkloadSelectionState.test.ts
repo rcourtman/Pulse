@@ -3,6 +3,14 @@ import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkloadGuest } from '@/types/workloads';
+import {
+  clearPendingAppShellRestoreTop,
+  readPendingAppShellRestoreTop,
+} from '@/utils/appShellScrollRestoration';
+import {
+  ROUTE_STATE_REPLACE_OPTIONS,
+  createRouteStateNavigateScheduler,
+} from '@/utils/routeStateNavigation';
 
 import { resolveWorkloadResourceSelection } from '../workloadSelectionModel';
 import { useWorkloadSelectionState } from '../useWorkloadSelectionState';
@@ -300,6 +308,44 @@ describe('useWorkloadSelectionState', () => {
     vi.runAllTimers();
 
     expect(result.selectedGuestId()).toBeNull();
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
+  it('stages no app-shell restore for a local row toggle that a later route change could replay', () => {
+    locationSearch = '';
+    clearPendingAppShellRestoreTop();
+    const shell = document.createElement('div');
+    shell.className = 'app-scroll-shell';
+    shell.scrollTop = 3000;
+    document.body.appendChild(shell);
+    const [filteredGuests] = createSignal<WorkloadGuest[]>([]);
+
+    const { result } = renderHook(() =>
+      useWorkloadSelectionState({
+        filteredGuests,
+      }),
+    );
+
+    result.setSelectedGuestId('cluster-a:node-1:101');
+    vi.runAllTimers();
+    expect(result.selectedGuestId()).toBe('cluster-a:node-1:101');
+    expect(readPendingAppShellRestoreTop()).toBeNull();
+
+    result.setSelectedGuestId(null);
+    vi.runAllTimers();
+    expect(readPendingAppShellRestoreTop()).toBeNull();
+
+    // Back at the top, a filter change writes the URL. The scheduler stages a
+    // restore only from a scrolled shell, so App.tsx would replay anything the
+    // row toggle had staged and jump the page back to 3000.
+    shell.scrollTop = 0;
+    const navigate = vi.fn();
+    const scheduler = createRouteStateNavigateScheduler(navigate, () => '/proxmox/overview');
+    scheduler.schedule('/proxmox/overview?type=vm');
+    vi.runAllTimers();
+
+    expect(navigate).toHaveBeenCalledWith('/proxmox/overview?type=vm', ROUTE_STATE_REPLACE_OPTIONS);
+    expect(readPendingAppShellRestoreTop()).toBeNull();
     expect(navigateSpy).not.toHaveBeenCalled();
   });
 });
